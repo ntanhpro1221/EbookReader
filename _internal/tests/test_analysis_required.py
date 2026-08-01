@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from e_book_reader.analysis import OllamaBookAnalyzer
+from e_book_reader.analysis import OllamaBookAnalyzer, _validate
 from e_book_reader.config import build_settings
 
 
@@ -32,6 +34,63 @@ class FakeDB:
         self.events.append((level, code, message, details))
 
 
+class FakeResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {"response": json.dumps(self.payload, ensure_ascii=False)}
+
+
+class FakeSession:
+    def __init__(self, payload):
+        self.payload = payload
+        self.request = None
+
+    def post(self, _url, *, json, timeout):
+        self.request = {"json": json, "timeout": timeout}
+        return FakeResponse(self.payload)
+
+
+def analysis_item(segment_id):
+    return {
+        "id": segment_id,
+        "kind": "narration",
+        "speaker": "NARRATOR",
+        "gender": "unknown",
+        "age": "unknown",
+        "emotion": "neutral",
+        "intensity": 0,
+        "pace": "normal",
+        "volume": "normal",
+        "confidence": 1.0,
+        "personality_hint": "",
+        "notes": "",
+    }
+
+
+def analysis_group():
+    return [
+        {
+            "id": 1,
+            "stable_id": "c00001_s0000000_ba30c9fbb6b1",
+            "chapter_id": 1,
+            "text": "Đoạn đầu tiên.",
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "c00001_s0000001_8039b1d43f9d",
+            "chapter_id": 1,
+            "text": "Đoạn thứ hai.",
+            "kind_hint": "narration",
+        },
+    ]
+
+
 def test_required_analysis_does_not_silently_fall_back(monkeypatch) -> None:
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: False)
@@ -50,3 +109,34 @@ def test_required_analysis_stops_when_every_request_fails(monkeypatch) -> None:
         analyzer.analyze_all(lambda: False)
 
     assert any(event[1] == "REQUIRED_ANALYSIS_BATCH_FAILED" for event in db.events)
+
+
+def test_request_uses_constrained_batch_ids_and_restores_stable_ids() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    payload = analyzer._request(group)
+
+    assert [item["id"] for item in payload["segments"]] == [row["stable_id"] for row in group]
+    assert session.request is not None
+    request = session.request["json"]
+    segment_schema = request["format"]["properties"]["segments"]
+    assert segment_schema["minItems"] == len(group)
+    assert segment_schema["maxItems"] == len(group)
+    assert segment_schema["items"]["properties"]["id"]["enum"] == ["S001", "S002"]
+    assert '"id": "S001"' in request["prompt"]
+    assert group[0]["stable_id"] not in request["prompt"]
+
+
+def test_unknown_batch_id_is_not_fuzzily_mapped() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S0002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    payload = analyzer._request(group)
+    validated = _validate(group, payload)
+
+    assert list(validated) == [group[0]["stable_id"]]

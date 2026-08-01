@@ -2,8 +2,8 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **37/37 test pass** trên Python hệ thống 3.11.9, gồm pronunciation/fallback,
-completed fast-path và FFmpeg encode/decode thật.
+Trạng thái source hiện tại: **39/39 test pass** trên Python hệ thống 3.11.9, gồm pronunciation/fallback,
+completed fast-path, batch-local analysis ID và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
 `ruff 0.9.10 check _internal` và Vulture dead-code scan pass; các dependency tạm cũng đã được xóa.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
@@ -14,6 +14,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
 - one-click startup ẩn qua `START.vbs`, chỉ hiện console khi cần setup;
+- analysis dùng ID ngắn bị ràng buộc theo batch rồi ánh xạ chính xác về stable ID;
 - project lock, voice profile lock và resume;
 - Resource Manager: foreground, RAM, SSD và stop policy;
 - recovery: `.part`, checksum, WAV/MP3 hợp lệ;
@@ -27,10 +28,12 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 
+Smoke-test trực tiếp Qwen3 8B với batch thật đầu tiên đã trả và validate đủ **28/28 ID** sau khi dùng batch-local ID.
+
 ## Chưa xác nhận trên máy đích
 
 - GUI PySide6 trên Windows;
-- Ollama/Qwen3 8B thực tế;
+- phân tích trọn 599 segment và alias reconciliation bằng Ollama/Qwen3 8B;
 - VoxCPM2 và VieNeu inference;
 - Whisper Turbo GPU;
 - CUDA 12.8 trên RTX 5060 Laptop;

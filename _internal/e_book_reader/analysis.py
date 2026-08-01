@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -23,6 +24,8 @@ ALLOWED_EMOTIONS = {
 ALLOWED_PACES = {"slow", "normal", "fast"}
 ALLOWED_VOLUMES = {"soft", "normal", "loud"}
 RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
+BATCH_ID_PREFIX = "S"
+BATCH_ID_WIDTH = 3
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -179,6 +182,19 @@ def _validate(group: list[Any], payload: dict[str, Any]) -> dict[str, dict[str, 
     return result
 
 
+def _batch_id(index: int) -> str:
+    return f"{BATCH_ID_PREFIX}{index:0{BATCH_ID_WIDTH}d}"
+
+
+def _output_schema_for_batch(batch_ids: list[str]) -> dict[str, Any]:
+    schema = copy.deepcopy(OUTPUT_SCHEMA)
+    segments = schema["properties"]["segments"]
+    segments["minItems"] = len(batch_ids)
+    segments["maxItems"] = len(batch_ids)
+    segments["items"]["properties"]["id"]["enum"] = batch_ids
+    return schema
+
+
 class OllamaBookAnalyzer:
     def __init__(self, settings: dict[str, Any], db: ProjectDB, log: Callable[[str], None]) -> None:
         self.settings = settings["analysis"]
@@ -256,11 +272,14 @@ class OllamaBookAnalyzer:
     def _request(self, group: list[Any]) -> dict[str, Any]:
         chapter_titles: list[str] = []
         rows: list[dict[str, Any]] = []
-        for row in group:
+        batch_to_stable: dict[str, str] = {}
+        for index, row in enumerate(group, 1):
             chapter_title = self._chapter_titles.get(int(row["chapter_id"]), "")
             if chapter_title not in chapter_titles:
                 chapter_titles.append(chapter_title)
-            rows.append({"id": row["stable_id"], "hint": row["kind_hint"], "text": row["text"]})
+            batch_id = _batch_id(index)
+            batch_to_stable[batch_id] = str(row["stable_id"])
+            rows.append({"id": batch_id, "hint": row["kind_hint"], "text": row["text"]})
         prompt = (
             f"Các chương hiện tại: {', '.join(chapter_titles)}\n\n"
             f"Nhân vật đã biết từ các phần trước:\n{self._known_summary()}\n\n"
@@ -271,7 +290,7 @@ class OllamaBookAnalyzer:
             "system": SYSTEM_PROMPT,
             "prompt": prompt,
             "stream": False,
-            "format": OUTPUT_SCHEMA,
+            "format": _output_schema_for_batch(list(batch_to_stable)),
             "keep_alive": "30m",
             "options": {
                 "temperature": float(self.settings.get("temperature", 0.1)),
@@ -285,7 +304,16 @@ class OllamaBookAnalyzer:
         )
         response.raise_for_status()
         content = response.json().get("response", "{}")
-        return json.loads(content)
+        payload = json.loads(content)
+        segments = payload.get("segments", [])
+        if isinstance(segments, list):
+            for item in segments:
+                if not isinstance(item, dict):
+                    continue
+                batch_id = str(item.get("id", ""))
+                if batch_id in batch_to_stable:
+                    item["id"] = batch_to_stable[batch_id]
+        return payload
 
     def _checkpoint_pronunciations(self, group: list[Any], payload: dict[str, Any]) -> None:
         source_text = "\n".join(str(row["text"]) for row in group)
