@@ -13,7 +13,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
-- one-click startup qua `START.bat`;
+- one-click startup ẩn qua `START.vbs`, chỉ hiện console khi cần setup;
 - project lock, voice profile lock và resume;
 - Resource Manager: foreground, RAM, SSD và stop policy;
 - recovery: `.part`, checksum, WAV/MP3 hợp lệ;

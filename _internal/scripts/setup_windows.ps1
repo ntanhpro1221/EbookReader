@@ -17,6 +17,8 @@ $env:PYTHONUTF8 = "1"
 $env:E_BOOK_READER_RUNTIME = $RuntimeRoot
 $env:HF_HOME = Join-Path $ModelsRoot "huggingface"
 $env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub"
+$env:HF_HUB_DISABLE_XET = "1"
+$env:HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
 $env:TORCH_HOME = Join-Path $ModelsRoot "torch"
 
 function Invoke-NativeChecked([scriptblock]$Command, [string]$Label) {

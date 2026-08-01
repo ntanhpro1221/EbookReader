@@ -102,7 +102,7 @@ class VoxCPM2Engine:
             from voxcpm import VoxCPM
             from huggingface_hub import snapshot_download
         except ImportError as exc:
-            raise RuntimeError("Thiếu VoxCPM2/PyTorch; hãy chạy START.bat") from exc
+            raise RuntimeError("Thiếu VoxCPM2/PyTorch; hãy chạy START.vbs") from exc
         device = str(self.settings["tts"].get("device", "cuda"))
         if device.startswith("cuda") and not torch.cuda.is_available():
             raise RuntimeError("PyTorch không nhận CUDA")
@@ -179,7 +179,7 @@ class VieNeuEngine:
         try:
             from vieneu import Vieneu
         except ImportError as exc:
-            raise RuntimeError("Thiếu VieNeu; hãy chạy START.bat") from exc
+            raise RuntimeError("Thiếu VieNeu; hãy chạy START.vbs") from exc
         self.log("Nạp VieNeu-TTS cho người kể/fallback.")
         self.tts = Vieneu(max_batch_size=max(1, int(self.settings["tts"]["batch_size"])))
         raw = list(self.tts.list_preset_voices())

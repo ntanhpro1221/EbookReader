@@ -6,10 +6,12 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 
 
 def test_one_click_startup_contract() -> None:
-    start_bytes = (PROJECT_ROOT / "START.bat").read_bytes()
+    start_path = PROJECT_ROOT / "START.vbs"
+    start_bytes = start_path.read_bytes()
     assert not start_bytes.startswith(b"\xef\xbb\xbf")
     assert start_bytes.isascii()
     start = start_bytes.decode("utf-8")
+    assert not (PROJECT_ROOT / "START.bat").exists()
 
     launcher_path = INTERNAL_ROOT / "scripts" / "start_windows.ps1"
     launcher_bytes = launcher_path.read_bytes()
@@ -22,14 +24,20 @@ def test_one_click_startup_contract() -> None:
     setup = setup_bytes.decode("utf-8-sig")
 
     assert 'scripts\\start_windows.ps1' in start
-    assert "goto" not in start.casefold()
+    assert "shell.Run command, 0, False" in start
     assert '$SetupMarker = Join-Path $RuntimeRoot ".setup_complete"' in launcher
+    assert '[switch]$SetupConsole' in launcher
     assert '$SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"' in launcher
     assert '$AppScript = Join-Path $InternalRoot "app.py"' in launcher
+    assert '$Pythonw = Join-Path $RuntimeRoot ".venv\\Scripts\\pythonw.exe"' in launcher
     assert 'import e_book_reader.gui' in launcher
+    assert 'Start-Process -FilePath "powershell.exe"' in launcher
+    assert '-WindowStyle Normal' in launcher
+    assert 'Start-Process -FilePath $Pythonw' in launcher
+    assert '& $Python $AppScript' not in launcher
     assert "Lần chạy đầu hoặc môi trường cần được sửa." in launcher
     assert "CÀI ĐẶT KHÔNG HOÀN TẤT." in launcher
-    assert "Đang mở E Book Reader..." in launcher
+    assert "Đang mở E Book Reader..." not in launcher
     assert '[switch]$NoPause' in setup
     assert 'Set-Content -Encoding UTF8 $markerTemp' in setup
     assert 'Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker' in setup

@@ -1,4 +1,8 @@
-﻿$ErrorActionPreference = "Stop"
+﻿param(
+    [switch]$SetupConsole
+)
+
+$ErrorActionPreference = "Stop"
 
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [Console]::InputEncoding = $utf8
@@ -15,6 +19,7 @@ $ProjectRoot = Split-Path -Parent $InternalRoot
 $RuntimeRoot = Join-Path $InternalRoot "runtime"
 $SetupMarker = Join-Path $RuntimeRoot ".setup_complete"
 $Python = Join-Path $RuntimeRoot ".venv\Scripts\python.exe"
+$Pythonw = Join-Path $RuntimeRoot ".venv\Scripts\pythonw.exe"
 $SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"
 $AppScript = Join-Path $InternalRoot "app.py"
 
@@ -24,6 +29,8 @@ $env:PYTHONUTF8 = "1"
 $env:E_BOOK_READER_RUNTIME = $RuntimeRoot
 $env:HF_HOME = Join-Path $RuntimeRoot "models\huggingface"
 $env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub"
+$env:HF_HUB_DISABLE_XET = "1"
+$env:HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
 $env:TORCH_HOME = Join-Path $RuntimeRoot "models\torch"
 
 function Test-AppRuntime {
@@ -31,6 +38,9 @@ function Test-AppRuntime {
         return $false
     }
     if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath $Pythonw -PathType Leaf)) {
         return $false
     }
     & $Python -c "import e_book_reader.gui" *> $null
@@ -41,11 +51,34 @@ function Wait-BeforeClose {
     Read-Host "Nhấn Enter để đóng"
 }
 
-Write-Host "============================================================"
-Write-Host "                    E BOOK READER"
-Write-Host "============================================================"
+function Start-SetupConsole {
+    $arguments = @(
+        "-NoLogo"
+        "-NoProfile"
+        "-ExecutionPolicy"
+        "Bypass"
+        "-File"
+        "`"$PSCommandPath`""
+        "-SetupConsole"
+    )
+    Start-Process -FilePath "powershell.exe" -ArgumentList $arguments -WorkingDirectory $ProjectRoot -WindowStyle Normal
+}
 
-if (-not (Test-AppRuntime)) {
+function Start-App {
+    Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot
+}
+
+$runtimeReady = Test-AppRuntime
+
+if (-not $runtimeReady -and -not $SetupConsole) {
+    Start-SetupConsole
+    exit 0
+}
+
+if (-not $runtimeReady) {
+    Write-Host "============================================================"
+    Write-Host "                    E BOOK READER"
+    Write-Host "============================================================"
     Write-Host "Lần chạy đầu hoặc môi trường cần được sửa."
     Write-Host "Chương trình sẽ tự động cài đặt và tải model cần thiết."
     Write-Host "Quá trình này cần Internet và có thể sử dụng nhiều dung lượng SSD."
@@ -64,29 +97,22 @@ if (-not (Test-AppRuntime)) {
         Write-Host "CÀI ĐẶT KHÔNG HOÀN TẤT." -ForegroundColor Red
         Write-Host "Quá trình chuẩn bị ứng dụng gặp lỗi."
         Write-Host "Không có project audiobook nào bị thay đổi."
-        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại START.bat."
+        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại START.vbs."
         Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
         Wait-BeforeClose
         exit 1
     }
 }
 
-Write-Host "Đang mở E Book Reader..."
 try {
-    & $Python $AppScript
-    $appExit = $LASTEXITCODE
+    Start-App
 } catch {
-    Write-Host ""
-    Write-Host "Không thể mở E Book Reader." -ForegroundColor Red
-    Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
-    Wait-BeforeClose
+    if ($SetupConsole) {
+        Write-Host ""
+        Write-Host "Không thể mở E Book Reader." -ForegroundColor Red
+        Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
+        Wait-BeforeClose
+    }
     exit 1
 }
-
-if ($appExit -ne 0) {
-    Write-Host ""
-    Write-Host "E Book Reader đã đóng với mã lỗi $appExit." -ForegroundColor Red
-    Write-Host "Thông tin kỹ thuật nằm trong thư mục _internal."
-    Wait-BeforeClose
-}
-exit $appExit
+exit 0

@@ -5,7 +5,7 @@
 ## Bắt đầu
 
 1. Giải nén toàn bộ ZIP vào SSD còn đủ dung lượng.
-2. Double-click **`START.bat`**.
+2. Double-click **`START.vbs`**.
 3. Lần đầu, file này tự cài môi trường và tải model; khi nâng cấp, setup tái sử dụng venv/model cache thay vì xóa runtime cũ.
 4. Trong ứng dụng, chọn nhiều file TXT hoặc chọn một folder chứa các chapter TXT.
 
@@ -18,7 +18,7 @@ Không cần mở PowerShell, không cần chạy file setup riêng.
 
 ```text
 e_book_reader/
-├── START.bat     # file duy nhất người dùng cần mở
+├── START.vbs     # file duy nhất người dùng cần mở
 ├── README.md     # hướng dẫn sử dụng
 └── _internal/    # source, setup, test, model cache và tài liệu kỹ thuật
 ```

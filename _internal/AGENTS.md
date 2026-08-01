@@ -8,7 +8,7 @@
 
 Yêu cầu bắt buộc:
 
-- workflow người dùng chỉ là double-click `START.bat`;
+- workflow người dùng chỉ là double-click `START.vbs`;
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
@@ -58,7 +58,7 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 ## Cấu trúc source
 
 ```text
-START.bat
+START.vbs
 README.md
 _internal/
 ├── AGENTS.md          # tài liệu dành cho agent/lập trình viên
@@ -89,7 +89,7 @@ Module chính:
 - `recovery.py`: integrity/checksum recovery.
 - `notifier.py`: Windows notifications.
 - `process_utils.py`: kết thúc an toàn cây process worker/native helper.
-- `scripts/start_windows.ps1`: kiểm tra runtime, gọi setup và mở app với thông báo UTF-8 an toàn.
+- `scripts/start_windows.ps1`: kiểm tra runtime ở chế độ ẩn, chỉ mở console khi cần setup và mở app bằng `pythonw.exe`.
 
 ## Quy tắc thay đổi
 
@@ -113,7 +113,7 @@ python -m pytest
 Definition of done:
 
 - test liên quan pass;
-- các mục root hiện cho người dùng vẫn chỉ có `START.bat`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
+- các mục root hiện cho người dùng vẫn chỉ có `START.vbs`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
 - không tạo prompt giữa job;
 - kill ở ranh giới bất kỳ không làm hỏng artifact đã commit;
 - resume giữ settings và voice mapping;

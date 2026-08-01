@@ -236,7 +236,7 @@ class OllamaBookAnalyzer:
         if not executable or not self.allow_downloads:
             self.log(
                 f"Thiếu Ollama model {self.model}. Job không được tự tải model sau khi đã bắt đầu; "
-                "hãy mở lại START.bat để kiểm tra/cài model."
+                "hãy mở lại START.vbs để kiểm tra/cài model."
             )
             return False
         self.log(f"Đang tải Ollama model {self.model} theo policy đã cho phép.")
