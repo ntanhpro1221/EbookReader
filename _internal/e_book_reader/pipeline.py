@@ -1,0 +1,620 @@
+from __future__ import annotations
+
+import json
+import os
+import time
+from collections import defaultdict
+from pathlib import Path
+from typing import Any, Callable
+
+from .analysis import OllamaBookAnalyzer
+from .asr import WhisperVerifier
+from .audio_io import (
+    AudioQualityError,
+    assemble_chapter_atomic,
+    combine_full_book_atomic,
+    export_json_atomic,
+    inspect_wav,
+    merge_wav_parts_atomic,
+    verify_mp3,
+    write_playlist_atomic,
+)
+from .character_registry import build_registry_and_cast
+from .database import ProjectDB
+from .io_utils import sha256_file, slugify
+from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
+from .notifier import WindowsNotifier
+from .text_processing import load_and_segment_chapter
+from .recovery import recover_project
+from .resource_manager import AdaptiveResourceManager
+from .tts import TTSCoordinator
+
+
+class PipelineStopped(RuntimeError):
+    pass
+
+
+class CriticalResourceStop(RuntimeError):
+    pass
+
+
+class BookPipeline:
+    def __init__(
+        self,
+        *,
+        paths: ProjectPaths,
+        db: ProjectDB,
+        settings: dict[str, Any],
+        pause_requested: Callable[[], bool],
+        stop_requested: Callable[[], bool],
+        emit: Callable[[str, dict[str, Any]], None],
+    ) -> None:
+        self.paths = paths
+        self.db = db
+        self.settings = settings
+        self.pause_requested = pause_requested
+        self.stop_requested = stop_requested
+        self.emit = emit
+        self.resources = AdaptiveResourceManager(settings, paths.root)
+        self.notifier = WindowsNotifier()
+        self.tts = TTSCoordinator(settings, db, paths.voices, self.log)
+        self._last_resource_level: ResourceLevel | None = None
+
+    def log(self, message: str) -> None:
+        self.db.event("info", "LOG", message)
+        self.emit("log", {"text": message})
+
+    def _state(self, state: str, text: str) -> None:
+        self.emit("state", {"state": state, "text": text})
+
+    def _wait_pause_or_stop(self) -> None:
+        announced = False
+        while self.pause_requested():
+            if self.stop_requested():
+                raise PipelineStopped("Stop requested")
+            if not announced:
+                self.db.update_book(status=BookStatus.PAUSED.value, stage="paused")
+                self._state("paused", "Đã tạm dừng tại checkpoint an toàn.")
+                announced = True
+            time.sleep(0.25)
+        if announced:
+            self.db.update_book(status=BookStatus.SYNTHESIZING.value, stage="resuming")
+            self._state("running", "Đang tiếp tục từ checkpoint.")
+        if self.stop_requested():
+            raise PipelineStopped("Stop requested")
+
+    def _resource_gate(
+        self,
+        checkpoint: str,
+        *,
+        keep_engine: str | None = None,
+        release_active: Callable[[], None] | None = None,
+        require_cpu_io: bool = False,
+    ):
+        while True:
+            self._wait_pause_or_stop()
+            decision = self.resources.decide()
+            if decision.level != self._last_resource_level:
+                self._last_resource_level = decision.level
+                self.emit(
+                    "resource",
+                    {
+                        "level": decision.level.value,
+                        "reason": decision.reason,
+                        "cpu_scale": decision.cpu_workers_scale,
+                        "gpu_scale": decision.gpu_batch_scale,
+                    },
+                )
+                self.log(f"Resource mode: {decision.level.value} — {decision.reason}")
+                if "disk free" in decision.reason or "running on battery" in decision.reason:
+                    self.notifier.notify(
+                        "E Book Reader đang chờ tài nguyên",
+                        f"{decision.reason}. Pipeline đã dừng cấp tác vụ mới tại checkpoint an toàn.",
+                        project_path=self.paths.root,
+                    )
+            if decision.critical:
+                book = self.db.book()
+                self.db.update_book(status=BookStatus.STOPPED.value, stage="critical_stop", error=decision.reason)
+                self.db.event(
+                    "critical",
+                    "CRITICAL_RESOURCE_STOP",
+                    decision.reason,
+                    {"checkpoint": checkpoint},
+                )
+                self.notifier.critical_stop(str(book["title"]), decision.reason, self.paths.root, checkpoint)
+                raise CriticalResourceStop(decision.reason)
+            if decision.unload_idle_models:
+                if not decision.allow_new_gpu_batch and release_active is not None:
+                    release_active()
+                elif decision.allow_new_gpu_batch:
+                    self.tts.unload_idle_models(keep_engine=keep_engine)
+                else:
+                    # At this point the previous inference already committed. Release even the active
+                    # engine so a foreground renderer/game can reclaim VRAM without killing CUDA mid-kernel.
+                    self.tts.unload_all()
+            cpu_ok = (not require_cpu_io) or decision.allow_cpu_heavy_work
+            if decision.allow_new_gpu_batch and cpu_ok:
+                return decision
+            time.sleep(2.0)
+
+    def _ensure_segments(self) -> None:
+        max_chars = int(self.settings["tts"]["max_segment_chars"])
+        for chapter in self.db.list_chapters():
+            if int(chapter["total_segments"]) > 0:
+                continue
+            self._wait_pause_or_stop()
+            rows = load_and_segment_chapter(dict(chapter), max_chars=max_chars)
+            if not rows:
+                raise RuntimeError(f"Chapter has no readable content: {chapter['input_path']}")
+            self.db.replace_chapter_segments(int(chapter["id"]), rows)
+            self.log(f"Đã chia {chapter['title']} thành {len(rows):,} segment và checkpoint vào SQLite.")
+
+    def _recover(self) -> None:
+        report = recover_project(self.paths, self.db, self.settings)
+        if (
+            report.reset_in_progress
+            or report.reset_missing_or_corrupt
+            or report.removed_part_files
+            or report.invalid_voice_references
+        ):
+            self.log(
+                "Recovery: "
+                f"giữ {report.recovered_verified} đoạn; "
+                f"reset {report.reset_in_progress + report.reset_missing_or_corrupt} đoạn; "
+                f"xóa {report.removed_part_files} file tạm; "
+                f"tạo lại {report.invalid_voice_references} voice reference."
+            )
+            if self.settings["safety"].get("notify_on_recovery", True):
+                self.notifier.recovery_notice(
+                    str(self.db.book()["title"]),
+                    self.paths.root,
+                    report.recovered_verified,
+                    report.reset_in_progress + report.reset_missing_or_corrupt,
+                )
+
+    def run(self) -> None:
+        self._recover()
+        self.db.begin_run_generation()
+        self._ensure_segments()
+        self.db.update_book(status=BookStatus.ANALYZING.value, stage="full_book_analysis")
+        self._state("running", "Đang phân tích toàn bộ book trước khi tạo audio.")
+
+        analyzer = OllamaBookAnalyzer(self.settings, self.db, self.log)
+        try:
+            analyzer.analyze_all(
+                self.stop_requested,
+                progress=lambda done, total: self.emit(
+                    "analysis_progress", {"done": done, "total": total}
+                ),
+                before_batch=lambda index: self._resource_gate(
+                    f"analysis batch {index}", release_active=analyzer.release_model
+                ),
+            )
+            self._wait_pause_or_stop()
+            if self.db.casting_is_finalized():
+                self.log("Voice casting đã khóa từ lần chạy trước; giữ nguyên mapping khi resume.")
+            else:
+                alias_map = analyzer.reconcile_aliases(
+                    before_batch=lambda index: self._resource_gate(
+                        f"alias reconciliation batch {index}",
+                        release_active=analyzer.release_model,
+                    )
+                )
+                build_registry_and_cast(self.db, self.settings, alias_map, self.log)
+                self.db.finalize_casting()
+            self.db.update_book(status=BookStatus.CASTING.value, stage="voice_cast_locked")
+        finally:
+            analyzer.unload()
+
+        self.tts.prepare_voice_references(
+            self.stop_requested,
+            before_profile=lambda index, total: self._resource_gate(
+                f"voice reference {index}/{total}", keep_engine="voxcpm2"
+            ),
+        )
+        self.tts.unload_idle_models()
+        self.db.update_book(status=BookStatus.SYNTHESIZING.value, stage="chapter_synthesis")
+
+        verifier = WhisperVerifier(self.settings, self.log)
+        try:
+            chapters = self.db.list_chapters()
+            for chapter_no, chapter in enumerate(chapters, 1):
+                self._wait_pause_or_stop()
+                self._process_chapter(chapter, verifier)
+                self.emit(
+                    "chapter_progress",
+                    {"done": chapter_no, "total": len(chapters), "chapter_id": int(chapter["id"])},
+                )
+        finally:
+            verifier.unload()
+            self.tts.unload_all()
+
+        self._export_reports()
+        completed = [row for row in self.db.list_chapters() if row["status"] == ChapterStatus.COMPLETED.value]
+        all_chapters = self.db.list_chapters()
+        if completed and len(completed) == len(all_chapters):
+            chapter_files = [Path(str(row["output_mp3"])) for row in completed]
+            if self.settings["audio"].get("create_m3u8", True):
+                write_playlist_atomic(chapter_files, self.paths.output / "playlist.m3u8")
+            if self.settings["audio"].get("combine_full_book", True):
+                self._resource_gate("FFmpeg full-book assembly", require_cpu_io=True)
+                full_path = self.paths.output / f"{slugify(str(self.db.book()['title']))}_full.mp3"
+                checksum = combine_full_book_atomic(chapter_files, full_path, str(self.db.book()["title"]))
+                self.db.register_artifact(
+                    artifact_key="full_book_mp3",
+                    kind="full_book_mp3",
+                    path=full_path,
+                    sha256=checksum,
+                    verified=True,
+                )
+            self.db.update_book(status=BookStatus.COMPLETED.value, stage="completed", error=None)
+            self._state("completed", "Đã hoàn tất toàn bộ audiobook.")
+            self.notifier.notify(
+                "E Book Reader đã hoàn tất",
+                f"Book: {self.db.book()['title']}",
+                project_path=self.paths.root,
+            )
+        else:
+            failed = len([row for row in all_chapters if row["status"] == ChapterStatus.FAILED.value])
+            self.db.update_book(
+                status=BookStatus.ERROR.value,
+                stage="completed_with_errors",
+                error=f"{failed} chapter chưa thể xuất MP3",
+            )
+            self._state("error", f"Đã xử lý xong nhưng còn {failed} chapter lỗi.")
+
+    def _existing_segment_is_safe(self, row: Any) -> bool:
+        if str(row["status"]) not in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}:
+            return False
+        wav_text = str(row["wav_path"] or "")
+        if not wav_text:
+            return False
+        wav = Path(wav_text)
+        if not wav.exists():
+            return False
+        if row["wav_sha256"] and sha256_file(wav) != str(row["wav_sha256"]):
+            return False
+        valid, _, _ = inspect_wav(wav, str(row["text"]), self.settings)
+        return valid
+
+    def _process_chapter(self, chapter: Any, verifier: WhisperVerifier) -> None:
+        chapter_id = int(chapter["id"])
+        output = Path(str(chapter["output_mp3"]))
+        if chapter["status"] == ChapterStatus.COMPLETED.value:
+            valid, _ = verify_mp3(output)
+            if valid:
+                self.log(f"Bỏ qua chapter đã hoàn tất: {chapter['title']}")
+                return
+
+        self.db.update_chapter_status(chapter_id, ChapterStatus.SYNTHESIZING.value)
+        self.log(f"Tạo audio chapter {chapter['chapter_index']}: {chapter['title']}")
+        rows = self.db.list_segments(chapter_id=chapter_id)
+        for row in rows:
+            if self._existing_segment_is_safe(row):
+                continue
+            if str(row["status"]) in {
+                SegmentStatus.GENERATING.value,
+                SegmentStatus.SIGNAL_PASSED.value,
+                SegmentStatus.ASR_PASSED.value,
+            } and not row["wav_path"]:
+                self.db.reset_segment_pending(int(row["id"]), "Recovered unfinished stage before chapter processing")
+
+        # Stage 1: synthesize the whole chapter. VieNeu profiles are batchable; VoxCPM2 remains per segment.
+        current_rows = self.db.list_segments(chapter_id=chapter_id)
+        vieneu_groups: dict[int, list[Any]] = defaultdict(list)
+        other_rows: list[Any] = []
+        for row in current_rows:
+            if self._existing_segment_is_safe(row):
+                continue
+            # A valid signal_passed WAV can proceed directly to the chapter ASR stage after recovery.
+            if str(row["status"]) == SegmentStatus.SIGNAL_PASSED.value and row["wav_path"]:
+                valid, _, _ = inspect_wav(Path(str(row["wav_path"])), str(row["text"]), self.settings)
+                if valid:
+                    continue
+            if row["voice_profile_id"] is None:
+                self.db.mark_failed(int(row["id"]), "No locked voice profile")
+                continue
+            profile = self.db.voice_profile(int(row["voice_profile_id"]))
+            if str(profile["engine"]) == "vieneu":
+                vieneu_groups[int(profile["id"])].append(row)
+            else:
+                other_rows.append(row)
+
+        for group in vieneu_groups.values():
+            offset = 0
+            while offset < len(group):
+                decision = self._resource_gate(
+                    f"chapter {chapter['chapter_index']} VieNeu batch at segment {group[offset]['seq']}",
+                    keep_engine="vieneu",
+                )
+                configured = max(1, int(self.settings["tts"]["batch_size"]))
+                batch_size = max(1, int(configured * decision.gpu_batch_scale))
+                batch = group[offset : offset + batch_size]
+                self._process_vieneu_batch(batch, chapter)
+                offset += len(batch)
+
+        for row in other_rows:
+            self._resource_gate(
+                f"chapter {chapter['chapter_index']} segment {row['seq']}",
+                keep_engine="voxcpm2",
+            )
+            self._process_single_segment(row, chapter)
+
+        # Stage 2: release TTS VRAM before loading Whisper, then verify the whole chapter.
+        self.tts.unload_all()
+        self.db.update_chapter_status(chapter_id, ChapterStatus.VERIFYING.value)
+        self._verify_chapter_audio(chapter, verifier)
+        verifier.unload()
+
+        rows = self.db.list_segments(chapter_id=chapter_id)
+        if not self.db.chapter_is_publishable(chapter_id):
+            failed = [row for row in rows if row["status"] == SegmentStatus.FAILED.value]
+            self.db.update_chapter_status(
+                chapter_id,
+                ChapterStatus.FAILED.value,
+                f"{len(failed)} segment failed; chapter MP3 intentionally not published",
+            )
+            self.log(f"Không xuất MP3 chapter {chapter['title']}: còn {len(failed)} segment lỗi.")
+            return
+
+        wavs = [(Path(str(row["wav_path"])), int(row["break_ms"])) for row in rows]
+        self._resource_gate(
+            f"FFmpeg chapter {chapter['chapter_index']}",
+            require_cpu_io=True,
+        )
+        checksum = assemble_chapter_atomic(
+            wavs,
+            output,
+            self.settings,
+            title=str(chapter["title"]),
+            book_title=str(self.db.book()["title"]),
+            track=int(chapter["chapter_index"]),
+            work_dir=self.paths.work / "silence",
+        )
+        self.db.register_artifact(
+            artifact_key=f"chapter_mp3:{chapter['chapter_index']}",
+            kind="chapter_mp3",
+            path=output,
+            sha256=checksum,
+            verified=True,
+            metadata={"chapter_id": chapter_id, "title": str(chapter["title"])},
+        )
+        self.db.update_chapter_status(chapter_id, ChapterStatus.COMPLETED.value)
+        self.log(f"Chapter MP3 đã hoàn tất và giải mã kiểm tra thành công: {output.name}")
+        self.emit(
+            "chapter_completed",
+            {"chapter_id": chapter_id, "path": str(output), "title": str(chapter["title"])},
+        )
+
+    def _chunk_path(self, row: Any) -> Path:
+        return self.paths.chunks / f"chapter_{int(row['chapter_id']):05d}" / f"{int(row['seq']):07d}.wav"
+
+    def _process_vieneu_batch(self, rows: list[Any], chapter: Any) -> None:
+        outputs = [self._chunk_path(row) for row in rows]
+        for row in rows:
+            self.db.mark_generating(int(row["id"]), self.tts.generation_seed(row, "batch"))
+        try:
+            results = self.tts.synthesize_vieneu_batch_atomic(rows, outputs, len(rows))
+            for row, output, (checksum, metrics, seed) in zip(rows, outputs, results):
+                self.db.mark_signal_passed(
+                    int(row["id"]),
+                    wav_path=output,
+                    wav_sha256=checksum,
+                    duration=float(metrics["duration"]),
+                    signal=metrics,
+                    generation_seed=seed,
+                )
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"VieNeu batch lỗi; chuyển sang cứu từng segment: {exc}")
+            for row in rows:
+                self._process_single_segment(row, chapter)
+
+    def _process_single_segment(self, row: Any, chapter: Any, seed_salt_prefix: str = "primary") -> None:
+        output = self._chunk_path(row)
+        last_error = ""
+        retries = int(self.settings["tts"]["max_retries"])
+        for attempt in range(retries):
+            self._wait_pause_or_stop()
+            try:
+                seed_salt = f"{seed_salt_prefix}_{attempt}"
+                self.db.mark_generating(
+                    int(row["id"]),
+                    self.tts.generation_seed(row, seed_salt),
+                )
+                checksum, metrics, seed = self.tts.synthesize_atomic(
+                    row, output, seed_salt=seed_salt
+                )
+                self.db.mark_signal_passed(
+                    int(row["id"]),
+                    wav_path=output,
+                    wav_sha256=checksum,
+                    duration=float(metrics["duration"]),
+                    signal=metrics,
+                    generation_seed=seed,
+                )
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = str(exc)
+                self.log(f"TTS segment {row['stable_id']} lỗi lần {attempt + 1}/{retries}: {last_error}")
+                time.sleep(min(8, 2 ** attempt))
+
+        try:
+            split_seed = self.tts.generation_seed(row, "split")
+            self.db.mark_generating(int(row["id"]), split_seed)
+            self._synthesize_split(row, output)
+            valid, metrics, reason = inspect_wav(output, str(row["text"]), self.settings)
+            if not valid:
+                raise AudioQualityError(reason)
+            checksum = sha256_file(output)
+            self.db.mark_signal_passed(
+                int(row["id"]), wav_path=output, wav_sha256=checksum,
+                duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
+            )
+            self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"{last_error}; split={exc}"
+
+        try:
+            fallback_seed = self.tts.generation_seed(row, "fallback")
+            self.db.mark_generating(int(row["id"]), fallback_seed)
+            checksum, metrics, fallback_seed = self.tts.fallback_atomic(row, output)
+            self.db.mark_signal_passed(
+                int(row["id"]), wav_path=output, wav_sha256=checksum,
+                duration=float(metrics["duration"]), signal=metrics, generation_seed=fallback_seed,
+            )
+            self.db.set_segment_warning_code(int(row["id"]), "TTS_FALLBACK_ENGINE")
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_error = f"{last_error}; fallback={exc}"
+
+        self.db.mark_failed(int(row["id"]), last_error)
+        self.db.event(
+            "error",
+            "SEGMENT_TTS_FAILED",
+            f"Segment {row['stable_id']} failed after all non-silent strategies",
+            {"error": last_error, "chapter": str(chapter["title"]), "text": str(row["text"])},
+        )
+
+    def _synthesize_split(self, row: Any, output: Path) -> None:
+        text = str(row["text"])
+        if len(text) < 100:
+            raise AudioQualityError("segment too short to split safely")
+        words = text.split()
+        pieces: list[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if current and len(candidate) > 170:
+                pieces.append(current)
+                current = word
+            else:
+                current = candidate
+        if current:
+            pieces.append(current)
+        if len(pieces) < 2:
+            raise AudioQualityError("split produced fewer than two pieces")
+        part_paths: list[Path] = []
+        try:
+            for index, piece in enumerate(pieces):
+                part_row = dict(row)
+                part_row["text"] = piece
+                part_row["stable_id"] = f"{row['stable_id']}_part{index:02d}"
+                part_path = output.with_name(output.stem + f".split{index:02d}.wav")
+                part_paths.append(part_path)
+                self.tts.synthesize_atomic(part_row, part_path, seed_salt=f"split_{index}")
+            merge_wav_parts_atomic(part_paths, output, text, self.settings)
+        finally:
+            for path in part_paths:
+                path.unlink(missing_ok=True)
+
+    def _verify_chapter_audio(self, chapter: Any, verifier: WhisperVerifier) -> None:
+        chapter_id = int(chapter["id"])
+        rows = self.db.list_segments(chapter_id=chapter_id)
+        pending: list[dict[str, Any]] = []
+        last_results: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            if str(row["status"]) == SegmentStatus.FAILED.value:
+                continue
+            if self._existing_segment_is_safe(row):
+                continue
+            if str(row["status"]) != SegmentStatus.SIGNAL_PASSED.value or not row["wav_path"]:
+                self.db.mark_failed(int(row["id"]), "No signal-validated WAV available for ASR")
+                continue
+            pending.append(dict(row))
+
+        def verify_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            mismatches: list[dict[str, Any]] = []
+            for item in items:
+                self._resource_gate(
+                    f"Whisper chapter {chapter['chapter_index']} segment {item['seq']}",
+                    release_active=verifier.unload,
+                )
+                result = verifier.verify(str(item["text"]), Path(str(item["wav_path"])))
+                last_results[int(item["id"])] = result
+                existing_warning = str(item.get("warning_code") or "") or None
+                if result["reason"] in {"ASR_NOT_RUN", "ASR_ERROR"}:
+                    warning = existing_warning or str(result["reason"])
+                    self.db.mark_verified(int(item["id"]), warning_code=warning)
+                elif result["passed"]:
+                    self.db.mark_asr_result(
+                        int(item["id"]), passed=True, transcript=str(result["transcript"]),
+                        similarity=float(result["similarity"]), wer=float(result["wer"]),
+                    )
+                    self.db.mark_verified(int(item["id"]), warning_code=existing_warning)
+                else:
+                    mismatches.append(item)
+            return mismatches
+
+        mismatches = verify_rows(pending)
+        repair_rounds = int(self.settings["asr"].get("repair_rounds", 2))
+        for repair_round in range(repair_rounds):
+            if not mismatches:
+                break
+            verifier.unload()
+            regenerated: list[dict[str, Any]] = []
+            for item in mismatches:
+                self._resource_gate(
+                    f"ASR repair chapter {chapter['chapter_index']} segment {item['seq']}",
+                    keep_engine=None,
+                )
+                # Retry the locked primary voice with a different deterministic seed.
+                self._process_single_segment(item, chapter, seed_salt_prefix=f"asr_repair_{repair_round}")
+                fresh = next(
+                    row for row in self.db.list_segments(chapter_id=chapter_id)
+                    if int(row["id"]) == int(item["id"])
+                )
+                if str(fresh["status"]) == SegmentStatus.SIGNAL_PASSED.value:
+                    regenerated.append(dict(fresh))
+            self.tts.unload_all()
+            mismatches = verify_rows(regenerated)
+
+        for item in mismatches:
+            result = last_results.get(int(item["id"]), {})
+            existing_warning = str(item.get("warning_code") or "") or None
+            warning = existing_warning or "ASR_MISMATCH_UNRESOLVED"
+            self.db.mark_asr_result(
+                int(item["id"]), passed=False, transcript=str(result.get("transcript", "")),
+                similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
+                warning_code=warning,
+            )
+            self.db.mark_verified(int(item["id"]), warning_code=warning)
+            self.db.event(
+                "warning",
+                "ASR_MISMATCH_UNRESOLVED",
+                f"ASR still differs for {item['stable_id']}; audio kept for later review",
+                {
+                    "chapter": str(chapter["title"]),
+                    "text": str(item["text"]),
+                    "transcript": str(result.get("transcript", "")),
+                    "similarity": float(result.get("similarity", 0.0)),
+                    "wer": float(result.get("wer", 1.0)),
+                },
+            )
+
+    def _export_reports(self) -> None:
+        characters = [dict(row) for row in self.db.list_characters()]
+        segments = [dict(row) for row in self.db.list_segments()]
+        warnings = [
+            {
+                "stable_id": row["stable_id"],
+                "chapter_id": row["chapter_id"],
+                "seq": row["seq"],
+                "text": row["text"],
+                "warning_code": row["warning_code"],
+                "error": row["error"],
+                "asr_text": row["asr_text"],
+                "asr_similarity": row["asr_similarity"],
+                "asr_wer": row["asr_wer"],
+            }
+            for row in segments
+            if row["status"] in {SegmentStatus.WARNING.value, SegmentStatus.FAILED.value}
+            or row["warning_code"]
+        ]
+        export_json_atomic(self.paths.output / "characters.json", characters)
+        export_json_atomic(self.paths.output / "transcript_metadata.json", segments)
+        export_json_atomic(self.paths.reports / "review_required.json", warnings)
+        export_json_atomic(
+            self.paths.reports / "runtime_events.json",
+            [dict(row) for row in self.db.list_events()],
+        )

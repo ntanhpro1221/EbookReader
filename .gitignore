@@ -1,0 +1,35 @@
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local runtime, virtual environment and downloaded models
+_internal/runtime/
+.venv/
+
+# Generated audiobook projects and transient worker files
+project.sqlite3
+project.sqlite3-shm
+project.sqlite3-wal
+book_settings.json
+.worker.lock
+logs/
+work/
+output/
+*.part
+*.part.*
+*.wav
+*.mp3
+*.m3u8
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.vs/
+.DS_Store
+Thumbs.db
+Desktop.ini
