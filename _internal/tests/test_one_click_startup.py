@@ -8,20 +8,28 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 def test_one_click_startup_contract() -> None:
     start_bytes = (PROJECT_ROOT / "START.bat").read_bytes()
     assert not start_bytes.startswith(b"\xef\xbb\xbf")
+    assert start_bytes.isascii()
     start = start_bytes.decode("utf-8")
+
+    launcher_path = INTERNAL_ROOT / "scripts" / "start_windows.ps1"
+    launcher_bytes = launcher_path.read_bytes()
+    assert launcher_bytes.startswith(b"\xef\xbb\xbf")
+    launcher = launcher_bytes.decode("utf-8-sig")
+
     setup_path = INTERNAL_ROOT / "scripts" / "setup_windows.ps1"
     setup_bytes = setup_path.read_bytes()
     assert setup_bytes.startswith(b"\xef\xbb\xbf")
     setup = setup_bytes.decode("utf-8-sig")
 
-    assert 'set "INTERNAL_ROOT=%~dp0_internal"' in start
-    assert 'set "RUNTIME_ROOT=%~dp0_internal\\runtime"' in start
-    assert r'set "SETUP_MARKER=%RUNTIME_ROOT%\.setup_complete"' in start
-    assert 'scripts\\setup_windows.ps1' in start
-    assert 'set "APP_SCRIPT=%INTERNAL_ROOT%\\app.py"' in start
-    assert 'import e_book_reader.gui' in start
-    assert "Lần chạy đầu hoặc môi trường cần được sửa." in start
-    assert "Đang mở E Book Reader..." in start
+    assert 'scripts\\start_windows.ps1' in start
+    assert "goto" not in start.casefold()
+    assert '$SetupMarker = Join-Path $RuntimeRoot ".setup_complete"' in launcher
+    assert '$SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"' in launcher
+    assert '$AppScript = Join-Path $InternalRoot "app.py"' in launcher
+    assert 'import e_book_reader.gui' in launcher
+    assert "Lần chạy đầu hoặc môi trường cần được sửa." in launcher
+    assert "CÀI ĐẶT KHÔNG HOÀN TẤT." in launcher
+    assert "Đang mở E Book Reader..." in launcher
     assert '[switch]$NoPause' in setup
     assert 'Set-Content -Encoding UTF8 $markerTemp' in setup
     assert 'Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker' in setup

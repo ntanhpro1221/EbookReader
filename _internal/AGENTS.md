@@ -89,6 +89,7 @@ Module chính:
 - `recovery.py`: integrity/checksum recovery.
 - `notifier.py`: Windows notifications.
 - `process_utils.py`: kết thúc an toàn cây process worker/native helper.
+- `scripts/start_windows.ps1`: kiểm tra runtime, gọi setup và mở app với thông báo UTF-8 an toàn.
 
 ## Quy tắc thay đổi
 
