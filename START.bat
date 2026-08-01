@@ -30,9 +30,9 @@ if errorlevel 1 goto :RUN_SETUP
 goto :LAUNCH
 
 :RUN_SETUP
-echo Lan chay dau hoac moi truong can duoc sua.
-echo Chuong trinh se tu dong cai dat va tai model can thiet.
-echo Qua trinh nay can Internet va co the su dung nhieu dung luong SSD.
+echo Lần chạy đầu hoặc môi trường cần được sửa.
+echo Chương trình sẽ tự động cài đặt và tải model cần thiết.
+echo Quá trình này cần Internet và có thể sử dụng nhiều dung lượng SSD.
 echo.
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%SETUP_SCRIPT%" -NoPause
@@ -42,21 +42,23 @@ if not exist "%SETUP_MARKER%" goto :SETUP_FAILED
 if not exist "%PYTHON_EXE%" goto :SETUP_FAILED
 
 :LAUNCH
-echo Dang mo E Book Reader...
+echo Đang mở E Book Reader...
 "%PYTHON_EXE%" "%APP_SCRIPT%"
 set "APP_EXIT=%ERRORLEVEL%"
 if not "%APP_EXIT%"=="0" (
     echo.
-    echo E Book Reader da dong voi ma loi %APP_EXIT%.
-    echo Thong tin ky thuat nam trong thu muc _internal.
-    pause
+    echo E Book Reader đã đóng với mã lỗi %APP_EXIT%.
+    echo Thông tin kỹ thuật nằm trong thư mục _internal.
+    echo Nhấn phím bất kỳ để đóng...
+    pause >nul
 )
 exit /b %APP_EXIT%
 
 :SETUP_FAILED
 echo.
-echo CAI DAT KHONG HOAN TAT.
-echo Khong co project audiobook nao bi thay doi.
-echo Kiem tra Internet, dung luong SSD va loi ben tren, sau do mo lai START.bat.
-pause
+echo CÀI ĐẶT KHÔNG HOÀN TẤT.
+echo Không có project audiobook nào bị thay đổi.
+echo Kiểm tra Internet, dung lượng SSD và lỗi bên trên, sau đó mở lại START.bat.
+echo Nhấn phím bất kỳ để đóng...
+pause >nul
 exit /b 1

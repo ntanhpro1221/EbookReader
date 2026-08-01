@@ -6,7 +6,9 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 
 
 def test_one_click_startup_contract() -> None:
-    start = (PROJECT_ROOT / "START.bat").read_text(encoding="utf-8")
+    start_bytes = (PROJECT_ROOT / "START.bat").read_bytes()
+    assert not start_bytes.startswith(b"\xef\xbb\xbf")
+    start = start_bytes.decode("utf-8")
     setup_path = INTERNAL_ROOT / "scripts" / "setup_windows.ps1"
     setup_bytes = setup_path.read_bytes()
     assert setup_bytes.startswith(b"\xef\xbb\xbf")
@@ -18,6 +20,8 @@ def test_one_click_startup_contract() -> None:
     assert 'scripts\\setup_windows.ps1' in start
     assert 'set "APP_SCRIPT=%INTERNAL_ROOT%\\app.py"' in start
     assert 'import e_book_reader.gui' in start
+    assert "Lần chạy đầu hoặc môi trường cần được sửa." in start
+    assert "Đang mở E Book Reader..." in start
     assert '[switch]$NoPause' in setup
     assert 'Set-Content -Encoding UTF8 $markerTemp' in setup
     assert 'Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker' in setup
