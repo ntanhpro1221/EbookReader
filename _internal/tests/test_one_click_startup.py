@@ -7,7 +7,10 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 
 def test_one_click_startup_contract() -> None:
     start = (PROJECT_ROOT / "START.bat").read_text(encoding="utf-8")
-    setup = (INTERNAL_ROOT / "scripts" / "setup_windows.ps1").read_text(encoding="utf-8")
+    setup_path = INTERNAL_ROOT / "scripts" / "setup_windows.ps1"
+    setup_bytes = setup_path.read_bytes()
+    assert setup_bytes.startswith(b"\xef\xbb\xbf")
+    setup = setup_bytes.decode("utf-8-sig")
 
     assert 'set "INTERNAL_ROOT=%~dp0_internal"' in start
     assert 'set "RUNTIME_ROOT=%~dp0_internal\\runtime"' in start
