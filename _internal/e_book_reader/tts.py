@@ -146,11 +146,11 @@ class VoxCPM2Engine:
 
     def generate(self, text: str, seed: int, reference_wav: Path | None = None) -> np.ndarray:
         self.load()
+        _set_generation_seed(seed)
         kwargs: dict[str, Any] = {
             "text": text,
             "cfg_value": float(self.settings["tts"]["cfg_value"]),
             "inference_timesteps": int(self.settings["tts"]["inference_timesteps"]),
-            "seed": int(seed),
             "retry_badcase": True,
             "retry_badcase_max_times": 3,
             "normalize": False,
