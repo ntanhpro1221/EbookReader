@@ -3,31 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 
 class BookStatus(StrEnum):
     CREATED = "created"
     ANALYZING = "analyzing"
-    ANALYZED = "analyzed"
     CASTING = "casting"
     SYNTHESIZING = "synthesizing"
-    VERIFYING = "verifying"
     COMPLETED = "completed"
     PAUSED = "paused"
     STOPPED = "stopped"
     ERROR = "error"
-    RECOVERY_REQUIRED = "recovery_required"
 
 
 class ChapterStatus(StrEnum):
     PENDING = "pending"
-    ANALYZING = "analyzing"
-    ANALYZED = "analyzed"
     SYNTHESIZING = "synthesizing"
     VERIFYING = "verifying"
     COMPLETED = "completed"
-    WARNING = "warning"
     FAILED = "failed"
 
 
@@ -54,7 +47,6 @@ class ResourceLevel(StrEnum):
 class ResourceDecision:
     level: ResourceLevel
     reason: str
-    cpu_workers_scale: float = 1.0
     gpu_batch_scale: float = 1.0
     allow_new_gpu_batch: bool = True
     allow_cpu_heavy_work: bool = True
@@ -92,11 +84,3 @@ class ProjectPaths:
         for path in (obj.root, obj.logs, obj.work, obj.chunks, obj.voices, obj.chapters, obj.output, obj.reports):
             path.mkdir(parents=True, exist_ok=True)
         return obj
-
-
-@dataclass(slots=True)
-class RuntimeEvent:
-    level: str
-    code: str
-    message: str
-    details: dict[str, Any] | None = None

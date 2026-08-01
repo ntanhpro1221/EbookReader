@@ -181,7 +181,6 @@ def _validate(group: list[Any], payload: dict[str, Any]) -> dict[str, dict[str, 
 
 class OllamaBookAnalyzer:
     def __init__(self, settings: dict[str, Any], db: ProjectDB, log: Callable[[str], None]) -> None:
-        self.full_settings = settings
         self.settings = settings["analysis"]
         self.allow_downloads = bool(settings.get("safety", {}).get("allow_network_downloads_during_job", False))
         self.db = db

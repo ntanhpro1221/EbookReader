@@ -11,7 +11,6 @@ from urllib.parse import urlparse
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {
-    "schema_version": 1,
     "quality_profile": "balanced",
     "interactive_prompts": False,
     "analysis": {
@@ -26,7 +25,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "max_alias_candidates": 400,
         "max_retries": 3,
         "timeout_seconds": 900,
-        "full_book_first": True,
         "low_confidence_threshold": 0.58,
         "low_confidence_policy": "auto_with_warning",
     },
@@ -113,10 +111,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "safety": {
         "sqlite_synchronous": "FULL",
-        "atomic_writes": True,
         "verify_checksums": True,
-        "verify_mp3_decode": True,
-        "checkpoint_every_segment": True,
         "stop_book_on_source_change": True,
         "notify_on_critical_stop": True,
         "notify_on_recovery": True,
@@ -194,8 +189,6 @@ def validate_settings(settings: dict[str, Any]) -> None:
     threshold = float(analysis.get("low_confidence_threshold", 0.58))
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("analysis.low_confidence_threshold must be between 0 and 1")
-    if analysis.get("full_book_first") is not True:
-        raise ValueError("analysis.full_book_first must remain true")
     if analysis.get("low_confidence_policy") not in {"auto_with_warning", "fail"}:
         raise ValueError("Unsupported analysis.low_confidence_policy")
 
@@ -233,10 +226,7 @@ def validate_settings(settings: dict[str, Any]) -> None:
 
     safety = settings.get("safety", {})
     for key in (
-        "atomic_writes",
         "verify_checksums",
-        "verify_mp3_decode",
-        "checkpoint_every_segment",
         "stop_book_on_source_change",
     ):
         if safety.get(key) is not True:

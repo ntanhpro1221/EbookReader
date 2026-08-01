@@ -10,9 +10,6 @@ from typing import Any, Iterator, Sequence
 from .models import BookStatus, ChapterStatus, SegmentStatus
 
 
-DB_SCHEMA_VERSION = 4
-
-
 SCHEMA = """
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
@@ -30,9 +27,7 @@ CREATE TABLE IF NOT EXISTS book (
     updated_at REAL NOT NULL,
     last_error TEXT,
     run_generation INTEGER NOT NULL DEFAULT 0,
-    casting_finalized INTEGER NOT NULL DEFAULT 0,
-    runtime_fingerprint_hash TEXT,
-    runtime_fingerprint_json TEXT
+    casting_finalized INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS chapters (
@@ -189,11 +184,6 @@ class ProjectDB:
         if self.synchronous not in {"OFF", "NORMAL", "FULL", "EXTRA"}:
             raise ValueError(f"Unsupported SQLite synchronous mode: {synchronous}")
         with self.connect() as conn:
-            current_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
-            if current_version > DB_SCHEMA_VERSION:
-                raise RuntimeError(
-                    f"Project database schema {current_version} is newer than supported {DB_SCHEMA_VERSION}"
-                )
             has_user_tables = bool(
                 conn.execute(
                     """
@@ -203,10 +193,8 @@ class ProjectDB:
                     """
                 ).fetchone()
             )
-            if current_version < DB_SCHEMA_VERSION and has_user_tables:
-                backup_path = self.path.with_suffix(
-                    self.path.suffix + f".schema-v{current_version}.bak"
-                )
+            if has_user_tables:
+                backup_path = self.path.with_suffix(self.path.suffix + ".pre-migration.bak")
                 if not backup_path.exists():
                     with sqlite3.connect(backup_path) as backup:
                         conn.backup(backup)
@@ -232,13 +220,6 @@ class ProjectDB:
                 )
                 """
             )
-        book_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
-        if "runtime_fingerprint_hash" not in book_columns:
-            conn.execute("ALTER TABLE book ADD COLUMN runtime_fingerprint_hash TEXT")
-        if "runtime_fingerprint_json" not in book_columns:
-            conn.execute("ALTER TABLE book ADD COLUMN runtime_fingerprint_json TEXT")
-        conn.execute(f"PRAGMA user_version={DB_SCHEMA_VERSION}")
-
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.path, timeout=60, isolation_level=None)
@@ -320,7 +301,7 @@ class ProjectDB:
         if stage is not None:
             fields.append("stage=?")
             params.append(stage)
-        if error is not None or status in {BookStatus.COMPLETED.value, BookStatus.ANALYZED.value}:
+        if error is not None or status == BookStatus.COMPLETED.value:
             fields.append("last_error=?")
             params.append(error)
         params.append(1)
@@ -344,28 +325,6 @@ class ProjectDB:
                 "UPDATE book SET casting_finalized=1,stage='voice_cast_locked',updated_at=? WHERE id=1",
                 (time.time(),),
             )
-
-    def bind_runtime_fingerprint(self, payload: dict[str, Any], fingerprint_hash: str) -> None:
-        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-        with self.transaction() as conn:
-            row = conn.execute(
-                "SELECT runtime_fingerprint_hash FROM book WHERE id=1"
-            ).fetchone()
-            if row is None:
-                raise RuntimeError("Project database has not been initialized")
-            existing = str(row["runtime_fingerprint_hash"] or "")
-            if existing and existing != fingerprint_hash:
-                raise RuntimeError(
-                    "Runtime/model fingerprint khác lần chạy đầu; từ chối resume để giữ chất lượng và giọng"
-                )
-            if not existing:
-                conn.execute(
-                    """
-                    UPDATE book SET runtime_fingerprint_hash=?,runtime_fingerprint_json=?,updated_at=?
-                    WHERE id=1
-                    """,
-                    (fingerprint_hash, serialized, time.time()),
-                )
 
     def ensure_chapters(self, rows: Sequence[dict[str, Any]]) -> list[int]:
         ids: list[int] = []
@@ -401,13 +360,6 @@ class ProjectDB:
     def list_chapters(self) -> list[sqlite3.Row]:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM chapters ORDER BY chapter_index"))
-
-    def get_chapter(self, chapter_id: int) -> sqlite3.Row:
-        with self.connect() as conn:
-            row = conn.execute("SELECT * FROM chapters WHERE id=?", (chapter_id,)).fetchone()
-            if row is None:
-                raise KeyError(chapter_id)
-            return row
 
     def update_chapter_status(self, chapter_id: int, status: str, error: str | None = None) -> None:
         now = time.time()
@@ -549,13 +501,6 @@ class ProjectDB:
                     time.time(),
                     segment_id,
                 ),
-            )
-
-    def set_segment_character(self, segment_id: int, character_id: int | None) -> None:
-        with self.connect() as conn:
-            conn.execute(
-                "UPDATE segments SET canonical_character_id=?, updated_at=? WHERE id=?",
-                (character_id, time.time(), segment_id),
             )
 
     def mark_generating(self, segment_id: int, seed: int) -> None:
@@ -848,21 +793,6 @@ class ProjectDB:
                 )
             )
 
-    def get_character_by_name_or_alias(self, normalized_name: str) -> sqlite3.Row | None:
-        with self.connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM characters WHERE canonical_name=?", (normalized_name,)
-            ).fetchone()
-            if row:
-                return row
-            return conn.execute(
-                """
-                SELECT c.* FROM character_aliases a JOIN characters c ON c.id=a.character_id
-                WHERE a.normalized_alias=?
-                """,
-                (normalized_name,),
-            ).fetchone()
-
     def upsert_voice_profile(self, data: dict[str, Any]) -> int:
         now = time.time()
         with self.transaction() as conn:
@@ -912,13 +842,6 @@ class ProjectDB:
                 (data["voice_key"], *values[:-1], now, now),
             )
             return int(cursor.lastrowid)
-
-    def assign_voice_profile(self, segment_id: int, profile_id: int) -> None:
-        with self.connect() as conn:
-            conn.execute(
-                "UPDATE segments SET voice_profile_id=?,updated_at=? WHERE id=?",
-                (profile_id, time.time(), segment_id),
-            )
 
     def list_voice_profiles(self) -> list[sqlite3.Row]:
         with self.connect() as conn:
@@ -1022,10 +945,6 @@ class ProjectDB:
         with self.connect() as conn:
             conn.execute("DELETE FROM worker_leases WHERE worker_name=?", (worker_name,))
 
-    def list_worker_leases(self) -> list[sqlite3.Row]:
-        with self.connect() as conn:
-            return list(conn.execute("SELECT * FROM worker_leases ORDER BY worker_name"))
-
     def reset_in_progress_segments(self, reason: str = "Interrupted before commit") -> int:
         with self.connect() as conn:
             chapter_ids = [
@@ -1052,10 +971,6 @@ class ProjectDB:
             for chapter_id in chapter_ids:
                 self._refresh_chapter_counts_conn(conn, chapter_id)
             return int(cursor.rowcount)
-
-    def list_artifacts(self) -> list[sqlite3.Row]:
-        with self.connect() as conn:
-            return list(conn.execute("SELECT * FROM artifacts ORDER BY id"))
 
     def artifact_by_key(self, artifact_key: str) -> sqlite3.Row | None:
         with self.connect() as conn:

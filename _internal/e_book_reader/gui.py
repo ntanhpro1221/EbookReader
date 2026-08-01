@@ -48,7 +48,7 @@ from .worker import run_worker
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("E Book Reader — v0.2 alpha.9")
+        self.setWindowTitle("E Book Reader")
         self.resize(1180, 780)
         self.settings_store = QSettings("OpenAI", "EBookReader")
         self.files: list[Path] = []

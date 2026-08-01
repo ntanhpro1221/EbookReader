@@ -5,7 +5,6 @@ import json
 import os
 import re
 import subprocess
-import time
 import unicodedata
 from pathlib import Path
 from typing import Any, Iterable
@@ -88,10 +87,6 @@ def decode_text_bytes(raw: bytes) -> str:
     return unicodedata.normalize("NFC", raw.decode("utf-8", errors="replace"))
 
 
-def read_text_auto(path: Path) -> str:
-    return decode_text_bytes(path.read_bytes())
-
-
 def atomic_write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".part")
@@ -149,7 +144,3 @@ def run_hidden(command: Iterable[str], *, timeout: float | None = None, check: b
         check=check,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
     )
-
-
-def utc_timestamp() -> float:
-    return time.time()

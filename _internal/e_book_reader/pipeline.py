@@ -106,7 +106,6 @@ class BookPipeline:
                     {
                         "level": decision.level.value,
                         "reason": decision.reason,
-                        "cpu_scale": decision.cpu_workers_scale,
                         "gpu_scale": decision.gpu_batch_scale,
                     },
                 )

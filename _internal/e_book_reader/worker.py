@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import logging
 import os
-import sys
 import threading
 import traceback
-import urllib.request
-from importlib import metadata
 from pathlib import Path
 from queue import Queue
 from typing import Any
@@ -123,55 +119,6 @@ def _validate_project_inputs(paths: ProjectPaths, db: ProjectDB, settings: dict[
             raise RuntimeError(f"Source chapter đã đổi kích thước sau khi project được tạo: {source}")
         if sha256_file(source) != str(chapter["input_sha256"]):
             raise RuntimeError(f"Source chapter đã thay đổi nội dung sau khi project được tạo: {source}")
-
-
-def _runtime_fingerprint(settings: dict[str, Any]) -> tuple[dict[str, Any], str]:
-    package_names = (
-        "e_book_reader",
-        "torch",
-        "torchaudio",
-        "vieneu",
-        "voxcpm",
-        "openai-whisper",
-        "PySide6",
-        "numpy",
-        "soundfile",
-    )
-    versions: dict[str, str] = {}
-    for name in package_names:
-        try:
-            versions[name] = metadata.version(name)
-        except metadata.PackageNotFoundError as exc:
-            raise RuntimeError(f"Thiếu package runtime bắt buộc: {name}") from exc
-
-    analysis = settings["analysis"]
-    ollama_digest: str | None = None
-    if analysis.get("enabled", True):
-        url = f"{str(analysis['base_url']).rstrip('/')}/api/tags"
-        try:
-            with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 - URL is validated.
-                tags = json.loads(response.read().decode("utf-8"))
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError("Không đọc được Ollama model digest để khóa runtime") from exc
-        model_name = str(analysis["model"])
-        for item in tags.get("models", []):
-            if str(item.get("name", "")) == model_name or str(item.get("model", "")) == model_name:
-                ollama_digest = str(item.get("digest", "")) or None
-                break
-        if ollama_digest is None:
-            raise RuntimeError(f"Không tìm thấy Ollama model để khóa runtime: {model_name}")
-
-    payload: dict[str, Any] = {
-        "python": sys.version.split()[0],
-        "packages": versions,
-        "analysis_model": str(analysis["model"]),
-        "analysis_model_digest": ollama_digest,
-        "voxcpm_model": str(settings["tts"]["voxcpm_model"]),
-        "voxcpm_revision": str(settings["tts"]["voxcpm_revision"]),
-        "whisper_model": str(settings["asr"]["model"]),
-    }
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return payload, hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class WorkerHeartbeat(threading.Thread):
@@ -298,14 +245,13 @@ def run_worker(
             emit=emit,
         )
         completed_noop = pipeline.prepare_recovery()
-        if not completed_noop:
-            runtime_payload, runtime_hash = _runtime_fingerprint(settings)
-            db.bind_runtime_fingerprint(runtime_payload, runtime_hash)
-            if not settings.get("safety", {}).get("allow_network_downloads_during_job", False):
-                # Setup must prefetch models. A running book must not unexpectedly download or change model revisions.
-                os.environ["HF_HUB_OFFLINE"] = "1"
-                os.environ["TRANSFORMERS_OFFLINE"] = "1"
-                os.environ["HF_DATASETS_OFFLINE"] = "1"
+        if not completed_noop and not settings.get("safety", {}).get(
+            "allow_network_downloads_during_job", False
+        ):
+            # Setup prefetches models so a running book never starts a surprise download.
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            os.environ["TRANSFORMERS_OFFLINE"] = "1"
+            os.environ["HF_DATASETS_OFFLINE"] = "1"
         pipeline.run(recovery_already_run=True)
         _emit(message_queue, "finished", {"ok": True, "text": "Pipeline kết thúc."})
     except PipelineStopped:

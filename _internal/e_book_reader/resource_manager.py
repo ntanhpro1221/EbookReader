@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import ctypes
 import os
 import shutil
@@ -8,7 +7,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import psutil
 
@@ -17,18 +16,11 @@ from .models import ResourceDecision, ResourceLevel
 
 @dataclass(slots=True)
 class ResourceSnapshot:
-    timestamp: float
     cpu_percent: float
     free_ram_gb: float
-    available_ram_percent: float
     disk_free_gb: float
     disk_active_percent: float | None
     gpu_temp_c: int | None
-    gpu_util_percent: float | None
-    gpu_memory_used_mb: int | None
-    gpu_memory_total_mb: int | None
-    foreground_pid: int | None
-    foreground_name: str | None
     foreground_cpu_percent: float | None
     foreground_gpu_percent: float | None
     seconds_since_user_input: float | None
@@ -71,20 +63,20 @@ class WindowsActivityProbe:
         except Exception:
             return None
 
-    def process_cpu(self, pid: int | None) -> tuple[str | None, float | None]:
+    def process_cpu(self, pid: int | None) -> float | None:
         if not pid:
-            return None, None
+            return None
         try:
             proc = self._process_samples.get(pid)
             if proc is None or not proc.is_running():
                 proc = psutil.Process(pid)
                 proc.cpu_percent(None)
                 self._process_samples[pid] = proc
-                return proc.name(), 0.0
-            return proc.name(), proc.cpu_percent(None)
+                return 0.0
+            return proc.cpu_percent(None)
         except (psutil.Error, OSError):
             self._process_samples.pop(pid, None)
-            return None, None
+            return None
 
 
 class NvidiaProbe:
@@ -94,20 +86,14 @@ class NvidiaProbe:
         self._process_cache_value: float | None = None
         self._process_cache_at = 0.0
 
-    def gpu_summary(self) -> dict[str, int | float | None]:
-        result: dict[str, int | float | None] = {
-            "temp": None,
-            "util": None,
-            "memory_used": None,
-            "memory_total": None,
-        }
+    def gpu_temperature(self) -> int | None:
         if not self.executable:
-            return result
+            return None
         try:
             completed = subprocess.run(
                 [
                     self.executable,
-                    "--query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total",
+                    "--query-gpu=temperature.gpu",
                     "--format=csv,noheader,nounits",
                 ],
                 capture_output=True,
@@ -116,12 +102,9 @@ class NvidiaProbe:
                 check=True,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             )
-            first = next(csv.reader([completed.stdout.strip().splitlines()[0]]))
-            values = [int(float(item.strip())) for item in first]
-            result.update(temp=values[0], util=float(values[1]), memory_used=values[2], memory_total=values[3])
+            return int(float(completed.stdout.strip().splitlines()[0]))
         except Exception:
-            pass
-        return result
+            return None
 
     def process_gpu_percent(self, pid: int | None) -> float | None:
         if not self.executable or not pid:
@@ -195,9 +178,9 @@ class AdaptiveResourceManager:
         self._last_disk_io = current_io
         self._last_disk_time = now
 
-        gpu = self.nvidia.gpu_summary()
+        gpu_temp = self.nvidia.gpu_temperature()
         pid = self.windows.foreground_pid()
-        foreground_name, foreground_cpu = self.windows.process_cpu(pid)
+        foreground_cpu = self.windows.process_cpu(pid)
         foreground_gpu = self.nvidia.process_gpu_percent(pid)
         try:
             battery = psutil.sensors_battery()
@@ -205,18 +188,11 @@ class AdaptiveResourceManager:
             battery = None
         on_battery = None if battery is None else not bool(battery.power_plugged)
         snapshot = ResourceSnapshot(
-            timestamp=time.time(),
             cpu_percent=cpu,
             free_ram_gb=memory.available / (1024**3),
-            available_ram_percent=float(memory.available * 100 / max(1, memory.total)),
             disk_free_gb=disk.free / (1024**3),
             disk_active_percent=disk_active,
-            gpu_temp_c=gpu["temp"] if isinstance(gpu["temp"], int) else None,
-            gpu_util_percent=float(gpu["util"]) if gpu["util"] is not None else None,
-            gpu_memory_used_mb=int(gpu["memory_used"]) if gpu["memory_used"] is not None else None,
-            gpu_memory_total_mb=int(gpu["memory_total"]) if gpu["memory_total"] is not None else None,
-            foreground_pid=pid,
-            foreground_name=foreground_name,
+            gpu_temp_c=gpu_temp,
             foreground_cpu_percent=foreground_cpu,
             foreground_gpu_percent=foreground_gpu,
             seconds_since_user_input=self.windows.seconds_since_input(),
@@ -243,7 +219,6 @@ class AdaptiveResourceManager:
             return ResourceDecision(
                 ResourceLevel.CRITICAL_STOP,
                 "; ".join(critical_reasons),
-                cpu_workers_scale=0.0,
                 gpu_batch_scale=0.0,
                 allow_new_gpu_batch=False,
                 unload_idle_models=True,
@@ -262,7 +237,6 @@ class AdaptiveResourceManager:
                 return ResourceDecision(
                     ResourceLevel.PAUSE_NEW_WORK,
                     f"GPU cooling at {detail}; resume at {resume_temp}°C",
-                    cpu_workers_scale=0.25,
                     gpu_batch_scale=0.0,
                     allow_new_gpu_batch=False,
                     unload_idle_models=False,
@@ -276,7 +250,6 @@ class AdaptiveResourceManager:
             return ResourceDecision(
                 ResourceLevel.PAUSE_NEW_WORK,
                 "laptop is running on battery",
-                cpu_workers_scale=0.1,
                 gpu_batch_scale=0.0,
                 allow_new_gpu_batch=False,
                 unload_idle_models=True,
@@ -317,7 +290,6 @@ class AdaptiveResourceManager:
             return ResourceDecision(
                 ResourceLevel.YIELD_HEAVY,
                 "; ".join(heavy_reasons),
-                cpu_workers_scale=0.25,
                 gpu_batch_scale=0.25,
                 # VoxCPM2 is per-segment, so reducing batch cannot make it share GPU gracefully.
                 # Stop dispatching new GPU work when the foreground app is actually using GPU.
@@ -340,7 +312,6 @@ class AdaptiveResourceManager:
             return ResourceDecision(
                 ResourceLevel.YIELD_LIGHT,
                 reason,
-                cpu_workers_scale=0.60,
                 gpu_batch_scale=0.70,
                 allow_new_gpu_batch=True,
                 allow_cpu_heavy_work=False,
@@ -351,33 +322,16 @@ class AdaptiveResourceManager:
         ramp_step = max(0.0, float(cfg.get("ramp_step_seconds", 8)))
         if stable_for < ramp_wait + ramp_step and self._last_level != ResourceLevel.MAXIMUM:
             ramp_progress = max(0.0, min(1.0, (stable_for - ramp_wait) / max(0.001, ramp_step)))
-            scale = 0.60 + 0.30 * ramp_progress
+            gpu_scale = 0.60 + 0.30 * ramp_progress
             return ResourceDecision(
                 ResourceLevel.YIELD_LIGHT,
                 f"ramping after {stable_for:.0f}/{ramp_wait + ramp_step:.0f}s stable",
-                cpu_workers_scale=scale,
-                gpu_batch_scale=scale,
+                gpu_batch_scale=gpu_scale,
                 allow_new_gpu_batch=True,
             )
 
         self._last_level = ResourceLevel.MAXIMUM
         return ResourceDecision(ResourceLevel.MAXIMUM, "resources available")
-
-    def wait_until_work_allowed(
-        self,
-        stop_requested: Callable[[], bool] | None = None,
-        callback: Callable[[ResourceDecision], None] | None = None,
-    ) -> ResourceDecision:
-        while True:
-            if stop_requested and stop_requested():
-                return ResourceDecision(ResourceLevel.PAUSE_NEW_WORK, "stop requested", allow_new_gpu_batch=False)
-            decision = self.decide()
-            if callback:
-                callback(decision)
-            if decision.critical or decision.allow_new_gpu_batch:
-                return decision
-            time.sleep(2.0)
-
 
 def set_worker_priority(priority: str = "below_normal") -> None:
     try:

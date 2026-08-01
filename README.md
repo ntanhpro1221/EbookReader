@@ -1,4 +1,4 @@
-# E Book Reader v0.2 alpha.9
+# E Book Reader
 
 Ứng dụng Windows chạy local, chuyển một hoặc nhiều chapter `.txt` tiếng Việt thành audiobook MP3 có phân vai và cảm xúc.
 
@@ -38,9 +38,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - WAV/MP3 ghi qua file `.part`, kiểm tra rồi mới atomic rename.
 - SQLite là nguồn trạng thái chính; không coi file tồn tại là đã hoàn tất.
-- Mỗi project chỉ cho phép một worker; settings trong SQLite, source hash và runtime/model fingerprint được kiểm tra lại khi resume.
+- Mỗi project chỉ cho phép một worker; settings trong SQLite và source hash được kiểm tra lại khi resume.
 - Byte TXT dùng để segment phải khớp đúng hash đã khóa; source đổi ngay trong lúc đọc cũng làm job dừng.
-- `START.bat` kiểm tra source manifest trước khi mở app; database mới hơn phiên bản app bị từ chối thay vì migrate ngược.
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.
 - Khi dừng cưỡng bức, app kết thúc cả cây process con (FFmpeg/Ollama helper) để tránh tiến trình mồ côi.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
@@ -51,7 +50,7 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 Mỗi book được lưu thành một project riêng với database, log, audio trung gian và thư mục `output` chứa MP3 chapter,
 playlist, `pronunciations.json`, metadata tùy chọn và report. Project đã hoàn tất chỉ xác minh MP3/checksum rồi thoát nhanh,
-không yêu cầu Ollama/model fingerprint, không băm lại toàn bộ WAV hoặc ghép lại full-book nếu artifact vẫn nguyên vẹn.
+không cần khởi động Ollama, không băm lại toàn bộ WAV hoặc ghép lại full-book nếu artifact vẫn nguyên vẹn.
 
 ## Trạng thái alpha
 

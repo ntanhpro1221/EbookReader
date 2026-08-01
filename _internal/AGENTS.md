@@ -53,7 +53,6 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Fallback phải là engine khác primary; không được ghi warning fallback nếu thực tế vẫn gọi cùng engine.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
 - Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
-- Fast-path `completed` chạy trước model/runtime fingerprint; chỉ project cần tạo lại audio mới phải bind fingerprint.
 - Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
 
 ## Cấu trúc source
@@ -90,7 +89,6 @@ Module chính:
 - `recovery.py`: integrity/checksum recovery.
 - `notifier.py`: Windows notifications.
 - `process_utils.py`: kết thúc an toàn cây process worker/native helper.
-- `scripts/check_source_manifest.py`: xác minh checksum source trước khi mở app.
 
 ## Quy tắc thay đổi
 

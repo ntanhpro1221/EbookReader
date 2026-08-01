@@ -43,7 +43,6 @@ def transcript_metrics(expected: str, actual: str) -> tuple[float, float]:
 
 class WhisperVerifier:
     def __init__(self, settings: dict[str, Any], log: Callable[[str], None]) -> None:
-        self.full_settings = settings
         self.settings = settings["asr"]
         self.allow_downloads = bool(settings.get("safety", {}).get("allow_network_downloads_during_job", False))
         self.log = log

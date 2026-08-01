@@ -4,9 +4,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 $InternalRoot = Split-Path -Parent $PSScriptRoot
-$ProjectRoot = Split-Path -Parent $InternalRoot
 $RuntimeRoot = Join-Path $InternalRoot "runtime"
-$SetupMarker = Join-Path $RuntimeRoot ".setup_complete_0.2.0-alpha.9"
+$SetupMarker = Join-Path $RuntimeRoot ".setup_complete"
 $VenvRoot = Join-Path $RuntimeRoot ".venv"
 $Python = Join-Path $VenvRoot "Scripts\python.exe"
 $ModelsRoot = Join-Path $RuntimeRoot "models"
@@ -51,36 +50,9 @@ function Ensure-WingetPackage([string]$Command, [string]$PackageId, [string]$Dis
     }
 }
 
-function Test-SourceManifest {
-    $manifest = Join-Path $InternalRoot "SOURCE_MANIFEST.sha256"
-    $rootPrefix = [IO.Path]::GetFullPath($ProjectRoot + [IO.Path]::DirectorySeparatorChar)
-    foreach ($line in Get-Content -LiteralPath $manifest -Encoding UTF8) {
-        if ([string]::IsNullOrWhiteSpace($line)) { continue }
-        if ($line -notmatch '^([0-9a-fA-F]{64})\s+(.+)$') {
-            throw "Source manifest không hợp lệ: $line"
-        }
-        $expected = $Matches[1].ToLowerInvariant()
-        $relative = $Matches[2] -replace '^\.[\\/]', ''
-        $target = [IO.Path]::GetFullPath((Join-Path $ProjectRoot $relative))
-        if (-not $target.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "Source manifest chứa path ngoài project: $relative"
-        }
-        if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
-            throw "Thiếu source file: $relative"
-        }
-        $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $target).Hash.ToLowerInvariant()
-        if ($actual -ne $expected) {
-            throw "Source checksum không khớp: $relative"
-        }
-    }
-    Write-Host "[OK] Source manifest"
-}
-
 Write-Host "=== E Book Reader - cài đặt Windows ===" -ForegroundColor Cyan
 Write-Host "Môi trường và model được lưu gọn trong _internal\runtime."
 Write-Host "Máy nên đang cắm sạc và SSD nên còn tối thiểu 30-40 GB."
-
-Test-SourceManifest
 
 Ensure-WingetPackage "uv" "astral-sh.uv" "uv"
 
@@ -105,7 +77,7 @@ Invoke-NativeChecked {
 
 Write-Host "Cài E Book Reader và các engine..."
 Invoke-NativeChecked {
-    & $Python -m pip install --no-build-isolation -e ".[dev]"
+    & $Python -m pip install --no-build-isolation -e "."
 } "Cài E Book Reader"
 Invoke-NativeChecked { & $Python -m pip check } "Kiểm tra dependency"
 
@@ -145,20 +117,11 @@ Invoke-NativeChecked {
     & $Python -c "import whisper; m=whisper.load_model('turbo', device='cpu', download_root=r'$WhisperRoot'); del m; print('Whisper Turbo ready')"
 } "Tải Whisper Turbo"
 
-Write-Host "Chạy test..."
-Invoke-NativeChecked { & $Python -m pytest } "Chạy pytest"
-
 Write-Host "Chạy system check..."
 Invoke-NativeChecked { & $Python (Join-Path $PSScriptRoot "check_system.py") } "Chạy system check"
 
-Write-Host "Kiểm tra source manifest..."
-Invoke-NativeChecked {
-    & $Python (Join-Path $PSScriptRoot "check_source_manifest.py")
-} "Kiểm tra source manifest"
-
 $markerPayload = [ordered]@{
     completed_at = (Get-Date).ToString("o")
-    setup_version = "0.2.0-alpha.9"
     python = $Python
     internal_root = $InternalRoot
 }

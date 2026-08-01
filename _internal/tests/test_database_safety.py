@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 import pytest
 
-from e_book_reader.database import DB_SCHEMA_VERSION, ProjectDB
+from e_book_reader.database import ProjectDB
 from e_book_reader.config import build_settings
 from e_book_reader.tts import TTSCoordinator
 
@@ -74,19 +73,6 @@ def test_pronunciation_keeps_higher_confidence_value(tmp_path: Path) -> None:
     row = db.list_pronunciations()[0]
     assert row["spoken_form"] == "Ê đen vai"
     assert row["confidence"] == pytest.approx(0.9)
-
-
-def test_future_database_schema_is_rejected(tmp_path: Path) -> None:
-    path = tmp_path / "future.sqlite3"
-    conn = sqlite3.connect(path)
-    with conn:
-        conn.execute(f"PRAGMA user_version={DB_SCHEMA_VERSION + 1}")
-    conn.close()
-
-    with pytest.raises(RuntimeError, match="newer than supported"):
-        ProjectDB(path)
-
-
 def test_pronunciation_is_applied_and_fallback_engine_is_distinct(tmp_path: Path) -> None:
     db = ProjectDB(tmp_path / "project.sqlite3")
     db.upsert_pronunciation(

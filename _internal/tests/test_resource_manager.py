@@ -9,18 +9,11 @@ from e_book_reader.resource_manager import AdaptiveResourceManager, ResourceSnap
 
 def snapshot(**updates):
     values = dict(
-        timestamp=0.0,
         cpu_percent=20.0,
         free_ram_gb=12.0,
-        available_ram_percent=40.0,
         disk_free_gb=100.0,
         disk_active_percent=5.0,
         gpu_temp_c=70,
-        gpu_util_percent=80.0,
-        gpu_memory_used_mb=5000,
-        gpu_memory_total_mb=8000,
-        foreground_pid=123,
-        foreground_name="editor.exe",
         foreground_cpu_percent=5.0,
         foreground_gpu_percent=0.0,
         seconds_since_user_input=30.0,
