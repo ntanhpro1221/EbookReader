@@ -35,19 +35,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .config import build_settings
+from .config import build_settings, load_settings
 from .database import ProjectDB
 from .io_utils import discover_txt_files, natural_key
 from .models import ProjectPaths
 from .notifier import WindowsNotifier
 from .project import create_or_open_project
+from .process_utils import terminate_process_tree
 from .worker import run_worker
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("E Book Reader — v0.2 alpha.8")
+        self.setWindowTitle("E Book Reader — v0.2 alpha.9")
         self.resize(1180, 780)
         self.settings_store = QSettings("OpenAI", "EBookReader")
         self.files: list[Path] = []
@@ -59,12 +60,13 @@ class MainWindow(QMainWindow):
         self.stop_event: Any = None
         self.received_finished = False
         self.was_user_stop = False
+        self._chapter_snapshot: tuple[Any, ...] | None = None
         self.notifier = WindowsNotifier()
         self._build_ui()
         self._restore_ui()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._poll)
-        self.timer.start(350)
+        self.timer.start(1000)
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -95,12 +97,15 @@ class MainWindow(QMainWindow):
         remove_files.clicked.connect(self._remove_files)
         open_project = QPushButton("Mở project cũ")
         open_project.clicked.connect(self._open_project)
+        new_book = QPushButton("Book mới")
+        new_book.clicked.connect(self._new_book)
         top.addWidget(QLabel("Tên book:"), 0, 0)
         top.addWidget(self.title_edit, 0, 1, 1, 3)
         top.addWidget(QLabel("Nơi lưu:"), 1, 0)
         top.addWidget(self.output_edit, 1, 1)
         top.addWidget(choose_output, 1, 2)
         top.addWidget(open_project, 1, 3)
+        top.addWidget(new_book, 2, 0)
         top.addWidget(add_files, 2, 1)
         top.addWidget(add_folder, 2, 2)
         top.addWidget(remove_files, 2, 3)
@@ -219,6 +224,8 @@ class MainWindow(QMainWindow):
         scrollbar.setValue(scrollbar.maximum())
 
     def _merge_input_files(self, paths: list[Path]) -> int:
+        if paths and self.project_paths is not None:
+            self._new_book()
         existing = {str(path).casefold() for path in self.files}
         added = 0
         for path in paths:
@@ -375,14 +382,9 @@ class MainWindow(QMainWindow):
         self.was_user_stop = True
         if self.stop_event:
             self.stop_event.set()
-        self.process.terminate()
-        self.process.join(timeout=4)
-        if self.process.is_alive():
-            try:
-                self.process.kill()
-            except Exception:
-                pass
-            self.process.join(timeout=2)
+        if self.process.pid:
+            terminate_process_tree(self.process.pid, grace_seconds=4.0)
+        self.process.join(timeout=2)
         self._append_log("Worker đã bị dừng ngay. File .part sẽ bị loại bỏ trong recovery scan lần sau.")
         self._running_controls(False)
         self._dispose_ipc()
@@ -432,11 +434,40 @@ class MainWindow(QMainWindow):
             self.files = [Path(str(row["input_path"])) for row in chapters]
             self.title_edit.setText(str(self.db.book()["title"]))
             self.output_edit.setText(str(paths.root.parent))
+            self._apply_locked_settings(load_settings(paths.settings))
+            self._chapter_snapshot = None
             self._refresh_file_list()
             self._refresh_chapters()
             self._append_log("Đã mở project. Khi tiếp tục sẽ dùng nguyên settings và voice mapping đã khóa.")
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "Không mở được project", str(exc))
+
+    def _new_book(self) -> None:
+        if self.process and self.process.is_alive():
+            return
+        self.project_paths = None
+        self.db = None
+        self.files = []
+        self.title_edit.clear()
+        self.file_list.clear()
+        self.chapter_table.setRowCount(0)
+        self.progress.setValue(0)
+        self._chapter_snapshot = None
+        self._append_log("Đã chuyển sang book mới; project cũ vẫn nguyên vẹn trên ổ đĩa.")
+
+    def _apply_locked_settings(self, settings: dict[str, Any]) -> None:
+        profile_index = self.profile_combo.findData(str(settings.get("quality_profile", "balanced")))
+        if profile_index >= 0:
+            self.profile_combo.setCurrentIndex(profile_index)
+        resources = settings.get("resources", {})
+        resource_index = self.resource_combo.findData(str(resources.get("mode", "")))
+        if resource_index >= 0:
+            self.resource_combo.setCurrentIndex(resource_index)
+        self.max_temp.setValue(int(resources.get("max_gpu_temp_c", 86)))
+        self.pause_battery.setChecked(bool(resources.get("pause_on_battery", True)))
+        audio = settings.get("audio", {})
+        self.keep_wav.setChecked(bool(audio.get("keep_verified_wav", True)))
+        self.full_book.setChecked(bool(audio.get("combine_full_book", True)))
 
     def _refresh_chapters(self) -> None:
         if not self.db:
@@ -445,6 +476,20 @@ class MainWindow(QMainWindow):
             chapters = self.db.list_chapters()
         except Exception:
             return
+        snapshot = tuple(
+            (
+                int(row["id"]),
+                str(row["status"]),
+                int(row["verified_segments"]),
+                int(row["warning_segments"]),
+                int(row["total_segments"]),
+                Path(str(row["output_mp3"])).exists(),
+            )
+            for row in chapters
+        )
+        if snapshot == self._chapter_snapshot:
+            return
+        self._chapter_snapshot = snapshot
         self.chapter_table.setRowCount(len(chapters))
         done = 0
         for index, row in enumerate(chapters):
@@ -455,8 +500,9 @@ class MainWindow(QMainWindow):
             total = int(row["total_segments"])
             self.chapter_table.setItem(index, 3, QTableWidgetItem(f"{accepted}/{total}"))
             output = str(row["output_mp3"])
-            item = QTableWidgetItem(output if Path(output).exists() else "")
-            item.setData(Qt.UserRole, output)
+            published = str(row["status"]) == "completed" and Path(output).exists()
+            item = QTableWidgetItem(output if published else "")
+            item.setData(Qt.UserRole, output if published else "")
             self.chapter_table.setItem(index, 4, item)
             if row["status"] == "completed":
                 done += 1
@@ -493,7 +539,20 @@ class MainWindow(QMainWindow):
             if not self.received_finished and not self.was_user_stop:
                 title = str(self.db.book()["title"]) if self.db else "Audiobook"
                 root = self.project_paths.root if self.project_paths else Path.cwd()
-                self.notifier.critical_stop(title, f"Worker thoát bất ngờ, exit code {exitcode}", root)
+                notify = True
+                if self.project_paths is not None:
+                    try:
+                        notify = bool(
+                            load_settings(self.project_paths.settings)["safety"].get(
+                                "notify_on_critical_stop", True
+                            )
+                        )
+                    except Exception:
+                        notify = True
+                if notify:
+                    self.notifier.critical_stop(
+                        title, f"Worker thoát bất ngờ, exit code {exitcode}", root
+                    )
                 self._append_log(f"Worker thoát bất ngờ, exit code {exitcode}. Lần sau recovery sẽ kiểm tra checkpoint.")
             self._running_controls(False)
             self._dispose_ipc()
@@ -520,13 +579,9 @@ class MainWindow(QMainWindow):
                 self.stop_event.set()
             self.process.join(timeout=2.0)
             if self.process.is_alive():
-                self.process.terminate()
+                if self.process.pid:
+                    terminate_process_tree(self.process.pid, grace_seconds=4.0)
                 self.process.join(timeout=2.0)
-            if self.process.is_alive():
-                try:
-                    self.process.kill()
-                except Exception:
-                    pass
             if not self.process.is_alive():
                 self._dispose_ipc()
         event.accept()

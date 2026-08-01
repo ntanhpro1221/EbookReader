@@ -80,7 +80,10 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
         return shown
 
     def critical_stop(self, book_title: str, reason: str, project_path: Path, checkpoint: str = "") -> None:
-        message = f"Book: {book_title}. Lý do: {reason}. Dữ liệu đã checkpoint an toàn."
+        message = (
+            f"Book: {book_title}. Lý do: {reason}. "
+            "Các checkpoint đã commit vẫn được giữ; đoạn đang chạy sẽ được recovery kiểm tra."
+        )
         if checkpoint:
             message += f" Vị trí: {checkpoint}."
         self.notify("E Book Reader đã tự dừng", message, critical=True, project_path=project_path)

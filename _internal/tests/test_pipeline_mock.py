@@ -27,6 +27,9 @@ class FakeTTS:
     def generation_seed(self, row, seed_salt=""):
         return 1
 
+    def spoken_text(self, row):
+        return str(row["text"])
+
     def synthesize_vieneu_batch_atomic(self, rows, outputs, batch_size):
         results = []
         for row, output in zip(rows, outputs):

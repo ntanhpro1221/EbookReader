@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import threading
-import time
 import traceback
 import urllib.request
 from importlib import metadata
@@ -22,6 +21,7 @@ from .io_utils import sha256_file
 from .models import BookStatus, ProjectPaths
 from .notifier import WindowsNotifier
 from .pipeline import BookPipeline, CriticalResourceStop, PipelineStopped
+from .process_utils import terminate_process_tree
 from .resource_manager import set_worker_priority
 
 
@@ -204,6 +204,7 @@ class ParentWatchdog(threading.Thread):
         db: ProjectDB,
         project_root: Path,
         grace_seconds: float,
+        notify_on_critical_stop: bool,
     ) -> None:
         super().__init__(name="e-book-reader-parent-watchdog", daemon=True)
         self.parent_pid = parent_pid
@@ -212,6 +213,7 @@ class ParentWatchdog(threading.Thread):
         self.db = db
         self.project_root = project_root
         self.grace_seconds = max(3.0, float(grace_seconds))
+        self.notify_on_critical_stop = notify_on_critical_stop
 
     def run(self) -> None:
         while not self.local_stop.wait(2.0):
@@ -224,16 +226,21 @@ class ParentWatchdog(threading.Thread):
                         reason,
                         {"parent_pid": self.parent_pid, "grace_seconds": self.grace_seconds},
                     )
-                    WindowsNotifier().critical_stop(
-                        str(self.db.book()["title"]), reason, self.project_root, "parent watchdog"
-                    )
                 except Exception:
                     pass
+                if self.notify_on_critical_stop:
+                    try:
+                        WindowsNotifier().critical_stop(
+                            str(self.db.book()["title"]), reason, self.project_root, "parent watchdog"
+                        )
+                    except Exception:
+                        pass
                 self.external_stop_event.set()
                 # If a native CUDA call never returns, do not leave an orphan worker indefinitely.
                 # os._exit is safe here because all committed outputs are atomic and the current
                 # generating segment will be reset by Recovery Scan.
                 if not self.local_stop.wait(self.grace_seconds):
+                    terminate_process_tree(os.getpid(), include_parent=False, grace_seconds=2.0)
                     os._exit(17)
                 return
 
@@ -251,6 +258,7 @@ def run_worker(
     notifier = WindowsNotifier()
     run_lock = ProjectRunLock(paths.root / ".worker.lock")
     db: ProjectDB | None = None
+    settings: dict[str, Any] | None = None
 
     def emit(kind: str, payload: dict[str, Any]) -> None:
         logging.info("EVENT %s %s", kind, payload)
@@ -265,13 +273,6 @@ def run_worker(
             synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")),
         )
         _validate_project_inputs(paths, db, settings)
-        runtime_payload, runtime_hash = _runtime_fingerprint(settings)
-        db.bind_runtime_fingerprint(runtime_payload, runtime_hash)
-        if not settings.get("safety", {}).get("allow_network_downloads_during_job", False):
-            # Setup must prefetch models. A running book must not unexpectedly download or change model revisions.
-            os.environ["HF_HUB_OFFLINE"] = "1"
-            os.environ["TRANSFORMERS_OFFLINE"] = "1"
-            os.environ["HF_DATASETS_OFFLINE"] = "1"
         _configure_logging(paths.logs / "e_book_reader.log")
         set_worker_priority(str(settings["resources"].get("worker_priority", "below_normal")))
 
@@ -284,6 +285,7 @@ def run_worker(
             db,
             paths.root,
             float(settings["resources"].get("parent_exit_grace_seconds", 12)),
+            bool(settings["safety"].get("notify_on_critical_stop", True)),
         )
         heartbeat.start()
         parent_watchdog.start()
@@ -295,7 +297,16 @@ def run_worker(
             stop_requested=stop_event.is_set,
             emit=emit,
         )
-        pipeline.run()
+        completed_noop = pipeline.prepare_recovery()
+        if not completed_noop:
+            runtime_payload, runtime_hash = _runtime_fingerprint(settings)
+            db.bind_runtime_fingerprint(runtime_payload, runtime_hash)
+            if not settings.get("safety", {}).get("allow_network_downloads_during_job", False):
+                # Setup must prefetch models. A running book must not unexpectedly download or change model revisions.
+                os.environ["HF_HUB_OFFLINE"] = "1"
+                os.environ["TRANSFORMERS_OFFLINE"] = "1"
+                os.environ["HF_DATASETS_OFFLINE"] = "1"
+        pipeline.run(recovery_already_run=True)
         _emit(message_queue, "finished", {"ok": True, "text": "Pipeline kết thúc."})
     except PipelineStopped:
         assert db is not None
@@ -320,9 +331,14 @@ def run_worker(
                 raise RuntimeError("Database chưa mở được")
             db.update_book(status=BookStatus.ERROR.value, stage="unrecoverable_error", error=str(exc))
             db.event("critical", "UNRECOVERABLE_PIPELINE_ERROR", str(exc), {"traceback": details[-12000:]})
-            notifier.critical_stop(str(db.book()["title"]), str(exc), paths.root)
         except Exception:
             pass
+        if settings is None or settings.get("safety", {}).get("notify_on_critical_stop", True):
+            try:
+                title = str(db.book()["title"]) if db is not None else "Audiobook"
+                notifier.critical_stop(title, str(exc), paths.root)
+            except Exception:
+                pass
         _emit(message_queue, "log", {"text": details})
         _emit(message_queue, "finished", {"ok": False, "critical": True, "text": str(exc)})
     finally:

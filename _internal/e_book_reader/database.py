@@ -10,7 +10,7 @@ from typing import Any, Iterator, Sequence
 from .models import BookStatus, ChapterStatus, SegmentStatus
 
 
-DB_SCHEMA_VERSION = 3
+DB_SCHEMA_VERSION = 4
 
 
 SCHEMA = """
@@ -115,6 +115,18 @@ CREATE TABLE IF NOT EXISTS character_aliases (
     source TEXT NOT NULL DEFAULT 'analysis'
 );
 
+CREATE TABLE IF NOT EXISTS pronunciations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    surface TEXT NOT NULL,
+    normalized_surface TEXT NOT NULL UNIQUE,
+    spoken_form TEXT NOT NULL,
+    confidence REAL NOT NULL DEFAULT 0.5,
+    source TEXT NOT NULL DEFAULT 'analysis',
+    locked INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS voice_profiles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     voice_key TEXT NOT NULL UNIQUE,
@@ -164,6 +176,7 @@ CREATE TABLE IF NOT EXISTS worker_leases (
 
 CREATE INDEX IF NOT EXISTS idx_segments_chapter_status ON segments(chapter_id, status, seq);
 CREATE INDEX IF NOT EXISTS idx_segments_status ON segments(status);
+CREATE INDEX IF NOT EXISTS idx_segments_speaker ON segments(speaker);
 CREATE INDEX IF NOT EXISTS idx_runtime_events_time ON runtime_events(timestamp);
 """
 
@@ -176,6 +189,27 @@ class ProjectDB:
         if self.synchronous not in {"OFF", "NORMAL", "FULL", "EXTRA"}:
             raise ValueError(f"Unsupported SQLite synchronous mode: {synchronous}")
         with self.connect() as conn:
+            current_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+            if current_version > DB_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"Project database schema {current_version} is newer than supported {DB_SCHEMA_VERSION}"
+                )
+            has_user_tables = bool(
+                conn.execute(
+                    """
+                    SELECT 1 FROM sqlite_master
+                    WHERE type='table' AND name NOT LIKE 'sqlite_%'
+                    LIMIT 1
+                    """
+                ).fetchone()
+            )
+            if current_version < DB_SCHEMA_VERSION and has_user_tables:
+                backup_path = self.path.with_suffix(
+                    self.path.suffix + f".schema-v{current_version}.bak"
+                )
+                if not backup_path.exists():
+                    with sqlite3.connect(backup_path) as backup:
+                        conn.backup(backup)
             conn.executescript(SCHEMA)
             self._migrate_schema(conn)
 
@@ -458,6 +492,21 @@ class ProjectDB:
         with self.connect() as conn:
             return list(conn.execute(f"SELECT * FROM segments{where} ORDER BY chapter_id,seq", params))
 
+    def get_segment(self, segment_id: int) -> sqlite3.Row:
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM segments WHERE id=?", (segment_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown segment id: {segment_id}")
+        return row
+
+    @staticmethod
+    def _merge_warning_codes(existing: str | None, warning_code: str | None) -> str | None:
+        values = [value for value in str(existing or "").split("|") if value]
+        for value in str(warning_code or "").split("|"):
+            if value and value not in values:
+                values.append(value)
+        return "|".join(values) or None
+
     def update_analysis(
         self,
         segment_id: int,
@@ -557,44 +606,76 @@ class ProjectDB:
         wer: float,
         warning_code: str | None = None,
     ) -> None:
-        status = SegmentStatus.ASR_PASSED.value if passed else SegmentStatus.WARNING.value
-        with self.connect() as conn:
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT warning_code FROM segments WHERE id=?", (segment_id,)
+            ).fetchone()
+            merged_warning = self._merge_warning_codes(
+                str(existing["warning_code"]) if existing and existing["warning_code"] else None,
+                warning_code,
+            )
+            status = (
+                SegmentStatus.ASR_PASSED.value
+                if passed and merged_warning is None
+                else SegmentStatus.WARNING.value
+            )
             conn.execute(
                 """
                 UPDATE segments SET status=?,asr_text=?,asr_similarity=?,asr_wer=?,warning_code=?,updated_at=?
                 WHERE id=?
                 """,
-                (status, transcript, similarity, wer, warning_code, time.time(), segment_id),
+                (status, transcript, similarity, wer, merged_warning, time.time(), segment_id),
             )
 
     def mark_verified(self, segment_id: int, warning_code: str | None = None) -> None:
-        status = SegmentStatus.WARNING.value if warning_code else SegmentStatus.VERIFIED.value
-        with self.connect() as conn:
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT chapter_id,warning_code FROM segments WHERE id=?", (segment_id,)
+            ).fetchone()
+            if existing is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            merged_warning = self._merge_warning_codes(
+                str(existing["warning_code"]) if existing["warning_code"] else None,
+                warning_code,
+            )
+            status = SegmentStatus.WARNING.value if merged_warning else SegmentStatus.VERIFIED.value
             conn.execute(
                 "UPDATE segments SET status=?,warning_code=?,error=NULL,updated_at=? WHERE id=?",
-                (status, warning_code, time.time(), segment_id),
+                (status, merged_warning, time.time(), segment_id),
             )
-            chapter_id = int(
-                conn.execute("SELECT chapter_id FROM segments WHERE id=?", (segment_id,)).fetchone()[0]
-            )
+            chapter_id = int(existing["chapter_id"])
             self._refresh_chapter_counts_conn(conn, chapter_id)
 
     def set_segment_warning_code(self, segment_id: int, warning_code: str) -> None:
-        with self.connect() as conn:
+        with self.transaction() as conn:
+            row = conn.execute("SELECT warning_code FROM segments WHERE id=?", (segment_id,)).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            merged_warning = self._merge_warning_codes(
+                str(row["warning_code"]) if row["warning_code"] else None,
+                warning_code,
+            )
             conn.execute(
                 "UPDATE segments SET warning_code=?,updated_at=? WHERE id=?",
-                (warning_code, time.time(), segment_id),
+                (merged_warning, time.time(), segment_id),
             )
 
     def mark_failed(self, segment_id: int, error: str, warning_code: str = "SEGMENT_FAILED") -> None:
-        with self.connect() as conn:
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT chapter_id,warning_code FROM segments WHERE id=?", (segment_id,)
+            ).fetchone()
+            if existing is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            merged_warning = self._merge_warning_codes(
+                str(existing["warning_code"]) if existing["warning_code"] else None,
+                warning_code,
+            )
             conn.execute(
                 "UPDATE segments SET status=?,warning_code=?,error=?,updated_at=? WHERE id=?",
-                (SegmentStatus.FAILED.value, warning_code, error[-8000:], time.time(), segment_id),
+                (SegmentStatus.FAILED.value, merged_warning, error[-8000:], time.time(), segment_id),
             )
-            chapter_id = int(
-                conn.execute("SELECT chapter_id FROM segments WHERE id=?", (segment_id,)).fetchone()[0]
-            )
+            chapter_id = int(existing["chapter_id"])
             self._refresh_chapter_counts_conn(conn, chapter_id)
 
     def reset_segment_pending(self, segment_id: int, reason: str) -> None:
@@ -718,6 +799,54 @@ class ProjectDB:
     def list_characters(self) -> list[sqlite3.Row]:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM characters ORDER BY importance,mention_count DESC"))
+
+    def upsert_pronunciation(
+        self,
+        *,
+        surface: str,
+        normalized_surface: str,
+        spoken_form: str,
+        confidence: float,
+        source: str = "analysis",
+    ) -> None:
+        now = time.time()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO pronunciations(
+                    surface,normalized_surface,spoken_form,confidence,source,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?,?)
+                ON CONFLICT(normalized_surface) DO UPDATE SET
+                    surface=CASE
+                        WHEN excluded.confidence >= pronunciations.confidence THEN excluded.surface
+                        ELSE pronunciations.surface
+                    END,
+                    spoken_form=CASE
+                        WHEN pronunciations.locked=0 AND excluded.confidence >= pronunciations.confidence
+                        THEN excluded.spoken_form ELSE pronunciations.spoken_form
+                    END,
+                    confidence=MAX(pronunciations.confidence, excluded.confidence),
+                    source=CASE
+                        WHEN pronunciations.locked=0 AND excluded.confidence >= pronunciations.confidence
+                        THEN excluded.source ELSE pronunciations.source
+                    END,
+                    updated_at=excluded.updated_at
+                """,
+                (surface, normalized_surface, spoken_form, confidence, source, now, now),
+            )
+
+    def list_pronunciations(self, minimum_confidence: float = 0.0) -> list[sqlite3.Row]:
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    """
+                    SELECT * FROM pronunciations
+                    WHERE locked=1 OR confidence>=?
+                    ORDER BY LENGTH(surface) DESC, normalized_surface
+                    """,
+                    (minimum_confidence,),
+                )
+            )
 
     def get_character_by_name_or_alias(self, normalized_name: str) -> sqlite3.Row | None:
         with self.connect() as conn:

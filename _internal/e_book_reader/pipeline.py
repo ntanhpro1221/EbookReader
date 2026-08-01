@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import os
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -27,7 +25,7 @@ from .notifier import WindowsNotifier
 from .text_processing import load_and_segment_chapter
 from .recovery import recover_project
 from .resource_manager import AdaptiveResourceManager
-from .tts import TTSCoordinator
+from .tts import TTSCoordinator, is_fatal_tts_error, is_oom_tts_error
 
 
 class PipelineStopped(RuntimeError):
@@ -59,6 +57,8 @@ class BookPipeline:
         self.notifier = WindowsNotifier()
         self.tts = TTSCoordinator(settings, db, paths.voices, self.log)
         self._last_resource_level: ResourceLevel | None = None
+        self._completed_noop = False
+        self._tts_failure_counts: dict[str, int] = defaultdict(int)
 
     def log(self, message: str) -> None:
         self.db.event("info", "LOG", message)
@@ -69,16 +69,21 @@ class BookPipeline:
 
     def _wait_pause_or_stop(self) -> None:
         announced = False
+        resume_status: str | None = None
+        resume_stage: str | None = None
         while self.pause_requested():
             if self.stop_requested():
                 raise PipelineStopped("Stop requested")
             if not announced:
+                book = self.db.book()
+                resume_status = str(book["status"])
+                resume_stage = str(book["stage"])
                 self.db.update_book(status=BookStatus.PAUSED.value, stage="paused")
                 self._state("paused", "Đã tạm dừng tại checkpoint an toàn.")
                 announced = True
             time.sleep(0.25)
         if announced:
-            self.db.update_book(status=BookStatus.SYNTHESIZING.value, stage="resuming")
+            self.db.update_book(status=resume_status, stage=resume_stage)
             self._state("running", "Đang tiếp tục từ checkpoint.")
         if self.stop_requested():
             raise PipelineStopped("Stop requested")
@@ -121,7 +126,10 @@ class BookPipeline:
                     decision.reason,
                     {"checkpoint": checkpoint},
                 )
-                self.notifier.critical_stop(str(book["title"]), decision.reason, self.paths.root, checkpoint)
+                if self.settings["safety"].get("notify_on_critical_stop", True):
+                    self.notifier.critical_stop(
+                        str(book["title"]), decision.reason, self.paths.root, checkpoint
+                    )
                 raise CriticalResourceStop(decision.reason)
             if decision.unload_idle_models:
                 if not decision.allow_new_gpu_batch and release_active is not None:
@@ -140,6 +148,7 @@ class BookPipeline:
     def _ensure_segments(self) -> None:
         max_chars = int(self.settings["tts"]["max_segment_chars"])
         for chapter in self.db.list_chapters():
+            self._validate_chapter_source(chapter)
             if int(chapter["total_segments"]) > 0:
                 continue
             self._wait_pause_or_stop()
@@ -149,8 +158,20 @@ class BookPipeline:
             self.db.replace_chapter_segments(int(chapter["id"]), rows)
             self.log(f"Đã chia {chapter['title']} thành {len(rows):,} segment và checkpoint vào SQLite.")
 
+    def _validate_chapter_source(self, chapter: Any) -> None:
+        if not self.settings["safety"].get("stop_book_on_source_change", True):
+            return
+        source = Path(str(chapter["input_path"]))
+        if not source.is_file():
+            raise RuntimeError(f"Source chapter is missing: {source}")
+        if source.stat().st_size != int(chapter["input_size"]):
+            raise RuntimeError(f"Source chapter size changed during the job: {source}")
+        if sha256_file(source) != str(chapter["input_sha256"]):
+            raise RuntimeError(f"Source chapter content changed during the job: {source}")
+
     def _recover(self) -> None:
         report = recover_project(self.paths, self.db, self.settings)
+        self._completed_noop = report.completed_verified
         if (
             report.reset_in_progress
             or report.reset_missing_or_corrupt
@@ -172,8 +193,16 @@ class BookPipeline:
                     report.reset_in_progress + report.reset_missing_or_corrupt,
                 )
 
-    def run(self) -> None:
+    def prepare_recovery(self) -> bool:
         self._recover()
+        return self._completed_noop
+
+    def run(self, *, recovery_already_run: bool = False) -> None:
+        if not recovery_already_run:
+            self._recover()
+        if self._completed_noop:
+            self._state("completed", "Project đã hoàn tất; artifact đã được xác minh.")
+            return
         self.db.begin_run_generation()
         self._ensure_segments()
         self.db.update_book(status=BookStatus.ANALYZING.value, stage="full_book_analysis")
@@ -279,6 +308,7 @@ class BookPipeline:
 
     def _process_chapter(self, chapter: Any, verifier: WhisperVerifier) -> None:
         chapter_id = int(chapter["id"])
+        self._validate_chapter_source(chapter)
         output = Path(str(chapter["output_mp3"]))
         if chapter["status"] == ChapterStatus.COMPLETED.value:
             valid, _ = verify_mp3(output)
@@ -315,7 +345,10 @@ class BookPipeline:
                 self.db.mark_failed(int(row["id"]), "No locked voice profile")
                 continue
             profile = self.db.voice_profile(int(row["voice_profile_id"]))
-            if str(profile["engine"]) == "vieneu":
+            if (
+                str(profile["engine"]) == "vieneu"
+                and not self.settings["tts"].get("deterministic_vieneu", True)
+            ):
                 vieneu_groups[int(profile["id"])].append(row)
             else:
                 other_rows.append(row)
@@ -328,15 +361,18 @@ class BookPipeline:
                     keep_engine="vieneu",
                 )
                 configured = max(1, int(self.settings["tts"]["batch_size"]))
-                batch_size = max(1, int(configured * decision.gpu_batch_scale))
+                batch_size = configured
+                if self.settings["tts"].get("auto_tune_batch", True):
+                    batch_size = max(1, int(configured * decision.gpu_batch_scale))
                 batch = group[offset : offset + batch_size]
                 self._process_vieneu_batch(batch, chapter)
                 offset += len(batch)
 
         for row in other_rows:
+            profile = self.db.voice_profile(int(row["voice_profile_id"]))
             self._resource_gate(
                 f"chapter {chapter['chapter_index']} segment {row['seq']}",
-                keep_engine="voxcpm2",
+                keep_engine=str(profile["engine"]),
             )
             self._process_single_segment(row, chapter)
 
@@ -356,6 +392,8 @@ class BookPipeline:
             )
             self.log(f"Không xuất MP3 chapter {chapter['title']}: còn {len(failed)} segment lỗi.")
             return
+
+        self._validate_chapter_source(chapter)
 
         wavs = [(Path(str(row["wav_path"])), int(row["break_ms"])) for row in rows]
         self._resource_gate(
@@ -405,6 +443,8 @@ class BookPipeline:
                     generation_seed=seed,
                 )
         except Exception as exc:  # noqa: BLE001
+            if is_fatal_tts_error(exc) and not is_oom_tts_error(exc):
+                raise RuntimeError(f"Fatal VieNeu engine failure: {exc}") from exc
             self.log(f"VieNeu batch lỗi; chuyển sang cứu từng segment: {exc}")
             for row in rows:
                 self._process_single_segment(row, chapter)
@@ -434,6 +474,8 @@ class BookPipeline:
                 )
                 return
             except Exception as exc:  # noqa: BLE001
+                if is_fatal_tts_error(exc):
+                    raise RuntimeError(f"Fatal TTS engine failure: {exc}") from exc
                 last_error = str(exc)
                 self.log(f"TTS segment {row['stable_id']} lỗi lần {attempt + 1}/{retries}: {last_error}")
                 time.sleep(min(8, 2 ** attempt))
@@ -475,6 +517,13 @@ class BookPipeline:
             f"Segment {row['stable_id']} failed after all non-silent strategies",
             {"error": last_error, "chapter": str(chapter["title"]), "text": str(row["text"])},
         )
+        signature = " ".join(last_error.casefold().split())[:240]
+        self._tts_failure_counts[signature] += 1
+        failure_limit = int(self.settings["tts"].get("fatal_failure_streak", 3))
+        if self._tts_failure_counts[signature] >= failure_limit:
+            raise RuntimeError(
+                f"TTS circuit breaker opened after {failure_limit} identical failures: {last_error}"
+            )
 
     def _synthesize_split(self, row: Any, output: Path) -> None:
         text = str(row["text"])
@@ -530,12 +579,13 @@ class BookPipeline:
                     f"Whisper chapter {chapter['chapter_index']} segment {item['seq']}",
                     release_active=verifier.unload,
                 )
-                result = verifier.verify(str(item["text"]), Path(str(item["wav_path"])))
+                result = verifier.verify(
+                    self.tts.spoken_text(item), Path(str(item["wav_path"]))
+                )
                 last_results[int(item["id"])] = result
                 existing_warning = str(item.get("warning_code") or "") or None
                 if result["reason"] in {"ASR_NOT_RUN", "ASR_ERROR"}:
-                    warning = existing_warning or str(result["reason"])
-                    self.db.mark_verified(int(item["id"]), warning_code=warning)
+                    self.db.mark_verified(int(item["id"]), warning_code=str(result["reason"]))
                 elif result["passed"]:
                     self.db.mark_asr_result(
                         int(item["id"]), passed=True, transcript=str(result["transcript"]),
@@ -560,10 +610,7 @@ class BookPipeline:
                 )
                 # Retry the locked primary voice with a different deterministic seed.
                 self._process_single_segment(item, chapter, seed_salt_prefix=f"asr_repair_{repair_round}")
-                fresh = next(
-                    row for row in self.db.list_segments(chapter_id=chapter_id)
-                    if int(row["id"]) == int(item["id"])
-                )
+                fresh = self.db.get_segment(int(item["id"]))
                 if str(fresh["status"]) == SegmentStatus.SIGNAL_PASSED.value:
                     regenerated.append(dict(fresh))
             self.tts.unload_all()
@@ -571,8 +618,20 @@ class BookPipeline:
 
         for item in mismatches:
             result = last_results.get(int(item["id"]), {})
-            existing_warning = str(item.get("warning_code") or "") or None
-            warning = existing_warning or "ASR_MISMATCH_UNRESOLVED"
+            warning = "ASR_MISMATCH_UNRESOLVED"
+            if self.settings["asr"].get("failure_policy") == "fail":
+                self.db.mark_failed(
+                    int(item["id"]),
+                    "ASR mismatch remained after all configured repair rounds",
+                    warning_code="ASR_MISMATCH_UNRESOLVED",
+                )
+                self.db.event(
+                    "error",
+                    "ASR_MISMATCH_UNRESOLVED",
+                    f"ASR mismatch is fatal by policy for {item['stable_id']}",
+                    {"chapter": str(chapter["title"]), "text": str(item["text"])},
+                )
+                continue
             self.db.mark_asr_result(
                 int(item["id"]), passed=False, transcript=str(result.get("transcript", "")),
                 similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
@@ -612,7 +671,12 @@ class BookPipeline:
             or row["warning_code"]
         ]
         export_json_atomic(self.paths.output / "characters.json", characters)
-        export_json_atomic(self.paths.output / "transcript_metadata.json", segments)
+        export_json_atomic(
+            self.paths.output / "pronunciations.json",
+            [dict(row) for row in self.db.list_pronunciations()],
+        )
+        if self.settings["audio"].get("export_metadata", True):
+            export_json_atomic(self.paths.output / "transcript_metadata.json", segments)
         export_json_atomic(self.paths.reports / "review_required.json", warnings)
         export_json_atomic(
             self.paths.reports / "runtime_events.json",

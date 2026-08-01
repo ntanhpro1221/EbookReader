@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import gc
+import random
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -9,7 +11,7 @@ import numpy as np
 
 from .audio_io import AudioQualityError, atomic_write_wav, inspect_wav
 from .database import ProjectDB
-from .io_utils import sha256_file, stable_int
+from .io_utils import stable_int
 
 
 EMOTION_CONTROLS = {
@@ -25,6 +27,39 @@ EMOTION_CONTROLS = {
     "tired": "giọng mệt mỏi, nhịp chậm nhẹ",
     "whispering": "giọng thì thầm rõ chữ",
 }
+
+FATAL_TTS_MARKERS = (
+    "cuda driver",
+    "cublas",
+    "cudnn",
+    "no module named",
+    "out of memory",
+    "pytorch không nhận cuda",
+    "thiếu vieneu",
+    "thiếu voxcpm2",
+)
+
+
+def is_fatal_tts_error(error: BaseException) -> bool:
+    message = str(error).casefold()
+    return any(marker in message for marker in FATAL_TTS_MARKERS)
+
+
+def is_oom_tts_error(error: BaseException) -> bool:
+    return "out of memory" in str(error).casefold()
+
+
+def _set_generation_seed(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed % (2**32))
+    try:
+        import torch
+
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+    except ImportError:
+        pass
 
 
 def control_for_segment(row: Any) -> str:
@@ -193,8 +228,9 @@ class VieNeuEngine:
             return f"[thở dài] {text}"
         return text
 
-    def generate_one(self, row: Any, profile: Any) -> np.ndarray:
+    def generate_one(self, row: Any, profile: Any, seed: int) -> np.ndarray:
         self.load()
+        _set_generation_seed(seed)
         voice = self.voice_for_profile(profile, row)
         style = "doc_truyen" if str(row["speaker"]) == "NARRATOR" else "tu_nhien"
         try:
@@ -202,10 +238,13 @@ class VieNeuEngine:
         except Exception as exc:  # noqa: BLE001
             raise AudioQualityError(str(exc)) from exc
 
-    def generate_batch(self, rows: list[Any], profile: Any, batch_size: int) -> list[np.ndarray]:
+    def generate_batch(
+        self, rows: list[Any], profile: Any, batch_size: int, seed: int
+    ) -> list[np.ndarray]:
         self.load()
         if not rows:
             return []
+        _set_generation_seed(seed)
         voice = self.voice_for_profile(profile, rows[0])
         style = "doc_truyen" if str(rows[0]["speaker"]) == "NARRATOR" else "tu_nhien"
         texts = [self._styled_text(row) for row in rows]
@@ -230,6 +269,8 @@ class TTSCoordinator:
         self.log = log
         self.vox = VoxCPM2Engine(settings, log)
         self.vieneu = VieNeuEngine(settings, log)
+        self._pronunciation_pattern: re.Pattern[str] | None = None
+        self._pronunciation_map: dict[str, str] = {}
 
     def unload_all(self) -> None:
         self.vox.unload()
@@ -252,6 +293,42 @@ class TTSCoordinator:
         profile = self.db.voice_profile(int(row["voice_profile_id"]))
         return stable_int(f"segment::{row['stable_id']}::{profile['voice_key']}::{seed_salt}")
 
+    def _fallback_engine(self, profile: Any) -> str:
+        primary = str(profile["engine"])
+        configured = str(self.settings["voices"].get("fallback_engine", "vieneu"))
+        if configured != primary:
+            return configured
+        return "voxcpm2" if primary == "vieneu" else "vieneu"
+
+    def spoken_text(self, row: Any) -> str:
+        if self._pronunciation_pattern is None:
+            minimum = float(self.settings["analysis"].get("low_confidence_threshold", 0.58))
+            pronunciations = self.db.list_pronunciations(minimum)
+            self._pronunciation_map = {
+                " ".join(str(item["surface"]).casefold().split()): str(item["spoken_form"])
+                for item in pronunciations
+            }
+            surfaces = [str(item["surface"]) for item in pronunciations]
+            self._pronunciation_pattern = (
+                re.compile(
+                    r"(?<!\w)(?:" + "|".join(re.escape(value) for value in surfaces) + r")(?!\w)",
+                    re.IGNORECASE,
+                )
+                if surfaces
+                else re.compile(r"(?!x)x")
+            )
+
+        def replace(match: re.Match[str]) -> str:
+            key = " ".join(match.group(0).casefold().split())
+            return self._pronunciation_map.get(key, match.group(0))
+
+        return self._pronunciation_pattern.sub(replace, str(row["text"]))
+
+    def _spoken_row(self, row: Any) -> dict[str, Any]:
+        result = dict(row)
+        result["text"] = self.spoken_text(row)
+        return result
+
     def prepare_voice_references(
         self,
         stop_requested: Callable[[], bool],
@@ -259,7 +336,11 @@ class TTSCoordinator:
     ) -> None:
         reference_text = str(self.settings["voices"]["reference_text"])
         profiles = self.db.list_voice_profiles()
-        vox_profiles = [profile for profile in profiles if str(profile["engine"]) == "voxcpm2"]
+        vox_profiles = [
+            profile
+            for profile in profiles
+            if str(profile["engine"]) == "voxcpm2" or self._fallback_engine(profile) == "voxcpm2"
+        ]
         if not vox_profiles:
             return
         self.vox.load()
@@ -294,15 +375,16 @@ class TTSCoordinator:
     def _primary_generate(self, row: Any, profile: Any, seed_salt: str = "") -> tuple[np.ndarray, int]:
         engine = str(profile["engine"])
         seed = self.generation_seed(row, seed_salt)
+        spoken_row = self._spoken_row(row)
         if engine == "voxcpm2":
             reference = Path(str(profile["reference_wav"])) if profile["reference_wav"] else None
             if not reference or not reference.exists():
                 raise AudioQualityError(f"Missing VoxCPM2 reference for {profile['voice_key']}")
-            prompt = f"({control_for_segment(row)}) {row['text']}"
+            prompt = f"({control_for_segment(spoken_row)}) {spoken_row['text']}"
             return self.vox.generate(prompt, seed=seed, reference_wav=reference), self.vox.sample_rate
         if engine == "vieneu":
-            profile = self._lock_vieneu_preset(profile, row)
-            return self.vieneu.generate_one(row, profile), self.vieneu.sample_rate
+            profile = self._lock_vieneu_preset(profile, spoken_row)
+            return self.vieneu.generate_one(spoken_row, profile, seed), self.vieneu.sample_rate
         raise AudioQualityError(f"Unsupported TTS engine: {engine}")
 
     def synthesize_vieneu_batch_atomic(
@@ -314,14 +396,20 @@ class TTSCoordinator:
         if str(profile["engine"]) != "vieneu":
             raise ValueError("batch synthesis is only available for VieNeu profiles")
         profile = self._lock_vieneu_preset(profile, rows[0])
-        arrays = self.vieneu.generate_batch(rows, profile, batch_size=max(1, batch_size))
+        spoken_rows = [self._spoken_row(row) for row in rows]
+        batch_seed = stable_int("vieneu-batch::" + "::".join(str(row["stable_id"]) for row in rows))
+        arrays = self.vieneu.generate_batch(
+            spoken_rows,
+            profile,
+            batch_size=max(1, batch_size),
+            seed=batch_seed,
+        )
         results: list[tuple[str, dict[str, float], int]] = []
         for row, output, audio in zip(rows, outputs, arrays):
             checksum, metrics = atomic_write_wav(
                 output, audio, self.vieneu.sample_rate, str(row["text"]), self.settings
             )
-            seed = self.generation_seed(row, "batch")
-            results.append((checksum, metrics, seed))
+            results.append((checksum, metrics, batch_seed))
         return results
 
     def synthesize_atomic(self, row: Any, output: Path, seed_salt: str = "") -> tuple[str, dict[str, float], int]:
@@ -334,8 +422,23 @@ class TTSCoordinator:
     def fallback_atomic(self, row: Any, output: Path, seed_salt: str = "fallback") -> tuple[str, dict[str, float], int]:
         # Fallback never inserts silence. It uses a real Vietnamese preset and records a warning.
         profile = self.db.voice_profile(int(row["voice_profile_id"]))
-        profile = self._lock_vieneu_preset(profile, row, fallback=True)
-        audio = self.vieneu.generate_one(row, profile)
-        checksum, metrics = atomic_write_wav(output, audio, self.vieneu.sample_rate, str(row["text"]), self.settings)
         seed = self.generation_seed(row, seed_salt)
+        spoken_row = self._spoken_row(row)
+        fallback_engine = self._fallback_engine(profile)
+        if fallback_engine == "vieneu":
+            profile = self._lock_vieneu_preset(profile, spoken_row, fallback=True)
+            audio = self.vieneu.generate_one(spoken_row, profile, seed)
+            sample_rate = self.vieneu.sample_rate
+        elif fallback_engine == "voxcpm2":
+            reference = Path(str(profile["reference_wav"])) if profile["reference_wav"] else None
+            if not reference or not reference.exists():
+                raise AudioQualityError(f"Missing fallback VoxCPM2 reference for {profile['voice_key']}")
+            prompt = f"({control_for_segment(spoken_row)}) {spoken_row['text']}"
+            audio = self.vox.generate(prompt, seed=seed, reference_wav=reference)
+            sample_rate = self.vox.sample_rate
+        else:
+            raise AudioQualityError(f"Unsupported fallback TTS engine: {fallback_engine}")
+        checksum, metrics = atomic_write_wav(
+            output, audio, sample_rate, str(row["text"]), self.settings
+        )
         return checksum, metrics, seed

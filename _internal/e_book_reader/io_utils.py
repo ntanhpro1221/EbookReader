@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -64,16 +65,31 @@ def slugify(text: str, max_length: int = 90) -> str:
     return (text[:max_length] or "item").lower()
 
 
-def read_text_auto(path: Path) -> str:
-    raw = path.read_bytes()
-    for encoding in ("utf-8-sig", "utf-8", "utf-16", "utf-16-le", "utf-16-be", "cp1258", "windows-1252"):
+def decode_text_bytes(raw: bytes) -> str:
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return unicodedata.normalize("NFC", raw.decode("utf-16"))
+
+    encodings = ["utf-8-sig", "utf-8", "cp1258", "windows-1252"]
+    if raw:
+        even_nuls = raw[0::2].count(0)
+        odd_nuls = raw[1::2].count(0)
+        nul_ratio = (even_nuls + odd_nuls) / len(raw)
+        if nul_ratio >= 0.2:
+            utf16_encoding = "utf-16-be" if even_nuls > odd_nuls else "utf-16-le"
+            encodings.insert(0, utf16_encoding)
+
+    for encoding in encodings:
         try:
             text = raw.decode(encoding)
             if "�" not in text:
-                return text
+                return unicodedata.normalize("NFC", text)
         except UnicodeDecodeError:
             continue
-    return raw.decode("utf-8", errors="replace")
+    return unicodedata.normalize("NFC", raw.decode("utf-8", errors="replace"))
+
+
+def read_text_auto(path: Path) -> str:
+    return decode_text_bytes(path.read_bytes())
 
 
 def atomic_write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:

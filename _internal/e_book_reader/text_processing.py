@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .io_utils import natural_key, read_text_auto, sha256_file, sha256_text
+from .io_utils import decode_text_bytes, natural_key, sha256_bytes, sha256_file, sha256_text, slugify
 
 
 QUOTE_PATTERN = re.compile(r"([“\"][^”\"]{1,1600}[”\"])", re.DOTALL)
@@ -117,7 +117,7 @@ def build_chapter_manifest(input_files: list[Path], chapters_output_dir: Path) -
                 "input_path": str(path),
                 "input_sha256": sha256_file(path),
                 "input_size": path.stat().st_size,
-                "output_mp3": str(chapters_output_dir / f"{index:05d}_{path.stem}.mp3"),
+                "output_mp3": str(chapters_output_dir / f"{index:05d}_{slugify(path.stem, 72)}.mp3"),
             }
         )
     return manifest
@@ -132,5 +132,11 @@ def input_manifest_hash(manifest: list[dict[str, Any]]) -> str:
 
 
 def load_and_segment_chapter(chapter: dict[str, Any], max_chars: int) -> list[dict[str, Any]]:
-    text = read_text_auto(Path(chapter["input_path"]))
+    source = Path(chapter["input_path"])
+    raw = source.read_bytes()
+    expected_size = int(chapter["input_size"])
+    expected_sha256 = str(chapter["input_sha256"])
+    if len(raw) != expected_size or sha256_bytes(raw) != expected_sha256:
+        raise RuntimeError(f"Source chapter changed while it was being loaded: {source}")
+    text = decode_text_bytes(raw)
     return segment_chapter_text(int(chapter["chapter_index"]), text, max_chars=max_chars)

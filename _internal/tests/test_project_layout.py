@@ -7,10 +7,16 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 
 
 def test_root_is_user_focused() -> None:
-    assert {item.name for item in PROJECT_ROOT.iterdir()} == {
+    root_entries = {item.name for item in PROJECT_ROOT.iterdir()}
+    assert {name for name in root_entries if not name.startswith(".")} == {
         "START.bat",
         "README.md",
         "_internal",
+    }
+    assert root_entries - {"START.bat", "README.md", "_internal"} <= {
+        ".git",
+        ".gitattributes",
+        ".gitignore",
     }
     assert (INTERNAL_ROOT / "AGENTS.md").is_file()
 

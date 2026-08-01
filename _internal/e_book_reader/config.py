@@ -23,6 +23,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "num_ctx": 16384,
         "batch_segments": 28,
         "batch_chars": 6200,
+        "max_alias_candidates": 400,
         "max_retries": 3,
         "timeout_seconds": 900,
         "full_book_first": True,
@@ -53,9 +54,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "cfg_value": 2.0,
         "inference_timesteps": 10,
         "max_retries": 3,
+        "fatal_failure_streak": 3,
         "max_segment_chars": 340,
         "batch_size": 12,
         "auto_tune_batch": True,
+        "deterministic_vieneu": True,
         "min_seconds_per_100_chars": 2.1,
         "max_seconds_per_100_chars": 13.0,
         "min_rms": 0.002,
@@ -184,6 +187,8 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Remote analysis requires safety.allow_remote_analysis=true")
     if int(analysis.get("batch_segments", 0)) < 1 or int(analysis.get("batch_chars", 0)) < 100:
         raise ValueError("Analysis batch limits must be positive")
+    if int(analysis.get("max_alias_candidates", 0)) < 2:
+        raise ValueError("analysis.max_alias_candidates must be at least 2")
     if int(analysis.get("max_retries", 0)) < 1 or float(analysis.get("timeout_seconds", 0)) <= 0:
         raise ValueError("Analysis retry and timeout settings must be positive")
     threshold = float(analysis.get("low_confidence_threshold", 0.58))
@@ -191,6 +196,16 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("analysis.low_confidence_threshold must be between 0 and 1")
     if analysis.get("full_book_first") is not True:
         raise ValueError("analysis.full_book_first must remain true")
+    if analysis.get("low_confidence_policy") not in {"auto_with_warning", "fail"}:
+        raise ValueError("Unsupported analysis.low_confidence_policy")
+
+    voices = settings.get("voices", {})
+    supported_engines = {"vieneu", "voxcpm2"}
+    for key in ("narrator_engine", "character_engine"):
+        if voices.get(key) not in supported_engines:
+            raise ValueError(f"Unsupported voices.{key}")
+    if voices.get("fallback_engine") not in supported_engines:
+        raise ValueError("Unsupported voices.fallback_engine")
 
     tts = settings.get("tts", {})
     if int(tts.get("sample_rate", 0)) < 8_000:
@@ -202,6 +217,8 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("tts.max_segment_chars must be at least 50")
     if int(tts.get("max_retries", 0)) < 1 or int(tts.get("batch_size", 0)) < 1:
         raise ValueError("TTS retry and batch settings must be positive")
+    if int(tts.get("fatal_failure_streak", 0)) < 1:
+        raise ValueError("tts.fatal_failure_streak must be positive")
     if tts.get("failure_policy") != "retry_split_fallback_fail":
         raise ValueError("Unsupported tts.failure_policy")
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import math
 import os
 from pathlib import Path
@@ -74,7 +73,8 @@ def atomic_write_wav(path: Path, audio: Any, sample_rate: int, text: str, settin
     temp.unlink(missing_ok=True)
     array, _ = validate_audio_array(audio, text, settings, sample_rate)
     sf.write(temp, array, sample_rate, subtype="PCM_16")
-    with temp.open("rb") as handle:
+    # Windows rejects fsync on a read-only descriptor (WinError 9).
+    with temp.open("rb+") as handle:
         os.fsync(handle.fileno())
     valid, metrics, reason = inspect_wav(temp, text, settings)
     if not valid:
@@ -140,7 +140,7 @@ def _silence_file(work_dir: Path, milliseconds: int, sample_rate: int) -> Path:
     temp = path.with_name(path.stem + ".part" + path.suffix)
     temp.unlink(missing_ok=True)
     sf.write(temp, samples, sample_rate, subtype="PCM_16")
-    with temp.open("rb") as handle:
+    with temp.open("rb+") as handle:
         os.fsync(handle.fileno())
     os.replace(temp, path)
     return path

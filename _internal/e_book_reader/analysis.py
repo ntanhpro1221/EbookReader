@@ -22,6 +22,7 @@ ALLOWED_EMOTIONS = {
 }
 ALLOWED_PACES = {"slow", "normal", "fast"}
 ALLOWED_VOLUMES = {"soft", "normal", "loud"}
+RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -51,7 +52,21 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                 ],
                 "additionalProperties": False,
             },
-        }
+        },
+        "pronunciations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "surface": {"type": "string"},
+                    "spoken_form": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "reason": {"type": "string"},
+                },
+                "required": ["surface", "spoken_form", "confidence", "reason"],
+                "additionalProperties": False,
+            },
+        },
     },
     "required": ["segments"],
     "additionalProperties": False,
@@ -68,7 +83,9 @@ Quy tắc:
 4. Không sửa văn bản. Không bịa nhân vật chỉ vì đại từ hắn/cô ấy/nàng.
 5. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng.
 6. gender/age mô tả người nói, NARRATOR dùng unknown.
-7. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
+7. Với tên riêng hoặc thuật ngữ khó đọc, thêm pronunciation: surface phải xuất hiện nguyên văn trong batch,
+   spoken_form là cách viết tiếng Việt giúp TTS đọc đúng; không thêm từ phổ thông hoặc mục không chắc chắn.
+8. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
 """
 
 
@@ -98,6 +115,11 @@ RECONCILE_SCHEMA: dict[str, Any] = {
 def _safe_choice(value: Any, allowed: set[str], default: str) -> str:
     normalized = str(value or "").strip().lower()
     return normalized if normalized in allowed else default
+
+
+def _canonical_speaker(value: Any) -> str:
+    speaker = str(value or "UNKNOWN").strip()[:120] or "UNKNOWN"
+    return RESERVED_SPEAKERS.get(speaker.casefold(), speaker)
 
 
 def _heuristic(row: Any) -> dict[str, Any]:
@@ -138,7 +160,7 @@ def _validate(group: list[Any], payload: dict[str, Any]) -> dict[str, dict[str, 
         if seg_id not in expected or seg_id in result:
             continue
         kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, "narration")
-        speaker = str(item.get("speaker") or "UNKNOWN").strip()[:120] or "UNKNOWN"
+        speaker = _canonical_speaker(item.get("speaker"))
         if kind == "narration":
             speaker = "NARRATOR"
         result[seg_id] = {
@@ -169,7 +191,9 @@ class OllamaBookAnalyzer:
         self.session = requests.Session()
         existing = self.db.list_segments(statuses=("analyzed", "warning", "signal_passed", "asr_passed", "verified"))
         self._speaker_counts = Counter(
-            str(row["speaker"]) for row in existing if row["speaker"] not in {"NARRATOR", "UNKNOWN"}
+            str(row["speaker"])
+            for row in existing
+            if str(row["speaker"]).casefold() not in RESERVED_SPEAKERS
         )
         self._chapter_titles = {
             int(row["id"]): str(row["title"]) for row in self.db.list_chapters()
@@ -264,6 +288,32 @@ class OllamaBookAnalyzer:
         content = response.json().get("response", "{}")
         return json.loads(content)
 
+    def _checkpoint_pronunciations(self, group: list[Any], payload: dict[str, Any]) -> None:
+        source_text = "\n".join(str(row["text"]) for row in group)
+        raw_items = payload.get("pronunciations", [])
+        if not isinstance(raw_items, list):
+            return
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            surface = str(item.get("surface", "")).strip()[:160]
+            spoken_form = str(item.get("spoken_form", "")).strip()[:240]
+            try:
+                confidence = max(0.0, min(1.0, float(item.get("confidence", 0.0))))
+            except (TypeError, ValueError):
+                continue
+            if not surface or not spoken_form or surface not in source_text:
+                continue
+            if surface.casefold() == spoken_form.casefold():
+                continue
+            normalized_surface = " ".join(surface.casefold().split())
+            self.db.upsert_pronunciation(
+                surface=surface,
+                normalized_surface=normalized_surface,
+                spoken_form=spoken_form,
+                confidence=confidence,
+            )
+
     def analyze_all(
         self,
         stop_requested: Callable[[], bool],
@@ -309,11 +359,13 @@ class OllamaBookAnalyzer:
             if before_batch is not None:
                 before_batch(group_index)
             validated: dict[str, dict[str, Any]] = {}
+            payload: dict[str, Any] = {}
             last_error = "AI analysis is unavailable"
             if llm_ready:
                 for attempt in range(int(self.settings.get("max_retries", 3))):
                     try:
-                        validated = _validate(group, self._request(group))
+                        payload = self._request(group)
+                        validated = _validate(group, payload)
                         if len(validated) == len(group):
                             break
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
@@ -337,15 +389,24 @@ class OllamaBookAnalyzer:
                     },
                 )
                 raise RuntimeError(message)
+            if validated:
+                self._checkpoint_pronunciations(group, payload)
             for row in group:
                 data = validated.get(str(row["stable_id"])) or _heuristic(row)
+                if (
+                    float(data.get("confidence", 0.0)) < confidence_threshold
+                    and self.settings.get("low_confidence_policy") == "fail"
+                ):
+                    raise RuntimeError(
+                        f"Analysis confidence is below the locked threshold for {row['stable_id']}"
+                    )
                 self.db.update_analysis(
                     int(row["id"]),
                     data,
                     low_confidence_threshold=confidence_threshold,
                 )
-                speaker = str(data.get("speaker", "UNKNOWN"))
-                if speaker not in {"NARRATOR", "UNKNOWN", ""}:
+                speaker = _canonical_speaker(data.get("speaker", "UNKNOWN"))
+                if speaker.casefold() not in RESERVED_SPEAKERS and speaker:
                     self._speaker_counts[speaker] += 1
                 done += 1
                 if progress:
@@ -360,26 +421,42 @@ class OllamaBookAnalyzer:
         rows = [row for row in self.db.list_segments() if str(row["status"]) != "pending"]
         contexts: dict[str, list[str]] = defaultdict(list)
         for row in rows:
-            speaker = str(row["speaker"]).strip()
-            if speaker in {"NARRATOR", "UNKNOWN", ""}:
+            speaker = _canonical_speaker(row["speaker"])
+            if speaker.casefold() in RESERVED_SPEAKERS or not speaker:
                 continue
             if len(contexts[speaker]) < 4:
                 contexts[speaker].append(str(row["text"])[:260])
-        if len(contexts) < 2 or not self._available():
+        if len(contexts) < 2:
+            return {}
+        max_candidates = int(self.settings.get("max_alias_candidates", 400))
+        if len(contexts) > max_candidates:
+            message = (
+                f"Alias reconciliation has {len(contexts)} candidates, above the locked safe limit "
+                f"of {max_candidates}"
+            )
+            self.db.event("error", "ALIAS_CANDIDATE_LIMIT_EXCEEDED", message)
+            if self.settings.get("enabled", True) and self.settings.get("required", True):
+                raise RuntimeError(message)
+            return {}
+        if not self._available():
+            if self.settings.get("enabled", True) and self.settings.get("required", True):
+                raise RuntimeError("Ollama became unavailable before required alias reconciliation")
             return {}
         items = [
             {"name": name, "examples": examples}
             for name, examples in sorted(contexts.items(), key=lambda item: item[0].casefold())
         ]
         alias_map: dict[str, str] = {}
+        all_names = [item["name"] for item in items]
         # Keep requests bounded. Only high-confidence merges are applied automatically.
-        for batch_index, offset in enumerate(range(0, len(items), 50), 1):
+        for batch_index, offset in enumerate(range(0, len(items), 40), 1):
             if before_batch is not None:
                 before_batch(batch_index)
-            batch = items[offset : offset + 50]
+            batch = items[offset : offset + 40]
             prompt = (
                 "Hợp nhất bí danh của cùng một nhân vật trong audiobook. Không gộp đại từ chung như hắn, nàng, cô ấy. "
                 "Chỉ trả nhóm khi chắc chắn từ ngữ cảnh. Canonical phải là tên rõ nhất trong aliases.\n\n"
+                f"Toàn bộ tên ứng viên trong sách: {json.dumps(all_names, ensure_ascii=False)}\n\n"
                 + json.dumps(batch, ensure_ascii=False, indent=2)
             )
             request = {
@@ -391,19 +468,49 @@ class OllamaBookAnalyzer:
                 "keep_alive": "10m",
                 "options": {"temperature": 0.0, "num_ctx": int(self.settings.get("num_ctx", 16384))},
             }
+            last_error = ""
+            payload: dict[str, Any] | None = None
+            for attempt in range(int(self.settings.get("max_retries", 3))):
+                try:
+                    response = self.session.post(
+                        f"{self.base_url}/api/generate",
+                        json=request,
+                        timeout=float(self.settings.get("timeout_seconds", 900)),
+                    )
+                    response.raise_for_status()
+                    payload = json.loads(response.json().get("response", "{}"))
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    last_error = str(exc)
+                    time.sleep(min(8, 2 ** attempt))
+            if payload is None:
+                self.db.event("warning", "ALIAS_RECONCILIATION_FAILED", last_error)
+                if self.settings.get("enabled", True) and self.settings.get("required", True):
+                    raise RuntimeError(
+                        f"Required alias reconciliation failed in batch {batch_index}: {last_error}"
+                    )
+                continue
             try:
-                response = self.session.post(
-                    f"{self.base_url}/api/generate",
-                    json=request,
-                    timeout=float(self.settings.get("timeout_seconds", 900)),
-                )
-                response.raise_for_status()
-                payload = json.loads(response.json().get("response", "{}"))
                 for group in payload.get("groups", []):
                     confidence = float(group.get("confidence", 0))
-                    aliases = [str(x).strip() for x in group.get("aliases", []) if str(x).strip()]
-                    canonical = str(group.get("canonical", "")).strip()
+                    aliases = [_canonical_speaker(x) for x in group.get("aliases", []) if str(x).strip()]
+                    canonical = _canonical_speaker(group.get("canonical", ""))
                     if confidence < 0.86 or canonical not in aliases or len(aliases) < 2:
+                        continue
+                    if any(alias.casefold() in RESERVED_SPEAKERS for alias in aliases):
+                        continue
+                    if any(alias not in all_names for alias in aliases):
+                        continue
+                    conflicts = {
+                        alias: alias_map[alias]
+                        for alias in aliases
+                        if alias in alias_map and alias_map[alias] != canonical
+                    }
+                    if conflicts:
+                        message = f"Conflicting alias groups for {canonical}: {conflicts}"
+                        self.db.event("error", "ALIAS_RECONCILIATION_CONFLICT", message)
+                        if self.settings.get("enabled", True) and self.settings.get("required", True):
+                            raise RuntimeError(message)
                         continue
                     for alias in aliases:
                         if alias != canonical:
@@ -416,6 +523,10 @@ class OllamaBookAnalyzer:
                     )
             except Exception as exc:  # noqa: BLE001
                 self.db.event("warning", "ALIAS_RECONCILIATION_FAILED", str(exc))
+                if self.settings.get("enabled", True) and self.settings.get("required", True):
+                    raise RuntimeError(
+                        f"Required alias reconciliation returned invalid data in batch {batch_index}: {exc}"
+                    ) from exc
         # Resolve transitive mappings deterministically so A→B and B→C cannot leave A at B.
         resolved: dict[str, str] = {}
         for alias in sorted(alias_map, key=str.casefold):

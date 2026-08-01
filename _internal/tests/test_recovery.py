@@ -9,6 +9,7 @@ from e_book_reader.config import build_settings, settings_hash
 from e_book_reader.database import ProjectDB
 from e_book_reader.models import ProjectPaths
 from e_book_reader.recovery import recover_project
+from e_book_reader.io_utils import sha256_file
 
 
 def setup_db(tmp_path: Path):
@@ -104,3 +105,40 @@ def test_recovery_invalidates_corrupt_voice_reference(tmp_path: Path) -> None:
     assert fresh["reference_wav"] is None
     assert fresh["reference_sha256"] is None
     assert fresh["status"] == "planned"
+
+
+def test_completed_project_uses_verified_mp3_fast_path(tmp_path: Path, monkeypatch) -> None:
+    paths, settings, db, row = setup_db(tmp_path)
+    db.mark_verified(int(row["id"]))
+    chapter = db.list_chapters()[0]
+    chapter_output = Path(str(chapter["output_mp3"]))
+    chapter_output.parent.mkdir(parents=True, exist_ok=True)
+    chapter_output.write_bytes(b"ID3" + b"c" * 5000)
+    db.register_artifact(
+        artifact_key=f"chapter_mp3:{chapter['chapter_index']}",
+        kind="chapter_mp3",
+        path=chapter_output,
+        sha256=sha256_file(chapter_output),
+        verified=True,
+    )
+    db.update_chapter_status(int(chapter["id"]), "completed")
+    full_output = paths.output / "book_full.mp3"
+    full_output.write_bytes(b"ID3" + b"f" * 5000)
+    db.register_artifact(
+        artifact_key="full_book_mp3",
+        kind="full_book_mp3",
+        path=full_output,
+        sha256=sha256_file(full_output),
+        verified=True,
+    )
+    db.update_book(status="completed", stage="completed")
+    monkeypatch.setattr("e_book_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
+    monkeypatch.setattr(
+        "e_book_reader.recovery.inspect_wav",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("deep recovery ran")),
+    )
+
+    report = recover_project(paths, db, settings)
+
+    assert report.completed_verified is True
+    assert report.recovered_verified == 0

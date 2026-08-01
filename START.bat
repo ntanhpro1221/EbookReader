@@ -12,10 +12,11 @@ set "E_BOOK_READER_RUNTIME=%RUNTIME_ROOT%"
 set "HF_HOME=%RUNTIME_ROOT%\models\huggingface"
 set "HF_HUB_CACHE=%RUNTIME_ROOT%\models\huggingface\hub"
 set "TORCH_HOME=%RUNTIME_ROOT%\models\torch"
-set "SETUP_MARKER=%RUNTIME_ROOT%\.setup_complete_0.2.0-alpha.8"
+set "SETUP_MARKER=%RUNTIME_ROOT%\.setup_complete_0.2.0-alpha.9"
 set "PYTHON_EXE=%RUNTIME_ROOT%\.venv\Scripts\python.exe"
 set "SETUP_SCRIPT=%INTERNAL_ROOT%\scripts\setup_windows.ps1"
 set "APP_SCRIPT=%INTERNAL_ROOT%\app.py"
+set "SOURCE_CHECK=%INTERNAL_ROOT%\scripts\check_source_manifest.py"
 
 echo ============================================================
 echo                     E BOOK READER
@@ -42,6 +43,9 @@ if not exist "%SETUP_MARKER%" goto :SETUP_FAILED
 if not exist "%PYTHON_EXE%" goto :SETUP_FAILED
 
 :LAUNCH
+"%PYTHON_EXE%" "%SOURCE_CHECK%"
+if errorlevel 1 goto :SOURCE_FAILED
+
 echo Dang mo E Book Reader...
 "%PYTHON_EXE%" "%APP_SCRIPT%"
 set "APP_EXIT=%ERRORLEVEL%"
@@ -52,6 +56,13 @@ if not "%APP_EXIT%"=="0" (
     pause
 )
 exit /b %APP_EXIT%
+
+:SOURCE_FAILED
+echo.
+echo SOURCE CUA UNG DUNG KHONG KHOP BAN PHAT HANH.
+echo Hay khoi phuc bo cai hoac tai lai ban phat hanh day du truoc khi mo app.
+pause
+exit /b 2
 
 :SETUP_FAILED
 echo.

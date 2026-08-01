@@ -11,6 +11,7 @@ Yêu cầu bắt buộc:
 - workflow người dùng chỉ là double-click `START.bat`;
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
+- dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
 - tận dụng tối đa tài nguyên trong giới hạn an toàn, tự nhường foreground và tự tăng lại;
 - giả định GUI/worker/máy có thể bị đóng bất kỳ lúc nào;
 - lỗi nghiêm trọng phải checkpoint, tự dừng an toàn và gửi Windows notification;
@@ -46,7 +47,14 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Khi foreground pressure xuất hiện: hoàn thành đơn vị inference hiện tại, checkpoint, ngừng cấp việc mới, giảm tải/unload nếu cần.
 - Không kill CUDA giữa kernel chỉ để nhường tài nguyên.
 - Khi resume, settings hash và voice mapping phải giữ nguyên.
+- TXT phải được decode từ đúng byte đã hash; ưu tiên BOM/UTF-8/CP1258 và chỉ thử UTF-16 không BOM khi có NUL heuristic.
+- Pronunciation confidence được lưu trong SQLite; cùng một text đã chuyển cách đọc phải được dùng cho TTS và expected ASR.
+- VieNeu mặc định chạy từng segment với seed ổn định; chỉ batch khi `deterministic_vieneu=false` đã được khóa theo book.
+- Fallback phải là engine khác primary; không được ghi warning fallback nếu thực tế vẫn gọi cùng engine.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
+- Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
+- Fast-path `completed` chạy trước model/runtime fingerprint; chỉ project cần tạo lại audio mới phải bind fingerprint.
+- Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
 
 ## Cấu trúc source
 
@@ -81,6 +89,8 @@ Module chính:
 - `resource_manager.py`: resource snapshot/decision.
 - `recovery.py`: integrity/checksum recovery.
 - `notifier.py`: Windows notifications.
+- `process_utils.py`: kết thúc an toàn cây process worker/native helper.
+- `scripts/check_source_manifest.py`: xác minh checksum source trước khi mở app.
 
 ## Quy tắc thay đổi
 
@@ -104,7 +114,7 @@ python -m pytest
 Definition of done:
 
 - test liên quan pass;
-- root vẫn chỉ có `START.bat`, `README.md`, `_internal`;
+- các mục root hiện cho người dùng vẫn chỉ có `START.bat`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
 - không tạo prompt giữa job;
 - kill ở ranh giới bất kỳ không làm hỏng artifact đã commit;
 - resume giữ settings và voice mapping;

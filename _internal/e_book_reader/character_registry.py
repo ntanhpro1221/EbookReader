@@ -12,6 +12,7 @@ PRONOUNS = {
     "hắn", "nàng", "cô ấy", "anh ấy", "ông ấy", "bà ấy", "người đó", "kẻ đó",
     "ta", "tôi", "mình", "chúng ta", "bọn họ",
 }
+RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
 
 VOICE_ARCHETYPES: dict[str, str] = {
     "male_child": "Giọng bé trai Việt Nam trong sáng, rõ chữ, tự nhiên",
@@ -64,6 +65,11 @@ def build_registry_and_cast(
         if rewritten:
             log(f"Hợp nhất bí danh: {alias} → {canonical} ({rewritten} segment).")
 
+    for speaker in {str(row["speaker"]) for row in db.list_segments()}:
+        reserved = RESERVED_SPEAKERS.get(speaker.casefold())
+        if reserved and speaker != reserved:
+            db.rewrite_speaker(speaker, reserved)
+
     # Use the entire book, including already synthesized/verified segments. Restricting this to
     # only currently analyzed rows would change mention counts/personality hints on resume and could
     # destabilize locked voice profiles.
@@ -78,7 +84,7 @@ def build_registry_and_cast(
 
     named_counts = Counter(
         speaker for speaker, items in by_speaker.items()
-        if speaker not in {"NARRATOR", "UNKNOWN"} and normalize_name(speaker) not in PRONOUNS
+        if speaker.casefold() not in RESERVED_SPEAKERS and normalize_name(speaker) not in PRONOUNS
         for _ in items
     )
     ranked = [name for name, count in named_counts.most_common() if count >= min_mentions]
@@ -110,14 +116,14 @@ def build_registry_and_cast(
 
     generic_profiles: dict[str, int] = {}
     for speaker, speaker_rows in sorted(by_speaker.items(), key=lambda item: item[0].casefold()):
-        if speaker == "NARRATOR":
+        if speaker.casefold() == "narrator":
             continue
         gender = _majority(speaker_rows, "gender")
         age = _majority(speaker_rows, "age")
         personality = next((str(r["analysis_notes"]) for r in speaker_rows if r["analysis_notes"]), "")[:300]
         confidence = sum(float(r["confidence"]) for r in speaker_rows) / max(1, len(speaker_rows))
         normalized = normalize_name(speaker)
-        is_unknown = speaker == "UNKNOWN" or normalized in PRONOUNS
+        is_unknown = speaker.casefold() == "unknown" or normalized in PRONOUNS
         display_name = speaker if not is_unknown else f"Nhân vật phụ {gender}/{age}"
         canonical = canonical_key(display_name)
         importance = "main" if speaker in unique_names else "minor"

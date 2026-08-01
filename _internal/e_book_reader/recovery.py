@@ -18,6 +18,7 @@ class RecoveryReport:
     invalid_mp3: int = 0
     invalid_voice_references: int = 0
     stale_leases: int = 0
+    completed_verified: bool = False
 
 
 class RecoveryError(RuntimeError):
@@ -33,6 +34,58 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
     report.removed_part_files = len(remove_part_files(paths.root))
     report.reset_in_progress = db.reset_in_progress_segments()
     report.stale_leases = db.clear_all_worker_leases()
+
+    if str(db.book()["status"]) == "completed":
+        completed_ok = True
+        chapters = db.list_chapters()
+        for chapter in chapters:
+            output = Path(str(chapter["output_mp3"] or ""))
+            artifact = db.artifact_by_key(f"chapter_mp3:{chapter['chapter_index']}")
+            valid, _ = verify_mp3(output)
+            checksum_ok = bool(
+                artifact
+                and artifact["verified"]
+                and artifact["sha256"]
+                and output.exists()
+                and sha256_file(output) == str(artifact["sha256"])
+            )
+            completed_ok = (
+                completed_ok
+                and str(chapter["status"]) == "completed"
+                and db.chapter_is_publishable(int(chapter["id"]))
+                and valid
+                and checksum_ok
+            )
+        if settings.get("audio", {}).get("combine_full_book", True):
+            artifact = db.artifact_by_key("full_book_mp3")
+            full_path = Path(str(artifact["path"])) if artifact and artifact["path"] else None
+            full_path_safe = bool(
+                full_path
+                and full_path.resolve().is_relative_to(paths.output.resolve())
+                and full_path.suffix.casefold() == ".mp3"
+            )
+            full_valid, _ = (
+                verify_mp3(full_path) if full_path_safe and full_path else (False, "artifact missing or unsafe")
+            )
+            full_checksum_ok = bool(
+                artifact
+                and artifact["verified"]
+                and artifact["sha256"]
+                and full_path
+                and full_path_safe
+                and full_path.exists()
+                and sha256_file(full_path) == str(artifact["sha256"])
+            )
+            completed_ok = completed_ok and full_valid and full_checksum_ok
+        if completed_ok and chapters:
+            report.completed_verified = True
+            db.event(
+                "info",
+                "COMPLETED_PROJECT_VERIFIED",
+                "Completed project artifacts verified; deep WAV recovery was skipped",
+                {"chapters": len(chapters)},
+            )
+            return report
 
     for row in db.list_segments(statuses=("signal_passed", "verified", "warning")):
         wav_text = str(row["wav_path"] or "")

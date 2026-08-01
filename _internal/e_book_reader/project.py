@@ -29,9 +29,7 @@ def create_or_open_project(
         raise ValueError("At least one TXT file is required")
     output_root = output_root.expanduser().resolve()
     output_root.mkdir(parents=True, exist_ok=True)
-    provisional = output_root / ".manifest_work"
-    provisional.mkdir(parents=True, exist_ok=True)
-    manifest = build_chapter_manifest(input_files, provisional)
+    manifest = build_chapter_manifest(input_files, output_root)
     manifest_hash = input_manifest_hash(manifest)
     book_title = (title or infer_book_title(input_files)).strip() or "audiobook"
     project_root = output_root / f"{slugify(book_title, 70)}_{manifest_hash[:10]}"
@@ -40,11 +38,6 @@ def create_or_open_project(
     # Rebuild output paths now that the final project root is known.
     manifest = build_chapter_manifest(input_files, paths.chapters)
     manifest_hash = input_manifest_hash(manifest)
-    try:
-        provisional.rmdir()
-    except OSError:
-        pass
-
     if paths.settings.exists():
         settings = load_settings(paths.settings)
     else:
