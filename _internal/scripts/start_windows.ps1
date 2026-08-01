@@ -62,9 +62,9 @@ if (-not (Test-AppRuntime)) {
     } catch {
         Write-Host ""
         Write-Host "CÀI ĐẶT KHÔNG HOÀN TẤT." -ForegroundColor Red
-        Write-Host "Không thể tải hoặc chuẩn bị thành phần cần thiết."
+        Write-Host "Quá trình chuẩn bị ứng dụng gặp lỗi."
         Write-Host "Không có project audiobook nào bị thay đổi."
-        Write-Host "Hãy kiểm tra kết nối Internet và dung lượng SSD, sau đó mở lại START.bat."
+        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại START.bat."
         Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
         Wait-BeforeClose
         exit 1

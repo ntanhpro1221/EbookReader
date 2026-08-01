@@ -26,6 +26,9 @@ e_book_reader = "e_book_reader.gui:run_gui"
 [project.optional-dependencies]
 dev = ["pytest==8.3.5", "ruff==0.9.10"]
 
+[tool.setuptools.packages.find]
+include = ["e_book_reader*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
