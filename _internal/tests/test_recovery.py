@@ -86,27 +86,6 @@ def test_recovery_rebuilds_completed_mp3_when_artifact_checksum_mismatches(tmp_p
     assert db.list_chapters()[0]["status"] == "warning"
 
 
-def test_recovery_invalidates_corrupt_voice_reference(tmp_path: Path) -> None:
-    paths, settings, db, _row = setup_db(tmp_path)
-    profile_id = db.upsert_voice_profile({
-        "voice_key": "char_test",
-        "engine": "voxcpm2",
-        "description": "Giọng thử",
-        "seed": 123,
-    })
-    reference = paths.voices / "char_test.wav"
-    reference.write_bytes(b"not-a-wave")
-    db.update_voice_reference(profile_id, reference_wav=reference, reference_sha256="bad")
-
-    report = recover_project(paths, db, settings)
-    fresh = db.voice_profile(profile_id)
-
-    assert report.invalid_voice_references == 1
-    assert fresh["reference_wav"] is None
-    assert fresh["reference_sha256"] is None
-    assert fresh["status"] == "planned"
-
-
 def test_completed_project_uses_verified_mp3_fast_path(tmp_path: Path, monkeypatch) -> None:
     paths, settings, db, row = setup_db(tmp_path)
     db.mark_verified(int(row["id"]))

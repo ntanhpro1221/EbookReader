@@ -26,7 +26,7 @@ import + natural sort TXT
 → segment toàn book
 → Qwen phân tích toàn book, checkpoint theo batch
 → character registry + alias + pronunciation
-→ khóa voice mapping/reference/seed/settings
+→ khóa voice mapping/preset/seed/settings
 → unload LLM
 → từng chapter: TTS → unload TTS → Whisper → repair → FFmpeg verify
 → chapter MP3
@@ -41,7 +41,7 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - SQLite là source of truth; không dùng existence/mtime làm bằng chứng hoàn tất.
 - WAV/MP3 luôn ghi `.part`, validate + checksum rồi atomic replace.
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
-- TTS retry theo thứ tự: seed khác → chia nhỏ → fallback engine → `failed`.
+- TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn → `failed`.
 - Chapter còn segment `failed` không được publish.
 - Không giữ TTS và Whisper đồng thời trên GPU khi không cần.
 - Khi foreground pressure xuất hiện: hoàn thành đơn vị inference hiện tại, checkpoint, ngừng cấp việc mới, giảm tải/unload nếu cần.
@@ -49,8 +49,14 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Khi resume, settings hash và voice mapping phải giữ nguyên.
 - TXT phải được decode từ đúng byte đã hash; ưu tiên BOM/UTF-8/CP1258 và chỉ thử UTF-16 không BOM khi có NUL heuristic.
 - Pronunciation confidence được lưu trong SQLite; cùng một text đã chuyển cách đọc phải được dùng cho TTS và expected ASR.
-- VieNeu mặc định chạy từng segment với seed ổn định; chỉ batch khi `deterministic_vieneu=false` đã được khóa theo book.
-- Fallback phải là engine khác primary; không được ghi warning fallback nếu thực tế vẫn gọi cùng engine.
+- Mọi vai dùng preset VieNeu đã khóa; một nhân vật không được đổi preset theo cảm xúc hoặc khi resume.
+- Cảm xúc chỉ thay đổi cách thể hiện trên cùng preset: cue phi ngôn ngữ được VieNeu hỗ trợ, sampling,
+  pace và mức âm lượng mục tiêu. Không thay identity giọng để giả lập cảm xúc.
+- Preset được phân bổ theo giới tính và ưu tiên dùng hết pool phù hợp trước khi tái sử dụng.
+- NPC có nhãn cục bộ được giữ identity riêng trong phạm vi chapter/batch; NPC không phân biệt được
+  ít nhất phải tách pool nam, nữ và chưa rõ giới tính.
+- Whisper phải nhận WAV đã đọc/resample trong process; không truyền đường dẫn cho API Whisper vì bản
+  dependency hiện tại sẽ gọi FFmpeg subprocess cho từng segment và gây nháy console trên Windows.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
 - Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
 - Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
@@ -82,7 +88,7 @@ Module chính:
 - `database.py`: schema/transaction API.
 - `analysis.py`: Qwen structured analysis.
 - `character_registry.py`: canonical character, alias, voice mapping.
-- `tts.py`: VoxCPM2/VieNeu adapters và fallback.
+- `tts.py`: VieNeu preset adapter, emotion delivery và deterministic retry.
 - `asr.py`: Whisper và transcript metrics.
 - `audio_io.py`: validation, atomic audio, playlist.
 - `resource_manager.py`: resource snapshot/decision.

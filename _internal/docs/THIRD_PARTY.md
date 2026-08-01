@@ -5,7 +5,6 @@ Project không đóng gói model weights trong source ZIP. Lần cài đầu t�
 Các thành phần chính:
 
 - Qwen3 qua Ollama;
-- VoxCPM2 / `voxcpm`;
 - VieNeu / `vieneu`;
 - OpenAI Whisper;
 - PyTorch và torchaudio;

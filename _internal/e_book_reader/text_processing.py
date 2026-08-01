@@ -9,6 +9,15 @@ from .io_utils import decode_text_bytes, natural_key, sha256_bytes, sha256_file,
 
 QUOTE_PATTERN = re.compile(r"([“\"][^”\"]{1,1600}[”\"])", re.DOTALL)
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+")
+SPEECH_VERB_PATTERN = re.compile(
+    r"\b(?:nói|hỏi|đáp|trả lời|quát|hét|gào|thì thầm|lẩm bẩm|kêu|bảo|ra lệnh|cười)\b",
+    re.IGNORECASE,
+)
+PUNCTUATION_BREAK_MS = {
+    ",": 180,
+    ".": 320,
+    "…": 600,
+}
 
 
 def normalize_text(text: str) -> str:
@@ -51,12 +60,97 @@ def _split_long(text: str, max_chars: int) -> list[str]:
     return result
 
 
+def has_spoken_content(text: str) -> bool:
+    return any(char.isalnum() for char in text)
+
+
+def _quoted_span_is_dialogue(line: str, match: re.Match[str]) -> bool:
+    quoted = match.group(1).strip()
+    inner = quoted[1:-1].strip()
+    if not has_spoken_content(inner):
+        return False
+    if line.strip() == quoted:
+        return True
+    if any(mark in inner for mark in ("?", "!", "…")) or inner.endswith("."):
+        return True
+    before = line[: match.start()].rstrip()
+    after = line[match.end() :].lstrip()
+    if before.endswith(":"):
+        return True
+    context = f"{before[-100:]} {after[:100]}"
+    return SPEECH_VERB_PATTERN.search(context) is not None
+
+
+def _join_fragments(left: str, right: str) -> str:
+    if not left:
+        return right
+    if not right:
+        return left
+    if right[0] in ",.;:!?…)]}”":
+        return left + right
+    return f"{left} {right}"
+
+
+def _line_pieces(line: str) -> list[tuple[str, str]]:
+    if re.match(r"^[—–-]\s*\S", line):
+        return [(line, "dialogue")]
+    matches = list(QUOTE_PATTERN.finditer(line))
+    if not matches:
+        hint = "thought" if line.startswith("(") and line.endswith(")") else "narration"
+        return [(line, hint)]
+
+    raw: list[tuple[str, str]] = []
+    cursor = 0
+    for match in matches:
+        if match.start() > cursor:
+            raw.append((line[cursor : match.start()], "narration"))
+        hint = "dialogue" if _quoted_span_is_dialogue(line, match) else "narration"
+        raw.append((match.group(1), hint))
+        cursor = match.end()
+    if cursor < len(line):
+        raw.append((line[cursor:], "narration"))
+
+    merged: list[tuple[str, str]] = []
+    pending_prefix = ""
+    for text, hint in raw:
+        text = text.strip()
+        if not text:
+            continue
+        if not has_spoken_content(text):
+            if merged:
+                previous_text, previous_hint = merged[-1]
+                merged[-1] = (_join_fragments(previous_text, text), previous_hint)
+            else:
+                pending_prefix = _join_fragments(pending_prefix, text)
+            continue
+        if pending_prefix:
+            text = _join_fragments(pending_prefix, text)
+            pending_prefix = ""
+        if merged and merged[-1][1] == hint:
+            previous_text, _ = merged[-1]
+            merged[-1] = (_join_fragments(previous_text, text), hint)
+        else:
+            merged.append((text, hint))
+    return merged
+
+
+def _punctuation_break_ms(text: str) -> int:
+    return max(
+        (duration for mark, duration in PUNCTUATION_BREAK_MS.items() if mark in text),
+        default=230,
+    )
+
+
 def segment_chapter_text(chapter_index: int, text: str, max_chars: int = 340) -> list[dict[str, Any]]:
     text = normalize_text(text)
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
     rows: list[dict[str, Any]] = []
 
     def append_piece(piece: str, hint: str, paragraph_index: int) -> None:
+        if not has_spoken_content(piece):
+            if rows:
+                rows[-1]["break_ms"] = max(int(rows[-1]["break_ms"]), _punctuation_break_ms(piece))
+            return
         for chunk in _split_long(piece.strip(), max_chars):
             seq = len(rows)
             stable_id = f"c{chapter_index:05d}_s{seq:07d}_{sha256_text(chunk)[:12]}"
@@ -78,22 +172,11 @@ def segment_chapter_text(chapter_index: int, text: str, max_chars: int = 340) ->
     for paragraph_index, paragraph in enumerate(paragraphs):
         lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
         for line in lines:
-            if re.match(r"^[—–-]\s*\S", line):
-                append_piece(line, "dialogue", paragraph_index)
-                continue
-            cursor = 0
-            matches = list(QUOTE_PATTERN.finditer(line))
-            if not matches:
-                hint = "thought" if line.startswith("(") and line.endswith(")") else "narration"
-                append_piece(line, hint, paragraph_index)
-                continue
-            for match in matches:
-                if match.start() > cursor:
-                    append_piece(line[cursor : match.start()], "narration", paragraph_index)
-                append_piece(match.group(1), "dialogue", paragraph_index)
-                cursor = match.end()
-            if cursor < len(line):
-                append_piece(line[cursor:], "narration", paragraph_index)
+            pieces = _line_pieces(line)
+            if not pieces and rows:
+                rows[-1]["break_ms"] = max(int(rows[-1]["break_ms"]), _punctuation_break_ms(line))
+            for piece, hint in pieces:
+                append_piece(piece, hint, paragraph_index)
     for index, row in enumerate(rows):
         if index + 1 >= len(rows):
             row["break_ms"] = 0

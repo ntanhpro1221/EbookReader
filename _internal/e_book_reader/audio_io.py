@@ -15,6 +15,24 @@ class AudioQualityError(RuntimeError):
     pass
 
 
+EMOTION_LEVEL_OFFSETS_DB = {
+    "angry": 1.5,
+    "excited": 1.0,
+    "surprised": 0.7,
+    "whispering": -2.5,
+    "tired": -1.0,
+    "tender": -0.5,
+}
+
+
+def _segment_value(segment: Any, key: str, default: Any) -> Any:
+    try:
+        value = segment[key]
+    except (KeyError, TypeError):
+        return default
+    return default if value is None else value
+
+
 def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
     array = np.asarray(audio, dtype=np.float32)
     if array.ndim == 2 and 1 in array.shape:
@@ -31,7 +49,56 @@ def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
     }
 
 
-def validate_audio_array(audio: Any, text: str, settings: dict[str, Any], sample_rate: int) -> tuple[np.ndarray, dict[str, float]]:
+def _active_rms(audio: np.ndarray, sample_rate: int, floor_dbfs: float) -> float:
+    frame_size = max(1, int(sample_rate * 0.02))
+    usable_size = audio.size - (audio.size % frame_size)
+    if usable_size <= 0:
+        return 0.0
+    frames = audio[:usable_size].astype(np.float64).reshape(-1, frame_size)
+    frame_rms = np.sqrt(np.mean(np.square(frames), axis=1))
+    active = frame_rms[frame_rms >= 10 ** (floor_dbfs / 20.0)]
+    return float(math.sqrt(float(np.mean(np.square(active))))) if active.size else 0.0
+
+
+def normalize_segment_level(
+    audio: np.ndarray,
+    sample_rate: int,
+    segment: Any,
+    settings: dict[str, Any],
+) -> np.ndarray:
+    array = np.asarray(audio, dtype=np.float32).reshape(-1)
+    if not array.size:
+        return array
+    audio_cfg = settings["audio"]
+    active_rms = _active_rms(
+        array,
+        sample_rate,
+        float(audio_cfg.get("segment_active_floor_dbfs", -45.0)),
+    )
+    if active_rms <= 0:
+        return array
+    volume = str(_segment_value(segment, "volume", "normal"))
+    targets = audio_cfg["segment_target_dbfs"]
+    target_dbfs = float(targets.get(volume, targets["normal"]))
+    if volume == "normal":
+        emotion = str(_segment_value(segment, "emotion", "neutral"))
+        intensity = max(0, min(3, int(_segment_value(segment, "intensity", 0))))
+        target_dbfs += EMOTION_LEVEL_OFFSETS_DB.get(emotion, 0.0) * intensity / 3.0
+    desired_gain = 10 ** ((target_dbfs - 20.0 * math.log10(active_rms)) / 20.0)
+    peak = float(np.max(np.abs(array)))
+    peak_limit = 10 ** (float(audio_cfg.get("segment_peak_dbfs", -2.0)) / 20.0)
+    peak_safe_gain = peak_limit / peak if peak > 0 else desired_gain
+    gain = min(desired_gain, peak_safe_gain)
+    return np.asarray(array * gain, dtype=np.float32)
+
+
+def validate_audio_array(
+    audio: Any,
+    text: str,
+    settings: dict[str, Any],
+    sample_rate: int,
+    segment: Any | None = None,
+) -> tuple[np.ndarray, dict[str, float]]:
     if sample_rate <= 0:
         raise AudioQualityError(f"invalid sample rate: {sample_rate}")
     array = np.asarray(audio, dtype=np.float32)
@@ -55,28 +122,57 @@ def validate_audio_array(audio: Any, text: str, settings: dict[str, Any], sample
         raise AudioQualityError(f"audio RMS too low: {metrics['rms']:.6f}")
     if metrics["clipping_fraction"] > float(settings["tts"]["max_clipping_fraction"]):
         raise AudioQualityError(f"audio clipping: {metrics['clipping_fraction']:.4%}")
+    speakable_chars = sum(char.isalnum() for char in text)
+    if segment is not None and speakable_chars >= int(settings["tts"].get("rate_check_min_chars", 24)):
+        pace = str(_segment_value(segment, "pace", "normal"))
+        bounds = settings["tts"]["pace_chars_per_second"].get(
+            pace,
+            settings["tts"]["pace_chars_per_second"]["normal"],
+        )
+        rate = speakable_chars / metrics["duration"]
+        if rate < float(bounds[0]) or rate > float(bounds[1]):
+            raise AudioQualityError(
+                f"speech rate outside {pace} range: {rate:.2f} chars/s not in "
+                f"[{float(bounds[0]):.2f}, {float(bounds[1]):.2f}]"
+            )
+        metrics["chars_per_second"] = float(rate)
     return array, metrics
 
 
-def inspect_wav(path: Path, text: str, settings: dict[str, Any]) -> tuple[bool, dict[str, float], str]:
+def inspect_wav(
+    path: Path,
+    text: str,
+    settings: dict[str, Any],
+    segment: Any | None = None,
+) -> tuple[bool, dict[str, float], str]:
     try:
         audio, sample_rate = sf.read(path, dtype="float32", always_2d=False)
-        _, metrics = validate_audio_array(audio, text, settings, sample_rate)
+        _, metrics = validate_audio_array(audio, text, settings, sample_rate, segment=segment)
         return True, metrics, "ok"
     except Exception as exc:  # noqa: BLE001
         return False, {}, str(exc)
 
 
-def atomic_write_wav(path: Path, audio: Any, sample_rate: int, text: str, settings: dict[str, Any]) -> tuple[str, dict[str, float]]:
+def atomic_write_wav(
+    path: Path,
+    audio: Any,
+    sample_rate: int,
+    text: str,
+    settings: dict[str, Any],
+    segment: Any | None = None,
+) -> tuple[str, dict[str, float]]:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(path.stem + ".part" + path.suffix)
     temp.unlink(missing_ok=True)
-    array, _ = validate_audio_array(audio, text, settings, sample_rate)
+    array, _ = validate_audio_array(audio, text, settings, sample_rate, segment=segment)
+    if segment is not None:
+        array = normalize_segment_level(array, sample_rate, segment, settings)
+    array, _ = validate_audio_array(array, text, settings, sample_rate, segment=segment)
     sf.write(temp, array, sample_rate, subtype="PCM_16")
     # Windows rejects fsync on a read-only descriptor (WinError 9).
     with temp.open("rb+") as handle:
         os.fsync(handle.fileno())
-    valid, metrics, reason = inspect_wav(temp, text, settings)
+    valid, metrics, reason = inspect_wav(temp, text, settings, segment=segment)
     if not valid:
         temp.unlink(missing_ok=True)
         raise AudioQualityError(f"temporary WAV failed validation: {reason}")
@@ -86,7 +182,12 @@ def atomic_write_wav(path: Path, audio: Any, sample_rate: int, text: str, settin
 
 
 def merge_wav_parts_atomic(
-    parts: list[Path], destination: Path, text: str, settings: dict[str, Any], pause_seconds: float = 0.12
+    parts: list[Path],
+    destination: Path,
+    text: str,
+    settings: dict[str, Any],
+    pause_seconds: float = 0.12,
+    segment: Any | None = None,
 ) -> tuple[str, dict[str, float]]:
     if not parts:
         raise AudioQualityError("no WAV parts to merge")
@@ -105,7 +206,7 @@ def merge_wav_parts_atomic(
             arrays.append(np.zeros(int(sample_rate * pause_seconds), dtype=np.float32))
     assert sample_rate is not None
     merged = np.concatenate(arrays)
-    return atomic_write_wav(destination, merged, sample_rate, text, settings)
+    return atomic_write_wav(destination, merged, sample_rate, text, settings, segment=segment)
 
 
 def verify_mp3(path: Path) -> tuple[bool, str]:

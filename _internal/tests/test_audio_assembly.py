@@ -11,6 +11,8 @@ from e_book_reader.audio_io import (
     atomic_write_wav,
     assemble_chapter_atomic,
     combine_full_book_atomic,
+    normalize_segment_level,
+    signal_metrics,
     verify_mp3,
     validate_audio_array,
 )
@@ -88,6 +90,18 @@ def test_stereo_audio_is_rejected_instead_of_flattened() -> None:
         validate_audio_array(stereo, "Một câu đủ dài để kiểm tra.", settings, 48_000)
 
 
+def test_segment_leveling_does_not_hide_stereo_or_clipped_model_output(tmp_path: Path) -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    segment = {"pace": "normal", "volume": "normal", "emotion": "neutral", "intensity": 1}
+    stereo = np.zeros((48_000, 2), dtype=np.float32)
+    clipped = np.ones(48_000, dtype=np.float32)
+
+    with pytest.raises(AudioQualityError, match="mono"):
+        atomic_write_wav(tmp_path / "stereo.wav", stereo, 48_000, "Một câu kiểm tra.", settings, segment)
+    with pytest.raises(AudioQualityError, match="clipping"):
+        atomic_write_wav(tmp_path / "clipped.wav", clipped, 48_000, "Một câu kiểm tra.", settings, segment)
+
+
 def test_full_book_failure_cleans_temporary_files(tmp_path: Path, monkeypatch) -> None:
     chapter = tmp_path / "chapter.mp3"
     chapter.write_bytes(b"ID3" + b"x" * 5000)
@@ -101,3 +115,38 @@ def test_full_book_failure_cleans_temporary_files(tmp_path: Path, monkeypatch) -
         combine_full_book_atomic([chapter], output, "Book")
 
     assert not list(tmp_path.rglob("*.part.*"))
+
+
+def test_segment_leveling_matches_neutral_voices_and_preserves_loud_intent() -> None:
+    settings = build_settings()
+    sample_rate = 48_000
+    timeline = np.arange(sample_rate, dtype=np.float32) / sample_rate
+    quiet = 0.03 * np.sin(2 * np.pi * 220 * timeline)
+    strong = 0.20 * np.sin(2 * np.pi * 220 * timeline)
+    neutral = {"volume": "normal", "emotion": "neutral", "intensity": 1}
+    loud = {"volume": "loud", "emotion": "angry", "intensity": 3}
+
+    quiet_normalized = normalize_segment_level(quiet, sample_rate, neutral, settings)
+    strong_normalized = normalize_segment_level(strong, sample_rate, neutral, settings)
+    loud_normalized = normalize_segment_level(quiet, sample_rate, loud, settings)
+    quiet_db = 20 * np.log10(signal_metrics(quiet_normalized, sample_rate)["rms"])
+    strong_db = 20 * np.log10(signal_metrics(strong_normalized, sample_rate)["rms"])
+    loud_db = 20 * np.log10(signal_metrics(loud_normalized, sample_rate)["rms"])
+
+    assert quiet_db == pytest.approx(strong_db, abs=0.15)
+    assert loud_db > quiet_db + 2.0
+
+
+def test_segment_rate_validation_rejects_wrong_pace() -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    audio = np.sin(np.linspace(0, 200, 48_000 * 6, dtype=np.float32)) * 0.12
+    text = "a" * 60
+
+    with pytest.raises(AudioQualityError, match="speech rate outside normal range"):
+        validate_audio_array(
+            audio,
+            text,
+            settings,
+            48_000,
+            segment={"pace": "normal"},
+        )

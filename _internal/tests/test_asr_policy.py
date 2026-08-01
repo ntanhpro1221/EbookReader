@@ -4,7 +4,9 @@ import sys
 from types import SimpleNamespace
 from pathlib import Path
 
+import numpy as np
 import pytest
+import soundfile as sf
 
 from e_book_reader.asr import WhisperVerifier, is_asr_repair_candidate
 from e_book_reader.config import build_settings
@@ -58,3 +60,29 @@ def test_non_lexical_text_skips_whisper_and_one_word_is_not_repaired(monkeypatch
     assert result["repairable"] is False
     assert is_asr_repair_candidate("rầm") is False
     assert is_asr_repair_candidate("Cánh cửa đổ rầm xuống.") is True
+
+
+def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
+    sample_rate = 48_000
+    timeline = np.arange(sample_rate, dtype=np.float32) / sample_rate
+    source = 0.1 * np.sin(2 * np.pi * 220 * timeline)
+    wav = tmp_path / "speech.wav"
+    sf.write(wav, source, sample_rate)
+
+    received = {}
+
+    class FakeModel:
+        def transcribe(self, audio, **kwargs):
+            received["audio"] = audio
+            received["kwargs"] = kwargs
+            return {"text": "xin chào"}
+
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier.model = FakeModel()
+    verifier.device = "cpu"
+
+    assert verifier.transcribe(wav) == "xin chào"
+    assert isinstance(received["audio"], np.ndarray)
+    assert received["audio"].ndim == 1
+    assert abs(len(received["audio"]) - 16_000) <= 1
+    assert received["kwargs"]["fp16"] is False

@@ -291,7 +291,6 @@ class AdaptiveResourceManager:
                 ResourceLevel.YIELD_HEAVY,
                 "; ".join(heavy_reasons),
                 gpu_batch_scale=0.25,
-                # VoxCPM2 is per-segment, so reducing batch cannot make it share GPU gracefully.
                 # Stop dispatching new GPU work when the foreground app is actually using GPU.
                 allow_new_gpu_batch=not (
                     foreground_gpu_pressure or memory_pressure or disk_space_pressure

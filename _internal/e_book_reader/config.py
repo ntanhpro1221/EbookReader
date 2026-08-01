@@ -29,39 +29,31 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "low_confidence_policy": "auto_with_warning",
     },
     "voices": {
-        "narrator_engine": "vieneu",
-        "character_engine": "voxcpm2",
-        "fallback_engine": "vieneu",
         "narrator_voice": "Phạm Tuyên",
-        "max_unique_character_voices": 24,
         "minimum_named_character_mentions": 3,
-        "reference_text": (
-            "Đêm xuống rất chậm. Gió lướt qua hàng cây, mang theo mùi đất ẩm "
-            "và một cảm giác yên bình khó gọi thành tên."
-        ),
         "narrator_description": (
             "Giọng nam Việt Nam trưởng thành, trầm ấm, rõ chữ, giàu cảm xúc nhưng tiết chế, "
             "nhịp kể tự nhiên như audiobook chuyên nghiệp, phát âm chuẩn tiếng Việt"
         ),
     },
     "tts": {
-        "voxcpm_model": "openbmb/VoxCPM2",
-        "voxcpm_revision": "bffb3df5a29440629464e5e839f4d214c8714c3d",
         "device": "cuda",
         "sample_rate": 48000,
-        "cfg_value": 2.0,
-        "inference_timesteps": 10,
         "max_retries": 3,
         "fatal_failure_streak": 3,
         "max_segment_chars": 340,
         "batch_size": 12,
-        "auto_tune_batch": True,
-        "deterministic_vieneu": True,
         "min_seconds_per_100_chars": 2.1,
         "max_seconds_per_100_chars": 13.0,
         "min_rms": 0.002,
         "max_clipping_fraction": 0.003,
-        "failure_policy": "retry_split_fallback_fail",
+        "pace_chars_per_second": {
+            "slow": [6.0, 17.0],
+            "normal": [10.5, 22.0],
+            "fast": [12.0, 27.0],
+        },
+        "rate_check_min_chars": 24,
+        "failure_policy": "retry_split_fail",
         "allow_silent_replacement": False,
     },
     "asr": {
@@ -84,6 +76,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "loudness_lufs": -18.0,
         "true_peak_db": -2.0,
         "lra": 11.0,
+        "segment_active_floor_dbfs": -45.0,
+        "segment_peak_dbfs": -2.0,
+        "segment_target_dbfs": {
+            "soft": -22.0,
+            "normal": -19.0,
+            "loud": -16.5,
+        },
         "combine_full_book": True,
         "create_m3u8": True,
         "keep_verified_wav": True,
@@ -125,7 +124,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     "fast": {
         "analysis": {"model": "qwen3:4b", "batch_segments": 40},
-        "voices": {"character_engine": "vieneu"},
         "asr": {"enabled": True, "min_words": 8, "repair_rounds": 1},
         "tts": {"batch_size": 16},
     },
@@ -193,27 +191,27 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Unsupported analysis.low_confidence_policy")
 
     voices = settings.get("voices", {})
-    supported_engines = {"vieneu", "voxcpm2"}
-    for key in ("narrator_engine", "character_engine"):
-        if voices.get(key) not in supported_engines:
-            raise ValueError(f"Unsupported voices.{key}")
-    if voices.get("fallback_engine") not in supported_engines:
-        raise ValueError("Unsupported voices.fallback_engine")
+    if not str(voices.get("narrator_voice", "")).strip():
+        raise ValueError("voices.narrator_voice cannot be empty")
 
     tts = settings.get("tts", {})
     if int(tts.get("sample_rate", 0)) < 8_000:
         raise ValueError("tts.sample_rate must be at least 8000 Hz")
-    revision = str(tts.get("voxcpm_revision", ""))
-    if len(revision) != 40 or any(char not in "0123456789abcdef" for char in revision.casefold()):
-        raise ValueError("tts.voxcpm_revision must be a full 40-character commit hash")
     if int(tts.get("max_segment_chars", 0)) < 50:
         raise ValueError("tts.max_segment_chars must be at least 50")
     if int(tts.get("max_retries", 0)) < 1 or int(tts.get("batch_size", 0)) < 1:
         raise ValueError("TTS retry and batch settings must be positive")
     if int(tts.get("fatal_failure_streak", 0)) < 1:
         raise ValueError("tts.fatal_failure_streak must be positive")
-    if tts.get("failure_policy") != "retry_split_fallback_fail":
+    if tts.get("failure_policy") != "retry_split_fail":
         raise ValueError("Unsupported tts.failure_policy")
+    pace_ranges = tts.get("pace_chars_per_second", {})
+    for pace in ("slow", "normal", "fast"):
+        bounds = pace_ranges.get(pace, [])
+        if len(bounds) != 2 or float(bounds[0]) <= 0 or float(bounds[0]) >= float(bounds[1]):
+            raise ValueError(f"tts.pace_chars_per_second.{pace} must contain increasing bounds")
+    if int(tts.get("rate_check_min_chars", 0)) < 1:
+        raise ValueError("tts.rate_check_min_chars must be positive")
 
     asr = settings.get("asr", {})
     if int(asr.get("repair_rounds", 0)) < 0 or int(asr.get("beam_size", 0)) < 1:
@@ -233,6 +231,15 @@ def validate_settings(settings: dict[str, Any]) -> None:
             raise ValueError(f"safety.{key} must remain true")
     if settings.get("audio", {}).get("keep_verified_wav") is not True:
         raise ValueError("audio.keep_verified_wav must remain true until WAV-free recovery is implemented")
+    audio = settings.get("audio", {})
+    targets = audio.get("segment_target_dbfs", {})
+    if not (
+        float(targets.get("soft", 0))
+        < float(targets.get("normal", 0))
+        < float(targets.get("loud", 0))
+        < float(audio.get("segment_peak_dbfs", 0))
+    ):
+        raise ValueError("Segment dBFS targets must satisfy soft < normal < loud < peak")
     resources = settings.get("resources", {})
     max_temp = int(resources.get("max_gpu_temp_c", 86))
     resume_temp = int(resources.get("resume_gpu_temp_c", 80))

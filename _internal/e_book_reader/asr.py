@@ -6,8 +6,12 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Callable
 
+import numpy as np
+import soundfile as sf
+
 
 ASR_REPAIR_MIN_WORDS = 2
+WHISPER_SAMPLE_RATE = 16_000
 
 
 def normalize_transcript(text: str) -> str:
@@ -46,6 +50,25 @@ def transcript_metrics(expected: str, actual: str) -> tuple[float, float]:
 
 def is_asr_repair_candidate(expected: str) -> bool:
     return len(normalize_transcript(expected).split()) >= ASR_REPAIR_MIN_WORDS
+
+
+def load_audio_for_whisper(path: Path) -> np.ndarray:
+    audio, sample_rate = sf.read(path, dtype="float32", always_2d=False)
+    array = np.asarray(audio, dtype=np.float32)
+    if array.ndim != 1:
+        raise RuntimeError(f"Whisper input must be mono, got shape {array.shape}")
+    if int(sample_rate) != WHISPER_SAMPLE_RATE:
+        import torch
+        import torchaudio.functional as audio_functional
+
+        waveform = torch.from_numpy(array).unsqueeze(0)
+        array = (
+            audio_functional.resample(waveform, int(sample_rate), WHISPER_SAMPLE_RATE)
+            .squeeze(0)
+            .numpy()
+            .astype(np.float32, copy=False)
+        )
+    return array
 
 
 class WhisperVerifier:
@@ -112,8 +135,9 @@ class WhisperVerifier:
     def transcribe(self, path: Path) -> str:
         if self.model is None:
             raise RuntimeError("Whisper is not loaded")
+        audio = load_audio_for_whisper(path)
         result = self.model.transcribe(
-            str(path),
+            audio,
             language="vi",
             task="transcribe",
             fp16=self.device.startswith("cuda"),

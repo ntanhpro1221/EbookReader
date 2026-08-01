@@ -59,7 +59,7 @@ def main() -> int:
 
     modules = [
         "PySide6", "requests", "psutil", "numpy", "soundfile", "imageio_ffmpeg",
-        "torch", "whisper", "vieneu", "voxcpm",
+        "torch", "torchaudio", "whisper", "vieneu",
     ]
     for name in modules:
         try:

@@ -5,7 +5,11 @@ from pathlib import Path
 import pytest
 
 from e_book_reader.io_utils import decode_text_bytes, sha256_file
-from e_book_reader.text_processing import build_chapter_manifest, load_and_segment_chapter
+from e_book_reader.text_processing import (
+    build_chapter_manifest,
+    load_and_segment_chapter,
+    segment_chapter_text,
+)
 
 
 def test_cp1258_is_not_misdecoded_as_utf16() -> None:
@@ -42,3 +46,27 @@ def test_output_filename_is_sanitized_and_bounded(tmp_path: Path) -> None:
     assert len(output.name) <= 82
     assert ":" not in output.name
     assert "?" not in output.name
+
+
+def test_inline_quoted_terms_remain_one_narration_segment() -> None:
+    text = 'Lucien nghĩ đến những từ như “cơ duyên”, “kho báu”, “sổ tay ma thuật”.'
+
+    rows = segment_chapter_text(1, text)
+
+    assert [row["text"] for row in rows] == [text]
+    assert [row["kind_hint"] for row in rows] == ["narration"]
+
+
+def test_direct_speech_is_separated_from_narration() -> None:
+    rows = segment_chapter_text(1, 'Cô hỏi: “Anh có khỏe không?”')
+
+    assert [row["text"] for row in rows] == ["Cô hỏi:", "“Anh có khỏe không?”"]
+    assert [row["kind_hint"] for row in rows] == ["narration", "dialogue"]
+
+
+def test_punctuation_only_content_never_becomes_tts_segment() -> None:
+    rows = segment_chapter_text(1, "Một câu kể.\n…\n,\nMột câu khác.")
+
+    assert [row["text"] for row in rows] == ["Một câu kể.", "Một câu khác."]
+    assert all(any(char.isalnum() for char in row["text"]) for row in rows)
+    assert segment_chapter_text(1, "…\n,\n.") == []

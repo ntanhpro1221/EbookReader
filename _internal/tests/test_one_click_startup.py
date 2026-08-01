@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 
@@ -51,7 +52,18 @@ def test_one_click_startup_contract() -> None:
     assert 'Ensure-WingetPackage "ffmpeg"' in setup
     assert 'pip install torch==2.8.0 torchaudio==2.8.0' in setup
     assert 'ollama pull qwen3:8b' in setup
-    assert "snapshot_download('openbmb/VoxCPM2'" in setup
+    assert "snapshot_download" not in setup
+    project = tomllib.loads((INTERNAL_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["project"]["dependencies"] == [
+        "PySide6==6.8.0",
+        "requests==2.32.3",
+        "psutil==6.0.0",
+        "numpy==1.26.4",
+        "soundfile==0.13.1",
+        "imageio-ffmpeg==0.6.0",
+        "openai-whisper==20250625",
+        "vieneu==3.2.3",
+    ]
     assert 'VieNeuEngine' in setup
-    assert 'required in e.voices' in setup
+    assert 'required-set(e.voices)' in setup
     assert "whisper.load_model('turbo'" in setup

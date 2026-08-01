@@ -73,7 +73,9 @@ def test_pronunciation_keeps_higher_confidence_value(tmp_path: Path) -> None:
     row = db.list_pronunciations()[0]
     assert row["spoken_form"] == "Ê đen vai"
     assert row["confidence"] == pytest.approx(0.9)
-def test_pronunciation_is_applied_and_fallback_engine_is_distinct(tmp_path: Path) -> None:
+
+
+def test_pronunciation_is_applied_by_vieneu_coordinator(tmp_path: Path) -> None:
     db = ProjectDB(tmp_path / "project.sqlite3")
     db.upsert_pronunciation(
         surface="Edelweiss",
@@ -81,8 +83,6 @@ def test_pronunciation_is_applied_and_fallback_engine_is_distinct(tmp_path: Path
         spoken_form="Ê đen vai",
         confidence=0.95,
     )
-    coordinator = TTSCoordinator(build_settings(), db, tmp_path / "voices", lambda _message: None)
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
 
     assert coordinator.spoken_text({"text": "Edelweiss nở hoa."}) == "Ê đen vai nở hoa."
-    assert coordinator._fallback_engine({"engine": "vieneu"}) == "voxcpm2"
-    assert coordinator._fallback_engine({"engine": "voxcpm2"}) == "vieneu"

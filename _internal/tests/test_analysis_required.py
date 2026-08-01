@@ -4,7 +4,12 @@ import json
 
 import pytest
 
-from e_book_reader.analysis import OllamaBookAnalyzer, _validate
+from e_book_reader.analysis import (
+    OllamaBookAnalyzer,
+    _validate,
+    is_local_speaker,
+    local_speaker_display,
+)
 from e_book_reader.config import build_settings
 
 
@@ -140,3 +145,19 @@ def test_unknown_batch_id_is_not_fuzzily_mapped() -> None:
     validated = _validate(group, payload)
 
     assert list(validated) == [group[0]["stable_id"]]
+
+
+def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
+    group = analysis_group()
+    first = analysis_item(group[0]["stable_id"])
+    first.update({"kind": "dialogue", "speaker": "NPC_LOCAL:áo xanh", "gender": "male"})
+    second = analysis_item(group[1]["stable_id"])
+    second.update({"kind": "dialogue", "speaker": "NPC_LOCAL:áo đỏ", "gender": "male"})
+
+    validated = _validate(group, {"segments": [first, second]}, local_scope="b0007")
+    speakers = [validated[row["stable_id"]]["speaker"] for row in group]
+
+    assert speakers[0] != speakers[1]
+    assert all(is_local_speaker(speaker) for speaker in speakers)
+    assert "c00001::b0007" in speakers[0]
+    assert local_speaker_display(speakers[0]) == "NPC áo xanh"

@@ -16,7 +16,6 @@ class RecoveryReport:
     recovered_verified: int = 0
     reset_missing_or_corrupt: int = 0
     invalid_mp3: int = 0
-    invalid_voice_references: int = 0
     stale_leases: int = 0
     completed_verified: bool = False
 
@@ -96,34 +95,13 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             checksum_ok = bool(row["wav_sha256"]) and sha256_file(wav) == str(row["wav_sha256"])
             if not checksum_required:
                 checksum_ok = True
-            signal_ok, _, _ = inspect_wav(wav, str(row["text"]), settings)
+            signal_ok, _, _ = inspect_wav(wav, str(row["text"]), settings, segment=row)
             valid = checksum_ok and signal_ok
         if valid:
             report.recovered_verified += 1
         else:
             db.reset_segment_pending(int(row["id"]), "Recovery found missing/corrupt/checksum-mismatched WAV")
             report.reset_missing_or_corrupt += 1
-
-    reference_text = str(settings["voices"]["reference_text"])
-    for profile in db.list_voice_profiles():
-        reference_value = str(profile["reference_wav"] or "")
-        if not reference_value:
-            continue
-        reference = Path(reference_value)
-        checksum_ok = bool(
-            profile["reference_sha256"]
-            and reference.exists()
-            and sha256_file(reference) == str(profile["reference_sha256"])
-        )
-        signal_ok = False
-        if reference.exists():
-            signal_ok, _, _ = inspect_wav(reference, reference_text, settings)
-        if not checksum_ok or not signal_ok:
-            db.invalidate_voice_reference(
-                int(profile["id"]),
-                f"Voice reference không còn hợp lệ: {profile['voice_key']}",
-            )
-            report.invalid_voice_references += 1
 
     for chapter in db.list_chapters():
         output_text = str(chapter["output_mp3"] or "")
@@ -163,7 +141,6 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             "recovered_verified": report.recovered_verified,
             "reset_missing_or_corrupt": report.reset_missing_or_corrupt,
             "invalid_mp3": report.invalid_mp3,
-            "invalid_voice_references": report.invalid_voice_references,
             "stale_leases": report.stale_leases,
         },
     )

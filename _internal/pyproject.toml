@@ -14,12 +14,8 @@ dependencies = [
   "numpy==1.26.4",
   "soundfile==0.13.1",
   "imageio-ffmpeg==0.6.0",
-  "huggingface-hub==1.7.1",
-  "gradio==6.16.0",
-  "transformers==5.7.0",
   "openai-whisper==20250625",
   "vieneu==3.2.3",
-  "voxcpm==2.0.3",
 ]
 
 [project.scripts]

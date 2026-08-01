@@ -22,10 +22,10 @@ from .database import ProjectDB
 from .io_utils import sha256_file, slugify
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
-from .text_processing import load_and_segment_chapter
+from .text_processing import has_spoken_content, load_and_segment_chapter
 from .recovery import recover_project
 from .resource_manager import AdaptiveResourceManager
-from .tts import TTSCoordinator, is_fatal_tts_error, is_oom_tts_error
+from .tts import TTSCoordinator, is_fatal_tts_error
 
 
 class PipelineStopped(RuntimeError):
@@ -55,7 +55,7 @@ class BookPipeline:
         self.emit = emit
         self.resources = AdaptiveResourceManager(settings, paths.root)
         self.notifier = WindowsNotifier()
-        self.tts = TTSCoordinator(settings, db, paths.voices, self.log)
+        self.tts = TTSCoordinator(settings, db, self.log)
         self._last_resource_level: ResourceLevel | None = None
         self._completed_noop = False
         self._tts_failure_counts: dict[str, int] = defaultdict(int)
@@ -175,14 +175,12 @@ class BookPipeline:
             report.reset_in_progress
             or report.reset_missing_or_corrupt
             or report.removed_part_files
-            or report.invalid_voice_references
         ):
             self.log(
                 "Recovery: "
                 f"giữ {report.recovered_verified} đoạn; "
                 f"reset {report.reset_in_progress + report.reset_missing_or_corrupt} đoạn; "
-                f"xóa {report.removed_part_files} file tạm; "
-                f"tạo lại {report.invalid_voice_references} voice reference."
+                f"xóa {report.removed_part_files} file tạm."
             )
             if self.settings["safety"].get("notify_on_recovery", True):
                 self.notifier.recovery_notice(
@@ -234,12 +232,8 @@ class BookPipeline:
         finally:
             analyzer.unload()
 
-        self.tts.prepare_voice_references(
-            self.stop_requested,
-            before_profile=lambda index, total: self._resource_gate(
-                f"voice reference {index}/{total}", keep_engine="voxcpm2"
-            ),
-        )
+        self._resource_gate("xác minh preset VieNeu", keep_engine="vieneu")
+        self.tts.prepare_voice_presets()
         self.tts.unload_idle_models()
         self.db.update_book(status=BookStatus.SYNTHESIZING.value, stage="chapter_synthesis")
 
@@ -302,7 +296,7 @@ class BookPipeline:
             return False
         if row["wav_sha256"] and sha256_file(wav) != str(row["wav_sha256"]):
             return False
-        valid, _, _ = inspect_wav(wav, str(row["text"]), self.settings)
+        valid, _, _ = inspect_wav(wav, str(row["text"]), self.settings, segment=row)
         return valid
 
     def _process_chapter(self, chapter: Any, verifier: WhisperVerifier) -> None:
@@ -328,50 +322,34 @@ class BookPipeline:
             } and not row["wav_path"]:
                 self.db.reset_segment_pending(int(row["id"]), "Recovered unfinished stage before chapter processing")
 
-        # Stage 1: synthesize the whole chapter. VieNeu profiles are batchable; VoxCPM2 remains per segment.
+        # Stage 1: synthesize sequentially with a stable seed so each checkpoint is reproducible.
         current_rows = self.db.list_segments(chapter_id=chapter_id)
-        vieneu_groups: dict[int, list[Any]] = defaultdict(list)
-        other_rows: list[Any] = []
         for row in current_rows:
             if self._existing_segment_is_safe(row):
                 continue
             # A valid signal_passed WAV can proceed directly to the chapter ASR stage after recovery.
             if str(row["status"]) == SegmentStatus.SIGNAL_PASSED.value and row["wav_path"]:
-                valid, _, _ = inspect_wav(Path(str(row["wav_path"])), str(row["text"]), self.settings)
+                valid, _, _ = inspect_wav(
+                    Path(str(row["wav_path"])),
+                    str(row["text"]),
+                    self.settings,
+                    segment=row,
+                )
                 if valid:
                     continue
+            if not has_spoken_content(str(row["text"])):
+                self.db.mark_failed(
+                    int(row["id"]),
+                    "Legacy punctuation-only segment must be rebuilt by the corrected text parser",
+                    warning_code="NON_SPEAKABLE_SEGMENT",
+                )
+                continue
             if row["voice_profile_id"] is None:
                 self.db.mark_failed(int(row["id"]), "No locked voice profile")
                 continue
-            profile = self.db.voice_profile(int(row["voice_profile_id"]))
-            if (
-                str(profile["engine"]) == "vieneu"
-                and not self.settings["tts"].get("deterministic_vieneu", True)
-            ):
-                vieneu_groups[int(profile["id"])].append(row)
-            else:
-                other_rows.append(row)
-
-        for group in vieneu_groups.values():
-            offset = 0
-            while offset < len(group):
-                decision = self._resource_gate(
-                    f"chapter {chapter['chapter_index']} VieNeu batch at segment {group[offset]['seq']}",
-                    keep_engine="vieneu",
-                )
-                configured = max(1, int(self.settings["tts"]["batch_size"]))
-                batch_size = configured
-                if self.settings["tts"].get("auto_tune_batch", True):
-                    batch_size = max(1, int(configured * decision.gpu_batch_scale))
-                batch = group[offset : offset + batch_size]
-                self._process_vieneu_batch(batch, chapter)
-                offset += len(batch)
-
-        for row in other_rows:
-            profile = self.db.voice_profile(int(row["voice_profile_id"]))
             self._resource_gate(
                 f"chapter {chapter['chapter_index']} segment {row['seq']}",
-                keep_engine=str(profile["engine"]),
+                keep_engine="vieneu",
             )
             self._process_single_segment(row, chapter)
 
@@ -426,28 +404,6 @@ class BookPipeline:
     def _chunk_path(self, row: Any) -> Path:
         return self.paths.chunks / f"chapter_{int(row['chapter_id']):05d}" / f"{int(row['seq']):07d}.wav"
 
-    def _process_vieneu_batch(self, rows: list[Any], chapter: Any) -> None:
-        outputs = [self._chunk_path(row) for row in rows]
-        for row in rows:
-            self.db.mark_generating(int(row["id"]), self.tts.generation_seed(row, "batch"))
-        try:
-            results = self.tts.synthesize_vieneu_batch_atomic(rows, outputs, len(rows))
-            for row, output, (checksum, metrics, seed) in zip(rows, outputs, results):
-                self.db.mark_signal_passed(
-                    int(row["id"]),
-                    wav_path=output,
-                    wav_sha256=checksum,
-                    duration=float(metrics["duration"]),
-                    signal=metrics,
-                    generation_seed=seed,
-                )
-        except Exception as exc:  # noqa: BLE001
-            if is_fatal_tts_error(exc) and not is_oom_tts_error(exc):
-                raise RuntimeError(f"Fatal VieNeu engine failure: {exc}") from exc
-            self.log(f"VieNeu batch lỗi; chuyển sang cứu từng segment: {exc}")
-            for row in rows:
-                self._process_single_segment(row, chapter)
-
     def _process_single_segment(self, row: Any, chapter: Any, seed_salt_prefix: str = "primary") -> None:
         output = self._chunk_path(row)
         last_error = ""
@@ -483,7 +439,12 @@ class BookPipeline:
             split_seed = self.tts.generation_seed(row, "split")
             self.db.mark_generating(int(row["id"]), split_seed)
             self._synthesize_split(row, output)
-            valid, metrics, reason = inspect_wav(output, str(row["text"]), self.settings)
+            valid, metrics, reason = inspect_wav(
+                output,
+                str(row["text"]),
+                self.settings,
+                segment=row,
+            )
             if not valid:
                 raise AudioQualityError(reason)
             checksum = sha256_file(output)
@@ -495,19 +456,6 @@ class BookPipeline:
             return
         except Exception as exc:  # noqa: BLE001
             last_error = f"{last_error}; split={exc}"
-
-        try:
-            fallback_seed = self.tts.generation_seed(row, "fallback")
-            self.db.mark_generating(int(row["id"]), fallback_seed)
-            checksum, metrics, fallback_seed = self.tts.fallback_atomic(row, output)
-            self.db.mark_signal_passed(
-                int(row["id"]), wav_path=output, wav_sha256=checksum,
-                duration=float(metrics["duration"]), signal=metrics, generation_seed=fallback_seed,
-            )
-            self.db.set_segment_warning_code(int(row["id"]), "TTS_FALLBACK_ENGINE")
-            return
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"{last_error}; fallback={exc}"
 
         self.db.mark_failed(int(row["id"]), last_error)
         self.db.event(
@@ -551,7 +499,7 @@ class BookPipeline:
                 part_path = output.with_name(output.stem + f".split{index:02d}.wav")
                 part_paths.append(part_path)
                 self.tts.synthesize_atomic(part_row, part_path, seed_salt=f"split_{index}")
-            merge_wav_parts_atomic(part_paths, output, text, self.settings)
+            merge_wav_parts_atomic(part_paths, output, text, self.settings, segment=row)
         finally:
             for path in part_paths:
                 path.unlink(missing_ok=True)

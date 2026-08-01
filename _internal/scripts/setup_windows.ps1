@@ -104,14 +104,9 @@ Invoke-NativeChecked { & ollama pull qwen3:8b } "Tải Qwen3 8B"
 Write-Host "Tải Qwen3 4B cho profile Nhanh..."
 Invoke-NativeChecked { & ollama pull qwen3:4b } "Tải Qwen3 4B"
 
-Write-Host "Tải VoxCPM2..."
-Invoke-NativeChecked {
-    & $Python -c "from huggingface_hub import snapshot_download; snapshot_download('openbmb/VoxCPM2', revision='bffb3df5a29440629464e5e839f4d214c8714c3d'); print('VoxCPM2 ready')"
-} "Tải VoxCPM2"
-
 Write-Host "Tải và smoke-load VieNeu..."
 Invoke-NativeChecked {
-    & $Python -c "from e_book_reader.config import build_settings; from e_book_reader.tts import VieNeuEngine; s=build_settings(); e=VieNeuEngine(s, print); e.load(); required=str(s['voices']['narrator_voice']); assert required in e.voices, f'VieNeu preset not found: {required}'; print('VieNeu voices:', len(e.voices)); e.unload(); print('VieNeu ready')"
+    & $Python -c "from e_book_reader.character_registry import VIENEU_PRESETS; from e_book_reader.config import build_settings; from e_book_reader.tts import VieNeuEngine; s=build_settings(); e=VieNeuEngine(s, print); e.load(); required={p['name'] for p in VIENEU_PRESETS}; missing=required-set(e.voices); assert not missing, f'VieNeu presets missing: {sorted(missing)}'; print('VieNeu voices:', len(e.voices)); e.unload(); print('VieNeu ready')"
 } "Smoke-load VieNeu"
 
 Write-Host "Tải Whisper Turbo..."

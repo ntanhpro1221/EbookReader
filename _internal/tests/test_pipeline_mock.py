@@ -15,7 +15,7 @@ class FakeTTS:
         self.settings = settings
         self.db = db
 
-    def prepare_voice_references(self, stop_requested, before_profile=None):
+    def prepare_voice_presets(self):
         return None
 
     def unload_idle_models(self, keep_engine=None):
@@ -30,21 +30,17 @@ class FakeTTS:
     def spoken_text(self, row):
         return str(row["text"])
 
-    def synthesize_vieneu_batch_atomic(self, rows, outputs, batch_size):
-        results = []
-        for row, output in zip(rows, outputs):
-            audio = np.sin(np.linspace(0, 50, 96000, dtype=np.float32)) * 0.12
-            checksum, metrics = atomic_write_wav(output, audio, 48000, row["text"], self.settings)
-            results.append((checksum, metrics, 1))
-        return results
-
     def synthesize_atomic(self, row, output, seed_salt=""):
         audio = np.sin(np.linspace(0, 50, 96000, dtype=np.float32)) * 0.12
-        checksum, metrics = atomic_write_wav(output, audio, 48000, row["text"], self.settings)
+        checksum, metrics = atomic_write_wav(
+            output,
+            audio,
+            48000,
+            row["text"],
+            self.settings,
+            segment=row,
+        )
         return checksum, metrics, 1
-
-    def fallback_atomic(self, row, output):
-        return self.synthesize_atomic(row, output, "fallback")
 
 
 def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monkeypatch) -> None:

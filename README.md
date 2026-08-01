@@ -29,6 +29,11 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
+- Toàn bộ vai dùng catalog preset VieNeu: ưu tiên dùng hết các giọng phù hợp giới tính trước khi tái sử dụng.
+- Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
+  trường hợp thực sự không phân biệt được vẫn tách tối thiểu theo nam/nữ/chưa rõ.
+- Mỗi nhân vật giữ nguyên một preset. Cảm xúc chỉ thay đổi cách thể hiện, nhịp và mức âm lượng hợp lý,
+  không đổi sang một người đọc khác giữa chừng.
 - Từ điển phát âm có confidence được checkpoint trong SQLite, áp dụng đồng nhất cho TTS và câu đối chiếu ASR.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Chapter hoàn tất được xuất MP3 ngay; cuối cùng tạo playlist và MP3 toàn book.
@@ -43,6 +48,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.
 - Khi dừng cưỡng bức, app kết thúc cả cây process con (FFmpeg/Ollama helper) để tránh tiến trình mồ côi.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
+- Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,
+  quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
+- Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Nếu phải tự dừng vì SSD/RAM/GPU/driver hoặc lỗi nghiêm trọng, app checkpoint và gửi Windows notification.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.
 

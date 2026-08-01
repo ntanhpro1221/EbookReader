@@ -62,7 +62,6 @@ class ProjectPaths:
     logs: Path
     work: Path
     chunks: Path
-    voices: Path
     chapters: Path
     output: Path
     reports: Path
@@ -76,11 +75,10 @@ class ProjectPaths:
             logs=root / "logs",
             work=root / "work",
             chunks=root / "work" / "chunks",
-            voices=root / "work" / "voices",
             chapters=root / "output" / "chapters",
             output=root / "output",
             reports=root / "output" / "reports",
         )
-        for path in (obj.root, obj.logs, obj.work, obj.chunks, obj.voices, obj.chapters, obj.output, obj.reports):
+        for path in (obj.root, obj.logs, obj.work, obj.chunks, obj.chapters, obj.output, obj.reports):
             path.mkdir(parents=True, exist_ok=True)
         return obj

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -26,6 +27,8 @@ ALLOWED_VOLUMES = {"soft", "normal", "loud"}
 RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
 BATCH_ID_PREFIX = "S"
 BATCH_ID_WIDTH = 3
+LOCAL_SPEAKER_REQUEST_PREFIX = "NPC_LOCAL:"
+LOCAL_SPEAKER_STORED_PREFIX = "NPC_LOCAL::"
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -81,10 +84,15 @@ Phân tích từng đoạn theo đúng ID. Không hỏi người dùng và khôn
 
 Quy tắc:
 1. Lời kể dùng speaker=NARRATOR.
-2. Hội thoại dùng tên nhân vật nhất quán với danh sách đã biết; nếu thực sự không chắc dùng UNKNOWN.
+2. Hội thoại dùng tên nhân vật nhất quán với danh sách đã biết.
+   Nếu nhân vật không có tên nhưng phân biệt được cục bộ trong đoạn hội thoại, dùng
+   speaker=NPC_LOCAL:<nhãn ngắn>, ví dụ NPC_LOCAL:áo xanh hoặc NPC_LOCAL:lính gác 1.
+   Giữ cùng nhãn cho cùng người trong các đoạn liên tiếp của batch; dùng nhãn khác cho người khác.
+   Chỉ dùng UNKNOWN khi hoàn toàn không có dấu hiệu phân biệt người nói.
 3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ nếu suy ra được.
 4. Không sửa văn bản. Không bịa nhân vật chỉ vì đại từ hắn/cô ấy/nàng.
-5. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng.
+5. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng. pace và volume phải phản ánh
+   cách thể hiện: lời thì thầm thường soft, lời quát/giận dữ mạnh thường loud, không mặc định mọi câu là normal.
 6. gender/age mô tả người nói, NARRATOR dùng unknown.
 7. Với tên riêng hoặc thuật ngữ khó đọc, thêm pronunciation: surface phải xuất hiện nguyên văn trong batch,
    spoken_form là cách viết tiếng Việt giúp TTS đọc đúng; không thêm từ phổ thông hoặc mục không chắc chắn.
@@ -125,6 +133,27 @@ def _canonical_speaker(value: Any) -> str:
     return RESERVED_SPEAKERS.get(speaker.casefold(), speaker)
 
 
+def is_local_speaker(value: Any) -> bool:
+    return str(value or "").startswith(LOCAL_SPEAKER_STORED_PREFIX)
+
+
+def local_speaker_display(value: Any) -> str:
+    label = str(value or "").rsplit("::", 1)[-1].strip()
+    return f"NPC {label}" if label else "NPC cục bộ"
+
+
+def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
+    if not speaker.casefold().startswith(LOCAL_SPEAKER_REQUEST_PREFIX.casefold()):
+        return speaker
+    label = speaker[len(LOCAL_SPEAKER_REQUEST_PREFIX) :]
+    label = re.sub(r"[\r\n:|]+", " ", label)
+    label = re.sub(r"\s+", " ", label).strip()[:60]
+    if not label:
+        return "UNKNOWN"
+    chapter_id = int(row["chapter_id"])
+    return f"{LOCAL_SPEAKER_STORED_PREFIX}c{chapter_id:05d}::{local_scope}::{label}"
+
+
 def _heuristic(row: Any) -> dict[str, Any]:
     text = str(row["text"])
     lowered = text.casefold()
@@ -155,8 +184,13 @@ def _heuristic(row: Any) -> dict[str, Any]:
     }
 
 
-def _validate(group: list[Any], payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _validate(
+    group: list[Any],
+    payload: dict[str, Any],
+    local_scope: str = "b0000",
+) -> dict[str, dict[str, Any]]:
     expected = {str(row["stable_id"]) for row in group}
+    rows_by_id = {str(row["stable_id"]): row for row in group}
     result: dict[str, dict[str, Any]] = {}
     for item in payload.get("segments", []):
         seg_id = str(item.get("id", ""))
@@ -166,6 +200,8 @@ def _validate(group: list[Any], payload: dict[str, Any]) -> dict[str, dict[str, 
         speaker = _canonical_speaker(item.get("speaker"))
         if kind == "narration":
             speaker = "NARRATOR"
+        else:
+            speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)
         result[seg_id] = {
             "kind": kind,
             "speaker": speaker,
@@ -209,6 +245,7 @@ class OllamaBookAnalyzer:
             str(row["speaker"])
             for row in existing
             if str(row["speaker"]).casefold() not in RESERVED_SPEAKERS
+            and not is_local_speaker(row["speaker"])
         )
         self._chapter_titles = {
             int(row["id"]): str(row["title"]) for row in self.db.list_chapters()
@@ -279,7 +316,18 @@ class OllamaBookAnalyzer:
                 chapter_titles.append(chapter_title)
             batch_id = _batch_id(index)
             batch_to_stable[batch_id] = str(row["stable_id"])
-            rows.append({"id": batch_id, "hint": row["kind_hint"], "text": row["text"]})
+            try:
+                paragraph_index = int(row["paragraph_index"])
+            except (KeyError, TypeError):
+                paragraph_index = 0
+            rows.append(
+                {
+                    "id": batch_id,
+                    "paragraph": paragraph_index,
+                    "hint": row["kind_hint"],
+                    "text": row["text"],
+                }
+            )
         prompt = (
             f"Các chương hiện tại: {', '.join(chapter_titles)}\n\n"
             f"Nhân vật đã biết từ các phần trước:\n{self._known_summary()}\n\n"
@@ -392,7 +440,7 @@ class OllamaBookAnalyzer:
                 for attempt in range(int(self.settings.get("max_retries", 3))):
                     try:
                         payload = self._request(group)
-                        validated = _validate(group, payload)
+                        validated = _validate(group, payload, local_scope=f"b{group_index:04d}")
                         if len(validated) == len(group):
                             break
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
@@ -433,7 +481,11 @@ class OllamaBookAnalyzer:
                     low_confidence_threshold=confidence_threshold,
                 )
                 speaker = _canonical_speaker(data.get("speaker", "UNKNOWN"))
-                if speaker.casefold() not in RESERVED_SPEAKERS and speaker:
+                if (
+                    speaker.casefold() not in RESERVED_SPEAKERS
+                    and not is_local_speaker(speaker)
+                    and speaker
+                ):
                     self._speaker_counts[speaker] += 1
                 done += 1
                 if progress:
@@ -449,7 +501,7 @@ class OllamaBookAnalyzer:
         contexts: dict[str, list[str]] = defaultdict(list)
         for row in rows:
             speaker = _canonical_speaker(row["speaker"])
-            if speaker.casefold() in RESERVED_SPEAKERS or not speaker:
+            if speaker.casefold() in RESERVED_SPEAKERS or is_local_speaker(speaker) or not speaker:
                 continue
             if len(contexts[speaker]) < 4:
                 contexts[speaker].append(str(row["text"])[:260])

@@ -2,11 +2,11 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **44/44 test pass** trên Python 3.11.9, gồm pronunciation/fallback,
-completed fast-path, batch-local analysis ID, VoxCPM2/VieNeu API adapter, chính sách câu cực ngắn/ASR
-và FFmpeg encode/decode thật.
+Trạng thái source hiện tại: **51/51 test pass** trên Python 3.11.9, gồm pronunciation,
+completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
+parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
-`ruff 0.9.10 check _internal` và Vulture dead-code scan pass; các dependency tạm cũng đã được xóa.
+`ruff 0.9.10 check _internal` pass; các dependency kiểm thử tạm cũng đã được xóa.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -24,20 +24,25 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - warning code hợp nhất và pronunciation ưu tiên confidence cao;
 - required-analysis batch failure không được fallback ngầm;
 - stereo WAV bị từ chối, ASR optional chuyển lỗi inference thành warning;
-- VoxCPM không gắn control prompt dài vào câu cực ngắn; dấu câu bỏ qua Whisper và ASR một từ không kích hoạt vòng tái tạo;
-- voice-reference checksum, thermal hysteresis và cleanup full-book khi FFmpeg lỗi;
+- cụm từ đặt trong ngoặc kép không bị nhận nhầm thành hội thoại, segment chỉ có dấu câu không đi vào TTS;
+- NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ và catalog đủ 14 preset được dùng hết
+  trước khi tái sử dụng nếu book có đủ vai;
+- cùng nhân vật giữ nguyên preset khi emotion delivery thay đổi; mức âm lượng trung tính được cân bằng
+  còn chỉ dẫn loud vẫn được giữ lớn hơn có chủ đích;
+- Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
+- thermal hysteresis và cleanup full-book khi FFmpeg lỗi;
 - pipeline mock không cần model;
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 
-GUI PySide6 đã mở thực tế trên Windows. Qwen3 8B đã phân tích và checkpoint đủ **599/599 segment**,
-hợp nhất bí danh, khóa voice casting và tạo đủ **8/8 voice reference** trên project thử. VoxCPM2 2.0.3
-và VieNeu 3.2.3 preset `Phạm Tuyên` cũng đã inference thật bằng PyTorch CUDA 12.8 trên RTX 5060 Laptop,
-tạo waveform 48 kHz hữu hạn.
+GUI PySide6 đã mở thực tế trên Windows. Ở phiên bản trước refactor này, Qwen3 8B đã phân tích và
+checkpoint đủ **599/599 segment**; VieNeu 3.2.3 preset `Phạm Tuyên` đã inference thật bằng PyTorch
+CUDA 12.8 trên RTX 5060 Laptop và tạo waveform 48 kHz hữu hạn. Casting VieNeu-only và emotion delivery
+mới chưa được inference xuyên suốt chapter thật sau thay đổi này.
 
 ## Chưa xác nhận trên máy đích
 
-- chạy VoxCPM2/VieNeu trọn toàn book;
+- chạy VieNeu-only trọn toàn book với nhiều preset và emotion delivery;
 - Whisper Turbo GPU;
 - Windows Toast và foreground GPU detection;
 - kill/resume giữa CUDA inference;

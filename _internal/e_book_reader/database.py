@@ -129,8 +129,6 @@ CREATE TABLE IF NOT EXISTS voice_profiles (
     preset_name TEXT,
     description TEXT NOT NULL DEFAULT '',
     seed INTEGER NOT NULL,
-    reference_wav TEXT,
-    reference_sha256 TEXT,
     status TEXT NOT NULL DEFAULT 'planned',
     locked INTEGER NOT NULL DEFAULT 1,
     created_at REAL NOT NULL,
@@ -804,10 +802,7 @@ class ProjectDB:
                 data.get("preset_name"),
                 data.get("description", ""),
                 int(data.get("seed", 1)),
-                data.get("reference_wav"),
-                data.get("reference_sha256"),
                 data.get("status", "planned"),
-                now,
             )
             if row:
                 profile_id = int(row["id"])
@@ -829,67 +824,20 @@ class ProjectDB:
                     raise RuntimeError(
                         f"Voice profile {data['voice_key']} is locked and cannot change during resume"
                     )
-                # Preserve reference WAV, checksum and readiness. Rebuilding the registry on resume
-                # must not erase an already committed voice reference.
                 return profile_id
             cursor = conn.execute(
                 """
                 INSERT INTO voice_profiles(
-                    voice_key,engine,preset_name,description,seed,reference_wav,reference_sha256,
-                    status,created_at,updated_at
-                ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                    voice_key,engine,preset_name,description,seed,status,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?,?,?)
                 """,
-                (data["voice_key"], *values[:-1], now, now),
+                (data["voice_key"], *values, now, now),
             )
             return int(cursor.lastrowid)
 
     def list_voice_profiles(self) -> list[sqlite3.Row]:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM voice_profiles ORDER BY id"))
-
-    def update_voice_reference(
-        self, profile_id: int, *, reference_wav: Path, reference_sha256: str, status: str = "ready"
-    ) -> None:
-        with self.connect() as conn:
-            conn.execute(
-                "UPDATE voice_profiles SET reference_wav=?,reference_sha256=?,status=?,updated_at=? WHERE id=?",
-                (str(reference_wav.resolve()), reference_sha256, status, time.time(), profile_id),
-            )
-
-    def invalidate_voice_reference(self, profile_id: int, reason: str) -> None:
-        with self.connect() as conn:
-            conn.execute(
-                """
-                UPDATE voice_profiles SET reference_wav=NULL,reference_sha256=NULL,
-                    status='planned',updated_at=? WHERE id=?
-                """,
-                (time.time(), profile_id),
-            )
-            conn.execute(
-                "INSERT INTO runtime_events(timestamp,level,code,message,details_json) VALUES(?,?,?,?,?)",
-                (time.time(), "warning", "VOICE_REFERENCE_INVALIDATED", reason, None),
-            )
-
-    def lock_voice_preset(self, profile_id: int, preset_name: str) -> None:
-        value = preset_name.strip()
-        if not value:
-            raise ValueError("A locked voice preset cannot be empty")
-        with self.transaction() as conn:
-            row = conn.execute(
-                "SELECT preset_name FROM voice_profiles WHERE id=?", (profile_id,)
-            ).fetchone()
-            if row is None:
-                raise KeyError(profile_id)
-            existing = str(row["preset_name"] or "").strip()
-            if existing and existing != value:
-                raise RuntimeError(
-                    f"Voice preset is locked to {existing!r} and cannot change to {value!r}"
-                )
-            if not existing:
-                conn.execute(
-                    "UPDATE voice_profiles SET preset_name=?,updated_at=? WHERE id=?",
-                    (value, time.time(), profile_id),
-                )
 
     def voice_profile(self, profile_id: int) -> sqlite3.Row:
         with self.connect() as conn:
@@ -1041,6 +989,30 @@ class ProjectDB:
                 (profile_id, time.time(), character_id),
             )
             return int(cursor.rowcount)
+
+    def set_character_and_voice_for_segments(
+        self,
+        segment_ids: list[int],
+        character_id: int,
+        profile_id: int,
+    ) -> int:
+        updated = 0
+        now = time.time()
+        with self.transaction() as conn:
+            for offset in range(0, len(segment_ids), 500):
+                batch = segment_ids[offset : offset + 500]
+                if not batch:
+                    continue
+                placeholders = ",".join("?" for _ in batch)
+                cursor = conn.execute(
+                    f"""
+                    UPDATE segments SET canonical_character_id=?,voice_profile_id=?,updated_at=?
+                    WHERE id IN ({placeholders})
+                    """,
+                    (character_id, profile_id, now, *batch),
+                )
+                updated += int(cursor.rowcount)
+        return updated
 
     def integrity_check(self) -> list[str]:
         errors: list[str] = []
