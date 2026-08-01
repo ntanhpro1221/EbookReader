@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from e_book_reader.asr import WhisperVerifier
+from e_book_reader.asr import WhisperVerifier, is_asr_repair_candidate
 from e_book_reader.config import build_settings
 
 
@@ -41,3 +41,20 @@ def test_asr_fail_policy_rejects_missing_model_cache(monkeypatch, tmp_path: Path
 
     with pytest.raises(RuntimeError, match="Thiếu Whisper"):
         verifier.load()
+
+
+def test_non_lexical_text_skips_whisper_and_one_word_is_not_repaired(monkeypatch) -> None:
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    monkeypatch.setattr(
+        verifier,
+        "load",
+        lambda: (_ for _ in ()).throw(AssertionError("Whisper should not load")),
+    )
+
+    result = verifier.verify("……", Path("missing.wav"))
+
+    assert result["passed"] is True
+    assert result["reason"] == "NON_LEXICAL_SKIP"
+    assert result["repairable"] is False
+    assert is_asr_repair_candidate("rầm") is False
+    assert is_asr_repair_candidate("Cánh cửa đổ rầm xuống.") is True

@@ -9,7 +9,12 @@ import numpy as np
 import e_book_reader.tts as tts_module
 from e_book_reader.config import build_settings
 from e_book_reader.database import ProjectDB
-from e_book_reader.tts import VieNeuEngine, VoxCPM2Engine, is_fatal_tts_error
+from e_book_reader.tts import (
+    VieNeuEngine,
+    VoxCPM2Engine,
+    is_fatal_tts_error,
+    voxcpm_prompt_for_segment,
+)
 
 
 class FakeVoxModel:
@@ -67,6 +72,24 @@ def test_voxcpm_seeds_runtime_without_forwarding_unsupported_keyword(monkeypatch
     assert "seed" not in model.kwargs
     assert model.kwargs["text"] == "Một câu kiểm thử."
     assert np.array_equal(audio, np.asarray([0.1, -0.1], dtype=np.float32))
+
+
+def test_voxcpm_omits_long_control_for_tiny_utterances() -> None:
+    row = {
+        "text": "“Ha…”",
+        "emotion": "surprised",
+        "pace": "normal",
+        "volume": "normal",
+        "intensity": 3,
+        "kind": "dialogue",
+    }
+
+    assert voxcpm_prompt_for_segment(row) == "“Ha…”"
+
+    row["text"] = "Tôi không thể tin chuyện này là thật."
+    prompt = voxcpm_prompt_for_segment(row)
+    assert prompt.startswith("(")
+    assert prompt.endswith(row["text"])
 
 
 def test_vieneu_uses_voice_id_instead_of_display_label(monkeypatch) -> None:

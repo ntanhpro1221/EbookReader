@@ -596,6 +596,15 @@ class BookPipeline:
             return mismatches
 
         mismatches = verify_rows(pending)
+        final_mismatches: list[dict[str, Any]] = []
+        repairable_mismatches: list[dict[str, Any]] = []
+        for item in mismatches:
+            result = last_results.get(int(item["id"]), {})
+            if bool(result.get("repairable", True)):
+                repairable_mismatches.append(item)
+            else:
+                final_mismatches.append(item)
+        mismatches = repairable_mismatches
         repair_rounds = int(self.settings["asr"].get("repair_rounds", 2))
         for repair_round in range(repair_rounds):
             if not mismatches:
@@ -613,9 +622,17 @@ class BookPipeline:
                 if str(fresh["status"]) == SegmentStatus.SIGNAL_PASSED.value:
                     regenerated.append(dict(fresh))
             self.tts.unload_all()
-            mismatches = verify_rows(regenerated)
+            verified_mismatches = verify_rows(regenerated)
+            mismatches = []
+            for item in verified_mismatches:
+                result = last_results.get(int(item["id"]), {})
+                if bool(result.get("repairable", True)):
+                    mismatches.append(item)
+                else:
+                    final_mismatches.append(item)
 
-        for item in mismatches:
+        final_mismatches.extend(mismatches)
+        for item in sorted(final_mismatches, key=lambda row: int(row["seq"])):
             result = last_results.get(int(item["id"]), {})
             warning = "ASR_MISMATCH_UNRESOLVED"
             if self.settings["asr"].get("failure_policy") == "fail":

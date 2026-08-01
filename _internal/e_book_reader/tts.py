@@ -40,6 +40,8 @@ FATAL_TTS_MARKERS = (
     "locked vieneu preset",
 )
 
+VOXCPM_CONTROL_MIN_ALNUM_CHARS = 12
+
 
 def is_fatal_tts_error(error: BaseException) -> bool:
     message = str(error).casefold()
@@ -75,6 +77,14 @@ def control_for_segment(row: Any) -> str:
     intensity_text = ["rất tiết chế", "tiết chế", "rõ cảm xúc", "cảm xúc mạnh nhưng tự nhiên"][intensity]
     thought = ", như độc thoại nội tâm" if str(row["kind"]) == "thought" else ""
     return f"{emotion}, {pace}, {volume}, {intensity_text}{thought}"
+
+
+def voxcpm_prompt_for_segment(row: Any) -> str:
+    text = str(row["text"])
+    speakable_chars = sum(char.isalnum() for char in text)
+    if speakable_chars < VOXCPM_CONTROL_MIN_ALNUM_CHARS:
+        return text
+    return f"({control_for_segment(row)}) {text}"
 
 
 class VoxCPM2Engine:
@@ -381,7 +391,7 @@ class TTSCoordinator:
             reference = Path(str(profile["reference_wav"])) if profile["reference_wav"] else None
             if not reference or not reference.exists():
                 raise AudioQualityError(f"Missing VoxCPM2 reference for {profile['voice_key']}")
-            prompt = f"({control_for_segment(spoken_row)}) {spoken_row['text']}"
+            prompt = voxcpm_prompt_for_segment(spoken_row)
             return self.vox.generate(prompt, seed=seed, reference_wav=reference), self.vox.sample_rate
         if engine == "vieneu":
             profile = self._lock_vieneu_preset(profile, spoken_row)
@@ -434,7 +444,7 @@ class TTSCoordinator:
             reference = Path(str(profile["reference_wav"])) if profile["reference_wav"] else None
             if not reference or not reference.exists():
                 raise AudioQualityError(f"Missing fallback VoxCPM2 reference for {profile['voice_key']}")
-            prompt = f"({control_for_segment(spoken_row)}) {spoken_row['text']}"
+            prompt = voxcpm_prompt_for_segment(spoken_row)
             audio = self.vox.generate(prompt, seed=seed, reference_wav=reference)
             sample_rate = self.vox.sample_rate
         else:

@@ -2,8 +2,9 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **42/42 test pass** trên Python hệ thống 3.11.9, gồm pronunciation/fallback,
-completed fast-path, batch-local analysis ID, VoxCPM2/VieNeu API adapter và FFmpeg encode/decode thật.
+Trạng thái source hiện tại: **44/44 test pass** trên Python 3.11.9, gồm pronunciation/fallback,
+completed fast-path, batch-local analysis ID, VoxCPM2/VieNeu API adapter, chính sách câu cực ngắn/ASR
+và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
 `ruff 0.9.10 check _internal` và Vulture dead-code scan pass; các dependency tạm cũng đã được xóa.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
@@ -23,6 +24,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - warning code hợp nhất và pronunciation ưu tiên confidence cao;
 - required-analysis batch failure không được fallback ngầm;
 - stereo WAV bị từ chối, ASR optional chuyển lỗi inference thành warning;
+- VoxCPM không gắn control prompt dài vào câu cực ngắn; dấu câu bỏ qua Whisper và ASR một từ không kích hoạt vòng tái tạo;
 - voice-reference checksum, thermal hysteresis và cleanup full-book khi FFmpeg lỗi;
 - pipeline mock không cần model;
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
