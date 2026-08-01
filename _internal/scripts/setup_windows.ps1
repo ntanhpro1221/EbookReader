@@ -111,7 +111,7 @@ Invoke-NativeChecked {
 
 Write-Host "Tải và smoke-load VieNeu..."
 Invoke-NativeChecked {
-    & $Python -c "from vieneu import Vieneu; t=Vieneu(max_batch_size=1); print('VieNeu voices:', len(list(t.list_preset_voices()))); del t; print('VieNeu ready')"
+    & $Python -c "from e_book_reader.config import build_settings; from e_book_reader.tts import VieNeuEngine; s=build_settings(); e=VieNeuEngine(s, print); e.load(); required=str(s['voices']['narrator_voice']); assert required in e.voices, f'VieNeu preset not found: {required}'; print('VieNeu voices:', len(e.voices)); e.unload(); print('VieNeu ready')"
 } "Smoke-load VieNeu"
 
 Write-Host "Tải Whisper Turbo..."

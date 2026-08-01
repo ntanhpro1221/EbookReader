@@ -2,8 +2,8 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **40/40 test pass** trên Python hệ thống 3.11.9, gồm pronunciation/fallback,
-completed fast-path, batch-local analysis ID, VoxCPM2 API adapter và FFmpeg encode/decode thật.
+Trạng thái source hiện tại: **42/42 test pass** trên Python hệ thống 3.11.9, gồm pronunciation/fallback,
+completed fast-path, batch-local analysis ID, VoxCPM2/VieNeu API adapter và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
 `ruff 0.9.10 check _internal` và Vulture dead-code scan pass; các dependency tạm cũng đã được xóa.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
@@ -29,12 +29,13 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 
 GUI PySide6 đã mở thực tế trên Windows. Qwen3 8B đã phân tích và checkpoint đủ **599/599 segment**,
-hợp nhất bí danh rồi khóa voice casting trên project thử. VoxCPM2 2.0.3 cũng đã inference thật bằng
-PyTorch CUDA 12.8 trên RTX 5060 Laptop, tạo waveform 48 kHz hữu hạn sau khi seed runtime thay vì truyền keyword ngoài API.
+hợp nhất bí danh, khóa voice casting và tạo đủ **8/8 voice reference** trên project thử. VoxCPM2 2.0.3
+và VieNeu 3.2.3 preset `Phạm Tuyên` cũng đã inference thật bằng PyTorch CUDA 12.8 trên RTX 5060 Laptop,
+tạo waveform 48 kHz hữu hạn.
 
 ## Chưa xác nhận trên máy đích
 
-- tạo trọn bộ voice reference và chạy VoxCPM2/VieNeu trên toàn book;
+- chạy VoxCPM2/VieNeu trọn toàn book;
 - Whisper Turbo GPU;
 - Windows Toast và foreground GPU detection;
 - kill/resume giữa CUDA inference;

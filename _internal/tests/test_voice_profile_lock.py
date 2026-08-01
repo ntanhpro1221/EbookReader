@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import numpy as np
 
 import e_book_reader.tts as tts_module
 from e_book_reader.config import build_settings
 from e_book_reader.database import ProjectDB
-from e_book_reader.tts import VoxCPM2Engine
+from e_book_reader.tts import VieNeuEngine, VoxCPM2Engine, is_fatal_tts_error
 
 
 class FakeVoxModel:
@@ -17,6 +19,14 @@ class FakeVoxModel:
     def generate(self, **kwargs):
         self.kwargs = kwargs
         return np.asarray([0.1, -0.1], dtype=np.float32)
+
+
+class FakeVieNeuRuntime:
+    def list_preset_voices(self):
+        return [
+            ("Phạm Tuyên — Nam · Bắc · Phong cách tự nhiên", "Phạm Tuyên"),
+            ("Thái Sơn — Nam · Nam · Phong cách kể chuyện", "Thái Sơn"),
+        ]
 
 
 def test_voice_profile_resume_preserves_committed_reference(tmp_path: Path) -> None:
@@ -57,3 +67,24 @@ def test_voxcpm_seeds_runtime_without_forwarding_unsupported_keyword(monkeypatch
     assert "seed" not in model.kwargs
     assert model.kwargs["text"] == "Một câu kiểm thử."
     assert np.array_equal(audio, np.asarray([0.1, -0.1], dtype=np.float32))
+
+
+def test_vieneu_uses_voice_id_instead_of_display_label(monkeypatch) -> None:
+    vieneu_module = ModuleType("vieneu")
+    vieneu_module.Vieneu = lambda **_kwargs: FakeVieNeuRuntime()
+    monkeypatch.setitem(sys.modules, "vieneu", vieneu_module)
+    engine = VieNeuEngine(build_settings(), lambda _message: None)
+
+    engine.load()
+
+    assert engine.voices == ["Phạm Tuyên", "Thái Sơn"]
+    assert engine.voice_for_profile(
+        {"preset_name": "Phạm Tuyên", "voice_key": "narrator"},
+        {"gender": "unknown"},
+    ) == "Phạm Tuyên"
+
+
+def test_missing_locked_vieneu_preset_is_fatal() -> None:
+    assert is_fatal_tts_error(
+        RuntimeError("Locked VieNeu preset 'Phạm Tuyên' is unavailable; refusing to change voice silently")
+    )

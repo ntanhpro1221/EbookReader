@@ -52,5 +52,6 @@ def test_one_click_startup_contract() -> None:
     assert 'pip install torch==2.8.0 torchaudio==2.8.0' in setup
     assert 'ollama pull qwen3:8b' in setup
     assert "snapshot_download('openbmb/VoxCPM2'" in setup
-    assert 'Vieneu(max_batch_size=1)' in setup
+    assert 'VieNeuEngine' in setup
+    assert 'required in e.voices' in setup
     assert "whisper.load_model('turbo'" in setup

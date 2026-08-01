@@ -37,6 +37,7 @@ FATAL_TTS_MARKERS = (
     "pytorch không nhận cuda",
     "thiếu vieneu",
     "thiếu voxcpm2",
+    "locked vieneu preset",
 )
 
 
@@ -186,11 +187,11 @@ class VieNeuEngine:
         self.voices = []
         for item in raw:
             if isinstance(item, (tuple, list)) and item:
-                label = str(item[0] or (item[1] if len(item) > 1 else "")).strip()
+                voice_id = str((item[1] if len(item) > 1 else item[0]) or item[0]).strip()
             else:
-                label = str(item).strip()
-            if label and label not in self.voices:
-                self.voices.append(label)
+                voice_id = str(item).strip()
+            if voice_id and voice_id not in self.voices:
+                self.voices.append(voice_id)
         if not self.voices:
             self.voices = [str(self.settings["voices"]["narrator_voice"])]
 
