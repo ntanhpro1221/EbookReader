@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self.stop_event: Any = None
         self.received_finished = False
         self.was_user_stop = False
+        self._applying_locked_settings = False
         self._chapter_snapshot: tuple[Any, ...] | None = None
         self.notifier = WindowsNotifier()
         self._build_ui()
@@ -139,13 +140,13 @@ class MainWindow(QMainWindow):
         top.addWidget(QLabel("Nơi lưu:"), 1, 0)
         top.addWidget(self.output_edit, 1, 1, 1, 2)
         top.addWidget(self.choose_output_button, 1, 3)
-        top.addWidget(self.new_book_button, 2, 0)
         self.input_actions = QHBoxLayout()
         self.input_actions.setSpacing(8)
+        self.input_actions.addWidget(self.new_book_button, 1)
         self.input_actions.addWidget(self.add_files_button, 1)
         self.input_actions.addWidget(self.add_folder_button, 1)
         self.input_actions.addWidget(self.remove_files_button, 1)
-        top.addLayout(self.input_actions, 2, 1, 1, 3)
+        top.addLayout(self.input_actions, 2, 0, 1, 4)
         layout.addWidget(self.book_box)
 
         self.main_splitter = QSplitter(Qt.Vertical)
@@ -185,6 +186,10 @@ class MainWindow(QMainWindow):
         self.full_book.setToolTip(
             "Tắt: mỗi file TXT tạo một MP3 chapter. Bật: tạo thêm một MP3 ghép toàn sách."
         )
+        self.profile_combo.currentIndexChanged.connect(self._settings_edited)
+        self.resource_combo.currentIndexChanged.connect(self._settings_edited)
+        self.max_temp.valueChanged.connect(self._settings_edited)
+        self.full_book.toggled.connect(self._settings_edited)
         form.addRow("Chất lượng:", self.profile_combo)
         form.addRow("Tài nguyên:", self.resource_combo)
         form.addRow("Ngưỡng GPU nóng:", self.max_temp)
@@ -239,6 +244,7 @@ class MainWindow(QMainWindow):
         self.log.setReadOnly(True)
         self.log.setLineWrapMode(QTextEdit.NoWrap)
         log_layout.addWidget(self.log)
+        self._match_item_selection_to_log()
         self.work_splitter.addWidget(self.log_box)
         self.work_splitter.setSizes([820, 400])
         self.main_splitter.addWidget(self.work_splitter)
@@ -265,17 +271,26 @@ class MainWindow(QMainWindow):
         palette = view.palette()
         base = palette.color(QPalette.ColorRole.Base)
         alternate = base.lighter(116) if base.lightness() < 128 else base.darker(106)
-        system_palette = QApplication.palette()
         palette.setColor(QPalette.ColorRole.AlternateBase, alternate)
-        palette.setColor(
-            QPalette.ColorRole.Highlight,
-            system_palette.color(QPalette.ColorRole.Highlight),
-        )
-        palette.setColor(
-            QPalette.ColorRole.HighlightedText,
-            system_palette.color(QPalette.ColorRole.HighlightedText),
-        )
         view.setPalette(palette)
+
+    def _match_item_selection_to_log(self) -> None:
+        log_palette = self.log.palette()
+        highlight = log_palette.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight)
+        highlighted_text = log_palette.color(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.HighlightedText,
+        )
+        for view in (self.file_list, self.chapter_table):
+            palette = view.palette()
+            for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
+                palette.setColor(group, QPalette.ColorRole.Highlight, highlight)
+                palette.setColor(group, QPalette.ColorRole.HighlightedText, highlighted_text)
+            view.setPalette(palette)
+            view.setStyleSheet(
+                f"selection-background-color: {highlight.name()}; "
+                f"selection-color: {highlighted_text.name()};"
+            )
 
     def _restore_ui(self, *, restore_recent: bool) -> None:
         self.output_edit.setText(self.settings_store.value("output", str(Path.home() / "Audiobooks"), str))
@@ -360,22 +375,28 @@ class MainWindow(QMainWindow):
         self.add_folder_button.setEnabled(not running)
         self.new_book_button.setEnabled(not running)
         self.open_project_button.setEnabled(not running)
-        self.profile_combo.setEnabled(not selected and not running)
-        self.resource_combo.setEnabled(not selected and not running)
-        self.max_temp.setEnabled(not selected and not running)
-        self.full_book.setEnabled(not selected and not running)
+        self.profile_combo.setEnabled(not running)
+        self.resource_combo.setEnabled(not running)
+        self.max_temp.setEnabled(not running)
+        self.full_book.setEnabled(not running)
         self.open_folder_button.setEnabled(selected)
         if selected:
-            self.settings_box.setTitle("Thiết lập đã khóa của sách")
+            self.settings_box.setTitle("Thiết lập của sách")
             self.settings_note.setText(
-                "Sách đã bắt đầu nên thiết lập được giữ nguyên khi Tiếp tục. "
-                "Thêm/xóa TXT sẽ tạo một bản sách mới và giữ nguyên sách hiện tại trên ổ đĩa."
+                "Có thể chỉnh ngay. Thay đổi đầu tiên sẽ tạo một bản sách mới và giữ nguyên "
+                "sách hiện tại trên ổ đĩa."
             )
         else:
             self.settings_box.setTitle("Thiết lập cho sách mới")
             self.settings_note.setText("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
         self._update_remove_files_button()
         self._update_start_button()
+
+    def _settings_edited(self, *_args: Any) -> None:
+        if self._applying_locked_settings or (self.process and self.process.is_alive()):
+            return
+        if self.project_paths is not None:
+            self._detach_project_as_draft()
 
     def _update_start_button(self) -> None:
         running = bool(self.process and self.process.is_alive())
@@ -658,17 +679,21 @@ class MainWindow(QMainWindow):
         self._append_log("Đã chuyển sang sách mới; sách cũ vẫn nguyên vẹn trên ổ đĩa.")
 
     def _apply_locked_settings(self, settings: dict[str, Any]) -> None:
-        profile_index = self.profile_combo.findData(str(settings.get("quality_profile", "balanced")))
-        if profile_index >= 0:
-            self.profile_combo.setCurrentIndex(profile_index)
-        resources = settings.get("resources", {})
-        resource_index = self.resource_combo.findData(str(resources.get("mode", "")))
-        if resource_index >= 0:
-            self.resource_combo.setCurrentIndex(resource_index)
-        self.max_temp.setValue(int(resources.get("max_gpu_temp_c", 86)))
-        audio = settings.get("audio", {})
-        self.keep_wav.setChecked(bool(audio.get("keep_verified_wav", True)))
-        self.full_book.setChecked(bool(audio.get("combine_full_book", False)))
+        self._applying_locked_settings = True
+        try:
+            profile_index = self.profile_combo.findData(str(settings.get("quality_profile", "balanced")))
+            if profile_index >= 0:
+                self.profile_combo.setCurrentIndex(profile_index)
+            resources = settings.get("resources", {})
+            resource_index = self.resource_combo.findData(str(resources.get("mode", "")))
+            if resource_index >= 0:
+                self.resource_combo.setCurrentIndex(resource_index)
+            self.max_temp.setValue(int(resources.get("max_gpu_temp_c", 86)))
+            audio = settings.get("audio", {})
+            self.keep_wav.setChecked(bool(audio.get("keep_verified_wav", True)))
+            self.full_book.setChecked(bool(audio.get("combine_full_book", False)))
+        finally:
+            self._applying_locked_settings = False
 
     def _refresh_chapters(self) -> None:
         if not self.db:
@@ -834,10 +859,14 @@ class MainWindow(QMainWindow):
         if row < 0:
             return
         item = self.chapter_table.item(row, MP3_COLUMN)
-        if item:
-            path = Path(str(item.data(Qt.UserRole) or ""))
-            if path.exists():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+        if not item:
+            return
+        path_text = str(item.data(Qt.UserRole) or "").strip()
+        if not path_text:
+            return
+        path = Path(path_text)
+        if path.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def _open_project_folder(self) -> None:
         if self.project_paths and self.project_paths.root.exists():

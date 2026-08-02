@@ -7,7 +7,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QCloseEvent, QPalette
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QHeaderView, QLabel
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QHeaderView,
+    QLabel,
+    QTableWidgetItem,
+)
 
 from e_book_reader.config import build_settings
 from e_book_reader.gui import MainWindow
@@ -48,8 +54,13 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     top = window.book_box.layout()
     open_button_index = top.indexOf(window.open_project_button)
     assert top.getItemPosition(open_button_index) == (0, 3, 1, 1)
-    assert window.input_actions.stretch(window.input_actions.indexOf(window.add_files_button)) == 1
-    assert window.input_actions.stretch(window.input_actions.indexOf(window.add_folder_button)) == 1
+    for button in (
+        window.new_book_button,
+        window.add_files_button,
+        window.add_folder_button,
+        window.remove_files_button,
+    ):
+        assert window.input_actions.stretch(window.input_actions.indexOf(button)) == 1
     window.close()
 
 
@@ -97,10 +108,21 @@ def test_item_views_use_subtle_alternating_rows_and_text_selection_blue(tmp_path
         palette = view.palette()
         base = palette.color(QPalette.ColorRole.Base)
         alternate = palette.color(QPalette.ColorRole.AlternateBase)
-        highlight = palette.color(QPalette.ColorRole.Highlight)
+        log_highlight = window.log.palette().color(
+            QPalette.ColorGroup.Active,
+            QPalette.ColorRole.Highlight,
+        )
         assert base != alternate
         assert 5 <= abs(base.lightness() - alternate.lightness()) <= 24
-        assert highlight == window.log.palette().color(QPalette.ColorRole.Highlight)
+        assert (
+            palette.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight)
+            == log_highlight
+        )
+        assert (
+            palette.color(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight)
+            == log_highlight
+        )
+        assert log_highlight.name() in view.styleSheet()
     assert "QPushButton:disabled" in window.centralWidget().styleSheet()
     assert "background-color: palette(dark)" in window.centralWidget().styleSheet()
     header = window.chapter_table.horizontalHeader()
@@ -214,17 +236,20 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.start_button.text() == "Tiếp tục"
     assert window.add_files_button.isEnabled() is True
     assert window.add_folder_button.isEnabled() is True
-    assert window.profile_combo.isEnabled() is False
-    assert window.settings_box.title() == "Thiết lập đã khóa của sách"
+    assert window.profile_combo.isEnabled() is True
+    assert window.resource_combo.isEnabled() is True
+    assert window.max_temp.isEnabled() is True
+    assert window.full_book.isEnabled() is True
+    assert window.settings_box.title() == "Thiết lập của sách"
     window.file_list.item(0).setSelected(True)
     assert window.remove_files_button.isEnabled() is True
 
-    replacement = tmp_path / "002.txt"
-    replacement.write_text("Nội dung của book mới.", encoding="utf-8")
-    window._merge_input_files([replacement])
+    fast_index = window.profile_combo.findData("fast")
+    window.profile_combo.setCurrentIndex(fast_index)
 
     assert window.project_paths is None
-    assert window.files == [source.resolve(), replacement.resolve()]
+    assert window.files == [source.resolve()]
+    assert window.start_button.text() == "Bắt đầu"
     assert window.profile_combo.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập cho sách mới"
     window.close()
@@ -315,4 +340,24 @@ def test_chapter_table_shows_every_stage_and_full_mp3_path(tmp_path: Path) -> No
     assert window.chapter_table.item(0, 6).toolTip() == str(output)
     expected_width = window.chapter_table.fontMetrics().horizontalAdvance(str(output))
     assert window.chapter_table.columnWidth(6) >= expected_width
+    window.close()
+
+
+def test_double_clicking_empty_mp3_cell_does_not_open_explorer(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _app, window, _store = _window(tmp_path)
+    window.chapter_table.setRowCount(1)
+    window.chapter_table.setItem(0, 6, QTableWidgetItem(""))
+    window.chapter_table.setCurrentCell(0, 6)
+    opened: list[object] = []
+    monkeypatch.setattr(
+        "e_book_reader.gui.QDesktopServices.openUrl",
+        lambda url: opened.append(url),
+    )
+
+    window._open_selected_mp3()
+
+    assert opened == []
     window.close()

@@ -11,7 +11,7 @@ from typing import Any
 
 import psutil
 
-from .config import hydrate_settings, load_settings_raw, settings_hash
+from .config import load_settings, settings_hash, validate_settings
 from .database import ProjectDB
 from .io_utils import sha256_file
 from .models import BookStatus, ProjectPaths
@@ -86,12 +86,13 @@ class ProjectRunLock:
 
 
 def _load_locked_settings(paths: ProjectPaths, db: ProjectDB) -> dict[str, Any]:
-    external = load_settings_raw(paths.settings)
+    external = load_settings(paths.settings)
     book = db.book()
     try:
         locked = json.loads(str(book["settings_json"]))
     except (TypeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Settings trong SQLite bị hỏng") from exc
+    validate_settings(locked)
     locked_hash = settings_hash(locked)
     if locked_hash != str(book["settings_hash"]):
         raise RuntimeError("Settings trong SQLite không khớp settings_hash đã khóa")
@@ -99,7 +100,7 @@ def _load_locked_settings(paths: ProjectPaths, db: ProjectDB) -> dict[str, Any]:
         raise RuntimeError(
             "book_settings.json khác settings đã khóa trong SQLite; từ chối resume để tránh đổi giọng/model"
         )
-    return hydrate_settings(locked)
+    return locked
 
 
 def _validate_project_inputs(paths: ProjectPaths, db: ProjectDB, settings: dict[str, Any]) -> None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import hydrate_settings, load_settings_raw, save_settings, settings_hash
+from .config import load_settings, save_settings, settings_hash
 from .database import ProjectDB
 from .io_utils import slugify
 from .models import ProjectPaths
@@ -32,26 +32,30 @@ def create_or_open_project(
     manifest = build_chapter_manifest(input_files, output_root)
     manifest_hash = input_manifest_hash(manifest)
     book_title = (title or infer_book_title(input_files)).strip() or "audiobook"
-    project_root = output_root / f"{slugify(book_title, 70)}_{manifest_hash[:10]}"
+    project_name = f"{slugify(book_title, 70)}_{manifest_hash[:10]}"
+    project_root = output_root / project_name
     paths = ProjectPaths.build(project_root)
+
+    requested_hash = settings_hash(requested_settings)
+    if paths.settings.exists() and settings_hash(load_settings(paths.settings)) != requested_hash:
+        project_root = output_root / f"{project_name}_{requested_hash[:8]}"
+        paths = ProjectPaths.build(project_root)
 
     # Rebuild output paths now that the final project root is known.
     manifest = build_chapter_manifest(input_files, paths.chapters)
     manifest_hash = input_manifest_hash(manifest)
     if paths.settings.exists():
-        stored_settings = load_settings_raw(paths.settings)
-        settings = hydrate_settings(stored_settings)
+        settings = load_settings(paths.settings)
     else:
         settings = requested_settings
-        stored_settings = settings
         save_settings(paths.settings, settings)
 
     db = ProjectDB(paths.db, synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")))
     db.initialize_book(
         title=book_title,
         project_root=project_root,
-        settings=stored_settings,
-        settings_hash=settings_hash(stored_settings),
+        settings=settings,
+        settings_hash=settings_hash(settings),
         input_manifest_hash=manifest_hash,
     )
     db.ensure_chapters(manifest)

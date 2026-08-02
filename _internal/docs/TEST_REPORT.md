@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **64/64 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **63/63 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
@@ -17,14 +17,14 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - one-click startup ẩn qua `START.vbs`, chỉ hiện console khi cần setup;
 - GUI không còn tiêu đề lớn, tự đổi nút `Bắt đầu`/`Tiếp tục`, tự mở project được chọn gần nhất;
   nút chọn TXT/folder vẫn dùng được khi project cũ đang dừng và chuyển sang book mới sau khi chọn nguồn;
-  settings khóa theo sách được ghi rõ; thêm/xóa TXT tạo draft mới mà không sửa sách cũ; danh sách/bảng
-  có alternate-row đủ tương phản và selection dùng đúng màu highlight hệ thống như ô Log;
+  settings chỉnh được ngay sau khi mở lại và thay đổi sẽ tạo project mới theo settings hash;
+  thêm/xóa TXT tạo draft mới mà không sửa sách cũ; bốn nút nguồn có cùng kích thước; danh sách/bảng
+  có alternate-row đủ tương phản và selection dùng đúng màu highlight của ô Log kể cả khi mất focus;
   nested splitter và từng cột tiến độ kéo được, kích thước cột được lưu, đường dẫn MP3 không bị elide;
   nút chính tự đổi `Bắt đầu`/`Tạm dừng`/`Tiếp tục`, chỉ còn một nút `Dừng` riêng và mặc định chỉ xuất
   MP3 theo chapter; đóng cửa sổ kết thúc cây worker mà không đợi checkpoint;
 - bảng chapter hiển thị riêng tiến độ phân tích, tạo audio, kiểm tra, giai đoạn và MP3;
-- settings legacy `retry_split_fallback_fail` vẫn resume được bằng pipeline retry → split → fail hiện tại,
-  không khôi phục engine fallback đã xóa và không thay đổi settings hash của sách cũ;
+- double-click ô MP3 trống không mở Explorer;
 - progress event bao phủ chuẩn bị văn bản, TTS, Whisper, repair, ghép chapter và xuất báo cáo;
 - analysis dùng ID ngắn bị ràng buộc theo batch rồi ánh xạ chính xác về stable ID;
 - project lock, voice profile lock và resume;
