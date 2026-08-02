@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 
 import pytest
 
@@ -8,6 +9,7 @@ from ebook_reader.analysis import (
     ANALYSIS_OUTPUT_MAX_TOKENS,
     AnalysisRequestStopped,
     OllamaBookAnalyzer,
+    OllamaStreamIncompleteError,
     _validate,
     is_local_speaker,
     local_speaker_display,
@@ -289,9 +291,72 @@ def test_streaming_analysis_request_can_be_cancelled() -> None:
     assert session.response.closed is True
 
 
-def test_analyzer_starts_and_stops_only_its_managed_ollama_process(monkeypatch) -> None:
+def test_incomplete_stream_raises_specific_error_and_closes_response() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001")]})
+
+    class IncompleteResponse(FakeResponse):
+        def iter_lines(self, decode_unicode=False):
+            line = json.dumps({"response": '{"segments":[', "done": False})
+            yield line if decode_unicode else line.encode("utf-8")
+
+    session.response = IncompleteResponse({})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    with pytest.raises(OllamaStreamIncompleteError, match="13 response chars"):
+        analyzer._request(group)
+
+    assert session.response.closed is True
+
+
+def test_incomplete_stream_splits_batch_instead_of_retrying_same_size(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"c1s{index}",
+            "chapter_id": 1,
+            "text": f"Đoạn {index}.",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000}}
+    )
+    logs: list[str] = []
+    analyzer = OllamaBookAnalyzer(settings, db, logs.append)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    request_sizes: list[int] = []
+
+    def request(group, **_kwargs):
+        request_sizes.append(len(group))
+        if len(group) == 4:
+            raise OllamaStreamIncompleteError("incomplete test stream")
+        return {
+            "segments": [analysis_item(str(row["stable_id"])) for row in group],
+        }
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert request_sizes == [4, 2, 2]
+    assert len(db.updated) == 4
+    assert any("tự chia thành 2 + 2 segment" in message for message in logs)
+
+
+def test_analyzer_starts_and_stops_only_its_managed_ollama_process(
+    monkeypatch,
+    tmp_path,
+) -> None:
     logs: list[str] = []
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), logs.append)
+    runtime_root = tmp_path / "runtime"
+    monkeypatch.setenv("EBOOK_READER_RUNTIME", str(runtime_root))
     availability = iter((False, True))
     monkeypatch.setattr(analyzer, "_available", lambda: next(availability))
     monkeypatch.setattr("ebook_reader.analysis.shutil.which", lambda _name: "ollama.exe")
@@ -315,7 +380,13 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(monkeypatch) 
             return None
 
     managed = ManagedProcess()
-    monkeypatch.setattr("ebook_reader.analysis.subprocess.Popen", lambda *_args, **_kwargs: managed)
+    popen_calls: list[tuple[str, object]] = []
+
+    def start_managed_process(*_args, **kwargs):
+        popen_calls.append((kwargs["stdout"].name, kwargs["stderr"]))
+        return managed
+
+    monkeypatch.setattr("ebook_reader.analysis.subprocess.Popen", start_managed_process)
     terminated: list[tuple[int, float]] = []
     monkeypatch.setattr(
         "ebook_reader.analysis.terminate_process_tree",
@@ -325,6 +396,10 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(monkeypatch) 
 
     assert analyzer.ensure_available() is True
     assert analyzer._managed_ollama_process is managed
+    expected_log = runtime_root / "logs" / "ollama-server.log"
+    assert analyzer._managed_ollama_log_path == expected_log
+    assert popen_calls == [(str(expected_log), subprocess.STDOUT)]
+    assert "Ebook Reader started Ollama" in expected_log.read_text(encoding="utf-8")
     analyzer._stop_managed_ollama()
     analyzer._stop_managed_ollama()
 

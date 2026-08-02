@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **89/89 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **91/91 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. Compileall cho source/test và `git diff --check` cũng pass.
@@ -36,6 +36,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - analysis dùng ID ngắn bị ràng buộc theo batch rồi ánh xạ chính xác về stable ID;
 - Ollama analysis/alias chạy dạng stream có thể hủy khi dừng, giới hạn schema/token/wall-time và ghi
   heartbeat vào Log mỗi phút để không còn im lặng trong một request dài;
+- stream analysis thiếu gói kết thúc được phân loại riêng và tự chia đôi batch ngay; batch con giữ nguyên
+  checkpoint/progress, còn stdout/stderr của Ollama ẩn được nối vào `runtime/logs/ollama-server.log`;
 - Ollama server do worker tự khởi động chạy ẩn, được theo dõi quyền sở hữu và chỉ tiến trình do app tạo
   mới bị dừng sau giai đoạn phân tích;
 - project lock, voice profile lock và resume;

@@ -31,6 +31,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
+- Nếu stream Ollama kết thúc dở, app chia đôi batch hiện tại và tiếp tục với các batch nhỏ hơn thay vì
+  lặp lại nguyên batch lớn ba lần. Ollama do app tự chạy ghi stdout/stderr vào
+  `_internal/runtime/logs/ollama-server.log` để chẩn đoán runner/GPU khi có lỗi.
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown chỉ hiện tên của
   toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng kể chuyện` là header foldout
   với chevron nhỏ cùng style dropdown ở đầu; bên dưới có ba dòng con thụt vào khoảng chiều rộng bốn chữ `o`

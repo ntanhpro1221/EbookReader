@@ -60,6 +60,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
 - Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
 - Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
+- Ollama ẩn phải ghi stdout/stderr vào `runtime/logs/ollama-server.log`; không bỏ mất bằng `DEVNULL`.
+- Stream Ollama kết thúc thiếu `done=true` phải chia đôi batch hiện tại và chạy batch con; không retry nguyên
+  batch lớn nhiều lần. Segment chỉ còn một phần tử mới dùng retry thông thường.
 - GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
   kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
 - Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:

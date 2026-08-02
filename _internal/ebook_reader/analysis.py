@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import time
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any, Callable
 
 import requests
@@ -39,9 +40,15 @@ ANALYSIS_REQUEST_MAX_SECONDS = 420.0
 ANALYSIS_STREAM_IDLE_SECONDS = 90.0
 ANALYSIS_ACTIVITY_SECONDS = 60.0
 MAX_PRONUNCIATIONS_PER_BATCH = 32
+OLLAMA_LOG_FILENAME = "ollama-server.log"
+DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[1] / "runtime"
 
 
 class AnalysisRequestStopped(RuntimeError):
+    pass
+
+
+class OllamaStreamIncompleteError(RuntimeError):
     pass
 
 
@@ -294,6 +301,7 @@ class OllamaBookAnalyzer:
         self.model = str(self.settings["model"])
         self.session = requests.Session()
         self._managed_ollama_process: subprocess.Popen[bytes] | None = None
+        self._managed_ollama_log_path: Path | None = None
         existing = self.db.list_segments(statuses=("analyzed", "warning", "signal_passed", "asr_passed", "verified"))
         self._speaker_counts = Counter(
             str(row["speaker"])
@@ -319,13 +327,22 @@ class OllamaBookAnalyzer:
             if not executable:
                 return False
             try:
-                self._managed_ollama_process = subprocess.Popen(
-                    [executable, "serve"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
-                )
-                self.log("Ebook Reader đã tự khởi động Ollama ẩn.")
+                runtime_root = Path(os.environ.get("EBOOK_READER_RUNTIME") or DEFAULT_RUNTIME_ROOT)
+                ollama_log_path = runtime_root / "logs" / OLLAMA_LOG_FILENAME
+                ollama_log_path.parent.mkdir(parents=True, exist_ok=True)
+                with ollama_log_path.open("ab", buffering=0) as ollama_log:
+                    started_at = time.strftime("%Y-%m-%d %H:%M:%S")
+                    ollama_log.write(f"\n--- Ebook Reader started Ollama at {started_at} ---\n".encode())
+                    self._managed_ollama_process = subprocess.Popen(
+                        [executable, "serve"],
+                        stdout=ollama_log,
+                        stderr=subprocess.STDOUT,
+                        creationflags=(
+                            getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+                        ),
+                    )
+                self._managed_ollama_log_path = ollama_log_path
+                self.log(f"Ebook Reader đã tự khởi động Ollama ẩn. Log kỹ thuật: {ollama_log_path}")
             except OSError:
                 return False
             for _ in range(30):
@@ -410,7 +427,11 @@ class OllamaBookAnalyzer:
                     activity(int(elapsed), sum(len(part) for part in parts))
                     last_activity = now
             if not completed:
-                raise RuntimeError("Ollama stream ended before the JSON response was complete")
+                response_chars = sum(len(part) for part in parts)
+                raise OllamaStreamIncompleteError(
+                    "Ollama stream ended before the JSON response was complete "
+                    f"({response_chars:,} response chars)"
+                )
         finally:
             if response is not None:
                 response.close()
@@ -545,7 +566,10 @@ class OllamaBookAnalyzer:
         required = bool(self.settings.get("enabled", True) and self.settings.get("required", True))
         confidence_threshold = float(self.settings.get("low_confidence_threshold", 0.58))
         retry_count = int(self.settings.get("max_retries", 3))
-        for group_index, group in enumerate(groups, 1):
+        group_offset = 0
+        while group_offset < len(groups):
+            group_index = group_offset + 1
+            group = groups[group_offset]
             if stop_requested():
                 return
             if before_batch is not None:
@@ -553,6 +577,7 @@ class OllamaBookAnalyzer:
             validated: dict[str, dict[str, Any]] = {}
             payload: dict[str, Any] = {}
             last_error = "AI analysis is unavailable"
+            split_incomplete_stream = False
             if llm_ready:
                 for attempt in range(retry_count):
                     attempt_number = attempt + 1
@@ -575,10 +600,30 @@ class OllamaBookAnalyzer:
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
                     except AnalysisRequestStopped:
                         raise
+                    except OllamaStreamIncompleteError as exc:
+                        last_error = str(exc)
+                        if len(group) > 1:
+                            self.log(
+                                f"Phân tích batch {group_index} lỗi lần {attempt_number}: "
+                                f"{last_error}"
+                            )
+                            midpoint = len(group) // 2
+                            first_half = group[:midpoint]
+                            second_half = group[midpoint:]
+                            groups[group_offset : group_offset + 1] = [first_half, second_half]
+                            self.log(
+                                f"Stream batch {group_index} bị ngắt; tự chia thành "
+                                f"{len(first_half)} + {len(second_half)} segment. "
+                                f"Tổng số batch còn lại hiện là {len(groups)}."
+                            )
+                            split_incomplete_stream = True
+                            break
                     except Exception as exc:  # noqa: BLE001
                         last_error = str(exc)
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
+            if split_incomplete_stream:
+                continue
             if len(validated) != len(group) and payload:
                 fallback_validated = _validate(
                     group,
@@ -649,6 +694,7 @@ class OllamaBookAnalyzer:
                 if progress:
                     progress(done, total)
             self.log(f"Đã checkpoint phân tích {done:,}/{total:,} segment.")
+            group_offset += 1
 
     def reconcile_aliases(
         self,
