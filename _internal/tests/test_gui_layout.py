@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from e_book_reader.config import build_settings
-from e_book_reader.gui import MainWindow
+from e_book_reader.gui import APP_ICON_PATH, MainWindow
 from e_book_reader.project import create_or_open_project
 
 
@@ -56,6 +56,9 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.show_action.text() == "Hiện E Book Reader"
     assert window.hide_action.text() == "Ẩn xuống system tray"
     assert window.quit_action.text() == "Thoát hoàn toàn"
+    assert APP_ICON_PATH.is_file()
+    assert window.windowIcon().isNull() is False
+    assert window.tray_icon.icon().isNull() is False
     assert not hasattr(window, "pause_button")
     assert not hasattr(window, "stop_now_button")
     assert not hasattr(window, "pause_battery")

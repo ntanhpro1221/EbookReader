@@ -10,7 +10,7 @@ from queue import Empty
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QPalette
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -31,7 +31,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QSplitter,
-    QStyle,
     QSystemTrayIcon,
     QTableWidget,
     QTableWidgetItem,
@@ -51,6 +50,10 @@ from .worker import run_worker
 
 
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
+APP_NAME = "E Book Reader"
+APP_USER_MODEL_ID = "EBookReader.Desktop"
+APP_ASSET_DIR = Path(__file__).resolve().parent / "assets"
+APP_ICON_PATH = APP_ASSET_DIR / ("e_book_reader.ico" if os.name == "nt" else "e_book_reader.png")
 CHAPTER_TABLE_HEADERS = (
     "#",
     "Chapter",
@@ -82,7 +85,7 @@ class MainWindow(QMainWindow):
         restore_recent: bool = True,
     ) -> None:
         super().__init__()
-        self.setWindowTitle("E Book Reader")
+        self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
         self.setMinimumSize(900, 620)
         self.settings_store = settings_store or QSettings("OpenAI", "EBookReader")
@@ -263,12 +266,12 @@ class MainWindow(QMainWindow):
         layout.addLayout(controls)
 
     def _setup_tray(self) -> None:
-        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume)
+        icon = QIcon(str(APP_ICON_PATH))
         self.setWindowIcon(icon)
         self.tray_icon = QSystemTrayIcon(icon, self)
-        self.tray_icon.setToolTip("E Book Reader")
+        self.tray_icon.setToolTip(APP_NAME)
         self.tray_menu = QMenu(self)
-        self.show_action = QAction("Hiện E Book Reader", self)
+        self.show_action = QAction(f"Hiện {APP_NAME}", self)
         self.show_action.triggered.connect(self._show_from_tray)
         self.hide_action = QAction("Ẩn xuống system tray", self)
         self.hide_action.triggered.connect(self._hide_to_tray)
@@ -920,7 +923,7 @@ class MainWindow(QMainWindow):
             self.hide()
             if not self._tray_message_shown:
                 self.tray_icon.showMessage(
-                    "E Book Reader vẫn đang chạy",
+                    f"{APP_NAME} vẫn đang chạy",
                     "Bấm biểu tượng ở system tray để mở lại hoặc chọn Thoát hoàn toàn.",
                     QSystemTrayIcon.MessageIcon.Information,
                     4000,
@@ -933,9 +936,23 @@ class MainWindow(QMainWindow):
         event.accept()
 
 
+def _set_windows_app_identity() -> None:
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except (AttributeError, OSError):
+        pass
+
+
 def run_gui() -> int:
     mp.freeze_support()
+    _set_windows_app_identity()
     app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
     window = MainWindow()
     window.show()
     return app.exec()
