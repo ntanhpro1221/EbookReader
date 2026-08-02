@@ -8,7 +8,11 @@ import numpy as np
 import pytest
 
 import ebook_reader.tts as tts_module
-from ebook_reader.audio_io import AudioQualityError
+from ebook_reader.audio_io import (
+    VIENEU_V3_CODEC_SAMPLES_PER_FRAME,
+    AudioQualityError,
+    segment_duration_policy,
+)
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.tts import (
@@ -103,6 +107,22 @@ def test_emotion_changes_delivery_but_not_locked_voice(monkeypatch) -> None:
     assert vieneu_sampling_for_segment({**neutral, "pace": "slow"})["silence_p"] > (
         vieneu_sampling_for_segment({**neutral, "pace": "fast"})["silence_p"]
     )
+
+
+def test_short_utterance_uses_conservative_sampling() -> None:
+    sampling = vieneu_sampling_for_segment(
+        {
+            "text": "Ha...",
+            "speaker": "Nhân vật",
+            "emotion": "excited",
+            "intensity": 3,
+            "pace": "normal",
+        }
+    )
+
+    assert sampling["max_new_frames"] == 24
+    assert sampling["temperature"] == pytest.approx(0.72)
+    assert sampling["top_p"] == pytest.approx(0.90)
 
 
 def test_missing_locked_vieneu_preset_is_fatal() -> None:
@@ -246,3 +266,18 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     with pytest.raises(AudioQualityError, match="inference failed"):
         coordinator.synthesize_atomic(row, tmp_path / "segment.wav")
     assert release_calls == 3
+
+    ceiling_row = {**row, "text": "“Ha…”"}
+    spoken_text = coordinator.spoken_text(ceiling_row)
+    policy = segment_duration_policy(spoken_text, build_settings(), ceiling_row)
+    monkeypatch.setattr(
+        coordinator.vieneu,
+        "generate_one",
+        lambda *_args: np.zeros(
+            policy.generation_max_frames * VIENEU_V3_CODEC_SAMPLES_PER_FRAME,
+            dtype=np.float32,
+        ),
+    )
+    with pytest.raises(AudioQualityError, match="max_new_frames"):
+        coordinator.synthesize_atomic(ceiling_row, tmp_path / "segment.wav")
+    assert release_calls == 4

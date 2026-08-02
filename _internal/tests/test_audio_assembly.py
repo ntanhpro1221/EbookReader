@@ -12,6 +12,7 @@ from ebook_reader.audio_io import (
     integrated_loudness_lufs,
     normalize_segment_level,
     segment_duration_policy,
+    vieneu_generation_reached_frame_ceiling,
     verify_mp3,
     validate_audio_array,
 )
@@ -157,9 +158,25 @@ def test_vieneu_frame_budget_cannot_exceed_the_shared_validation_limit() -> None
 
     _, metrics = validate_audio_array(audio, "“Ha…”", settings, 48_000, segment=segment)
 
-    assert policy.generation_max_frames == 48
+    assert policy.generation_max_frames == 24
     assert policy.generation_ceiling_seconds < policy.validation_max_seconds
-    assert metrics["duration"] == pytest.approx(3.84, abs=0.01)
+    assert metrics["duration"] == pytest.approx(1.92, abs=0.01)
+
+
+def test_vieneu_output_at_exact_frame_ceiling_is_an_unfinished_generation() -> None:
+    policy = segment_duration_policy(
+        "“Hà... hà...”",
+        build_settings(),
+        {"kind": "dialogue", "pace": "normal"},
+    )
+    ceiling_samples = policy.generation_max_frames * VIENEU_V3_CODEC_SAMPLES_PER_FRAME
+
+    assert policy.generation_max_frames == 24
+    assert vieneu_generation_reached_frame_ceiling(np.zeros(ceiling_samples), policy)
+    assert not vieneu_generation_reached_frame_ceiling(
+        np.zeros(ceiling_samples - VIENEU_V3_CODEC_SAMPLES_PER_FRAME),
+        policy,
+    )
 
 
 @pytest.mark.parametrize("kind", ["narration", "dialogue", "thought"])

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -47,6 +48,11 @@ MIN_GENERATION_SECONDS = 3.0
 MIN_VALIDATION_SECONDS = 5.0
 VALIDATION_PADDING_SECONDS = 8.0
 DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
+SHORT_UTTERANCE_MAX_WORDS = 1
+SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS = 8
+SHORT_REPEATED_VOCALIZATION_MAX_WORDS = 2
+SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
+SHORT_UTTERANCE_MAX_GENERATION_FRAMES = 24
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +71,19 @@ def _segment_value(segment: Any, key: str, default: Any) -> Any:
     except (KeyError, TypeError):
         return default
     return default if value is None else value
+
+
+def is_short_utterance(text: str) -> bool:
+    words = re.findall(r"[^\W_]+", text, re.UNICODE)
+    speakable_chars = sum(char.isalnum() for char in text)
+    if not words or speakable_chars > SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS:
+        return False
+    if len(words) <= SHORT_UTTERANCE_MAX_WORDS:
+        return True
+    return (
+        len(words) <= SHORT_REPEATED_VOCALIZATION_MAX_WORDS
+        and len({word.casefold() for word in words}) == 1
+    )
 
 
 def segment_duration_policy(
@@ -93,10 +112,16 @@ def segment_duration_policy(
     safe_frames = math.floor(
         (validation_seconds - VIENEU_V3_FRAME_SECONDS) / VIENEU_V3_FRAME_SECONDS
     )
-    max_frames = max(
-        MIN_GENERATION_FRAMES,
-        min(MAX_GENERATION_FRAMES, requested_frames, safe_frames),
-    )
+    if is_short_utterance(text):
+        max_frames = max(
+            SHORT_UTTERANCE_MIN_GENERATION_FRAMES,
+            min(SHORT_UTTERANCE_MAX_GENERATION_FRAMES, requested_frames, safe_frames),
+        )
+    else:
+        max_frames = max(
+            MIN_GENERATION_FRAMES,
+            min(MAX_GENERATION_FRAMES, requested_frames, safe_frames),
+        )
     policy = SegmentDurationPolicy(
         generation_max_frames=max_frames,
         validation_max_seconds=validation_seconds,
@@ -104,6 +129,16 @@ def segment_duration_policy(
     if policy.generation_ceiling_seconds >= policy.validation_max_seconds:
         raise ValueError("VieNeu generation budget must stay below the audio validation limit")
     return policy
+
+
+def vieneu_generation_reached_frame_ceiling(
+    audio: Any,
+    policy: SegmentDurationPolicy,
+) -> bool:
+    """VieNeu returning every allowed codec frame means generation did not end early via EOS."""
+    generated_samples = np.asarray(audio).size
+    ceiling_samples = policy.generation_max_frames * VIENEU_V3_CODEC_SAMPLES_PER_FRAME
+    return generated_samples >= ceiling_samples
 
 
 def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:

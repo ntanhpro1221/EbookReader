@@ -37,6 +37,10 @@ COMPACT_VOCALIZATION_PATTERN = re.compile(
     r"(?<!\w)(?P<syllable>ha|he|hi|hu)(?P=syllable){1,7}(?!\w)",
     re.IGNORECASE,
 )
+STANDALONE_GASP_PATTERN = re.compile(
+    r"^(?P<prefix>\s*[“\"'‘—–-]?\s*)ha(?:…|\.{2,})(?P<suffix>\s*[”\"'’]?\s*)$",
+    re.IGNORECASE,
+)
 MAX_VOCALIZATION_REPETITIONS = 4
 
 
@@ -103,6 +107,10 @@ def normalize_vocalizations_for_tts(text: str) -> str:
             len(match.group(0)) // len(match.group("syllable")),
         )
         return " ".join([syllable] * count).capitalize()
+
+    gasp = STANDALONE_GASP_PATTERN.fullmatch(text)
+    if gasp is not None:
+        return f"{gasp.group('prefix')}Hà... hà...{gasp.group('suffix')}"
 
     result = VOCAL_CUE_PATTERN.sub(replace_cue, text)
     result = STRETCHED_SIGH_PATTERN.sub("Hầy", result)

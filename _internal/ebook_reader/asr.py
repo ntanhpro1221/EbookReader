@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import math
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -10,7 +11,10 @@ import numpy as np
 import soundfile as sf
 
 
-ASR_REPAIR_MIN_WORDS = 2
+ASR_REPAIR_MIN_WORDS = 1
+SEVERE_MISMATCH_MAX_SIMILARITY = 0.35
+SEVERE_MISMATCH_MIN_LENGTH_RATIO = 3.0
+SEVERE_MISMATCH_MIN_EXTRA_WORDS = 4
 WHISPER_SAMPLE_RATE = 16_000
 
 
@@ -50,6 +54,21 @@ def transcript_metrics(expected: str, actual: str) -> tuple[float, float]:
 
 def is_asr_repair_candidate(expected: str) -> bool:
     return len(normalize_transcript(expected).split()) >= ASR_REPAIR_MIN_WORDS
+
+
+def is_severe_asr_mismatch(expected: str, actual: str, similarity: float) -> bool:
+    expected_words = normalize_transcript(expected).split()
+    actual_words = normalize_transcript(actual).split()
+    if not expected_words or not actual_words:
+        return False
+    minimum_actual_words = max(
+        len(expected_words) + SEVERE_MISMATCH_MIN_EXTRA_WORDS,
+        math.ceil(len(expected_words) * SEVERE_MISMATCH_MIN_LENGTH_RATIO),
+    )
+    return (
+        float(similarity) < SEVERE_MISMATCH_MAX_SIMILARITY
+        and len(actual_words) >= minimum_actual_words
+    )
 
 
 def load_audio_for_whisper(path: Path) -> np.ndarray:
@@ -159,6 +178,7 @@ class WhisperVerifier:
                 "wer": 0.0,
                 "reason": "NON_LEXICAL_SKIP",
                 "repairable": False,
+                "severe": False,
             }
         if word_count < int(self.settings.get("min_words", 3)) and not self.settings.get("verify_short_dialogue", True):
             return {
@@ -168,6 +188,7 @@ class WhisperVerifier:
                 "wer": 0.0,
                 "reason": "short_skip",
                 "repairable": False,
+                "severe": False,
             }
         if not self.load():
             return {
@@ -177,6 +198,7 @@ class WhisperVerifier:
                 "wer": 1.0,
                 "reason": "ASR_NOT_RUN",
                 "repairable": False,
+                "severe": False,
             }
         try:
             transcript = self.transcribe(wav_path)
@@ -191,6 +213,7 @@ class WhisperVerifier:
                 "wer": 1.0,
                 "reason": "ASR_ERROR",
                 "repairable": False,
+                "severe": False,
             }
         similarity, wer = transcript_metrics(expected, transcript)
         min_similarity = float(self.settings.get("min_similarity", 0.58))
@@ -205,4 +228,5 @@ class WhisperVerifier:
             "wer": wer,
             "reason": "ok" if passed else "ASR_MISMATCH",
             "repairable": is_asr_repair_candidate(expected),
+            "severe": not passed and is_severe_asr_mismatch(expected, transcript, similarity),
         }

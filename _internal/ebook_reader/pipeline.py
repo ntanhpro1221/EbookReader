@@ -30,6 +30,10 @@ from .tts import TTSCoordinator, is_fatal_tts_error
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
 
 
+def unresolved_asr_is_fatal(result: dict[str, Any], failure_policy: str) -> bool:
+    return bool(result.get("severe", False)) or failure_policy == "fail"
+
+
 class PipelineStopped(RuntimeError):
     pass
 
@@ -707,17 +711,44 @@ class BookPipeline:
         for item in sorted(final_mismatches, key=lambda row: int(row["seq"])):
             result = last_results.get(int(item["id"]), {})
             warning = "ASR_MISMATCH_UNRESOLVED"
-            if self.settings["asr"].get("failure_policy") == "fail":
+            severe = bool(result.get("severe", False))
+            if severe:
+                warning = "ASR_SEVERE_MISMATCH"
+            if unresolved_asr_is_fatal(
+                result,
+                str(self.settings["asr"].get("failure_policy", "warning_continue")),
+            ):
+                self.db.mark_asr_result(
+                    int(item["id"]), passed=False, transcript=str(result.get("transcript", "")),
+                    similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
+                    warning_code=warning,
+                )
                 self.db.mark_failed(
                     int(item["id"]),
-                    "ASR mismatch remained after all configured repair rounds",
-                    warning_code="ASR_MISMATCH_UNRESOLVED",
+                    (
+                        "Severe ASR mismatch remained after all configured repair rounds; "
+                        "refusing to publish potentially hallucinated speech"
+                        if severe
+                        else "ASR mismatch remained after all configured repair rounds"
+                    ),
+                    warning_code=warning,
                 )
                 self.db.event(
                     "error",
-                    "ASR_MISMATCH_UNRESOLVED",
-                    f"ASR mismatch is fatal by policy for {item['stable_id']}",
-                    {"chapter": str(chapter["title"]), "text": str(item["text"])},
+                    warning,
+                    (
+                        f"Severe ASR mismatch blocks publication for {item['stable_id']}"
+                        if severe
+                        else f"ASR mismatch is fatal by policy for {item['stable_id']}"
+                    ),
+                    {
+                        "chapter": str(chapter["title"]),
+                        "text": str(item["text"]),
+                        "transcript": str(result.get("transcript", "")),
+                        "similarity": float(result.get("similarity", 0.0)),
+                        "wer": float(result.get("wer", 1.0)),
+                        "severe": severe,
+                    },
                 )
                 continue
             self.db.mark_asr_result(

@@ -8,7 +8,11 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from ebook_reader.asr import WhisperVerifier, is_asr_repair_candidate
+from ebook_reader.asr import (
+    WhisperVerifier,
+    is_asr_repair_candidate,
+    is_severe_asr_mismatch,
+)
 from ebook_reader.config import build_settings
 
 
@@ -45,7 +49,7 @@ def test_asr_fail_policy_rejects_missing_model_cache(monkeypatch, tmp_path: Path
         verifier.load()
 
 
-def test_non_lexical_text_skips_whisper_and_one_word_is_not_repaired(monkeypatch) -> None:
+def test_non_lexical_text_skips_whisper_and_one_word_can_be_repaired(monkeypatch) -> None:
     verifier = WhisperVerifier(build_settings(), lambda _message: None)
     monkeypatch.setattr(
         verifier,
@@ -58,8 +62,22 @@ def test_non_lexical_text_skips_whisper_and_one_word_is_not_repaired(monkeypatch
     assert result["passed"] is True
     assert result["reason"] == "NON_LEXICAL_SKIP"
     assert result["repairable"] is False
-    assert is_asr_repair_candidate("rầm") is False
+    assert is_asr_repair_candidate("rầm") is True
     assert is_asr_repair_candidate("Cánh cửa đổ rầm xuống.") is True
+
+
+def test_severe_mismatch_detects_impossibly_long_unrelated_transcript() -> None:
+    assert is_severe_asr_mismatch(
+        "Ha...",
+        "Cảm ơn các bạn đã theo dõi và hẹn gặp lại.",
+        0.0465,
+    ) is True
+    assert is_severe_asr_mismatch(
+        "Anh Lu-xi-en!",
+        "Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn.",
+        0.22,
+    ) is True
+    assert is_severe_asr_mismatch("Độc ác quá!", "Nó bạc quá.", 0.60) is False
 
 
 def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:

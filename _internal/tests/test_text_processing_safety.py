@@ -141,7 +141,7 @@ def test_vocal_cues_and_onomatopoeia_stay_in_their_spoken_sentences() -> None:
 @pytest.mark.parametrize(
     ("source", "spoken"),
     [
-        ('“Ha…”', '“Ha…”'),
+        ('“Ha…”', '“Hà... hà...”'),
         ('“Haiz…”', '“Hầy…”'),
         ('“Haizzzzz....”', '“Hầy...”'),
         ('“Hừmmmm...”', '“Hừm...”'),

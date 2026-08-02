@@ -63,8 +63,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   `-1`, các preset còn lại hạ tối đa `-2`; mọi preset chỉ nâng tối đa `+2` bán âm. Khi nhiều vai
   dùng chung preset, biến thể này tạo khác biệt vừa phải mà không đổi tốc độ; cảm xúc không đổi
   sang người đọc khác giữa chừng.
-- Độc thoại nội tâm ưu tiên bắt buộc giọng đã khóa của nhân vật đang nghĩ; chỉ sau khi phân tích hết số
-  lần thử mà vẫn không xác định được nhân vật thì mới fallback sang giọng người kể và ghi warning.
+- Độc thoại nội tâm dùng giọng đã khóa của nhân vật đang nghĩ; nếu không xác định được nhân vật thì dùng
+  ngay giọng người kể và ghi warning, không tạo một giọng `UNKNOWN` riêng.
 - Tên tiếng Anh được đối chiếu với CMU Pronouncing Dictionary đóng gói cục bộ; chuỗi âm vị tiếng Anh
   được Qwen chuyển thành âm tiết thuần Việt như `Michael → Mai-cồ`, `Gary → Ga-ri`. Tên fantasy không có
   trong từ điển vẫn được xét theo ngữ cảnh. Cách đọc được khóa trong SQLite theo sách, áp dụng đồng nhất
@@ -106,11 +106,19 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   trần toàn cục của model. Ngân sách frame VieNeu và giới hạn kiểm tra dùng chung một chính sách thời lượng,
   nên app không thể vừa cho model sinh dài hơn rồi tự từ chối chính kết quả đó. Sai lệch tốc độ nhẹ được ghi
   warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
+- Câu chỉ có một từ ngắn dùng tối đa 24 frame và sampling thận trọng hơn để VieNeu không có khoảng sinh dư
+  rồi nối thêm lời ngoài văn bản. Riêng tiếng thở `Ha...` đứng độc lập được gửi thành `Hà... hà...` để tạo
+  hai âm vị tiếng Việt rõ; nếu VieNeu vẫn chạm đúng `max_new_frames` thay vì kết thúc bằng EOS thì lần sinh
+  đó bị loại và retry. Mọi mismatch có chữ đều được tạo lại bằng seed khác.
 - Mọi segment narration/dialogue/thought đều dùng chung chính sách thời lượng, kiểm tra tốc độ khi đủ dài và đối chiếu
   Whisper bằng đúng `spoken_text`. App không cắt audio để lách validation; kết quả quá dài phải retry hoặc thất bại.
+- Transcript dài bất thường và gần như không liên quan tới câu nguồn được coi là mismatch nghiêm trọng. Sau các vòng
+  retry, lỗi này luôn làm segment/chapter thất bại và chặn xuất MP3, kể cả khi policy thường là `warning_continue`.
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
+- Alias có bằng chứng trực tiếp như nhân vật A nói `tên của mình là B` được hợp nhất bằng quy tắc xác định
+  trước kết quả Qwen, nên tên cũ/tên mới dùng cùng một voice profile ngay cả khi Qwen bỏ sót nhóm alias.
 - Khi Ollama chưa chạy, Ebook Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
   phân tích/phân vai xong. Một Ollama đã chạy từ trước được coi là tiến trình bên ngoài và không bị tự ý kill.
 - Sau mỗi lần VieNeu tạo audio hoặc trả lỗi, app thu hồi cache inference. Nếu RAM tụt tới mức critical giữa hai

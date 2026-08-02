@@ -8,7 +8,7 @@ import pytest
 from ebook_reader.audio_io import atomic_write_wav
 from ebook_reader.config import build_settings
 from ebook_reader.models import ResourceLevel
-from ebook_reader.pipeline import BookPipeline, CriticalResourceStop
+from ebook_reader.pipeline import BookPipeline, CriticalResourceStop, unresolved_asr_is_fatal
 from ebook_reader.project import create_or_open_project
 from ebook_reader.resource_manager import ResourceSnapshot
 
@@ -56,6 +56,12 @@ class FakeNotifier:
 
     def critical_stop(self, *args, **kwargs):
         self.critical_calls.append((args, kwargs))
+
+
+def test_severe_asr_mismatch_is_fatal_even_under_warning_policy() -> None:
+    assert unresolved_asr_is_fatal({"severe": True}, "warning_continue") is True
+    assert unresolved_asr_is_fatal({"severe": False}, "warning_continue") is False
+    assert unresolved_asr_is_fatal({"severe": False}, "fail") is True
 
 
 def resource_snapshot(free_ram_gb: float) -> ResourceSnapshot:

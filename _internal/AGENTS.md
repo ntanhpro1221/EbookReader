@@ -52,6 +52,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Chỉ có `narration`/`dialogue`/`thought`; từ tượng thanh và cụm cảm thán giữ nguyên trong câu đọc bình thường.
   Không audio nào được cắt để lách validation; kết quả quá dài phải retry hoặc `failed`.
 - Chapter còn segment `failed` không được publish.
+- ASR mismatch dài bất thường và gần như không liên quan tới `spoken_text` phải retry kể cả với câu một từ; nếu vẫn
+  nghiêm trọng sau mọi vòng sửa thì segment phải `failed`, không được hạ xuống warning để publish chapter.
+- Vocalization cực ngắn phải được chuẩn hóa thành âm tiết tiếng Việt đủ ổn định; output chạm đúng trần frame của
+  VieNeu được xem là chưa kết thúc bằng EOS và phải retry, không được ghi thành WAV hợp lệ.
 - Mọi kết thúc với `BookStatus.ERROR` phải gửi `finished.ok=false`; nhánh `completed_with_errors` gửi đúng
   một Windows notification nếu policy cho phép, đồng thời giữ nguyên checkpoint/chapter đã commit.
 - Không giữ TTS và Whisper đồng thời trên GPU khi không cần.
@@ -91,7 +95,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Segment mới được cân theo K-weighted LUFS; giọng kể có anchor nhỉnh hơn hội thoại trung tính và
   chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
 - Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
-  độc thoại nội tâm để analysis tìm giọng nhân vật thay vì gán sẵn narrator.
+  độc thoại nội tâm để analysis tìm giọng nhân vật; nếu không xác định được người đang nghĩ thì gán `NARRATOR` ngay.
+- Tự giới thiệu rõ theo mẫu `tên của mình/tôi/ta là X` phải hợp nhất speaker hiện tại vào nhân vật X đã tồn tại
+  bằng quy tắc xác định trước bước gán voice; không phụ thuộc hoàn toàn vào alias JSON của Qwen.
 - Whisper phải nhận WAV đã đọc/resample trong process; không truyền đường dẫn cho API Whisper vì bản
   dependency hiện tại sẽ gọi FFmpeg subprocess cho từng segment và gây nháy console trên Windows.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.

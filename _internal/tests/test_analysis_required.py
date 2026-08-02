@@ -22,6 +22,7 @@ from ebook_reader.analysis import (
     _local_name_fallback,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
+    _self_identified_aliases,
     _valid_vietnamese_spoken_form,
     _validate,
     is_local_speaker,
@@ -796,6 +797,42 @@ def test_identity_reconciliation_uses_chapter_boundary_context_for_renamed_prota
     assert analyzer.reconcile_aliases() == {"Hạ Phong": "Lucien"}
 
 
+def test_explicit_self_identification_merges_alias_when_qwen_returns_no_group(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "seq": 1,
+            "text": "‘Tên của mình là Lucien…’",
+            "status": "analyzed",
+            "speaker": "Hạ Phong",
+        },
+        {
+            "id": 2,
+            "stable_id": "c2s1",
+            "chapter_id": 2,
+            "seq": 1,
+            "text": "‘Mình phải thích nghi với thân phận này.’",
+            "status": "analyzed",
+            "speaker": "Lucien",
+        },
+    ]
+    db.chapters = [{"id": 1, "title": "000"}, {"id": 2, "title": "001"}]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr(analyzer, "_stream_json_response", lambda *_args, **_kwargs: {"groups": []})
+
+    assert _self_identified_aliases(db.rows, ["Hạ Phong", "Lucien"]) == {
+        "Hạ Phong": "Lucien"
+    }
+    assert analyzer.reconcile_aliases() == {"Hạ Phong": "Lucien"}
+    assert any(event[1] == "ALIAS_SELF_IDENTIFICATION_APPLIED" for event in db.events)
+
+
 def test_onomatopoeia_remains_normal_narration() -> None:
     row = {
         **analysis_group()[0],
@@ -822,19 +859,18 @@ def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
     assert validated[row["stable_id"]]["speaker"] == "Lucien"
 
 
-def test_thought_uses_narrator_only_when_explicit_fallback_is_enabled() -> None:
+def test_unresolved_thought_immediately_uses_narrator() -> None:
     row = analysis_group()[0]
     narrator_thought = analysis_item(row["stable_id"])
     narrator_thought.update({"kind": "thought", "speaker": "NARRATOR"})
 
-    assert _validate([row], {"segments": [narrator_thought]}) == {}
-    fallback = _validate(
-        [row],
-        {"segments": [narrator_thought]},
-        allow_unresolved_thought_narrator=True,
-    )
+    fallback = _validate([row], {"segments": [narrator_thought]})
     assert fallback[row["stable_id"]]["speaker"] == "NARRATOR"
     assert "không xác định được người đang nghĩ" in fallback[row["stable_id"]]["notes"]
+
+    unknown_thought = {**narrator_thought, "speaker": "UNKNOWN"}
+    fallback = _validate([row], {"segments": [unknown_thought]})
+    assert fallback[row["stable_id"]]["speaker"] == "NARRATOR"
 
     character_thought = {**narrator_thought, "speaker": "Alisa", "gender": "female"}
     validated = _validate([row], {"segments": [character_thought]})
@@ -843,7 +879,7 @@ def test_thought_uses_narrator_only_when_explicit_fallback_is_enabled() -> None:
     assert validated[row["stable_id"]]["speaker"] == "Alisa"
 
 
-def test_unresolved_thought_retries_then_falls_back_to_narrator(monkeypatch) -> None:
+def test_unresolved_thought_uses_narrator_without_retry(monkeypatch) -> None:
     db = FakeDB()
     db.rows[0].update({"text": "(Mình nên làm gì bây giờ?)", "kind_hint": "thought"})
     settings = build_settings()
@@ -864,7 +900,7 @@ def test_unresolved_thought_retries_then_falls_back_to_narrator(monkeypatch) -> 
 
     analyzer.analyze_all(lambda: False)
 
-    assert attempts == settings["analysis"]["max_retries"]
+    assert attempts == 1
     assert db.updated[0][1]["kind"] == "thought"
     assert db.updated[0][1]["speaker"] == "NARRATOR"
     assert any(event[1] == "THOUGHT_SPEAKER_NARRATOR_FALLBACK" for event in db.events)

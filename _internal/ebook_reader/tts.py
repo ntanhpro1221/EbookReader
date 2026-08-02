@@ -12,7 +12,9 @@ import pyworld
 from .audio_io import (
     AudioQualityError,
     atomic_write_wav,
+    is_short_utterance,
     segment_duration_policy,
+    vieneu_generation_reached_frame_ceiling,
 )
 from .database import ProjectDB
 from .io_utils import stable_int
@@ -53,6 +55,8 @@ WORLD_FRAME_PERIOD_MS = 5.0
 WORLD_F0_FLOOR_HZ = 55.0
 WORLD_F0_CEIL_HZ = 600.0
 WORLD_MIN_VOICED_FRAMES = 3
+SHORT_UTTERANCE_MAX_TEMPERATURE = 0.72
+SHORT_UTTERANCE_MAX_TOP_P = 0.90
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
@@ -136,10 +140,14 @@ def vieneu_sampling_for_segment(
         0.92,
         base_temperature + PACE_TEMPERATURE_OFFSETS.get(pace, 0.0) + 0.015 * intensity,
     )
+    top_p = min(0.98, 0.92 + 0.015 * intensity)
+    if is_short_utterance(str(_row_value(row, "text", ""))):
+        temperature = min(temperature, SHORT_UTTERANCE_MAX_TEMPERATURE)
+        top_p = min(top_p, SHORT_UTTERANCE_MAX_TOP_P)
     return {
         "temperature": temperature,
         "top_k": 25,
-        "top_p": min(0.98, 0.92 + 0.015 * intensity),
+        "top_p": top_p,
         "repetition_penalty": 1.2,
         "silence_p": PACE_SILENCE_PROPORTIONS.get(pace, PACE_SILENCE_PROPORTIONS["normal"]),
         "max_new_frames": _max_new_frames(row, settings),
@@ -322,6 +330,19 @@ class TTSCoordinator:
             seed = self.generation_seed(row, seed_salt)
             spoken_row = self._spoken_row(row)
             audio = self.vieneu.generate_one(spoken_row, profile, seed)
+            duration_policy = segment_duration_policy(
+                str(spoken_row["text"]),
+                self.settings,
+                spoken_row,
+            )
+            if (
+                is_short_utterance(str(spoken_row["text"]))
+                and vieneu_generation_reached_frame_ceiling(audio, duration_policy)
+            ):
+                raise AudioQualityError(
+                    "VieNeu reached max_new_frames without an early EOS; "
+                    "refusing audio that may continue beyond the supplied text"
+                )
             pitch_steps = int(_row_value(profile, "pitch_semitones", 0))
             pitch_variant_skipped = False
             try:

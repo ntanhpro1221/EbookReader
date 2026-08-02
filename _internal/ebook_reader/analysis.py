@@ -55,6 +55,9 @@ IDENTITY_CONTEXT_RADIUS = 1
 IDENTITY_CONTEXTS_PER_SPEAKER = 4
 IDENTITY_CONTEXT_LINE_CHARS = 220
 ALIAS_RECONCILIATION_BATCH_SIZE = 16
+SELF_IDENTIFICATION_PREFIX_PATTERN = (
+    r"(?:tên(?:\s+đầy\s+đủ)?\s+của\s+(?:mình|tôi|ta)|(?:mình|tôi|ta)\s+tên)\s+là"
+)
 ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
 DIRECT_ADDRESS_TITLES = (
     "anh", "chị", "ông", "bà", "ngài", "cô", "chú", "bác", "dì", "cậu", "em",
@@ -361,8 +364,8 @@ Quy tắc:
    nghe. Tuyệt đối không lấy tên đó làm speaker nếu lời kể lân cận cho thấy một người khác đang nói;
    nếu người nói chưa có tên, dùng NPC_LOCAL với nhãn mô tả người nói.
 3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ. Hãy dùng ngữ cảnh lân cận
-   và ngôi kể để xác định nhân vật; không dùng NARRATOR. Chỉ trả UNKNOWN khi thực sự không thể
-   suy ra, không được bịa ra danh tính.
+   và ngôi kể để xác định nhân vật. Nếu thực sự không thể suy ra thì dùng speaker=NARRATOR để giọng
+   người kể đọc đoạn đó; không trả UNKNOWN và không bịa ra danh tính.
 4. Chỉ dùng kind=narration, dialogue hoặc thought. Từ tượng thanh như rầm/uỳnh vẫn là một phần của câu
    người kể hoặc nhân vật đang đọc. Cụm cảm thán như ha/haiz/hừm và chỉ dẫn [cười]/[thở dài]/[hắng giọng]
    cũng là lời đọc bình thường của đúng speaker; không tạo kind hiệu ứng riêng và không tách chúng khỏi câu.
@@ -527,7 +530,7 @@ def _heuristic(row: Any) -> dict[str, Any]:
     text = str(row["text"])
     lowered = text.casefold()
     kind = str(row["kind_hint"])
-    speaker = "NARRATOR" if kind == "narration" else "UNKNOWN"
+    speaker = "NARRATOR" if kind in {"narration", "thought"} else "UNKNOWN"
     emotion, intensity, pace, volume = "neutral", 1, "normal", "normal"
     if any(word in lowered for word in ("khóc", "nước mắt", "đau lòng", "buồn", "tuyệt vọng")):
         emotion, pace, volume = "sad", "slow", "soft"
@@ -557,8 +560,6 @@ def _validate(
     group: list[Any],
     payload: dict[str, Any],
     local_scope: str = "b0000",
-    *,
-    allow_unresolved_thought_narrator: bool = False,
 ) -> dict[str, dict[str, Any]]:
     expected = {str(row["stable_id"]) for row in group}
     rows_by_id = {str(row["stable_id"]): row for row in group}
@@ -575,8 +576,6 @@ def _validate(
         if kind == "narration":
             speaker = "NARRATOR"
         elif kind == "thought" and speaker in {"NARRATOR", "UNKNOWN"}:
-            if not allow_unresolved_thought_narrator:
-                continue
             speaker = "NARRATOR"
             unresolved_thought_fallback = True
         else:
@@ -737,6 +736,41 @@ def _identity_reconciliation_items(
                 examples.append(excerpt)
         items.append({"name": speaker, "examples": examples})
     return items
+
+
+def _self_identified_aliases(
+    rows: list[Any],
+    candidate_names: list[str],
+) -> dict[str, str]:
+    """Resolve explicit "tên của mình là X" evidence without relying on an LLM."""
+    names_by_key = {
+        _canonical_speaker(name).casefold(): _canonical_speaker(name)
+        for name in candidate_names
+    }
+    matches_by_speaker: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        speaker = _canonical_speaker(row["speaker"])
+        speaker_key = speaker.casefold()
+        if speaker_key not in names_by_key:
+            continue
+        text = " ".join(str(row["text"]).split())
+        for target in sorted(candidate_names, key=lambda value: (-len(value), value.casefold())):
+            canonical = _canonical_speaker(target)
+            if canonical.casefold() == speaker_key:
+                continue
+            target_pattern = r"\s+".join(re.escape(part) for part in canonical.split())
+            pattern = re.compile(
+                rf"(?<!\w){SELF_IDENTIFICATION_PREFIX_PATTERN}\s+{target_pattern}(?!\w)",
+                re.IGNORECASE,
+            )
+            if pattern.search(text):
+                matches_by_speaker[speaker].add(canonical)
+
+    return {
+        speaker: next(iter(targets))
+        for speaker, targets in matches_by_speaker.items()
+        if len(targets) == 1
+    }
 
 
 def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
@@ -1397,6 +1431,25 @@ class OllamaBookAnalyzer:
                         )
                         validated = _validate(group, payload, local_scope=f"b{group_index:04d}")
                         if len(validated) == len(group):
+                            fallback_count = sum(
+                                data["kind"] == "thought" and data["speaker"] == "NARRATOR"
+                                for data in validated.values()
+                            )
+                            if fallback_count:
+                                message = (
+                                    f"Batch {group_index} có {fallback_count} đoạn nội tâm không xác định "
+                                    "được nhân vật; dùng giọng người kể."
+                                )
+                                self.log(message)
+                                self.db.event(
+                                    "warning",
+                                    "THOUGHT_SPEAKER_NARRATOR_FALLBACK",
+                                    message,
+                                    {
+                                        "batch_index": group_index,
+                                        "fallback_segments": fallback_count,
+                                    },
+                                )
                             break
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
                     except AnalysisRequestStopped:
@@ -1425,33 +1478,6 @@ class OllamaBookAnalyzer:
                     time.sleep(min(8, 2 ** attempt))
             if split_incomplete_stream:
                 continue
-            if len(validated) != len(group) and payload:
-                fallback_validated = _validate(
-                    group,
-                    payload,
-                    local_scope=f"b{group_index:04d}",
-                    allow_unresolved_thought_narrator=True,
-                )
-                fallback_count = sum(
-                    data["kind"] == "thought" and data["speaker"] == "NARRATOR"
-                    for data in fallback_validated.values()
-                )
-                if len(fallback_validated) == len(group) and fallback_count:
-                    validated = fallback_validated
-                    message = (
-                        f"Sau {retry_count} lần phân tích batch {group_index}, còn {fallback_count} "
-                        "đoạn nội tâm không xác định được nhân vật; dùng giọng người kể."
-                    )
-                    self.log(message)
-                    self.db.event(
-                        "warning",
-                        "THOUGHT_SPEAKER_NARRATOR_FALLBACK",
-                        message,
-                        {
-                            "batch_index": group_index,
-                            "fallback_segments": fallback_count,
-                        },
-                    )
             if len(validated) != len(group) and required:
                 message = (
                     f"Phân tích bắt buộc thất bại ở batch {group_index}: "
@@ -1842,12 +1868,24 @@ class OllamaBookAnalyzer:
             if self.settings.get("enabled", True) and self.settings.get("required", True):
                 raise RuntimeError(message)
             return {}
+        all_names = [item["name"] for item in items]
+        alias_map = _self_identified_aliases(rows, all_names)
+        for alias, canonical in sorted(alias_map.items(), key=lambda item: item[0].casefold()):
+            self.db.event(
+                "info",
+                "ALIAS_SELF_IDENTIFICATION_APPLIED",
+                f"Explicit self-identification merged {alias} into {canonical}",
+                {
+                    "alias": alias,
+                    "canonical": canonical,
+                    "confidence": 1.0,
+                    "rule": "explicit_self_identification",
+                },
+            )
         if not self.ensure_available():
             if self.settings.get("enabled", True) and self.settings.get("required", True):
                 raise RuntimeError("Ollama became unavailable before required alias reconciliation")
-            return {}
-        alias_map: dict[str, str] = {}
-        all_names = [item["name"] for item in items]
+            return alias_map
         # Keep requests bounded. Only high-confidence merges are applied automatically.
         for batch_index, offset in enumerate(
             range(0, len(items), ALIAS_RECONCILIATION_BATCH_SIZE),
