@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **161/161 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **165/165 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục TEMP riêng, không cài vào runtime của app.
@@ -41,7 +41,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - Ollama server do worker tự khởi động chạy ẩn, được theo dõi quyền sở hữu và chỉ tiến trình do app tạo
   mới bị dừng sau giai đoạn phân tích;
 - project lock, voice profile lock và resume;
-- Resource Manager: foreground, RAM, SSD và stop policy;
+- Resource Manager: foreground, RAM, SSD và stop policy; RAM critical đơn lẻ unload model/cache, đo cưỡng bức
+  lại và chỉ dừng nếu lần đo sau thu hồi vẫn critical;
 - recovery: kill khi đang ghi `.part`, kill sau atomic replace nhưng trước SQLite commit, checksum và
   giữ nguyên WAV/MP3 đã commit hợp lệ;
 - settings tamper, source mutation và khóa độc quyền một worker/project;
@@ -78,6 +79,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;
 - pipeline mock không cần model;
+- cache inference VieNeu được thu hồi trong `finally` sau cả attempt thành công lẫn thất bại;
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 

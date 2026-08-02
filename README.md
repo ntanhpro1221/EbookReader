@@ -93,8 +93,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
 - Khi Ollama chưa chạy, Ebook Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
   phân tích/phân vai xong. Một Ollama đã chạy từ trước được coi là tiến trình bên ngoài và không bị tự ý kill.
-- Nếu phải tự dừng vì SSD/RAM/GPU/driver, lỗi nghiêm trọng hoặc kết thúc mà vẫn còn chapter lỗi, app giữ
-  checkpoint và gửi Windows notification.
+- Sau mỗi lần VieNeu tạo audio hoặc trả lỗi, app thu hồi cache inference. Nếu RAM tụt tới mức critical giữa hai
+  segment, app unload model/cache rồi đo lại; chỉ tự dừng, giữ checkpoint và gửi Windows notification khi RAM
+  vẫn không hồi phục. Critical SSD/GPU/driver và lỗi nghiêm trọng vẫn dừng ngay tại ranh giới an toàn.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.
 
 ## Đầu ra

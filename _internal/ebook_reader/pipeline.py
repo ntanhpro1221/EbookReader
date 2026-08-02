@@ -27,6 +27,9 @@ from .resource_manager import AdaptiveResourceManager
 from .tts import TTSCoordinator, is_fatal_tts_error
 
 
+CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
+
+
 class PipelineStopped(RuntimeError):
     pass
 
@@ -117,7 +120,30 @@ class BookPipeline:
                         f"mode={updated_resources['mode']}, "
                         f"GPU tối đa={updated_resources['max_gpu_temp_c']}°C."
                     )
-            decision = self.resources.decide()
+            snapshot = self.resources.snapshot()
+            decision = self.resources.decide(snapshot)
+            if decision.critical and self.resources.is_ram_only_critical(snapshot):
+                before_ram_gb = snapshot.free_ram_gb
+                self.log(
+                    f"RAM khả dụng chỉ còn {before_ram_gb:.1f} GB; "
+                    "đang giải phóng model và cache trước khi quyết định dừng."
+                )
+                if release_active is not None:
+                    try:
+                        release_active()
+                    except Exception as exc:  # noqa: BLE001
+                        self.log(f"Thu hồi model đang hoạt động gặp lỗi: {exc}")
+                try:
+                    self.tts.unload_all()
+                except Exception as exc:  # noqa: BLE001
+                    self.log(f"Thu hồi model TTS/cache gặp lỗi: {exc}")
+                time.sleep(CRITICAL_RAM_RECOVERY_WAIT_SECONDS)
+                snapshot = self.resources.snapshot(force=True)
+                decision = self.resources.decide(snapshot)
+                self.log(
+                    f"Đã đo lại RAM sau thu hồi: {before_ram_gb:.1f} → "
+                    f"{snapshot.free_ram_gb:.1f} GB khả dụng."
+                )
             if decision.level != self._last_resource_level:
                 self._last_resource_level = decision.level
                 self.emit(

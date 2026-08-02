@@ -165,6 +165,17 @@ class AdaptiveResourceManager:
         self.settings = dict(resources)
         self._last_snapshot_at = 0.0
 
+    def is_ram_only_critical(self, snapshot: ResourceSnapshot) -> bool:
+        """Return whether unloading models can resolve the complete critical condition."""
+        cfg = self.settings
+        ram_critical = snapshot.free_ram_gb <= float(cfg["critical_free_ram_gb"])
+        disk_critical = snapshot.disk_free_gb <= float(cfg["critical_free_disk_gb"])
+        gpu_critical = bool(
+            snapshot.gpu_temp_c is not None
+            and snapshot.gpu_temp_c >= int(cfg["critical_gpu_temp_c"])
+        )
+        return ram_critical and not disk_critical and not gpu_critical
+
     def snapshot(self, force: bool = False) -> ResourceSnapshot:
         now = time.monotonic()
         if not force and self._last_snapshot is not None and now - self._last_snapshot_at < 1.5:

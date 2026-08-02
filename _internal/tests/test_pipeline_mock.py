@@ -3,17 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from ebook_reader.audio_io import atomic_write_wav
 from ebook_reader.config import build_settings
-from ebook_reader.pipeline import BookPipeline
+from ebook_reader.models import ResourceLevel
+from ebook_reader.pipeline import BookPipeline, CriticalResourceStop
 from ebook_reader.project import create_or_open_project
+from ebook_reader.resource_manager import ResourceSnapshot
 
 
 class FakeTTS:
     def __init__(self, settings, db):
         self.settings = settings
         self.db = db
+        self.unload_calls = 0
 
     def prepare_voice_presets(self):
         return None
@@ -22,7 +26,7 @@ class FakeTTS:
         return None
 
     def unload_all(self):
-        return None
+        self.unload_calls += 1
 
     def generation_seed(self, row, seed_salt=""):
         return 1
@@ -52,6 +56,19 @@ class FakeNotifier:
 
     def critical_stop(self, *args, **kwargs):
         self.critical_calls.append((args, kwargs))
+
+
+def resource_snapshot(free_ram_gb: float) -> ResourceSnapshot:
+    return ResourceSnapshot(
+        cpu_percent=20.0,
+        free_ram_gb=free_ram_gb,
+        disk_free_gb=100.0,
+        disk_active_percent=5.0,
+        gpu_temp_c=70,
+        foreground_cpu_percent=5.0,
+        foreground_gpu_percent=0.0,
+        seconds_since_user_input=30.0,
+    )
 
 
 def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monkeypatch) -> None:
@@ -170,3 +187,73 @@ def test_completed_with_errors_notifies_and_emits_error_state(tmp_path: Path) ->
         kind == "state" and payload["state"] == "error"
         for kind, payload in events
     )
+
+
+def test_critical_ram_unloads_models_and_continues_after_recovery(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "001.txt"
+    source.write_text("Nội dung kiểm tra phục hồi RAM.", encoding="utf-8")
+    settings = build_settings()
+    paths, db, settings = create_or_open_project([source], tmp_path / "out", settings, "Test Book")
+    events = []
+    notifier = FakeNotifier()
+    pipeline = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda kind, payload: events.append((kind, payload)),
+    )
+    pipeline.tts = FakeTTS(settings, db)
+    pipeline.notifier = notifier
+    snapshots = iter((resource_snapshot(0.8), resource_snapshot(8.0)))
+    monkeypatch.setattr(pipeline.resources, "snapshot", lambda force=False: next(snapshots))
+    monkeypatch.setattr("ebook_reader.pipeline.time.sleep", lambda _seconds: None)
+
+    decision = pipeline._resource_gate("chapter 1 segment 75", keep_engine="vieneu")
+
+    assert decision.level != ResourceLevel.CRITICAL_STOP
+    assert decision.critical is False
+    assert decision.allow_new_gpu_batch is True
+    assert pipeline.tts.unload_calls == 1
+    assert notifier.critical_calls == []
+    assert db.book()["status"] != "stopped"
+    assert any(
+        kind == "log" and "0.8 → 8.0 GB" in str(payload["text"])
+        for kind, payload in events
+    )
+
+
+def test_critical_ram_stops_only_when_recovery_is_insufficient(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "001.txt"
+    source.write_text("Nội dung kiểm tra RAM vẫn thiếu.", encoding="utf-8")
+    settings = build_settings()
+    paths, db, settings = create_or_open_project([source], tmp_path / "out", settings, "Test Book")
+    notifier = FakeNotifier()
+    pipeline = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    pipeline.tts = FakeTTS(settings, db)
+    pipeline.notifier = notifier
+    snapshots = iter((resource_snapshot(0.8), resource_snapshot(0.7)))
+    monkeypatch.setattr(pipeline.resources, "snapshot", lambda force=False: next(snapshots))
+    monkeypatch.setattr("ebook_reader.pipeline.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(CriticalResourceStop, match="available RAM 0.7 GB"):
+        pipeline._resource_gate("chapter 1 segment 75", keep_engine="vieneu")
+
+    assert pipeline.tts.unload_calls == 1
+    assert db.book()["status"] == "stopped"
+    assert db.book()["stage"] == "critical_stop"
+    assert len(notifier.critical_calls) == 1

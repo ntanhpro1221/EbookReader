@@ -69,6 +69,14 @@ def test_low_noncritical_ram_pauses_and_releases_models(tmp_path: Path) -> None:
     assert decision.unload_idle_models is True
 
 
+def test_only_ram_critical_is_recoverable_by_unloading_models(tmp_path: Path) -> None:
+    manager = AdaptiveResourceManager(build_settings(), tmp_path)
+
+    assert manager.is_ram_only_critical(snapshot(free_ram_gb=0.8)) is True
+    assert manager.is_ram_only_critical(snapshot(free_ram_gb=0.8, disk_free_gb=2.0)) is False
+    assert manager.is_ram_only_critical(snapshot(free_ram_gb=0.8, gpu_temp_c=96)) is False
+
+
 def test_gpu_temperature_uses_resume_hysteresis(tmp_path: Path) -> None:
     manager = AdaptiveResourceManager(build_settings(), tmp_path)
 

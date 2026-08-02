@@ -5,11 +5,14 @@ from pathlib import Path
 from types import ModuleType
 
 import numpy as np
+import pytest
 
 import ebook_reader.tts as tts_module
+from ebook_reader.audio_io import AudioQualityError
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.tts import (
+    TTSCoordinator,
     VieNeuEngine,
     apply_pitch_variant,
     is_fatal_tts_error,
@@ -127,3 +130,60 @@ def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:
     assert shifted.shape == audio.shape
     assert np.allclose(apply_pitch_variant(audio, sample_rate, 0), audio)
     assert not np.allclose(shifted, audio)
+
+
+def test_coordinator_releases_inference_cache_after_success_and_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    profile_id = db.upsert_voice_profile({
+        "voice_key": "narrator",
+        "engine": "vieneu",
+        "preset_name": "Thái Sơn",
+        "description": "Nam · Nam · Kể chuyện",
+        "seed": 1234,
+        "status": "ready",
+    })
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+    row = {
+        "voice_profile_id": profile_id,
+        "stable_id": "segment_1",
+        "text": "Một câu kiểm tra.",
+        "kind": "narration",
+    }
+    release_calls = 0
+
+    def release_cache() -> None:
+        nonlocal release_calls
+        release_calls += 1
+
+    monkeypatch.setattr(coordinator, "release_inference_cache", release_cache)
+    monkeypatch.setattr(coordinator, "generation_seed", lambda _row, _salt="": 1)
+    monkeypatch.setattr(
+        coordinator.vieneu,
+        "generate_one",
+        lambda _row, _profile, _seed: np.asarray([0.1, -0.1], dtype=np.float32),
+    )
+    monkeypatch.setattr(tts_module, "apply_pitch_variant", lambda audio, *_args: audio)
+    monkeypatch.setattr(
+        tts_module,
+        "constrain_special_audio_duration",
+        lambda audio, *_args: (audio, False),
+    )
+    monkeypatch.setattr(
+        tts_module,
+        "atomic_write_wav",
+        lambda *_args, **_kwargs: ("checksum", {"duration": 1.0}),
+    )
+
+    coordinator.synthesize_atomic(row, tmp_path / "segment.wav")
+    assert release_calls == 1
+
+    def fail_generation(*_args) -> np.ndarray:
+        raise AudioQualityError("inference failed")
+
+    monkeypatch.setattr(coordinator.vieneu, "generate_one", fail_generation)
+    with pytest.raises(AudioQualityError, match="inference failed"):
+        coordinator.synthesize_atomic(row, tmp_path / "segment.wav")
+    assert release_calls == 2

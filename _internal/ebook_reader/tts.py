@@ -148,6 +148,11 @@ class VieNeuEngine:
     def unload(self) -> None:
         self.tts = None
         self.voices = []
+        self.release_inference_cache()
+
+    @staticmethod
+    def release_inference_cache() -> None:
+        """Release temporary Python/CUDA allocations after a completed inference unit."""
         gc.collect()
         try:
             import torch
@@ -211,6 +216,9 @@ class TTSCoordinator:
     def unload_all(self) -> None:
         self.vieneu.unload()
 
+    def release_inference_cache(self) -> None:
+        self.vieneu.release_inference_cache()
+
     def unload_idle_models(self, keep_engine: str | None = None) -> None:
         if keep_engine != "vieneu":
             self.vieneu.unload()
@@ -261,35 +269,40 @@ class TTSCoordinator:
         output: Path,
         seed_salt: str = "",
     ) -> tuple[str, dict[str, float], int]:
-        profile = self.db.voice_profile(int(row["voice_profile_id"]))
-        seed = self.generation_seed(row, seed_salt)
-        spoken_row = self._spoken_row(row)
-        audio = self.vieneu.generate_one(spoken_row, profile, seed)
-        audio = apply_pitch_variant(
-            audio,
-            self.vieneu.sample_rate,
-            int(_row_value(profile, "pitch_semitones", 0)),
-        )
-        audio, duration_limited = constrain_special_audio_duration(
-            audio,
-            self.vieneu.sample_rate,
-            str(row["text"]),
-            self.settings,
-            row,
-        )
-        if duration_limited:
-            self.log(
-                f"Hiệu ứng {row['stable_id']} dài quá giới hạn; "
-                "đã giới hạn bằng fade-out thay vì làm lỗi chapter."
+        try:
+            profile = self.db.voice_profile(int(row["voice_profile_id"]))
+            seed = self.generation_seed(row, seed_salt)
+            spoken_row = self._spoken_row(row)
+            audio = self.vieneu.generate_one(spoken_row, profile, seed)
+            audio = apply_pitch_variant(
+                audio,
+                self.vieneu.sample_rate,
+                int(_row_value(profile, "pitch_semitones", 0)),
             )
-        checksum, metrics = atomic_write_wav(
-            output,
-            audio,
-            self.vieneu.sample_rate,
-            str(row["text"]),
-            self.settings,
-            segment=row,
-        )
-        if duration_limited:
-            metrics["effect_duration_limited"] = 1.0
-        return checksum, metrics, seed
+            audio, duration_limited = constrain_special_audio_duration(
+                audio,
+                self.vieneu.sample_rate,
+                str(row["text"]),
+                self.settings,
+                row,
+            )
+            if duration_limited:
+                self.log(
+                    f"Hiệu ứng {row['stable_id']} dài quá giới hạn; "
+                    "đã giới hạn bằng fade-out thay vì làm lỗi chapter."
+                )
+            checksum, metrics = atomic_write_wav(
+                output,
+                audio,
+                self.vieneu.sample_rate,
+                str(row["text"]),
+                self.settings,
+                segment=row,
+            )
+            if duration_limited:
+                metrics["effect_duration_limited"] = 1.0
+            return checksum, metrics, seed
+        finally:
+            # VieNeu's PyTorch backend may retain allocator cache after returning a NumPy waveform.
+            # The WAV is already committed (or the attempt has failed), so this is a safe boundary.
+            self.release_inference_cache()

@@ -50,6 +50,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Mọi kết thúc với `BookStatus.ERROR` phải gửi `finished.ok=false`; nhánh `completed_with_errors` gửi đúng
   một Windows notification nếu policy cho phép, đồng thời giữ nguyên checkpoint/chapter đã commit.
 - Không giữ TTS và Whisper đồng thời trên GPU khi không cần.
+- Sau mỗi attempt VieNeu đã trả waveform hoặc lỗi, phải thu hồi object rác và CUDA allocator cache tại ranh giới an toàn.
+- RAM critical đơn lẻ phải unload model/cache rồi đo cưỡng bức lại; chỉ chuyển book sang `critical_stop` và gửi notification
+  nếu lần đo sau thu hồi vẫn critical. Critical SSD hoặc nhiệt GPU vẫn dừng ngay.
 - Khi foreground pressure xuất hiện: hoàn thành đơn vị inference hiện tại, checkpoint, ngừng cấp việc mới, giảm tải/unload nếu cần.
 - Không kill CUDA giữa kernel chỉ để nhường tài nguyên.
 - Khi resume, settings hash và voice mapping phải giữ nguyên.
