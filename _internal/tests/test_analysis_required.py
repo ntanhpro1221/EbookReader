@@ -1,19 +1,25 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+from itertools import product
 
 import pytest
 
 from ebook_reader.analysis import (
     ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_OUTPUT_MAX_TOKENS,
+    CMUDICT_PATH,
+    NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
+    VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisRequestStopped,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
     _identity_reconciliation_items,
+    _local_name_fallback,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
     _valid_vietnamese_spoken_form,
@@ -258,6 +264,102 @@ def test_bundled_cmudict_identifies_common_english_names() -> None:
     assert "phong" not in pronunciations
 
 
+def test_every_bundled_cmudict_entry_has_a_safe_local_reading() -> None:
+    failures: list[str] = []
+    seen: set[str] = set()
+    with CMUDICT_PATH.open("r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            word, separator, raw_phones = raw_line.partition(" ")
+            if not separator:
+                continue
+            surface = re.sub(r"\(\d+\)$", "", word.strip())
+            key = surface.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            pronunciation = raw_phones.partition("#")[0].strip()
+            try:
+                spoken_form = _cmu_pronunciation_to_vietnamese(surface, pronunciation)
+                assert VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is not None
+                assert all(
+                    NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) is None
+                    for syllable in spoken_form.split("-")
+                )
+            except Exception as exc:  # noqa: BLE001
+                failures.append(f"{surface} {pronunciation}: {exc}")
+
+    assert len(seen) == 126_052
+    assert failures == []
+
+
+def test_hundreds_of_common_english_names_use_the_local_cmu_path() -> None:
+    names = """
+        James Robert Mary Patricia Jennifer Linda Elizabeth David William Richard Joseph Thomas
+        Charles Christopher Daniel Matthew Anthony Donald Mark Paul Steven Andrew Kenneth Joshua
+        Kevin Brian George Edward Ronald Timothy Jason Jeffrey Ryan Jacob Nicholas Eric Stephen
+        Jonathan Larry Justin Scott Brandon Frank Raymond Gregory Samuel Patrick Alexander Jack
+        Dennis Jerry Tyler Aaron Henry Douglas Peter Adam Nathan Zachary Walter Kyle Harold Carl
+        Jeremy Keith Roger Gerald Ethan Arthur Terry Christian Sean Lawrence Austin Joe Noah Jesse
+        Albert Bryan Billy Bruce Willie Jordan Dylan Alan Ralph Gabriel Roy Juan Wayne Eugene Logan
+        Randy Louis Russell Vincent Philip Bobby Johnny Bradley Barbara Susan Jessica Sarah Karen
+        Nancy Lisa Margaret Betty Sandra Ashley Kimberly Emily Donna Michelle Carol Amanda Melissa
+        Deborah Stephanie Rebecca Sharon Laura Cynthia Kathleen Amy Shirley Angela Helen Anna Brenda
+        Pamela Nicole Samantha Katherine Emma Ruth Christine Catherine Debra Rachel Carolyn Janet
+        Virginia Maria Heather Diane Julie Joyce Victoria Kelly Christina Joan Evelyn Lauren Judith
+        Megan Cheryl Andrea Hannah Jacqueline Martha Gloria Teresa Ann Sara Madison Frances Kathryn
+        Janice Jean Abigail Alice Julia Judy Grace Denise Amber Marilyn Beverly Danielle Theresa
+        Sophia Marie Diana Brittany Natalie Isabella Charlotte Rose Alexis Kayla Olivia Audrey
+        Claire Vanessa Benjamin Michael Gary Joel John Murphy Alisa Tracy Simon Evans Lucien
+    """.split()
+
+    pronunciations = _cmu_pronunciations(names)
+
+    assert len(names) == 207
+    assert set(pronunciations) == {name.casefold() for name in names}
+    for name in names:
+        spoken_form = _cmu_pronunciation_to_vietnamese(
+            name,
+            pronunciations[name.casefold()],
+        )
+        assert VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is not None
+
+
+def test_thousands_of_generated_fantasy_names_have_safe_fallbacks() -> None:
+    prefixes = (
+        "Ael", "Aer", "Astra", "Bel", "Cael", "Cor", "Dra", "Eld", "Fael", "Gal",
+        "Ith", "Kael", "Lor", "Mor", "Nyth", "Or", "Quel", "Rhae", "Syl", "Thael",
+        "Ul", "Vael", "Wyr", "Xy", "Yl", "Zyr",
+    )
+    suffixes = (
+        "a", "adon", "ael", "aris", "dred", "dris", "en", "eria", "eth", "ian",
+        "ion", "is", "ith", "oria", "os", "riel", "ron", "thas", "wen", "wyn",
+    )
+    middles = ("", "l", "m", "n", "r")
+
+    for prefix in prefixes:
+        for middle in middles:
+            for suffix in suffixes:
+                surface = prefix + middle + suffix
+                spoken_form = _local_name_fallback(surface)
+                assert VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is not None
+                assert all(
+                    NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) is None
+                    for syllable in spoken_form.split("-")
+                )
+
+
+def test_every_short_latin_letter_combination_has_a_safe_fallback() -> None:
+    alphabet = "abcdefghijklmnopqrstuvwxyz"
+    for length in range(1, 4):
+        for letters in product(alphabet, repeat=length):
+            spoken_form = _local_name_fallback("".join(letters).title())
+            assert VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is not None
+            assert all(
+                NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) is None
+                for syllable in spoken_form.split("-")
+            )
+
+
 @pytest.mark.parametrize(
     ("surface", "pronunciation", "expected"),
     [
@@ -413,7 +515,7 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
     assert db.pronunciations[0]["source"] == "english_name_transliteration_case_sensitive"
 
 
-def test_cmu_names_are_checkpointed_when_a_fantasy_name_exhausts_targeted_retries(
+def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
     monkeypatch,
 ) -> None:
     db = FakeDB()
@@ -451,11 +553,55 @@ def test_cmu_names_are_checkpointed_when_a_fantasy_name_exhausts_targeted_retrie
 
     monkeypatch.setattr(analyzer, "_stream_json_response", response)
 
-    with pytest.raises(RuntimeError, match="Xen"):
-        analyzer.reconcile_name_pronunciations()
+    assert analyzer.reconcile_name_pronunciations() == 2
 
     assert requested_ids == [["N001"], ["N001"], ["N001"]]
-    assert {row["surface"] for row in db.pronunciations} == {"Gary"}
+    assert {
+        row["surface"]: row["spoken_form"]
+        for row in db.pronunciations
+    } == {"Gary": "Ga-ri", "Xen": "Xên"}
+    assert any(event[1] == "NAME_PRONUNCIATION_LOCAL_FALLBACK" for event in db.events)
+
+
+def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Xen gặp Zytherion và Vaelorian.",
+            "kind_hint": "dialogue",
+            "status": "analyzed",
+            "speaker": "Xen",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    attempts = 0
+
+    def response(_request, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("Qwen response intentionally failed")
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    assert analyzer.reconcile_name_pronunciations() == 3
+    assert attempts == 3
+    assert {
+        row["surface"]: row["spoken_form"]
+        for row in db.pronunciations
+    } == {
+        "Vaelorian": "Ve-lô-rian",
+        "Xen": "Xên",
+        "Zytherion": "Di-thê-riôn",
+    }
+    fallback_event = next(
+        event for event in db.events if event[1] == "NAME_PRONUNCIATION_LOCAL_FALLBACK"
+    )
+    assert "Qwen response intentionally failed" in fallback_event[2]
 
 
 def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:

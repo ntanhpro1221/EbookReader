@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
         self.stop_event: Any = None
         self.received_finished = False
         self.was_user_stop = False
+        self._worker_error_shown = False
         self._force_quit = False
         self._tray_message_shown = False
         self._applying_locked_settings = False
@@ -802,6 +803,7 @@ class MainWindow(QMainWindow):
             self.stop_event = ctx.Event()
             self.received_finished = False
             self.was_user_stop = False
+            self._worker_error_shown = False
             self.process = ctx.Process(
                 target=run_worker,
                 args=(
@@ -1122,12 +1124,14 @@ class MainWindow(QMainWindow):
                     self._append_log(f"Có thể nghe ngay: {message.get('path')}")
                 elif kind == "finished":
                     self.received_finished = True
-                    self._append_log(str(message.get("text", "")))
+                    finished_text = str(message.get("text", ""))
+                    self._append_log(finished_text)
                     self._running_controls(False)
                     if message.get("stopped"):
                         self._show_progress("Đã dừng", 0, 100)
                     elif not message.get("ok", False):
                         self._show_progress("Đã dừng vì lỗi", 0, 100)
+                        self._show_worker_error(finished_text)
         self._refresh_chapters()
         if self.process and not self.process.is_alive():
             exitcode = self.process.exitcode
@@ -1148,9 +1152,25 @@ class MainWindow(QMainWindow):
                     self.notifier.critical_stop(
                         title, f"Worker thoát bất ngờ, exit code {exitcode}", root
                     )
-                self._append_log(f"Worker thoát bất ngờ, exit code {exitcode}. Lần sau recovery sẽ kiểm tra checkpoint.")
+                failure = (
+                    f"Worker thoát bất ngờ, exit code {exitcode}. "
+                    "Lần sau recovery sẽ kiểm tra checkpoint."
+                )
+                self._append_log(failure)
+                self._show_worker_error(failure)
             self._running_controls(False)
             self._dispose_ipc()
+
+    def _show_worker_error(self, reason: str) -> None:
+        if self._worker_error_shown:
+            return
+        self._worker_error_shown = True
+        self._show_from_tray()
+        QMessageBox.critical(
+            self,
+            "Ebook Reader đã dừng vì lỗi",
+            f"{reason}\n\nCác checkpoint đã hoàn tất vẫn được giữ nguyên.",
+        )
 
     def _open_selected_mp3(self) -> None:
         row = self.chapter_table.currentRow()

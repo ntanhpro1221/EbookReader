@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from queue import Queue
 from uuid import uuid4
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -363,6 +364,43 @@ def test_gui_log_prefixes_each_line_with_a_timestamp(tmp_path: Path) -> None:
     lines = window.log.toPlainText().splitlines()
     assert len(lines) == 2
     assert all(re.fullmatch(r"\[\d{2}:\d{2}:\d{2}\] Dòng (một|hai)", line) for line in lines)
+    window.close()
+
+
+def test_finished_worker_error_restores_window_and_opens_modal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _app, window, _store = _window(tmp_path)
+    window.message_queue = Queue()
+    window.message_queue.put(
+        {
+            "kind": "finished",
+            "ok": False,
+            "critical": True,
+            "text": "Chuẩn hóa tên thất bại.",
+        }
+    )
+    restored: list[bool] = []
+    dialogs: list[tuple[str, str]] = []
+    monkeypatch.setattr(window, "_show_from_tray", lambda: restored.append(True))
+    monkeypatch.setattr(
+        "ebook_reader.gui.QMessageBox.critical",
+        lambda _parent, title, text: dialogs.append((title, text)),
+    )
+
+    window._poll()
+
+    assert restored == [True]
+    assert dialogs == [
+        (
+            "Ebook Reader đã dừng vì lỗi",
+            "Chuẩn hóa tên thất bại.\n\nCác checkpoint đã hoàn tất vẫn được giữ nguyên.",
+        )
+    ]
+    assert window.received_finished is True
+    assert "Chuẩn hóa tên thất bại." in window.log.toPlainText()
+    window.message_queue = None
     window.close()
 
 

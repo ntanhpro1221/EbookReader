@@ -50,6 +50,7 @@ NAME_PRONUNCIATION_ID_PREFIX = "N"
 NAME_PRONUNCIATION_ID_WIDTH = 3
 AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE = 0.85
 CMUDICT_TRANSLITERATION_CONFIDENCE = 0.98
+LOCAL_NAME_FALLBACK_CONFIDENCE = 0.88
 IDENTITY_CONTEXT_RADIUS = 1
 IDENTITY_CONTEXTS_PER_SPEAKER = 4
 IDENTITY_CONTEXT_LINE_CHARS = 220
@@ -72,12 +73,13 @@ NON_VIETNAMESE_SYLLABLE_CODA_PATTERN = re.compile(r"[fjlrsvwz]$", re.IGNORECASE)
 NAME_CANDIDATE_EXCLUSIONS = {
     "a", "ai", "an", "anh", "ba", "ban", "binh", "book", "cha", "chapter", "chau", "chi",
     "chu", "co", "con", "cung", "dao", "day", "dinh", "do", "dong", "duc", "giang", "ha", "hai",
-    "haiz", "hieu", "ho", "hoa", "hoang", "huhu", "huy", "khi", "khong", "khung", "lan", "linh",
+    "haiz", "hieu", "hm", "hmm", "hmmm", "ho", "hoa", "hoang", "huhu", "huy", "khi",
+    "khong", "khung", "lan", "linh",
     "long", "luc", "mai", "mau", "minh", "mot", "muoi", "nam", "narrator", "nga", "ngay", "nguoi",
     "nhung", "no", "npc", "ong", "phong", "phuc", "quan", "quang", "sau", "son", "ta", "thanh",
     "thao", "the", "thi", "thu", "tia", "tieng", "tim", "tinh", "toi", "trang", "trinh", "trong",
     "trung", "truoc", "tuan", "tuy", "unknown", "va", "vai", "van", "vi", "viet", "vinh", "voi",
-    "he", "her", "him",
+    "he", "her", "him", "mm", "sh", "shh",
     "his", "lady", "lord", "miss", "mister", "mr", "mrs", "she", "sir", "their", "they",
 }
 CMUDICT_CONTEXT_ONLY = {"may"}
@@ -173,6 +175,111 @@ ARPABET_CODAS = {
     "NG": "ng",
     "P": "p",
     "T": "t",
+}
+LATIN_NAME_VOWELS = frozenset("aeiouy")
+LATIN_NAME_VOWEL_READINGS = {
+    "a": "a",
+    "aa": "a",
+    "ae": "e",
+    "ai": "ai",
+    "au": "ao",
+    "aw": "ao",
+    "ay": "ây",
+    "e": "ê",
+    "ea": "i",
+    "ee": "i",
+    "ei": "ây",
+    "eu": "iu",
+    "ew": "iu",
+    "ey": "ây",
+    "i": "i",
+    "ie": "i",
+    "io": "iô",
+    "o": "ô",
+    "oa": "ô",
+    "oe": "ô",
+    "oi": "oi",
+    "oo": "u",
+    "ou": "ao",
+    "ow": "ao",
+    "oy": "oi",
+    "u": "u",
+    "ue": "u",
+    "ui": "ui",
+    "y": "i",
+}
+LATIN_NAME_ONSET_READINGS = {
+    "ch": "ch",
+    "ck": "c",
+    "gn": "n",
+    "kn": "n",
+    "ph": "ph",
+    "qu": "qu",
+    "rh": "r",
+    "sch": "x",
+    "sh": "s",
+    "tch": "ch",
+    "th": "th",
+    "wh": "u",
+    "wr": "r",
+}
+LATIN_NAME_CONSONANT_READINGS = {
+    "b": "b",
+    "c": "c",
+    "d": "đ",
+    "f": "ph",
+    "g": "g",
+    "h": "h",
+    "j": "gi",
+    "k": "c",
+    "l": "l",
+    "m": "m",
+    "n": "n",
+    "p": "p",
+    "q": "c",
+    "r": "r",
+    "s": "x",
+    "t": "t",
+    "v": "v",
+    "w": "u",
+    "x": "x",
+    "z": "d",
+}
+LATIN_LETTER_NAMES = {
+    "a": "a",
+    "b": "bê",
+    "c": "xê",
+    "d": "đê",
+    "e": "e",
+    "f": "ép",
+    "g": "giê",
+    "h": "hát",
+    "i": "i",
+    "j": "giây",
+    "k": "ca",
+    "l": "e-lờ",
+    "m": "em",
+    "n": "en",
+    "o": "ô",
+    "p": "pê",
+    "q": "quy",
+    "r": "a-rờ",
+    "s": "ét",
+    "t": "tê",
+    "u": "u",
+    "v": "vê",
+    "w": "đắp-liu",
+    "x": "ích",
+    "y": "oai",
+    "z": "dét",
+}
+VOWELLESS_NAME_READINGS = {
+    "hm": "Hừm",
+    "hmm": "Hừm",
+    "hmmm": "Hừm",
+    "mm": "Ừm",
+    "sh": "Suỵt",
+    "shh": "Suỵt",
 }
 
 
@@ -691,6 +798,138 @@ def _arpabet_coda_reading(
     return next((ARPABET_CODAS[phone] for phone in coda if phone in ARPABET_CODAS), "")
 
 
+def _latin_name_vowel_groups(value: str) -> list[tuple[int, int]]:
+    groups: list[tuple[int, int]] = []
+    index = 0
+    while index < len(value):
+        if value[index] not in LATIN_NAME_VOWELS:
+            index += 1
+            continue
+        start = index
+        index += 1
+        while index < len(value) and value[index] in LATIN_NAME_VOWELS:
+            index += 1
+        groups.append((start, index))
+    return groups
+
+
+def _latin_name_syllables(value: str) -> list[tuple[str, str, str]]:
+    vowel_groups = _latin_name_vowel_groups(value)
+    if not vowel_groups:
+        return []
+    syllables: list[tuple[str, str, str]] = []
+    onset_start = 0
+    coda_candidates = ("ng", "ch", "n", "m", "p", "t", "c", "k")
+    for group_index, (vowel_start, vowel_end) in enumerate(vowel_groups):
+        onset = value[onset_start:vowel_start]
+        if group_index + 1 >= len(vowel_groups):
+            coda = value[vowel_end:]
+            next_onset_start = len(value)
+        else:
+            next_vowel_start = vowel_groups[group_index + 1][0]
+            between = value[vowel_end:next_vowel_start]
+            if any(between.startswith(onset) for onset in LATIN_NAME_ONSET_READINGS):
+                coda = ""
+            else:
+                coda = next(
+                    (
+                        candidate
+                        for candidate in coda_candidates
+                        if between.startswith(candidate) and len(between) > len(candidate)
+                    ),
+                    "",
+                )
+            next_onset_start = vowel_end + len(coda)
+        syllables.append((onset, value[vowel_start:vowel_end], coda))
+        onset_start = next_onset_start
+    return syllables
+
+
+def _latin_name_onset_reading(onset: str, vowel: str) -> str:
+    collapsed = re.sub(r"(.)\1+", r"\1", onset.casefold())
+    reading = LATIN_NAME_ONSET_READINGS.get(collapsed)
+    if reading is None:
+        reading = "".join(
+            LATIN_NAME_CONSONANT_READINGS.get(character, "")
+            for character in collapsed
+        )
+    if reading == "c" and vowel[:1] in {"e", "i", "y"}:
+        return "k"
+    if reading == "g" and vowel[:1] in {"e", "i", "y"}:
+        return "gh"
+    return reading
+
+
+def _latin_name_vowel_reading(vowel: str) -> str:
+    key = vowel.casefold()
+    return LATIN_NAME_VOWEL_READINGS.get(
+        key,
+        "".join(LATIN_NAME_VOWEL_READINGS.get(character, character) for character in key),
+    )
+
+
+def _latin_name_coda_reading(coda: str) -> str:
+    key = coda.casefold()
+    if key.startswith("ng"):
+        return "ng"
+    if key.startswith("ch"):
+        return "ch"
+    if not key:
+        return ""
+    return {
+        "c": "c",
+        "f": "p",
+        "g": "c",
+        "k": "c",
+        "l": "n",
+        "m": "m",
+        "n": "n",
+        "p": "p",
+        "q": "c",
+        "r": "n",
+        "s": "t",
+        "t": "t",
+        "v": "p",
+        "w": "u",
+        "x": "c",
+        "z": "t",
+    }.get(key[0], "")
+
+
+def _vowelless_name_reading(value: str) -> str:
+    override = VOWELLESS_NAME_READINGS.get(value.casefold())
+    if override is not None:
+        return override
+    parts = [LATIN_LETTER_NAMES[character] for character in value.casefold() if character.isalpha()]
+    return "-".join(parts)
+
+
+def _local_name_fallback(surface: str) -> str:
+    """Produce a safe Vietnamese-readable form for any Latin name accepted by the scanner."""
+    rendered: list[str] = []
+    for part in re.findall(r"[A-Za-z]+", surface):
+        syllables = _latin_name_syllables(part.casefold())
+        if not syllables:
+            rendered.append(_vowelless_name_reading(part))
+            continue
+        rendered.extend(
+            _latin_name_onset_reading(onset, vowel)
+            + _latin_name_vowel_reading(vowel)
+            + _latin_name_coda_reading(coda)
+            for onset, vowel, coda in syllables
+        )
+    spoken_form = "-".join(part for part in rendered if part)
+    if not spoken_form:
+        raise ValueError(f"Tên không chứa ký tự Latin có thể đọc: {surface!r}")
+    spoken_form = spoken_form[0].upper() + spoken_form[1:]
+    if VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is None:
+        raise ValueError(f"Fallback cục bộ tạo cách đọc không hợp lệ: {surface!r} → {spoken_form!r}")
+    syllables = spoken_form.split("-")
+    if any(NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) for syllable in syllables):
+        raise ValueError(f"Fallback cục bộ tạo âm cuối không hợp lệ: {surface!r} → {spoken_form!r}")
+    return spoken_form
+
+
 def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
     """Convert CMU ARPAbet locally so known English names never depend on an LLM retry."""
     phones = _arpabet_phones(pronunciation)
@@ -710,7 +949,7 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
         )
     spoken_form = "-".join(part for part in rendered if part)
     if not spoken_form:
-        raise ValueError(f"CMU pronunciation has no readable vowel for {surface!r}: {pronunciation!r}")
+        return _local_name_fallback(surface)
     spoken_form = spoken_form[0].upper() + spoken_form[1:]
     if VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is None:
         raise ValueError(
@@ -1499,13 +1738,31 @@ class OllamaBookAnalyzer:
 
             if pending:
                 remaining = [str(candidate["surface"]) for candidate in pending.values()]
+                fallback_readings: dict[str, str] = {}
+                for candidate in pending.values():
+                    surface = str(candidate["surface"])
+                    spoken_form = _local_name_fallback(surface)
+                    checkpoint_pronunciation(
+                        candidate,
+                        spoken_form,
+                        LOCAL_NAME_FALLBACK_CONFIDENCE,
+                    )
+                    fallback_readings[surface] = spoken_form
                 message = (
-                    f"Chuẩn hóa cách đọc tên thất bại ở batch {batch_index}, "
-                    f"còn lỗi {remaining}: {last_error}"
+                    f"Qwen không tạo được cách đọc hợp lệ ở batch {batch_index} cho {remaining}: "
+                    f"{last_error}. Đã xử lý tận gốc bằng bộ chuyển cục bộ: {fallback_readings}."
                 )
-                self.db.event("error", "NAME_PRONUNCIATION_FAILED", message)
-                if self.settings.get("enabled", True) and self.settings.get("required", True):
-                    raise RuntimeError(message)
+                self.log(message)
+                self.db.event(
+                    "warning",
+                    "NAME_PRONUNCIATION_LOCAL_FALLBACK",
+                    message,
+                    {
+                        "batch_index": batch_index,
+                        "last_error": last_error,
+                        "fallback_readings": fallback_readings,
+                    },
+                )
 
         self.log(
             f"Đã khóa cách đọc thuần Việt cho {converted_count}/{len(candidates)} "

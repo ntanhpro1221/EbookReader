@@ -332,14 +332,14 @@ def run_worker(
             db.event("critical", "UNRECOVERABLE_PIPELINE_ERROR", str(exc), {"traceback": details[-12000:]})
         except Exception:
             pass
+        _emit(message_queue, "log", {"text": details})
+        _emit(message_queue, "finished", {"ok": False, "critical": True, "text": str(exc)})
         if settings is None or settings.get("safety", {}).get("notify_on_critical_stop", True):
             try:
                 title = str(db.book()["title"]) if db is not None else "Audiobook"
                 notifier.critical_stop(title, str(exc), paths.root)
             except Exception:
                 pass
-        _emit(message_queue, "log", {"text": details})
-        _emit(message_queue, "finished", {"ok": False, "critical": True, "text": str(exc)})
     finally:
         local_stop.set()
         if db is not None:
