@@ -6,7 +6,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QColor, QCloseEvent, QPalette
 from PySide6.QtWidgets import QAbstractItemView, QApplication, QLabel
 
 from e_book_reader.config import build_settings
@@ -38,6 +38,22 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert not hasattr(window, "stop_now_button")
     assert not hasattr(window, "pause_battery")
     assert not hasattr(window, "resource_label")
+    window.close()
+
+
+def test_item_views_use_subtle_alternating_rows_and_text_selection_blue(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+
+    for view in (window.file_list, window.chapter_table):
+        palette = view.palette()
+        base = palette.color(QPalette.ColorRole.Base)
+        alternate = palette.color(QPalette.ColorRole.AlternateBase)
+        highlight = palette.color(QPalette.ColorRole.Highlight)
+        assert base != alternate
+        assert abs(base.lightness() - alternate.lightness()) <= 12
+        assert highlight == QColor("#0078D4")
+    assert "QPushButton:disabled" in window.centralWidget().styleSheet()
+    assert "background-color: palette(dark)" in window.centralWidget().styleSheet()
     window.close()
 
 
@@ -133,4 +149,17 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.title_edit.text() == "Book gần đây"
     assert window.file_list.count() == 1
     assert window.start_button.text() == "Tiếp tục"
+    assert window.add_files_button.isEnabled() is True
+    assert window.add_folder_button.isEnabled() is True
+    assert window.profile_combo.isEnabled() is False
+    assert window.settings_box.title() == "Thiết lập đã khóa của project"
+
+    replacement = tmp_path / "002.txt"
+    replacement.write_text("Nội dung của book mới.", encoding="utf-8")
+    window._merge_input_files([replacement])
+
+    assert window.project_paths is None
+    assert window.files == [replacement.resolve()]
+    assert window.profile_combo.isEnabled() is True
+    assert window.settings_box.title() == "Thiết lập cho book mới"
     window.close()

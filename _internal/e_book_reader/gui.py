@@ -9,7 +9,7 @@ from queue import Empty
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QCloseEvent, QDesktopServices
+from PySide6.QtGui import QColor, QCloseEvent, QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -48,6 +48,7 @@ from .worker import run_worker
 
 
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
+TEXT_SELECTION_COLOR = "#0078D4"
 
 
 CHAPTER_STATUS_LABELS = {
@@ -99,6 +100,8 @@ class MainWindow(QMainWindow):
             "QGroupBox { font-weight: 600; margin-top: 8px; padding-top: 10px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
             "QPushButton { min-height: 28px; padding: 2px 10px; }"
+            "QPushButton:disabled { color: palette(mid); background-color: palette(dark); "
+            "border: 1px solid palette(mid); }"
             "QLineEdit, QComboBox, QSpinBox { min-height: 27px; }"
         )
         book_box = QGroupBox("Book")
@@ -143,11 +146,12 @@ class MainWindow(QMainWindow):
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.file_list.setAlternatingRowColors(True)
+        self._apply_item_view_palette(self.file_list)
         files_layout.addWidget(self.file_list)
         self.source_splitter.addWidget(files_box)
 
-        settings_box = QGroupBox("Thiết lập cho book mới")
-        form = QFormLayout(settings_box)
+        self.settings_box = QGroupBox("Thiết lập cho book mới")
+        form = QFormLayout(self.settings_box)
         self.profile_combo = QComboBox()
         self.profile_combo.addItem("Cân bằng", "balanced")
         self.profile_combo.addItem("Nhanh", "fast")
@@ -172,11 +176,11 @@ class MainWindow(QMainWindow):
         form.addRow("Ngưỡng GPU nóng:", self.max_temp)
         form.addRow(self.keep_wav)
         form.addRow(self.full_book)
-        note = QLabel("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
-        note.setWordWrap(True)
-        note.setStyleSheet("color:#666")
-        form.addRow(note)
-        self.source_splitter.addWidget(settings_box)
+        self.settings_note = QLabel("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
+        self.settings_note.setWordWrap(True)
+        self.settings_note.setStyleSheet("color:#777")
+        form.addRow(self.settings_note)
+        self.source_splitter.addWidget(self.settings_box)
         self.source_splitter.setSizes([650, 520])
         self.main_splitter.addWidget(self.source_splitter)
 
@@ -203,6 +207,7 @@ class MainWindow(QMainWindow):
         self.chapter_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.chapter_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.chapter_table.setAlternatingRowColors(True)
+        self._apply_item_view_palette(self.chapter_table)
         header = self.chapter_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -243,6 +248,16 @@ class MainWindow(QMainWindow):
         controls.addStretch(1)
         controls.addWidget(self.open_folder_button)
         layout.addLayout(controls)
+
+    @staticmethod
+    def _apply_item_view_palette(view: QAbstractItemView) -> None:
+        palette = view.palette()
+        base = palette.color(QPalette.ColorRole.Base)
+        alternate = base.lighter(106) if base.lightness() < 128 else base.darker(103)
+        palette.setColor(QPalette.ColorRole.AlternateBase, alternate)
+        palette.setColor(QPalette.ColorRole.Highlight, QColor(TEXT_SELECTION_COLOR))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(Qt.GlobalColor.white))
+        view.setPalette(palette)
 
     def _restore_ui(self, *, restore_recent: bool) -> None:
         self.output_edit.setText(self.settings_store.value("output", str(Path.home() / "Audiobooks"), str))
@@ -314,17 +329,29 @@ class MainWindow(QMainWindow):
         self.progress.setFormat("%v/%m — %p%")
 
     def _set_project_selected(self, selected: bool) -> None:
+        running = bool(self.process and self.process.is_alive())
         self.title_edit.setReadOnly(selected)
         self.output_edit.setReadOnly(selected)
-        self.choose_output_button.setEnabled(not selected)
-        self.add_files_button.setEnabled(not selected)
-        self.add_folder_button.setEnabled(not selected)
-        self.remove_files_button.setEnabled(not selected)
-        self.profile_combo.setEnabled(not selected)
-        self.resource_combo.setEnabled(not selected)
-        self.max_temp.setEnabled(not selected)
-        self.full_book.setEnabled(not selected)
+        self.choose_output_button.setEnabled(not selected and not running)
+        self.add_files_button.setEnabled(not running)
+        self.add_folder_button.setEnabled(not running)
+        self.remove_files_button.setEnabled(not selected and not running)
+        self.new_book_button.setEnabled(not running)
+        self.open_project_button.setEnabled(not running)
+        self.profile_combo.setEnabled(not selected and not running)
+        self.resource_combo.setEnabled(not selected and not running)
+        self.max_temp.setEnabled(not selected and not running)
+        self.full_book.setEnabled(not selected and not running)
         self.open_folder_button.setEnabled(selected)
+        if selected:
+            self.settings_box.setTitle("Thiết lập đã khóa của project")
+            self.settings_note.setText(
+                "Project đã bắt đầu nên thiết lập được giữ nguyên khi Tiếp tục. "
+                "Chọn Book mới, nhiều TXT hoặc thư mục để tạo book với thiết lập khác."
+            )
+        else:
+            self.settings_box.setTitle("Thiết lập cho book mới")
+            self.settings_note.setText("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
         self._update_start_button()
 
     def _update_start_button(self) -> None:
@@ -459,9 +486,7 @@ class MainWindow(QMainWindow):
                 daemon=False,
             )
             self.process.start()
-            self.start_button.setEnabled(False)
-            self.pause_button.setEnabled(True)
-            self.stop_button.setEnabled(True)
+            self._running_controls(True)
             self._append_log("Worker đã bắt đầu. Mọi phần hoàn tất đều được lưu để có thể tiếp tục an toàn.")
             self._refresh_chapters()
         except Exception as exc:  # noqa: BLE001
@@ -490,6 +515,7 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(not running)
         self.pause_button.setEnabled(running)
         self.stop_button.setEnabled(running)
+        self._set_project_selected(self.project_paths is not None)
         if not running:
             self.pause_button.setText("Tạm dừng")
             self._update_start_button()
