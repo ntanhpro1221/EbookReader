@@ -559,6 +559,14 @@ class MainWindow(QMainWindow):
         self.narrator_gender_combo.setEnabled(book_settings_editable)
         self.narrator_region_combo.setEnabled(book_settings_editable)
         self.narrator_voice_combo.setEnabled(book_settings_editable)
+        self.voice_tools_layout.setRowVisible(
+            self.narrator_gender_combo,
+            book_settings_editable,
+        )
+        self.voice_tools_layout.setRowVisible(
+            self.narrator_region_combo,
+            book_settings_editable,
+        )
         self.preview_button.setEnabled(bool(self.narrator_voice_combo.currentData()))
         self.voice_foldout_button.setEnabled(True)
         self.resource_combo.setEnabled(True)

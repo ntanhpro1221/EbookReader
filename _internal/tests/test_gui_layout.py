@@ -109,6 +109,9 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.voice_tools_layout.labelForField(window.narrator_gender_combo) is window.voice_gender_label
     assert window.voice_tools_layout.labelForField(window.narrator_region_combo) is window.voice_region_label
     assert window.voice_tools_layout.labelForField(window.preview_button) is window.voice_preview_label
+    assert window.voice_tools_layout.isRowVisible(window.narrator_gender_combo) is True
+    assert window.voice_tools_layout.isRowVisible(window.narrator_region_combo) is True
+    assert window.voice_tools_layout.isRowVisible(window.preview_button) is True
     assert window.voice_gender_label.text() == "Giới tính:"
     assert window.voice_region_label.text() == "Miền:"
     assert window.voice_preview_label.text() == "Nghe thử:"
@@ -522,6 +525,9 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.narrator_gender_combo.isEnabled() is False
     assert window.narrator_region_combo.isEnabled() is False
     assert window.narrator_voice_combo.isEnabled() is False
+    assert window.voice_tools_layout.isRowVisible(window.narrator_gender_combo) is False
+    assert window.voice_tools_layout.isRowVisible(window.narrator_region_combo) is False
+    assert window.voice_tools_layout.isRowVisible(window.preview_button) is True
     assert window.resource_combo.isEnabled() is True
     assert window.max_temp.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"

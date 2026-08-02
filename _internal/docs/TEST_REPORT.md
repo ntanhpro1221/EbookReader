@@ -57,7 +57,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - dropdown kể chuyện chỉ hiện tên của đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
   preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; label `Giọng kể chuyện` là header foldout có
   chevron style dropdown ở đầu, bên dưới là ba dòng con thụt khoảng bốn ký tự và có label riêng cho giới tính, miền và nghe thử;
-  Thái Sơn và Ngọc Linh đứng đầu danh sách;
+  Thái Sơn và Ngọc Linh đứng đầu danh sách; hai dòng filter ẩn khi narrator bị khóa nhưng preview vẫn hiện;
 - thay đổi narrator trực tiếp tự phát preview, nút preview phát lại; 10 WAV không phải tin tức được đóng gói
   bằng package-data và mapping preset nào cũng phải trỏ tới file tồn tại;
 - profile chất lượng và narrator được khóa theo sách; resource mode và ngưỡng GPU là global, không detach
