@@ -49,9 +49,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Mỗi project chỉ cho phép một worker; settings trong SQLite và source hash được kiểm tra lại khi resume.
 - Byte TXT dùng để segment phải khớp đúng hash đã khóa; source đổi ngay trong lúc đọc cũng làm job dừng.
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.
-- Nút **Dừng** chờ tác vụ inference hiện tại kết thúc rồi dừng ở ranh giới an toàn; ứng dụng không còn
-  cung cấp nút kill worker trực tiếp trên giao diện.
-- Khi dừng cưỡng bức, app kết thúc cả cây process con (FFmpeg/Ollama helper) để tránh tiến trình mồ côi.
+- Giao diện chỉ có một nút **Dừng**; worker kết thúc ở ranh giới gần nhất và lần sau có thể tiếp tục.
+- Đóng cửa sổ kết thúc worker ngay. App kết thúc cả cây process con (FFmpeg/Ollama helper) để tránh tiến
+  trình mồ côi; transaction SQLite, file `.part`, atomic replace và recovery bảo vệ dữ liệu đã commit.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
 - Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,
   quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.

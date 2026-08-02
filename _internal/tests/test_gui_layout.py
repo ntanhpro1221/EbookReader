@@ -6,7 +6,8 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtWidgets import QAbstractItemView, QApplication
+from PySide6.QtGui import QCloseEvent
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QLabel
 
 from e_book_reader.config import build_settings
 from e_book_reader.gui import MainWindow
@@ -21,9 +22,11 @@ def _window(tmp_path: Path) -> tuple[QApplication, MainWindow, QSettings]:
     return app, window, store
 
 
-def test_gui_has_multi_file_selection_nested_splitters_and_one_safe_stop(tmp_path: Path) -> None:
+def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) -> None:
     _app, window, _store = _window(tmp_path)
 
+    assert window.start_button.text() == "Bắt đầu"
+    assert "E Book Reader" not in {label.text() for label in window.findChildren(QLabel)}
     assert window.file_list.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
     assert window.main_splitter.orientation() == Qt.Orientation.Vertical
     assert window.source_splitter.orientation() == Qt.Orientation.Horizontal
@@ -36,6 +39,44 @@ def test_gui_has_multi_file_selection_nested_splitters_and_one_safe_stop(tmp_pat
     assert not hasattr(window, "pause_battery")
     assert not hasattr(window, "resource_label")
     window.close()
+
+
+def test_close_terminates_worker_without_waiting_for_checkpoint(tmp_path: Path, monkeypatch) -> None:
+    _app, window, _store = _window(tmp_path)
+    calls: list[tuple[int, float]] = []
+
+    class FakeProcess:
+        pid = 12345
+
+        @staticmethod
+        def is_alive() -> bool:
+            return True
+
+        @staticmethod
+        def join(timeout: float) -> None:
+            assert timeout > 0
+
+    class FakeEvent:
+        was_set = False
+
+        def set(self) -> None:
+            self.was_set = True
+
+    stop_event = FakeEvent()
+    window.process = FakeProcess()
+    window.stop_event = stop_event
+    monkeypatch.setattr(
+        "e_book_reader.gui.terminate_process_tree",
+        lambda pid, *, grace_seconds: calls.append((pid, grace_seconds)),
+    )
+    event = QCloseEvent()
+
+    window.closeEvent(event)
+
+    assert event.isAccepted()
+    assert stop_event.was_set is True
+    assert calls == [(FakeProcess.pid, 0.5)]
+    assert window.process is None
 
 
 def test_remove_files_removes_every_selected_row(tmp_path: Path) -> None:
@@ -91,4 +132,5 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.project_paths.root == paths.root
     assert window.title_edit.text() == "Book gần đây"
     assert window.file_list.count() == 1
+    assert window.start_button.text() == "Tiếp tục"
     window.close()

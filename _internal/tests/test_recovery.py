@@ -64,6 +64,39 @@ def test_recovery_preserves_valid_committed_wav_and_removes_part(tmp_path: Path)
     assert not part.exists()
 
 
+def test_recovery_resets_segment_killed_during_atomic_wav_write(tmp_path: Path) -> None:
+    paths, settings, db, row = setup_db(tmp_path)
+    db.mark_generating(int(row["id"]), seed=1234)
+    part = paths.chunks / "chapter_00001" / "0000000.part.wav"
+    part.parent.mkdir(parents=True, exist_ok=True)
+    part.write_bytes(b"incomplete wav")
+
+    report = recover_project(paths, db, settings)
+
+    fresh = db.list_segments()[0]
+    assert report.reset_in_progress == 1
+    assert fresh["status"] == "pending"
+    assert fresh["wav_path"] is None
+    assert fresh["wav_sha256"] is None
+    assert not part.exists()
+
+
+def test_recovery_does_not_trust_wav_replaced_before_sqlite_commit(tmp_path: Path) -> None:
+    paths, settings, db, row = setup_db(tmp_path)
+    wav = paths.chunks / "chapter_00001" / "0000000.wav"
+    audio = np.sin(np.linspace(0, 30, 48000, dtype=np.float32)) * 0.1
+    db.mark_generating(int(row["id"]), seed=5678)
+    atomic_write_wav(wav, audio, 48000, row["text"], settings)
+
+    report = recover_project(paths, db, settings)
+
+    fresh = db.list_segments()[0]
+    assert report.reset_in_progress == 1
+    assert fresh["status"] == "pending"
+    assert fresh["wav_path"] is None
+    assert wav.exists()
+
+
 def test_recovery_rebuilds_completed_mp3_when_artifact_checksum_mismatches(tmp_path: Path, monkeypatch) -> None:
     paths, settings, db, row = setup_db(tmp_path)
     chapter = db.list_chapters()[0]

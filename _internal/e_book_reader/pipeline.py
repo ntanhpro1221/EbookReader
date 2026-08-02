@@ -87,7 +87,7 @@ class BookPipeline:
                 resume_status = str(book["status"])
                 resume_stage = str(book["stage"])
                 self.db.update_book(status=BookStatus.PAUSED.value, stage="paused")
-                self._state("paused", "Đã tạm dừng an toàn.")
+                self._state("paused", "Đã tạm dừng.")
                 announced = True
             time.sleep(0.25)
         if announced:

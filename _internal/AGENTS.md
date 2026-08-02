@@ -14,7 +14,7 @@ Yêu cầu bắt buộc:
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
 - tận dụng tối đa tài nguyên trong giới hạn an toàn, tự nhường foreground và tự tăng lại;
 - giả định GUI/worker/máy có thể bị đóng bất kỳ lúc nào;
-- lỗi nghiêm trọng phải checkpoint, tự dừng an toàn và gửi Windows notification;
+- lỗi nghiêm trọng phải giữ nguyên checkpoint đã commit, dừng và gửi Windows notification;
 - tuyệt đối không chèn im lặng để thay nội dung TTS thất bại.
 
 Máy đích hiện tại: Ryzen 9845HX, RTX 5060 Laptop, RAM 32 GB. Không hard-code batch hoặc VRAM theo một máy duy nhất.
@@ -60,8 +60,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
 - Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
 - Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
-- GUI chỉ cung cấp một lệnh dừng an toàn; đóng cửa sổ khi worker đang chạy phải chờ worker xác nhận dừng,
-  không tự kill process sau một timeout ngắn.
+- GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
+  kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
+- Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:
+  app/worker bị kill ở bất kỳ thời điểm nào cũng không làm mất artifact đã commit; phần dở được reset khi resume.
 
 ## Cấu trúc source
 

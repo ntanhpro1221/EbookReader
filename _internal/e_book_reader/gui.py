@@ -42,8 +42,12 @@ from .database import ProjectDB
 from .io_utils import discover_txt_files, natural_key
 from .models import ProjectPaths
 from .notifier import WindowsNotifier
+from .process_utils import terminate_process_tree
 from .project import create_or_open_project
 from .worker import run_worker
+
+
+WORKER_TERMINATION_GRACE_SECONDS = 0.5
 
 
 CHAPTER_STATUS_LABELS = {
@@ -77,7 +81,6 @@ class MainWindow(QMainWindow):
         self.stop_event: Any = None
         self.received_finished = False
         self.was_user_stop = False
-        self._close_when_stopped = False
         self._chapter_snapshot: tuple[Any, ...] | None = None
         self.notifier = WindowsNotifier()
         self._build_ui()
@@ -98,10 +101,6 @@ class MainWindow(QMainWindow):
             "QPushButton { min-height: 28px; padding: 2px 10px; }"
             "QLineEdit, QComboBox, QSpinBox { min-height: 27px; }"
         )
-        title = QLabel("E Book Reader")
-        title.setStyleSheet("font-size: 25px; font-weight: 700;")
-        layout.addWidget(title)
-
         book_box = QGroupBox("Book")
         top = QGridLayout(book_box)
         top.setColumnStretch(1, 1)
@@ -227,14 +226,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.main_splitter, 1)
 
         controls = QHBoxLayout()
-        self.start_button = QPushButton("Bắt đầu / Tiếp tục")
+        self.start_button = QPushButton("Bắt đầu")
         self.start_button.clicked.connect(self._start)
         self.pause_button = QPushButton("Tạm dừng")
         self.pause_button.clicked.connect(self._toggle_pause)
         self.pause_button.setEnabled(False)
         self.stop_button = QPushButton("Dừng")
-        self.stop_button.setToolTip("Dừng sau khi tác vụ inference hiện tại kết thúc và checkpoint an toàn.")
-        self.stop_button.clicked.connect(self._safe_stop)
+        self.stop_button.setToolTip("Dừng xử lý. Phần chưa commit sẽ được kiểm tra và làm lại khi tiếp tục.")
+        self.stop_button.clicked.connect(self._stop)
         self.stop_button.setEnabled(False)
         self.open_folder_button = QPushButton("Mở thư mục project")
         self.open_folder_button.clicked.connect(self._open_project_folder)
@@ -326,6 +325,10 @@ class MainWindow(QMainWindow):
         self.max_temp.setEnabled(not selected)
         self.full_book.setEnabled(not selected)
         self.open_folder_button.setEnabled(selected)
+        self._update_start_button()
+
+    def _update_start_button(self) -> None:
+        self.start_button.setText("Tiếp tục" if self.project_paths is not None else "Bắt đầu")
 
     def _merge_input_files(self, paths: list[Path]) -> int:
         if paths and self.project_paths is not None:
@@ -472,16 +475,16 @@ class MainWindow(QMainWindow):
             self.pause_button.setText("Tạm dừng")
         else:
             self.pause_event.set()
-            self.pause_button.setText("Tiếp tục")
+            self.pause_button.setText("Chạy tiếp")
 
-    def _safe_stop(self) -> None:
+    def _stop(self) -> None:
         if self.stop_event:
             self.was_user_stop = True
             self.stop_event.set()
             self.stop_button.setEnabled(False)
             self.pause_button.setEnabled(False)
-            self._show_progress("Đang dừng an toàn…")
-            self._append_log("Đang chờ tác vụ hiện tại kết thúc để dừng an toàn.")
+            self._show_progress("Đang dừng…")
+            self._append_log("Đang dừng. Phần chưa commit sẽ được recovery kiểm tra khi tiếp tục.")
 
     def _running_controls(self, running: bool) -> None:
         self.start_button.setEnabled(not running)
@@ -489,6 +492,25 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(running)
         if not running:
             self.pause_button.setText("Tạm dừng")
+            self._update_start_button()
+
+    def _terminate_worker_for_exit(self) -> None:
+        process = self.process
+        if process is None or not process.is_alive():
+            return
+        self.was_user_stop = True
+        if self.stop_event is not None:
+            self.stop_event.set()
+        terminate_process_tree(
+            process.pid,
+            grace_seconds=WORKER_TERMINATION_GRACE_SECONDS,
+        )
+        try:
+            process.join(timeout=WORKER_TERMINATION_GRACE_SECONDS)
+        except (AssertionError, OSError):
+            pass
+        self.process = None
+        self._dispose_ipc()
 
     def _dispose_ipc(self) -> None:
         if self.process is not None and not self.process.is_alive():
@@ -621,7 +643,7 @@ class MainWindow(QMainWindow):
             if book_status == "completed":
                 self._show_progress("Đã hoàn tất", len(chapters), len(chapters))
             elif book_status == "stopped":
-                self._show_progress("Đã dừng an toàn", done, len(chapters))
+                self._show_progress("Đã dừng", done, len(chapters))
             elif book_status == "error":
                 self._show_progress("Đã dừng vì lỗi", done, len(chapters))
             else:
@@ -662,7 +684,7 @@ class MainWindow(QMainWindow):
                     self._append_log(str(message.get("text", "")))
                     self._running_controls(False)
                     if message.get("stopped"):
-                        self._show_progress("Đã dừng an toàn", 0, 100)
+                        self._show_progress("Đã dừng", 0, 100)
                     elif not message.get("ok", False):
                         self._show_progress("Đã dừng vì lỗi", 0, 100)
         self._refresh_chapters()
@@ -688,9 +710,6 @@ class MainWindow(QMainWindow):
                 self._append_log(f"Worker thoát bất ngờ, exit code {exitcode}. Lần sau recovery sẽ kiểm tra checkpoint.")
             self._running_controls(False)
             self._dispose_ipc()
-            if self._close_when_stopped:
-                self._close_when_stopped = False
-                QTimer.singleShot(0, self.close)
 
     def _open_selected_mp3(self) -> None:
         row = self.chapter_table.currentRow()
@@ -708,11 +727,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         self._save_ui()
-        if self.process and self.process.is_alive():
-            self._close_when_stopped = True
-            self._safe_stop()
-            event.ignore()
-            return
+        self._terminate_worker_for_exit()
         event.accept()
 
 

@@ -165,7 +165,7 @@ class ParentWatchdog(threading.Thread):
     def run(self) -> None:
         while not self.local_stop.wait(2.0):
             if not psutil.pid_exists(self.parent_pid):
-                reason = "GUI process disappeared; worker is stopping from its last safe checkpoint"
+                reason = "GUI process disappeared; worker is stopping and recovery will discard unfinished work"
                 try:
                     self.db.event(
                         "warning",
@@ -256,18 +256,18 @@ def run_worker(
         _emit(message_queue, "finished", {"ok": True, "text": "Pipeline kết thúc."})
     except PipelineStopped:
         assert db is not None
-        db.update_book(status=BookStatus.STOPPED.value, stage="stopped_at_checkpoint", error="User/app stop requested")
-        db.event("info", "PIPELINE_STOPPED", "Pipeline stopped at a safe checkpoint")
+        db.update_book(status=BookStatus.STOPPED.value, stage="stopped", error="User/app stop requested")
+        db.event("info", "PIPELINE_STOPPED", "Pipeline stopped after a stop request")
         _emit(
             message_queue,
             "finished",
-            {"ok": True, "stopped": True, "text": "Đã dừng an toàn; lần sau có thể tiếp tục."},
+            {"ok": True, "stopped": True, "text": "Đã dừng; lần sau có thể tiếp tục."},
         )
     except CriticalResourceStop as exc:
         _emit(
             message_queue,
             "finished",
-            {"ok": False, "critical": True, "text": f"Tự dừng an toàn: {exc}"},
+            {"ok": False, "critical": True, "text": f"Đã dừng vì điều kiện an toàn: {exc}"},
         )
     except BaseException as exc:  # noqa: BLE001
         details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))

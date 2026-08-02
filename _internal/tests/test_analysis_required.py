@@ -99,7 +99,7 @@ def analysis_group():
 def test_required_analysis_does_not_silently_fall_back(monkeypatch) -> None:
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: False)
-    with pytest.raises(RuntimeError, match="dừng an toàn"):
+    with pytest.raises(RuntimeError, match="Pipeline dừng"):
         analyzer.analyze_all(lambda: False)
 
 

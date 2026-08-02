@@ -405,7 +405,7 @@ class OllamaBookAnalyzer:
             if self.settings.get("enabled", True) and self.settings.get("required", True):
                 raise RuntimeError(
                     f"Ollama/Qwen model {self.model} không sẵn sàng. "
-                    "Pipeline dừng an toàn thay vì âm thầm hạ chất lượng phân tích toàn book."
+                    "Pipeline dừng thay vì âm thầm hạ chất lượng phân tích toàn book."
                 )
             self.log("Phân tích AI bị tắt/không bắt buộc; dùng heuristic và đánh warning, không dừng hỏi người dùng.")
         max_segments = int(self.settings.get("batch_segments", 28))
