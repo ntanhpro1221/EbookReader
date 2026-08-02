@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from e_book_reader.config import build_settings
-from e_book_reader.models import ResourceLevel
-from e_book_reader.resource_manager import AdaptiveResourceManager, ResourceSnapshot
+from ebook_reader.config import build_settings
+from ebook_reader.models import ResourceLevel
+from ebook_reader.resource_manager import AdaptiveResourceManager, ResourceSnapshot
 
 
 def snapshot(**updates):

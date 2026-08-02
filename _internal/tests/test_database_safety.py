@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from e_book_reader.database import ProjectDB
-from e_book_reader.config import build_settings
-from e_book_reader.tts import TTSCoordinator
+from ebook_reader.database import ProjectDB
+from ebook_reader.config import build_settings
+from ebook_reader.tts import TTSCoordinator
 
 
 def _segment_db(tmp_path: Path) -> tuple[ProjectDB, int]:

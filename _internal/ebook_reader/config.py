@@ -64,7 +64,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "model": "turbo",
         "device": "cuda",
         "cpu_fallback": True,
-        "download_root": str(Path(os.environ.get("E_BOOK_READER_RUNTIME", "runtime")) / "models" / "whisper"),
+        "download_root": str(Path(os.environ.get("EBOOK_READER_RUNTIME", "runtime")) / "models" / "whisper"),
         "beam_size": 5,
         "verify_short_dialogue": True,
         "min_words": 3,

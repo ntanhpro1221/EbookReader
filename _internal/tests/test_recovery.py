@@ -4,12 +4,12 @@ from pathlib import Path
 
 import numpy as np
 
-from e_book_reader.audio_io import atomic_write_wav
-from e_book_reader.config import build_settings, settings_hash
-from e_book_reader.database import ProjectDB
-from e_book_reader.models import ProjectPaths
-from e_book_reader.recovery import recover_project
-from e_book_reader.io_utils import sha256_file
+from ebook_reader.audio_io import atomic_write_wav
+from ebook_reader.config import build_settings, settings_hash
+from ebook_reader.database import ProjectDB
+from ebook_reader.models import ProjectPaths
+from ebook_reader.recovery import recover_project
+from ebook_reader.io_utils import sha256_file
 
 
 def setup_db(tmp_path: Path):
@@ -111,7 +111,7 @@ def test_recovery_rebuilds_completed_mp3_when_artifact_checksum_mismatches(tmp_p
         verified=True,
     )
     db.update_chapter_status(int(chapter["id"]), "completed")
-    monkeypatch.setattr("e_book_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
+    monkeypatch.setattr("ebook_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
 
     report = recover_project(paths, db, settings)
 
@@ -135,9 +135,9 @@ def test_completed_project_uses_verified_mp3_fast_path(tmp_path: Path, monkeypat
     )
     db.update_chapter_status(int(chapter["id"]), "completed")
     db.update_book(status="completed", stage="completed")
-    monkeypatch.setattr("e_book_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
+    monkeypatch.setattr("ebook_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
     monkeypatch.setattr(
-        "e_book_reader.recovery.inspect_wav",
+        "ebook_reader.recovery.inspect_wav",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("deep recovery ran")),
     )
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from e_book_reader.config import build_settings, settings_hash
-from e_book_reader.project import create_or_open_project
+from ebook_reader.config import build_settings, settings_hash
+from ebook_reader.project import create_or_open_project
 
 
 def test_changed_settings_create_a_separate_project(tmp_path: Path) -> None:

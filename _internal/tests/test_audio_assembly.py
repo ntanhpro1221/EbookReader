@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from e_book_reader.audio_io import (
+from ebook_reader.audio_io import (
     AudioQualityError,
     atomic_write_wav,
     assemble_chapter_atomic,
@@ -13,7 +13,7 @@ from e_book_reader.audio_io import (
     verify_mp3,
     validate_audio_array,
 )
-from e_book_reader.config import build_settings
+from ebook_reader.config import build_settings
 
 
 def test_real_ffmpeg_chapter_assembly_is_atomic_and_decodable(tmp_path: Path) -> None:

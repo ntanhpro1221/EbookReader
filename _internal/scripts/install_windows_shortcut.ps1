@@ -6,8 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 
 $AppName = "Ebook Reader"
-$Launcher = Join-Path $ProjectRoot "_internal\START.vbs"
-$Icon = Join-Path $ProjectRoot "_internal\e_book_reader\assets\e_book_reader.ico"
+$Launcher = Join-Path $ProjectRoot "_internal\Ebook Reader.vbs"
+$Icon = Join-Path $ProjectRoot "_internal\ebook_reader\assets\ebook_reader.ico"
 $ProgramsRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::Programs)
 $RootShortcutPath = Join-Path $ProjectRoot "$AppName.lnk"
 $StartMenuShortcutPath = Join-Path $ProgramsRoot "$AppName.lnk"
@@ -25,15 +25,6 @@ if ([string]::IsNullOrWhiteSpace($ProgramsRoot)) {
 
 New-Item -ItemType Directory -Force -Path $ProgramsRoot | Out-Null
 $Shell = New-Object -ComObject WScript.Shell
-
-foreach ($LegacyShortcutPath in @(
-    (Join-Path $ProjectRoot "E Book Reader.lnk"),
-    (Join-Path $ProgramsRoot "E Book Reader.lnk")
-)) {
-    if (Test-Path -LiteralPath $LegacyShortcutPath -PathType Leaf) {
-        Remove-Item -LiteralPath $LegacyShortcutPath -Force
-    }
-}
 
 function Set-AppShortcut([string]$ShortcutPath) {
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)

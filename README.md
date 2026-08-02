@@ -17,10 +17,10 @@ Không cần mở PowerShell, không cần chạy file setup riêng.
 ## Những gì nằm ở thư mục gốc
 
 ```text
-e_book_reader/
-├── Ebook Reader.lnk  # shortcut ứng dụng có icon, trỏ thẳng tới _internal\START.vbs
+ebook_reader/
+├── Ebook Reader.lnk  # shortcut ứng dụng có icon, trỏ thẳng tới _internal\Ebook Reader.vbs
 ├── README.md     # hướng dẫn sử dụng
-└── _internal/    # chứa START.vbs, source, setup, test, model cache và tài liệu kỹ thuật
+└── _internal/    # chứa Ebook Reader.vbs, source, setup, test, model cache và tài liệu kỹ thuật
 ```
 
 Người dùng bình thường không cần mở `_internal`. Tài liệu dành cho agent/lập trình viên cũng được giữ bên trong thư mục này.

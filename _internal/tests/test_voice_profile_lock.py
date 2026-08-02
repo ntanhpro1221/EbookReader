@@ -6,10 +6,10 @@ from types import ModuleType
 
 import numpy as np
 
-import e_book_reader.tts as tts_module
-from e_book_reader.config import build_settings
-from e_book_reader.database import ProjectDB
-from e_book_reader.tts import (
+import ebook_reader.tts as tts_module
+from ebook_reader.config import build_settings
+from ebook_reader.database import ProjectDB
+from ebook_reader.tts import (
     VieNeuEngine,
     apply_pitch_variant,
     is_fatal_tts_error,

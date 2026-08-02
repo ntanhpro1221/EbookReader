@@ -27,7 +27,7 @@ $AppScript = Join-Path $InternalRoot "app.py"
 Set-Location $ProjectRoot
 
 $env:PYTHONUTF8 = "1"
-$env:E_BOOK_READER_RUNTIME = $RuntimeRoot
+$env:EBOOK_READER_RUNTIME = $RuntimeRoot
 $env:HF_HOME = Join-Path $RuntimeRoot "models\huggingface"
 $env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub"
 $env:HF_HUB_DISABLE_XET = "1"
@@ -44,7 +44,7 @@ function Test-AppRuntime {
     if (-not (Test-Path -LiteralPath $Pythonw -PathType Leaf)) {
         return $false
     }
-    & $Python -c "import e_book_reader.gui" *> $null
+    & $Python -c "import sys; sys.path.insert(0, r'''$InternalRoot'''); import ebook_reader.gui" *> $null
     return $LASTEXITCODE -eq 0
 }
 

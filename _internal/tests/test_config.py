@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from e_book_reader.config import build_settings, validate_settings
+from ebook_reader.config import build_settings, validate_settings
 
 
 def test_unattended_safety_defaults() -> None:

@@ -65,9 +65,9 @@ from .worker import run_worker
 
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
 APP_NAME = "Ebook Reader"
-APP_USER_MODEL_ID = "EBookReader.Desktop"
+APP_USER_MODEL_ID = "EbookReader.Desktop"
 APP_ASSET_DIR = Path(__file__).resolve().parent / "assets"
-APP_ICON_PATH = APP_ASSET_DIR / ("e_book_reader.ico" if os.name == "nt" else "e_book_reader.png")
+APP_ICON_PATH = APP_ASSET_DIR / ("ebook_reader.ico" if os.name == "nt" else "ebook_reader.png")
 VOICE_PREVIEW_DIR = APP_ASSET_DIR / "voice_previews"
 CHAPTER_TABLE_HEADERS = (
     "#",
@@ -103,7 +103,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
         self.setMinimumSize(900, 620)
-        self.settings_store = settings_store or QSettings("OpenAI", "EBookReader")
+        self.settings_store = settings_store or QSettings("OpenAI", "EbookReader")
         self.files: list[Path] = []
         self.project_paths: ProjectPaths | None = None
         self.db: ProjectDB | None = None

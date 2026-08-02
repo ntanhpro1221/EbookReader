@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from e_book_reader.analysis import (
+from ebook_reader.analysis import (
     ANALYSIS_OUTPUT_MAX_TOKENS,
     AnalysisRequestStopped,
     OllamaBookAnalyzer,
@@ -12,7 +12,7 @@ from e_book_reader.analysis import (
     is_local_speaker,
     local_speaker_display,
 )
-from e_book_reader.config import build_settings
+from ebook_reader.config import build_settings
 
 
 class FakeDB:
@@ -128,7 +128,7 @@ def test_required_analysis_stops_when_every_request_fails(monkeypatch) -> None:
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
     monkeypatch.setattr(analyzer, "_request", lambda _group: (_ for _ in ()).throw(RuntimeError("timeout")))
-    monkeypatch.setattr("e_book_reader.analysis.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
 
     with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
         analyzer.analyze_all(lambda: False)
@@ -250,7 +250,7 @@ def test_unresolved_thought_retries_then_falls_back_to_narrator(monkeypatch) -> 
     logs: list[str] = []
     analyzer = OllamaBookAnalyzer(settings, db, logs.append)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
-    monkeypatch.setattr("e_book_reader.analysis.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
     attempts = 0
 
     def unresolved_request(_group, **_kwargs):
@@ -294,7 +294,7 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(monkeypatch) 
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), logs.append)
     availability = iter((False, True))
     monkeypatch.setattr(analyzer, "_available", lambda: next(availability))
-    monkeypatch.setattr("e_book_reader.analysis.shutil.which", lambda _name: "ollama.exe")
+    monkeypatch.setattr("ebook_reader.analysis.shutil.which", lambda _name: "ollama.exe")
 
     class TagsResponse:
         @staticmethod
@@ -315,10 +315,10 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(monkeypatch) 
             return None
 
     managed = ManagedProcess()
-    monkeypatch.setattr("e_book_reader.analysis.subprocess.Popen", lambda *_args, **_kwargs: managed)
+    monkeypatch.setattr("ebook_reader.analysis.subprocess.Popen", lambda *_args, **_kwargs: managed)
     terminated: list[tuple[int, float]] = []
     monkeypatch.setattr(
-        "e_book_reader.analysis.terminate_process_tree",
+        "ebook_reader.analysis.terminate_process_tree",
         lambda pid, *, grace_seconds: terminated.append((pid, grace_seconds)),
     )
     analyzer.session = StartupSession()

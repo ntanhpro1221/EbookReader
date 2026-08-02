@@ -7,14 +7,13 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 
 
 def test_one_click_startup_contract() -> None:
-    start_path = INTERNAL_ROOT / "START.vbs"
+    start_path = INTERNAL_ROOT / "Ebook Reader.vbs"
     start_bytes = start_path.read_bytes()
     assert not start_bytes.startswith(b"\xef\xbb\xbf")
     assert start_bytes.isascii()
     start = start_bytes.decode("utf-8")
     assert not (PROJECT_ROOT / "START.bat").exists()
     assert not (PROJECT_ROOT / "START.vbs").exists()
-    assert not (PROJECT_ROOT / "E Book Reader.vbs").exists()
     assert (PROJECT_ROOT / "Ebook Reader.lnk").is_file()
 
     launcher_path = INTERNAL_ROOT / "scripts" / "start_windows.ps1"
@@ -38,7 +37,8 @@ def test_one_click_startup_contract() -> None:
     assert '$ShortcutScript = Join-Path $PSScriptRoot "install_windows_shortcut.ps1"' in launcher
     assert '$AppScript = Join-Path $InternalRoot "app.py"' in launcher
     assert '$Pythonw = Join-Path $RuntimeRoot ".venv\\Scripts\\pythonw.exe"' in launcher
-    assert 'import e_book_reader.gui' in launcher
+    assert 'import ebook_reader.gui' in launcher
+    assert "sys.path.insert(0" in launcher
     assert 'Start-Process -FilePath "powershell.exe"' in launcher
     assert '-WindowStyle Normal' in launcher
     assert 'Start-Process -FilePath $Pythonw' in launcher
@@ -62,13 +62,13 @@ def test_one_click_startup_contract() -> None:
     assert 'ollama pull qwen3:8b' in setup
     assert "snapshot_download" not in setup
     assert '$AppName = "Ebook Reader"' in shortcut
-    assert '$Launcher = Join-Path $ProjectRoot "_internal\\START.vbs"' in shortcut
+    assert '$Launcher = Join-Path $ProjectRoot "_internal\\Ebook Reader.vbs"' in shortcut
     assert '$RootShortcutPath = Join-Path $ProjectRoot "$AppName.lnk"' in shortcut
     assert '$StartMenuShortcutPath = Join-Path $ProgramsRoot "$AppName.lnk"' in shortcut
     assert "$Shortcut.TargetPath = $Launcher" in shortcut
     assert '$Shortcut.Arguments = ""' in shortcut
     assert "wscript.exe" not in shortcut.lower()
-    assert '"_internal\\e_book_reader\\assets\\e_book_reader.ico"' in shortcut
+    assert '"_internal\\ebook_reader\\assets\\ebook_reader.ico"' in shortcut
     assert "$Shortcut.IconLocation = $IconLocation" in shortcut
     project = tomllib.loads((INTERNAL_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["dependencies"] == [

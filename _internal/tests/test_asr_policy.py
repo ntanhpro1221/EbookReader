@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from e_book_reader.asr import WhisperVerifier, is_asr_repair_candidate
-from e_book_reader.config import build_settings
+from ebook_reader.asr import WhisperVerifier, is_asr_repair_candidate
+from ebook_reader.config import build_settings
 
 
 def test_optional_asr_inference_error_becomes_warning(monkeypatch) -> None:

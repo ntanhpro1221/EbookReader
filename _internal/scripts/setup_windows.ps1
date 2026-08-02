@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 Set-Location $InternalRoot
 
 $env:PYTHONUTF8 = "1"
-$env:E_BOOK_READER_RUNTIME = $RuntimeRoot
+$env:EBOOK_READER_RUNTIME = $RuntimeRoot
 $env:HF_HOME = Join-Path $ModelsRoot "huggingface"
 $env:HF_HUB_CACHE = Join-Path $env:HF_HOME "hub"
 $env:HF_HUB_DISABLE_XET = "1"
@@ -106,7 +106,7 @@ Invoke-NativeChecked { & ollama pull qwen3:4b } "Tải Qwen3 4B"
 
 Write-Host "Tải và smoke-load VieNeu..."
 Invoke-NativeChecked {
-    & $Python -c "from e_book_reader.character_registry import VIENEU_PRESETS; from e_book_reader.config import build_settings; from e_book_reader.tts import VieNeuEngine; s=build_settings(); e=VieNeuEngine(s, print); e.load(); required={p['name'] for p in VIENEU_PRESETS}; missing=required-set(e.voices); assert not missing, f'VieNeu presets missing: {sorted(missing)}'; print('VieNeu voices:', len(e.voices)); e.unload(); print('VieNeu ready')"
+    & $Python -c "from ebook_reader.character_registry import VIENEU_PRESETS; from ebook_reader.config import build_settings; from ebook_reader.tts import VieNeuEngine; s=build_settings(); e=VieNeuEngine(s, print); e.load(); required={p['name'] for p in VIENEU_PRESETS}; missing=required-set(e.voices); assert not missing, f'VieNeu presets missing: {sorted(missing)}'; print('VieNeu voices:', len(e.voices)); e.unload(); print('VieNeu ready')"
 } "Smoke-load VieNeu"
 
 Write-Host "Tải Whisper Turbo..."

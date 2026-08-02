@@ -17,10 +17,10 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
 )
 
-from e_book_reader.config import build_settings
-from e_book_reader.gui import APP_ICON_PATH, VOICE_PREVIEW_DIR, MainWindow
-from e_book_reader.project import create_or_open_project
-from e_book_reader.voice_catalog import VOICE_PREVIEW_FILENAMES
+from ebook_reader.config import build_settings
+from ebook_reader.gui import APP_ICON_PATH, VOICE_PREVIEW_DIR, MainWindow
+from ebook_reader.project import create_or_open_project
+from ebook_reader.voice_catalog import VOICE_PREVIEW_FILENAMES
 
 
 def _window(tmp_path: Path) -> tuple[QApplication, MainWindow, QSettings]:
@@ -349,7 +349,7 @@ def test_tray_quit_terminates_worker_without_waiting_for_checkpoint(tmp_path: Pa
     window.stop_event = stop_event
     window._force_quit = True
     monkeypatch.setattr(
-        "e_book_reader.gui.terminate_process_tree",
+        "ebook_reader.gui.terminate_process_tree",
         lambda pid, *, grace_seconds: calls.append((pid, grace_seconds)),
     )
     event = QCloseEvent()
@@ -579,7 +579,7 @@ def test_double_clicking_empty_mp3_cell_does_not_open_explorer(
     window.chapter_table.setCurrentCell(0, 6)
     opened: list[object] = []
     monkeypatch.setattr(
-        "e_book_reader.gui.QDesktopServices.openUrl",
+        "ebook_reader.gui.QDesktopServices.openUrl",
         lambda url: opened.append(url),
     )
 

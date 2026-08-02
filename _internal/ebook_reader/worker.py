@@ -134,7 +134,7 @@ def _validate_project_inputs(paths: ProjectPaths, db: ProjectDB, settings: dict[
 
 class WorkerHeartbeat(threading.Thread):
     def __init__(self, db: ProjectDB, stop_flag: threading.Event, generation: int) -> None:
-        super().__init__(name="e-book-reader-heartbeat", daemon=True)
+        super().__init__(name="ebook-reader-heartbeat", daemon=True)
         self.db = db
         self.stop_flag = stop_flag
         self.generation = generation
@@ -164,7 +164,7 @@ class ParentWatchdog(threading.Thread):
         grace_seconds: float,
         notify_on_critical_stop: bool,
     ) -> None:
-        super().__init__(name="e-book-reader-parent-watchdog", daemon=True)
+        super().__init__(name="ebook-reader-parent-watchdog", daemon=True)
         self.parent_pid = parent_pid
         self.external_stop_event = external_stop_event
         self.local_stop = local_stop
@@ -237,7 +237,7 @@ def run_worker(
             synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")),
         )
         _validate_project_inputs(paths, db, settings)
-        _configure_logging(paths.logs / "e_book_reader.log")
+        _configure_logging(paths.logs / "ebook_reader.log")
         set_worker_priority(str(settings["resources"].get("worker_priority", "below_normal")))
 
         generation = int(db.book()["run_generation"]) + 1

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from e_book_reader.character_registry import build_registry_and_cast
-from e_book_reader.config import build_settings
-from e_book_reader.database import ProjectDB
-from e_book_reader.voice_catalog import (
+from ebook_reader.character_registry import build_registry_and_cast
+from ebook_reader.config import build_settings
+from ebook_reader.database import ProjectDB
+from ebook_reader.voice_catalog import (
     REGION_CENTRAL,
     REGION_NORTH,
     REGION_SOUTH,

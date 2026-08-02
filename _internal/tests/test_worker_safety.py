@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from e_book_reader.config import build_settings, save_settings, settings_hash
-from e_book_reader.database import ProjectDB
-from e_book_reader.io_utils import sha256_file
-from e_book_reader.models import ProjectPaths
-from e_book_reader.worker import (
+from ebook_reader.config import build_settings, save_settings, settings_hash
+from ebook_reader.database import ProjectDB
+from ebook_reader.io_utils import sha256_file
+from ebook_reader.models import ProjectPaths
+from ebook_reader.worker import (
     ProjectRunLock,
     _apply_runtime_resource_overrides,
     _load_locked_settings,

@@ -1,4 +1,4 @@
-from e_book_reader.gui import run_gui
+from ebook_reader.gui import run_gui
 
 
 if __name__ == "__main__":

@@ -4,10 +4,10 @@ from pathlib import Path
 
 import numpy as np
 
-from e_book_reader.audio_io import atomic_write_wav
-from e_book_reader.config import build_settings
-from e_book_reader.pipeline import BookPipeline
-from e_book_reader.project import create_or_open_project
+from ebook_reader.audio_io import atomic_write_wav
+from ebook_reader.config import build_settings
+from ebook_reader.pipeline import BookPipeline
+from ebook_reader.project import create_or_open_project
 
 
 class FakeTTS:
@@ -59,8 +59,8 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         output.write_bytes(b"ID3" + b"x" * 5000)
         return "chapterhash"
 
-    monkeypatch.setattr("e_book_reader.pipeline.assemble_chapter_atomic", fake_chapter)
-    monkeypatch.setattr("e_book_reader.pipeline.verify_mp3", lambda path: (path.exists(), "ok"))
+    monkeypatch.setattr("ebook_reader.pipeline.assemble_chapter_atomic", fake_chapter)
+    monkeypatch.setattr("ebook_reader.pipeline.verify_mp3", lambda path: (path.exists(), "ok"))
     verify_calls = 0
     verified_texts: list[str] = []
 
@@ -78,7 +78,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
             "repairable": True,
         }
 
-    monkeypatch.setattr("e_book_reader.pipeline.WhisperVerifier.verify", fake_verify)
+    monkeypatch.setattr("ebook_reader.pipeline.WhisperVerifier.verify", fake_verify)
 
     events = []
     pipeline = BookPipeline(
@@ -123,7 +123,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     )
     resumed.tts = FakeTTS(settings, db)
     monkeypatch.setattr(
-        "e_book_reader.analysis.OllamaBookAnalyzer.reconcile_aliases",
+        "ebook_reader.analysis.OllamaBookAnalyzer.reconcile_aliases",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("casting ran again")),
     )
     resumed.run()

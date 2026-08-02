@@ -8,7 +8,7 @@
 
 Yêu cầu bắt buộc:
 
-- workflow người dùng chỉ là mở shortcut **Ebook Reader** ở root hoặc trong Start Menu; cả hai trỏ thẳng tới `_internal\START.vbs`;
+- workflow người dùng chỉ là mở shortcut **Ebook Reader** ở root hoặc trong Start Menu; cả hai trỏ thẳng tới `_internal\Ebook Reader.vbs`;
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
@@ -71,10 +71,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 Ebook Reader.lnk
 README.md
 _internal/
-├── START.vbs          # launcher thật; shortcut root/Start Menu trỏ trực tiếp vào đây
+├── Ebook Reader.vbs   # launcher thật; shortcut root/Start Menu trỏ trực tiếp vào đây
 ├── AGENTS.md          # tài liệu dành cho agent/lập trình viên
 ├── app.py
-├── e_book_reader/      # Python package chính
+├── ebook_reader/      # Python package chính
 ├── tests/
 ├── scripts/            # setup và system check
 ├── docs/               # test report và third-party notices
@@ -83,7 +83,7 @@ _internal/
 └── LICENSE
 ```
 
-Tên kỹ thuật duy nhất là `e_book_reader`; tên hiển thị là `Ebook Reader`. Không đưa file kỹ thuật mới ra root nếu không thật sự cần cho người dùng.
+Tên kỹ thuật duy nhất là `ebook_reader`; tên hiển thị là `Ebook Reader`. Không đưa file kỹ thuật mới ra root nếu không thật sự cần cho người dùng.
 
 Module chính:
 

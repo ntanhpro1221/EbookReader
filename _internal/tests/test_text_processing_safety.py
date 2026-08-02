@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from e_book_reader.io_utils import decode_text_bytes, sha256_file
-from e_book_reader.text_processing import (
+from ebook_reader.io_utils import decode_text_bytes, sha256_file
+from ebook_reader.text_processing import (
     TEXT_SFX_KIND,
     VOCAL_EFFECT_KIND,
     build_chapter_manifest,
