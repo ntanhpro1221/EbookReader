@@ -6,6 +6,14 @@ from typing import Any, Callable
 from .analysis import is_local_speaker, local_speaker_display
 from .database import ProjectDB
 from .io_utils import slugify, stable_int
+from .voice_catalog import (
+    CHARACTER_PITCH_VARIANTS,
+    STYLE_NEWS,
+    VIENEU_PRESETS,
+    casting_presets,
+    preset_by_name,
+    preset_priority,
+)
 
 
 PRONOUNS = {
@@ -13,24 +21,6 @@ PRONOUNS = {
     "ta", "tôi", "mình", "chúng ta", "bọn họ",
 }
 RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
-
-VIENEU_PRESETS: tuple[dict[str, str], ...] = (
-    {"name": "Phạm Tuyên", "gender": "male", "style": "tu_nhien", "description": "Nam · Bắc · Tự nhiên"},
-    {"name": "Thái Sơn", "gender": "male", "style": "doc_truyen", "description": "Nam · Nam · Kể chuyện"},
-    {"name": "Thanh Bình", "gender": "male", "style": "doc_truyen", "description": "Nam · Bắc · Kể chuyện"},
-    {"name": "Xuân Vĩnh", "gender": "male", "style": "tu_nhien", "description": "Nam · Nam · Tự nhiên"},
-    {"name": "Quang Sơn", "gender": "male", "style": "tu_nhien", "description": "Nam · Trung · Tự nhiên"},
-    {"name": "Minh Đức", "gender": "male", "style": "tin_tuc", "description": "Nam · Bắc · Tin tức"},
-    {"name": "Minh Triết", "gender": "male", "style": "tin_tuc", "description": "Nam · Nam · Tin tức"},
-    {"name": "Ngọc Linh", "gender": "female", "style": "doc_truyen", "description": "Nữ · Bắc · Kể chuyện"},
-    {"name": "Thục Đoan", "gender": "female", "style": "doc_truyen", "description": "Nữ · Nam · Kể chuyện"},
-    {"name": "Trúc Ly", "gender": "female", "style": "tu_nhien", "description": "Nữ · Bắc · Tự nhiên"},
-    {"name": "Đoan Trang", "gender": "female", "style": "tu_nhien", "description": "Nữ · Bắc · Tự nhiên"},
-    {"name": "Ngọc Trân", "gender": "female", "style": "tu_nhien", "description": "Nữ · Trung · Tự nhiên"},
-    {"name": "Mai Anh", "gender": "female", "style": "tin_tuc", "description": "Nữ · Bắc · Tin tức"},
-    {"name": "Thùy Dung", "gender": "female", "style": "tin_tuc", "description": "Nữ · Nam · Tin tức"},
-)
-
 
 def normalize_name(name: str) -> str:
     return " ".join(name.strip().casefold().split())
@@ -55,46 +45,73 @@ def _majority(rows: list[Any], column: str, default: str = "unknown") -> str:
 
 
 def _preset_by_name(name: str) -> dict[str, str]:
-    for preset in VIENEU_PRESETS:
-        if preset["name"] == name:
-            return preset
-    raise ValueError(f"VieNeu narrator preset is not in the locked catalog: {name!r}")
+    try:
+        return preset_by_name(name)
+    except ValueError as exc:
+        raise ValueError(f"VieNeu narrator preset is not in the locked catalog: {name!r}") from exc
 
 
 class PresetAllocator:
-    def __init__(self, narrator_voice: str) -> None:
-        self.candidates = [preset for preset in VIENEU_PRESETS if preset["name"] != narrator_voice]
-        self.usage: Counter[str] = Counter()
+    def __init__(self, narrator_voice: str, max_pitch_shift: int) -> None:
+        self.narrator_voice = narrator_voice
+        self.max_pitch_shift = max(0, int(max_pitch_shift))
+        self.pool_usage: dict[str, Counter[str]] = {
+            "named": Counter(),
+            "npc": Counter(),
+        }
+        self.variant_usage: Counter[str] = Counter()
 
-    def choose(self, gender: str) -> dict[str, str]:
-        matching = [preset for preset in self.candidates if preset["gender"] == gender]
-        candidates = matching or self.candidates
-        minimum_usage = min(self.usage[preset["name"]] for preset in candidates)
-        selected = next(
-            preset for preset in candidates if self.usage[preset["name"]] == minimum_usage
+    def choose(self, gender: str, *, npc: bool) -> tuple[dict[str, str], int]:
+        candidates = [
+            preset
+            for preset in casting_presets(gender, include_regional=npc)
+            if preset["name"] != self.narrator_voice
+        ]
+        if not candidates:
+            candidates = [
+                preset
+                for preset in VIENEU_PRESETS
+                if preset["name"] != self.narrator_voice and preset["style"] != STYLE_NEWS
+            ]
+        pool = "npc" if npc else "named"
+        usage = self.pool_usage[pool]
+        selected = min(
+            candidates,
+            key=lambda preset: (usage[preset["name"]], *preset_priority(preset)),
         )
-        self.usage[selected["name"]] += 1
-        return selected
+        usage[selected["name"]] += 1
+        variants = [
+            steps for steps in CHARACTER_PITCH_VARIANTS
+            if abs(steps) <= self.max_pitch_shift
+        ] or [0]
+        pitch_steps = variants[self.variant_usage[selected["name"]] % len(variants)]
+        self.variant_usage[selected["name"]] += 1
+        return selected, pitch_steps
 
 
 def _profile_for_preset(
     db: ProjectDB,
     preset: dict[str, str],
+    pitch_steps: int,
     cache: dict[str, int],
 ) -> int:
     name = preset["name"]
-    if name not in cache:
-        cache[name] = db.upsert_voice_profile(
+    pitch_key = f"m{abs(pitch_steps)}" if pitch_steps < 0 else f"p{pitch_steps}"
+    profile_key = f"{name}::{pitch_key}"
+    if profile_key not in cache:
+        pitch_description = "cao độ gốc" if pitch_steps == 0 else f"cao độ {pitch_steps:+d} bán âm"
+        cache[profile_key] = db.upsert_voice_profile(
             {
-                "voice_key": f"preset_{slugify(name)}",
+                "voice_key": f"preset_{slugify(name)}_{pitch_key}",
                 "engine": "vieneu",
                 "preset_name": name,
-                "description": preset["description"],
-                "seed": stable_int(f"voice::vieneu::{name}"),
+                "description": f"{preset['description']} · {pitch_description}",
+                "seed": stable_int(f"voice::vieneu::{name}::{pitch_steps}"),
+                "pitch_semitones": pitch_steps,
                 "status": "ready",
             }
         )
-    return cache[name]
+    return cache[profile_key]
 
 
 def _personality(rows: list[Any]) -> str:
@@ -132,7 +149,10 @@ def build_registry_and_cast(
     voice_cfg = settings["voices"]
     narrator_voice = str(voice_cfg["narrator_voice"])
     narrator_preset = _preset_by_name(narrator_voice)
-    allocator = PresetAllocator(narrator_voice)
+    allocator = PresetAllocator(
+        narrator_voice,
+        int(voice_cfg.get("max_character_pitch_semitones", 2)),
+    )
     profile_cache: dict[str, int] = {}
 
     narrator_rows = by_speaker.pop("NARRATOR", [])
@@ -153,10 +173,11 @@ def build_registry_and_cast(
             "preset_name": narrator_voice,
             "description": str(voice_cfg["narrator_description"]),
             "seed": stable_int("voice::narrator"),
+            "pitch_semitones": 0,
             "status": "ready",
         }
     )
-    profile_cache[narrator_voice] = narrator_profile
+    profile_cache[f"{narrator_voice}::p0"] = narrator_profile
     db.set_character_for_speaker("NARRATOR", narrator_character_id)
     db.set_voice_for_character_segments(narrator_character_id, narrator_profile)
 
@@ -186,8 +207,8 @@ def build_registry_and_cast(
         )
         db.add_alias(character_id, speaker, normalize_name(speaker), confidence, "analysis")
         db.set_character_for_speaker(speaker, character_id)
-        preset = allocator.choose(gender)
-        profile_id = _profile_for_preset(db, preset, profile_cache)
+        preset, pitch_steps = allocator.choose(gender, npc=local)
+        profile_id = _profile_for_preset(db, preset, pitch_steps, profile_cache)
         db.set_voice_for_character_segments(character_id, profile_id)
         local_count += int(local)
 
@@ -213,8 +234,8 @@ def build_registry_and_cast(
             importance="minor",
             confidence=confidence,
         )
-        preset = allocator.choose(gender)
-        profile_id = _profile_for_preset(db, preset, profile_cache)
+        preset, pitch_steps = allocator.choose(gender, npc=True)
+        profile_id = _profile_for_preset(db, preset, pitch_steps, profile_cache)
         db.set_character_and_voice_for_segments(
             [int(row["id"]) for row in anonymous_rows],
             character_id,
@@ -222,8 +243,10 @@ def build_registry_and_cast(
         )
         anonymous_count += 1
 
-    used_voices = len(profile_cache)
+    used_voices = len({str(profile["preset_name"]) for profile in db.list_voice_profiles()})
+    voice_variants = len(profile_cache)
     log(
         f"Đã khóa voice casting VieNeu: dùng {used_voices}/{len(VIENEU_PRESETS)} preset; "
+        f"{voice_variants} biến thể giọng; "
         f"{local_count} NPC có danh tính cục bộ, {anonymous_count} nhóm NPC generic theo giới tính."
     )

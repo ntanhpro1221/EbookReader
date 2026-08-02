@@ -11,6 +11,7 @@ from e_book_reader.config import build_settings
 from e_book_reader.database import ProjectDB
 from e_book_reader.tts import (
     VieNeuEngine,
+    apply_pitch_variant,
     is_fatal_tts_error,
     vieneu_sampling_for_segment,
 )
@@ -50,6 +51,7 @@ def test_voice_profile_resume_preserves_locked_vieneu_preset(tmp_path: Path) -> 
     assert same_id == profile_id
     assert fresh["engine"] == "vieneu"
     assert fresh["preset_name"] == "Ngọc Linh"
+    assert fresh["pitch_semitones"] == 0
     assert fresh["status"] == "ready"
 
 
@@ -113,3 +115,15 @@ def test_missing_locked_vieneu_preset_is_fatal() -> None:
     assert is_fatal_tts_error(
         RuntimeError("Locked VieNeu preset 'Phạm Tuyên' is unavailable; refusing to change voice silently")
     )
+
+
+def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:
+    sample_rate = 8_000
+    time_axis = np.arange(sample_rate // 5, dtype=np.float32) / sample_rate
+    audio = np.sin(2 * np.pi * 220 * time_axis).astype(np.float32)
+
+    shifted = apply_pitch_variant(audio, sample_rate, 1)
+
+    assert shifted.shape == audio.shape
+    assert np.allclose(apply_pitch_variant(audio, sample_rate, 0), audio)
+    assert not np.allclose(shifted, audio)

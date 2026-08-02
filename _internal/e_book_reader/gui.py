@@ -9,7 +9,7 @@ from pathlib import Path
 from queue import Empty
 from typing import Any
 
-from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
+from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -46,6 +46,14 @@ from .models import ProjectPaths
 from .notifier import WindowsNotifier
 from .process_utils import terminate_process_tree
 from .project import create_or_open_project
+from .voice_catalog import (
+    DEFAULT_NARRATOR_BY_GENDER,
+    GENDER_FEMALE,
+    GENDER_MALE,
+    STYLE_NATURAL,
+    narrator_presets,
+    preset_by_name,
+)
 from .worker import run_worker
 
 
@@ -180,6 +188,11 @@ class MainWindow(QMainWindow):
         self.profile_combo.addItem("Cân bằng", "balanced")
         self.profile_combo.addItem("Nhanh", "fast")
         self.profile_combo.addItem("Chất lượng cao", "high_quality")
+        self.narrator_gender_combo = QComboBox()
+        self.narrator_gender_combo.addItem("Nam", GENDER_MALE)
+        self.narrator_gender_combo.addItem("Nữ", GENDER_FEMALE)
+        self.narrator_voice_combo = QComboBox()
+        self._populate_narrator_voices(DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE])
         self.resource_combo = QComboBox()
         self.resource_combo.addItem("Tối đa an toàn + tự nhường foreground", "max_safe_adaptive_foreground")
         self.resource_combo.addItem("Luôn tối đa, chỉ giảm vì an toàn", "max_safe")
@@ -188,9 +201,13 @@ class MainWindow(QMainWindow):
         self.max_temp.setValue(86)
         self.max_temp.setSuffix(" °C")
         self.profile_combo.currentIndexChanged.connect(self._settings_edited)
+        self.narrator_gender_combo.currentIndexChanged.connect(self._narrator_gender_changed)
+        self.narrator_voice_combo.currentIndexChanged.connect(self._settings_edited)
         self.resource_combo.currentIndexChanged.connect(self._settings_edited)
         self.max_temp.valueChanged.connect(self._settings_edited)
         form.addRow("Chất lượng:", self.profile_combo)
+        form.addRow("Giới tính người kể:", self.narrator_gender_combo)
+        form.addRow("Giọng người kể:", self.narrator_voice_combo)
         form.addRow("Tài nguyên:", self.resource_combo)
         form.addRow("Ngưỡng GPU nóng:", self.max_temp)
         self.settings_note = QLabel("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
@@ -344,6 +361,16 @@ class MainWindow(QMainWindow):
     def _restore_ui(self, *, restore_recent: bool) -> None:
         self.output_edit.setText(self.settings_store.value("output", str(Path.home() / "Audiobooks"), str))
         self.max_temp.setValue(self.settings_store.value("max_temp", 86, int))
+        narrator_gender = self.settings_store.value("narrator_gender", GENDER_MALE, str)
+        gender_index = self.narrator_gender_combo.findData(narrator_gender)
+        if gender_index >= 0:
+            self.narrator_gender_combo.setCurrentIndex(gender_index)
+        saved_voice = self.settings_store.value(
+            "narrator_voice",
+            DEFAULT_NARRATOR_BY_GENDER.get(narrator_gender, DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]),
+            str,
+        )
+        self._populate_narrator_voices(saved_voice)
         self._set_project_selected(False)
         for key, splitter in (
             ("splitter_main", self.main_splitter),
@@ -368,6 +395,8 @@ class MainWindow(QMainWindow):
     def _save_ui(self) -> None:
         self.settings_store.setValue("output", self.output_edit.text().strip())
         self.settings_store.setValue("max_temp", self.max_temp.value())
+        self.settings_store.setValue("narrator_gender", self.narrator_gender_combo.currentData())
+        self.settings_store.setValue("narrator_voice", self.narrator_voice_combo.currentData())
         self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
         self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
         self.settings_store.setValue("splitter_work", self.work_splitter.saveState())
@@ -428,6 +457,8 @@ class MainWindow(QMainWindow):
         self.new_book_button.setEnabled(not running)
         self.open_project_button.setEnabled(not running)
         self.profile_combo.setEnabled(not running)
+        self.narrator_gender_combo.setEnabled(not running)
+        self.narrator_voice_combo.setEnabled(not running)
         self.resource_combo.setEnabled(not running)
         self.max_temp.setEnabled(not running)
         self.open_folder_button.setEnabled(selected)
@@ -446,6 +477,25 @@ class MainWindow(QMainWindow):
             return
         if self.project_paths is not None:
             self._detach_project_as_draft()
+
+    def _populate_narrator_voices(self, preferred_voice: str | None = None) -> None:
+        gender = str(self.narrator_gender_combo.currentData() or GENDER_MALE)
+        blocker = QSignalBlocker(self.narrator_voice_combo)
+        self.narrator_voice_combo.clear()
+        for preset in narrator_presets(gender):
+            style = "Tự nhiên" if preset["style"] == STYLE_NATURAL else "Kể chuyện"
+            self.narrator_voice_combo.addItem(
+                f"{preset['name']} — {preset['region']} · {style}",
+                preset["name"],
+            )
+        target = preferred_voice or DEFAULT_NARRATOR_BY_GENDER[gender]
+        index = self.narrator_voice_combo.findData(target)
+        self.narrator_voice_combo.setCurrentIndex(index if index >= 0 else 0)
+        del blocker
+
+    def _narrator_gender_changed(self, *_args: Any) -> None:
+        self._populate_narrator_voices()
+        self._settings_edited()
 
     def _update_start_button(self) -> None:
         running = bool(self.process and self.process.is_alive())
@@ -554,6 +604,10 @@ class MainWindow(QMainWindow):
     def _build_settings(self) -> dict[str, Any]:
         profile = str(self.profile_combo.currentData())
         overrides = {
+            "voices": {
+                "narrator_gender": str(self.narrator_gender_combo.currentData()),
+                "narrator_voice": str(self.narrator_voice_combo.currentData()),
+            },
             "resources": {
                 "mode": str(self.resource_combo.currentData()),
                 "max_gpu_temp_c": self.max_temp.value(),
@@ -731,6 +785,17 @@ class MainWindow(QMainWindow):
             profile_index = self.profile_combo.findData(str(settings.get("quality_profile", "balanced")))
             if profile_index >= 0:
                 self.profile_combo.setCurrentIndex(profile_index)
+            voices = settings.get("voices", {})
+            narrator_voice = str(voices.get("narrator_voice", DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]))
+            try:
+                narrator_gender = str(voices.get("narrator_gender") or preset_by_name(narrator_voice)["gender"])
+            except ValueError:
+                narrator_gender = GENDER_MALE
+                narrator_voice = DEFAULT_NARRATOR_BY_GENDER[narrator_gender]
+            gender_index = self.narrator_gender_combo.findData(narrator_gender)
+            if gender_index >= 0:
+                self.narrator_gender_combo.setCurrentIndex(gender_index)
+            self._populate_narrator_voices(narrator_voice)
             resources = settings.get("resources", {})
             resource_index = self.resource_combo.findData(str(resources.get("mode", "")))
             if resource_index >= 0:

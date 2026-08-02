@@ -50,9 +50,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   segment checkpoint riêng; effect dùng giới hạn thời lượng riêng và bỏ qua kiểm tra tốc độ/Whisper;
 - giới hạn frame VieNeu thay đổi theo độ dài/pace để câu ngắn không chạy tới trần model; lệch pace nhẹ
   trở thành warning còn sai lệch cực đoan vẫn bị từ chối;
-- NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ và catalog đủ 14 preset được dùng hết
-  trước khi tái sử dụng nếu book có đủ vai;
-- cùng nhân vật giữ nguyên preset khi emotion delivery thay đổi; mức âm lượng trung tính được cân bằng
+- NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ; phân vai loại hoàn toàn preset tin tức,
+  ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
+- cùng nhân vật giữ nguyên preset và biến thể cao độ tối đa ±2 bán âm; thought bắt buộc giữ speaker nhân vật;
+  mức âm lượng trung tính được cân bằng
   còn chỉ dẫn loud vẫn được giữ lớn hơn có chủ đích;
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;

@@ -70,9 +70,23 @@ def _set_generation_seed(seed: int) -> None:
 def _row_value(row: Any, key: str, default: Any) -> Any:
     try:
         value = row[key]
-    except (KeyError, TypeError):
+    except (IndexError, KeyError, TypeError):
         return default
     return default if value is None else value
+
+
+def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> np.ndarray:
+    array = np.asarray(audio, dtype=np.float32).reshape(-1)
+    steps = int(pitch_semitones)
+    if steps == 0 or array.size == 0:
+        return array
+    import torch
+    from torchaudio.functional import pitch_shift
+
+    waveform = torch.from_numpy(array.copy()).unsqueeze(0)
+    with torch.inference_mode():
+        shifted = pitch_shift(waveform, sample_rate, n_steps=steps)
+    return shifted.squeeze(0).cpu().numpy().astype(np.float32, copy=False)
 
 
 def _max_new_frames(row: Any, settings: dict[str, Any] | None) -> int:
@@ -264,6 +278,11 @@ class TTSCoordinator:
         seed = self.generation_seed(row, seed_salt)
         spoken_row = self._spoken_row(row)
         audio = self.vieneu.generate_one(spoken_row, profile, seed)
+        audio = apply_pitch_variant(
+            audio,
+            self.vieneu.sample_rate,
+            int(_row_value(profile, "pitch_semitones", 0)),
+        )
         checksum, metrics = atomic_write_wav(
             output,
             audio,

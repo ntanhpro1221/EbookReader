@@ -29,11 +29,15 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
-- Toàn bộ vai dùng catalog preset VieNeu: ưu tiên dùng hết các giọng phù hợp giới tính trước khi tái sử dụng.
+- Người dùng chọn giới tính và preset người kể ngay trong Thiết lập; danh sách chỉ chứa giọng Bắc/Nam kiểu tự nhiên
+  hoặc kể chuyện, không chứa giọng tin tức hay giọng Trung.
+- Nhân vật có tên được ưu tiên giọng theo thứ tự Bắc → Nam, rồi tự nhiên → kể chuyện. Preset tin tức không được
+  phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
   trường hợp thực sự không phân biệt được vẫn tách tối thiểu theo nam/nữ/chưa rõ.
-- Mỗi nhân vật giữ nguyên một preset. Cảm xúc chỉ thay đổi cách thể hiện, nhịp và mức âm lượng hợp lý,
-  không đổi sang một người đọc khác giữa chừng.
+- Mỗi nhân vật giữ nguyên một preset và một biến thể cao độ tối đa ±2 bán âm. Khi nhiều vai dùng chung preset,
+  biến thể cao độ tạo khác biệt vừa phải mà không đổi tốc độ; cảm xúc không đổi sang người đọc khác giữa chừng.
+- Độc thoại nội tâm bắt buộc dùng giọng đã khóa của nhân vật đang nghĩ, không dùng giọng người kể.
 - Từ điển phát âm có confidence được checkpoint trong SQLite, áp dụng đồng nhất cho TTS và câu đối chiếu ASR.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.

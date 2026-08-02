@@ -217,6 +217,20 @@ def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
     assert validated[row["stable_id"]]["kind"] == row["kind_hint"]
 
 
+def test_thought_requires_the_character_speaker_and_never_uses_narrator() -> None:
+    row = analysis_group()[0]
+    narrator_thought = analysis_item(row["stable_id"])
+    narrator_thought.update({"kind": "thought", "speaker": "NARRATOR"})
+
+    assert _validate([row], {"segments": [narrator_thought]}) == {}
+
+    character_thought = {**narrator_thought, "speaker": "Alisa", "gender": "female"}
+    validated = _validate([row], {"segments": [character_thought]})
+
+    assert validated[row["stable_id"]]["kind"] == "thought"
+    assert validated[row["stable_id"]]["speaker"] == "Alisa"
+
+
 def test_streaming_analysis_request_can_be_cancelled() -> None:
     group = analysis_group()
     session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})

@@ -2,9 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from e_book_reader.character_registry import VIENEU_PRESETS, build_registry_and_cast
+from e_book_reader.character_registry import build_registry_and_cast
 from e_book_reader.config import build_settings
 from e_book_reader.database import ProjectDB
+from e_book_reader.voice_catalog import (
+    REGION_CENTRAL,
+    REGION_NORTH,
+    REGION_SOUTH,
+    STYLE_NEWS,
+    preset_by_name,
+)
 
 
 def _casting_db(tmp_path: Path) -> ProjectDB:
@@ -35,6 +42,8 @@ def _casting_db(tmp_path: Path) -> ProjectDB:
         [
             ("NPC_LOCAL::c00001::b0001::áo xanh", "male"),
             ("NPC_LOCAL::c00001::b0001::áo đỏ", "male"),
+            ("NPC_LOCAL::c00001::b0001::áo vàng", "male"),
+            ("NPC_LOCAL::c00001::b0001::áo tím", "male"),
             ("UNKNOWN", "male"),
             ("UNKNOWN", "female"),
         ]
@@ -59,7 +68,7 @@ def _casting_db(tmp_path: Path) -> ProjectDB:
     return db
 
 
-def test_casting_uses_full_vieneu_catalog_before_reusing_and_separates_local_npcs(
+def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_regional_to_npcs(
     tmp_path: Path,
 ) -> None:
     db = _casting_db(tmp_path)
@@ -67,19 +76,47 @@ def test_casting_uses_full_vieneu_catalog_before_reusing_and_separates_local_npc
     build_registry_and_cast(db, build_settings(), {}, lambda _message: None)
 
     profiles = db.list_voice_profiles()
-    assert len(profiles) == len(VIENEU_PRESETS)
-    assert {str(profile["preset_name"]) for profile in profiles} == {
-        preset["name"] for preset in VIENEU_PRESETS
-    }
+    assert all(preset_by_name(str(profile["preset_name"]))["style"] != STYLE_NEWS for profile in profiles)
+    assert all(abs(int(profile["pitch_semitones"])) <= 2 for profile in profiles)
     rows = db.list_segments()
     local_rows = [row for row in rows if str(row["speaker"]).startswith("NPC_LOCAL::")]
-    assert len({int(row["canonical_character_id"]) for row in local_rows}) == 2
-    assert len({int(row["voice_profile_id"]) for row in local_rows}) == 2
+    assert len({int(row["canonical_character_id"]) for row in local_rows}) == 4
+    assert len({int(row["voice_profile_id"]) for row in local_rows}) == 4
+
+    profile_by_id = {int(profile["id"]): profile for profile in profiles}
+    named_rows = [
+        row for row in rows
+        if str(row["speaker"]) not in {"NARRATOR", "UNKNOWN"}
+        and not str(row["speaker"]).startswith("NPC_LOCAL::")
+    ]
+    named_presets = [
+        preset_by_name(str(profile_by_id[int(row["voice_profile_id"])]["preset_name"]))
+        for row in named_rows
+    ]
+    assert {preset["region"] for preset in named_presets} <= {REGION_NORTH, REGION_SOUTH}
+
+    local_presets = [
+        preset_by_name(str(profile_by_id[int(row["voice_profile_id"])]["preset_name"]))
+        for row in local_rows
+    ]
+    assert any(preset["region"] == REGION_CENTRAL for preset in local_presets)
+    assert any(preset["region"] != REGION_CENTRAL for preset in local_presets)
+
+    named_male_profiles = [
+        profile_by_id[int(row["voice_profile_id"])]
+        for row in named_rows
+        if str(row["gender"]) == "male"
+    ]
+    pitches_by_preset: dict[str, set[int]] = {}
+    for profile in named_male_profiles:
+        pitches_by_preset.setdefault(str(profile["preset_name"]), set()).add(
+            int(profile["pitch_semitones"])
+        )
+    assert any(len(pitches) > 1 for pitches in pitches_by_preset.values())
 
     anonymous = [row for row in rows if str(row["speaker"]) == "UNKNOWN"]
     assert len({int(row["canonical_character_id"]) for row in anonymous}) == 2
-    profile_by_id = {int(profile["id"]): str(profile["preset_name"]) for profile in profiles}
-    gender_by_preset = {preset["name"]: preset["gender"] for preset in VIENEU_PRESETS}
     assert {
-        gender_by_preset[profile_by_id[int(row["voice_profile_id"])]] for row in anonymous
+        preset_by_name(str(profile_by_id[int(row["voice_profile_id"])]["preset_name"]))["gender"]
+        for row in anonymous
     } == {"male", "female"}

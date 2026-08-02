@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS voice_profiles (
     preset_name TEXT,
     description TEXT NOT NULL DEFAULT '',
     seed INTEGER NOT NULL,
+    pitch_semitones INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'planned',
     locked INTEGER NOT NULL DEFAULT 1,
     created_at REAL NOT NULL,
@@ -822,6 +823,7 @@ class ProjectDB:
                 data.get("preset_name"),
                 data.get("description", ""),
                 int(data.get("seed", 1)),
+                int(data.get("pitch_semitones", 0)),
                 data.get("status", "planned"),
             )
             if row:
@@ -834,6 +836,7 @@ class ProjectDB:
                     existing["engine"] != data["engine"]
                     or existing["description"] != data.get("description", "")
                     or int(existing["seed"]) != int(data.get("seed", 1))
+                    or int(existing["pitch_semitones"]) != int(data.get("pitch_semitones", 0))
                 )
                 requested_preset = data.get("preset_name")
                 preset_changed = bool(
@@ -848,8 +851,8 @@ class ProjectDB:
             cursor = conn.execute(
                 """
                 INSERT INTO voice_profiles(
-                    voice_key,engine,preset_name,description,seed,status,created_at,updated_at
-                ) VALUES(?,?,?,?,?,?,?,?)
+                    voice_key,engine,preset_name,description,seed,pitch_semitones,status,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?)
                 """,
                 (data["voice_key"], *values, now, now),
             )

@@ -56,6 +56,12 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.show_action.text() == "Hiện E Book Reader"
     assert window.hide_action.text() == "Ẩn xuống system tray"
     assert window.quit_action.text() == "Thoát hoàn toàn"
+    assert window.narrator_gender_combo.currentData() == "male"
+    assert window.narrator_voice_combo.currentData() == "Phạm Tuyên"
+    assert "Minh Đức" not in {
+        window.narrator_voice_combo.itemData(index)
+        for index in range(window.narrator_voice_combo.count())
+    }
     assert APP_ICON_PATH.is_file()
     assert window.windowIcon().isNull() is False
     assert window.tray_icon.icon().isNull() is False
@@ -299,6 +305,8 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.add_files_button.isEnabled() is True
     assert window.add_folder_button.isEnabled() is True
     assert window.profile_combo.isEnabled() is True
+    assert window.narrator_gender_combo.isEnabled() is True
+    assert window.narrator_voice_combo.isEnabled() is True
     assert window.resource_combo.isEnabled() is True
     assert window.max_temp.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"
@@ -315,6 +323,24 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.profile_combo.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"
     assert window.settings_note.isHidden() is False
+    window.close()
+
+
+def test_narrator_gender_filters_safe_voices_and_builds_matching_settings(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+    female_index = window.narrator_gender_combo.findData("female")
+
+    window.narrator_gender_combo.setCurrentIndex(female_index)
+
+    available = {
+        window.narrator_voice_combo.itemData(index)
+        for index in range(window.narrator_voice_combo.count())
+    }
+    assert window.narrator_voice_combo.currentData() == "Ngọc Linh"
+    assert available == {"Trúc Ly", "Đoan Trang", "Ngọc Linh", "Thục Đoan"}
+    settings = window._build_settings()
+    assert settings["voices"]["narrator_gender"] == "female"
+    assert settings["voices"]["narrator_voice"] == "Ngọc Linh"
     window.close()
 
 

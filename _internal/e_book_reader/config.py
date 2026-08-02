@@ -29,8 +29,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "low_confidence_policy": "auto_with_warning",
     },
     "voices": {
+        "narrator_gender": "male",
         "narrator_voice": "Phạm Tuyên",
         "minimum_named_character_mentions": 3,
+        "max_character_pitch_semitones": 2,
         "narrator_description": (
             "Giọng nam Việt Nam trưởng thành, trầm ấm, rõ chữ, giàu cảm xúc nhưng tiết chế, "
             "nhịp kể tự nhiên như audiobook chuyên nghiệp, phát âm chuẩn tiếng Việt"
@@ -150,6 +152,21 @@ def build_settings(profile: str = "balanced", overrides: dict[str, Any] | None =
     settings["quality_profile"] = profile
     if overrides:
         settings = deep_merge(settings, overrides)
+    from .voice_catalog import DEFAULT_NARRATOR_BY_GENDER, preset_by_name
+
+    voice_overrides = overrides.get("voices", {}) if overrides else {}
+    if "narrator_gender" in voice_overrides and "narrator_voice" not in voice_overrides:
+        requested_gender = str(voice_overrides["narrator_gender"])
+        default_voice = DEFAULT_NARRATOR_BY_GENDER.get(requested_gender)
+        if default_voice is None:
+            raise ValueError("Unsupported voices.narrator_gender")
+        settings["voices"]["narrator_voice"] = default_voice
+
+    narrator = preset_by_name(str(settings["voices"]["narrator_voice"]))
+    settings["voices"]["narrator_gender"] = narrator["gender"]
+    settings["voices"]["narrator_description"] = (
+        f"{narrator['description']} · Người kể audiobook rõ chữ, biểu cảm tiết chế, nhịp tự nhiên"
+    )
     validate_settings(settings)
     return settings
 
@@ -187,8 +204,27 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Unsupported analysis.low_confidence_policy")
 
     voices = settings.get("voices", {})
-    if not str(voices.get("narrator_voice", "")).strip():
+    narrator_voice = str(voices.get("narrator_voice", "")).strip()
+    if not narrator_voice:
         raise ValueError("voices.narrator_voice cannot be empty")
+    from .voice_catalog import (
+        REGION_CENTRAL,
+        STYLE_NEWS,
+        narrator_presets,
+        preset_by_name,
+    )
+
+    narrator = preset_by_name(narrator_voice)
+    narrator_gender = str(voices.get("narrator_gender", ""))
+    if narrator_gender != narrator["gender"]:
+        raise ValueError("voices.narrator_gender must match voices.narrator_voice")
+    if narrator["style"] == STYLE_NEWS or narrator["region"] == REGION_CENTRAL:
+        raise ValueError("Narrator must use a standard natural or storytelling voice")
+    if narrator_voice not in {preset["name"] for preset in narrator_presets(narrator_gender)}:
+        raise ValueError("Unsupported narrator voice")
+    max_pitch_shift = int(voices.get("max_character_pitch_semitones", -1))
+    if not 0 <= max_pitch_shift <= 2:
+        raise ValueError("voices.max_character_pitch_semitones must be between 0 and 2")
 
     tts = settings.get("tts", {})
     if int(tts.get("sample_rate", 0)) < 8_000:

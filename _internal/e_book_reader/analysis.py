@@ -103,7 +103,8 @@ Quy tắc:
    speaker=NPC_LOCAL:<nhãn ngắn>, ví dụ NPC_LOCAL:áo xanh hoặc NPC_LOCAL:lính gác 1.
    Giữ cùng nhãn cho cùng người trong các đoạn liên tiếp của batch; dùng nhãn khác cho người khác.
    Chỉ dùng UNKNOWN khi hoàn toàn không có dấu hiệu phân biệt người nói.
-3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ nếu suy ra được.
+3. Độc thoại nội tâm dùng kind=thought và speaker bắt buộc là nhân vật đang nghĩ. Không bao giờ dùng
+   speaker=NARRATOR hoặc UNKNOWN cho thought; hãy dùng ngữ cảnh lân cận và ngôi kể để xác định đúng nhân vật.
 4. Giữ nguyên hint=vocal_effect hoặc hint=text_sfx. vocal_effect vẫn dùng speaker của người phát ra
    âm thanh nếu suy ra được; text_sfx luôn dùng speaker=NARRATOR. Chỉ dùng vocal_effect cho âm thanh
    phát ra từ miệng đứng riêng và text_sfx cho từ tượng thanh đứng riêng; câu có lời nói không được đổi
@@ -226,6 +227,8 @@ def _validate(
         speaker = _canonical_speaker(item.get("speaker"))
         if kind in {"narration", TEXT_SFX_KIND}:
             speaker = "NARRATOR"
+        elif kind == "thought" and speaker in {"NARRATOR", "UNKNOWN"}:
+            continue
         else:
             speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)
         result[seg_id] = {
