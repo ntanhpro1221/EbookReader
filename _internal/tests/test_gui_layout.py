@@ -18,8 +18,9 @@ from PySide6.QtWidgets import (
 )
 
 from e_book_reader.config import build_settings
-from e_book_reader.gui import APP_ICON_PATH, MainWindow
+from e_book_reader.gui import APP_ICON_PATH, VOICE_PREVIEW_DIR, MainWindow
 from e_book_reader.project import create_or_open_project
+from e_book_reader.voice_catalog import VOICE_PREVIEW_FILENAMES
 
 
 def _window(tmp_path: Path) -> tuple[QApplication, MainWindow, QSettings]:
@@ -48,6 +49,8 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.book_box.title() == "Sách"
     assert window.files_box.title() == "Chapter nguồn"
     assert window.settings_box.title() == "Thiết lập"
+    assert window.book_settings_box.title() == "Thiết lập sách"
+    assert window.global_settings_box.title() == "Thiết lập chung"
     assert window.chapters_box.title() == "Tiến độ"
     assert window.log_box.title() == "Log"
     assert window.add_files_button.text() == "Thêm file"
@@ -66,9 +69,15 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     }
     assert len(available_narrators) == 10
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(available_narrators)
-    assert window.narrator_row.itemAt(0).widget() is window.narrator_voice_combo
-    assert window.narrator_row.itemAt(1).widget() is window.narrator_gender_combo
-    assert window.narrator_row.itemAt(2).widget() is window.narrator_region_combo
+    assert window.narrator_control_layout.itemAt(0).widget() is window.narrator_voice_combo
+    assert window.narrator_control_layout.itemAt(1).widget() is window.voice_foldout_button
+    assert window.narrator_control_layout.itemAt(2).widget() is window.voice_tools_widget
+    assert window.voice_tools_layout.contentsMargins().left() > 0
+    assert window.voice_tools_layout.itemAt(0).widget() is window.narrator_gender_combo
+    assert window.voice_tools_layout.itemAt(1).widget() is window.narrator_region_combo
+    assert window.voice_tools_layout.itemAt(2).widget() is window.preview_button
+    assert window.voice_foldout_button.isChecked() is True
+    assert window.voice_tools_widget.isHidden() is False
     assert not hasattr(window, "settings_note")
     assert APP_ICON_PATH.is_file()
     assert window.windowIcon().isNull() is False
@@ -88,6 +97,60 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     ):
         assert window.input_actions.stretch(window.input_actions.indexOf(button)) == 1
     window.close()
+
+
+def test_voice_options_foldout_collapses_and_restores(tmp_path: Path) -> None:
+    _app, window, store = _window(tmp_path)
+
+    window.voice_foldout_button.setChecked(False)
+
+    assert window.voice_tools_widget.isHidden() is True
+    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.RightArrow
+    assert store.value("voice_options_expanded", type=bool) is False
+
+    window.voice_foldout_button.setChecked(True)
+
+    assert window.voice_tools_widget.isHidden() is False
+    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.DownArrow
+    window.close()
+
+
+def test_selecting_narrator_autoplays_preview_and_button_replays(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+    calls: list[tuple[str, object | None]] = []
+
+    class PreviewPlayer:
+        source = None
+
+        def stop(self) -> None:
+            calls.append(("stop", None))
+
+        def setSource(self, source) -> None:
+            self.source = source
+            calls.append(("source", source))
+
+        def play(self) -> None:
+            calls.append(("play", self.source))
+
+    window.preview_player = PreviewPlayer()
+    window.narrator_voice_combo.setCurrentIndex(
+        window.narrator_voice_combo.findData("Ngọc Linh")
+    )
+
+    play_calls = [call for call in calls if call[0] == "play"]
+    assert len(play_calls) == 1
+    assert play_calls[0][1].toLocalFile().endswith("ngoc_linh.wav")
+
+    window.preview_button.click()
+
+    assert len([call for call in calls if call[0] == "play"]) == 2
+    window.preview_player = None
+    window.close()
+
+
+def test_every_selectable_narrator_has_a_packaged_preview() -> None:
+    assert len(VOICE_PREVIEW_FILENAMES) == 10
+    assert all((VOICE_PREVIEW_DIR / filename).is_file() for filename in VOICE_PREVIEW_FILENAMES.values())
 
 
 def test_primary_button_owns_pause_and_resume_states(tmp_path: Path) -> None:

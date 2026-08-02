@@ -11,6 +11,7 @@ from typing import Any
 
 from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -54,6 +56,7 @@ from .voice_catalog import (
     REGION_NORTH,
     REGION_SOUTH,
     STYLE_NATURAL,
+    VOICE_PREVIEW_FILENAMES,
     narrator_presets,
     preset_by_name,
 )
@@ -65,6 +68,7 @@ APP_NAME = "E Book Reader"
 APP_USER_MODEL_ID = "EBookReader.Desktop"
 APP_ASSET_DIR = Path(__file__).resolve().parent / "assets"
 APP_ICON_PATH = APP_ASSET_DIR / ("e_book_reader.ico" if os.name == "nt" else "e_book_reader.png")
+VOICE_PREVIEW_DIR = APP_ASSET_DIR / "voice_previews"
 CHAPTER_TABLE_HEADERS = (
     "#",
     "Chapter",
@@ -115,6 +119,10 @@ class MainWindow(QMainWindow):
         self._applying_locked_settings = False
         self._chapter_snapshot: tuple[Any, ...] | None = None
         self.notifier = WindowsNotifier()
+        self.preview_audio_output = QAudioOutput(self)
+        self.preview_audio_output.setVolume(0.8)
+        self.preview_player = QMediaPlayer(self)
+        self.preview_player.setAudioOutput(self.preview_audio_output)
         self._build_ui()
         self._setup_tray()
         self._restore_ui(restore_recent=restore_recent)
@@ -187,7 +195,10 @@ class MainWindow(QMainWindow):
         self.source_splitter.addWidget(self.files_box)
 
         self.settings_box = QGroupBox("Thiết lập")
-        form = QFormLayout(self.settings_box)
+        settings_layout = QVBoxLayout(self.settings_box)
+        settings_layout.setSpacing(8)
+        self.book_settings_box = QGroupBox("Thiết lập sách")
+        book_form = QFormLayout(self.book_settings_box)
         self.profile_combo = QComboBox()
         self.profile_combo.addItem("Cân bằng", "balanced")
         self.profile_combo.addItem("Nhanh", "fast")
@@ -207,6 +218,39 @@ class MainWindow(QMainWindow):
         self.narrator_region_combo.setAccessibleName("Lọc giọng theo miền")
         self.narrator_voice_combo = QComboBox()
         self._populate_narrator_voices(DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE])
+        self.preview_button = QPushButton("Phát preview")
+        self.preview_button.clicked.connect(self._play_narrator_preview)
+        self.voice_foldout_button = QToolButton()
+        self.voice_foldout_button.setText("Tùy chọn giọng")
+        self.voice_foldout_button.setCheckable(True)
+        self.voice_foldout_button.setChecked(True)
+        self.voice_foldout_button.setArrowType(Qt.ArrowType.DownArrow)
+        self.voice_foldout_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.voice_tools_widget = QWidget()
+        self.voice_tools_layout = QHBoxLayout(self.voice_tools_widget)
+        self.voice_tools_layout.setContentsMargins(22, 0, 0, 0)
+        self.voice_tools_layout.setSpacing(8)
+        self.voice_tools_layout.addWidget(self.narrator_gender_combo)
+        self.voice_tools_layout.addWidget(self.narrator_region_combo)
+        self.voice_tools_layout.addWidget(self.preview_button)
+        self.voice_tools_layout.addStretch(1)
+        self.voice_foldout_button.toggled.connect(self._set_voice_options_expanded)
+        self.narrator_voice_combo.currentIndexChanged.connect(self._narrator_voice_changed)
+
+        narrator_control = QWidget()
+        self.narrator_control_layout = QVBoxLayout(narrator_control)
+        self.narrator_control_layout.setContentsMargins(0, 0, 0, 0)
+        self.narrator_control_layout.setSpacing(4)
+        self.narrator_control_layout.addWidget(self.narrator_voice_combo)
+        self.narrator_control_layout.addWidget(self.voice_foldout_button)
+        self.narrator_control_layout.addWidget(self.voice_tools_widget)
+
+        book_form.addRow("Chất lượng:", self.profile_combo)
+        book_form.addRow("Giọng người kể:", narrator_control)
+        settings_layout.addWidget(self.book_settings_box)
+
+        self.global_settings_box = QGroupBox("Thiết lập chung")
+        global_form = QFormLayout(self.global_settings_box)
         self.resource_combo = QComboBox()
         self.resource_combo.addItem("Tối đa an toàn + tự nhường foreground", "max_safe_adaptive_foreground")
         self.resource_combo.addItem("Luôn tối đa, chỉ giảm vì an toàn", "max_safe")
@@ -218,16 +262,10 @@ class MainWindow(QMainWindow):
         self.narrator_region_combo.currentIndexChanged.connect(self._narrator_filter_changed)
         self.resource_combo.currentIndexChanged.connect(self._global_settings_edited)
         self.max_temp.valueChanged.connect(self._global_settings_edited)
-        form.addRow("Chất lượng:", self.profile_combo)
-        self.narrator_row = QHBoxLayout()
-        self.narrator_row.setContentsMargins(0, 0, 0, 0)
-        self.narrator_row.setSpacing(8)
-        self.narrator_row.addWidget(self.narrator_voice_combo, 1)
-        self.narrator_row.addWidget(self.narrator_gender_combo)
-        self.narrator_row.addWidget(self.narrator_region_combo)
-        form.addRow("Giọng người kể:", self.narrator_row)
-        form.addRow("Tài nguyên:", self.resource_combo)
-        form.addRow("Ngưỡng GPU nóng:", self.max_temp)
+        global_form.addRow("Tài nguyên:", self.resource_combo)
+        global_form.addRow("Ngưỡng GPU nóng:", self.max_temp)
+        settings_layout.addWidget(self.global_settings_box)
+        settings_layout.addStretch(1)
         locked_tip = "Được lưu cùng sách và khóa sau khi sách đã bắt đầu."
         for control in (
             self.profile_combo,
@@ -405,6 +443,9 @@ class MainWindow(QMainWindow):
             str,
         )
         self._populate_narrator_voices(saved_voice)
+        voice_options_expanded = self.settings_store.value("voice_options_expanded", True, bool)
+        self.voice_foldout_button.setChecked(voice_options_expanded)
+        self._set_voice_options_expanded(voice_options_expanded, persist=False)
         self._set_project_selected(False)
         for key, splitter in (
             ("splitter_main", self.main_splitter),
@@ -431,6 +472,7 @@ class MainWindow(QMainWindow):
         self.settings_store.setValue("resource_mode", self.resource_combo.currentData())
         self.settings_store.setValue("max_temp", self.max_temp.value())
         self.settings_store.setValue("narrator_voice", self.narrator_voice_combo.currentData())
+        self.settings_store.setValue("voice_options_expanded", self.voice_foldout_button.isChecked())
         self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
         self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
         self.settings_store.setValue("splitter_work", self.work_splitter.saveState())
@@ -495,6 +537,8 @@ class MainWindow(QMainWindow):
         self.narrator_gender_combo.setEnabled(book_settings_editable)
         self.narrator_region_combo.setEnabled(book_settings_editable)
         self.narrator_voice_combo.setEnabled(book_settings_editable)
+        self.preview_button.setEnabled(bool(self.narrator_voice_combo.currentData()))
+        self.voice_foldout_button.setEnabled(True)
         self.resource_combo.setEnabled(True)
         self.max_temp.setEnabled(True)
         self.open_folder_button.setEnabled(selected)
@@ -531,6 +575,32 @@ class MainWindow(QMainWindow):
         index = self.narrator_voice_combo.findData(target)
         self.narrator_voice_combo.setCurrentIndex(index if index >= 0 else 0)
         del blocker
+
+    def _set_voice_options_expanded(self, expanded: bool, *, persist: bool = True) -> None:
+        self.voice_tools_widget.setVisible(expanded)
+        self.voice_foldout_button.setArrowType(
+            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
+        )
+        if persist:
+            self.settings_store.setValue("voice_options_expanded", expanded)
+            self.settings_store.sync()
+
+    def _narrator_voice_changed(self, *_args: Any) -> None:
+        self._play_narrator_preview()
+
+    def _play_narrator_preview(self) -> None:
+        voice_name = str(self.narrator_voice_combo.currentData() or "")
+        filename = VOICE_PREVIEW_FILENAMES.get(voice_name)
+        if not filename:
+            self._append_log(f"Không có preview cho giọng {voice_name or 'chưa chọn'}.")
+            return
+        preview = (VOICE_PREVIEW_DIR / filename).resolve()
+        if not preview.is_file():
+            self._append_log(f"Thiếu file preview giọng: {preview}")
+            return
+        self.preview_player.stop()
+        self.preview_player.setSource(QUrl.fromLocalFile(str(preview)))
+        self.preview_player.play()
 
     def _narrator_filter_changed(self, *_args: Any) -> None:
         self._populate_narrator_voices()

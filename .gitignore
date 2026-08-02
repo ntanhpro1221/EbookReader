@@ -23,6 +23,7 @@ output/
 *.part
 *.part.*
 *.wav
+!_internal/e_book_reader/assets/voice_previews/*.wav
 *.mp3
 *.m3u8
 

@@ -26,6 +26,18 @@ DEFAULT_NARRATOR_BY_GENDER = {
     GENDER_MALE: "Thái Sơn",
     GENDER_FEMALE: "Ngọc Linh",
 }
+VOICE_PREVIEW_FILENAMES = {
+    "Phạm Tuyên": "pham_tuyen.wav",
+    "Thanh Bình": "thanh_binh.wav",
+    "Xuân Vĩnh": "xuan_vinh.wav",
+    "Thái Sơn": "thai_son.wav",
+    "Quang Sơn": "quang_son.wav",
+    "Trúc Ly": "truc_ly.wav",
+    "Đoan Trang": "doan_trang.wav",
+    "Ngọc Linh": "ngoc_linh.wav",
+    "Thục Đoan": "thuc_doan.wav",
+    "Ngọc Trân": "ngoc_tran.wav",
+}
 
 VIENEU_PRESETS: tuple[dict[str, str], ...] = (
     {
