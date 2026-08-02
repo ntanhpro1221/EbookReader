@@ -30,18 +30,22 @@ def test_one_click_startup_contract() -> None:
     shortcut = shortcut_path.read_text(encoding="utf-8")
 
     assert 'scripts\\start_windows.ps1' in start
-    assert "shell.Run command, 0, False" in start
+    assert "shell.Run command, 1, False" in start
     assert '$SetupMarker = Join-Path $RuntimeRoot ".setup_complete"' in launcher
-    assert '[switch]$SetupConsole' in launcher
+    assert '[switch]$SetupConsole' not in launcher
+    assert "Start-SetupConsole" not in launcher
     assert '$SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"' in launcher
     assert '$ShortcutScript = Join-Path $PSScriptRoot "install_windows_shortcut.ps1"' in launcher
     assert '$AppScript = Join-Path $InternalRoot "app.py"' in launcher
     assert '$Pythonw = Join-Path $RuntimeRoot ".venv\\Scripts\\pythonw.exe"' in launcher
     assert 'import ebook_reader.gui' in launcher
     assert "sys.path.insert(0" in launcher
-    assert 'Start-Process -FilePath "powershell.exe"' in launcher
-    assert '-WindowStyle Normal' in launcher
     assert 'Start-Process -FilePath $Pythonw' in launcher
+    assert "-PassThru" in launcher
+    assert "Wait-AppWindow" in launcher
+    assert "MainWindowHandle" in launcher
+    assert "Đang khởi động Ebook Reader..." in launcher
+    assert "Ebook Reader vẫn đang khởi động..." in launcher
     assert "Install-AppShortcuts" in launcher
     assert '& $Python $AppScript' not in launcher
     assert "Lần chạy đầu hoặc môi trường cần được sửa." in launcher

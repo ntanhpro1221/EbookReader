@@ -14,4 +14,4 @@ projectRoot = fileSystem.GetParentFolderName(internalRoot)
 launcher = fileSystem.BuildPath(internalRoot, "scripts\start_windows.ps1")
 command = "powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File """ & launcher & """"
 
-shell.Run command, 0, False
+shell.Run command, 1, False

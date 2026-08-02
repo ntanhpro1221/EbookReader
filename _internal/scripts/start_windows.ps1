@@ -1,8 +1,4 @@
-﻿param(
-    [switch]$SetupConsole
-)
-
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 [Console]::InputEncoding = $utf8
@@ -23,6 +19,9 @@ $Pythonw = Join-Path $RuntimeRoot ".venv\Scripts\pythonw.exe"
 $SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"
 $ShortcutScript = Join-Path $PSScriptRoot "install_windows_shortcut.ps1"
 $AppScript = Join-Path $InternalRoot "app.py"
+$StartupPollMilliseconds = 250
+$StartupProgressIntervalSeconds = 5
+$StartupWindowTimeoutSeconds = 180
 
 Set-Location $ProjectRoot
 
@@ -52,21 +51,44 @@ function Wait-BeforeClose {
     Read-Host "Nhấn Enter để đóng"
 }
 
-function Start-SetupConsole {
-    $arguments = @(
-        "-NoLogo"
-        "-NoProfile"
-        "-ExecutionPolicy"
-        "Bypass"
-        "-File"
-        "`"$PSCommandPath`""
-        "-SetupConsole"
-    )
-    Start-Process -FilePath "powershell.exe" -ArgumentList $arguments -WorkingDirectory $ProjectRoot -WindowStyle Normal
+function Show-StartupHeader {
+    Write-Host "============================================================"
+    Write-Host "                    EBOOK READER"
+    Write-Host "============================================================"
+    Write-Host "Đang khởi động Ebook Reader..." -ForegroundColor Cyan
+    Write-Host ""
+}
+
+function Wait-AppWindow([System.Diagnostics.Process]$Process) {
+    $startedAt = [DateTime]::UtcNow
+    $deadline = $startedAt.AddSeconds($StartupWindowTimeoutSeconds)
+    $nextProgress = $startedAt.AddSeconds($StartupProgressIntervalSeconds)
+
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if ($Process.HasExited) {
+            throw "Tiến trình Ebook Reader đã kết thúc với exit code $($Process.ExitCode)."
+        }
+        $Process.Refresh()
+        if ($Process.MainWindowHandle -ne [IntPtr]::Zero) {
+            return
+        }
+        $now = [DateTime]::UtcNow
+        if ($now -ge $nextProgress) {
+            $elapsed = [int]($now - $startedAt).TotalSeconds
+            Write-Host "Ebook Reader vẫn đang khởi động... ${elapsed}s"
+            $nextProgress = $now.AddSeconds($StartupProgressIntervalSeconds)
+        }
+        Start-Sleep -Milliseconds $StartupPollMilliseconds
+    }
+
+    throw "Ebook Reader chưa hiển thị cửa sổ sau $StartupWindowTimeoutSeconds giây."
 }
 
 function Start-App {
-    Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot
+    Write-Host "Đang nạp giao diện..."
+    $process = Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot -PassThru
+    Wait-AppWindow $process
+    Write-Host "Cửa sổ Ebook Reader đã sẵn sàng." -ForegroundColor Green
 }
 
 function Install-AppShortcuts {
@@ -77,18 +99,13 @@ function Install-AppShortcuts {
     }
 }
 
+Show-StartupHeader
 Install-AppShortcuts
+Write-Host "Đang kiểm tra môi trường..."
 $runtimeReady = Test-AppRuntime
 
-if (-not $runtimeReady -and -not $SetupConsole) {
-    Start-SetupConsole
-    exit 0
-}
-
 if (-not $runtimeReady) {
-    Write-Host "============================================================"
-    Write-Host "                    EBOOK READER"
-    Write-Host "============================================================"
+    Write-Host ""
     Write-Host "Lần chạy đầu hoặc môi trường cần được sửa."
     Write-Host "Chương trình sẽ tự động cài đặt và tải model cần thiết."
     Write-Host "Quá trình này cần Internet và có thể sử dụng nhiều dung lượng SSD."
@@ -112,17 +129,17 @@ if (-not $runtimeReady) {
         Wait-BeforeClose
         exit 1
     }
+} else {
+    Write-Host "[OK] Môi trường sẵn sàng."
 }
 
 try {
     Start-App
 } catch {
-    if ($SetupConsole) {
-        Write-Host ""
-        Write-Host "Không thể mở Ebook Reader." -ForegroundColor Red
-        Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
-        Wait-BeforeClose
-    }
+    Write-Host ""
+    Write-Host "Không thể mở Ebook Reader." -ForegroundColor Red
+    Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
+    Wait-BeforeClose
     exit 1
 }
 exit 0

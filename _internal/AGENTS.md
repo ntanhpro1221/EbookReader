@@ -100,7 +100,8 @@ Module chính:
 - `recovery.py`: integrity/checksum recovery.
 - `notifier.py`: Windows notifications.
 - `process_utils.py`: kết thúc an toàn cây process worker/native helper.
-- `scripts/start_windows.ps1`: kiểm tra runtime ở chế độ ẩn, chỉ mở console khi cần setup và mở app bằng `pythonw.exe`.
+- `scripts/start_windows.ps1`: hiện một console ngay khi khởi động, báo tiến độ trong lúc kiểm tra runtime/nạp GUI,
+  mở app bằng `pythonw.exe` và tự đóng console khi cửa sổ chính xuất hiện; lỗi giữ console để người dùng đọc.
 
 ## Quy tắc thay đổi
 

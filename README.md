@@ -12,7 +12,8 @@
 Khi muốn chuyển từ project đang mở sang đầu vào khác, bấm **Book mới**. Settings hiển thị của project cũ
 được đồng bộ từ cấu hình đã khóa, nên thay đổi control trên màn hình không thể âm thầm đổi giọng khi resume.
 
-Không cần mở PowerShell, không cần chạy file setup riêng.
+Không cần tự mở PowerShell hoặc chạy file setup riêng. Launcher hiện một console ngay khi bắt đầu,
+liên tục báo trạng thái trong lúc GUI đang nạp và tự đóng console khi cửa sổ Ebook Reader xuất hiện.
 
 ## Những gì nằm ở thư mục gốc
 
