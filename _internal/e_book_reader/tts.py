@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import math
 import random
 import re
 from pathlib import Path
@@ -11,6 +12,7 @@ import numpy as np
 from .audio_io import AudioQualityError, atomic_write_wav
 from .database import ProjectDB
 from .io_utils import stable_int
+from .text_processing import SPECIAL_AUDIO_KINDS, VOCAL_EFFECT_KIND, vocal_effect_tag
 
 
 FATAL_TTS_MARKERS = (
@@ -39,6 +41,12 @@ EMOTION_TEMPERATURE = {
 }
 PACE_TEMPERATURE_OFFSETS = {"slow": -0.03, "normal": 0.0, "fast": 0.04}
 PACE_SILENCE_PROPORTIONS = {"slow": 0.20, "normal": 0.15, "fast": 0.08}
+VIENEU_FRAMES_PER_SECOND = 17.1
+MIN_GENERATION_FRAMES = 48
+MAX_GENERATION_FRAMES = 300
+GENERATION_PADDING_SECONDS = 2.0
+DEFAULT_EFFECT_MAX_SECONDS = 4.5
+DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
@@ -67,7 +75,27 @@ def _row_value(row: Any, key: str, default: Any) -> Any:
     return default if value is None else value
 
 
-def vieneu_sampling_for_segment(row: Any) -> dict[str, float | int]:
+def _max_new_frames(row: Any, settings: dict[str, Any] | None) -> int:
+    kind = str(_row_value(row, "kind", "narration"))
+    if kind in SPECIAL_AUDIO_KINDS:
+        max_seconds = DEFAULT_EFFECT_MAX_SECONDS
+    else:
+        pace = str(_row_value(row, "pace", "normal"))
+        configured_bounds = (settings or {}).get("tts", {}).get("pace_chars_per_second", {})
+        configured = configured_bounds.get(pace, DEFAULT_PACE_LOWER_BOUNDS.get(pace, 10.5))
+        lower_bound = float(configured[0] if isinstance(configured, (list, tuple)) else configured)
+        speakable_chars = max(1, sum(char.isalnum() for char in str(_row_value(row, "text", ""))))
+        max_seconds = max(3.0, speakable_chars / max(1.0, lower_bound) + GENERATION_PADDING_SECONDS)
+    return max(
+        MIN_GENERATION_FRAMES,
+        min(MAX_GENERATION_FRAMES, math.ceil(max_seconds * VIENEU_FRAMES_PER_SECOND)),
+    )
+
+
+def vieneu_sampling_for_segment(
+    row: Any,
+    settings: dict[str, Any] | None = None,
+) -> dict[str, float | int]:
     emotion = str(_row_value(row, "emotion", "neutral"))
     pace = str(_row_value(row, "pace", "normal"))
     intensity = max(0, min(3, int(_row_value(row, "intensity", 0))))
@@ -82,6 +110,7 @@ def vieneu_sampling_for_segment(row: Any) -> dict[str, float | int]:
         "top_p": min(0.98, 0.92 + 0.015 * intensity),
         "repetition_penalty": 1.2,
         "silence_p": PACE_SILENCE_PROPORTIONS.get(pace, PACE_SILENCE_PROPORTIONS["normal"]),
+        "max_new_frames": _max_new_frames(row, settings),
     }
 
 
@@ -143,13 +172,11 @@ class VieNeuEngine:
     @staticmethod
     def _styled_text(row: Any) -> str:
         text = str(row["text"])
-        emotion = str(_row_value(row, "emotion", "neutral"))
-        intensity = max(0, min(3, int(_row_value(row, "intensity", 0))))
-        lowered = text.casefold()
-        if emotion in {"happy", "excited"} and intensity >= 3 and "[cười]" not in lowered:
-            return f"[cười] {text}"
-        if emotion in {"sad", "tired"} and intensity >= 3 and "[thở dài]" not in lowered:
-            return f"[thở dài] {text}"
+        if str(_row_value(row, "kind", "")) == VOCAL_EFFECT_KIND:
+            tag = vocal_effect_tag(text)
+            if not tag:
+                raise AudioQualityError(f"Unsupported vocal effect text: {text!r}")
+            return tag
         return text
 
     def generate_one(self, row: Any, profile: Any, seed: int) -> np.ndarray:
@@ -163,7 +190,7 @@ class VieNeuEngine:
                     self._styled_text(row),
                     voice=voice,
                     style=style,
-                    **vieneu_sampling_for_segment(row),
+                    **vieneu_sampling_for_segment(row, self.settings),
                 ),
                 dtype=np.float32,
             ).reshape(-1)

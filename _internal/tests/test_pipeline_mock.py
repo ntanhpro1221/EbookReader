@@ -45,7 +45,7 @@ class FakeTTS:
 
 def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "001.txt"
-    source.write_text("Đây là một đoạn kể chuyện đủ dài để kiểm tra pipeline.", encoding="utf-8")
+    source.write_text("Rầm! Cánh cửa mở ra.\n\nĐây là một đoạn kể chuyện đủ dài để kiểm tra pipeline.", encoding="utf-8")
     settings = build_settings(overrides={
         "analysis": {"enabled": False},
         "asr": {"enabled": False},
@@ -62,10 +62,12 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     monkeypatch.setattr("e_book_reader.pipeline.assemble_chapter_atomic", fake_chapter)
     monkeypatch.setattr("e_book_reader.pipeline.verify_mp3", lambda path: (path.exists(), "ok"))
     verify_calls = 0
+    verified_texts: list[str] = []
 
     def fake_verify(_verifier, expected, wav_path):
         nonlocal verify_calls
         verify_calls += 1
+        verified_texts.append(expected)
         passed = verify_calls > 1
         return {
             "passed": passed,
@@ -93,7 +95,11 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert db.book()["status"] == "completed"
     assert db.list_chapters()[0]["status"] == "completed"
     assert db.casting_is_finalized() is True
-    assert int(db.list_segments()[0]["generation_seed"]) == 1
+    segments = db.list_segments()
+    assert int(segments[0]["generation_seed"]) == 1
+    assert segments[0]["kind"] == "text_sfx"
+    assert segments[0]["status"] in {"verified", "warning"}
+    assert "Rầm!" not in verified_texts
     assert any(kind == "chapter_completed" for kind, _ in events)
     progress_labels = [
         str(payload["label"])

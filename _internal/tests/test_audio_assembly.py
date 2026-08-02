@@ -89,16 +89,41 @@ def test_segment_leveling_matches_neutral_voices_and_preserves_loud_intent() -> 
     assert loud_db > quiet_db + 2.0
 
 
-def test_segment_rate_validation_rejects_wrong_pace() -> None:
+def test_segment_rate_validation_warns_for_mild_outlier_and_rejects_extreme() -> None:
     settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
-    audio = np.sin(np.linspace(0, 200, 48_000 * 6, dtype=np.float32)) * 0.12
     text = "a" * 60
+    mildly_slow = np.sin(np.linspace(0, 200, 48_000 * 6, dtype=np.float32)) * 0.12
+    extremely_slow = np.sin(np.linspace(0, 200, 48_000 * 12, dtype=np.float32)) * 0.12
 
-    with pytest.raises(AudioQualityError, match="speech rate outside normal range"):
+    _, metrics = validate_audio_array(
+        mildly_slow,
+        text,
+        settings,
+        48_000,
+        segment={"pace": "normal"},
+    )
+
+    assert metrics["pace_outlier"] == 1.0
+    with pytest.raises(AudioQualityError, match="far outside normal safety range"):
         validate_audio_array(
-            audio,
+            extremely_slow,
             text,
             settings,
             48_000,
             segment={"pace": "normal"},
         )
+
+
+def test_vocal_effect_skips_speech_rate_validation() -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    audio = np.sin(np.linspace(0, 200, 48_000 * 4, dtype=np.float32)) * 0.12
+
+    _, metrics = validate_audio_array(
+        audio,
+        "Ha ha ha ha ha ha ha ha ha ha ha ha",
+        settings,
+        48_000,
+        segment={"kind": "vocal_effect", "pace": "normal"},
+    )
+
+    assert "chars_per_second" not in metrics

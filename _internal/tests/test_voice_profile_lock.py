@@ -87,14 +87,22 @@ def test_emotion_changes_delivery_but_not_locked_voice(monkeypatch) -> None:
         "intensity": 0,
     }
     excited = {**neutral, "emotion": "excited", "intensity": 3}
+    laughter = {
+        **excited,
+        "text": "“Ha…”",
+        "kind": "vocal_effect",
+    }
 
     engine.generate_one(neutral, profile, 1)
     engine.generate_one(excited, profile, 2)
+    engine.generate_one(laughter, profile, 3)
 
-    assert [call[1]["voice"] for call in runtime.calls] == ["Thái Sơn", "Thái Sơn"]
+    assert [call[1]["voice"] for call in runtime.calls] == ["Thái Sơn", "Thái Sơn", "Thái Sơn"]
     assert runtime.calls[0][0] == neutral["text"]
-    assert runtime.calls[1][0] == f"[cười] {neutral['text']}"
+    assert runtime.calls[1][0] == neutral["text"]
+    assert runtime.calls[2][0] == "[cười]"
     assert runtime.calls[1][1]["temperature"] > runtime.calls[0][1]["temperature"]
+    assert runtime.calls[2][1]["max_new_frames"] < 300
     assert vieneu_sampling_for_segment(excited)["top_p"] > vieneu_sampling_for_segment(neutral)["top_p"]
     assert vieneu_sampling_for_segment({**neutral, "pace": "slow"})["silence_p"] > (
         vieneu_sampling_for_segment({**neutral, "pace": "fast"})["silence_p"]

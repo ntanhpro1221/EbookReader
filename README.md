@@ -36,8 +36,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   không đổi sang một người đọc khác giữa chừng.
 - Từ điển phát âm có confidence được checkpoint trong SQLite, áp dụng đồng nhất cho TTS và câu đối chiếu ASR.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
-- Mỗi file TXT luôn tạo một MP3 chapter tương ứng. Tùy chọn **Tạo thêm một MP3 toàn book** mặc định tắt;
-  khi bật, app ghép thêm một file MP3 toàn book sau khi tất cả chapter hoàn tất.
+- Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
+- Vocal-effect đứng riêng như `ha...`, `haiz...`, `[cười]`, `[thở dài]`, `[hắng giọng]` và từ tượng thanh
+  như `rầm`, `uỳnh` được tách thành segment độc lập, giữ đúng vị trí khi ghép chapter.
+- Vocal-effect dùng thẻ phi ngôn ngữ gốc của VieNeu. Từ tượng thanh vẫn do TTS đọc, không giả làm file hiệu ứng âm thanh thật.
 - Giao diện hiển thị tiến độ riêng cho chuẩn bị văn bản, phân tích, phân vai, tạo audio, Whisper,
   sửa lỗi, ghép MP3 và xuất báo cáo.
 - Trong lúc chạy, tool không dừng để hỏi lựa chọn. Trường hợp mơ hồ được xử lý theo policy và ghi vào report.
@@ -55,6 +57,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Không chèn im lặng để che đoạn TTS bị lỗi.
 - Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,
   quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
+- Giới hạn sinh audio được tính theo độ dài và pace của từng segment để một câu rất ngắn không chạy tới
+  trần toàn cục của model. Sai lệch tốc độ nhẹ được ghi warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
+- Vocal-effect và từ tượng thanh có giới hạn thời lượng riêng, không bị đánh giá bằng số ký tự/giây và không đưa qua Whisper.
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Nếu phải tự dừng vì SSD/RAM/GPU/driver hoặc lỗi nghiêm trọng, app checkpoint và gửi Windows notification.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.

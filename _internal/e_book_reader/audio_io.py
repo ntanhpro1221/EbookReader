@@ -9,6 +9,7 @@ import numpy as np
 import soundfile as sf
 
 from .io_utils import atomic_write_text, ffmpeg_executable, run_hidden, sha256_file
+from .text_processing import SPECIAL_AUDIO_KINDS
 
 
 class AudioQualityError(RuntimeError):
@@ -23,6 +24,9 @@ EMOTION_LEVEL_OFFSETS_DB = {
     "tired": -1.0,
     "tender": -0.5,
 }
+EFFECT_MAX_SECONDS = 5.0
+RATE_HARD_MIN_FACTOR = 0.55
+RATE_HARD_MAX_FACTOR = 1.50
 
 
 def _segment_value(segment: Any, key: str, default: Any) -> Any:
@@ -113,7 +117,14 @@ def validate_audio_array(
     metrics = signal_metrics(array, sample_rate)
     chars = max(1, len(text.strip()))
     min_duration = max(0.20, chars / 100 * float(settings["tts"]["min_seconds_per_100_chars"]))
-    max_duration = max(5.0, chars / 100 * float(settings["tts"]["max_seconds_per_100_chars"]) + 8.0)
+    kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
+    if kind in SPECIAL_AUDIO_KINDS:
+        max_duration = EFFECT_MAX_SECONDS
+    else:
+        max_duration = max(
+            5.0,
+            chars / 100 * float(settings["tts"]["max_seconds_per_100_chars"]) + 8.0,
+        )
     if metrics["duration"] < min_duration:
         raise AudioQualityError(f"audio too short: {metrics['duration']:.2f}s < {min_duration:.2f}s")
     if metrics["duration"] > max_duration:
@@ -123,19 +134,28 @@ def validate_audio_array(
     if metrics["clipping_fraction"] > float(settings["tts"]["max_clipping_fraction"]):
         raise AudioQualityError(f"audio clipping: {metrics['clipping_fraction']:.4%}")
     speakable_chars = sum(char.isalnum() for char in text)
-    if segment is not None and speakable_chars >= int(settings["tts"].get("rate_check_min_chars", 24)):
+    if (
+        segment is not None
+        and kind not in SPECIAL_AUDIO_KINDS
+        and speakable_chars >= int(settings["tts"].get("rate_check_min_chars", 24))
+    ):
         pace = str(_segment_value(segment, "pace", "normal"))
         bounds = settings["tts"]["pace_chars_per_second"].get(
             pace,
             settings["tts"]["pace_chars_per_second"]["normal"],
         )
         rate = speakable_chars / metrics["duration"]
-        if rate < float(bounds[0]) or rate > float(bounds[1]):
+        lower_bound = float(bounds[0])
+        upper_bound = float(bounds[1])
+        hard_lower = lower_bound * RATE_HARD_MIN_FACTOR
+        hard_upper = upper_bound * RATE_HARD_MAX_FACTOR
+        if rate < hard_lower or rate > hard_upper:
             raise AudioQualityError(
-                f"speech rate outside {pace} range: {rate:.2f} chars/s not in "
-                f"[{float(bounds[0]):.2f}, {float(bounds[1]):.2f}]"
+                f"speech rate far outside {pace} safety range: {rate:.2f} chars/s not in "
+                f"[{hard_lower:.2f}, {hard_upper:.2f}]"
             )
         metrics["chars_per_second"] = float(rate)
+        metrics["pace_outlier"] = float(rate < lower_bound or rate > upper_bound)
     return array, metrics
 
 

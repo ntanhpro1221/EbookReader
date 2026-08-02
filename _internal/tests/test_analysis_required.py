@@ -161,3 +161,37 @@ def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
     assert all(is_local_speaker(speaker) for speaker in speakers)
     assert "c00001::b0007" in speakers[0]
     assert local_speaker_display(speakers[0]) == "NPC áo xanh"
+
+
+def test_source_effect_kinds_cannot_be_overwritten_by_analysis() -> None:
+    vocal_row = {
+        **analysis_group()[0],
+        "kind_hint": "vocal_effect",
+        "text": "“Ha…”",
+    }
+    effect_item = analysis_item(vocal_row["stable_id"])
+    effect_item.update({"kind": "dialogue", "speaker": "Lucien"})
+    sfx_row = {
+        **analysis_group()[1],
+        "kind_hint": "text_sfx",
+        "text": "Rầm!",
+    }
+    sfx_item = analysis_item(sfx_row["stable_id"])
+    sfx_item.update({"kind": "dialogue", "speaker": "UNKNOWN"})
+
+    validated = _validate([vocal_row, sfx_row], {"segments": [effect_item, sfx_item]})
+
+    assert validated[vocal_row["stable_id"]]["kind"] == "vocal_effect"
+    assert validated[vocal_row["stable_id"]]["speaker"] == "Lucien"
+    assert validated[sfx_row["stable_id"]]["kind"] == "text_sfx"
+    assert validated[sfx_row["stable_id"]]["speaker"] == "NARRATOR"
+
+
+def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
+    row = analysis_group()[0]
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "vocal_effect", "speaker": "Lucien"})
+
+    validated = _validate([row], {"segments": [item]})
+
+    assert validated[row["stable_id"]]["kind"] == row["kind_hint"]

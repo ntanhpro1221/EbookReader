@@ -6,6 +6,8 @@ import pytest
 
 from e_book_reader.io_utils import decode_text_bytes, sha256_file
 from e_book_reader.text_processing import (
+    TEXT_SFX_KIND,
+    VOCAL_EFFECT_KIND,
     build_chapter_manifest,
     load_and_segment_chapter,
     segment_chapter_text,
@@ -70,3 +72,28 @@ def test_punctuation_only_content_never_becomes_tts_segment() -> None:
     assert [row["text"] for row in rows] == ["Một câu kể.", "Một câu khác."]
     assert all(any(char.isalnum() for char in row["text"]) for row in rows)
     assert segment_chapter_text(1, "…\n,\n.") == []
+
+
+def test_standalone_vocalizations_become_vocal_effect_segments() -> None:
+    rows = segment_chapter_text(1, '“Ha…”\n“Ha ha ha...”\n“Haiz…”\n“Hầy...”\n“Hừm...”\n“Khụ khụ...”\n“Ha?”')
+
+    assert [row["kind_hint"] for row in rows] == [
+        VOCAL_EFFECT_KIND,
+        VOCAL_EFFECT_KIND,
+        VOCAL_EFFECT_KIND,
+        VOCAL_EFFECT_KIND,
+        VOCAL_EFFECT_KIND,
+        VOCAL_EFFECT_KIND,
+        "dialogue",
+    ]
+
+
+def test_inline_effect_and_text_sfx_are_split_into_independent_segments() -> None:
+    rows = segment_chapter_text(1, '— [cười] Ta thắng rồi!\n\nRầm! Cánh cửa bật mở.')
+
+    assert [(row["text"], row["kind_hint"]) for row in rows] == [
+        ("[cười]", VOCAL_EFFECT_KIND),
+        ("Ta thắng rồi!", "dialogue"),
+        ("Rầm!", TEXT_SFX_KIND),
+        ("Cánh cửa bật mở.", "narration"),
+    ]

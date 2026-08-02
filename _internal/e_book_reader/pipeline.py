@@ -21,7 +21,7 @@ from .database import ProjectDB
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
-from .text_processing import has_spoken_content, load_and_segment_chapter
+from .text_processing import SPECIAL_AUDIO_KINDS, has_spoken_content, load_and_segment_chapter
 from .recovery import recover_project
 from .resource_manager import AdaptiveResourceManager
 from .tts import TTSCoordinator, is_fatal_tts_error
@@ -438,6 +438,13 @@ class BookPipeline:
                     signal=metrics,
                     generation_seed=seed,
                 )
+                if metrics.get("pace_outlier"):
+                    self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
+                    self.log(
+                        f"TTS segment {row['stable_id']} lệch tốc độ mục tiêu "
+                        f"({metrics['chars_per_second']:.2f} chars/s) nhưng vẫn trong giới hạn an toàn; "
+                        "chuyển sang Whisper kiểm tra."
+                    )
                 return
             except Exception as exc:  # noqa: BLE001
                 if is_fatal_tts_error(exc):
@@ -446,29 +453,40 @@ class BookPipeline:
                 self.log(f"TTS segment {row['stable_id']} lỗi lần {attempt + 1}/{retries}: {last_error}")
                 time.sleep(min(8, 2 ** attempt))
 
-        try:
-            split_seed = self.tts.generation_seed(row, "split")
-            self.db.mark_generating(int(row["id"]), split_seed)
-            self._synthesize_split(row, output)
-            valid, metrics, reason = inspect_wav(
-                output,
-                str(row["text"]),
-                self.settings,
-                segment=row,
+        if str(row["kind"]) in SPECIAL_AUDIO_KINDS:
+            last_error = f"{last_error}; split=not applicable to {row['kind']}"
+        else:
+            self.log(
+                f"TTS segment {row['stable_id']} đã lỗi {retries}/{retries}; "
+                "đang thử chia nhỏ để cứu."
             )
-            if not valid:
-                raise AudioQualityError(reason)
-            checksum = sha256_file(output)
-            self.db.mark_signal_passed(
-                int(row["id"]), wav_path=output, wav_sha256=checksum,
-                duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
-            )
-            self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
-            return
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"{last_error}; split={exc}"
+            try:
+                split_seed = self.tts.generation_seed(row, "split")
+                self.db.mark_generating(int(row["id"]), split_seed)
+                self._synthesize_split(row, output)
+                valid, metrics, reason = inspect_wav(
+                    output,
+                    str(row["text"]),
+                    self.settings,
+                    segment=row,
+                )
+                if not valid:
+                    raise AudioQualityError(reason)
+                checksum = sha256_file(output)
+                self.db.mark_signal_passed(
+                    int(row["id"]), wav_path=output, wav_sha256=checksum,
+                    duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
+                )
+                self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
+                if metrics.get("pace_outlier"):
+                    self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
+                self.log(f"Đã cứu TTS segment {row['stable_id']} bằng cách chia nhỏ.")
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = f"{last_error}; split={exc}"
 
         self.db.mark_failed(int(row["id"]), last_error)
+        self.log(f"TTS segment {row['stable_id']} thất bại hoàn toàn: {last_error}")
         self.db.event(
             "error",
             "SEGMENT_TTS_FAILED",
@@ -537,6 +555,10 @@ class BookPipeline:
             mismatches: list[dict[str, Any]] = []
             self._progress(label, 0, len(items))
             for index, item in enumerate(items, 1):
+                if str(item["kind"]) in SPECIAL_AUDIO_KINDS:
+                    self.db.mark_verified(int(item["id"]), warning_code=str(item.get("warning_code") or "") or None)
+                    self._progress(label, index, len(items))
+                    continue
                 self._resource_gate(
                     f"Whisper chapter {chapter['chapter_index']} segment {item['seq']}",
                     release_active=verifier.unload,

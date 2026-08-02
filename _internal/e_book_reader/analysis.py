@@ -13,9 +13,10 @@ from typing import Any, Callable
 import requests
 
 from .database import ProjectDB
+from .text_processing import SPECIAL_AUDIO_KINDS, TEXT_SFX_KIND, VOCAL_EFFECT_KIND
 
 
-ALLOWED_KINDS = {"narration", "dialogue", "thought"}
+ALLOWED_KINDS = {"narration", "dialogue", "thought", VOCAL_EFFECT_KIND, TEXT_SFX_KIND}
 ALLOWED_GENDERS = {"male", "female", "unknown"}
 ALLOWED_AGES = {"child", "teen", "young", "adult", "elderly", "unknown"}
 ALLOWED_EMOTIONS = {
@@ -90,13 +91,17 @@ Quy tắc:
    Giữ cùng nhãn cho cùng người trong các đoạn liên tiếp của batch; dùng nhãn khác cho người khác.
    Chỉ dùng UNKNOWN khi hoàn toàn không có dấu hiệu phân biệt người nói.
 3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ nếu suy ra được.
-4. Không sửa văn bản. Không bịa nhân vật chỉ vì đại từ hắn/cô ấy/nàng.
-5. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng. pace và volume phải phản ánh
+4. Giữ nguyên hint=vocal_effect hoặc hint=text_sfx. vocal_effect vẫn dùng speaker của người phát ra
+   âm thanh nếu suy ra được; text_sfx luôn dùng speaker=NARRATOR. Chỉ dùng vocal_effect cho âm thanh
+   phát ra từ miệng đứng riêng và text_sfx cho từ tượng thanh đứng riêng; câu có lời nói không được đổi
+   cả câu thành effect.
+5. Không sửa văn bản. Không bịa nhân vật chỉ vì đại từ hắn/cô ấy/nàng.
+6. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng. pace và volume phải phản ánh
    cách thể hiện: lời thì thầm thường soft, lời quát/giận dữ mạnh thường loud, không mặc định mọi câu là normal.
-6. gender/age mô tả người nói, NARRATOR dùng unknown.
-7. Với tên riêng hoặc thuật ngữ khó đọc, thêm pronunciation: surface phải xuất hiện nguyên văn trong batch,
+7. gender/age mô tả người nói, NARRATOR dùng unknown.
+8. Với tên riêng hoặc thuật ngữ khó đọc, thêm pronunciation: surface phải xuất hiện nguyên văn trong batch,
    spoken_form là cách viết tiếng Việt giúp TTS đọc đúng; không thêm từ phổ thông hoặc mục không chắc chắn.
-8. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
+9. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
 """
 
 
@@ -158,7 +163,7 @@ def _heuristic(row: Any) -> dict[str, Any]:
     text = str(row["text"])
     lowered = text.casefold()
     kind = str(row["kind_hint"])
-    speaker = "NARRATOR" if kind == "narration" else "UNKNOWN"
+    speaker = "NARRATOR" if kind in {"narration", TEXT_SFX_KIND} else "UNKNOWN"
     emotion, intensity, pace, volume = "neutral", 1, "normal", "normal"
     if any(word in lowered for word in ("khóc", "nước mắt", "đau lòng", "buồn", "tuyệt vọng")):
         emotion, pace, volume = "sad", "slow", "soft"
@@ -196,9 +201,14 @@ def _validate(
         seg_id = str(item.get("id", ""))
         if seg_id not in expected or seg_id in result:
             continue
-        kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, "narration")
+        source_kind = str(rows_by_id[seg_id]["kind_hint"])
+        analyzed_kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, "narration")
+        if source_kind in SPECIAL_AUDIO_KINDS or analyzed_kind in SPECIAL_AUDIO_KINDS:
+            kind = source_kind
+        else:
+            kind = analyzed_kind
         speaker = _canonical_speaker(item.get("speaker"))
-        if kind == "narration":
+        if kind in {"narration", TEXT_SFX_KIND}:
             speaker = "NARRATOR"
         else:
             speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)

@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **62/62 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **67/67 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
@@ -39,6 +39,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - required-analysis batch failure không được fallback ngầm;
 - stereo WAV bị từ chối, ASR optional chuyển lỗi inference thành warning;
 - cụm từ đặt trong ngoặc kép không bị nhận nhầm thành hội thoại, segment chỉ có dấu câu không đi vào TTS;
+- vocal-effect (`ha...`, `haiz...`, thẻ VieNeu) và từ tượng thanh (`rầm`, `uỳnh`...) được tách thành
+  segment checkpoint riêng; effect dùng giới hạn thời lượng riêng và bỏ qua kiểm tra tốc độ/Whisper;
+- giới hạn frame VieNeu thay đổi theo độ dài/pace để câu ngắn không chạy tới trần model; lệch pace nhẹ
+  trở thành warning còn sai lệch cực đoan vẫn bị từ chối;
 - NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ và catalog đủ 14 preset được dùng hết
   trước khi tái sử dụng nếu book có đủ vai;
 - cùng nhân vật giữ nguyên preset khi emotion delivery thay đổi; mức âm lượng trung tính được cân bằng
