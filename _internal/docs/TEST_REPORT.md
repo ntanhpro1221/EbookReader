@@ -54,7 +54,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
 - dropdown người kể có đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
   preset đang chọn nếu preset đó vẫn còn trong kết quả lọc;
-- cùng nhân vật giữ nguyên preset và biến thể cao độ tối đa ±2 bán âm; thought bắt buộc giữ speaker nhân vật;
+- cùng nhân vật giữ nguyên preset và biến thể cao độ tối đa ±2 bán âm; thought thử lại đủ số lần để tìm
+  speaker nhân vật, chỉ fallback sang NARRATOR kèm warning khi vẫn không xác định được;
   mức âm lượng trung tính được cân bằng
   còn chỉ dẫn loud vẫn được giữ lớn hơn có chủ đích;
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;

@@ -30,7 +30,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "voices": {
         "narrator_gender": "male",
-        "narrator_voice": "Phạm Tuyên",
+        "narrator_voice": "Thái Sơn",
         "minimum_named_character_mentions": 3,
         "max_character_pitch_semitones": 2,
         "narrator_description": (

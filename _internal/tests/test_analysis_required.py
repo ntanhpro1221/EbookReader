@@ -18,11 +18,8 @@ from e_book_reader.config import build_settings
 class FakeDB:
     def __init__(self):
         self.events = []
-
-    def list_segments(self, statuses=None):
-        if statuses is not None:
-            return []
-        return [
+        self.updated = []
+        self.rows = [
             {
                 "id": 1,
                 "stable_id": "c1s1",
@@ -34,11 +31,19 @@ class FakeDB:
             }
         ]
 
+    def list_segments(self, statuses=None):
+        if statuses is not None:
+            return []
+        return self.rows
+
     def list_chapters(self):
         return [{"id": 1, "title": "Chương 1"}]
 
     def event(self, level, code, message, details=None):
         self.events.append((level, code, message, details))
+
+    def update_analysis(self, segment_id, data, low_confidence_threshold):
+        self.updated.append((segment_id, data, low_confidence_threshold))
 
 
 class FakeResponse:
@@ -217,18 +222,53 @@ def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
     assert validated[row["stable_id"]]["kind"] == row["kind_hint"]
 
 
-def test_thought_requires_the_character_speaker_and_never_uses_narrator() -> None:
+def test_thought_uses_narrator_only_when_explicit_fallback_is_enabled() -> None:
     row = analysis_group()[0]
     narrator_thought = analysis_item(row["stable_id"])
     narrator_thought.update({"kind": "thought", "speaker": "NARRATOR"})
 
     assert _validate([row], {"segments": [narrator_thought]}) == {}
+    fallback = _validate(
+        [row],
+        {"segments": [narrator_thought]},
+        allow_unresolved_thought_narrator=True,
+    )
+    assert fallback[row["stable_id"]]["speaker"] == "NARRATOR"
+    assert "không xác định được người đang nghĩ" in fallback[row["stable_id"]]["notes"]
 
     character_thought = {**narrator_thought, "speaker": "Alisa", "gender": "female"}
     validated = _validate([row], {"segments": [character_thought]})
 
     assert validated[row["stable_id"]]["kind"] == "thought"
     assert validated[row["stable_id"]]["speaker"] == "Alisa"
+
+
+def test_unresolved_thought_retries_then_falls_back_to_narrator(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows[0].update({"text": "(Mình nên làm gì bây giờ?)", "kind_hint": "thought"})
+    settings = build_settings()
+    logs: list[str] = []
+    analyzer = OllamaBookAnalyzer(settings, db, logs.append)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("e_book_reader.analysis.time.sleep", lambda _seconds: None)
+    attempts = 0
+
+    def unresolved_request(_group, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        item = analysis_item("c1s1")
+        item.update({"kind": "thought", "speaker": "UNKNOWN"})
+        return {"segments": [item]}
+
+    monkeypatch.setattr(analyzer, "_request", unresolved_request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert attempts == settings["analysis"]["max_retries"]
+    assert db.updated[0][1]["kind"] == "thought"
+    assert db.updated[0][1]["speaker"] == "NARRATOR"
+    assert any(event[1] == "THOUGHT_SPEAKER_NARRATOR_FALLBACK" for event in db.events)
+    assert any("dùng giọng người kể" in message for message in logs)
 
 
 def test_streaming_analysis_request_can_be_cancelled() -> None:

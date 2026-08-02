@@ -103,8 +103,9 @@ Quy tắc:
    speaker=NPC_LOCAL:<nhãn ngắn>, ví dụ NPC_LOCAL:áo xanh hoặc NPC_LOCAL:lính gác 1.
    Giữ cùng nhãn cho cùng người trong các đoạn liên tiếp của batch; dùng nhãn khác cho người khác.
    Chỉ dùng UNKNOWN khi hoàn toàn không có dấu hiệu phân biệt người nói.
-3. Độc thoại nội tâm dùng kind=thought và speaker bắt buộc là nhân vật đang nghĩ. Không bao giờ dùng
-   speaker=NARRATOR hoặc UNKNOWN cho thought; hãy dùng ngữ cảnh lân cận và ngôi kể để xác định đúng nhân vật.
+3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ. Hãy dùng ngữ cảnh lân cận
+   và ngôi kể để xác định nhân vật; không dùng NARRATOR. Chỉ trả UNKNOWN khi thực sự không thể
+   suy ra, không được bịa ra danh tính.
 4. Giữ nguyên hint=vocal_effect hoặc hint=text_sfx. vocal_effect vẫn dùng speaker của người phát ra
    âm thanh nếu suy ra được; text_sfx luôn dùng speaker=NARRATOR. Chỉ dùng vocal_effect cho âm thanh
    phát ra từ miệng đứng riêng và text_sfx cho từ tượng thanh đứng riêng; câu có lời nói không được đổi
@@ -210,6 +211,8 @@ def _validate(
     group: list[Any],
     payload: dict[str, Any],
     local_scope: str = "b0000",
+    *,
+    allow_unresolved_thought_narrator: bool = False,
 ) -> dict[str, dict[str, Any]]:
     expected = {str(row["stable_id"]) for row in group}
     rows_by_id = {str(row["stable_id"]): row for row in group}
@@ -225,12 +228,19 @@ def _validate(
         else:
             kind = analyzed_kind
         speaker = _canonical_speaker(item.get("speaker"))
+        unresolved_thought_fallback = False
         if kind in {"narration", TEXT_SFX_KIND}:
             speaker = "NARRATOR"
         elif kind == "thought" and speaker in {"NARRATOR", "UNKNOWN"}:
-            continue
+            if not allow_unresolved_thought_narrator:
+                continue
+            speaker = "NARRATOR"
+            unresolved_thought_fallback = True
         else:
             speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)
+        notes = str(item.get("notes", ""))[:500]
+        if unresolved_thought_fallback:
+            notes = (notes + "; " if notes else "") + "không xác định được người đang nghĩ; dùng người kể"
         result[seg_id] = {
             "kind": kind,
             "speaker": speaker,
@@ -242,7 +252,7 @@ def _validate(
             "volume": _safe_choice(item.get("volume"), ALLOWED_VOLUMES, "normal"),
             "confidence": max(0.0, min(1.0, float(item.get("confidence", 0.5)))),
             "personality_hint": str(item.get("personality_hint", ""))[:300],
-            "notes": str(item.get("notes", ""))[:500],
+            "notes": notes[:500],
         }
     return result
 
@@ -569,6 +579,33 @@ class OllamaBookAnalyzer:
                         last_error = str(exc)
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
+            if len(validated) != len(group) and payload:
+                fallback_validated = _validate(
+                    group,
+                    payload,
+                    local_scope=f"b{group_index:04d}",
+                    allow_unresolved_thought_narrator=True,
+                )
+                fallback_count = sum(
+                    data["kind"] == "thought" and data["speaker"] == "NARRATOR"
+                    for data in fallback_validated.values()
+                )
+                if len(fallback_validated) == len(group) and fallback_count:
+                    validated = fallback_validated
+                    message = (
+                        f"Sau {retry_count} lần phân tích batch {group_index}, còn {fallback_count} "
+                        "đoạn nội tâm không xác định được nhân vật; dùng giọng người kể."
+                    )
+                    self.log(message)
+                    self.db.event(
+                        "warning",
+                        "THOUGHT_SPEAKER_NARRATOR_FALLBACK",
+                        message,
+                        {
+                            "batch_index": group_index,
+                            "fallback_segments": fallback_count,
+                        },
+                    )
             if len(validated) != len(group) and required:
                 message = (
                     f"Phân tích bắt buộc thất bại ở batch {group_index}: "

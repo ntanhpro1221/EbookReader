@@ -23,7 +23,7 @@ STYLE_PRIORITY = {
 }
 CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 DEFAULT_NARRATOR_BY_GENDER = {
-    GENDER_MALE: "Phạm Tuyên",
+    GENDER_MALE: "Thái Sơn",
     GENDER_FEMALE: "Ngọc Linh",
 }
 

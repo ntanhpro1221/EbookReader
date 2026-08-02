@@ -58,7 +58,7 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.quit_action.text() == "Thoát hoàn toàn"
     assert window.narrator_gender_combo.currentData() == "male"
     assert window.narrator_region_combo.currentData() == ""
-    assert window.narrator_voice_combo.currentData() == "Phạm Tuyên"
+    assert window.narrator_voice_combo.currentData() == "Thái Sơn"
     available_narrators = {
         window.narrator_voice_combo.itemData(index)
         for index in range(window.narrator_voice_combo.count())
