@@ -6,12 +6,12 @@ import os
 import threading
 import traceback
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Queue
 from typing import Any
 
 import psutil
 
-from .config import load_settings, settings_hash, validate_settings
+from .config import deep_merge, load_settings, settings_hash, validate_settings
 from .database import ProjectDB
 from .io_utils import sha256_file
 from .models import BookStatus, ProjectPaths
@@ -101,6 +101,17 @@ def _load_locked_settings(paths: ProjectPaths, db: ProjectDB) -> dict[str, Any]:
             "book_settings.json khác settings đã khóa trong SQLite; từ chối resume để tránh đổi giọng/model"
         )
     return locked
+
+
+def _apply_runtime_resource_overrides(
+    locked_settings: dict[str, Any],
+    resource_overrides: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not resource_overrides:
+        return locked_settings
+    settings = deep_merge(locked_settings, {"resources": resource_overrides})
+    validate_settings(settings)
+    return settings
 
 
 def _validate_project_inputs(paths: ProjectPaths, db: ProjectDB, settings: dict[str, Any]) -> None:
@@ -198,6 +209,8 @@ def run_worker(
     pause_event: Any,
     stop_event: Any,
     parent_pid: int,
+    runtime_resource_overrides: dict[str, Any] | None = None,
+    resource_settings_queue: Any = None,
 ) -> None:
     project_root = Path(project_root_str).resolve()
     paths = ProjectPaths.build(project_root)
@@ -214,7 +227,11 @@ def run_worker(
     try:
         run_lock.acquire()
         bootstrap_db = ProjectDB(paths.db, synchronous="FULL")
-        settings = _load_locked_settings(paths, bootstrap_db)
+        locked_settings = _load_locked_settings(paths, bootstrap_db)
+        settings = _apply_runtime_resource_overrides(
+            locked_settings,
+            runtime_resource_overrides,
+        )
         db = ProjectDB(
             paths.db,
             synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")),
@@ -236,6 +253,24 @@ def run_worker(
         )
         heartbeat.start()
         parent_watchdog.start()
+
+        def poll_resource_updates() -> dict[str, Any] | None:
+            if resource_settings_queue is None or settings is None:
+                return None
+            latest: dict[str, Any] | None = None
+            while True:
+                try:
+                    candidate = resource_settings_queue.get_nowait()
+                except (Empty, OSError, ValueError):
+                    break
+                if isinstance(candidate, dict):
+                    latest = candidate
+            if latest is None:
+                return None
+            updated = _apply_runtime_resource_overrides(settings, latest)
+            settings["resources"] = updated["resources"]
+            return dict(settings["resources"])
+
         pipeline = BookPipeline(
             paths=paths,
             db=db,
@@ -243,6 +278,7 @@ def run_worker(
             pause_requested=pause_event.is_set,
             stop_requested=stop_event.is_set,
             emit=emit,
+            resource_updates=poll_resource_updates,
         )
         completed_noop = pipeline.prepare_recovery()
         if not completed_noop and not settings.get("safety", {}).get(

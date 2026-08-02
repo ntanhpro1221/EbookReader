@@ -56,7 +56,7 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.show_action.text() == "Hiện E Book Reader"
     assert window.hide_action.text() == "Ẩn xuống system tray"
     assert window.quit_action.text() == "Thoát hoàn toàn"
-    assert window.narrator_gender_combo.currentData() == "male"
+    assert window.narrator_gender_combo.currentData() == ""
     assert window.narrator_region_combo.currentData() == ""
     assert window.narrator_voice_combo.currentData() == "Thái Sơn"
     assert window.narrator_voice_combo.itemData(0) == "Thái Sơn"
@@ -64,7 +64,11 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
         window.narrator_voice_combo.itemData(index)
         for index in range(window.narrator_voice_combo.count())
     }
-    assert available_narrators == {"Phạm Tuyên", "Thanh Bình", "Xuân Vĩnh", "Thái Sơn", "Quang Sơn"}
+    assert len(available_narrators) == 10
+    assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(available_narrators)
+    assert window.narrator_row.itemAt(0).widget() is window.narrator_voice_combo
+    assert window.narrator_row.itemAt(1).widget() is window.narrator_gender_combo
+    assert window.narrator_row.itemAt(2).widget() is window.narrator_region_combo
     assert not hasattr(window, "settings_note")
     assert APP_ICON_PATH.is_file()
     assert window.windowIcon().isNull() is False
@@ -113,6 +117,10 @@ def test_primary_button_owns_pause_and_resume_states(tmp_path: Path) -> None:
 
     assert window.start_button.text() == "Tạm dừng"
     assert window.start_button.isEnabled() is True
+    assert window.profile_combo.isEnabled() is False
+    assert window.narrator_voice_combo.isEnabled() is False
+    assert window.resource_combo.isEnabled() is True
+    assert window.max_temp.isEnabled() is True
     window._handle_primary_action()
     assert pause_event.is_set() is True
     assert window.start_button.text() == "Tiếp tục"
@@ -121,6 +129,48 @@ def test_primary_button_owns_pause_and_resume_states(tmp_path: Path) -> None:
     assert window.start_button.text() == "Tạm dừng"
 
     window.process = None
+    window.close()
+
+
+def test_global_resource_controls_publish_updates_without_detaching_book(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+    updates: list[dict[str, object]] = []
+
+    class UpdateQueue:
+        @staticmethod
+        def put_nowait(value) -> None:
+            updates.append(value)
+
+    window.resource_settings_queue = UpdateQueue()
+    window.max_temp.setValue(84)
+
+    assert updates[-1] == {
+        "mode": "max_safe_adaptive_foreground",
+        "max_gpu_temp_c": 84,
+        "resume_gpu_temp_c": 78,
+        "critical_gpu_temp_c": 89,
+    }
+    assert window._build_settings()["resources"]["max_gpu_temp_c"] == 86
+    assert window._runtime_resource_overrides()["max_gpu_temp_c"] == 84
+    window.resource_settings_queue = None
+    window.close()
+
+
+def test_global_resources_and_saved_narrator_restore_independently(tmp_path: Path) -> None:
+    _app = QApplication.instance() or QApplication([])
+    store = QSettings(str(tmp_path / "restore-global.ini"), QSettings.Format.IniFormat)
+    store.setValue("resource_mode", "max_safe")
+    store.setValue("max_temp", 84)
+    store.setValue("narrator_voice", "Ngọc Linh")
+
+    window = MainWindow(settings_store=store, restore_recent=False)
+    window.timer.stop()
+
+    assert window.resource_combo.currentData() == "max_safe"
+    assert window.max_temp.value() == 84
+    assert window.narrator_gender_combo.currentData() == ""
+    assert window.narrator_region_combo.currentData() == ""
+    assert window.narrator_voice_combo.currentData() == "Ngọc Linh"
     window.close()
 
 
@@ -308,23 +358,25 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.start_button.isEnabled() is True
     assert window.add_files_button.isEnabled() is True
     assert window.add_folder_button.isEnabled() is True
-    assert window.profile_combo.isEnabled() is True
-    assert window.narrator_gender_combo.isEnabled() is True
-    assert window.narrator_region_combo.isEnabled() is True
-    assert window.narrator_voice_combo.isEnabled() is True
+    assert window.profile_combo.isEnabled() is False
+    assert window.narrator_gender_combo.isEnabled() is False
+    assert window.narrator_region_combo.isEnabled() is False
+    assert window.narrator_voice_combo.isEnabled() is False
     assert window.resource_combo.isEnabled() is True
     assert window.max_temp.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"
     window.file_list.item(0).setSelected(True)
     assert window.remove_files_button.isEnabled() is True
 
-    fast_index = window.profile_combo.findData("fast")
-    window.profile_combo.setCurrentIndex(fast_index)
+    max_safe_index = window.resource_combo.findData("max_safe")
+    window.resource_combo.setCurrentIndex(max_safe_index)
 
-    assert window.project_paths is None
+    assert window.project_paths is not None
+    assert window.project_paths.root == paths.root
     assert window.files == [source.resolve()]
-    assert window.start_button.text() == "Bắt đầu"
-    assert window.profile_combo.isEnabled() is True
+    assert window.start_button.text() == "Tiếp tục"
+    assert window.profile_combo.isEnabled() is False
+    assert store.value("resource_mode") == "max_safe"
     assert window.settings_box.title() == "Thiết lập"
     window.close()
 

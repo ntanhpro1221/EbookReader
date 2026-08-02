@@ -45,6 +45,7 @@ class BookPipeline:
         pause_requested: Callable[[], bool],
         stop_requested: Callable[[], bool],
         emit: Callable[[str, dict[str, Any]], None],
+        resource_updates: Callable[[], dict[str, Any] | None] | None = None,
     ) -> None:
         self.paths = paths
         self.db = db
@@ -52,6 +53,7 @@ class BookPipeline:
         self.pause_requested = pause_requested
         self.stop_requested = stop_requested
         self.emit = emit
+        self.resource_updates = resource_updates
         self.resources = AdaptiveResourceManager(settings, paths.root)
         self.notifier = WindowsNotifier()
         self.tts = TTSCoordinator(settings, db, self.log)
@@ -105,6 +107,16 @@ class BookPipeline:
     ):
         while True:
             self._wait_pause_or_stop()
+            if self.resource_updates is not None:
+                updated_resources = self.resource_updates()
+                if updated_resources is not None:
+                    self.settings["resources"] = updated_resources
+                    self.resources.update_settings(updated_resources)
+                    self.log(
+                        "Đã áp dụng setting tài nguyên global: "
+                        f"mode={updated_resources['mode']}, "
+                        f"GPU tối đa={updated_resources['max_gpu_temp_c']}°C."
+                    )
             decision = self.resources.decide()
             if decision.level != self._last_resource_level:
                 self._last_resource_level = decision.level

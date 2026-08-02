@@ -80,3 +80,22 @@ def test_gpu_temperature_uses_resume_hysteresis(tmp_path: Path) -> None:
     assert cooling.level == ResourceLevel.PAUSE_NEW_WORK
     assert cooling.allow_new_gpu_batch is False
     assert resumed.allow_new_gpu_batch is True
+
+
+def test_global_resource_settings_can_be_updated_while_manager_is_alive(tmp_path: Path) -> None:
+    manager = AdaptiveResourceManager(build_settings(), tmp_path)
+    updated = build_settings(overrides={
+        "resources": {
+            "mode": "max_safe",
+            "max_gpu_temp_c": 90,
+            "resume_gpu_temp_c": 84,
+            "critical_gpu_temp_c": 95,
+        }
+    })
+
+    manager.update_settings(updated["resources"])
+    decision = manager.decide(snapshot(foreground_gpu_percent=90.0, gpu_temp_c=85))
+
+    assert manager.settings["mode"] == "max_safe"
+    assert manager.settings["max_gpu_temp_c"] == 90
+    assert decision.level != ResourceLevel.PAUSE_NEW_WORK

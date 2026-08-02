@@ -161,6 +161,10 @@ class AdaptiveResourceManager:
         self._last_snapshot: ResourceSnapshot | None = None
         self._last_snapshot_at = 0.0
 
+    def update_settings(self, resources: dict[str, Any]) -> None:
+        self.settings = dict(resources)
+        self._last_snapshot_at = 0.0
+
     def snapshot(self, force: bool = False) -> ResourceSnapshot:
         now = time.monotonic()
         if not force and self._last_snapshot is not None and now - self._last_snapshot_at < 1.5:

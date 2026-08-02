@@ -9,7 +9,12 @@ from e_book_reader.config import build_settings, save_settings, settings_hash
 from e_book_reader.database import ProjectDB
 from e_book_reader.io_utils import sha256_file
 from e_book_reader.models import ProjectPaths
-from e_book_reader.worker import ProjectRunLock, _load_locked_settings, _validate_project_inputs
+from e_book_reader.worker import (
+    ProjectRunLock,
+    _apply_runtime_resource_overrides,
+    _load_locked_settings,
+    _validate_project_inputs,
+)
 
 
 def _project(tmp_path: Path):
@@ -53,6 +58,25 @@ def test_worker_rejects_changed_source_file(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="đã đổi kích thước|đã thay đổi nội dung"):
         _validate_project_inputs(paths, db, settings)
+
+
+def test_runtime_resources_override_global_values_without_mutating_book_settings() -> None:
+    locked = build_settings()
+    updated = _apply_runtime_resource_overrides(
+        locked,
+        {
+            "mode": "max_safe",
+            "max_gpu_temp_c": 82,
+            "resume_gpu_temp_c": 76,
+            "critical_gpu_temp_c": 87,
+        },
+    )
+
+    assert locked["resources"]["mode"] == "max_safe_adaptive_foreground"
+    assert locked["resources"]["max_gpu_temp_c"] == 86
+    assert updated["resources"]["mode"] == "max_safe"
+    assert updated["resources"]["max_gpu_temp_c"] == 82
+    assert updated["voices"] == locked["voices"]
 
 
 def test_project_run_lock_is_exclusive(tmp_path: Path) -> None:
