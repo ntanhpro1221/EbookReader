@@ -51,13 +51,6 @@ NAME_PRONUNCIATION_ID_WIDTH = 3
 AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE = 0.85
 CMUDICT_TRANSLITERATION_CONFIDENCE = 0.98
 LOCAL_NAME_FALLBACK_CONFIDENCE = 0.88
-IDENTITY_CONTEXT_RADIUS = 1
-IDENTITY_CONTEXTS_PER_SPEAKER = 4
-IDENTITY_CONTEXT_LINE_CHARS = 220
-ALIAS_RECONCILIATION_BATCH_SIZE = 16
-SELF_IDENTIFICATION_PREFIX_PATTERN = (
-    r"(?:tên(?:\s+đầy\s+đủ)?\s+của\s+(?:mình|tôi|ta)|(?:mình|tôi|ta)\s+tên)\s+là"
-)
 ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
 DIRECT_ADDRESS_TITLES = (
     "anh", "chị", "ông", "bà", "ngài", "cô", "chú", "bác", "dì", "cậu", "em",
@@ -363,9 +356,8 @@ Quy tắc:
    “anh Lucien”, “chị Alisa”, hoặc tên ở đầu câu theo sau bởi dấu phẩy như “Iven, ...” thường là người
    nghe. Tuyệt đối không lấy tên đó làm speaker nếu lời kể lân cận cho thấy một người khác đang nói;
    nếu người nói chưa có tên, dùng NPC_LOCAL với nhãn mô tả người nói.
-3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ. Hãy dùng ngữ cảnh lân cận
-   và ngôi kể để xác định nhân vật. Nếu thực sự không thể suy ra thì dùng speaker=NARRATOR để giọng
-   người kể đọc đoạn đó; không trả UNKNOWN và không bịa ra danh tính.
+3. Độc thoại nội tâm dùng kind=thought và luôn dùng speaker=NARRATOR. Không xác định hoặc lưu danh tính
+   nhân vật đang nghĩ; toàn bộ nội tâm trong mọi chapter đều do người kể đọc.
 4. Chỉ dùng kind=narration, dialogue hoặc thought. Từ tượng thanh như rầm/uỳnh vẫn là một phần của câu
    người kể hoặc nhân vật đang đọc. Cụm cảm thán như ha/haiz/hừm và chỉ dẫn [cười]/[thở dài]/[hắng giọng]
    cũng là lời đọc bình thường của đúng speaker; không tạo kind hiệu ứng riêng và không tách chúng khỏi câu.
@@ -379,32 +371,6 @@ Quy tắc:
    khó đọc khác cũng làm tương tự; không thêm từ phổ thông hoặc tên thuần Việt.
 9. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
 """
-
-
-RECONCILE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "groups": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "canonical": {"type": "string", "maxLength": 120},
-                    "aliases": {
-                        "type": "array",
-                        "items": {"type": "string", "maxLength": 120},
-                    },
-                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "reason": {"type": "string", "maxLength": 240},
-                },
-                "required": ["canonical", "aliases", "confidence", "reason"],
-                "additionalProperties": False,
-            },
-        }
-    },
-    "required": ["groups"],
-    "additionalProperties": False,
-}
 
 
 NAME_PRONUNCIATION_SCHEMA: dict[str, Any] = {
@@ -572,22 +538,24 @@ def _validate(
         source_default = source_kind if source_kind in ALLOWED_KINDS else "narration"
         kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, source_default)
         speaker = _canonical_speaker(item.get("speaker"))
-        unresolved_thought_fallback = False
-        if kind == "narration":
+        if kind in {"narration", "thought"}:
             speaker = "NARRATOR"
-        elif kind == "thought" and speaker in {"NARRATOR", "UNKNOWN"}:
-            speaker = "NARRATOR"
-            unresolved_thought_fallback = True
         else:
             speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)
         notes = str(item.get("notes", ""))[:500]
-        if unresolved_thought_fallback:
-            notes = (notes + "; " if notes else "") + "không xác định được người đang nghĩ; dùng người kể"
         result[seg_id] = {
             "kind": kind,
             "speaker": speaker,
-            "gender": _safe_choice(item.get("gender"), ALLOWED_GENDERS, "unknown"),
-            "age": _safe_choice(item.get("age"), ALLOWED_AGES, "unknown"),
+            "gender": (
+                "unknown"
+                if speaker == "NARRATOR"
+                else _safe_choice(item.get("gender"), ALLOWED_GENDERS, "unknown")
+            ),
+            "age": (
+                "unknown"
+                if speaker == "NARRATOR"
+                else _safe_choice(item.get("age"), ALLOWED_AGES, "unknown")
+            ),
             "emotion": _safe_choice(item.get("emotion"), ALLOWED_EMOTIONS, "neutral"),
             "intensity": max(0, min(3, int(item.get("intensity", 1)))),
             "pace": _safe_choice(item.get("pace"), ALLOWED_PACES, "normal"),
@@ -693,84 +661,6 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             }
         )
     return candidates
-
-
-def _identity_reconciliation_items(
-    rows: list[Any],
-    chapter_titles: dict[int, str],
-) -> list[dict[str, Any]]:
-    eligible_indexes: dict[str, list[int]] = defaultdict(list)
-    first_seen: dict[str, int] = {}
-    for index, row in enumerate(rows):
-        speaker = _canonical_speaker(row["speaker"])
-        if speaker.casefold() in RESERVED_SPEAKERS or is_local_speaker(speaker) or not speaker:
-            continue
-        eligible_indexes[speaker].append(index)
-        first_seen.setdefault(speaker, index)
-
-    items: list[dict[str, Any]] = []
-    for speaker in sorted(eligible_indexes, key=lambda name: first_seen[name]):
-        indexes = eligible_indexes[speaker]
-        edge_count = max(1, IDENTITY_CONTEXTS_PER_SPEAKER // 2)
-        selected_indexes = list(dict.fromkeys(indexes[:edge_count] + indexes[-edge_count:]))
-        examples: list[str] = []
-        for center in selected_indexes:
-            center_row = rows[center]
-            chapter_id = int(center_row["chapter_id"])
-            context_lines: list[str] = []
-            start = max(0, center - IDENTITY_CONTEXT_RADIUS)
-            end = min(len(rows), center + IDENTITY_CONTEXT_RADIUS + 1)
-            for nearby in rows[start:end]:
-                if int(nearby["chapter_id"]) != chapter_id:
-                    continue
-                nearby_speaker = _canonical_speaker(nearby["speaker"])
-                nearby_text = " ".join(str(nearby["text"]).split())[:IDENTITY_CONTEXT_LINE_CHARS]
-                context_lines.append(f"{nearby_speaker}: {nearby_text}")
-            try:
-                seq = int(center_row["seq"])
-            except (KeyError, TypeError, ValueError):
-                seq = center
-            chapter_title = chapter_titles.get(chapter_id, str(chapter_id))
-            excerpt = f"[chapter={chapter_title}; seq={seq}]\n" + "\n".join(context_lines)
-            if excerpt not in examples:
-                examples.append(excerpt)
-        items.append({"name": speaker, "examples": examples})
-    return items
-
-
-def _self_identified_aliases(
-    rows: list[Any],
-    candidate_names: list[str],
-) -> dict[str, str]:
-    """Resolve explicit "tên của mình là X" evidence without relying on an LLM."""
-    names_by_key = {
-        _canonical_speaker(name).casefold(): _canonical_speaker(name)
-        for name in candidate_names
-    }
-    matches_by_speaker: dict[str, set[str]] = defaultdict(set)
-    for row in rows:
-        speaker = _canonical_speaker(row["speaker"])
-        speaker_key = speaker.casefold()
-        if speaker_key not in names_by_key:
-            continue
-        text = " ".join(str(row["text"]).split())
-        for target in sorted(candidate_names, key=lambda value: (-len(value), value.casefold())):
-            canonical = _canonical_speaker(target)
-            if canonical.casefold() == speaker_key:
-                continue
-            target_pattern = r"\s+".join(re.escape(part) for part in canonical.split())
-            pattern = re.compile(
-                rf"(?<!\w){SELF_IDENTIFICATION_PREFIX_PATTERN}\s+{target_pattern}(?!\w)",
-                re.IGNORECASE,
-            )
-            if pattern.search(text):
-                matches_by_speaker[speaker].add(canonical)
-
-    return {
-        speaker: next(iter(targets))
-        for speaker, targets in matches_by_speaker.items()
-        if len(targets) == 1
-    }
 
 
 def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
@@ -1431,25 +1321,6 @@ class OllamaBookAnalyzer:
                         )
                         validated = _validate(group, payload, local_scope=f"b{group_index:04d}")
                         if len(validated) == len(group):
-                            fallback_count = sum(
-                                data["kind"] == "thought" and data["speaker"] == "NARRATOR"
-                                for data in validated.values()
-                            )
-                            if fallback_count:
-                                message = (
-                                    f"Batch {group_index} có {fallback_count} đoạn nội tâm không xác định "
-                                    "được nhân vật; dùng giọng người kể."
-                                )
-                                self.log(message)
-                                self.db.event(
-                                    "warning",
-                                    "THOUGHT_SPEAKER_NARRATOR_FALLBACK",
-                                    message,
-                                    {
-                                        "batch_index": group_index,
-                                        "fallback_segments": fallback_count,
-                                    },
-                                )
                             break
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
                     except AnalysisRequestStopped:
@@ -1847,159 +1718,6 @@ class OllamaBookAnalyzer:
             "tên tiếng Anh hoặc fantasy cần xem xét."
         )
         return converted_count
-
-    def reconcile_aliases(
-        self,
-        before_batch: Callable[[int], None] | None = None,
-        stop_requested: Callable[[], bool] | None = None,
-    ) -> dict[str, str]:
-        """Conservative full-book reconciliation. It never merges low-confidence names automatically."""
-        rows = [row for row in self.db.list_segments() if str(row["status"]) != "pending"]
-        items = _identity_reconciliation_items(rows, self._chapter_titles)
-        if len(items) < 2:
-            return {}
-        max_candidates = int(self.settings.get("max_alias_candidates", 400))
-        if len(items) > max_candidates:
-            message = (
-                f"Alias reconciliation has {len(items)} candidates, above the locked safe limit "
-                f"of {max_candidates}"
-            )
-            self.db.event("error", "ALIAS_CANDIDATE_LIMIT_EXCEEDED", message)
-            if self.settings.get("enabled", True) and self.settings.get("required", True):
-                raise RuntimeError(message)
-            return {}
-        all_names = [item["name"] for item in items]
-        alias_map = _self_identified_aliases(rows, all_names)
-        for alias, canonical in sorted(alias_map.items(), key=lambda item: item[0].casefold()):
-            self.db.event(
-                "info",
-                "ALIAS_SELF_IDENTIFICATION_APPLIED",
-                f"Explicit self-identification merged {alias} into {canonical}",
-                {
-                    "alias": alias,
-                    "canonical": canonical,
-                    "confidence": 1.0,
-                    "rule": "explicit_self_identification",
-                },
-            )
-        if not self.ensure_available():
-            if self.settings.get("enabled", True) and self.settings.get("required", True):
-                raise RuntimeError("Ollama became unavailable before required alias reconciliation")
-            return alias_map
-        # Keep requests bounded. Only high-confidence merges are applied automatically.
-        for batch_index, offset in enumerate(
-            range(0, len(items), ALIAS_RECONCILIATION_BATCH_SIZE),
-            1,
-        ):
-            if before_batch is not None:
-                before_batch(batch_index)
-            batch = items[offset : offset + ALIAS_RECONCILIATION_BATCH_SIZE]
-            prompt = (
-                "Hợp nhất bí danh của cùng một nhân vật trong audiobook dựa trên ngữ cảnh lân cận của toàn sách. "
-                "Tên trước và sau khi chuyển sinh, trọng sinh, đổi thân phận, đổi tên hoặc dùng bí danh phải được "
-                "xem là cùng một người khi ngữ cảnh xác nhận rõ. Ví dụ một nhân vật chôn ký ức quá khứ rồi chấp "
-                "nhận tên/thân phận mới là một identity, không phải hai nhân vật. Không gộp đại từ chung như hắn, "
-                "nàng, cô ấy; không gộp người nói với người chỉ được gọi tên trong lời thoại. Chỉ trả nhóm khi chắc "
-                "chắn từ ngữ cảnh. Canonical phải là tên rõ nhất hoặc tên hiện tại trong aliases.\n\n"
-                f"Toàn bộ tên ứng viên trong sách: {json.dumps(all_names, ensure_ascii=False)}\n\n"
-                + json.dumps(batch, ensure_ascii=False, indent=2)
-            )
-            response_schema = copy.deepcopy(RECONCILE_SCHEMA)
-            groups_schema = response_schema["properties"]["groups"]
-            groups_schema["maxItems"] = len(batch)
-            groups_schema["items"]["properties"]["aliases"]["maxItems"] = len(all_names)
-            num_ctx = int(self.settings.get("num_ctx", 16384))
-            request = {
-                "model": self.model,
-                "system": "Bạn là biên tập viên nhất quán nhân vật. Trả JSON đúng schema.",
-                "prompt": prompt,
-                "format": response_schema,
-                "keep_alive": "10m",
-                "options": {
-                    "temperature": 0.0,
-                    "num_ctx": num_ctx,
-                    "num_predict": _analysis_output_token_limit(len(batch), num_ctx),
-                },
-            }
-            last_error = ""
-            payload: dict[str, Any] | None = None
-            retry_count = int(self.settings.get("max_retries", 3))
-            for attempt in range(retry_count):
-                attempt_number = attempt + 1
-                self.log(
-                    f"Đang hợp nhất bí danh batch {batch_index}: "
-                    f"{len(batch)} nhân vật, lần {attempt_number}/{retry_count}."
-                )
-                try:
-                    payload = self._stream_json_response(
-                        request,
-                        stop_requested=stop_requested,
-                        activity=lambda elapsed, chars, batch_no=batch_index, current=attempt_number: self.log(
-                            f"Hợp nhất bí danh batch {batch_no} lần {current}/{retry_count} "
-                            f"vẫn đang chạy: {elapsed}s, đã nhận {chars:,} ký tự JSON."
-                        ),
-                    )
-                    break
-                except AnalysisRequestStopped:
-                    raise
-                except Exception as exc:  # noqa: BLE001
-                    last_error = str(exc)
-                    time.sleep(min(8, 2 ** attempt))
-            if payload is None:
-                self.db.event("warning", "ALIAS_RECONCILIATION_FAILED", last_error)
-                if self.settings.get("enabled", True) and self.settings.get("required", True):
-                    raise RuntimeError(
-                        f"Required alias reconciliation failed in batch {batch_index}: {last_error}"
-                    )
-                continue
-            try:
-                for group in payload.get("groups", []):
-                    confidence = float(group.get("confidence", 0))
-                    aliases = [_canonical_speaker(x) for x in group.get("aliases", []) if str(x).strip()]
-                    canonical = _canonical_speaker(group.get("canonical", ""))
-                    if confidence < 0.86 or canonical not in aliases or len(aliases) < 2:
-                        continue
-                    if any(alias.casefold() in RESERVED_SPEAKERS for alias in aliases):
-                        continue
-                    if any(alias not in all_names for alias in aliases):
-                        continue
-                    conflicts = {
-                        alias: alias_map[alias]
-                        for alias in aliases
-                        if alias in alias_map and alias_map[alias] != canonical
-                    }
-                    if conflicts:
-                        message = f"Conflicting alias groups for {canonical}: {conflicts}"
-                        self.db.event("error", "ALIAS_RECONCILIATION_CONFLICT", message)
-                        if self.settings.get("enabled", True) and self.settings.get("required", True):
-                            raise RuntimeError(message)
-                        continue
-                    for alias in aliases:
-                        if alias != canonical:
-                            alias_map[alias] = canonical
-                    self.db.event(
-                        "info",
-                        "ALIAS_RECONCILIATION_APPLIED",
-                        f"High-confidence alias group: {canonical}",
-                        {"canonical": canonical, "aliases": aliases, "confidence": confidence},
-                    )
-            except Exception as exc:  # noqa: BLE001
-                self.db.event("warning", "ALIAS_RECONCILIATION_FAILED", str(exc))
-                if self.settings.get("enabled", True) and self.settings.get("required", True):
-                    raise RuntimeError(
-                        f"Required alias reconciliation returned invalid data in batch {batch_index}: {exc}"
-                    ) from exc
-        # Resolve transitive mappings deterministically so A→B and B→C cannot leave A at B.
-        resolved: dict[str, str] = {}
-        for alias in sorted(alias_map, key=str.casefold):
-            canonical = alias_map[alias]
-            visited = {alias}
-            while canonical in alias_map and canonical not in visited:
-                visited.add(canonical)
-                canonical = alias_map[canonical]
-            if canonical not in visited:
-                resolved[alias] = canonical
-        return resolved
 
     def release_model(self) -> None:
         """Unload Qwen from Ollama VRAM while keeping the HTTP session reusable."""

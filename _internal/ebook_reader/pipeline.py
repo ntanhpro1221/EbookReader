@@ -273,14 +273,7 @@ class BookPipeline:
             if self.db.casting_is_finalized():
                 self.log("Voice casting đã khóa từ lần chạy trước; giữ nguyên mapping khi resume.")
             else:
-                self._state("running", "Đang hợp nhất nhân vật và phân vai.")
-                alias_map = analyzer.reconcile_aliases(
-                    before_batch=lambda index: self._resource_gate(
-                        f"alias reconciliation batch {index}",
-                        release_active=analyzer.release_model,
-                    ),
-                    stop_requested=self.stop_requested,
-                )
+                self._state("running", "Đang khóa nhân vật theo tên và phân vai.")
                 self._state("running", "Đang chuẩn hóa cách đọc tên tiếng Anh.")
                 analyzer.reconcile_name_pronunciations(
                     before_batch=lambda index: self._resource_gate(
@@ -289,7 +282,7 @@ class BookPipeline:
                     ),
                     stop_requested=self.stop_requested,
                 )
-                build_registry_and_cast(self.db, self.settings, alias_map, self.log)
+                build_registry_and_cast(self.db, self.settings, self.log)
                 self.db.finalize_casting()
             self.db.update_book(status=BookStatus.CASTING.value, stage="voice_cast_locked")
         except AnalysisRequestStopped as exc:

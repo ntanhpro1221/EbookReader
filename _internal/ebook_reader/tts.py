@@ -255,8 +255,13 @@ class TTSCoordinator:
             self.vieneu.unload()
 
     def generation_seed(self, row: Any, seed_salt: str = "") -> int:
-        profile = self.db.voice_profile(int(row["voice_profile_id"]))
+        profile = self._voice_profile_for_row(row)
         return stable_int(f"segment::{row['stable_id']}::{profile['voice_key']}::{seed_salt}")
+
+    def _voice_profile_for_row(self, row: Any) -> Any:
+        if str(_row_value(row, "kind", "narration")) == "thought":
+            return self.db.voice_profile_by_key("narrator")
+        return self.db.voice_profile(int(row["voice_profile_id"]))
 
     def spoken_text(self, row: Any) -> str:
         if self._pronunciation_pattern is None:
@@ -310,6 +315,10 @@ class TTSCoordinator:
     def _spoken_row(self, row: Any) -> dict[str, Any]:
         result = dict(row)
         result["text"] = self.spoken_text(row)
+        if str(_row_value(row, "kind", "narration")) == "thought":
+            narrator_profile = self.db.voice_profile_by_key("narrator")
+            result["speaker"] = "NARRATOR"
+            result["voice_profile_id"] = int(narrator_profile["id"])
         return result
 
     def prepare_voice_presets(self) -> None:
@@ -326,7 +335,7 @@ class TTSCoordinator:
         seed_salt: str = "",
     ) -> tuple[str, dict[str, float], int]:
         try:
-            profile = self.db.voice_profile(int(row["voice_profile_id"]))
+            profile = self._voice_profile_for_row(row)
             seed = self.generation_seed(row, seed_salt)
             spoken_row = self._spoken_row(row)
             audio = self.vieneu.generate_one(spoken_row, profile, seed)

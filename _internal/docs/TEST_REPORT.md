@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-03
 
-Trạng thái source hiện tại: **188/188 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **187/187 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử chỉ được cài tạm và đã được gỡ khỏi runtime của app sau khi kiểm tra.
@@ -36,7 +36,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - double-click ô MP3 trống không mở Explorer;
 - progress event bao phủ chuẩn bị văn bản, TTS, Whisper, repair, ghép chapter và xuất báo cáo;
 - analysis dùng ID ngắn bị ràng buộc theo batch rồi ánh xạ chính xác về stable ID;
-- Ollama analysis/alias chạy dạng stream có thể hủy khi dừng, giới hạn schema/token/wall-time và ghi
+- Ollama analysis chạy dạng stream có thể hủy khi dừng, giới hạn schema/token/wall-time và ghi
   heartbeat vào Log mỗi phút để không còn im lặng trong một request dài;
 - stream analysis thiếu gói kết thúc được phân loại riêng và tự chia đôi batch ngay; batch con giữ nguyên
   checkpoint/progress, còn stdout/stderr của Ollama ẩn được nối vào `runtime/logs/ollama-server.log`;
@@ -62,8 +62,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   văn bản/hash nguồn không đổi; cùng `spoken_text` được dùng cho TTS và expected ASR;
 - `Ha...` đứng độc lập được đổi thành hai âm tiết thở có dấu tiếng Việt; output VieNeu chạm đúng trần frame
   bị coi là chưa có EOS và bị từ chối trước khi ghi WAV;
-- lời tự giới thiệu rõ `tên của mình là X` hợp nhất alias bằng quy tắc xác định kể cả khi Qwen không trả nhóm;
-- nội tâm không xác định được nhân vật dùng ngay giọng người kể mà không lặp lại nguyên batch phân tích;
+- mọi nội tâm bị ép về `NARRATOR` bất kể Qwen trả tên nhân vật nào và không phát warning danh tính;
 - câu một từ ngắn bị giới hạn 24 frame, dùng sampling thận trọng và vẫn là ứng viên ASR repair;
 - ASR mismatch dài bất thường, gần như không liên quan luôn chặn publish sau các vòng retry dù policy thường cho warning;
 - ngân sách frame và validator dùng chung một duration policy dựa trên codec VieNeu v3 3.840 sample/frame;
@@ -86,21 +85,19 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   sách đang mở và có thể cập nhật AdaptiveResourceManager khi worker đang chạy; `Sách mới` reset profile,
   bộ lọc và narrator về mặc định nhưng giữ nguyên resource mode và ngưỡng GPU; nút chỉ bật khi đang mở
   một project đã tồn tại và tắt trong bản nháp sách mới chưa chạy;
-- cùng nhân vật giữ nguyên preset và biến thể cao độ; median F0 của 10 preview được đo để khóa
+- cùng normalized speaker name giữ nguyên preset và biến thể cao độ; median F0 của 10 preview được đo để khóa
   pitch âm theo preset: Phạm Tuyên `0`, Xuân Vĩnh/Thái Sơn/Ngọc Trân `-1`, các preset còn lại `-2`;
   test tín hiệu xác nhận WORLD vocoder đổi F0 đúng bán âm, giữ nguyên thời lượng, spectral
   envelope và aperiodicity; không còn resampler integer-ratio từng gây allocation 2.442.336.000 byte;
   lỗi lớp pitch hoặc thiếu voiced frame giữ waveform gốc;
-  thought thử lại đủ số lần để tìm
-  speaker nhân vật, chỉ fallback sang NARRATOR kèm warning khi vẫn không xác định được;
+  mọi thought dùng narrator profile kể cả khi một row cũ còn chứa speaker/voice của nhân vật;
   segment mới dùng K-weighted LUFS thay active RMS, narrator có anchor `+0,5 dB`, target hội thoại
   trung tính `-19 LUFS` và `loud` thu hẹp còn `-17,8 LUFS`; test giọng thấp 100 Hz và sáng 260 Hz
   cùng hội tụ về target cảm nhận;
 - nhãn NPC cục bộ trùng tên trong cùng chapter được hợp nhất trước casting; hội thoại ngoặc kép
   cong/ASCII kéo qua nhiều paragraph giữ nguyên kind và ngoặc đơn cong tạo thought hint;
-- ngữ cảnh đầu/cuối chapter cho phép alias reconciliation hợp nhất nhân vật đổi thân phận như
-  `Hạ Phong → Lucien` thành cùng character/voice; tên người được gọi trong “Anh Lucien!” hoặc “Iven, …”
-  bị tách khỏi speaker, trong khi câu tự giới thiệu “Tôi là Lucien” vẫn giữ đúng identity;
+- cùng speaker `Lucien` ở nhiều chapter khóa đúng một character/voice, trong khi tên khác như `Hạ Phong`
+  vẫn là character độc lập; tên người được gọi trong “Anh Lucien!” hoặc “Iven, …” bị tách khỏi speaker;
 - pronunciation checkpoint theo từng tên, tự sửa `A-der-on → A-đe-ron` mà không lặp request; khi một tên
   không thể sửa, các tên hợp lệ vẫn được khóa và retry chỉ còn đúng ID lỗi với feedback validator;
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;

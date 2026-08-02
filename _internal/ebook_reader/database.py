@@ -875,6 +875,16 @@ class ProjectDB:
                 raise KeyError(profile_id)
             return row
 
+    def voice_profile_by_key(self, voice_key: str) -> sqlite3.Row:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM voice_profiles WHERE voice_key=?",
+                (voice_key,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(voice_key)
+            return row
+
     def event(self, level: str, code: str, message: str, details: dict[str, Any] | None = None) -> None:
         with self.connect() as conn:
             conn.execute(
@@ -1000,6 +1010,21 @@ class ProjectDB:
             cursor = conn.execute(
                 "UPDATE segments SET speaker=?,updated_at=? WHERE speaker=?",
                 (canonical_name, time.time(), old_name),
+            )
+            return int(cursor.rowcount)
+
+    def normalize_thought_speakers(self) -> int:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE segments SET speaker='NARRATOR',gender='unknown',age='unknown',
+                    canonical_character_id=NULL,voice_profile_id=NULL,updated_at=?
+                WHERE kind='thought' AND (
+                    speaker!='NARRATOR' OR gender!='unknown' OR age!='unknown'
+                    OR canonical_character_id IS NOT NULL OR voice_profile_id IS NOT NULL
+                )
+                """,
+                (time.time(),),
             )
             return int(cursor.rowcount)
 

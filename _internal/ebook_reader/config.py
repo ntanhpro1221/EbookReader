@@ -23,7 +23,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "num_ctx": 16384,
         "batch_segments": 28,
         "batch_chars": 6200,
-        "max_alias_candidates": 400,
         "max_retries": 3,
         "timeout_seconds": 900,
         "low_confidence_threshold": 0.58,
@@ -200,8 +199,6 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Remote analysis requires safety.allow_remote_analysis=true")
     if int(analysis.get("batch_segments", 0)) < 1 or int(analysis.get("batch_chars", 0)) < 100:
         raise ValueError("Analysis batch limits must be positive")
-    if int(analysis.get("max_alias_candidates", 0)) < 2:
-        raise ValueError("analysis.max_alias_candidates must be at least 2")
     if int(analysis.get("max_retries", 0)) < 1 or float(analysis.get("timeout_seconds", 0)) <= 0:
         raise ValueError("Analysis retry and timeout settings must be positive")
     threshold = float(analysis.get("low_confidence_threshold", 0.58))

@@ -18,11 +18,9 @@ from ebook_reader.analysis import (
     OllamaStreamIncompleteError,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
-    _identity_reconciliation_items,
     _local_name_fallback,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
-    _self_identified_aliases,
     _valid_vietnamese_spoken_form,
     _validate,
     is_local_speaker,
@@ -718,121 +716,6 @@ def test_bare_name_vocative_is_repaired_but_self_introduction_is_not() -> None:
     assert validated[self_intro["stable_id"]]["speaker"] == "Lucien"
 
 
-def test_identity_reconciliation_uses_chapter_boundary_context_for_renamed_protagonist(
-    monkeypatch,
-) -> None:
-    db = FakeDB()
-    db.chapters = [
-        {"id": 1, "title": "000"},
-        {"id": 2, "title": "001"},
-    ]
-    db.rows = [
-        {
-            "id": 1,
-            "stable_id": "c1s49",
-            "chapter_id": 1,
-            "seq": 49,
-            "text": "Hạ Phong muốn được yên tĩnh suy nghĩ về cuộc đời mình.",
-            "kind_hint": "narration",
-            "status": "analyzed",
-            "speaker": "NARRATOR",
-        },
-        {
-            "id": 2,
-            "stable_id": "c1s51",
-            "chapter_id": 1,
-            "seq": 51,
-            "text": "‘Phù thủy đó có liên quan đến mình?’",
-            "kind_hint": "thought",
-            "status": "analyzed",
-            "speaker": "Hạ Phong",
-        },
-        {
-            "id": 3,
-            "stable_id": "c2s4",
-            "chapter_id": 2,
-            "seq": 4,
-            "text": (
-                "Lucien đã chấp nhận thân phận của mình, chôn vùi mọi ký ức quá khứ trong lòng."
-            ),
-            "kind_hint": "narration",
-            "status": "analyzed",
-            "speaker": "NARRATOR",
-        },
-        {
-            "id": 4,
-            "stable_id": "c2s5",
-            "chapter_id": 2,
-            "seq": 5,
-            "text": "‘Không biết mình có cơ hội nào học được thần thuật không nhỉ?’",
-            "kind_hint": "thought",
-            "status": "analyzed",
-            "speaker": "Lucien",
-        },
-    ]
-    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
-    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
-
-    items = _identity_reconciliation_items(db.rows, {1: "000", 2: "001"})
-    assert [item["name"] for item in items] == ["Hạ Phong", "Lucien"]
-
-    def response(request, **_kwargs):
-        prompt = request["prompt"]
-        assert "Hạ Phong muốn được yên tĩnh" in prompt
-        assert "Lucien đã chấp nhận thân phận" in prompt
-        assert "Tên trước và sau khi chuyển sinh" in prompt
-        return {
-            "groups": [
-                {
-                    "canonical": "Lucien",
-                    "aliases": ["Hạ Phong", "Lucien"],
-                    "confidence": 0.98,
-                    "reason": "Cùng một nhân vật sau khi chuyển sinh và nhận thân phận mới.",
-                }
-            ]
-        }
-
-    monkeypatch.setattr(analyzer, "_stream_json_response", response)
-
-    assert analyzer.reconcile_aliases() == {"Hạ Phong": "Lucien"}
-
-
-def test_explicit_self_identification_merges_alias_when_qwen_returns_no_group(
-    monkeypatch,
-) -> None:
-    db = FakeDB()
-    db.rows = [
-        {
-            "id": 1,
-            "stable_id": "c1s1",
-            "chapter_id": 1,
-            "seq": 1,
-            "text": "‘Tên của mình là Lucien…’",
-            "status": "analyzed",
-            "speaker": "Hạ Phong",
-        },
-        {
-            "id": 2,
-            "stable_id": "c2s1",
-            "chapter_id": 2,
-            "seq": 1,
-            "text": "‘Mình phải thích nghi với thân phận này.’",
-            "status": "analyzed",
-            "speaker": "Lucien",
-        },
-    ]
-    db.chapters = [{"id": 1, "title": "000"}, {"id": 2, "title": "001"}]
-    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
-    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
-    monkeypatch.setattr(analyzer, "_stream_json_response", lambda *_args, **_kwargs: {"groups": []})
-
-    assert _self_identified_aliases(db.rows, ["Hạ Phong", "Lucien"]) == {
-        "Hạ Phong": "Lucien"
-    }
-    assert analyzer.reconcile_aliases() == {"Hạ Phong": "Lucien"}
-    assert any(event[1] == "ALIAS_SELF_IDENTIFICATION_APPLIED" for event in db.events)
-
-
 def test_onomatopoeia_remains_normal_narration() -> None:
     row = {
         **analysis_group()[0],
@@ -859,14 +742,15 @@ def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
     assert validated[row["stable_id"]]["speaker"] == "Lucien"
 
 
-def test_unresolved_thought_immediately_uses_narrator() -> None:
+def test_every_thought_uses_narrator_without_character_identity() -> None:
     row = analysis_group()[0]
     narrator_thought = analysis_item(row["stable_id"])
     narrator_thought.update({"kind": "thought", "speaker": "NARRATOR"})
 
     fallback = _validate([row], {"segments": [narrator_thought]})
     assert fallback[row["stable_id"]]["speaker"] == "NARRATOR"
-    assert "không xác định được người đang nghĩ" in fallback[row["stable_id"]]["notes"]
+    assert fallback[row["stable_id"]]["gender"] == "unknown"
+    assert fallback[row["stable_id"]]["age"] == "unknown"
 
     unknown_thought = {**narrator_thought, "speaker": "UNKNOWN"}
     fallback = _validate([row], {"segments": [unknown_thought]})
@@ -876,10 +760,11 @@ def test_unresolved_thought_immediately_uses_narrator() -> None:
     validated = _validate([row], {"segments": [character_thought]})
 
     assert validated[row["stable_id"]]["kind"] == "thought"
-    assert validated[row["stable_id"]]["speaker"] == "Alisa"
+    assert validated[row["stable_id"]]["speaker"] == "NARRATOR"
+    assert validated[row["stable_id"]]["gender"] == "unknown"
 
 
-def test_unresolved_thought_uses_narrator_without_retry(monkeypatch) -> None:
+def test_thought_uses_narrator_without_retry_or_warning(monkeypatch) -> None:
     db = FakeDB()
     db.rows[0].update({"text": "(Mình nên làm gì bây giờ?)", "kind_hint": "thought"})
     settings = build_settings()
@@ -903,8 +788,8 @@ def test_unresolved_thought_uses_narrator_without_retry(monkeypatch) -> None:
     assert attempts == 1
     assert db.updated[0][1]["kind"] == "thought"
     assert db.updated[0][1]["speaker"] == "NARRATOR"
-    assert any(event[1] == "THOUGHT_SPEAKER_NARRATOR_FALLBACK" for event in db.events)
-    assert any("dùng giọng người kể" in message for message in logs)
+    assert db.events == []
+    assert not any("không xác định" in message for message in logs)
 
 
 def test_streaming_analysis_request_can_be_cancelled() -> None:

@@ -27,7 +27,7 @@ Máy đích hiện tại: Ryzen 9845HX, RTX 5060 Laptop, RAM 32 GB. Không hard-
 import + natural sort TXT
 → segment toàn book
 → Qwen phân tích toàn book, checkpoint theo batch
-→ character registry + alias + pronunciation
+→ character registry theo speaker name + pronunciation
 → khóa voice mapping/preset/seed/settings
 → unload LLM
 → từng chapter: TTS → unload TTS → Whisper → repair → FFmpeg verify
@@ -74,7 +74,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   CMUdict cục bộ cung cấp ARPAbet và bắt buộc tên tiếng Anh được chuyển thành âm tiết thuần Việt; tên fantasy ngoài
   từ điển do Qwen phân loại theo ngữ cảnh. Kết quả chuyên biệt hợp lệ phải `locked=1` trong SQLite để cùng một tên
   không đổi cách đọc theo giọng, chapter, confidence threshold hoặc lần resume.
-- Mọi vai dùng preset VieNeu đã khóa; một nhân vật không được đổi preset theo cảm xúc hoặc khi resume.
+- Mọi normalized speaker name dùng đúng một character và một voice profile trên toàn sách; cùng tên không được
+  đổi preset theo chapter, cảm xúc hoặc khi resume. Không hợp nhất hai tên khác nhau vì đổi tên/thân phận/chuyển sinh.
 - Cảm xúc chỉ thay đổi sampling, pace và mức âm lượng mục tiêu trên cùng preset. Không dùng cue phi ngôn ngữ thử nghiệm
   của VieNeu và không thay identity giọng để giả lập cảm xúc.
 - Chuẩn hóa các cách viết như `haizzzzz`, `hừmmmm` hoặc `[thở dài]` chỉ được áp dụng lên `spoken_text` dùng chung cho
@@ -87,17 +88,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   ít nhất phải tách pool nam, nữ và chưa rõ giới tính.
 - Nhãn NPC cục bộ trùng chính xác với tên nhân vật trong cùng chapter phải được hợp nhất trước khi
   phân vai, tránh cùng một người bị khóa hai giọng hoặc hai pitch khác nhau.
-- Alias reconciliation phải nhận ngữ cảnh trước/sau ở cả lần xuất hiện đầu và cuối của mỗi speaker, kèm chapter/seq,
-  để nhận ra đổi tên, bí danh và chuyển thân phận xuyên chapter trước khi khóa casting.
 - Tên trong lời gọi trực tiếp như `Anh Lucien!` hoặc `Iven, ...` là addressee, không phải bằng chứng về speaker.
   Nếu analysis vẫn gán tên đó làm người nói, validation phải tách thành NPC cục bộ `người gọi <tên>`, áp dụng
   nhất quán cho cùng local speaker trong batch và ghi event `ADDRESSEE_SPEAKER_REPAIRED`.
 - Segment mới được cân theo K-weighted LUFS; giọng kể có anchor nhỉnh hơn hội thoại trung tính và
   chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
 - Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
-  độc thoại nội tâm để analysis tìm giọng nhân vật; nếu không xác định được người đang nghĩ thì gán `NARRATOR` ngay.
-- Tự giới thiệu rõ theo mẫu `tên của mình/tôi/ta là X` phải hợp nhất speaker hiện tại vào nhân vật X đã tồn tại
-  bằng quy tắc xác định trước bước gán voice; không phụ thuộc hoàn toàn vào alias JSON của Qwen.
+  độc thoại nội tâm và mọi segment `thought` bắt buộc dùng `NARRATOR`, không gắn với character identity.
 - Whisper phải nhận WAV đã đọc/resample trong process; không truyền đường dẫn cho API Whisper vì bản
   dependency hiện tại sẽ gọi FFmpeg subprocess cho từng segment và gây nháy console trên Windows.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
@@ -138,7 +135,7 @@ Module chính:
 - `pipeline.py`: orchestration và state transition.
 - `database.py`: schema/transaction API.
 - `analysis.py`: Qwen structured analysis.
-- `character_registry.py`: canonical character, alias, voice mapping.
+- `character_registry.py`: canonical speaker name và voice mapping; không hợp nhất identity khác tên.
 - `tts.py`: VieNeu preset adapter, emotion delivery và deterministic retry.
 - `asr.py`: Whisper và transcript metrics.
 - `audio_io.py`: validation, atomic audio, playlist.

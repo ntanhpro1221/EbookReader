@@ -162,13 +162,11 @@ def _merge_local_speakers_with_named_identity(
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
-    alias_map: dict[str, str],
     log: Callable[[str], None],
 ) -> None:
-    for alias, canonical in alias_map.items():
-        rewritten = db.rewrite_speaker(alias, canonical)
-        if rewritten:
-            log(f"Hợp nhất bí danh: {alias} → {canonical} ({rewritten} segment).")
+    normalized_thoughts = db.normalize_thought_speakers()
+    if normalized_thoughts:
+        log(f"Đã chuyển {normalized_thoughts} đoạn nội tâm sang giọng người kể.")
 
     for speaker in {str(row["speaker"]) for row in db.list_segments()}:
         reserved = RESERVED_SPEAKERS.get(speaker.casefold())
@@ -288,6 +286,23 @@ def build_registry_and_cast(
 
     used_voices = len({str(profile["preset_name"]) for profile in db.list_voice_profiles()})
     voice_variants = len(profile_cache)
+    profiles_by_speaker: dict[str, set[int]] = defaultdict(set)
+    for row in db.list_segments():
+        speaker = str(row["speaker"])
+        normalized = normalize_name(speaker)
+        if speaker == "UNKNOWN" or is_local_speaker(speaker) or normalized in PRONOUNS:
+            continue
+        profile_id = row["voice_profile_id"]
+        if profile_id is None:
+            raise RuntimeError(f"Speaker {speaker!r} has no locked voice profile")
+        profiles_by_speaker[normalized].add(int(profile_id))
+    unstable = {
+        speaker: sorted(profile_ids)
+        for speaker, profile_ids in profiles_by_speaker.items()
+        if len(profile_ids) != 1
+    }
+    if unstable:
+        raise RuntimeError(f"A speaker name resolved to multiple voice profiles: {unstable}")
     log(
         f"Đã khóa voice casting VieNeu: dùng {used_voices}/{len(VIENEU_PRESETS)} preset; "
         f"{voice_variants} biến thể giọng; "

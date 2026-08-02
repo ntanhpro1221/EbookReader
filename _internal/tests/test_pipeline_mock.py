@@ -169,10 +169,6 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         emit=lambda kind, payload: events.append((kind, payload)),
     )
     resumed.tts = FakeTTS(settings, db)
-    monkeypatch.setattr(
-        "ebook_reader.analysis.OllamaBookAnalyzer.reconcile_aliases",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("casting ran again")),
-    )
     resumed.run()
     assert pronunciation_passes == 1
     assert db.book()["status"] == "completed"

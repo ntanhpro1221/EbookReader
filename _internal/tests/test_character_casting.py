@@ -84,7 +84,7 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_region
 ) -> None:
     db = _casting_db(tmp_path)
 
-    build_registry_and_cast(db, build_settings(), {}, lambda _message: None)
+    build_registry_and_cast(db, build_settings(), lambda _message: None)
 
     profiles = db.list_voice_profiles()
     assert all(preset_by_name(str(profile["preset_name"]))["style"] != STYLE_NEWS for profile in profiles)
@@ -169,7 +169,9 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
     ]
 
 
-def test_alias_identity_transition_locks_one_voice_across_chapters(tmp_path: Path) -> None:
+def test_same_lucien_name_locks_one_voice_across_chapters_without_identity_merging(
+    tmp_path: Path,
+) -> None:
     db = ProjectDB(tmp_path / "identity.sqlite3")
     db.initialize_book(
         title="Book",
@@ -191,36 +193,82 @@ def test_alias_identity_transition_locks_one_voice_across_chapters(tmp_path: Pat
             for index, title in enumerate(("000", "001"), 1)
         ]
     )
-    for chapter_id, speaker in zip(chapter_ids, ("Hạ Phong", "Lucien"), strict=True):
-        db.replace_chapter_segments(
-            chapter_id,
-            [
-                {
-                    "stable_id": f"c{chapter_id}s1",
-                    "seq": 1,
-                    "text": "Độc thoại của cùng một nhân vật.",
-                    "text_sha256": f"text-{chapter_id}",
-                    "kind_hint": "thought",
-                    "kind": "thought",
-                    "speaker": speaker,
-                    "gender": "male",
-                    "confidence": 0.99,
-                    "status": "analyzed",
-                }
-            ],
-        )
+    db.replace_chapter_segments(
+        chapter_ids[0],
+        [
+            {
+                "stable_id": "c1s1",
+                "seq": 1,
+                "text": "Hạ Phong đang nói.",
+                "text_sha256": "text-hp",
+                "kind_hint": "dialogue",
+                "kind": "dialogue",
+                "speaker": "Hạ Phong",
+                "gender": "male",
+                "confidence": 0.99,
+                "status": "analyzed",
+            },
+            {
+                "stable_id": "c1s2",
+                "seq": 2,
+                "text": "Lucien xuất hiện ở chương đầu.",
+                "text_sha256": "text-lucien-1",
+                "kind_hint": "dialogue",
+                "kind": "dialogue",
+                "speaker": "Lucien",
+                "gender": "male",
+                "confidence": 0.99,
+                "status": "analyzed",
+            },
+            {
+                "stable_id": "c1s3",
+                "seq": 3,
+                "text": "‘Nội tâm này phải do người kể đọc.’",
+                "text_sha256": "text-thought",
+                "kind_hint": "thought",
+                "kind": "thought",
+                "speaker": "Lucien",
+                "gender": "male",
+                "confidence": 0.99,
+                "status": "analyzed",
+            },
+        ],
+    )
+    db.replace_chapter_segments(
+        chapter_ids[1],
+        [
+            {
+                "stable_id": "c2s1",
+                "seq": 1,
+                "text": "Lucien tiếp tục nói ở chương sau.",
+                "text_sha256": "text-lucien-2",
+                "kind_hint": "dialogue",
+                "kind": "dialogue",
+                "speaker": "Lucien",
+                "gender": "male",
+                "confidence": 0.99,
+                "status": "analyzed",
+            }
+        ],
+    )
 
     build_registry_and_cast(
         db,
         build_settings(),
-        {"Hạ Phong": "Lucien"},
         lambda _message: None,
     )
 
     rows = db.list_segments()
-    assert {str(row["speaker"]) for row in rows} == {"Lucien"}
-    assert len({int(row["canonical_character_id"]) for row in rows}) == 1
-    assert len({int(row["voice_profile_id"]) for row in rows}) == 1
+    lucien_rows = [row for row in rows if str(row["speaker"]) == "Lucien"]
+    ha_phong_rows = [row for row in rows if str(row["speaker"]) == "Hạ Phong"]
+    thought_rows = [row for row in rows if str(row["kind"]) == "thought"]
+
+    assert len(lucien_rows) == 2
+    assert len({int(row["canonical_character_id"]) for row in lucien_rows}) == 1
+    assert len({int(row["voice_profile_id"]) for row in lucien_rows}) == 1
+    assert ha_phong_rows[0]["canonical_character_id"] != lucien_rows[0]["canonical_character_id"]
+    assert {str(row["speaker"]) for row in thought_rows} == {"NARRATOR"}
+    assert len({int(row["voice_profile_id"]) for row in thought_rows}) == 1
 
 
 def test_pitch_ranges_follow_measured_preset_depth() -> None:

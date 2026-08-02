@@ -32,7 +32,7 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 ## Cách xử lý một book
 
 - Tool natural-sort các chapter theo tên file.
-- Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
+- Phân tích toàn book trước để xây character registry theo speaker name, cách phát âm và voice casting thống nhất.
 - Nếu stream Ollama kết thúc dở, app chia đôi batch hiện tại và tiếp tục với các batch nhỏ hơn thay vì
   lặp lại nguyên batch lớn ba lần. Ollama do app tự chạy ghi stdout/stderr vào
   `_internal/runtime/logs/ollama-server.log` để chẩn đoán runner/GPU khi có lỗi.
@@ -54,17 +54,17 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
   trường hợp thực sự không phân biệt được vẫn tách tối thiểu theo nam/nữ/chưa rõ.
-- Trước khi khóa giọng, bước hợp nhất danh tính đọc cả ngữ cảnh lân cận ở đầu và cuối mỗi chapter để nhận ra
-  trường hợp cùng một người đổi tên, dùng bí danh hoặc chuyển sang thân phận mới như `Hạ Phong → Lucien`.
-  Tên xuất hiện trong cách gọi trực tiếp như “Anh Lucien!” hoặc “Iven, …” không được dùng làm speaker;
+- Voice được khóa theo normalized speaker name trên toàn sách: mọi `Lucien` ở mọi chapter bắt buộc dùng cùng
+  một character/voice profile. Hai tên khác nhau như `Hạ Phong` và `Lucien` không được tự hợp nhất dù câu chuyện
+  cho thấy nhân vật đổi tên, đổi thân phận hoặc chuyển sinh. Tên xuất hiện trong cách gọi trực tiếp như
+  “Anh Lucien!” hoặc “Iven, …” không được dùng làm speaker;
   nếu người nói chưa rõ danh tính, app giữ một vai NPC cục bộ riêng và ghi warning thay vì đổi nhầm giọng.
 - Mỗi nhân vật giữ nguyên một preset và một biến thể cao độ. Khoảng hạ giọng được giới hạn
   theo cao độ median đo từ preview: Phạm Tuyên không bị hạ, Xuân Vĩnh/Thái Sơn/Ngọc Trân chỉ hạ tối đa
   `-1`, các preset còn lại hạ tối đa `-2`; mọi preset chỉ nâng tối đa `+2` bán âm. Khi nhiều vai
   dùng chung preset, biến thể này tạo khác biệt vừa phải mà không đổi tốc độ; cảm xúc không đổi
   sang người đọc khác giữa chừng.
-- Độc thoại nội tâm dùng giọng đã khóa của nhân vật đang nghĩ; nếu không xác định được nhân vật thì dùng
-  ngay giọng người kể và ghi warning, không tạo một giọng `UNKNOWN` riêng.
+- Mọi độc thoại nội tâm dùng giọng người kể, không xác định và không lưu danh tính nhân vật đang nghĩ.
 - Tên tiếng Anh được đối chiếu với CMU Pronouncing Dictionary đóng gói cục bộ; chuỗi âm vị tiếng Anh
   được Qwen chuyển thành âm tiết thuần Việt như `Michael → Mai-cồ`, `Gary → Ga-ri`. Tên fantasy không có
   trong từ điển vẫn được xét theo ngữ cảnh. Cách đọc được khóa trong SQLite theo sách, áp dụng đồng nhất
@@ -117,8 +117,6 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
-- Alias có bằng chứng trực tiếp như nhân vật A nói `tên của mình là B` được hợp nhất bằng quy tắc xác định
-  trước kết quả Qwen, nên tên cũ/tên mới dùng cùng một voice profile ngay cả khi Qwen bỏ sót nhóm alias.
 - Khi Ollama chưa chạy, Ebook Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
   phân tích/phân vai xong. Một Ollama đã chạy từ trước được coi là tiến trình bên ngoài và không bị tự ý kill.
 - Sau mỗi lần VieNeu tạo audio hoặc trả lỗi, app thu hồi cache inference. Nếu RAM tụt tới mức critical giữa hai

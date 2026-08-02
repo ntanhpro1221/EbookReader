@@ -281,3 +281,58 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     with pytest.raises(AudioQualityError, match="max_new_frames"):
         coordinator.synthesize_atomic(ceiling_row, tmp_path / "segment.wav")
     assert release_calls == 4
+
+
+def test_thought_always_uses_narrator_profile_even_if_row_contains_character_cast(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    narrator_profile_id = db.upsert_voice_profile({
+        "voice_key": "narrator",
+        "engine": "vieneu",
+        "preset_name": "Phạm Tuyên",
+        "description": "Người kể",
+        "seed": 1,
+        "pitch_semitones": 0,
+        "status": "ready",
+    })
+    character_profile_id = db.upsert_voice_profile({
+        "voice_key": "lucien",
+        "engine": "vieneu",
+        "preset_name": "Thanh Bình",
+        "description": "Lucien",
+        "seed": 2,
+        "pitch_semitones": 0,
+        "status": "ready",
+    })
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+    row = {
+        "voice_profile_id": character_profile_id,
+        "stable_id": "thought_1",
+        "text": "‘Mình phải làm gì đây?’",
+        "kind": "thought",
+        "speaker": "Lucien",
+    }
+    generated: dict[str, object] = {}
+
+    def generate(spoken_row, profile, _seed):
+        generated["row"] = spoken_row
+        generated["profile"] = profile
+        return np.asarray([0.1, -0.1], dtype=np.float32)
+
+    monkeypatch.setattr(coordinator.vieneu, "generate_one", generate)
+    monkeypatch.setattr(tts_module, "apply_pitch_variant", lambda audio, *_args: audio)
+    monkeypatch.setattr(
+        tts_module,
+        "atomic_write_wav",
+        lambda *_args, **_kwargs: ("checksum", {"duration": 1.0}),
+    )
+
+    coordinator.synthesize_atomic(row, tmp_path / "thought.wav")
+
+    spoken_row = generated["row"]
+    profile = generated["profile"]
+    assert spoken_row["speaker"] == "NARRATOR"
+    assert int(spoken_row["voice_profile_id"]) == narrator_profile_id
+    assert str(profile["voice_key"]) == "narrator"
