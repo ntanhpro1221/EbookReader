@@ -24,7 +24,6 @@ class ResourceSnapshot:
     foreground_cpu_percent: float | None
     foreground_gpu_percent: float | None
     seconds_since_user_input: float | None
-    on_battery: bool | None
 
 
 class WindowsActivityProbe:
@@ -182,11 +181,6 @@ class AdaptiveResourceManager:
         pid = self.windows.foreground_pid()
         foreground_cpu = self.windows.process_cpu(pid)
         foreground_gpu = self.nvidia.process_gpu_percent(pid)
-        try:
-            battery = psutil.sensors_battery()
-        except (OSError, FileNotFoundError):
-            battery = None
-        on_battery = None if battery is None else not bool(battery.power_plugged)
         snapshot = ResourceSnapshot(
             cpu_percent=cpu,
             free_ram_gb=memory.available / (1024**3),
@@ -196,7 +190,6 @@ class AdaptiveResourceManager:
             foreground_cpu_percent=foreground_cpu,
             foreground_gpu_percent=foreground_gpu,
             seconds_since_user_input=self.windows.seconds_since_input(),
-            on_battery=on_battery,
         )
         self._last_snapshot = snapshot
         self._last_snapshot_at = now
@@ -243,17 +236,6 @@ class AdaptiveResourceManager:
                 )
             self._thermal_hold = False
             self._last_pressure_at = time.monotonic()
-
-        if bool(cfg.get("pause_on_battery", True)) and s.on_battery is True:
-            self._last_pressure_at = time.monotonic()
-            self._last_level = ResourceLevel.PAUSE_NEW_WORK
-            return ResourceDecision(
-                ResourceLevel.PAUSE_NEW_WORK,
-                "laptop is running on battery",
-                gpu_batch_scale=0.0,
-                allow_new_gpu_batch=False,
-                unload_idle_models=True,
-            )
 
         adaptive_foreground = str(cfg.get("mode", "max_safe_adaptive_foreground")) != "max_safe"
         heavy_reasons: list[str] = []

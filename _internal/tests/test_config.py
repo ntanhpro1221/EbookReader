@@ -10,6 +10,7 @@ def test_unattended_safety_defaults() -> None:
     assert settings["interactive_prompts"] is False
     assert settings["safety"]["never_prompt_during_run"] is True
     assert settings["tts"]["allow_silent_replacement"] is False
+    assert settings["audio"]["combine_full_book"] is False
 
 
 def test_silent_replacement_is_rejected() -> None:

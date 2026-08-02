@@ -67,6 +67,14 @@ class BookPipeline:
     def _state(self, state: str, text: str) -> None:
         self.emit("state", {"state": state, "text": text})
 
+    def _progress(
+        self,
+        label: str,
+        done: int | None = None,
+        total: int | None = None,
+    ) -> None:
+        self.emit("work_progress", {"label": label, "done": done, "total": total})
+
     def _wait_pause_or_stop(self) -> None:
         announced = False
         resume_status: str | None = None
@@ -79,7 +87,7 @@ class BookPipeline:
                 resume_status = str(book["status"])
                 resume_stage = str(book["stage"])
                 self.db.update_book(status=BookStatus.PAUSED.value, stage="paused")
-                self._state("paused", "Đã tạm dừng tại checkpoint an toàn.")
+                self._state("paused", "Đã tạm dừng an toàn.")
                 announced = True
             time.sleep(0.25)
         if announced:
@@ -110,7 +118,7 @@ class BookPipeline:
                     },
                 )
                 self.log(f"Resource mode: {decision.level.value} — {decision.reason}")
-                if "disk free" in decision.reason or "running on battery" in decision.reason:
+                if "disk free" in decision.reason:
                     self.notifier.notify(
                         "E Book Reader đang chờ tài nguyên",
                         f"{decision.reason}. Pipeline đã dừng cấp tác vụ mới tại checkpoint an toàn.",
@@ -146,9 +154,12 @@ class BookPipeline:
 
     def _ensure_segments(self) -> None:
         max_chars = int(self.settings["tts"]["max_segment_chars"])
-        for chapter in self.db.list_chapters():
+        chapters = self.db.list_chapters()
+        self._progress("Chuẩn bị và chia văn bản", 0, len(chapters))
+        for index, chapter in enumerate(chapters, 1):
             self._validate_chapter_source(chapter)
             if int(chapter["total_segments"]) > 0:
+                self._progress("Chuẩn bị và chia văn bản", index, len(chapters))
                 continue
             self._wait_pause_or_stop()
             rows = load_and_segment_chapter(dict(chapter), max_chars=max_chars)
@@ -156,6 +167,7 @@ class BookPipeline:
                 raise RuntimeError(f"Chapter has no readable content: {chapter['input_path']}")
             self.db.replace_chapter_segments(int(chapter["id"]), rows)
             self.log(f"Đã chia {chapter['title']} thành {len(rows):,} segment và checkpoint vào SQLite.")
+            self._progress("Chuẩn bị và chia văn bản", index, len(chapters))
 
     def _validate_chapter_source(self, chapter: Any) -> None:
         if not self.settings["safety"].get("stop_book_on_source_change", True):
@@ -220,6 +232,7 @@ class BookPipeline:
             if self.db.casting_is_finalized():
                 self.log("Voice casting đã khóa từ lần chạy trước; giữ nguyên mapping khi resume.")
             else:
+                self._state("running", "Đang hợp nhất nhân vật và phân vai.")
                 alias_map = analyzer.reconcile_aliases(
                     before_batch=lambda index: self._resource_gate(
                         f"alias reconciliation batch {index}",
@@ -232,6 +245,7 @@ class BookPipeline:
         finally:
             analyzer.unload()
 
+        self._state("running", "Đang xác minh các giọng VieNeu đã khóa.")
         self._resource_gate("xác minh preset VieNeu", keep_engine="vieneu")
         self.tts.prepare_voice_presets()
         self.tts.unload_idle_models()
@@ -251,14 +265,17 @@ class BookPipeline:
             verifier.unload()
             self.tts.unload_all()
 
+        self._progress("Xuất báo cáo", 0, 1)
         self._export_reports()
+        self._progress("Xuất báo cáo", 1, 1)
         completed = [row for row in self.db.list_chapters() if row["status"] == ChapterStatus.COMPLETED.value]
         all_chapters = self.db.list_chapters()
         if completed and len(completed) == len(all_chapters):
             chapter_files = [Path(str(row["output_mp3"])) for row in completed]
             if self.settings["audio"].get("create_m3u8", True):
                 write_playlist_atomic(chapter_files, self.paths.output / "playlist.m3u8")
-            if self.settings["audio"].get("combine_full_book", True):
+            if self.settings["audio"].get("combine_full_book", False):
+                self._progress("Ghép MP3 toàn book")
                 self._resource_gate("FFmpeg full-book assembly", require_cpu_io=True)
                 full_path = self.paths.output / f"{slugify(str(self.db.book()['title']))}_full.mp3"
                 checksum = combine_full_book_atomic(chapter_files, full_path, str(self.db.book()["title"]))
@@ -269,6 +286,7 @@ class BookPipeline:
                     sha256=checksum,
                     verified=True,
                 )
+                self._progress("Ghép MP3 toàn book", 1, 1)
             self.db.update_book(status=BookStatus.COMPLETED.value, stage="completed", error=None)
             self._state("completed", "Đã hoàn tất toàn bộ audiobook.")
             self.notifier.notify(
@@ -324,7 +342,10 @@ class BookPipeline:
 
         # Stage 1: synthesize sequentially with a stable seed so each checkpoint is reproducible.
         current_rows = self.db.list_segments(chapter_id=chapter_id)
-        for row in current_rows:
+        tts_label = f"Tạo audio chapter {chapter['chapter_index']}: {chapter['title']}"
+        self._progress(tts_label, 0, len(current_rows))
+        for index, row in enumerate(current_rows, 1):
+            self._progress(tts_label, index - 1, len(current_rows))
             if self._existing_segment_is_safe(row):
                 continue
             # A valid signal_passed WAV can proceed directly to the chapter ASR stage after recovery.
@@ -352,6 +373,7 @@ class BookPipeline:
                 keep_engine="vieneu",
             )
             self._process_single_segment(row, chapter)
+        self._progress(tts_label, len(current_rows), len(current_rows))
 
         # Stage 2: release TTS VRAM before loading Whisper, then verify the whole chapter.
         self.tts.unload_all()
@@ -377,6 +399,8 @@ class BookPipeline:
             f"FFmpeg chapter {chapter['chapter_index']}",
             require_cpu_io=True,
         )
+        assembly_label = f"Ghép và kiểm tra MP3 chapter {chapter['chapter_index']}"
+        self._progress(assembly_label)
         checksum = assemble_chapter_atomic(
             wavs,
             output,
@@ -395,6 +419,7 @@ class BookPipeline:
             metadata={"chapter_id": chapter_id, "title": str(chapter["title"])},
         )
         self.db.update_chapter_status(chapter_id, ChapterStatus.COMPLETED.value)
+        self._progress(assembly_label, 1, 1)
         self.log(f"Chapter MP3 đã hoàn tất và giải mã kiểm tra thành công: {output.name}")
         self.emit(
             "chapter_completed",
@@ -519,9 +544,13 @@ class BookPipeline:
                 continue
             pending.append(dict(row))
 
-        def verify_rows(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        def verify_rows(
+            items: list[dict[str, Any]],
+            label: str,
+        ) -> list[dict[str, Any]]:
             mismatches: list[dict[str, Any]] = []
-            for item in items:
+            self._progress(label, 0, len(items))
+            for index, item in enumerate(items, 1):
                 self._resource_gate(
                     f"Whisper chapter {chapter['chapter_index']} segment {item['seq']}",
                     release_active=verifier.unload,
@@ -541,9 +570,11 @@ class BookPipeline:
                     self.db.mark_verified(int(item["id"]), warning_code=existing_warning)
                 else:
                     mismatches.append(item)
+                self._progress(label, index, len(items))
             return mismatches
 
-        mismatches = verify_rows(pending)
+        verification_label = f"Kiểm tra phát âm chapter {chapter['chapter_index']}"
+        mismatches = verify_rows(pending, verification_label)
         final_mismatches: list[dict[str, Any]] = []
         repairable_mismatches: list[dict[str, Any]] = []
         for item in mismatches:
@@ -559,7 +590,11 @@ class BookPipeline:
                 break
             verifier.unload()
             regenerated: list[dict[str, Any]] = []
-            for item in mismatches:
+            repair_label = (
+                f"Sửa audio chapter {chapter['chapter_index']} — vòng {repair_round + 1}"
+            )
+            self._progress(repair_label, 0, len(mismatches))
+            for index, item in enumerate(mismatches, 1):
                 self._resource_gate(
                     f"ASR repair chapter {chapter['chapter_index']} segment {item['seq']}",
                     keep_engine=None,
@@ -569,8 +604,12 @@ class BookPipeline:
                 fresh = self.db.get_segment(int(item["id"]))
                 if str(fresh["status"]) == SegmentStatus.SIGNAL_PASSED.value:
                     regenerated.append(dict(fresh))
+                self._progress(repair_label, index, len(mismatches))
             self.tts.unload_all()
-            verified_mismatches = verify_rows(regenerated)
+            verified_mismatches = verify_rows(
+                regenerated,
+                f"Kiểm tra lại chapter {chapter['chapter_index']} — vòng {repair_round + 1}",
+            )
             mismatches = []
             for item in verified_mismatches:
                 result = last_results.get(int(item["id"]), {})

@@ -36,7 +36,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   không đổi sang một người đọc khác giữa chừng.
 - Từ điển phát âm có confidence được checkpoint trong SQLite, áp dụng đồng nhất cho TTS và câu đối chiếu ASR.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
-- Chapter hoàn tất được xuất MP3 ngay; cuối cùng tạo playlist và MP3 toàn book.
+- Mỗi file TXT luôn tạo một MP3 chapter tương ứng. Tùy chọn **Tạo thêm một MP3 toàn book** mặc định tắt;
+  khi bật, app ghép thêm một file MP3 toàn book sau khi tất cả chapter hoàn tất.
+- Giao diện hiển thị tiến độ riêng cho chuẩn bị văn bản, phân tích, phân vai, tạo audio, Whisper,
+  sửa lỗi, ghép MP3 và xuất báo cáo.
 - Trong lúc chạy, tool không dừng để hỏi lựa chọn. Trường hợp mơ hồ được xử lý theo policy và ghi vào report.
 
 ## An toàn và phục hồi
@@ -46,6 +49,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Mỗi project chỉ cho phép một worker; settings trong SQLite và source hash được kiểm tra lại khi resume.
 - Byte TXT dùng để segment phải khớp đúng hash đã khóa; source đổi ngay trong lúc đọc cũng làm job dừng.
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.
+- Nút **Dừng** chờ tác vụ inference hiện tại kết thúc rồi dừng ở ranh giới an toàn; ứng dụng không còn
+  cung cấp nút kill worker trực tiếp trên giao diện.
 - Khi dừng cưỡng bức, app kết thúc cả cây process con (FFmpeg/Ollama helper) để tránh tiến trình mồ côi.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
 - Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,

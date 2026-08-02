@@ -261,7 +261,7 @@ def run_worker(
         _emit(
             message_queue,
             "finished",
-            {"ok": True, "stopped": True, "text": "Đã dừng tại checkpoint; lần sau có thể tiếp tục."},
+            {"ok": True, "stopped": True, "text": "Đã dừng an toàn; lần sau có thể tiếp tục."},
         )
     except CriticalResourceStop as exc:
         _emit(

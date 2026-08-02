@@ -17,7 +17,6 @@ def snapshot(**updates):
         foreground_cpu_percent=5.0,
         foreground_gpu_percent=0.0,
         seconds_since_user_input=30.0,
-        on_battery=False,
     )
     values.update(updates)
     return ResourceSnapshot(**values)

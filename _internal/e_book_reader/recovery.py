@@ -55,7 +55,7 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
                 and valid
                 and checksum_ok
             )
-        if settings.get("audio", {}).get("combine_full_book", True):
+        if settings.get("audio", {}).get("combine_full_book", False):
             artifact = db.artifact_by_key("full_book_mp3")
             full_path = Path(str(artifact["path"])) if artifact and artifact["path"] else None
             full_path_safe = bool(

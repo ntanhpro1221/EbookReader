@@ -30,7 +30,7 @@ import + natural sort TXT
 → unload LLM
 → từng chapter: TTS → unload TTS → Whisper → repair → FFmpeg verify
 → chapter MP3
-→ full-book MP3 + M3U8 + reports
+→ reports + M3U8 + full-book MP3 nếu người dùng bật tùy chọn
 ```
 
 Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đổi ưu tiên đồng bộ toàn truyện.
@@ -60,6 +60,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
 - Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
 - Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
+- GUI chỉ cung cấp một lệnh dừng an toàn; đóng cửa sổ khi worker đang chạy phải chờ worker xác nhận dừng,
+  không tự kill process sau một timeout ngắn.
 
 ## Cấu trúc source
 

@@ -49,8 +49,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     settings = build_settings(overrides={
         "analysis": {"enabled": False},
         "asr": {"enabled": False},
-        "audio": {"combine_full_book": True},
-        "resources": {"pause_on_battery": False, "min_free_disk_gb": 0.01, "critical_free_disk_gb": 0.001},
+        "resources": {"min_free_disk_gb": 0.01, "critical_free_disk_gb": 0.001},
         "tts": {"min_seconds_per_100_chars": 0.2},
     })
     paths, db, settings = create_or_open_project([source], tmp_path / "out", settings, "Test Book")
@@ -60,13 +59,30 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         output.write_bytes(b"ID3" + b"x" * 5000)
         return "chapterhash"
 
-    def fake_full(chapters, output, title):
-        output.write_bytes(b"ID3" + b"y" * 5000)
-        return "fullhash"
-
     monkeypatch.setattr("e_book_reader.pipeline.assemble_chapter_atomic", fake_chapter)
-    monkeypatch.setattr("e_book_reader.pipeline.combine_full_book_atomic", fake_full)
+    monkeypatch.setattr(
+        "e_book_reader.pipeline.combine_full_book_atomic",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("full-book MP3 must remain disabled by default")
+        ),
+    )
     monkeypatch.setattr("e_book_reader.pipeline.verify_mp3", lambda path: (path.exists(), "ok"))
+    verify_calls = 0
+
+    def fake_verify(_verifier, expected, wav_path):
+        nonlocal verify_calls
+        verify_calls += 1
+        passed = verify_calls > 1
+        return {
+            "passed": passed,
+            "transcript": expected if passed else "sai nội dung",
+            "similarity": 1.0 if passed else 0.0,
+            "wer": 0.0 if passed else 1.0,
+            "reason": "ok" if passed else "ASR_MISMATCH",
+            "repairable": True,
+        }
+
+    monkeypatch.setattr("e_book_reader.pipeline.WhisperVerifier.verify", fake_verify)
 
     events = []
     pipeline = BookPipeline(
@@ -85,6 +101,16 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert db.casting_is_finalized() is True
     assert int(db.list_segments()[0]["generation_seed"]) == 1
     assert any(kind == "chapter_completed" for kind, _ in events)
+    progress_labels = [
+        str(payload["label"])
+        for kind, payload in events
+        if kind == "work_progress"
+    ]
+    assert any(label.startswith("Chuẩn bị và chia văn bản") for label in progress_labels)
+    assert any(label.startswith("Tạo audio chapter") for label in progress_labels)
+    assert any(label.startswith("Kiểm tra phát âm chapter") for label in progress_labels)
+    assert any(label.startswith("Sửa audio chapter") for label in progress_labels)
+    assert any(label.startswith("Ghép và kiểm tra MP3 chapter") for label in progress_labels)
 
     # A full resume/reopen pass must preserve locked voice identities and skip valid output.
     resumed = BookPipeline(

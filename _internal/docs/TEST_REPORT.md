@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **51/51 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **55/55 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
@@ -15,6 +15,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
 - one-click startup ẩn qua `START.vbs`, chỉ hiện console khi cần setup;
+- GUI tự mở project được chọn gần nhất, danh sách TXT chọn nhiều dòng, nested splitter kéo được,
+  một nút dừng an toàn và mặc định chỉ xuất MP3 theo chapter;
+- progress event bao phủ chuẩn bị văn bản, TTS, Whisper, repair, ghép chapter và xuất báo cáo;
 - analysis dùng ID ngắn bị ràng buộc theo batch rồi ánh xạ chính xác về stable ID;
 - project lock, voice profile lock và resume;
 - Resource Manager: foreground, RAM, SSD và stop policy;

@@ -83,7 +83,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "normal": -19.0,
             "loud": -16.5,
         },
-        "combine_full_book": True,
+        "combine_full_book": False,
         "create_m3u8": True,
         "keep_verified_wav": True,
         "export_metadata": True,
@@ -105,7 +105,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "idle_seconds_before_ramp": 20,
         "ramp_step_seconds": 8,
         "unload_model_for_foreground_vram": True,
-        "pause_on_battery": True,
         "parent_exit_grace_seconds": 12,
     },
     "safety": {

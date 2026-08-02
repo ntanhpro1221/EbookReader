@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import multiprocessing as mp
 import os
 import sys
@@ -10,6 +11,7 @@ from typing import Any
 from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
 from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QCheckBox,
     QComboBox,
@@ -41,16 +43,31 @@ from .io_utils import discover_txt_files, natural_key
 from .models import ProjectPaths
 from .notifier import WindowsNotifier
 from .project import create_or_open_project
-from .process_utils import terminate_process_tree
 from .worker import run_worker
 
 
+CHAPTER_STATUS_LABELS = {
+    "pending": "Chờ xử lý",
+    "synthesizing": "Đang tạo audio",
+    "verifying": "Đang kiểm tra",
+    "completed": "Hoàn tất",
+    "failed": "Lỗi",
+    "warning": "Cần tạo lại",
+}
+
+
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        settings_store: QSettings | None = None,
+        restore_recent: bool = True,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("E Book Reader")
-        self.resize(1180, 780)
-        self.settings_store = QSettings("OpenAI", "EBookReader")
+        self.resize(1280, 820)
+        self.setMinimumSize(900, 620)
+        self.settings_store = settings_store or QSettings("OpenAI", "EBookReader")
         self.files: list[Path] = []
         self.project_paths: ProjectPaths | None = None
         self.db: ProjectDB | None = None
@@ -60,10 +77,11 @@ class MainWindow(QMainWindow):
         self.stop_event: Any = None
         self.received_finished = False
         self.was_user_stop = False
+        self._close_when_stopped = False
         self._chapter_snapshot: tuple[Any, ...] | None = None
         self.notifier = WindowsNotifier()
         self._build_ui()
-        self._restore_ui()
+        self._restore_ui(restore_recent=restore_recent)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._poll)
         self.timer.start(1000)
@@ -72,56 +90,64 @@ class MainWindow(QMainWindow):
         root = QWidget()
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
+        root.setStyleSheet(
+            "QGroupBox { font-weight: 600; margin-top: 8px; padding-top: 10px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 4px; }"
+            "QPushButton { min-height: 28px; padding: 2px 10px; }"
+            "QLineEdit, QComboBox, QSpinBox { min-height: 27px; }"
+        )
         title = QLabel("E Book Reader")
         title.setStyleSheet("font-size: 25px; font-weight: 700;")
         layout.addWidget(title)
-        layout.addWidget(
-            QLabel(
-                "Phân tích toàn book trước, khóa voice casting, chạy tự động không hỏi giữa chừng, "
-                "checkpoint an toàn và tự nhường tài nguyên cho ứng dụng foreground."
-            )
-        )
 
-        top = QGridLayout()
+        book_box = QGroupBox("Book")
+        top = QGridLayout(book_box)
+        top.setColumnStretch(1, 1)
         self.title_edit = QLineEdit()
         self.title_edit.setPlaceholderText("Tên book; để trống sẽ lấy tên thư mục hoặc file")
         self.output_edit = QLineEdit()
         self.output_edit.setPlaceholderText("Thư mục chứa các book project")
-        choose_output = QPushButton("Chọn thư mục đầu ra")
-        choose_output.clicked.connect(self._choose_output)
-        add_files = QPushButton("Thêm TXT")
-        add_files.clicked.connect(self._add_files)
-        add_folder = QPushButton("Thêm folder")
-        add_folder.clicked.connect(self._add_folder)
-        remove_files = QPushButton("Xóa file đã chọn")
-        remove_files.clicked.connect(self._remove_files)
-        open_project = QPushButton("Mở project cũ")
-        open_project.clicked.connect(self._open_project)
-        new_book = QPushButton("Book mới")
-        new_book.clicked.connect(self._new_book)
+        self.choose_output_button = QPushButton("Chọn nơi lưu")
+        self.choose_output_button.clicked.connect(self._choose_output)
+        self.add_files_button = QPushButton("Chọn nhiều TXT")
+        self.add_files_button.clicked.connect(self._add_files)
+        self.add_folder_button = QPushButton("Thêm thư mục")
+        self.add_folder_button.clicked.connect(self._add_folder)
+        self.remove_files_button = QPushButton("Xóa file đã chọn")
+        self.remove_files_button.clicked.connect(self._remove_files)
+        self.open_project_button = QPushButton("Mở project khác")
+        self.open_project_button.clicked.connect(self._open_project)
+        self.new_book_button = QPushButton("Book mới")
+        self.new_book_button.clicked.connect(self._new_book)
         top.addWidget(QLabel("Tên book:"), 0, 0)
         top.addWidget(self.title_edit, 0, 1, 1, 3)
         top.addWidget(QLabel("Nơi lưu:"), 1, 0)
         top.addWidget(self.output_edit, 1, 1)
-        top.addWidget(choose_output, 1, 2)
-        top.addWidget(open_project, 1, 3)
-        top.addWidget(new_book, 2, 0)
-        top.addWidget(add_files, 2, 1)
-        top.addWidget(add_folder, 2, 2)
-        top.addWidget(remove_files, 2, 3)
-        layout.addLayout(top)
+        top.addWidget(self.choose_output_button, 1, 2)
+        top.addWidget(self.open_project_button, 1, 3)
+        top.addWidget(self.new_book_button, 2, 0)
+        top.addWidget(self.add_files_button, 2, 1)
+        top.addWidget(self.add_folder_button, 2, 2)
+        top.addWidget(self.remove_files_button, 2, 3)
+        layout.addWidget(book_box)
 
-        splitter = QSplitter(Qt.Vertical)
-        upper = QWidget()
-        upper_layout = QHBoxLayout(upper)
-        upper_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter.setChildrenCollapsible(False)
+        self.main_splitter.setHandleWidth(7)
+        self.source_splitter = QSplitter(Qt.Horizontal)
+        self.source_splitter.setChildrenCollapsible(False)
+        self.source_splitter.setHandleWidth(7)
         files_box = QGroupBox("TXT thuộc cùng một book")
         files_layout = QVBoxLayout(files_box)
         self.file_list = QListWidget()
+        self.file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.file_list.setAlternatingRowColors(True)
         files_layout.addWidget(self.file_list)
-        upper_layout.addWidget(files_box, 1)
+        self.source_splitter.addWidget(files_box)
 
-        settings_box = QGroupBox("Settings khóa trước khi chạy book")
+        settings_box = QGroupBox("Thiết lập cho book mới")
         form = QFormLayout(settings_box)
         self.profile_combo = QComboBox()
         self.profile_combo.addItem("Cân bằng", "balanced")
@@ -137,32 +163,47 @@ class MainWindow(QMainWindow):
         self.keep_wav = QCheckBox("Giữ WAV segment đã kiểm tra (bắt buộc trong alpha để recovery an toàn)")
         self.keep_wav.setChecked(True)
         self.keep_wav.setEnabled(False)
-        self.full_book = QCheckBox("Tạo MP3 toàn book")
-        self.full_book.setChecked(True)
-        self.pause_battery = QCheckBox("Tự tạm dừng khi chuyển sang pin")
-        self.pause_battery.setChecked(True)
+        self.full_book = QCheckBox("Tạo thêm một MP3 toàn book")
+        self.full_book.setChecked(False)
+        self.full_book.setToolTip(
+            "Tắt: mỗi file TXT tạo một MP3 chapter. Bật: tạo thêm một MP3 ghép toàn book."
+        )
         form.addRow("Chất lượng:", self.profile_combo)
         form.addRow("Tài nguyên:", self.resource_combo)
         form.addRow("Ngưỡng GPU nóng:", self.max_temp)
         form.addRow(self.keep_wav)
         form.addRow(self.full_book)
-        form.addRow(self.pause_battery)
         note = QLabel("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
         note.setWordWrap(True)
         note.setStyleSheet("color:#666")
         form.addRow(note)
-        upper_layout.addWidget(settings_box, 1)
-        splitter.addWidget(upper)
+        self.source_splitter.addWidget(settings_box)
+        self.source_splitter.setSizes([650, 520])
+        self.main_splitter.addWidget(self.source_splitter)
 
-        lower = QWidget()
-        lower_layout = QHBoxLayout(lower)
-        lower_layout.setContentsMargins(0, 0, 0, 0)
-        chapters_box = QGroupBox("Tiến độ chapter")
+        self.work_splitter = QSplitter(Qt.Horizontal)
+        self.work_splitter.setChildrenCollapsible(False)
+        self.work_splitter.setHandleWidth(7)
+        chapters_box = QGroupBox("Tiến độ xử lý")
         chapters_layout = QVBoxLayout(chapters_box)
+        progress_layout = QHBoxLayout()
+        self.stage_label = QLabel("Sẵn sàng")
+        self.stage_label.setMinimumWidth(220)
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(True)
+        progress_layout.addWidget(self.stage_label)
+        progress_layout.addWidget(self.progress, 1)
+        chapters_layout.addLayout(progress_layout)
         self.chapter_table = QTableWidget(0, 5)
-        self.chapter_table.setHorizontalHeaderLabels(["#", "Chapter", "Trạng thái", "Segment", "MP3"])
+        self.chapter_table.setHorizontalHeaderLabels(
+            ["#", "Chapter", "Giai đoạn", "Audio đã kiểm tra", "MP3"]
+        )
         self.chapter_table.verticalHeader().setVisible(False)
         self.chapter_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.chapter_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.chapter_table.setAlternatingRowColors(True)
         header = self.chapter_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
@@ -171,7 +212,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(4, QHeaderView.Stretch)
         self.chapter_table.doubleClicked.connect(self._open_selected_mp3)
         chapters_layout.addWidget(self.chapter_table)
-        lower_layout.addWidget(chapters_box, 2)
+        self.work_splitter.addWidget(chapters_box)
 
         log_box = QGroupBox("Nhật ký")
         log_layout = QVBoxLayout(log_box)
@@ -179,10 +220,11 @@ class MainWindow(QMainWindow):
         self.log.setReadOnly(True)
         self.log.setLineWrapMode(QTextEdit.NoWrap)
         log_layout.addWidget(self.log)
-        lower_layout.addWidget(log_box, 1)
-        splitter.addWidget(lower)
-        splitter.setSizes([260, 430])
-        layout.addWidget(splitter, 1)
+        self.work_splitter.addWidget(log_box)
+        self.work_splitter.setSizes([820, 400])
+        self.main_splitter.addWidget(self.work_splitter)
+        self.main_splitter.setSizes([290, 460])
+        layout.addWidget(self.main_splitter, 1)
 
         controls = QHBoxLayout()
         self.start_button = QPushButton("Bắt đầu / Tiếp tục")
@@ -190,38 +232,100 @@ class MainWindow(QMainWindow):
         self.pause_button = QPushButton("Tạm dừng")
         self.pause_button.clicked.connect(self._toggle_pause)
         self.pause_button.setEnabled(False)
-        self.safe_stop_button = QPushButton("Dừng tại checkpoint")
-        self.safe_stop_button.clicked.connect(self._safe_stop)
-        self.safe_stop_button.setEnabled(False)
-        self.stop_now_button = QPushButton("Dừng ngay")
-        self.stop_now_button.clicked.connect(self._stop_now)
-        self.stop_now_button.setEnabled(False)
-        open_folder = QPushButton("Mở thư mục project")
-        open_folder.clicked.connect(self._open_project_folder)
-        self.resource_label = QLabel("Tài nguyên: chưa chạy")
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
+        self.stop_button = QPushButton("Dừng")
+        self.stop_button.setToolTip("Dừng sau khi tác vụ inference hiện tại kết thúc và checkpoint an toàn.")
+        self.stop_button.clicked.connect(self._safe_stop)
+        self.stop_button.setEnabled(False)
+        self.open_folder_button = QPushButton("Mở thư mục project")
+        self.open_folder_button.clicked.connect(self._open_project_folder)
         controls.addWidget(self.start_button)
         controls.addWidget(self.pause_button)
-        controls.addWidget(self.safe_stop_button)
-        controls.addWidget(self.stop_now_button)
-        controls.addWidget(open_folder)
-        controls.addWidget(self.resource_label)
-        controls.addWidget(self.progress, 1)
+        controls.addWidget(self.stop_button)
+        controls.addStretch(1)
+        controls.addWidget(self.open_folder_button)
         layout.addLayout(controls)
 
-    def _restore_ui(self) -> None:
+    def _restore_ui(self, *, restore_recent: bool) -> None:
         self.output_edit.setText(self.settings_store.value("output", str(Path.home() / "Audiobooks"), str))
         self.max_temp.setValue(self.settings_store.value("max_temp", 86, int))
+        self._set_project_selected(False)
+        for key, splitter in (
+            ("splitter_main", self.main_splitter),
+            ("splitter_source", self.source_splitter),
+            ("splitter_work", self.work_splitter),
+        ):
+            state = self.settings_store.value(key)
+            if state is not None:
+                splitter.restoreState(state)
+        if restore_recent:
+            candidate = self._recent_project_candidate()
+            if candidate is not None:
+                try:
+                    self._load_project(candidate, announce=False)
+                except Exception as exc:  # noqa: BLE001
+                    self._append_log(f"Không thể tự mở project gần đây: {exc}")
 
     def _save_ui(self) -> None:
         self.settings_store.setValue("output", self.output_edit.text().strip())
         self.settings_store.setValue("max_temp", self.max_temp.value())
+        self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
+        self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
+        self.settings_store.setValue("splitter_work", self.work_splitter.saveState())
+        self.settings_store.sync()
+
+    def _recent_project_candidate(self) -> Path | None:
+        saved = self.settings_store.value("recent_project", "", str).strip()
+        if saved:
+            selected = Path(saved).expanduser()
+            if (selected / "project.sqlite3").is_file() and (selected / "book_settings.json").is_file():
+                return selected.resolve()
+        output = Path(self.output_edit.text().strip()).expanduser()
+        if not output.is_dir():
+            return None
+        try:
+            candidates = [
+                path
+                for path in output.iterdir()
+                if path.is_dir()
+                and (path / "project.sqlite3").is_file()
+                and (path / "book_settings.json").is_file()
+            ]
+        except OSError:
+            return None
+        if not candidates:
+            return None
+        return max(candidates, key=lambda path: (path / "project.sqlite3").stat().st_mtime).resolve()
+
+    def _remember_project(self, path: Path) -> None:
+        self.settings_store.setValue("recent_project", str(path.resolve()))
+        self.settings_store.sync()
 
     def _append_log(self, text: str) -> None:
         self.log.append(text)
         scrollbar = self.log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+
+    def _show_progress(self, label: str, done: int | None = None, total: int | None = None) -> None:
+        self.stage_label.setText(label)
+        if done is None or total is None or total <= 0:
+            self.progress.setRange(0, 0)
+            return
+        self.progress.setRange(0, total)
+        self.progress.setValue(max(0, min(done, total)))
+        self.progress.setFormat("%v/%m — %p%")
+
+    def _set_project_selected(self, selected: bool) -> None:
+        self.title_edit.setReadOnly(selected)
+        self.output_edit.setReadOnly(selected)
+        self.choose_output_button.setEnabled(not selected)
+        self.add_files_button.setEnabled(not selected)
+        self.add_folder_button.setEnabled(not selected)
+        self.remove_files_button.setEnabled(not selected)
+        self.profile_combo.setEnabled(not selected)
+        self.resource_combo.setEnabled(not selected)
+        self.max_temp.setEnabled(not selected)
+        self.full_book.setEnabled(not selected)
+        self.open_folder_button.setEnabled(selected)
 
     def _merge_input_files(self, paths: list[Path]) -> int:
         if paths and self.project_paths is not None:
@@ -303,7 +407,6 @@ class MainWindow(QMainWindow):
                 "max_gpu_temp_c": self.max_temp.value(),
                 "resume_gpu_temp_c": max(60, self.max_temp.value() - 6),
                 "critical_gpu_temp_c": min(98, self.max_temp.value() + 5),
-                "pause_on_battery": self.pause_battery.isChecked(),
             },
             "audio": {
                 "keep_verified_wav": self.keep_wav.isChecked(),
@@ -329,6 +432,8 @@ class MainWindow(QMainWindow):
                     self.title_edit.text().strip() or None,
                 )
                 self.project_paths, self.db = paths, db
+                self._remember_project(paths.root)
+                self._set_project_selected(True)
                 if used_settings["quality_profile"] != str(self.profile_combo.currentData()):
                     self._append_log("Project cũ được mở lại bằng settings đã khóa từ lần chạy đầu.")
             assert self.project_paths is not None
@@ -353,9 +458,8 @@ class MainWindow(QMainWindow):
             self.process.start()
             self.start_button.setEnabled(False)
             self.pause_button.setEnabled(True)
-            self.safe_stop_button.setEnabled(True)
-            self.stop_now_button.setEnabled(True)
-            self._append_log("Worker đã bắt đầu. Có thể đóng app; checkpoint và recovery sẽ bảo vệ phần đã hoàn tất.")
+            self.stop_button.setEnabled(True)
+            self._append_log("Worker đã bắt đầu. Mọi phần hoàn tất đều được lưu để có thể tiếp tục an toàn.")
             self._refresh_chapters()
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "Không thể bắt đầu", str(exc))
@@ -374,26 +478,15 @@ class MainWindow(QMainWindow):
         if self.stop_event:
             self.was_user_stop = True
             self.stop_event.set()
-            self._append_log("Đã yêu cầu dừng tại checkpoint gần nhất.")
-
-    def _stop_now(self) -> None:
-        if not self.process or not self.process.is_alive():
-            return
-        self.was_user_stop = True
-        if self.stop_event:
-            self.stop_event.set()
-        if self.process.pid:
-            terminate_process_tree(self.process.pid, grace_seconds=4.0)
-        self.process.join(timeout=2)
-        self._append_log("Worker đã bị dừng ngay. File .part sẽ bị loại bỏ trong recovery scan lần sau.")
-        self._running_controls(False)
-        self._dispose_ipc()
+            self.stop_button.setEnabled(False)
+            self.pause_button.setEnabled(False)
+            self._show_progress("Đang dừng an toàn…")
+            self._append_log("Đang chờ tác vụ hiện tại kết thúc để dừng an toàn.")
 
     def _running_controls(self, running: bool) -> None:
         self.start_button.setEnabled(not running)
         self.pause_button.setEnabled(running)
-        self.safe_stop_button.setEnabled(running)
-        self.stop_now_button.setEnabled(running)
+        self.stop_button.setEnabled(running)
         if not running:
             self.pause_button.setText("Tạm dừng")
 
@@ -422,25 +515,34 @@ class MainWindow(QMainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Chọn thư mục book project", self.output_edit.text())
         if not directory:
             return
-        selected = Path(directory).resolve()
-        if not (selected / "project.sqlite3").exists() or not (selected / "book_settings.json").exists():
-            QMessageBox.warning(self, "Không phải project", "Thư mục không có project.sqlite3 và book_settings.json.")
-            return
         try:
-            paths = ProjectPaths.build(selected)
-            self.project_paths = paths
-            self.db = ProjectDB(paths.db)
-            chapters = self.db.list_chapters()
-            self.files = [Path(str(row["input_path"])) for row in chapters]
-            self.title_edit.setText(str(self.db.book()["title"]))
-            self.output_edit.setText(str(paths.root.parent))
-            self._apply_locked_settings(load_settings(paths.settings))
-            self._chapter_snapshot = None
-            self._refresh_file_list()
-            self._refresh_chapters()
-            self._append_log("Đã mở project. Khi tiếp tục sẽ dùng nguyên settings và voice mapping đã khóa.")
+            self._load_project(Path(directory).resolve(), announce=True)
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "Không mở được project", str(exc))
+
+    def _load_project(self, selected: Path, *, announce: bool) -> None:
+        if not (selected / "project.sqlite3").is_file() or not (selected / "book_settings.json").is_file():
+            raise ValueError("Thư mục không có project.sqlite3 và book_settings.json")
+        paths = ProjectPaths.build(selected.resolve())
+        db = ProjectDB(paths.db)
+        chapters = db.list_chapters()
+        try:
+            locked_settings = load_settings(paths.settings)
+        except (KeyError, TypeError, ValueError):
+            locked_settings = json.loads(str(db.book()["settings_json"]))
+        self.project_paths = paths
+        self.db = db
+        self.files = [Path(str(row["input_path"])) for row in chapters]
+        self.title_edit.setText(str(db.book()["title"]))
+        self.output_edit.setText(str(paths.root.parent))
+        self._apply_locked_settings(locked_settings)
+        self._chapter_snapshot = None
+        self._refresh_file_list()
+        self._set_project_selected(True)
+        self._remember_project(paths.root)
+        self._refresh_chapters()
+        if announce:
+            self._append_log("Đã mở project. Khi tiếp tục sẽ dùng nguyên settings và voice mapping đã khóa.")
 
     def _new_book(self) -> None:
         if self.process and self.process.is_alive():
@@ -451,8 +553,9 @@ class MainWindow(QMainWindow):
         self.title_edit.clear()
         self.file_list.clear()
         self.chapter_table.setRowCount(0)
-        self.progress.setValue(0)
+        self._show_progress("Sẵn sàng", 0, 100)
         self._chapter_snapshot = None
+        self._set_project_selected(False)
         self._append_log("Đã chuyển sang book mới; project cũ vẫn nguyên vẹn trên ổ đĩa.")
 
     def _apply_locked_settings(self, settings: dict[str, Any]) -> None:
@@ -464,16 +567,16 @@ class MainWindow(QMainWindow):
         if resource_index >= 0:
             self.resource_combo.setCurrentIndex(resource_index)
         self.max_temp.setValue(int(resources.get("max_gpu_temp_c", 86)))
-        self.pause_battery.setChecked(bool(resources.get("pause_on_battery", True)))
         audio = settings.get("audio", {})
         self.keep_wav.setChecked(bool(audio.get("keep_verified_wav", True)))
-        self.full_book.setChecked(bool(audio.get("combine_full_book", True)))
+        self.full_book.setChecked(bool(audio.get("combine_full_book", False)))
 
     def _refresh_chapters(self) -> None:
         if not self.db:
             return
         try:
             chapters = self.db.list_chapters()
+            book = self.db.book()
         except Exception:
             return
         snapshot = tuple(
@@ -487,6 +590,7 @@ class MainWindow(QMainWindow):
             )
             for row in chapters
         )
+        snapshot += ((str(book["status"]), str(book["stage"])),)
         if snapshot == self._chapter_snapshot:
             return
         self._chapter_snapshot = snapshot
@@ -495,7 +599,12 @@ class MainWindow(QMainWindow):
         for index, row in enumerate(chapters):
             self.chapter_table.setItem(index, 0, QTableWidgetItem(str(row["chapter_index"])))
             self.chapter_table.setItem(index, 1, QTableWidgetItem(str(row["title"])))
-            self.chapter_table.setItem(index, 2, QTableWidgetItem(str(row["status"])))
+            status = str(row["status"])
+            self.chapter_table.setItem(
+                index,
+                2,
+                QTableWidgetItem(CHAPTER_STATUS_LABELS.get(status, status)),
+            )
             accepted = int(row["verified_segments"]) + int(row["warning_segments"])
             total = int(row["total_segments"])
             self.chapter_table.setItem(index, 3, QTableWidgetItem(f"{accepted}/{total}"))
@@ -504,9 +613,19 @@ class MainWindow(QMainWindow):
             item = QTableWidgetItem(output if published else "")
             item.setData(Qt.UserRole, output if published else "")
             self.chapter_table.setItem(index, 4, item)
-            if row["status"] == "completed":
+            if status == "completed":
                 done += 1
-        self.progress.setValue(round(done * 100 / max(1, len(chapters))))
+        running = bool(self.process and self.process.is_alive())
+        if not running:
+            book_status = str(book["status"])
+            if book_status == "completed":
+                self._show_progress("Đã hoàn tất", len(chapters), len(chapters))
+            elif book_status == "stopped":
+                self._show_progress("Đã dừng an toàn", done, len(chapters))
+            elif book_status == "error":
+                self._show_progress("Đã dừng vì lỗi", done, len(chapters))
+            else:
+                self._show_progress("Project sẵn sàng", done, len(chapters))
 
     def _poll(self) -> None:
         if self.message_queue:
@@ -519,20 +638,33 @@ class MainWindow(QMainWindow):
                 if kind == "log":
                     self._append_log(str(message.get("text", "")))
                 elif kind == "state":
-                    self._append_log(str(message.get("text", "")))
-                elif kind == "resource":
-                    self.resource_label.setText(
-                        f"Tài nguyên: {message.get('level')} — {message.get('reason')}"
-                    )
+                    text = str(message.get("text", ""))
+                    self._append_log(text)
+                    self._show_progress(text)
                 elif kind == "analysis_progress":
                     done, total = int(message.get("done", 0)), int(message.get("total", 0))
-                    self.progress.setValue(round(done * 100 / max(1, total)))
+                    self._show_progress("Phân tích nội dung và nhân vật", done, total)
+                elif kind == "work_progress":
+                    done = message.get("done")
+                    total = message.get("total")
+                    self._show_progress(
+                        str(message.get("label", "Đang xử lý")),
+                        int(done) if done is not None else None,
+                        int(total) if total is not None else None,
+                    )
+                elif kind == "chapter_progress":
+                    done, total = int(message.get("done", 0)), int(message.get("total", 0))
+                    self._show_progress("Hoàn tất chapter", done, total)
                 elif kind == "chapter_completed":
                     self._append_log(f"Có thể nghe ngay: {message.get('path')}")
                 elif kind == "finished":
                     self.received_finished = True
                     self._append_log(str(message.get("text", "")))
                     self._running_controls(False)
+                    if message.get("stopped"):
+                        self._show_progress("Đã dừng an toàn", 0, 100)
+                    elif not message.get("ok", False):
+                        self._show_progress("Đã dừng vì lỗi", 0, 100)
         self._refresh_chapters()
         if self.process and not self.process.is_alive():
             exitcode = self.process.exitcode
@@ -556,6 +688,9 @@ class MainWindow(QMainWindow):
                 self._append_log(f"Worker thoát bất ngờ, exit code {exitcode}. Lần sau recovery sẽ kiểm tra checkpoint.")
             self._running_controls(False)
             self._dispose_ipc()
+            if self._close_when_stopped:
+                self._close_when_stopped = False
+                QTimer.singleShot(0, self.close)
 
     def _open_selected_mp3(self) -> None:
         row = self.chapter_table.currentRow()
@@ -572,18 +707,12 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.project_paths.root)))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        # No confirmation dialog: closing at any moment must be safe and unattended-friendly.
+        self._save_ui()
         if self.process and self.process.is_alive():
-            self.was_user_stop = True
-            if self.stop_event:
-                self.stop_event.set()
-            self.process.join(timeout=2.0)
-            if self.process.is_alive():
-                if self.process.pid:
-                    terminate_process_tree(self.process.pid, grace_seconds=4.0)
-                self.process.join(timeout=2.0)
-            if not self.process.is_alive():
-                self._dispose_ipc()
+            self._close_when_stopped = True
+            self._safe_stop()
+            event.ignore()
+            return
         event.accept()
 
 
