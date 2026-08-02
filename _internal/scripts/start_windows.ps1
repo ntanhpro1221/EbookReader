@@ -21,6 +21,7 @@ $SetupMarker = Join-Path $RuntimeRoot ".setup_complete"
 $Python = Join-Path $RuntimeRoot ".venv\Scripts\python.exe"
 $Pythonw = Join-Path $RuntimeRoot ".venv\Scripts\pythonw.exe"
 $SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"
+$ShortcutScript = Join-Path $PSScriptRoot "install_windows_shortcut.ps1"
 $AppScript = Join-Path $InternalRoot "app.py"
 
 Set-Location $ProjectRoot
@@ -68,6 +69,15 @@ function Start-App {
     Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot
 }
 
+function Install-StartMenuShortcut {
+    try {
+        & $ShortcutScript -ProjectRoot $ProjectRoot | Out-Null
+    } catch {
+        # Shortcut là tiện ích tích hợp Windows; lỗi tạo shortcut không được chặn app khởi động.
+    }
+}
+
+Install-StartMenuShortcut
 $runtimeReady = Test-AppRuntime
 
 if (-not $runtimeReady -and -not $SetupConsole) {
@@ -97,7 +107,7 @@ if (-not $runtimeReady) {
         Write-Host "CÀI ĐẶT KHÔNG HOÀN TẤT." -ForegroundColor Red
         Write-Host "Quá trình chuẩn bị ứng dụng gặp lỗi."
         Write-Host "Không có project audiobook nào bị thay đổi."
-        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại START.vbs."
+        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại E Book Reader.vbs."
         Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
         Wait-BeforeClose
         exit 1

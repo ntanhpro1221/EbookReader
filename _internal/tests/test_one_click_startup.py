@@ -7,12 +7,13 @@ PROJECT_ROOT = INTERNAL_ROOT.parent
 
 
 def test_one_click_startup_contract() -> None:
-    start_path = PROJECT_ROOT / "START.vbs"
+    start_path = PROJECT_ROOT / "E Book Reader.vbs"
     start_bytes = start_path.read_bytes()
     assert not start_bytes.startswith(b"\xef\xbb\xbf")
     assert start_bytes.isascii()
     start = start_bytes.decode("utf-8")
     assert not (PROJECT_ROOT / "START.bat").exists()
+    assert not (PROJECT_ROOT / "START.vbs").exists()
 
     launcher_path = INTERNAL_ROOT / "scripts" / "start_windows.ps1"
     launcher_bytes = launcher_path.read_bytes()
@@ -24,17 +25,22 @@ def test_one_click_startup_contract() -> None:
     assert setup_bytes.startswith(b"\xef\xbb\xbf")
     setup = setup_bytes.decode("utf-8-sig")
 
+    shortcut_path = INTERNAL_ROOT / "scripts" / "install_windows_shortcut.ps1"
+    shortcut = shortcut_path.read_text(encoding="utf-8")
+
     assert 'scripts\\start_windows.ps1' in start
     assert "shell.Run command, 0, False" in start
     assert '$SetupMarker = Join-Path $RuntimeRoot ".setup_complete"' in launcher
     assert '[switch]$SetupConsole' in launcher
     assert '$SetupScript = Join-Path $PSScriptRoot "setup_windows.ps1"' in launcher
+    assert '$ShortcutScript = Join-Path $PSScriptRoot "install_windows_shortcut.ps1"' in launcher
     assert '$AppScript = Join-Path $InternalRoot "app.py"' in launcher
     assert '$Pythonw = Join-Path $RuntimeRoot ".venv\\Scripts\\pythonw.exe"' in launcher
     assert 'import e_book_reader.gui' in launcher
     assert 'Start-Process -FilePath "powershell.exe"' in launcher
     assert '-WindowStyle Normal' in launcher
     assert 'Start-Process -FilePath $Pythonw' in launcher
+    assert "Install-StartMenuShortcut" in launcher
     assert '& $Python $AppScript' not in launcher
     assert "Lần chạy đầu hoặc môi trường cần được sửa." in launcher
     assert "CÀI ĐẶT KHÔNG HOÀN TẤT." in launcher
@@ -53,6 +59,10 @@ def test_one_click_startup_contract() -> None:
     assert 'pip install torch==2.8.0 torchaudio==2.8.0' in setup
     assert 'ollama pull qwen3:8b' in setup
     assert "snapshot_download" not in setup
+    assert '$ShortcutPath = Join-Path $ProgramsRoot "$AppName.lnk"' in shortcut
+    assert '"System32\\wscript.exe"' in shortcut
+    assert '"_internal\\e_book_reader\\assets\\e_book_reader.ico"' in shortcut
+    assert "$Shortcut.IconLocation = $IconLocation" in shortcut
     project = tomllib.loads((INTERNAL_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["dependencies"] == [
         "PySide6==6.8.0",

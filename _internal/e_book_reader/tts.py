@@ -142,7 +142,7 @@ class VieNeuEngine:
         try:
             from vieneu import Vieneu
         except ImportError as exc:
-            raise RuntimeError("Thiếu VieNeu; hãy chạy START.vbs") from exc
+            raise RuntimeError("Thiếu VieNeu; hãy chạy E Book Reader.vbs") from exc
         self.log("Nạp VieNeu-TTS.")
         self.tts = Vieneu(max_batch_size=max(1, int(self.settings["tts"]["batch_size"])))
         raw = list(self.tts.list_preset_voices())

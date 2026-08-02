@@ -8,7 +8,7 @@
 
 Yêu cầu bắt buộc:
 
-- workflow người dùng chỉ là double-click `START.vbs`;
+- workflow người dùng chỉ là mở `E Book Reader.vbs` hoặc shortcut **E Book Reader** trong Start Menu;
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
@@ -68,7 +68,7 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 ## Cấu trúc source
 
 ```text
-START.vbs
+E Book Reader.vbs
 README.md
 _internal/
 ├── AGENTS.md          # tài liệu dành cho agent/lập trình viên
@@ -123,7 +123,7 @@ python -m pytest
 Definition of done:
 
 - test liên quan pass;
-- các mục root hiện cho người dùng vẫn chỉ có `START.vbs`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
+- các mục root hiện cho người dùng vẫn chỉ có `E Book Reader.vbs`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
 - không tạo prompt giữa job;
 - kill ở ranh giới bất kỳ không làm hỏng artifact đã commit;
 - resume giữ settings và voice mapping;
