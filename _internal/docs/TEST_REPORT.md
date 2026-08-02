@@ -15,7 +15,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
 - one-click startup qua shortcut `Ebook Reader` ở root/Start Menu trỏ thẳng tới `_internal\Ebook Reader.vbs`;
-  console hiện ngay, báo tiến độ và tự đóng theo ready marker do GUI ghi sau khi render, còn lỗi giữ console để đọc;
+  console hiện ngay, báo tiến độ và tự đóng theo ready marker do GUI ghi sau khi render;
+  output được append vào `runtime/logs/startup.log`, boundary ngoài cùng bắt lỗi và giữ console mở cho tới khi
+  người dùng chủ động đóng; runtime cũ thiếu dependency chỉ chạy repair Python, không cài lại PyTorch/model;
 - single-instance dùng local IPC: lần mở thứ hai chỉ kích hoạt/đưa cửa sổ đang chạy lên trước rồi đóng launcher;
 - system tray có hành động hiện/ẩn/thoát hoàn toàn; nút `X` chỉ ẩn và giữ worker chạy, còn thoát từ tray
   kết thúc cây worker ngay;

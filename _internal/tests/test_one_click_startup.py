@@ -40,6 +40,8 @@ def test_one_click_startup_contract() -> None:
     assert '$Pythonw = Join-Path $RuntimeRoot ".venv\\Scripts\\pythonw.exe"' in launcher
     assert 'import ebook_reader.gui' in launcher
     assert "sys.path.insert(0" in launcher
+    assert '$ErrorActionPreference = "Continue"' in launcher
+    assert "$ErrorActionPreference = $previousErrorAction" in launcher
     assert 'Start-Process -FilePath $Pythonw' in launcher
     assert "-PassThru" in launcher
     assert "Wait-AppWindow" in launcher
@@ -53,13 +55,27 @@ def test_one_click_startup_contract() -> None:
     assert "Install-AppShortcuts" in launcher
     assert '& $Python $AppScript' not in launcher
     assert "Lần chạy đầu hoặc môi trường cần được sửa." in launcher
-    assert "CÀI ĐẶT KHÔNG HOÀN TẤT." in launcher
+    assert "KHÔNG THỂ KHỞI ĐỘNG EBOOK READER." in launcher
+    assert '$StartupLog = Join-Path $LogsRoot "startup.log"' in launcher
+    assert "Start-Transcript -Path $StartupLog -Append" in launcher
+    assert "Stop-StartupLogging" in launcher
+    assert "[Console]::ReadKey($true)" in launcher
+    assert "cửa sổ sẽ không tự đóng" in launcher
+    assert "& $SetupScript -NoPause -DependenciesOnly" in launcher
+    assert "Không cài lại PyTorch, không tải lại model." in launcher
     assert "Đang mở Ebook Reader..." not in launcher
     assert '[switch]$NoPause' in setup
+    assert '[switch]$DependenciesOnly' in setup
+    assert "if ($DependenciesOnly)" in setup
+    assert setup.index("if ($DependenciesOnly)") < setup.index(
+        'Ensure-WingetPackage "uv" "astral-sh.uv" "uv"'
+    )
+    assert "REPAIR DEPENDENCY HOÀN TẤT" in setup
     assert 'Set-Content -Encoding UTF8 $markerTemp' in setup
     assert 'Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker' in setup
     assert 'uv venv --python 3.11 --clear' not in setup
-    assert '--no-build-isolation -e "."' in setup
+    assert "--no-build-isolation -e $InternalRoot" in setup
+    assert "Set-Location $InternalRoot" not in setup
     assert 'if (-not $NoPause)' in setup
     assert "function Invoke-NativeChecked" in setup
     assert ' & $Python -m pytest ' not in setup

@@ -1,5 +1,6 @@
 ﻿param(
-    [switch]$NoPause
+    [switch]$NoPause,
+    [switch]$DependenciesOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,7 +12,6 @@ $Python = Join-Path $VenvRoot "Scripts\python.exe"
 $ModelsRoot = Join-Path $RuntimeRoot "models"
 
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
-Set-Location $InternalRoot
 
 $env:PYTHONUTF8 = "1"
 $env:EBOOK_READER_RUNTIME = $RuntimeRoot
@@ -52,6 +52,37 @@ function Ensure-WingetPackage([string]$Command, [string]$PackageId, [string]$Dis
     }
 }
 
+function Install-AppDependencies {
+    Write-Host "Cài Ebook Reader và các dependency Python..."
+    Invoke-NativeChecked {
+        & $Python -m pip install --no-build-isolation -e $InternalRoot
+    } "Cài Ebook Reader"
+    Invoke-NativeChecked { & $Python -m pip check } "Kiểm tra dependency"
+}
+
+function Write-SetupMarker {
+    $markerPayload = [ordered]@{
+        completed_at = (Get-Date).ToString("o")
+        python = $Python
+        internal_root = $InternalRoot
+    }
+    $markerTemp = "$SetupMarker.part"
+    $markerPayload | ConvertTo-Json | Set-Content -Encoding UTF8 $markerTemp
+    Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker
+}
+
+if ($DependenciesOnly) {
+    if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+        throw "Không thể repair dependency vì runtime Python chưa tồn tại."
+    }
+    Write-Host "=== Ebook Reader - repair dependency Python ===" -ForegroundColor Cyan
+    Write-Host "Giữ nguyên PyTorch, model và dữ liệu sách hiện có."
+    Install-AppDependencies
+    Write-SetupMarker
+    Write-Host "REPAIR DEPENDENCY HOÀN TẤT" -ForegroundColor Green
+    return
+}
+
 Write-Host "=== Ebook Reader - cài đặt Windows ===" -ForegroundColor Cyan
 Write-Host "Môi trường và model được lưu gọn trong _internal\runtime."
 Write-Host "Máy nên đang cắm sạc và SSD nên còn tối thiểu 30-40 GB."
@@ -77,11 +108,7 @@ Invoke-NativeChecked {
     & $Python -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
 } "Cài PyTorch CUDA 12.8"
 
-Write-Host "Cài Ebook Reader và các engine..."
-Invoke-NativeChecked {
-    & $Python -m pip install --no-build-isolation -e "."
-} "Cài Ebook Reader"
-Invoke-NativeChecked { & $Python -m pip check } "Kiểm tra dependency"
+Install-AppDependencies
 
 New-Item -ItemType Directory -Force -Path $env:HF_HOME | Out-Null
 $WhisperRoot = Join-Path $ModelsRoot "whisper"
@@ -117,14 +144,7 @@ Invoke-NativeChecked {
 Write-Host "Chạy system check..."
 Invoke-NativeChecked { & $Python (Join-Path $PSScriptRoot "check_system.py") } "Chạy system check"
 
-$markerPayload = [ordered]@{
-    completed_at = (Get-Date).ToString("o")
-    python = $Python
-    internal_root = $InternalRoot
-}
-$markerTemp = "$SetupMarker.part"
-$markerPayload | ConvertTo-Json | Set-Content -Encoding UTF8 $markerTemp
-Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker
+Write-SetupMarker
 
 Write-Host ""
 Write-Host "CÀI ĐẶT HOÀN TẤT" -ForegroundColor Green

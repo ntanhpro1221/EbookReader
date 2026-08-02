@@ -14,6 +14,8 @@ Khi muốn chuyển từ project đang mở sang đầu vào khác, bấm **Book
 
 Không cần tự mở PowerShell hoặc chạy file setup riêng. Launcher hiện một console ngay khi bắt đầu,
 liên tục báo trạng thái trong lúc GUI đang nạp và tự đóng console ngay khi chính GUI báo đã hiển thị.
+Nếu source mới chỉ thiếu dependency Python, launcher repair tăng dần mà không cài lại PyTorch/model.
+Mọi phiên khởi động được ghi vào `_internal/runtime/logs/startup.log`; khi lỗi, console không tự đóng.
 Nếu Ebook Reader đã chạy, lần mở tiếp theo chỉ đưa cửa sổ hiện có lên trước thay vì tạo instance thứ hai.
 
 ## Những gì nằm ở thư mục gốc

@@ -12,6 +12,8 @@ Yêu cầu bắt buộc:
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
+- runtime đã tồn tại nhưng thiếu dependency Python phải dùng nhánh repair `pip install -e .` nhẹ;
+  không cài lại PyTorch, không pull lại model và không chạy full setup cho trường hợp này.
 - tận dụng tối đa tài nguyên trong giới hạn an toàn, tự nhường foreground và tự tăng lại;
 - giả định GUI/worker/máy có thể bị đóng bất kỳ lúc nào;
 - lỗi nghiêm trọng phải giữ nguyên checkpoint đã commit, dừng và gửi Windows notification;
@@ -125,7 +127,8 @@ Module chính:
 - `process_utils.py`: kết thúc an toàn cây process worker/native helper.
 - `scripts/start_windows.ps1`: hiện một console ngay khi khởi động, báo tiến độ trong lúc kiểm tra runtime/nạp GUI,
   mở app bằng `pythonw.exe` và tự đóng console theo ready marker do GUI ghi sau khi cửa sổ đã render;
-  lỗi giữ console để người dùng đọc.
+  mọi output được append vào `runtime/logs/startup.log`; lỗi được bắt ở boundary ngoài cùng và console
+  phải giữ mở cho tới khi người dùng chủ động nhấn phím/đóng cửa sổ.
 - GUI giữ một `QLocalServer` theo user session để khóa single-instance; lần mở sau gửi lệnh kích hoạt cửa sổ
   đang chạy rồi thoát sạch, không tạo thêm tray icon hoặc worker controller.
 

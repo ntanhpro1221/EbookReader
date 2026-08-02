@@ -23,6 +23,10 @@ $StartupPollMilliseconds = 250
 $StartupProgressIntervalSeconds = 5
 $StartupWindowTimeoutSeconds = 180
 $StartupReadyFile = Join-Path $RuntimeRoot ".gui_ready_$PID"
+$LogsRoot = Join-Path $RuntimeRoot "logs"
+$StartupLog = Join-Path $LogsRoot "startup.log"
+$script:RuntimeCheckDetails = ""
+$script:TranscriptStarted = $false
 
 Set-Location $ProjectRoot
 
@@ -35,21 +39,68 @@ $env:HF_HUB_DISABLE_SYMLINKS_WARNING = "1"
 $env:TORCH_HOME = Join-Path $RuntimeRoot "models\torch"
 
 function Test-AppRuntime {
+    $script:RuntimeCheckDetails = ""
     if (-not (Test-Path -LiteralPath $SetupMarker -PathType Leaf)) {
+        $script:RuntimeCheckDetails = "Thiếu marker cài đặt: $SetupMarker"
         return $false
     }
     if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
+        $script:RuntimeCheckDetails = "Thiếu runtime Python: $Python"
         return $false
     }
     if (-not (Test-Path -LiteralPath $Pythonw -PathType Leaf)) {
+        $script:RuntimeCheckDetails = "Thiếu runtime pythonw: $Pythonw"
         return $false
     }
-    & $Python -c "import sys; sys.path.insert(0, r'''$InternalRoot'''); import ebook_reader.gui" *> $null
-    return $LASTEXITCODE -eq 0
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 có thể biến stderr của native process thành terminating error.
+        # Thu traceback lại để launcher tự phân loại repair thay vì thoát trước khi đọc exit code.
+        $ErrorActionPreference = "Continue"
+        $checkOutput = & $Python -c "import sys; sys.path.insert(0, r'''$InternalRoot'''); import ebook_reader.gui" 2>&1
+        $checkExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($checkExitCode -ne 0) {
+        $script:RuntimeCheckDetails = ($checkOutput | Out-String).Trim()
+        return $false
+    }
+    return $true
 }
 
 function Wait-BeforeClose {
-    Read-Host "Nhấn Enter để đóng"
+    Write-Host "Nhấn phím bất kỳ để đóng; cửa sổ sẽ không tự đóng." -ForegroundColor Yellow
+    while ($true) {
+        try {
+            [void][Console]::ReadKey($true)
+            return
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
+function Start-StartupLogging {
+    New-Item -ItemType Directory -Force -Path $LogsRoot | Out-Null
+    try {
+        Start-Transcript -Path $StartupLog -Append | Out-Null
+        $script:TranscriptStarted = $true
+    } catch {
+        $script:TranscriptStarted = $false
+    }
+}
+
+function Stop-StartupLogging {
+    if (-not $script:TranscriptStarted) {
+        return
+    }
+    try {
+        Stop-Transcript | Out-Null
+    } catch {
+        # Không để lỗi đóng transcript che mất lỗi khởi động gốc.
+    }
+    $script:TranscriptStarted = $false
 }
 
 function Show-StartupHeader {
@@ -116,47 +167,69 @@ function Install-AppShortcuts {
     }
 }
 
-Show-StartupHeader
-Install-AppShortcuts
-Write-Host "Đang kiểm tra môi trường..."
-$runtimeReady = Test-AppRuntime
+function Invoke-Launcher {
+    Show-StartupHeader
+    Install-AppShortcuts
+    Write-Host "Đang kiểm tra môi trường..."
+    $runtimeReady = Test-AppRuntime
 
-if (-not $runtimeReady) {
-    Write-Host ""
-    Write-Host "Lần chạy đầu hoặc môi trường cần được sửa."
-    Write-Host "Chương trình sẽ tự động cài đặt và tải model cần thiết."
-    Write-Host "Quá trình này cần Internet và có thể sử dụng nhiều dung lượng SSD."
-    Write-Host ""
-
-    try {
-        & $SetupScript -NoPause
-        if ($LASTEXITCODE -ne 0) {
-            throw "Trình cài đặt trả về mã lỗi $LASTEXITCODE."
+    if (-not $runtimeReady) {
+        $canRepairDependencies = (
+            (Test-Path -LiteralPath $SetupMarker -PathType Leaf) -and
+            (Test-Path -LiteralPath $Python -PathType Leaf) -and
+            (Test-Path -LiteralPath $Pythonw -PathType Leaf)
+        )
+        if ($canRepairDependencies) {
+            Write-Host ""
+            Write-Host "Môi trường thiếu dependency Python; đang repair nhẹ."
+            Write-Host "Không cài lại PyTorch, không tải lại model."
+            if ($script:RuntimeCheckDetails) {
+                Write-Host "Phát hiện: $script:RuntimeCheckDetails" -ForegroundColor DarkGray
+            }
+            & $SetupScript -NoPause -DependenciesOnly
+            if ($LASTEXITCODE -ne 0) {
+                throw "Repair dependency trả về mã lỗi $LASTEXITCODE."
+            }
+            if (-not (Test-AppRuntime)) {
+                throw "Môi trường vẫn chưa sẵn sàng sau repair dependency.`n$script:RuntimeCheckDetails"
+            }
+        } else {
+            Write-Host ""
+            Write-Host "Lần chạy đầu hoặc môi trường cần được sửa."
+            Write-Host "Chương trình sẽ tự động cài đặt và tải model cần thiết."
+            Write-Host "Quá trình này cần Internet và có thể sử dụng nhiều dung lượng SSD."
+            Write-Host ""
+            & $SetupScript -NoPause
+            if ($LASTEXITCODE -ne 0) {
+                throw "Trình cài đặt trả về mã lỗi $LASTEXITCODE."
+            }
+            if (-not (Test-AppRuntime)) {
+                throw "Môi trường vẫn chưa sẵn sàng sau khi cài đặt.`n$script:RuntimeCheckDetails"
+            }
         }
-        if (-not (Test-AppRuntime)) {
-            throw "Môi trường ứng dụng vẫn chưa sẵn sàng sau khi cài đặt."
-        }
-    } catch {
-        Write-Host ""
-        Write-Host "CÀI ĐẶT KHÔNG HOÀN TẤT." -ForegroundColor Red
-        Write-Host "Quá trình chuẩn bị ứng dụng gặp lỗi."
-        Write-Host "Không có project audiobook nào bị thay đổi."
-        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại Ebook Reader."
-        Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
-        Wait-BeforeClose
-        exit 1
     }
-} else {
+
     Write-Host "[OK] Môi trường sẵn sàng."
+    Start-App
 }
 
+$launcherExitCode = 0
+Start-StartupLogging
 try {
-    Start-App
+    Invoke-Launcher
 } catch {
+    $launcherExitCode = 1
     Write-Host ""
-    Write-Host "Không thể mở Ebook Reader." -ForegroundColor Red
-    Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
+    Write-Host "KHÔNG THỂ KHỞI ĐỘNG EBOOK READER." -ForegroundColor Red
+    Write-Host "Không có project audiobook nào bị thay đổi."
+    Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Log khởi động: $StartupLog" -ForegroundColor Yellow
+} finally {
+    Stop-StartupLogging
+}
+
+if ($launcherExitCode -ne 0) {
     Wait-BeforeClose
-    exit 1
+    exit $launcherExitCode
 }
 exit 0
