@@ -44,6 +44,10 @@ def test_one_click_startup_contract() -> None:
     assert "-PassThru" in launcher
     assert "Wait-AppWindow" in launcher
     assert "MainWindowHandle" in launcher
+    assert '$StartupReadyFile = Join-Path $RuntimeRoot ".gui_ready_$PID"' in launcher
+    assert '$env:EBOOK_READER_READY_FILE = $StartupReadyFile' in launcher
+    assert "Test-Path -LiteralPath $ReadyFile -PathType Leaf" in launcher
+    assert "$Process.ExitCode -eq 0" in launcher
     assert "Đang khởi động Ebook Reader..." in launcher
     assert "Ebook Reader vẫn đang khởi động..." in launcher
     assert "Install-AppShortcuts" in launcher

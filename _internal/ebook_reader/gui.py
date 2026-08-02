@@ -12,6 +12,7 @@ from typing import Any
 from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -66,6 +67,10 @@ from .worker import run_worker
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
 APP_NAME = "Ebook Reader"
 APP_USER_MODEL_ID = "EbookReader.Desktop"
+INSTANCE_SERVER_NAME = f"{APP_USER_MODEL_ID}.SingleInstance"
+INSTANCE_ACTIVATE_MESSAGE = b"activate"
+INSTANCE_CONNECT_TIMEOUT_MS = 250
+STARTUP_READY_FILE_ENV = "EBOOK_READER_READY_FILE"
 APP_ASSET_DIR = Path(__file__).resolve().parent / "assets"
 APP_ICON_PATH = APP_ASSET_DIR / ("ebook_reader.ico" if os.name == "nt" else "ebook_reader.png")
 VOICE_PREVIEW_DIR = APP_ASSET_DIR / "voice_previews"
@@ -80,6 +85,10 @@ CHAPTER_TABLE_HEADERS = (
 )
 CHAPTER_TABLE_DEFAULT_WIDTHS = (45, 160, 110, 115, 130, 155, 480)
 MP3_COLUMN = 6
+VOICE_FOLDOUT_LABEL = "Giọng người kể:"
+VOICE_FOLDOUT_EXPANDED_SUFFIX = "⌄"
+VOICE_FOLDOUT_COLLAPSED_SUFFIX = "›"
+VOICE_CHILD_INDENT = 8
 
 
 CHAPTER_STATUS_LABELS = {
@@ -221,23 +230,32 @@ class MainWindow(QMainWindow):
         self.preview_button = QPushButton("Phát preview")
         self.preview_button.clicked.connect(self._play_narrator_preview)
         self.voice_foldout_button = QToolButton()
-        self.voice_foldout_button.setText("Giọng người kể:")
+        self.voice_foldout_button.setText(
+            f"{VOICE_FOLDOUT_LABEL}  {VOICE_FOLDOUT_EXPANDED_SUFFIX}"
+        )
         self.voice_foldout_button.setCheckable(True)
         self.voice_foldout_button.setChecked(True)
-        self.voice_foldout_button.setArrowType(Qt.ArrowType.DownArrow)
-        self.voice_foldout_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.voice_foldout_button.setArrowType(Qt.ArrowType.NoArrow)
+        self.voice_foldout_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.voice_foldout_button.setAutoRaise(True)
         self.voice_foldout_button.setStyleSheet(
             "QToolButton { border: none; background: transparent; padding: 0; }"
         )
         self.voice_tools_widget = QWidget()
         self.voice_tools_layout = QFormLayout(self.voice_tools_widget)
-        self.voice_tools_layout.setContentsMargins(22, 0, 0, 0)
+        self.voice_tools_layout.setContentsMargins(VOICE_CHILD_INDENT, 0, 0, 0)
         self.voice_tools_layout.setHorizontalSpacing(8)
         self.voice_tools_layout.setVerticalSpacing(6)
         self.voice_gender_label = QLabel("Giới tính:")
         self.voice_region_label = QLabel("Miền:")
         self.voice_preview_label = QLabel("Nghe thử:")
+        voice_child_label_width = self.voice_foldout_button.sizeHint().width()
+        for label in (
+            self.voice_gender_label,
+            self.voice_region_label,
+            self.voice_preview_label,
+        ):
+            label.setMinimumWidth(voice_child_label_width)
         self.voice_tools_layout.addRow(self.voice_gender_label, self.narrator_gender_combo)
         self.voice_tools_layout.addRow(self.voice_region_label, self.narrator_region_combo)
         self.voice_tools_layout.addRow(self.voice_preview_label, self.preview_button)
@@ -246,7 +264,7 @@ class MainWindow(QMainWindow):
 
         book_form.addRow("Chất lượng:", self.profile_combo)
         book_form.addRow(self.voice_foldout_button, self.narrator_voice_combo)
-        book_form.addRow("", self.voice_tools_widget)
+        book_form.addRow(self.voice_tools_widget)
         settings_layout.addWidget(self.book_settings_box)
 
         self.global_settings_box = QGroupBox("Thiết lập chung")
@@ -578,9 +596,12 @@ class MainWindow(QMainWindow):
 
     def _set_voice_options_expanded(self, expanded: bool, *, persist: bool = True) -> None:
         self.voice_tools_widget.setVisible(expanded)
-        self.voice_foldout_button.setArrowType(
-            Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
+        suffix = (
+            VOICE_FOLDOUT_EXPANDED_SUFFIX
+            if expanded
+            else VOICE_FOLDOUT_COLLAPSED_SUFFIX
         )
+        self.voice_foldout_button.setText(f"{VOICE_FOLDOUT_LABEL}  {suffix}")
         if persist:
             self.settings_store.setValue("voice_options_expanded", expanded)
             self.settings_store.sync()
@@ -1124,12 +1145,82 @@ def _set_windows_app_identity() -> None:
         pass
 
 
+def _notify_running_instance(server_name: str = INSTANCE_SERVER_NAME) -> bool:
+    socket = QLocalSocket()
+    socket.connectToServer(server_name)
+    if not socket.waitForConnected(INSTANCE_CONNECT_TIMEOUT_MS):
+        socket.abort()
+        return False
+    socket.write(INSTANCE_ACTIVATE_MESSAGE)
+    socket.flush()
+    socket.waitForBytesWritten(INSTANCE_CONNECT_TIMEOUT_MS)
+    socket.disconnectFromServer()
+    return True
+
+
+def _claim_single_instance(
+    app: QApplication,
+    server_name: str = INSTANCE_SERVER_NAME,
+) -> QLocalServer | None:
+    if _notify_running_instance(server_name):
+        return None
+
+    server = QLocalServer(app)
+    if server.listen(server_name):
+        return server
+
+    if _notify_running_instance(server_name):
+        return None
+
+    QLocalServer.removeServer(server_name)
+    if server.listen(server_name):
+        return server
+    raise RuntimeError(f"Không thể khóa single-instance: {server.errorString()}")
+
+
+def _signal_startup_ready() -> None:
+    ready_path = os.environ.get(STARTUP_READY_FILE_ENV, "").strip()
+    if not ready_path:
+        return
+    try:
+        Path(ready_path).write_text(str(os.getpid()), encoding="ascii")
+    except OSError:
+        # Launcher vẫn còn đường dự phòng bằng MainWindowHandle và process exit.
+        pass
+
+
+def _connect_instance_activation(server: QLocalServer, window: MainWindow) -> None:
+    def activate_pending_instance() -> None:
+        received = False
+        while server.hasPendingConnections():
+            connection = server.nextPendingConnection()
+            if connection is None:
+                continue
+            connection.readAll()
+            connection.disconnectFromServer()
+            received = True
+        if received:
+            window._show_from_tray()
+
+    window._instance_server = server
+    window._instance_activation_handler = activate_pending_instance
+    server.newConnection.connect(activate_pending_instance)
+    QTimer.singleShot(0, activate_pending_instance)
+
+
 def run_gui() -> int:
     mp.freeze_support()
     _set_windows_app_identity()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
+    instance_server = _claim_single_instance(app)
+    if instance_server is None:
+        _signal_startup_ready()
+        return 0
     window = MainWindow()
+    _connect_instance_activation(instance_server, window)
     window.show()
+    app.processEvents()
+    _signal_startup_ready()
     return app.exec()

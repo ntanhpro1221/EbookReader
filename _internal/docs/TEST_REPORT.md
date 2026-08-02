@@ -2,10 +2,10 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **72/72 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **88/88 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
-Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
+Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. Compileall cho source/test và `git diff --check` cũng pass.
 `ruff 0.9.10 check _internal` pass; các dependency kiểm thử tạm cũng đã được xóa.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
@@ -15,7 +15,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
 - one-click startup qua shortcut `Ebook Reader` ở root/Start Menu trỏ thẳng tới `_internal\Ebook Reader.vbs`;
-  console hiện ngay, báo tiến độ và tự đóng khi cửa sổ chính xuất hiện, còn lỗi giữ console để đọc;
+  console hiện ngay, báo tiến độ và tự đóng theo ready marker do GUI ghi sau khi render, còn lỗi giữ console để đọc;
+- single-instance dùng local IPC: lần mở thứ hai chỉ kích hoạt/đưa cửa sổ đang chạy lên trước rồi đóng launcher;
 - system tray có hành động hiện/ẩn/thoát hoàn toàn; nút `X` chỉ ẩn và giữ worker chạy, còn thoát từ tray
   kết thúc cây worker ngay;
 - GUI không còn tiêu đề lớn, tự đổi nút `Bắt đầu`/`Tiếp tục`, tự mở project được chọn gần nhất;
@@ -54,8 +55,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ; phân vai loại hoàn toàn preset tin tức,
   ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
 - dropdown người kể có đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
-  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; label `Giọng người kể` là header foldout,
-  bên dưới là ba dòng con có label riêng cho giới tính, miền và nghe thử; Thái Sơn và Ngọc Linh đứng đầu danh sách;
+  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; label `Giọng người kể` là header foldout có
+  chevron nhỏ ở cuối, bên dưới là ba dòng con chỉ thụt nhẹ và có label riêng cho giới tính, miền và nghe thử;
+  Thái Sơn và Ngọc Linh đứng đầu danh sách;
 - thay đổi narrator trực tiếp tự phát preview, nút preview phát lại; 10 WAV không phải tin tức được đóng gói
   bằng package-data và mapping preset nào cũng phải trỏ tới file tồn tại;
 - profile chất lượng và narrator được khóa theo sách; resource mode và ngưỡng GPU là global, không detach

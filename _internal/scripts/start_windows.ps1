@@ -22,6 +22,7 @@ $AppScript = Join-Path $InternalRoot "app.py"
 $StartupPollMilliseconds = 250
 $StartupProgressIntervalSeconds = 5
 $StartupWindowTimeoutSeconds = 180
+$StartupReadyFile = Join-Path $RuntimeRoot ".gui_ready_$PID"
 
 Set-Location $ProjectRoot
 
@@ -59,13 +60,22 @@ function Show-StartupHeader {
     Write-Host ""
 }
 
-function Wait-AppWindow([System.Diagnostics.Process]$Process) {
+function Wait-AppWindow(
+    [System.Diagnostics.Process]$Process,
+    [string]$ReadyFile
+) {
     $startedAt = [DateTime]::UtcNow
     $deadline = $startedAt.AddSeconds($StartupWindowTimeoutSeconds)
     $nextProgress = $startedAt.AddSeconds($StartupProgressIntervalSeconds)
 
     while ([DateTime]::UtcNow -lt $deadline) {
+        if (Test-Path -LiteralPath $ReadyFile -PathType Leaf) {
+            return
+        }
         if ($Process.HasExited) {
+            if ($Process.ExitCode -eq 0) {
+                return
+            }
             throw "Tiến trình Ebook Reader đã kết thúc với exit code $($Process.ExitCode)."
         }
         $Process.Refresh()
@@ -86,9 +96,16 @@ function Wait-AppWindow([System.Diagnostics.Process]$Process) {
 
 function Start-App {
     Write-Host "Đang nạp giao diện..."
-    $process = Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot -PassThru
-    Wait-AppWindow $process
-    Write-Host "Cửa sổ Ebook Reader đã sẵn sàng." -ForegroundColor Green
+    Remove-Item -Force -LiteralPath $StartupReadyFile -ErrorAction SilentlyContinue
+    $env:EBOOK_READER_READY_FILE = $StartupReadyFile
+    try {
+        $process = Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot -PassThru
+        Wait-AppWindow $process $StartupReadyFile
+        Write-Host "Cửa sổ Ebook Reader đã sẵn sàng." -ForegroundColor Green
+    } finally {
+        Remove-Item -Force -LiteralPath $StartupReadyFile -ErrorAction SilentlyContinue
+        Remove-Item Env:EBOOK_READER_READY_FILE -ErrorAction SilentlyContinue
+    }
 }
 
 function Install-AppShortcuts {

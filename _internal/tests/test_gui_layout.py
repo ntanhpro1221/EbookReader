@@ -3,22 +3,36 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from uuid import uuid4
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtGui import QCloseEvent, QPalette
+from PySide6.QtNetwork import QLocalServer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QFormLayout,
     QHeaderView,
     QLabel,
     QTableWidgetItem,
 )
 
 from ebook_reader.config import build_settings
-from ebook_reader.gui import APP_ICON_PATH, VOICE_PREVIEW_DIR, MainWindow
+from ebook_reader.gui import (
+    APP_ICON_PATH,
+    STARTUP_READY_FILE_ENV,
+    VOICE_CHILD_INDENT,
+    VOICE_FOLDOUT_COLLAPSED_SUFFIX,
+    VOICE_FOLDOUT_EXPANDED_SUFFIX,
+    VOICE_PREVIEW_DIR,
+    MainWindow,
+    _claim_single_instance,
+    _connect_instance_activation,
+    _signal_startup_ready,
+)
 from ebook_reader.project import create_or_open_project
 from ebook_reader.voice_catalog import VOICE_PREVIEW_FILENAMES
 
@@ -71,9 +85,11 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(available_narrators)
     book_form = window.book_settings_box.layout()
     assert book_form.labelForField(window.narrator_voice_combo) is window.voice_foldout_button
-    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert window.voice_foldout_button.text().endswith(VOICE_FOLDOUT_EXPANDED_SUFFIX)
+    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
     assert not hasattr(window, "narrator_control_layout")
-    assert window.voice_tools_layout.contentsMargins().left() > 0
+    assert book_form.getWidgetPosition(window.voice_tools_widget)[1] == QFormLayout.ItemRole.SpanningRole
+    assert window.voice_tools_layout.contentsMargins().left() == VOICE_CHILD_INDENT
     assert window.voice_tools_layout.rowCount() == 3
     assert window.voice_tools_layout.labelForField(window.narrator_gender_combo) is window.voice_gender_label
     assert window.voice_tools_layout.labelForField(window.narrator_region_combo) is window.voice_region_label
@@ -81,6 +97,14 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.voice_gender_label.text() == "Giới tính:"
     assert window.voice_region_label.text() == "Miền:"
     assert window.voice_preview_label.text() == "Nghe thử:"
+    assert all(
+        label.minimumWidth() == window.voice_foldout_button.sizeHint().width()
+        for label in (
+            window.voice_gender_label,
+            window.voice_region_label,
+            window.voice_preview_label,
+        )
+    )
     assert window.voice_foldout_button.isChecked() is True
     assert window.voice_tools_widget.isHidden() is False
     assert not hasattr(window, "settings_note")
@@ -110,14 +134,43 @@ def test_voice_options_foldout_collapses_and_restores(tmp_path: Path) -> None:
     window.voice_foldout_button.setChecked(False)
 
     assert window.voice_tools_widget.isHidden() is True
-    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.RightArrow
+    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
+    assert window.voice_foldout_button.text().endswith(VOICE_FOLDOUT_COLLAPSED_SUFFIX)
     assert store.value("voice_options_expanded", type=bool) is False
 
     window.voice_foldout_button.setChecked(True)
 
     assert window.voice_tools_widget.isHidden() is False
-    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.DownArrow
+    assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
+    assert window.voice_foldout_button.text().endswith(VOICE_FOLDOUT_EXPANDED_SUFFIX)
     window.close()
+
+
+def test_second_instance_activates_the_existing_window(tmp_path: Path) -> None:
+    app, window, _store = _window(tmp_path)
+    server_name = f"EbookReader.Test.{uuid4().hex}"
+    server = _claim_single_instance(app, server_name)
+    assert server is not None
+    _connect_instance_activation(server, window)
+    window.hide()
+
+    assert _claim_single_instance(app, server_name) is None
+    QTest.qWait(50)
+    app.processEvents()
+
+    assert window.isHidden() is False
+    server.close()
+    QLocalServer.removeServer(server_name)
+    window.close()
+
+
+def test_gui_ready_signal_creates_launcher_marker(tmp_path: Path, monkeypatch) -> None:
+    ready_file = tmp_path / "gui.ready"
+    monkeypatch.setenv(STARTUP_READY_FILE_ENV, str(ready_file))
+
+    _signal_startup_ready()
+
+    assert ready_file.read_text(encoding="ascii") == str(os.getpid())
 
 
 def test_selecting_narrator_autoplays_preview_and_button_replays(tmp_path: Path) -> None:
