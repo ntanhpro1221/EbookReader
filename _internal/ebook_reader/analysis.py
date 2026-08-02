@@ -47,6 +47,15 @@ NAME_PRONUNCIATION_BATCH_SIZE = 20
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
 NAME_PRONUNCIATION_ID_PREFIX = "N"
 NAME_PRONUNCIATION_ID_WIDTH = 3
+IDENTITY_CONTEXT_RADIUS = 1
+IDENTITY_CONTEXTS_PER_SPEAKER = 4
+IDENTITY_CONTEXT_LINE_CHARS = 220
+ALIAS_RECONCILIATION_BATCH_SIZE = 16
+ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
+DIRECT_ADDRESS_TITLES = (
+    "anh", "chị", "ông", "bà", "ngài", "cô", "chú", "bác", "dì", "cậu", "em",
+    "cha", "mẹ", "thầy", "sư phụ", "đại nhân", "đội trưởng",
+)
 NAME_TOKEN_PATTERN = re.compile(
     r"(?<![\wÀ-ỹĐđ])([A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*)(?![\wÀ-ỹĐđ])"
 )
@@ -140,6 +149,10 @@ Quy tắc:
    speaker=NPC_LOCAL:<nhãn ngắn>, ví dụ NPC_LOCAL:áo xanh hoặc NPC_LOCAL:lính gác 1.
    Giữ cùng nhãn cho cùng người trong các đoạn liên tiếp của batch; dùng nhãn khác cho người khác.
    Chỉ dùng UNKNOWN khi hoàn toàn không có dấu hiệu phân biệt người nói.
+   Speaker là người phát ra câu, không phải người được gọi trong câu. Tên đứng sau cách xưng hô như
+   “anh Lucien”, “chị Alisa”, hoặc tên ở đầu câu theo sau bởi dấu phẩy như “Iven, ...” thường là người
+   nghe. Tuyệt đối không lấy tên đó làm speaker nếu lời kể lân cận cho thấy một người khác đang nói;
+   nếu người nói chưa có tên, dùng NPC_LOCAL với nhãn mô tả người nói.
 3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ. Hãy dùng ngữ cảnh lân cận
    và ngôi kể để xác định nhân vật; không dùng NARRATOR. Chỉ trả UNKNOWN khi thực sự không thể
    suy ra, không được bịa ra danh tính.
@@ -243,6 +256,66 @@ def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
     return f"{LOCAL_SPEAKER_STORED_PREFIX}c{chapter_id:05d}::{local_scope}::{label}"
 
 
+def _speaker_is_directly_addressed(text: str, speaker: str) -> bool:
+    if speaker.casefold() in RESERVED_SPEAKERS:
+        return False
+    label = local_speaker_label(speaker) if is_local_speaker(speaker) else speaker
+    label = " ".join(label.split())
+    if not label or label.casefold().startswith(("người gọi ", "người nói")):
+        return False
+    escaped_label = re.escape(label).replace(r"\ ", r"\s+")
+    quoted_start = rf"^[\s\"“”'‘’(\[]*{escaped_label}\s*[,!?:…]"
+    if re.search(quoted_start, text, flags=re.IGNORECASE):
+        return True
+    title_pattern = "|".join(
+        re.escape(title).replace(r"\ ", r"\s+")
+        for title in DIRECT_ADDRESS_TITLES
+    )
+    titled_address = (
+        rf"(?<![\wÀ-ỹĐđ])(?:{title_pattern})\s+{escaped_label}"
+        rf"(?=\s*[,!?.:;…\"”’]|$)"
+    )
+    return re.search(titled_address, text, flags=re.IGNORECASE) is not None
+
+
+def _repair_addressee_speakers(
+    group: list[Any],
+    result: dict[str, dict[str, Any]],
+    local_scope: str,
+) -> None:
+    rows_by_id = {str(row["stable_id"]): row for row in group}
+    local_replacements: dict[str, str] = {}
+    direct_replacements: dict[str, str] = {}
+    for seg_id, data in result.items():
+        if data["kind"] != "dialogue":
+            continue
+        speaker = str(data["speaker"])
+        row = rows_by_id[seg_id]
+        if not _speaker_is_directly_addressed(str(row["text"]), speaker):
+            continue
+        label = local_speaker_label(speaker) if is_local_speaker(speaker) else speaker
+        replacement = _scope_local_speaker(
+            f"{LOCAL_SPEAKER_REQUEST_PREFIX}người gọi {label}",
+            row,
+            local_scope,
+        )
+        if is_local_speaker(speaker):
+            local_replacements[speaker] = replacement
+        else:
+            direct_replacements[seg_id] = replacement
+
+    for seg_id, data in result.items():
+        speaker = str(data["speaker"])
+        replacement = direct_replacements.get(seg_id) or local_replacements.get(speaker)
+        if replacement is None:
+            continue
+        data["speaker"] = replacement
+        notes = str(data.get("notes", ""))
+        data["notes"] = (
+            f"{notes}; {ADDRESSEE_REPAIR_NOTE}" if notes else ADDRESSEE_REPAIR_NOTE
+        )[:500]
+
+
 def _heuristic(row: Any) -> dict[str, Any]:
     text = str(row["text"])
     lowered = text.casefold()
@@ -317,6 +390,7 @@ def _validate(
             "personality_hint": str(item.get("personality_hint", ""))[:300],
             "notes": notes[:500],
         }
+    _repair_addressee_speakers(group, result, local_scope)
     return result
 
 
@@ -382,6 +456,49 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             }
         )
     return candidates
+
+
+def _identity_reconciliation_items(
+    rows: list[Any],
+    chapter_titles: dict[int, str],
+) -> list[dict[str, Any]]:
+    eligible_indexes: dict[str, list[int]] = defaultdict(list)
+    first_seen: dict[str, int] = {}
+    for index, row in enumerate(rows):
+        speaker = _canonical_speaker(row["speaker"])
+        if speaker.casefold() in RESERVED_SPEAKERS or is_local_speaker(speaker) or not speaker:
+            continue
+        eligible_indexes[speaker].append(index)
+        first_seen.setdefault(speaker, index)
+
+    items: list[dict[str, Any]] = []
+    for speaker in sorted(eligible_indexes, key=lambda name: first_seen[name]):
+        indexes = eligible_indexes[speaker]
+        edge_count = max(1, IDENTITY_CONTEXTS_PER_SPEAKER // 2)
+        selected_indexes = list(dict.fromkeys(indexes[:edge_count] + indexes[-edge_count:]))
+        examples: list[str] = []
+        for center in selected_indexes:
+            center_row = rows[center]
+            chapter_id = int(center_row["chapter_id"])
+            context_lines: list[str] = []
+            start = max(0, center - IDENTITY_CONTEXT_RADIUS)
+            end = min(len(rows), center + IDENTITY_CONTEXT_RADIUS + 1)
+            for nearby in rows[start:end]:
+                if int(nearby["chapter_id"]) != chapter_id:
+                    continue
+                nearby_speaker = _canonical_speaker(nearby["speaker"])
+                nearby_text = " ".join(str(nearby["text"]).split())[:IDENTITY_CONTEXT_LINE_CHARS]
+                context_lines.append(f"{nearby_speaker}: {nearby_text}")
+            try:
+                seq = int(center_row["seq"])
+            except (KeyError, TypeError, ValueError):
+                seq = center
+            chapter_title = chapter_titles.get(chapter_id, str(chapter_id))
+            excerpt = f"[chapter={chapter_title}; seq={seq}]\n" + "\n".join(context_lines)
+            if excerpt not in examples:
+                examples.append(excerpt)
+        items.append({"name": speaker, "examples": examples})
+    return items
 
 
 def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
@@ -827,6 +944,26 @@ class OllamaBookAnalyzer:
                     },
                 )
                 raise RuntimeError(message)
+            repaired_addressee_ids = [
+                seg_id
+                for seg_id, data in validated.items()
+                if ADDRESSEE_REPAIR_NOTE in str(data.get("notes", ""))
+            ]
+            if repaired_addressee_ids:
+                message = (
+                    f"Đã sửa {len(repaired_addressee_ids)} segment trong batch {group_index}: "
+                    "tên người được gọi không còn bị dùng làm người nói."
+                )
+                self.log(message)
+                self.db.event(
+                    "warning",
+                    "ADDRESSEE_SPEAKER_REPAIRED",
+                    message,
+                    {
+                        "batch_index": group_index,
+                        "segment_ids": repaired_addressee_ids,
+                    },
+                )
             if validated:
                 self._checkpoint_pronunciations(group, payload)
             for row in group:
@@ -1045,19 +1182,13 @@ class OllamaBookAnalyzer:
     ) -> dict[str, str]:
         """Conservative full-book reconciliation. It never merges low-confidence names automatically."""
         rows = [row for row in self.db.list_segments() if str(row["status"]) != "pending"]
-        contexts: dict[str, list[str]] = defaultdict(list)
-        for row in rows:
-            speaker = _canonical_speaker(row["speaker"])
-            if speaker.casefold() in RESERVED_SPEAKERS or is_local_speaker(speaker) or not speaker:
-                continue
-            if len(contexts[speaker]) < 4:
-                contexts[speaker].append(str(row["text"])[:260])
-        if len(contexts) < 2:
+        items = _identity_reconciliation_items(rows, self._chapter_titles)
+        if len(items) < 2:
             return {}
         max_candidates = int(self.settings.get("max_alias_candidates", 400))
-        if len(contexts) > max_candidates:
+        if len(items) > max_candidates:
             message = (
-                f"Alias reconciliation has {len(contexts)} candidates, above the locked safe limit "
+                f"Alias reconciliation has {len(items)} candidates, above the locked safe limit "
                 f"of {max_candidates}"
             )
             self.db.event("error", "ALIAS_CANDIDATE_LIMIT_EXCEEDED", message)
@@ -1068,27 +1199,30 @@ class OllamaBookAnalyzer:
             if self.settings.get("enabled", True) and self.settings.get("required", True):
                 raise RuntimeError("Ollama became unavailable before required alias reconciliation")
             return {}
-        items = [
-            {"name": name, "examples": examples}
-            for name, examples in sorted(contexts.items(), key=lambda item: item[0].casefold())
-        ]
         alias_map: dict[str, str] = {}
         all_names = [item["name"] for item in items]
         # Keep requests bounded. Only high-confidence merges are applied automatically.
-        for batch_index, offset in enumerate(range(0, len(items), 40), 1):
+        for batch_index, offset in enumerate(
+            range(0, len(items), ALIAS_RECONCILIATION_BATCH_SIZE),
+            1,
+        ):
             if before_batch is not None:
                 before_batch(batch_index)
-            batch = items[offset : offset + 40]
+            batch = items[offset : offset + ALIAS_RECONCILIATION_BATCH_SIZE]
             prompt = (
-                "Hợp nhất bí danh của cùng một nhân vật trong audiobook. Không gộp đại từ chung như hắn, nàng, cô ấy. "
-                "Chỉ trả nhóm khi chắc chắn từ ngữ cảnh. Canonical phải là tên rõ nhất trong aliases.\n\n"
+                "Hợp nhất bí danh của cùng một nhân vật trong audiobook dựa trên ngữ cảnh lân cận của toàn sách. "
+                "Tên trước và sau khi chuyển sinh, trọng sinh, đổi thân phận, đổi tên hoặc dùng bí danh phải được "
+                "xem là cùng một người khi ngữ cảnh xác nhận rõ. Ví dụ một nhân vật chôn ký ức quá khứ rồi chấp "
+                "nhận tên/thân phận mới là một identity, không phải hai nhân vật. Không gộp đại từ chung như hắn, "
+                "nàng, cô ấy; không gộp người nói với người chỉ được gọi tên trong lời thoại. Chỉ trả nhóm khi chắc "
+                "chắn từ ngữ cảnh. Canonical phải là tên rõ nhất hoặc tên hiện tại trong aliases.\n\n"
                 f"Toàn bộ tên ứng viên trong sách: {json.dumps(all_names, ensure_ascii=False)}\n\n"
                 + json.dumps(batch, ensure_ascii=False, indent=2)
             )
             response_schema = copy.deepcopy(RECONCILE_SCHEMA)
             groups_schema = response_schema["properties"]["groups"]
             groups_schema["maxItems"] = len(batch)
-            groups_schema["items"]["properties"]["aliases"]["maxItems"] = len(batch)
+            groups_schema["items"]["properties"]["aliases"]["maxItems"] = len(all_names)
             num_ctx = int(self.settings.get("num_ctx", 16384))
             request = {
                 "model": self.model,

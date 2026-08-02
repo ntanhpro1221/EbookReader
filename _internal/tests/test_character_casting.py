@@ -169,6 +169,60 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
     ]
 
 
+def test_alias_identity_transition_locks_one_voice_across_chapters(tmp_path: Path) -> None:
+    db = ProjectDB(tmp_path / "identity.sqlite3")
+    db.initialize_book(
+        title="Book",
+        project_root=tmp_path,
+        settings={},
+        settings_hash="settings",
+        input_manifest_hash="manifest",
+    )
+    chapter_ids = db.ensure_chapters(
+        [
+            {
+                "chapter_index": index,
+                "title": title,
+                "input_path": tmp_path / f"{title}.txt",
+                "input_sha256": f"source-{index}",
+                "input_size": 1,
+                "output_mp3": tmp_path / f"{title}.mp3",
+            }
+            for index, title in enumerate(("000", "001"), 1)
+        ]
+    )
+    for chapter_id, speaker in zip(chapter_ids, ("Hạ Phong", "Lucien"), strict=True):
+        db.replace_chapter_segments(
+            chapter_id,
+            [
+                {
+                    "stable_id": f"c{chapter_id}s1",
+                    "seq": 1,
+                    "text": "Độc thoại của cùng một nhân vật.",
+                    "text_sha256": f"text-{chapter_id}",
+                    "kind_hint": "thought",
+                    "kind": "thought",
+                    "speaker": speaker,
+                    "gender": "male",
+                    "confidence": 0.99,
+                    "status": "analyzed",
+                }
+            ],
+        )
+
+    build_registry_and_cast(
+        db,
+        build_settings(),
+        {"Hạ Phong": "Lucien"},
+        lambda _message: None,
+    )
+
+    rows = db.list_segments()
+    assert {str(row["speaker"]) for row in rows} == {"Lucien"}
+    assert len({int(row["canonical_character_id"]) for row in rows}) == 1
+    assert len({int(row["voice_profile_id"]) for row in rows}) == 1
+
+
 def test_pitch_ranges_follow_measured_preset_depth() -> None:
     supported_names = {
         preset["name"]

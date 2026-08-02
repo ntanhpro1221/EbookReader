@@ -6,11 +6,13 @@ import subprocess
 import pytest
 
 from ebook_reader.analysis import (
+    ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_OUTPUT_MAX_TOKENS,
     AnalysisRequestStopped,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
     _cmu_pronunciations,
+    _identity_reconciliation_items,
     _name_candidate_contexts,
     _validate,
     _valid_vietnamese_spoken_form,
@@ -36,6 +38,7 @@ class FakeDB:
                 "speaker": None,
             }
         ]
+        self.chapters = [{"id": 1, "title": "Chương 1"}]
 
     def list_segments(self, statuses=None):
         if statuses is not None:
@@ -43,7 +46,7 @@ class FakeDB:
         return self.rows
 
     def list_chapters(self):
-        return [{"id": 1, "title": "Chương 1"}]
+        return self.chapters
 
     def event(self, level, code, message, details=None):
         self.events.append((level, code, message, details))
@@ -355,6 +358,144 @@ def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
     assert all(is_local_speaker(speaker) for speaker in speakers)
     assert "c00001::b0007" in speakers[0]
     assert local_speaker_display(speakers[0]) == "NPC áo xanh"
+
+
+def test_addressee_name_cannot_become_the_local_speaker_identity() -> None:
+    group = [
+        {
+            **analysis_group()[0],
+            "text": "“Anh Lucien!”",
+            "kind_hint": "dialogue",
+        },
+        {
+            **analysis_group()[1],
+            "text": "“Anh tỉnh rồi?”",
+            "kind_hint": "dialogue",
+        },
+    ]
+    items = []
+    for row in group:
+        item = analysis_item(row["stable_id"])
+        item.update(
+            {
+                "kind": "dialogue",
+                "speaker": "NPC_LOCAL:Lucien",
+                "gender": "male",
+            }
+        )
+        items.append(item)
+
+    validated = _validate(group, {"segments": items}, local_scope="b0002")
+    speakers = [validated[row["stable_id"]]["speaker"] for row in group]
+
+    assert len(set(speakers)) == 1
+    assert local_speaker_display(speakers[0]) == "NPC người gọi Lucien"
+    assert all(ADDRESSEE_REPAIR_NOTE in validated[row["stable_id"]]["notes"] for row in group)
+
+
+def test_bare_name_vocative_is_repaired_but_self_introduction_is_not() -> None:
+    addressed = {
+        **analysis_group()[0],
+        "text": "“Iven, đỡ mẹ con rồi về nhà thôi.”",
+        "kind_hint": "dialogue",
+    }
+    self_intro = {
+        **analysis_group()[1],
+        "text": "“Tôi là Lucien.”",
+        "kind_hint": "dialogue",
+    }
+    addressed_item = analysis_item(addressed["stable_id"])
+    addressed_item.update({"kind": "dialogue", "speaker": "Iven", "gender": "male"})
+    self_intro_item = analysis_item(self_intro["stable_id"])
+    self_intro_item.update({"kind": "dialogue", "speaker": "Lucien", "gender": "male"})
+
+    validated = _validate(
+        [addressed, self_intro],
+        {"segments": [addressed_item, self_intro_item]},
+        local_scope="b0003",
+    )
+
+    assert local_speaker_display(validated[addressed["stable_id"]]["speaker"]) == "NPC người gọi Iven"
+    assert validated[self_intro["stable_id"]]["speaker"] == "Lucien"
+
+
+def test_identity_reconciliation_uses_chapter_boundary_context_for_renamed_protagonist(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.chapters = [
+        {"id": 1, "title": "000"},
+        {"id": 2, "title": "001"},
+    ]
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s49",
+            "chapter_id": 1,
+            "seq": 49,
+            "text": "Hạ Phong muốn được yên tĩnh suy nghĩ về cuộc đời mình.",
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        },
+        {
+            "id": 2,
+            "stable_id": "c1s51",
+            "chapter_id": 1,
+            "seq": 51,
+            "text": "‘Phù thủy đó có liên quan đến mình?’",
+            "kind_hint": "thought",
+            "status": "analyzed",
+            "speaker": "Hạ Phong",
+        },
+        {
+            "id": 3,
+            "stable_id": "c2s4",
+            "chapter_id": 2,
+            "seq": 4,
+            "text": (
+                "Lucien đã chấp nhận thân phận của mình, chôn vùi mọi ký ức quá khứ trong lòng."
+            ),
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        },
+        {
+            "id": 4,
+            "stable_id": "c2s5",
+            "chapter_id": 2,
+            "seq": 5,
+            "text": "‘Không biết mình có cơ hội nào học được thần thuật không nhỉ?’",
+            "kind_hint": "thought",
+            "status": "analyzed",
+            "speaker": "Lucien",
+        },
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    items = _identity_reconciliation_items(db.rows, {1: "000", 2: "001"})
+    assert [item["name"] for item in items] == ["Hạ Phong", "Lucien"]
+
+    def response(request, **_kwargs):
+        prompt = request["prompt"]
+        assert "Hạ Phong muốn được yên tĩnh" in prompt
+        assert "Lucien đã chấp nhận thân phận" in prompt
+        assert "Tên trước và sau khi chuyển sinh" in prompt
+        return {
+            "groups": [
+                {
+                    "canonical": "Lucien",
+                    "aliases": ["Hạ Phong", "Lucien"],
+                    "confidence": 0.98,
+                    "reason": "Cùng một nhân vật sau khi chuyển sinh và nhận thân phận mới.",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    assert analyzer.reconcile_aliases() == {"Hạ Phong": "Lucien"}
 
 
 def test_onomatopoeia_remains_normal_narration() -> None:

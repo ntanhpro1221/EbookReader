@@ -54,6 +54,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
   trường hợp thực sự không phân biệt được vẫn tách tối thiểu theo nam/nữ/chưa rõ.
+- Trước khi khóa giọng, bước hợp nhất danh tính đọc cả ngữ cảnh lân cận ở đầu và cuối mỗi chapter để nhận ra
+  trường hợp cùng một người đổi tên, dùng bí danh hoặc chuyển sang thân phận mới như `Hạ Phong → Lucien`.
+  Tên xuất hiện trong cách gọi trực tiếp như “Anh Lucien!” hoặc “Iven, …” không được dùng làm speaker;
+  nếu người nói chưa rõ danh tính, app giữ một vai NPC cục bộ riêng và ghi warning thay vì đổi nhầm giọng.
 - Mỗi nhân vật giữ nguyên một preset và một biến thể cao độ. Khoảng hạ giọng được giới hạn
   theo cao độ median đo từ preview: Phạm Tuyên không bị hạ, Xuân Vĩnh/Thái Sơn/Ngọc Trân chỉ hạ tối đa
   `-1`, các preset còn lại hạ tối đa `-2`; mọi preset chỉ nâng tối đa `+2` bán âm. Khi nhiều vai

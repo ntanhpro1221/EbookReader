@@ -80,6 +80,11 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   ít nhất phải tách pool nam, nữ và chưa rõ giới tính.
 - Nhãn NPC cục bộ trùng chính xác với tên nhân vật trong cùng chapter phải được hợp nhất trước khi
   phân vai, tránh cùng một người bị khóa hai giọng hoặc hai pitch khác nhau.
+- Alias reconciliation phải nhận ngữ cảnh trước/sau ở cả lần xuất hiện đầu và cuối của mỗi speaker, kèm chapter/seq,
+  để nhận ra đổi tên, bí danh và chuyển thân phận xuyên chapter trước khi khóa casting.
+- Tên trong lời gọi trực tiếp như `Anh Lucien!` hoặc `Iven, ...` là addressee, không phải bằng chứng về speaker.
+  Nếu analysis vẫn gán tên đó làm người nói, validation phải tách thành NPC cục bộ `người gọi <tên>`, áp dụng
+  nhất quán cho cùng local speaker trong batch và ghi event `ADDRESSEE_SPEAKER_REPAIRED`.
 - Segment mới được cân theo K-weighted LUFS; giọng kể có anchor nhỉnh hơn hội thoại trung tính và
   chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
 - Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
