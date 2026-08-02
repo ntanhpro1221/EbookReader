@@ -21,6 +21,7 @@ STYLE_PRIORITY = {
     STYLE_NATURAL: 0,
     STYLE_STORY: 1,
 }
+PRIMARY_CASTING_REGIONS = {REGION_NORTH, REGION_SOUTH}
 CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 DEFAULT_NARRATOR_BY_GENDER = {
     GENDER_MALE: "Phạm Tuyên",
@@ -140,6 +141,18 @@ def preset_priority(preset: dict[str, Any]) -> tuple[int, int, str]:
     )
 
 
+def casting_preset_priority(preset: dict[str, Any]) -> tuple[int, int, int, str]:
+    region = str(preset.get("region", ""))
+    style = str(preset.get("style", ""))
+    is_primary_natural_voice = style == STYLE_NATURAL and region in PRIMARY_CASTING_REGIONS
+    return (
+        0 if is_primary_natural_voice else 1,
+        REGION_PRIORITY.get(region, len(REGION_PRIORITY)),
+        STYLE_PRIORITY.get(style, len(STYLE_PRIORITY)),
+        str(preset.get("name", "")).casefold(),
+    )
+
+
 def pitch_variants_for_preset(preset_name: str, max_abs_semitones: int) -> tuple[int, ...]:
     maximum = max(0, int(max_abs_semitones))
     minimum = max(-maximum, int(PRESET_MIN_PITCH_SEMITONES.get(preset_name, -maximum)))
@@ -183,4 +196,4 @@ def casting_presets(gender: str, *, include_regional: bool) -> list[dict[str, st
         and preset["style"] != STYLE_NEWS
         and (include_regional or preset["region"] in {REGION_NORTH, REGION_SOUTH})
     ]
-    return sorted(candidates, key=preset_priority)
+    return sorted(candidates, key=casting_preset_priority)

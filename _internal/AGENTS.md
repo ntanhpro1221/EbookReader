@@ -70,7 +70,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Mọi vai dùng preset VieNeu đã khóa; một nhân vật không được đổi preset theo cảm xúc hoặc khi resume.
 - Cảm xúc chỉ thay đổi cách thể hiện trên cùng preset: cue phi ngôn ngữ được VieNeu hỗ trợ, sampling,
   pace và mức âm lượng mục tiêu. Không thay identity giọng để giả lập cảm xúc.
-- Preset được phân bổ theo giới tính và ưu tiên dùng hết pool phù hợp trước khi tái sử dụng.
+- Preset được phân bổ theo giới tính và ưu tiên dùng hết pool phù hợp trước khi tái sử dụng. Trong cùng mức sử dụng,
+  giọng tự nhiên miền Bắc đứng đầu, tiếp theo là giọng tự nhiên miền Nam; các giọng còn lại giữ thứ tự cũ.
 - Pitch âm phải theo giới hạn từng preset đo trên preview: Phạm Tuyên không hạ; Xuân Vĩnh, Thái Sơn,
   Ngọc Trân tối đa `-1`; các preset không tin tức còn lại tối đa `-2`; pitch dương tối đa `+2`.
 - NPC có nhãn cục bộ được giữ identity riêng trong phạm vi chapter/batch; NPC không phân biệt được

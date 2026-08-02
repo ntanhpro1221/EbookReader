@@ -49,7 +49,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   Bấm `Sách mới` đặt lại thiết lập sách về `Cân bằng`, mọi giới tính, mọi miền và giọng `Phạm Tuyên`,
   nhưng giữ nguyên hai thiết lập global này. Nút này chỉ bật khi đang mở một sách đã tồn tại; trong bản
   nháp sách mới chưa chạy, nút bị vô hiệu hóa vì không có sách cũ nào cần rời khỏi.
-- Nhân vật có tên được ưu tiên giọng theo thứ tự Bắc → Nam, rồi tự nhiên → kể chuyện. Preset tin tức không được
+- Nhân vật có tên ưu tiên cao nhất giọng tự nhiên miền Bắc, tiếp theo là giọng tự nhiên miền Nam. Các giọng còn lại
+  giữ thứ tự Bắc → Nam và tự nhiên → kể chuyện. Preset tin tức không được
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
   trường hợp thực sự không phân biệt được vẫn tách tối thiểu theo nam/nữ/chưa rõ.

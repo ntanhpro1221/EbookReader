@@ -9,10 +9,10 @@ from .io_utils import slugify, stable_int
 from .voice_catalog import (
     STYLE_NEWS,
     VIENEU_PRESETS,
+    casting_preset_priority,
     casting_presets,
     preset_by_name,
     pitch_variants_for_preset,
-    preset_priority,
 )
 
 
@@ -77,7 +77,7 @@ class PresetAllocator:
         usage = self.pool_usage[pool]
         selected = min(
             candidates,
-            key=lambda preset: (usage[preset["name"]], *preset_priority(preset)),
+            key=lambda preset: (usage[preset["name"]], *casting_preset_priority(preset)),
         )
         usage[selected["name"]] += 1
         variants = pitch_variants_for_preset(selected["name"], self.max_pitch_shift)

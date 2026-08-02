@@ -6,13 +6,18 @@ from ebook_reader.character_registry import build_registry_and_cast
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.voice_catalog import (
+    GENDER_FEMALE,
+    GENDER_MALE,
     PRESET_PREVIEW_MEDIAN_PITCH_HZ,
     PRESET_MIN_PITCH_SEMITONES,
     REGION_CENTRAL,
     REGION_NORTH,
     REGION_SOUTH,
+    STYLE_NATURAL,
     STYLE_NEWS,
+    STYLE_STORY,
     VIENEU_PRESETS,
+    casting_presets,
     pitch_variants_for_preset,
     preset_by_name,
 )
@@ -136,6 +141,32 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_region
     assert len(bishop_rows) == 2
     assert len({int(row["canonical_character_id"]) for row in bishop_rows}) == 1
     assert len({int(row["voice_profile_id"]) for row in bishop_rows}) == 1
+
+
+def test_casting_prioritizes_natural_north_then_natural_south() -> None:
+    male_order = [
+        (preset["region"], preset["style"])
+        for preset in casting_presets(GENDER_MALE, include_regional=True)
+    ]
+    female_order = [
+        (preset["region"], preset["style"])
+        for preset in casting_presets(GENDER_FEMALE, include_regional=True)
+    ]
+
+    assert male_order == [
+        (REGION_NORTH, STYLE_NATURAL),
+        (REGION_SOUTH, STYLE_NATURAL),
+        (REGION_NORTH, STYLE_STORY),
+        (REGION_SOUTH, STYLE_STORY),
+        (REGION_CENTRAL, STYLE_NATURAL),
+    ]
+    assert female_order == [
+        (REGION_NORTH, STYLE_NATURAL),
+        (REGION_NORTH, STYLE_NATURAL),
+        (REGION_NORTH, STYLE_STORY),
+        (REGION_SOUTH, STYLE_STORY),
+        (REGION_CENTRAL, STYLE_NATURAL),
+    ]
 
 
 def test_pitch_ranges_follow_measured_preset_depth() -> None:
