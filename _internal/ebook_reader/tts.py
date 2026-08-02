@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import gc
-import math
 import random
 import re
 from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
-import soxr
+import pyworld
 
 from .audio_io import (
     AudioQualityError,
@@ -50,6 +49,12 @@ EMOTION_TEMPERATURE = {
 }
 PACE_TEMPERATURE_OFFSETS = {"slow": -0.03, "normal": 0.0, "fast": 0.04}
 PACE_SILENCE_PROPORTIONS = {"slow": 0.20, "normal": 0.15, "fast": 0.08}
+WORLD_FRAME_PERIOD_MS = 5.0
+WORLD_F0_FLOOR_HZ = 55.0
+WORLD_F0_CEIL_HZ = 600.0
+WORLD_MIN_VOICED_FRAMES = 3
+
+
 def is_fatal_tts_error(error: BaseException) -> bool:
     message = str(error).casefold()
     return any(marker in message for marker in FATAL_TTS_MARKERS)
@@ -81,49 +86,30 @@ def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> n
     steps = int(pitch_semitones)
     if steps == 0 or array.size == 0:
         return array
-    import torch
-    from torchaudio.functional import phase_vocoder
-
-    n_fft = 512
-    hop_length = n_fft // 4
-    rate = 2.0 ** (-float(steps) / 12.0)
-    waveform = torch.from_numpy(array.copy())
-    window = torch.hann_window(n_fft, device=waveform.device)
-    with torch.inference_mode():
-        spectrum = torch.stft(
-            waveform,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            win_length=n_fft,
-            window=window,
-            center=True,
-            pad_mode="reflect",
-            normalized=False,
-            onesided=True,
-            return_complex=True,
-        )
-        phase_advance = torch.linspace(
-            0,
-            math.pi * hop_length,
-            spectrum.shape[-2],
-            device=spectrum.device,
-        )[..., None]
-        stretched_spectrum = phase_vocoder(spectrum, rate, phase_advance)
-        stretched = torch.istft(
-            stretched_spectrum,
-            n_fft=n_fft,
-            hop_length=hop_length,
-            win_length=n_fft,
-            window=window,
-            length=int(round(array.size / rate)),
-        )
-    # torchaudio.pitch_shift resamples 48 kHz with a near-irrational integer ratio and can
-    # allocate multi-gigabyte sinc kernels. Soxr accepts the ratio directly and stays bounded.
-    shifted = soxr.resample(
-        stretched.cpu().numpy(),
-        sample_rate / rate,
+    if sample_rate < 8_000:
+        raise ValueError(f"WORLD pitch shifting requires at least 8000 Hz, got {sample_rate}")
+    waveform = np.asarray(array, dtype=np.float64)
+    f0, time_axis = pyworld.harvest(
+        waveform,
         sample_rate,
-        quality="HQ",
+        f0_floor=WORLD_F0_FLOOR_HZ,
+        f0_ceil=WORLD_F0_CEIL_HZ,
+        frame_period=WORLD_FRAME_PERIOD_MS,
+    )
+    f0 = pyworld.stonemask(waveform, f0, time_axis, sample_rate)
+    voiced = f0 > 0.0
+    if int(np.count_nonzero(voiced)) < WORLD_MIN_VOICED_FRAMES:
+        raise ValueError("WORLD could not find enough voiced frames for formant-preserving pitch shift")
+    spectral_envelope = pyworld.cheaptrick(waveform, f0, time_axis, sample_rate)
+    aperiodicity = pyworld.d4c(waveform, f0, time_axis, sample_rate)
+    shifted_f0 = f0.copy()
+    shifted_f0[voiced] *= 2.0 ** (float(steps) / 12.0)
+    shifted = pyworld.synthesize(
+        shifted_f0,
+        spectral_envelope,
+        aperiodicity,
+        sample_rate,
+        frame_period=WORLD_FRAME_PERIOD_MS,
     ).astype(np.float32, copy=False)
     if shifted.size >= array.size:
         return shifted[: array.size]

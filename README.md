@@ -85,8 +85,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Mức âm lượng được cân bằng theo K-weighted LUFS của từng segment trước khi ghép chapter;
   giọng kể chuyện có anchor nhỉnh hơn hội thoại trung tính, còn khoảng cách của `loud` được giữ nhỏ. Chỉ các
   chỉ dẫn như thì thầm, quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
-- Xử lý pitch dùng phase-vocoder với resampler có bộ nhớ bị chặn; nếu bước trang trí pitch hiếm khi lỗi,
-  app giữ waveform gốc và ghi warning thay vì tạo lại lời đọc hoặc làm hỏng chapter.
+- Xử lý pitch dùng WORLD vocoder chuyên cho tiếng nói: tách F0, spectral envelope và aperiodicity,
+  chỉ thay đường F0 rồi tổng hợp lại để giữ formant/chất giọng và nguyên thời lượng. Nếu đoạn
+  phi ngôn ngữ không có đủ voiced frame hoặc bước pitch hiếm khi lỗi, app giữ waveform gốc và ghi warning
+  thay vì tạo lại lời đọc hoặc làm hỏng chapter.
 - Giới hạn sinh audio được tính theo độ dài và pace của từng segment để một câu rất ngắn không chạy tới
   trần toàn cục của model. Ngân sách frame VieNeu và giới hạn kiểm tra dùng chung một chính sách thời lượng,
   nên app không thể vừa cho model sinh dài hơn rồi tự từ chối chính kết quả đó. Sai lệch tốc độ nhẹ được ghi

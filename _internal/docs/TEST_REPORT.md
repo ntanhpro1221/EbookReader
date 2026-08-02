@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **170/170 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **171/171 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục TEMP riêng, không cài vào runtime của app.
@@ -74,8 +74,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   một project đã tồn tại và tắt trong bản nháp sách mới chưa chạy;
 - cùng nhân vật giữ nguyên preset và biến thể cao độ; median F0 của 10 preview được đo để khóa
   pitch âm theo preset: Phạm Tuyên `0`, Xuân Vĩnh/Thái Sơn/Ngọc Trân `-1`, các preset còn lại `-2`;
-  test tín hiệu xác nhận phase-vocoder + Soxr đổi tần số đúng bán âm, giữ nguyên thời lượng và
-  không dùng resampler integer-ratio từng gây allocation 2.442.336.000 byte; lỗi lớp pitch giữ waveform gốc;
+  test tín hiệu xác nhận WORLD vocoder đổi F0 đúng bán âm, giữ nguyên thời lượng, spectral
+  envelope và aperiodicity; không còn resampler integer-ratio từng gây allocation 2.442.336.000 byte;
+  lỗi lớp pitch hoặc thiếu voiced frame giữ waveform gốc;
   thought thử lại đủ số lần để tìm
   speaker nhân vật, chỉ fallback sang NARRATOR kèm warning khi vẫn không xác định được;
   segment mới dùng K-weighted LUFS thay active RMS, narrator có anchor `+0,5 dB`, target hội thoại

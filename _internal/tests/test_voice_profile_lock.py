@@ -124,9 +124,13 @@ def test_missing_locked_vieneu_preset_is_fatal() -> None:
 
 
 def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:
-    sample_rate = 8_000
-    time_axis = np.arange(sample_rate // 5, dtype=np.float32) / sample_rate
-    audio = np.sin(2 * np.pi * 220 * time_axis).astype(np.float32)
+    sample_rate = 16_000
+    time_axis = np.arange(sample_rate, dtype=np.float32) / sample_rate
+    audio = sum(
+        (1 / harmonic) * np.sin(2 * np.pi * 220 * harmonic * time_axis)
+        for harmonic in range(1, 7)
+    )
+    audio = np.asarray(0.2 * audio / np.max(np.abs(audio)), dtype=np.float32)
 
     shifted = apply_pitch_variant(audio, sample_rate, 1)
 
@@ -137,8 +141,53 @@ def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:
     shifted_peak = np.fft.rfftfreq(shifted.size, 1 / sample_rate)[
         np.argmax(np.abs(np.fft.rfft(shifted)))
     ]
-    assert input_peak == pytest.approx(220.0, abs=5.0)
-    assert shifted_peak == pytest.approx(220.0 * 2 ** (1 / 12), abs=5.0)
+    assert input_peak == pytest.approx(220.0, abs=2.0)
+    assert shifted_peak == pytest.approx(220.0 * 2 ** (1 / 12), abs=2.0)
+
+
+def test_world_pitch_variant_changes_f0_but_reuses_voice_envelopes(monkeypatch) -> None:
+    source_f0 = np.asarray([0.0, 100.0, 110.0, 120.0, 0.0], dtype=np.float64)
+    time_axis = np.arange(source_f0.size, dtype=np.float64) * 0.005
+    spectral_envelope = np.full((source_f0.size, 4), 2.0, dtype=np.float64)
+    aperiodicity = np.full((source_f0.size, 4), 3.0, dtype=np.float64)
+    synthesized: dict[str, np.ndarray] = {}
+
+    monkeypatch.setattr(
+        tts_module.pyworld,
+        "harvest",
+        lambda *_args, **_kwargs: (source_f0.copy(), time_axis),
+    )
+    monkeypatch.setattr(
+        tts_module.pyworld,
+        "stonemask",
+        lambda _audio, f0, _time_axis, _sample_rate: f0,
+    )
+    monkeypatch.setattr(
+        tts_module.pyworld,
+        "cheaptrick",
+        lambda *_args, **_kwargs: spectral_envelope,
+    )
+    monkeypatch.setattr(
+        tts_module.pyworld,
+        "d4c",
+        lambda *_args, **_kwargs: aperiodicity,
+    )
+
+    def synthesize(f0, envelope, periodicity, *_args, **_kwargs):
+        synthesized["f0"] = f0
+        synthesized["envelope"] = envelope
+        synthesized["aperiodicity"] = periodicity
+        return np.ones(800, dtype=np.float64)
+
+    monkeypatch.setattr(tts_module.pyworld, "synthesize", synthesize)
+
+    shifted = apply_pitch_variant(np.ones(800, dtype=np.float32), 16_000, -1)
+
+    assert shifted.shape == (800,)
+    assert synthesized["f0"][[0, 4]].tolist() == [0.0, 0.0]
+    assert synthesized["f0"][1:4] == pytest.approx(source_f0[1:4] * 2 ** (-1 / 12))
+    assert synthesized["envelope"] is spectral_envelope
+    assert synthesized["aperiodicity"] is aperiodicity
 
 
 def test_coordinator_releases_inference_cache_after_success_and_failure(

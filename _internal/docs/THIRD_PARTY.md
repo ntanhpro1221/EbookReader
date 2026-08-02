@@ -8,6 +8,8 @@ Các thành phần chính:
 - VieNeu / `vieneu`;
 - OpenAI Whisper;
 - PyTorch và torchaudio;
+- PyWORLD và WORLD vocoder;
+- pyloudnorm;
 - PySide6;
 - FFmpeg / imageio-ffmpeg;
 - NumPy, SoundFile, psutil, requests và huggingface-hub.

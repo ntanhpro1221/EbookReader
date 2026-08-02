@@ -42,8 +42,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - WAV/MP3 luôn ghi `.part`, validate + checksum rồi atomic replace.
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
 - TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn → `failed`.
-- Biến thể pitch chỉ là lớp trang trí sau inference: dùng phase-vocoder + Soxr với bộ nhớ bị chặn,
-  không dùng `torchaudio.functional.pitch_shift`; lỗi pitch phải giữ waveform gốc, ghi warning và không retry TTS.
+- Biến thể pitch chỉ là lớp trang trí sau inference: dùng WORLD vocoder để chỉ scale F0, giữ nguyên
+  spectral envelope và aperiodicity; không dùng phase-vocoder hay `torchaudio.functional.pitch_shift`.
+  Lỗi pitch hoặc không đủ voiced frame phải giữ waveform gốc, ghi warning và không retry TTS.
 - Ngân sách frame VieNeu và giới hạn validation phải lấy từ cùng `segment_duration_policy`; codec VieNeu v3
   dùng 3.840 sample/frame ở 48 kHz. Mọi tổ hợp kind/pace/độ dài phải có headroom validation được test.
 - Chỉ `vocal_effect`/`text_sfx` được phép giới hạn thời lượng bằng fade-out khi runtime vẫn trả quá dài;
