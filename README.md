@@ -34,10 +34,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown chỉ hiện tên của
   toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng kể chuyện` là header foldout
   với chevron nhỏ cùng style dropdown ở đầu; bên dưới có ba dòng con thụt vào khoảng chiều rộng bốn chữ `o`
-  và có label riêng: `Giới tính`, `Miền`, `Nghe thử`. Thái Sơn và Ngọc Linh
+  và có ba dòng con theo thứ tự: `Nghe thử`, `Giới tính`, `Miền`. Thái Sơn và Ngọc Linh
   đứng đầu danh sách. Hai dòng lọc giới tính/miền chỉ hiện khi giọng kể chuyện còn được chỉnh sửa;
   dòng nghe thử vẫn giữ lại khi thiết lập sách đã khóa.
-- Chọn một preset trong dropdown sẽ tự phát WAV preview; nút `Phát preview` cho phép nghe lại. App đóng gói
+- Chọn một preset trong dropdown sẽ tự phát WAV preview; nút `Nghe thử` cho phép nghe lại. App đóng gói
   sẵn preview cho cả 10 preset hợp lệ nên không nạp model TTS chỉ để nghe thử.
 - Chất lượng và giọng người kể được lưu cùng sách và khóa sau khi sách bắt đầu. Chế độ tài nguyên
   và ngưỡng GPU là setting global, không tạo sách mới khi thay đổi và được worker nhận tại checkpoint kế tiếp.

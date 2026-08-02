@@ -230,7 +230,7 @@ class MainWindow(QMainWindow):
         self.narrator_region_combo.setAccessibleName("Lọc giọng theo miền")
         self.narrator_voice_combo = QComboBox()
         self._populate_narrator_voices(DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE])
-        self.preview_button = QPushButton("Phát preview")
+        self.preview_button = QPushButton("Nghe thử")
         self.preview_button.clicked.connect(self._play_narrator_preview)
         self.voice_foldout_button = QToolButton()
         self.voice_foldout_button.setText(VOICE_FOLDOUT_LABEL)
@@ -262,9 +262,9 @@ class MainWindow(QMainWindow):
             self.voice_preview_label,
         ):
             label.setMinimumWidth(voice_child_label_width)
+        self.voice_tools_layout.addRow(self.voice_preview_label, self.preview_button)
         self.voice_tools_layout.addRow(self.voice_gender_label, self.narrator_gender_combo)
         self.voice_tools_layout.addRow(self.voice_region_label, self.narrator_region_combo)
-        self.voice_tools_layout.addRow(self.voice_preview_label, self.preview_button)
         self.voice_foldout_button.toggled.connect(self._set_voice_options_expanded)
         self.narrator_voice_combo.currentIndexChanged.connect(self._narrator_voice_changed)
 
