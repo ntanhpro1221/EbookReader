@@ -9,8 +9,8 @@ from pathlib import Path
 from queue import Empty, Full
 from typing import Any
 
-from PySide6.QtCore import QSettings, QSignalBlocker, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPalette
+from PySide6.QtCore import QSize, QSettings, QSignalBlocker, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QIcon, QPainter, QPalette, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSpinBox,
     QSplitter,
+    QStyle,
+    QStyleOption,
     QSystemTrayIcon,
     QTableWidget,
     QTableWidgetItem,
@@ -86,9 +88,8 @@ CHAPTER_TABLE_HEADERS = (
 CHAPTER_TABLE_DEFAULT_WIDTHS = (45, 160, 110, 115, 130, 155, 480)
 MP3_COLUMN = 6
 VOICE_FOLDOUT_LABEL = "Giọng người kể:"
-VOICE_FOLDOUT_EXPANDED_SUFFIX = "⌄"
-VOICE_FOLDOUT_COLLAPSED_SUFFIX = "›"
-VOICE_CHILD_INDENT = 8
+VOICE_FOLDOUT_ICON_SIZE = 12
+VOICE_CHILD_INDENT_SAMPLE = "oooo"
 
 
 CHAPTER_STATUS_LABELS = {
@@ -230,20 +231,23 @@ class MainWindow(QMainWindow):
         self.preview_button = QPushButton("Phát preview")
         self.preview_button.clicked.connect(self._play_narrator_preview)
         self.voice_foldout_button = QToolButton()
-        self.voice_foldout_button.setText(
-            f"{VOICE_FOLDOUT_LABEL}  {VOICE_FOLDOUT_EXPANDED_SUFFIX}"
-        )
+        self.voice_foldout_button.setText(VOICE_FOLDOUT_LABEL)
         self.voice_foldout_button.setCheckable(True)
         self.voice_foldout_button.setChecked(True)
         self.voice_foldout_button.setArrowType(Qt.ArrowType.NoArrow)
-        self.voice_foldout_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.voice_foldout_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.voice_foldout_button.setIconSize(
+            QSize(VOICE_FOLDOUT_ICON_SIZE, VOICE_FOLDOUT_ICON_SIZE)
+        )
+        self.voice_foldout_button.setIcon(self._voice_foldout_icon(expanded=True))
         self.voice_foldout_button.setAutoRaise(True)
         self.voice_foldout_button.setStyleSheet(
             "QToolButton { border: none; background: transparent; padding: 0; }"
         )
         self.voice_tools_widget = QWidget()
         self.voice_tools_layout = QFormLayout(self.voice_tools_widget)
-        self.voice_tools_layout.setContentsMargins(VOICE_CHILD_INDENT, 0, 0, 0)
+        voice_child_indent = self.fontMetrics().horizontalAdvance(VOICE_CHILD_INDENT_SAMPLE)
+        self.voice_tools_layout.setContentsMargins(voice_child_indent, 0, 0, 0)
         self.voice_tools_layout.setHorizontalSpacing(8)
         self.voice_tools_layout.setVerticalSpacing(6)
         self.voice_gender_label = QLabel("Giới tính:")
@@ -594,14 +598,31 @@ class MainWindow(QMainWindow):
         self.narrator_voice_combo.setCurrentIndex(index if index >= 0 else 0)
         del blocker
 
+    def _voice_foldout_icon(self, *, expanded: bool) -> QIcon:
+        icon_size = QSize(VOICE_FOLDOUT_ICON_SIZE, VOICE_FOLDOUT_ICON_SIZE)
+        pixmap = QPixmap(icon_size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        option = QStyleOption()
+        option.initFrom(self.voice_foldout_button)
+        option.rect = pixmap.rect()
+        primitive = (
+            QStyle.PrimitiveElement.PE_IndicatorArrowDown
+            if expanded
+            else QStyle.PrimitiveElement.PE_IndicatorArrowRight
+        )
+        painter = QPainter(pixmap)
+        self.voice_foldout_button.style().drawPrimitive(
+            primitive,
+            option,
+            painter,
+            self.voice_foldout_button,
+        )
+        painter.end()
+        return QIcon(pixmap)
+
     def _set_voice_options_expanded(self, expanded: bool, *, persist: bool = True) -> None:
         self.voice_tools_widget.setVisible(expanded)
-        suffix = (
-            VOICE_FOLDOUT_EXPANDED_SUFFIX
-            if expanded
-            else VOICE_FOLDOUT_COLLAPSED_SUFFIX
-        )
-        self.voice_foldout_button.setText(f"{VOICE_FOLDOUT_LABEL}  {suffix}")
+        self.voice_foldout_button.setIcon(self._voice_foldout_icon(expanded=expanded))
         if persist:
             self.settings_store.setValue("voice_options_expanded", expanded)
             self.settings_store.sync()

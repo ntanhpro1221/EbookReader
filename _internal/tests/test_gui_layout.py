@@ -24,9 +24,8 @@ from ebook_reader.config import build_settings
 from ebook_reader.gui import (
     APP_ICON_PATH,
     STARTUP_READY_FILE_ENV,
-    VOICE_CHILD_INDENT,
-    VOICE_FOLDOUT_COLLAPSED_SUFFIX,
-    VOICE_FOLDOUT_EXPANDED_SUFFIX,
+    VOICE_CHILD_INDENT_SAMPLE,
+    VOICE_FOLDOUT_ICON_SIZE,
     VOICE_PREVIEW_DIR,
     MainWindow,
     _claim_single_instance,
@@ -85,11 +84,16 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(available_narrators)
     book_form = window.book_settings_box.layout()
     assert book_form.labelForField(window.narrator_voice_combo) is window.voice_foldout_button
-    assert window.voice_foldout_button.text().endswith(VOICE_FOLDOUT_EXPANDED_SUFFIX)
+    assert window.voice_foldout_button.text() == "Giọng người kể:"
     assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
+    assert window.voice_foldout_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
+    assert window.voice_foldout_button.icon().isNull() is False
+    assert window.voice_foldout_button.iconSize().width() == VOICE_FOLDOUT_ICON_SIZE
     assert not hasattr(window, "narrator_control_layout")
     assert book_form.getWidgetPosition(window.voice_tools_widget)[1] == QFormLayout.ItemRole.SpanningRole
-    assert window.voice_tools_layout.contentsMargins().left() == VOICE_CHILD_INDENT
+    assert window.voice_tools_layout.contentsMargins().left() == window.fontMetrics().horizontalAdvance(
+        VOICE_CHILD_INDENT_SAMPLE
+    )
     assert window.voice_tools_layout.rowCount() == 3
     assert window.voice_tools_layout.labelForField(window.narrator_gender_combo) is window.voice_gender_label
     assert window.voice_tools_layout.labelForField(window.narrator_region_combo) is window.voice_region_label
@@ -130,19 +134,22 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
 
 def test_voice_options_foldout_collapses_and_restores(tmp_path: Path) -> None:
     _app, window, store = _window(tmp_path)
+    expanded_icon_key = window.voice_foldout_button.icon().cacheKey()
 
     window.voice_foldout_button.setChecked(False)
 
     assert window.voice_tools_widget.isHidden() is True
     assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
-    assert window.voice_foldout_button.text().endswith(VOICE_FOLDOUT_COLLAPSED_SUFFIX)
+    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert window.voice_foldout_button.icon().cacheKey() != expanded_icon_key
     assert store.value("voice_options_expanded", type=bool) is False
 
     window.voice_foldout_button.setChecked(True)
 
     assert window.voice_tools_widget.isHidden() is False
     assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
-    assert window.voice_foldout_button.text().endswith(VOICE_FOLDOUT_EXPANDED_SUFFIX)
+    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert window.voice_foldout_button.icon().isNull() is False
     window.close()
 
 

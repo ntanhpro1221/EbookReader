@@ -33,7 +33,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown giọng chứa
   toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng người kể` là header foldout
-  với chevron nhỏ ở cuối; bên dưới có ba dòng con chỉ thụt nhẹ với label riêng: `Giới tính`, `Miền`, `Nghe thử`. Thái Sơn và Ngọc Linh
+  với chevron nhỏ cùng style dropdown ở đầu; bên dưới có ba dòng con thụt vào khoảng chiều rộng bốn chữ `o`
+  và có label riêng: `Giới tính`, `Miền`, `Nghe thử`. Thái Sơn và Ngọc Linh
   đứng đầu danh sách.
 - Chọn một preset trong dropdown sẽ tự phát WAV preview; nút `Phát preview` cho phép nghe lại. App đóng gói
   sẵn preview cho cả 10 preset hợp lệ nên không nạp model TTS chỉ để nghe thử.
