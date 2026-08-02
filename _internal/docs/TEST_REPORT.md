@@ -2,11 +2,11 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **91/91 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **161/161 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
-Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. Compileall cho source/test và `git diff --check` cũng pass.
-`ruff 0.9.10 check _internal` pass; các dependency kiểm thử tạm cũng đã được xóa.
+Các dependency kiểm thử được cài trong thư mục TEMP riêng, không cài vào runtime của app.
+Compileall cho source/test, `git diff --check` và `ruff 0.9.10 check _internal` đều pass.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -52,8 +52,13 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - cụm từ đặt trong ngoặc kép không bị nhận nhầm thành hội thoại, segment chỉ có dấu câu không đi vào TTS;
 - vocal-effect (`ha...`, `haiz...`, thẻ VieNeu) và từ tượng thanh (`rầm`, `uỳnh`...) được tách thành
   segment checkpoint riêng; effect dùng giới hạn thời lượng riêng và bỏ qua kiểm tra tốc độ/Whisper;
+- ngân sách frame và validator dùng chung một duration policy dựa trên codec VieNeu v3 3.840 sample/frame;
+  ma trận kind/pace/độ dài chứng minh mọi ngân sách sinh đều còn headroom validation; effect quá dài được
+  fade-out và warning, còn lời kể/hội thoại/nội tâm không bị cắt;
 - giới hạn frame VieNeu thay đổi theo độ dài/pace để câu ngắn không chạy tới trần model; lệch pace nhẹ
   trở thành warning còn sai lệch cực đoan vẫn bị từ chối;
+- nhánh kết thúc còn chapter lỗi gửi Windows notification, giữ `BookStatus.ERROR`/checkpoint và worker phát
+  `finished.ok=false` thay vì báo thành công;
 - NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ; phân vai loại hoàn toàn preset tin tức,
   ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
 - dropdown kể chuyện chỉ hiện tên của đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -24,9 +25,31 @@ EMOTION_LEVEL_OFFSETS_DB = {
     "tired": -1.0,
     "tender": -0.5,
 }
-EFFECT_MAX_SECONDS = 5.0
 RATE_HARD_MIN_FACTOR = 0.55
 RATE_HARD_MAX_FACTOR = 1.50
+VIENEU_V3_CODEC_SAMPLE_RATE = 48_000
+VIENEU_V3_CODEC_SAMPLES_PER_FRAME = 3_840
+VIENEU_V3_FRAME_SECONDS = VIENEU_V3_CODEC_SAMPLES_PER_FRAME / VIENEU_V3_CODEC_SAMPLE_RATE
+MIN_GENERATION_FRAMES = 48
+MAX_GENERATION_FRAMES = 300
+GENERATION_PADDING_SECONDS = 2.0
+MIN_GENERATION_SECONDS = 3.0
+MIN_VALIDATION_SECONDS = 5.0
+VALIDATION_PADDING_SECONDS = 8.0
+SPECIAL_AUDIO_GENERATION_SECONDS = 4.5
+SPECIAL_AUDIO_VALIDATION_SECONDS = 5.0
+SPECIAL_AUDIO_FADE_SECONDS = 0.12
+DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
+
+
+@dataclass(frozen=True, slots=True)
+class SegmentDurationPolicy:
+    generation_max_frames: int
+    validation_max_seconds: float
+
+    @property
+    def generation_ceiling_seconds(self) -> float:
+        return self.generation_max_frames * VIENEU_V3_FRAME_SECONDS
 
 
 def _segment_value(segment: Any, key: str, default: Any) -> Any:
@@ -35,6 +58,72 @@ def _segment_value(segment: Any, key: str, default: Any) -> Any:
     except (KeyError, TypeError):
         return default
     return default if value is None else value
+
+
+def segment_duration_policy(
+    text: str,
+    settings: dict[str, Any] | None,
+    segment: Any | None = None,
+) -> SegmentDurationPolicy:
+    tts = (settings or {}).get("tts", {})
+    kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
+    if kind in SPECIAL_AUDIO_KINDS:
+        generation_seconds = SPECIAL_AUDIO_GENERATION_SECONDS
+        validation_seconds = SPECIAL_AUDIO_VALIDATION_SECONDS
+    else:
+        pace = str(_segment_value(segment, "pace", "normal")) if segment is not None else "normal"
+        configured_bounds = tts.get("pace_chars_per_second", {})
+        configured = configured_bounds.get(pace, DEFAULT_PACE_LOWER_BOUNDS.get(pace, 10.5))
+        lower_bound = float(configured[0] if isinstance(configured, (list, tuple)) else configured)
+        speakable_chars = max(1, sum(char.isalnum() for char in text))
+        generation_seconds = max(
+            MIN_GENERATION_SECONDS,
+            speakable_chars / max(1.0, lower_bound) + GENERATION_PADDING_SECONDS,
+        )
+        chars = max(1, len(text.strip()))
+        max_seconds_per_100_chars = float(tts.get("max_seconds_per_100_chars", 13.0))
+        validation_seconds = max(
+            MIN_VALIDATION_SECONDS,
+            chars / 100 * max_seconds_per_100_chars + VALIDATION_PADDING_SECONDS,
+        )
+
+    requested_frames = math.ceil(generation_seconds / VIENEU_V3_FRAME_SECONDS)
+    safe_frames = math.floor(
+        (validation_seconds - VIENEU_V3_FRAME_SECONDS) / VIENEU_V3_FRAME_SECONDS
+    )
+    max_frames = max(
+        MIN_GENERATION_FRAMES,
+        min(MAX_GENERATION_FRAMES, requested_frames, safe_frames),
+    )
+    policy = SegmentDurationPolicy(
+        generation_max_frames=max_frames,
+        validation_max_seconds=validation_seconds,
+    )
+    if policy.generation_ceiling_seconds >= policy.validation_max_seconds:
+        raise ValueError("VieNeu generation budget must stay below the audio validation limit")
+    return policy
+
+
+def constrain_special_audio_duration(
+    audio: Any,
+    sample_rate: int,
+    text: str,
+    settings: dict[str, Any],
+    segment: Any | None,
+) -> tuple[np.ndarray, bool]:
+    array = np.asarray(audio, dtype=np.float32)
+    kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
+    if kind not in SPECIAL_AUDIO_KINDS or array.ndim != 1 or sample_rate <= 0:
+        return array, False
+    policy = segment_duration_policy(text, settings, segment)
+    safe_seconds = policy.validation_max_seconds - VIENEU_V3_FRAME_SECONDS
+    safe_samples = max(1, int(math.floor(safe_seconds * sample_rate)))
+    if array.size <= safe_samples:
+        return array, False
+    limited = array[:safe_samples].copy()
+    fade_samples = min(limited.size, max(1, int(round(SPECIAL_AUDIO_FADE_SECONDS * sample_rate))))
+    limited[-fade_samples:] *= np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
+    return limited, True
 
 
 def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
@@ -118,13 +207,7 @@ def validate_audio_array(
     chars = max(1, len(text.strip()))
     min_duration = max(0.20, chars / 100 * float(settings["tts"]["min_seconds_per_100_chars"]))
     kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
-    if kind in SPECIAL_AUDIO_KINDS:
-        max_duration = EFFECT_MAX_SECONDS
-    else:
-        max_duration = max(
-            5.0,
-            chars / 100 * float(settings["tts"]["max_seconds_per_100_chars"]) + 8.0,
-        )
+    max_duration = segment_duration_policy(text, settings, segment).validation_max_seconds
     if metrics["duration"] < min_duration:
         raise AudioQualityError(f"audio too short: {metrics['duration']:.2f}s < {min_duration:.2f}s")
     if metrics["duration"] > max_duration:

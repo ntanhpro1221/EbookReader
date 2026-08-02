@@ -43,6 +43,17 @@ class FakeTTS:
         return checksum, metrics, 1
 
 
+class FakeNotifier:
+    def __init__(self):
+        self.critical_calls = []
+
+    def notify(self, *_args, **_kwargs):
+        return True
+
+    def critical_stop(self, *args, **kwargs):
+        self.critical_calls.append((args, kwargs))
+
+
 def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "001.txt"
     source.write_text("Rầm! Cánh cửa mở ra.\n\nĐây là một đoạn kể chuyện đủ dài để kiểm tra pipeline.", encoding="utf-8")
@@ -128,3 +139,34 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     )
     resumed.run()
     assert db.book()["status"] == "completed"
+
+
+def test_completed_with_errors_notifies_and_emits_error_state(tmp_path: Path) -> None:
+    source = tmp_path / "001.txt"
+    source.write_text("Nội dung chapter sẽ được đánh dấu lỗi.", encoding="utf-8")
+    settings = build_settings()
+    paths, db, settings = create_or_open_project([source], tmp_path / "out", settings, "Test Book")
+    chapter = db.list_chapters()[0]
+    db.update_chapter_status(int(chapter["id"]), "failed", error="segment lỗi")
+    events = []
+    notifier = FakeNotifier()
+    pipeline = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda kind, payload: events.append((kind, payload)),
+    )
+    pipeline.notifier = notifier
+
+    pipeline._finalize_book()
+
+    book = db.book()
+    assert book["status"] == "error"
+    assert book["stage"] == "completed_with_errors"
+    assert len(notifier.critical_calls) == 1
+    assert any(
+        kind == "state" and payload["state"] == "error"
+        for kind, payload in events
+    )

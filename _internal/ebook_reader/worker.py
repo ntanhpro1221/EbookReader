@@ -38,6 +38,23 @@ def _emit(queue: Queue, kind: str, payload: dict[str, Any] | None = None) -> Non
         pass
 
 
+def _emit_pipeline_result(message_queue: Queue, db: ProjectDB) -> None:
+    book = db.book()
+    if str(book["status"]) == BookStatus.ERROR.value:
+        detail = str(book["last_error"] or "Pipeline kết thúc với lỗi.")
+        _emit(
+            message_queue,
+            "finished",
+            {
+                "ok": False,
+                "critical": True,
+                "text": f"Pipeline kết thúc với lỗi: {detail}.",
+            },
+        )
+        return
+    _emit(message_queue, "finished", {"ok": True, "text": "Pipeline kết thúc."})
+
+
 class ProjectRunLock:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -289,7 +306,7 @@ def run_worker(
             os.environ["TRANSFORMERS_OFFLINE"] = "1"
             os.environ["HF_DATASETS_OFFLINE"] = "1"
         pipeline.run(recovery_already_run=True)
-        _emit(message_queue, "finished", {"ok": True, "text": "Pipeline kết thúc."})
+        _emit_pipeline_result(message_queue, db)
     except PipelineStopped:
         assert db is not None
         db.update_book(status=BookStatus.STOPPED.value, stage="stopped", error="User/app stop requested")

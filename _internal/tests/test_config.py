@@ -45,6 +45,26 @@ def test_silent_replacement_is_rejected() -> None:
         validate_settings(settings)
 
 
+@pytest.mark.parametrize(
+    "minimum,maximum",
+    [
+        (0.0, 13.0),
+        (2.1, 2.1),
+        (4.0, 3.0),
+        (float("nan"), 13.0),
+        (2.1, float("inf")),
+    ],
+)
+def test_invalid_tts_duration_bounds_are_rejected(minimum: float, maximum: float) -> None:
+    with pytest.raises(ValueError, match="duration bounds"):
+        build_settings(overrides={
+            "tts": {
+                "min_seconds_per_100_chars": minimum,
+                "max_seconds_per_100_chars": maximum,
+            },
+        })
+
+
 def test_remote_analysis_requires_explicit_opt_in() -> None:
     with pytest.raises(ValueError, match="allow_remote_analysis"):
         build_settings(overrides={"analysis": {"base_url": "https://example.com"}})

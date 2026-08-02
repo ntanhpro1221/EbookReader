@@ -4,7 +4,7 @@
 
 ## Mục tiêu
 
-Ứng dụng Windows local nhận nhiều chapter `.txt` hoặc một folder chứa TXT của cùng một book, phân tích toàn book để giữ nhân vật/giọng/cách phát âm đồng bộ, rồi tạo MP3 theo chapter và toàn book.
+Ứng dụng Windows local nhận nhiều chapter `.txt` hoặc một folder chứa TXT của cùng một book, phân tích toàn book để giữ nhân vật/giọng/cách phát âm đồng bộ, rồi tạo MP3 theo từng chapter nguồn.
 
 Yêu cầu bắt buộc:
 
@@ -30,7 +30,7 @@ import + natural sort TXT
 → unload LLM
 → từng chapter: TTS → unload TTS → Whisper → repair → FFmpeg verify
 → chapter MP3
-→ reports + M3U8 + full-book MP3 nếu người dùng bật tùy chọn
+→ reports + M3U8
 ```
 
 Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đổi ưu tiên đồng bộ toàn truyện.
@@ -42,7 +42,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - WAV/MP3 luôn ghi `.part`, validate + checksum rồi atomic replace.
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
 - TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn → `failed`.
+- Ngân sách frame VieNeu và giới hạn validation phải lấy từ cùng `segment_duration_policy`; codec VieNeu v3
+  dùng 3.840 sample/frame ở 48 kHz. Mọi tổ hợp kind/pace/độ dài phải có headroom validation được test.
+- Chỉ `vocal_effect`/`text_sfx` được phép giới hạn thời lượng bằng fade-out khi runtime vẫn trả quá dài;
+  narration/dialogue/thought tuyệt đối không được cắt để lách validation.
 - Chapter còn segment `failed` không được publish.
+- Mọi kết thúc với `BookStatus.ERROR` phải gửi `finished.ok=false`; nhánh `completed_with_errors` gửi đúng
+  một Windows notification nếu policy cho phép, đồng thời giữ nguyên checkpoint/chapter đã commit.
 - Không giữ TTS và Whisper đồng thời trên GPU khi không cần.
 - Khi foreground pressure xuất hiện: hoàn thành đơn vị inference hiện tại, checkpoint, ngừng cấp việc mới, giảm tải/unload nếu cần.
 - Không kill CUDA giữa kernel chỉ để nhường tài nguyên.

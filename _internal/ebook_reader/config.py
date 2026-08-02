@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import ipaddress
+import math
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -236,6 +237,18 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("tts.fatal_failure_streak must be positive")
     if tts.get("failure_policy") != "retry_split_fail":
         raise ValueError("Unsupported tts.failure_policy")
+    minimum_duration = float(tts.get("min_seconds_per_100_chars", 0))
+    maximum_duration = float(tts.get("max_seconds_per_100_chars", 0))
+    if (
+        not math.isfinite(minimum_duration)
+        or not math.isfinite(maximum_duration)
+        or minimum_duration <= 0
+        or maximum_duration <= minimum_duration
+    ):
+        raise ValueError(
+            "TTS duration bounds must satisfy 0 < min_seconds_per_100_chars "
+            "< max_seconds_per_100_chars"
+        )
     pace_ranges = tts.get("pace_chars_per_second", {})
     for pace in ("slow", "normal", "fast"):
         bounds = pace_ranges.get(pace, [])

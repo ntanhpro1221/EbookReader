@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gc
-import math
 import random
 import re
 from pathlib import Path
@@ -9,10 +8,15 @@ from typing import Any, Callable
 
 import numpy as np
 
-from .audio_io import AudioQualityError, atomic_write_wav
+from .audio_io import (
+    AudioQualityError,
+    atomic_write_wav,
+    constrain_special_audio_duration,
+    segment_duration_policy,
+)
 from .database import ProjectDB
 from .io_utils import stable_int
-from .text_processing import SPECIAL_AUDIO_KINDS, VOCAL_EFFECT_KIND, vocal_effect_tag
+from .text_processing import VOCAL_EFFECT_KIND, vocal_effect_tag
 
 
 FATAL_TTS_MARKERS = (
@@ -41,14 +45,6 @@ EMOTION_TEMPERATURE = {
 }
 PACE_TEMPERATURE_OFFSETS = {"slow": -0.03, "normal": 0.0, "fast": 0.04}
 PACE_SILENCE_PROPORTIONS = {"slow": 0.20, "normal": 0.15, "fast": 0.08}
-VIENEU_FRAMES_PER_SECOND = 17.1
-MIN_GENERATION_FRAMES = 48
-MAX_GENERATION_FRAMES = 300
-GENERATION_PADDING_SECONDS = 2.0
-DEFAULT_EFFECT_MAX_SECONDS = 4.5
-DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
-
-
 def is_fatal_tts_error(error: BaseException) -> bool:
     message = str(error).casefold()
     return any(marker in message for marker in FATAL_TTS_MARKERS)
@@ -90,20 +86,11 @@ def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> n
 
 
 def _max_new_frames(row: Any, settings: dict[str, Any] | None) -> int:
-    kind = str(_row_value(row, "kind", "narration"))
-    if kind in SPECIAL_AUDIO_KINDS:
-        max_seconds = DEFAULT_EFFECT_MAX_SECONDS
-    else:
-        pace = str(_row_value(row, "pace", "normal"))
-        configured_bounds = (settings or {}).get("tts", {}).get("pace_chars_per_second", {})
-        configured = configured_bounds.get(pace, DEFAULT_PACE_LOWER_BOUNDS.get(pace, 10.5))
-        lower_bound = float(configured[0] if isinstance(configured, (list, tuple)) else configured)
-        speakable_chars = max(1, sum(char.isalnum() for char in str(_row_value(row, "text", ""))))
-        max_seconds = max(3.0, speakable_chars / max(1.0, lower_bound) + GENERATION_PADDING_SECONDS)
-    return max(
-        MIN_GENERATION_FRAMES,
-        min(MAX_GENERATION_FRAMES, math.ceil(max_seconds * VIENEU_FRAMES_PER_SECOND)),
-    )
+    return segment_duration_policy(
+        str(_row_value(row, "text", "")),
+        settings,
+        row,
+    ).generation_max_frames
 
 
 def vieneu_sampling_for_segment(
@@ -283,6 +270,18 @@ class TTSCoordinator:
             self.vieneu.sample_rate,
             int(_row_value(profile, "pitch_semitones", 0)),
         )
+        audio, duration_limited = constrain_special_audio_duration(
+            audio,
+            self.vieneu.sample_rate,
+            str(row["text"]),
+            self.settings,
+            row,
+        )
+        if duration_limited:
+            self.log(
+                f"Hiệu ứng {row['stable_id']} dài quá giới hạn; "
+                "đã giới hạn bằng fade-out thay vì làm lỗi chapter."
+            )
         checksum, metrics = atomic_write_wav(
             output,
             audio,
@@ -291,4 +290,6 @@ class TTSCoordinator:
             self.settings,
             segment=row,
         )
+        if duration_limited:
+            metrics["effect_duration_limited"] = 1.0
         return checksum, metrics, seed

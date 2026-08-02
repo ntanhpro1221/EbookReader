@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from queue import Queue
 
 import pytest
 
@@ -12,6 +13,7 @@ from ebook_reader.models import ProjectPaths
 from ebook_reader.worker import (
     ProjectRunLock,
     _apply_runtime_resource_overrides,
+    _emit_pipeline_result,
     _load_locked_settings,
     _validate_project_inputs,
 )
@@ -88,3 +90,21 @@ def test_project_run_lock_is_exclusive(tmp_path: Path) -> None:
             second.acquire()
     finally:
         first.release()
+
+
+def test_worker_reports_completed_with_errors_as_failure(tmp_path: Path) -> None:
+    _paths, _settings, db, _source = _project(tmp_path)
+    db.update_book(
+        status="error",
+        stage="completed_with_errors",
+        error="1 chapter chưa thể xuất MP3",
+    )
+    messages = Queue()
+
+    _emit_pipeline_result(messages, db)
+
+    message = messages.get_nowait()
+    assert message["kind"] == "finished"
+    assert message["ok"] is False
+    assert message["critical"] is True
+    assert "1 chapter chưa thể xuất MP3" in message["text"]

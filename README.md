@@ -82,14 +82,19 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,
   quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
 - Giới hạn sinh audio được tính theo độ dài và pace của từng segment để một câu rất ngắn không chạy tới
-  trần toàn cục của model. Sai lệch tốc độ nhẹ được ghi warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
-- Vocal-effect và từ tượng thanh có giới hạn thời lượng riêng, không bị đánh giá bằng số ký tự/giây và không đưa qua Whisper.
+  trần toàn cục của model. Ngân sách frame VieNeu và giới hạn kiểm tra dùng chung một chính sách thời lượng,
+  nên app không thể vừa cho model sinh dài hơn rồi tự từ chối chính kết quả đó. Sai lệch tốc độ nhẹ được ghi
+  warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
+- Vocal-effect và từ tượng thanh có giới hạn thời lượng riêng, không bị đánh giá bằng số ký tự/giây và không đưa qua
+  Whisper. Nếu runtime vẫn trả một hiệu ứng quá dài, app fade-out riêng hiệu ứng đó và ghi warning; lời kể,
+  hội thoại và nội tâm không bao giờ bị cắt để lách kiểm tra.
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
 - Khi Ollama chưa chạy, Ebook Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
   phân tích/phân vai xong. Một Ollama đã chạy từ trước được coi là tiến trình bên ngoài và không bị tự ý kill.
-- Nếu phải tự dừng vì SSD/RAM/GPU/driver hoặc lỗi nghiêm trọng, app checkpoint và gửi Windows notification.
+- Nếu phải tự dừng vì SSD/RAM/GPU/driver, lỗi nghiêm trọng hoặc kết thúc mà vẫn còn chapter lỗi, app giữ
+  checkpoint và gửi Windows notification.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.
 
 ## Đầu ra

@@ -6,9 +6,12 @@ import pytest
 
 from ebook_reader.audio_io import (
     AudioQualityError,
+    VIENEU_V3_CODEC_SAMPLES_PER_FRAME,
     atomic_write_wav,
     assemble_chapter_atomic,
+    constrain_special_audio_duration,
     normalize_segment_level,
+    segment_duration_policy,
     signal_metrics,
     verify_mp3,
     validate_audio_array,
@@ -127,3 +130,71 @@ def test_vocal_effect_skips_speech_rate_validation() -> None:
     )
 
     assert "chars_per_second" not in metrics
+
+
+def test_vieneu_frame_budget_cannot_exceed_the_shared_validation_limit() -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    effect = {"kind": "vocal_effect", "pace": "normal"}
+    policy = segment_duration_policy("“Ha…”", settings, effect)
+    generated_samples = policy.generation_max_frames * VIENEU_V3_CODEC_SAMPLES_PER_FRAME
+    audio = np.sin(np.linspace(0, 500, generated_samples, dtype=np.float32)) * 0.12
+
+    _, metrics = validate_audio_array(audio, "“Ha…”", settings, 48_000, segment=effect)
+
+    assert policy.generation_max_frames == 57
+    assert policy.generation_ceiling_seconds < policy.validation_max_seconds
+    assert metrics["duration"] == pytest.approx(4.56, abs=0.01)
+
+
+@pytest.mark.parametrize("kind", ["narration", "dialogue", "thought", "vocal_effect", "text_sfx"])
+@pytest.mark.parametrize("pace", ["slow", "normal", "fast"])
+@pytest.mark.parametrize("character_count", [1, 20, 100, 340])
+def test_every_generation_budget_has_validation_headroom(
+    kind: str,
+    pace: str,
+    character_count: int,
+) -> None:
+    settings = build_settings()
+    policy = segment_duration_policy(
+        "a" * character_count,
+        settings,
+        {"kind": kind, "pace": pace},
+    )
+
+    assert policy.generation_ceiling_seconds < policy.validation_max_seconds
+
+
+def test_overlong_special_audio_is_limited_with_fade_instead_of_failing() -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    sample_rate = 48_000
+    audio = np.sin(np.linspace(0, 700, int(sample_rate * 6.16), dtype=np.float32)) * 0.12
+    segment = {"kind": "vocal_effect", "pace": "normal"}
+
+    limited, changed = constrain_special_audio_duration(
+        audio,
+        sample_rate,
+        "“Ha…”",
+        settings,
+        segment,
+    )
+    _, metrics = validate_audio_array(limited, "“Ha…”", settings, sample_rate, segment=segment)
+
+    assert changed is True
+    assert metrics["duration"] < 5.0
+    assert limited[-1] == pytest.approx(0.0, abs=1e-7)
+
+
+def test_spoken_audio_is_never_trimmed_by_the_effect_guard() -> None:
+    settings = build_settings()
+    audio = np.ones(48_000 * 6, dtype=np.float32) * 0.1
+
+    unchanged, changed = constrain_special_audio_duration(
+        audio,
+        48_000,
+        "Đây là lời thoại không được phép cắt.",
+        settings,
+        {"kind": "dialogue", "pace": "normal"},
+    )
+
+    assert changed is False
+    assert unchanged is audio

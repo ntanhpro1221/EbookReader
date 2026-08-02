@@ -282,6 +282,9 @@ class BookPipeline:
         self._progress("Xuất báo cáo", 0, 1)
         self._export_reports()
         self._progress("Xuất báo cáo", 1, 1)
+        self._finalize_book()
+
+    def _finalize_book(self) -> None:
         completed = [row for row in self.db.list_chapters() if row["status"] == ChapterStatus.COMPLETED.value]
         all_chapters = self.db.list_chapters()
         if completed and len(completed) == len(all_chapters):
@@ -297,12 +300,26 @@ class BookPipeline:
             )
         else:
             failed = len([row for row in all_chapters if row["status"] == ChapterStatus.FAILED.value])
+            error_text = f"Đã xử lý xong nhưng còn {failed} chapter lỗi."
             self.db.update_book(
                 status=BookStatus.ERROR.value,
                 stage="completed_with_errors",
                 error=f"{failed} chapter chưa thể xuất MP3",
             )
-            self._state("error", f"Đã xử lý xong nhưng còn {failed} chapter lỗi.")
+            self.db.event(
+                "error",
+                "BOOK_COMPLETED_WITH_ERRORS",
+                error_text,
+                {"failed_chapters": failed},
+            )
+            self._state("error", error_text)
+            if self.settings["safety"].get("notify_on_critical_stop", True):
+                self.notifier.critical_stop(
+                    str(self.db.book()["title"]),
+                    error_text,
+                    self.paths.root,
+                    "kết thúc pipeline",
+                )
 
     def _existing_segment_is_safe(self, row: Any) -> bool:
         if str(row["status"]) not in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}:
@@ -453,6 +470,11 @@ class BookPipeline:
                     signal=metrics,
                     generation_seed=seed,
                 )
+                if metrics.get("effect_duration_limited"):
+                    self.db.set_segment_warning_code(
+                        int(row["id"]),
+                        "TTS_EFFECT_DURATION_LIMITED",
+                    )
                 if metrics.get("pace_outlier"):
                     self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
                     self.log(
@@ -465,7 +487,15 @@ class BookPipeline:
                 if is_fatal_tts_error(exc):
                     raise RuntimeError(f"Fatal TTS engine failure: {exc}") from exc
                 last_error = str(exc)
-                self.log(f"TTS segment {row['stable_id']} lỗi lần {attempt + 1}/{retries}: {last_error}")
+                if isinstance(exc, AudioQualityError):
+                    self.log(
+                        f"TTS segment {row['stable_id']} chưa đạt lần {attempt + 1}/{retries}; "
+                        f"đang tạo lại: {last_error}"
+                    )
+                else:
+                    self.log(
+                        f"TTS segment {row['stable_id']} lỗi lần {attempt + 1}/{retries}: {last_error}"
+                    )
                 time.sleep(min(8, 2 ** attempt))
 
         if str(row["kind"]) in SPECIAL_AUDIO_KINDS:
