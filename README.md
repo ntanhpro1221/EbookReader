@@ -60,7 +60,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   sang người đọc khác giữa chừng.
 - Độc thoại nội tâm ưu tiên bắt buộc giọng đã khóa của nhân vật đang nghĩ; chỉ sau khi phân tích hết số
   lần thử mà vẫn không xác định được nhân vật thì mới fallback sang giọng người kể và ghi warning.
-- Từ điển phát âm có confidence được checkpoint trong SQLite, áp dụng đồng nhất cho TTS và câu đối chiếu ASR.
+- Tên tiếng Anh được đối chiếu với CMU Pronouncing Dictionary đóng gói cục bộ; chuỗi âm vị tiếng Anh
+  được Qwen chuyển thành âm tiết thuần Việt như `Michael → Mai-cồ`, `Gary → Ga-ri`. Tên fantasy không có
+  trong từ điển vẫn được xét theo ngữ cảnh. Cách đọc được khóa trong SQLite theo sách, áp dụng đồng nhất
+  cho mọi giọng, chapter, lần resume và câu đối chiếu ASR.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
 - Vocal-effect đứng riêng như `ha...`, `haiz...`, `[cười]`, `[thở dài]`, `[hắng giọng]` và từ tượng thanh

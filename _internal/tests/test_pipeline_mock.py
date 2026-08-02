@@ -81,6 +81,17 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         "tts": {"min_seconds_per_100_chars": 0.2},
     })
     paths, db, settings = create_or_open_project([source], tmp_path / "out", settings, "Test Book")
+    pronunciation_passes = 0
+
+    def fake_name_pronunciations(*_args, **_kwargs):
+        nonlocal pronunciation_passes
+        pronunciation_passes += 1
+        return 0
+
+    monkeypatch.setattr(
+        "ebook_reader.analysis.OllamaBookAnalyzer.reconcile_name_pronunciations",
+        fake_name_pronunciations,
+    )
 
     def fake_chapter(wavs, output, settings, **kwargs):
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -139,6 +150,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert any(label.startswith("Kiểm tra phát âm chapter") for label in progress_labels)
     assert any(label.startswith("Sửa audio chapter") for label in progress_labels)
     assert any(label.startswith("Ghép và kiểm tra MP3 chapter") for label in progress_labels)
+    assert pronunciation_passes == 1
 
     # A full resume/reopen pass must preserve locked voice identities and skip valid output.
     resumed = BookPipeline(
@@ -155,6 +167,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("casting ran again")),
     )
     resumed.run()
+    assert pronunciation_passes == 1
     assert db.book()["status"] == "completed"
 
 

@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **171/171 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **177/177 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục TEMP riêng, không cài vào runtime của app.
@@ -50,6 +50,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - settings tamper, source mutation và khóa độc quyền một worker/project;
 - source đổi cùng kích thước trong cửa sổ đọc, CP1258/UTF-16 không BOM và tên output an toàn;
 - warning code hợp nhất và pronunciation ưu tiên confidence cao;
+- chuẩn hóa tên tiếng Anh thu thập cả tên chỉ xuất hiện một lần; CMUdict nhận diện tên phổ biến và cung cấp
+  ARPAbet bắt buộc Qwen trả cách đọc thuần Việt, còn từ/tên Việt bị loại theo ngữ cảnh; pronunciation chuyên biệt
+  được khóa trong SQLite, áp dụng dưới mọi confidence threshold và không thể bị lần phân tích sau ghi đè;
 - required-analysis batch failure không được fallback ngầm;
 - stereo WAV bị từ chối, ASR optional chuyển lỗi inference thành warning;
 - cụm từ đặt trong ngoặc kép không bị nhận nhầm thành hội thoại, segment chỉ có dấu câu không đi vào TTS;

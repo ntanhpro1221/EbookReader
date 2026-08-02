@@ -17,6 +17,7 @@ from .audio_io import (
 )
 from .database import ProjectDB
 from .io_utils import stable_int
+from .models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
 from .text_processing import VOCAL_EFFECT_KIND, vocal_effect_tag
 
 
@@ -243,6 +244,8 @@ class TTSCoordinator:
         self.vieneu = VieNeuEngine(settings, log)
         self._pronunciation_pattern: re.Pattern[str] | None = None
         self._pronunciation_map: dict[str, str] = {}
+        self._exact_pronunciation_pattern: re.Pattern[str] | None = None
+        self._exact_pronunciation_map: dict[str, str] = {}
 
     def unload_all(self) -> None:
         self.vieneu.unload()
@@ -262,6 +265,16 @@ class TTSCoordinator:
         if self._pronunciation_pattern is None:
             minimum = float(self.settings["analysis"].get("low_confidence_threshold", 0.58))
             pronunciations = self.db.list_pronunciations(minimum)
+            exact_pronunciations = [
+                item
+                for item in pronunciations
+                if str(item["source"]) == CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
+            ]
+            pronunciations = [
+                item
+                for item in pronunciations
+                if str(item["source"]) != CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
+            ]
             self._pronunciation_map = {
                 " ".join(str(item["surface"]).casefold().split()): str(item["spoken_form"])
                 for item in pronunciations
@@ -275,12 +288,26 @@ class TTSCoordinator:
                 if surfaces
                 else re.compile(r"(?!x)x")
             )
+            self._exact_pronunciation_map = {
+                str(item["surface"]): str(item["spoken_form"])
+                for item in exact_pronunciations
+            }
+            exact_surfaces = [str(item["surface"]) for item in exact_pronunciations]
+            self._exact_pronunciation_pattern = (
+                re.compile(r"(?<!\w)(?:" + "|".join(re.escape(value) for value in exact_surfaces) + r")(?!\w)")
+                if exact_surfaces
+                else re.compile(r"(?!x)x")
+            )
 
         def replace(match: re.Match[str]) -> str:
             key = " ".join(match.group(0).casefold().split())
             return self._pronunciation_map.get(key, match.group(0))
 
-        return self._pronunciation_pattern.sub(replace, str(row["text"]))
+        def replace_exact(match: re.Match[str]) -> str:
+            return self._exact_pronunciation_map.get(match.group(0), match.group(0))
+
+        text = self._exact_pronunciation_pattern.sub(replace_exact, str(row["text"]))
+        return self._pronunciation_pattern.sub(replace, text)
 
     def _spoken_row(self, row: Any) -> dict[str, Any]:
         result = dict(row)

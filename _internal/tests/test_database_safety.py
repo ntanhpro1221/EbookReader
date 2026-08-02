@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.database import ProjectDB
+from ebook_reader.models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
 from ebook_reader.config import build_settings
 from ebook_reader.tts import TTSCoordinator
 
@@ -75,6 +76,30 @@ def test_pronunciation_keeps_higher_confidence_value(tmp_path: Path) -> None:
     assert row["confidence"] == pytest.approx(0.9)
 
 
+def test_locked_name_pronunciation_is_applied_and_cannot_be_overwritten(tmp_path: Path) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    db.upsert_pronunciation(
+        surface="Michael",
+        normalized_surface="michael",
+        spoken_form="Mai-cồ",
+        confidence=0.55,
+        source="english_name_transliteration",
+        locked=True,
+    )
+    db.upsert_pronunciation(
+        surface="Michael",
+        normalized_surface="michael",
+        spoken_form="Cách đọc sai",
+        confidence=0.99,
+        source="analysis",
+    )
+
+    row = db.list_pronunciations(minimum_confidence=0.95)[0]
+    assert row["spoken_form"] == "Mai-cồ"
+    assert row["source"] == "english_name_transliteration"
+    assert row["locked"] == 1
+
+
 def test_pronunciation_is_applied_by_vieneu_coordinator(tmp_path: Path) -> None:
     db = ProjectDB(tmp_path / "project.sqlite3")
     db.upsert_pronunciation(
@@ -86,3 +111,20 @@ def test_pronunciation_is_applied_by_vieneu_coordinator(tmp_path: Path) -> None:
     coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
 
     assert coordinator.spoken_text({"text": "Edelweiss nở hoa."}) == "Ê đen vai nở hoa."
+
+
+def test_contextual_english_name_pronunciation_preserves_lowercase_vietnamese_word(
+    tmp_path: Path,
+) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    db.upsert_pronunciation(
+        surface="May",
+        normalized_surface="may",
+        spoken_form="Mây",
+        confidence=0.95,
+        source=CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE,
+        locked=True,
+    )
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+
+    assert coordinator.spoken_text({"text": "May đang may một chiếc áo."}) == "Mây đang may một chiếc áo."

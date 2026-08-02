@@ -772,31 +772,37 @@ class ProjectDB:
         spoken_form: str,
         confidence: float,
         source: str = "analysis",
+        locked: bool = False,
     ) -> None:
         now = time.time()
         with self.connect() as conn:
             conn.execute(
                 """
                 INSERT INTO pronunciations(
-                    surface,normalized_surface,spoken_form,confidence,source,created_at,updated_at
-                ) VALUES(?,?,?,?,?,?,?)
+                    surface,normalized_surface,spoken_form,confidence,source,locked,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?,?,?)
                 ON CONFLICT(normalized_surface) DO UPDATE SET
                     surface=CASE
-                        WHEN excluded.confidence >= pronunciations.confidence THEN excluded.surface
+                        WHEN pronunciations.locked=0
+                             AND (excluded.locked=1 OR excluded.confidence >= pronunciations.confidence)
+                        THEN excluded.surface
                         ELSE pronunciations.surface
                     END,
                     spoken_form=CASE
-                        WHEN pronunciations.locked=0 AND excluded.confidence >= pronunciations.confidence
+                        WHEN pronunciations.locked=0
+                             AND (excluded.locked=1 OR excluded.confidence >= pronunciations.confidence)
                         THEN excluded.spoken_form ELSE pronunciations.spoken_form
                     END,
                     confidence=MAX(pronunciations.confidence, excluded.confidence),
                     source=CASE
-                        WHEN pronunciations.locked=0 AND excluded.confidence >= pronunciations.confidence
+                        WHEN pronunciations.locked=0
+                             AND (excluded.locked=1 OR excluded.confidence >= pronunciations.confidence)
                         THEN excluded.source ELSE pronunciations.source
                     END,
+                    locked=MAX(pronunciations.locked, excluded.locked),
                     updated_at=excluded.updated_at
                 """,
-                (surface, normalized_surface, spoken_form, confidence, source, now, now),
+                (surface, normalized_surface, spoken_form, confidence, source, int(locked), now, now),
             )
 
     def list_pronunciations(self, minimum_confidence: float = 0.0) -> list[sqlite3.Row]:

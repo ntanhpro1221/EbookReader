@@ -30,7 +30,13 @@ dev = ["pytest==8.3.5", "ruff==0.9.10"]
 include = ["ebook_reader*"]
 
 [tool.setuptools.package-data]
-ebook_reader = ["assets/*.ico", "assets/*.png", "assets/voice_previews/*.wav"]
+ebook_reader = [
+  "assets/*.ico",
+  "assets/*.png",
+  "assets/*.dict",
+  "assets/CMUDICT_LICENSE.txt",
+  "assets/voice_previews/*.wav",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

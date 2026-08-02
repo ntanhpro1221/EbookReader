@@ -5,6 +5,10 @@ from enum import StrEnum
 from pathlib import Path
 
 
+ENGLISH_NAME_PRONUNCIATION_SOURCE = "english_name_transliteration"
+CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE = "english_name_transliteration_case_sensitive"
+
+
 class BookStatus(StrEnum):
     CREATED = "created"
     ANALYZING = "analyzing"

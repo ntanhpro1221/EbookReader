@@ -12,6 +12,8 @@ Các thành phần chính:
 - pyloudnorm;
 - PySide6;
 - FFmpeg / imageio-ffmpeg;
+- CMU Pronouncing Dictionary (`cmudict.dict`, dữ liệu từ CMU Sphinx; sử dụng và phân phối không hạn chế,
+  yêu cầu ghi nhận nguồn). Source đi kèm giữ nguyên `_internal/ebook_reader/assets/CMUDICT_LICENSE.txt`;
 - NumPy, SoundFile, psutil, requests và huggingface-hub.
 
 Khi phát hành binary hoặc phân phối kèm model cache, người bảo trì phải kiểm tra phiên bản thực tế được đóng gói và giữ LICENSE/NOTICE tương ứng của từng dependency/model.

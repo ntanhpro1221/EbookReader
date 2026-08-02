@@ -63,6 +63,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Khi resume, settings hash và voice mapping phải giữ nguyên.
 - TXT phải được decode từ đúng byte đã hash; ưu tiên BOM/UTF-8/CP1258 và chỉ thử UTF-16 không BOM khi có NUL heuristic.
 - Pronunciation confidence được lưu trong SQLite; cùng một text đã chuyển cách đọc phải được dùng cho TTS và expected ASR.
+- Trước khi finalize casting, mọi token tên Latin viết hoa (kể cả chỉ xuất hiện một lần) phải qua bước chuẩn hóa tên:
+  CMUdict cục bộ cung cấp ARPAbet và bắt buộc tên tiếng Anh được chuyển thành âm tiết thuần Việt; tên fantasy ngoài
+  từ điển do Qwen phân loại theo ngữ cảnh. Kết quả chuyên biệt hợp lệ phải `locked=1` trong SQLite để cùng một tên
+  không đổi cách đọc theo giọng, chapter, confidence threshold hoặc lần resume.
 - Mọi vai dùng preset VieNeu đã khóa; một nhân vật không được đổi preset theo cảm xúc hoặc khi resume.
 - Cảm xúc chỉ thay đổi cách thể hiện trên cùng preset: cue phi ngôn ngữ được VieNeu hỗ trợ, sampling,
   pace và mức âm lượng mục tiêu. Không thay identity giọng để giả lập cảm xúc.

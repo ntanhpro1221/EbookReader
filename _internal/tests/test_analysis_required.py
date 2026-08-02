@@ -10,7 +10,10 @@ from ebook_reader.analysis import (
     AnalysisRequestStopped,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
+    _cmu_pronunciations,
+    _name_candidate_contexts,
     _validate,
+    _valid_vietnamese_spoken_form,
     is_local_speaker,
     local_speaker_display,
 )
@@ -20,6 +23,7 @@ from ebook_reader.config import build_settings
 class FakeDB:
     def __init__(self):
         self.events = []
+        self.pronunciations = []
         self.updated = []
         self.rows = [
             {
@@ -46,6 +50,39 @@ class FakeDB:
 
     def update_analysis(self, segment_id, data, low_confidence_threshold):
         self.updated.append((segment_id, data, low_confidence_threshold))
+
+    def list_pronunciations(self, minimum_confidence=0.0):
+        return [
+            row
+            for row in self.pronunciations
+            if bool(row.get("locked", 0)) or float(row["confidence"]) >= minimum_confidence
+        ]
+
+    def upsert_pronunciation(
+        self,
+        *,
+        surface,
+        normalized_surface,
+        spoken_form,
+        confidence,
+        source="analysis",
+        locked=False,
+    ):
+        self.pronunciations = [
+            row
+            for row in self.pronunciations
+            if row["normalized_surface"] != normalized_surface
+        ]
+        self.pronunciations.append(
+            {
+                "surface": surface,
+                "normalized_surface": normalized_surface,
+                "spoken_form": spoken_form,
+                "confidence": confidence,
+                "source": source,
+                "locked": int(locked),
+            }
+        )
 
 
 class FakeResponse:
@@ -172,6 +209,136 @@ def test_unknown_batch_id_is_not_fuzzily_mapped() -> None:
     validated = _validate(group, payload)
 
     assert list(validated) == [group[0]["stable_id"]]
+
+
+def test_name_candidates_include_speakers_and_one_off_capitalized_names() -> None:
+    rows = [
+        {
+            "speaker": "Alisa",
+            "text": "Alisa nhìn Michael bước vào. Alice chỉ xuất hiện một lần.",
+        },
+        {
+            "speaker": "NARRATOR",
+            "text": "Michael quay lại, còn Minh vẫn đứng yên.",
+        },
+    ]
+
+    candidates = _name_candidate_contexts(rows)
+    by_surface = {candidate["surface"]: candidate for candidate in candidates}
+
+    assert set(by_surface) == {"Alisa", "Alice", "Michael"}
+    assert by_surface["Alisa"]["is_speaker"] is True
+    assert by_surface["Michael"]["occurrences"] == 2
+    assert by_surface["Alice"]["occurrences"] == 1
+    assert "Minh" not in by_surface
+
+
+def test_vietnamese_spoken_form_requires_an_explicit_phonetic_rewrite() -> None:
+    assert _valid_vietnamese_spoken_form("Michael", "Mai-cồ") is True
+    assert _valid_vietnamese_spoken_form("Gary", "Ga-ri") is True
+    assert _valid_vietnamese_spoken_form("John", "Giôn") is True
+    assert _valid_vietnamese_spoken_form("Corella", "Cô-ren-la") is True
+    assert _valid_vietnamese_spoken_form("Corella", "Co-rel-la") is False
+    assert _valid_vietnamese_spoken_form("Gary", "Gary") is False
+    assert _valid_vietnamese_spoken_form("Gary", "/ˈɡɛri/") is False
+
+
+def test_bundled_cmudict_identifies_common_english_names() -> None:
+    pronunciations = _cmu_pronunciations(["Gary", "Michael", "Phong"])
+
+    assert pronunciations["gary"] == "G EH1 R IY0"
+    assert pronunciations["michael"] == "M AY1 K AH0 L"
+    assert "phong" not in pronunciations
+
+
+def test_required_name_pronunciation_pass_checkpoints_vietnamese_readings(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Gary gặp Michael trong hành lang.",
+            "kind_hint": "dialogue",
+            "status": "analyzed",
+            "speaker": "Gary",
+        },
+        {
+            "id": 2,
+            "stable_id": "c1s2",
+            "chapter_id": 1,
+            "text": "Michael gật đầu với Gary.",
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        },
+    ]
+    db.pronunciations = [
+        {
+            "surface": "Gary",
+            "normalized_surface": "gary",
+            "spoken_form": "Cách đọc phân tích cũ",
+            "confidence": 0.99,
+            "source": "analysis",
+            "locked": 0,
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    attempts = 0
+
+    def fake_response(request, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        assert "Michael→Mai-cồ" in request["prompt"]
+        assert "G EH1 R IY0" in request["prompt"]
+        assert "M AY1 K AH0 L" in request["prompt"]
+        assert request["format"]["properties"]["names"]["minItems"] == 2
+        assert request["format"]["properties"]["names"]["maxItems"] == 2
+        assert request["format"]["properties"]["names"]["items"]["properties"]["id"]["enum"] == [
+            "N001",
+            "N002",
+        ]
+        payload = {
+            "names": [
+                {
+                    "id": "N001",
+                    "convert": True,
+                    "spoken_form": "Ga-ri",
+                    "confidence": 0.95,
+                    "reason": "Tên tiếng Anh",
+                },
+                {
+                    "id": "N002",
+                    "convert": True,
+                    "spoken_form": "Mai-cồ",
+                    "confidence": 0.96,
+                    "reason": "Tên tiếng Anh",
+                },
+            ]
+        }
+        if attempts == 1:
+            payload["names"][0].update(
+                {
+                    "convert": False,
+                    "spoken_form": "Gary",
+                    "reason": "Kết quả phân loại sai cần retry",
+                }
+            )
+        return payload
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", fake_response)
+
+    assert analyzer.reconcile_name_pronunciations() == 2
+    assert attempts == 2
+    assert {
+        row["surface"]: (row["spoken_form"], row["source"], row["locked"])
+        for row in db.pronunciations
+    } == {
+        "Gary": ("Ga-ri", "english_name_transliteration", 1),
+        "Michael": ("Mai-cồ", "english_name_transliteration", 1),
+    }
 
 
 def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:

@@ -277,6 +277,14 @@ class BookPipeline:
                     ),
                     stop_requested=self.stop_requested,
                 )
+                self._state("running", "Đang chuẩn hóa cách đọc tên tiếng Anh.")
+                analyzer.reconcile_name_pronunciations(
+                    before_batch=lambda index: self._resource_gate(
+                        f"name pronunciation batch {index}",
+                        release_active=analyzer.release_model,
+                    ),
+                    stop_requested=self.stop_requested,
+                )
                 build_registry_and_cast(self.db, self.settings, alias_map, self.log)
                 self.db.finalize_casting()
             self.db.update_book(status=BookStatus.CASTING.value, stage="voice_cast_locked")
