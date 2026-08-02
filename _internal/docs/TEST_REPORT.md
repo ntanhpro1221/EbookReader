@@ -62,7 +62,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   bằng package-data và mapping preset nào cũng phải trỏ tới file tồn tại;
 - profile chất lượng và narrator được khóa theo sách; resource mode và ngưỡng GPU là global, không detach
   sách đang mở và có thể cập nhật AdaptiveResourceManager khi worker đang chạy; `Sách mới` reset profile,
-  bộ lọc và narrator về mặc định nhưng giữ nguyên resource mode và ngưỡng GPU;
+  bộ lọc và narrator về mặc định nhưng giữ nguyên resource mode và ngưỡng GPU; nút chỉ bật khi đang mở
+  một project đã tồn tại và tắt trong bản nháp sách mới chưa chạy;
 - cùng nhân vật giữ nguyên preset và biến thể cao độ tối đa ±2 bán âm; thought thử lại đủ số lần để tìm
   speaker nhân vật, chỉ fallback sang NARRATOR kèm warning khi vẫn không xác định được;
   mức âm lượng trung tính được cân bằng

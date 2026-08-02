@@ -49,6 +49,7 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
 
     assert window.start_button.text() == "Bắt đầu"
     assert window.start_button.isEnabled() is False
+    assert window.new_book_button.isEnabled() is False
     assert "Ebook Reader" not in {label.text() for label in window.findChildren(QLabel)}
     assert window.file_list.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
     assert window.main_splitter.orientation() == Qt.Orientation.Vertical
@@ -523,6 +524,7 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.file_list.count() == 1
     assert window.start_button.text() == "Tiếp tục"
     assert window.start_button.isEnabled() is True
+    assert window.new_book_button.isEnabled() is True
     assert window.add_files_button.isEnabled() is True
     assert window.add_folder_button.isEnabled() is True
     assert window.profile_combo.isEnabled() is False
@@ -548,6 +550,8 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.profile_combo.isEnabled() is False
     assert store.value("resource_mode") == "max_safe"
     assert window.settings_box.title() == "Thiết lập"
+    window._new_book()
+    assert window.new_book_button.isEnabled() is False
     window.close()
 
 

@@ -42,7 +42,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Chất lượng và giọng người kể được lưu cùng sách và khóa sau khi sách bắt đầu. Chế độ tài nguyên
   và ngưỡng GPU là setting global, không tạo sách mới khi thay đổi và được worker nhận tại checkpoint kế tiếp.
   Bấm `Sách mới` đặt lại thiết lập sách về `Cân bằng`, mọi giới tính, mọi miền và giọng `Thái Sơn`,
-  nhưng giữ nguyên hai thiết lập global này.
+  nhưng giữ nguyên hai thiết lập global này. Nút này chỉ bật khi đang mở một sách đã tồn tại; trong bản
+  nháp sách mới chưa chạy, nút bị vô hiệu hóa vì không có sách cũ nào cần rời khỏi.
 - Nhân vật có tên được ưu tiên giọng theo thứ tự Bắc → Nam, rồi tự nhiên → kể chuyện. Preset tin tức không được
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;

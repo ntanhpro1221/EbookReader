@@ -553,7 +553,7 @@ class MainWindow(QMainWindow):
         self.choose_output_button.setEnabled(not selected and not running)
         self.add_files_button.setEnabled(not running)
         self.add_folder_button.setEnabled(not running)
-        self.new_book_button.setEnabled(not running)
+        self.new_book_button.setEnabled(selected and not running)
         self.open_project_button.setEnabled(not running)
         self.profile_combo.setEnabled(book_settings_editable)
         self.narrator_gender_combo.setEnabled(book_settings_editable)
