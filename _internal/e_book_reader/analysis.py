@@ -325,7 +325,7 @@ class OllamaBookAnalyzer:
                     stderr=subprocess.DEVNULL,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
                 )
-                self.log("E Book Reader đã tự khởi động Ollama ẩn.")
+                self.log("Ebook Reader đã tự khởi động Ollama ẩn.")
             except OSError:
                 return False
             for _ in range(30):
@@ -345,7 +345,7 @@ class OllamaBookAnalyzer:
         if not executable or not self.allow_downloads:
             self.log(
                 f"Thiếu Ollama model {self.model}. Job không được tự tải model sau khi đã bắt đầu; "
-                "hãy mở lại E Book Reader.vbs để kiểm tra/cài model."
+                "hãy mở lại Ebook Reader để kiểm tra/cài model."
             )
             return False
         self.log(f"Đang tải Ollama model {self.model} theo policy đã cho phép.")
@@ -811,7 +811,7 @@ class OllamaBookAnalyzer:
         if process is None or process.poll() is not None:
             return
         terminate_process_tree(process.pid, grace_seconds=3.0)
-        self.log("Đã dừng Ollama ẩn do E Book Reader tự khởi động.")
+        self.log("Đã dừng Ollama ẩn do Ebook Reader tự khởi động.")
 
     def unload(self) -> None:
         try:

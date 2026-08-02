@@ -131,7 +131,7 @@ class BookPipeline:
                 self.log(f"Resource mode: {decision.level.value} — {decision.reason}")
                 if "disk free" in decision.reason:
                     self.notifier.notify(
-                        "E Book Reader đang chờ tài nguyên",
+                        "Ebook Reader đang chờ tài nguyên",
                         f"{decision.reason}. Pipeline đã dừng cấp tác vụ mới tại checkpoint an toàn.",
                         project_path=self.paths.root,
                     )
@@ -291,7 +291,7 @@ class BookPipeline:
             self.db.update_book(status=BookStatus.COMPLETED.value, stage="completed", error=None)
             self._state("completed", "Đã hoàn tất toàn bộ audiobook.")
             self.notifier.notify(
-                "E Book Reader đã hoàn tất",
+                "Ebook Reader đã hoàn tất",
                 f"Book: {self.db.book()['title']}",
                 project_path=self.paths.root,
             )

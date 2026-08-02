@@ -101,7 +101,7 @@ class WhisperVerifier:
             if not self.allow_downloads and expected_model is not None and not expected_model.exists():
                 message = (
                     f"Thiếu Whisper {model_name} trong {download_root}. Job không được tự tải model giữa chừng; "
-                    "hãy chạy E Book Reader.vbs trước."
+                    "hãy chạy Ebook Reader trước."
                 )
                 self.log(message)
                 if self.settings.get("required", False) or self.settings.get("failure_policy") == "fail":

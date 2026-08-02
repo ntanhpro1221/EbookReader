@@ -1,4 +1,4 @@
-# AGENTS.md — E Book Reader
+# AGENTS.md — Ebook Reader
 
 Đọc file này trước khi sửa code. Không tạo tài liệu agent song song; cập nhật trực tiếp file này khi invariant hoặc kiến trúc thay đổi.
 
@@ -8,7 +8,7 @@
 
 Yêu cầu bắt buộc:
 
-- workflow người dùng chỉ là mở `E Book Reader.vbs` hoặc shortcut **E Book Reader** trong Start Menu;
+- workflow người dùng chỉ là mở shortcut **Ebook Reader** ở root hoặc trong Start Menu; cả hai trỏ thẳng tới `_internal\START.vbs`;
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
@@ -68,9 +68,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 ## Cấu trúc source
 
 ```text
-E Book Reader.vbs
+Ebook Reader.lnk
 README.md
 _internal/
+├── START.vbs          # launcher thật; shortcut root/Start Menu trỏ trực tiếp vào đây
 ├── AGENTS.md          # tài liệu dành cho agent/lập trình viên
 ├── app.py
 ├── e_book_reader/      # Python package chính
@@ -82,7 +83,7 @@ _internal/
 └── LICENSE
 ```
 
-Tên kỹ thuật duy nhất là `e_book_reader`; tên hiển thị là `E Book Reader`. Không đưa file kỹ thuật mới ra root nếu không thật sự cần cho người dùng.
+Tên kỹ thuật duy nhất là `e_book_reader`; tên hiển thị là `Ebook Reader`. Không đưa file kỹ thuật mới ra root nếu không thật sự cần cho người dùng.
 
 Module chính:
 
@@ -123,7 +124,7 @@ python -m pytest
 Definition of done:
 
 - test liên quan pass;
-- các mục root hiện cho người dùng vẫn chỉ có `E Book Reader.vbs`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
+- các mục root hiện cho người dùng vẫn chỉ có `Ebook Reader.lnk`, `README.md`, `_internal`; metadata Git ẩn được phép trong checkout;
 - không tạo prompt giữa job;
 - kill ở ranh giới bất kỳ không làm hỏng artifact đã commit;
 - resume giữ settings và voice mapping;

@@ -14,7 +14,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
-- one-click startup ẩn qua `E Book Reader.vbs` hoặc shortcut Start Menu có icon, chỉ hiện console khi cần setup;
+- one-click startup ẩn qua shortcut `Ebook Reader` ở root/Start Menu trỏ thẳng tới `_internal\START.vbs`, chỉ hiện console khi cần setup;
 - system tray có hành động hiện/ẩn/thoát hoàn toàn; nút `X` chỉ ẩn và giữ worker chạy, còn thoát từ tray
   kết thúc cây worker ngay;
 - GUI không còn tiêu đề lớn, tự đổi nút `Bắt đầu`/`Tiếp tục`, tự mở project được chọn gần nhất;

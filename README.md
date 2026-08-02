@@ -1,11 +1,11 @@
-# E Book Reader
+# Ebook Reader
 
 Ứng dụng Windows chạy local, chuyển một hoặc nhiều chapter `.txt` tiếng Việt thành audiobook MP3 có phân vai và cảm xúc.
 
 ## Bắt đầu
 
 1. Giải nén toàn bộ ZIP vào SSD còn đủ dung lượng.
-2. Double-click **`E Book Reader.vbs`** hoặc mở **E Book Reader** từ Start Menu.
+2. Double-click shortcut **`Ebook Reader`** ở thư mục gốc hoặc mở **Ebook Reader** từ Start Menu.
 3. Lần đầu, file này tự cài môi trường và tải model; khi nâng cấp, setup tái sử dụng venv/model cache thay vì xóa runtime cũ.
 4. Trong ứng dụng, chọn nhiều file TXT hoặc chọn một folder chứa các chapter TXT.
 
@@ -18,9 +18,9 @@ Không cần mở PowerShell, không cần chạy file setup riêng.
 
 ```text
 e_book_reader/
-├── E Book Reader.vbs  # launcher có tên ứng dụng; shortcut Start Menu dùng icon riêng
+├── Ebook Reader.lnk  # shortcut ứng dụng có icon, trỏ thẳng tới _internal\START.vbs
 ├── README.md     # hướng dẫn sử dụng
-└── _internal/    # source, setup, test, model cache và tài liệu kỹ thuật
+└── _internal/    # chứa START.vbs, source, setup, test, model cache và tài liệu kỹ thuật
 ```
 
 Người dùng bình thường không cần mở `_internal`. Tài liệu dành cho agent/lập trình viên cũng được giữ bên trong thư mục này.
@@ -76,7 +76,7 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
-- Khi Ollama chưa chạy, E Book Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
+- Khi Ollama chưa chạy, Ebook Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
   phân tích/phân vai xong. Một Ollama đã chạy từ trước được coi là tiến trình bên ngoài và không bị tự ý kill.
 - Nếu phải tự dừng vì SSD/RAM/GPU/driver hoặc lỗi nghiêm trọng, app checkpoint và gửi Windows notification.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.

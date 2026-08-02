@@ -9,7 +9,7 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = $utf8
 $OutputEncoding = $utf8
 try {
-    $Host.UI.RawUI.WindowTitle = "E Book Reader"
+    $Host.UI.RawUI.WindowTitle = "Ebook Reader"
 } catch {
     # Một số host không hỗ trợ đổi tiêu đề; việc mở app vẫn tiếp tục bình thường.
 }
@@ -69,7 +69,7 @@ function Start-App {
     Start-Process -FilePath $Pythonw -ArgumentList "`"$AppScript`"" -WorkingDirectory $ProjectRoot
 }
 
-function Install-StartMenuShortcut {
+function Install-AppShortcuts {
     try {
         & $ShortcutScript -ProjectRoot $ProjectRoot | Out-Null
     } catch {
@@ -77,7 +77,7 @@ function Install-StartMenuShortcut {
     }
 }
 
-Install-StartMenuShortcut
+Install-AppShortcuts
 $runtimeReady = Test-AppRuntime
 
 if (-not $runtimeReady -and -not $SetupConsole) {
@@ -87,7 +87,7 @@ if (-not $runtimeReady -and -not $SetupConsole) {
 
 if (-not $runtimeReady) {
     Write-Host "============================================================"
-    Write-Host "                    E BOOK READER"
+    Write-Host "                    EBOOK READER"
     Write-Host "============================================================"
     Write-Host "Lần chạy đầu hoặc môi trường cần được sửa."
     Write-Host "Chương trình sẽ tự động cài đặt và tải model cần thiết."
@@ -107,7 +107,7 @@ if (-not $runtimeReady) {
         Write-Host "CÀI ĐẶT KHÔNG HOÀN TẤT." -ForegroundColor Red
         Write-Host "Quá trình chuẩn bị ứng dụng gặp lỗi."
         Write-Host "Không có project audiobook nào bị thay đổi."
-        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại E Book Reader.vbs."
+        Write-Host "Hãy đọc dòng Chi tiết bên dưới, khắc phục nguyên nhân rồi mở lại Ebook Reader."
         Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
         Wait-BeforeClose
         exit 1
@@ -119,7 +119,7 @@ try {
 } catch {
     if ($SetupConsole) {
         Write-Host ""
-        Write-Host "Không thể mở E Book Reader." -ForegroundColor Red
+        Write-Host "Không thể mở Ebook Reader." -ForegroundColor Red
         Write-Host "Chi tiết: $($_.Exception.Message)" -ForegroundColor DarkGray
         Wait-BeforeClose
     }

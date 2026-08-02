@@ -64,7 +64,7 @@ from .worker import run_worker
 
 
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
-APP_NAME = "E Book Reader"
+APP_NAME = "Ebook Reader"
 APP_USER_MODEL_ID = "EBookReader.Desktop"
 APP_ASSET_DIR = Path(__file__).resolve().parent / "assets"
 APP_ICON_PATH = APP_ASSET_DIR / ("e_book_reader.ico" if os.name == "nt" else "e_book_reader.png")

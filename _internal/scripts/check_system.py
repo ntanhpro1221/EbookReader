@@ -108,7 +108,7 @@ def main() -> int:
     if failures:
         print(
             f"System check found {failures} blocking/missing item(s). "
-            "Run E Book Reader.vbs or inspect output above."
+            "Run Ebook Reader or inspect output above."
         )
         return 1
     print("System check passed. Start with one 2,000–5,000 word chapter before a full book.")

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 class WindowsNotifier:
-    def __init__(self, app_name: str = "E Book Reader") -> None:
+    def __init__(self, app_name: str = "Ebook Reader") -> None:
         self.app_name = app_name
 
     def notify(self, title: str, message: str, *, critical: bool = False, project_path: Path | None = None) -> bool:
@@ -86,7 +86,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
         )
         if checkpoint:
             message += f" Vị trí: {checkpoint}."
-        self.notify("E Book Reader đã tự dừng", message, critical=True, project_path=project_path)
+        self.notify("Ebook Reader đã tự dừng", message, critical=True, project_path=project_path)
 
     def recovery_notice(self, book_title: str, project_path: Path, recovered: int, reset: int) -> None:
         self.notify(

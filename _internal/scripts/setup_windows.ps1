@@ -52,7 +52,7 @@ function Ensure-WingetPackage([string]$Command, [string]$PackageId, [string]$Dis
     }
 }
 
-Write-Host "=== E Book Reader - cài đặt Windows ===" -ForegroundColor Cyan
+Write-Host "=== Ebook Reader - cài đặt Windows ===" -ForegroundColor Cyan
 Write-Host "Môi trường và model được lưu gọn trong _internal\runtime."
 Write-Host "Máy nên đang cắm sạc và SSD nên còn tối thiểu 30-40 GB."
 
@@ -77,10 +77,10 @@ Invoke-NativeChecked {
     & $Python -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
 } "Cài PyTorch CUDA 12.8"
 
-Write-Host "Cài E Book Reader và các engine..."
+Write-Host "Cài Ebook Reader và các engine..."
 Invoke-NativeChecked {
     & $Python -m pip install --no-build-isolation -e "."
-} "Cài E Book Reader"
+} "Cài Ebook Reader"
 Invoke-NativeChecked { & $Python -m pip check } "Kiểm tra dependency"
 
 New-Item -ItemType Directory -Force -Path $env:HF_HOME | Out-Null
@@ -128,7 +128,7 @@ Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker
 
 Write-Host ""
 Write-Host "CÀI ĐẶT HOÀN TẤT" -ForegroundColor Green
-Write-Host "E Book Reader sẽ được mở tự động."
+Write-Host "Ebook Reader sẽ được mở tự động."
 if (-not $NoPause) {
     Read-Host "Nhấn Enter để đóng"
 }
