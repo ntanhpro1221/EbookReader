@@ -11,12 +11,13 @@ from ebook_reader.analysis import (
     AnalysisRequestStopped,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
+    _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
     _identity_reconciliation_items,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
-    _validate,
     _valid_vietnamese_spoken_form,
+    _validate,
     is_local_speaker,
     local_speaker_display,
 )
@@ -257,7 +258,27 @@ def test_bundled_cmudict_identifies_common_english_names() -> None:
     assert "phong" not in pronunciations
 
 
-def test_required_name_pronunciation_pass_checkpoints_vietnamese_readings(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("surface", "pronunciation", "expected"),
+    [
+        ("Alisa", "AH0 L IY1 S AH0", "A-li-sa"),
+        ("Benjamin", "B EH1 N JH AH0 M AH0 N", "Ben-gia-min"),
+        ("Gary", "G EH1 R IY0", "Ga-ri"),
+        ("Joel", "JH OW1 AH0 L", "Giô-en"),
+        ("John", "JH AA1 N", "Giôn"),
+        ("Michael", "M AY1 K AH0 L", "Mai-cồ"),
+        ("Murphy", "M ER1 F IY0", "Mơ-phi"),
+    ],
+)
+def test_cmu_arpabet_is_converted_locally(
+    surface: str,
+    pronunciation: str,
+    expected: str,
+) -> None:
+    assert _cmu_pronunciation_to_vietnamese(surface, pronunciation) == expected
+
+
+def test_required_cmu_names_are_checkpointed_without_qwen(monkeypatch) -> None:
     db = FakeDB()
     db.rows = [
         {
@@ -290,60 +311,18 @@ def test_required_name_pronunciation_pass_checkpoints_vietnamese_readings(monkey
         }
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
-    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
-    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
-    attempts = 0
-
-    def fake_response(request, **_kwargs):
-        nonlocal attempts
-        attempts += 1
-        assert "Michael→Mai-cồ" in request["prompt"]
-        assert "G EH1 R IY0" in request["prompt"]
-        name_schema = request["format"]["properties"]["names"]
-        if attempts == 1:
-            assert "M AY1 K AH0 L" in request["prompt"]
-            assert name_schema["minItems"] == 2
-            assert name_schema["maxItems"] == 2
-            assert name_schema["items"]["properties"]["id"]["enum"] == ["N001", "N002"]
-            return {
-                "names": [
-                    {
-                        "id": "N001",
-                        "convert": False,
-                        "spoken_form": "Gary",
-                        "confidence": 0.95,
-                        "reason": "Kết quả phân loại sai cần retry",
-                    },
-                    {
-                        "id": "N002",
-                        "convert": True,
-                        "spoken_form": "Mai-cồ",
-                        "confidence": 0.96,
-                        "reason": "Tên tiếng Anh",
-                    },
-                ]
-            }
-        assert name_schema["minItems"] == 1
-        assert name_schema["maxItems"] == 1
-        assert name_schema["items"]["properties"]["id"]["enum"] == ["N001"]
-        assert "Không được lặp lại đáp án cũ" in request["prompt"]
-        assert any(row["surface"] == "Michael" for row in db.pronunciations)
-        return {
-            "names": [
-                {
-                    "id": "N001",
-                    "convert": True,
-                    "spoken_form": "Ga-ri",
-                    "confidence": 0.95,
-                    "reason": "Tên tiếng Anh",
-                }
-            ]
-        }
-
-    monkeypatch.setattr(analyzer, "_stream_json_response", fake_response)
+    monkeypatch.setattr(
+        analyzer,
+        "ensure_available",
+        lambda: pytest.fail("CMUdict names must not start Ollama"),
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "_stream_json_response",
+        lambda *_args, **_kwargs: pytest.fail("CMUdict names must not be sent to Qwen"),
+    )
 
     assert analyzer.reconcile_name_pronunciations() == 2
-    assert attempts == 2
     assert {
         row["surface"]: (row["spoken_form"], row["source"], row["locked"])
         for row in db.pronunciations
@@ -393,7 +372,48 @@ def test_invalid_aderon_boundary_is_repaired_without_repeating_the_request(monke
     assert any(event[1] == "NAME_PRONUNCIATION_BOUNDARY_REPAIRED" for event in db.events)
 
 
-def test_valid_names_are_checkpointed_when_another_name_exhausts_targeted_retries(
+def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "May là một từ cần xét theo đúng ngữ cảnh.",
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    attempts = 0
+
+    def response(_request, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        return {
+            "names": [
+                {
+                    "id": "N001",
+                    "convert": False,
+                    "spoken_form": "May",
+                    "confidence": 0.94,
+                    "reason": "Từ trong ngữ cảnh tiếng Việt",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    assert analyzer.reconcile_name_pronunciations() == 1
+    assert analyzer.reconcile_name_pronunciations() == 0
+    assert attempts == 1
+    assert db.pronunciations[0]["spoken_form"] == "May"
+    assert db.pronunciations[0]["source"] == "english_name_transliteration_case_sensitive"
+
+
+def test_cmu_names_are_checkpointed_when_a_fantasy_name_exhausts_targeted_retries(
     monkeypatch,
 ) -> None:
     db = FakeDB()
@@ -402,7 +422,7 @@ def test_valid_names_are_checkpointed_when_another_name_exhausts_targeted_retrie
             "id": 1,
             "stable_id": "c1s1",
             "chapter_id": 1,
-            "text": "Gary gặp Corella trong hành lang.",
+            "text": "Gary gặp Xen trong hành lang.",
             "kind_hint": "dialogue",
             "status": "analyzed",
             "speaker": "Gary",
@@ -416,36 +436,25 @@ def test_valid_names_are_checkpointed_when_another_name_exhausts_targeted_retrie
     def response(request, **_kwargs):
         ids = request["format"]["properties"]["names"]["items"]["properties"]["id"]["enum"]
         requested_ids.append(ids)
-        names = []
-        for item_id in ids:
-            if item_id == "N001":
-                names.append(
-                    {
-                        "id": item_id,
-                        "convert": True,
-                        "spoken_form": "Cô-rel-la",
-                        "confidence": 0.9,
-                        "reason": "Cố ý không hợp lệ",
-                    }
-                )
-            else:
-                names.append(
-                    {
-                        "id": item_id,
-                        "convert": True,
-                        "spoken_form": "Ga-ri",
-                        "confidence": 0.95,
-                        "reason": "Tên tiếng Anh",
-                    }
-                )
-        return {"names": names}
+        assert ids == ["N001"]
+        return {
+            "names": [
+                {
+                    "id": "N001",
+                    "convert": True,
+                    "spoken_form": "Xen",
+                    "confidence": 0.9,
+                    "reason": "Cố ý không hợp lệ",
+                }
+            ]
+        }
 
     monkeypatch.setattr(analyzer, "_stream_json_response", response)
 
-    with pytest.raises(RuntimeError, match="Corella"):
+    with pytest.raises(RuntimeError, match="Xen"):
         analyzer.reconcile_name_pronunciations()
 
-    assert requested_ids == [["N001", "N002"], ["N001"], ["N001"]]
+    assert requested_ids == [["N001"], ["N001"], ["N001"]]
     assert {row["surface"] for row in db.pronunciations} == {"Gary"}
 
 

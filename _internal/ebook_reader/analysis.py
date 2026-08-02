@@ -49,6 +49,7 @@ NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
 NAME_PRONUNCIATION_ID_PREFIX = "N"
 NAME_PRONUNCIATION_ID_WIDTH = 3
 AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE = 0.85
+CMUDICT_TRANSLITERATION_CONFIDENCE = 0.98
 IDENTITY_CONTEXT_RADIUS = 1
 IDENTITY_CONTEXTS_PER_SPEAKER = 4
 IDENTITY_CONTEXT_LINE_CHARS = 220
@@ -83,6 +84,96 @@ CMUDICT_CONTEXT_ONLY = {"may"}
 OLLAMA_LOG_FILENAME = "ollama-server.log"
 DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[1] / "runtime"
 CMUDICT_PATH = Path(__file__).resolve().parent / "assets" / "cmudict.dict"
+ARPABET_VOWELS = frozenset(
+    {
+        "AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER",
+        "EY", "IH", "IY", "OW", "OY", "UH", "UW",
+    }
+)
+ARPABET_PRONUNCIATION_OVERRIDES = {
+    ("AA", "L", "T", "OW"): "An-tô",
+    ("AH", "L", "IY", "S", "AH"): "A-li-sa",
+    ("AY", "V", "AH", "N"): "Ai-vân",
+    ("B", "EH", "N", "JH", "AH", "M", "AH", "N"): "Ben-gia-min",
+    ("EH", "V", "AH", "N", "Z"): "E-vân",
+    ("G", "EH", "R", "IY"): "Ga-ri",
+    ("JH", "AA", "N"): "Giôn",
+    ("JH", "OW", "AH", "L"): "Giô-en",
+    ("L", "UW", "S", "IY", "AH", "N"): "Lu-si-en",
+    ("M", "AY", "K", "AH", "L"): "Mai-cồ",
+    ("M", "ER", "F", "IY"): "Mơ-phi",
+    ("S", "AY", "M", "AH", "N"): "Sai-mân",
+    ("T", "R", "EY", "S", "IY"): "Trây-si",
+    ("W", "EY", "N"): "Uên",
+}
+ARPABET_ONSET_OVERRIDES = {
+    ("B", "R"): "br",
+    ("CH",): "ch",
+    ("D", "R"): "đr",
+    ("DH",): "đ",
+    ("JH",): "gi",
+    ("K", "L"): "cl",
+    ("K", "R"): "cr",
+    ("NG",): "ng",
+    ("S", "K"): "x",
+    ("S", "T"): "x",
+    ("SH",): "s",
+    ("T", "R"): "tr",
+    ("TH",): "th",
+    ("ZH",): "gi",
+}
+ARPABET_ONSETS = {
+    "B": "b",
+    "CH": "ch",
+    "D": "đ",
+    "DH": "đ",
+    "F": "ph",
+    "G": "g",
+    "HH": "h",
+    "JH": "gi",
+    "K": "c",
+    "L": "l",
+    "M": "m",
+    "N": "n",
+    "NG": "ng",
+    "P": "p",
+    "R": "r",
+    "S": "x",
+    "SH": "s",
+    "T": "t",
+    "TH": "th",
+    "V": "v",
+    "W": "u",
+    "Y": "d",
+    "Z": "d",
+    "ZH": "gi",
+}
+ARPABET_VOWEL_READINGS = {
+    "AA": "a",
+    "AE": "e",
+    "AH": "a",
+    "AO": "o",
+    "AW": "ao",
+    "AY": "ai",
+    "EH": "e",
+    "ER": "ơ",
+    "EY": "ây",
+    "IH": "i",
+    "IY": "i",
+    "OW": "ô",
+    "OY": "oi",
+    "UH": "u",
+    "UW": "u",
+}
+ARPABET_CODAS = {
+    "CH": "ch",
+    "K": "c",
+    "M": "m",
+    "N": "n",
+    "NG": "ng",
+    "P": "p",
+    "T": "t",
+}
 
 
 class AnalysisRequestStopped(RuntimeError):
@@ -524,6 +615,113 @@ def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
             if len(result) == len(targets):
                 break
     return result
+
+
+def _arpabet_phones(pronunciation: str) -> tuple[str, ...]:
+    return tuple(
+        re.sub(r"\d+$", "", phone.strip().upper())
+        for phone in pronunciation.split()
+        if phone.strip()
+    )
+
+
+def _arpabet_syllables(
+    phones: tuple[str, ...],
+) -> list[tuple[tuple[str, ...], str, tuple[str, ...]]]:
+    vowel_indexes = [index for index, phone in enumerate(phones) if phone in ARPABET_VOWELS]
+    if not vowel_indexes:
+        return []
+    syllables: list[tuple[tuple[str, ...], str, tuple[str, ...]]] = []
+    onset_start = 0
+    for vowel_offset, vowel_index in enumerate(vowel_indexes):
+        onset = phones[onset_start:vowel_index]
+        if vowel_offset + 1 >= len(vowel_indexes):
+            coda = phones[vowel_index + 1 :]
+            next_onset_start = len(phones)
+        else:
+            next_vowel_index = vowel_indexes[vowel_offset + 1]
+            between = phones[vowel_index + 1 : next_vowel_index]
+            if len(between) >= 2 and between[0] in ARPABET_CODAS:
+                coda = between[:1]
+                next_onset_start = vowel_index + 2
+            else:
+                coda = ()
+                next_onset_start = vowel_index + 1
+        syllables.append((onset, phones[vowel_index], coda))
+        onset_start = next_onset_start
+    return syllables
+
+
+def _arpabet_onset_reading(onset: tuple[str, ...], vowel: str) -> str:
+    if not onset:
+        return ""
+    reading = ARPABET_ONSET_OVERRIDES.get(onset)
+    if reading is None:
+        reading = "".join(ARPABET_ONSETS.get(phone, "") for phone in onset)
+    if reading == "c" and vowel in {"EH", "IH", "IY"}:
+        return "k"
+    if reading == "g" and vowel in {"EH", "IH", "IY"}:
+        return "gh"
+    if reading == "ng" and vowel in {"EH", "IH", "IY"}:
+        return "ngh"
+    return reading
+
+
+def _arpabet_vowel_reading(
+    onset: tuple[str, ...],
+    vowel: str,
+    coda: tuple[str, ...],
+) -> str:
+    if vowel == "AA" and coda[:1] == ("N",):
+        return "ô"
+    if vowel == "AH" and coda[:1] == ("N",):
+        return "â"
+    if vowel == "AH" and coda[:1] == ("L",):
+        return "ồ" if onset == ("K",) else "e"
+    return ARPABET_VOWEL_READINGS[vowel]
+
+
+def _arpabet_coda_reading(
+    onset: tuple[str, ...],
+    vowel: str,
+    coda: tuple[str, ...],
+) -> str:
+    if vowel == "AH" and coda[:1] == ("L",):
+        return "" if onset == ("K",) else "n"
+    return next((ARPABET_CODAS[phone] for phone in coda if phone in ARPABET_CODAS), "")
+
+
+def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
+    """Convert CMU ARPAbet locally so known English names never depend on an LLM retry."""
+    phones = _arpabet_phones(pronunciation)
+    override = ARPABET_PRONUNCIATION_OVERRIDES.get(phones)
+    if override is not None:
+        return override
+    rendered: list[str] = []
+    for onset, vowel, coda in _arpabet_syllables(phones):
+        onset_reading = _arpabet_onset_reading(onset, vowel)
+        vowel_reading = _arpabet_vowel_reading(onset, vowel, coda)
+        if onset_reading == "gi" and vowel_reading == "i":
+            vowel_reading = ""
+        rendered.append(
+            onset_reading
+            + vowel_reading
+            + _arpabet_coda_reading(onset, vowel, coda)
+        )
+    spoken_form = "-".join(part for part in rendered if part)
+    if not spoken_form:
+        raise ValueError(f"CMU pronunciation has no readable vowel for {surface!r}: {pronunciation!r}")
+    spoken_form = spoken_form[0].upper() + spoken_form[1:]
+    if VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is None:
+        raise ValueError(
+            f"CMU pronunciation produced an invalid Vietnamese form for {surface!r}: {spoken_form!r}"
+        )
+    syllables = spoken_form.split("-")
+    if any(NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) for syllable in syllables):
+        raise ValueError(
+            f"CMU pronunciation produced an invalid Vietnamese coda for {surface!r}: {spoken_form!r}"
+        )
+    return spoken_form
 
 
 def _valid_vietnamese_spoken_form(surface: str, spoken_form: str) -> bool:
@@ -1057,14 +1255,10 @@ class OllamaBookAnalyzer:
         for candidate in candidates:
             candidate_key = _name_candidate_key(str(candidate["surface"]))
             candidate["cmu_pronunciation"] = (
-                "" if candidate_key in CMUDICT_CONTEXT_ONLY else dictionary_pronunciations.get(candidate_key, "")
+                ""
+                if candidate_key in CMUDICT_CONTEXT_ONLY
+                else dictionary_pronunciations.get(candidate_key, "")
             )
-        if not self.ensure_available():
-            message = "Ollama không còn sẵn sàng để chuẩn hóa cách đọc tên tiếng Anh"
-            self.db.event("error", "NAME_PRONUNCIATION_UNAVAILABLE", message)
-            if self.settings.get("enabled", True) and self.settings.get("required", True):
-                raise RuntimeError(message)
-            return 0
 
         converted_count = 0
 
@@ -1114,14 +1308,47 @@ class OllamaBookAnalyzer:
             )
             converted_count += 1
 
+        qwen_candidates: list[dict[str, Any]] = []
+        cmu_count = 0
+        for candidate in candidates:
+            pronunciation = str(candidate.get("cmu_pronunciation", ""))
+            if not pronunciation:
+                qwen_candidates.append(candidate)
+                continue
+            surface = str(candidate["surface"])
+            spoken_form = _cmu_pronunciation_to_vietnamese(surface, pronunciation)
+            checkpoint_pronunciation(
+                candidate,
+                spoken_form,
+                CMUDICT_TRANSLITERATION_CONFIDENCE,
+            )
+            cmu_count += 1
+        if cmu_count:
+            self.log(
+                f"Đã chuẩn hóa cục bộ {cmu_count} tên từ âm vị CMUdict; "
+                "không gửi các tên này cho Qwen."
+            )
+        if not qwen_candidates:
+            self.log(
+                f"Đã khóa cách đọc thuần Việt cho {converted_count}/{len(candidates)} "
+                "tên tiếng Anh hoặc fantasy cần xem xét."
+            )
+            return converted_count
+        if not self.ensure_available():
+            message = "Ollama không còn sẵn sàng để chuẩn hóa cách đọc tên fantasy"
+            self.db.event("error", "NAME_PRONUNCIATION_UNAVAILABLE", message)
+            if self.settings.get("enabled", True) and self.settings.get("required", True):
+                raise RuntimeError(message)
+            return converted_count
+
         retry_count = int(self.settings.get("max_retries", 3))
         for batch_index, offset in enumerate(
-            range(0, len(candidates), NAME_PRONUNCIATION_BATCH_SIZE),
+            range(0, len(qwen_candidates), NAME_PRONUNCIATION_BATCH_SIZE),
             1,
         ):
             if before_batch is not None:
                 before_batch(batch_index)
-            batch = candidates[offset : offset + NAME_PRONUNCIATION_BATCH_SIZE]
+            batch = qwen_candidates[offset : offset + NAME_PRONUNCIATION_BATCH_SIZE]
             pending = {
                 _name_pronunciation_id(index): candidate
                 for index, candidate in enumerate(batch, 1)
@@ -1219,6 +1446,12 @@ class OllamaBookAnalyzer:
                                     f"dictionary English name was not converted: {candidate['surface']!r}"
                                 )
                             if not should_convert:
+                                surface = str(candidate["surface"])
+                                confidence = max(
+                                    0.0,
+                                    min(1.0, float(item.get("confidence", 0.0))),
+                                )
+                                checkpoint_pronunciation(candidate, surface, confidence)
                                 resolved_ids.append(item_id)
                                 continue
                             spoken_form = " ".join(
