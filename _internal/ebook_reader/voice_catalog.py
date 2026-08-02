@@ -23,8 +23,34 @@ STYLE_PRIORITY = {
 }
 CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 DEFAULT_NARRATOR_BY_GENDER = {
-    GENDER_MALE: "Thái Sơn",
+    GENDER_MALE: "Phạm Tuyên",
     GENDER_FEMALE: "Ngọc Linh",
+}
+PRESET_PREVIEW_MEDIAN_PITCH_HZ = {
+    "Phạm Tuyên": 100.6,
+    "Xuân Vĩnh": 116.2,
+    "Thái Sơn": 120.7,
+    "Quang Sơn": 138.2,
+    "Thanh Bình": 155.1,
+    "Ngọc Trân": 181.3,
+    "Ngọc Linh": 204.7,
+    "Trúc Ly": 213.7,
+    "Đoan Trang": 225.8,
+    "Thục Đoan": 246.2,
+}
+PRESET_MIN_PITCH_SEMITONES = {
+    # Phạm Tuyên is already the lowest measured male preset; lowering it reduces intelligibility.
+    "Phạm Tuyên": 0,
+    "Xuân Vĩnh": -1,
+    "Thái Sơn": -1,
+    "Quang Sơn": -2,
+    "Thanh Bình": -2,
+    # Ngọc Trân is the lowest measured female preset, so keep its downward variant conservative.
+    "Ngọc Trân": -1,
+    "Ngọc Linh": -2,
+    "Trúc Ly": -2,
+    "Đoan Trang": -2,
+    "Thục Đoan": -2,
 }
 VOICE_PREVIEW_FILENAMES = {
     "Phạm Tuyên": "pham_tuyen.wav",
@@ -112,6 +138,17 @@ def preset_priority(preset: dict[str, Any]) -> tuple[int, int, str]:
         STYLE_PRIORITY.get(str(preset.get("style", "")), len(STYLE_PRIORITY)),
         str(preset.get("name", "")).casefold(),
     )
+
+
+def pitch_variants_for_preset(preset_name: str, max_abs_semitones: int) -> tuple[int, ...]:
+    maximum = max(0, int(max_abs_semitones))
+    minimum = max(-maximum, int(PRESET_MIN_PITCH_SEMITONES.get(preset_name, -maximum)))
+    variants = tuple(
+        steps
+        for steps in CHARACTER_PITCH_VARIANTS
+        if minimum <= steps <= maximum
+    )
+    return variants or (0,)
 
 
 def narrator_presets(

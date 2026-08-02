@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import gc
+import math
 import random
 import re
 from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
+import soxr
 
 from .audio_io import (
     AudioQualityError,
@@ -25,6 +27,9 @@ FATAL_TTS_MARKERS = (
     "cudnn",
     "no module named",
     "out of memory",
+    "not enough memory",
+    "defaultcpuallocator",
+    "alloc_cpu.cpp",
     "thiếu vieneu",
     "locked vieneu preset",
     "only vieneu profiles",
@@ -77,12 +82,52 @@ def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> n
     if steps == 0 or array.size == 0:
         return array
     import torch
-    from torchaudio.functional import pitch_shift
+    from torchaudio.functional import phase_vocoder
 
-    waveform = torch.from_numpy(array.copy()).unsqueeze(0)
+    n_fft = 512
+    hop_length = n_fft // 4
+    rate = 2.0 ** (-float(steps) / 12.0)
+    waveform = torch.from_numpy(array.copy())
+    window = torch.hann_window(n_fft, device=waveform.device)
     with torch.inference_mode():
-        shifted = pitch_shift(waveform, sample_rate, n_steps=steps)
-    return shifted.squeeze(0).cpu().numpy().astype(np.float32, copy=False)
+        spectrum = torch.stft(
+            waveform,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            win_length=n_fft,
+            window=window,
+            center=True,
+            pad_mode="reflect",
+            normalized=False,
+            onesided=True,
+            return_complex=True,
+        )
+        phase_advance = torch.linspace(
+            0,
+            math.pi * hop_length,
+            spectrum.shape[-2],
+            device=spectrum.device,
+        )[..., None]
+        stretched_spectrum = phase_vocoder(spectrum, rate, phase_advance)
+        stretched = torch.istft(
+            stretched_spectrum,
+            n_fft=n_fft,
+            hop_length=hop_length,
+            win_length=n_fft,
+            window=window,
+            length=int(round(array.size / rate)),
+        )
+    # torchaudio.pitch_shift resamples 48 kHz with a near-irrational integer ratio and can
+    # allocate multi-gigabyte sinc kernels. Soxr accepts the ratio directly and stays bounded.
+    shifted = soxr.resample(
+        stretched.cpu().numpy(),
+        sample_rate / rate,
+        sample_rate,
+        quality="HQ",
+    ).astype(np.float32, copy=False)
+    if shifted.size >= array.size:
+        return shifted[: array.size]
+    return np.pad(shifted, (0, array.size - shifted.size)).astype(np.float32, copy=False)
 
 
 def _max_new_frames(row: Any, settings: dict[str, Any] | None) -> int:
@@ -274,11 +319,22 @@ class TTSCoordinator:
             seed = self.generation_seed(row, seed_salt)
             spoken_row = self._spoken_row(row)
             audio = self.vieneu.generate_one(spoken_row, profile, seed)
-            audio = apply_pitch_variant(
-                audio,
-                self.vieneu.sample_rate,
-                int(_row_value(profile, "pitch_semitones", 0)),
-            )
+            pitch_steps = int(_row_value(profile, "pitch_semitones", 0))
+            pitch_variant_skipped = False
+            try:
+                audio = apply_pitch_variant(
+                    audio,
+                    self.vieneu.sample_rate,
+                    pitch_steps,
+                )
+            except Exception as exc:  # noqa: BLE001
+                # Pitch is optional voice diversification. The original waveform still contains
+                # every spoken word, so preserve it instead of failing or retrying the whole TTS.
+                pitch_variant_skipped = True
+                self.log(
+                    f"Bỏ biến thể cao độ {pitch_steps:+d} cho segment {row['stable_id']} "
+                    f"vì xử lý pitch lỗi: {exc}"
+                )
             audio, duration_limited = constrain_special_audio_duration(
                 audio,
                 self.vieneu.sample_rate,
@@ -301,6 +357,8 @@ class TTSCoordinator:
             )
             if duration_limited:
                 metrics["effect_duration_limited"] = 1.0
+            if pitch_variant_skipped:
+                metrics["pitch_variant_skipped"] = 1.0
             return checksum, metrics, seed
         finally:
             # VieNeu's PyTorch backend may retain allocator cache after returning a NumPy waveform.

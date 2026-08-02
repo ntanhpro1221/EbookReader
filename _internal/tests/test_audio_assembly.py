@@ -10,9 +10,9 @@ from ebook_reader.audio_io import (
     atomic_write_wav,
     assemble_chapter_atomic,
     constrain_special_audio_duration,
+    integrated_loudness_lufs,
     normalize_segment_level,
     segment_duration_policy,
-    signal_metrics,
     verify_mp3,
     validate_audio_array,
 )
@@ -78,18 +78,50 @@ def test_segment_leveling_matches_neutral_voices_and_preserves_loud_intent() -> 
     timeline = np.arange(sample_rate, dtype=np.float32) / sample_rate
     quiet = 0.03 * np.sin(2 * np.pi * 220 * timeline)
     strong = 0.20 * np.sin(2 * np.pi * 220 * timeline)
-    neutral = {"volume": "normal", "emotion": "neutral", "intensity": 1}
-    loud = {"volume": "loud", "emotion": "angry", "intensity": 3}
+    neutral = {
+        "kind": "dialogue",
+        "speaker": "Nhân vật",
+        "volume": "normal",
+        "emotion": "neutral",
+        "intensity": 1,
+    }
+    narrator = {**neutral, "kind": "narration", "speaker": "NARRATOR"}
+    loud = {**neutral, "volume": "loud", "emotion": "angry", "intensity": 3}
 
     quiet_normalized = normalize_segment_level(quiet, sample_rate, neutral, settings)
     strong_normalized = normalize_segment_level(strong, sample_rate, neutral, settings)
+    narrator_normalized = normalize_segment_level(quiet, sample_rate, narrator, settings)
     loud_normalized = normalize_segment_level(quiet, sample_rate, loud, settings)
-    quiet_db = 20 * np.log10(signal_metrics(quiet_normalized, sample_rate)["rms"])
-    strong_db = 20 * np.log10(signal_metrics(strong_normalized, sample_rate)["rms"])
-    loud_db = 20 * np.log10(signal_metrics(loud_normalized, sample_rate)["rms"])
+    quiet_lufs = integrated_loudness_lufs(quiet_normalized, sample_rate)
+    strong_lufs = integrated_loudness_lufs(strong_normalized, sample_rate)
+    narrator_lufs = integrated_loudness_lufs(narrator_normalized, sample_rate)
+    loud_lufs = integrated_loudness_lufs(loud_normalized, sample_rate)
 
-    assert quiet_db == pytest.approx(strong_db, abs=0.15)
-    assert loud_db > quiet_db + 2.0
+    assert quiet_lufs == pytest.approx(strong_lufs, abs=0.15)
+    assert quiet_lufs == pytest.approx(-19.0, abs=0.15)
+    assert narrator_lufs == pytest.approx(-18.5, abs=0.15)
+    assert loud_lufs == pytest.approx(-17.8, abs=0.15)
+
+
+def test_lufs_leveling_matches_low_and_bright_voice_spectra() -> None:
+    settings = build_settings()
+    sample_rate = 48_000
+    timeline = np.arange(sample_rate, dtype=np.float32) / sample_rate
+    low_voice = 0.03 * np.sin(2 * np.pi * 100 * timeline)
+    bright_voice = 0.03 * np.sin(2 * np.pi * 260 * timeline)
+    segment = {
+        "kind": "dialogue",
+        "speaker": "Nhân vật",
+        "volume": "normal",
+        "emotion": "neutral",
+        "intensity": 1,
+    }
+
+    low_normalized = normalize_segment_level(low_voice, sample_rate, segment, settings)
+    bright_normalized = normalize_segment_level(bright_voice, sample_rate, segment, settings)
+
+    assert integrated_loudness_lufs(low_normalized, sample_rate) == pytest.approx(-19.0, abs=0.15)
+    assert integrated_loudness_lufs(bright_normalized, sample_rate) == pytest.approx(-19.0, abs=0.15)
 
 
 def test_segment_rate_validation_warns_for_mild_outlier_and_rejects_extreme() -> None:

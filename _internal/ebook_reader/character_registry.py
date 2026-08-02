@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
-from .analysis import is_local_speaker, local_speaker_display
+from .analysis import is_local_speaker, local_speaker_display, local_speaker_label
 from .database import ProjectDB
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
-    CHARACTER_PITCH_VARIANTS,
     STYLE_NEWS,
     VIENEU_PRESETS,
     casting_presets,
     preset_by_name,
+    pitch_variants_for_preset,
     preset_priority,
 )
 
@@ -80,10 +80,7 @@ class PresetAllocator:
             key=lambda preset: (usage[preset["name"]], *preset_priority(preset)),
         )
         usage[selected["name"]] += 1
-        variants = [
-            steps for steps in CHARACTER_PITCH_VARIANTS
-            if abs(steps) <= self.max_pitch_shift
-        ] or [0]
+        variants = pitch_variants_for_preset(selected["name"], self.max_pitch_shift)
         pitch_steps = variants[self.variant_usage[selected["name"]] % len(variants)]
         self.variant_usage[selected["name"]] += 1
         return selected, pitch_steps
@@ -118,6 +115,50 @@ def _personality(rows: list[Any]) -> str:
     return next((str(row["analysis_notes"]) for row in rows if row["analysis_notes"]), "")[:300]
 
 
+def _merge_local_speakers_with_named_identity(
+    db: ProjectDB,
+    log: Callable[[str], None],
+) -> None:
+    rows = list(db.list_segments())
+    named_by_chapter_and_label: dict[tuple[int, str], Counter[str]] = defaultdict(Counter)
+    for row in rows:
+        speaker = str(row["speaker"])
+        normalized = normalize_name(speaker)
+        if (
+            is_local_speaker(speaker)
+            or speaker.casefold() in RESERVED_SPEAKERS
+            or normalized in PRONOUNS
+        ):
+            continue
+        named_by_chapter_and_label[(int(row["chapter_id"]), normalized)][speaker] += 1
+
+    local_speakers = {
+        str(row["speaker"])
+        for row in rows
+        if is_local_speaker(row["speaker"])
+    }
+    for local_speaker in sorted(local_speakers, key=str.casefold):
+        matching_rows = [row for row in rows if str(row["speaker"]) == local_speaker]
+        if not matching_rows:
+            continue
+        chapter_id = int(matching_rows[0]["chapter_id"])
+        label = normalize_name(local_speaker_label(local_speaker))
+        candidates = named_by_chapter_and_label.get((chapter_id, label))
+        if not candidates:
+            continue
+        named_speaker = sorted(
+            candidates,
+            key=lambda candidate: (-candidates[candidate], candidate.casefold()),
+        )[0]
+        rewritten = db.rewrite_speaker(local_speaker, named_speaker)
+        if rewritten:
+            log(
+                f"Hợp nhất nhân vật cục bộ cùng chapter: "
+                f"{local_speaker_display(local_speaker)} → {named_speaker} "
+                f"({rewritten} segment)."
+            )
+
+
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
@@ -133,6 +174,8 @@ def build_registry_and_cast(
         reserved = RESERVED_SPEAKERS.get(speaker.casefold())
         if reserved and speaker != reserved:
             db.rewrite_speaker(speaker, reserved)
+
+    _merge_local_speakers_with_named_identity(db, log)
 
     rows = [row for row in db.list_segments() if str(row["status"]) != "pending"]
     by_speaker: dict[str, list[Any]] = defaultdict(list)

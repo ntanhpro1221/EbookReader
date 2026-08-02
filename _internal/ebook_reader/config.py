@@ -31,7 +31,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "voices": {
         "narrator_gender": "male",
-        "narrator_voice": "Thái Sơn",
+        "narrator_voice": "Phạm Tuyên",
         "minimum_named_character_mentions": 3,
         "max_character_pitch_semitones": 2,
         "narrator_description": (
@@ -86,6 +86,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "normal": -19.0,
             "loud": -16.5,
         },
+        "segment_target_lufs": {
+            "soft": -22.0,
+            "normal": -19.0,
+            "loud": -17.8,
+        },
+        "segment_narrator_offset_db": 0.5,
         "create_m3u8": True,
         "export_metadata": True,
     },
@@ -282,6 +288,17 @@ def validate_settings(settings: dict[str, Any]) -> None:
         < float(audio.get("segment_peak_dbfs", 0))
     ):
         raise ValueError("Segment dBFS targets must satisfy soft < normal < loud < peak")
+    loudness_targets = audio.get("segment_target_lufs", {})
+    if loudness_targets and not (
+        float(loudness_targets.get("soft", 0))
+        < float(loudness_targets.get("normal", 0))
+        < float(loudness_targets.get("loud", 0))
+        < 0.0
+    ):
+        raise ValueError("Segment LUFS targets must satisfy soft < normal < loud < 0")
+    narrator_offset = float(audio.get("segment_narrator_offset_db", 0.0))
+    if not math.isfinite(narrator_offset) or not 0.0 <= narrator_offset <= 2.0:
+        raise ValueError("segment_narrator_offset_db must be between 0 and 2 dB")
     resources = settings.get("resources", {})
     max_temp = int(resources.get("max_gpu_temp_c", 86))
     resume_temp = int(resources.get("resume_gpu_temp_c", 80))

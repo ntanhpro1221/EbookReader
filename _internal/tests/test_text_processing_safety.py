@@ -66,6 +66,47 @@ def test_direct_speech_is_separated_from_narration() -> None:
     assert [row["kind_hint"] for row in rows] == ["narration", "dialogue"]
 
 
+def test_multiline_dialogue_and_inner_thought_keep_their_kind() -> None:
+    text = (
+        "Cô ta nguyền rủa:\n\n"
+        "“Từ trong biển lửa, ta sẽ chứng kiến thiên quốc sụp đổ.\n\n"
+        "Ta sẽ chứng kiến giáo đường tan nát.\n\n"
+        "Các ngươi sẽ vĩnh viễn trầm luân!”\n\n"
+        "‘Đây không phải thế giới cũ…’"
+    )
+
+    rows = segment_chapter_text(1, text)
+
+    assert [row["kind_hint"] for row in rows] == [
+        "narration",
+        "dialogue",
+        "dialogue",
+        "dialogue",
+        "thought",
+    ]
+
+
+def test_multiline_ascii_quotes_keep_dialogue_state() -> None:
+    rows = segment_chapter_text(
+        1,
+        'Cô ta nói: "Câu đầu.\n\nCâu tiếp theo.\n\nCâu cuối."\n\nLời kể.',
+    )
+
+    assert [row["kind_hint"] for row in rows] == [
+        "narration",
+        "dialogue",
+        "dialogue",
+        "dialogue",
+        "narration",
+    ]
+
+
+def test_inline_curly_single_quote_is_an_inner_thought() -> None:
+    rows = segment_chapter_text(1, "Hạ Phong không khỏi nghĩ: ‘Mình phải rời khỏi đây.’")
+
+    assert [row["kind_hint"] for row in rows] == ["narration", "thought"]
+
+
 def test_punctuation_only_content_never_becomes_tts_segment() -> None:
     rows = segment_chapter_text(1, "Một câu kể.\n…\n,\nMột câu khác.")
 

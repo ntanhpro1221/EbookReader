@@ -42,6 +42,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - WAV/MP3 luôn ghi `.part`, validate + checksum rồi atomic replace.
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
 - TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn → `failed`.
+- Biến thể pitch chỉ là lớp trang trí sau inference: dùng phase-vocoder + Soxr với bộ nhớ bị chặn,
+  không dùng `torchaudio.functional.pitch_shift`; lỗi pitch phải giữ waveform gốc, ghi warning và không retry TTS.
 - Ngân sách frame VieNeu và giới hạn validation phải lấy từ cùng `segment_duration_policy`; codec VieNeu v3
   dùng 3.840 sample/frame ở 48 kHz. Mọi tổ hợp kind/pace/độ dài phải có headroom validation được test.
 - Chỉ `vocal_effect`/`text_sfx` được phép giới hạn thời lượng bằng fade-out khi runtime vẫn trả quá dài;
@@ -62,8 +64,16 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Cảm xúc chỉ thay đổi cách thể hiện trên cùng preset: cue phi ngôn ngữ được VieNeu hỗ trợ, sampling,
   pace và mức âm lượng mục tiêu. Không thay identity giọng để giả lập cảm xúc.
 - Preset được phân bổ theo giới tính và ưu tiên dùng hết pool phù hợp trước khi tái sử dụng.
+- Pitch âm phải theo giới hạn từng preset đo trên preview: Phạm Tuyên không hạ; Xuân Vĩnh, Thái Sơn,
+  Ngọc Trân tối đa `-1`; các preset không tin tức còn lại tối đa `-2`; pitch dương tối đa `+2`.
 - NPC có nhãn cục bộ được giữ identity riêng trong phạm vi chapter/batch; NPC không phân biệt được
   ít nhất phải tách pool nam, nữ và chưa rõ giới tính.
+- Nhãn NPC cục bộ trùng chính xác với tên nhân vật trong cùng chapter phải được hợp nhất trước khi
+  phân vai, tránh cùng một người bị khóa hai giọng hoặc hai pitch khác nhau.
+- Segment mới được cân theo K-weighted LUFS; giọng kể có anchor nhỉnh hơn hội thoại trung tính và
+  chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
+- Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
+  độc thoại nội tâm để analysis tìm giọng nhân vật thay vì gán sẵn narrator.
 - Whisper phải nhận WAV đã đọc/resample trong process; không truyền đường dẫn cho API Whisper vì bản
   dependency hiện tại sẽ gọi FFmpeg subprocess cho từng segment và gây nháy console trên Windows.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.

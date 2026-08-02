@@ -6,10 +6,14 @@ from ebook_reader.character_registry import build_registry_and_cast
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.voice_catalog import (
+    PRESET_PREVIEW_MEDIAN_PITCH_HZ,
+    PRESET_MIN_PITCH_SEMITONES,
     REGION_CENTRAL,
     REGION_NORTH,
     REGION_SOUTH,
     STYLE_NEWS,
+    VIENEU_PRESETS,
+    pitch_variants_for_preset,
     preset_by_name,
 )
 
@@ -44,6 +48,8 @@ def _casting_db(tmp_path: Path) -> ProjectDB:
             ("NPC_LOCAL::c00001::b0001::áo đỏ", "male"),
             ("NPC_LOCAL::c00001::b0001::áo vàng", "male"),
             ("NPC_LOCAL::c00001::b0001::áo tím", "male"),
+            ("NPC_LOCAL::c00001::b0002::giám mục", "male"),
+            ("Giám mục", "male"),
             ("UNKNOWN", "male"),
             ("UNKNOWN", "female"),
         ]
@@ -78,6 +84,11 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_region
     profiles = db.list_voice_profiles()
     assert all(preset_by_name(str(profile["preset_name"]))["style"] != STYLE_NEWS for profile in profiles)
     assert all(abs(int(profile["pitch_semitones"])) <= 2 for profile in profiles)
+    assert all(
+        int(profile["pitch_semitones"])
+        >= PRESET_MIN_PITCH_SEMITONES.get(str(profile["preset_name"]), -2)
+        for profile in profiles
+    )
     rows = db.list_segments()
     local_rows = [row for row in rows if str(row["speaker"]).startswith("NPC_LOCAL::")]
     assert len({int(row["canonical_character_id"]) for row in local_rows}) == 4
@@ -120,3 +131,34 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_region
         preset_by_name(str(profile_by_id[int(row["voice_profile_id"])]["preset_name"]))["gender"]
         for row in anonymous
     } == {"male", "female"}
+
+    bishop_rows = [row for row in rows if str(row["speaker"]) == "Giám mục"]
+    assert len(bishop_rows) == 2
+    assert len({int(row["canonical_character_id"]) for row in bishop_rows}) == 1
+    assert len({int(row["voice_profile_id"]) for row in bishop_rows}) == 1
+
+
+def test_pitch_ranges_follow_measured_preset_depth() -> None:
+    supported_names = {
+        preset["name"]
+        for preset in VIENEU_PRESETS
+        if preset["style"] != STYLE_NEWS
+    }
+    assert set(PRESET_PREVIEW_MEDIAN_PITCH_HZ) == supported_names
+    assert PRESET_MIN_PITCH_SEMITONES == {
+        "Phạm Tuyên": 0,
+        "Xuân Vĩnh": -1,
+        "Thái Sơn": -1,
+        "Quang Sơn": -2,
+        "Thanh Bình": -2,
+        "Ngọc Trân": -1,
+        "Ngọc Linh": -2,
+        "Trúc Ly": -2,
+        "Đoan Trang": -2,
+        "Thục Đoan": -2,
+    }
+    assert pitch_variants_for_preset("Phạm Tuyên", 2) == (0, 1, 2)
+    assert pitch_variants_for_preset("Xuân Vĩnh", 2) == (0, -1, 1, 2)
+    assert pitch_variants_for_preset("Thái Sơn", 2) == (0, -1, 1, 2)
+    assert pitch_variants_for_preset("Thanh Bình", 2) == (0, -1, 1, -2, 2)
+    assert pitch_variants_for_preset("Ngọc Trân", 2) == (0, -1, 1, 2)

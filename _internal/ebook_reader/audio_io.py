@@ -3,10 +3,12 @@ from __future__ import annotations
 import math
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+import pyloudnorm as pyln
 import soundfile as sf
 
 from .io_utils import atomic_write_text, ffmpeg_executable, run_hidden, sha256_file
@@ -25,6 +27,15 @@ EMOTION_LEVEL_OFFSETS_DB = {
     "tired": -1.0,
     "tender": -0.5,
 }
+LOUDNESS_EMOTION_OFFSETS_DB = {
+    "angry": 0.8,
+    "excited": 0.6,
+    "surprised": 0.4,
+    "whispering": -2.0,
+    "tired": -0.7,
+    "tender": -0.3,
+}
+LOUDNESS_BLOCK_SECONDS = 0.4
 RATE_HARD_MIN_FACTOR = 0.55
 RATE_HARD_MAX_FACTOR = 1.50
 VIENEU_V3_CODEC_SAMPLE_RATE = 48_000
@@ -153,6 +164,22 @@ def _active_rms(audio: np.ndarray, sample_rate: int, floor_dbfs: float) -> float
     return float(math.sqrt(float(np.mean(np.square(active))))) if active.size else 0.0
 
 
+@lru_cache(maxsize=4)
+def _loudness_meter(sample_rate: int) -> pyln.Meter:
+    return pyln.Meter(sample_rate, block_size=LOUDNESS_BLOCK_SECONDS)
+
+
+def integrated_loudness_lufs(audio: np.ndarray, sample_rate: int) -> float | None:
+    array = np.asarray(audio, dtype=np.float64).reshape(-1)
+    if sample_rate <= 0 or array.size < int(round(sample_rate * LOUDNESS_BLOCK_SECONDS)):
+        return None
+    try:
+        loudness = float(_loudness_meter(sample_rate).integrated_loudness(array))
+    except (ValueError, ZeroDivisionError):
+        return None
+    return loudness if math.isfinite(loudness) else None
+
+
 def normalize_segment_level(
     audio: np.ndarray,
     sample_rate: int,
@@ -171,13 +198,30 @@ def normalize_segment_level(
     if active_rms <= 0:
         return array
     volume = str(_segment_value(segment, "volume", "normal"))
-    targets = audio_cfg["segment_target_dbfs"]
-    target_dbfs = float(targets.get(volume, targets["normal"]))
-    if volume == "normal":
-        emotion = str(_segment_value(segment, "emotion", "neutral"))
-        intensity = max(0, min(3, int(_segment_value(segment, "intensity", 0))))
-        target_dbfs += EMOTION_LEVEL_OFFSETS_DB.get(emotion, 0.0) * intensity / 3.0
-    desired_gain = 10 ** ((target_dbfs - 20.0 * math.log10(active_rms)) / 20.0)
+    lufs_targets = audio_cfg.get("segment_target_lufs")
+    if isinstance(lufs_targets, dict) and "normal" in lufs_targets:
+        target_level = float(lufs_targets.get(volume, lufs_targets["normal"]))
+        kind = str(_segment_value(segment, "kind", ""))
+        speaker = str(_segment_value(segment, "speaker", ""))
+        if speaker == "NARRATOR" and kind not in SPECIAL_AUDIO_KINDS:
+            target_level += float(audio_cfg.get("segment_narrator_offset_db", 0.0))
+        if volume == "normal":
+            emotion = str(_segment_value(segment, "emotion", "neutral"))
+            intensity = max(0, min(3, int(_segment_value(segment, "intensity", 0))))
+            target_level += LOUDNESS_EMOTION_OFFSETS_DB.get(emotion, 0.0) * intensity / 3.0
+        measured_level = integrated_loudness_lufs(array, sample_rate)
+        if measured_level is None:
+            measured_level = 20.0 * math.log10(active_rms)
+    else:
+        # Locked books created before LUFS leveling retain their original RMS policy.
+        targets = audio_cfg["segment_target_dbfs"]
+        target_level = float(targets.get(volume, targets["normal"]))
+        if volume == "normal":
+            emotion = str(_segment_value(segment, "emotion", "neutral"))
+            intensity = max(0, min(3, int(_segment_value(segment, "intensity", 0))))
+            target_level += EMOTION_LEVEL_OFFSETS_DB.get(emotion, 0.0) * intensity / 3.0
+        measured_level = 20.0 * math.log10(active_rms)
+    desired_gain = 10 ** ((target_level - measured_level) / 20.0)
     peak = float(np.max(np.abs(array)))
     peak_limit = 10 ** (float(audio_cfg.get("segment_peak_dbfs", -2.0)) / 20.0)
     peak_safe_gain = peak_limit / peak if peak > 0 else desired_gain
@@ -204,6 +248,9 @@ def validate_audio_array(
     if not np.isfinite(array).all():
         raise AudioQualityError("audio contains NaN or infinity")
     metrics = signal_metrics(array, sample_rate)
+    loudness = integrated_loudness_lufs(array, sample_rate)
+    if loudness is not None:
+        metrics["loudness_lufs"] = loudness
     chars = max(1, len(text.strip()))
     min_duration = max(0.20, chars / 100 * float(settings["tts"]["min_seconds_per_100_chars"]))
     kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""

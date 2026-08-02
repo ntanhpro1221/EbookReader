@@ -85,6 +85,8 @@ def test_one_click_startup_contract() -> None:
         "psutil==6.0.0",
         "numpy==1.26.4",
         "soundfile==0.13.1",
+        "pyloudnorm==0.1.1",
+        "soxr==1.1.0",
         "imageio-ffmpeg==0.6.0",
         "openai-whisper==20250625",
         "vieneu==3.2.3",

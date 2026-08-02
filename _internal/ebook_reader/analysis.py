@@ -167,8 +167,12 @@ def is_local_speaker(value: Any) -> bool:
     return str(value or "").startswith(LOCAL_SPEAKER_STORED_PREFIX)
 
 
+def local_speaker_label(value: Any) -> str:
+    return str(value or "").rsplit("::", 1)[-1].strip()
+
+
 def local_speaker_display(value: Any) -> str:
-    label = str(value or "").rsplit("::", 1)[-1].strip()
+    label = local_speaker_label(value)
     return f"NPC {label}" if label else "NPC cục bộ"
 
 

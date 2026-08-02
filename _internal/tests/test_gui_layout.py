@@ -75,8 +75,8 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.quit_action.text() == "Thoát hoàn toàn"
     assert window.narrator_gender_combo.currentData() == ""
     assert window.narrator_region_combo.currentData() == ""
-    assert window.narrator_voice_combo.currentData() == "Thái Sơn"
-    assert window.narrator_voice_combo.itemData(0) == "Thái Sơn"
+    assert window.narrator_voice_combo.currentData() == "Phạm Tuyên"
+    assert window.narrator_voice_combo.itemData(0) == "Phạm Tuyên"
     available_narrators = {
         window.narrator_voice_combo.itemData(index)
         for index in range(window.narrator_voice_combo.count())
@@ -317,7 +317,7 @@ def test_only_global_resources_restore_for_a_new_draft(tmp_path: Path) -> None:
     assert window.max_temp.value() == 84
     assert window.narrator_gender_combo.currentData() == ""
     assert window.narrator_region_combo.currentData() == ""
-    assert window.narrator_voice_combo.currentData() == "Thái Sơn"
+    assert window.narrator_voice_combo.currentData() == "Phạm Tuyên"
     window.close()
 
 
@@ -336,7 +336,7 @@ def test_new_book_resets_book_settings_but_keeps_global_settings(tmp_path: Path)
     assert window.profile_combo.currentData() == "balanced"
     assert window.narrator_gender_combo.currentData() == ""
     assert window.narrator_region_combo.currentData() == ""
-    assert window.narrator_voice_combo.currentData() == "Thái Sơn"
+    assert window.narrator_voice_combo.currentData() == "Phạm Tuyên"
     assert window.resource_combo.currentData() == "max_safe"
     assert window.max_temp.value() == 84
     window.close()
@@ -582,7 +582,7 @@ def test_narrator_filters_offer_every_non_news_voice_and_build_matching_settings
     ]
     all_available = set(all_available_ordered)
     assert len(all_available) == 10
-    assert all_available_ordered[:2] == ["Thái Sơn", "Ngọc Linh"]
+    assert all_available_ordered[:2] == ["Phạm Tuyên", "Ngọc Linh"]
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(all_available)
 
     window.narrator_gender_combo.setCurrentIndex(female_index)

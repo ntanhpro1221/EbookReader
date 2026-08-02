@@ -508,6 +508,11 @@ class BookPipeline:
                         f"({metrics['chars_per_second']:.2f} chars/s) nhưng vẫn trong giới hạn an toàn; "
                         "chuyển sang Whisper kiểm tra."
                     )
+                if metrics.get("pitch_variant_skipped"):
+                    self.db.set_segment_warning_code(
+                        int(row["id"]),
+                        "TTS_PITCH_VARIANT_SKIPPED",
+                    )
                 return
             except Exception as exc:  # noqa: BLE001
                 if is_fatal_tts_error(exc):

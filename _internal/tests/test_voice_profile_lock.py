@@ -118,6 +118,9 @@ def test_missing_locked_vieneu_preset_is_fatal() -> None:
     assert is_fatal_tts_error(
         RuntimeError("Locked VieNeu preset 'Phạm Tuyên' is unavailable; refusing to change voice silently")
     )
+    assert is_fatal_tts_error(
+        RuntimeError("DefaultCPUAllocator: not enough memory: you tried to allocate 2442336000 bytes")
+    )
 
 
 def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:
@@ -130,6 +133,12 @@ def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:
     assert shifted.shape == audio.shape
     assert np.allclose(apply_pitch_variant(audio, sample_rate, 0), audio)
     assert not np.allclose(shifted, audio)
+    input_peak = np.fft.rfftfreq(audio.size, 1 / sample_rate)[np.argmax(np.abs(np.fft.rfft(audio)))]
+    shifted_peak = np.fft.rfftfreq(shifted.size, 1 / sample_rate)[
+        np.argmax(np.abs(np.fft.rfft(shifted)))
+    ]
+    assert input_peak == pytest.approx(220.0, abs=5.0)
+    assert shifted_peak == pytest.approx(220.0 * 2 ** (1 / 12), abs=5.0)
 
 
 def test_coordinator_releases_inference_cache_after_success_and_failure(
@@ -143,9 +152,11 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
         "preset_name": "Thái Sơn",
         "description": "Nam · Nam · Kể chuyện",
         "seed": 1234,
+        "pitch_semitones": 1,
         "status": "ready",
     })
-    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+    logs: list[str] = []
+    coordinator = TTSCoordinator(build_settings(), db, logs.append)
     row = {
         "voice_profile_id": profile_id,
         "stable_id": "segment_1",
@@ -180,10 +191,23 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     coordinator.synthesize_atomic(row, tmp_path / "segment.wav")
     assert release_calls == 1
 
+    monkeypatch.setattr(
+        tts_module,
+        "apply_pitch_variant",
+        lambda *_args: (_ for _ in ()).throw(MemoryError("pitch allocation failed")),
+    )
+    _checksum, fallback_metrics, _seed = coordinator.synthesize_atomic(
+        row,
+        tmp_path / "segment.wav",
+    )
+    assert fallback_metrics["pitch_variant_skipped"] == 1.0
+    assert any("Bỏ biến thể cao độ" in message for message in logs)
+    assert release_calls == 2
+
     def fail_generation(*_args) -> np.ndarray:
         raise AudioQualityError("inference failed")
 
     monkeypatch.setattr(coordinator.vieneu, "generate_one", fail_generation)
     with pytest.raises(AudioQualityError, match="inference failed"):
         coordinator.synthesize_atomic(row, tmp_path / "segment.wav")
-    assert release_calls == 2
+    assert release_calls == 3

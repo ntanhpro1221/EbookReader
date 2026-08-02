@@ -37,22 +37,25 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown chỉ hiện tên của
   toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng kể chuyện` là header foldout
   với chevron nhỏ cùng style dropdown ở đầu; bên dưới có ba dòng con thụt vào khoảng chiều rộng bốn chữ `o`
-  và có ba dòng con theo thứ tự: `Nghe thử`, `Giới tính`, `Miền`. Thái Sơn và Ngọc Linh
+  và có ba dòng con theo thứ tự: `Nghe thử`, `Giới tính`, `Miền`. Phạm Tuyên và Ngọc Linh
   đứng đầu danh sách. Hai dòng lọc giới tính/miền chỉ hiện khi giọng kể chuyện còn được chỉnh sửa;
   dòng nghe thử vẫn giữ lại khi thiết lập sách đã khóa.
 - Chọn một preset trong dropdown sẽ tự phát WAV preview; nút `Nghe thử` cho phép nghe lại. App đóng gói
   sẵn preview cho cả 10 preset hợp lệ nên không nạp model TTS chỉ để nghe thử.
 - Chất lượng và giọng người kể được lưu cùng sách và khóa sau khi sách bắt đầu. Chế độ tài nguyên
   và ngưỡng GPU là setting global, không tạo sách mới khi thay đổi và được worker nhận tại checkpoint kế tiếp.
-  Bấm `Sách mới` đặt lại thiết lập sách về `Cân bằng`, mọi giới tính, mọi miền và giọng `Thái Sơn`,
+  Bấm `Sách mới` đặt lại thiết lập sách về `Cân bằng`, mọi giới tính, mọi miền và giọng `Phạm Tuyên`,
   nhưng giữ nguyên hai thiết lập global này. Nút này chỉ bật khi đang mở một sách đã tồn tại; trong bản
   nháp sách mới chưa chạy, nút bị vô hiệu hóa vì không có sách cũ nào cần rời khỏi.
 - Nhân vật có tên được ưu tiên giọng theo thứ tự Bắc → Nam, rồi tự nhiên → kể chuyện. Preset tin tức không được
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
   trường hợp thực sự không phân biệt được vẫn tách tối thiểu theo nam/nữ/chưa rõ.
-- Mỗi nhân vật giữ nguyên một preset và một biến thể cao độ tối đa ±2 bán âm. Khi nhiều vai dùng chung preset,
-  biến thể cao độ tạo khác biệt vừa phải mà không đổi tốc độ; cảm xúc không đổi sang người đọc khác giữa chừng.
+- Mỗi nhân vật giữ nguyên một preset và một biến thể cao độ. Khoảng hạ giọng được giới hạn
+  theo cao độ median đo từ preview: Phạm Tuyên không bị hạ, Xuân Vĩnh/Thái Sơn/Ngọc Trân chỉ hạ tối đa
+  `-1`, các preset còn lại hạ tối đa `-2`; mọi preset chỉ nâng tối đa `+2` bán âm. Khi nhiều vai
+  dùng chung preset, biến thể này tạo khác biệt vừa phải mà không đổi tốc độ; cảm xúc không đổi
+  sang người đọc khác giữa chừng.
 - Độc thoại nội tâm ưu tiên bắt buộc giọng đã khóa của nhân vật đang nghĩ; chỉ sau khi phân tích hết số
   lần thử mà vẫn không xác định được nhân vật thì mới fallback sang giọng người kể và ghi warning.
 - Từ điển phát âm có confidence được checkpoint trong SQLite, áp dụng đồng nhất cho TTS và câu đối chiếu ASR.
@@ -79,8 +82,11 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   mới kết thúc app và cả cây process con; transaction SQLite, file `.part`, atomic replace và recovery
   bảo vệ dữ liệu đã commit.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
-- Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,
-  quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
+- Mức âm lượng được cân bằng theo K-weighted LUFS của từng segment trước khi ghép chapter;
+  giọng kể chuyện có anchor nhỉnh hơn hội thoại trung tính, còn khoảng cách của `loud` được giữ nhỏ. Chỉ các
+  chỉ dẫn như thì thầm, quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
+- Xử lý pitch dùng phase-vocoder với resampler có bộ nhớ bị chặn; nếu bước trang trí pitch hiếm khi lỗi,
+  app giữ waveform gốc và ghi warning thay vì tạo lại lời đọc hoặc làm hỏng chapter.
 - Giới hạn sinh audio được tính theo độ dài và pace của từng segment để một câu rất ngắn không chạy tới
   trần toàn cục của model. Ngân sách frame VieNeu và giới hạn kiểm tra dùng chung một chính sách thời lượng,
   nên app không thể vừa cho model sinh dài hơn rồi tự từ chối chính kết quả đó. Sai lệch tốc độ nhẹ được ghi

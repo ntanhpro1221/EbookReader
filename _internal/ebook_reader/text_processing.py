@@ -8,6 +8,7 @@ from .io_utils import decode_text_bytes, natural_key, sha256_bytes, sha256_file,
 
 
 QUOTE_PATTERN = re.compile(r"([“\"][^”\"]{1,1600}[”\"])", re.DOTALL)
+THOUGHT_QUOTE_PATTERN = re.compile(r"(‘[^’]{1,1600}’)", re.DOTALL)
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+")
 SPEECH_VERB_PATTERN = re.compile(
     r"\b(?:nói|hỏi|đáp|trả lời|quát|hét|gào|thì thầm|lẩm bẩm|kêu|bảo|ra lệnh|cười)\b",
@@ -186,17 +187,21 @@ def _join_fragments(left: str, right: str) -> str:
 def _line_pieces(line: str) -> list[tuple[str, str]]:
     if re.match(r"^[—–-]\s*\S", line):
         return [(line, "dialogue")]
-    matches = list(QUOTE_PATTERN.finditer(line))
+    matches = [
+        (match, "dialogue" if _quoted_span_is_dialogue(line, match) else "narration")
+        for match in QUOTE_PATTERN.finditer(line)
+    ]
+    matches.extend((match, "thought") for match in THOUGHT_QUOTE_PATTERN.finditer(line))
+    matches.sort(key=lambda item: item[0].start())
     if not matches:
         hint = "thought" if line.startswith("(") and line.endswith(")") else "narration"
         return [(line, hint)]
 
     raw: list[tuple[str, str]] = []
     cursor = 0
-    for match in matches:
+    for match, hint in matches:
         if match.start() > cursor:
             raw.append((line[cursor : match.start()], "narration"))
-        hint = "dialogue" if _quoted_span_is_dialogue(line, match) else "narration"
         raw.append((match.group(1), hint))
         cursor = match.end()
     if cursor < len(line):
@@ -224,6 +229,41 @@ def _line_pieces(line: str) -> list[tuple[str, str]]:
         else:
             merged.append((text, hint))
     return merged
+
+
+def _line_pieces_with_quote_state(
+    line: str,
+    quote_state: tuple[str, str] | None,
+) -> tuple[list[tuple[str, str]], tuple[str, str] | None]:
+    if quote_state is not None:
+        hint, closing_mark = quote_state
+        closing_index = line.find(closing_mark)
+        if closing_index < 0:
+            return [(line, hint)], quote_state
+        pieces = [(line[: closing_index + 1], hint)]
+        remainder = line[closing_index + 1 :].strip()
+        if not remainder:
+            return pieces, None
+        tail, next_state = _line_pieces_with_quote_state(remainder, None)
+        return pieces + tail, next_state
+
+    unmatched_openings: list[tuple[int, str, str]] = []
+    for opening_mark, closing_mark, hint in (("“", "”", "dialogue"), ("‘", "’", "thought")):
+        opening_index = line.find(opening_mark)
+        if opening_index >= 0 and line.find(closing_mark, opening_index + 1) < 0:
+            unmatched_openings.append((opening_index, closing_mark, hint))
+    ascii_quote_positions = [index for index, char in enumerate(line) if char == '"']
+    if len(ascii_quote_positions) % 2:
+        unmatched_openings.append((ascii_quote_positions[-1], '"', "dialogue"))
+    if not unmatched_openings:
+        return _line_pieces(line), None
+
+    opening_index, closing_mark, hint = min(unmatched_openings, key=lambda item: item[0])
+    pieces = _line_pieces(line[:opening_index].strip()) if opening_index > 0 else []
+    quoted = line[opening_index:].strip()
+    if quoted:
+        pieces.append((quoted, hint))
+    return pieces, (hint, closing_mark)
 
 
 def _punctuation_break_ms(text: str) -> int:
@@ -265,10 +305,11 @@ def segment_chapter_text(chapter_index: int, text: str, max_chars: int = 340) ->
                     }
                 )
 
+    quote_state: tuple[str, str] | None = None
     for paragraph_index, paragraph in enumerate(paragraphs):
         lines = [line.strip() for line in paragraph.splitlines() if line.strip()]
         for line in lines:
-            pieces = _line_pieces(line)
+            pieces, quote_state = _line_pieces_with_quote_state(line, quote_state)
             if not pieces and rows:
                 rows[-1]["break_ms"] = max(int(rows[-1]["break_ms"]), _punctuation_break_ms(line))
             for piece, hint in pieces:
