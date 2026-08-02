@@ -30,7 +30,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown giọng chứa
-  toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Mặc định nam là Thái Sơn, nữ là Ngọc Linh.
+  toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Hai bộ lọc nằm gọn trên cùng một
+  hàng; Thái Sơn và Ngọc Linh đứng đầu danh sách để thể hiện hai lựa chọn mặc định ưu tiên.
 - Nhân vật có tên được ưu tiên giọng theo thứ tự Bắc → Nam, rồi tự nhiên → kể chuyện. Preset tin tức không được
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;

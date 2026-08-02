@@ -59,11 +59,13 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.narrator_gender_combo.currentData() == "male"
     assert window.narrator_region_combo.currentData() == ""
     assert window.narrator_voice_combo.currentData() == "Thái Sơn"
+    assert window.narrator_voice_combo.itemData(0) == "Thái Sơn"
     available_narrators = {
         window.narrator_voice_combo.itemData(index)
         for index in range(window.narrator_voice_combo.count())
     }
     assert available_narrators == {"Phạm Tuyên", "Thanh Bình", "Xuân Vĩnh", "Thái Sơn", "Quang Sơn"}
+    assert not hasattr(window, "settings_note")
     assert APP_ICON_PATH.is_file()
     assert window.windowIcon().isNull() is False
     assert window.tray_icon.icon().isNull() is False
@@ -313,7 +315,6 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.resource_combo.isEnabled() is True
     assert window.max_temp.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"
-    assert window.settings_note.isHidden() is True
     window.file_list.item(0).setSelected(True)
     assert window.remove_files_button.isEnabled() is True
 
@@ -325,7 +326,6 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.start_button.text() == "Bắt đầu"
     assert window.profile_combo.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"
-    assert window.settings_note.isHidden() is False
     window.close()
 
 
@@ -340,6 +340,7 @@ def test_narrator_filters_offer_every_non_news_voice_and_build_matching_settings
         for index in range(window.narrator_voice_combo.count())
     }
     assert window.narrator_voice_combo.currentData() == "Ngọc Linh"
+    assert window.narrator_voice_combo.itemData(0) == "Ngọc Linh"
     assert available == {"Trúc Ly", "Đoan Trang", "Ngọc Linh", "Thục Đoan", "Ngọc Trân"}
 
     central_index = window.narrator_region_combo.findData("Trung")
@@ -349,11 +350,13 @@ def test_narrator_filters_offer_every_non_news_voice_and_build_matching_settings
 
     window.narrator_gender_combo.setCurrentIndex(window.narrator_gender_combo.findData(""))
     window.narrator_region_combo.setCurrentIndex(window.narrator_region_combo.findData(""))
-    all_available = {
+    all_available_ordered = [
         window.narrator_voice_combo.itemData(index)
         for index in range(window.narrator_voice_combo.count())
-    }
+    ]
+    all_available = set(all_available_ordered)
     assert len(all_available) == 10
+    assert all_available_ordered[:2] == ["Thái Sơn", "Ngọc Linh"]
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(all_available)
 
     window.narrator_gender_combo.setCurrentIndex(female_index)

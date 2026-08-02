@@ -113,7 +113,17 @@ def narrator_presets(
         and (not gender or preset["gender"] == gender)
         and (not region or preset["region"] == region)
     ]
-    return sorted(candidates, key=preset_priority)
+    preferred_order = {
+        DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]: 0,
+        DEFAULT_NARRATOR_BY_GENDER[GENDER_FEMALE]: 1,
+    }
+    return sorted(
+        candidates,
+        key=lambda preset: (
+            preferred_order.get(preset["name"], len(preferred_order)),
+            *preset_priority(preset),
+        ),
+    )
 
 
 def casting_presets(gender: str, *, include_regional: bool) -> list[dict[str, str]]:
