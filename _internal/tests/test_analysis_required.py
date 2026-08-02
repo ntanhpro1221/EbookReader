@@ -14,6 +14,7 @@ from ebook_reader.analysis import (
     _cmu_pronunciations,
     _identity_reconciliation_items,
     _name_candidate_contexts,
+    _repair_vietnamese_syllable_boundaries,
     _validate,
     _valid_vietnamese_spoken_form,
     is_local_speaker,
@@ -244,6 +245,8 @@ def test_vietnamese_spoken_form_requires_an_explicit_phonetic_rewrite() -> None:
     assert _valid_vietnamese_spoken_form("Corella", "Co-rel-la") is False
     assert _valid_vietnamese_spoken_form("Gary", "Gary") is False
     assert _valid_vietnamese_spoken_form("Gary", "/ˈɡɛri/") is False
+    assert _repair_vietnamese_syllable_boundaries("Aderon", "A-der-on") == "A-đe-ron"
+    assert _repair_vietnamese_syllable_boundaries("Corella", "Co-rel-la") is None
 
 
 def test_bundled_cmudict_identifies_common_english_names() -> None:
@@ -296,14 +299,36 @@ def test_required_name_pronunciation_pass_checkpoints_vietnamese_readings(monkey
         attempts += 1
         assert "Michael→Mai-cồ" in request["prompt"]
         assert "G EH1 R IY0" in request["prompt"]
-        assert "M AY1 K AH0 L" in request["prompt"]
-        assert request["format"]["properties"]["names"]["minItems"] == 2
-        assert request["format"]["properties"]["names"]["maxItems"] == 2
-        assert request["format"]["properties"]["names"]["items"]["properties"]["id"]["enum"] == [
-            "N001",
-            "N002",
-        ]
-        payload = {
+        name_schema = request["format"]["properties"]["names"]
+        if attempts == 1:
+            assert "M AY1 K AH0 L" in request["prompt"]
+            assert name_schema["minItems"] == 2
+            assert name_schema["maxItems"] == 2
+            assert name_schema["items"]["properties"]["id"]["enum"] == ["N001", "N002"]
+            return {
+                "names": [
+                    {
+                        "id": "N001",
+                        "convert": False,
+                        "spoken_form": "Gary",
+                        "confidence": 0.95,
+                        "reason": "Kết quả phân loại sai cần retry",
+                    },
+                    {
+                        "id": "N002",
+                        "convert": True,
+                        "spoken_form": "Mai-cồ",
+                        "confidence": 0.96,
+                        "reason": "Tên tiếng Anh",
+                    },
+                ]
+            }
+        assert name_schema["minItems"] == 1
+        assert name_schema["maxItems"] == 1
+        assert name_schema["items"]["properties"]["id"]["enum"] == ["N001"]
+        assert "Không được lặp lại đáp án cũ" in request["prompt"]
+        assert any(row["surface"] == "Michael" for row in db.pronunciations)
+        return {
             "names": [
                 {
                     "id": "N001",
@@ -311,25 +336,9 @@ def test_required_name_pronunciation_pass_checkpoints_vietnamese_readings(monkey
                     "spoken_form": "Ga-ri",
                     "confidence": 0.95,
                     "reason": "Tên tiếng Anh",
-                },
-                {
-                    "id": "N002",
-                    "convert": True,
-                    "spoken_form": "Mai-cồ",
-                    "confidence": 0.96,
-                    "reason": "Tên tiếng Anh",
-                },
+                }
             ]
         }
-        if attempts == 1:
-            payload["names"][0].update(
-                {
-                    "convert": False,
-                    "spoken_form": "Gary",
-                    "reason": "Kết quả phân loại sai cần retry",
-                }
-            )
-        return payload
 
     monkeypatch.setattr(analyzer, "_stream_json_response", fake_response)
 
@@ -342,6 +351,102 @@ def test_required_name_pronunciation_pass_checkpoints_vietnamese_readings(monkey
         "Gary": ("Ga-ri", "english_name_transliteration", 1),
         "Michael": ("Mai-cồ", "english_name_transliteration", 1),
     }
+
+
+def test_invalid_aderon_boundary_is_repaired_without_repeating_the_request(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Giáo đường Aderon nằm ở trung tâm thành phố.",
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    attempts = 0
+
+    def response(_request, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        return {
+            "names": [
+                {
+                    "id": "N001",
+                    "convert": True,
+                    "spoken_form": "A-der-on",
+                    "confidence": 0.96,
+                    "reason": "Tên fantasy",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    assert analyzer.reconcile_name_pronunciations() == 1
+    assert attempts == 1
+    assert db.pronunciations[0]["spoken_form"] == "A-đe-ron"
+    assert any(event[1] == "NAME_PRONUNCIATION_BOUNDARY_REPAIRED" for event in db.events)
+
+
+def test_valid_names_are_checkpointed_when_another_name_exhausts_targeted_retries(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Gary gặp Corella trong hành lang.",
+            "kind_hint": "dialogue",
+            "status": "analyzed",
+            "speaker": "Gary",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    requested_ids: list[list[str]] = []
+
+    def response(request, **_kwargs):
+        ids = request["format"]["properties"]["names"]["items"]["properties"]["id"]["enum"]
+        requested_ids.append(ids)
+        names = []
+        for item_id in ids:
+            if item_id == "N001":
+                names.append(
+                    {
+                        "id": item_id,
+                        "convert": True,
+                        "spoken_form": "Cô-rel-la",
+                        "confidence": 0.9,
+                        "reason": "Cố ý không hợp lệ",
+                    }
+                )
+            else:
+                names.append(
+                    {
+                        "id": item_id,
+                        "convert": True,
+                        "spoken_form": "Ga-ri",
+                        "confidence": 0.95,
+                        "reason": "Tên tiếng Anh",
+                    }
+                )
+        return {"names": names}
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    with pytest.raises(RuntimeError, match="Corella"):
+        analyzer.reconcile_name_pronunciations()
+
+    assert requested_ids == [["N001", "N002"], ["N001"], ["N001"]]
+    assert {row["surface"] for row in db.pronunciations} == {"Gary"}
 
 
 def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:

@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import time
+import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Callable
@@ -47,6 +48,7 @@ NAME_PRONUNCIATION_BATCH_SIZE = 20
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
 NAME_PRONUNCIATION_ID_PREFIX = "N"
 NAME_PRONUNCIATION_ID_WIDTH = 3
+AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE = 0.85
 IDENTITY_CONTEXT_RADIUS = 1
 IDENTITY_CONTEXTS_PER_SPEAKER = 4
 IDENTITY_CONTEXT_LINE_CHARS = 220
@@ -534,6 +536,39 @@ def _valid_vietnamese_spoken_form(surface: str, spoken_form: str) -> bool:
     if any(NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) for syllable in syllables):
         return False
     return "-" in value or " " in value or any(ord(character) > 127 for character in value)
+
+
+def _starts_with_vowel(value: str) -> bool:
+    if not value:
+        return False
+    base_character = unicodedata.normalize("NFD", value[0])[0].casefold()
+    return base_character in "aeiouy"
+
+
+def _repair_vietnamese_syllable_boundaries(surface: str, spoken_form: str) -> str | None:
+    value = " ".join(spoken_form.strip().split())
+    syllables = re.split(r"[ -]", value)
+    if len(syllables) < 2 or any(not syllable for syllable in syllables):
+        return None
+    changed_indexes: set[int] = set()
+    for index in range(len(syllables) - 1):
+        coda = NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllables[index])
+        if coda is None or not _starts_with_vowel(syllables[index + 1]):
+            continue
+        consonant = coda.group(0)
+        syllables[index] = syllables[index][:-1]
+        syllables[index + 1] = consonant + syllables[index + 1]
+        if not syllables[index]:
+            return None
+        changed_indexes.update((index, index + 1))
+    if not changed_indexes:
+        return None
+    for index in changed_indexes:
+        syllable = syllables[index]
+        if len(syllable) >= 2 and syllable[0].casefold() == "d" and _starts_with_vowel(syllable[1:]):
+            syllables[index] = ("Đ" if syllable[0].isupper() else "đ") + syllable[1:]
+    repaired = "-".join(syllables)
+    return repaired if _valid_vietnamese_spoken_form(surface, repaired) else None
 
 
 def _output_schema_for_batch(batch_ids: list[str]) -> dict[str, Any]:
@@ -1032,6 +1067,53 @@ class OllamaBookAnalyzer:
             return 0
 
         converted_count = 0
+
+        def checkpoint_pronunciation(
+            candidate: dict[str, Any],
+            spoken_form: str,
+            confidence: float,
+            *,
+            repaired_from: str = "",
+        ) -> None:
+            nonlocal converted_count
+            surface = str(candidate["surface"])
+            if repaired_from:
+                message = (
+                    f"Đã tự sửa ranh giới âm tiết cho {surface}: "
+                    f"{repaired_from} → {spoken_form}."
+                )
+                self.log(message)
+                self.db.event(
+                    "warning",
+                    "NAME_PRONUNCIATION_BOUNDARY_REPAIRED",
+                    message,
+                    {
+                        "surface": surface,
+                        "rejected_spoken_form": repaired_from,
+                        "spoken_form": spoken_form,
+                    },
+                )
+            if confidence < minimum_confidence:
+                self.db.event(
+                    "warning",
+                    "NAME_PRONUNCIATION_LOW_CONFIDENCE",
+                    f"Cách đọc thuần Việt cho {surface} có độ tin cậy thấp nhưng vẫn được khóa theo sách",
+                    {"surface": surface, "spoken_form": spoken_form, "confidence": confidence},
+                )
+            self.db.upsert_pronunciation(
+                surface=surface,
+                normalized_surface=_name_candidate_key(surface),
+                spoken_form=spoken_form,
+                confidence=confidence,
+                source=(
+                    CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
+                    if _name_candidate_key(surface) in CMUDICT_CONTEXT_ONLY
+                    else ENGLISH_NAME_PRONUNCIATION_SOURCE
+                ),
+                locked=True,
+            )
+            converted_count += 1
+
         retry_count = int(self.settings.get("max_retries", 3))
         for batch_index, offset in enumerate(
             range(0, len(candidates), NAME_PRONUNCIATION_BATCH_SIZE),
@@ -1040,50 +1122,66 @@ class OllamaBookAnalyzer:
             if before_batch is not None:
                 before_batch(batch_index)
             batch = candidates[offset : offset + NAME_PRONUNCIATION_BATCH_SIZE]
-            batch_to_candidate = {
+            pending = {
                 _name_pronunciation_id(index): candidate
                 for index, candidate in enumerate(batch, 1)
             }
-            request_items = [
-                {"id": item_id, **candidate}
-                for item_id, candidate in batch_to_candidate.items()
-            ]
-            prompt = (
-                "Xác định và chuyển cách đọc tên riêng cho audiobook tiếng Việt. Với tên tiếng Anh hoặc "
-                "tên fantasy phương Tây viết chữ Latin, convert=true và spoken_form là cách ghi âm tiết "
-                "thuần Việt gần với cách phát âm tự nhiên; có thể dùng dấu tiếng Việt và dấu gạch nối. "
-                "cmu_pronunciation là chuỗi âm vị ARPAbet từ từ điển tiếng Anh: nếu trường này không rỗng "
-                "thì bắt buộc convert=true và phải dựa vào chuỗi âm vị đó, không được gọi tên này là tiếng Việt. "
-                "Không dịch nghĩa, không trả IPA, không thêm chú thích vào spoken_form. Ví dụ: "
-                "Michael→Mai-cồ, Benjamin→Ben-gia-min, Gary→Ga-ri, Corella→Cô-ren-la. Mỗi phần ngăn "
-                "bằng gạch nối phải là một âm tiết người Việt đọc được; không để lại âm tiết kiểu Anh như "
-                "rel, th, sh. Với tên thuần Việt hoặc từ phổ thông, "
-                "convert=false và lặp nguyên surface vào spoken_form. Phải trả đúng một kết quả cho từng ID.\n\n"
-                + json.dumps(request_items, ensure_ascii=False, indent=2)
-            )
-            num_ctx = int(self.settings.get("num_ctx", 16384))
-            request = {
-                "model": self.model,
-                "system": (
-                    "Bạn là biên tập viên phát âm tên riêng cho TTS tiếng Việt. "
-                    "Ưu tiên cách đọc thuần Việt dễ nghe và trả JSON đúng schema."
-                ),
-                "prompt": prompt,
-                "format": _name_pronunciation_schema(list(batch_to_candidate)),
-                "keep_alive": "10m",
-                "options": {
-                    "temperature": 0.0,
-                    "num_ctx": num_ctx,
-                    "num_predict": _analysis_output_token_limit(len(batch), num_ctx),
-                },
-            }
+            feedback: dict[str, str] = {}
             last_error = ""
-            accepted: list[tuple[dict[str, Any], str, float]] | None = None
             for attempt in range(retry_count):
+                if not pending:
+                    break
                 attempt_number = attempt + 1
+                request_items = [
+                    {"id": item_id, **candidate}
+                    for item_id, candidate in pending.items()
+                ]
+                prompt = (
+                    "Xác định và chuyển cách đọc tên riêng cho audiobook tiếng Việt. Với tên tiếng Anh hoặc "
+                    "tên fantasy phương Tây viết chữ Latin, convert=true và spoken_form là cách ghi âm tiết "
+                    "thuần Việt gần với cách phát âm tự nhiên; có thể dùng dấu tiếng Việt và dấu gạch nối. "
+                    "cmu_pronunciation là chuỗi âm vị ARPAbet từ từ điển tiếng Anh: nếu trường này không rỗng "
+                    "thì bắt buộc convert=true và phải dựa vào chuỗi âm vị đó, không được gọi tên này là tiếng Việt. "
+                    "Không dịch nghĩa, không trả IPA, không thêm chú thích vào spoken_form. Ví dụ: "
+                    "Michael→Mai-cồ, Benjamin→Ben-gia-min, Gary→Ga-ri, Corella→Cô-ren-la, "
+                    "Aderon→A-đe-ron. Mỗi phần ngăn bằng gạch nối phải là một âm tiết người Việt đọc được; "
+                    "không để lại âm tiết kiểu Anh như rel, der, th, sh. Với tên thuần Việt hoặc từ phổ thông, "
+                    "convert=false và lặp nguyên surface vào spoken_form. Phải trả đúng một kết quả cho từng ID."
+                )
+                if feedback:
+                    rejected = [
+                        {
+                            "id": item_id,
+                            "surface": pending[item_id]["surface"],
+                            "rejected_reason": feedback[item_id],
+                        }
+                        for item_id in pending
+                    ]
+                    prompt += (
+                        "\n\nCác kết quả dưới đây đã bị validator từ chối. Không được lặp lại đáp án cũ; "
+                        "hãy sửa đúng lỗi âm tiết được nêu:\n"
+                        + json.dumps(rejected, ensure_ascii=False, indent=2)
+                    )
+                prompt += "\n\n" + json.dumps(request_items, ensure_ascii=False, indent=2)
+                num_ctx = int(self.settings.get("num_ctx", 16384))
+                request = {
+                    "model": self.model,
+                    "system": (
+                        "Bạn là biên tập viên phát âm tên riêng cho TTS tiếng Việt. "
+                        "Ưu tiên cách đọc thuần Việt dễ nghe và trả JSON đúng schema."
+                    ),
+                    "prompt": prompt,
+                    "format": _name_pronunciation_schema(list(pending)),
+                    "keep_alive": "10m",
+                    "options": {
+                        "temperature": 0.0 if attempt == 0 else 0.2,
+                        "num_ctx": num_ctx,
+                        "num_predict": _analysis_output_token_limit(len(pending), num_ctx),
+                    },
+                }
                 self.log(
                     f"Đang chuẩn hóa tên tiếng Anh batch {batch_index}: "
-                    f"{len(batch)} tên, lần {attempt_number}/{retry_count}."
+                    f"{len(pending)} tên còn lại, lần {attempt_number}/{retry_count}."
                 )
                 try:
                     payload = self._stream_json_response(
@@ -1102,72 +1200,79 @@ class OllamaBookAnalyzer:
                         if not isinstance(item, dict):
                             raise ValueError("response contains a non-object name item")
                         item_id = str(item.get("id", ""))
-                        if item_id not in batch_to_candidate or item_id in by_id:
+                        if item_id not in pending or item_id in by_id:
                             raise ValueError(f"invalid or duplicate name ID: {item_id!r}")
                         by_id[item_id] = item
-                    if set(by_id) != set(batch_to_candidate):
-                        missing = sorted(set(batch_to_candidate) - set(by_id))
+                    if set(by_id) != set(pending):
+                        missing = sorted(set(pending) - set(by_id))
                         raise ValueError(f"response omitted name IDs: {missing}")
 
-                    accepted = []
-                    for item_id, candidate in batch_to_candidate.items():
+                    item_errors: dict[str, str] = {}
+                    resolved_ids: list[str] = []
+                    for item_id, candidate in pending.items():
                         item = by_id[item_id]
-                        must_convert = bool(candidate.get("cmu_pronunciation"))
-                        should_convert = bool(item.get("convert", False))
-                        if must_convert and not should_convert:
-                            raise ValueError(
-                                f"dictionary English name was not converted: {candidate['surface']!r}"
+                        try:
+                            must_convert = bool(candidate.get("cmu_pronunciation"))
+                            should_convert = bool(item.get("convert", False))
+                            if must_convert and not should_convert:
+                                raise ValueError(
+                                    f"dictionary English name was not converted: {candidate['surface']!r}"
+                                )
+                            if not should_convert:
+                                resolved_ids.append(item_id)
+                                continue
+                            spoken_form = " ".join(
+                                str(item.get("spoken_form", "")).strip().split()
                             )
-                        if not should_convert:
-                            continue
-                        spoken_form = " ".join(str(item.get("spoken_form", "")).strip().split())
-                        surface = str(candidate["surface"])
-                        if not _valid_vietnamese_spoken_form(surface, spoken_form):
-                            raise ValueError(
-                                f"invalid Vietnamese spoken form for {surface!r}: {spoken_form!r}"
+                            surface = str(candidate["surface"])
+                            confidence = max(
+                                0.0,
+                                min(1.0, float(item.get("confidence", 0.0))),
                             )
-                        confidence = max(0.0, min(1.0, float(item.get("confidence", 0.0))))
-                        accepted.append((candidate, spoken_form, confidence))
-                    break
+                            if _valid_vietnamese_spoken_form(surface, spoken_form):
+                                checkpoint_pronunciation(candidate, spoken_form, confidence)
+                                resolved_ids.append(item_id)
+                                continue
+                            repaired = _repair_vietnamese_syllable_boundaries(surface, spoken_form)
+                            if repaired is None:
+                                raise ValueError(
+                                    f"invalid Vietnamese spoken form for {surface!r}: {spoken_form!r}"
+                                )
+                            checkpoint_pronunciation(
+                                candidate,
+                                repaired,
+                                min(confidence, AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE),
+                                repaired_from=spoken_form,
+                            )
+                            resolved_ids.append(item_id)
+                        except Exception as exc:  # noqa: BLE001
+                            item_errors[item_id] = str(exc)
+                    for item_id in resolved_ids:
+                        pending.pop(item_id, None)
+                    feedback = item_errors
+                    if not pending:
+                        break
+                    last_error = "; ".join(feedback[item_id] for item_id in pending)
                 except AnalysisRequestStopped:
                     raise
                 except Exception as exc:  # noqa: BLE001
-                    accepted = None
                     last_error = str(exc)
-                    self.log(
-                        f"Chuẩn hóa tên batch {batch_index} lỗi lần {attempt_number}: {last_error}"
-                    )
-                    time.sleep(min(8, 2 ** attempt))
+                    feedback = {}
+                self.log(
+                    f"Chuẩn hóa tên batch {batch_index} còn {len(pending)} tên lỗi "
+                    f"sau lần {attempt_number}: {last_error}"
+                )
+                time.sleep(min(8, 2 ** attempt))
 
-            if accepted is None:
-                message = f"Chuẩn hóa cách đọc tên thất bại ở batch {batch_index}: {last_error}"
+            if pending:
+                remaining = [str(candidate["surface"]) for candidate in pending.values()]
+                message = (
+                    f"Chuẩn hóa cách đọc tên thất bại ở batch {batch_index}, "
+                    f"còn lỗi {remaining}: {last_error}"
+                )
                 self.db.event("error", "NAME_PRONUNCIATION_FAILED", message)
                 if self.settings.get("enabled", True) and self.settings.get("required", True):
                     raise RuntimeError(message)
-                continue
-
-            for candidate, spoken_form, confidence in accepted:
-                surface = str(candidate["surface"])
-                if confidence < minimum_confidence:
-                    self.db.event(
-                        "warning",
-                        "NAME_PRONUNCIATION_LOW_CONFIDENCE",
-                        f"Cách đọc thuần Việt cho {surface} có độ tin cậy thấp nhưng vẫn được khóa theo sách",
-                        {"surface": surface, "spoken_form": spoken_form, "confidence": confidence},
-                    )
-                self.db.upsert_pronunciation(
-                    surface=surface,
-                    normalized_surface=_name_candidate_key(surface),
-                    spoken_form=spoken_form,
-                    confidence=confidence,
-                    source=(
-                        CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
-                        if _name_candidate_key(surface) in CMUDICT_CONTEXT_ONLY
-                        else ENGLISH_NAME_PRONUNCIATION_SOURCE
-                    ),
-                    locked=True,
-                )
-                converted_count += 1
 
         self.log(
             f"Đã khóa cách đọc thuần Việt cho {converted_count}/{len(candidates)} "

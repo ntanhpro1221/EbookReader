@@ -68,7 +68,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Tên tiếng Anh được đối chiếu với CMU Pronouncing Dictionary đóng gói cục bộ; chuỗi âm vị tiếng Anh
   được Qwen chuyển thành âm tiết thuần Việt như `Michael → Mai-cồ`, `Gary → Ga-ri`. Tên fantasy không có
   trong từ điển vẫn được xét theo ngữ cảnh. Cách đọc được khóa trong SQLite theo sách, áp dụng đồng nhất
-  cho mọi giọng, chapter, lần resume và câu đối chiếu ASR.
+  cho mọi giọng, chapter, lần resume và câu đối chiếu ASR. Mỗi tên hợp lệ được checkpoint riêng; ranh giới
+  âm tiết kiểu `A-der-on` được sửa cơ học thành `A-đe-ron`, còn retry chỉ gửi lại đúng các tên vẫn chưa hợp lệ
+  cùng lý do từ chối thay vì chạy lại toàn batch với cùng prompt.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
 - Từ tượng thanh như `rầm`, `uỳnh` ở nguyên trong câu của người kể hoặc nhân vật, được đọc và kiểm tra tốc độ như

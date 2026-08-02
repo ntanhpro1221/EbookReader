@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **165/165 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **167/167 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử chỉ được cài tạm và đã được gỡ khỏi runtime của app sau khi kiểm tra.
@@ -95,6 +95,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - ngữ cảnh đầu/cuối chapter cho phép alias reconciliation hợp nhất nhân vật đổi thân phận như
   `Hạ Phong → Lucien` thành cùng character/voice; tên người được gọi trong “Anh Lucien!” hoặc “Iven, …”
   bị tách khỏi speaker, trong khi câu tự giới thiệu “Tôi là Lucien” vẫn giữ đúng identity;
+- pronunciation checkpoint theo từng tên, tự sửa `A-der-on → A-đe-ron` mà không lặp request; khi một tên
+  không thể sửa, các tên hợp lệ vẫn được khóa và retry chỉ còn đúng ID lỗi với feedback validator;
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;
 - pipeline mock không cần model;
