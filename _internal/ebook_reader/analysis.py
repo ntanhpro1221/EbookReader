@@ -66,10 +66,17 @@ NAME_TOKEN_PATTERN = re.compile(
 SPEAKER_NAME_TOKEN_PATTERN = re.compile(
     r"(?<![\wÀ-ỹĐđ])([A-Za-z][A-Za-z]*(?:['’-][A-Za-z]+)*)(?![\wÀ-ỹĐđ])"
 )
+SENTENCE_INITIAL_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?…:\n])[\s\"'“”‘’()\[\]{}—-]*$"
+)
 VIETNAMESE_SPOKEN_FORM_PATTERN = re.compile(
     r"^[A-Za-zÀ-ỹĐđ]+(?:[ -][A-Za-zÀ-ỹĐđ]+)*$"
 )
 NON_VIETNAMESE_SYLLABLE_CODA_PATTERN = re.compile(r"[fjlrsvwz]$", re.IGNORECASE)
+VIETNAMESE_SYLLABLE_ONSETS = {
+    "", "b", "c", "ch", "d", "g", "gh", "gi", "h", "k", "kh", "l", "m", "n",
+    "ng", "ngh", "nh", "p", "ph", "q", "qu", "r", "s", "t", "th", "tr", "v", "x",
+}
 NAME_CANDIDATE_EXCLUSIONS = {
     "a", "ai", "an", "anh", "ba", "ban", "binh", "book", "cha", "chapter", "chau", "chi",
     "chu", "co", "con", "cung", "dao", "day", "dinh", "do", "dong", "duc", "giang", "ha", "hai",
@@ -606,13 +613,26 @@ def _name_candidate_key(value: str) -> str:
     return value.replace("’", "'").casefold()
 
 
+def _is_sentence_initial_token(text: str, start: int) -> bool:
+    return SENTENCE_INITIAL_PREFIX_PATTERN.search(text[:start]) is not None
+
+
 def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
     forms: dict[str, Counter[str]] = defaultdict(Counter)
     occurrences: Counter[str] = Counter()
+    sentence_initial_occurrences: Counter[str] = Counter()
+    mid_sentence_occurrences: Counter[str] = Counter()
     examples: dict[str, list[str]] = defaultdict(list)
     speaker_keys: set[str] = set()
+    lowercase_text_keys: set[str] = set()
 
-    def register(surface: str, *, example: str = "", speaker: bool = False) -> None:
+    def register(
+        surface: str,
+        *,
+        example: str = "",
+        speaker: bool = False,
+        sentence_initial: bool = False,
+    ) -> None:
         value = surface.strip()
         if value.casefold().endswith(("'s", "’s")):
             value = value[:-2]
@@ -623,6 +643,10 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
         occurrences[key] += 1
         if speaker:
             speaker_keys.add(key)
+        elif sentence_initial:
+            sentence_initial_occurrences[key] += 1
+        else:
+            mid_sentence_occurrences[key] += 1
         normalized_example = " ".join(example.split())[:220]
         if normalized_example and normalized_example not in examples[key] and len(examples[key]) < 3:
             examples[key].append(normalized_example)
@@ -634,13 +658,25 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
                 register(match.group(1), speaker=True)
 
         text = str(row["text"])
+        for match in SPEAKER_NAME_TOKEN_PATTERN.finditer(text):
+            value = match.group(1)
+            if value[:1].islower():
+                lowercase_text_keys.add(_name_candidate_key(value))
         for match in NAME_TOKEN_PATTERN.finditer(text):
             start = max(0, match.start() - 80)
             end = min(len(text), match.end() + 80)
-            register(match.group(1), example=text[start:end])
+            register(
+                match.group(1),
+                example=text[start:end],
+                sentence_initial=_is_sentence_initial_token(text, match.start()),
+            )
 
     candidates: list[dict[str, Any]] = []
     for key in sorted(forms):
+        if key not in speaker_keys and key in lowercase_text_keys:
+            continue
+        if key not in speaker_keys and mid_sentence_occurrences[key] == 0:
+            continue
         if key not in speaker_keys and occurrences[key] < NAME_PRONUNCIATION_MIN_OCCURRENCES:
             continue
         surface = sorted(
@@ -652,6 +688,8 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
                 "surface": surface,
                 "occurrences": int(occurrences[key]),
                 "is_speaker": key in speaker_keys,
+                "sentence_initial_occurrences": int(sentence_initial_occurrences[key]),
+                "mid_sentence_occurrences": int(mid_sentence_occurrences[key]),
                 "examples": examples[key],
             }
         )
@@ -972,7 +1010,21 @@ def _valid_vietnamese_spoken_form(surface: str, spoken_form: str) -> bool:
     syllables = re.split(r"[ -]", value)
     if any(NON_VIETNAMESE_SYLLABLE_CODA_PATTERN.search(syllable) for syllable in syllables):
         return False
-    return "-" in value or " " in value or any(ord(character) > 127 for character in value)
+    for syllable in syllables:
+        normalized = "".join(
+            character
+            for character in unicodedata.normalize("NFD", syllable.casefold().replace("đ", "d"))
+            if unicodedata.category(character) != "Mn"
+        )
+        vowel_indexes = [
+            index for index, character in enumerate(normalized) if character in "aeiouy"
+        ]
+        if not vowel_indexes:
+            return False
+        onset = normalized[:vowel_indexes[0]]
+        if onset not in VIETNAMESE_SYLLABLE_ONSETS:
+            return False
+    return True
 
 
 def _starts_with_vowel(value: str) -> bool:

@@ -226,7 +226,7 @@ def test_name_candidates_include_speakers_and_one_off_capitalized_names() -> Non
     rows = [
         {
             "speaker": "Alisa",
-            "text": "Alisa nhìn Michael bước vào. Alice chỉ xuất hiện một lần.",
+            "text": "Alisa nhìn Michael bước vào cùng Alice.",
         },
         {
             "speaker": "NARRATOR",
@@ -244,10 +244,48 @@ def test_name_candidates_include_speakers_and_one_off_capitalized_names() -> Non
     assert "Minh" not in by_surface
 
 
+def test_sentence_initial_vietnamese_words_are_not_name_candidates() -> None:
+    rows = [
+        {
+            "speaker": "NARRATOR",
+            "text": (
+                "Điều duy nhất cậu cảm thấy may mắn là mọi việc đã qua. "
+                "May mắn thay, cậu vẫn ổn. Xen lẫn trong đó còn có tóc đỏ."
+            ),
+        },
+        {
+            "speaker": "Alisa",
+            "text": "May mà chúng ta đến kịp.",
+        },
+    ]
+
+    candidates = _name_candidate_contexts(rows)
+
+    assert {candidate["surface"] for candidate in candidates} == {"Alisa"}
+
+
+def test_name_at_sentence_start_is_kept_when_other_evidence_exists() -> None:
+    rows = [
+        {
+            "speaker": "NARRATOR",
+            "text": "Xen bước vào phòng. Tôi gọi Xen quay lại.",
+        }
+    ]
+
+    candidates = _name_candidate_contexts(rows)
+
+    assert len(candidates) == 1
+    assert candidates[0]["surface"] == "Xen"
+    assert candidates[0]["sentence_initial_occurrences"] == 1
+    assert candidates[0]["mid_sentence_occurrences"] == 1
+
+
 def test_vietnamese_spoken_form_requires_an_explicit_phonetic_rewrite() -> None:
     assert _valid_vietnamese_spoken_form("Michael", "Mai-cồ") is True
     assert _valid_vietnamese_spoken_form("Gary", "Ga-ri") is True
     assert _valid_vietnamese_spoken_form("John", "Giôn") is True
+    assert _valid_vietnamese_spoken_form("May", "Mai") is True
+    assert _valid_vietnamese_spoken_form("John", "Jhon") is False
     assert _valid_vietnamese_spoken_form("Corella", "Cô-ren-la") is True
     assert _valid_vietnamese_spoken_form("Corella", "Co-rel-la") is False
     assert _valid_vietnamese_spoken_form("Gary", "Gary") is False
@@ -481,7 +519,7 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
             "id": 1,
             "stable_id": "c1s1",
             "chapter_id": 1,
-            "text": "May là một từ cần xét theo đúng ngữ cảnh.",
+            "text": "Tôi biết May là một từ cần xét theo đúng ngữ cảnh.",
             "kind_hint": "narration",
             "status": "analyzed",
             "speaker": "NARRATOR",
