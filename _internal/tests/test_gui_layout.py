@@ -5,8 +5,9 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QPoint, QSettings, Qt
 from PySide6.QtGui import QCloseEvent, QPalette
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -366,4 +367,38 @@ def test_double_clicking_empty_mp3_cell_does_not_open_explorer(
     window._open_selected_mp3()
 
     assert opened == []
+    window.close()
+
+
+def test_repeated_clicks_on_long_mp3_cell_do_not_move_horizontal_scroll(tmp_path: Path) -> None:
+    app, window, _store = _window(tmp_path)
+    window.resize(850, 700)
+    window.show()
+    app.processEvents()
+    table = window.chapter_table
+    table.setRowCount(1)
+    for column in range(table.columnCount()):
+        table.setItem(0, column, QTableWidgetItem("x"))
+    for column in range(6):
+        table.setColumnWidth(column, 120)
+    mp3_item = table.item(0, 6)
+    mp3_item.setText("C:/" + "chapter-source/" * 40 + "chapter.mp3")
+    mp3_item.setData(Qt.ItemDataRole.UserRole, "")
+    table.setColumnWidth(6, 1000)
+    app.processEvents()
+    scrollbar = table.horizontalScrollBar()
+    scrollbar.setValue(500)
+    app.processEvents()
+    before = scrollbar.value()
+    rect = table.visualItemRect(mp3_item)
+    click_position = rect.topLeft() + QPoint(20, rect.height() // 2)
+
+    QTest.mouseClick(table.viewport(), Qt.MouseButton.LeftButton, pos=click_position)
+    QTest.qWait(100)
+    QTest.mouseClick(table.viewport(), Qt.MouseButton.LeftButton, pos=click_position)
+    QTest.qWait(QApplication.doubleClickInterval() + 300)
+    app.processEvents()
+
+    assert table.hasAutoScroll() is False
+    assert scrollbar.value() == before
     window.close()

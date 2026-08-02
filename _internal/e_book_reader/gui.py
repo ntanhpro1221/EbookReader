@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.chapter_table.setAlternatingRowColors(True)
         self.chapter_table.setTextElideMode(Qt.TextElideMode.ElideNone)
         self.chapter_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.chapter_table.setAutoScroll(False)
         self._apply_item_view_palette(self.chapter_table)
         header = self.chapter_table.horizontalHeader()
         header.setSectionsMovable(True)
