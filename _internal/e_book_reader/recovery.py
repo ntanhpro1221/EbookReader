@@ -55,27 +55,6 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
                 and valid
                 and checksum_ok
             )
-        if settings.get("audio", {}).get("combine_full_book", False):
-            artifact = db.artifact_by_key("full_book_mp3")
-            full_path = Path(str(artifact["path"])) if artifact and artifact["path"] else None
-            full_path_safe = bool(
-                full_path
-                and full_path.resolve().is_relative_to(paths.output.resolve())
-                and full_path.suffix.casefold() == ".mp3"
-            )
-            full_valid, _ = (
-                verify_mp3(full_path) if full_path_safe and full_path else (False, "artifact missing or unsafe")
-            )
-            full_checksum_ok = bool(
-                artifact
-                and artifact["verified"]
-                and artifact["sha256"]
-                and full_path
-                and full_path_safe
-                and full_path.exists()
-                and sha256_file(full_path) == str(artifact["sha256"])
-            )
-            completed_ok = completed_ok and full_valid and full_checksum_ok
         if completed_ok and chapters:
             report.completed_verified = True
             db.event(

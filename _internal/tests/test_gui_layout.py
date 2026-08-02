@@ -39,7 +39,8 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.work_splitter.orientation() == Qt.Orientation.Horizontal
     assert window.source_splitter.count() == 2
     assert window.work_splitter.count() == 2
-    assert window.full_book.isChecked() is False
+    assert not hasattr(window, "full_book")
+    assert not hasattr(window, "keep_wav")
     assert window.stop_button.text() == "Dừng"
     assert window.book_box.title() == "Sách"
     assert window.files_box.title() == "Chapter nguồn"
@@ -243,7 +244,6 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.profile_combo.isEnabled() is True
     assert window.resource_combo.isEnabled() is True
     assert window.max_temp.isEnabled() is True
-    assert window.full_book.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập"
     assert window.settings_note.isHidden() is True
     window.file_list.item(0).setSelected(True)

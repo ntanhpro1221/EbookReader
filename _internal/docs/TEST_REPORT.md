@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **63/63 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **61/61 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
@@ -21,8 +21,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   thêm/xóa TXT tạo draft mới mà không sửa sách cũ; bốn nút nguồn có cùng kích thước; danh sách/bảng
   có alternate-row tối hơn nền thường và selection dùng đúng màu highlight của ô Log kể cả khi mất focus;
   nested splitter và từng cột tiến độ kéo được, kích thước cột được lưu, đường dẫn MP3 không bị elide;
-  nút chính tự đổi `Bắt đầu`/`Tạm dừng`/`Tiếp tục`, chỉ còn một nút `Dừng` riêng và mặc định chỉ xuất
-  MP3 theo chapter; đóng cửa sổ kết thúc cây worker mà không đợi checkpoint;
+  nút chính tự đổi `Bắt đầu`/`Tạm dừng`/`Tiếp tục`, chỉ còn một nút `Dừng` riêng và chỉ xuất MP3
+  theo từng chapter nguồn; WAV checkpoint bắt buộc được giữ nội bộ, không hiển thị như một tùy chọn;
+  đóng cửa sổ kết thúc cây worker mà không đợi checkpoint;
 - bảng chapter hiển thị riêng tiến độ phân tích, tạo audio, kiểm tra, giai đoạn và MP3;
 - double-click ô MP3 trống không mở Explorer;
 - progress event bao phủ chuẩn bị văn bản, TTS, Whisper, repair, ghép chapter và xuất báo cáo;
@@ -42,7 +43,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - cùng nhân vật giữ nguyên preset khi emotion delivery thay đổi; mức âm lượng trung tính được cân bằng
   còn chỉ dẫn loud vẫn được giữ lớn hơn có chủ đích;
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
-- thermal hysteresis và cleanup full-book khi FFmpeg lỗi;
+- thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;
 - pipeline mock không cần model;
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.

@@ -60,12 +60,6 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         return "chapterhash"
 
     monkeypatch.setattr("e_book_reader.pipeline.assemble_chapter_atomic", fake_chapter)
-    monkeypatch.setattr(
-        "e_book_reader.pipeline.combine_full_book_atomic",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("full-book MP3 must remain disabled by default")
-        ),
-    )
     monkeypatch.setattr("e_book_reader.pipeline.verify_mp3", lambda path: (path.exists(), "ok"))
     verify_calls = 0
 

@@ -134,15 +134,6 @@ def test_completed_project_uses_verified_mp3_fast_path(tmp_path: Path, monkeypat
         verified=True,
     )
     db.update_chapter_status(int(chapter["id"]), "completed")
-    full_output = paths.output / "book_full.mp3"
-    full_output.write_bytes(b"ID3" + b"f" * 5000)
-    db.register_artifact(
-        artifact_key="full_book_mp3",
-        kind="full_book_mp3",
-        path=full_output,
-        sha256=sha256_file(full_output),
-        verified=True,
-    )
     db.update_book(status="completed", stage="completed")
     monkeypatch.setattr("e_book_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
     monkeypatch.setattr(

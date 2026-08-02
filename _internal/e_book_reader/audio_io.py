@@ -316,38 +316,6 @@ def write_playlist_atomic(chapter_files: list[Path], output: Path) -> None:
     atomic_write_text(output, "\n".join(rows) + "\n")
 
 
-def combine_full_book_atomic(chapter_files: list[Path], output: Path, book_title: str) -> str:
-    if not chapter_files:
-        raise AudioQualityError("no completed chapters to combine")
-    concat = output.with_suffix(".concat.part.txt")
-    temp = output.with_name(output.stem + ".part" + output.suffix)
-    atomic_write_text(concat, "\n".join(_concat_line(path) for path in chapter_files))
-    temp.unlink(missing_ok=True)
-    ffmpeg = ffmpeg_executable()
-    try:
-        result = run_hidden(
-            [
-                ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "concat", "-safe", "0", "-i", str(concat),
-                "-c", "copy", "-metadata", f"title={book_title}", str(temp),
-            ],
-            timeout=14400,
-            check=False,
-        )
-        if result.returncode != 0:
-            raise AudioQualityError(f"FFmpeg full-book assembly failed: {result.stderr[-3000:]}")
-        valid, reason = verify_mp3(temp)
-        if not valid:
-            raise AudioQualityError(f"full-book MP3 failed verification: {reason}")
-        checksum = sha256_file(temp)
-        os.replace(temp, output)
-        return checksum
-    finally:
-        concat.unlink(missing_ok=True)
-        if temp.exists() and temp != output:
-            temp.unlink(missing_ok=True)
-
-
 def export_json_atomic(path: Path, payload: Any) -> None:
     from .io_utils import atomic_write_json
 

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import SimpleNamespace
-
 import numpy as np
 import pytest
 
@@ -10,7 +8,6 @@ from e_book_reader.audio_io import (
     AudioQualityError,
     atomic_write_wav,
     assemble_chapter_atomic,
-    combine_full_book_atomic,
     normalize_segment_level,
     signal_metrics,
     verify_mp3,
@@ -52,36 +49,6 @@ def test_real_ffmpeg_chapter_assembly_is_atomic_and_decodable(tmp_path: Path) ->
     assert not list(tmp_path.rglob("*.part.*"))
 
 
-def test_real_ffmpeg_full_book_copy_is_atomic_and_decodable(tmp_path: Path) -> None:
-    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
-    sample_rate = int(settings["tts"]["sample_rate"])
-    timeline = np.arange(int(sample_rate * 0.8), dtype=np.float32) / sample_rate
-    audio = 0.12 * np.sin(2 * np.pi * 260 * timeline)
-    wav = tmp_path / "source.wav"
-    atomic_write_wav(wav, audio, sample_rate, "Một câu thử nghiệm đủ dài.", settings)
-
-    chapters: list[Path] = []
-    for track in (1, 2):
-        chapter = tmp_path / f"chapter_{track:03d}.mp3"
-        assemble_chapter_atomic(
-            [(wav, 0)],
-            chapter,
-            settings,
-            title=f"Chương {track}",
-            book_title="Sách thử",
-            track=track,
-            work_dir=tmp_path / "silence",
-        )
-        chapters.append(chapter)
-
-    output = tmp_path / "full_book.mp3"
-    checksum = combine_full_book_atomic(chapters, output, "Sách thử")
-
-    assert len(checksum) == 64
-    assert verify_mp3(output) == (True, "ok")
-    assert not list(tmp_path.rglob("*.part.*"))
-
-
 def test_stereo_audio_is_rejected_instead_of_flattened() -> None:
     settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
     stereo = np.zeros((48_000, 2), dtype=np.float32)
@@ -100,21 +67,6 @@ def test_segment_leveling_does_not_hide_stereo_or_clipped_model_output(tmp_path:
         atomic_write_wav(tmp_path / "stereo.wav", stereo, 48_000, "Một câu kiểm tra.", settings, segment)
     with pytest.raises(AudioQualityError, match="clipping"):
         atomic_write_wav(tmp_path / "clipped.wav", clipped, 48_000, "Một câu kiểm tra.", settings, segment)
-
-
-def test_full_book_failure_cleans_temporary_files(tmp_path: Path, monkeypatch) -> None:
-    chapter = tmp_path / "chapter.mp3"
-    chapter.write_bytes(b"ID3" + b"x" * 5000)
-    output = tmp_path / "full.mp3"
-    monkeypatch.setattr(
-        "e_book_reader.audio_io.run_hidden",
-        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stderr="boom"),
-    )
-
-    with pytest.raises(AudioQualityError, match="assembly failed"):
-        combine_full_book_atomic([chapter], output, "Book")
-
-    assert not list(tmp_path.rglob("*.part.*"))
 
 
 def test_segment_leveling_matches_neutral_voices_and_preserves_loud_intent() -> None:

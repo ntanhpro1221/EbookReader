@@ -83,9 +83,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "normal": -19.0,
             "loud": -16.5,
         },
-        "combine_full_book": False,
         "create_m3u8": True,
-        "keep_verified_wav": True,
         "export_metadata": True,
     },
     "resources": {
@@ -131,7 +129,6 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
         "analysis": {"batch_segments": 20, "low_confidence_threshold": 0.65},
         "asr": {"min_words": 1, "min_similarity": 0.64, "max_wer": 0.48, "repair_rounds": 3},
         "tts": {"max_retries": 4, "batch_size": 8},
-        "audio": {"keep_verified_wav": True},
     },
 }
 
@@ -228,8 +225,6 @@ def validate_settings(settings: dict[str, Any]) -> None:
     ):
         if safety.get(key) is not True:
             raise ValueError(f"safety.{key} must remain true")
-    if settings.get("audio", {}).get("keep_verified_wav") is not True:
-        raise ValueError("audio.keep_verified_wav must remain true until WAV-free recovery is implemented")
     audio = settings.get("audio", {})
     targets = audio.get("segment_target_dbfs", {})
     if not (

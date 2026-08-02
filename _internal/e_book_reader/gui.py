@@ -13,7 +13,6 @@ from PySide6.QtGui import QCloseEvent, QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
-    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -178,23 +177,12 @@ class MainWindow(QMainWindow):
         self.max_temp.setRange(75, 92)
         self.max_temp.setValue(86)
         self.max_temp.setSuffix(" °C")
-        self.keep_wav = QCheckBox("Giữ WAV segment đã kiểm tra (bắt buộc trong alpha để recovery an toàn)")
-        self.keep_wav.setChecked(True)
-        self.keep_wav.setEnabled(False)
-        self.full_book = QCheckBox("Tạo thêm một MP3 toàn sách")
-        self.full_book.setChecked(False)
-        self.full_book.setToolTip(
-            "Tắt: mỗi file TXT tạo một MP3 chapter. Bật: tạo thêm một MP3 ghép toàn sách."
-        )
         self.profile_combo.currentIndexChanged.connect(self._settings_edited)
         self.resource_combo.currentIndexChanged.connect(self._settings_edited)
         self.max_temp.valueChanged.connect(self._settings_edited)
-        self.full_book.toggled.connect(self._settings_edited)
         form.addRow("Chất lượng:", self.profile_combo)
         form.addRow("Tài nguyên:", self.resource_combo)
         form.addRow("Ngưỡng GPU nóng:", self.max_temp)
-        form.addRow(self.keep_wav)
-        form.addRow(self.full_book)
         self.settings_note = QLabel("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
         self.settings_note.setWordWrap(True)
         self.settings_note.setStyleSheet("color:#777")
@@ -383,7 +371,6 @@ class MainWindow(QMainWindow):
         self.profile_combo.setEnabled(not running)
         self.resource_combo.setEnabled(not running)
         self.max_temp.setEnabled(not running)
-        self.full_book.setEnabled(not running)
         self.open_folder_button.setEnabled(selected)
         self.settings_box.setTitle("Thiết lập")
         if selected:
@@ -509,10 +496,6 @@ class MainWindow(QMainWindow):
                 "max_gpu_temp_c": self.max_temp.value(),
                 "resume_gpu_temp_c": max(60, self.max_temp.value() - 6),
                 "critical_gpu_temp_c": min(98, self.max_temp.value() + 5),
-            },
-            "audio": {
-                "keep_verified_wav": self.keep_wav.isChecked(),
-                "combine_full_book": self.full_book.isChecked(),
             },
         }
         return build_settings(profile, overrides)
@@ -692,9 +675,6 @@ class MainWindow(QMainWindow):
             if resource_index >= 0:
                 self.resource_combo.setCurrentIndex(resource_index)
             self.max_temp.setValue(int(resources.get("max_gpu_temp_c", 86)))
-            audio = settings.get("audio", {})
-            self.keep_wav.setChecked(bool(audio.get("keep_verified_wav", True)))
-            self.full_book.setChecked(bool(audio.get("combine_full_book", False)))
         finally:
             self._applying_locked_settings = False
 

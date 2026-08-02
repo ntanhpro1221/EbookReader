@@ -10,7 +10,6 @@ from .asr import WhisperVerifier
 from .audio_io import (
     AudioQualityError,
     assemble_chapter_atomic,
-    combine_full_book_atomic,
     export_json_atomic,
     inspect_wav,
     merge_wav_parts_atomic,
@@ -19,7 +18,7 @@ from .audio_io import (
 )
 from .character_registry import build_registry_and_cast
 from .database import ProjectDB
-from .io_utils import sha256_file, slugify
+from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
 from .text_processing import has_spoken_content, load_and_segment_chapter
@@ -274,19 +273,6 @@ class BookPipeline:
             chapter_files = [Path(str(row["output_mp3"])) for row in completed]
             if self.settings["audio"].get("create_m3u8", True):
                 write_playlist_atomic(chapter_files, self.paths.output / "playlist.m3u8")
-            if self.settings["audio"].get("combine_full_book", False):
-                self._progress("Ghép MP3 toàn book")
-                self._resource_gate("FFmpeg full-book assembly", require_cpu_io=True)
-                full_path = self.paths.output / f"{slugify(str(self.db.book()['title']))}_full.mp3"
-                checksum = combine_full_book_atomic(chapter_files, full_path, str(self.db.book()["title"]))
-                self.db.register_artifact(
-                    artifact_key="full_book_mp3",
-                    kind="full_book_mp3",
-                    path=full_path,
-                    sha256=checksum,
-                    verified=True,
-                )
-                self._progress("Ghép MP3 toàn book", 1, 1)
             self.db.update_book(status=BookStatus.COMPLETED.value, stage="completed", error=None)
             self._state("completed", "Đã hoàn tất toàn bộ audiobook.")
             self.notifier.notify(
