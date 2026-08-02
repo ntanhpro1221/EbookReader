@@ -53,6 +53,9 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.add_files_button.text() == "Thêm file"
     assert window.open_project_button.text() == "Mở sách khác"
     assert window.open_folder_button.text() == "Hiển thị sách trong Explorer"
+    assert window.show_action.text() == "Hiện E Book Reader"
+    assert window.hide_action.text() == "Ẩn xuống system tray"
+    assert window.quit_action.text() == "Thoát hoàn toàn"
     assert not hasattr(window, "pause_button")
     assert not hasattr(window, "stop_now_button")
     assert not hasattr(window, "pause_battery")
@@ -173,7 +176,28 @@ def test_item_views_use_subtle_alternating_rows_and_text_selection_blue(tmp_path
     window.close()
 
 
-def test_close_terminates_worker_without_waiting_for_checkpoint(tmp_path: Path, monkeypatch) -> None:
+def test_window_close_hides_to_available_system_tray(tmp_path: Path, monkeypatch) -> None:
+    app, window, _store = _window(tmp_path)
+    window._tray_available = True
+    window.show()
+    app.processEvents()
+    terminated: list[bool] = []
+    messages: list[tuple[object, ...]] = []
+    monkeypatch.setattr(window, "_terminate_worker_for_exit", lambda: terminated.append(True))
+    monkeypatch.setattr(window.tray_icon, "showMessage", lambda *args: messages.append(args))
+    event = QCloseEvent()
+
+    window.closeEvent(event)
+
+    assert event.isAccepted() is False
+    assert window.isHidden() is True
+    assert terminated == []
+    assert len(messages) == 1
+    window._force_quit = True
+    window.close()
+
+
+def test_tray_quit_terminates_worker_without_waiting_for_checkpoint(tmp_path: Path, monkeypatch) -> None:
     _app, window, _store = _window(tmp_path)
     calls: list[tuple[int, float]] = []
 
@@ -197,6 +221,7 @@ def test_close_terminates_worker_without_waiting_for_checkpoint(tmp_path: Path, 
     stop_event = FakeEvent()
     window.process = FakeProcess()
     window.stop_event = stop_event
+    window._force_quit = True
     monkeypatch.setattr(
         "e_book_reader.gui.terminate_process_tree",
         lambda pid, *, grace_seconds: calls.append((pid, grace_seconds)),

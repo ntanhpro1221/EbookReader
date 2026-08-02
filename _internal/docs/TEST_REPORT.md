@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **70/70 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **72/72 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. `python -m compileall -q _internal` và `git diff --check` cũng pass.
@@ -15,6 +15,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
 - one-click startup ẩn qua `START.vbs`, chỉ hiện console khi cần setup;
+- system tray có hành động hiện/ẩn/thoát hoàn toàn; nút `X` chỉ ẩn và giữ worker chạy, còn thoát từ tray
+  kết thúc cây worker ngay;
 - GUI không còn tiêu đề lớn, tự đổi nút `Bắt đầu`/`Tiếp tục`, tự mở project được chọn gần nhất;
   `Bắt đầu` bị vô hiệu hóa khi chưa có chapter nguồn và mỗi dòng Log có timestamp;
   nút chọn TXT/folder vẫn dùng được khi project cũ đang dừng và chuyển sang book mới sau khi chọn nguồn;
@@ -32,6 +34,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - analysis dùng ID ngắn bị ràng buộc theo batch rồi ánh xạ chính xác về stable ID;
 - Ollama analysis/alias chạy dạng stream có thể hủy khi dừng, giới hạn schema/token/wall-time và ghi
   heartbeat vào Log mỗi phút để không còn im lặng trong một request dài;
+- Ollama server do worker tự khởi động chạy ẩn, được theo dõi quyền sở hữu và chỉ tiến trình do app tạo
+  mới bị dừng sau giai đoạn phân tích;
 - project lock, voice profile lock và resume;
 - Resource Manager: foreground, RAM, SSD và stop policy;
 - recovery: kill khi đang ghi `.part`, kill sau atomic replace nhưng trước SQLite commit, checksum và

@@ -10,7 +10,7 @@ from queue import Empty
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QPalette
+from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -25,11 +25,14 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QSpinBox,
     QSplitter,
+    QStyle,
+    QSystemTrayIcon,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -92,10 +95,13 @@ class MainWindow(QMainWindow):
         self.stop_event: Any = None
         self.received_finished = False
         self.was_user_stop = False
+        self._force_quit = False
+        self._tray_message_shown = False
         self._applying_locked_settings = False
         self._chapter_snapshot: tuple[Any, ...] | None = None
         self.notifier = WindowsNotifier()
         self._build_ui()
+        self._setup_tray()
         self._restore_ui(restore_recent=restore_recent)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._poll)
@@ -255,6 +261,51 @@ class MainWindow(QMainWindow):
         controls.addStretch(1)
         controls.addWidget(self.open_folder_button)
         layout.addLayout(controls)
+
+    def _setup_tray(self) -> None:
+        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume)
+        self.setWindowIcon(icon)
+        self.tray_icon = QSystemTrayIcon(icon, self)
+        self.tray_icon.setToolTip("E Book Reader")
+        self.tray_menu = QMenu(self)
+        self.show_action = QAction("Hiện E Book Reader", self)
+        self.show_action.triggered.connect(self._show_from_tray)
+        self.hide_action = QAction("Ẩn xuống system tray", self)
+        self.hide_action.triggered.connect(self._hide_to_tray)
+        self.quit_action = QAction("Thoát hoàn toàn", self)
+        self.quit_action.triggered.connect(self._quit_from_tray)
+        self.tray_menu.addAction(self.show_action)
+        self.tray_menu.addAction(self.hide_action)
+        self.tray_menu.addSeparator()
+        self.tray_menu.addAction(self.quit_action)
+        self.tray_icon.setContextMenu(self.tray_menu)
+        self.tray_icon.activated.connect(self._handle_tray_activation)
+        self._tray_available = QSystemTrayIcon.isSystemTrayAvailable()
+        if self._tray_available:
+            self.tray_icon.show()
+
+    def _show_from_tray(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _hide_to_tray(self) -> None:
+        if self._tray_available:
+            self.hide()
+
+    def _handle_tray_activation(self, reason: QSystemTrayIcon.ActivationReason) -> None:
+        if reason in {
+            QSystemTrayIcon.ActivationReason.Trigger,
+            QSystemTrayIcon.ActivationReason.DoubleClick,
+        }:
+            self._show_from_tray()
+
+    def _quit_from_tray(self) -> None:
+        self._force_quit = True
+        self.close()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     @staticmethod
     def _apply_item_view_palette(view: QAbstractItemView) -> None:
@@ -863,8 +914,22 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.project_paths.root)))
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self._tray_available and not self._force_quit:
+            self._save_ui()
+            event.ignore()
+            self.hide()
+            if not self._tray_message_shown:
+                self.tray_icon.showMessage(
+                    "E Book Reader vẫn đang chạy",
+                    "Bấm biểu tượng ở system tray để mở lại hoặc chọn Thoát hoàn toàn.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    4000,
+                )
+                self._tray_message_shown = True
+            return
         self._save_ui()
         self._terminate_worker_for_exit()
+        self.tray_icon.hide()
         event.accept()
 
 

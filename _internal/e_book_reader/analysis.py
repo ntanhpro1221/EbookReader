@@ -13,6 +13,7 @@ from typing import Any, Callable
 import requests
 
 from .database import ProjectDB
+from .process_utils import terminate_process_tree
 from .text_processing import SPECIAL_AUDIO_KINDS, TEXT_SFX_KIND, VOCAL_EFFECT_KIND
 
 
@@ -279,6 +280,7 @@ class OllamaBookAnalyzer:
         self.base_url = str(self.settings["base_url"]).rstrip("/")
         self.model = str(self.settings["model"])
         self.session = requests.Session()
+        self._managed_ollama_process: subprocess.Popen[bytes] | None = None
         existing = self.db.list_segments(statuses=("analyzed", "warning", "signal_passed", "asr_passed", "verified"))
         self._speaker_counts = Counter(
             str(row["speaker"])
@@ -304,12 +306,13 @@ class OllamaBookAnalyzer:
             if not executable:
                 return False
             try:
-                subprocess.Popen(
+                self._managed_ollama_process = subprocess.Popen(
                     [executable, "serve"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
                 )
+                self.log("E Book Reader đã tự khởi động Ollama ẩn.")
             except OSError:
                 return False
             for _ in range(30):
@@ -317,6 +320,7 @@ class OllamaBookAnalyzer:
                     break
                 time.sleep(1)
             else:
+                self._stop_managed_ollama()
                 return False
         try:
             response = self.session.get(f"{self.base_url}/api/tags", timeout=10)
@@ -761,6 +765,17 @@ class OllamaBookAnalyzer:
         except requests.RequestException:
             pass
 
+    def _stop_managed_ollama(self) -> None:
+        process = self._managed_ollama_process
+        self._managed_ollama_process = None
+        if process is None or process.poll() is not None:
+            return
+        terminate_process_tree(process.pid, grace_seconds=3.0)
+        self.log("Đã dừng Ollama ẩn do E Book Reader tự khởi động.")
+
     def unload(self) -> None:
-        self.release_model()
-        self.session.close()
+        try:
+            self.release_model()
+        finally:
+            self.session.close()
+            self._stop_managed_ollama()

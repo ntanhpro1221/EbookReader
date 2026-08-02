@@ -54,8 +54,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Byte TXT dùng để segment phải khớp đúng hash đã khóa; source đổi ngay trong lúc đọc cũng làm job dừng.
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.
 - Giao diện chỉ có một nút **Dừng**; worker kết thúc ở ranh giới gần nhất và lần sau có thể tiếp tục.
-- Đóng cửa sổ kết thúc worker ngay. App kết thúc cả cây process con (FFmpeg/Ollama helper) để tránh tiến
-  trình mồ côi; transaction SQLite, file `.part`, atomic replace và recovery bảo vệ dữ liệu đã commit.
+- Bấm `X` chỉ ẩn cửa sổ xuống system tray để worker tiếp tục. Chọn **Thoát hoàn toàn** trong menu tray
+  mới kết thúc app và cả cây process con; transaction SQLite, file `.part`, atomic replace và recovery
+  bảo vệ dữ liệu đã commit.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
 - Mức âm lượng được cân bằng theo từng segment trước khi ghép chapter; chỉ các chỉ dẫn như thì thầm,
   quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
@@ -65,6 +66,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
+- Khi Ollama chưa chạy, E Book Reader tự mở `ollama serve` ở chế độ ẩn và tự dừng tiến trình đó sau khi
+  phân tích/phân vai xong. Một Ollama đã chạy từ trước được coi là tiến trình bên ngoài và không bị tự ý kill.
 - Nếu phải tự dừng vì SSD/RAM/GPU/driver hoặc lỗi nghiêm trọng, app checkpoint và gửi Windows notification.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.
 

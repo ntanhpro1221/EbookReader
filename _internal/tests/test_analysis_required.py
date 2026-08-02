@@ -233,3 +233,47 @@ def test_streaming_analysis_request_can_be_cancelled() -> None:
         analyzer._request(group, stop_requested=stop_requested)
 
     assert session.response.closed is True
+
+
+def test_analyzer_starts_and_stops_only_its_managed_ollama_process(monkeypatch) -> None:
+    logs: list[str] = []
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), logs.append)
+    availability = iter((False, True))
+    monkeypatch.setattr(analyzer, "_available", lambda: next(availability))
+    monkeypatch.setattr("e_book_reader.analysis.shutil.which", lambda _name: "ollama.exe")
+
+    class TagsResponse:
+        @staticmethod
+        def json():
+            return {"models": [{"name": "qwen3:8b"}]}
+
+    class StartupSession:
+        @staticmethod
+        def get(_url, timeout):
+            assert timeout == 10
+            return TagsResponse()
+
+    class ManagedProcess:
+        pid = 4242
+
+        @staticmethod
+        def poll():
+            return None
+
+    managed = ManagedProcess()
+    monkeypatch.setattr("e_book_reader.analysis.subprocess.Popen", lambda *_args, **_kwargs: managed)
+    terminated: list[tuple[int, float]] = []
+    monkeypatch.setattr(
+        "e_book_reader.analysis.terminate_process_tree",
+        lambda pid, *, grace_seconds: terminated.append((pid, grace_seconds)),
+    )
+    analyzer.session = StartupSession()
+
+    assert analyzer.ensure_available() is True
+    assert analyzer._managed_ollama_process is managed
+    analyzer._stop_managed_ollama()
+    analyzer._stop_managed_ollama()
+
+    assert terminated == [(managed.pid, 3.0)]
+    assert any("tự khởi động Ollama ẩn" in message for message in logs)
+    assert any("Đã dừng Ollama ẩn" in message for message in logs)
