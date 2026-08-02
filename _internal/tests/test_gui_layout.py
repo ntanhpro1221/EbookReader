@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QCloseEvent, QPalette
-from PySide6.QtWidgets import QAbstractItemView, QApplication, QLabel
+from PySide6.QtWidgets import QAbstractItemView, QApplication, QHeaderView, QLabel
 
 from e_book_reader.config import build_settings
 from e_book_reader.gui import MainWindow
@@ -35,9 +35,49 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.work_splitter.count() == 2
     assert window.full_book.isChecked() is False
     assert window.stop_button.text() == "Dừng"
+    assert window.open_project_button.text() == "Mở sách khác"
+    assert window.open_folder_button.text() == "Hiển thị sách trong Explorer"
+    assert not hasattr(window, "pause_button")
     assert not hasattr(window, "stop_now_button")
     assert not hasattr(window, "pause_battery")
     assert not hasattr(window, "resource_label")
+    window.close()
+
+
+def test_primary_button_owns_pause_and_resume_states(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+
+    class FakeProcess:
+        @staticmethod
+        def is_alive() -> bool:
+            return True
+
+    class FakeEvent:
+        paused = False
+
+        def is_set(self) -> bool:
+            return self.paused
+
+        def set(self) -> None:
+            self.paused = True
+
+        def clear(self) -> None:
+            self.paused = False
+
+    pause_event = FakeEvent()
+    window.process = FakeProcess()
+    window.pause_event = pause_event
+    window._running_controls(True)
+
+    assert window.start_button.text() == "Tạm dừng"
+    window._handle_primary_action()
+    assert pause_event.is_set() is True
+    assert window.start_button.text() == "Tiếp tục"
+    window._handle_primary_action()
+    assert pause_event.is_set() is False
+    assert window.start_button.text() == "Tạm dừng"
+
+    window.process = None
     window.close()
 
 
@@ -54,6 +94,14 @@ def test_item_views_use_subtle_alternating_rows_and_text_selection_blue(tmp_path
         assert highlight == QColor("#0078D4")
     assert "QPushButton:disabled" in window.centralWidget().styleSheet()
     assert "background-color: palette(dark)" in window.centralWidget().styleSheet()
+    header = window.chapter_table.horizontalHeader()
+    assert window.chapter_table.columnCount() == 8
+    assert header.sectionsMovable() is True
+    assert all(
+        header.sectionResizeMode(column) == QHeaderView.ResizeMode.Interactive
+        for column in range(window.chapter_table.columnCount())
+    )
+    assert window.chapter_table.textElideMode() == Qt.TextElideMode.ElideNone
     window.close()
 
 
@@ -162,4 +210,66 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.files == [replacement.resolve()]
     assert window.profile_combo.isEnabled() is True
     assert window.settings_box.title() == "Thiết lập cho book mới"
+    window.close()
+
+
+def test_chapter_table_shows_every_stage_and_full_mp3_path(tmp_path: Path) -> None:
+    _app = QApplication.instance() or QApplication([])
+    source = tmp_path / "001.txt"
+    source.write_text("Một chapter để kiểm tra đầy đủ các bước.", encoding="utf-8")
+    paths, db, _settings = create_or_open_project(
+        [source],
+        tmp_path / "books",
+        build_settings(),
+        "Book có đường dẫn MP3 dài để kiểm tra",
+    )
+    chapter = db.list_chapters()[0]
+    db.replace_chapter_segments(
+        int(chapter["id"]),
+        [{
+            "stable_id": "chapter-progress-segment",
+            "seq": 0,
+            "text": "Một chapter để kiểm tra đầy đủ các bước.",
+            "text_sha256": "text-sha",
+            "kind_hint": "narration",
+        }],
+    )
+    segment = db.list_segments()[0]
+    db.update_analysis(int(segment["id"]), {"confidence": 0.99})
+    wav = paths.chunks / "chapter_00001" / "0000000.wav"
+    db.mark_generating(int(segment["id"]), seed=123)
+    db.mark_signal_passed(
+        int(segment["id"]),
+        wav_path=wav,
+        wav_sha256="wav-sha",
+        duration=1.0,
+        signal={"duration": 1.0},
+    )
+    db.mark_asr_result(
+        int(segment["id"]),
+        passed=True,
+        transcript="Một chapter để kiểm tra đầy đủ các bước.",
+        similarity=1.0,
+        wer=0.0,
+    )
+    db.mark_verified(int(segment["id"]))
+    output = Path(str(chapter["output_mp3"]))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(b"ID3")
+    db.update_chapter_status(int(chapter["id"]), "completed")
+    store = QSettings(str(tmp_path / "progress.ini"), QSettings.Format.IniFormat)
+    store.setValue("recent_project", str(paths.root))
+
+    window = MainWindow(settings_store=store, restore_recent=True)
+    window.timer.stop()
+
+    assert window.chapter_table.item(0, 2).text() == "1 segment"
+    assert window.chapter_table.item(0, 3).text() == "1/1"
+    assert window.chapter_table.item(0, 4).text() == "1/1"
+    assert window.chapter_table.item(0, 5).text() == "1/1"
+    assert window.chapter_table.item(0, 6).text() == "Hoàn tất"
+    assert window.chapter_table.item(0, 7).text() == str(output)
+    assert window.chapter_table.item(0, 7).toolTip() == str(output)
+    expected_width = window.chapter_table.fontMetrics().horizontalAdvance(str(output))
+    assert window.chapter_table.columnWidth(7) >= expected_width
     window.close()

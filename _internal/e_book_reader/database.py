@@ -359,6 +359,26 @@ class ProjectDB:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM chapters ORDER BY chapter_index"))
 
+    def chapter_progress_counts(self) -> dict[int, dict[str, int]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT chapter_id,
+                    SUM(CASE WHEN status <> 'pending' OR voice_profile_id IS NOT NULL THEN 1 ELSE 0 END)
+                        AS analyzed,
+                    SUM(CASE WHEN wav_path IS NOT NULL THEN 1 ELSE 0 END) AS audio
+                FROM segments
+                GROUP BY chapter_id
+                """
+            )
+            return {
+                int(row["chapter_id"]): {
+                    "analysis": int(row["analyzed"] or 0),
+                    "audio": int(row["audio"] or 0),
+                }
+                for row in rows
+            }
+
     def update_chapter_status(self, chapter_id: int, status: str, error: str | None = None) -> None:
         now = time.time()
         with self.connect() as conn:

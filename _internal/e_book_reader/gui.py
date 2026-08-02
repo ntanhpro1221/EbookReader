@@ -49,6 +49,18 @@ from .worker import run_worker
 
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
 TEXT_SELECTION_COLOR = "#0078D4"
+CHAPTER_TABLE_HEADERS = (
+    "#",
+    "Chapter",
+    "Chia đoạn",
+    "Phân tích",
+    "Tạo audio",
+    "Kiểm tra",
+    "Giai đoạn",
+    "MP3",
+)
+CHAPTER_TABLE_DEFAULT_WIDTHS = (45, 150, 100, 105, 110, 125, 150, 480)
+MP3_COLUMN = 7
 
 
 CHAPTER_STATUS_LABELS = {
@@ -119,7 +131,7 @@ class MainWindow(QMainWindow):
         self.add_folder_button.clicked.connect(self._add_folder)
         self.remove_files_button = QPushButton("Xóa file đã chọn")
         self.remove_files_button.clicked.connect(self._remove_files)
-        self.open_project_button = QPushButton("Mở project khác")
+        self.open_project_button = QPushButton("Mở sách khác")
         self.open_project_button.clicked.connect(self._open_project)
         self.new_book_button = QPushButton("Book mới")
         self.new_book_button.clicked.connect(self._new_book)
@@ -199,21 +211,22 @@ class MainWindow(QMainWindow):
         progress_layout.addWidget(self.stage_label)
         progress_layout.addWidget(self.progress, 1)
         chapters_layout.addLayout(progress_layout)
-        self.chapter_table = QTableWidget(0, 5)
-        self.chapter_table.setHorizontalHeaderLabels(
-            ["#", "Chapter", "Giai đoạn", "Audio đã kiểm tra", "MP3"]
-        )
+        self.chapter_table = QTableWidget(0, len(CHAPTER_TABLE_HEADERS))
+        self.chapter_table.setHorizontalHeaderLabels(CHAPTER_TABLE_HEADERS)
         self.chapter_table.verticalHeader().setVisible(False)
         self.chapter_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.chapter_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.chapter_table.setAlternatingRowColors(True)
+        self.chapter_table.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.chapter_table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self._apply_item_view_palette(self.chapter_table)
         header = self.chapter_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionsMovable(True)
+        header.setMinimumSectionSize(40)
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for column, width in enumerate(CHAPTER_TABLE_DEFAULT_WIDTHS):
+            self.chapter_table.setColumnWidth(column, width)
+        self._mp3_column_initialized = False
         self.chapter_table.doubleClicked.connect(self._open_selected_mp3)
         chapters_layout.addWidget(self.chapter_table)
         self.work_splitter.addWidget(chapters_box)
@@ -232,18 +245,14 @@ class MainWindow(QMainWindow):
 
         controls = QHBoxLayout()
         self.start_button = QPushButton("Bắt đầu")
-        self.start_button.clicked.connect(self._start)
-        self.pause_button = QPushButton("Tạm dừng")
-        self.pause_button.clicked.connect(self._toggle_pause)
-        self.pause_button.setEnabled(False)
+        self.start_button.clicked.connect(self._handle_primary_action)
         self.stop_button = QPushButton("Dừng")
         self.stop_button.setToolTip("Dừng xử lý. Phần chưa commit sẽ được kiểm tra và làm lại khi tiếp tục.")
         self.stop_button.clicked.connect(self._stop)
         self.stop_button.setEnabled(False)
-        self.open_folder_button = QPushButton("Mở thư mục project")
+        self.open_folder_button = QPushButton("Hiển thị sách trong Explorer")
         self.open_folder_button.clicked.connect(self._open_project_folder)
         controls.addWidget(self.start_button)
-        controls.addWidget(self.pause_button)
         controls.addWidget(self.stop_button)
         controls.addStretch(1)
         controls.addWidget(self.open_folder_button)
@@ -271,6 +280,10 @@ class MainWindow(QMainWindow):
             state = self.settings_store.value(key)
             if state is not None:
                 splitter.restoreState(state)
+        header_state = self.settings_store.value("chapter_header_v2")
+        if header_state is not None:
+            self.chapter_table.horizontalHeader().restoreState(header_state)
+            self._mp3_column_initialized = True
         if restore_recent:
             candidate = self._recent_project_candidate()
             if candidate is not None:
@@ -285,6 +298,7 @@ class MainWindow(QMainWindow):
         self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
         self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
         self.settings_store.setValue("splitter_work", self.work_splitter.saveState())
+        self.settings_store.setValue("chapter_header_v2", self.chapter_table.horizontalHeader().saveState())
         self.settings_store.sync()
 
     def _recent_project_candidate(self) -> Path | None:
@@ -355,6 +369,11 @@ class MainWindow(QMainWindow):
         self._update_start_button()
 
     def _update_start_button(self) -> None:
+        running = bool(self.process and self.process.is_alive())
+        if running:
+            paused = bool(self.pause_event and self.pause_event.is_set())
+            self.start_button.setText("Tiếp tục" if paused else "Tạm dừng")
+            return
         self.start_button.setText("Tiếp tục" if self.project_paths is not None else "Bắt đầu")
 
     def _merge_input_files(self, paths: list[Path]) -> int:
@@ -492,33 +511,36 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             QMessageBox.critical(self, "Không thể bắt đầu", str(exc))
 
+    def _handle_primary_action(self) -> None:
+        if self.process and self.process.is_alive():
+            self._toggle_pause()
+            return
+        self._start()
+
     def _toggle_pause(self) -> None:
         if not self.pause_event:
             return
         if self.pause_event.is_set():
             self.pause_event.clear()
-            self.pause_button.setText("Tạm dừng")
         else:
             self.pause_event.set()
-            self.pause_button.setText("Chạy tiếp")
+        self._update_start_button()
 
     def _stop(self) -> None:
         if self.stop_event:
             self.was_user_stop = True
             self.stop_event.set()
             self.stop_button.setEnabled(False)
-            self.pause_button.setEnabled(False)
+            self.start_button.setEnabled(False)
             self._show_progress("Đang dừng…")
             self._append_log("Đang dừng. Phần chưa commit sẽ được recovery kiểm tra khi tiếp tục.")
 
     def _running_controls(self, running: bool) -> None:
-        self.start_button.setEnabled(not running)
-        self.pause_button.setEnabled(running)
+        process_finishing = bool(self.process and self.process.is_alive() and self.received_finished)
+        self.start_button.setEnabled(not process_finishing)
         self.stop_button.setEnabled(running)
         self._set_project_selected(self.project_paths is not None)
-        if not running:
-            self.pause_button.setText("Tạm dừng")
-            self._update_start_button()
+        self._update_start_button()
 
     def _terminate_worker_for_exit(self) -> None:
         process = self.process
@@ -560,7 +582,7 @@ class MainWindow(QMainWindow):
     def _open_project(self) -> None:
         if self.process and self.process.is_alive():
             return
-        directory = QFileDialog.getExistingDirectory(self, "Chọn thư mục book project", self.output_edit.text())
+        directory = QFileDialog.getExistingDirectory(self, "Chọn thư mục sách", self.output_edit.text())
         if not directory:
             return
         try:
@@ -590,7 +612,7 @@ class MainWindow(QMainWindow):
         self._remember_project(paths.root)
         self._refresh_chapters()
         if announce:
-            self._append_log("Đã mở project. Khi tiếp tục sẽ dùng nguyên settings và voice mapping đã khóa.")
+            self._append_log("Đã mở sách. Khi tiếp tục sẽ dùng nguyên settings và voice mapping đã khóa.")
 
     def _new_book(self) -> None:
         if self.process and self.process.is_alive():
@@ -624,6 +646,7 @@ class MainWindow(QMainWindow):
             return
         try:
             chapters = self.db.list_chapters()
+            segment_progress = self.db.chapter_progress_counts()
             book = self.db.book()
         except Exception:
             return
@@ -631,8 +654,11 @@ class MainWindow(QMainWindow):
             (
                 int(row["id"]),
                 str(row["status"]),
+                segment_progress.get(int(row["id"]), {}).get("analysis", 0),
+                segment_progress.get(int(row["id"]), {}).get("audio", 0),
                 int(row["verified_segments"]),
                 int(row["warning_segments"]),
+                int(row["failed_segments"]),
                 int(row["total_segments"]),
                 Path(str(row["output_mp3"])).exists(),
             )
@@ -645,24 +671,66 @@ class MainWindow(QMainWindow):
         self.chapter_table.setRowCount(len(chapters))
         done = 0
         for index, row in enumerate(chapters):
+            chapter_id = int(row["id"])
+            progress = segment_progress.get(chapter_id, {"analysis": 0, "audio": 0})
             self.chapter_table.setItem(index, 0, QTableWidgetItem(str(row["chapter_index"])))
             self.chapter_table.setItem(index, 1, QTableWidgetItem(str(row["title"])))
-            status = str(row["status"])
+            total = int(row["total_segments"])
             self.chapter_table.setItem(
                 index,
                 2,
-                QTableWidgetItem(CHAPTER_STATUS_LABELS.get(status, status)),
+                QTableWidgetItem(f"{total} segment" if total else "Chờ"),
+            )
+            self.chapter_table.setItem(
+                index,
+                3,
+                QTableWidgetItem(f"{progress['analysis']}/{total}" if total else "0/0"),
+            )
+            self.chapter_table.setItem(
+                index,
+                4,
+                QTableWidgetItem(f"{progress['audio']}/{total}" if total else "0/0"),
             )
             accepted = int(row["verified_segments"]) + int(row["warning_segments"])
-            total = int(row["total_segments"])
-            self.chapter_table.setItem(index, 3, QTableWidgetItem(f"{accepted}/{total}"))
+            failed = int(row["failed_segments"])
+            verification_text = f"{accepted}/{total}" if total else "0/0"
+            if failed:
+                verification_text += f" · {failed} lỗi"
+            self.chapter_table.setItem(index, 5, QTableWidgetItem(verification_text))
+            status = str(row["status"])
+            self.chapter_table.setItem(
+                index,
+                6,
+                QTableWidgetItem(CHAPTER_STATUS_LABELS.get(status, status)),
+            )
             output = str(row["output_mp3"])
             published = str(row["status"]) == "completed" and Path(output).exists()
-            item = QTableWidgetItem(output if published else "")
+            mp3_text = output if published else ""
+            if not published and status == "verifying":
+                mp3_text = "Đang kiểm tra / ghép"
+            elif not published and status == "failed":
+                mp3_text = "Lỗi — chưa xuất MP3"
+            item = QTableWidgetItem(mp3_text)
             item.setData(Qt.UserRole, output if published else "")
-            self.chapter_table.setItem(index, 4, item)
+            item.setToolTip(output if published else str(row["last_error"] or mp3_text))
+            self.chapter_table.setItem(index, MP3_COLUMN, item)
             if status == "completed":
                 done += 1
+        if not self._mp3_column_initialized:
+            published_paths = [
+                str(row["output_mp3"])
+                for row in chapters
+                if str(row["status"]) == "completed" and Path(str(row["output_mp3"])).exists()
+            ]
+            if published_paths:
+                content_width = max(
+                    self.chapter_table.fontMetrics().horizontalAdvance(path) for path in published_paths
+                )
+                self.chapter_table.setColumnWidth(
+                    MP3_COLUMN,
+                    max(CHAPTER_TABLE_DEFAULT_WIDTHS[MP3_COLUMN], content_width + 28),
+                )
+                self._mp3_column_initialized = True
         running = bool(self.process and self.process.is_alive())
         if not running:
             book_status = str(book["status"])
@@ -741,7 +809,7 @@ class MainWindow(QMainWindow):
         row = self.chapter_table.currentRow()
         if row < 0:
             return
-        item = self.chapter_table.item(row, 4)
+        item = self.chapter_table.item(row, MP3_COLUMN)
         if item:
             path = Path(str(item.data(Qt.UserRole) or ""))
             if path.exists():
