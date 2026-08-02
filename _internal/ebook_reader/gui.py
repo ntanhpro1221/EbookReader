@@ -58,7 +58,6 @@ from .voice_catalog import (
     REGION_CENTRAL,
     REGION_NORTH,
     REGION_SOUTH,
-    STYLE_NATURAL,
     VOICE_PREVIEW_FILENAMES,
     narrator_presets,
     preset_by_name,
@@ -87,7 +86,10 @@ CHAPTER_TABLE_HEADERS = (
 )
 CHAPTER_TABLE_DEFAULT_WIDTHS = (45, 160, 110, 115, 130, 155, 480)
 MP3_COLUMN = 6
-VOICE_FOLDOUT_LABEL = "Giọng người kể:"
+DEFAULT_QUALITY_PROFILE = "balanced"
+DEFAULT_NARRATOR_FILTER = ""
+DEFAULT_NARRATOR_VOICE = DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]
+VOICE_FOLDOUT_LABEL = "Giọng kể chuyện:"
 VOICE_FOLDOUT_ICON_SIZE = 12
 VOICE_CHILD_INDENT_SAMPLE = "oooo"
 
@@ -268,6 +270,10 @@ class MainWindow(QMainWindow):
 
         book_form.addRow("Chất lượng:", self.profile_combo)
         book_form.addRow(self.voice_foldout_button, self.narrator_voice_combo)
+        book_form.setAlignment(
+            self.voice_foldout_button,
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+        )
         book_form.addRow(self.voice_tools_widget)
         settings_layout.addWidget(self.book_settings_box)
 
@@ -366,6 +372,8 @@ class MainWindow(QMainWindow):
         controls.addStretch(1)
         controls.addWidget(self.open_folder_button)
         layout.addLayout(controls)
+        self.narrator_voice_combo.ensurePolished()
+        self.voice_foldout_button.setMinimumHeight(self.narrator_voice_combo.sizeHint().height())
 
     def _setup_tray(self) -> None:
         icon = QIcon(str(APP_ICON_PATH))
@@ -457,14 +465,7 @@ class MainWindow(QMainWindow):
             self.resource_combo.setCurrentIndex(resource_index)
         self.max_temp.setValue(self.settings_store.value("max_temp", 86, int))
         del resource_blocker, temperature_blocker
-        self.narrator_gender_combo.setCurrentIndex(self.narrator_gender_combo.findData(""))
-        self.narrator_region_combo.setCurrentIndex(self.narrator_region_combo.findData(""))
-        saved_voice = self.settings_store.value(
-            "narrator_voice",
-            DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE],
-            str,
-        )
-        self._populate_narrator_voices(saved_voice)
+        self._reset_book_settings_controls()
         voice_options_expanded = self.settings_store.value("voice_options_expanded", True, bool)
         self.voice_foldout_button.setChecked(voice_options_expanded)
         self._set_voice_options_expanded(voice_options_expanded, persist=False)
@@ -493,7 +494,6 @@ class MainWindow(QMainWindow):
         self.settings_store.setValue("output", self.output_edit.text().strip())
         self.settings_store.setValue("resource_mode", self.resource_combo.currentData())
         self.settings_store.setValue("max_temp", self.max_temp.value())
-        self.settings_store.setValue("narrator_voice", self.narrator_voice_combo.currentData())
         self.settings_store.setValue("voice_options_expanded", self.voice_foldout_button.isChecked())
         self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
         self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
@@ -586,11 +586,7 @@ class MainWindow(QMainWindow):
         self.narrator_voice_combo.clear()
         available = narrator_presets(gender or None, region or None)
         for preset in available:
-            style = "Tự nhiên" if preset["style"] == STYLE_NATURAL else "Kể chuyện"
-            self.narrator_voice_combo.addItem(
-                f"{preset['name']} — {preset['region']} · {style}",
-                preset["name"],
-            )
+            self.narrator_voice_combo.addItem(preset["name"], preset["name"])
         target = preferred_voice or previous_voice
         if self.narrator_voice_combo.findData(target) < 0 and gender in DEFAULT_NARRATOR_BY_GENDER:
             target = DEFAULT_NARRATOR_BY_GENDER[gender]
@@ -937,26 +933,57 @@ class MainWindow(QMainWindow):
         self.chapter_table.setRowCount(0)
         self._show_progress("Sẵn sàng", 0, 100)
         self._chapter_snapshot = None
+        self._reset_book_settings_controls()
         self._set_project_selected(False)
         self._append_log("Đã chuyển sang sách mới; sách cũ vẫn nguyên vẹn trên ổ đĩa.")
 
-    def _apply_locked_settings(self, settings: dict[str, Any]) -> None:
+    def _set_book_settings_controls(
+        self,
+        *,
+        quality_profile: str,
+        narrator_voice: str,
+    ) -> None:
+        was_applying_locked_settings = self._applying_locked_settings
         self._applying_locked_settings = True
+        blockers = (
+            QSignalBlocker(self.profile_combo),
+            QSignalBlocker(self.narrator_gender_combo),
+            QSignalBlocker(self.narrator_region_combo),
+        )
         try:
-            profile_index = self.profile_combo.findData(str(settings.get("quality_profile", "balanced")))
-            if profile_index >= 0:
-                self.profile_combo.setCurrentIndex(profile_index)
-            voices = settings.get("voices", {})
-            narrator_voice = str(voices.get("narrator_voice", DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]))
-            try:
-                preset_by_name(narrator_voice)
-            except ValueError:
-                narrator_voice = DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]
-            self.narrator_gender_combo.setCurrentIndex(self.narrator_gender_combo.findData(""))
-            self.narrator_region_combo.setCurrentIndex(self.narrator_region_combo.findData(""))
+            profile_index = self.profile_combo.findData(quality_profile)
+            if profile_index < 0:
+                profile_index = self.profile_combo.findData(DEFAULT_QUALITY_PROFILE)
+            self.profile_combo.setCurrentIndex(profile_index)
+            self.narrator_gender_combo.setCurrentIndex(
+                self.narrator_gender_combo.findData(DEFAULT_NARRATOR_FILTER)
+            )
+            self.narrator_region_combo.setCurrentIndex(
+                self.narrator_region_combo.findData(DEFAULT_NARRATOR_FILTER)
+            )
             self._populate_narrator_voices(narrator_voice)
         finally:
-            self._applying_locked_settings = False
+            del blockers
+            self._applying_locked_settings = was_applying_locked_settings
+
+    def _reset_book_settings_controls(self) -> None:
+        self._set_book_settings_controls(
+            quality_profile=DEFAULT_QUALITY_PROFILE,
+            narrator_voice=DEFAULT_NARRATOR_VOICE,
+        )
+
+    def _apply_locked_settings(self, settings: dict[str, Any]) -> None:
+        quality_profile = str(settings.get("quality_profile", DEFAULT_QUALITY_PROFILE))
+        voices = settings.get("voices", {})
+        narrator_voice = str(voices.get("narrator_voice", DEFAULT_NARRATOR_VOICE))
+        try:
+            preset_by_name(narrator_voice)
+        except ValueError:
+            narrator_voice = DEFAULT_NARRATOR_VOICE
+        self._set_book_settings_controls(
+            quality_profile=quality_profile,
+            narrator_voice=narrator_voice,
+        )
 
     def _refresh_chapters(self) -> None:
         if not self.db:

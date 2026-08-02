@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-02
 
-Trạng thái source hiện tại: **88/88 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **89/89 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử được cài trong thư mục tạm, sau đó đã xóa. Compileall cho source/test và `git diff --check` cũng pass.
@@ -54,14 +54,15 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   trở thành warning còn sai lệch cực đoan vẫn bị từ chối;
 - NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ; phân vai loại hoàn toàn preset tin tức,
   ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
-- dropdown người kể có đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
-  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; label `Giọng người kể` là header foldout có
+- dropdown kể chuyện chỉ hiện tên của đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
+  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; label `Giọng kể chuyện` là header foldout có
   chevron style dropdown ở đầu, bên dưới là ba dòng con thụt khoảng bốn ký tự và có label riêng cho giới tính, miền và nghe thử;
   Thái Sơn và Ngọc Linh đứng đầu danh sách;
 - thay đổi narrator trực tiếp tự phát preview, nút preview phát lại; 10 WAV không phải tin tức được đóng gói
   bằng package-data và mapping preset nào cũng phải trỏ tới file tồn tại;
 - profile chất lượng và narrator được khóa theo sách; resource mode và ngưỡng GPU là global, không detach
-  sách đang mở và có thể cập nhật AdaptiveResourceManager khi worker đang chạy;
+  sách đang mở và có thể cập nhật AdaptiveResourceManager khi worker đang chạy; `Sách mới` reset profile,
+  bộ lọc và narrator về mặc định nhưng giữ nguyên resource mode và ngưỡng GPU;
 - cùng nhân vật giữ nguyên preset và biến thể cao độ tối đa ±2 bán âm; thought thử lại đủ số lần để tìm
   speaker nhân vật, chỉ fallback sang NARRATOR kèm warning khi vẫn không xác định được;
   mức âm lượng trung tính được cân bằng

@@ -82,14 +82,25 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     }
     assert len(available_narrators) == 10
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(available_narrators)
+    assert all(
+        window.narrator_voice_combo.itemText(index)
+        == window.narrator_voice_combo.itemData(index)
+        for index in range(window.narrator_voice_combo.count())
+    )
     book_form = window.book_settings_box.layout()
     assert book_form.labelForField(window.narrator_voice_combo) is window.voice_foldout_button
-    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert window.voice_foldout_button.text() == "Giọng kể chuyện:"
     assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
     assert window.voice_foldout_button.toolButtonStyle() == Qt.ToolButtonStyle.ToolButtonTextBesideIcon
     assert window.voice_foldout_button.icon().isNull() is False
     assert window.voice_foldout_button.iconSize().width() == VOICE_FOLDOUT_ICON_SIZE
+    assert (
+        window.voice_foldout_button.minimumHeight()
+        == window.narrator_voice_combo.sizeHint().height()
+    )
     assert not hasattr(window, "narrator_control_layout")
+    voice_label_row, voice_label_role = book_form.getWidgetPosition(window.voice_foldout_button)
+    assert book_form.itemAt(voice_label_row, voice_label_role).alignment() & Qt.AlignmentFlag.AlignVCenter
     assert book_form.getWidgetPosition(window.voice_tools_widget)[1] == QFormLayout.ItemRole.SpanningRole
     assert window.voice_tools_layout.contentsMargins().left() == window.fontMetrics().horizontalAdvance(
         VOICE_CHILD_INDENT_SAMPLE
@@ -140,7 +151,7 @@ def test_voice_options_foldout_collapses_and_restores(tmp_path: Path) -> None:
 
     assert window.voice_tools_widget.isHidden() is True
     assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
-    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert window.voice_foldout_button.text() == "Giọng kể chuyện:"
     assert window.voice_foldout_button.icon().cacheKey() != expanded_icon_key
     assert store.value("voice_options_expanded", type=bool) is False
 
@@ -148,7 +159,7 @@ def test_voice_options_foldout_collapses_and_restores(tmp_path: Path) -> None:
 
     assert window.voice_tools_widget.isHidden() is False
     assert window.voice_foldout_button.arrowType() == Qt.ArrowType.NoArrow
-    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert window.voice_foldout_button.text() == "Giọng kể chuyện:"
     assert window.voice_foldout_button.icon().isNull() is False
     window.close()
 
@@ -284,7 +295,7 @@ def test_global_resource_controls_publish_updates_without_detaching_book(tmp_pat
     window.close()
 
 
-def test_global_resources_and_saved_narrator_restore_independently(tmp_path: Path) -> None:
+def test_only_global_resources_restore_for_a_new_draft(tmp_path: Path) -> None:
     _app = QApplication.instance() or QApplication([])
     store = QSettings(str(tmp_path / "restore-global.ini"), QSettings.Format.IniFormat)
     store.setValue("resource_mode", "max_safe")
@@ -298,7 +309,28 @@ def test_global_resources_and_saved_narrator_restore_independently(tmp_path: Pat
     assert window.max_temp.value() == 84
     assert window.narrator_gender_combo.currentData() == ""
     assert window.narrator_region_combo.currentData() == ""
-    assert window.narrator_voice_combo.currentData() == "Ngọc Linh"
+    assert window.narrator_voice_combo.currentData() == "Thái Sơn"
+    window.close()
+
+
+def test_new_book_resets_book_settings_but_keeps_global_settings(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+    window.profile_combo.setCurrentIndex(window.profile_combo.findData("high_quality"))
+    window.narrator_gender_combo.setCurrentIndex(window.narrator_gender_combo.findData("female"))
+    window.narrator_region_combo.setCurrentIndex(window.narrator_region_combo.findData("Trung"))
+    window.resource_combo.setCurrentIndex(window.resource_combo.findData("max_safe"))
+    window.max_temp.setValue(84)
+
+    assert window.narrator_voice_combo.currentData() == "Ngọc Trân"
+
+    window._new_book()
+
+    assert window.profile_combo.currentData() == "balanced"
+    assert window.narrator_gender_combo.currentData() == ""
+    assert window.narrator_region_combo.currentData() == ""
+    assert window.narrator_voice_combo.currentData() == "Thái Sơn"
+    assert window.resource_combo.currentData() == "max_safe"
+    assert window.max_temp.value() == 84
     window.close()
 
 

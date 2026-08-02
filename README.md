@@ -31,8 +31,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
-- Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown giọng chứa
-  toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng người kể` là header foldout
+- Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown chỉ hiện tên của
+  toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng kể chuyện` là header foldout
   với chevron nhỏ cùng style dropdown ở đầu; bên dưới có ba dòng con thụt vào khoảng chiều rộng bốn chữ `o`
   và có label riêng: `Giới tính`, `Miền`, `Nghe thử`. Thái Sơn và Ngọc Linh
   đứng đầu danh sách.
@@ -40,6 +40,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   sẵn preview cho cả 10 preset hợp lệ nên không nạp model TTS chỉ để nghe thử.
 - Chất lượng và giọng người kể được lưu cùng sách và khóa sau khi sách bắt đầu. Chế độ tài nguyên
   và ngưỡng GPU là setting global, không tạo sách mới khi thay đổi và được worker nhận tại checkpoint kế tiếp.
+  Bấm `Sách mới` đặt lại thiết lập sách về `Cân bằng`, mọi giới tính, mọi miền và giọng `Thái Sơn`,
+  nhưng giữ nguyên hai thiết lập global này.
 - Nhân vật có tên được ưu tiên giọng theo thứ tự Bắc → Nam, rồi tự nhiên → kể chuyện. Preset tin tức không được
   phân vai; giọng Trung chỉ tham gia pool NPC vô danh/cục bộ ngắn sau các giọng phổ thông để tăng đa dạng có kiểm soát.
 - Nhân vật phụ có dấu hiệu cục bộ như “áo xanh”, “áo đỏ” được giữ thành hai vai riêng trong cuộc thoại;
