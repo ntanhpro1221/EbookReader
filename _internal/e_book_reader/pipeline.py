@@ -5,7 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
-from .analysis import OllamaBookAnalyzer
+from .analysis import AnalysisRequestStopped, OllamaBookAnalyzer
 from .asr import WhisperVerifier
 from .audio_io import (
     AudioQualityError,
@@ -236,11 +236,14 @@ class BookPipeline:
                     before_batch=lambda index: self._resource_gate(
                         f"alias reconciliation batch {index}",
                         release_active=analyzer.release_model,
-                    )
+                    ),
+                    stop_requested=self.stop_requested,
                 )
                 build_registry_and_cast(self.db, self.settings, alias_map, self.log)
                 self.db.finalize_casting()
             self.db.update_book(status=BookStatus.CASTING.value, stage="voice_cast_locked")
+        except AnalysisRequestStopped as exc:
+            raise PipelineStopped("Stop requested during Ollama analysis") from exc
         finally:
             analyzer.unload()
 

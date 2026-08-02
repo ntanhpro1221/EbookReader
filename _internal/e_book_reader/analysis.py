@@ -30,6 +30,18 @@ BATCH_ID_PREFIX = "S"
 BATCH_ID_WIDTH = 3
 LOCAL_SPEAKER_REQUEST_PREFIX = "NPC_LOCAL:"
 LOCAL_SPEAKER_STORED_PREFIX = "NPC_LOCAL::"
+ANALYSIS_OUTPUT_BASE_TOKENS = 512
+ANALYSIS_OUTPUT_TOKENS_PER_SEGMENT = 192
+ANALYSIS_OUTPUT_MIN_TOKENS = 1024
+ANALYSIS_OUTPUT_MAX_TOKENS = 6144
+ANALYSIS_REQUEST_MAX_SECONDS = 420.0
+ANALYSIS_STREAM_IDLE_SECONDS = 90.0
+ANALYSIS_ACTIVITY_SECONDS = 60.0
+MAX_PRONUNCIATIONS_PER_BATCH = 32
+
+
+class AnalysisRequestStopped(RuntimeError):
+    pass
 
 
 OUTPUT_SCHEMA: dict[str, Any] = {
@@ -42,7 +54,7 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "id": {"type": "string"},
                     "kind": {"type": "string", "enum": sorted(ALLOWED_KINDS)},
-                    "speaker": {"type": "string"},
+                    "speaker": {"type": "string", "maxLength": 120},
                     "gender": {"type": "string", "enum": sorted(ALLOWED_GENDERS)},
                     "age": {"type": "string", "enum": sorted(ALLOWED_AGES)},
                     "emotion": {"type": "string", "enum": sorted(ALLOWED_EMOTIONS)},
@@ -50,8 +62,8 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                     "pace": {"type": "string", "enum": sorted(ALLOWED_PACES)},
                     "volume": {"type": "string", "enum": sorted(ALLOWED_VOLUMES)},
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "personality_hint": {"type": "string"},
-                    "notes": {"type": "string"},
+                    "personality_hint": {"type": "string", "maxLength": 160},
+                    "notes": {"type": "string", "maxLength": 240},
                 },
                 "required": [
                     "id", "kind", "speaker", "gender", "age", "emotion", "intensity",
@@ -65,10 +77,10 @@ OUTPUT_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "surface": {"type": "string"},
-                    "spoken_form": {"type": "string"},
+                    "surface": {"type": "string", "maxLength": 160},
+                    "spoken_form": {"type": "string", "maxLength": 240},
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "reason": {"type": "string"},
+                    "reason": {"type": "string", "maxLength": 240},
                 },
                 "required": ["surface", "spoken_form", "confidence", "reason"],
                 "additionalProperties": False,
@@ -113,10 +125,13 @@ RECONCILE_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "canonical": {"type": "string"},
-                    "aliases": {"type": "array", "items": {"type": "string"}},
+                    "canonical": {"type": "string", "maxLength": 120},
+                    "aliases": {
+                        "type": "array",
+                        "items": {"type": "string", "maxLength": 120},
+                    },
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "reason": {"type": "string"},
+                    "reason": {"type": "string", "maxLength": 240},
                 },
                 "required": ["canonical", "aliases", "confidence", "reason"],
                 "additionalProperties": False,
@@ -238,7 +253,21 @@ def _output_schema_for_batch(batch_ids: list[str]) -> dict[str, Any]:
     segments["minItems"] = len(batch_ids)
     segments["maxItems"] = len(batch_ids)
     segments["items"]["properties"]["id"]["enum"] = batch_ids
+    pronunciations = schema["properties"]["pronunciations"]
+    pronunciations["maxItems"] = min(
+        MAX_PRONUNCIATIONS_PER_BATCH,
+        max(8, len(batch_ids) * 2),
+    )
     return schema
+
+
+def _analysis_output_token_limit(segment_count: int, num_ctx: int) -> int:
+    requested = max(
+        ANALYSIS_OUTPUT_MIN_TOKENS,
+        ANALYSIS_OUTPUT_BASE_TOKENS + segment_count * ANALYSIS_OUTPUT_TOKENS_PER_SEGMENT,
+    )
+    context_limit = max(ANALYSIS_OUTPUT_MIN_TOKENS, num_ctx // 2)
+    return min(requested, context_limit, ANALYSIS_OUTPUT_MAX_TOKENS)
 
 
 class OllamaBookAnalyzer:
@@ -316,7 +345,67 @@ class OllamaBookAnalyzer:
             f"- {name}; số lần đã gặp={count}" for name, count in self._speaker_counts.most_common(80)
         )
 
-    def _request(self, group: list[Any]) -> dict[str, Any]:
+    def _stream_json_response(
+        self,
+        request: dict[str, Any],
+        *,
+        stop_requested: Callable[[], bool] | None = None,
+        activity: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
+        if stop_requested is not None and stop_requested():
+            raise AnalysisRequestStopped("Stop requested before Ollama request")
+        wall_timeout = min(
+            float(self.settings.get("timeout_seconds", ANALYSIS_REQUEST_MAX_SECONDS)),
+            ANALYSIS_REQUEST_MAX_SECONDS,
+        )
+        started = time.monotonic()
+        last_activity = started
+        parts: list[str] = []
+        response: requests.Response | None = None
+        completed = False
+        request["stream"] = True
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/generate",
+                json=request,
+                timeout=(10.0, min(ANALYSIS_STREAM_IDLE_SECONDS, wall_timeout)),
+                stream=True,
+            )
+            response.raise_for_status()
+            response.encoding = "utf-8"
+            for raw_line in response.iter_lines(decode_unicode=True):
+                if stop_requested is not None and stop_requested():
+                    raise AnalysisRequestStopped("Stop requested during Ollama request")
+                now = time.monotonic()
+                elapsed = now - started
+                if elapsed > wall_timeout:
+                    raise TimeoutError(
+                        f"Ollama analysis exceeded {wall_timeout:.0f}s wall-time limit"
+                    )
+                if raw_line:
+                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                    envelope = json.loads(line)
+                    if envelope.get("error"):
+                        raise RuntimeError(str(envelope["error"]))
+                    parts.append(str(envelope.get("response", "")))
+                    completed = bool(envelope.get("done", False))
+                if activity is not None and now - last_activity >= ANALYSIS_ACTIVITY_SECONDS:
+                    activity(int(elapsed), sum(len(part) for part in parts))
+                    last_activity = now
+            if not completed:
+                raise RuntimeError("Ollama stream ended before the JSON response was complete")
+        finally:
+            if response is not None:
+                response.close()
+        return json.loads("".join(parts) or "{}")
+
+    def _request(
+        self,
+        group: list[Any],
+        *,
+        stop_requested: Callable[[], bool] | None = None,
+        activity: Callable[[int, int], None] | None = None,
+    ) -> dict[str, Any]:
         chapter_titles: list[str] = []
         rows: list[dict[str, Any]] = []
         batch_to_stable: dict[str, str] = {}
@@ -347,22 +436,22 @@ class OllamaBookAnalyzer:
             "model": self.model,
             "system": SYSTEM_PROMPT,
             "prompt": prompt,
-            "stream": False,
             "format": _output_schema_for_batch(list(batch_to_stable)),
             "keep_alive": "30m",
             "options": {
                 "temperature": float(self.settings.get("temperature", 0.1)),
                 "num_ctx": int(self.settings.get("num_ctx", 16384)),
+                "num_predict": _analysis_output_token_limit(
+                    len(group),
+                    int(self.settings.get("num_ctx", 16384)),
+                ),
             },
         }
-        response = self.session.post(
-            f"{self.base_url}/api/generate",
-            json=request,
-            timeout=float(self.settings.get("timeout_seconds", 900)),
+        payload = self._stream_json_response(
+            request,
+            stop_requested=stop_requested,
+            activity=activity,
         )
-        response.raise_for_status()
-        content = response.json().get("response", "{}")
-        payload = json.loads(content)
         segments = payload.get("segments", [])
         if isinstance(segments, list):
             for item in segments:
@@ -438,6 +527,7 @@ class OllamaBookAnalyzer:
         total = len(all_rows)
         required = bool(self.settings.get("enabled", True) and self.settings.get("required", True))
         confidence_threshold = float(self.settings.get("low_confidence_threshold", 0.58))
+        retry_count = int(self.settings.get("max_retries", 3))
         for group_index, group in enumerate(groups, 1):
             if stop_requested():
                 return
@@ -447,16 +537,30 @@ class OllamaBookAnalyzer:
             payload: dict[str, Any] = {}
             last_error = "AI analysis is unavailable"
             if llm_ready:
-                for attempt in range(int(self.settings.get("max_retries", 3))):
+                for attempt in range(retry_count):
+                    attempt_number = attempt + 1
+                    self.log(
+                        f"Đang phân tích batch {group_index}/{len(groups)} của phần còn lại: "
+                        f"{len(group)} segment, lần {attempt_number}/{retry_count}."
+                    )
                     try:
-                        payload = self._request(group)
+                        payload = self._request(
+                            group,
+                            stop_requested=stop_requested,
+                            activity=lambda elapsed, chars, batch=group_index, current=attempt_number: self.log(
+                                f"Phân tích batch {batch}/{len(groups)} lần {current}/{retry_count} "
+                                f"vẫn đang chạy: {elapsed}s, đã nhận {chars:,} ký tự JSON."
+                            ),
+                        )
                         validated = _validate(group, payload, local_scope=f"b{group_index:04d}")
                         if len(validated) == len(group):
                             break
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
+                    except AnalysisRequestStopped:
+                        raise
                     except Exception as exc:  # noqa: BLE001
                         last_error = str(exc)
-                    self.log(f"Phân tích batch {group_index} lỗi lần {attempt + 1}: {last_error}")
+                    self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
             if len(validated) != len(group) and required:
                 message = (
@@ -505,6 +609,7 @@ class OllamaBookAnalyzer:
     def reconcile_aliases(
         self,
         before_batch: Callable[[int], None] | None = None,
+        stop_requested: Callable[[], bool] | None = None,
     ) -> dict[str, str]:
         """Conservative full-book reconciliation. It never merges low-confidence names automatically."""
         rows = [row for row in self.db.list_segments() if str(row["status"]) != "pending"]
@@ -548,27 +653,44 @@ class OllamaBookAnalyzer:
                 f"Toàn bộ tên ứng viên trong sách: {json.dumps(all_names, ensure_ascii=False)}\n\n"
                 + json.dumps(batch, ensure_ascii=False, indent=2)
             )
+            response_schema = copy.deepcopy(RECONCILE_SCHEMA)
+            groups_schema = response_schema["properties"]["groups"]
+            groups_schema["maxItems"] = len(batch)
+            groups_schema["items"]["properties"]["aliases"]["maxItems"] = len(batch)
+            num_ctx = int(self.settings.get("num_ctx", 16384))
             request = {
                 "model": self.model,
                 "system": "Bạn là biên tập viên nhất quán nhân vật. Trả JSON đúng schema.",
                 "prompt": prompt,
-                "stream": False,
-                "format": RECONCILE_SCHEMA,
+                "format": response_schema,
                 "keep_alive": "10m",
-                "options": {"temperature": 0.0, "num_ctx": int(self.settings.get("num_ctx", 16384))},
+                "options": {
+                    "temperature": 0.0,
+                    "num_ctx": num_ctx,
+                    "num_predict": _analysis_output_token_limit(len(batch), num_ctx),
+                },
             }
             last_error = ""
             payload: dict[str, Any] | None = None
-            for attempt in range(int(self.settings.get("max_retries", 3))):
+            retry_count = int(self.settings.get("max_retries", 3))
+            for attempt in range(retry_count):
+                attempt_number = attempt + 1
+                self.log(
+                    f"Đang hợp nhất bí danh batch {batch_index}: "
+                    f"{len(batch)} nhân vật, lần {attempt_number}/{retry_count}."
+                )
                 try:
-                    response = self.session.post(
-                        f"{self.base_url}/api/generate",
-                        json=request,
-                        timeout=float(self.settings.get("timeout_seconds", 900)),
+                    payload = self._stream_json_response(
+                        request,
+                        stop_requested=stop_requested,
+                        activity=lambda elapsed, chars, batch_no=batch_index, current=attempt_number: self.log(
+                            f"Hợp nhất bí danh batch {batch_no} lần {current}/{retry_count} "
+                            f"vẫn đang chạy: {elapsed}s, đã nhận {chars:,} ký tự JSON."
+                        ),
                     )
-                    response.raise_for_status()
-                    payload = json.loads(response.json().get("response", "{}"))
                     break
+                except AnalysisRequestStopped:
+                    raise
                 except Exception as exc:  # noqa: BLE001
                     last_error = str(exc)
                     time.sleep(min(8, 2 ** attempt))

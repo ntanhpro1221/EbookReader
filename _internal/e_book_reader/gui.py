@@ -4,6 +4,7 @@ import json
 import multiprocessing as mp
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from queue import Empty
 from typing import Any
@@ -347,7 +348,10 @@ class MainWindow(QMainWindow):
         self.settings_store.sync()
 
     def _append_log(self, text: str) -> None:
-        self.log.append(text)
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        lines = str(text).splitlines() or [""]
+        for line in lines:
+            self.log.append(f"[{timestamp}] {line}")
         scrollbar = self.log.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
@@ -394,8 +398,11 @@ class MainWindow(QMainWindow):
         if running:
             paused = bool(self.pause_event and self.pause_event.is_set())
             self.start_button.setText("Tiếp tục" if paused else "Tạm dừng")
+            stopping = bool(self.stop_event and self.stop_event.is_set())
+            self.start_button.setEnabled(not self.received_finished and not stopping)
             return
         self.start_button.setText("Tiếp tục" if self.project_paths is not None else "Bắt đầu")
+        self.start_button.setEnabled(bool(self.files))
 
     def _detach_project_as_draft(self) -> None:
         if self.project_paths is None:
@@ -483,6 +490,7 @@ class MainWindow(QMainWindow):
         self.file_list.clear()
         self.file_list.addItems([str(path) for path in self.files])
         self._update_remove_files_button()
+        self._update_start_button()
 
     def _choose_output(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Chọn thư mục đầu ra", self.output_edit.text())
@@ -573,8 +581,6 @@ class MainWindow(QMainWindow):
             self._append_log("Đang dừng. Phần chưa commit sẽ được recovery kiểm tra khi tiếp tục.")
 
     def _running_controls(self, running: bool) -> None:
-        process_finishing = bool(self.process and self.process.is_alive() and self.received_finished)
-        self.start_button.setEnabled(not process_finishing)
         self.stop_button.setEnabled(running)
         self._set_project_selected(self.project_paths is not None)
         self._update_start_button()

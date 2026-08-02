@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -33,6 +34,7 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     _app, window, _store = _window(tmp_path)
 
     assert window.start_button.text() == "Bắt đầu"
+    assert window.start_button.isEnabled() is False
     assert "E Book Reader" not in {label.text() for label in window.findChildren(QLabel)}
     assert window.file_list.selectionMode() == QAbstractItemView.SelectionMode.ExtendedSelection
     assert window.main_splitter.orientation() == Qt.Orientation.Vertical
@@ -94,6 +96,7 @@ def test_primary_button_owns_pause_and_resume_states(tmp_path: Path) -> None:
     window._running_controls(True)
 
     assert window.start_button.text() == "Tạm dừng"
+    assert window.start_button.isEnabled() is True
     window._handle_primary_action()
     assert pause_event.is_set() is True
     assert window.start_button.text() == "Tiếp tục"
@@ -102,6 +105,30 @@ def test_primary_button_owns_pause_and_resume_states(tmp_path: Path) -> None:
     assert window.start_button.text() == "Tạm dừng"
 
     window.process = None
+    window.close()
+
+
+def test_start_button_requires_at_least_one_source_chapter(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+
+    assert window.start_button.isEnabled() is False
+    window.files = [tmp_path / "001.txt"]
+    window._refresh_file_list()
+    assert window.start_button.isEnabled() is True
+    window.files = []
+    window._refresh_file_list()
+    assert window.start_button.isEnabled() is False
+    window.close()
+
+
+def test_gui_log_prefixes_each_line_with_a_timestamp(tmp_path: Path) -> None:
+    _app, window, _store = _window(tmp_path)
+
+    window._append_log("Dòng một\nDòng hai")
+
+    lines = window.log.toPlainText().splitlines()
+    assert len(lines) == 2
+    assert all(re.fullmatch(r"\[\d{2}:\d{2}:\d{2}\] Dòng (một|hai)", line) for line in lines)
     window.close()
 
 
@@ -240,6 +267,7 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.title_edit.text() == "Book gần đây"
     assert window.file_list.count() == 1
     assert window.start_button.text() == "Tiếp tục"
+    assert window.start_button.isEnabled() is True
     assert window.add_files_button.isEnabled() is True
     assert window.add_folder_button.isEnabled() is True
     assert window.profile_combo.isEnabled() is True

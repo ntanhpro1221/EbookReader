@@ -5,6 +5,8 @@ import json
 import pytest
 
 from e_book_reader.analysis import (
+    ANALYSIS_OUTPUT_MAX_TOKENS,
+    AnalysisRequestStopped,
     OllamaBookAnalyzer,
     _validate,
     is_local_speaker,
@@ -42,22 +44,35 @@ class FakeDB:
 class FakeResponse:
     def __init__(self, payload):
         self.payload = payload
+        self.encoding = None
+        self.closed = False
 
     def raise_for_status(self):
         return None
 
-    def json(self):
-        return {"response": json.dumps(self.payload, ensure_ascii=False)}
+    def iter_lines(self, decode_unicode=False):
+        line = json.dumps(
+            {
+                "response": json.dumps(self.payload, ensure_ascii=False),
+                "done": True,
+            },
+            ensure_ascii=False,
+        )
+        yield line if decode_unicode else line.encode("utf-8")
+
+    def close(self):
+        self.closed = True
 
 
 class FakeSession:
     def __init__(self, payload):
         self.payload = payload
         self.request = None
+        self.response = FakeResponse(payload)
 
-    def post(self, _url, *, json, timeout):
-        self.request = {"json": json, "timeout": timeout}
-        return FakeResponse(self.payload)
+    def post(self, _url, *, json, timeout, stream):
+        self.request = {"json": json, "timeout": timeout, "stream": stream}
+        return self.response
 
 
 def analysis_item(segment_id):
@@ -131,6 +146,11 @@ def test_request_uses_constrained_batch_ids_and_restores_stable_ids() -> None:
     assert segment_schema["minItems"] == len(group)
     assert segment_schema["maxItems"] == len(group)
     assert segment_schema["items"]["properties"]["id"]["enum"] == ["S001", "S002"]
+    assert request["format"]["properties"]["pronunciations"]["maxItems"] >= len(group)
+    assert request["options"]["num_predict"] <= ANALYSIS_OUTPUT_MAX_TOKENS
+    assert request["stream"] is True
+    assert session.request["stream"] is True
+    assert session.response.closed is True
     assert '"id": "S001"' in request["prompt"]
     assert group[0]["stable_id"] not in request["prompt"]
 
@@ -195,3 +215,21 @@ def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
     validated = _validate([row], {"segments": [item]})
 
     assert validated[row["stable_id"]]["kind"] == row["kind_hint"]
+
+
+def test_streaming_analysis_request_can_be_cancelled() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    checks = 0
+
+    def stop_requested() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks > 1
+
+    with pytest.raises(AnalysisRequestStopped):
+        analyzer._request(group, stop_requested=stop_requested)
+
+    assert session.response.closed is True

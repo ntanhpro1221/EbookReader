@@ -42,6 +42,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Vocal-effect dùng thẻ phi ngôn ngữ gốc của VieNeu. Từ tượng thanh vẫn do TTS đọc, không giả làm file hiệu ứng âm thanh thật.
 - Giao diện hiển thị tiến độ riêng cho chuẩn bị văn bản, phân tích, phân vai, tạo audio, Whisper,
   sửa lỗi, ghép MP3 và xuất báo cáo.
+- Nút **Bắt đầu** chỉ bật khi đã có chapter nguồn. Mỗi dòng Log có timestamp để phân biệt tiến trình
+  đang chạy với thông tin cũ.
 - Trong lúc chạy, tool không dừng để hỏi lựa chọn. Trường hợp mơ hồ được xử lý theo policy và ghi vào report.
 
 ## An toàn và phục hồi
@@ -61,6 +63,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   trần toàn cục của model. Sai lệch tốc độ nhẹ được ghi warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
 - Vocal-effect và từ tượng thanh có giới hạn thời lượng riêng, không bị đánh giá bằng số ký tự/giây và không đưa qua Whisper.
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
+- Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
+  nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.
 - Nếu phải tự dừng vì SSD/RAM/GPU/driver hoặc lỗi nghiêm trọng, app checkpoint và gửi Windows notification.
 - Resource Manager tự nhường CPU/GPU/RAM/SSD cho ứng dụng foreground, sau đó tự tăng tải lại khi máy rảnh.
 
