@@ -17,7 +17,7 @@ Không cần mở PowerShell, không cần chạy file setup riêng.
 ## Những gì nằm ở thư mục gốc
 
 ```text
-ebook_reader/
+Ebook Reader/
 ├── Ebook Reader.lnk  # shortcut ứng dụng có icon, trỏ thẳng tới _internal\Ebook Reader.vbs
 ├── README.md     # hướng dẫn sử dụng
 └── _internal/    # chứa Ebook Reader.vbs, source, setup, test, model cache và tài liệu kỹ thuật
