@@ -155,17 +155,17 @@ class MainWindow(QMainWindow):
         self.source_splitter = QSplitter(Qt.Horizontal)
         self.source_splitter.setChildrenCollapsible(False)
         self.source_splitter.setHandleWidth(7)
-        files_box = QGroupBox("TXT thuộc cùng một sách")
-        files_layout = QVBoxLayout(files_box)
+        self.files_box = QGroupBox("Chapter nguồn")
+        files_layout = QVBoxLayout(self.files_box)
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.file_list.itemSelectionChanged.connect(self._update_remove_files_button)
         self.file_list.setAlternatingRowColors(True)
         self._apply_item_view_palette(self.file_list)
         files_layout.addWidget(self.file_list)
-        self.source_splitter.addWidget(files_box)
+        self.source_splitter.addWidget(self.files_box)
 
-        self.settings_box = QGroupBox("Thiết lập cho sách mới")
+        self.settings_box = QGroupBox("Thiết lập")
         form = QFormLayout(self.settings_box)
         self.profile_combo = QComboBox()
         self.profile_combo.addItem("Cân bằng", "balanced")
@@ -270,7 +270,7 @@ class MainWindow(QMainWindow):
     def _apply_item_view_palette(view: QAbstractItemView) -> None:
         palette = view.palette()
         base = palette.color(QPalette.ColorRole.Base)
-        alternate = base.lighter(116) if base.lightness() < 128 else base.darker(106)
+        alternate = base.darker(115 if base.lightness() < 128 else 104)
         palette.setColor(QPalette.ColorRole.AlternateBase, alternate)
         view.setPalette(palette)
 
@@ -281,15 +281,20 @@ class MainWindow(QMainWindow):
             QPalette.ColorGroup.Active,
             QPalette.ColorRole.HighlightedText,
         )
-        for view in (self.file_list, self.chapter_table):
+        for view, selector in (
+            (self.file_list, "QListWidget"),
+            (self.chapter_table, "QTableWidget"),
+        ):
             palette = view.palette()
             for group in (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive):
                 palette.setColor(group, QPalette.ColorRole.Highlight, highlight)
                 palette.setColor(group, QPalette.ColorRole.HighlightedText, highlighted_text)
             view.setPalette(palette)
             view.setStyleSheet(
-                f"selection-background-color: {highlight.name()}; "
-                f"selection-color: {highlighted_text.name()};"
+                f"{selector}::item:selected {{"
+                f"background-color: {highlight.name()};"
+                f"color: {highlighted_text.name()};"
+                "}"
             )
 
     def _restore_ui(self, *, restore_recent: bool) -> None:
@@ -380,15 +385,13 @@ class MainWindow(QMainWindow):
         self.max_temp.setEnabled(not running)
         self.full_book.setEnabled(not running)
         self.open_folder_button.setEnabled(selected)
+        self.settings_box.setTitle("Thiết lập")
         if selected:
-            self.settings_box.setTitle("Thiết lập của sách")
-            self.settings_note.setText(
-                "Có thể chỉnh ngay. Thay đổi đầu tiên sẽ tạo một bản sách mới và giữ nguyên "
-                "sách hiện tại trên ổ đĩa."
-            )
+            self.settings_note.clear()
+            self.settings_note.hide()
         else:
-            self.settings_box.setTitle("Thiết lập cho sách mới")
             self.settings_note.setText("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
+            self.settings_note.show()
         self._update_remove_files_button()
         self._update_start_button()
 

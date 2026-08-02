@@ -42,6 +42,8 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     assert window.full_book.isChecked() is False
     assert window.stop_button.text() == "Dừng"
     assert window.book_box.title() == "Sách"
+    assert window.files_box.title() == "Chapter nguồn"
+    assert window.settings_box.title() == "Thiết lập"
     assert window.chapters_box.title() == "Tiến độ"
     assert window.log_box.title() == "Log"
     assert window.add_files_button.text() == "Thêm file"
@@ -113,6 +115,7 @@ def test_item_views_use_subtle_alternating_rows_and_text_selection_blue(tmp_path
             QPalette.ColorRole.Highlight,
         )
         assert base != alternate
+        assert alternate.lightness() < base.lightness()
         assert 5 <= abs(base.lightness() - alternate.lightness()) <= 24
         assert (
             palette.color(QPalette.ColorGroup.Active, QPalette.ColorRole.Highlight)
@@ -122,6 +125,7 @@ def test_item_views_use_subtle_alternating_rows_and_text_selection_blue(tmp_path
             palette.color(QPalette.ColorGroup.Inactive, QPalette.ColorRole.Highlight)
             == log_highlight
         )
+        assert "::item:selected" in view.styleSheet()
         assert log_highlight.name() in view.styleSheet()
     assert "QPushButton:disabled" in window.centralWidget().styleSheet()
     assert "background-color: palette(dark)" in window.centralWidget().styleSheet()
@@ -240,7 +244,8 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.resource_combo.isEnabled() is True
     assert window.max_temp.isEnabled() is True
     assert window.full_book.isEnabled() is True
-    assert window.settings_box.title() == "Thiết lập của sách"
+    assert window.settings_box.title() == "Thiết lập"
+    assert window.settings_note.isHidden() is True
     window.file_list.item(0).setSelected(True)
     assert window.remove_files_button.isEnabled() is True
 
@@ -251,7 +256,8 @@ def test_startup_opens_the_last_selected_project(tmp_path: Path) -> None:
     assert window.files == [source.resolve()]
     assert window.start_button.text() == "Bắt đầu"
     assert window.profile_combo.isEnabled() is True
-    assert window.settings_box.title() == "Thiết lập cho sách mới"
+    assert window.settings_box.title() == "Thiết lập"
+    assert window.settings_note.isHidden() is False
     window.close()
 
 

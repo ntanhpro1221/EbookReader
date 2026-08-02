@@ -17,9 +17,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - one-click startup ẩn qua `START.vbs`, chỉ hiện console khi cần setup;
 - GUI không còn tiêu đề lớn, tự đổi nút `Bắt đầu`/`Tiếp tục`, tự mở project được chọn gần nhất;
   nút chọn TXT/folder vẫn dùng được khi project cũ đang dừng và chuyển sang book mới sau khi chọn nguồn;
-  settings chỉnh được ngay sau khi mở lại và thay đổi sẽ tạo project mới theo settings hash;
+  khối `Thiết lập` chỉnh được ngay sau khi mở lại và thay đổi sẽ tạo project mới theo settings hash;
   thêm/xóa TXT tạo draft mới mà không sửa sách cũ; bốn nút nguồn có cùng kích thước; danh sách/bảng
-  có alternate-row đủ tương phản và selection dùng đúng màu highlight của ô Log kể cả khi mất focus;
+  có alternate-row tối hơn nền thường và selection dùng đúng màu highlight của ô Log kể cả khi mất focus;
   nested splitter và từng cột tiến độ kéo được, kích thước cột được lưu, đường dẫn MP3 không bị elide;
   nút chính tự đổi `Bắt đầu`/`Tạm dừng`/`Tiếp tục`, chỉ còn một nút `Dừng` riêng và mặc định chỉ xuất
   MP3 theo chapter; đóng cửa sổ kết thúc cây worker mà không đợi checkpoint;
