@@ -69,13 +69,18 @@ def test_gui_has_compact_header_nested_splitters_and_one_stop(tmp_path: Path) ->
     }
     assert len(available_narrators) == 10
     assert {"Minh Đức", "Minh Triết", "Mai Anh", "Thùy Dung"}.isdisjoint(available_narrators)
-    assert window.narrator_control_layout.itemAt(0).widget() is window.narrator_voice_combo
-    assert window.narrator_control_layout.itemAt(1).widget() is window.voice_foldout_button
-    assert window.narrator_control_layout.itemAt(2).widget() is window.voice_tools_widget
+    book_form = window.book_settings_box.layout()
+    assert book_form.labelForField(window.narrator_voice_combo) is window.voice_foldout_button
+    assert window.voice_foldout_button.text() == "Giọng người kể:"
+    assert not hasattr(window, "narrator_control_layout")
     assert window.voice_tools_layout.contentsMargins().left() > 0
-    assert window.voice_tools_layout.itemAt(0).widget() is window.narrator_gender_combo
-    assert window.voice_tools_layout.itemAt(1).widget() is window.narrator_region_combo
-    assert window.voice_tools_layout.itemAt(2).widget() is window.preview_button
+    assert window.voice_tools_layout.rowCount() == 3
+    assert window.voice_tools_layout.labelForField(window.narrator_gender_combo) is window.voice_gender_label
+    assert window.voice_tools_layout.labelForField(window.narrator_region_combo) is window.voice_region_label
+    assert window.voice_tools_layout.labelForField(window.preview_button) is window.voice_preview_label
+    assert window.voice_gender_label.text() == "Giới tính:"
+    assert window.voice_region_label.text() == "Miền:"
+    assert window.voice_preview_label.text() == "Nghe thử:"
     assert window.voice_foldout_button.isChecked() is True
     assert window.voice_tools_widget.isHidden() is False
     assert not hasattr(window, "settings_note")

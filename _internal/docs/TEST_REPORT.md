@@ -53,8 +53,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ; phân vai loại hoàn toàn preset tin tức,
   ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
 - dropdown người kể có đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
-  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; foldout bên dưới dropdown chứa hai bộ lọc
-  và nút preview trên một hàng thụt lề; Thái Sơn và Ngọc Linh đứng đầu danh sách;
+  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc; label `Giọng người kể` là header foldout,
+  bên dưới là ba dòng con có label riêng cho giới tính, miền và nghe thử; Thái Sơn và Ngọc Linh đứng đầu danh sách;
 - thay đổi narrator trực tiếp tự phát preview, nút preview phát lại; 10 WAV không phải tin tức được đóng gói
   bằng package-data và mapping preset nào cũng phải trỏ tới file tồn tại;
 - profile chất lượng và narrator được khóa theo sách; resource mode và ngưỡng GPU là global, không detach

@@ -30,8 +30,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry, bí danh, cách phát âm và voice casting thống nhất.
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown giọng chứa
-  toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Bên dưới dropdown là foldout `Tùy chọn giọng`:
-  hai bộ lọc và nút preview nằm trên một hàng thụt vào; Thái Sơn, Ngọc Linh đứng đầu danh sách.
+  toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng người kể` là header foldout;
+  bên dưới có ba dòng con thụt vào với label riêng: `Giới tính`, `Miền`, `Nghe thử`. Thái Sơn và Ngọc Linh
+  đứng đầu danh sách.
 - Chọn một preset trong dropdown sẽ tự phát WAV preview; nút `Phát preview` cho phép nghe lại. App đóng gói
   sẵn preview cho cả 10 preset hợp lệ nên không nạp model TTS chỉ để nghe thử.
 - Chất lượng và giọng người kể được lưu cùng sách và khóa sau khi sách bắt đầu. Chế độ tài nguyên
