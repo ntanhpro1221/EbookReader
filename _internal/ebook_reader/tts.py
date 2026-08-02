@@ -12,13 +12,12 @@ import pyworld
 from .audio_io import (
     AudioQualityError,
     atomic_write_wav,
-    constrain_special_audio_duration,
     segment_duration_policy,
 )
 from .database import ProjectDB
 from .io_utils import stable_int
 from .models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
-from .text_processing import VOCAL_EFFECT_KIND, vocal_effect_tag
+from .text_processing import normalize_vocalizations_for_tts
 
 
 FATAL_TTS_MARKERS = (
@@ -207,16 +206,6 @@ class VieNeuEngine:
             )
         return preset
 
-    @staticmethod
-    def _styled_text(row: Any) -> str:
-        text = str(row["text"])
-        if str(_row_value(row, "kind", "")) == VOCAL_EFFECT_KIND:
-            tag = vocal_effect_tag(text)
-            if not tag:
-                raise AudioQualityError(f"Unsupported vocal effect text: {text!r}")
-            return tag
-        return text
-
     def generate_one(self, row: Any, profile: Any, seed: int) -> np.ndarray:
         self.load()
         _set_generation_seed(seed)
@@ -225,7 +214,7 @@ class VieNeuEngine:
         try:
             return np.asarray(
                 self.tts.infer(
-                    self._styled_text(row),
+                    str(row["text"]),
                     voice=voice,
                     style=style,
                     **vieneu_sampling_for_segment(row, self.settings),
@@ -307,7 +296,8 @@ class TTSCoordinator:
             return self._exact_pronunciation_map.get(match.group(0), match.group(0))
 
         text = self._exact_pronunciation_pattern.sub(replace_exact, str(row["text"]))
-        return self._pronunciation_pattern.sub(replace, text)
+        text = self._pronunciation_pattern.sub(replace, text)
+        return normalize_vocalizations_for_tts(text)
 
     def _spoken_row(self, row: Any) -> dict[str, Any]:
         result = dict(row)
@@ -348,28 +338,14 @@ class TTSCoordinator:
                     f"Bỏ biến thể cao độ {pitch_steps:+d} cho segment {row['stable_id']} "
                     f"vì xử lý pitch lỗi: {exc}"
                 )
-            audio, duration_limited = constrain_special_audio_duration(
-                audio,
-                self.vieneu.sample_rate,
-                str(row["text"]),
-                self.settings,
-                row,
-            )
-            if duration_limited:
-                self.log(
-                    f"Hiệu ứng {row['stable_id']} dài quá giới hạn; "
-                    "đã giới hạn bằng fade-out thay vì làm lỗi chapter."
-                )
             checksum, metrics = atomic_write_wav(
                 output,
                 audio,
                 self.vieneu.sample_rate,
-                str(row["text"]),
+                str(spoken_row["text"]),
                 self.settings,
-                segment=row,
+                segment=spoken_row,
             )
-            if duration_limited:
-                metrics["effect_duration_limited"] = 1.0
             if pitch_variant_skipped:
                 metrics["pitch_variant_skipped"] = 1.0
             return checksum, metrics, seed

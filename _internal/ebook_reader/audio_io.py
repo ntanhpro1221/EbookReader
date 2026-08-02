@@ -12,7 +12,6 @@ import pyloudnorm as pyln
 import soundfile as sf
 
 from .io_utils import atomic_write_text, ffmpeg_executable, run_hidden, sha256_file
-from .text_processing import SPECIAL_AUDIO_KINDS
 
 
 class AudioQualityError(RuntimeError):
@@ -47,9 +46,6 @@ GENERATION_PADDING_SECONDS = 2.0
 MIN_GENERATION_SECONDS = 3.0
 MIN_VALIDATION_SECONDS = 5.0
 VALIDATION_PADDING_SECONDS = 8.0
-SPECIAL_AUDIO_GENERATION_SECONDS = 4.5
-SPECIAL_AUDIO_VALIDATION_SECONDS = 5.0
-SPECIAL_AUDIO_FADE_SECONDS = 0.12
 DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
 
 
@@ -77,26 +73,21 @@ def segment_duration_policy(
     segment: Any | None = None,
 ) -> SegmentDurationPolicy:
     tts = (settings or {}).get("tts", {})
-    kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
-    if kind in SPECIAL_AUDIO_KINDS:
-        generation_seconds = SPECIAL_AUDIO_GENERATION_SECONDS
-        validation_seconds = SPECIAL_AUDIO_VALIDATION_SECONDS
-    else:
-        pace = str(_segment_value(segment, "pace", "normal")) if segment is not None else "normal"
-        configured_bounds = tts.get("pace_chars_per_second", {})
-        configured = configured_bounds.get(pace, DEFAULT_PACE_LOWER_BOUNDS.get(pace, 10.5))
-        lower_bound = float(configured[0] if isinstance(configured, (list, tuple)) else configured)
-        speakable_chars = max(1, sum(char.isalnum() for char in text))
-        generation_seconds = max(
-            MIN_GENERATION_SECONDS,
-            speakable_chars / max(1.0, lower_bound) + GENERATION_PADDING_SECONDS,
-        )
-        chars = max(1, len(text.strip()))
-        max_seconds_per_100_chars = float(tts.get("max_seconds_per_100_chars", 13.0))
-        validation_seconds = max(
-            MIN_VALIDATION_SECONDS,
-            chars / 100 * max_seconds_per_100_chars + VALIDATION_PADDING_SECONDS,
-        )
+    pace = str(_segment_value(segment, "pace", "normal")) if segment is not None else "normal"
+    configured_bounds = tts.get("pace_chars_per_second", {})
+    configured = configured_bounds.get(pace, DEFAULT_PACE_LOWER_BOUNDS.get(pace, 10.5))
+    lower_bound = float(configured[0] if isinstance(configured, (list, tuple)) else configured)
+    speakable_chars = max(1, sum(char.isalnum() for char in text))
+    generation_seconds = max(
+        MIN_GENERATION_SECONDS,
+        speakable_chars / max(1.0, lower_bound) + GENERATION_PADDING_SECONDS,
+    )
+    chars = max(1, len(text.strip()))
+    max_seconds_per_100_chars = float(tts.get("max_seconds_per_100_chars", 13.0))
+    validation_seconds = max(
+        MIN_VALIDATION_SECONDS,
+        chars / 100 * max_seconds_per_100_chars + VALIDATION_PADDING_SECONDS,
+    )
 
     requested_frames = math.ceil(generation_seconds / VIENEU_V3_FRAME_SECONDS)
     safe_frames = math.floor(
@@ -113,28 +104,6 @@ def segment_duration_policy(
     if policy.generation_ceiling_seconds >= policy.validation_max_seconds:
         raise ValueError("VieNeu generation budget must stay below the audio validation limit")
     return policy
-
-
-def constrain_special_audio_duration(
-    audio: Any,
-    sample_rate: int,
-    text: str,
-    settings: dict[str, Any],
-    segment: Any | None,
-) -> tuple[np.ndarray, bool]:
-    array = np.asarray(audio, dtype=np.float32)
-    kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
-    if kind not in SPECIAL_AUDIO_KINDS or array.ndim != 1 or sample_rate <= 0:
-        return array, False
-    policy = segment_duration_policy(text, settings, segment)
-    safe_seconds = policy.validation_max_seconds - VIENEU_V3_FRAME_SECONDS
-    safe_samples = max(1, int(math.floor(safe_seconds * sample_rate)))
-    if array.size <= safe_samples:
-        return array, False
-    limited = array[:safe_samples].copy()
-    fade_samples = min(limited.size, max(1, int(round(SPECIAL_AUDIO_FADE_SECONDS * sample_rate))))
-    limited[-fade_samples:] *= np.linspace(1.0, 0.0, fade_samples, dtype=np.float32)
-    return limited, True
 
 
 def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
@@ -201,9 +170,8 @@ def normalize_segment_level(
     lufs_targets = audio_cfg.get("segment_target_lufs")
     if isinstance(lufs_targets, dict) and "normal" in lufs_targets:
         target_level = float(lufs_targets.get(volume, lufs_targets["normal"]))
-        kind = str(_segment_value(segment, "kind", ""))
         speaker = str(_segment_value(segment, "speaker", ""))
-        if speaker == "NARRATOR" and kind not in SPECIAL_AUDIO_KINDS:
+        if speaker == "NARRATOR":
             target_level += float(audio_cfg.get("segment_narrator_offset_db", 0.0))
         if volume == "normal":
             emotion = str(_segment_value(segment, "emotion", "neutral"))
@@ -253,7 +221,6 @@ def validate_audio_array(
         metrics["loudness_lufs"] = loudness
     chars = max(1, len(text.strip()))
     min_duration = max(0.20, chars / 100 * float(settings["tts"]["min_seconds_per_100_chars"]))
-    kind = str(_segment_value(segment, "kind", "")) if segment is not None else ""
     max_duration = segment_duration_policy(text, settings, segment).validation_max_seconds
     if metrics["duration"] < min_duration:
         raise AudioQualityError(f"audio too short: {metrics['duration']:.2f}s < {min_duration:.2f}s")
@@ -266,7 +233,6 @@ def validate_audio_array(
     speakable_chars = sum(char.isalnum() for char in text)
     if (
         segment is not None
-        and kind not in SPECIAL_AUDIO_KINDS
         and speakable_chars >= int(settings["tts"].get("rate_check_min_chars", 24))
     ):
         pace = str(_segment_value(segment, "pace", "normal"))

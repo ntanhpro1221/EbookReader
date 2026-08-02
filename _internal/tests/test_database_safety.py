@@ -113,6 +113,15 @@ def test_pronunciation_is_applied_by_vieneu_coordinator(tmp_path: Path) -> None:
     assert coordinator.spoken_text({"text": "Edelweiss nở hoa."}) == "Ê đen vai nở hoa."
 
 
+def test_vocalization_normalization_is_applied_without_changing_source_row(tmp_path: Path) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+    row = {"text": "[thở dài] Haizzzzz.... Tôi hiểu rồi."}
+
+    assert coordinator.spoken_text(row) == "Hầy... Hầy... Tôi hiểu rồi."
+    assert row["text"] == "[thở dài] Haizzzzz.... Tôi hiểu rồi."
+
+
 def test_contextual_english_name_pronunciation_preserves_lowercase_vietnamese_word(
     tmp_path: Path,
 ) -> None:

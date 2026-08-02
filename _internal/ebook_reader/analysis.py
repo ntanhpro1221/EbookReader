@@ -19,10 +19,9 @@ from .models import (
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
 )
 from .process_utils import terminate_process_tree
-from .text_processing import SPECIAL_AUDIO_KINDS, TEXT_SFX_KIND, VOCAL_EFFECT_KIND
 
 
-ALLOWED_KINDS = {"narration", "dialogue", "thought", VOCAL_EFFECT_KIND, TEXT_SFX_KIND}
+ALLOWED_KINDS = {"narration", "dialogue", "thought"}
 ALLOWED_GENDERS = {"male", "female", "unknown"}
 ALLOWED_AGES = {"child", "teen", "young", "adult", "elderly", "unknown"}
 ALLOWED_EMOTIONS = {
@@ -144,10 +143,9 @@ Quy tắc:
 3. Độc thoại nội tâm dùng kind=thought và speaker là nhân vật đang nghĩ. Hãy dùng ngữ cảnh lân cận
    và ngôi kể để xác định nhân vật; không dùng NARRATOR. Chỉ trả UNKNOWN khi thực sự không thể
    suy ra, không được bịa ra danh tính.
-4. Giữ nguyên hint=vocal_effect hoặc hint=text_sfx. vocal_effect vẫn dùng speaker của người phát ra
-   âm thanh nếu suy ra được; text_sfx luôn dùng speaker=NARRATOR. Chỉ dùng vocal_effect cho âm thanh
-   phát ra từ miệng đứng riêng và text_sfx cho từ tượng thanh đứng riêng; câu có lời nói không được đổi
-   cả câu thành effect.
+4. Chỉ dùng kind=narration, dialogue hoặc thought. Từ tượng thanh như rầm/uỳnh vẫn là một phần của câu
+   người kể hoặc nhân vật đang đọc. Cụm cảm thán như ha/haiz/hừm và chỉ dẫn [cười]/[thở dài]/[hắng giọng]
+   cũng là lời đọc bình thường của đúng speaker; không tạo kind hiệu ứng riêng và không tách chúng khỏi câu.
 5. Không sửa văn bản. Không bịa nhân vật chỉ vì đại từ hắn/cô ấy/nàng.
 6. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng. pace và volume phải phản ánh
    cách thể hiện: lời thì thầm thường soft, lời quát/giận dữ mạnh thường loud, không mặc định mọi câu là normal.
@@ -249,7 +247,7 @@ def _heuristic(row: Any) -> dict[str, Any]:
     text = str(row["text"])
     lowered = text.casefold()
     kind = str(row["kind_hint"])
-    speaker = "NARRATOR" if kind in {"narration", TEXT_SFX_KIND} else "UNKNOWN"
+    speaker = "NARRATOR" if kind == "narration" else "UNKNOWN"
     emotion, intensity, pace, volume = "neutral", 1, "normal", "normal"
     if any(word in lowered for word in ("khóc", "nước mắt", "đau lòng", "buồn", "tuyệt vọng")):
         emotion, pace, volume = "sad", "slow", "soft"
@@ -290,14 +288,11 @@ def _validate(
         if seg_id not in expected or seg_id in result:
             continue
         source_kind = str(rows_by_id[seg_id]["kind_hint"])
-        analyzed_kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, "narration")
-        if source_kind in SPECIAL_AUDIO_KINDS or analyzed_kind in SPECIAL_AUDIO_KINDS:
-            kind = source_kind
-        else:
-            kind = analyzed_kind
+        source_default = source_kind if source_kind in ALLOWED_KINDS else "narration"
+        kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, source_default)
         speaker = _canonical_speaker(item.get("speaker"))
         unresolved_thought_fallback = False
-        if kind in {"narration", TEXT_SFX_KIND}:
+        if kind == "narration":
             speaker = "NARRATOR"
         elif kind == "thought" and speaker in {"NARRATOR", "UNKNOWN"}:
             if not allow_unresolved_thought_narrator:

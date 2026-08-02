@@ -136,9 +136,10 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert db.casting_is_finalized() is True
     segments = db.list_segments()
     assert int(segments[0]["generation_seed"]) == 1
-    assert segments[0]["kind"] == "text_sfx"
+    assert segments[0]["kind"] == "narration"
+    assert segments[0]["text"] == "Rầm! Cánh cửa mở ra."
     assert segments[0]["status"] in {"verified", "warning"}
-    assert "Rầm!" not in verified_texts
+    assert "Rầm! Cánh cửa mở ra." in verified_texts
     assert any(kind == "chapter_completed" for kind, _ in events)
     progress_labels = [
         str(payload["label"])

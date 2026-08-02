@@ -67,9 +67,10 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   cho mọi giọng, chapter, lần resume và câu đối chiếu ASR.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
-- Vocal-effect đứng riêng như `ha...`, `haiz...`, `[cười]`, `[thở dài]`, `[hắng giọng]` và từ tượng thanh
-  như `rầm`, `uỳnh` được tách thành segment độc lập, giữ đúng vị trí khi ghép chapter.
-- Vocal-effect dùng thẻ phi ngôn ngữ gốc của VieNeu. Từ tượng thanh vẫn do TTS đọc, không giả làm file hiệu ứng âm thanh thật.
+- Từ tượng thanh như `rầm`, `uỳnh` ở nguyên trong câu của người kể hoặc nhân vật, được đọc và kiểm tra tốc độ như
+  nội dung bình thường. Cụm cảm thán như `ha...`, `haiz...`, `hừm...` cũng giữ speaker/kind của câu gốc.
+- App không dùng các cue phi ngôn ngữ thử nghiệm của VieNeu. Chỉ bản sao `spoken_text` đưa vào TTS được chuẩn hóa,
+  ví dụ `haizzzzz → hầy`, `[cười] → ha ha`, `[thở dài] → hầy`; văn bản và hash nguồn trong SQLite không đổi.
 - Giao diện hiển thị tiến độ riêng cho chuẩn bị văn bản, phân tích, phân vai, tạo audio, Whisper,
   sửa lỗi, ghép MP3 và xuất báo cáo.
 - Nút **Bắt đầu** chỉ bật khi đã có chapter nguồn. Mỗi dòng Log có timestamp để phân biệt tiến trình
@@ -99,9 +100,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   trần toàn cục của model. Ngân sách frame VieNeu và giới hạn kiểm tra dùng chung một chính sách thời lượng,
   nên app không thể vừa cho model sinh dài hơn rồi tự từ chối chính kết quả đó. Sai lệch tốc độ nhẹ được ghi
   warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
-- Vocal-effect và từ tượng thanh có giới hạn thời lượng riêng, không bị đánh giá bằng số ký tự/giây và không đưa qua
-  Whisper. Nếu runtime vẫn trả một hiệu ứng quá dài, app fade-out riêng hiệu ứng đó và ghi warning; lời kể,
-  hội thoại và nội tâm không bao giờ bị cắt để lách kiểm tra.
+- Mọi segment narration/dialogue/thought đều dùng chung chính sách thời lượng, kiểm tra tốc độ khi đủ dài và đối chiếu
+  Whisper bằng đúng `spoken_text`. App không cắt audio để lách validation; kết quả quá dài phải retry hoặc thất bại.
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.

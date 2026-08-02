@@ -92,22 +92,13 @@ def test_emotion_changes_delivery_but_not_locked_voice(monkeypatch) -> None:
         "intensity": 0,
     }
     excited = {**neutral, "emotion": "excited", "intensity": 3}
-    laughter = {
-        **excited,
-        "text": "“Ha…”",
-        "kind": "vocal_effect",
-    }
-
     engine.generate_one(neutral, profile, 1)
     engine.generate_one(excited, profile, 2)
-    engine.generate_one(laughter, profile, 3)
 
-    assert [call[1]["voice"] for call in runtime.calls] == ["Thái Sơn", "Thái Sơn", "Thái Sơn"]
+    assert [call[1]["voice"] for call in runtime.calls] == ["Thái Sơn", "Thái Sơn"]
     assert runtime.calls[0][0] == neutral["text"]
     assert runtime.calls[1][0] == neutral["text"]
-    assert runtime.calls[2][0] == "[cười]"
     assert runtime.calls[1][1]["temperature"] > runtime.calls[0][1]["temperature"]
-    assert runtime.calls[2][1]["max_new_frames"] < 300
     assert vieneu_sampling_for_segment(excited)["top_p"] > vieneu_sampling_for_segment(neutral)["top_p"]
     assert vieneu_sampling_for_segment({**neutral, "pace": "slow"})["silence_p"] > (
         vieneu_sampling_for_segment({**neutral, "pace": "fast"})["silence_p"]
@@ -226,11 +217,6 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
         lambda _row, _profile, _seed: np.asarray([0.1, -0.1], dtype=np.float32),
     )
     monkeypatch.setattr(tts_module, "apply_pitch_variant", lambda audio, *_args: audio)
-    monkeypatch.setattr(
-        tts_module,
-        "constrain_special_audio_duration",
-        lambda audio, *_args: (audio, False),
-    )
     monkeypatch.setattr(
         tts_module,
         "atomic_write_wav",

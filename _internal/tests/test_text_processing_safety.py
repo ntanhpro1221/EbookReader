@@ -6,10 +6,9 @@ import pytest
 
 from ebook_reader.io_utils import decode_text_bytes, sha256_file
 from ebook_reader.text_processing import (
-    TEXT_SFX_KIND,
-    VOCAL_EFFECT_KIND,
     build_chapter_manifest,
     load_and_segment_chapter,
+    normalize_vocalizations_for_tts,
     segment_chapter_text,
 )
 
@@ -115,26 +114,42 @@ def test_punctuation_only_content_never_becomes_tts_segment() -> None:
     assert segment_chapter_text(1, "…\n,\n.") == []
 
 
-def test_standalone_vocalizations_become_vocal_effect_segments() -> None:
+def test_vocalizations_remain_ordinary_dialogue_segments() -> None:
     rows = segment_chapter_text(1, '“Ha…”\n“Ha ha ha...”\n“Haiz…”\n“Hầy...”\n“Hừm...”\n“Khụ khụ...”\n“Ha?”')
 
-    assert [row["kind_hint"] for row in rows] == [
-        VOCAL_EFFECT_KIND,
-        VOCAL_EFFECT_KIND,
-        VOCAL_EFFECT_KIND,
-        VOCAL_EFFECT_KIND,
-        VOCAL_EFFECT_KIND,
-        VOCAL_EFFECT_KIND,
-        "dialogue",
+    assert [row["kind_hint"] for row in rows] == ["dialogue"] * 7
+    assert [row["text"] for row in rows] == [
+        '“Ha…”',
+        '“Ha ha ha...”',
+        '“Haiz…”',
+        '“Hầy...”',
+        '“Hừm...”',
+        '“Khụ khụ...”',
+        '“Ha?”',
     ]
 
 
-def test_inline_effect_and_text_sfx_are_split_into_independent_segments() -> None:
+def test_vocal_cues_and_onomatopoeia_stay_in_their_spoken_sentences() -> None:
     rows = segment_chapter_text(1, '— [cười] Ta thắng rồi!\n\nRầm! Cánh cửa bật mở.')
 
     assert [(row["text"], row["kind_hint"]) for row in rows] == [
-        ("[cười]", VOCAL_EFFECT_KIND),
-        ("Ta thắng rồi!", "dialogue"),
-        ("Rầm!", TEXT_SFX_KIND),
-        ("Cánh cửa bật mở.", "narration"),
+        ("— [cười] Ta thắng rồi!", "dialogue"),
+        ("Rầm! Cánh cửa bật mở.", "narration"),
     ]
+
+
+@pytest.mark.parametrize(
+    ("source", "spoken"),
+    [
+        ('“Ha…”', '“Ha…”'),
+        ('“Haiz…”', '“Hầy…”'),
+        ('“Haizzzzz....”', '“Hầy...”'),
+        ('“Hừmmmm...”', '“Hừm...”'),
+        ('“Hahaha!”', '“Ha ha ha!”'),
+        ("[cười] Ta thắng rồi!", "Ha ha... Ta thắng rồi!"),
+        ("[thở dài].", "Hầy..."),
+        ("[hắng giọng] Tôi xin nói tiếp.", "Khụ khụ... Tôi xin nói tiếp."),
+    ],
+)
+def test_vocalizations_are_normalized_only_for_tts(source: str, spoken: str) -> None:
+    assert normalize_vocalizations_for_tts(source) == spoken

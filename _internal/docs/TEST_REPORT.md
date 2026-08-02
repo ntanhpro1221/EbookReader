@@ -56,11 +56,13 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - required-analysis batch failure không được fallback ngầm;
 - stereo WAV bị từ chối, ASR optional chuyển lỗi inference thành warning;
 - cụm từ đặt trong ngoặc kép không bị nhận nhầm thành hội thoại, segment chỉ có dấu câu không đi vào TTS;
-- vocal-effect (`ha...`, `haiz...`, thẻ VieNeu) và từ tượng thanh (`rầm`, `uỳnh`...) được tách thành
-  segment checkpoint riêng; effect dùng giới hạn thời lượng riêng và bỏ qua kiểm tra tốc độ/Whisper;
+- cụm cảm thán (`ha...`, `haiz...`, `hừm...`) và từ tượng thanh (`rầm`, `uỳnh`...) giữ nguyên trong câu
+  narration/dialogue/thought; parser không tạo kind hiệu ứng riêng;
+- `spoken_text` chuẩn hóa cách viết kéo dài và chuyển thẻ VieNeu thử nghiệm thành âm tiết có thể đọc, trong khi
+  văn bản/hash nguồn không đổi; cùng `spoken_text` được dùng cho TTS và expected ASR;
 - ngân sách frame và validator dùng chung một duration policy dựa trên codec VieNeu v3 3.840 sample/frame;
-  ma trận kind/pace/độ dài chứng minh mọi ngân sách sinh đều còn headroom validation; effect quá dài được
-  fade-out và warning, còn lời kể/hội thoại/nội tâm không bị cắt;
+  ma trận kind/pace/độ dài chứng minh mọi ngân sách sinh đều còn headroom validation và không audio nào bị
+  fade-out để lách kiểm tra;
 - giới hạn frame VieNeu thay đổi theo độ dài/pace để câu ngắn không chạy tới trần model; lệch pace nhẹ
   trở thành warning còn sai lệch cực đoan vẫn bị từ chối;
 - nhánh kết thúc còn chapter lỗi gửi Windows notification, giữ `BookStatus.ERROR`/checkpoint và worker phát

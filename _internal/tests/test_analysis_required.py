@@ -357,38 +357,30 @@ def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
     assert local_speaker_display(speakers[0]) == "NPC áo xanh"
 
 
-def test_source_effect_kinds_cannot_be_overwritten_by_analysis() -> None:
-    vocal_row = {
+def test_onomatopoeia_remains_normal_narration() -> None:
+    row = {
         **analysis_group()[0],
-        "kind_hint": "vocal_effect",
-        "text": "“Ha…”",
+        "kind_hint": "narration",
+        "text": "Rầm! Cánh cửa bật mở.",
     }
-    effect_item = analysis_item(vocal_row["stable_id"])
-    effect_item.update({"kind": "dialogue", "speaker": "Lucien"})
-    sfx_row = {
-        **analysis_group()[1],
-        "kind_hint": "text_sfx",
-        "text": "Rầm!",
-    }
-    sfx_item = analysis_item(sfx_row["stable_id"])
-    sfx_item.update({"kind": "dialogue", "speaker": "UNKNOWN"})
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "narration", "speaker": "UNKNOWN"})
 
-    validated = _validate([vocal_row, sfx_row], {"segments": [effect_item, sfx_item]})
+    validated = _validate([row], {"segments": [item]})
 
-    assert validated[vocal_row["stable_id"]]["kind"] == "vocal_effect"
-    assert validated[vocal_row["stable_id"]]["speaker"] == "Lucien"
-    assert validated[sfx_row["stable_id"]]["kind"] == "text_sfx"
-    assert validated[sfx_row["stable_id"]]["speaker"] == "NARRATOR"
+    assert validated[row["stable_id"]]["kind"] == "narration"
+    assert validated[row["stable_id"]]["speaker"] == "NARRATOR"
 
 
 def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
-    row = analysis_group()[0]
+    row = {**analysis_group()[0], "kind_hint": "dialogue", "text": "“Ha…”"}
     item = analysis_item(row["stable_id"])
     item.update({"kind": "vocal_effect", "speaker": "Lucien"})
 
     validated = _validate([row], {"segments": [item]})
 
-    assert validated[row["stable_id"]]["kind"] == row["kind_hint"]
+    assert validated[row["stable_id"]]["kind"] == "dialogue"
+    assert validated[row["stable_id"]]["speaker"] == "Lucien"
 
 
 def test_thought_uses_narrator_only_when_explicit_fallback_is_enabled() -> None:

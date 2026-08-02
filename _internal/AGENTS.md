@@ -49,8 +49,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   Lỗi pitch hoặc không đủ voiced frame phải giữ waveform gốc, ghi warning và không retry TTS.
 - Ngân sách frame VieNeu và giới hạn validation phải lấy từ cùng `segment_duration_policy`; codec VieNeu v3
   dùng 3.840 sample/frame ở 48 kHz. Mọi tổ hợp kind/pace/độ dài phải có headroom validation được test.
-- Chỉ `vocal_effect`/`text_sfx` được phép giới hạn thời lượng bằng fade-out khi runtime vẫn trả quá dài;
-  narration/dialogue/thought tuyệt đối không được cắt để lách validation.
+- Chỉ có `narration`/`dialogue`/`thought`; từ tượng thanh và cụm cảm thán giữ nguyên trong câu đọc bình thường.
+  Không audio nào được cắt để lách validation; kết quả quá dài phải retry hoặc `failed`.
 - Chapter còn segment `failed` không được publish.
 - Mọi kết thúc với `BookStatus.ERROR` phải gửi `finished.ok=false`; nhánh `completed_with_errors` gửi đúng
   một Windows notification nếu policy cho phép, đồng thời giữ nguyên checkpoint/chapter đã commit.
@@ -68,8 +68,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   từ điển do Qwen phân loại theo ngữ cảnh. Kết quả chuyên biệt hợp lệ phải `locked=1` trong SQLite để cùng một tên
   không đổi cách đọc theo giọng, chapter, confidence threshold hoặc lần resume.
 - Mọi vai dùng preset VieNeu đã khóa; một nhân vật không được đổi preset theo cảm xúc hoặc khi resume.
-- Cảm xúc chỉ thay đổi cách thể hiện trên cùng preset: cue phi ngôn ngữ được VieNeu hỗ trợ, sampling,
-  pace và mức âm lượng mục tiêu. Không thay identity giọng để giả lập cảm xúc.
+- Cảm xúc chỉ thay đổi sampling, pace và mức âm lượng mục tiêu trên cùng preset. Không dùng cue phi ngôn ngữ thử nghiệm
+  của VieNeu và không thay identity giọng để giả lập cảm xúc.
+- Chuẩn hóa các cách viết như `haizzzzz`, `hừmmmm` hoặc `[thở dài]` chỉ được áp dụng lên `spoken_text` dùng chung cho
+  TTS và expected ASR; văn bản nguồn, hash và segment đã checkpoint không được sửa.
 - Preset được phân bổ theo giới tính và ưu tiên dùng hết pool phù hợp trước khi tái sử dụng. Trong cùng mức sử dụng,
   giọng tự nhiên miền Bắc đứng đầu, tiếp theo là giọng tự nhiên miền Nam; các giọng còn lại giữ thứ tự cũ.
 - Pitch âm phải theo giới hạn từng preset đo trên preview: Phạm Tuyên không hạ; Xuân Vĩnh, Thái Sơn,
