@@ -52,6 +52,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   trở thành warning còn sai lệch cực đoan vẫn bị từ chối;
 - NPC có nhãn cục bộ giữ identity riêng, NPC vô danh tách nam/nữ; phân vai loại hoàn toàn preset tin tức,
   ưu tiên Bắc → Nam và tự nhiên → kể chuyện, chỉ đưa giọng Trung vào pool NPC ngắn;
+- dropdown người kể có đủ 10 preset không phải tin tức; bộ lọc giới tính và miền không làm thay đổi
+  preset đang chọn nếu preset đó vẫn còn trong kết quả lọc;
 - cùng nhân vật giữ nguyên preset và biến thể cao độ tối đa ±2 bán âm; thought bắt buộc giữ speaker nhân vật;
   mức âm lượng trung tính được cân bằng
   còn chỉ dẫn loud vẫn được giữ lớn hơn có chủ đích;

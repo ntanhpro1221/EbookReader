@@ -50,6 +50,9 @@ from .voice_catalog import (
     DEFAULT_NARRATOR_BY_GENDER,
     GENDER_FEMALE,
     GENDER_MALE,
+    REGION_CENTRAL,
+    REGION_NORTH,
+    REGION_SOUTH,
     STYLE_NATURAL,
     narrator_presets,
     preset_by_name,
@@ -189,8 +192,15 @@ class MainWindow(QMainWindow):
         self.profile_combo.addItem("Nhanh", "fast")
         self.profile_combo.addItem("Chất lượng cao", "high_quality")
         self.narrator_gender_combo = QComboBox()
+        self.narrator_gender_combo.addItem("Tất cả", "")
         self.narrator_gender_combo.addItem("Nam", GENDER_MALE)
         self.narrator_gender_combo.addItem("Nữ", GENDER_FEMALE)
+        self.narrator_gender_combo.setCurrentIndex(self.narrator_gender_combo.findData(GENDER_MALE))
+        self.narrator_region_combo = QComboBox()
+        self.narrator_region_combo.addItem("Tất cả", "")
+        self.narrator_region_combo.addItem(REGION_NORTH, REGION_NORTH)
+        self.narrator_region_combo.addItem(REGION_SOUTH, REGION_SOUTH)
+        self.narrator_region_combo.addItem(REGION_CENTRAL, REGION_CENTRAL)
         self.narrator_voice_combo = QComboBox()
         self._populate_narrator_voices(DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE])
         self.resource_combo = QComboBox()
@@ -201,12 +211,14 @@ class MainWindow(QMainWindow):
         self.max_temp.setValue(86)
         self.max_temp.setSuffix(" °C")
         self.profile_combo.currentIndexChanged.connect(self._settings_edited)
-        self.narrator_gender_combo.currentIndexChanged.connect(self._narrator_gender_changed)
+        self.narrator_gender_combo.currentIndexChanged.connect(self._narrator_filter_changed)
+        self.narrator_region_combo.currentIndexChanged.connect(self._narrator_filter_changed)
         self.narrator_voice_combo.currentIndexChanged.connect(self._settings_edited)
         self.resource_combo.currentIndexChanged.connect(self._settings_edited)
         self.max_temp.valueChanged.connect(self._settings_edited)
         form.addRow("Chất lượng:", self.profile_combo)
-        form.addRow("Giới tính người kể:", self.narrator_gender_combo)
+        form.addRow("Lọc giới tính:", self.narrator_gender_combo)
+        form.addRow("Lọc miền giọng:", self.narrator_region_combo)
         form.addRow("Giọng người kể:", self.narrator_voice_combo)
         form.addRow("Tài nguyên:", self.resource_combo)
         form.addRow("Ngưỡng GPU nóng:", self.max_temp)
@@ -361,10 +373,14 @@ class MainWindow(QMainWindow):
     def _restore_ui(self, *, restore_recent: bool) -> None:
         self.output_edit.setText(self.settings_store.value("output", str(Path.home() / "Audiobooks"), str))
         self.max_temp.setValue(self.settings_store.value("max_temp", 86, int))
-        narrator_gender = self.settings_store.value("narrator_gender", GENDER_MALE, str)
+        narrator_gender = self.settings_store.value("narrator_gender_filter", GENDER_MALE, str)
         gender_index = self.narrator_gender_combo.findData(narrator_gender)
         if gender_index >= 0:
             self.narrator_gender_combo.setCurrentIndex(gender_index)
+        narrator_region = self.settings_store.value("narrator_region_filter", "", str)
+        region_index = self.narrator_region_combo.findData(narrator_region)
+        if region_index >= 0:
+            self.narrator_region_combo.setCurrentIndex(region_index)
         saved_voice = self.settings_store.value(
             "narrator_voice",
             DEFAULT_NARRATOR_BY_GENDER.get(narrator_gender, DEFAULT_NARRATOR_BY_GENDER[GENDER_MALE]),
@@ -395,7 +411,8 @@ class MainWindow(QMainWindow):
     def _save_ui(self) -> None:
         self.settings_store.setValue("output", self.output_edit.text().strip())
         self.settings_store.setValue("max_temp", self.max_temp.value())
-        self.settings_store.setValue("narrator_gender", self.narrator_gender_combo.currentData())
+        self.settings_store.setValue("narrator_gender_filter", self.narrator_gender_combo.currentData())
+        self.settings_store.setValue("narrator_region_filter", self.narrator_region_combo.currentData())
         self.settings_store.setValue("narrator_voice", self.narrator_voice_combo.currentData())
         self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
         self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
@@ -458,6 +475,7 @@ class MainWindow(QMainWindow):
         self.open_project_button.setEnabled(not running)
         self.profile_combo.setEnabled(not running)
         self.narrator_gender_combo.setEnabled(not running)
+        self.narrator_region_combo.setEnabled(not running)
         self.narrator_voice_combo.setEnabled(not running)
         self.resource_combo.setEnabled(not running)
         self.max_temp.setEnabled(not running)
@@ -479,21 +497,26 @@ class MainWindow(QMainWindow):
             self._detach_project_as_draft()
 
     def _populate_narrator_voices(self, preferred_voice: str | None = None) -> None:
-        gender = str(self.narrator_gender_combo.currentData() or GENDER_MALE)
+        previous_voice = str(self.narrator_voice_combo.currentData() or "")
+        gender = str(self.narrator_gender_combo.currentData() or "")
+        region = str(self.narrator_region_combo.currentData() or "")
         blocker = QSignalBlocker(self.narrator_voice_combo)
         self.narrator_voice_combo.clear()
-        for preset in narrator_presets(gender):
+        available = narrator_presets(gender or None, region or None)
+        for preset in available:
             style = "Tự nhiên" if preset["style"] == STYLE_NATURAL else "Kể chuyện"
             self.narrator_voice_combo.addItem(
                 f"{preset['name']} — {preset['region']} · {style}",
                 preset["name"],
             )
-        target = preferred_voice or DEFAULT_NARRATOR_BY_GENDER[gender]
+        target = preferred_voice or previous_voice
+        if self.narrator_voice_combo.findData(target) < 0 and gender in DEFAULT_NARRATOR_BY_GENDER:
+            target = DEFAULT_NARRATOR_BY_GENDER[gender]
         index = self.narrator_voice_combo.findData(target)
         self.narrator_voice_combo.setCurrentIndex(index if index >= 0 else 0)
         del blocker
 
-    def _narrator_gender_changed(self, *_args: Any) -> None:
+    def _narrator_filter_changed(self, *_args: Any) -> None:
         self._populate_narrator_voices()
         self._settings_edited()
 
@@ -605,7 +628,6 @@ class MainWindow(QMainWindow):
         profile = str(self.profile_combo.currentData())
         overrides = {
             "voices": {
-                "narrator_gender": str(self.narrator_gender_combo.currentData()),
                 "narrator_voice": str(self.narrator_voice_combo.currentData()),
             },
             "resources": {
@@ -795,6 +817,7 @@ class MainWindow(QMainWindow):
             gender_index = self.narrator_gender_combo.findData(narrator_gender)
             if gender_index >= 0:
                 self.narrator_gender_combo.setCurrentIndex(gender_index)
+            self.narrator_region_combo.setCurrentIndex(self.narrator_region_combo.findData(""))
             self._populate_narrator_voices(narrator_voice)
             resources = settings.get("resources", {})
             resource_index = self.resource_combo.findData(str(resources.get("mode", "")))

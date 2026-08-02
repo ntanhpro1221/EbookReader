@@ -208,7 +208,6 @@ def validate_settings(settings: dict[str, Any]) -> None:
     if not narrator_voice:
         raise ValueError("voices.narrator_voice cannot be empty")
     from .voice_catalog import (
-        REGION_CENTRAL,
         STYLE_NEWS,
         narrator_presets,
         preset_by_name,
@@ -218,8 +217,8 @@ def validate_settings(settings: dict[str, Any]) -> None:
     narrator_gender = str(voices.get("narrator_gender", ""))
     if narrator_gender != narrator["gender"]:
         raise ValueError("voices.narrator_gender must match voices.narrator_voice")
-    if narrator["style"] == STYLE_NEWS or narrator["region"] == REGION_CENTRAL:
-        raise ValueError("Narrator must use a standard natural or storytelling voice")
+    if narrator["style"] == STYLE_NEWS:
+        raise ValueError("Narrator cannot use a news voice")
     if narrator_voice not in {preset["name"] for preset in narrator_presets(narrator_gender)}:
         raise ValueError("Unsupported narrator voice")
     max_pitch_shift = int(voices.get("max_character_pitch_semitones", -1))

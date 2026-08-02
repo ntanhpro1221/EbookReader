@@ -102,13 +102,16 @@ def preset_priority(preset: dict[str, Any]) -> tuple[int, int, str]:
     )
 
 
-def narrator_presets(gender: str) -> list[dict[str, str]]:
+def narrator_presets(
+    gender: str | None = None,
+    region: str | None = None,
+) -> list[dict[str, str]]:
     candidates = [
         preset
         for preset in VIENEU_PRESETS
-        if preset["gender"] == gender
-        and preset["style"] != STYLE_NEWS
-        and preset["region"] in {REGION_NORTH, REGION_SOUTH}
+        if preset["style"] != STYLE_NEWS
+        and (not gender or preset["gender"] == gender)
+        and (not region or preset["region"] == region)
     ]
     return sorted(candidates, key=preset_priority)
 
