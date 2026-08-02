@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .config import load_settings, save_settings, settings_hash
+from .config import hydrate_settings, load_settings_raw, save_settings, settings_hash
 from .database import ProjectDB
 from .io_utils import slugify
 from .models import ProjectPaths
@@ -39,17 +39,19 @@ def create_or_open_project(
     manifest = build_chapter_manifest(input_files, paths.chapters)
     manifest_hash = input_manifest_hash(manifest)
     if paths.settings.exists():
-        settings = load_settings(paths.settings)
+        stored_settings = load_settings_raw(paths.settings)
+        settings = hydrate_settings(stored_settings)
     else:
         settings = requested_settings
+        stored_settings = settings
         save_settings(paths.settings, settings)
 
     db = ProjectDB(paths.db, synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")))
     db.initialize_book(
         title=book_title,
         project_root=project_root,
-        settings=settings,
-        settings_hash=settings_hash(settings),
+        settings=stored_settings,
+        settings_hash=settings_hash(stored_settings),
         input_manifest_hash=manifest_hash,
     )
     db.ensure_chapters(manifest)

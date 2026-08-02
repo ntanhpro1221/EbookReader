@@ -7,7 +7,7 @@ import pytest
 
 from e_book_reader.config import build_settings, save_settings, settings_hash
 from e_book_reader.database import ProjectDB
-from e_book_reader.io_utils import sha256_file
+from e_book_reader.io_utils import atomic_write_json, sha256_file
 from e_book_reader.models import ProjectPaths
 from e_book_reader.worker import ProjectRunLock, _load_locked_settings, _validate_project_inputs
 
@@ -45,6 +45,29 @@ def test_worker_rejects_external_settings_that_differ_from_sqlite(tmp_path: Path
 
     with pytest.raises(RuntimeError, match="khác settings đã khóa"):
         _load_locked_settings(paths, db)
+
+
+def test_worker_hydrates_legacy_settings_after_verifying_original_hash(tmp_path: Path) -> None:
+    paths = ProjectPaths.build(tmp_path / "legacy-project")
+    legacy = build_settings()
+    legacy["tts"]["failure_policy"] = "retry_split_fallback_fail"
+    legacy["tts"].pop("pace_chars_per_second")
+    legacy["tts"].pop("rate_check_min_chars")
+    atomic_write_json(paths.settings, legacy)
+    db = ProjectDB(paths.db)
+    db.initialize_book(
+        title="Legacy",
+        project_root=paths.root,
+        settings=legacy,
+        settings_hash=settings_hash(legacy),
+        input_manifest_hash="manifest",
+    )
+
+    loaded = _load_locked_settings(paths, db)
+
+    assert settings_hash(legacy) == str(db.book()["settings_hash"])
+    assert loaded["tts"]["pace_chars_per_second"]["normal"] == [10.5, 22.0]
+    assert loaded["tts"]["failure_policy"] == "retry_split_fallback_fail"
 
 
 def test_worker_rejects_changed_source_file(tmp_path: Path) -> None:

@@ -157,6 +157,14 @@ def build_settings(profile: str = "balanced", overrides: dict[str, Any] | None =
     return settings
 
 
+def hydrate_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    profile = str(settings.get("quality_profile", "balanced"))
+    profile_defaults = PROFILE_OVERRIDES.get(profile, {})
+    hydrated = deep_merge(deep_merge(DEFAULT_SETTINGS, profile_defaults), settings)
+    validate_settings(hydrated)
+    return hydrated
+
+
 def validate_settings(settings: dict[str, Any]) -> None:
     if settings.get("interactive_prompts"):
         raise ValueError("interactive_prompts must remain false for unattended book jobs")
@@ -202,7 +210,10 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("TTS retry and batch settings must be positive")
     if int(tts.get("fatal_failure_streak", 0)) < 1:
         raise ValueError("tts.fatal_failure_streak must be positive")
-    if tts.get("failure_policy") != "retry_split_fail":
+    # Older locked books used the longer policy name. The current pipeline still performs
+    # deterministic retries, safe splitting, then failure; accepting the stored name preserves
+    # its settings hash without restoring a removed fallback engine.
+    if tts.get("failure_policy") not in {"retry_split_fail", "retry_split_fallback_fail"}:
         raise ValueError("Unsupported tts.failure_policy")
     pace_ranges = tts.get("pace_chars_per_second", {})
     for pace in ("slow", "normal", "fast"):
@@ -267,6 +278,11 @@ def save_settings(path: Path, settings: dict[str, Any]) -> None:
 
 
 def load_settings(path: Path) -> dict[str, Any]:
+    return hydrate_settings(load_settings_raw(path))
+
+
+def load_settings_raw(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
-    validate_settings(data)
+    if not isinstance(data, dict):
+        raise ValueError("Settings root must be an object")
     return data

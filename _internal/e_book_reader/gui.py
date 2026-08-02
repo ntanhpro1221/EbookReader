@@ -9,7 +9,7 @@ from queue import Empty
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, QTimer, QUrl
-from PySide6.QtGui import QColor, QCloseEvent, QDesktopServices, QPalette
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -48,19 +48,17 @@ from .worker import run_worker
 
 
 WORKER_TERMINATION_GRACE_SECONDS = 0.5
-TEXT_SELECTION_COLOR = "#0078D4"
 CHAPTER_TABLE_HEADERS = (
     "#",
     "Chapter",
-    "Chia đoạn",
     "Phân tích",
     "Tạo audio",
     "Kiểm tra",
     "Giai đoạn",
     "MP3",
 )
-CHAPTER_TABLE_DEFAULT_WIDTHS = (45, 150, 100, 105, 110, 125, 150, 480)
-MP3_COLUMN = 7
+CHAPTER_TABLE_DEFAULT_WIDTHS = (45, 160, 110, 115, 130, 155, 480)
+MP3_COLUMN = 6
 
 
 CHAPTER_STATUS_LABELS = {
@@ -116,16 +114,16 @@ class MainWindow(QMainWindow):
             "border: 1px solid palette(mid); }"
             "QLineEdit, QComboBox, QSpinBox { min-height: 27px; }"
         )
-        book_box = QGroupBox("Book")
-        top = QGridLayout(book_box)
+        self.book_box = QGroupBox("Sách")
+        top = QGridLayout(self.book_box)
         top.setColumnStretch(1, 1)
         self.title_edit = QLineEdit()
-        self.title_edit.setPlaceholderText("Tên book; để trống sẽ lấy tên thư mục hoặc file")
+        self.title_edit.setPlaceholderText("Tên sách; để trống sẽ lấy tên thư mục hoặc file")
         self.output_edit = QLineEdit()
-        self.output_edit.setPlaceholderText("Thư mục chứa các book project")
+        self.output_edit.setPlaceholderText("Thư mục chứa các sách")
         self.choose_output_button = QPushButton("Chọn nơi lưu")
         self.choose_output_button.clicked.connect(self._choose_output)
-        self.add_files_button = QPushButton("Chọn nhiều TXT")
+        self.add_files_button = QPushButton("Thêm file")
         self.add_files_button.clicked.connect(self._add_files)
         self.add_folder_button = QPushButton("Thêm thư mục")
         self.add_folder_button.clicked.connect(self._add_folder)
@@ -133,19 +131,22 @@ class MainWindow(QMainWindow):
         self.remove_files_button.clicked.connect(self._remove_files)
         self.open_project_button = QPushButton("Mở sách khác")
         self.open_project_button.clicked.connect(self._open_project)
-        self.new_book_button = QPushButton("Book mới")
+        self.new_book_button = QPushButton("Sách mới")
         self.new_book_button.clicked.connect(self._new_book)
-        top.addWidget(QLabel("Tên book:"), 0, 0)
-        top.addWidget(self.title_edit, 0, 1, 1, 3)
+        top.addWidget(QLabel("Tên sách:"), 0, 0)
+        top.addWidget(self.title_edit, 0, 1, 1, 2)
+        top.addWidget(self.open_project_button, 0, 3)
         top.addWidget(QLabel("Nơi lưu:"), 1, 0)
-        top.addWidget(self.output_edit, 1, 1)
-        top.addWidget(self.choose_output_button, 1, 2)
-        top.addWidget(self.open_project_button, 1, 3)
+        top.addWidget(self.output_edit, 1, 1, 1, 2)
+        top.addWidget(self.choose_output_button, 1, 3)
         top.addWidget(self.new_book_button, 2, 0)
-        top.addWidget(self.add_files_button, 2, 1)
-        top.addWidget(self.add_folder_button, 2, 2)
-        top.addWidget(self.remove_files_button, 2, 3)
-        layout.addWidget(book_box)
+        self.input_actions = QHBoxLayout()
+        self.input_actions.setSpacing(8)
+        self.input_actions.addWidget(self.add_files_button, 1)
+        self.input_actions.addWidget(self.add_folder_button, 1)
+        self.input_actions.addWidget(self.remove_files_button, 1)
+        top.addLayout(self.input_actions, 2, 1, 1, 3)
+        layout.addWidget(self.book_box)
 
         self.main_splitter = QSplitter(Qt.Vertical)
         self.main_splitter.setChildrenCollapsible(False)
@@ -153,16 +154,17 @@ class MainWindow(QMainWindow):
         self.source_splitter = QSplitter(Qt.Horizontal)
         self.source_splitter.setChildrenCollapsible(False)
         self.source_splitter.setHandleWidth(7)
-        files_box = QGroupBox("TXT thuộc cùng một book")
+        files_box = QGroupBox("TXT thuộc cùng một sách")
         files_layout = QVBoxLayout(files_box)
         self.file_list = QListWidget()
         self.file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.file_list.itemSelectionChanged.connect(self._update_remove_files_button)
         self.file_list.setAlternatingRowColors(True)
         self._apply_item_view_palette(self.file_list)
         files_layout.addWidget(self.file_list)
         self.source_splitter.addWidget(files_box)
 
-        self.settings_box = QGroupBox("Thiết lập cho book mới")
+        self.settings_box = QGroupBox("Thiết lập cho sách mới")
         form = QFormLayout(self.settings_box)
         self.profile_combo = QComboBox()
         self.profile_combo.addItem("Cân bằng", "balanced")
@@ -178,10 +180,10 @@ class MainWindow(QMainWindow):
         self.keep_wav = QCheckBox("Giữ WAV segment đã kiểm tra (bắt buộc trong alpha để recovery an toàn)")
         self.keep_wav.setChecked(True)
         self.keep_wav.setEnabled(False)
-        self.full_book = QCheckBox("Tạo thêm một MP3 toàn book")
+        self.full_book = QCheckBox("Tạo thêm một MP3 toàn sách")
         self.full_book.setChecked(False)
         self.full_book.setToolTip(
-            "Tắt: mỗi file TXT tạo một MP3 chapter. Bật: tạo thêm một MP3 ghép toàn book."
+            "Tắt: mỗi file TXT tạo một MP3 chapter. Bật: tạo thêm một MP3 ghép toàn sách."
         )
         form.addRow("Chất lượng:", self.profile_combo)
         form.addRow("Tài nguyên:", self.resource_combo)
@@ -199,8 +201,8 @@ class MainWindow(QMainWindow):
         self.work_splitter = QSplitter(Qt.Horizontal)
         self.work_splitter.setChildrenCollapsible(False)
         self.work_splitter.setHandleWidth(7)
-        chapters_box = QGroupBox("Tiến độ xử lý")
-        chapters_layout = QVBoxLayout(chapters_box)
+        self.chapters_box = QGroupBox("Tiến độ")
+        chapters_layout = QVBoxLayout(self.chapters_box)
         progress_layout = QHBoxLayout()
         self.stage_label = QLabel("Sẵn sàng")
         self.stage_label.setMinimumWidth(220)
@@ -229,15 +231,15 @@ class MainWindow(QMainWindow):
         self._mp3_column_initialized = False
         self.chapter_table.doubleClicked.connect(self._open_selected_mp3)
         chapters_layout.addWidget(self.chapter_table)
-        self.work_splitter.addWidget(chapters_box)
+        self.work_splitter.addWidget(self.chapters_box)
 
-        log_box = QGroupBox("Nhật ký")
-        log_layout = QVBoxLayout(log_box)
+        self.log_box = QGroupBox("Log")
+        log_layout = QVBoxLayout(self.log_box)
         self.log = QTextEdit()
         self.log.setReadOnly(True)
         self.log.setLineWrapMode(QTextEdit.NoWrap)
         log_layout.addWidget(self.log)
-        self.work_splitter.addWidget(log_box)
+        self.work_splitter.addWidget(self.log_box)
         self.work_splitter.setSizes([820, 400])
         self.main_splitter.addWidget(self.work_splitter)
         self.main_splitter.setSizes([290, 460])
@@ -262,10 +264,17 @@ class MainWindow(QMainWindow):
     def _apply_item_view_palette(view: QAbstractItemView) -> None:
         palette = view.palette()
         base = palette.color(QPalette.ColorRole.Base)
-        alternate = base.lighter(106) if base.lightness() < 128 else base.darker(103)
+        alternate = base.lighter(116) if base.lightness() < 128 else base.darker(106)
+        system_palette = QApplication.palette()
         palette.setColor(QPalette.ColorRole.AlternateBase, alternate)
-        palette.setColor(QPalette.ColorRole.Highlight, QColor(TEXT_SELECTION_COLOR))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor(Qt.GlobalColor.white))
+        palette.setColor(
+            QPalette.ColorRole.Highlight,
+            system_palette.color(QPalette.ColorRole.Highlight),
+        )
+        palette.setColor(
+            QPalette.ColorRole.HighlightedText,
+            system_palette.color(QPalette.ColorRole.HighlightedText),
+        )
         view.setPalette(palette)
 
     def _restore_ui(self, *, restore_recent: bool) -> None:
@@ -280,7 +289,7 @@ class MainWindow(QMainWindow):
             state = self.settings_store.value(key)
             if state is not None:
                 splitter.restoreState(state)
-        header_state = self.settings_store.value("chapter_header_v2")
+        header_state = self.settings_store.value("chapter_header_v3")
         if header_state is not None:
             self.chapter_table.horizontalHeader().restoreState(header_state)
             self._mp3_column_initialized = True
@@ -290,7 +299,7 @@ class MainWindow(QMainWindow):
                 try:
                     self._load_project(candidate, announce=False)
                 except Exception as exc:  # noqa: BLE001
-                    self._append_log(f"Không thể tự mở project gần đây: {exc}")
+                    self._append_log(f"Không thể tự mở sách gần đây: {exc}")
 
     def _save_ui(self) -> None:
         self.settings_store.setValue("output", self.output_edit.text().strip())
@@ -298,7 +307,7 @@ class MainWindow(QMainWindow):
         self.settings_store.setValue("splitter_main", self.main_splitter.saveState())
         self.settings_store.setValue("splitter_source", self.source_splitter.saveState())
         self.settings_store.setValue("splitter_work", self.work_splitter.saveState())
-        self.settings_store.setValue("chapter_header_v2", self.chapter_table.horizontalHeader().saveState())
+        self.settings_store.setValue("chapter_header_v3", self.chapter_table.horizontalHeader().saveState())
         self.settings_store.sync()
 
     def _recent_project_candidate(self) -> Path | None:
@@ -349,7 +358,6 @@ class MainWindow(QMainWindow):
         self.choose_output_button.setEnabled(not selected and not running)
         self.add_files_button.setEnabled(not running)
         self.add_folder_button.setEnabled(not running)
-        self.remove_files_button.setEnabled(not selected and not running)
         self.new_book_button.setEnabled(not running)
         self.open_project_button.setEnabled(not running)
         self.profile_combo.setEnabled(not selected and not running)
@@ -358,14 +366,15 @@ class MainWindow(QMainWindow):
         self.full_book.setEnabled(not selected and not running)
         self.open_folder_button.setEnabled(selected)
         if selected:
-            self.settings_box.setTitle("Thiết lập đã khóa của project")
+            self.settings_box.setTitle("Thiết lập đã khóa của sách")
             self.settings_note.setText(
-                "Project đã bắt đầu nên thiết lập được giữ nguyên khi Tiếp tục. "
-                "Chọn Book mới, nhiều TXT hoặc thư mục để tạo book với thiết lập khác."
+                "Sách đã bắt đầu nên thiết lập được giữ nguyên khi Tiếp tục. "
+                "Thêm/xóa TXT sẽ tạo một bản sách mới và giữ nguyên sách hiện tại trên ổ đĩa."
             )
         else:
-            self.settings_box.setTitle("Thiết lập cho book mới")
+            self.settings_box.setTitle("Thiết lập cho sách mới")
             self.settings_note.setText("Sau khi bấm Bắt đầu, app không bật hộp thoại yêu cầu lựa chọn.")
+        self._update_remove_files_button()
         self._update_start_button()
 
     def _update_start_button(self) -> None:
@@ -376,27 +385,38 @@ class MainWindow(QMainWindow):
             return
         self.start_button.setText("Tiếp tục" if self.project_paths is not None else "Bắt đầu")
 
+    def _detach_project_as_draft(self) -> None:
+        if self.project_paths is None:
+            return
+        self.project_paths = None
+        self.db = None
+        self.chapter_table.setRowCount(0)
+        self._show_progress("Sẵn sàng", 0, 100)
+        self._chapter_snapshot = None
+        self._set_project_selected(False)
+        self._append_log("Đang tạo bản sách mới; sách hiện tại vẫn nguyên vẹn trên ổ đĩa.")
+
     def _merge_input_files(self, paths: list[Path]) -> int:
-        if paths and self.project_paths is not None:
-            self._new_book()
         existing = {str(path).casefold() for path in self.files}
-        added = 0
+        additions: list[Path] = []
         for path in paths:
             resolved = path.resolve()
             key = str(resolved).casefold()
             if key not in existing:
-                self.files.append(resolved)
+                additions.append(resolved)
                 existing.add(key)
-                added += 1
+        if additions and self.project_paths is not None:
+            self._detach_project_as_draft()
+        self.files.extend(additions)
         self.files.sort(key=lambda path: natural_key(path.name))
         self._refresh_file_list()
-        return added
+        return len(additions)
 
     def _add_files(self) -> None:
         start_dir = self.settings_store.value("input_folder", "", str)
         names, _ = QFileDialog.getOpenFileNames(
             self,
-            "Chọn TXT của cùng một book",
+            "Thêm TXT vào sách",
             start_dir,
             "Text files (*.txt)",
         )
@@ -436,12 +456,21 @@ class MainWindow(QMainWindow):
         if self.process and self.process.is_alive():
             return
         selected = {item.text() for item in self.file_list.selectedItems()}
+        if not selected:
+            return
+        if self.project_paths is not None:
+            self._detach_project_as_draft()
         self.files = [path for path in self.files if str(path) not in selected]
         self._refresh_file_list()
+
+    def _update_remove_files_button(self) -> None:
+        running = bool(self.process and self.process.is_alive())
+        self.remove_files_button.setEnabled(bool(self.file_list.selectedItems()) and not running)
 
     def _refresh_file_list(self) -> None:
         self.file_list.clear()
         self.file_list.addItems([str(path) for path in self.files])
+        self._update_remove_files_button()
 
     def _choose_output(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Chọn thư mục đầu ra", self.output_edit.text())
@@ -588,7 +617,7 @@ class MainWindow(QMainWindow):
         try:
             self._load_project(Path(directory).resolve(), announce=True)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, "Không mở được project", str(exc))
+            QMessageBox.critical(self, "Không mở được sách", str(exc))
 
     def _load_project(self, selected: Path, *, announce: bool) -> None:
         if not (selected / "project.sqlite3").is_file() or not (selected / "book_settings.json").is_file():
@@ -626,7 +655,7 @@ class MainWindow(QMainWindow):
         self._show_progress("Sẵn sàng", 0, 100)
         self._chapter_snapshot = None
         self._set_project_selected(False)
-        self._append_log("Đã chuyển sang book mới; project cũ vẫn nguyên vẹn trên ổ đĩa.")
+        self._append_log("Đã chuyển sang sách mới; sách cũ vẫn nguyên vẹn trên ổ đĩa.")
 
     def _apply_locked_settings(self, settings: dict[str, Any]) -> None:
         profile_index = self.profile_combo.findData(str(settings.get("quality_profile", "balanced")))
@@ -679,16 +708,11 @@ class MainWindow(QMainWindow):
             self.chapter_table.setItem(
                 index,
                 2,
-                QTableWidgetItem(f"{total} segment" if total else "Chờ"),
-            )
-            self.chapter_table.setItem(
-                index,
-                3,
                 QTableWidgetItem(f"{progress['analysis']}/{total}" if total else "0/0"),
             )
             self.chapter_table.setItem(
                 index,
-                4,
+                3,
                 QTableWidgetItem(f"{progress['audio']}/{total}" if total else "0/0"),
             )
             accepted = int(row["verified_segments"]) + int(row["warning_segments"])
@@ -696,11 +720,11 @@ class MainWindow(QMainWindow):
             verification_text = f"{accepted}/{total}" if total else "0/0"
             if failed:
                 verification_text += f" · {failed} lỗi"
-            self.chapter_table.setItem(index, 5, QTableWidgetItem(verification_text))
+            self.chapter_table.setItem(index, 4, QTableWidgetItem(verification_text))
             status = str(row["status"])
             self.chapter_table.setItem(
                 index,
-                6,
+                5,
                 QTableWidgetItem(CHAPTER_STATUS_LABELS.get(status, status)),
             )
             output = str(row["output_mp3"])
@@ -741,7 +765,7 @@ class MainWindow(QMainWindow):
             elif book_status == "error":
                 self._show_progress("Đã dừng vì lỗi", done, len(chapters))
             else:
-                self._show_progress("Project sẵn sàng", done, len(chapters))
+                self._show_progress("Sách sẵn sàng", done, len(chapters))
 
     def _poll(self) -> None:
         if self.message_queue:
