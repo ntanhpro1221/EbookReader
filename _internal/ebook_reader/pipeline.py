@@ -669,8 +669,11 @@ class BookPipeline:
                     self.db.mark_verified(int(item["id"]), warning_code=str(result["reason"]))
                 elif result["passed"]:
                     verification_warning = (
-                        "ASR_TRANSCRIPT_RATE_IMPOSSIBLE"
-                        if result["reason"] == "ASR_TRANSCRIPT_RATE_IMPOSSIBLE"
+                        str(result["reason"])
+                        if result["reason"] in {
+                            "ASR_TRANSCRIPT_RATE_IMPOSSIBLE",
+                            "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE",
+                        }
                         else None
                     )
                     self.db.mark_asr_result(

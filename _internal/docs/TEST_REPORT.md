@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-03
 
-Trạng thái source hiện tại: **204/204 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **208/208 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử chỉ được cài tạm và đã được gỡ khỏi runtime của app sau khi kiểm tra.
@@ -65,7 +65,11 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - mọi nội tâm bị ép về `NARRATOR` bất kể Qwen trả tên nhân vật nào và không phát warning danh tính;
 - câu một từ ngắn bị giới hạn 24 frame, dùng sampling thận trọng và vẫn là ứng viên ASR repair;
 - transcript Whisper có số từ không thể tồn tại trong thời lượng WAV được nhận diện là verifier hallucination;
+- transcript Whisper kéo dài vô lý vào phần đệm 30 giây của model cũng được nhận diện là verifier hallucination,
+  thay vì làm hỏng một vocalization ngắn có waveform hợp lệ;
 - circuit breaker reset sau TTS thành công và không cộng dồn failure giống nhau nằm rải rác ở nhiều chapter;
+- lần tạo lại audio xóa ASR/TTS warning cũ nhưng giữ warning phân tích; recovery đưa segment đã có
+  analysis/voice profile về `analyzed`, không phân tích và phân vai lại rồi làm đổi giọng nhân vật;
 - ngân sách frame và validator dùng chung một duration policy dựa trên codec VieNeu v3 3.840 sample/frame;
   ma trận kind/pace/độ dài chứng minh mọi ngân sách sinh đều còn headroom validation và không audio nào bị
   fade-out để lách kiểm tra;
@@ -108,15 +112,13 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 
-GUI PySide6 đã mở thực tế trên Windows. Ở phiên bản trước refactor này, Qwen3 8B đã phân tích và
-checkpoint đủ **599/599 segment**; VieNeu 3.2.3 preset `Phạm Tuyên` đã inference thật bằng PyTorch
-CUDA 12.8 trên RTX 5060 Laptop và tạo waveform 48 kHz hữu hạn. Casting VieNeu-only và emotion delivery
-mới chưa được inference xuyên suốt chapter thật sau thay đổi này.
+GUI PySide6 đã mở thực tế trên Windows. Test6 đã chạy thật xuyên suốt bằng VieNeu-TTS và Whisper Turbo
+trên CUDA: **11/11 chapter**, **1.080/1.080 segment**, **0 segment lỗi**, **11/11 MP3** giải mã/xác minh;
+SQLite `integrity_check` trả `ok` và không có lỗi khóa ngoại. Các segment được tạo lại trong chapter 000,
+002–006 vẫn giữ đúng narrator/Benjamin/Lucien/Hạ Phong đã khóa; báo cáo review được xuất lại sau lần chạy.
 
 ## Chưa xác nhận trên máy đích
 
-- chạy VieNeu-only trọn toàn book với nhiều preset và emotion delivery;
-- Whisper Turbo GPU;
 - Windows Toast và foreground GPU detection;
 - kill/resume giữa CUDA inference;
 - OOM/backoff và thermal behavior dài giờ;

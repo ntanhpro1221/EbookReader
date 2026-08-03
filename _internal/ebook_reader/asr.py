@@ -21,6 +21,8 @@ WHISPER_SAMPLE_RATE = 16_000
 MAX_PLAUSIBLE_TRANSCRIPT_WORDS_PER_SECOND = 5.0
 TRANSCRIPT_WORD_MARGIN = 2
 MIN_PLAUSIBLE_TRANSCRIPT_WORDS = 4
+WHISPER_TIMELINE_ABSOLUTE_MARGIN_SECONDS = 1.0
+WHISPER_TIMELINE_DURATION_FACTOR = 2.0
 
 
 def normalize_transcript(text: str) -> str:
@@ -88,6 +90,26 @@ def transcript_exceeds_physical_rate(actual: str, duration_seconds: float) -> bo
     return len(actual_words) > plausible_words
 
 
+def transcription_exceeds_audio_timeline(
+    segments: list[dict[str, Any]],
+    duration_seconds: float,
+) -> bool:
+    if duration_seconds <= 0 or not segments:
+        return False
+    plausible_end = max(
+        duration_seconds + WHISPER_TIMELINE_ABSOLUTE_MARGIN_SECONDS,
+        duration_seconds * WHISPER_TIMELINE_DURATION_FACTOR,
+    )
+    for segment in segments:
+        try:
+            end = float(segment.get("end", 0.0))
+        except (TypeError, ValueError):
+            continue
+        if end > plausible_end:
+            return True
+    return False
+
+
 def load_audio_for_whisper(path: Path) -> np.ndarray:
     audio, sample_rate = sf.read(path, dtype="float32", always_2d=False)
     array = np.asarray(audio, dtype=np.float32)
@@ -114,6 +136,7 @@ class WhisperVerifier:
         self.log = log
         self.model = None
         self.device = str(self.settings.get("device", "cuda"))
+        self._last_transcription_timeline_impossible = False
 
     def load(self) -> bool:
         if not self.settings.get("enabled", True):
@@ -171,6 +194,7 @@ class WhisperVerifier:
     def transcribe(self, path: Path) -> str:
         if self.model is None:
             raise RuntimeError("Whisper is not loaded")
+        self._last_transcription_timeline_impossible = False
         audio = load_audio_for_whisper(path)
         result = self.model.transcribe(
             audio,
@@ -181,6 +205,16 @@ class WhisperVerifier:
             beam_size=int(self.settings.get("beam_size", 5)),
             condition_on_previous_text=False,
             verbose=False,
+        )
+        try:
+            duration_seconds = float(sf.info(path).duration)
+        except (RuntimeError, TypeError, ValueError):
+            duration_seconds = 0.0
+        raw_segments = result.get("segments", [])
+        segments = [item for item in raw_segments if isinstance(item, dict)]
+        self._last_transcription_timeline_impossible = transcription_exceeds_audio_timeline(
+            segments,
+            duration_seconds,
         )
         return str(result.get("text", "")).strip()
 
@@ -217,6 +251,7 @@ class WhisperVerifier:
                 "repairable": False,
                 "severe": False,
             }
+        self._last_transcription_timeline_impossible = False
         try:
             transcript = self.transcribe(wav_path)
         except Exception as exc:  # noqa: BLE001
@@ -237,6 +272,16 @@ class WhisperVerifier:
             duration_seconds = float(sf.info(wav_path).duration)
         except (RuntimeError, TypeError, ValueError):
             duration_seconds = 0.0
+        if self._last_transcription_timeline_impossible:
+            return {
+                "passed": True,
+                "transcript": transcript,
+                "similarity": similarity,
+                "wer": wer,
+                "reason": "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE",
+                "repairable": False,
+                "severe": False,
+            }
         if transcript_exceeds_physical_rate(transcript, duration_seconds):
             return {
                 "passed": True,

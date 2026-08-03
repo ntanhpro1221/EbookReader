@@ -478,6 +478,19 @@ class ProjectDB:
                 values.append(value)
         return "|".join(values) or None
 
+    @staticmethod
+    def _without_audio_attempt_warnings(existing: str | None) -> str | None:
+        values = []
+        for value in str(existing or "").split("|"):
+            if not value:
+                continue
+            if value == "SEGMENT_FAILED" or value == "NON_SPEAKABLE_SEGMENT":
+                continue
+            if value.startswith("TTS_") or value.startswith("ASR_"):
+                continue
+            values.append(value)
+        return "|".join(values) or None
+
     def update_analysis(
         self,
         segment_id: int,
@@ -523,14 +536,30 @@ class ProjectDB:
             )
 
     def mark_generating(self, segment_id: int, seed: int) -> None:
-        with self.connect() as conn:
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT chapter_id,warning_code FROM segments WHERE id=?", (segment_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            retained_warning = self._without_audio_attempt_warnings(
+                str(row["warning_code"]) if row["warning_code"] else None
+            )
             conn.execute(
                 """
                 UPDATE segments SET status=?,attempt_count=attempt_count+1,generation_seed=?,
-                    error=NULL,updated_at=? WHERE id=?
+                    asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
+                    warning_code=?,error=NULL,updated_at=? WHERE id=?
                 """,
-                (SegmentStatus.GENERATING.value, seed, time.time(), segment_id),
+                (
+                    SegmentStatus.GENERATING.value,
+                    seed,
+                    retained_warning,
+                    time.time(),
+                    segment_id,
+                ),
             )
+            self._refresh_chapter_counts_conn(conn, int(row["chapter_id"]))
 
     def mark_signal_passed(
         self,
@@ -646,12 +675,21 @@ class ProjectDB:
         with self.connect() as conn:
             conn.execute(
                 """
-                UPDATE segments SET status=?,wav_path=NULL,wav_sha256=NULL,wav_duration=NULL,
+                UPDATE segments SET status=(
+                        CASE WHEN voice_profile_id IS NOT NULL AND kind IS NOT NULL AND speaker IS NOT NULL
+                            THEN ? ELSE ? END
+                    ),wav_path=NULL,wav_sha256=NULL,wav_duration=NULL,
                     signal_json=NULL,asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
                     warning_code=NULL,generation_seed=NULL,error=?,updated_at=?
                 WHERE id=?
                 """,
-                (SegmentStatus.PENDING.value, reason[-2000:], time.time(), segment_id),
+                (
+                    SegmentStatus.ANALYZED.value,
+                    SegmentStatus.PENDING.value,
+                    reason[-2000:],
+                    time.time(),
+                    segment_id,
+                ),
             )
             row = conn.execute("SELECT chapter_id FROM segments WHERE id=?", (segment_id,)).fetchone()
             if row is not None:
@@ -942,7 +980,10 @@ class ProjectDB:
             ]
             cursor = conn.execute(
                 """
-                UPDATE segments SET status='pending',wav_path=NULL,wav_sha256=NULL,wav_duration=NULL,
+                UPDATE segments SET status=(
+                        CASE WHEN voice_profile_id IS NOT NULL AND kind IS NOT NULL AND speaker IS NOT NULL
+                            THEN 'analyzed' ELSE 'pending' END
+                    ),wav_path=NULL,wav_sha256=NULL,wav_duration=NULL,
                     signal_json=NULL,asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
                     warning_code=NULL,generation_seed=NULL,error=?,updated_at=?
                 WHERE status='generating'

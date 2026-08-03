@@ -13,6 +13,7 @@ from ebook_reader.asr import (
     is_asr_repair_candidate,
     is_severe_asr_mismatch,
     transcript_exceeds_physical_rate,
+    transcription_exceeds_audio_timeline,
 )
 from ebook_reader.config import build_settings
 
@@ -87,6 +88,34 @@ def test_transcript_word_rate_rejects_whisper_output_that_cannot_fit_the_wav() -
         0.88,
     )
     assert not transcript_exceeds_physical_rate("Ha, ha, ho.", 1.60)
+
+
+def test_whisper_timeline_rejects_transcript_that_extends_into_padding() -> None:
+    assert transcription_exceeds_audio_timeline([{"start": 0.0, "end": 29.98}], 3.28)
+    assert not transcription_exceeds_audio_timeline([{"start": 0.0, "end": 2.0}], 2.48)
+
+
+def test_whisper_padding_hallucination_does_not_fail_vocal_audio(tmp_path: Path) -> None:
+    wav = tmp_path / "vocal.wav"
+    sf.write(wav, np.zeros(16_000 * 3, dtype=np.float32), 16_000)
+
+    class FakeModel:
+        def transcribe(self, _audio, **_kwargs):
+            return {
+                "text": "Hãy subscribe cho kênh La La School",
+                "segments": [{"start": 0.0, "end": 29.98}],
+            }
+
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier.model = FakeModel()
+    verifier.device = "cpu"
+
+    result = verifier.verify("“S… Hự!”", wav)
+
+    assert result["passed"] is True
+    assert result["repairable"] is False
+    assert result["severe"] is False
+    assert result["reason"] == "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE"
 
 
 @pytest.mark.parametrize(
