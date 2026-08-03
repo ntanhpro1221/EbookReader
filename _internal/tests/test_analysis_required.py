@@ -279,6 +279,18 @@ def test_name_at_sentence_start_is_kept_when_other_evidence_exists() -> None:
     assert candidates[0]["mid_sentence_occurrences"] == 1
 
 
+def test_isolated_fantasy_dialogue_is_a_pronunciation_candidate_but_a_scream_is_not() -> None:
+    rows = [
+        {"speaker": "Lucien", "kind": "dialogue", "text": "“Paso.”"},
+        {"speaker": "Lucien", "kind": "dialogue", "text": "“Gaya.”"},
+        {"speaker": "Lucien", "kind": "dialogue", "text": "“Aaaaah!”"},
+    ]
+
+    candidates = _name_candidate_contexts(rows)
+
+    assert {candidate["surface"] for candidate in candidates} == {"Gaya", "Lucien", "Paso"}
+
+
 def test_vietnamese_spoken_form_requires_an_explicit_phonetic_rewrite() -> None:
     assert _valid_vietnamese_spoken_form("Michael", "Mai-cồ") is True
     assert _valid_vietnamese_spoken_form("Gary", "Ga-ri") is True

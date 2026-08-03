@@ -10,12 +10,17 @@ from typing import Any, Callable
 import numpy as np
 import soundfile as sf
 
+from .text_processing import is_vocalization_only
+
 
 ASR_REPAIR_MIN_WORDS = 1
 SEVERE_MISMATCH_MAX_SIMILARITY = 0.35
 SEVERE_MISMATCH_MIN_LENGTH_RATIO = 3.0
 SEVERE_MISMATCH_MIN_EXTRA_WORDS = 4
 WHISPER_SAMPLE_RATE = 16_000
+MAX_PLAUSIBLE_TRANSCRIPT_WORDS_PER_SECOND = 5.0
+TRANSCRIPT_WORD_MARGIN = 2
+MIN_PLAUSIBLE_TRANSCRIPT_WORDS = 4
 
 
 def normalize_transcript(text: str) -> str:
@@ -69,6 +74,18 @@ def is_severe_asr_mismatch(expected: str, actual: str, similarity: float) -> boo
         float(similarity) < SEVERE_MISMATCH_MAX_SIMILARITY
         and len(actual_words) >= minimum_actual_words
     )
+
+
+def transcript_exceeds_physical_rate(actual: str, duration_seconds: float) -> bool:
+    actual_words = normalize_transcript(actual).split()
+    if not actual_words or duration_seconds <= 0:
+        return False
+    plausible_words = max(
+        MIN_PLAUSIBLE_TRANSCRIPT_WORDS,
+        math.ceil(duration_seconds * MAX_PLAUSIBLE_TRANSCRIPT_WORDS_PER_SECOND)
+        + TRANSCRIPT_WORD_MARGIN,
+    )
+    return len(actual_words) > plausible_words
 
 
 def load_audio_for_whisper(path: Path) -> np.ndarray:
@@ -216,6 +233,32 @@ class WhisperVerifier:
                 "severe": False,
             }
         similarity, wer = transcript_metrics(expected, transcript)
+        try:
+            duration_seconds = float(sf.info(wav_path).duration)
+        except (RuntimeError, TypeError, ValueError):
+            duration_seconds = 0.0
+        if transcript_exceeds_physical_rate(transcript, duration_seconds):
+            return {
+                "passed": True,
+                "transcript": transcript,
+                "similarity": similarity,
+                "wer": wer,
+                "reason": "ASR_TRANSCRIPT_RATE_IMPOSSIBLE",
+                "repairable": False,
+                "severe": False,
+            }
+        if is_vocalization_only(expected) and (
+            not normalize_transcript(transcript) or is_vocalization_only(transcript)
+        ):
+            return {
+                "passed": True,
+                "transcript": transcript,
+                "similarity": similarity,
+                "wer": wer,
+                "reason": "VOCALIZATION_ASR_COMPATIBLE",
+                "repairable": False,
+                "severe": False,
+            }
         min_similarity = float(self.settings.get("min_similarity", 0.58))
         max_wer = float(self.settings.get("max_wer", 0.58))
         passed = bool(transcript) and not (

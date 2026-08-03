@@ -20,6 +20,7 @@ from .models import (
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
 )
 from .process_utils import terminate_process_tree
+from .text_processing import is_vocalization_only
 
 
 ALLOWED_KINDS = {"narration", "dialogue", "thought"}
@@ -64,6 +65,9 @@ SPEAKER_NAME_TOKEN_PATTERN = re.compile(
 )
 SENTENCE_INITIAL_PREFIX_PATTERN = re.compile(
     r"(?:^|[.!?…:\n])[\s\"'“”‘’()\[\]{}—-]*$"
+)
+ISOLATED_LATIN_DIALOGUE_PATTERN = re.compile(
+    r"^\s*[\"'“‘—–-]?\s*(?P<token>[A-Z][A-Za-z'’-]{1,})\s*[.!?…]*\s*[\"'”’]?\s*$"
 )
 VIETNAMESE_SPOKEN_FORM_PATTERN = re.compile(
     r"^[A-Za-zÀ-ỹĐđ]+(?:[ -][A-Za-zÀ-ỹĐđ]+)*$"
@@ -592,6 +596,7 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
     examples: dict[str, list[str]] = defaultdict(list)
     speaker_keys: set[str] = set()
     lowercase_text_keys: set[str] = set()
+    isolated_dialogue_keys: set[str] = set()
 
     def register(
         surface: str,
@@ -625,6 +630,17 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
                 register(match.group(1), speaker=True)
 
         text = str(row["text"])
+        try:
+            row_kind = str(row["kind"] or row["kind_hint"])
+        except (KeyError, TypeError):
+            row_kind = ""
+        isolated_match = ISOLATED_LATIN_DIALOGUE_PATTERN.fullmatch(text)
+        if (
+            row_kind == "dialogue"
+            and isolated_match is not None
+            and not is_vocalization_only(text)
+        ):
+            isolated_dialogue_keys.add(_name_candidate_key(isolated_match.group("token")))
         for match in SPEAKER_NAME_TOKEN_PATTERN.finditer(text):
             value = match.group(1)
             if value[:1].islower():
@@ -642,7 +658,11 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
     for key in sorted(forms):
         if key not in speaker_keys and key in lowercase_text_keys:
             continue
-        if key not in speaker_keys and mid_sentence_occurrences[key] == 0:
+        if (
+            key not in speaker_keys
+            and key not in isolated_dialogue_keys
+            and mid_sentence_occurrences[key] == 0
+        ):
             continue
         if key not in speaker_keys and occurrences[key] < NAME_PRONUNCIATION_MIN_OCCURRENCES:
             continue

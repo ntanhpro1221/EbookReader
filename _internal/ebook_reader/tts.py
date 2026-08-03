@@ -344,14 +344,10 @@ class TTSCoordinator:
                 self.settings,
                 spoken_row,
             )
-            if (
+            generation_ceiling_hit = (
                 is_short_utterance(str(spoken_row["text"]))
                 and vieneu_generation_reached_frame_ceiling(audio, duration_policy)
-            ):
-                raise AudioQualityError(
-                    "VieNeu reached max_new_frames without an early EOS; "
-                    "refusing audio that may continue beyond the supplied text"
-                )
+            )
             pitch_steps = int(_row_value(profile, "pitch_semitones", 0))
             pitch_variant_skipped = False
             try:
@@ -378,6 +374,8 @@ class TTSCoordinator:
             )
             if pitch_variant_skipped:
                 metrics["pitch_variant_skipped"] = 1.0
+            if generation_ceiling_hit:
+                metrics["generation_ceiling_hit"] = 1.0
             return checksum, metrics, seed
         finally:
             # VieNeu's PyTorch backend may retain allocator cache after returning a NumPy waveform.

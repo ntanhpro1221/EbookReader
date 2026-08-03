@@ -7,6 +7,7 @@ import pytest
 from ebook_reader.io_utils import decode_text_bytes, sha256_file
 from ebook_reader.text_processing import (
     build_chapter_manifest,
+    is_vocalization_only,
     load_and_segment_chapter,
     normalize_vocalizations_for_tts,
     segment_chapter_text,
@@ -146,6 +147,8 @@ def test_vocal_cues_and_onomatopoeia_stay_in_their_spoken_sentences() -> None:
         ('“Haizzzzz....”', '“Hầy...”'),
         ('“Hừmmmm...”', '“Hừm...”'),
         ('“Hahaha!”', '“Ha ha ha!”'),
+        ('“Aaaaah!”', '“A... a!”'),
+        ('“Uuu…”', '“U... u…”'),
         ("[cười] Ta thắng rồi!", "Ha ha... Ta thắng rồi!"),
         ("[thở dài].", "Hầy..."),
         ("[hắng giọng] Tôi xin nói tiếp.", "Khụ khụ... Tôi xin nói tiếp."),
@@ -153,3 +156,16 @@ def test_vocal_cues_and_onomatopoeia_stay_in_their_spoken_sentences() -> None:
 )
 def test_vocalizations_are_normalized_only_for_tts(source: str, spoken: str) -> None:
     assert normalize_vocalizations_for_tts(source) == spoken
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Hức hức hức…", "“S… Hự!”", "“Aaaaah!”", "“Uuu…”", "Ha, ha, ho."],
+)
+def test_non_lexical_vocalizations_are_recognized(text: str) -> None:
+    assert is_vocalization_only(text)
+
+
+@pytest.mark.parametrize("text", ["Paso.", "Gaya.", "Cảm ơn.", "Anh Lucien!"])
+def test_lexical_text_is_not_a_vocalization(text: str) -> None:
+    assert not is_vocalization_only(text)

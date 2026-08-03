@@ -108,12 +108,15 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
 - Câu chỉ có một từ ngắn dùng tối đa 24 frame và sampling thận trọng hơn để VieNeu không có khoảng sinh dư
   rồi nối thêm lời ngoài văn bản. Riêng tiếng thở `Ha...` đứng độc lập được gửi thành `Hà... hà...` để tạo
-  hai âm vị tiếng Việt rõ; nếu VieNeu vẫn chạm đúng `max_new_frames` thay vì kết thúc bằng EOS thì lần sinh
-  đó bị loại và retry. Mọi mismatch có chữ đều được tạo lại bằng seed khác.
+  hai âm vị tiếng Việt rõ; tiếng kéo dài như `Aaaaah`/`Uuu` cũng được đổi thành hai âm tiết ổn định. Output dùng
+  hết `max_new_frames` được đánh dấu để kiểm tra tín hiệu và Whisper, không còn bị kết luận sai chỉ từ độ dài.
 - Mọi segment narration/dialogue/thought đều dùng chung chính sách thời lượng, kiểm tra tốc độ khi đủ dài và đối chiếu
   Whisper bằng đúng `spoken_text`. App không cắt audio để lách validation; kết quả quá dài phải retry hoặc thất bại.
-- Transcript dài bất thường và gần như không liên quan tới câu nguồn được coi là mismatch nghiêm trọng. Sau các vòng
-  retry, lỗi này luôn làm segment/chapter thất bại và chặn xuất MP3, kể cả khi policy thường là `warning_continue`.
+- Transcript dài bất thường và gần như không liên quan tới câu nguồn chỉ được coi là mismatch nghiêm trọng khi số
+  từ còn có thể tồn tại trong thời lượng WAV. Transcript có tốc độ vật lý bất khả thi được đánh dấu là Whisper
+  hallucination, không dùng để kết luận TTS nói thêm lời.
+- Circuit breaker chỉ đếm các segment TTS thất bại hoàn toàn liên tiếp với cùng nguyên nhân và reset sau mọi segment
+  thành công; lỗi rải rác ở nhiều chapter không bị cộng dồn để dừng cả sách.
 - Whisper đọc và resample WAV ngay trong process, không bật FFmpeg console theo từng segment.
 - Phản hồi JSON từ Ollama có giới hạn schema, token và thời gian theo batch. Trong lúc chờ, app ghi
   nhịp hoạt động mỗi phút; bấm **Dừng** sẽ đóng stream thay vì đợi hết timeout dài.

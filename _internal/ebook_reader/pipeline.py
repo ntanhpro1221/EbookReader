@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Callable
 
@@ -66,11 +65,25 @@ class BookPipeline:
         self.tts = TTSCoordinator(settings, db, self.log)
         self._last_resource_level: ResourceLevel | None = None
         self._completed_noop = False
-        self._tts_failure_counts: dict[str, int] = defaultdict(int)
+        self._last_tts_failure_signature: str | None = None
+        self._tts_failure_streak = 0
 
     def log(self, message: str) -> None:
         self.db.event("info", "LOG", message)
         self.emit("log", {"text": message})
+
+    def _reset_tts_failure_streak(self) -> None:
+        self._last_tts_failure_signature = None
+        self._tts_failure_streak = 0
+
+    def _record_tts_failure(self, error: str) -> int:
+        signature = " ".join(error.casefold().split())[:240]
+        if signature == self._last_tts_failure_signature:
+            self._tts_failure_streak += 1
+        else:
+            self._last_tts_failure_signature = signature
+            self._tts_failure_streak = 1
+        return self._tts_failure_streak
 
     def _state(self, state: str, text: str) -> None:
         self.emit("state", {"state": state, "text": text})
@@ -506,6 +519,7 @@ class BookPipeline:
                     signal=metrics,
                     generation_seed=seed,
                 )
+                self._reset_tts_failure_streak()
                 if metrics.get("pace_outlier"):
                     self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
                     self.log(
@@ -517,6 +531,15 @@ class BookPipeline:
                     self.db.set_segment_warning_code(
                         int(row["id"]),
                         "TTS_PITCH_VARIANT_SKIPPED",
+                    )
+                if metrics.get("generation_ceiling_hit"):
+                    self.db.set_segment_warning_code(
+                        int(row["id"]),
+                        "TTS_GENERATION_CEILING_REACHED",
+                    )
+                    self.log(
+                        f"TTS segment {row['stable_id']} dùng hết ngân sách frame; "
+                        "giữ waveform để kiểm tra tín hiệu và Whisper thay vì tự kết luận audio sai."
                     )
                 return
             except Exception as exc:  # noqa: BLE001
@@ -555,6 +578,7 @@ class BookPipeline:
                 int(row["id"]), wav_path=output, wav_sha256=checksum,
                 duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
             )
+            self._reset_tts_failure_streak()
             self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
             if metrics.get("pace_outlier"):
                 self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
@@ -571,10 +595,9 @@ class BookPipeline:
             f"Segment {row['stable_id']} failed after all non-silent strategies",
             {"error": last_error, "chapter": str(chapter["title"]), "text": str(row["text"])},
         )
-        signature = " ".join(last_error.casefold().split())[:240]
-        self._tts_failure_counts[signature] += 1
+        failure_streak = self._record_tts_failure(last_error)
         failure_limit = int(self.settings["tts"].get("fatal_failure_streak", 3))
-        if self._tts_failure_counts[signature] >= failure_limit:
+        if failure_streak >= failure_limit:
             raise RuntimeError(
                 f"TTS circuit breaker opened after {failure_limit} identical failures: {last_error}"
             )
@@ -645,9 +668,15 @@ class BookPipeline:
                 if result["reason"] in {"ASR_NOT_RUN", "ASR_ERROR"}:
                     self.db.mark_verified(int(item["id"]), warning_code=str(result["reason"]))
                 elif result["passed"]:
+                    verification_warning = (
+                        "ASR_TRANSCRIPT_RATE_IMPOSSIBLE"
+                        if result["reason"] == "ASR_TRANSCRIPT_RATE_IMPOSSIBLE"
+                        else None
+                    )
                     self.db.mark_asr_result(
                         int(item["id"]), passed=True, transcript=str(result["transcript"]),
                         similarity=float(result["similarity"]), wer=float(result["wer"]),
+                        warning_code=verification_warning,
                     )
                     self.db.mark_verified(int(item["id"]), warning_code=existing_warning)
                 else:

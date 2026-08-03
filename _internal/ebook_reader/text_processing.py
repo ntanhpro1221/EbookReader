@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,15 @@ COMPACT_VOCALIZATION_PATTERN = re.compile(
 )
 STANDALONE_GASP_PATTERN = re.compile(
     r"^(?P<prefix>\s*[“\"'‘—–-]?\s*)ha(?:…|\.{2,})(?P<suffix>\s*[”\"'’]?\s*)$",
+    re.IGNORECASE,
+)
+STRETCHED_OPEN_VOWEL_PATTERN = re.compile(
+    r"(?<!\w)(?P<vowel>[aeiouyưăâêôơ])(?P=vowel){2,}h*(?!\w)",
+    re.IGNORECASE,
+)
+SPOKEN_WORD_PATTERN = re.compile(r"[A-Za-zÀ-ỹĐđ]+")
+FOLDED_VOCALIZATION_PATTERN = re.compile(
+    r"^(?:a+h*|u+h*|o+h*|you|ha+|he+|hi+|hu+|huc|hac|hay|hum|hm+|khu+|ho+|[a-z])$",
     re.IGNORECASE,
 )
 MAX_VOCALIZATION_REPETITIONS = 4
@@ -88,6 +98,19 @@ def has_spoken_content(text: str) -> bool:
     return any(char.isalnum() for char in text)
 
 
+def _fold_vocalization_token(token: str) -> str:
+    decomposed = unicodedata.normalize("NFD", token.casefold().replace("đ", "d"))
+    return "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
+
+
+def is_vocalization_only(text: str) -> bool:
+    tokens = SPOKEN_WORD_PATTERN.findall(text)
+    return bool(tokens) and all(
+        FOLDED_VOCALIZATION_PATTERN.fullmatch(_fold_vocalization_token(token)) is not None
+        for token in tokens
+    )
+
+
 def normalize_vocalizations_for_tts(text: str) -> str:
     """Turn stylized vocal spellings into ordinary pronounceable Vietnamese text.
 
@@ -108,6 +131,10 @@ def normalize_vocalizations_for_tts(text: str) -> str:
         )
         return " ".join([syllable] * count).capitalize()
 
+    def separate_stretched_vowel(match: re.Match[str]) -> str:
+        vowel = match.group("vowel").casefold()
+        return f"{vowel.upper()}... {vowel}"
+
     gasp = STANDALONE_GASP_PATTERN.fullmatch(text)
     if gasp is not None:
         return f"{gasp.group('prefix')}Hà... hà...{gasp.group('suffix')}"
@@ -116,6 +143,7 @@ def normalize_vocalizations_for_tts(text: str) -> str:
     result = STRETCHED_SIGH_PATTERN.sub("Hầy", result)
     result = STRETCHED_HUM_PATTERN.sub("Hừm", result)
     result = COMPACT_VOCALIZATION_PATTERN.sub(separate_compact_vocalization, result)
+    result = STRETCHED_OPEN_VOWEL_PATTERN.sub(separate_stretched_vowel, result)
     return re.sub(r"\.{4,}", "...", result)
 
 

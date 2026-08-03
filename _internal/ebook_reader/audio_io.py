@@ -135,7 +135,7 @@ def vieneu_generation_reached_frame_ceiling(
     audio: Any,
     policy: SegmentDurationPolicy,
 ) -> bool:
-    """VieNeu returning every allowed codec frame means generation did not end early via EOS."""
+    """Report that VieNeu returned every allowed codec frame; validation decides whether audio is usable."""
     generated_samples = np.asarray(audio).size
     ceiling_samples = policy.generation_max_frames * VIENEU_V3_CODEC_SAMPLES_PER_FRAME
     return generated_samples >= ceiling_samples

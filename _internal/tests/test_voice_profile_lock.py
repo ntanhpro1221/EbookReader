@@ -278,8 +278,11 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
             dtype=np.float32,
         ),
     )
-    with pytest.raises(AudioQualityError, match="max_new_frames"):
-        coordinator.synthesize_atomic(ceiling_row, tmp_path / "segment.wav")
+    _checksum, ceiling_metrics, _seed = coordinator.synthesize_atomic(
+        ceiling_row,
+        tmp_path / "segment.wav",
+    )
+    assert ceiling_metrics["generation_ceiling_hit"] == 1.0
     assert release_calls == 4
 
 

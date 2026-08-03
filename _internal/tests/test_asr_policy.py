@@ -12,6 +12,7 @@ from ebook_reader.asr import (
     WhisperVerifier,
     is_asr_repair_candidate,
     is_severe_asr_mismatch,
+    transcript_exceeds_physical_rate,
 )
 from ebook_reader.config import build_settings
 
@@ -78,6 +79,55 @@ def test_severe_mismatch_detects_impossibly_long_unrelated_transcript() -> None:
         0.22,
     ) is True
     assert is_severe_asr_mismatch("Độc ác quá!", "Nó bạc quá.", 0.60) is False
+
+
+def test_transcript_word_rate_rejects_whisper_output_that_cannot_fit_the_wav() -> None:
+    assert transcript_exceeds_physical_rate(
+        "Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn.",
+        0.88,
+    )
+    assert not transcript_exceeds_physical_rate("Ha, ha, ho.", 1.60)
+
+
+@pytest.mark.parametrize(
+    ("expected", "transcript", "duration", "reason"),
+    [
+        (
+            "“S… Hự!”",
+            "Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn",
+            0.88,
+            "ASR_TRANSCRIPT_RATE_IMPOSSIBLE",
+        ),
+        (
+            "Hức hức hức, hức hức hức…",
+            "Hắc hắc hắc, hắc hắc hắc.",
+            1.44,
+            "VOCALIZATION_ASR_COMPATIBLE",
+        ),
+        ("“A... a!”", "", 1.20, "VOCALIZATION_ASR_COMPATIBLE"),
+    ],
+)
+def test_vocalization_verification_does_not_blame_tts_for_whisper_hallucination(
+    expected: str,
+    transcript: str,
+    duration: float,
+    reason: str,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    wav = tmp_path / "vocal.wav"
+    sf.write(wav, np.zeros(round(48_000 * duration), dtype=np.float32), 48_000)
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier.model = object()
+    monkeypatch.setattr(verifier, "load", lambda: True)
+    monkeypatch.setattr(verifier, "transcribe", lambda _path: transcript)
+
+    result = verifier.verify(expected, wav)
+
+    assert result["passed"] is True
+    assert result["repairable"] is False
+    assert result["severe"] is False
+    assert result["reason"] == reason
 
 
 def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:

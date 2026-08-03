@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-03
 
-Trạng thái source hiện tại: **187/187 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **204/204 test pass** trên Python 3.11.9, gồm pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử chỉ được cài tạm và đã được gỡ khỏi runtime của app sau khi kiểm tra.
@@ -60,11 +60,12 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   narration/dialogue/thought; parser không tạo kind hiệu ứng riêng;
 - `spoken_text` chuẩn hóa cách viết kéo dài và chuyển thẻ VieNeu thử nghiệm thành âm tiết có thể đọc, trong khi
   văn bản/hash nguồn không đổi; cùng `spoken_text` được dùng cho TTS và expected ASR;
-- `Ha...` đứng độc lập được đổi thành hai âm tiết thở có dấu tiếng Việt; output VieNeu chạm đúng trần frame
-  bị coi là chưa có EOS và bị từ chối trước khi ghi WAV;
+- `Ha...`, `Aaaaah`, `Uuu` được đổi thành âm tiết ổn định; output VieNeu chạm đúng trần frame được giữ để
+  signal/Whisper kiểm tra thay vì bị từ chối cơ học;
 - mọi nội tâm bị ép về `NARRATOR` bất kể Qwen trả tên nhân vật nào và không phát warning danh tính;
 - câu một từ ngắn bị giới hạn 24 frame, dùng sampling thận trọng và vẫn là ứng viên ASR repair;
-- ASR mismatch dài bất thường, gần như không liên quan luôn chặn publish sau các vòng retry dù policy thường cho warning;
+- transcript Whisper có số từ không thể tồn tại trong thời lượng WAV được nhận diện là verifier hallucination;
+- circuit breaker reset sau TTS thành công và không cộng dồn failure giống nhau nằm rải rác ở nhiều chapter;
 - ngân sách frame và validator dùng chung một duration policy dựa trên codec VieNeu v3 3.840 sample/frame;
   ma trận kind/pace/độ dài chứng minh mọi ngân sách sinh đều còn headroom validation và không audio nào bị
   fade-out để lách kiểm tra;

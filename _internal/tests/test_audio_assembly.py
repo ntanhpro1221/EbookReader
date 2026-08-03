@@ -163,7 +163,7 @@ def test_vieneu_frame_budget_cannot_exceed_the_shared_validation_limit() -> None
     assert metrics["duration"] == pytest.approx(1.92, abs=0.01)
 
 
-def test_vieneu_output_at_exact_frame_ceiling_is_an_unfinished_generation() -> None:
+def test_vieneu_output_at_exact_frame_ceiling_is_reported_without_judging_content() -> None:
     policy = segment_duration_policy(
         "“Hà... hà...”",
         build_settings(),

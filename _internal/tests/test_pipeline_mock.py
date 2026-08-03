@@ -64,6 +64,18 @@ def test_severe_asr_mismatch_is_fatal_even_under_warning_policy() -> None:
     assert unresolved_asr_is_fatal({"severe": False}, "fail") is True
 
 
+def test_tts_circuit_breaker_counts_only_consecutive_identical_complete_failures() -> None:
+    pipeline = object.__new__(BookPipeline)
+    pipeline._last_tts_failure_signature = None
+    pipeline._tts_failure_streak = 0
+
+    assert pipeline._record_tts_failure("same error") == 1
+    assert pipeline._record_tts_failure("same   error") == 2
+    pipeline._reset_tts_failure_streak()
+    assert pipeline._record_tts_failure("same error") == 1
+    assert pipeline._record_tts_failure("different error") == 1
+
+
 def resource_snapshot(free_ram_gb: float) -> ResourceSnapshot:
     return ResourceSnapshot(
         cpu_percent=20.0,
