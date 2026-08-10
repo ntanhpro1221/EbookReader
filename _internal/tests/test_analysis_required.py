@@ -11,6 +11,7 @@ from ebook_reader.analysis import (
     ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_OUTPUT_MAX_TOKENS,
     CMUDICT_PATH,
+    EXPLICIT_ATTRIBUTION_NOTE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisRequestStopped,
@@ -18,6 +19,7 @@ from ebook_reader.analysis import (
     OllamaStreamIncompleteError,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
+    _local_scope_for_group,
     _local_name_fallback,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
@@ -289,6 +291,60 @@ def test_isolated_fantasy_dialogue_is_a_pronunciation_candidate_but_a_scream_is_
     candidates = _name_candidate_contexts(rows)
 
     assert {candidate["surface"] for candidate in candidates} == {"Gaya", "Lucien", "Paso"}
+
+
+def test_weak_short_names_and_corrupted_entities_are_not_candidates() -> None:
+    rows = [
+        {
+            "speaker": "NARRATOR",
+            "kind": "narration",
+            "text": "Tôi gặp Wolf rồi Mag, Twal và Sol. VICT,OR đứng cạnh STHNTS.",
+        }
+    ]
+
+    candidates = _name_candidate_contexts(rows)
+
+    assert {candidate["surface"] for candidate in candidates}.isdisjoint(
+        {"Wolf", "Mag", "Twal", "Sol", "VICT", "OR", "STHNTS"}
+    )
+
+
+def test_batch_pronunciation_checkpoint_rejects_fragments_and_garbage() -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": (
+                "VICTOR gặp LUCIEN, NATASHA và Herodotus. "
+                "STHNTS đứng cạnh Michael; VICT,OR quay đi."
+            ),
+            "kind_hint": "narration",
+            "kind": "narration",
+            "status": "pending",
+            "speaker": "NARRATOR",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    items = [
+        {"surface": surface, "spoken_form": spoken, "confidence": 0.99}
+        for surface, spoken in (
+            ("VICT", "Vích"),
+            ("LUCI", "Lu-xi"),
+            ("NATASH", "Na-tát"),
+            ("otus", "Ô-tút"),
+            ("STHNTS", "Ét-thờ"),
+            ("VICT,OR", "Vích-to"),
+            ("Michael", "Mai-cồ"),
+        )
+    ]
+
+    analyzer._checkpoint_pronunciations(db.rows, {"pronunciations": items})
+
+    assert [(row["surface"], row["spoken_form"]) for row in db.pronunciations] == [
+        ("Michael", "Mai-cồ")
+    ]
 
 
 def test_vietnamese_spoken_form_requires_an_explicit_phonetic_rewrite() -> None:
@@ -653,6 +709,117 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
     assert "Qwen response intentionally failed" in fallback_event[2]
 
 
+def test_uncertain_short_names_are_left_verbatim_when_reconciliation_fails(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Wolf gặp Mag, Twal, Sol và Vaelorian.",
+            "kind_hint": "dialogue",
+            "kind": "dialogue",
+            "status": "analyzed",
+            "speaker": "Wolf",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(profile="balanced"), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    attempts = 0
+
+    def response(_request, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("pronunciation review unavailable")
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    assert analyzer.reconcile_name_pronunciations() == 1
+    assert attempts == 3
+    assert {
+        row["surface"]: row["spoken_form"]
+        for row in db.pronunciations
+    } == {"Vaelorian": "Ve-lô-rian"}
+    skipped = next(
+        event for event in db.events if event[1] == "NAME_PRONUNCIATION_UNCERTAIN_SKIPPED"
+    )
+    assert set(skipped[3]["surfaces"]) == {"Wolf", "Mag", "Twal", "Sol"}
+
+
+def test_high_quality_blocks_unresolved_short_name_pronunciation(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Wolf gặp Mag trong đại sảnh.",
+            "kind_hint": "dialogue",
+            "kind": "dialogue",
+            "status": "analyzed",
+            "speaker": "Wolf",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        analyzer,
+        "_stream_json_response",
+        lambda _request, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("pronunciation review unavailable")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="High-quality pronunciation QA could not resolve"):
+        analyzer.reconcile_name_pronunciations()
+
+    assert any(
+        event[1] == "NAME_PRONUNCIATION_UNCERTAIN_SKIPPED"
+        for event in db.events
+    )
+
+
+def test_high_confidence_contextual_short_name_can_be_locked(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Wolf bước vào phòng.",
+            "kind_hint": "dialogue",
+            "kind": "dialogue",
+            "status": "analyzed",
+            "speaker": "Wolf",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr(
+        analyzer,
+        "_stream_json_response",
+        lambda _request, **_kwargs: {
+            "names": [
+                {
+                    "id": "N001",
+                    "convert": True,
+                    "spoken_form": "Uôn",
+                    "confidence": 0.96,
+                    "reason": "Tên nhân vật rõ ràng trong ngữ cảnh",
+                }
+            ]
+        },
+    )
+
+    assert analyzer.reconcile_name_pronunciations() == 1
+    assert db.pronunciations[0]["surface"] == "Wolf"
+    assert db.pronunciations[0]["spoken_form"] == "Uôn"
+
+
 def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
     group = analysis_group()
     first = analysis_item(group[0]["stable_id"])
@@ -667,6 +834,55 @@ def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
     assert all(is_local_speaker(speaker) for speaker in speakers)
     assert "c00001::b0007" in speakers[0]
     assert local_speaker_display(speakers[0]) == "NPC áo xanh"
+
+
+def test_local_scope_is_derived_from_stable_range_boundaries() -> None:
+    group = analysis_group()
+
+    scope = _local_scope_for_group(group)
+
+    assert scope.startswith("r")
+    assert scope == _local_scope_for_group(list(group))
+    assert scope != _local_scope_for_group(group[:1])
+
+
+def test_resume_uses_scope_from_original_full_book_partition(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"c1s{index}",
+            "chapter_id": 1,
+            "text": f"Đoạn {index}.",
+            "kind_hint": "dialogue",
+            "status": "analyzed" if index <= 2 else "pending",
+            "speaker": "NARRATOR" if index <= 2 else None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 2, "batch_chars": 10000}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def request(group, **_kwargs):
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            item.update(
+                {"kind": "dialogue", "speaker": "NPC_LOCAL:lính gác", "gender": "male"}
+            )
+            items.append(item)
+        return {"segments": items}
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    speakers = {data["speaker"] for _segment_id, data, _threshold in db.updated}
+    assert len(speakers) == 1
+    assert _local_scope_for_group(db.rows[2:]) in next(iter(speakers))
 
 
 def test_addressee_name_cannot_become_the_local_speaker_identity() -> None:
@@ -700,6 +916,103 @@ def test_addressee_name_cannot_become_the_local_speaker_identity() -> None:
     assert len(set(speakers)) == 1
     assert local_speaker_display(speakers[0]) == "NPC người gọi Lucien"
     assert all(ADDRESSEE_REPAIR_NOTE in validated[row["stable_id"]]["notes"] for row in group)
+
+
+def test_same_paragraph_action_beats_override_wrong_dialogue_speakers() -> None:
+    examples = [
+        (
+            "“Cha, cha và mẹ phải cẩn thận hơn trong một thời gian nữa đấy.”",
+            "John có phần lo lắng.",
+            "John",
+        ),
+        (
+            "“Mẹ con và ta sẽ ổn thôi.”",
+            "Joel chừa ra một khoảng trống để Alisa chữa trị vết thương cho Lucien.",
+            "Joel",
+        ),
+        (
+            "“Đến đây ăn sáng với bọn em đi!”",
+            "Iven mở cửa.",
+            "Iven",
+        ),
+    ]
+    group = []
+    items = []
+    for paragraph_index, (dialogue, narration, _speaker) in enumerate(examples, 1):
+        dialogue_id = f"d{paragraph_index}"
+        narration_id = f"n{paragraph_index}"
+        group.extend(
+            [
+                {
+                    "stable_id": dialogue_id,
+                    "chapter_id": 1,
+                    "paragraph_index": paragraph_index,
+                    "text": dialogue,
+                    "kind_hint": "dialogue",
+                },
+                {
+                    "stable_id": narration_id,
+                    "chapter_id": 1,
+                    "paragraph_index": paragraph_index,
+                    "text": narration,
+                    "kind_hint": "narration",
+                },
+            ]
+        )
+        dialogue_item = analysis_item(dialogue_id)
+        dialogue_item.update({"kind": "dialogue", "speaker": "ALISA", "gender": "female"})
+        items.extend((dialogue_item, analysis_item(narration_id)))
+
+    validated = _validate(group, {"segments": items})
+
+    for paragraph_index, (_dialogue, _narration, speaker) in enumerate(examples, 1):
+        data = validated[f"d{paragraph_index}"]
+        assert data["speaker"] == speaker
+        assert data["gender"] == "unknown"
+        assert EXPLICIT_ATTRIBUTION_NOTE in data["notes"]
+
+
+def test_speech_verb_before_quote_overrides_speaker_but_weak_context_does_not() -> None:
+    group = [
+        {
+            "stable_id": "n1",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": "John hỏi:",
+            "kind_hint": "narration",
+        },
+        {
+            "stable_id": "d1",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": "“Cha có ổn không?”",
+            "kind_hint": "dialogue",
+        },
+        {
+            "stable_id": "d2",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "“Tôi không biết.”",
+            "kind_hint": "dialogue",
+        },
+        {
+            "stable_id": "n2",
+            "chapter_id": 1,
+            "paragraph_index": 3,
+            "text": "Sau đó Joel rời đi.",
+            "kind_hint": "narration",
+        },
+    ]
+    items = [analysis_item("n1"), analysis_item("d1"), analysis_item("d2"), analysis_item("n2")]
+    items[1].update({"kind": "dialogue", "speaker": "ALISA", "gender": "female"})
+    items[2].update({"kind": "dialogue", "speaker": "ALISA", "gender": "female"})
+
+    validated = _validate(group, {"segments": items})
+
+    assert validated["d1"]["speaker"] == "John"
+    assert EXPLICIT_ATTRIBUTION_NOTE in validated["d1"]["notes"]
+    assert validated["d2"]["speaker"] == "ALISA"
+    assert EXPLICIT_ATTRIBUTION_NOTE not in validated["d2"]["notes"]
 
 
 def test_bare_name_vocative_is_repaired_but_self_introduction_is_not() -> None:
@@ -880,6 +1193,90 @@ def test_incomplete_stream_splits_batch_instead_of_retrying_same_size(monkeypatc
     assert any("tự chia thành 2 + 2 segment" in message for message in logs)
 
 
+def test_split_batches_keep_one_stable_local_identity_scope(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"c1s{index}",
+            "chapter_id": 1,
+            "text": f"Đoạn {index}.",
+            "kind_hint": "dialogue",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def request(group, **_kwargs):
+        if len(group) == 4:
+            raise OllamaStreamIncompleteError("incomplete test stream")
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            item.update(
+                {"kind": "dialogue", "speaker": "NPC_LOCAL:lính gác", "gender": "male"}
+            )
+            items.append(item)
+        return {"segments": items}
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    speakers = {data["speaker"] for _segment_id, data, _threshold in db.updated}
+    assert len(speakers) == 1
+    assert _local_scope_for_group(db.rows) in next(iter(speakers))
+
+
+def test_incomplete_id_response_splits_batch_after_retries(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"c1s{index}",
+            "chapter_id": 1,
+            "text": f"Đoạn {index}.",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000}}
+    )
+    logs: list[str] = []
+    analyzer = OllamaBookAnalyzer(settings, db, logs.append)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    request_sizes: list[int] = []
+
+    def request(group, **_kwargs):
+        request_sizes.append(len(group))
+        rows = group[:-1] if len(group) == 4 else group
+        return {
+            "segments": [analysis_item(str(row["stable_id"])) for row in rows],
+        }
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert request_sizes == [4, 4, 4, 2, 2]
+    assert len(db.updated) == 4
+    assert not any(event[1] == "REQUIRED_ANALYSIS_BATCH_FAILED" for event in db.events)
+    assert any(
+        "vẫn trả thiếu ID sau 3 lần; tự chia thành 2 + 2 segment" in message
+        for message in logs
+    )
+
+
 def test_analyzer_starts_and_stops_only_its_managed_ollama_process(
     monkeypatch,
     tmp_path,
@@ -937,3 +1334,34 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(
     assert terminated == [(managed.pid, 3.0)]
     assert any("tự khởi động Ollama ẩn" in message for message in logs)
     assert any("Đã dừng Ollama ẩn" in message for message in logs)
+
+
+def test_analyzer_pulls_an_allowed_missing_model_without_a_console(monkeypatch) -> None:
+    settings = build_settings(
+        "high_quality",
+        {"safety": {"allow_network_downloads_during_job": True}},
+    )
+    analyzer = OllamaBookAnalyzer(settings, FakeDB(), lambda _message: None)
+    monkeypatch.setattr(analyzer, "_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.shutil.which", lambda _name: "ollama.exe")
+
+    class EmptyTagsResponse:
+        @staticmethod
+        def json():
+            return {"models": []}
+
+    class EmptyTagsSession:
+        @staticmethod
+        def get(_url, timeout):
+            assert timeout == 10
+            return EmptyTagsResponse()
+
+    analyzer.session = EmptyTagsSession()
+    calls: list[tuple[list[str], bool]] = []
+    monkeypatch.setattr(
+        "ebook_reader.analysis.run_hidden",
+        lambda command, *, check: calls.append((list(command), check)),
+    )
+
+    assert analyzer.ensure_available() is True
+    assert calls == [(["ollama.exe", "pull", "qwen3:8b"], True)]

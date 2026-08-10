@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -8,6 +9,23 @@ from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 from .models import BookStatus, ChapterStatus, SegmentStatus
+
+
+# Version 1 is the legacy pre-QA layout. Existing projects did not persist a
+# user_version, so they migrate from 0 directly to this version 2 schema.
+SCHEMA_VERSION = 2
+QUALITY_SCOPE_SEGMENT = "segment"
+QUALITY_SCOPE_CHAPTER = "chapter"
+QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
+SEGMENT_AUDIO_QUALITY_STAGE = "segment_audio_v1"
+CHAPTER_POST_ENCODE_QUALITY_STAGE = "chapter_post_encode_v1"
+QUALITY_VERDICT_PASS = "pass"
+QUALITY_VERDICTS = {
+    QUALITY_VERDICT_PASS,
+    "repair",
+    "inconclusive",
+    "fail",
+}
 
 
 SCHEMA = """
@@ -149,6 +167,36 @@ CREATE TABLE IF NOT EXISTS artifacts (
     updated_at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS quality_policies (
+    policy_hash TEXT PRIMARY KEY,
+    policy_version INTEGER NOT NULL,
+    policy_json TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0 CHECK (active IN (0, 1)),
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS quality_checks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL CHECK (scope IN ('segment', 'chapter')),
+    stage TEXT NOT NULL,
+    segment_id INTEGER REFERENCES segments(id) ON DELETE CASCADE,
+    chapter_id INTEGER REFERENCES chapters(id) ON DELETE CASCADE,
+    artifact_sha256 TEXT NOT NULL,
+    policy_hash TEXT NOT NULL REFERENCES quality_policies(policy_hash),
+    policy_version INTEGER NOT NULL,
+    verdict TEXT NOT NULL CHECK (verdict IN ('pass', 'repair', 'inconclusive', 'fail')),
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    failure_codes_json TEXT NOT NULL DEFAULT '[]',
+    repair_action TEXT,
+    attempt INTEGER NOT NULL DEFAULT 1 CHECK (attempt >= 1),
+    created_at REAL NOT NULL,
+    CHECK (
+        (scope = 'segment' AND segment_id IS NOT NULL AND chapter_id IS NULL)
+        OR (scope = 'chapter' AND chapter_id IS NOT NULL AND segment_id IS NULL)
+    )
+);
+
 CREATE TABLE IF NOT EXISTS runtime_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp REAL NOT NULL,
@@ -172,6 +220,12 @@ CREATE INDEX IF NOT EXISTS idx_segments_chapter_status ON segments(chapter_id, s
 CREATE INDEX IF NOT EXISTS idx_segments_status ON segments(status);
 CREATE INDEX IF NOT EXISTS idx_segments_speaker ON segments(speaker);
 CREATE INDEX IF NOT EXISTS idx_runtime_events_time ON runtime_events(timestamp);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_quality_policies_active
+    ON quality_policies(active) WHERE active = 1;
+CREATE INDEX IF NOT EXISTS idx_quality_checks_segment
+    ON quality_checks(segment_id, stage, policy_hash, id);
+CREATE INDEX IF NOT EXISTS idx_quality_checks_chapter
+    ON quality_checks(chapter_id, stage, policy_hash, id);
 """
 
 
@@ -183,6 +237,12 @@ class ProjectDB:
         if self.synchronous not in {"OFF", "NORMAL", "FULL", "EXTRA"}:
             raise ValueError(f"Unsupported SQLite synchronous mode: {synchronous}")
         with self.connect() as conn:
+            schema_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+            if schema_version > SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"Project schema version {schema_version} is newer than supported version "
+                    f"{SCHEMA_VERSION}"
+                )
             has_user_tables = bool(
                 conn.execute(
                     """
@@ -192,13 +252,46 @@ class ProjectDB:
                     """
                 ).fetchone()
             )
-            if has_user_tables:
-                backup_path = self.path.with_suffix(self.path.suffix + ".pre-migration.bak")
-                if not backup_path.exists():
-                    with sqlite3.connect(backup_path) as backup:
-                        conn.backup(backup)
+            if has_user_tables and schema_version < SCHEMA_VERSION:
+                self._create_migration_backup(conn, schema_version)
             conn.executescript(SCHEMA)
-            self._migrate_schema(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                self._migrate_schema(conn)
+                conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+
+    def _migration_backup_path(self, source_version: int) -> Path:
+        return self.path.with_name(
+            f"{self.path.name}.pre-v{source_version}-to-v{SCHEMA_VERSION}.bak"
+        )
+
+    def _create_migration_backup(
+        self,
+        conn: sqlite3.Connection,
+        source_version: int,
+    ) -> Path:
+        backup_path = self._migration_backup_path(source_version)
+        if backup_path.exists():
+            return backup_path
+        temp = backup_path.with_name(backup_path.name + ".part")
+        temp.unlink(missing_ok=True)
+        try:
+            backup = sqlite3.connect(temp)
+            try:
+                conn.backup(backup)
+                result = backup.execute("PRAGMA integrity_check").fetchone()
+                if result is None or str(result[0]).casefold() != "ok":
+                    raise RuntimeError("SQLite migration backup failed integrity_check")
+            finally:
+                backup.close()
+            os.replace(temp, backup_path)
+            return backup_path
+        finally:
+            temp.unlink(missing_ok=True)
 
     @staticmethod
     def _migrate_schema(conn: sqlite3.Connection) -> None:
@@ -219,6 +312,7 @@ class ProjectDB:
                 )
                 """
             )
+
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.path, timeout=60, isolation_level=None)
@@ -491,6 +585,15 @@ class ProjectDB:
             values.append(value)
         return "|".join(values) or None
 
+    @staticmethod
+    def _without_asr_warnings(existing: str | None) -> str | None:
+        values = [
+            value
+            for value in str(existing or "").split("|")
+            if value and not value.startswith("ASR_")
+        ]
+        return "|".join(values) or None
+
     def update_analysis(
         self,
         segment_id: int,
@@ -694,6 +797,49 @@ class ProjectDB:
             row = conn.execute("SELECT chapter_id FROM segments WHERE id=?", (segment_id,)).fetchone()
             if row is not None:
                 self._refresh_chapter_counts_conn(conn, int(row["chapter_id"]))
+
+    def requeue_segment_for_asr(self, segment_id: int, reason: str) -> None:
+        with self.transaction() as conn:
+            row = conn.execute(
+                """
+                SELECT chapter_id,status,wav_path,wav_sha256,wav_duration,
+                       signal_json,warning_code
+                FROM segments WHERE id=?
+                """,
+                (segment_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            if str(row["status"]) not in {
+                SegmentStatus.VERIFIED.value,
+                SegmentStatus.WARNING.value,
+            }:
+                raise RuntimeError("ASR-only requeue requires a verified or warning segment")
+            if (
+                not str(row["wav_path"] or "").strip()
+                or not str(row["wav_sha256"] or "").strip()
+                or row["wav_duration"] is None
+                or row["signal_json"] is None
+            ):
+                raise RuntimeError("ASR-only requeue requires a committed signal-validated WAV")
+            retained_warning = self._without_asr_warnings(
+                str(row["warning_code"]) if row["warning_code"] else None
+            )
+            conn.execute(
+                """
+                UPDATE segments SET status=?,asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
+                    warning_code=?,error=?,updated_at=?
+                WHERE id=?
+                """,
+                (
+                    SegmentStatus.SIGNAL_PASSED.value,
+                    retained_warning,
+                    str(reason)[-2000:],
+                    time.time(),
+                    segment_id,
+                ),
+            )
+            self._refresh_chapter_counts_conn(conn, int(row["chapter_id"]))
 
     def _refresh_chapter_counts_conn(self, conn: sqlite3.Connection, chapter_id: int) -> None:
         row = conn.execute(
@@ -1005,6 +1151,338 @@ class ProjectDB:
             return conn.execute(
                 "SELECT * FROM artifacts WHERE artifact_key=?", (artifact_key,)
             ).fetchone()
+
+    def set_current_quality_policy(
+        self,
+        *,
+        policy_hash: str,
+        policy_version: int,
+        policy: dict[str, Any],
+    ) -> None:
+        normalized_hash = str(policy_hash).strip()
+        normalized_version = int(policy_version)
+        if not normalized_hash:
+            raise ValueError("quality policy hash must not be empty")
+        if normalized_version < 1:
+            raise ValueError("quality policy version must be positive")
+        payload = json.dumps(
+            policy,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        now = time.time()
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT policy_version,policy_json FROM quality_policies WHERE policy_hash=?",
+                (normalized_hash,),
+            ).fetchone()
+            if existing is not None and (
+                int(existing["policy_version"]) != normalized_version
+                or str(existing["policy_json"]) != payload
+            ):
+                raise ValueError("quality policy hash is already registered with different content")
+            conn.execute("UPDATE quality_policies SET active=0,updated_at=? WHERE active=1", (now,))
+            conn.execute(
+                """
+                INSERT INTO quality_policies(
+                    policy_hash,policy_version,policy_json,active,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?)
+                ON CONFLICT(policy_hash) DO UPDATE SET
+                    policy_version=excluded.policy_version,
+                    policy_json=excluded.policy_json,
+                    active=1,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    normalized_hash,
+                    normalized_version,
+                    payload,
+                    1,
+                    now,
+                    now,
+                ),
+            )
+
+    def current_quality_policy(self) -> sqlite3.Row | None:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT * FROM quality_policies WHERE active=1"
+            ).fetchone()
+
+    def quality_metadata_for_current_policy(
+        self,
+        verdict: str = QUALITY_VERDICT_PASS,
+    ) -> dict[str, Any]:
+        normalized_verdict = str(verdict).strip().casefold()
+        if normalized_verdict not in QUALITY_VERDICTS:
+            raise ValueError(f"Unsupported quality verdict: {verdict}")
+        policy = self.current_quality_policy()
+        if policy is None:
+            raise RuntimeError("No active quality policy is locked for this project")
+        return {
+            "policy_hash": str(policy["policy_hash"]),
+            "policy_version": int(policy["policy_version"]),
+            "verdict": normalized_verdict,
+        }
+
+    def record_quality_check(
+        self,
+        *,
+        scope: str,
+        stage: str,
+        artifact_sha256: str,
+        policy_hash: str,
+        policy_version: int,
+        verdict: str,
+        segment_id: int | None = None,
+        chapter_id: int | None = None,
+        metrics: dict[str, Any] | None = None,
+        failure_codes: Sequence[str] = (),
+        repair_action: str | None = None,
+        attempt: int = 1,
+    ) -> int:
+        normalized_scope = str(scope).strip().casefold()
+        normalized_stage = str(stage).strip()
+        normalized_hash = str(policy_hash).strip()
+        normalized_verdict = str(verdict).strip().casefold()
+        normalized_version = int(policy_version)
+        normalized_attempt = int(attempt)
+        if normalized_scope not in QUALITY_SCOPES:
+            raise ValueError(f"Unsupported quality scope: {scope}")
+        if not normalized_stage:
+            raise ValueError("quality check stage must not be empty")
+        if not str(artifact_sha256).strip():
+            raise ValueError("quality check artifact checksum must not be empty")
+        if normalized_verdict not in QUALITY_VERDICTS:
+            raise ValueError(f"Unsupported quality verdict: {verdict}")
+        if normalized_version < 1 or normalized_attempt < 1:
+            raise ValueError("quality policy version and attempt must be positive")
+        if normalized_scope == QUALITY_SCOPE_SEGMENT:
+            if segment_id is None or chapter_id is not None:
+                raise ValueError("segment quality checks require only segment_id")
+        elif chapter_id is None or segment_id is not None:
+            raise ValueError("chapter quality checks require only chapter_id")
+
+        with self.transaction() as conn:
+            policy = conn.execute(
+                "SELECT policy_version FROM quality_policies WHERE policy_hash=?",
+                (normalized_hash,),
+            ).fetchone()
+            if policy is None or int(policy["policy_version"]) != normalized_version:
+                raise ValueError("quality check policy hash/version is not registered")
+            cursor = conn.execute(
+                """
+                INSERT INTO quality_checks(
+                    scope,stage,segment_id,chapter_id,artifact_sha256,
+                    policy_hash,policy_version,verdict,metrics_json,
+                    failure_codes_json,repair_action,attempt,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    normalized_scope,
+                    normalized_stage,
+                    segment_id,
+                    chapter_id,
+                    str(artifact_sha256).strip(),
+                    normalized_hash,
+                    normalized_version,
+                    normalized_verdict,
+                    json.dumps(metrics or {}, ensure_ascii=False, sort_keys=True),
+                    json.dumps(list(failure_codes), ensure_ascii=False),
+                    repair_action,
+                    normalized_attempt,
+                    time.time(),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def latest_quality_check(
+        self,
+        *,
+        scope: str,
+        stage: str,
+        segment_id: int | None = None,
+        chapter_id: int | None = None,
+        current_policy_only: bool = True,
+    ) -> sqlite3.Row | None:
+        normalized_scope = str(scope).strip().casefold()
+        if normalized_scope not in QUALITY_SCOPES:
+            raise ValueError(f"Unsupported quality scope: {scope}")
+        if normalized_scope == QUALITY_SCOPE_SEGMENT:
+            if segment_id is None or chapter_id is not None:
+                raise ValueError("segment quality lookup requires only segment_id")
+            subject_clause = "quality_checks.segment_id=?"
+            subject_id = int(segment_id)
+        else:
+            if chapter_id is None or segment_id is not None:
+                raise ValueError("chapter quality lookup requires only chapter_id")
+            subject_clause = "quality_checks.chapter_id=?"
+            subject_id = int(chapter_id)
+        policy_clause = " AND quality_policies.active=1" if current_policy_only else ""
+        with self.connect() as conn:
+            return conn.execute(
+                f"""
+                SELECT quality_checks.*
+                FROM quality_checks
+                JOIN quality_policies USING(policy_hash)
+                WHERE quality_checks.scope=?
+                  AND quality_checks.stage=?
+                  AND {subject_clause}
+                  {policy_clause}
+                ORDER BY quality_checks.id DESC
+                LIMIT 1
+                """,
+                (normalized_scope, str(stage).strip(), subject_id),
+            ).fetchone()
+
+    @staticmethod
+    def _quality_check_is_current_pass_conn(
+        conn: sqlite3.Connection,
+        *,
+        scope: str,
+        stage: str,
+        artifact_sha256: str,
+        segment_id: int | None = None,
+        chapter_id: int | None = None,
+    ) -> bool:
+        if scope == QUALITY_SCOPE_SEGMENT:
+            subject_clause = "quality_checks.segment_id=?"
+            subject_id = segment_id
+        else:
+            subject_clause = "quality_checks.chapter_id=?"
+            subject_id = chapter_id
+        if subject_id is None:
+            return False
+        row = conn.execute(
+            f"""
+            SELECT quality_checks.verdict
+            FROM quality_checks
+            JOIN quality_policies
+              ON quality_policies.policy_hash=quality_checks.policy_hash
+             AND quality_policies.policy_version=quality_checks.policy_version
+            WHERE quality_policies.active=1
+              AND quality_checks.scope=?
+              AND quality_checks.stage=?
+              AND quality_checks.artifact_sha256=?
+              AND {subject_clause}
+            ORDER BY quality_checks.id DESC
+            LIMIT 1
+            """,
+            (scope, stage, artifact_sha256, int(subject_id)),
+        ).fetchone()
+        return bool(row and str(row["verdict"]) == QUALITY_VERDICT_PASS)
+
+    def segment_audio_is_current_qa_verified(
+        self,
+        segment_id: int,
+        artifact_sha256: str,
+        stage: str = SEGMENT_AUDIO_QUALITY_STAGE,
+    ) -> bool:
+        normalized_sha256 = str(artifact_sha256).strip()
+        normalized_stage = str(stage).strip()
+        if not normalized_sha256 or not normalized_stage:
+            return False
+        with self.connect() as conn:
+            segment = conn.execute(
+                "SELECT wav_sha256 FROM segments WHERE id=?",
+                (int(segment_id),),
+            ).fetchone()
+            if segment is None or str(segment["wav_sha256"] or "") != normalized_sha256:
+                return False
+            return self._quality_check_is_current_pass_conn(
+                conn,
+                scope=QUALITY_SCOPE_SEGMENT,
+                stage=normalized_stage,
+                artifact_sha256=normalized_sha256,
+                segment_id=int(segment_id),
+            )
+
+    def chapter_segments_have_current_audio_qa(
+        self,
+        chapter_id: int,
+        stage: str = SEGMENT_AUDIO_QUALITY_STAGE,
+    ) -> bool:
+        normalized_stage = str(stage).strip()
+        if not normalized_stage:
+            return False
+        with self.connect() as conn:
+            rows = list(
+                conn.execute(
+                    "SELECT id,status,wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
+                    (int(chapter_id),),
+                )
+            )
+            if not rows:
+                return False
+            for row in rows:
+                if str(row["status"]) not in {
+                    SegmentStatus.VERIFIED.value,
+                    SegmentStatus.WARNING.value,
+                }:
+                    return False
+                artifact_sha256 = str(row["wav_sha256"] or "").strip()
+                if not artifact_sha256 or not self._quality_check_is_current_pass_conn(
+                    conn,
+                    scope=QUALITY_SCOPE_SEGMENT,
+                    stage=normalized_stage,
+                    artifact_sha256=artifact_sha256,
+                    segment_id=int(row["id"]),
+                ):
+                    return False
+            return True
+
+    def chapter_artifact_is_current_qa_verified(
+        self,
+        chapter_index: int,
+        stage: str = CHAPTER_POST_ENCODE_QUALITY_STAGE,
+    ) -> bool:
+        artifact_key = f"chapter_mp3:{int(chapter_index)}"
+        normalized_stage = str(stage).strip()
+        if not normalized_stage:
+            return False
+        with self.connect() as conn:
+            artifact = conn.execute(
+                "SELECT * FROM artifacts WHERE artifact_key=?",
+                (artifact_key,),
+            ).fetchone()
+            chapter = conn.execute(
+                "SELECT id FROM chapters WHERE chapter_index=?",
+                (int(chapter_index),),
+            ).fetchone()
+            policy = conn.execute(
+                "SELECT * FROM quality_policies WHERE active=1"
+            ).fetchone()
+            if (
+                artifact is None
+                or chapter is None
+                or policy is None
+                or str(artifact["kind"]) != "chapter_mp3"
+                or not bool(artifact["verified"])
+                or not str(artifact["sha256"] or "").strip()
+            ):
+                return False
+            try:
+                metadata = json.loads(str(artifact["metadata_json"] or "{}"))
+                quality = metadata.get("quality") if isinstance(metadata, dict) else None
+                metadata_passes = bool(
+                    isinstance(quality, dict)
+                    and str(quality.get("policy_hash", "")) == str(policy["policy_hash"])
+                    and int(quality.get("policy_version", -1)) == int(policy["policy_version"])
+                    and str(quality.get("verdict", "")).casefold() == QUALITY_VERDICT_PASS
+                )
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return False
+            return bool(
+                metadata_passes
+                and self._quality_check_is_current_pass_conn(
+                    conn,
+                    scope=QUALITY_SCOPE_CHAPTER,
+                    stage=normalized_stage,
+                    artifact_sha256=str(artifact["sha256"]),
+                    chapter_id=int(chapter["id"]),
+                )
+            )
 
     def clear_all_worker_leases(self) -> int:
         with self.connect() as conn:

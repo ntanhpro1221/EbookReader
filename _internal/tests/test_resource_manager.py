@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from ebook_reader.config import build_settings
 from ebook_reader.models import ResourceLevel
-from ebook_reader.resource_manager import AdaptiveResourceManager, ResourceSnapshot
+from ebook_reader import resource_manager
+from ebook_reader.resource_manager import (
+    AdaptiveResourceManager,
+    ResourceSnapshot,
+    trim_process_working_set,
+)
 
 
 def snapshot(**updates):
@@ -20,6 +26,36 @@ def snapshot(**updates):
     )
     values.update(updates)
     return ResourceSnapshot(**values)
+
+
+def test_trim_process_working_set_calls_windows_api(monkeypatch) -> None:
+    calls: list[tuple[str, object]] = []
+
+    class FakeFunction:
+        def __init__(self, name: str, result: object) -> None:
+            self.name = name
+            self.result = result
+            self.argtypes = None
+            self.restype = None
+
+        def __call__(self, *args):
+            calls.append((self.name, args))
+            return self.result
+
+    kernel32 = SimpleNamespace(GetCurrentProcess=FakeFunction("GetCurrentProcess", 123))
+    psapi = SimpleNamespace(EmptyWorkingSet=FakeFunction("EmptyWorkingSet", 1))
+
+    def fake_win_dll(name: str, **_kwargs):
+        return {"kernel32": kernel32, "psapi": psapi}[name]
+
+    monkeypatch.setattr(resource_manager.os, "name", "nt")
+    monkeypatch.setattr(resource_manager.ctypes, "WinDLL", fake_win_dll, raising=False)
+
+    assert trim_process_working_set() is True
+    assert calls == [
+        ("GetCurrentProcess", ()),
+        ("EmptyWorkingSet", (123,)),
+    ]
 
 
 def test_critical_disk_stops(tmp_path: Path) -> None:

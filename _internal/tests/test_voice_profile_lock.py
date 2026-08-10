@@ -125,6 +125,72 @@ def test_short_utterance_uses_conservative_sampling() -> None:
     assert sampling["top_p"] == pytest.approx(0.90)
 
 
+def test_short_utterance_repair_halves_a_persisted_generation_ceiling() -> None:
+    sampling = vieneu_sampling_for_segment(
+        {
+            "text": "Vâng.",
+            "speaker": "Nhân vật",
+            "emotion": "neutral",
+            "intensity": 3,
+            "pace": "normal",
+            "warning_code": "TTS_GENERATION_CEILING_REACHED|ASR_SEVERE_MISMATCH",
+        },
+        repair_short_utterance=True,
+    )
+
+    assert sampling["max_new_frames"] == 12
+
+
+def test_short_utterance_attempt_count_does_not_enable_repair_budget() -> None:
+    sampling = vieneu_sampling_for_segment(
+        {
+            "text": "Được rồi.",
+            "speaker": "Nhân vật",
+            "emotion": "neutral",
+            "intensity": 3,
+            "pace": "normal",
+            "attempt_count": 2,
+        },
+        repair_short_utterance=True,
+    )
+
+    assert sampling["max_new_frames"] == 24
+
+
+def test_short_utterance_ceiling_warning_only_caps_an_explicit_repair() -> None:
+    row = {
+        "text": "Được rồi.",
+        "speaker": "Nhân vật",
+        "emotion": "neutral",
+        "intensity": 3,
+        "pace": "normal",
+        "warning_code": "TTS_GENERATION_CEILING_REACHED",
+        "attempt_count": 9,
+    }
+
+    initial_sampling = vieneu_sampling_for_segment(row)
+    repair_sampling = vieneu_sampling_for_segment(row, repair_short_utterance=True)
+
+    assert initial_sampling["max_new_frames"] == 24
+    assert repair_sampling["max_new_frames"] == 12
+
+
+def test_single_syllable_repair_uses_a_micro_generation_budget() -> None:
+    sampling = vieneu_sampling_for_segment(
+        {
+            "text": "Ừ?",
+            "speaker": "Nhân vật",
+            "emotion": "neutral",
+            "intensity": 3,
+            "pace": "normal",
+            "warning_code": "TTS_GENERATION_CEILING_REACHED|ASR_SEVERE_MISMATCH",
+        },
+        repair_short_utterance=True,
+    )
+
+    assert sampling["max_new_frames"] == 6
+
+
 def test_missing_locked_vieneu_preset_is_fatal() -> None:
     assert is_fatal_tts_error(
         RuntimeError("Locked VieNeu preset 'Phạm Tuyên' is unavailable; refusing to change voice silently")
@@ -234,7 +300,7 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     monkeypatch.setattr(
         coordinator.vieneu,
         "generate_one",
-        lambda _row, _profile, _seed: np.asarray([0.1, -0.1], dtype=np.float32),
+        lambda _row, _profile, _seed, **_kwargs: np.asarray([0.1, -0.1], dtype=np.float32),
     )
     monkeypatch.setattr(tts_module, "apply_pitch_variant", lambda audio, *_args: audio)
     monkeypatch.setattr(
@@ -259,7 +325,7 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     assert any("Bỏ biến thể cao độ" in message for message in logs)
     assert release_calls == 2
 
-    def fail_generation(*_args) -> np.ndarray:
+    def fail_generation(*_args, **_kwargs) -> np.ndarray:
         raise AudioQualityError("inference failed")
 
     monkeypatch.setattr(coordinator.vieneu, "generate_one", fail_generation)
@@ -273,7 +339,7 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     monkeypatch.setattr(
         coordinator.vieneu,
         "generate_one",
-        lambda *_args: np.zeros(
+        lambda *_args, **_kwargs: np.zeros(
             policy.generation_max_frames * VIENEU_V3_CODEC_SAMPLES_PER_FRAME,
             dtype=np.float32,
         ),
@@ -284,6 +350,84 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     )
     assert ceiling_metrics["generation_ceiling_hit"] == 1.0
     assert release_calls == 4
+
+
+def test_vieneu_unload_trims_process_working_set(monkeypatch) -> None:
+    trims: list[bool] = []
+    engine = VieNeuEngine(build_settings(), lambda _message: None)
+    engine.tts = object()
+    engine.voices = ["Phạm Tuyên"]
+    monkeypatch.setattr(engine, "release_inference_cache", lambda: None)
+    monkeypatch.setattr(tts_module, "trim_process_working_set", lambda: trims.append(True))
+
+    engine.unload()
+
+    assert engine.tts is None
+    assert engine.voices == []
+    assert trims == [True]
+
+
+def test_vieneu_unload_without_model_is_a_no_op(monkeypatch) -> None:
+    releases: list[bool] = []
+    trims: list[bool] = []
+    engine = VieNeuEngine(build_settings(), lambda _message: None)
+    monkeypatch.setattr(engine, "release_inference_cache", lambda: releases.append(True))
+    monkeypatch.setattr(tts_module, "trim_process_working_set", lambda: trims.append(True))
+
+    engine.unload()
+
+    assert releases == []
+    assert trims == []
+
+
+def test_repair_uses_effective_frame_cap_for_inference_and_ceiling_detection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    profile_id = db.upsert_voice_profile({
+        "voice_key": "narrator",
+        "engine": "vieneu",
+        "preset_name": "Thái Sơn",
+        "description": "Nam · Nam · Kể chuyện",
+        "seed": 1234,
+        "pitch_semitones": 0,
+        "status": "ready",
+    })
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+    row = {
+        "voice_profile_id": profile_id,
+        "stable_id": "short_repair_1",
+        "text": "Vâng.",
+        "kind": "dialogue",
+        "speaker": "Nhân vật",
+        "warning_code": "TTS_GENERATION_CEILING_REACHED",
+    }
+    received_sampling: dict[str, float | int] = {}
+
+    def generate_one(_row, _profile, _seed, *, sampling):
+        received_sampling.update(sampling)
+        return np.zeros(
+            int(sampling["max_new_frames"]) * VIENEU_V3_CODEC_SAMPLES_PER_FRAME,
+            dtype=np.float32,
+        )
+
+    monkeypatch.setattr(coordinator.vieneu, "generate_one", generate_one)
+    monkeypatch.setattr(tts_module, "apply_pitch_variant", lambda audio, *_args: audio)
+    monkeypatch.setattr(
+        tts_module,
+        "atomic_write_wav",
+        lambda *_args, **_kwargs: ("checksum", {"duration": 0.96}),
+    )
+
+    _checksum, metrics, _seed = coordinator.synthesize_atomic(
+        row,
+        tmp_path / "short-repair.wav",
+        repair_short_utterance=True,
+    )
+
+    assert received_sampling["max_new_frames"] == 12
+    assert metrics["generation_ceiling_hit"] == 1.0
 
 
 def test_thought_always_uses_narrator_profile_even_if_row_contains_character_cast(
@@ -319,7 +463,7 @@ def test_thought_always_uses_narrator_profile_even_if_row_contains_character_cas
     }
     generated: dict[str, object] = {}
 
-    def generate(spoken_row, profile, _seed):
+    def generate(spoken_row, profile, _seed, **_kwargs):
         generated["row"] = spoken_row
         generated["profile"] = profile
         return np.asarray([0.1, -0.1], dtype=np.float32)

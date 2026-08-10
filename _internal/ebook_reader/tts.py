@@ -11,6 +11,7 @@ import pyworld
 
 from .audio_io import (
     AudioQualityError,
+    SegmentDurationPolicy,
     atomic_write_wav,
     is_short_utterance,
     segment_duration_policy,
@@ -19,6 +20,7 @@ from .audio_io import (
 from .database import ProjectDB
 from .io_utils import stable_int
 from .models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
+from .resource_manager import trim_process_working_set
 from .text_processing import normalize_vocalizations_for_tts
 
 
@@ -57,6 +59,10 @@ WORLD_F0_CEIL_HZ = 600.0
 WORLD_MIN_VOICED_FRAMES = 3
 SHORT_UTTERANCE_MAX_TEMPERATURE = 0.72
 SHORT_UTTERANCE_MAX_TOP_P = 0.90
+SHORT_UTTERANCE_REPAIR_MAX_FRAMES = 12
+MICRO_UTTERANCE_REPAIR_MAX_FRAMES = 6
+MICRO_UTTERANCE_MAX_SPEAKABLE_CHARS = 1
+GENERATION_CEILING_WARNING = "TTS_GENERATION_CEILING_REACHED"
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
@@ -131,7 +137,10 @@ def _max_new_frames(row: Any, settings: dict[str, Any] | None) -> int:
 def vieneu_sampling_for_segment(
     row: Any,
     settings: dict[str, Any] | None = None,
+    *,
+    repair_short_utterance: bool = False,
 ) -> dict[str, float | int]:
+    text = str(_row_value(row, "text", ""))
     emotion = str(_row_value(row, "emotion", "neutral"))
     pace = str(_row_value(row, "pace", "normal"))
     intensity = max(0, min(3, int(_row_value(row, "intensity", 0))))
@@ -141,16 +150,26 @@ def vieneu_sampling_for_segment(
         base_temperature + PACE_TEMPERATURE_OFFSETS.get(pace, 0.0) + 0.015 * intensity,
     )
     top_p = min(0.98, 0.92 + 0.015 * intensity)
-    if is_short_utterance(str(_row_value(row, "text", ""))):
+    max_new_frames = _max_new_frames(row, settings)
+    if is_short_utterance(text):
         temperature = min(temperature, SHORT_UTTERANCE_MAX_TEMPERATURE)
         top_p = min(top_p, SHORT_UTTERANCE_MAX_TOP_P)
+        warning_codes = str(_row_value(row, "warning_code", "")).split("|")
+        if repair_short_utterance and GENERATION_CEILING_WARNING in warning_codes:
+            speakable_chars = sum(char.isalnum() for char in text)
+            repair_frames = (
+                MICRO_UTTERANCE_REPAIR_MAX_FRAMES
+                if speakable_chars <= MICRO_UTTERANCE_MAX_SPEAKABLE_CHARS
+                else SHORT_UTTERANCE_REPAIR_MAX_FRAMES
+            )
+            max_new_frames = min(max_new_frames, repair_frames)
     return {
         "temperature": temperature,
         "top_k": 25,
         "top_p": top_p,
         "repetition_penalty": 1.2,
         "silence_p": PACE_SILENCE_PROPORTIONS.get(pace, PACE_SILENCE_PROPORTIONS["normal"]),
-        "max_new_frames": _max_new_frames(row, settings),
+        "max_new_frames": max_new_frames,
     }
 
 
@@ -185,9 +204,13 @@ class VieNeuEngine:
         self.sample_rate = int(getattr(self.tts, "sample_rate", self.sample_rate))
 
     def unload(self) -> None:
+        had_model = self.tts is not None
         self.tts = None
         self.voices = []
+        if not had_model:
+            return
         self.release_inference_cache()
+        trim_process_working_set()
 
     @staticmethod
     def release_inference_cache() -> None:
@@ -214,18 +237,30 @@ class VieNeuEngine:
             )
         return preset
 
-    def generate_one(self, row: Any, profile: Any, seed: int) -> np.ndarray:
+    def generate_one(
+        self,
+        row: Any,
+        profile: Any,
+        seed: int,
+        *,
+        sampling: dict[str, float | int] | None = None,
+    ) -> np.ndarray:
         self.load()
         _set_generation_seed(seed)
         voice = self.voice_for_profile(profile)
         style = "doc_truyen" if str(row["speaker"]) == "NARRATOR" else "tu_nhien"
+        effective_sampling = (
+            sampling
+            if sampling is not None
+            else vieneu_sampling_for_segment(row, self.settings)
+        )
         try:
             return np.asarray(
                 self.tts.infer(
                     str(row["text"]),
                     voice=voice,
                     style=style,
-                    **vieneu_sampling_for_segment(row, self.settings),
+                    **effective_sampling,
                 ),
                 dtype=np.float32,
             ).reshape(-1)
@@ -333,20 +368,36 @@ class TTSCoordinator:
         row: Any,
         output: Path,
         seed_salt: str = "",
+        *,
+        repair_short_utterance: bool = False,
     ) -> tuple[str, dict[str, float], int]:
         try:
             profile = self._voice_profile_for_row(row)
             seed = self.generation_seed(row, seed_salt)
             spoken_row = self._spoken_row(row)
-            audio = self.vieneu.generate_one(spoken_row, profile, seed)
+            sampling = vieneu_sampling_for_segment(
+                spoken_row,
+                self.settings,
+                repair_short_utterance=repair_short_utterance,
+            )
+            audio = self.vieneu.generate_one(
+                spoken_row,
+                profile,
+                seed,
+                sampling=sampling,
+            )
             duration_policy = segment_duration_policy(
                 str(spoken_row["text"]),
                 self.settings,
                 spoken_row,
             )
+            effective_generation_policy = SegmentDurationPolicy(
+                generation_max_frames=int(sampling["max_new_frames"]),
+                validation_max_seconds=duration_policy.validation_max_seconds,
+            )
             generation_ceiling_hit = (
                 is_short_utterance(str(spoken_row["text"]))
-                and vieneu_generation_reached_frame_ceiling(audio, duration_policy)
+                and vieneu_generation_reached_frame_ceiling(audio, effective_generation_policy)
             )
             pitch_steps = int(_row_value(profile, "pitch_semitones", 0))
             pitch_variant_skipped = False

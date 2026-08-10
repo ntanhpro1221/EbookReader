@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ebook_reader.character_registry import build_registry_and_cast
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
@@ -76,6 +78,48 @@ def _casting_db(tmp_path: Path) -> ProjectDB:
             }
         )
     db.replace_chapter_segments(chapter_id, rows)
+    return db
+
+
+def _identity_db(tmp_path: Path, speakers: list[tuple[str, str]]) -> ProjectDB:
+    db = ProjectDB(tmp_path / "identity-gate.sqlite3")
+    db.initialize_book(
+        title="Book",
+        project_root=tmp_path,
+        settings={},
+        settings_hash="settings",
+        input_manifest_hash="manifest",
+    )
+    chapter_id = db.ensure_chapters(
+        [
+            {
+                "chapter_index": 1,
+                "title": "One",
+                "input_path": tmp_path / "one.txt",
+                "input_sha256": "source",
+                "input_size": 1,
+                "output_mp3": tmp_path / "one.mp3",
+            }
+        ]
+    )[0]
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {
+                "stable_id": f"c1s{seq}",
+                "seq": seq,
+                "text": f"Câu thoại {seq}.",
+                "text_sha256": f"text-{seq}",
+                "kind_hint": "dialogue",
+                "kind": "dialogue",
+                "speaker": speaker,
+                "gender": gender,
+                "confidence": 0.95,
+                "status": "analyzed",
+            }
+            for seq, (speaker, gender) in enumerate(speakers, 1)
+        ],
+    )
     return db
 
 
@@ -167,6 +211,104 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
         (REGION_SOUTH, STYLE_STORY),
         (REGION_CENTRAL, STYLE_NATURAL),
     ]
+
+
+def test_clear_named_aliases_lock_to_one_character_and_voice(tmp_path: Path) -> None:
+    db = _identity_db(
+        tmp_path,
+        [
+            ("ALISA", "female"),
+            ("DÌ ALISA", "female"),
+            ("NPC ALISA", "female"),
+            ("NPC_LOCAL::c00001::stable::Alisa", "female"),
+            ("VICTOR", "male"),
+            ("VICT,OR", "male"),
+        ],
+    )
+
+    build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    rows = db.list_segments()
+    assert {str(row["speaker"]) for row in rows} == {"ALISA", "VICTOR"}
+    for speaker in ("ALISA", "VICTOR"):
+        speaker_rows = [row for row in rows if str(row["speaker"]) == speaker]
+        assert len({int(row["canonical_character_id"]) for row in speaker_rows}) == 1
+        assert len({int(row["voice_profile_id"]) for row in speaker_rows}) == 1
+
+
+def test_relational_description_is_not_merged_with_named_character(tmp_path: Path) -> None:
+    db = _identity_db(
+        tmp_path,
+        [("FELICIA", "female"), ("MẸ CỦA FELICIA", "female")],
+    )
+
+    build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    rows = db.list_segments()
+    assert {str(row["speaker"]) for row in rows} == {"FELICIA", "MẸ CỦA FELICIA"}
+    assert len({int(row["canonical_character_id"]) for row in rows}) == 2
+
+
+def test_gender_conflict_fails_before_voice_casting(tmp_path: Path) -> None:
+    db = _identity_db(tmp_path, [("CAMIL", "female"), ("Camil", "male")])
+
+    with pytest.raises(RuntimeError, match="gender conflicts"):
+        build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    assert db.list_voice_profiles() == []
+
+
+def test_recurring_named_speaker_without_gender_fails_before_voice_casting(
+    tmp_path: Path,
+) -> None:
+    db = _identity_db(tmp_path, [("Mag", "unknown")] * 3)
+
+    with pytest.raises(RuntimeError, match="named speakers missing gender"):
+        build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    assert db.list_voice_profiles() == []
+
+
+def test_existing_voice_identity_instability_fails_before_recasting(tmp_path: Path) -> None:
+    db = _identity_db(tmp_path, [("Lucien", "male"), ("Lucien", "male")])
+    character_id = db.upsert_character(
+        canonical_name="LUCIEN",
+        display_name="Lucien",
+        gender="male",
+        age="adult",
+        personality="",
+        mentions=2,
+        importance="main",
+        confidence=0.95,
+    )
+    first_profile = db.upsert_voice_profile(
+        {
+            "voice_key": "unstable-one",
+            "engine": "vieneu",
+            "preset_name": "Thái Sơn",
+            "description": "one",
+            "seed": 1,
+            "pitch_semitones": 0,
+            "status": "ready",
+        }
+    )
+    second_profile = db.upsert_voice_profile(
+        {
+            "voice_key": "unstable-two",
+            "engine": "vieneu",
+            "preset_name": "Quang Sơn",
+            "description": "two",
+            "seed": 2,
+            "pitch_semitones": 0,
+            "status": "ready",
+        }
+    )
+    rows = db.list_segments()
+    db.set_character_and_voice_for_segments([int(rows[0]["id"])], character_id, first_profile)
+    db.set_character_and_voice_for_segments([int(rows[1]["id"])], character_id, second_profile)
+
+    with pytest.raises(RuntimeError, match="voice identity instability"):
+        build_registry_and_cast(db, build_settings(), lambda _message: None)
 
 
 def test_same_lucien_name_locks_one_voice_across_chapters_without_identity_merging(

@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {
-    "quality_profile": "balanced",
+    "quality_profile": "high_quality",
     "interactive_prompts": False,
     "analysis": {
         "enabled": True,
@@ -60,7 +60,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "asr": {
         "enabled": True,
-        "required": False,
+        "required": True,
         "model": "turbo",
         "device": "cuda",
         "cpu_fallback": True,
@@ -71,7 +71,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "min_similarity": 0.58,
         "max_wer": 0.58,
         "repair_rounds": 2,
-        "failure_policy": "warning_continue",
+        "failure_policy": "fail",
     },
     "audio": {
         "mp3_bitrate": "192k",
@@ -135,7 +135,7 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     "balanced": {},
     "high_quality": {
         "analysis": {"batch_segments": 20, "low_confidence_threshold": 0.65},
-        "asr": {"min_words": 1, "min_similarity": 0.64, "max_wer": 0.48, "repair_rounds": 3},
+        "asr": {"min_words": 1, "min_similarity": 0.78, "max_wer": 0.30, "repair_rounds": 3},
         "tts": {"max_retries": 4, "batch_size": 8},
     },
 }
@@ -151,7 +151,7 @@ def deep_merge(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def build_settings(profile: str = "balanced", overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_settings(profile: str = "high_quality", overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     if profile not in PROFILE_OVERRIDES:
         raise ValueError(f"Unknown quality profile: {profile}")
     settings = deep_merge(DEFAULT_SETTINGS, PROFILE_OVERRIDES[profile])
@@ -206,6 +206,10 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("analysis.low_confidence_threshold must be between 0 and 1")
     if analysis.get("low_confidence_policy") not in {"auto_with_warning", "fail"}:
         raise ValueError("Unsupported analysis.low_confidence_policy")
+    if settings.get("quality_profile") == "high_quality" and (
+        not analysis.get("enabled") or not analysis.get("required")
+    ):
+        raise ValueError("high_quality requires enabled mandatory book analysis")
 
     voices = settings.get("voices", {})
     narrator_voice = str(voices.get("narrator_voice", "")).strip()
@@ -268,6 +272,16 @@ def validate_settings(settings: dict[str, Any]) -> None:
             raise ValueError(f"asr.{key} must be between 0 and 1")
     if asr.get("failure_policy") not in {"warning_continue", "fail"}:
         raise ValueError("Unsupported asr.failure_policy")
+    if asr.get("required") and not asr.get("enabled"):
+        raise ValueError("Required ASR cannot be disabled")
+    if asr.get("required") and asr.get("failure_policy") != "fail":
+        raise ValueError("Required ASR must use failure_policy=fail")
+    if settings.get("quality_profile") == "high_quality" and (
+        not asr.get("enabled")
+        or not asr.get("required")
+        or asr.get("failure_policy") != "fail"
+    ):
+        raise ValueError("high_quality requires enabled mandatory ASR with failure_policy=fail")
 
     safety = settings.get("safety", {})
     for key in (

@@ -334,7 +334,7 @@ def test_new_book_resets_book_settings_but_keeps_global_settings(tmp_path: Path)
 
     window._new_book()
 
-    assert window.profile_combo.currentData() == "balanced"
+    assert window.profile_combo.currentData() == "high_quality"
     assert window.narrator_gender_combo.currentData() == ""
     assert window.narrator_region_combo.currentData() == ""
     assert window.narrator_voice_combo.currentData() == "Phạm Tuyên"

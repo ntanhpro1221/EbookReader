@@ -12,6 +12,7 @@ dependencies = [
   "requests==2.32.3",
   "psutil==6.0.0",
   "numpy==1.26.4",
+  "scipy==1.17.1",
   "soundfile==0.13.1",
   "pyloudnorm==0.1.1",
   "pyworld==0.3.5",
@@ -22,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 ebook_reader = "ebook_reader.gui:run_gui"
+ebook-reader-headless = "ebook_reader.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest==8.3.5", "ruff==0.9.10"]

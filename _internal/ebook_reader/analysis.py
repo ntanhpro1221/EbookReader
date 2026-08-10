@@ -15,6 +15,7 @@ from typing import Any, Callable
 import requests
 
 from .database import ProjectDB
+from .io_utils import run_hidden, sha256_text
 from .models import (
     CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE,
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
@@ -37,6 +38,7 @@ BATCH_ID_PREFIX = "S"
 BATCH_ID_WIDTH = 3
 LOCAL_SPEAKER_REQUEST_PREFIX = "NPC_LOCAL:"
 LOCAL_SPEAKER_STORED_PREFIX = "NPC_LOCAL::"
+LOCAL_SCOPE_HASH_LENGTH = 16
 ANALYSIS_OUTPUT_BASE_TOKENS = 512
 ANALYSIS_OUTPUT_TOKENS_PER_SEGMENT = 192
 ANALYSIS_OUTPUT_MIN_TOKENS = 1024
@@ -49,10 +51,13 @@ NAME_PRONUNCIATION_BATCH_SIZE = 20
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
 NAME_PRONUNCIATION_ID_PREFIX = "N"
 NAME_PRONUNCIATION_ID_WIDTH = 3
+SHORT_NAME_MAX_CHARACTERS = 4
+SHORT_NAME_MIN_CONFIDENCE = 0.9
 AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE = 0.85
 CMUDICT_TRANSLITERATION_CONFIDENCE = 0.98
 LOCAL_NAME_FALLBACK_CONFIDENCE = 0.88
 ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
+EXPLICIT_ATTRIBUTION_NOTE = "đã khóa người nói từ lời dẫn cùng đoạn văn"
 DIRECT_ADDRESS_TITLES = (
     "anh", "chị", "ông", "bà", "ngài", "cô", "chú", "bác", "dì", "cậu", "em",
     "cha", "mẹ", "thầy", "sư phụ", "đại nhân", "đội trưởng",
@@ -90,6 +95,18 @@ NAME_CANDIDATE_EXCLUSIONS = {
     "his", "lady", "lord", "miss", "mister", "mr", "mrs", "she", "sir", "their", "they",
 }
 CMUDICT_CONTEXT_ONLY = {"may"}
+LATIN_PROPER_NAME_SURFACE_PATTERN = re.compile(
+    r"[A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*)*"
+)
+CORRUPTED_NAME_JOINERS = frozenset(",;:")
+ATTRIBUTION_SENTENCE_START_EXCLUSIONS = {
+    "ban", "cùng", "dù", "khi", "lúc", "nếu", "ngoài", "sau", "suy", "thay",
+    "theo", "trong", "trước", "tuy", "vì",
+}
+SPEECH_ATTRIBUTION_PATTERN = re.compile(
+    rf"(?P<speaker>{LATIN_PROPER_NAME_SURFACE_PATTERN.pattern})\s+"
+    r"(?:nói|hỏi|đáp|trả lời|lên tiếng|thì thầm|quát|kêu|thốt lên)\s*[:：]\s*$"
+)
 OLLAMA_LOG_FILENAME = "ollama-server.log"
 DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[1] / "runtime"
 CMUDICT_PATH = Path(__file__).resolve().parent / "assets" / "cmudict.dict"
@@ -352,6 +369,8 @@ Phân tích từng đoạn theo đúng ID. Không hỏi người dùng và khôn
 Quy tắc:
 1. Lời kể dùng speaker=NARRATOR.
 2. Hội thoại dùng tên nhân vật nhất quán với danh sách đã biết.
+   Với nhân vật có tên, speaker chỉ chứa tên riêng chuẩn: không thêm tiền tố NPC, vai vế/xưng hô như dì/ông/quý cô,
+   và không chèn dấu câu vào giữa tên. Phải giữ đúng gender đã biết của cùng tên qua mọi batch.
    Nếu nhân vật không có tên nhưng phân biệt được cục bộ trong đoạn hội thoại, dùng
    speaker=NPC_LOCAL:<nhãn ngắn>, ví dụ NPC_LOCAL:áo xanh hoặc NPC_LOCAL:lính gác 1.
    Giữ cùng nhãn cho cùng người trong các đoạn liên tiếp của batch; dùng nhãn khác cho người khác.
@@ -408,6 +427,14 @@ def _safe_choice(value: Any, allowed: set[str], default: str) -> str:
 
 def _canonical_speaker(value: Any) -> str:
     speaker = str(value or "UNKNOWN").strip()[:120] or "UNKNOWN"
+    speaker = re.sub(r"(?<=[A-Za-z]),(?=[A-Za-z])", "", speaker)
+    npc_named = re.fullmatch(
+        r"NPC(?:[\s:_-]+)([A-Z][A-Za-z]*(?:[\s'-][A-Z][A-Za-z]*)*)",
+        speaker,
+        flags=re.IGNORECASE,
+    )
+    if npc_named and any(character.isupper() for character in npc_named.group(1)):
+        speaker = npc_named.group(1)
     return RESERVED_SPEAKERS.get(speaker.casefold(), speaker)
 
 
@@ -436,6 +463,26 @@ def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
     return f"{LOCAL_SPEAKER_STORED_PREFIX}c{chapter_id:05d}::{local_scope}::{label}"
 
 
+def _local_scope_for_group(group: list[Any]) -> str:
+    if not group:
+        raise ValueError("Cannot create a local speaker scope for an empty analysis group")
+    first_id = str(group[0]["stable_id"])
+    last_id = str(group[-1]["stable_id"])
+    digest = sha256_text(f"{first_id}\0{last_id}")[:LOCAL_SCOPE_HASH_LENGTH]
+    return f"r{digest}"
+
+
+def _split_analysis_group(group: list[Any]) -> tuple[list[Any], list[Any]]:
+    midpoint = len(group) // 2
+    boundaries = [
+        index
+        for index in range(1, len(group))
+        if not _same_paragraph(group[index - 1], group[index])
+    ]
+    split_at = min(boundaries, key=lambda index: (abs(index - midpoint), index)) if boundaries else midpoint
+    return group[:split_at], group[split_at:]
+
+
 def _speaker_is_directly_addressed(text: str, speaker: str) -> bool:
     if speaker.casefold() in RESERVED_SPEAKERS:
         return False
@@ -458,6 +505,115 @@ def _speaker_is_directly_addressed(text: str, speaker: str) -> bool:
     return re.search(titled_address, text, flags=re.IGNORECASE) is not None
 
 
+def _same_paragraph(left: Any, right: Any) -> bool:
+    try:
+        return (
+            int(left["chapter_id"]) == int(right["chapter_id"])
+            and int(left["paragraph_index"]) == int(right["paragraph_index"])
+        )
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _leading_proper_name(text: str) -> str | None:
+    stripped = text.lstrip()
+    match = LATIN_PROPER_NAME_SURFACE_PATTERN.match(stripped)
+    if match is None:
+        return None
+    speaker = match.group(0)
+    tail = stripped[match.end() :]
+    if not tail or not tail[0].isspace():
+        return None
+    remainder = tail.lstrip()
+    if (
+        not remainder
+        or not remainder[0].islower()
+        or _name_candidate_key(speaker) in NAME_CANDIDATE_EXCLUSIONS
+        or _name_candidate_key(speaker.split()[0]) in ATTRIBUTION_SENTENCE_START_EXCLUSIONS
+    ):
+        return None
+    return speaker
+
+
+def _trailing_speech_attribution(text: str) -> str | None:
+    match = SPEECH_ATTRIBUTION_PATTERN.search(text.strip())
+    if match is None:
+        return None
+    speaker = match.group("speaker")
+    if _name_candidate_key(speaker) in NAME_CANDIDATE_EXCLUSIONS:
+        return None
+    return speaker
+
+
+def _repair_explicit_attribution(
+    group: list[Any],
+    result: dict[str, dict[str, Any]],
+) -> None:
+    for index, row in enumerate(group):
+        seg_id = str(row["stable_id"])
+        data = result.get(seg_id)
+        if data is None or data["kind"] != "dialogue":
+            continue
+        attributed_speaker: str | None = None
+        if index > 0 and _same_paragraph(group[index - 1], row):
+            previous = group[index - 1]
+            previous_data = result.get(str(previous["stable_id"]))
+            if previous_data is not None and previous_data["kind"] == "narration":
+                attributed_speaker = _trailing_speech_attribution(str(previous["text"]))
+        if (
+            attributed_speaker is None
+            and index + 1 < len(group)
+            and _same_paragraph(row, group[index + 1])
+        ):
+            following = group[index + 1]
+            following_data = result.get(str(following["stable_id"]))
+            if following_data is not None and following_data["kind"] == "narration":
+                attributed_speaker = _leading_proper_name(str(following["text"]))
+        if attributed_speaker is None:
+            continue
+        attributed_speaker = _canonical_speaker(attributed_speaker)
+        previous_speaker = str(data["speaker"])
+        known_rows = [
+            candidate
+            for candidate in result.values()
+            if normalize_speaker_name(str(candidate["speaker"]))
+            == normalize_speaker_name(attributed_speaker)
+        ]
+        data["speaker"] = attributed_speaker
+        resolved_gender = _strong_majority_value(known_rows, "gender", {"male", "female"})
+        resolved_age = _strong_majority_value(
+            known_rows,
+            "age",
+            ALLOWED_AGES - {"unknown"},
+        )
+        if normalize_speaker_name(previous_speaker) != normalize_speaker_name(attributed_speaker):
+            data["gender"] = resolved_gender
+            data["age"] = resolved_age
+        data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
+        notes = str(data.get("notes", ""))
+        data["notes"] = (
+            f"{notes}; {EXPLICIT_ATTRIBUTION_NOTE}" if notes else EXPLICIT_ATTRIBUTION_NOTE
+        )[:500]
+
+
+def normalize_speaker_name(value: str) -> str:
+    return " ".join(value.casefold().split())
+
+
+def _strong_majority_value(
+    rows: list[dict[str, Any]],
+    field: str,
+    allowed: set[str],
+) -> str:
+    counts = Counter(str(row.get(field, "unknown")) for row in rows if str(row.get(field)) in allowed)
+    if not counts:
+        return "unknown"
+    ranked = counts.most_common()
+    if len(ranked) > 1 and ranked[0][1] == ranked[1][1]:
+        return "unknown"
+    return ranked[0][0]
+
+
 def _repair_addressee_speakers(
     group: list[Any],
     result: dict[str, dict[str, Any]],
@@ -468,6 +624,8 @@ def _repair_addressee_speakers(
     direct_replacements: dict[str, str] = {}
     for seg_id, data in result.items():
         if data["kind"] != "dialogue":
+            continue
+        if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", "")):
             continue
         speaker = str(data["speaker"])
         row = rows_by_id[seg_id]
@@ -568,6 +726,7 @@ def _validate(
             "personality_hint": str(item.get("personality_hint", ""))[:300],
             "notes": notes[:500],
         }
+    _repair_explicit_attribution(group, result)
     _repair_addressee_speakers(group, result, local_scope)
     return result
 
@@ -584,6 +743,46 @@ def _name_candidate_key(value: str) -> str:
     return value.replace("’", "'").casefold()
 
 
+def _latin_character_count(value: str) -> int:
+    return sum(character.isascii() and character.isalpha() for character in value)
+
+
+def _is_short_name(value: str) -> bool:
+    return _latin_character_count(value) <= SHORT_NAME_MAX_CHARACTERS
+
+
+def _is_proper_latin_name_surface(value: str) -> bool:
+    surface = " ".join(value.strip().split())
+    if LATIN_PROPER_NAME_SURFACE_PATTERN.fullmatch(surface) is None:
+        return False
+    return any(character.casefold() in LATIN_NAME_VOWELS for character in surface)
+
+
+def _occurrence_has_corrupted_joiner(text: str, start: int, end: int) -> bool:
+    if (
+        end + 1 < len(text)
+        and text[end] in CORRUPTED_NAME_JOINERS
+        and text[end + 1].isascii()
+        and text[end + 1].isalpha()
+    ):
+        return True
+    return bool(
+        start >= 2
+        and text[start - 1] in CORRUPTED_NAME_JOINERS
+        and text[start - 2].isascii()
+        and text[start - 2].isalpha()
+    )
+
+
+def _whole_name_occurrences(text: str, surface: str) -> list[re.Match[str]]:
+    pattern = re.compile(r"(?<!\w)" + re.escape(surface) + r"(?!\w)")
+    return [
+        match
+        for match in pattern.finditer(text)
+        if not _occurrence_has_corrupted_joiner(text, match.start(), match.end())
+    ]
+
+
 def _is_sentence_initial_token(text: str, start: int) -> bool:
     return SENTENCE_INITIAL_PREFIX_PATTERN.search(text[:start]) is not None
 
@@ -591,12 +790,14 @@ def _is_sentence_initial_token(text: str, start: int) -> bool:
 def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
     forms: dict[str, Counter[str]] = defaultdict(Counter)
     occurrences: Counter[str] = Counter()
+    text_occurrences: Counter[str] = Counter()
     sentence_initial_occurrences: Counter[str] = Counter()
     mid_sentence_occurrences: Counter[str] = Counter()
     examples: dict[str, list[str]] = defaultdict(list)
     speaker_keys: set[str] = set()
     lowercase_text_keys: set[str] = set()
     isolated_dialogue_keys: set[str] = set()
+    dialogue_context_keys: set[str] = set()
 
     def register(
         surface: str,
@@ -604,12 +805,17 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
         example: str = "",
         speaker: bool = False,
         sentence_initial: bool = False,
+        text_occurrence: bool = False,
     ) -> None:
         value = surface.strip()
         if value.casefold().endswith(("'s", "’s")):
             value = value[:-2]
         key = _name_candidate_key(value)
-        if len(value) < 2 or key in NAME_CANDIDATE_EXCLUSIONS:
+        if (
+            len(value) < 2
+            or key in NAME_CANDIDATE_EXCLUSIONS
+            or not _is_proper_latin_name_surface(value)
+        ):
             return
         forms[key][value] += 1
         occurrences[key] += 1
@@ -619,21 +825,31 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             sentence_initial_occurrences[key] += 1
         else:
             mid_sentence_occurrences[key] += 1
+        if text_occurrence:
+            text_occurrences[key] += 1
         normalized_example = " ".join(example.split())[:220]
         if normalized_example and normalized_example not in examples[key] and len(examples[key]) < 3:
             examples[key].append(normalized_example)
 
     for row in rows:
         speaker = _canonical_speaker(row["speaker"])
-        if speaker.casefold() not in RESERVED_SPEAKERS and not is_local_speaker(speaker):
-            for match in SPEAKER_NAME_TOKEN_PATTERN.finditer(speaker):
-                register(match.group(1), speaker=True)
+        if (
+            speaker.casefold() not in RESERVED_SPEAKERS
+            and not is_local_speaker(speaker)
+            and _is_proper_latin_name_surface(speaker)
+        ):
+            register(speaker, speaker=True)
 
         text = str(row["text"])
         try:
-            row_kind = str(row["kind"] or row["kind_hint"])
+            row_kind = str(row["kind"] or "")
         except (KeyError, TypeError):
             row_kind = ""
+        if not row_kind:
+            try:
+                row_kind = str(row["kind_hint"] or "")
+            except (KeyError, TypeError):
+                row_kind = ""
         isolated_match = ISOLATED_LATIN_DIALOGUE_PATTERN.fullmatch(text)
         if (
             row_kind == "dialogue"
@@ -645,17 +861,34 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             value = match.group(1)
             if value[:1].islower():
                 lowercase_text_keys.add(_name_candidate_key(value))
-        for match in NAME_TOKEN_PATTERN.finditer(text):
+        for match in LATIN_PROPER_NAME_SURFACE_PATTERN.finditer(text):
+            if _occurrence_has_corrupted_joiner(text, match.start(), match.end()):
+                continue
+            match_key = _name_candidate_key(match.group(0))
+            if (
+                row_kind == "dialogue"
+                and speaker.casefold() not in RESERVED_SPEAKERS
+                and not is_local_speaker(speaker)
+            ):
+                dialogue_context_keys.add(match_key)
             start = max(0, match.start() - 80)
             end = min(len(text), match.end() + 80)
             register(
-                match.group(1),
+                match.group(0),
                 example=text[start:end],
                 sentence_initial=_is_sentence_initial_token(text, match.start()),
+                text_occurrence=True,
             )
 
     candidates: list[dict[str, Any]] = []
+    text_keys = {key for key, count in text_occurrences.items() if count}
     for key in sorted(forms):
+        if (
+            key in speaker_keys
+            and text_occurrences[key] == 0
+            and any(other != key and other.startswith(key) for other in text_keys)
+        ):
+            continue
         if key not in speaker_keys and key in lowercase_text_keys:
             continue
         if (
@@ -666,6 +899,16 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             continue
         if key not in speaker_keys and occurrences[key] < NAME_PRONUNCIATION_MIN_OCCURRENCES:
             continue
+        representative = max(forms[key], key=len)
+        if (
+            _is_short_name(representative)
+            and key not in speaker_keys
+            and key not in isolated_dialogue_keys
+            and key not in dialogue_context_keys
+            and key not in CMUDICT_CONTEXT_ONLY
+            and text_occurrences[key] < 2
+        ):
+            continue
         surface = sorted(
             forms[key],
             key=lambda value: (-forms[key][value], value.isupper(), value.casefold()),
@@ -674,6 +917,7 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             {
                 "surface": surface,
                 "occurrences": int(occurrences[key]),
+                "text_occurrences": int(text_occurrences[key]),
                 "is_speaker": key in speaker_keys,
                 "sentence_initial_occurrences": int(sentence_initial_occurrences[key]),
                 "mid_sentence_occurrences": int(mid_sentence_occurrences[key]),
@@ -1004,6 +1248,32 @@ def _repair_vietnamese_syllable_boundaries(surface: str, spoken_form: str) -> st
     return repaired if _valid_vietnamese_spoken_form(surface, repaired) else None
 
 
+def _short_name_cmu_is_safe(pronunciation: str) -> bool:
+    return _arpabet_phones(pronunciation) in ARPABET_PRONUNCIATION_OVERRIDES
+
+
+def _short_name_local_fallback_is_safe(candidate: dict[str, Any]) -> bool:
+    surface = str(candidate["surface"])
+    if (
+        not _is_short_name(surface)
+        or _name_candidate_key(surface) in CMUDICT_CONTEXT_ONLY
+        or bool(candidate.get("cmu_pronunciation"))
+    ):
+        return False
+    parts = re.findall(r"[A-Za-z]+", surface)
+    if len(parts) != 1:
+        return False
+    value = parts[0].casefold()
+    first_vowel = next(
+        (index for index, character in enumerate(value) if character in LATIN_NAME_VOWELS),
+        -1,
+    )
+    if first_vowel < 0:
+        return False
+    onset = value[:first_vowel]
+    return len(onset) <= 1 or onset in LATIN_NAME_ONSET_READINGS
+
+
 def _output_schema_for_batch(batch_ids: list[str]) -> dict[str, Any]:
     schema = copy.deepcopy(OUTPUT_SCHEMA)
     segments = schema["properties"]["segments"]
@@ -1039,6 +1309,7 @@ def _analysis_output_token_limit(segment_count: int, num_ctx: int) -> int:
 class OllamaBookAnalyzer:
     def __init__(self, settings: dict[str, Any], db: ProjectDB, log: Callable[[str], None]) -> None:
         self.settings = settings["analysis"]
+        self.quality_profile = str(settings.get("quality_profile", "balanced"))
         self.allow_downloads = bool(settings.get("safety", {}).get("allow_network_downloads_during_job", False))
         self.db = db
         self.log = log
@@ -1054,6 +1325,16 @@ class OllamaBookAnalyzer:
             if str(row["speaker"]).casefold() not in RESERVED_SPEAKERS
             and not is_local_speaker(row["speaker"])
         )
+        self._speaker_genders: dict[str, Counter[str]] = defaultdict(Counter)
+        for row in existing:
+            speaker = str(row["speaker"])
+            gender = str(row["gender"])
+            if (
+                speaker.casefold() not in RESERVED_SPEAKERS
+                and not is_local_speaker(speaker)
+                and gender in {"male", "female"}
+            ):
+                self._speaker_genders[speaker][gender] += 1
         self._chapter_titles = {
             int(row["id"]): str(row["title"]) for row in self.db.list_chapters()
         }
@@ -1112,7 +1393,7 @@ class OllamaBookAnalyzer:
             return False
         self.log(f"Đang tải Ollama model {self.model} theo policy đã cho phép.")
         try:
-            subprocess.run([executable, "pull", self.model], check=True)
+            run_hidden([executable, "pull", self.model], check=True)
             return True
         except (OSError, subprocess.CalledProcessError):
             return False
@@ -1120,9 +1401,12 @@ class OllamaBookAnalyzer:
     def _known_summary(self) -> str:
         if not self._speaker_counts:
             return "(Chưa có nhân vật đã biết)"
-        return "\n".join(
-            f"- {name}; số lần đã gặp={count}" for name, count in self._speaker_counts.most_common(80)
-        )
+        lines = []
+        for name, count in self._speaker_counts.most_common(80):
+            genders = self._speaker_genders.get(name, Counter())
+            locked_gender = genders.most_common(1)[0][0] if genders else "unknown"
+            lines.append(f"- {name}; số lần đã gặp={count}; gender đã biết={locked_gender}")
+        return "\n".join(lines)
 
     def _stream_json_response(
         self,
@@ -1247,6 +1531,10 @@ class OllamaBookAnalyzer:
 
     def _checkpoint_pronunciations(self, group: list[Any], payload: dict[str, Any]) -> None:
         source_text = "\n".join(str(row["text"]) for row in group)
+        candidate_keys = {
+            _name_candidate_key(str(candidate["surface"]))
+            for candidate in _name_candidate_contexts(group)
+        }
         raw_items = payload.get("pronunciations", [])
         if not isinstance(raw_items, list):
             return
@@ -1259,14 +1547,25 @@ class OllamaBookAnalyzer:
                 confidence = max(0.0, min(1.0, float(item.get("confidence", 0.0))))
             except (TypeError, ValueError):
                 continue
-            if not surface or not spoken_form or surface not in source_text:
+            if (
+                not surface
+                or not spoken_form
+                or not _is_proper_latin_name_surface(surface)
+                or _is_short_name(surface)
+                or _name_candidate_key(surface) not in candidate_keys
+                or not _whole_name_occurrences(source_text, surface)
+            ):
                 continue
             if surface.casefold() == spoken_form.casefold():
                 continue
-            normalized_surface = " ".join(surface.casefold().split())
+            if not _valid_vietnamese_spoken_form(surface, spoken_form):
+                repaired = _repair_vietnamese_syllable_boundaries(surface, spoken_form)
+                if repaired is None:
+                    continue
+                spoken_form = repaired
             self.db.upsert_pronunciation(
                 surface=surface,
-                normalized_surface=normalized_surface,
+                normalized_surface=_name_candidate_key(surface),
                 spoken_form=spoken_form,
                 confidence=confidence,
             )
@@ -1292,19 +1591,28 @@ class OllamaBookAnalyzer:
             self.log("Phân tích AI bị tắt/không bắt buộc; dùng heuristic và đánh warning, không dừng hỏi người dùng.")
         max_segments = int(self.settings.get("batch_segments", 28))
         max_chars = int(self.settings.get("batch_chars", 6200))
-        groups: list[list[Any]] = []
+        stable_groups: list[list[Any]] = []
         current: list[Any] = []
         chars = 0
-        for row in pending:
+        for row in all_rows:
             text_len = len(str(row["text"]))
-            if current and (len(current) >= max_segments or chars + text_len > max_chars):
-                groups.append(current)
+            limit_reached = len(current) >= max_segments or chars + text_len > max_chars
+            if current and limit_reached and not _same_paragraph(current[-1], row):
+                stable_groups.append(current)
                 current = []
                 chars = 0
             current.append(row)
             chars += text_len
         if current:
-            groups.append(current)
+            stable_groups.append(current)
+        groups = [
+            (
+                [row for row in stable_group if str(row["status"]) == "pending"],
+                _local_scope_for_group(stable_group),
+            )
+            for stable_group in stable_groups
+            if any(str(row["status"]) == "pending" for row in stable_group)
+        ]
 
         done = len(all_rows) - len(pending)
         total = len(all_rows)
@@ -1314,7 +1622,7 @@ class OllamaBookAnalyzer:
         group_offset = 0
         while group_offset < len(groups):
             group_index = group_offset + 1
-            group = groups[group_offset]
+            group, local_scope = groups[group_offset]
             if stop_requested():
                 return
             if before_batch is not None:
@@ -1323,6 +1631,7 @@ class OllamaBookAnalyzer:
             payload: dict[str, Any] = {}
             last_error = "AI analysis is unavailable"
             split_incomplete_stream = False
+            received_incomplete_ids = False
             if llm_ready:
                 for attempt in range(retry_count):
                     attempt_number = attempt + 1
@@ -1339,10 +1648,11 @@ class OllamaBookAnalyzer:
                                 f"vẫn đang chạy: {elapsed}s, đã nhận {chars:,} ký tự JSON."
                             ),
                         )
-                        validated = _validate(group, payload, local_scope=f"b{group_index:04d}")
+                        validated = _validate(group, payload, local_scope=local_scope)
                         if len(validated) == len(group):
                             break
                         last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
+                        received_incomplete_ids = True
                     except AnalysisRequestStopped:
                         raise
                     except OllamaStreamIncompleteError as exc:
@@ -1352,10 +1662,11 @@ class OllamaBookAnalyzer:
                                 f"Phân tích batch {group_index} lỗi lần {attempt_number}: "
                                 f"{last_error}"
                             )
-                            midpoint = len(group) // 2
-                            first_half = group[:midpoint]
-                            second_half = group[midpoint:]
-                            groups[group_offset : group_offset + 1] = [first_half, second_half]
+                            first_half, second_half = _split_analysis_group(group)
+                            groups[group_offset : group_offset + 1] = [
+                                (first_half, local_scope),
+                                (second_half, local_scope),
+                            ]
                             self.log(
                                 f"Stream batch {group_index} bị ngắt; tự chia thành "
                                 f"{len(first_half)} + {len(second_half)} segment. "
@@ -1368,6 +1679,18 @@ class OllamaBookAnalyzer:
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
             if split_incomplete_stream:
+                continue
+            if received_incomplete_ids and len(validated) != len(group) and len(group) > 1:
+                first_half, second_half = _split_analysis_group(group)
+                groups[group_offset : group_offset + 1] = [
+                    (first_half, local_scope),
+                    (second_half, local_scope),
+                ]
+                self.log(
+                    f"Batch {group_index} vẫn trả thiếu ID sau {retry_count} lần; tự chia thành "
+                    f"{len(first_half)} + {len(second_half)} segment. "
+                    f"Tổng số batch còn lại hiện là {len(groups)}."
+                )
                 continue
             if len(validated) != len(group) and required:
                 message = (
@@ -1385,6 +1708,26 @@ class OllamaBookAnalyzer:
                     },
                 )
                 raise RuntimeError(message)
+            explicit_attribution_ids = [
+                seg_id
+                for seg_id, data in validated.items()
+                if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", ""))
+            ]
+            if explicit_attribution_ids:
+                message = (
+                    f"Đã khóa người nói cho {len(explicit_attribution_ids)} đoạn thoại "
+                    f"từ lời dẫn cùng paragraph ở batch {group_index}."
+                )
+                self.log(message)
+                self.db.event(
+                    "info",
+                    "EXPLICIT_SPEAKER_ATTRIBUTION_LOCKED",
+                    message,
+                    {
+                        "batch_index": group_index,
+                        "segment_ids": explicit_attribution_ids,
+                    },
+                )
             repaired_addressee_ids = [
                 seg_id
                 for seg_id, data in validated.items()
@@ -1428,6 +1771,9 @@ class OllamaBookAnalyzer:
                     and speaker
                 ):
                     self._speaker_counts[speaker] += 1
+                    gender = str(data.get("gender", "unknown"))
+                    if gender in {"male", "female"}:
+                        self._speaker_genders[speaker][gender] += 1
                 done += 1
                 if progress:
                     progress(done, total)
@@ -1467,6 +1813,14 @@ class OllamaBookAnalyzer:
                 if candidate_key in CMUDICT_CONTEXT_ONLY
                 else dictionary_pronunciations.get(candidate_key, "")
             )
+            pronunciation = str(candidate["cmu_pronunciation"])
+            candidate["requires_contextual_review"] = bool(
+                _is_short_name(str(candidate["surface"]))
+                and (
+                    not pronunciation
+                    or not _short_name_cmu_is_safe(pronunciation)
+                )
+            )
 
         converted_count = 0
 
@@ -1502,6 +1856,11 @@ class OllamaBookAnalyzer:
                     f"Cách đọc thuần Việt cho {surface} có độ tin cậy thấp nhưng vẫn được khóa theo sách",
                     {"surface": surface, "spoken_form": spoken_form, "confidence": confidence},
                 )
+                if self.quality_profile == "high_quality":
+                    raise ValueError(
+                        f"pronunciation confidence is below {minimum_confidence:.2f}: "
+                        f"{surface!r}={confidence:.2f}"
+                    )
             self.db.upsert_pronunciation(
                 surface=surface,
                 normalized_surface=_name_candidate_key(surface),
@@ -1520,7 +1879,7 @@ class OllamaBookAnalyzer:
         cmu_count = 0
         for candidate in candidates:
             pronunciation = str(candidate.get("cmu_pronunciation", ""))
-            if not pronunciation:
+            if not pronunciation or bool(candidate.get("requires_contextual_review")):
                 qwen_candidates.append(candidate)
                 continue
             surface = str(candidate["surface"])
@@ -1670,6 +2029,14 @@ class OllamaBookAnalyzer:
                                 0.0,
                                 min(1.0, float(item.get("confidence", 0.0))),
                             )
+                            if (
+                                bool(candidate.get("requires_contextual_review"))
+                                and confidence < SHORT_NAME_MIN_CONFIDENCE
+                            ):
+                                raise ValueError(
+                                    f"short name confidence is below {SHORT_NAME_MIN_CONFIDENCE:.2f}: "
+                                    f"{surface!r}={confidence:.2f}"
+                                )
                             if _valid_vietnamese_spoken_form(surface, spoken_form):
                                 checkpoint_pronunciation(candidate, spoken_form, confidence)
                                 resolved_ids.append(item_id)
@@ -1708,8 +2075,15 @@ class OllamaBookAnalyzer:
             if pending:
                 remaining = [str(candidate["surface"]) for candidate in pending.values()]
                 fallback_readings: dict[str, str] = {}
+                skipped_surfaces: list[str] = []
                 for candidate in pending.values():
                     surface = str(candidate["surface"])
+                    if (
+                        bool(candidate.get("requires_contextual_review"))
+                        and not _short_name_local_fallback_is_safe(candidate)
+                    ):
+                        skipped_surfaces.append(surface)
+                        continue
                     spoken_form = _local_name_fallback(surface)
                     checkpoint_pronunciation(
                         candidate,
@@ -1717,21 +2091,43 @@ class OllamaBookAnalyzer:
                         LOCAL_NAME_FALLBACK_CONFIDENCE,
                     )
                     fallback_readings[surface] = spoken_form
-                message = (
-                    f"Qwen không tạo được cách đọc hợp lệ ở batch {batch_index} cho {remaining}: "
-                    f"{last_error}. Đã xử lý tận gốc bằng bộ chuyển cục bộ: {fallback_readings}."
-                )
-                self.log(message)
-                self.db.event(
-                    "warning",
-                    "NAME_PRONUNCIATION_LOCAL_FALLBACK",
-                    message,
-                    {
-                        "batch_index": batch_index,
-                        "last_error": last_error,
-                        "fallback_readings": fallback_readings,
-                    },
-                )
+                if skipped_surfaces:
+                    skipped_message = (
+                        "Bỏ qua cách đọc tự động cho tên ngắn chưa đủ chắc chắn: "
+                        f"{skipped_surfaces}. TTS sẽ đọc nguyên văn."
+                    )
+                    self.log(skipped_message)
+                    self.db.event(
+                        "warning",
+                        "NAME_PRONUNCIATION_UNCERTAIN_SKIPPED",
+                        skipped_message,
+                        {
+                            "batch_index": batch_index,
+                            "surfaces": skipped_surfaces,
+                            "last_error": last_error,
+                        },
+                    )
+                    if self.quality_profile == "high_quality":
+                        raise RuntimeError(
+                            "High-quality pronunciation QA could not resolve: "
+                            + ", ".join(skipped_surfaces)
+                        )
+                if fallback_readings:
+                    message = (
+                        f"Qwen không tạo được cách đọc hợp lệ ở batch {batch_index} cho {remaining}: "
+                        f"{last_error}. Đã xử lý bằng bộ chuyển cục bộ: {fallback_readings}."
+                    )
+                    self.log(message)
+                    self.db.event(
+                        "warning",
+                        "NAME_PRONUNCIATION_LOCAL_FALLBACK",
+                        message,
+                        {
+                            "batch_index": batch_index,
+                            "last_error": last_error,
+                            "fallback_readings": fallback_readings,
+                        },
+                    )
 
         self.log(
             f"Đã khóa cách đọc thuần Việt cho {converted_count}/{len(candidates)} "

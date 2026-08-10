@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from pathlib import Path
 from typing import Any, Callable
 
 from .analysis import AnalysisRequestStopped, OllamaBookAnalyzer
-from .asr import WhisperVerifier
+from .asr import ASR_INCONCLUSIVE, ASR_MISMATCH, ASR_PASS, WhisperVerifier
 from .audio_io import (
     AudioQualityError,
-    assemble_chapter_atomic,
+    ChapterQualityError,
+    assemble_chapter_atomic_with_metrics,
     export_json_atomic,
     inspect_wav,
     merge_wav_parts_atomic,
@@ -16,21 +19,52 @@ from .audio_io import (
     write_playlist_atomic,
 )
 from .character_registry import build_registry_and_cast
-from .database import ProjectDB
+from .database import (
+    QUALITY_SCOPE_CHAPTER,
+    QUALITY_SCOPE_SEGMENT,
+    QUALITY_VERDICT_PASS,
+    SEGMENT_AUDIO_QUALITY_STAGE,
+    ProjectDB,
+)
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
 from .text_processing import has_spoken_content, load_and_segment_chapter
 from .recovery import recover_project
 from .resource_manager import AdaptiveResourceManager
+from .quality_policy import (
+    ANALYSIS_CASTING_STAGE,
+    CHAPTER_QUALITY_STAGE,
+    QUALITY_POLICY_VERSION,
+    TEXT_SEGMENTATION_STAGE,
+    build_quality_policy,
+    quality_policy_hash,
+)
 from .tts import TTSCoordinator, is_fatal_tts_error
 
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
+HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset({"TTS_SPLIT_RECOVERY"})
+CHAPTER_REVIEW_STATUS = "warning"
+QUALITY_VERDICT_FAIL = "fail"
+CHAPTER_AUDIO_PIPELINE_FAILURE_CODE = "CHAPTER_AUDIO_PIPELINE_FAILED"
+CHAPTER_QUALITY_REPAIR_ACTION = "retry_after_quality_or_policy_change"
 
 
 def unresolved_asr_is_fatal(result: dict[str, Any], failure_policy: str) -> bool:
-    return bool(result.get("severe", False)) or failure_policy == "fail"
+    verdict = str(result.get("verdict", ""))
+    if verdict:
+        return verdict != ASR_PASS
+    return not bool(result.get("passed", False)) or bool(result.get("severe", False)) or failure_policy == "fail"
+
+
+def _asr_verdict(result: dict[str, Any]) -> str:
+    verdict = str(result.get("verdict", ""))
+    if verdict in {ASR_PASS, ASR_MISMATCH, ASR_INCONCLUSIVE}:
+        return verdict
+    if bool(result.get("passed", False)):
+        return ASR_PASS
+    return ASR_MISMATCH if str(result.get("reason", "")) == "ASR_MISMATCH" else ASR_INCONCLUSIVE
 
 
 class PipelineStopped(RuntimeError):
@@ -67,6 +101,8 @@ class BookPipeline:
         self._completed_noop = False
         self._last_tts_failure_signature: str | None = None
         self._tts_failure_streak = 0
+        self.quality_policy = build_quality_policy(settings)
+        self.quality_policy_hash = quality_policy_hash(self.quality_policy)
 
     def log(self, message: str) -> None:
         self.db.event("info", "LOG", message)
@@ -235,6 +271,12 @@ class BookPipeline:
             raise RuntimeError(f"Source chapter content changed during the job: {source}")
 
     def _recover(self) -> None:
+        self._validate_resume_stage_fingerprints()
+        self.db.set_current_quality_policy(
+            policy_hash=self.quality_policy_hash,
+            policy_version=QUALITY_POLICY_VERSION,
+            policy=self.quality_policy,
+        )
         report = recover_project(self.paths, self.db, self.settings)
         self._completed_noop = report.completed_verified
         if (
@@ -256,6 +298,50 @@ class BookPipeline:
                     report.reset_in_progress + report.reset_missing_or_corrupt,
                 )
 
+    def _validate_resume_stage_fingerprints(self) -> None:
+        rows = self.db.list_segments()
+        if not rows:
+            return
+        previous = self.db.current_quality_policy()
+        if previous is None:
+            raise RuntimeError(
+                "Existing segments have no parser/casting fingerprint; create a clean project "
+                "instead of resuming checkpoints produced by an unknown implementation"
+            )
+        try:
+            previous_policy = json.loads(str(previous["policy_json"]))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "Existing quality policy is unreadable; create a clean project before resuming"
+            ) from exc
+        previous_stages = (
+            previous_policy.get("stage_fingerprints", {})
+            if isinstance(previous_policy, dict)
+            else {}
+        )
+        current_stages = self.quality_policy.get("stage_fingerprints", {})
+        if not isinstance(previous_stages, dict) or not isinstance(current_stages, dict):
+            raise RuntimeError(
+                "Existing parser/casting fingerprints are invalid; create a clean project before resuming"
+            )
+        if previous_stages.get(TEXT_SEGMENTATION_STAGE) != current_stages.get(
+            TEXT_SEGMENTATION_STAGE
+        ):
+            raise RuntimeError(
+                "Text segmentation implementation changed after segments were checkpointed; "
+                "create a clean project so stale text cannot be republished"
+            )
+        analysis_started = self.db.casting_is_finalized() or any(
+            str(row["status"]) != SegmentStatus.PENDING.value for row in rows
+        )
+        if analysis_started and previous_stages.get(ANALYSIS_CASTING_STAGE) != current_stages.get(
+            ANALYSIS_CASTING_STAGE
+        ):
+            raise RuntimeError(
+                "Analysis/casting implementation changed after analysis started; create a clean project "
+                "so stale speaker and voice assignments cannot be republished"
+            )
+
     def prepare_recovery(self) -> bool:
         self._recover()
         return self._completed_noop
@@ -264,6 +350,7 @@ class BookPipeline:
         if not recovery_already_run:
             self._recover()
         if self._completed_noop:
+            self._safe_export_reports(incremental=False)
             self._state("completed", "Project đã hoàn tất; artifact đã được xác minh.")
             return
         self.db.begin_run_generation()
@@ -302,6 +389,7 @@ class BookPipeline:
             raise PipelineStopped("Stop requested during Ollama analysis") from exc
         finally:
             analyzer.unload()
+            self._safe_export_reports(incremental=True)
 
         self._state("running", "Đang xác minh các giọng VieNeu đã khóa.")
         self._resource_gate("xác minh preset VieNeu", keep_engine="vieneu")
@@ -311,22 +399,184 @@ class BookPipeline:
 
         verifier = WhisperVerifier(self.settings, self.log)
         try:
-            chapters = self.db.list_chapters()
-            for chapter_no, chapter in enumerate(chapters, 1):
-                self._wait_pause_or_stop()
-                self._process_chapter(chapter, verifier)
-                self.emit(
-                    "chapter_progress",
-                    {"done": chapter_no, "total": len(chapters), "chapter_id": int(chapter["id"])},
-                )
+            self._process_all_chapters(verifier)
         finally:
             verifier.unload()
             self.tts.unload_all()
+            self._safe_export_reports(incremental=True)
 
+        self._finalize_book()
         self._progress("Xuất báo cáo", 0, 1)
         self._export_reports()
         self._progress("Xuất báo cáo", 1, 1)
-        self._finalize_book()
+
+    def _process_all_chapters(self, verifier: WhisperVerifier) -> None:
+        chapters = self.db.list_chapters()
+        for chapter_no, chapter in enumerate(chapters, 1):
+            self._wait_pause_or_stop()
+            try:
+                self._process_chapter(chapter, verifier)
+            except AudioQualityError as exc:
+                self._record_chapter_quality_failure(chapter, exc)
+            self.emit(
+                "chapter_progress",
+                {"done": chapter_no, "total": len(chapters), "chapter_id": int(chapter["id"])},
+            )
+            self._safe_export_reports(incremental=True)
+
+    def _next_chapter_quality_attempt(self, chapter_id: int) -> int:
+        latest = self.db.latest_quality_check(
+            scope=QUALITY_SCOPE_CHAPTER,
+            stage=CHAPTER_QUALITY_STAGE,
+            chapter_id=chapter_id,
+        )
+        return int(latest["attempt"]) + 1 if latest is not None else 1
+
+    def _next_segment_quality_attempt(self, segment_id: int) -> int:
+        latest = self.db.latest_quality_check(
+            scope=QUALITY_SCOPE_SEGMENT,
+            stage=SEGMENT_AUDIO_QUALITY_STAGE,
+            segment_id=segment_id,
+        )
+        return int(latest["attempt"]) + 1 if latest is not None else 1
+
+    def _record_segment_audio_pass(
+        self,
+        item: dict[str, Any],
+        result: dict[str, Any],
+        *,
+        confirmation: bool,
+    ) -> None:
+        segment_id = int(item["id"])
+        wav_path = Path(str(item["wav_path"] or ""))
+        artifact_sha256 = str(item["wav_sha256"] or "").strip()
+        if (
+            not artifact_sha256
+            or not wav_path.is_file()
+            or sha256_file(wav_path) != artifact_sha256
+        ):
+            raise AudioQualityError(
+                f"WAV changed before the ASR quality checkpoint for {item['stable_id']}"
+            )
+        self.db.record_quality_check(
+            scope=QUALITY_SCOPE_SEGMENT,
+            stage=SEGMENT_AUDIO_QUALITY_STAGE,
+            segment_id=segment_id,
+            artifact_sha256=artifact_sha256,
+            policy_hash=self.quality_policy_hash,
+            policy_version=QUALITY_POLICY_VERSION,
+            verdict=QUALITY_VERDICT_PASS,
+            metrics={
+                "verdict": _asr_verdict(result),
+                "reason": str(result.get("reason", "ok")),
+                "transcript": str(result.get("transcript", "")),
+                "similarity": float(result.get("similarity", 0.0)),
+                "wer": float(result.get("wer", 0.0)),
+                "confirmation_decode": bool(confirmation),
+                "repeated_short_context": (
+                    str(result.get("reason", "")) == "ASR_REPEATED_SHORT_PASS"
+                ),
+            },
+            attempt=self._next_segment_quality_attempt(segment_id),
+        )
+
+    def _chapter_audio_evidence_sha256(self, chapter_id: int) -> str:
+        digest = hashlib.sha256()
+        digest.update(f"policy={self.quality_policy_hash}\nchapter={chapter_id}\n".encode("utf-8"))
+        for row in self.db.list_segments(chapter_id=chapter_id):
+            digest.update(
+                (
+                    f"{row['stable_id']}\t{row['wav_sha256'] or ''}\t"
+                    f"{int(row['break_ms'])}\n"
+                ).encode("utf-8")
+            )
+        return digest.hexdigest()
+
+    def _high_quality_blocking_segment_warnings(
+        self,
+        rows: list[Any],
+    ) -> list[dict[str, Any]]:
+        if self.settings.get("quality_profile") != "high_quality":
+            return []
+        blocking: list[dict[str, Any]] = []
+        for row in rows:
+            warning_codes = {
+                value
+                for value in str(row["warning_code"] or "").split("|")
+                if value
+            }
+            blocked_codes = sorted(warning_codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
+            if blocked_codes:
+                blocking.append(
+                    {
+                        "segment_id": int(row["id"]),
+                        "stable_id": str(row["stable_id"]),
+                        "warning_codes": blocked_codes,
+                    }
+                )
+        return blocking
+
+    def _record_chapter_quality_failure(self, chapter: Any, error: AudioQualityError) -> None:
+        chapter_id = int(chapter["id"])
+        structured = error if isinstance(error, ChapterQualityError) else None
+        candidate_checksum = structured.artifact_sha256 if structured is not None else None
+        metrics = dict(structured.metrics) if structured is not None else {}
+        metrics.setdefault("error", str(error))
+        metrics["review_required"] = bool(structured and structured.review_required)
+        metrics["evidence_kind"] = "encoded_candidate" if candidate_checksum else "chapter_wav_set"
+        artifact_sha256 = candidate_checksum or self._chapter_audio_evidence_sha256(chapter_id)
+        failure_codes = (
+            structured.failure_codes
+            if structured is not None and structured.failure_codes
+            else (CHAPTER_AUDIO_PIPELINE_FAILURE_CODE,)
+        )
+        attempt = self._next_chapter_quality_attempt(chapter_id)
+        self.db.record_quality_check(
+            scope=QUALITY_SCOPE_CHAPTER,
+            stage=CHAPTER_QUALITY_STAGE,
+            chapter_id=chapter_id,
+            artifact_sha256=artifact_sha256,
+            policy_hash=self.quality_policy_hash,
+            policy_version=QUALITY_POLICY_VERSION,
+            verdict=QUALITY_VERDICT_FAIL,
+            metrics=metrics,
+            failure_codes=failure_codes,
+            repair_action=CHAPTER_QUALITY_REPAIR_ACTION,
+            attempt=attempt,
+        )
+        error_text = str(error)[-8000:]
+        self.db.update_chapter_status(chapter_id, ChapterStatus.FAILED.value, error_text)
+        event_code = (
+            "CHAPTER_QA_REVIEW_REQUIRED"
+            if structured is not None and structured.review_required
+            else "CHAPTER_QA_FAILED"
+        )
+        self.db.event(
+            "error",
+            event_code,
+            f"Chapter {chapter['title']} was not published: {error_text}",
+            {
+                "chapter_id": chapter_id,
+                "chapter_index": int(chapter["chapter_index"]),
+                "artifact_sha256": artifact_sha256,
+                "failure_codes": list(failure_codes),
+                "attempt": attempt,
+                "metrics": metrics,
+            },
+        )
+        self.emit(
+            "chapter_failed",
+            {
+                "chapter_id": chapter_id,
+                "title": str(chapter["title"]),
+                "error": error_text,
+                "review_required": bool(structured and structured.review_required),
+            },
+        )
+        self.log(
+            f"Không xuất chapter {chapter['title']} do QA audio: {error_text}. "
+            "Pipeline sẽ tiếp tục chapter kế tiếp."
+        )
 
     def _finalize_book(self) -> None:
         completed = [row for row in self.db.list_chapters() if row["status"] == ChapterStatus.COMPLETED.value]
@@ -365,24 +615,57 @@ class BookPipeline:
                     "kết thúc pipeline",
                 )
 
-    def _existing_segment_is_safe(self, row: Any) -> bool:
-        if str(row["status"]) not in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}:
-            return False
+    def _inspect_existing_segment(self, row: Any) -> tuple[bool, dict[str, float]]:
         wav_text = str(row["wav_path"] or "")
         if not wav_text:
-            return False
+            return False, {}
         wav = Path(wav_text)
         if not wav.exists():
-            return False
-        if row["wav_sha256"] and sha256_file(wav) != str(row["wav_sha256"]):
-            return False
-        valid, _, _ = inspect_wav(
+            return False, {}
+        wav_sha256 = str(row["wav_sha256"] or "").strip()
+        if not wav_sha256 or sha256_file(wav) != wav_sha256:
+            return False, {}
+        valid, metrics, _ = inspect_wav(
             wav,
             self.tts.spoken_text(row),
             self.settings,
             segment=row,
         )
-        return valid
+        return valid, metrics if valid else {}
+
+    def _existing_segment_is_safe(self, row: Any) -> bool:
+        if str(row["status"]) not in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}:
+            return False
+        valid, _ = self._inspect_existing_segment(row)
+        if not valid:
+            return False
+        return self.db.segment_audio_is_current_qa_verified(
+            int(row["id"]),
+            str(row["wav_sha256"]),
+            SEGMENT_AUDIO_QUALITY_STAGE,
+        )
+
+    def _recheckpoint_segment_for_current_audio_qa(
+        self,
+        row: Any,
+        metrics: dict[str, float],
+    ) -> None:
+        generation_seed = (
+            int(row["generation_seed"])
+            if row["generation_seed"] is not None
+            else self.tts.generation_seed(row, "qa_recheck")
+        )
+        self.db.mark_generating(int(row["id"]), generation_seed)
+        self.db.mark_signal_passed(
+            int(row["id"]),
+            wav_path=Path(str(row["wav_path"])),
+            wav_sha256=str(row["wav_sha256"]),
+            duration=float(metrics["duration"]),
+            signal=metrics,
+            generation_seed=generation_seed,
+        )
+        if metrics.get("pace_outlier"):
+            self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
 
     def _process_chapter(self, chapter: Any, verifier: WhisperVerifier) -> None:
         chapter_id = int(chapter["id"])
@@ -390,16 +673,25 @@ class BookPipeline:
         output = Path(str(chapter["output_mp3"]))
         if chapter["status"] == ChapterStatus.COMPLETED.value:
             valid, _ = verify_mp3(output)
-            if valid:
+            quality_verified = self.db.chapter_artifact_is_current_qa_verified(
+                int(chapter["chapter_index"])
+            )
+            segment_quality_verified = self.db.chapter_segments_have_current_audio_qa(
+                chapter_id,
+                SEGMENT_AUDIO_QUALITY_STAGE,
+            )
+            if valid and quality_verified and segment_quality_verified:
                 self.log(f"Bỏ qua chapter đã hoàn tất: {chapter['title']}")
                 return
+            self.log(
+                f"Chapter {chapter['title']} có MP3 legacy hoặc policy QA cũ; "
+                "không bỏ qua chỉ dựa trên khả năng giải mã."
+            )
 
         self.db.update_chapter_status(chapter_id, ChapterStatus.SYNTHESIZING.value)
         self.log(f"Tạo audio chapter {chapter['chapter_index']}: {chapter['title']}")
         rows = self.db.list_segments(chapter_id=chapter_id)
         for row in rows:
-            if self._existing_segment_is_safe(row):
-                continue
             if str(row["status"]) in {
                 SegmentStatus.GENERATING.value,
                 SegmentStatus.SIGNAL_PASSED.value,
@@ -413,18 +705,27 @@ class BookPipeline:
         self._progress(tts_label, 0, len(current_rows))
         for index, row in enumerate(current_rows, 1):
             self._progress(tts_label, index - 1, len(current_rows))
-            if self._existing_segment_is_safe(row):
-                continue
-            # A valid signal_passed WAV can proceed directly to the chapter ASR stage after recovery.
-            if str(row["status"]) == SegmentStatus.SIGNAL_PASSED.value and row["wav_path"]:
-                valid, _, _ = inspect_wav(
-                    Path(str(row["wav_path"])),
-                    self.tts.spoken_text(row),
-                    self.settings,
-                    segment=row,
+            status = str(row["status"])
+            signal_valid, signal_metrics = self._inspect_existing_segment(row)
+            if (
+                status in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}
+                and signal_valid
+                and self.db.segment_audio_is_current_qa_verified(
+                    int(row["id"]),
+                    str(row["wav_sha256"]),
+                    SEGMENT_AUDIO_QUALITY_STAGE,
                 )
-                if valid:
-                    continue
+            ):
+                continue
+            if signal_valid and status in {
+                SegmentStatus.SIGNAL_PASSED.value,
+                SegmentStatus.ASR_PASSED.value,
+                SegmentStatus.VERIFIED.value,
+                SegmentStatus.WARNING.value,
+            }:
+                if status != SegmentStatus.SIGNAL_PASSED.value:
+                    self._recheckpoint_segment_for_current_audio_qa(row, signal_metrics)
+                continue
             if not has_spoken_content(str(row["text"])):
                 self.db.mark_failed(
                     int(row["id"]),
@@ -449,6 +750,18 @@ class BookPipeline:
         verifier.unload()
 
         rows = self.db.list_segments(chapter_id=chapter_id)
+        blocking_warnings = self._high_quality_blocking_segment_warnings(rows)
+        if blocking_warnings:
+            raise ChapterQualityError(
+                "High-quality policy requires repair or review for segment warnings: "
+                + "; ".join(
+                    f"{item['stable_id']}={','.join(item['warning_codes'])}"
+                    for item in blocking_warnings
+                ),
+                metrics={"blocking_segment_warnings": blocking_warnings},
+                failure_codes=("SEGMENT_QA_REVIEW_REQUIRED",),
+                review_required=True,
+            )
         if not self.db.chapter_is_publishable(chapter_id):
             failed = [row for row in rows if row["status"] == SegmentStatus.FAILED.value]
             self.db.update_chapter_status(
@@ -468,7 +781,7 @@ class BookPipeline:
         )
         assembly_label = f"Ghép và kiểm tra MP3 chapter {chapter['chapter_index']}"
         self._progress(assembly_label)
-        checksum = assemble_chapter_atomic(
+        assembly = assemble_chapter_atomic_with_metrics(
             wavs,
             output,
             self.settings,
@@ -477,14 +790,44 @@ class BookPipeline:
             track=int(chapter["chapter_index"]),
             work_dir=self.paths.work / "silence",
         )
+        checksum = assembly.checksum
+        quality_metrics = assembly.quality.to_dict()
+        quality_metadata = self.db.quality_metadata_for_current_policy()
+        self.db.record_quality_check(
+            scope=QUALITY_SCOPE_CHAPTER,
+            stage=CHAPTER_QUALITY_STAGE,
+            chapter_id=chapter_id,
+            artifact_sha256=checksum,
+            policy_hash=self.quality_policy_hash,
+            policy_version=QUALITY_POLICY_VERSION,
+            verdict=QUALITY_VERDICT_PASS,
+            metrics=quality_metrics,
+            attempt=self._next_chapter_quality_attempt(chapter_id),
+        )
         self.db.register_artifact(
             artifact_key=f"chapter_mp3:{chapter['chapter_index']}",
             kind="chapter_mp3",
             path=output,
             sha256=checksum,
             verified=True,
-            metadata={"chapter_id": chapter_id, "title": str(chapter["title"])},
+            metadata={
+                "chapter_id": chapter_id,
+                "title": str(chapter["title"]),
+                "quality": quality_metadata,
+                "quality_metrics": quality_metrics,
+            },
         )
+        if assembly.quality.review_flags:
+            self.db.event(
+                "warning",
+                "CHAPTER_QA_REVIEW_FLAGS",
+                f"Chapter {chapter['title']} passed hard QA with review flags",
+                {
+                    "chapter_id": chapter_id,
+                    "flags": list(assembly.quality.review_flags),
+                    "metrics": quality_metrics,
+                },
+            )
         self.db.update_chapter_status(chapter_id, ChapterStatus.COMPLETED.value)
         self._progress(assembly_label, 1, 1)
         self.log(f"Chapter MP3 đã hoàn tất và giải mã kiểm tra thành công: {output.name}")
@@ -496,7 +839,14 @@ class BookPipeline:
     def _chunk_path(self, row: Any) -> Path:
         return self.paths.chunks / f"chapter_{int(row['chapter_id']):05d}" / f"{int(row['seq']):07d}.wav"
 
-    def _process_single_segment(self, row: Any, chapter: Any, seed_salt_prefix: str = "primary") -> None:
+    def _process_single_segment(
+        self,
+        row: Any,
+        chapter: Any,
+        seed_salt_prefix: str = "primary",
+        *,
+        repair_short_utterance: bool = False,
+    ) -> None:
         output = self._chunk_path(row)
         last_error = ""
         retries = int(self.settings["tts"]["max_retries"])
@@ -509,8 +859,23 @@ class BookPipeline:
                     self.tts.generation_seed(row, seed_salt),
                 )
                 checksum, metrics, seed = self.tts.synthesize_atomic(
-                    row, output, seed_salt=seed_salt
+                    row,
+                    output,
+                    seed_salt=seed_salt,
+                    repair_short_utterance=repair_short_utterance,
                 )
+                if self.settings.get("quality_profile") == "high_quality":
+                    retry_reasons = []
+                    if metrics.get("pace_outlier"):
+                        retry_reasons.append(
+                            f"speech pace {metrics.get('chars_per_second', 0.0):.2f} chars/s"
+                        )
+                    if metrics.get("generation_ceiling_hit"):
+                        retry_reasons.append("generation reached the frame ceiling")
+                    if retry_reasons:
+                        raise AudioQualityError(
+                            "high-quality TTS retry required: " + "; ".join(retry_reasons)
+                        )
                 self.db.mark_signal_passed(
                     int(row["id"]),
                     wav_path=output,
@@ -652,52 +1017,101 @@ class BookPipeline:
         def verify_rows(
             items: list[dict[str, Any]],
             label: str,
+            *,
+            confirmation: bool = False,
         ) -> list[dict[str, Any]]:
-            mismatches: list[dict[str, Any]] = []
+            issues: list[dict[str, Any]] = []
             self._progress(label, 0, len(items))
             for index, item in enumerate(items, 1):
                 self._resource_gate(
                     f"Whisper chapter {chapter['chapter_index']} segment {item['seq']}",
                     release_active=verifier.unload,
                 )
+                expected_text = self.tts.spoken_text(item)
                 result = verifier.verify(
-                    self.tts.spoken_text(item), Path(str(item["wav_path"]))
+                    expected_text,
+                    Path(str(item["wav_path"])),
+                    confirmation=confirmation,
                 )
+                if _asr_verdict(result) != ASR_PASS and verifier.can_verify_repeated_short(
+                    expected_text
+                ):
+                    result = verifier.verify_repeated_short(
+                        expected_text,
+                        Path(str(item["wav_path"])),
+                        confirmation=confirmation,
+                    )
                 last_results[int(item["id"])] = result
                 existing_warning = str(item.get("warning_code") or "") or None
-                if result["reason"] in {"ASR_NOT_RUN", "ASR_ERROR"}:
-                    self.db.mark_verified(int(item["id"]), warning_code=str(result["reason"]))
-                elif result["passed"]:
-                    verification_warning = (
-                        str(result["reason"])
-                        if result["reason"] in {
-                            "ASR_TRANSCRIPT_RATE_IMPOSSIBLE",
-                            "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE",
-                        }
-                        else None
-                    )
+                if _asr_verdict(result) == ASR_PASS:
                     self.db.mark_asr_result(
                         int(item["id"]), passed=True, transcript=str(result["transcript"]),
                         similarity=float(result["similarity"]), wer=float(result["wer"]),
-                        warning_code=verification_warning,
+                    )
+                    self._record_segment_audio_pass(
+                        item,
+                        result,
+                        confirmation=confirmation,
                     )
                     self.db.mark_verified(int(item["id"]), warning_code=existing_warning)
                 else:
-                    mismatches.append(item)
+                    issues.append(item)
                 self._progress(label, index, len(items))
-            return mismatches
+            return issues
+
+        def confirm_repair_candidates(
+            candidates: list[dict[str, Any]],
+            label: str,
+        ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+            needs_confirmation: list[dict[str, Any]] = []
+            rejected: list[dict[str, Any]] = []
+            initial_results: dict[int, dict[str, Any]] = {}
+            for item in candidates:
+                result = last_results.get(int(item["id"]), {})
+                if _asr_verdict(result) in {ASR_MISMATCH, ASR_INCONCLUSIVE}:
+                    needs_confirmation.append(item)
+                    initial_results[int(item["id"])] = dict(result)
+                else:
+                    rejected.append(item)
+            confirmed_issues = (
+                verify_rows(needs_confirmation, label, confirmation=True)
+                if needs_confirmation
+                else []
+            )
+            confirmed: list[dict[str, Any]] = []
+            for item in confirmed_issues:
+                segment_id = int(item["id"])
+                first_result = initial_results.get(segment_id, {})
+                result = last_results.get(segment_id, {})
+                first_verdict = _asr_verdict(first_result)
+                second_verdict = _asr_verdict(result)
+                if (
+                    first_verdict == ASR_MISMATCH
+                    and second_verdict == ASR_MISMATCH
+                    and bool(result.get("repairable", True))
+                ):
+                    confirmed.append(item)
+                else:
+                    if first_verdict != second_verdict:
+                        last_results[segment_id] = {
+                            **result,
+                            "passed": False,
+                            "verdict": ASR_INCONCLUSIVE,
+                            "reason": "ASR_CONFIRMATION_DISAGREED",
+                            "repairable": False,
+                            "severe": False,
+                        }
+                    rejected.append(item)
+            return confirmed, rejected
 
         verification_label = f"Kiểm tra phát âm chapter {chapter['chapter_index']}"
-        mismatches = verify_rows(pending, verification_label)
+        issues = verify_rows(pending, verification_label)
         final_mismatches: list[dict[str, Any]] = []
-        repairable_mismatches: list[dict[str, Any]] = []
-        for item in mismatches:
-            result = last_results.get(int(item["id"]), {})
-            if bool(result.get("repairable", True)):
-                repairable_mismatches.append(item)
-            else:
-                final_mismatches.append(item)
-        mismatches = repairable_mismatches
+        mismatches, unrepairable = confirm_repair_candidates(
+            issues,
+            f"Xác nhận lệch nội dung chapter {chapter['chapter_index']}",
+        )
+        final_mismatches.extend(unrepairable)
         repair_rounds = int(self.settings["asr"].get("repair_rounds", 2))
         for repair_round in range(repair_rounds):
             if not mismatches:
@@ -714,7 +1128,12 @@ class BookPipeline:
                     keep_engine=None,
                 )
                 # Retry the locked primary voice with a different deterministic seed.
-                self._process_single_segment(item, chapter, seed_salt_prefix=f"asr_repair_{repair_round}")
+                self._process_single_segment(
+                    item,
+                    chapter,
+                    seed_salt_prefix=f"asr_repair_{repair_round}",
+                    repair_short_utterance=True,
+                )
                 fresh = self.db.get_segment(int(item["id"]))
                 if str(fresh["status"]) == SegmentStatus.SIGNAL_PASSED.value:
                     regenerated.append(dict(fresh))
@@ -724,80 +1143,162 @@ class BookPipeline:
                 regenerated,
                 f"Kiểm tra lại chapter {chapter['chapter_index']} — vòng {repair_round + 1}",
             )
-            mismatches = []
-            for item in verified_mismatches:
-                result = last_results.get(int(item["id"]), {})
-                if bool(result.get("repairable", True)):
-                    mismatches.append(item)
-                else:
-                    final_mismatches.append(item)
+            mismatches, unrepairable = confirm_repair_candidates(
+                verified_mismatches,
+                (
+                    f"Xác nhận lệch nội dung chapter {chapter['chapter_index']} "
+                    f"— vòng {repair_round + 1}"
+                ),
+            )
+            final_mismatches.extend(unrepairable)
 
         final_mismatches.extend(mismatches)
         for item in sorted(final_mismatches, key=lambda row: int(row["seq"])):
             result = last_results.get(int(item["id"]), {})
-            warning = "ASR_MISMATCH_UNRESOLVED"
+            verdict = _asr_verdict(result)
+            reason = str(result.get("reason", "ASR_INCONCLUSIVE"))
+            warning = reason if verdict == ASR_INCONCLUSIVE else "ASR_MISMATCH_UNRESOLVED"
             severe = bool(result.get("severe", False))
             if severe:
                 warning = "ASR_SEVERE_MISMATCH"
-            if unresolved_asr_is_fatal(
-                result,
-                str(self.settings["asr"].get("failure_policy", "warning_continue")),
-            ):
-                self.db.mark_asr_result(
-                    int(item["id"]), passed=False, transcript=str(result.get("transcript", "")),
-                    similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
-                    warning_code=warning,
-                )
-                self.db.mark_failed(
-                    int(item["id"]),
-                    (
-                        "Severe ASR mismatch remained after all configured repair rounds; "
-                        "refusing to publish potentially hallucinated speech"
-                        if severe
-                        else "ASR mismatch remained after all configured repair rounds"
-                    ),
-                    warning_code=warning,
-                )
-                self.db.event(
-                    "error",
-                    warning,
-                    (
-                        f"Severe ASR mismatch blocks publication for {item['stable_id']}"
-                        if severe
-                        else f"ASR mismatch is fatal by policy for {item['stable_id']}"
-                    ),
-                    {
-                        "chapter": str(chapter["title"]),
-                        "text": str(item["text"]),
-                        "transcript": str(result.get("transcript", "")),
-                        "similarity": float(result.get("similarity", 0.0)),
-                        "wer": float(result.get("wer", 1.0)),
-                        "severe": severe,
-                    },
-                )
-                continue
             self.db.mark_asr_result(
                 int(item["id"]), passed=False, transcript=str(result.get("transcript", "")),
                 similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
                 warning_code=warning,
             )
-            self.db.mark_verified(int(item["id"]), warning_code=warning)
+            self.db.mark_failed(
+                int(item["id"]),
+                (
+                    "ASR could not produce a trustworthy verdict; refusing to publish"
+                    if verdict == ASR_INCONCLUSIVE
+                    else "ASR mismatch remained after all configured repair rounds"
+                ),
+                warning_code=warning,
+            )
             self.db.event(
-                "warning",
-                "ASR_MISMATCH_UNRESOLVED",
-                f"ASR still differs for {item['stable_id']}; audio kept for later review",
+                "error",
+                warning,
+                f"Mandatory content QA blocks publication for {item['stable_id']}",
                 {
                     "chapter": str(chapter["title"]),
                     "text": str(item["text"]),
                     "transcript": str(result.get("transcript", "")),
                     "similarity": float(result.get("similarity", 0.0)),
                     "wer": float(result.get("wer", 1.0)),
+                    "verdict": verdict,
                 },
             )
 
-    def _export_reports(self) -> None:
-        characters = [dict(row) for row in self.db.list_characters()]
+    def _safe_export_reports(self, *, incremental: bool) -> None:
+        try:
+            self._export_reports(incremental=incremental)
+        except Exception as exc:  # noqa: BLE001
+            self.db.event(
+                "warning",
+                "QUALITY_REPORT_EXPORT_FAILED",
+                f"Could not export the incremental quality report: {exc}",
+            )
+
+    def _export_reports(self, *, incremental: bool = False) -> None:
         segments = [dict(row) for row in self.db.list_segments()]
+        chapter_quality: list[dict[str, Any]] = []
+        for chapter in self.db.list_chapters():
+            artifact = self.db.artifact_by_key(f"chapter_mp3:{chapter['chapter_index']}")
+            metadata: dict[str, Any] = {}
+            if artifact is not None:
+                try:
+                    decoded_metadata = json.loads(str(artifact["metadata_json"] or "{}"))
+                except json.JSONDecodeError:
+                    decoded_metadata = {}
+                if isinstance(decoded_metadata, dict):
+                    metadata = decoded_metadata
+
+            latest_check = self.db.latest_quality_check(
+                scope=QUALITY_SCOPE_CHAPTER,
+                stage=CHAPTER_QUALITY_STAGE,
+                chapter_id=int(chapter["id"]),
+            )
+            latest_quality_check: dict[str, Any] | None = None
+            if latest_check is not None:
+                try:
+                    check_metrics = json.loads(str(latest_check["metrics_json"] or "{}"))
+                except json.JSONDecodeError:
+                    check_metrics = {}
+                if not isinstance(check_metrics, dict):
+                    check_metrics = {}
+                try:
+                    failure_codes = json.loads(str(latest_check["failure_codes_json"] or "[]"))
+                except json.JSONDecodeError:
+                    failure_codes = []
+                if not isinstance(failure_codes, list):
+                    failure_codes = []
+                latest_quality_check = {
+                    "verdict": str(latest_check["verdict"]),
+                    "artifact_sha256": str(latest_check["artifact_sha256"]),
+                    "policy_hash": str(latest_check["policy_hash"]),
+                    "policy_version": int(latest_check["policy_version"]),
+                    "attempt": int(latest_check["attempt"]),
+                    "metrics": check_metrics,
+                    "failure_codes": failure_codes,
+                    "repair_action": str(latest_check["repair_action"] or ""),
+                    "created_at": float(latest_check["created_at"]),
+                }
+
+            chapter_segments = [
+                row for row in segments if int(row["chapter_id"]) == int(chapter["id"])
+            ]
+            similarities = [
+                float(row["asr_similarity"])
+                for row in chapter_segments
+                if row["asr_similarity"] is not None
+            ]
+            word_error_rates = [
+                float(row["asr_wer"])
+                for row in chapter_segments
+                if row["asr_wer"] is not None
+            ]
+            blocking_segment_warnings = self._high_quality_blocking_segment_warnings(
+                chapter_segments
+            )
+            chapter_quality.append(
+                {
+                    "chapter_id": int(chapter["id"]),
+                    "chapter_index": int(chapter["chapter_index"]),
+                    "title": str(chapter["title"]),
+                    "status": str(chapter["status"]),
+                    "last_error": str(chapter["last_error"] or ""),
+                    "path": str(artifact["path"] if artifact is not None else chapter["output_mp3"]),
+                    "sha256": str(artifact["sha256"] or "") if artifact is not None else "",
+                    "artifact_verified": bool(artifact["verified"]) if artifact is not None else False,
+                    "current_policy_verified": self.db.chapter_artifact_is_current_qa_verified(
+                        int(chapter["chapter_index"])
+                    ),
+                    "segment_audio_qa_complete": self.db.chapter_segments_have_current_audio_qa(
+                        int(chapter["id"]),
+                        SEGMENT_AUDIO_QUALITY_STAGE,
+                    ),
+                    "publishable": self.db.chapter_is_publishable(int(chapter["id"]))
+                    and not blocking_segment_warnings,
+                    "segment_summary": {
+                        "total": len(chapter_segments),
+                        "failed": sum(
+                            str(row["status"]) == SegmentStatus.FAILED.value
+                            for row in chapter_segments
+                        ),
+                        "warning": sum(
+                            bool(row["warning_code"])
+                            or str(row["status"]) == SegmentStatus.WARNING.value
+                            for row in chapter_segments
+                        ),
+                        "min_asr_similarity": min(similarities) if similarities else None,
+                        "max_asr_wer": max(word_error_rates) if word_error_rates else None,
+                        "blocking_warnings": blocking_segment_warnings,
+                    },
+                    "quality": metadata.get("quality", {}),
+                    "metrics": metadata.get("quality_metrics", {}),
+                    "latest_quality_check": latest_quality_check,
+                }
+            )
         warnings = [
             {
                 "stable_id": row["stable_id"],
@@ -814,14 +1315,89 @@ class BookPipeline:
             if row["status"] in {SegmentStatus.WARNING.value, SegmentStatus.FAILED.value}
             or row["warning_code"]
         ]
-        export_json_atomic(self.paths.output / "characters.json", characters)
-        export_json_atomic(
-            self.paths.output / "pronunciations.json",
-            [dict(row) for row in self.db.list_pronunciations()],
-        )
-        if self.settings["audio"].get("export_metadata", True):
-            export_json_atomic(self.paths.output / "transcript_metadata.json", segments)
+        if not incremental:
+            export_json_atomic(
+                self.paths.output / "characters.json",
+                [dict(row) for row in self.db.list_characters()],
+            )
+            export_json_atomic(
+                self.paths.output / "pronunciations.json",
+                [dict(row) for row in self.db.list_pronunciations()],
+            )
+            if self.settings["audio"].get("export_metadata", True):
+                export_json_atomic(self.paths.output / "transcript_metadata.json", segments)
         export_json_atomic(self.paths.reports / "review_required.json", warnings)
+        export_json_atomic(self.paths.reports / "chapter_quality.json", chapter_quality)
+        book = dict(self.db.book())
+        completed_count = sum(
+            row["status"] == ChapterStatus.COMPLETED.value for row in chapter_quality
+        )
+        failed_count = sum(row["status"] == ChapterStatus.FAILED.value for row in chapter_quality)
+        review_count = sum(
+            row["status"] not in {
+                ChapterStatus.COMPLETED.value,
+                ChapterStatus.FAILED.value,
+            }
+            and (
+                row["status"] == CHAPTER_REVIEW_STATUS
+                or bool(
+                    row.get("latest_quality_check")
+                    and row["latest_quality_check"]["verdict"] != QUALITY_VERDICT_PASS
+                )
+            )
+            for row in chapter_quality
+        )
+        pending_count = len(chapter_quality) - completed_count - failed_count - review_count
+        overall_verdict = (
+            QUALITY_VERDICT_PASS
+            if chapter_quality
+            and completed_count == len(chapter_quality)
+            and all(row["current_policy_verified"] for row in chapter_quality)
+            else "fail"
+            if failed_count
+            else "review"
+        )
+        export_json_atomic(
+            self.paths.reports / "audiobook_quality_report.json",
+            {
+                "schema_version": 1,
+                "policy": {
+                    "policy_hash": self.quality_policy_hash,
+                    "policy_version": QUALITY_POLICY_VERSION,
+                    "definition": self.quality_policy,
+                },
+                "book": {
+                    "title": str(book["title"]),
+                    "status": str(book["status"]),
+                    "stage": str(book["stage"]),
+                    "overall_verdict": overall_verdict,
+                    "chapters_total": len(chapter_quality),
+                    "passed": completed_count,
+                    "review": review_count,
+                    "failed": failed_count,
+                    "pending": max(0, pending_count),
+                },
+                "global_gates": {
+                    "casting_finalized": self.db.casting_is_finalized(),
+                    "text_segmentation_fingerprint": self.quality_policy[
+                        "stage_fingerprints"
+                    ][TEXT_SEGMENTATION_STAGE],
+                    "analysis_casting_fingerprint": self.quality_policy[
+                        "stage_fingerprints"
+                    ][ANALYSIS_CASTING_STAGE],
+                },
+                "review_required": {
+                    "chapters": [
+                        row
+                        for row in chapter_quality
+                        if row["status"] != ChapterStatus.COMPLETED.value
+                        or not row["current_policy_verified"]
+                    ],
+                    "segments": warnings,
+                },
+                "chapters": chapter_quality,
+            },
+        )
         export_json_atomic(
             self.paths.reports / "runtime_events.json",
             [dict(row) for row in self.db.list_events()],

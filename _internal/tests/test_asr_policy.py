@@ -8,19 +8,50 @@ import numpy as np
 import pytest
 import soundfile as sf
 
+from ebook_reader import asr as asr_module
 from ebook_reader.asr import (
+    ASR_INCONCLUSIVE,
+    ASR_PASS,
     WhisperVerifier,
     is_asr_repair_candidate,
     is_severe_asr_mismatch,
     transcript_exceeds_physical_rate,
+    transcript_metrics,
     transcription_exceeds_audio_timeline,
 )
 from ebook_reader.config import build_settings
 
 
+def test_whisper_unload_trims_process_working_set(monkeypatch) -> None:
+    trims: list[bool] = []
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier.model = object()
+    monkeypatch.setattr(asr_module, "trim_process_working_set", lambda: trims.append(True))
+
+    verifier.unload()
+
+    assert verifier.model is None
+    assert trims == [True]
+
+
+def test_whisper_unload_without_model_does_not_trim_working_set(monkeypatch) -> None:
+    trims: list[bool] = []
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    monkeypatch.setattr(asr_module, "trim_process_working_set", lambda: trims.append(True))
+
+    verifier.unload()
+
+    assert trims == []
+
+
 def test_optional_asr_inference_error_becomes_warning(monkeypatch) -> None:
     messages: list[str] = []
-    verifier = WhisperVerifier(build_settings(), messages.append)
+    verifier = WhisperVerifier(
+        build_settings(profile="balanced", overrides={
+            "asr": {"required": False, "failure_policy": "warning_continue"}
+        }),
+        messages.append,
+    )
     verifier.model = object()
     monkeypatch.setattr(verifier, "load", lambda: True)
     monkeypatch.setattr(verifier, "transcribe", lambda _path: (_ for _ in ()).throw(RuntimeError("GPU error")))
@@ -28,7 +59,8 @@ def test_optional_asr_inference_error_becomes_warning(monkeypatch) -> None:
     result = verifier.verify("Một câu cần kiểm tra.", Path("missing.wav"))
 
     assert result["reason"] == "ASR_ERROR"
-    assert result["passed"] is True
+    assert result["passed"] is False
+    assert result["verdict"] == ASR_INCONCLUSIVE
     assert any("GPU error" in message for message in messages)
 
 
@@ -62,6 +94,7 @@ def test_non_lexical_text_skips_whisper_and_one_word_can_be_repaired(monkeypatch
     result = verifier.verify("……", Path("missing.wav"))
 
     assert result["passed"] is True
+    assert result["verdict"] == ASR_PASS
     assert result["reason"] == "NON_LEXICAL_SKIP"
     assert result["repairable"] is False
     assert is_asr_repair_candidate("rầm") is True
@@ -82,12 +115,27 @@ def test_severe_mismatch_detects_impossibly_long_unrelated_transcript() -> None:
     assert is_severe_asr_mismatch("Độc ác quá!", "Nó bạc quá.", 0.60) is False
 
 
+def test_missing_or_same_length_unrelated_transcript_is_severe() -> None:
+    assert is_severe_asr_mismatch("Khong duoc di.", "", 0.0) is True
+    assert is_severe_asr_mismatch("Anh dang o dau?", "Toi khong biet.", 0.0) is True
+
+
 def test_transcript_word_rate_rejects_whisper_output_that_cannot_fit_the_wav() -> None:
     assert transcript_exceeds_physical_rate(
         "Hãy subscribe cho kênh La La School để không bỏ lỡ những video hấp dẫn.",
         0.88,
     )
     assert not transcript_exceeds_physical_rate("Ha, ha, ho.", 1.60)
+
+
+def test_transcript_metrics_do_not_collapse_on_long_repeated_text() -> None:
+    expected = " ".join(["Lucien buoc qua canh cua"] * 80)
+    actual = expected.replace("canh cua", "khung cua", 3)
+
+    similarity, wer = transcript_metrics(expected, actual)
+
+    assert similarity > 0.95
+    assert wer < 0.02
 
 
 def test_whisper_timeline_rejects_transcript_that_extends_into_padding() -> None:
@@ -112,10 +160,34 @@ def test_whisper_padding_hallucination_does_not_fail_vocal_audio(tmp_path: Path)
 
     result = verifier.verify("“S… Hự!”", wav)
 
-    assert result["passed"] is True
+    assert result["passed"] is False
+    assert result["verdict"] == ASR_INCONCLUSIVE
     assert result["repairable"] is False
     assert result["severe"] is False
     assert result["reason"] == "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE"
+
+
+def test_repeated_short_context_can_confirm_a_short_utterance(tmp_path: Path) -> None:
+    wav = tmp_path / "short.wav"
+    sf.write(wav, np.zeros(16_000, dtype=np.float32), 16_000)
+
+    class FakeModel:
+        def transcribe(self, audio, **_kwargs):
+            assert len(audio) > 3 * 16_000
+            return {
+                "text": "xin chao xin chao xin chao",
+                "segments": [{"start": 0.0, "end": 3.2}],
+            }
+
+    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier.model = FakeModel()
+    verifier.device = "cpu"
+
+    result = verifier.verify_repeated_short("xin chao", wav)
+
+    assert result["passed"] is True
+    assert result["verdict"] == ASR_PASS
+    assert result["reason"] == "ASR_REPEATED_SHORT_PASS"
 
 
 @pytest.mark.parametrize(
@@ -153,10 +225,14 @@ def test_vocalization_verification_does_not_blame_tts_for_whisper_hallucination(
 
     result = verifier.verify(expected, wav)
 
-    assert result["passed"] is True
-    assert result["repairable"] is False
-    assert result["severe"] is False
     assert result["reason"] == reason
+    if reason.startswith("ASR_TRANSCRIPT_"):
+        assert result["passed"] is False
+        assert result["verdict"] == ASR_INCONCLUSIVE
+        assert result["repairable"] is False
+    else:
+        assert result["passed"] is True
+        assert result["verdict"] == ASR_PASS
 
 
 def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
@@ -180,6 +256,11 @@ def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
 
     assert verifier.transcribe(wav) == "xin chào"
     assert isinstance(received["audio"], np.ndarray)
+    assert received["audio"].dtype == np.float32
     assert received["audio"].ndim == 1
     assert abs(len(received["audio"]) - 16_000) <= 1
     assert received["kwargs"]["fp16"] is False
+    assert received["kwargs"]["beam_size"] == build_settings()["asr"]["beam_size"]
+
+    assert verifier.transcribe(wav, confirmation=True) == "xin chào"
+    assert "beam_size" not in received["kwargs"]

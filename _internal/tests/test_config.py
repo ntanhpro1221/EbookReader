@@ -15,6 +15,9 @@ def test_unattended_safety_defaults() -> None:
     assert settings["voices"]["narrator_gender"] == "male"
     assert settings["voices"]["narrator_voice"] == "Phạm Tuyên"
     assert settings["voices"]["max_character_pitch_semitones"] == 2
+    assert settings["asr"]["enabled"] is True
+    assert settings["asr"]["required"] is True
+    assert settings["asr"]["failure_policy"] == "fail"
 
 
 def test_narrator_gender_selects_a_safe_default_voice() -> None:
@@ -74,3 +77,34 @@ def test_remote_analysis_requires_explicit_opt_in() -> None:
         "safety": {"allow_remote_analysis": True},
     })
     assert settings["safety"]["allow_remote_analysis"] is True
+
+
+def test_required_asr_cannot_be_disabled_or_downgraded_to_warning() -> None:
+    with pytest.raises(ValueError, match="cannot be disabled"):
+        build_settings(overrides={"asr": {"enabled": False}})
+
+    with pytest.raises(ValueError, match="failure_policy=fail"):
+        build_settings(overrides={"asr": {"failure_policy": "warning_continue"}})
+
+    settings = build_settings(profile="balanced", overrides={
+        "asr": {
+            "enabled": False,
+            "required": False,
+            "failure_policy": "warning_continue",
+        }
+    })
+    assert settings["asr"]["enabled"] is False
+
+    with pytest.raises(ValueError, match="high_quality requires enabled mandatory ASR"):
+        build_settings(overrides={
+            "asr": {
+                "enabled": False,
+                "required": False,
+                "failure_policy": "warning_continue",
+            }
+        })
+
+
+def test_high_quality_requires_mandatory_analysis() -> None:
+    with pytest.raises(ValueError, match="mandatory book analysis"):
+        build_settings(overrides={"analysis": {"enabled": False, "required": False}})

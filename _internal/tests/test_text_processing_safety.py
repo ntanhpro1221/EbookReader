@@ -101,10 +101,131 @@ def test_multiline_ascii_quotes_keep_dialogue_state() -> None:
     ]
 
 
+def test_chapter_031_mismatched_thought_closer_does_not_run_into_narration() -> None:
+    text = (
+        "‘Mình cần phải dừng phản ứng ma thuật lại đúng lúc lưu huỳnh cháy.\n\n"
+        "‘Ghi chép có đề cập rằng nó sẽ gây phản phệ, thậm chí còn tệ hơn.”\n\n"
+        "Phân tích cấu trúc của phép thuật, Lucien chỉ giữ lại lửa lưu huỳnh.\n\n"
+        "“Lùi lại!”"
+    )
+
+    rows = segment_chapter_text(32, text)
+
+    assert [row["kind_hint"] for row in rows] == [
+        "thought",
+        "thought",
+        "narration",
+        "dialogue",
+    ]
+
+
+def test_chapter_091_nested_unclosed_thought_stays_inside_outer_dialogue() -> None:
+    text = (
+        "Ilia tiếp tục nói: “Ngân Bạch Chi Chủ cho ta một mặc khải. "
+        "‘Một ngôi sao rơi xuống mang đến hỗn loạn. Kẻ vô thần sẽ bước lên vũ đài hoa lệ.”\n\n"
+        "“Mặc khải này có ý gì?” Dragan hỏi.\n\n"
+        "Sau đó mọi người im lặng."
+    )
+
+    rows = segment_chapter_text(92, text)
+
+    later_rows = [row for row in rows if int(row["paragraph_index"]) > 0]
+    assert all(row["kind_hint"] != "thought" for row in rows)
+    assert any(
+        row["kind_hint"] == "dialogue" and "Một ngôi sao" in str(row["text"])
+        for row in rows
+    )
+    assert [row["kind_hint"] for row in later_rows] == [
+        "dialogue",
+        "narration",
+        "narration",
+    ]
+
+
+def test_unclosed_ascii_quote_nested_in_balanced_dialogue_does_not_escape() -> None:
+    rows = segment_chapter_text(
+        1,
+        'Ilia nói: “Ông ấy gọi nó là "Arcana.”\n\nĐây là lời kể tiếp theo.',
+    )
+
+    assert rows[-1]["kind_hint"] == "narration"
+
+
+@pytest.mark.parametrize(
+    ("malformed_quote", "expected_kind"),
+    [
+        ("‘Tiệc tùng rồi lại tiệc tùng!”", "thought"),
+        ('“Aha! Tôi nghe rõ lắm đấy! "Để xem điều gì sẽ xảy ra."', "dialogue"),
+        (
+            "‘Căn nhà gỗ ở phía Tây…” Lucien tra cứu bản đồ. “Nó nằm trong rừng!’",
+            "thought",
+        ),
+    ],
+)
+def test_terminal_mismatched_quote_marks_do_not_open_cross_paragraph_state(
+    malformed_quote: str,
+    expected_kind: str,
+) -> None:
+    rows = segment_chapter_text(
+        1,
+        f"{malformed_quote}\n\nĐây là lời kể ở đoạn tiếp theo.",
+    )
+
+    assert rows[0]["kind_hint"] == expected_kind
+    assert rows[-1]["kind_hint"] == "narration"
+
+
+def test_unclosed_quote_state_fails_closed_at_chapter_boundary() -> None:
+    with pytest.raises(RuntimeError, match="Unclosed dialogue quote at the end of chapter 7"):
+        segment_chapter_text(7, "“Câu thoại chưa được đóng.\n\nVẫn còn trong lời thoại.")
+
+
 def test_inline_curly_single_quote_is_an_inner_thought() -> None:
     rows = segment_chapter_text(1, "Hạ Phong không khỏi nghĩ: ‘Mình phải rời khỏi đây.’")
 
     assert [row["kind_hint"] for row in rows] == ["narration", "thought"]
+
+
+def test_nested_curly_term_inside_dialogue_is_not_duplicated() -> None:
+    text = (
+        "Bà nói: “Nếu đánh thức được ‘Thần ân’ trong huyết mạch và trở thành hiệp sĩ thực sự, "
+        "cậu sẽ trở thành một quý tộc đáng kính đấy.”"
+    )
+
+    rows = segment_chapter_text(1, text)
+
+    assert [row["kind_hint"] for row in rows] == ["narration", "dialogue"]
+    spoken = " ".join(row["text"] for row in rows)
+    assert spoken.count("Thần ân") == 1
+    assert spoken.count("trong huyết mạch") == 1
+
+
+def test_nested_quote_regressions_preserve_every_spoken_token_once() -> None:
+    samples = [
+        (
+            "“Đây là ‘Nightingale đen’ từ Vương quốc Holm, chỉ có quý tộc thực thụ mới mua nổi "
+            "thôi. Cậu lấy nó ở đâu vậy?”"
+        ),
+        (
+            "“Nếu đánh thức được ‘Thần ân’ trong huyết mạch và trở thành hiệp sĩ thực sự, "
+            "cậu sẽ trở thành một quý tộc đáng kính đấy.”"
+        ),
+    ]
+
+    for text in samples:
+        rows = segment_chapter_text(1, text)
+        joined = " ".join(str(row["text"]) for row in rows)
+        assert joined.count("Nightingale đen") == text.count("Nightingale đen")
+        assert joined.count("Thần ân") == text.count("Thần ân")
+
+
+def test_inline_reference_markers_are_removed_before_segmentation() -> None:
+    source = "Định luật Murphy[note54359] đang nhắc nhở. [cười] Ta hiểu rồi."
+
+    rows = segment_chapter_text(1, source)
+
+    assert [row["text"] for row in rows] == ["Định luật Murphy đang nhắc nhở. [cười] Ta hiểu rồi."]
+    assert "[note" in source
 
 
 def test_punctuation_only_content_never_becomes_tts_segment() -> None:

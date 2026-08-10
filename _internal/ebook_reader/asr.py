@@ -3,13 +3,14 @@ from __future__ import annotations
 import gc
 import math
 import re
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
 import soundfile as sf
+from scipy.signal import resample_poly
 
+from .resource_manager import trim_process_working_set
 from .text_processing import is_vocalization_only
 
 
@@ -23,6 +24,12 @@ TRANSCRIPT_WORD_MARGIN = 2
 MIN_PLAUSIBLE_TRANSCRIPT_WORDS = 4
 WHISPER_TIMELINE_ABSOLUTE_MARGIN_SECONDS = 1.0
 WHISPER_TIMELINE_DURATION_FACTOR = 2.0
+SHORT_CONTEXT_MAX_WORDS = 5
+SHORT_CONTEXT_REPEAT_COUNT = 3
+SHORT_CONTEXT_GAP_SECONDS = 0.24
+ASR_PASS = "pass"
+ASR_MISMATCH = "mismatch"
+ASR_INCONCLUSIVE = "inconclusive"
 
 
 def normalize_transcript(text: str) -> str:
@@ -52,7 +59,10 @@ def _edit_distance(left: list[str], right: list[str]) -> int:
 def transcript_metrics(expected: str, actual: str) -> tuple[float, float]:
     normalized_expected = normalize_transcript(expected)
     normalized_actual = normalize_transcript(actual)
-    similarity = SequenceMatcher(None, normalized_expected, normalized_actual).ratio()
+    expected_characters = list(normalized_expected)
+    actual_characters = list(normalized_actual)
+    character_errors = _edit_distance(expected_characters, actual_characters)
+    similarity = max(0.0, 1.0 - character_errors / max(1, len(expected_characters)))
     expected_words = normalized_expected.split()
     actual_words = normalized_actual.split()
     wer = _edit_distance(expected_words, actual_words) / max(1, len(expected_words))
@@ -66,15 +76,17 @@ def is_asr_repair_candidate(expected: str) -> bool:
 def is_severe_asr_mismatch(expected: str, actual: str, similarity: float) -> bool:
     expected_words = normalize_transcript(expected).split()
     actual_words = normalize_transcript(actual).split()
-    if not expected_words or not actual_words:
+    if not expected_words:
         return False
+    if not actual_words:
+        return True
     minimum_actual_words = max(
         len(expected_words) + SEVERE_MISMATCH_MIN_EXTRA_WORDS,
         math.ceil(len(expected_words) * SEVERE_MISMATCH_MIN_LENGTH_RATIO),
     )
-    return (
-        float(similarity) < SEVERE_MISMATCH_MAX_SIMILARITY
-        and len(actual_words) >= minimum_actual_words
+    return float(similarity) < SEVERE_MISMATCH_MAX_SIMILARITY and (
+        len(actual_words) >= minimum_actual_words
+        or abs(len(actual_words) - len(expected_words)) <= SEVERE_MISMATCH_MIN_EXTRA_WORDS
     )
 
 
@@ -116,16 +128,12 @@ def load_audio_for_whisper(path: Path) -> np.ndarray:
     if array.ndim != 1:
         raise RuntimeError(f"Whisper input must be mono, got shape {array.shape}")
     if int(sample_rate) != WHISPER_SAMPLE_RATE:
-        import torch
-        import torchaudio.functional as audio_functional
-
-        waveform = torch.from_numpy(array).unsqueeze(0)
-        array = (
-            audio_functional.resample(waveform, int(sample_rate), WHISPER_SAMPLE_RATE)
-            .squeeze(0)
-            .numpy()
-            .astype(np.float32, copy=False)
-        )
+        divisor = math.gcd(int(sample_rate), WHISPER_SAMPLE_RATE)
+        array = resample_poly(
+            array,
+            WHISPER_SAMPLE_RATE // divisor,
+            int(sample_rate) // divisor,
+        ).astype(np.float32, copy=False)
     return array
 
 
@@ -181,7 +189,10 @@ class WhisperVerifier:
             return False
 
     def unload(self) -> None:
+        had_model = self.model is not None
         self.model = None
+        if not had_model:
+            return
         gc.collect()
         try:
             import torch
@@ -190,26 +201,29 @@ class WhisperVerifier:
                 torch.cuda.empty_cache()
         except Exception:
             pass
+        trim_process_working_set()
 
-    def transcribe(self, path: Path) -> str:
+    def _transcribe_audio(
+        self,
+        audio: np.ndarray,
+        duration_seconds: float,
+        *,
+        confirmation: bool,
+    ) -> str:
         if self.model is None:
             raise RuntimeError("Whisper is not loaded")
         self._last_transcription_timeline_impossible = False
-        audio = load_audio_for_whisper(path)
-        result = self.model.transcribe(
-            audio,
-            language="vi",
-            task="transcribe",
-            fp16=self.device.startswith("cuda"),
-            temperature=0.0,
-            beam_size=int(self.settings.get("beam_size", 5)),
-            condition_on_previous_text=False,
-            verbose=False,
-        )
-        try:
-            duration_seconds = float(sf.info(path).duration)
-        except (RuntimeError, TypeError, ValueError):
-            duration_seconds = 0.0
+        decode_options: dict[str, Any] = {
+            "language": "vi",
+            "task": "transcribe",
+            "fp16": self.device.startswith("cuda"),
+            "temperature": 0.0,
+            "condition_on_previous_text": False,
+            "verbose": False,
+        }
+        if not confirmation:
+            decode_options["beam_size"] = int(self.settings.get("beam_size", 5))
+        result = self.model.transcribe(audio, **decode_options)
         raw_segments = result.get("segments", [])
         segments = [item for item in raw_segments if isinstance(item, dict)]
         self._last_transcription_timeline_impossible = transcription_exceeds_audio_timeline(
@@ -218,63 +232,29 @@ class WhisperVerifier:
         )
         return str(result.get("text", "")).strip()
 
-    def verify(self, expected: str, wav_path: Path) -> dict[str, Any]:
-        normalized_expected = normalize_transcript(expected)
-        word_count = len(normalized_expected.split())
-        if not normalized_expected:
-            return {
-                "passed": True,
-                "transcript": "",
-                "similarity": 1.0,
-                "wer": 0.0,
-                "reason": "NON_LEXICAL_SKIP",
-                "repairable": False,
-                "severe": False,
-            }
-        if word_count < int(self.settings.get("min_words", 3)) and not self.settings.get("verify_short_dialogue", True):
-            return {
-                "passed": True,
-                "transcript": "",
-                "similarity": 1.0,
-                "wer": 0.0,
-                "reason": "short_skip",
-                "repairable": False,
-                "severe": False,
-            }
-        if not self.load():
-            return {
-                "passed": not bool(self.settings.get("required", False)),
-                "transcript": "",
-                "similarity": 0.0,
-                "wer": 1.0,
-                "reason": "ASR_NOT_RUN",
-                "repairable": False,
-                "severe": False,
-            }
-        self._last_transcription_timeline_impossible = False
+    def transcribe(self, path: Path, *, confirmation: bool = False) -> str:
+        audio = load_audio_for_whisper(path)
         try:
-            transcript = self.transcribe(wav_path)
-        except Exception as exc:  # noqa: BLE001
-            self.log(f"Whisper inference lỗi cho {wav_path.name}: {exc}")
-            if self.settings.get("required", False) or self.settings.get("failure_policy") == "fail":
-                raise
-            return {
-                "passed": True,
-                "transcript": "",
-                "similarity": 0.0,
-                "wer": 1.0,
-                "reason": "ASR_ERROR",
-                "repairable": False,
-                "severe": False,
-            }
-        similarity, wer = transcript_metrics(expected, transcript)
-        try:
-            duration_seconds = float(sf.info(wav_path).duration)
+            duration_seconds = float(sf.info(path).duration)
         except (RuntimeError, TypeError, ValueError):
-            duration_seconds = 0.0
+            duration_seconds = float(audio.size / WHISPER_SAMPLE_RATE)
+        return self._transcribe_audio(
+            audio,
+            duration_seconds,
+            confirmation=confirmation,
+        )
+
+    def _evaluate_transcript(
+        self,
+        expected: str,
+        transcript: str,
+        duration_seconds: float,
+    ) -> dict[str, Any]:
+        similarity, wer = transcript_metrics(expected, transcript)
         if self._last_transcription_timeline_impossible:
             return {
-                "passed": True,
+                "passed": False,
+                "verdict": ASR_INCONCLUSIVE,
                 "transcript": transcript,
                 "similarity": similarity,
                 "wer": wer,
@@ -284,7 +264,8 @@ class WhisperVerifier:
             }
         if transcript_exceeds_physical_rate(transcript, duration_seconds):
             return {
-                "passed": True,
+                "passed": False,
+                "verdict": ASR_INCONCLUSIVE,
                 "transcript": transcript,
                 "similarity": similarity,
                 "wer": wer,
@@ -297,6 +278,7 @@ class WhisperVerifier:
         ):
             return {
                 "passed": True,
+                "verdict": ASR_PASS,
                 "transcript": transcript,
                 "similarity": similarity,
                 "wer": wer,
@@ -311,6 +293,7 @@ class WhisperVerifier:
         )
         return {
             "passed": passed,
+            "verdict": ASR_PASS if passed else ASR_MISMATCH,
             "transcript": transcript,
             "similarity": similarity,
             "wer": wer,
@@ -318,3 +301,122 @@ class WhisperVerifier:
             "repairable": is_asr_repair_candidate(expected),
             "severe": not passed and is_severe_asr_mismatch(expected, transcript, similarity),
         }
+
+    def can_verify_repeated_short(self, expected: str) -> bool:
+        word_count = len(normalize_transcript(expected).split())
+        return 0 < word_count <= SHORT_CONTEXT_MAX_WORDS
+
+    def verify_repeated_short(
+        self,
+        expected: str,
+        wav_path: Path,
+        *,
+        confirmation: bool = False,
+    ) -> dict[str, Any]:
+        if not self.can_verify_repeated_short(expected):
+            raise ValueError("Repeated short-context ASR only supports one to five words")
+        if not self.load():
+            return {
+                "passed": False,
+                "verdict": ASR_INCONCLUSIVE,
+                "transcript": "",
+                "similarity": 0.0,
+                "wer": 1.0,
+                "reason": "ASR_NOT_RUN",
+                "repairable": False,
+                "severe": False,
+            }
+        audio = load_audio_for_whisper(wav_path)
+        gap = np.zeros(
+            int(round(WHISPER_SAMPLE_RATE * SHORT_CONTEXT_GAP_SECONDS)),
+            dtype=np.float32,
+        )
+        pieces: list[np.ndarray] = []
+        for index in range(SHORT_CONTEXT_REPEAT_COUNT):
+            pieces.append(audio)
+            if index + 1 < SHORT_CONTEXT_REPEAT_COUNT:
+                pieces.append(gap)
+        repeated_audio = np.concatenate(pieces).astype(np.float32, copy=False)
+        transcript = self._transcribe_audio(
+            repeated_audio,
+            repeated_audio.size / WHISPER_SAMPLE_RATE,
+            confirmation=confirmation,
+        )
+        repeated_expected = " ".join([expected] * SHORT_CONTEXT_REPEAT_COUNT)
+        result = self._evaluate_transcript(
+            repeated_expected,
+            transcript,
+            repeated_audio.size / WHISPER_SAMPLE_RATE,
+        )
+        if result["passed"]:
+            result["reason"] = "ASR_REPEATED_SHORT_PASS"
+        return result
+
+    def verify(
+        self,
+        expected: str,
+        wav_path: Path,
+        *,
+        confirmation: bool = False,
+    ) -> dict[str, Any]:
+        normalized_expected = normalize_transcript(expected)
+        word_count = len(normalized_expected.split())
+        if not normalized_expected:
+            return {
+                "passed": True,
+                "verdict": ASR_PASS,
+                "transcript": "",
+                "similarity": 1.0,
+                "wer": 0.0,
+                "reason": "NON_LEXICAL_SKIP",
+                "repairable": False,
+                "severe": False,
+            }
+        if word_count < int(self.settings.get("min_words", 3)) and not self.settings.get("verify_short_dialogue", True):
+            return {
+                "passed": False,
+                "verdict": ASR_INCONCLUSIVE,
+                "transcript": "",
+                "similarity": 1.0,
+                "wer": 0.0,
+                "reason": "short_skip",
+                "repairable": False,
+                "severe": False,
+            }
+        if not self.load():
+            return {
+                "passed": False,
+                "verdict": ASR_INCONCLUSIVE,
+                "transcript": "",
+                "similarity": 0.0,
+                "wer": 1.0,
+                "reason": "ASR_NOT_RUN",
+                "repairable": False,
+                "severe": False,
+            }
+        self._last_transcription_timeline_impossible = False
+        try:
+            transcript = (
+                self.transcribe(wav_path, confirmation=True)
+                if confirmation
+                else self.transcribe(wav_path)
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log(f"Whisper inference lỗi cho {wav_path.name}: {exc}")
+            if self.settings.get("required", False) or self.settings.get("failure_policy") == "fail":
+                raise
+            return {
+                "passed": False,
+                "verdict": ASR_INCONCLUSIVE,
+                "transcript": "",
+                "similarity": 0.0,
+                "wer": 1.0,
+                "reason": "ASR_ERROR",
+                "repairable": False,
+                "severe": False,
+            }
+        try:
+            duration_seconds = float(sf.info(wav_path).duration)
+        except (RuntimeError, TypeError, ValueError):
+            duration_seconds = 0.0
+        return self._evaluate_transcript(expected, transcript, duration_seconds)

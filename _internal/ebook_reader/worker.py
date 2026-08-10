@@ -297,6 +297,15 @@ def run_worker(
             emit=emit,
             resource_updates=poll_resource_updates,
         )
+        _emit(
+            message_queue,
+            "worker_ready",
+            {
+                "pid": os.getpid(),
+                "project_root": str(paths.root),
+                "generation": generation,
+            },
+        )
         completed_noop = pipeline.prepare_recovery()
         if not completed_noop and not settings.get("safety", {}).get(
             "allow_network_downloads_during_job", False

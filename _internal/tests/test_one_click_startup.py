@@ -100,6 +100,7 @@ def test_one_click_startup_contract() -> None:
         "requests==2.32.3",
         "psutil==6.0.0",
         "numpy==1.26.4",
+        "scipy==1.17.1",
         "soundfile==0.13.1",
         "pyloudnorm==0.1.1",
         "pyworld==0.3.5",

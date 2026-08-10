@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pytest
 
+import ebook_reader.audio_io as audio_io
 from ebook_reader.audio_io import (
     AudioQualityError,
+    ChapterQualityError,
     VIENEU_V3_CODEC_SAMPLES_PER_FRAME,
     atomic_write_wav,
     assemble_chapter_atomic,
+    assemble_chapter_atomic_with_metrics,
     integrated_loudness_lufs,
     normalize_segment_level,
     segment_duration_policy,
@@ -19,25 +25,35 @@ from ebook_reader.audio_io import (
 from ebook_reader.config import build_settings
 
 
+def _write_test_tone(
+    path: Path,
+    settings: dict[str, Any],
+    frequency: float,
+    seconds: float = 0.8,
+) -> None:
+    sample_rate = int(settings["tts"]["sample_rate"])
+    timeline = np.arange(int(sample_rate * seconds), dtype=np.float32) / sample_rate
+    audio = 0.12 * np.sin(2 * np.pi * frequency * timeline)
+    atomic_write_wav(
+        path,
+        audio,
+        sample_rate,
+        "A sufficiently long sentence for deterministic audio QA.",
+        settings,
+    )
+
+
 def test_real_ffmpeg_chapter_assembly_is_atomic_and_decodable(tmp_path: Path) -> None:
     settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
     sample_rate = int(settings["tts"]["sample_rate"])
     entries: list[tuple[Path, int]] = []
     for index, frequency in enumerate((220, 330), start=1):
-        timeline = np.arange(int(sample_rate * 0.8), dtype=np.float32) / sample_rate
-        audio = 0.12 * np.sin(2 * np.pi * frequency * timeline)
         wav = tmp_path / f"{index}.wav"
-        atomic_write_wav(
-            wav,
-            audio,
-            sample_rate,
-            "Đây là một câu thử nghiệm đủ dài.",
-            settings,
-        )
+        _write_test_tone(wav, settings, frequency)
         entries.append((wav, 300 if index == 1 else 0))
 
     output = tmp_path / "chapter_001.mp3"
-    checksum = assemble_chapter_atomic(
+    result = assemble_chapter_atomic_with_metrics(
         entries,
         output,
         settings,
@@ -47,9 +63,152 @@ def test_real_ffmpeg_chapter_assembly_is_atomic_and_decodable(tmp_path: Path) ->
         work_dir=tmp_path / "silence",
     )
 
-    assert len(checksum) == 64
+    assert len(result.checksum) == 64
+    assert result.quality.hard_failures == ()
+    assert result.quality.sample_rate == sample_rate
+    assert result.quality.channels == 1
+    assert result.quality.duration_error_seconds == pytest.approx(0.0, abs=0.05)
+    assert result.quality.integrated_loudness_lufs == pytest.approx(
+        settings["audio"]["loudness_lufs"],
+        abs=0.3,
+    )
+    assert result.quality.true_peak_db <= settings["audio"]["true_peak_db"] + 0.15
+    assert result.quality.clipping_fraction == 0.0
+    assert abs(result.quality.dc_offset) < 0.01
+    assert result.quality.longest_unexpected_silence_seconds < 1.0
+    assert result.quality.max_join_jump < 0.18
     assert verify_mp3(output) == (True, "ok")
+
+    repeated_output = tmp_path / "chapter_001_repeated.mp3"
+    repeated_checksum = assemble_chapter_atomic(
+        entries,
+        repeated_output,
+        settings,
+        title="Chương 1",
+        book_title="Sách thử",
+        track=1,
+        work_dir=tmp_path / "silence",
+    )
+
+    assert repeated_checksum == result.checksum
     assert not list(tmp_path.rglob("*.part.*"))
+
+
+def test_chapter_qa_failure_preserves_existing_output_and_cleans_candidates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    source = tmp_path / "source.wav"
+    _write_test_tone(source, settings, 220, seconds=1.0)
+    output = tmp_path / "chapter_001.mp3"
+    original_output = b"previous verified chapter"
+    output.write_bytes(original_output)
+    evaluate = audio_io._evaluate_chapter_quality
+
+    def force_hard_failure(*args: Any, **kwargs: Any) -> audio_io.ChapterQualityMetrics:
+        quality = evaluate(*args, **kwargs)
+        return replace(quality, hard_failures=("forced regression gate",))
+
+    monkeypatch.setattr(audio_io, "_evaluate_chapter_quality", force_hard_failure)
+
+    with pytest.raises(ChapterQualityError, match="forced regression gate") as captured:
+        assemble_chapter_atomic_with_metrics(
+            [source],
+            output,
+            settings,
+            title="Chapter 1",
+            book_title="Test book",
+            track=1,
+            work_dir=tmp_path / "silence",
+        )
+
+    assert captured.value.artifact_sha256 is not None
+    assert captured.value.failure_codes == ("CHAPTER_QA_HARD_FAILURE",)
+    assert captured.value.metrics["hard_failures"] == ("forced regression gate",)
+    assert captured.value.review_required is False
+    assert output.read_bytes() == original_output
+    assert not list(tmp_path.rglob("*.part.*"))
+
+
+def test_high_quality_review_flag_preserves_existing_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    source = tmp_path / "source.wav"
+    _write_test_tone(source, settings, 220, seconds=1.0)
+    output = tmp_path / "chapter_001.mp3"
+    original_output = b"previous verified chapter"
+    output.write_bytes(original_output)
+    evaluate = audio_io._evaluate_chapter_quality
+
+    def force_review_flag(*args: Any, **kwargs: Any) -> audio_io.ChapterQualityMetrics:
+        quality = evaluate(*args, **kwargs)
+        return replace(quality, review_flags=("forced perceptual review",))
+
+    monkeypatch.setattr(audio_io, "_evaluate_chapter_quality", force_review_flag)
+
+    with pytest.raises(ChapterQualityError, match="requires review") as captured:
+        assemble_chapter_atomic_with_metrics(
+            [source],
+            output,
+            settings,
+            title="Chapter 1",
+            book_title="Test book",
+            track=1,
+            work_dir=tmp_path / "silence",
+        )
+
+    assert captured.value.artifact_sha256 is not None
+    assert captured.value.failure_codes == ("CHAPTER_QA_REVIEW_REQUIRED",)
+    assert captured.value.metrics["review_flags"] == ("forced perceptual review",)
+    assert captured.value.review_required is True
+    assert output.read_bytes() == original_output
+    assert not list(tmp_path.rglob("*.part.*"))
+
+
+def test_chapter_qa_separates_review_indicators_from_hard_gates() -> None:
+    sample_rate = 48_000
+    timeline = np.arange(sample_rate * 2, dtype=np.float32) / sample_rate
+    decoded = (0.05 * np.sin(2 * np.pi * 220 * timeline)).reshape(-1, 1)
+    audio_cfg = {
+        "loudness_lufs": -18.0,
+        "true_peak_db": -2.0,
+        "_expected_sample_rate": sample_rate,
+    }
+    mastering_input = {"input_i": -24.0, "input_tp": -10.0}
+    review_measurement = {"input_i": -17.6, "input_tp": -2.0, "input_lra": 1.0}
+
+    review_quality = audio_io._evaluate_chapter_quality(
+        decoded,
+        sample_rate,
+        1,
+        2.0,
+        [],
+        [],
+        audio_cfg,
+        mastering_input,
+        review_measurement,
+    )
+
+    assert review_quality.hard_failures == ()
+    assert any(flag.startswith("loudness delta") for flag in review_quality.review_flags)
+
+    hard_measurement = {**review_measurement, "input_i": -16.5}
+    hard_quality = audio_io._evaluate_chapter_quality(
+        decoded,
+        sample_rate,
+        1,
+        2.0,
+        [],
+        [],
+        audio_cfg,
+        mastering_input,
+        hard_measurement,
+    )
+
+    assert any("integrated loudness" in failure for failure in hard_quality.hard_failures)
 
 
 def test_stereo_audio_is_rejected_instead_of_flattened() -> None:
@@ -58,6 +217,14 @@ def test_stereo_audio_is_rejected_instead_of_flattened() -> None:
 
     with pytest.raises(AudioQualityError, match="mono"):
         validate_audio_array(stereo, "Một câu đủ dài để kiểm tra.", settings, 48_000)
+
+
+def test_segment_sample_rate_must_match_locked_tts_rate() -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    audio = np.sin(np.linspace(0.0, 20.0, 24_000, dtype=np.float32)) * 0.1
+
+    with pytest.raises(AudioQualityError, match="24000 Hz, expected 48000 Hz"):
+        validate_audio_array(audio, "Một câu đủ dài để kiểm tra.", settings, 24_000)
 
 
 def test_segment_leveling_does_not_hide_stereo_or_clipped_model_output(tmp_path: Path) -> None:
@@ -161,6 +328,16 @@ def test_vieneu_frame_budget_cannot_exceed_the_shared_validation_limit() -> None
     assert policy.generation_max_frames == 24
     assert policy.generation_ceiling_seconds < policy.validation_max_seconds
     assert metrics["duration"] == pytest.approx(1.92, abs=0.01)
+
+
+def test_two_word_short_dialogue_uses_the_short_generation_budget() -> None:
+    policy = segment_duration_policy(
+        "“Được rồi…”",
+        build_settings(),
+        {"kind": "dialogue", "pace": "normal"},
+    )
+
+    assert policy.generation_max_frames == 24
 
 
 def test_vieneu_output_at_exact_frame_ceiling_is_reported_without_judging_content() -> None:

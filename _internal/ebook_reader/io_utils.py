@@ -107,17 +107,31 @@ def atomic_write_text(path: Path, text: str, *, fsync: bool = True) -> None:
     atomic_write_bytes(path, text.encode("utf-8"), fsync=fsync)
 
 
-def remove_part_files(root: Path) -> list[Path]:
+def remove_part_files(
+    root: Path,
+    *,
+    excluded_roots: Iterable[Path] = (),
+) -> list[Path]:
     removed: list[Path] = []
     if not root.exists():
         return removed
+    excluded = tuple(path.resolve() for path in excluded_roots)
+
+    def is_excluded(path: Path) -> bool:
+        resolved = path.resolve()
+        return any(resolved == item or resolved.is_relative_to(item) for item in excluded)
+
     for path in root.rglob("*.part"):
+        if is_excluded(path):
+            continue
         try:
             path.unlink()
             removed.append(path)
         except OSError:
             pass
     for path in root.rglob("*.part.*"):
+        if is_excluded(path):
+            continue
         try:
             path.unlink()
             removed.append(path)

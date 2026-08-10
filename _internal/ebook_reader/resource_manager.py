@@ -145,6 +145,24 @@ class NvidiaProbe:
             return self._process_cache_value if pid == self._process_cache_pid else None
 
 
+def trim_process_working_set() -> bool:
+    """Return unused pages from this process to Windows after unloading large models."""
+    if os.name != "nt":
+        return False
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        get_current_process = kernel32.GetCurrentProcess
+        get_current_process.argtypes = []
+        get_current_process.restype = ctypes.c_void_p
+        empty_working_set = psapi.EmptyWorkingSet
+        empty_working_set.argtypes = [ctypes.c_void_p]
+        empty_working_set.restype = ctypes.c_int
+        return bool(empty_working_set(get_current_process()))
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
 class AdaptiveResourceManager:
     """Makes conservative, reversible resource decisions without user interaction."""
 

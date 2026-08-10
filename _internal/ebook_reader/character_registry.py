@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
-from .analysis import is_local_speaker, local_speaker_display, local_speaker_label
+from .analysis import (
+    _canonical_speaker,
+    is_local_speaker,
+    local_speaker_display,
+    local_speaker_label,
+)
 from .database import ProjectDB
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
@@ -21,6 +27,13 @@ PRONOUNS = {
     "ta", "tôi", "mình", "chúng ta", "bọn họ",
 }
 RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
+HONORIFIC_PREFIX_PATTERN = re.compile(
+    r"^(?:anh|chị|cô|dì|chú|bác|ông|bà|ngài|quý cô|quý ông|bá tước|công tước|đức ngài)\s+(.+)$",
+    flags=re.IGNORECASE,
+)
+ASCII_PROPER_NAME_PATTERN = re.compile(
+    r"[A-Z][A-Za-z]*(?:[\s'-][A-Z][A-Za-z]*)*"
+)
 
 def normalize_name(name: str) -> str:
     return " ".join(name.strip().casefold().split())
@@ -28,6 +41,132 @@ def normalize_name(name: str) -> str:
 
 def canonical_key(name: str) -> str:
     return normalize_name(name).upper()
+
+
+def _looks_like_proper_name(value: str) -> bool:
+    return ASCII_PROPER_NAME_PATTERN.fullmatch(value.strip()) is not None
+
+
+def _honorific_target(value: str) -> str | None:
+    match = HONORIFIC_PREFIX_PATTERN.fullmatch(" ".join(value.split()))
+    if match is None:
+        return None
+    candidate = match.group(1).strip()
+    return candidate if _looks_like_proper_name(candidate) else None
+
+
+def _canonicalize_named_speakers(
+    db: ProjectDB,
+    log: Callable[[str], None],
+) -> dict[str, set[str]]:
+    counts = Counter(str(row["speaker"]) for row in db.list_segments())
+    cleaned_counts: Counter[str] = Counter()
+    cleaned_by_original: dict[str, str] = {}
+    for original, count in counts.items():
+        cleaned = _canonical_speaker(original)
+        cleaned_by_original[original] = cleaned
+        normalized = normalize_name(cleaned)
+        if (
+            is_local_speaker(cleaned)
+            or cleaned.casefold() in RESERVED_SPEAKERS
+            or normalized in PRONOUNS
+        ):
+            continue
+        cleaned_counts[cleaned] += count
+
+    representatives: dict[str, str] = {}
+    variants_by_key: dict[str, Counter[str]] = defaultdict(Counter)
+    for cleaned, count in cleaned_counts.items():
+        variants_by_key[normalize_name(cleaned)][cleaned] += count
+    for key, variants in variants_by_key.items():
+        representatives[key] = min(
+            variants,
+            key=lambda candidate: (-variants[candidate], candidate.casefold(), candidate),
+        )
+
+    aliases_by_target: dict[str, set[str]] = defaultdict(set)
+    rewritten_segments = 0
+    for original, cleaned in cleaned_by_original.items():
+        normalized = normalize_name(cleaned)
+        if (
+            is_local_speaker(cleaned)
+            or cleaned.casefold() in RESERVED_SPEAKERS
+            or normalized in PRONOUNS
+        ):
+            continue
+        target_key = normalized
+        honorific_target = _honorific_target(cleaned)
+        if honorific_target is not None:
+            honorific_key = normalize_name(honorific_target)
+            if honorific_key in representatives:
+                target_key = honorific_key
+        target = representatives[target_key]
+        aliases_by_target[target].update((original, cleaned))
+        if original != target:
+            rewritten_segments += db.rewrite_speaker(original, target)
+
+    if rewritten_segments:
+        alias_count = sum(
+            len(aliases - {target})
+            for target, aliases in aliases_by_target.items()
+        )
+        log(
+            f"Đã chuẩn hóa {rewritten_segments} segment thuộc {alias_count} alias nhân vật "
+            "rõ ràng trước khi khóa voice."
+        )
+    return aliases_by_target
+
+
+def _validate_casting_inputs(rows: list[Any], minimum_named_mentions: int) -> None:
+    rows_by_identity: dict[str, list[Any]] = defaultdict(list)
+    for row in rows:
+        speaker = str(row["speaker"])
+        normalized = normalize_name(speaker)
+        if speaker.casefold() in RESERVED_SPEAKERS or normalized in PRONOUNS:
+            continue
+        rows_by_identity[canonical_key(speaker)].append(row)
+
+    gender_conflicts: dict[str, dict[str, int]] = {}
+    missing_named_genders: dict[str, int] = {}
+    identity_instability: dict[str, dict[str, list[Any]]] = {}
+    for identity, identity_rows in rows_by_identity.items():
+        gender_counts = Counter(
+            str(row["gender"])
+            for row in identity_rows
+            if str(row["gender"]) in {"male", "female"}
+        )
+        if len(gender_counts) > 1:
+            gender_conflicts[identity] = dict(sorted(gender_counts.items()))
+        if (
+            len(identity_rows) >= minimum_named_mentions
+            and not gender_counts
+            and not is_local_speaker(str(identity_rows[0]["speaker"]))
+        ):
+            missing_named_genders[identity] = len(identity_rows)
+
+        surfaces = sorted({str(row["speaker"]) for row in identity_rows}, key=str.casefold)
+        character_ids = sorted(
+            {int(row["canonical_character_id"]) for row in identity_rows if row["canonical_character_id"] is not None}
+        )
+        profile_ids = sorted(
+            {int(row["voice_profile_id"]) for row in identity_rows if row["voice_profile_id"] is not None}
+        )
+        if len(surfaces) > 1 or len(character_ids) > 1 or len(profile_ids) > 1:
+            identity_instability[identity] = {
+                "speakers": surfaces,
+                "character_ids": character_ids,
+                "voice_profile_ids": profile_ids,
+            }
+
+    issues: list[str] = []
+    if gender_conflicts:
+        issues.append(f"gender conflicts={gender_conflicts}")
+    if missing_named_genders:
+        issues.append(f"named speakers missing gender={missing_named_genders}")
+    if identity_instability:
+        issues.append(f"voice identity instability={identity_instability}")
+    if issues:
+        raise RuntimeError("Casting input quality gate failed: " + "; ".join(issues))
 
 
 def _majority(rows: list[Any], column: str, default: str = "unknown") -> str:
@@ -173,9 +312,13 @@ def build_registry_and_cast(
         if reserved and speaker != reserved:
             db.rewrite_speaker(speaker, reserved)
 
+    aliases_by_speaker = _canonicalize_named_speakers(db, log)
     _merge_local_speakers_with_named_identity(db, log)
 
     rows = [row for row in db.list_segments() if str(row["status"]) != "pending"]
+    voice_cfg = settings["voices"]
+    minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
+    _validate_casting_inputs(rows, minimum_main_mentions)
     by_speaker: dict[str, list[Any]] = defaultdict(list)
     anonymous_by_gender: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
@@ -187,7 +330,6 @@ def build_registry_and_cast(
         else:
             by_speaker[speaker].append(row)
 
-    voice_cfg = settings["voices"]
     narrator_voice = str(voice_cfg["narrator_voice"])
     narrator_preset = _preset_by_name(narrator_voice)
     allocator = PresetAllocator(
@@ -222,7 +364,6 @@ def build_registry_and_cast(
     db.set_character_for_speaker("NARRATOR", narrator_character_id)
     db.set_voice_for_character_segments(narrator_character_id, narrator_profile)
 
-    minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
     speaker_groups = sorted(
         by_speaker.items(),
         key=lambda item: (-len(item[1]), item[0].casefold()),
@@ -246,7 +387,8 @@ def build_registry_and_cast(
             importance=importance,
             confidence=confidence,
         )
-        db.add_alias(character_id, speaker, normalize_name(speaker), confidence, "analysis")
+        for alias in sorted(aliases_by_speaker.get(speaker, {speaker}), key=str.casefold):
+            db.add_alias(character_id, alias, normalize_name(alias), confidence, "analysis")
         db.set_character_for_speaker(speaker, character_id)
         preset, pitch_steps = allocator.choose(gender, npc=local)
         profile_id = _profile_for_preset(db, preset, pitch_steps, profile_cache)

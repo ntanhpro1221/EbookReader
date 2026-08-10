@@ -10,6 +10,12 @@ from .io_utils import decode_text_bytes, natural_key, sha256_bytes, sha256_file,
 
 QUOTE_PATTERN = re.compile(r"([“\"][^”\"]{1,1600}[”\"])", re.DOTALL)
 THOUGHT_QUOTE_PATTERN = re.compile(r"(‘[^’]{1,1600}’)", re.DOTALL)
+CURLY_QUOTE_SPECS = (
+    ("“", "”", "dialogue"),
+    ("‘", "’", "thought"),
+)
+QUOTE_CLOSING_MARKS = {"”", "’", '"'}
+INLINE_REFERENCE_MARKER_PATTERN = re.compile(r"\[\s*note\d+\s*\]", re.IGNORECASE)
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+")
 SPEECH_VERB_PATTERN = re.compile(
     r"\b(?:nói|hỏi|đáp|trả lời|quát|hét|gào|thì thầm|lẩm bẩm|kêu|bảo|ra lệnh|cười)\b",
@@ -47,6 +53,7 @@ STRETCHED_OPEN_VOWEL_PATTERN = re.compile(
     re.IGNORECASE,
 )
 SPOKEN_WORD_PATTERN = re.compile(r"[A-Za-zÀ-ỹĐđ]+")
+SPEAKABLE_TOKEN_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
 FOLDED_VOCALIZATION_PATTERN = re.compile(
     r"^(?:a+h*|u+h*|o+h*|you|ha+|he+|hi+|hu+|huc|hac|hay|hum|hm+|khu+|ho+|[a-z])$",
     re.IGNORECASE,
@@ -57,6 +64,7 @@ MAX_VOCALIZATION_REPETITIONS = 4
 def normalize_text(text: str) -> str:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = text.replace("\u00a0", " ").replace("\u200b", "")
+    text = INLINE_REFERENCE_MARKER_PATTERN.sub("", text)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n[ \t]+", "\n", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -96,6 +104,10 @@ def _split_long(text: str, max_chars: int) -> list[str]:
 
 def has_spoken_content(text: str) -> bool:
     return any(char.isalnum() for char in text)
+
+
+def _speakable_tokens(text: str) -> list[str]:
+    return SPEAKABLE_TOKEN_PATTERN.findall(text)
 
 
 def _fold_vocalization_token(token: str) -> str:
@@ -182,7 +194,15 @@ def _line_pieces(line: str) -> list[tuple[str, str]]:
         for match in QUOTE_PATTERN.finditer(line)
     ]
     matches.extend((match, "thought") for match in THOUGHT_QUOTE_PATTERN.finditer(line))
-    matches.sort(key=lambda item: item[0].start())
+    matches.sort(key=lambda item: (item[0].start(), -item[0].end()))
+    non_overlapping: list[tuple[re.Match[str], str]] = []
+    occupied_until = -1
+    for match, hint in matches:
+        if match.start() < occupied_until:
+            continue
+        non_overlapping.append((match, hint))
+        occupied_until = match.end()
+    matches = non_overlapping
     if not matches:
         hint = "thought" if line.startswith("(") and line.endswith(")") else "narration"
         return [(line, hint)]
@@ -221,6 +241,64 @@ def _line_pieces(line: str) -> list[tuple[str, str]]:
     return merged
 
 
+def _balanced_quote_spans(line: str) -> list[tuple[int, int]]:
+    spans: list[tuple[int, int]] = []
+    for opening_mark, closing_mark, _ in CURLY_QUOTE_SPECS:
+        cursor = 0
+        while cursor < len(line):
+            opening_index = line.find(opening_mark, cursor)
+            if opening_index < 0:
+                break
+            closing_index = line.find(closing_mark, opening_index + 1)
+            if closing_index < 0:
+                cursor = opening_index + 1
+                continue
+            spans.append((opening_index, closing_index + 1))
+            cursor = closing_index + 1
+    ascii_quote_positions = [index for index, char in enumerate(line) if char == '"']
+    spans.extend(
+        (opening_index, closing_index + 1)
+        for opening_index, closing_index in zip(
+            ascii_quote_positions[0::2],
+            ascii_quote_positions[1::2],
+        )
+    )
+    return spans
+
+
+def _unmatched_curly_quote_openings(line: str) -> list[tuple[int, str, str]]:
+    balanced_spans = _balanced_quote_spans(line)
+    unmatched: list[tuple[int, str, str]] = []
+    for opening_mark, closing_mark, hint in CURLY_QUOTE_SPECS:
+        cursor = 0
+        while cursor < len(line):
+            opening_index = line.find(opening_mark, cursor)
+            if opening_index < 0:
+                break
+            closing_index = line.find(closing_mark, opening_index + 1)
+            if closing_index >= 0:
+                cursor = closing_index + 1
+                continue
+            nested_in_balanced_quote = any(
+                start < opening_index < end
+                for start, end in balanced_spans
+            )
+            if not nested_in_balanced_quote:
+                unmatched.append((opening_index, closing_mark, hint))
+            cursor = opening_index + 1
+    return unmatched
+
+
+def _terminal_alternative_quote_closing(line: str, expected_closing_mark: str) -> int:
+    stripped = line.rstrip()
+    if not stripped:
+        return -1
+    terminal_mark = stripped[-1]
+    if terminal_mark == expected_closing_mark or terminal_mark not in QUOTE_CLOSING_MARKS:
+        return -1
+    return len(stripped) - 1
+
+
 def _line_pieces_with_quote_state(
     line: str,
     quote_state: tuple[str, str] | None,
@@ -229,6 +307,12 @@ def _line_pieces_with_quote_state(
         hint, closing_mark = quote_state
         closing_index = line.find(closing_mark)
         if closing_index < 0:
+            alternative_closing_index = _terminal_alternative_quote_closing(
+                line,
+                closing_mark,
+            )
+            if alternative_closing_index >= 0:
+                return [(line[: alternative_closing_index + 1], hint)], None
             return [(line, hint)], quote_state
         pieces = [(line[: closing_index + 1], hint)]
         remainder = line[closing_index + 1 :].strip()
@@ -237,19 +321,31 @@ def _line_pieces_with_quote_state(
         tail, next_state = _line_pieces_with_quote_state(remainder, None)
         return pieces + tail, next_state
 
-    unmatched_openings: list[tuple[int, str, str]] = []
-    for opening_mark, closing_mark, hint in (("“", "”", "dialogue"), ("‘", "’", "thought")):
-        opening_index = line.find(opening_mark)
-        if opening_index >= 0 and line.find(closing_mark, opening_index + 1) < 0:
-            unmatched_openings.append((opening_index, closing_mark, hint))
+    unmatched_openings = _unmatched_curly_quote_openings(line)
     ascii_quote_positions = [index for index, char in enumerate(line) if char == '"']
     if len(ascii_quote_positions) % 2:
-        unmatched_openings.append((ascii_quote_positions[-1], '"', "dialogue"))
+        opening_index = ascii_quote_positions[-1]
+        nested_in_balanced_quote = any(
+            start < opening_index < end
+            for start, end in _balanced_quote_spans(line)
+        )
+        if not nested_in_balanced_quote:
+            unmatched_openings.append((opening_index, '"', "dialogue"))
     if not unmatched_openings:
         return _line_pieces(line), None
 
     opening_index, closing_mark, hint = min(unmatched_openings, key=lambda item: item[0])
     pieces = _line_pieces(line[:opening_index].strip()) if opening_index > 0 else []
+    alternative_closing_index = _terminal_alternative_quote_closing(line, closing_mark)
+    if alternative_closing_index > opening_index:
+        quoted = line[opening_index : alternative_closing_index + 1].strip()
+        if quoted:
+            pieces.append((quoted, hint))
+        remainder = line[alternative_closing_index + 1 :].strip()
+        if remainder:
+            tail, next_state = _line_pieces_with_quote_state(remainder, None)
+            return pieces + tail, next_state
+        return pieces, None
     quoted = line[opening_index:].strip()
     if quoted:
         pieces.append((quoted, hint))
@@ -300,11 +396,21 @@ def segment_chapter_text(chapter_index: int, text: str, max_chars: int = 340) ->
                 rows[-1]["break_ms"] = max(int(rows[-1]["break_ms"]), _punctuation_break_ms(line))
             for piece, hint in pieces:
                 append_piece(piece, hint, paragraph_index)
+    if quote_state is not None:
+        hint, closing_mark = quote_state
+        raise RuntimeError(
+            f"Unclosed {hint} quote at the end of chapter {chapter_index}; "
+            f"expected {closing_mark!r}"
+        )
     for index, row in enumerate(rows):
         if index + 1 >= len(rows):
             row["break_ms"] = 0
         elif rows[index + 1]["paragraph_index"] != row["paragraph_index"]:
             row["break_ms"] = max(int(row["break_ms"]), 380)
+    source_tokens = _speakable_tokens(text)
+    segmented_tokens = [token for row in rows for token in _speakable_tokens(str(row["text"]))]
+    if segmented_tokens != source_tokens:
+        raise RuntimeError("Segmentation changed the spoken token sequence")
     return rows
 
 

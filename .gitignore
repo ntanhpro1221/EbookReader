@@ -15,6 +15,7 @@ _internal/runtime/
 .venv/
 
 # Generated audiobook projects and transient worker files
+/Text_Tmp/
 project.sqlite3
 project.sqlite3-shm
 project.sqlite3-wal
