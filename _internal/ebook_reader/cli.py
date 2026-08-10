@@ -39,6 +39,7 @@ DEFAULT_RANGE_SUFFIX = ".txt"
 RANGE_PATTERN = re.compile(r"^(?P<start>\d+)\.\.(?P<end>\d+)$")
 MAX_RANGE_ITEMS = 100_000
 DEFAULT_BACKGROUND_STARTUP_TIMEOUT_SECONDS = 45.0
+DEEP_DOCTOR_TIMEOUT_SECONDS = 180.0
 
 TEST_COMPONENTS: dict[str, tuple[str, ...]] = {
     "config": ("tests/test_config.py",),
@@ -854,6 +855,7 @@ def _command_doctor(args: argparse.Namespace) -> CommandResult:
             encoding="utf-8",
             errors="replace",
             env={**os.environ, "PYTHONUTF8": "1"},
+            timeout=DEEP_DOCTOR_TIMEOUT_SECONDS,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             check=False,
         )

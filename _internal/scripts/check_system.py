@@ -9,6 +9,8 @@ from pathlib import Path
 
 import psutil
 
+from ebook_reader.process_utils import terminate_process_tree
+
 
 def status(ok: bool, label: str, detail: str = "") -> None:
     mark = "OK" if ok else "FAIL"
@@ -16,17 +18,42 @@ def status(ok: bool, label: str, detail: str = "") -> None:
 
 
 def command_output(command: list[str], timeout: int = 20) -> tuple[bool, str]:
+    process: subprocess.Popen[str] | None = None
     try:
-        result = subprocess.run(
+        process = subprocess.Popen(
             command,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=timeout,
+            encoding="utf-8",
+            errors="replace",
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
         )
-        return result.returncode == 0, (result.stdout or result.stderr).strip()
+        output, _ = process.communicate(timeout=timeout)
+        return process.returncode == 0, (output or "").strip()
+    except subprocess.TimeoutExpired:
+        if process is not None:
+            terminate_process_tree(process.pid, include_parent=True, grace_seconds=3.0)
+            try:
+                output, _ = process.communicate(timeout=3.0)
+            except (OSError, subprocess.TimeoutExpired):
+                output = ""
+                if process.stdout is not None:
+                    process.stdout.close()
+        else:
+            output = ""
+        suffix = f": {(output or '').strip()}" if output else ""
+        return False, f"timed out after {timeout}s{suffix}"
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
+def ollama_model_manifest(model_name: str) -> Path:
+    model, _, tag = model_name.partition(":")
+    tag = tag or "latest"
+    configured_root = os.environ.get("OLLAMA_MODELS")
+    model_root = Path(configured_root).expanduser() if configured_root else Path.home() / ".ollama" / "models"
+    return model_root / "manifests" / "registry.ollama.ai" / "library" / model / tag
 
 
 def main() -> int:
@@ -58,7 +85,7 @@ def main() -> int:
         failures += 1
 
     modules = [
-        "PySide6", "requests", "psutil", "numpy", "soundfile", "imageio_ffmpeg",
+        "PySide6", "requests", "psutil", "numpy", "scipy", "soundfile", "imageio_ffmpeg",
         "pyloudnorm", "pyworld", "torch", "torchaudio", "whisper", "vieneu",
     ]
     for name in modules:
@@ -96,10 +123,14 @@ def main() -> int:
     ollama = shutil.which("ollama")
     status(bool(ollama), "Ollama", ollama or "not found")
     if ollama:
-        ok, output = command_output([ollama, "list"], timeout=30)
         for model_name in ("qwen3:8b", "qwen3:4b"):
-            has_qwen = ok and model_name in output
-            status(has_qwen, f"Ollama model {model_name}", "installed" if has_qwen else output[:500])
+            manifest = ollama_model_manifest(model_name)
+            has_qwen = manifest.is_file()
+            status(
+                has_qwen,
+                f"Ollama model {model_name}",
+                str(manifest) if has_qwen else "manifest not found",
+            )
             failures += not has_qwen
     else:
         failures += 1

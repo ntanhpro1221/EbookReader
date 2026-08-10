@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-10
 
-Trạng thái source hiện tại: **309/309 test pass** trên Python 3.11.9, gồm CLI/supervisor headless,
+Trạng thái source hiện tại: **311/311 test pass** trên Python 3.11.9, gồm CLI/supervisor headless,
 quality policy/evidence, pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.

@@ -187,7 +187,7 @@ Module chính:
 Từ thư mục `_internal`:
 
 ```text
-python -m compileall -q .
+python -m compileall -q ebook_reader tests scripts
 python -m pytest
 ```
 
