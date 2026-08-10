@@ -126,9 +126,10 @@ MIN_VALIDATION_SECONDS = 5.0
 VALIDATION_PADDING_SECONDS = 8.0
 DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
 SHORT_UTTERANCE_MAX_WORDS = 2
-SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS = 12
+SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS = 8
 SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
 SHORT_UTTERANCE_MAX_GENERATION_FRAMES = 24
+SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,12 +220,24 @@ def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
     if array.ndim != 1:
         raise AudioQualityError(f"audio must be mono, got shape {array.shape}")
     if array.size == 0:
-        return {"duration": 0.0, "rms": 0.0, "peak": 0.0, "clipping_fraction": 0.0}
+        return {
+            "duration": 0.0,
+            "rms": 0.0,
+            "peak": 0.0,
+            "clipping_fraction": 0.0,
+            "trailing_rms": 0.0,
+        }
+    endpoint_samples = min(
+        array.size,
+        max(1, int(round(sample_rate * SEGMENT_ENDPOINT_WINDOW_SECONDS))),
+    )
+    trailing = array[-endpoint_samples:].astype(np.float64)
     return {
         "duration": float(array.size / sample_rate),
         "rms": float(math.sqrt(float(np.mean(np.square(array.astype(np.float64)))))) if array.size else 0.0,
         "peak": float(np.max(np.abs(array))),
         "clipping_fraction": float(np.mean(np.abs(array) >= 0.999)),
+        "trailing_rms": float(math.sqrt(float(np.mean(np.square(trailing))))),
     }
 
 

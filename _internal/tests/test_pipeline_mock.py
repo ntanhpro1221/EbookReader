@@ -7,8 +7,9 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import ebook_reader.pipeline as pipeline_module
 from ebook_reader.asr import ASR_INCONCLUSIVE, ASR_MISMATCH, ASR_PASS
-from ebook_reader.audio_io import ChapterQualityError, atomic_write_wav
+from ebook_reader.audio_io import AudioQualityError, ChapterQualityError, atomic_write_wav
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
     QUALITY_SCOPE_CHAPTER,
@@ -75,6 +76,118 @@ class FakeNotifier:
         self.critical_calls.append((args, kwargs))
 
 
+class ScriptedShortTTS:
+    def __init__(self, outcomes: list[dict[str, float] | BaseException]) -> None:
+        self.outcomes = list(outcomes)
+        self.calls: list[dict[str, object]] = []
+        self.unload_calls = 0
+
+    def generation_seed(self, _row, seed_salt=""):
+        return len(self.calls) + len(seed_salt) + 1
+
+    def spoken_text(self, row):
+        return str(row["text"])
+
+    def synthesize_atomic(
+        self,
+        row,
+        _output,
+        seed_salt="",
+        *,
+        repair_short_utterance=False,
+    ):
+        self.calls.append(
+            {
+                "seed_salt": seed_salt,
+                "repair_short_utterance": repair_short_utterance,
+                "generation_frame_cap": row["generation_frame_cap"],
+            }
+        )
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return "a" * 64, dict(outcome), len(self.calls)
+
+    def unload_all(self):
+        self.unload_calls += 1
+
+
+class PassingShortVerifier:
+    def __init__(self, first_verdict: str = ASR_PASS) -> None:
+        self.calls = 0
+        self.unload_calls = 0
+        self.first_verdict = first_verdict
+
+    def verify(self, expected, _wav_path, *, confirmation=False):
+        self.calls += 1
+        if self.calls == 1 and self.first_verdict != ASR_PASS:
+            return {
+                "passed": False,
+                "verdict": self.first_verdict,
+                "transcript": "sai nội dung",
+                "similarity": 0.0,
+                "wer": 1.0,
+                "reason": (
+                    "ASR_MISMATCH"
+                    if self.first_verdict == ASR_MISMATCH
+                    else "ASR_INCONCLUSIVE"
+                ),
+                "repairable": False,
+                "severe": False,
+                "confirmation": confirmation,
+            }
+        return {
+            "passed": True,
+            "verdict": ASR_PASS,
+            "transcript": expected,
+            "similarity": 1.0,
+            "wer": 0.0,
+            "reason": "ok",
+            "repairable": False,
+            "severe": False,
+            "confirmation": confirmation,
+        }
+
+    def can_verify_repeated_short(self, _expected):
+        return False
+
+    def unload(self):
+        self.unload_calls += 1
+
+
+def _short_tts_pipeline(tmp_path: Path, *, repair_rounds: int = 2):
+    source = tmp_path / "001.txt"
+    source.write_text("“Điên rồi!”", encoding="utf-8")
+    settings = build_settings(
+        overrides={
+            "tts": {"max_retries": 4},
+            "asr": {"repair_rounds": repair_rounds},
+        }
+    )
+    paths, db, settings = create_or_open_project(
+        [source],
+        tmp_path / "out",
+        settings,
+        "Short ceiling",
+    )
+    pipeline = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    pipeline._recover()
+    pipeline._ensure_segments()
+    chapter = db.list_chapters()[0]
+    row = db.list_segments(chapter_id=int(chapter["id"]))[0]
+    pipeline._resource_gate = lambda *_args, **_kwargs: None
+    pipeline._progress = lambda *_args, **_kwargs: None
+    pipeline._record_segment_audio_pass = lambda *_args, **_kwargs: None
+    return pipeline, chapter, row
+
+
 def test_severe_asr_mismatch_is_fatal_even_under_warning_policy() -> None:
     assert unresolved_asr_is_fatal({"severe": True}, "warning_continue") is True
     assert unresolved_asr_is_fatal({"passed": False, "severe": False}, "warning_continue") is True
@@ -97,7 +210,11 @@ def test_high_quality_blocks_unreviewed_segment_warnings() -> None:
     pipeline = object.__new__(BookPipeline)
     pipeline.settings = {"quality_profile": "high_quality"}
     rows = [
-        {"id": 1, "stable_id": "c1s1", "warning_code": "TTS_SPLIT_RECOVERY"},
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "warning_code": "TTS_SPLIT_RECOVERY|TTS_GENERATION_CEILING_REACHED",
+        },
         {
             "id": 2,
             "stable_id": "c1s2",
@@ -115,6 +232,193 @@ def test_high_quality_blocks_unreviewed_segment_warnings() -> None:
 
     pipeline.settings = {"quality_profile": "balanced"}
     assert pipeline._high_quality_blocking_segment_warnings(rows) == []
+
+
+def test_high_quality_ceiling_waveform_is_checkpointed_for_whisper(tmp_path: Path) -> None:
+    pipeline, chapter, row = _short_tts_pipeline(tmp_path)
+    scripted = ScriptedShortTTS(
+        [
+            {
+                "duration": 1.92,
+                "generation_ceiling_hit": 1.0,
+                "generation_endpoint_active": 1.0,
+                "trailing_rms": 0.05,
+            }
+        ]
+    )
+    pipeline.tts = scripted
+
+    pipeline._process_single_segment(row, chapter)
+
+    updated = pipeline.db.get_segment(int(row["id"]))
+    assert len(scripted.calls) == 1
+    assert updated["status"] == "signal_passed"
+    assert updated["warning_code"] == "TTS_GENERATION_CEILING_REACHED"
+    assert json.loads(str(updated["signal_json"]))["generation_endpoint_active"] == 1.0
+
+
+def test_legacy_ceiling_without_endpoint_evidence_fails_closed() -> None:
+    assert BookPipeline._ceiling_endpoint_requires_repair(
+        {"signal_json": json.dumps({"generation_ceiling_hit": 1.0})}
+    )
+
+
+@pytest.mark.parametrize("signal_json", [None, "", "{broken", "null", "[]"])
+def test_ceiling_warning_with_invalid_signal_evidence_fails_closed(signal_json) -> None:
+    assert BookPipeline._ceiling_endpoint_requires_repair(
+        {
+            "signal_json": signal_json,
+            "warning_code": "LOW_ANALYSIS_CONFIDENCE|TTS_GENERATION_CEILING_REACHED",
+        }
+    )
+
+
+@pytest.mark.parametrize("signal_json", [None, "", "{broken", "null", "[]"])
+def test_invalid_signal_evidence_without_ceiling_warning_does_not_force_repair(
+    signal_json,
+) -> None:
+    assert not BookPipeline._ceiling_endpoint_requires_repair(
+        {"signal_json": signal_json, "warning_code": "LOW_ANALYSIS_CONFIDENCE"}
+    )
+
+
+def test_quiet_endpoint_evidence_overrides_the_durable_ceiling_warning() -> None:
+    assert not BookPipeline._ceiling_endpoint_requires_repair(
+        {
+            "signal_json": json.dumps(
+                {
+                    "generation_ceiling_hit": 1.0,
+                    "generation_endpoint_active": 0.0,
+                }
+            ),
+            "warning_code": "TTS_GENERATION_CEILING_REACHED",
+        }
+    )
+
+
+@pytest.mark.parametrize("initial_verdict", [ASR_PASS, ASR_MISMATCH, ASR_INCONCLUSIVE])
+def test_active_ceiling_endpoint_repairs_after_any_whisper_verdict_and_clears_cap(
+    tmp_path: Path,
+    initial_verdict: str,
+) -> None:
+    pipeline, chapter, row = _short_tts_pipeline(tmp_path)
+    initial = pipeline._chunk_path(row)
+    pipeline.db.mark_signal_passed(
+        int(row["id"]),
+        wav_path=initial,
+        wav_sha256="b" * 64,
+        duration=1.92,
+        signal={
+            "duration": 1.92,
+            "generation_ceiling_hit": 1.0,
+            "generation_endpoint_active": 1.0,
+            "trailing_rms": 0.05,
+        },
+    )
+    pipeline.db.set_segment_warning_code(int(row["id"]), "TTS_GENERATION_CEILING_REACHED")
+    scripted = ScriptedShortTTS([{"duration": 0.88, "trailing_rms": 0.0}])
+    verifier = PassingShortVerifier(initial_verdict)
+    pipeline.tts = scripted
+
+    pipeline._verify_chapter_audio(chapter, verifier)
+
+    updated = pipeline.db.get_segment(int(row["id"]))
+    assert verifier.calls == 2
+    assert [call["generation_frame_cap"] for call in scripted.calls] == [12]
+    assert scripted.calls[0]["repair_short_utterance"] is True
+    assert updated["status"] == "verified"
+    assert updated["generation_frame_cap"] is None
+
+
+def test_active_ceiling_endpoint_repairs_are_finite_and_remain_blocking(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row = _short_tts_pipeline(tmp_path, repair_rounds=2)
+    initial = pipeline._chunk_path(row)
+    endpoint_metrics = {
+        "duration": 0.96,
+        "generation_ceiling_hit": 1.0,
+        "generation_endpoint_active": 1.0,
+        "trailing_rms": 0.05,
+    }
+    pipeline.db.mark_signal_passed(
+        int(row["id"]),
+        wav_path=initial,
+        wav_sha256="c" * 64,
+        duration=1.92,
+        signal={**endpoint_metrics, "duration": 1.92},
+    )
+    pipeline.db.set_segment_warning_code(int(row["id"]), "TTS_GENERATION_CEILING_REACHED")
+    scripted = ScriptedShortTTS([endpoint_metrics, endpoint_metrics])
+    verifier = PassingShortVerifier()
+    pipeline.tts = scripted
+
+    pipeline._verify_chapter_audio(chapter, verifier)
+
+    updated = pipeline.db.get_segment(int(row["id"]))
+    assert len(scripted.calls) == 2
+    assert verifier.calls == 3
+    assert [call["generation_frame_cap"] for call in scripted.calls] == [12, 12]
+    assert updated["status"] == "failed"
+    assert updated["generation_frame_cap"] == 12
+    assert "Active endpoint remained" in str(updated["error"])
+
+
+def test_short_tts_failure_does_not_attempt_semantic_split(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline, chapter, row = _short_tts_pipeline(tmp_path)
+    scripted = ScriptedShortTTS(
+        [AudioQualityError("generation failed") for _attempt in range(4)]
+    )
+    pipeline.tts = scripted
+    monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
+    pipeline._synthesize_split = lambda *_args, **_kwargs: pytest.fail(
+        "short utterance must not be split"
+    )
+
+    pipeline._process_single_segment(row, chapter)
+
+    updated = pipeline.db.get_segment(int(row["id"]))
+    assert len(scripted.calls) == 4
+    assert updated["status"] == "failed"
+    assert "short utterance is not splittable" in str(updated["error"])
+
+
+def test_non_short_tts_failure_keeps_existing_split_recovery(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline, chapter, row = _short_tts_pipeline(tmp_path)
+    long_text = " ".join(["Nội dung đủ dài để chia an toàn"] * 8)
+    with pipeline.db.connect() as conn:
+        conn.execute("UPDATE segments SET text=? WHERE id=?", (long_text, int(row["id"])))
+    row = pipeline.db.get_segment(int(row["id"]))
+    scripted = ScriptedShortTTS(
+        [AudioQualityError("generation failed") for _attempt in range(4)]
+    )
+    split_calls: list[str] = []
+
+    def fake_split(item, _output):
+        split_calls.append(str(item["stable_id"]))
+
+    pipeline.tts = scripted
+    pipeline._synthesize_split = fake_split
+    monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        pipeline_module,
+        "inspect_wav",
+        lambda *_args, **_kwargs: (True, {"duration": 2.0}, "ok"),
+    )
+    monkeypatch.setattr(pipeline_module, "sha256_file", lambda _path: "d" * 64)
+
+    pipeline._process_single_segment(row, chapter)
+
+    updated = pipeline.db.get_segment(int(row["id"]))
+    assert split_calls == [str(row["stable_id"])]
+    assert updated["status"] == "signal_passed"
+    assert updated["warning_code"] == "TTS_SPLIT_RECOVERY"
 
 
 @pytest.mark.parametrize(

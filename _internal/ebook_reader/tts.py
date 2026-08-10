@@ -63,6 +63,10 @@ SHORT_UTTERANCE_REPAIR_MAX_FRAMES = 12
 MICRO_UTTERANCE_REPAIR_MAX_FRAMES = 6
 MICRO_UTTERANCE_MAX_SPEAKABLE_CHARS = 1
 GENERATION_CEILING_WARNING = "TTS_GENERATION_CEILING_REACHED"
+GENERATION_CEILING_METRIC = "generation_ceiling_hit"
+GENERATION_ENDPOINT_ACTIVE_METRIC = "generation_endpoint_active"
+GENERATION_FRAME_CAP_FIELD = "generation_frame_cap"
+DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS = -45.0
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
@@ -126,12 +130,25 @@ def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> n
     return np.pad(shifted, (0, array.size - shifted.size)).astype(np.float32, copy=False)
 
 
+def short_utterance_repair_frame_cap(text: str) -> int | None:
+    if not is_short_utterance(text):
+        return None
+    speakable_chars = sum(char.isalnum() for char in text)
+    return (
+        MICRO_UTTERANCE_REPAIR_MAX_FRAMES
+        if speakable_chars <= MICRO_UTTERANCE_MAX_SPEAKABLE_CHARS
+        else SHORT_UTTERANCE_REPAIR_MAX_FRAMES
+    )
+
+
 def _max_new_frames(row: Any, settings: dict[str, Any] | None) -> int:
-    return segment_duration_policy(
+    policy_frames = segment_duration_policy(
         str(_row_value(row, "text", "")),
         settings,
         row,
     ).generation_max_frames
+    persisted_cap = int(_row_value(row, GENERATION_FRAME_CAP_FIELD, 0) or 0)
+    return min(policy_frames, persisted_cap) if persisted_cap > 0 else policy_frames
 
 
 def vieneu_sampling_for_segment(
@@ -156,13 +173,9 @@ def vieneu_sampling_for_segment(
         top_p = min(top_p, SHORT_UTTERANCE_MAX_TOP_P)
         warning_codes = str(_row_value(row, "warning_code", "")).split("|")
         if repair_short_utterance and GENERATION_CEILING_WARNING in warning_codes:
-            speakable_chars = sum(char.isalnum() for char in text)
-            repair_frames = (
-                MICRO_UTTERANCE_REPAIR_MAX_FRAMES
-                if speakable_chars <= MICRO_UTTERANCE_MAX_SPEAKABLE_CHARS
-                else SHORT_UTTERANCE_REPAIR_MAX_FRAMES
-            )
-            max_new_frames = min(max_new_frames, repair_frames)
+            repair_frames = short_utterance_repair_frame_cap(text)
+            if repair_frames is not None:
+                max_new_frames = min(max_new_frames, repair_frames)
     return {
         "temperature": temperature,
         "top_k": 25,
@@ -426,7 +439,18 @@ class TTSCoordinator:
             if pitch_variant_skipped:
                 metrics["pitch_variant_skipped"] = 1.0
             if generation_ceiling_hit:
-                metrics["generation_ceiling_hit"] = 1.0
+                endpoint_floor_dbfs = float(
+                    self.settings.get("audio", {}).get(
+                        "segment_active_floor_dbfs",
+                        DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS,
+                    )
+                )
+                endpoint_floor = 10.0 ** (endpoint_floor_dbfs / 20.0)
+                metrics[GENERATION_CEILING_METRIC] = 1.0
+                metrics[GENERATION_ENDPOINT_ACTIVE_METRIC] = float(
+                    float(metrics.get("trailing_rms", 0.0)) > endpoint_floor
+                )
+                metrics["generation_endpoint_floor_dbfs"] = endpoint_floor_dbfs
             return checksum, metrics, seed
         finally:
             # VieNeu's PyTorch backend may retain allocator cache after returning a NumPy waveform.

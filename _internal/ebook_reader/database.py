@@ -12,8 +12,8 @@ from .models import BookStatus, ChapterStatus, SegmentStatus
 
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
-# user_version, so they migrate from 0 directly to this version 2 schema.
-SCHEMA_VERSION = 2
+# user_version, so they migrate from 0 through the current schema.
+SCHEMA_VERSION = 3
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -92,6 +92,9 @@ CREATE TABLE IF NOT EXISTS segments (
     status TEXT NOT NULL DEFAULT 'pending',
     attempt_count INTEGER NOT NULL DEFAULT 0,
     generation_seed INTEGER,
+    generation_frame_cap INTEGER CHECK(
+        generation_frame_cap IS NULL OR generation_frame_cap > 0
+    ),
     wav_path TEXT,
     wav_sha256 TEXT,
     wav_duration REAL,
@@ -299,6 +302,13 @@ class ProjectDB:
         segment_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")}
         if "break_ms" not in segment_columns:
             conn.execute("ALTER TABLE segments ADD COLUMN break_ms INTEGER NOT NULL DEFAULT 220")
+        if "generation_frame_cap" not in segment_columns:
+            conn.execute(
+                """
+                ALTER TABLE segments ADD COLUMN generation_frame_cap INTEGER
+                CHECK(generation_frame_cap IS NULL OR generation_frame_cap > 0)
+                """
+            )
 
         book_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
         if "casting_finalized" not in book_columns:
@@ -750,7 +760,10 @@ class ProjectDB:
             )
             status = SegmentStatus.WARNING.value if merged_warning else SegmentStatus.VERIFIED.value
             conn.execute(
-                "UPDATE segments SET status=?,warning_code=?,error=NULL,updated_at=? WHERE id=?",
+                """
+                UPDATE segments SET status=?,warning_code=?,generation_frame_cap=NULL,
+                    error=NULL,updated_at=? WHERE id=?
+                """,
                 (status, merged_warning, time.time(), segment_id),
             )
             chapter_id = int(existing["chapter_id"])
@@ -793,6 +806,18 @@ class ProjectDB:
                 "UPDATE segments SET warning_code=?,updated_at=? WHERE id=?",
                 (merged_warning, time.time(), segment_id),
             )
+
+    def set_segment_generation_frame_cap(self, segment_id: int, frame_cap: int) -> None:
+        normalized_cap = int(frame_cap)
+        if normalized_cap <= 0:
+            raise ValueError("generation frame cap must be positive")
+        with self.connect() as conn:
+            cursor = conn.execute(
+                "UPDATE segments SET generation_frame_cap=?,updated_at=? WHERE id=?",
+                (normalized_cap, time.time(), segment_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError(f"Unknown segment id: {segment_id}")
 
     def mark_failed(self, segment_id: int, error: str, warning_code: str = "SEGMENT_FAILED") -> None:
         with self.transaction() as conn:

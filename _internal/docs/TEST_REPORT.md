@@ -118,9 +118,11 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - cache inference VieNeu được thu hồi trong `finally` sau cả attempt thành công lẫn thất bại;
 - unload VieNeu/Whisper trên Windows trim working set sau GC/CUDA cache release, tránh RAM physical
   bị giữ lại qua nhiều lần chuyển model trong book dài;
-- hội thoại một hoặc hai từ có tối đa tám ký tự dùng ngân sách cực ngắn; repair câu đã chạm trần VieNeu
-  giảm ngân sách từ 24 xuống 12 frame, riêng câu một ký tự giảm xuống 6 frame; attempt checkpoint giữ ngân sách
-  này qua các vòng repair sau khi warning cũ đã được xóa;
+- hội thoại một hoặc hai từ có tối đa tám ký tự dùng ngân sách cực ngắn; waveform chạm trần vẫn qua
+  Whisper, nhưng endpoint còn hoạt động buộc repair kể cả transcript đúng và câu ngắn không bị split;
+- repair câu đã chạm trần VieNeu giảm ngân sách từ 24 xuống 12 frame, riêng câu một ký tự giảm xuống 6 frame;
+  cap được checkpoint riêng trong SQLite qua `mark_generating`, failure, recovery/reopen và các vòng ASR, rồi
+  chỉ xóa ở commit `verified`;
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 

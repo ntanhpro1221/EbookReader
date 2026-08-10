@@ -14,6 +14,7 @@ from .audio_io import (
     assemble_chapter_atomic_with_metrics,
     export_json_atomic,
     inspect_wav,
+    is_short_utterance,
     merge_wav_parts_atomic,
     verify_mp3,
     write_playlist_atomic,
@@ -48,15 +49,25 @@ from .quality_policy import (
     build_quality_policy,
     quality_policy_hash,
 )
-from .tts import TTSCoordinator, is_fatal_tts_error
+from .tts import (
+    GENERATION_CEILING_METRIC,
+    GENERATION_CEILING_WARNING,
+    GENERATION_ENDPOINT_ACTIVE_METRIC,
+    TTSCoordinator,
+    is_fatal_tts_error,
+    short_utterance_repair_frame_cap,
+)
 
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
-HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset({"TTS_SPLIT_RECOVERY"})
+HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
+    {"TTS_SPLIT_RECOVERY", GENERATION_CEILING_WARNING}
+)
 CHAPTER_REVIEW_STATUS = "warning"
 QUALITY_VERDICT_FAIL = "fail"
 CHAPTER_AUDIO_PIPELINE_FAILURE_CODE = "CHAPTER_AUDIO_PIPELINE_FAILED"
 CHAPTER_QUALITY_REPAIR_ACTION = "retry_after_quality_or_policy_change"
+ACTIVE_CEILING_ENDPOINT_REPAIR_REASON = "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING"
 
 
 def unresolved_asr_is_fatal(result: dict[str, Any], failure_policy: str) -> bool:
@@ -1091,6 +1102,42 @@ class BookPipeline:
     def _chunk_path(self, row: Any) -> Path:
         return self.paths.chunks / f"chapter_{int(row['chapter_id']):05d}" / f"{int(row['seq']):07d}.wav"
 
+    @staticmethod
+    def _ceiling_endpoint_requires_repair(row: Any) -> bool:
+        try:
+            warning_value = row["warning_code"]
+        except (IndexError, KeyError, TypeError):
+            warning_value = None
+        has_ceiling_warning = GENERATION_CEILING_WARNING in str(warning_value or "").split("|")
+        try:
+            raw_metrics = row["signal_json"]
+        except (IndexError, KeyError, TypeError):
+            raw_metrics = None
+        if not str(raw_metrics or "").strip():
+            return has_ceiling_warning
+        try:
+            metrics = json.loads(str(raw_metrics))
+        except (TypeError, json.JSONDecodeError):
+            return has_ceiling_warning
+        if not isinstance(metrics, dict):
+            return has_ceiling_warning
+        has_ceiling_evidence = bool(metrics.get(GENERATION_CEILING_METRIC))
+        return (has_ceiling_evidence or has_ceiling_warning) and bool(
+            metrics.get(GENERATION_ENDPOINT_ACTIVE_METRIC, True)
+        )
+
+    def _checkpoint_short_ceiling_repair(self, row: Any) -> dict[str, Any]:
+        warning_codes = str(row["warning_code"] or "").split("|")
+        persisted_cap = int(row["generation_frame_cap"] or 0)
+        if GENERATION_CEILING_WARNING not in warning_codes and persisted_cap <= 0:
+            return dict(row)
+        frame_cap = short_utterance_repair_frame_cap(self.tts.spoken_text(row))
+        if frame_cap is None:
+            return dict(row)
+        if persisted_cap != frame_cap:
+            self.db.set_segment_generation_frame_cap(int(row["id"]), frame_cap)
+        return dict(self.db.get_segment(int(row["id"])))
+
     def _process_single_segment(
         self,
         row: Any,
@@ -1122,8 +1169,6 @@ class BookPipeline:
                         retry_reasons.append(
                             f"speech pace {metrics.get('chars_per_second', 0.0):.2f} chars/s"
                         )
-                    if metrics.get("generation_ceiling_hit"):
-                        retry_reasons.append("generation reached the frame ceiling")
                     if retry_reasons:
                         raise AudioQualityError(
                             "high-quality TTS retry required: " + "; ".join(retry_reasons)
@@ -1149,10 +1194,10 @@ class BookPipeline:
                         int(row["id"]),
                         "TTS_PITCH_VARIANT_SKIPPED",
                     )
-                if metrics.get("generation_ceiling_hit"):
+                if metrics.get(GENERATION_CEILING_METRIC):
                     self.db.set_segment_warning_code(
                         int(row["id"]),
-                        "TTS_GENERATION_CEILING_REACHED",
+                        GENERATION_CEILING_WARNING,
                     )
                     self.log(
                         f"TTS segment {row['stable_id']} dùng hết ngân sách frame; "
@@ -1174,35 +1219,43 @@ class BookPipeline:
                     )
                 time.sleep(min(8, 2 ** attempt))
 
-        self.log(
-            f"TTS segment {row['stable_id']} đã lỗi {retries}/{retries}; "
-            "đang thử chia nhỏ để cứu."
-        )
-        try:
-            split_seed = self.tts.generation_seed(row, "split")
-            self.db.mark_generating(int(row["id"]), split_seed)
-            self._synthesize_split(row, output)
-            valid, metrics, reason = inspect_wav(
-                output,
-                self.tts.spoken_text(row),
-                self.settings,
-                segment=row,
+        spoken_text = self.tts.spoken_text(row)
+        if is_short_utterance(spoken_text):
+            last_error = f"{last_error}; split=short utterance is not splittable"
+            self.log(
+                f"TTS segment {row['stable_id']} đã lỗi {retries}/{retries}; "
+                "không chia câu cảm thán ngắn vì sẽ làm sai nội dung."
             )
-            if not valid:
-                raise AudioQualityError(reason)
-            checksum = sha256_file(output)
-            self.db.mark_signal_passed(
-                int(row["id"]), wav_path=output, wav_sha256=checksum,
-                duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
+        else:
+            self.log(
+                f"TTS segment {row['stable_id']} đã lỗi {retries}/{retries}; "
+                "đang thử chia nhỏ để cứu."
             )
-            self._reset_tts_failure_streak()
-            self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
-            if metrics.get("pace_outlier"):
-                self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
-            self.log(f"Đã cứu TTS segment {row['stable_id']} bằng cách chia nhỏ.")
-            return
-        except Exception as exc:  # noqa: BLE001
-            last_error = f"{last_error}; split={exc}"
+            try:
+                split_seed = self.tts.generation_seed(row, "split")
+                self.db.mark_generating(int(row["id"]), split_seed)
+                self._synthesize_split(row, output)
+                valid, metrics, reason = inspect_wav(
+                    output,
+                    spoken_text,
+                    self.settings,
+                    segment=row,
+                )
+                if not valid:
+                    raise AudioQualityError(reason)
+                checksum = sha256_file(output)
+                self.db.mark_signal_passed(
+                    int(row["id"]), wav_path=output, wav_sha256=checksum,
+                    duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
+                )
+                self._reset_tts_failure_streak()
+                self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
+                if metrics.get("pace_outlier"):
+                    self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
+                self.log(f"Đã cứu TTS segment {row['stable_id']} bằng cách chia nhỏ.")
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = f"{last_error}; split={exc}"
 
         self.db.mark_failed(int(row["id"]), last_error)
         self.log(f"TTS segment {row['stable_id']} thất bại hoàn toàn: {last_error}")
@@ -1293,6 +1346,20 @@ class BookPipeline:
                         Path(str(item["wav_path"])),
                         confirmation=confirmation,
                     )
+                if self._ceiling_endpoint_requires_repair(item):
+                    result = {
+                        **result,
+                        "passed": False,
+                        "verdict": ASR_MISMATCH,
+                        "reason": ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
+                        "repairable": True,
+                        "severe": False,
+                        "endpoint_repair": True,
+                    }
+                    self.log(
+                        f"TTS segment {item['stable_id']} đã qua Whisper nhưng chạm trần khi "
+                        "endpoint còn hoạt động; bắt buộc tạo lại để tránh audio bị cắt."
+                    )
                 last_results[int(item["id"])] = result
                 existing_warning = str(item.get("warning_code") or "") or None
                 if _asr_verdict(result) == ASR_PASS:
@@ -1317,10 +1384,13 @@ class BookPipeline:
         ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
             needs_confirmation: list[dict[str, Any]] = []
             rejected: list[dict[str, Any]] = []
+            confirmed: list[dict[str, Any]] = []
             initial_results: dict[int, dict[str, Any]] = {}
             for item in candidates:
                 result = last_results.get(int(item["id"]), {})
-                if _asr_verdict(result) in {ASR_MISMATCH, ASR_INCONCLUSIVE}:
+                if bool(result.get("endpoint_repair")):
+                    confirmed.append(item)
+                elif _asr_verdict(result) in {ASR_MISMATCH, ASR_INCONCLUSIVE}:
                     needs_confirmation.append(item)
                     initial_results[int(item["id"])] = dict(result)
                 else:
@@ -1330,7 +1400,6 @@ class BookPipeline:
                 if needs_confirmation
                 else []
             )
-            confirmed: list[dict[str, Any]] = []
             for item in confirmed_issues:
                 segment_id = int(item["id"])
                 first_result = initial_results.get(segment_id, {})
@@ -1380,8 +1449,9 @@ class BookPipeline:
                     keep_engine=None,
                 )
                 # Retry the locked primary voice with a different deterministic seed.
+                repair_item = self._checkpoint_short_ceiling_repair(item)
                 self._process_single_segment(
-                    item,
+                    repair_item,
                     chapter,
                     seed_salt_prefix=f"asr_repair_{repair_round}",
                     repair_short_utterance=True,
@@ -1409,7 +1479,11 @@ class BookPipeline:
             result = last_results.get(int(item["id"]), {})
             verdict = _asr_verdict(result)
             reason = str(result.get("reason", "ASR_INCONCLUSIVE"))
-            warning = reason if verdict == ASR_INCONCLUSIVE else "ASR_MISMATCH_UNRESOLVED"
+            warning = (
+                reason
+                if verdict == ASR_INCONCLUSIVE or reason == ACTIVE_CEILING_ENDPOINT_REPAIR_REASON
+                else "ASR_MISMATCH_UNRESOLVED"
+            )
             severe = bool(result.get("severe", False))
             if severe:
                 warning = "ASR_SEVERE_MISMATCH"
@@ -1423,7 +1497,11 @@ class BookPipeline:
                 (
                     "ASR could not produce a trustworthy verdict; refusing to publish"
                     if verdict == ASR_INCONCLUSIVE
-                    else "ASR mismatch remained after all configured repair rounds"
+                    else (
+                        "Active endpoint remained at the TTS frame ceiling after all repair rounds"
+                        if reason == ACTIVE_CEILING_ENDPOINT_REPAIR_REASON
+                        else "ASR mismatch remained after all configured repair rounds"
+                    )
                 ),
                 warning_code=warning,
             )

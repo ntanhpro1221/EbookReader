@@ -157,6 +157,22 @@ def test_short_utterance_attempt_count_does_not_enable_repair_budget() -> None:
     assert sampling["max_new_frames"] == 24
 
 
+def test_persisted_generation_frame_cap_survives_without_attempt_warning() -> None:
+    sampling = vieneu_sampling_for_segment(
+        {
+            "text": "Điên rồi!",
+            "speaker": "Nhân vật",
+            "emotion": "excited",
+            "intensity": 3,
+            "pace": "normal",
+            "attempt_count": 9,
+            "generation_frame_cap": 12,
+        }
+    )
+
+    assert sampling["max_new_frames"] == 12
+
+
 def test_short_utterance_ceiling_warning_only_caps_an_explicit_repair() -> None:
     row = {
         "text": "Được rồi.",
@@ -417,7 +433,10 @@ def test_repair_uses_effective_frame_cap_for_inference_and_ceiling_detection(
     monkeypatch.setattr(
         tts_module,
         "atomic_write_wav",
-        lambda *_args, **_kwargs: ("checksum", {"duration": 0.96}),
+        lambda *_args, **_kwargs: (
+            "checksum",
+            {"duration": 0.96, "trailing_rms": 0.1},
+        ),
     )
 
     _checksum, metrics, _seed = coordinator.synthesize_atomic(
@@ -428,6 +447,7 @@ def test_repair_uses_effective_frame_cap_for_inference_and_ceiling_detection(
 
     assert received_sampling["max_new_frames"] == 12
     assert metrics["generation_ceiling_hit"] == 1.0
+    assert metrics["generation_endpoint_active"] == 1.0
 
 
 def test_thought_always_uses_narrator_profile_even_if_row_contains_character_cast(

@@ -340,14 +340,16 @@ def test_two_word_short_dialogue_uses_the_short_generation_budget() -> None:
     assert policy.generation_max_frames == 24
 
 
-def test_short_pronunciation_expansion_does_not_receive_a_long_repetition_budget() -> None:
+def test_pronunciation_expansion_over_eight_chars_uses_normal_generation_budget() -> None:
+    text = "“Anh Lu-si-en!”"
     policy = segment_duration_policy(
-        "“Anh Lu-si-en!”",
+        text,
         build_settings(),
         {"kind": "dialogue", "pace": "normal"},
     )
 
-    assert policy.generation_max_frames == 24
+    assert not audio_io.is_short_utterance(text)
+    assert policy.generation_max_frames == 48
 
 
 def test_vieneu_output_at_exact_frame_ceiling_is_reported_without_judging_content() -> None:
@@ -364,6 +366,19 @@ def test_vieneu_output_at_exact_frame_ceiling_is_reported_without_judging_conten
         np.zeros(ceiling_samples - VIENEU_V3_CODEC_SAMPLES_PER_FRAME),
         policy,
     )
+
+
+def test_signal_metrics_measure_the_unmodified_endpoint_window() -> None:
+    sample_rate = 48_000
+    active_tail = np.full(sample_rate, 0.1, dtype=np.float32)
+    quiet_tail = active_tail.copy()
+    quiet_tail[-int(sample_rate * audio_io.SEGMENT_ENDPOINT_WINDOW_SECONDS) :] = 0.0
+
+    active_metrics = audio_io.signal_metrics(active_tail, sample_rate)
+    quiet_metrics = audio_io.signal_metrics(quiet_tail, sample_rate)
+
+    assert active_metrics["trailing_rms"] == pytest.approx(0.1)
+    assert quiet_metrics["trailing_rms"] == 0.0
 
 
 @pytest.mark.parametrize("kind", ["narration", "dialogue", "thought"])

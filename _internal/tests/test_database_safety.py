@@ -94,6 +94,20 @@ def test_new_generation_clears_old_audio_warnings_but_keeps_analysis_warning(
     assert row["error"] is None
 
 
+def test_short_ceiling_frame_cap_survives_interruption_and_reopen(tmp_path: Path) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    db.set_segment_generation_frame_cap(segment_id, 12)
+    db.mark_generating(segment_id, seed=17)
+
+    reopened = ProjectDB(db.path)
+    assert reopened.reset_in_progress_segments() == 1
+    recovered = reopened.get_segment(segment_id)
+
+    assert recovered["generation_frame_cap"] == 12
+    reopened.mark_verified(segment_id)
+    assert reopened.get_segment(segment_id)["generation_frame_cap"] is None
+
+
 def test_audio_reset_keeps_locked_analysis_and_casting(tmp_path: Path) -> None:
     db, segment_id = _segment_db(tmp_path)
     db.update_analysis(
@@ -297,6 +311,33 @@ def test_legacy_v0_migration_uses_a_versioned_backup_and_is_idempotent(tmp_path:
     assert versioned_backup.stat().st_mtime_ns == backup_mtime
     assert dict(reopened.book()) == before
     assert dict(reopened.list_chapters()[0]) == before_chapter
+
+
+def test_schema_v2_without_generation_frame_cap_migrates_to_v3(tmp_path: Path) -> None:
+    path = tmp_path / "project.sqlite3"
+    legacy = ProjectDB(path)
+    with legacy.connect() as conn:
+        conn.execute("ALTER TABLE segments DROP COLUMN generation_frame_cap")
+        conn.execute("PRAGMA user_version=2")
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")}
+    assert "generation_frame_cap" not in columns
+
+    migrated = ProjectDB(path)
+    backup = path.with_name(f"{path.name}.pre-v2-to-v{SCHEMA_VERSION}.bak")
+    with migrated.connect() as conn:
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")}
+        version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+    assert backup.is_file()
+    with closing(sqlite3.connect(backup)) as conn:
+        backup_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")
+        }
+        backup_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+    assert "generation_frame_cap" in columns
+    assert version == SCHEMA_VERSION
+    assert "generation_frame_cap" not in backup_columns
+    assert backup_version == 2
 
 
 def test_chapter_artifact_requires_passing_metadata_for_the_current_quality_policy(

@@ -53,7 +53,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - SQLite là source of truth; không dùng existence/mtime làm bằng chứng hoàn tất.
 - WAV/MP3 luôn ghi `.part`, validate + checksum rồi atomic replace.
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
-- TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn → `failed`.
+- TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn nếu câu đủ dài → `failed`; câu cảm thán
+  ngắn không được split vì sẽ làm sai nội dung.
 - Biến thể pitch chỉ là lớp trang trí sau inference: dùng WORLD vocoder để chỉ scale F0, giữ nguyên
   spectral envelope và aperiodicity; không dùng phase-vocoder hay `torchaudio.functional.pitch_shift`.
   Lỗi pitch hoặc không đủ voiced frame phải giữ waveform gốc, ghi warning và không retry TTS.
@@ -66,10 +67,11 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   transcript vượt tốc độ từ vật lý phải được đánh dấu là Whisper hallucination và không kích hoạt repair TTS.
 - Vocalization cực ngắn/kéo dài phải được chuẩn hóa thành âm tiết tiếng Việt ổn định. Output chạm đúng trần frame
   của VieNeu phải đi tiếp qua signal/Whisper validation, không được tự động coi là audio sai chỉ từ sample count.
+  Nếu endpoint vẫn còn hoạt động ở đúng trần thì phải repair kể cả Whisper nhận đúng; không fade/cắt waveform để lách.
 - Câu một hoặc hai từ có tối đa tám ký tự đọc được phải dùng ngân sách cực ngắn 24 frame. Nếu câu đó đã chạm
-  trần frame rồi bị Whisper xác nhận lệch, repair tiếp theo phải giảm xuống 12 frame để chặn VieNeu đọc thêm;
-  câu chỉ có một ký tự đọc được giảm xuống 6 frame. Ngân sách repair phải giữ qua các vòng ASR tiếp theo bằng
-  attempt checkpoint kể cả warning của attempt trước đã được xóa; không áp dụng giảm repair cho lần tạo đầu.
+  trần frame rồi bị Whisper xác nhận lệch hoặc endpoint còn hoạt động, repair tiếp theo phải giảm xuống 12 frame để
+  chặn VieNeu đọc thêm; câu chỉ có một ký tự đọc được giảm xuống 6 frame. Cap repair phải checkpoint riêng trong
+  SQLite, giữ qua các vòng ASR, failure và resume, rồi chỉ xóa sau khi ASR pass; không áp dụng giảm repair cho lần tạo đầu.
 - TTS circuit breaker chỉ đếm failure hoàn toàn liên tiếp cùng signature và phải reset sau một segment thành công.
 - Mọi kết thúc với `BookStatus.ERROR` phải gửi `finished.ok=false`; nhánh `completed_with_errors` gửi đúng
   một Windows notification nếu policy cho phép, đồng thời giữ nguyên checkpoint/chapter đã commit.
