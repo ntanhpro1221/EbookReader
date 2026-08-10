@@ -3,8 +3,9 @@ from __future__ import annotations
 import gc
 import math
 import os
+import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -45,6 +46,31 @@ def _temporary_environment(updates: dict[str, str]) -> Iterator[None]:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+@contextmanager
+def _headless_dependency_streams() -> Iterator[None]:
+    """Give libraries non-interactive output streams while running under pythonw."""
+    previous_stdout = sys.stdout
+    previous_stderr = sys.stderr
+    if previous_stdout is not None and previous_stderr is not None:
+        yield
+        return
+
+    with ExitStack() as stack:
+        stdout = previous_stdout
+        stderr = previous_stderr
+        if stdout is None:
+            stdout = stack.enter_context(tempfile.TemporaryFile(mode="w", encoding="utf-8"))
+        if stderr is None:
+            stderr = stack.enter_context(tempfile.TemporaryFile(mode="w", encoding="utf-8"))
+        sys.stdout = stdout
+        sys.stderr = stderr
+        try:
+            yield
+        finally:
+            sys.stdout = previous_stdout
+            sys.stderr = previous_stderr
 
 
 @contextmanager
@@ -208,7 +234,7 @@ class UTMOSNaturalnessVerifier:
             }
         )
         try:
-            with _temporary_environment(offline_environment):
+            with _temporary_environment(offline_environment), _headless_dependency_streams():
                 self.model = self.model_factory(
                     pretrained=True,
                     config=str(self.settings.get("model_config", "fusion_stage3")),

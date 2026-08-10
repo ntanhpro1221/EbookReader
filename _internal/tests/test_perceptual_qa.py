@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -277,6 +278,62 @@ def test_model_load_is_offline_and_environment_is_restored(tmp_path: Path, monke
     assert observed == {"hf": "1", "transformers": "1"}
     assert os.environ["HF_HUB_OFFLINE"] == "previous"
     assert "TRANSFORMERS_OFFLINE" not in os.environ
+
+
+def test_model_load_supplies_noninteractive_streams_for_detached_pythonw(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    checkpoint = tmp_path / "model.pth"
+    checkpoint.touch()
+    observed: dict[str, object] = {}
+
+    def factory(**_kwargs):
+        observed["stdout"] = sys.stdout
+        observed["stderr"] = sys.stderr
+        observed["stdout_isatty"] = sys.stdout.isatty()
+        observed["stderr_isatty"] = sys.stderr.isatty()
+        return FakeModel({})
+
+    verifier = UTMOSNaturalnessVerifier(
+        _settings(checkpoint),
+        lambda _message: None,
+        model_factory=factory,
+    )
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+
+    assert verifier.load() is True
+    assert observed["stdout"] is not None
+    assert observed["stderr"] is not None
+    assert observed["stdout_isatty"] is False
+    assert observed["stderr_isatty"] is False
+    assert sys.stdout is None
+    assert sys.stderr is None
+
+
+def test_detached_streams_are_restored_when_model_load_fails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    checkpoint = tmp_path / "model.pth"
+    checkpoint.touch()
+
+    def factory(**_kwargs):
+        assert sys.stdout is not None
+        raise RuntimeError("model load failed")
+
+    verifier = UTMOSNaturalnessVerifier(
+        _settings(checkpoint, failure_policy="inconclusive"),
+        lambda _message: None,
+        model_factory=factory,
+    )
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+
+    assert verifier.load() is False
+    assert sys.stdout is None
+    assert sys.stderr is None
 
 
 def test_model_factory_receives_only_explicit_checkpoint(tmp_path: Path) -> None:
