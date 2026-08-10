@@ -24,11 +24,19 @@ from .database import (
     QUALITY_SCOPE_SEGMENT,
     QUALITY_VERDICT_PASS,
     SEGMENT_AUDIO_QUALITY_STAGE,
+    SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
 )
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
+from .perceptual_qa import (
+    PERCEPTUAL_INCONCLUSIVE,
+    PERCEPTUAL_OK,
+    PERCEPTUAL_REVIEW,
+    PerceptualQAUnavailable,
+    UTMOSNaturalnessVerifier,
+)
 from .text_processing import has_spoken_content, load_and_segment_chapter
 from .recovery import recover_project
 from .resource_manager import AdaptiveResourceManager
@@ -97,6 +105,7 @@ class BookPipeline:
         self.resources = AdaptiveResourceManager(settings, paths.root)
         self.notifier = WindowsNotifier()
         self.tts = TTSCoordinator(settings, db, self.log)
+        self.perceptual_qa = UTMOSNaturalnessVerifier(settings, self.log)
         self._last_resource_level: ResourceLevel | None = None
         self._completed_noop = False
         self._last_tts_failure_signature: str | None = None
@@ -159,6 +168,7 @@ class BookPipeline:
         *,
         keep_engine: str | None = None,
         release_active: Callable[[], None] | None = None,
+        require_gpu: bool = True,
         require_cpu_io: bool = False,
     ):
         while True:
@@ -229,7 +239,11 @@ class BookPipeline:
                     )
                 raise CriticalResourceStop(decision.reason)
             if decision.unload_idle_models:
-                if not decision.allow_new_gpu_batch and release_active is not None:
+                active_resource_blocked = (
+                    (require_gpu and not decision.allow_new_gpu_batch)
+                    or (require_cpu_io and not decision.allow_cpu_heavy_work)
+                )
+                if active_resource_blocked and release_active is not None:
                     release_active()
                 elif decision.allow_new_gpu_batch:
                     self.tts.unload_idle_models(keep_engine=keep_engine)
@@ -237,8 +251,9 @@ class BookPipeline:
                     # At this point the previous inference already committed. Release even the active
                     # engine so a foreground renderer/game can reclaim VRAM without killing CUDA mid-kernel.
                     self.tts.unload_all()
+            gpu_ok = (not require_gpu) or decision.allow_new_gpu_batch
             cpu_ok = (not require_cpu_io) or decision.allow_cpu_heavy_work
-            if decision.allow_new_gpu_batch and cpu_ok:
+            if gpu_ok and cpu_ok:
                 return decision
             time.sleep(2.0)
 
@@ -402,6 +417,7 @@ class BookPipeline:
             self._process_all_chapters(verifier)
         finally:
             verifier.unload()
+            self.perceptual_qa.unload()
             self.tts.unload_all()
             self._safe_export_reports(incremental=True)
 
@@ -418,6 +434,8 @@ class BookPipeline:
                 self._process_chapter(chapter, verifier)
             except AudioQualityError as exc:
                 self._record_chapter_quality_failure(chapter, exc)
+            finally:
+                self.perceptual_qa.unload()
             self.emit(
                 "chapter_progress",
                 {"done": chapter_no, "total": len(chapters), "chapter_id": int(chapter["id"])},
@@ -432,10 +450,14 @@ class BookPipeline:
         )
         return int(latest["attempt"]) + 1 if latest is not None else 1
 
-    def _next_segment_quality_attempt(self, segment_id: int) -> int:
+    def _next_segment_quality_attempt(
+        self,
+        segment_id: int,
+        stage: str = SEGMENT_AUDIO_QUALITY_STAGE,
+    ) -> int:
         latest = self.db.latest_quality_check(
             scope=QUALITY_SCOPE_SEGMENT,
-            stage=SEGMENT_AUDIO_QUALITY_STAGE,
+            stage=stage,
             segment_id=segment_id,
         )
         return int(latest["attempt"]) + 1 if latest is not None else 1
@@ -479,6 +501,203 @@ class BookPipeline:
             },
             attempt=self._next_segment_quality_attempt(segment_id),
         )
+
+    def _perceptual_qa_enabled(self) -> bool:
+        return bool(self.settings.get("perceptual_qa", {}).get("enabled", False))
+
+    def _perceptual_qa_uses_gpu(self) -> bool:
+        device = str(self.settings.get("perceptual_qa", {}).get("device", "cpu"))
+        return device.strip().casefold().startswith("cuda")
+
+    def _segment_has_current_audio_qa(self, row: Any) -> bool:
+        artifact_sha256 = str(row["wav_sha256"] or "").strip()
+        if not self.db.segment_audio_is_current_qa_verified(
+            int(row["id"]),
+            artifact_sha256,
+            SEGMENT_AUDIO_QUALITY_STAGE,
+        ):
+            return False
+        return not self._perceptual_qa_enabled() or self.db.segment_audio_is_current_qa_verified(
+            int(row["id"]),
+            artifact_sha256,
+            SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+        )
+
+    def _chapter_has_current_segment_audio_qa(self, chapter_id: int) -> bool:
+        if not self.db.chapter_segments_have_current_audio_qa(
+            chapter_id,
+            SEGMENT_AUDIO_QUALITY_STAGE,
+        ):
+            return False
+        return not self._perceptual_qa_enabled() or self.db.chapter_segments_have_current_audio_qa(
+            chapter_id,
+            SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+        )
+
+    def _record_segment_perceptual_evidence(
+        self,
+        item: Any,
+        result: dict[str, Any],
+        *,
+        verdict: str,
+        failure_codes: tuple[str, ...] = (),
+    ) -> None:
+        segment_id = int(item["id"])
+        artifact_sha256 = str(item["wav_sha256"] or "").strip()
+        wav_path = Path(str(item["wav_path"] or ""))
+        if (
+            not artifact_sha256
+            or not wav_path.is_file()
+            or sha256_file(wav_path) != artifact_sha256
+        ):
+            raise AudioQualityError(
+                f"WAV changed before perceptual QA evidence for {item['stable_id']}"
+            )
+        self.db.record_quality_check(
+            scope=QUALITY_SCOPE_SEGMENT,
+            stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+            segment_id=segment_id,
+            artifact_sha256=artifact_sha256,
+            policy_hash=self.quality_policy_hash,
+            policy_version=QUALITY_POLICY_VERSION,
+            verdict=verdict,
+            metrics=result,
+            failure_codes=failure_codes,
+            attempt=self._next_segment_quality_attempt(
+                segment_id,
+                SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+            ),
+        )
+
+    def _effective_perceptual_profile(self, row: Any) -> tuple[Any, int]:
+        profile = (
+            self.db.voice_profile_by_key("narrator")
+            if str(row["kind"] or "narration") == "thought"
+            else self.db.voice_profile(int(row["voice_profile_id"]))
+        )
+        pitch_semitones = int(profile["pitch_semitones"] or 0)
+        try:
+            signal = json.loads(str(row["signal_json"] or "{}"))
+        except (TypeError, json.JSONDecodeError):
+            signal = {}
+        if isinstance(signal, dict) and signal.get("pitch_variant_skipped"):
+            pitch_semitones = 0
+        return profile, pitch_semitones
+
+    def _verify_chapter_perceptual_audio(self, chapter: Any) -> list[dict[str, Any]]:
+        if not self._perceptual_qa_enabled():
+            return []
+        chapter_id = int(chapter["id"])
+        rows = self.db.list_segments(chapter_id=chapter_id)
+        pending = [
+            row
+            for row in rows
+            if str(row["status"]) != SegmentStatus.FAILED.value
+            and not self.db.segment_audio_is_current_qa_verified(
+                int(row["id"]),
+                str(row["wav_sha256"] or ""),
+                SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+            )
+        ]
+        label = f"Perceptual QA chapter {chapter['chapter_index']}"
+        perceptual_uses_gpu = self._perceptual_qa_uses_gpu()
+        review_candidates: list[dict[str, Any]] = []
+        self._progress(label, 0, len(pending))
+        for index, row in enumerate(pending, 1):
+            if not self.db.segment_audio_is_current_qa_verified(
+                int(row["id"]),
+                str(row["wav_sha256"] or ""),
+                SEGMENT_AUDIO_QUALITY_STAGE,
+            ):
+                raise ChapterQualityError(
+                    f"Perceptual QA requires current ASR evidence for {row['stable_id']}",
+                    metrics={"segment_id": int(row["id"])},
+                    failure_codes=("PERCEPTUAL_ASR_EVIDENCE_MISSING",),
+                    review_required=True,
+                )
+            self._resource_gate(
+                f"UTMOSv2 chapter {chapter['chapter_index']} segment {row['seq']}",
+                release_active=self.perceptual_qa.unload,
+                require_gpu=perceptual_uses_gpu,
+                require_cpu_io=not perceptual_uses_gpu,
+            )
+            baseline_pitch_semitones = 0
+            try:
+                profile, baseline_pitch_semitones = self._effective_perceptual_profile(row)
+                preset_name = str(profile["preset_name"] or "").strip()
+                result = self.perceptual_qa.verify(
+                    Path(str(row["wav_path"])),
+                    preset_name,
+                    pitch_semitones=baseline_pitch_semitones,
+                )
+                result = {
+                    **result,
+                    "baseline_pitch_semitones": baseline_pitch_semitones,
+                }
+            except (PerceptualQAUnavailable, KeyError, TypeError, ValueError) as exc:
+                reason = (
+                    exc.reason
+                    if isinstance(exc, PerceptualQAUnavailable)
+                    else "PERCEPTUAL_EVIDENCE_ERROR"
+                )
+                result = {
+                    "verdict": PERCEPTUAL_INCONCLUSIVE,
+                    "reason": reason,
+                    "review_required": True,
+                    "baseline_pitch_semitones": baseline_pitch_semitones,
+                    "error": str(exc),
+                }
+                self._record_segment_perceptual_evidence(
+                    row,
+                    result,
+                    verdict=QUALITY_VERDICT_FAIL,
+                    failure_codes=(reason,),
+                )
+                self.db.mark_perceptual_result(int(row["id"]), warning_code=reason)
+                raise ChapterQualityError(
+                    f"Mandatory perceptual QA is unavailable for {row['stable_id']}: {exc}",
+                    metrics={"segment_id": int(row["id"]), **result},
+                    failure_codes=(reason,),
+                    review_required=True,
+                ) from exc
+
+            reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
+            perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
+            short_audio_exemption = (
+                perceptual_verdict == PERCEPTUAL_INCONCLUSIVE
+                and reason == "PERCEPTUAL_SHORT_AUDIO"
+            )
+            result = {
+                **result,
+                "policy_exemption": "short_audio" if short_audio_exemption else None,
+            }
+            if perceptual_verdict == PERCEPTUAL_OK or short_audio_exemption:
+                self._record_segment_perceptual_evidence(
+                    row,
+                    result,
+                    verdict=QUALITY_VERDICT_PASS,
+                )
+                self.db.mark_perceptual_result(int(row["id"]))
+            else:
+                warning_code = (
+                    "PERCEPTUAL_NATURALNESS_REVIEW"
+                    if perceptual_verdict == PERCEPTUAL_REVIEW
+                    else reason
+                )
+                self._record_segment_perceptual_evidence(
+                    row,
+                    result,
+                    verdict="inconclusive",
+                    failure_codes=(warning_code,),
+                )
+                self.db.mark_perceptual_result(
+                    int(row["id"]),
+                    warning_code=warning_code,
+                )
+                if perceptual_verdict == PERCEPTUAL_REVIEW:
+                    review_candidates.append(dict(row))
+            self._progress(label, index, len(pending))
+        return review_candidates
 
     def _chapter_audio_evidence_sha256(self, chapter_id: int) -> str:
         digest = hashlib.sha256()
@@ -639,11 +858,7 @@ class BookPipeline:
         valid, _ = self._inspect_existing_segment(row)
         if not valid:
             return False
-        return self.db.segment_audio_is_current_qa_verified(
-            int(row["id"]),
-            str(row["wav_sha256"]),
-            SEGMENT_AUDIO_QUALITY_STAGE,
-        )
+        return self._segment_has_current_audio_qa(row)
 
     def _recheckpoint_segment_for_current_audio_qa(
         self,
@@ -676,10 +891,7 @@ class BookPipeline:
             quality_verified = self.db.chapter_artifact_is_current_qa_verified(
                 int(chapter["chapter_index"])
             )
-            segment_quality_verified = self.db.chapter_segments_have_current_audio_qa(
-                chapter_id,
-                SEGMENT_AUDIO_QUALITY_STAGE,
-            )
+            segment_quality_verified = self._chapter_has_current_segment_audio_qa(chapter_id)
             if valid and quality_verified and segment_quality_verified:
                 self.log(f"Bỏ qua chapter đã hoàn tất: {chapter['title']}")
                 return
@@ -710,11 +922,7 @@ class BookPipeline:
             if (
                 status in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}
                 and signal_valid
-                and self.db.segment_audio_is_current_qa_verified(
-                    int(row["id"]),
-                    str(row["wav_sha256"]),
-                    SEGMENT_AUDIO_QUALITY_STAGE,
-                )
+                and self._segment_has_current_audio_qa(row)
             ):
                 continue
             if signal_valid and status in {
@@ -748,6 +956,43 @@ class BookPipeline:
         self.db.update_chapter_status(chapter_id, ChapterStatus.VERIFYING.value)
         self._verify_chapter_audio(chapter, verifier)
         verifier.unload()
+        perceptual_reviews = self._verify_chapter_perceptual_audio(chapter)
+        perceptual_repair_rounds = int(
+            self.settings.get("perceptual_qa", {}).get("repair_rounds", 0)
+        )
+        for repair_round in range(perceptual_repair_rounds):
+            if not perceptual_reviews:
+                break
+            self.perceptual_qa.unload()
+            repair_label = (
+                f"Perceptual repair chapter {chapter['chapter_index']} "
+                f"- round {repair_round + 1}"
+            )
+            self._progress(repair_label, 0, len(perceptual_reviews))
+            for index, item in enumerate(perceptual_reviews, 1):
+                segment_id = int(item["id"])
+                self.db.reset_segment_pending(
+                    segment_id,
+                    f"Perceptual QA repair round {repair_round + 1}",
+                )
+                fresh = dict(self.db.get_segment(segment_id))
+                self._resource_gate(
+                    (
+                        f"Perceptual repair chapter {chapter['chapter_index']} "
+                        f"segment {fresh['seq']}"
+                    ),
+                    keep_engine=None,
+                )
+                self._process_single_segment(
+                    fresh,
+                    chapter,
+                    seed_salt_prefix=f"perceptual_repair_{repair_round}",
+                )
+                self._progress(repair_label, index, len(perceptual_reviews))
+            self.tts.unload_all()
+            self._verify_chapter_audio(chapter, verifier)
+            verifier.unload()
+            perceptual_reviews = self._verify_chapter_perceptual_audio(chapter)
 
         rows = self.db.list_segments(chapter_id=chapter_id)
         blocking_warnings = self._high_quality_blocking_segment_warnings(rows)
@@ -760,6 +1005,13 @@ class BookPipeline:
                 ),
                 metrics={"blocking_segment_warnings": blocking_warnings},
                 failure_codes=("SEGMENT_QA_REVIEW_REQUIRED",),
+                review_required=True,
+            )
+        if not self._chapter_has_current_segment_audio_qa(chapter_id):
+            raise ChapterQualityError(
+                "Current policy requires passing ASR and perceptual evidence for every segment",
+                metrics={"chapter_id": chapter_id},
+                failure_codes=("SEGMENT_QA_EVIDENCE_MISSING",),
                 review_required=True,
             )
         if not self.db.chapter_is_publishable(chapter_id):
@@ -1201,8 +1453,12 @@ class BookPipeline:
 
     def _export_reports(self, *, incremental: bool = False) -> None:
         segments = [dict(row) for row in self.db.list_segments()]
+        chapters = self.db.list_chapters()
+        segments_by_chapter: dict[int, list[dict[str, Any]]] = {}
+        for segment in segments:
+            segments_by_chapter.setdefault(int(segment["chapter_id"]), []).append(segment)
         chapter_quality: list[dict[str, Any]] = []
-        for chapter in self.db.list_chapters():
+        for chapter in chapters:
             artifact = self.db.artifact_by_key(f"chapter_mp3:{chapter['chapter_index']}")
             metadata: dict[str, Any] = {}
             if artifact is not None:
@@ -1244,9 +1500,7 @@ class BookPipeline:
                     "created_at": float(latest_check["created_at"]),
                 }
 
-            chapter_segments = [
-                row for row in segments if int(row["chapter_id"]) == int(chapter["id"])
-            ]
+            chapter_segments = segments_by_chapter.get(int(chapter["id"]), [])
             similarities = [
                 float(row["asr_similarity"])
                 for row in chapter_segments
@@ -1273,9 +1527,8 @@ class BookPipeline:
                     "current_policy_verified": self.db.chapter_artifact_is_current_qa_verified(
                         int(chapter["chapter_index"])
                     ),
-                    "segment_audio_qa_complete": self.db.chapter_segments_have_current_audio_qa(
-                        int(chapter["id"]),
-                        SEGMENT_AUDIO_QUALITY_STAGE,
+                    "segment_audio_qa_complete": self._chapter_has_current_segment_audio_qa(
+                        int(chapter["id"])
                     ),
                     "publishable": self.db.chapter_is_publishable(int(chapter["id"]))
                     and not blocking_segment_warnings,
@@ -1299,6 +1552,75 @@ class BookPipeline:
                     "latest_quality_check": latest_quality_check,
                 }
             )
+        perceptual_checks = self.db.latest_segment_quality_checks(
+            SEGMENT_PERCEPTUAL_QUALITY_STAGE
+        )
+        chapter_indexes = {
+            int(chapter["id"]): int(chapter["chapter_index"])
+            for chapter in chapters
+        }
+        perceptual_evidence: list[dict[str, Any]] = []
+        if self._perceptual_qa_enabled():
+            for row in segments:
+                segment_id = int(row["id"])
+                check = perceptual_checks.get(segment_id)
+                metrics: dict[str, Any] = {}
+                failure_codes: list[Any] = []
+                if check is not None:
+                    try:
+                        decoded_metrics = json.loads(str(check["metrics_json"] or "{}"))
+                    except (TypeError, json.JSONDecodeError):
+                        decoded_metrics = {}
+                    if isinstance(decoded_metrics, dict):
+                        metrics = decoded_metrics
+                    try:
+                        decoded_failure_codes = json.loads(
+                            str(check["failure_codes_json"] or "[]")
+                        )
+                    except (TypeError, json.JSONDecodeError):
+                        decoded_failure_codes = []
+                    if isinstance(decoded_failure_codes, list):
+                        failure_codes = decoded_failure_codes
+                wav_sha256 = str(row["wav_sha256"] or "")
+                evidence_sha256 = (
+                    str(check["artifact_sha256"] or "") if check is not None else ""
+                )
+                verdict = str(check["verdict"]) if check is not None else "missing"
+                current_artifact = bool(evidence_sha256 and evidence_sha256 == wav_sha256)
+                perceptual_evidence.append(
+                    {
+                        "segment_id": segment_id,
+                        "stable_id": str(row["stable_id"]),
+                        "chapter_id": int(row["chapter_id"]),
+                        "chapter_index": chapter_indexes.get(int(row["chapter_id"])),
+                        "seq": int(row["seq"]),
+                        "wav_path": str(row["wav_path"] or ""),
+                        "wav_sha256": wav_sha256,
+                        "evidence_present": check is not None,
+                        "evidence_artifact_sha256": evidence_sha256,
+                        "current_artifact": current_artifact,
+                        "current_policy_verified": (
+                            current_artifact and verdict == QUALITY_VERDICT_PASS
+                        ),
+                        "verdict": verdict,
+                        "reason": metrics.get("reason"),
+                        "score": metrics.get("score"),
+                        "baseline_score": metrics.get("baseline_score"),
+                        "baseline_delta": metrics.get("baseline_delta"),
+                        "baseline_pitch_semitones": metrics.get(
+                            "baseline_pitch_semitones"
+                        ),
+                        "duration_seconds": metrics.get("duration_seconds"),
+                        "policy_exemption": metrics.get("policy_exemption"),
+                        "review_required": bool(metrics.get("review_required", False)),
+                        "failure_codes": failure_codes,
+                        "attempt": int(check["attempt"]) if check is not None else None,
+                        "policy_hash": str(check["policy_hash"]) if check is not None else None,
+                        "policy_version": (
+                            int(check["policy_version"]) if check is not None else None
+                        ),
+                    }
+                )
         warnings = [
             {
                 "stable_id": row["stable_id"],
@@ -1329,17 +1651,27 @@ class BookPipeline:
         export_json_atomic(self.paths.reports / "review_required.json", warnings)
         export_json_atomic(self.paths.reports / "chapter_quality.json", chapter_quality)
         book = dict(self.db.book())
-        completed_count = sum(
-            row["status"] == ChapterStatus.COMPLETED.value for row in chapter_quality
+        quality_passed_count = sum(
+            row["status"] == ChapterStatus.COMPLETED.value
+            and row["current_policy_verified"]
+            and row["segment_audio_qa_complete"]
+            and row["publishable"]
+            for row in chapter_quality
         )
         failed_count = sum(row["status"] == ChapterStatus.FAILED.value for row in chapter_quality)
         review_count = sum(
-            row["status"] not in {
-                ChapterStatus.COMPLETED.value,
-                ChapterStatus.FAILED.value,
-            }
+            row["status"] != ChapterStatus.FAILED.value
+            and not (
+                row["status"] == ChapterStatus.COMPLETED.value
+                and row["current_policy_verified"]
+                and row["segment_audio_qa_complete"]
+                and row["publishable"]
+            )
             and (
-                row["status"] == CHAPTER_REVIEW_STATUS
+                row["status"] in {
+                    ChapterStatus.COMPLETED.value,
+                    CHAPTER_REVIEW_STATUS,
+                }
                 or bool(
                     row.get("latest_quality_check")
                     and row["latest_quality_check"]["verdict"] != QUALITY_VERDICT_PASS
@@ -1347,12 +1679,11 @@ class BookPipeline:
             )
             for row in chapter_quality
         )
-        pending_count = len(chapter_quality) - completed_count - failed_count - review_count
+        pending_count = len(chapter_quality) - quality_passed_count - failed_count - review_count
         overall_verdict = (
             QUALITY_VERDICT_PASS
             if chapter_quality
-            and completed_count == len(chapter_quality)
-            and all(row["current_policy_verified"] for row in chapter_quality)
+            and quality_passed_count == len(chapter_quality)
             else "fail"
             if failed_count
             else "review"
@@ -1372,13 +1703,17 @@ class BookPipeline:
                     "stage": str(book["stage"]),
                     "overall_verdict": overall_verdict,
                     "chapters_total": len(chapter_quality),
-                    "passed": completed_count,
+                    "passed": quality_passed_count,
                     "review": review_count,
                     "failed": failed_count,
                     "pending": max(0, pending_count),
                 },
                 "global_gates": {
                     "casting_finalized": self.db.casting_is_finalized(),
+                    "segment_audio_qa_complete": bool(chapter_quality)
+                    and all(row["segment_audio_qa_complete"] for row in chapter_quality),
+                    "all_chapters_publishable": bool(chapter_quality)
+                    and all(row["publishable"] for row in chapter_quality),
                     "text_segmentation_fingerprint": self.quality_policy[
                         "stage_fingerprints"
                     ][TEXT_SEGMENTATION_STAGE],
@@ -1392,9 +1727,12 @@ class BookPipeline:
                         for row in chapter_quality
                         if row["status"] != ChapterStatus.COMPLETED.value
                         or not row["current_policy_verified"]
+                        or not row["segment_audio_qa_complete"]
+                        or not row["publishable"]
                     ],
                     "segments": warnings,
                 },
+                "segment_perceptual_evidence": perceptual_evidence,
                 "chapters": chapter_quality,
             },
         )

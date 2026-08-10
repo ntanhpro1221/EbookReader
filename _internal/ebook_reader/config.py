@@ -73,6 +73,27 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "repair_rounds": 2,
         "failure_policy": "fail",
     },
+    "perceptual_qa": {
+        "enabled": False,
+        "failure_policy": "inconclusive",
+        "checkpoint_path": str(
+            Path(os.environ.get("EBOOK_READER_RUNTIME", "runtime"))
+            / "models"
+            / "utmosv2"
+            / "fold0_s42_best_model.pth"
+        ),
+        "model_config": "fusion_stage3",
+        "fold": 0,
+        "model_seed": 42,
+        "device": "cpu",
+        "predict_dataset": "sarulab",
+        "review_delta": -0.8,
+        "minimum_duration_seconds": 1.5,
+        "num_repetitions": 3,
+        "repair_rounds": 2,
+        "inference_seed": 42,
+        "remove_silent_section": True,
+    },
     "audio": {
         "mp3_bitrate": "192k",
         "loudness_lufs": -18.0,
@@ -136,6 +157,7 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     "high_quality": {
         "analysis": {"batch_segments": 20, "low_confidence_threshold": 0.65},
         "asr": {"min_words": 1, "min_similarity": 0.78, "max_wer": 0.30, "repair_rounds": 3},
+        "perceptual_qa": {"enabled": True, "failure_policy": "fail"},
         "tts": {"max_retries": 4, "batch_size": 8},
     },
 }
@@ -282,6 +304,29 @@ def validate_settings(settings: dict[str, Any]) -> None:
         or asr.get("failure_policy") != "fail"
     ):
         raise ValueError("high_quality requires enabled mandatory ASR with failure_policy=fail")
+
+    perceptual = settings.get("perceptual_qa", {})
+    if perceptual.get("failure_policy") not in {"inconclusive", "fail"}:
+        raise ValueError("Unsupported perceptual_qa.failure_policy")
+    checkpoint_path = str(perceptual.get("checkpoint_path", "")).strip()
+    if perceptual.get("enabled") and not checkpoint_path:
+        raise ValueError("Enabled perceptual QA requires an explicit checkpoint_path")
+    review_delta = float(perceptual.get("review_delta", 0.0))
+    if not math.isfinite(review_delta) or review_delta > 0.0:
+        raise ValueError("perceptual_qa.review_delta must be finite and non-positive")
+    minimum_perceptual_duration = float(perceptual.get("minimum_duration_seconds", 0.0))
+    if not math.isfinite(minimum_perceptual_duration) or minimum_perceptual_duration <= 0.0:
+        raise ValueError("perceptual_qa.minimum_duration_seconds must be positive")
+    if int(perceptual.get("num_repetitions", 0)) < 1:
+        raise ValueError("perceptual_qa.num_repetitions must be positive")
+    if int(perceptual.get("repair_rounds", 0)) < 0:
+        raise ValueError("perceptual_qa.repair_rounds must be non-negative")
+    if settings.get("quality_profile") == "high_quality" and (
+        not perceptual.get("enabled") or perceptual.get("failure_policy") != "fail"
+    ):
+        raise ValueError(
+            "high_quality requires enabled perceptual QA with failure_policy=fail"
+        )
 
     safety = settings.get("safety", {})
     for key in (

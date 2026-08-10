@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import threading
 import traceback
 from pathlib import Path
@@ -19,6 +20,7 @@ from .notifier import WindowsNotifier
 from .pipeline import BookPipeline, CriticalResourceStop, PipelineStopped
 from .process_utils import terminate_process_tree
 from .resource_manager import set_worker_priority
+from .runtime_contract import runtime_contract_errors
 
 
 def _configure_logging(log_file: Path) -> None:
@@ -129,6 +131,66 @@ def _apply_runtime_resource_overrides(
     settings = deep_merge(locked_settings, {"resources": resource_overrides})
     validate_settings(settings)
     return settings
+
+
+def _apply_locked_model_cache_environment(settings: dict[str, Any]) -> bool:
+    """Force high-quality inference to use the cache tree validated by the contract."""
+    if settings.get("quality_profile") != "high_quality":
+        return False
+
+    runtime_root = Path(os.environ["EBOOK_READER_RUNTIME"]).resolve()
+    locked_values = {
+        "HF_HOME": str(runtime_root / "models" / "huggingface"),
+        "HF_HUB_CACHE": str(runtime_root / "models" / "huggingface" / "hub"),
+        "TORCH_HOME": str(runtime_root / "models" / "torch"),
+    }
+    os.environ.update(locked_values)
+
+    # Normal worker startup reaches this before these modules are imported. Keep the
+    # cached constants aligned as a defensive measure for embedded/test callers.
+    cached_paths = (
+        ("huggingface_hub.constants", "HF_HOME", locked_values["HF_HOME"]),
+        ("huggingface_hub.constants", "HF_HUB_CACHE", locked_values["HF_HUB_CACHE"]),
+        ("transformers.utils", "HF_HUB_CACHE", locked_values["HF_HUB_CACHE"]),
+        ("transformers.utils.hub", "HF_HUB_CACHE", locked_values["HF_HUB_CACHE"]),
+    )
+    for module_name, attribute, value in cached_paths:
+        module = sys.modules.get(module_name)
+        if module is not None and hasattr(module, attribute):
+            setattr(module, attribute, value)
+    return True
+
+
+def _apply_model_network_policy(settings: dict[str, Any]) -> bool:
+    """Enforce the locked no-download policy before any model backend is loaded."""
+    if settings.get("safety", {}).get("allow_network_downloads_during_job", False):
+        return False
+
+    os.environ["HF_HUB_OFFLINE"] = "1"
+    os.environ["TRANSFORMERS_OFFLINE"] = "1"
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+
+    cached_flags = (
+        ("huggingface_hub.constants", "HF_HUB_OFFLINE"),
+        ("transformers.utils", "_is_offline_mode"),
+        ("transformers.utils.hub", "_is_offline_mode"),
+        ("transformers.utils.import_utils", "_is_offline_mode"),
+        ("datasets.config", "HF_DATASETS_OFFLINE"),
+    )
+    for module_name, attribute in cached_flags:
+        module = sys.modules.get(module_name)
+        if module is not None and hasattr(module, attribute):
+            setattr(module, attribute, True)
+    return True
+
+
+def _validate_model_runtime_contract(settings: dict[str, Any]) -> None:
+    if settings.get("quality_profile") != "high_quality":
+        return
+    runtime_root = Path(os.environ["EBOOK_READER_RUNTIME"]).resolve()
+    errors = runtime_contract_errors(runtime_root, settings=settings)
+    if errors:
+        raise RuntimeError("High-quality runtime contract is invalid: " + "; ".join(errors))
 
 
 def _validate_project_inputs(paths: ProjectPaths, db: ProjectDB, settings: dict[str, Any]) -> None:
@@ -249,6 +311,9 @@ def run_worker(
             locked_settings,
             runtime_resource_overrides,
         )
+        _apply_locked_model_cache_environment(settings)
+        _apply_model_network_policy(settings)
+        _validate_model_runtime_contract(settings)
         db = ProjectDB(
             paths.db,
             synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")),
@@ -306,14 +371,7 @@ def run_worker(
                 "generation": generation,
             },
         )
-        completed_noop = pipeline.prepare_recovery()
-        if not completed_noop and not settings.get("safety", {}).get(
-            "allow_network_downloads_during_job", False
-        ):
-            # Setup prefetches models so a running book never starts a surprise download.
-            os.environ["HF_HUB_OFFLINE"] = "1"
-            os.environ["TRANSFORMERS_OFFLINE"] = "1"
-            os.environ["HF_DATASETS_OFFLINE"] = "1"
+        pipeline.prepare_recovery()
         pipeline.run(recovery_already_run=True)
         _emit_pipeline_result(message_queue, db)
     except PipelineStopped:

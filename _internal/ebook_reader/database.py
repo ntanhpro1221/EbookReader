@@ -18,6 +18,7 @@ QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
 SEGMENT_AUDIO_QUALITY_STAGE = "segment_audio_v1"
+SEGMENT_PERCEPTUAL_QUALITY_STAGE = "segment_perceptual_v1"
 CHAPTER_POST_ENCODE_QUALITY_STAGE = "chapter_post_encode_v1"
 QUALITY_VERDICT_PASS = "pass"
 QUALITY_VERDICTS = {
@@ -580,7 +581,11 @@ class ProjectDB:
                 continue
             if value == "SEGMENT_FAILED" or value == "NON_SPEAKABLE_SEGMENT":
                 continue
-            if value.startswith("TTS_") or value.startswith("ASR_"):
+            if (
+                value.startswith("TTS_")
+                or value.startswith("ASR_")
+                or value.startswith("PERCEPTUAL_")
+            ):
                 continue
             values.append(value)
         return "|".join(values) or None
@@ -591,6 +596,15 @@ class ProjectDB:
             value
             for value in str(existing or "").split("|")
             if value and not value.startswith("ASR_")
+        ]
+        return "|".join(values) or None
+
+    @staticmethod
+    def _without_perceptual_warnings(existing: str | None) -> str | None:
+        values = [
+            value
+            for value in str(existing or "").split("|")
+            if value and not value.startswith("PERCEPTUAL_")
         ]
         return "|".join(values) or None
 
@@ -742,6 +756,30 @@ class ProjectDB:
             chapter_id = int(existing["chapter_id"])
             self._refresh_chapter_counts_conn(conn, chapter_id)
 
+    def mark_perceptual_result(
+        self,
+        segment_id: int,
+        *,
+        warning_code: str | None = None,
+    ) -> None:
+        """Finalize a segment after perceptual QA while replacing stale stage warnings."""
+        with self.transaction() as conn:
+            existing = conn.execute(
+                "SELECT chapter_id,warning_code FROM segments WHERE id=?", (segment_id,)
+            ).fetchone()
+            if existing is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            retained_warning = self._without_perceptual_warnings(
+                str(existing["warning_code"]) if existing["warning_code"] else None
+            )
+            merged_warning = self._merge_warning_codes(retained_warning, warning_code)
+            status = SegmentStatus.WARNING.value if merged_warning else SegmentStatus.VERIFIED.value
+            conn.execute(
+                "UPDATE segments SET status=?,warning_code=?,error=NULL,updated_at=? WHERE id=?",
+                (status, merged_warning, time.time(), segment_id),
+            )
+            self._refresh_chapter_counts_conn(conn, int(existing["chapter_id"]))
+
     def set_segment_warning_code(self, segment_id: int, warning_code: str) -> None:
         with self.transaction() as conn:
             row = conn.execute("SELECT warning_code FROM segments WHERE id=?", (segment_id,)).fetchone()
@@ -822,8 +860,10 @@ class ProjectDB:
                 or row["signal_json"] is None
             ):
                 raise RuntimeError("ASR-only requeue requires a committed signal-validated WAV")
-            retained_warning = self._without_asr_warnings(
-                str(row["warning_code"]) if row["warning_code"] else None
+            retained_warning = self._without_perceptual_warnings(
+                self._without_asr_warnings(
+                    str(row["warning_code"]) if row["warning_code"] else None
+                )
             )
             conn.execute(
                 """
@@ -1335,6 +1375,37 @@ class ProjectDB:
                 """,
                 (normalized_scope, str(stage).strip(), subject_id),
             ).fetchone()
+
+    def latest_segment_quality_checks(
+        self,
+        stage: str,
+        *,
+        current_policy_only: bool = True,
+    ) -> dict[int, sqlite3.Row]:
+        normalized_stage = str(stage).strip()
+        if not normalized_stage:
+            raise ValueError("segment quality lookup stage must not be empty")
+        policy_clause = " AND quality_policies.active=1" if current_policy_only else ""
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT quality_checks.*
+                FROM quality_checks
+                JOIN quality_policies
+                  ON quality_policies.policy_hash=quality_checks.policy_hash
+                 AND quality_policies.policy_version=quality_checks.policy_version
+                WHERE quality_checks.scope=?
+                  AND quality_checks.stage=?
+                  {policy_clause}
+                ORDER BY quality_checks.id
+                """,
+                (QUALITY_SCOPE_SEGMENT, normalized_stage),
+            )
+            latest: dict[int, sqlite3.Row] = {}
+            for row in rows:
+                if row["segment_id"] is not None:
+                    latest[int(row["segment_id"])] = row
+            return latest
 
     @staticmethod
     def _quality_check_is_current_pass_conn(

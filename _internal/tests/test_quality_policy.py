@@ -13,6 +13,12 @@ from ebook_reader.quality_policy import (
     quality_policy_hash,
     text_segmentation_implementation_hash,
 )
+from ebook_reader.runtime_contract import (
+    CRITICAL_RUNTIME_DISTRIBUTIONS,
+    TIMM_CACHE_REVISION,
+    WAV2VEC2_CACHE_REVISION,
+    installed_dependency_provenance,
+)
 
 
 def test_quality_policy_hash_is_stable_and_changes_with_content_thresholds() -> None:
@@ -31,10 +37,20 @@ def test_quality_policy_fingerprints_every_critical_implementation_file() -> Non
     assert "audio_io.py" in QUALITY_IMPLEMENTATION_FILES
     assert "database.py" in QUALITY_IMPLEMENTATION_FILES
     assert "recovery.py" in QUALITY_IMPLEMENTATION_FILES
+    assert "runtime_contract.py" in QUALITY_IMPLEMENTATION_FILES
     assert "voice_catalog.py" in QUALITY_IMPLEMENTATION_FILES
     assert "../pyproject.toml" in QUALITY_IMPLEMENTATION_FILES
     assert "../uv.lock" in QUALITY_IMPLEMENTATION_FILES
     assert len(quality_implementation_hash()) == 64
+
+
+def test_quality_policy_locks_installed_dependency_versions_and_direct_urls() -> None:
+    policy = build_quality_policy(build_settings())
+
+    assert policy["runtime_dependencies"] == installed_dependency_provenance()
+    assert set(policy["runtime_dependencies"]) == set(CRITICAL_RUNTIME_DISTRIBUTIONS)
+    for evidence in policy["runtime_dependencies"].values():
+        assert set(evidence) == {"version", "direct_url"}
 
 
 def test_quality_policy_has_separate_parser_and_casting_fingerprints() -> None:
@@ -49,3 +65,10 @@ def test_quality_policy_has_separate_parser_and_casting_fingerprints() -> None:
     assert policy["stage_fingerprints"][ANALYSIS_CASTING_STAGE] == (
         analysis_casting_implementation_hash()
     )
+    assert policy["settings"]["perceptual_qa"]["wav2vec2_revision"] == (
+        WAV2VEC2_CACHE_REVISION
+    )
+    assert policy["settings"]["perceptual_qa"]["timm_backbone_revision"] == (
+        TIMM_CACHE_REVISION
+    )
+    assert policy["settings"]["perceptual_qa"]["repair_rounds"] == 2

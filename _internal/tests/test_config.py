@@ -18,6 +18,20 @@ def test_unattended_safety_defaults() -> None:
     assert settings["asr"]["enabled"] is True
     assert settings["asr"]["required"] is True
     assert settings["asr"]["failure_policy"] == "fail"
+    assert settings["perceptual_qa"]["enabled"] is False
+
+    high_quality = build_settings("high_quality")
+    assert high_quality["perceptual_qa"]["enabled"] is True
+    assert high_quality["perceptual_qa"]["failure_policy"] == "fail"
+    assert high_quality["perceptual_qa"]["repair_rounds"] == 2
+    # Live calibration: sub-1.5 s expressive phrases produced false MOS outliers,
+    # while mandatory Whisper still verifies their spoken content.
+    assert high_quality["perceptual_qa"]["minimum_duration_seconds"] == 1.5
+
+
+def test_negative_perceptual_repair_rounds_are_rejected() -> None:
+    with pytest.raises(ValueError, match="perceptual_qa.repair_rounds"):
+        build_settings(overrides={"perceptual_qa": {"repair_rounds": -1}})
 
 
 def test_narrator_gender_selects_a_safe_default_voice() -> None:

@@ -6,6 +6,7 @@ import io
 import sqlite3
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,7 +14,11 @@ from ebook_reader import cli
 from ebook_reader import background_runner
 from ebook_reader.background_runner import BackgroundStatus
 from ebook_reader.config import build_settings
-from ebook_reader.database import ProjectDB
+from ebook_reader.database import (
+    SEGMENT_AUDIO_QUALITY_STAGE,
+    SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+    ProjectDB,
+)
 from ebook_reader.project import create_or_open_project
 
 
@@ -36,6 +41,35 @@ def _create_project(tmp_path: Path, names: list[str] | None = None) -> Path:
         "CLI Test",
     )
     return paths.root
+
+
+def test_doctor_uses_actual_critical_dependency_and_runtime_contract_checks(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(cli, "_find_module", lambda name: {"ok": True, "detail": name})
+    monkeypatch.setattr(
+        cli,
+        "critical_dependency_checks",
+        lambda: {"torch": {"ok": True, "detail": "actual import passed"}},
+    )
+    monkeypatch.setattr(
+        cli,
+        "setup_marker_check",
+        lambda _root: {"ok": True, "detail": "schema current"},
+    )
+    monkeypatch.setattr(
+        cli,
+        "perceptual_cache_check",
+        lambda _root: {"ok": True, "detail": "offline smoke passed"},
+    )
+    monkeypatch.setattr(cli.shutil, "which", lambda name: f"C:\\bin\\{name}.exe")
+
+    result = cli._command_doctor(SimpleNamespace(deep=False))
+
+    assert result.exit_code == 0
+    assert result.data["checks"]["runtime:torch"]["detail"] == "actual import passed"
+    assert result.data["checks"]["runtime:setup_marker"]["ok"] is True
+    assert result.data["checks"]["model:utmosv2_cache"]["ok"] is True
 
 
 def test_numeric_range_is_inclusive_and_preserves_explicit_zero_padding() -> None:
@@ -200,6 +234,63 @@ def test_validate_detects_source_change_and_require_complete_gate(tmp_path: Path
     assert validation["ok"] is False
     assert any("Source chapter" in error for error in validation["errors"])
     assert any("Completion required" in error for error in validation["errors"])
+
+
+def test_validate_rejects_completed_chapter_without_perceptual_evidence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = _create_project(tmp_path, ["000.txt"])
+    writable_db = ProjectDB(project_root / "project.sqlite3")
+    chapter = writable_db.list_chapters()[0]
+    writable_db.update_chapter_status(int(chapter["id"]), "completed")
+    output = Path(str(chapter["output_mp3"]))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(b"complete artifact")
+    output_sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
+    requested_stages: list[str] = []
+
+    def fake_segment_qa(
+        _db: cli._ReadOnlyProjectDB,
+        _chapter_id: int,
+        stage: str = SEGMENT_AUDIO_QUALITY_STAGE,
+    ) -> bool:
+        requested_stages.append(stage)
+        return stage == SEGMENT_AUDIO_QUALITY_STAGE
+
+    monkeypatch.setattr("ebook_reader.audio_io.verify_mp3", lambda _path: (True, "ok"))
+    monkeypatch.setattr(
+        cli._ReadOnlyProjectDB,
+        "artifact_by_key",
+        lambda _db, _key: {"verified": 1, "sha256": output_sha256},
+    )
+    monkeypatch.setattr(
+        cli._ReadOnlyProjectDB,
+        "chapter_artifact_is_current_qa_verified",
+        lambda _db, _chapter_index: True,
+    )
+    monkeypatch.setattr(
+        cli._ReadOnlyProjectDB,
+        "chapter_segments_have_current_audio_qa",
+        fake_segment_qa,
+    )
+    monkeypatch.setattr(
+        cli._ReadOnlyProjectDB,
+        "chapter_is_publishable",
+        lambda _db, _chapter_id: True,
+    )
+
+    validation = cli.validate_project(project_root)
+
+    assert validation["ok"] is False
+    assert requested_stages == [
+        SEGMENT_AUDIO_QUALITY_STAGE,
+        SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+    ]
+    assert validation["artifacts"][0]["segment_audio_qa"] is True
+    assert validation["artifacts"][0]["segment_perceptual_qa"] is False
+    assert validation["artifacts"][0]["segment_qa"] is False
+    assert any("segment_perceptual_qa=False" in error for error in validation["errors"])
 
 
 def test_report_command_returns_compact_quality_summary(tmp_path: Path, capsys) -> None:

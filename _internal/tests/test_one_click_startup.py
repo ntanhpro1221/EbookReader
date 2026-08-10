@@ -39,6 +39,7 @@ def test_one_click_startup_contract() -> None:
     assert '$AppScript = Join-Path $InternalRoot "app.py"' in launcher
     assert '$Pythonw = Join-Path $RuntimeRoot ".venv\\Scripts\\pythonw.exe"' in launcher
     assert 'import ebook_reader.gui' in launcher
+    assert "runtime_contract_errors" in launcher
     assert "sys.path.insert(0" in launcher
     assert '$ErrorActionPreference = "Continue"' in launcher
     assert "$ErrorActionPreference = $previousErrorAction" in launcher
@@ -62,11 +63,14 @@ def test_one_click_startup_contract() -> None:
     assert "[Console]::ReadKey($true)" in launcher
     assert "cửa sổ sẽ không tự đóng" in launcher
     assert "& $SetupScript -NoPause -DependenciesOnly" in launcher
-    assert "Không cài lại PyTorch, không tải lại model." in launcher
+    assert "Dữ liệu project và các checkpoint audiobook được giữ nguyên." in launcher
     assert "Đang mở Ebook Reader..." not in launcher
     assert '[switch]$NoPause' in setup
     assert '[switch]$DependenciesOnly' in setup
     assert "if ($DependenciesOnly)" in setup
+    assert setup.index('Ensure-WingetPackage "git" "Git.Git" "Git"') < setup.index(
+        "if ($DependenciesOnly)"
+    )
     assert setup.index("if ($DependenciesOnly)") < setup.index(
         'Ensure-WingetPackage "uv" "astral-sh.uv" "uv"'
     )
@@ -80,11 +84,16 @@ def test_one_click_startup_contract() -> None:
     assert "function Invoke-NativeChecked" in setup
     assert ' & $Python -m pytest ' not in setup
     assert 'Ensure-WingetPackage "uv"' in setup
+    assert 'Ensure-WingetPackage "git"' in setup
     assert 'Ensure-WingetPackage "ollama"' in setup
     assert 'Ensure-WingetPackage "ffmpeg"' in setup
-    assert 'pip install torch==2.8.0 torchaudio==2.8.0' in setup
+    assert "--silent --disable-interactivity" in setup
+    assert "--force-reinstall torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0" in setup
+    assert "--index-url https://download.pytorch.org/whl/cu128" in setup
     assert 'ollama pull qwen3:8b' in setup
-    assert "snapshot_download" not in setup
+    assert "snapshot_download" in setup
+    assert "revision='$Wav2Vec2Revision'" in setup
+    assert "revision='$TimmBackboneRevision'" in setup
     assert '$AppName = "Ebook Reader"' in shortcut
     assert '$Launcher = Join-Path $ProjectRoot "_internal\\Ebook Reader.vbs"' in shortcut
     assert '$RootShortcutPath = Join-Path $ProjectRoot "$AppName.lnk"' in shortcut
@@ -106,8 +115,31 @@ def test_one_click_startup_contract() -> None:
         "pyworld==0.3.5",
         "imageio-ffmpeg==0.6.0",
         "openai-whisper==20250625",
+        "torch==2.8.0",
+        "torchaudio==2.8.0",
+        "torchvision==0.23.0",
+        "huggingface-hub==1.7.1",
+        "librosa==0.11.0",
+        "timm==1.0.28",
+        "transformers==5.7.0",
+        (
+            "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@"
+            "cc2700db57bb83ee13dc31ebe1b868c254e15d09"
+        ),
         "vieneu==3.2.3",
     ]
     assert 'VieNeuEngine' in setup
     assert 'required-set(e.voices)' in setup
     assert "whisper.load_model('turbo'" in setup
+    assert "torchvision==0.23.0" in setup
+    assert "fold0_s42_best_model.pth" in setup
+    assert "506474f2b33dc77c234d668cc419be1861899cad" in setup
+    assert "C8149D988E4BBF3F347E6966B5D769DE347A5F8C59FFCA1DC4BD4BF5B8585E57" in setup
+    assert "0b5b8e868dd84f03fd87d01f9c4ff0f080fecfe8" in setup
+    assert "ea9abc143ea2b9d8e1ec1de277bce02149b9cf0e" in setup
+    assert "UTMOSv2 base cache revisions locked" in setup
+    assert "cache_ready_v1.json" in setup
+    assert "UTMOSv2 pinned offline smoke-load passed" in setup
+    assert "UTMOSv2 pinned cache integrity passed" in setup
+    assert "perceptual_cache_check" in setup
+    assert "create_model(pretrained=True" in setup

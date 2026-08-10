@@ -57,7 +57,7 @@ function Test-AppRuntime {
         # Windows PowerShell 5.1 có thể biến stderr của native process thành terminating error.
         # Thu traceback lại để launcher tự phân loại repair thay vì thoát trước khi đọc exit code.
         $ErrorActionPreference = "Continue"
-        $checkOutput = & $Python -c "import sys; sys.path.insert(0, r'''$InternalRoot'''); import ebook_reader.gui" 2>&1
+        $checkOutput = & $Python -c "import sys; from pathlib import Path; sys.path.insert(0, r'''$InternalRoot'''); from ebook_reader.runtime_contract import runtime_contract_errors; errors=runtime_contract_errors(Path(r'''$RuntimeRoot''')); assert not errors, '\n'.join(errors); import ebook_reader.gui" 2>&1
         $checkExitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousErrorAction
@@ -181,8 +181,8 @@ function Invoke-Launcher {
         )
         if ($canRepairDependencies) {
             Write-Host ""
-            Write-Host "Môi trường thiếu dependency Python; đang repair nhẹ."
-            Write-Host "Không cài lại PyTorch, không tải lại model."
+            Write-Host "Môi trường hoặc cache model đã cũ; đang repair runtime đã khóa."
+            Write-Host "Dữ liệu project và các checkpoint audiobook được giữ nguyên."
             if ($script:RuntimeCheckDetails) {
                 Write-Host "Phát hiện: $script:RuntimeCheckDetails" -ForegroundColor DarkGray
             }

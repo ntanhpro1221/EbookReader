@@ -7,6 +7,7 @@ Các thành phần chính:
 - Qwen3 qua Ollama;
 - VieNeu / `vieneu`;
 - OpenAI Whisper;
+- UTMOSv2 (SaruLab, MIT) cùng checkpoint naturalness MOS, Wav2Vec2 base, timm EfficientNet, Transformers, torchvision và librosa;
 - PyTorch và torchaudio;
 - PyWORLD và WORLD vocoder;
 - pyloudnorm;

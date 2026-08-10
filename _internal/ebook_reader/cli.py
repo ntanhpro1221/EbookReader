@@ -20,10 +20,19 @@ from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 from .config import PROFILE_OVERRIDES, build_settings, load_settings, settings_hash, validate_settings
-from .database import SEGMENT_AUDIO_QUALITY_STAGE, ProjectDB
+from .database import (
+    SEGMENT_AUDIO_QUALITY_STAGE,
+    SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+    ProjectDB,
+)
 from .io_utils import natural_key, sha256_file, slugify
 from .models import BookStatus, ChapterStatus, ProjectPaths
 from .project import create_or_open_project, infer_book_title
+from .runtime_contract import (
+    critical_dependency_checks,
+    perceptual_cache_check,
+    setup_marker_check,
+)
 from .text_processing import build_chapter_manifest, input_manifest_hash
 
 
@@ -511,10 +520,21 @@ def validate_project(project_root: Path | str, *, require_complete: bool = False
             and sha256_file(output) == str(artifact["sha256"])
         )
         chapter_qa = db.chapter_artifact_is_current_qa_verified(chapter_index)
-        segment_qa = db.chapter_segments_have_current_audio_qa(
+        segment_audio_qa = db.chapter_segments_have_current_audio_qa(
             chapter_id,
             SEGMENT_AUDIO_QUALITY_STAGE,
         )
+        perceptual_qa_enabled = bool(
+            settings.get("perceptual_qa", {}).get("enabled", False)
+        )
+        segment_perceptual_qa = (
+            not perceptual_qa_enabled
+            or db.chapter_segments_have_current_audio_qa(
+                chapter_id,
+                SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+            )
+        )
+        segment_qa = segment_audio_qa and segment_perceptual_qa
         publishable = db.chapter_is_publishable(chapter_id)
         passed = decoded and checksum_ok and chapter_qa and segment_qa and publishable
         if passed:
@@ -523,7 +543,9 @@ def validate_project(project_root: Path | str, *, require_complete: bool = False
             errors.append(
                 f"Chapter {chapter_index} completed artifact failed validation "
                 f"(decode={decoded}, checksum={checksum_ok}, chapter_qa={chapter_qa}, "
-                f"segment_qa={segment_qa}, publishable={publishable}): {reason}"
+                f"segment_audio_qa={segment_audio_qa}, "
+                f"segment_perceptual_qa={segment_perceptual_qa}, "
+                f"publishable={publishable}): {reason}"
             )
         artifact_results.append(
             {
@@ -532,6 +554,8 @@ def validate_project(project_root: Path | str, *, require_complete: bool = False
                 "decode": decoded,
                 "checksum": checksum_ok,
                 "chapter_qa": chapter_qa,
+                "segment_audio_qa": segment_audio_qa,
+                "segment_perceptual_qa": segment_perceptual_qa,
                 "segment_qa": segment_qa,
                 "publishable": publishable,
                 "passed": passed,
@@ -827,11 +851,12 @@ def _command_doctor(args: argparse.Namespace) -> CommandResult:
         "pyloudnorm",
         "pyworld",
         "imageio_ffmpeg",
-        "torch",
         "whisper",
         "vieneu",
     ):
         checks[f"module:{module}"] = _find_module(module)
+    for dependency, result in critical_dependency_checks().items():
+        checks[f"runtime:{dependency}"] = result
     for executable in ("nvidia-smi", "ollama"):
         resolved = shutil.which(executable)
         checks[f"executable:{executable}"] = {"ok": bool(resolved), "detail": resolved or "not found"}
@@ -843,6 +868,9 @@ def _command_doctor(args: argparse.Namespace) -> CommandResult:
         "ok": bool(previews),
         "detail": f"{len(previews)} WAV preview(s)",
     }
+    runtime_root = Path(os.environ["EBOOK_READER_RUNTIME"]).resolve()
+    checks["runtime:setup_marker"] = setup_marker_check(runtime_root)
+    checks["model:utmosv2_cache"] = perceptual_cache_check(runtime_root)
     deep_output = ""
     deep_returncode: int | None = None
     if args.deep:

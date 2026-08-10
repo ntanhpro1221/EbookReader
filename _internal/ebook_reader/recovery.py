@@ -5,7 +5,11 @@ from pathlib import Path
 
 from .audio_io import inspect_wav, verify_mp3
 from .background_runner import BACKGROUND_DIRECTORY
-from .database import SEGMENT_AUDIO_QUALITY_STAGE, ProjectDB
+from .database import (
+    SEGMENT_AUDIO_QUALITY_STAGE,
+    SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+    ProjectDB,
+)
 from .io_utils import remove_part_files, sha256_file
 from .models import ProjectPaths, SegmentStatus
 
@@ -24,6 +28,46 @@ class RecoveryReport:
 
 class RecoveryError(RuntimeError):
     pass
+
+
+def _perceptual_qa_enabled(settings: dict) -> bool:
+    return bool(settings.get("perceptual_qa", {}).get("enabled", False))
+
+
+def _segment_has_current_audio_qa(
+    db: ProjectDB,
+    settings: dict,
+    *,
+    segment_id: int,
+    artifact_sha256: str,
+) -> bool:
+    if not db.segment_audio_is_current_qa_verified(
+        segment_id,
+        artifact_sha256,
+        SEGMENT_AUDIO_QUALITY_STAGE,
+    ):
+        return False
+    return not _perceptual_qa_enabled(settings) or db.segment_audio_is_current_qa_verified(
+        segment_id,
+        artifact_sha256,
+        SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+    )
+
+
+def _chapter_has_current_segment_audio_qa(
+    db: ProjectDB,
+    settings: dict,
+    chapter_id: int,
+) -> bool:
+    if not db.chapter_segments_have_current_audio_qa(
+        chapter_id,
+        SEGMENT_AUDIO_QUALITY_STAGE,
+    ):
+        return False
+    return not _perceptual_qa_enabled(settings) or db.chapter_segments_have_current_audio_qa(
+        chapter_id,
+        SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+    )
 
 
 def _validate_chapter_source_for_completed_fast_path(chapter, settings: dict) -> None:
@@ -64,9 +108,10 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             quality_ok = db.chapter_artifact_is_current_qa_verified(
                 int(chapter["chapter_index"])
             )
-            segment_quality_ok = db.chapter_segments_have_current_audio_qa(
+            segment_quality_ok = _chapter_has_current_segment_audio_qa(
+                db,
+                settings,
                 int(chapter["id"]),
-                SEGMENT_AUDIO_QUALITY_STAGE,
             )
             checksum_ok = bool(
                 artifact
@@ -107,10 +152,11 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             valid = checksum_ok and signal_ok
         if valid:
             status = str(row["status"])
-            quality_ok = db.segment_audio_is_current_qa_verified(
-                int(row["id"]),
-                str(row["wav_sha256"] or ""),
-                SEGMENT_AUDIO_QUALITY_STAGE,
+            quality_ok = _segment_has_current_audio_qa(
+                db,
+                settings,
+                segment_id=int(row["id"]),
+                artifact_sha256=str(row["wav_sha256"] or ""),
             )
             if status in {
                 SegmentStatus.VERIFIED.value,
@@ -118,7 +164,7 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             } and not quality_ok:
                 db.requeue_segment_for_asr(
                     int(row["id"]),
-                    "Recovery requires ASR under the current locked quality policy",
+                    "Recovery requires ASR and perceptual QA under the current locked quality policy",
                 )
                 report.requeued_asr += 1
             else:

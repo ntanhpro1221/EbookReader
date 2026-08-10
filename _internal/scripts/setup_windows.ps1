@@ -10,6 +10,16 @@ $SetupMarker = Join-Path $RuntimeRoot ".setup_complete"
 $VenvRoot = Join-Path $RuntimeRoot ".venv"
 $Python = Join-Path $VenvRoot "Scripts\python.exe"
 $ModelsRoot = Join-Path $RuntimeRoot "models"
+$SetupSchemaVersion = 2
+$PerceptualCacheSchemaVersion = 1
+$UtmosSourceCommit = "cc2700db57bb83ee13dc31ebe1b868c254e15d09"
+$UtmosRevision = "506474f2b33dc77c234d668cc419be1861899cad"
+$UtmosCheckpointSha256 = "C8149D988E4BBF3F347E6966B5D769DE347A5F8C59FFCA1DC4BD4BF5B8585E57"
+$Wav2Vec2Revision = "0b5b8e868dd84f03fd87d01f9c4ff0f080fecfe8"
+$TimmBackboneRevision = "ea9abc143ea2b9d8e1ec1de277bce02149b9cf0e"
+$UtmosRoot = Join-Path $ModelsRoot "utmosv2"
+$UtmosCheckpoint = Join-Path $UtmosRoot "fold0_s42_best_model.pth"
+$PerceptualReadyMarker = Join-Path $UtmosRoot "cache_ready_v1.json"
 
 New-Item -ItemType Directory -Force -Path $RuntimeRoot | Out-Null
 
@@ -44,7 +54,7 @@ function Ensure-WingetPackage([string]$Command, [string]$PackageId, [string]$Dis
     }
     Write-Host "Đang cài $DisplayName..."
     Invoke-NativeChecked {
-        winget install --exact --id $PackageId --accept-package-agreements --accept-source-agreements
+        winget install --exact --id $PackageId --silent --disable-interactivity --accept-package-agreements --accept-source-agreements
     } "Cài $DisplayName bằng winget"
     Refresh-Path
     if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
@@ -57,27 +67,117 @@ function Install-AppDependencies {
     Invoke-NativeChecked {
         & $Python -m pip install --no-build-isolation -e $InternalRoot
     } "Cài Ebook Reader"
+    & $Python -c "import importlib.metadata as m, json; direct=json.loads(m.distribution('utmosv2').read_text('direct_url.json') or '{}'); vcs=direct.get('vcs_info', {}); source=direct.get('url', '').removeprefix('git+').rstrip('/').removesuffix('.git').casefold(); expected='https://github.com/sarulab-speech/UTMOSv2.git'.rstrip('/').removesuffix('.git').casefold(); assert source == expected, source; assert vcs.get('commit_id', '').casefold() == '$UtmosSourceCommit'.casefold()" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Cài lại UTMOSv2 từ commit chính thức đã khóa..."
+        Invoke-NativeChecked {
+            & $Python -m pip install --force-reinstall --no-deps "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@$UtmosSourceCommit"
+        } "Khóa source UTMOSv2"
+    }
     Invoke-NativeChecked { & $Python -m pip check } "Kiểm tra dependency"
+}
+
+function Test-PytorchCudaStack {
+    & $Python -c "import torch, torchaudio, torchvision; assert torch.__version__.startswith('2.8.0+cu128'), torch.__version__; assert torchaudio.__version__.startswith('2.8.0+cu128'), torchaudio.__version__; assert torchvision.__version__.startswith('0.23.0'), torchvision.__version__; assert torch.version.cuda == '12.8', torch.version.cuda" 2>$null
+    return $LASTEXITCODE -eq 0
+}
+
+function Install-PytorchCudaStack {
+    if (Test-PytorchCudaStack) {
+        Write-Host "[OK] PyTorch CUDA 12.8"
+        return
+    }
+    Write-Host "Cài/repair PyTorch CUDA 12.8 cho RTX 50 Laptop..."
+    Invoke-NativeChecked {
+        & $Python -m pip install --upgrade --force-reinstall torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+    } "Cài PyTorch CUDA 12.8"
+    if (-not (Test-PytorchCudaStack)) {
+        throw "PyTorch/torchaudio không phải CUDA 12.8 hoặc torchvision không tương thích."
+    }
 }
 
 function Write-SetupMarker {
     $markerPayload = [ordered]@{
+        schema_version = $SetupSchemaVersion
         completed_at = (Get-Date).ToString("o")
         python = $Python
         internal_root = $InternalRoot
+        perceptual_ready_marker = $PerceptualReadyMarker
     }
     $markerTemp = "$SetupMarker.part"
     $markerPayload | ConvertTo-Json | Set-Content -Encoding UTF8 $markerTemp
     Move-Item -Force -LiteralPath $markerTemp -Destination $SetupMarker
 }
 
+function Install-PerceptualQaAssets {
+    New-Item -ItemType Directory -Force -Path $UtmosRoot | Out-Null
+    Remove-Item -Force -LiteralPath $PerceptualReadyMarker -ErrorAction SilentlyContinue
+    Write-Host "Tải checkpoint UTMOSv2 và chuẩn bị cache perceptual QA..."
+    $PreviousHfOffline = $env:HF_HUB_OFFLINE
+    $PreviousTransformersOffline = $env:TRANSFORMERS_OFFLINE
+    try {
+        $env:HF_HUB_OFFLINE = "0"
+        $env:TRANSFORMERS_OFFLINE = "0"
+        Invoke-NativeChecked {
+            & $Python -c "from huggingface_hub import hf_hub_download; from pathlib import Path; import hashlib; target=Path(r'$UtmosCheckpoint'); downloaded=Path(hf_hub_download(repo_id='sarulab-speech/UTMOSv2', filename='fold0_s42_best_model.pth', revision='$UtmosRevision', local_dir=r'$UtmosRoot')); assert downloaded.resolve()==target.resolve(), (downloaded,target); handle=target.open('rb'); actual=hashlib.file_digest(handle, 'sha256').hexdigest().upper(); handle.close(); assert actual=='$UtmosCheckpointSha256', actual; print('UTMOSv2 checkpoint:', target)"
+        } "Tải checkpoint UTMOSv2"
+        Invoke-NativeChecked {
+            & $Python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='facebook/wav2vec2-base', revision='$Wav2Vec2Revision', cache_dir=r'$env:HF_HUB_CACHE', allow_patterns=['config.json','preprocessor_config.json','pytorch_model.bin']); snapshot_download(repo_id='timm/tf_efficientnetv2_s.in21k_ft_in1k', revision='$TimmBackboneRevision', cache_dir=r'$env:HF_HUB_CACHE', allow_patterns=['model.safetensors']); print('UTMOSv2 pinned base snapshots prepared')"
+        } "Tải snapshot nền UTMOSv2 đã khóa"
+        Invoke-NativeChecked {
+            & $Python -c "from pathlib import Path; hub=Path(r'$env:HF_HUB_CACHE'); refs=[(hub/'models--facebook--wav2vec2-base'/'refs'/'main','$Wav2Vec2Revision'),(hub/'models--timm--tf_efficientnetv2_s.in21k_ft_in1k'/'refs'/'main','$TimmBackboneRevision')]; [(p.parent.mkdir(parents=True,exist_ok=True),p.write_text(rev,encoding='utf-8')) for p,rev in refs]; assert all(p.read_text(encoding='utf-8').strip()==rev for p,rev in refs); print('UTMOSv2 base cache revisions locked')"
+        } "Khóa revision cache nền UTMOSv2"
+
+        $env:HF_HUB_OFFLINE = "1"
+        $env:TRANSFORMERS_OFFLINE = "1"
+        Invoke-NativeChecked {
+            & $Python -c "from utmosv2 import create_model; m=create_model(pretrained=True, config='fusion_stage3', fold=0, checkpoint_path=r'$UtmosCheckpoint', seed=42, device='cpu'); del m; print('UTMOSv2 pinned offline smoke-load passed')"
+        } "Kiểm tra cache UTMOSv2 offline"
+    } finally {
+        if ($null -eq $PreviousHfOffline) {
+            Remove-Item Env:HF_HUB_OFFLINE -ErrorAction SilentlyContinue
+        } else {
+            $env:HF_HUB_OFFLINE = $PreviousHfOffline
+        }
+        if ($null -eq $PreviousTransformersOffline) {
+            Remove-Item Env:TRANSFORMERS_OFFLINE -ErrorAction SilentlyContinue
+        } else {
+            $env:TRANSFORMERS_OFFLINE = $PreviousTransformersOffline
+        }
+    }
+
+    $markerPayload = [ordered]@{
+        schema_version = $PerceptualCacheSchemaVersion
+        completed_at = (Get-Date).ToString("o")
+        checkpoint_revision = $UtmosRevision
+        checkpoint_sha256 = $UtmosCheckpointSha256
+        wav2vec2_revision = $Wav2Vec2Revision
+        timm_backbone_revision = $TimmBackboneRevision
+        checkpoint_path = $UtmosCheckpoint
+        model_config = "fusion_stage3"
+        fold = 0
+        seed = 42
+        hf_home = $env:HF_HOME
+    }
+    $markerTemp = "$PerceptualReadyMarker.part"
+    $markerPayload | ConvertTo-Json | Set-Content -Encoding UTF8 $markerTemp
+    Move-Item -Force -LiteralPath $markerTemp -Destination $PerceptualReadyMarker
+    Invoke-NativeChecked {
+        & $Python -c "from pathlib import Path; from ebook_reader.runtime_contract import perceptual_cache_check; result=perceptual_cache_check(Path(r'$RuntimeRoot')); assert result['ok'], result['detail']; print('UTMOSv2 pinned cache integrity passed')"
+    } "Kiểm tra integrity cache UTMOSv2"
+}
+
+Ensure-WingetPackage "git" "Git.Git" "Git"
+
 if ($DependenciesOnly) {
     if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
         throw "Không thể repair dependency vì runtime Python chưa tồn tại."
     }
     Write-Host "=== Ebook Reader - repair dependency Python ===" -ForegroundColor Cyan
-    Write-Host "Giữ nguyên PyTorch, model và dữ liệu sách hiện có."
+    Write-Host "Xác minh dependency, PyTorch CUDA và cache model; giữ nguyên dữ liệu sách."
+    Install-PytorchCudaStack
     Install-AppDependencies
+    Install-PerceptualQaAssets
     Write-SetupMarker
     Write-Host "REPAIR DEPENDENCY HOÀN TẤT" -ForegroundColor Green
     return
@@ -103,10 +203,7 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
 }
 
 Invoke-NativeChecked { & $Python -m pip install --upgrade pip setuptools wheel } "Cập nhật pip/setuptools/wheel"
-Write-Host "Cài PyTorch CUDA 12.8 cho RTX 50 Laptop..."
-Invoke-NativeChecked {
-    & $Python -m pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
-} "Cài PyTorch CUDA 12.8"
+Install-PytorchCudaStack
 
 Install-AppDependencies
 
@@ -140,6 +237,8 @@ Write-Host "Tải Whisper Turbo..."
 Invoke-NativeChecked {
     & $Python -c "import whisper; m=whisper.load_model('turbo', device='cpu', download_root=r'$WhisperRoot'); del m; print('Whisper Turbo ready')"
 } "Tải Whisper Turbo"
+
+Install-PerceptualQaAssets
 
 Write-Host "Chạy system check..."
 Invoke-NativeChecked { & $Python (Join-Path $PSScriptRoot "check_system.py") } "Chạy system check"

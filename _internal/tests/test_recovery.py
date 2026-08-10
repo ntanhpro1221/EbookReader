@@ -15,6 +15,7 @@ from ebook_reader.database import (
     QUALITY_SCOPE_SEGMENT,
     QUALITY_VERDICT_PASS,
     SEGMENT_AUDIO_QUALITY_STAGE,
+    SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
 )
 from ebook_reader.io_utils import sha256_file
@@ -92,6 +93,15 @@ def complete_project_with_current_qa(paths, settings, db, row):
     db.record_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        artifact_sha256=wav_checksum,
+        policy_hash=str(quality["policy_hash"]),
+        policy_version=int(quality["policy_version"]),
+        verdict=QUALITY_VERDICT_PASS,
+        segment_id=int(row["id"]),
+    )
+    db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
         artifact_sha256=wav_checksum,
         policy_hash=str(quality["policy_hash"]),
         policy_version=int(quality["policy_version"]),
@@ -236,6 +246,23 @@ def test_completed_project_uses_verified_mp3_fast_path(tmp_path: Path, monkeypat
     report = recover_project(paths, db, settings)
 
     assert report.completed_verified is True
+
+
+def test_completed_project_without_perceptual_evidence_is_requeued(tmp_path: Path, monkeypatch) -> None:
+    paths, settings, db, row = setup_db(tmp_path)
+    complete_project_with_current_qa(paths, settings, db, row)
+    with db.connect() as conn:
+        conn.execute(
+            "DELETE FROM quality_checks WHERE scope=? AND stage=?",
+            (QUALITY_SCOPE_SEGMENT, SEGMENT_PERCEPTUAL_QUALITY_STAGE),
+        )
+    monkeypatch.setattr("ebook_reader.recovery.verify_mp3", lambda _path: (True, "ok"))
+
+    report = recover_project(paths, db, settings)
+
+    assert report.completed_verified is False
+    assert report.requeued_asr == 1
+    assert db.get_segment(int(row["id"]))["status"] == "signal_passed"
     assert report.recovered_verified == 0
 
 
@@ -298,6 +325,15 @@ def test_completed_project_without_current_quality_metadata_is_not_fast_pathed(
     db.record_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        artifact_sha256=checksum,
+        policy_hash=str(quality["policy_hash"]),
+        policy_version=int(quality["policy_version"]),
+        verdict=QUALITY_VERDICT_PASS,
+        segment_id=int(row["id"]),
+    )
+    db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
         artifact_sha256=checksum,
         policy_hash=str(quality["policy_hash"]),
         policy_version=int(quality["policy_version"]),
