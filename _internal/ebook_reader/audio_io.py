@@ -126,7 +126,7 @@ MIN_VALIDATION_SECONDS = 5.0
 VALIDATION_PADDING_SECONDS = 8.0
 DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
 SHORT_UTTERANCE_MAX_WORDS = 2
-SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS = 8
+SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS = 12
 SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
 SHORT_UTTERANCE_MAX_GENERATION_FRAMES = 24
 
@@ -150,7 +150,7 @@ def _segment_value(segment: Any, key: str, default: Any) -> Any:
 
 
 def is_short_utterance(text: str) -> bool:
-    words = re.findall(r"[^\W_]+", text, re.UNICODE)
+    words = re.findall(r"[^\W_]+(?:-[^\W_]+)*", text, re.UNICODE)
     speakable_chars = sum(char.isalnum() for char in text)
     if not words or speakable_chars > SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS:
         return False

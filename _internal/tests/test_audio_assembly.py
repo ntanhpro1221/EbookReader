@@ -340,6 +340,16 @@ def test_two_word_short_dialogue_uses_the_short_generation_budget() -> None:
     assert policy.generation_max_frames == 24
 
 
+def test_short_pronunciation_expansion_does_not_receive_a_long_repetition_budget() -> None:
+    policy = segment_duration_policy(
+        "“Anh Lu-si-en!”",
+        build_settings(),
+        {"kind": "dialogue", "pace": "normal"},
+    )
+
+    assert policy.generation_max_frames == 24
+
+
 def test_vieneu_output_at_exact_frame_ceiling_is_reported_without_judging_content() -> None:
     policy = segment_duration_policy(
         "“Hà... hà...”",
