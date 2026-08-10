@@ -33,6 +33,8 @@ ALLOWED_EMOTIONS = {
 }
 ALLOWED_PACES = {"slow", "normal", "fast"}
 ALLOWED_VOLUMES = {"soft", "normal", "loud"}
+HIGH_AROUSAL_EMOTIONS = {"angry", "afraid", "excited"}
+LOW_AROUSAL_EMOTIONS = {"neutral", "tender", "tired", "whispering"}
 RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
 BATCH_ID_PREFIX = "S"
 BATCH_ID_WIDTH = 3
@@ -58,10 +60,27 @@ CMUDICT_TRANSLITERATION_CONFIDENCE = 0.98
 LOCAL_NAME_FALLBACK_CONFIDENCE = 0.88
 ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
 EXPLICIT_ATTRIBUTION_NOTE = "đã khóa người nói từ lời dẫn cùng đoạn văn"
+PARAGRAPH_SPEAKER_LOCK_NOTE = "đã đồng nhất người nói trong cùng đoạn văn"
+CONTINUED_DIALOGUE_LOCK_NOTE = "đã giữ người nói cho câu thoại nối tiếp"
 DIRECT_ADDRESS_TITLES = (
     "anh", "chị", "ông", "bà", "ngài", "cô", "chú", "bác", "dì", "cậu", "em",
     "cha", "mẹ", "thầy", "sư phụ", "đại nhân", "đội trưởng",
 )
+GENERIC_SPEAKER_TRAITS = {
+    "cậu bé": ("male", "child"),
+    "cô bé": ("female", "child"),
+    "đứa trẻ": ("unknown", "child"),
+    "chàng trai": ("male", "young"),
+    "cô gái": ("female", "young"),
+    "người đàn ông trung niên": ("male", "adult"),
+    "người đàn ông": ("male", "adult"),
+    "người phụ nữ": ("female", "adult"),
+    "ông lão": ("male", "elderly"),
+    "bà lão": ("female", "elderly"),
+}
+GENERIC_CHILD_LABELS = {"trẻ em", "đứa bé", "đứa trẻ", "trẻ nhỏ"}
+DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘"})
+DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’"})
 NAME_TOKEN_PATTERN = re.compile(
     r"(?<![\wÀ-ỹĐđ])([A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*)(?![\wÀ-ỹĐđ])"
 )
@@ -367,7 +386,9 @@ SYSTEM_PROMPT = """Bạn là đạo diễn audiobook tiếng Việt và biên t�
 Phân tích từng đoạn theo đúng ID. Không hỏi người dùng và không bỏ sót ID.
 
 Quy tắc:
-1. Lời kể dùng speaker=NARRATOR.
+1. Ranh giới hội thoại trong trường hint đã được parser kiểm chứng và là bất biến: không được đổi
+   dialogue thành narration/thought hoặc ngược lại, và không dịch chuyển kết quả sang ID trước/sau.
+   Chỉ narration và thought được phép hiệu chỉnh qua lại. Lời kể dùng speaker=NARRATOR.
 2. Hội thoại dùng tên nhân vật nhất quán với danh sách đã biết.
    Với nhân vật có tên, speaker chỉ chứa tên riêng chuẩn: không thêm tiền tố NPC, vai vế/xưng hô như dì/ông/quý cô,
    và không chèn dấu câu vào giữa tên. Phải giữ đúng gender đã biết của cùng tên qua mọi batch.
@@ -425,6 +446,18 @@ def _safe_choice(value: Any, allowed: set[str], default: str) -> str:
     return normalized if normalized in allowed else default
 
 
+def _calibrated_intensity(text: str, kind: str, emotion: str, requested: Any) -> int:
+    intensity = max(0, min(3, int(requested)))
+    if emotion in LOW_AROUSAL_EMOTIONS:
+        return min(intensity, 1)
+    if kind in {"narration", "thought"}:
+        return min(intensity, 2)
+    has_exclamation = "!" in text or "！" in text
+    if emotion not in HIGH_AROUSAL_EMOTIONS or not has_exclamation:
+        return min(intensity, 2)
+    return intensity
+
+
 def _canonical_speaker(value: Any) -> str:
     speaker = str(value or "UNKNOWN").strip()[:120] or "UNKNOWN"
     speaker = re.sub(r"(?<=[A-Za-z]),(?=[A-Za-z])", "", speaker)
@@ -451,6 +484,24 @@ def local_speaker_display(value: Any) -> str:
     return f"NPC {label}" if label else "NPC cục bộ"
 
 
+def _canonical_local_label(label: str, gender: str) -> str:
+    cleaned = " ".join(label.split()).strip()
+    if cleaned.casefold() not in GENERIC_CHILD_LABELS:
+        return cleaned
+    if gender == "male":
+        return "cậu bé"
+    if gender == "female":
+        return "cô bé"
+    return "đứa trẻ"
+
+
+def _canonical_local_request(speaker: str, gender: str) -> str:
+    if not speaker.casefold().startswith(LOCAL_SPEAKER_REQUEST_PREFIX.casefold()):
+        return speaker
+    label = speaker[len(LOCAL_SPEAKER_REQUEST_PREFIX) :]
+    return f"{LOCAL_SPEAKER_REQUEST_PREFIX}{_canonical_local_label(label, gender)}"
+
+
 def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
     if not speaker.casefold().startswith(LOCAL_SPEAKER_REQUEST_PREFIX.casefold()):
         return speaker
@@ -461,6 +512,25 @@ def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
         return "UNKNOWN"
     chapter_id = int(row["chapter_id"])
     return f"{LOCAL_SPEAKER_STORED_PREFIX}c{chapter_id:05d}::{local_scope}::{label}"
+
+
+def _generic_speaker_attribution(text: str, *, prefer_last: bool) -> str | None:
+    if not text.rstrip().endswith((":", "：")):
+        return None
+    matches: list[tuple[int, str]] = []
+    for label in GENERIC_SPEAKER_TRAITS:
+        match = re.search(
+            rf"(?<![\wÀ-ỹĐđ]){re.escape(label)}(?![\wÀ-ỹĐđ])",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if match is not None:
+            matches.append((match.start(), label))
+    if not matches:
+        return None
+    if prefer_last:
+        return max(matches, key=lambda item: (item[0], len(item[1])))[1]
+    return min(matches, key=lambda item: (item[0], -len(item[1])))[1]
 
 
 def _local_scope_for_group(group: list[Any]) -> str:
@@ -503,6 +573,21 @@ def _speaker_is_directly_addressed(text: str, speaker: str) -> bool:
         rf"(?=\s*[,!?.:;…\"”’]|$)"
     )
     return re.search(titled_address, text, flags=re.IGNORECASE) is not None
+
+
+def _titled_addressee(text: str) -> str | None:
+    title_pattern = "|".join(
+        re.escape(title).replace(r"\ ", r"\s+")
+        for title in DIRECT_ADDRESS_TITLES
+    )
+    match = re.search(
+        rf"(?<![\wÀ-ỹĐđ])(?:{title_pattern})\s+"
+        rf"(?P<target>{LATIN_PROPER_NAME_SURFACE_PATTERN.pattern})"
+        rf"(?=\s*[,!?.:;…\"”’]|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return _canonical_speaker(match.group("target")) if match is not None else None
 
 
 def _same_paragraph(left: Any, right: Any) -> bool:
@@ -548,6 +633,7 @@ def _trailing_speech_attribution(text: str) -> str | None:
 def _repair_explicit_attribution(
     group: list[Any],
     result: dict[str, dict[str, Any]],
+    local_scope: str,
 ) -> None:
     for index, row in enumerate(group):
         seg_id = str(row["stable_id"])
@@ -560,6 +646,13 @@ def _repair_explicit_attribution(
             previous_data = result.get(str(previous["stable_id"]))
             if previous_data is not None and previous_data["kind"] == "narration":
                 attributed_speaker = _trailing_speech_attribution(str(previous["text"]))
+                if attributed_speaker is None:
+                    label = _generic_speaker_attribution(
+                        str(previous["text"]),
+                        prefer_last=True,
+                    )
+                    if label is not None:
+                        attributed_speaker = f"{LOCAL_SPEAKER_REQUEST_PREFIX}{label}"
         if (
             attributed_speaker is None
             and index + 1 < len(group)
@@ -569,9 +662,21 @@ def _repair_explicit_attribution(
             following_data = result.get(str(following["stable_id"]))
             if following_data is not None and following_data["kind"] == "narration":
                 attributed_speaker = _leading_proper_name(str(following["text"]))
+                if attributed_speaker is None:
+                    label = _generic_speaker_attribution(
+                        str(following["text"]),
+                        prefer_last=False,
+                    )
+                    if label is not None:
+                        attributed_speaker = f"{LOCAL_SPEAKER_REQUEST_PREFIX}{label}"
         if attributed_speaker is None:
             continue
         attributed_speaker = _canonical_speaker(attributed_speaker)
+        attributed_traits = ("unknown", "unknown")
+        if attributed_speaker.casefold().startswith(LOCAL_SPEAKER_REQUEST_PREFIX.casefold()):
+            label = attributed_speaker[len(LOCAL_SPEAKER_REQUEST_PREFIX) :]
+            attributed_traits = GENERIC_SPEAKER_TRAITS.get(label, attributed_traits)
+            attributed_speaker = _scope_local_speaker(attributed_speaker, row, local_scope)
         previous_speaker = str(data["speaker"])
         known_rows = [
             candidate
@@ -587,8 +692,10 @@ def _repair_explicit_attribution(
             ALLOWED_AGES - {"unknown"},
         )
         if normalize_speaker_name(previous_speaker) != normalize_speaker_name(attributed_speaker):
-            data["gender"] = resolved_gender
-            data["age"] = resolved_age
+            data["gender"] = (
+                attributed_traits[0] if attributed_traits[0] != "unknown" else resolved_gender
+            )
+            data["age"] = attributed_traits[1] if attributed_traits[1] != "unknown" else resolved_age
         data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
         notes = str(data.get("notes", ""))
         data["notes"] = (
@@ -620,7 +727,6 @@ def _repair_addressee_speakers(
     local_scope: str,
 ) -> None:
     rows_by_id = {str(row["stable_id"]): row for row in group}
-    local_replacements: dict[str, str] = {}
     direct_replacements: dict[str, str] = {}
     for seg_id, data in result.items():
         if data["kind"] != "dialogue":
@@ -629,28 +735,122 @@ def _repair_addressee_speakers(
             continue
         speaker = str(data["speaker"])
         row = rows_by_id[seg_id]
-        if not _speaker_is_directly_addressed(str(row["text"]), speaker):
+        text = str(row["text"])
+        target = _titled_addressee(text)
+        speaker_matches_target = target is not None and (
+            normalize_speaker_name(local_speaker_label(speaker) if is_local_speaker(speaker) else speaker)
+            == normalize_speaker_name(target)
+        )
+        generic_speaker_with_target = target is not None and (
+            is_local_speaker(speaker) or speaker == "UNKNOWN"
+        )
+        if not (
+            speaker_matches_target
+            or generic_speaker_with_target
+            or _speaker_is_directly_addressed(text, speaker)
+        ):
             continue
-        label = local_speaker_label(speaker) if is_local_speaker(speaker) else speaker
+        label = target or (local_speaker_label(speaker) if is_local_speaker(speaker) else speaker)
         replacement = _scope_local_speaker(
             f"{LOCAL_SPEAKER_REQUEST_PREFIX}người gọi {label}",
             row,
             local_scope,
         )
-        if is_local_speaker(speaker):
-            local_replacements[speaker] = replacement
-        else:
-            direct_replacements[seg_id] = replacement
+        direct_replacements[seg_id] = replacement
 
     for seg_id, data in result.items():
-        speaker = str(data["speaker"])
-        replacement = direct_replacements.get(seg_id) or local_replacements.get(speaker)
+        replacement = direct_replacements.get(seg_id)
         if replacement is None:
             continue
         data["speaker"] = replacement
         notes = str(data.get("notes", ""))
         data["notes"] = (
             f"{notes}; {ADDRESSEE_REPAIR_NOTE}" if notes else ADDRESSEE_REPAIR_NOTE
+        )[:500]
+
+
+def _repair_same_paragraph_speakers(
+    group: list[Any],
+    result: dict[str, dict[str, Any]],
+) -> None:
+    by_paragraph: dict[tuple[int, int], list[tuple[Any, dict[str, Any]]]] = defaultdict(list)
+    for row in group:
+        data = result.get(str(row["stable_id"]))
+        if data is None or data["kind"] != "dialogue":
+            continue
+        try:
+            key = (int(row["chapter_id"]), int(row["paragraph_index"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        by_paragraph[key].append((row, data))
+
+    for entries in by_paragraph.values():
+        if len(entries) < 2:
+            continue
+        anchors = [
+            data
+            for _row, data in entries
+            if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", ""))
+            or ADDRESSEE_REPAIR_NOTE in str(data.get("notes", ""))
+        ]
+        anchor_speakers = {str(data["speaker"]) for data in anchors}
+        if len(anchor_speakers) != 1:
+            continue
+        anchor = anchors[0]
+        for _row, data in entries:
+            if str(data["speaker"]) == str(anchor["speaker"]):
+                continue
+            if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", "")):
+                continue
+            data["speaker"] = anchor["speaker"]
+            data["gender"] = anchor["gender"]
+            data["age"] = anchor["age"]
+            data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
+            notes = str(data.get("notes", ""))
+            data["notes"] = (
+                f"{notes}; {PARAGRAPH_SPEAKER_LOCK_NOTE}"
+                if notes
+                else PARAGRAPH_SPEAKER_LOCK_NOTE
+            )[:500]
+
+
+def _repair_continued_dialogue_speakers(
+    group: list[Any],
+    result: dict[str, dict[str, Any]],
+) -> None:
+    for index in range(1, len(group)):
+        previous_row = group[index - 1]
+        row = group[index]
+        previous = result.get(str(previous_row["stable_id"]))
+        data = result.get(str(row["stable_id"]))
+        if previous is None or data is None:
+            continue
+        if previous["kind"] != "dialogue" or data["kind"] != "dialogue":
+            continue
+        if int(previous_row["chapter_id"]) != int(row["chapter_id"]):
+            continue
+        try:
+            previous_paragraph = int(previous_row["paragraph_index"])
+            paragraph = int(row["paragraph_index"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if paragraph != previous_paragraph + 1:
+            continue
+        previous_text = str(previous_row["text"]).rstrip()
+        text = str(row["text"]).lstrip()
+        if not previous_text or not text:
+            continue
+        if text[0] in DIALOGUE_OPENERS or previous_text[-1] in DIALOGUE_CLOSERS:
+            continue
+        data["speaker"] = previous["speaker"]
+        data["gender"] = previous["gender"]
+        data["age"] = previous["age"]
+        data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
+        notes = str(data.get("notes", ""))
+        data["notes"] = (
+            f"{notes}; {CONTINUED_DIALOGUE_LOCK_NOTE}"
+            if notes
+            else CONTINUED_DIALOGUE_LOCK_NOTE
         )[:500]
 
 
@@ -698,36 +898,50 @@ def _validate(
             continue
         source_kind = str(rows_by_id[seg_id]["kind_hint"])
         source_default = source_kind if source_kind in ALLOWED_KINDS else "narration"
-        kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, source_default)
+        requested_kind = _safe_choice(item.get("kind"), ALLOWED_KINDS, source_default)
+        crosses_dialogue_boundary = (requested_kind == "dialogue") != (
+            source_default == "dialogue"
+        )
+        if crosses_dialogue_boundary:
+            # A valid-but-different kind normally means the model shifted one result to a
+            # neighbouring ID.  Do not silently attach that speaker/emotion to the wrong text;
+            # leave the ID absent so the normal required-analysis retry/split path handles it.
+            continue
+        kind = requested_kind
         speaker = _canonical_speaker(item.get("speaker"))
+        gender = _safe_choice(item.get("gender"), ALLOWED_GENDERS, "unknown")
+        age = _safe_choice(item.get("age"), ALLOWED_AGES, "unknown")
         if kind in {"narration", "thought"}:
             speaker = "NARRATOR"
+            gender = "unknown"
+            age = "unknown"
         else:
+            speaker = _canonical_local_request(speaker, gender)
             speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)
         notes = str(item.get("notes", ""))[:500]
+        emotion = _safe_choice(item.get("emotion"), ALLOWED_EMOTIONS, "neutral")
         result[seg_id] = {
             "kind": kind,
             "speaker": speaker,
-            "gender": (
-                "unknown"
-                if speaker == "NARRATOR"
-                else _safe_choice(item.get("gender"), ALLOWED_GENDERS, "unknown")
+            "gender": gender,
+            "age": age,
+            "emotion": emotion,
+            "intensity": _calibrated_intensity(
+                str(rows_by_id[seg_id]["text"]),
+                kind,
+                emotion,
+                item.get("intensity", 1),
             ),
-            "age": (
-                "unknown"
-                if speaker == "NARRATOR"
-                else _safe_choice(item.get("age"), ALLOWED_AGES, "unknown")
-            ),
-            "emotion": _safe_choice(item.get("emotion"), ALLOWED_EMOTIONS, "neutral"),
-            "intensity": max(0, min(3, int(item.get("intensity", 1)))),
             "pace": _safe_choice(item.get("pace"), ALLOWED_PACES, "normal"),
             "volume": _safe_choice(item.get("volume"), ALLOWED_VOLUMES, "normal"),
             "confidence": max(0.0, min(1.0, float(item.get("confidence", 0.5)))),
             "personality_hint": str(item.get("personality_hint", ""))[:300],
             "notes": notes[:500],
         }
-    _repair_explicit_attribution(group, result)
+    _repair_explicit_attribution(group, result, local_scope)
     _repair_addressee_speakers(group, result, local_scope)
+    _repair_same_paragraph_speakers(group, result)
+    _repair_continued_dialogue_speakers(group, result)
     return result
 
 

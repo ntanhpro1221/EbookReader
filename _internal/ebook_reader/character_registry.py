@@ -22,6 +22,9 @@ from .voice_catalog import (
 )
 
 
+LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP = 12
+
+
 PRONOUNS = {
     "hắn", "nàng", "cô ấy", "anh ấy", "ông ấy", "bà ấy", "người đó", "kẻ đó",
     "ta", "tôi", "mình", "chúng ta", "bọn họ",
@@ -298,6 +301,60 @@ def _merge_local_speakers_with_named_identity(
             )
 
 
+def _compatible_local_traits(left: list[Any], right: list[Any], field: str) -> bool:
+    left_values = {str(row[field]) for row in left if str(row[field]) != "unknown"}
+    right_values = {str(row[field]) for row in right if str(row[field]) != "unknown"}
+    return not left_values or not right_values or bool(left_values & right_values)
+
+
+def _merge_adjacent_local_speakers(
+    db: ProjectDB,
+    log: Callable[[str], None],
+) -> None:
+    rows = list(db.list_segments())
+    grouped: dict[tuple[int, str], dict[str, list[Any]]] = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        speaker = str(row["speaker"])
+        if not is_local_speaker(speaker):
+            continue
+        key = (int(row["chapter_id"]), normalize_name(local_speaker_label(speaker)))
+        grouped[key][speaker].append(row)
+
+    for identities in grouped.values():
+        ordered = sorted(
+            identities.items(),
+            key=lambda item: min(int(row["seq"]) for row in item[1]),
+        )
+        if len(ordered) < 2:
+            continue
+        canonical_speaker, canonical_rows = ordered[0]
+        canonical_last_seq = max(int(row["seq"]) for row in canonical_rows)
+        for speaker, speaker_rows in ordered[1:]:
+            first_seq = min(int(row["seq"]) for row in speaker_rows)
+            compatible = _compatible_local_traits(
+                canonical_rows,
+                speaker_rows,
+                "gender",
+            ) and _compatible_local_traits(canonical_rows, speaker_rows, "age")
+            if first_seq - canonical_last_seq > LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP or not compatible:
+                canonical_speaker = speaker
+                canonical_rows = speaker_rows
+                canonical_last_seq = max(int(row["seq"]) for row in speaker_rows)
+                continue
+            rewritten = db.rewrite_speaker(speaker, canonical_speaker)
+            if rewritten:
+                log(
+                    "Hợp nhất NPC cục bộ liền cảnh: "
+                    f"{local_speaker_display(speaker)} → "
+                    f"{local_speaker_display(canonical_speaker)} ({rewritten} segment)."
+                )
+            canonical_rows = [*canonical_rows, *speaker_rows]
+            canonical_last_seq = max(
+                canonical_last_seq,
+                max(int(row["seq"]) for row in speaker_rows),
+            )
+
+
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
@@ -313,6 +370,7 @@ def build_registry_and_cast(
             db.rewrite_speaker(speaker, reserved)
 
     aliases_by_speaker = _canonicalize_named_speakers(db, log)
+    _merge_adjacent_local_speakers(db, log)
     _merge_local_speakers_with_named_identity(db, log)
 
     rows = [row for row in db.list_segments() if str(row["status"]) != "pending"]

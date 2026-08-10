@@ -821,7 +821,7 @@ def test_high_confidence_contextual_short_name_can_be_locked(monkeypatch) -> Non
 
 
 def test_local_npc_labels_are_distinct_and_scoped_to_batch() -> None:
-    group = analysis_group()
+    group = [{**row, "kind_hint": "dialogue"} for row in analysis_group()]
     first = analysis_item(group[0]["stable_id"])
     first.update({"kind": "dialogue", "speaker": "NPC_LOCAL:áo xanh", "gender": "male"})
     second = analysis_item(group[1]["stable_id"])
@@ -891,11 +891,13 @@ def test_addressee_name_cannot_become_the_local_speaker_identity() -> None:
             **analysis_group()[0],
             "text": "“Anh Lucien!”",
             "kind_hint": "dialogue",
+            "paragraph_index": 1,
         },
         {
             **analysis_group()[1],
             "text": "“Anh tỉnh rồi?”",
             "kind_hint": "dialogue",
+            "paragraph_index": 1,
         },
     ]
     items = []
@@ -915,7 +917,7 @@ def test_addressee_name_cannot_become_the_local_speaker_identity() -> None:
 
     assert len(set(speakers)) == 1
     assert local_speaker_display(speakers[0]) == "NPC người gọi Lucien"
-    assert all(ADDRESSEE_REPAIR_NOTE in validated[row["stable_id"]]["notes"] for row in group)
+    assert ADDRESSEE_REPAIR_NOTE in validated[group[0]["stable_id"]]["notes"]
 
 
 def test_same_paragraph_action_beats_override_wrong_dialogue_speakers() -> None:
@@ -1041,6 +1043,84 @@ def test_bare_name_vocative_is_repaired_but_self_introduction_is_not() -> None:
     assert validated[self_intro["stable_id"]]["speaker"] == "Lucien"
 
 
+def test_generic_same_paragraph_attribution_locks_one_child_voice() -> None:
+    group = [
+        {
+            "stable_id": "d1",
+            "chapter_id": 1,
+            "paragraph_index": 32,
+            "text": "“Anh Lucien!”",
+            "kind_hint": "dialogue",
+        },
+        {
+            "stable_id": "n1",
+            "chapter_id": 1,
+            "paragraph_index": 32,
+            "text": "Một cậu bé tóc nâu nhìn Hạ Phong, vô cùng mừng rỡ:",
+            "kind_hint": "narration",
+        },
+        {
+            "stable_id": "d2",
+            "chapter_id": 1,
+            "paragraph_index": 32,
+            "text": "“Anh tỉnh rồi?”",
+            "kind_hint": "dialogue",
+        },
+    ]
+    items = [analysis_item(row["stable_id"]) for row in group]
+    items[0].update(
+        {"kind": "dialogue", "speaker": "NPC_LOCAL:người qua đường", "gender": "male"}
+    )
+    items[2].update({"kind": "dialogue", "speaker": "Lucien", "gender": "male"})
+
+    validated = _validate(group, {"segments": items}, local_scope="stable")
+
+    first = validated["d1"]
+    second = validated["d2"]
+    assert first["speaker"] == second["speaker"]
+    assert local_speaker_display(first["speaker"]) == "NPC cậu bé"
+    assert first["gender"] == second["gender"] == "male"
+    assert first["age"] == second["age"] == "child"
+    assert EXPLICIT_ATTRIBUTION_NOTE in first["notes"]
+    assert EXPLICIT_ATTRIBUTION_NOTE in second["notes"]
+
+
+def test_multiline_dialogue_keeps_previous_speaker_and_normalizes_child_label() -> None:
+    group = [
+        {
+            "stable_id": "d1",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": "“Mẹ vẫn không chịu tin em.",
+            "kind_hint": "dialogue",
+        },
+        {
+            "stable_id": "d2",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "Cha vừa sáng đã gọi anh hai về.”",
+            "kind_hint": "dialogue",
+        },
+    ]
+    items = [analysis_item(row["stable_id"]) for row in group]
+    items[0].update(
+        {
+            "kind": "dialogue",
+            "speaker": "NPC_LOCAL:trẻ em",
+            "gender": "male",
+            "age": "child",
+        }
+    )
+    items[1].update(
+        {"kind": "dialogue", "speaker": "NPC_LOCAL:người khác", "gender": "male"}
+    )
+
+    validated = _validate(group, {"segments": items}, local_scope="stable")
+
+    assert validated["d1"]["speaker"] == validated["d2"]["speaker"]
+    assert local_speaker_display(validated["d1"]["speaker"]) == "NPC cậu bé"
+
+
 def test_onomatopoeia_remains_normal_narration() -> None:
     row = {
         **analysis_group()[0],
@@ -1065,6 +1145,61 @@ def test_analysis_cannot_invent_an_unsupported_effect_kind() -> None:
 
     assert validated[row["stable_id"]]["kind"] == "dialogue"
     assert validated[row["stable_id"]]["speaker"] == "Lucien"
+
+
+def test_analysis_retries_when_model_shifts_a_valid_kind_to_the_wrong_id() -> None:
+    narration = {
+        **analysis_group()[0],
+        "kind_hint": "narration",
+        "text": "Hạ Phong nhận ra đây không phải bệnh viện.",
+    }
+    dialogue = {
+        **analysis_group()[1],
+        "kind_hint": "dialogue",
+        "text": "“Đây là đâu?”",
+    }
+    narration_item = analysis_item(narration["stable_id"])
+    narration_item.update({"kind": "dialogue", "speaker": "Hạ Phong"})
+    dialogue_item = analysis_item(dialogue["stable_id"])
+    dialogue_item.update({"kind": "narration", "speaker": "NARRATOR"})
+
+    validated = _validate(
+        [narration, dialogue],
+        {"segments": [narration_item, dialogue_item]},
+    )
+
+    assert validated == {}
+
+
+@pytest.mark.parametrize(
+    ("kind", "text", "emotion", "expected"),
+    [
+        ("narration", "Hạ Phong nhìn quanh căn phòng.", "neutral", 1),
+        ("dialogue", "“Tôi hiểu rồi.”", "neutral", 1),
+        ("dialogue", "“Ngươi đứng lại.”", "angry", 2),
+        ("dialogue", "“Đứng lại ngay!”", "angry", 3),
+    ],
+)
+def test_analysis_calibrates_repeated_maximum_intensity(
+    kind: str,
+    text: str,
+    emotion: str,
+    expected: int,
+) -> None:
+    row = {**analysis_group()[0], "kind_hint": kind, "text": text}
+    item = analysis_item(row["stable_id"])
+    item.update(
+        {
+            "kind": kind,
+            "speaker": "NARRATOR" if kind == "narration" else "Lucien",
+            "emotion": emotion,
+            "intensity": 3,
+        }
+    )
+
+    validated = _validate([row], {"segments": [item]})
+
+    assert validated[row["stable_id"]]["intensity"] == expected
 
 
 def test_every_thought_uses_narrator_without_character_identity() -> None:

@@ -236,6 +236,23 @@ def test_clear_named_aliases_lock_to_one_character_and_voice(tmp_path: Path) -> 
         assert len({int(row["voice_profile_id"]) for row in speaker_rows}) == 1
 
 
+def test_adjacent_local_child_scopes_merge_to_one_character_and_voice(tmp_path: Path) -> None:
+    db = _identity_db(
+        tmp_path,
+        [
+            ("NPC_LOCAL::c00001::batch-a::cậu bé", "male"),
+            ("NPC_LOCAL::c00001::batch-b::cậu bé", "male"),
+        ],
+    )
+
+    build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    rows = db.list_segments()
+    assert len({str(row["speaker"]) for row in rows}) == 1
+    assert len({int(row["canonical_character_id"]) for row in rows}) == 1
+    assert len({int(row["voice_profile_id"]) for row in rows}) == 1
+
+
 def test_relational_description_is_not_merged_with_named_character(tmp_path: Path) -> None:
     db = _identity_db(
         tmp_path,
