@@ -8,7 +8,8 @@
 
 Yêu cầu bắt buộc:
 
-- workflow người dùng chỉ là mở shortcut **Ebook Reader** ở root hoặc trong Start Menu; cả hai trỏ thẳng tới `_internal\Ebook Reader.vbs`;
+- workflow GUI mở shortcut **Ebook Reader** ở root hoặc trong Start Menu; workflow tự động dùng
+  `python -m ebook_reader.cli`/entrypoint `ebook-reader-headless` và tuyệt đối không điều khiển cửa sổ;
 - không hỏi người dùng trong lúc job đang chạy;
 - settings, model, voice mapping, seed và threshold bị khóa theo book;
 - dependency trực tiếp được pin; setup nâng cấp phải tái sử dụng runtime, không `uv venv --clear`;
@@ -40,6 +41,15 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 ## Invariant an toàn
 
 - `interactive_prompts=false`; pipeline/worker không mở prompt hoặc `QMessageBox`.
+- CLI `status`/`report`/`log` và `create --dry-run` là read-only: không mkdir, migrate SQLite, recovery,
+  dọn lease hay chạm file control; SQLite đang chạy phải được đọc bằng URI `mode=ro`, không dùng `immutable=1` vì có WAL.
+- Background start chỉ gửi `READY` sau khi worker đã giữ `.worker.lock`, nạp settings khóa và xác minh toàn bộ source.
+  State/control JSON ghi atomic trong `runtime/background`; recovery tuyệt đối không xóa `.part` trong namespace này.
+- Background identity gồm project path + instance token + PID + process create-time. Force-stop phải khóa launch ownership,
+  đối chiếu lại đủ identity ngay trước khi kill/ghi state và từ chối nếu một instance mới đã thay thế instance được yêu cầu.
+- Hai tiến trình tạo cùng title/manifest phải serialize bằng OS creation lock xuyên suốt bước chọn project root,
+  ghi settings và initialize SQLite; profile khác nhau không được ghi chéo settings/DB.
+- Mọi process nền trên Windows dùng `pythonw`/`CREATE_NO_WINDOW`, redirect stdio UTF-8 vào log; POSIX dùng session riêng.
 - SQLite là source of truth; không dùng existence/mtime làm bằng chứng hoàn tất.
 - WAV/MP3 luôn ghi `.part`, validate + checksum rồi atomic replace.
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
@@ -56,10 +66,16 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   transcript vượt tốc độ từ vật lý phải được đánh dấu là Whisper hallucination và không kích hoạt repair TTS.
 - Vocalization cực ngắn/kéo dài phải được chuẩn hóa thành âm tiết tiếng Việt ổn định. Output chạm đúng trần frame
   của VieNeu phải đi tiếp qua signal/Whisper validation, không được tự động coi là audio sai chỉ từ sample count.
+- Câu một hoặc hai từ có tối đa tám ký tự đọc được phải dùng ngân sách cực ngắn 24 frame. Nếu câu đó đã chạm
+  trần frame rồi bị Whisper xác nhận lệch, repair tiếp theo phải giảm xuống 12 frame để chặn VieNeu đọc thêm;
+  câu chỉ có một ký tự đọc được giảm xuống 6 frame. Ngân sách repair phải giữ qua các vòng ASR tiếp theo bằng
+  attempt checkpoint kể cả warning của attempt trước đã được xóa; không áp dụng giảm repair cho lần tạo đầu.
 - TTS circuit breaker chỉ đếm failure hoàn toàn liên tiếp cùng signature và phải reset sau một segment thành công.
 - Mọi kết thúc với `BookStatus.ERROR` phải gửi `finished.ok=false`; nhánh `completed_with_errors` gửi đúng
   một Windows notification nếu policy cho phép, đồng thời giữ nguyên checkpoint/chapter đã commit.
 - Không giữ TTS và Whisper đồng thời trên GPU khi không cần.
+- Trên Windows, sau khi unload VieNeu hoặc Whisper phải trim working set của worker để các trang model
+  không còn dùng được trả về hệ điều hành trước khi nạp model kế tiếp.
 - Sau mỗi attempt VieNeu đã trả waveform hoặc lỗi, phải thu hồi object rác và CUDA allocator cache tại ranh giới an toàn.
 - RAM critical đơn lẻ phải unload model/cache rồi đo cưỡng bức lại; chỉ chuyển book sang `critical_stop` và gửi notification
   nếu lần đo sau thu hồi vẫn critical. Critical SSD hoặc nhiệt GPU vẫn dừng ngay.
@@ -104,6 +120,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Ollama ẩn phải ghi stdout/stderr vào `runtime/logs/ollama-server.log`; không bỏ mất bằng `DEVNULL`.
 - Stream Ollama kết thúc thiếu `done=true` phải chia đôi batch hiện tại và chạy batch con; không retry nguyên
   batch lớn nhiều lần. Segment chỉ còn một phần tử mới dùng retry thông thường.
+- Phản hồi Ollama đã kết thúc nhưng thiếu ID segment bắt buộc được retry theo policy; nếu batch nhiều phần tử
+  vẫn thiếu sau các lần retry, phải chia đôi batch và tiếp tục. Chỉ được kết luận lỗi bắt buộc khi batch đơn
+  không thể tạo đủ kết quả hợp lệ.
 - GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
   kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
 - Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:
@@ -133,6 +152,8 @@ Module chính:
 
 - `gui.py`: UI/controller, không chứa model logic.
 - `worker.py`: process, heartbeat, watchdog, exception boundary.
+- `cli.py`: CLI headless create/run/resume/status/stop/log/validate/report/doctor/test; nhánh quan sát là read-only.
+- `background_runner.py`: supervisor ẩn, handshake, process identity, persistent stop request và event log.
 - `pipeline.py`: orchestration và state transition.
 - `database.py`: schema/transaction API.
 - `analysis.py`: Qwen structured analysis.

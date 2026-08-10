@@ -18,6 +18,43 @@ Nếu source mới chỉ thiếu dependency Python, launcher repair tăng dần 
 Mọi phiên khởi động được ghi vào `_internal/runtime/logs/startup.log`; khi lỗi, console không tự đóng.
 Nếu Ebook Reader đã chạy, lần mở tiếp theo chỉ đưa cửa sổ hiện có lên trước thay vì tạo instance thứ hai.
 
+## Chạy hoàn toàn nền
+
+CLI chính thức không mở GUI hay console con, dùng cùng pipeline/SQLite/checkpoint với ứng dụng và mặc định
+khởi động worker ẩn ở mức ưu tiên thấp. Từ thư mục `_internal`, có thể tạo đúng một dải chapter và chạy ngay:
+
+```powershell
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli create `
+  --source-dir "D:\Books\Text_Tmp" --range 000..099 `
+  --output-root "C:\Users\<user>\Audiobooks" --title "Tên sách" `
+  --profile high_quality --start --json
+```
+
+Nên thêm `--dry-run` ở lần đầu để xác nhận chính xác số file, file đầu/cuối, manifest hash và đường dẫn project
+mà không ghi dữ liệu. Các lệnh vận hành còn lại:
+
+```powershell
+# Không nạp model; kiểm tra dependency/tool/cache cơ bản
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli doctor --json
+
+# Đọc trạng thái/QA/log mà không migrate hoặc ghi SQLite
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli status "<project-root>" --json
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli report "<project-root>" --json
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli log "<project-root>" --lines 100
+
+# Yêu cầu dừng tại checkpoint an toàn; chạy lại `run` để resume
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli stop "<project-root>" --timeout 60 --json
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli run "<project-root>" --json
+
+# Test từng tầng hoặc toàn bộ, không mở model/GUI thật
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli test parser casting asr-policy audio db recovery pipeline-mocked --json
+.\runtime\.venv\Scripts\python.exe -m ebook_reader.cli test full --json
+```
+
+`status`, `report`, `log` và `create --dry-run` là read-only. Lệnh `run` chỉ trả thành công sau khi worker đã
+giữ được project lock và xác minh settings/source; PID, thời điểm tạo process, project và instance token đều
+phải khớp trước khi stop cưỡng bức, tránh tác động nhầm một lượt chạy mới.
+
 ## Những gì nằm ở thư mục gốc
 
 ```text
@@ -33,8 +70,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - Tool natural-sort các chapter theo tên file.
 - Phân tích toàn book trước để xây character registry theo speaker name, cách phát âm và voice casting thống nhất.
-- Nếu stream Ollama kết thúc dở, app chia đôi batch hiện tại và tiếp tục với các batch nhỏ hơn thay vì
-  lặp lại nguyên batch lớn ba lần. Ollama do app tự chạy ghi stdout/stderr vào
+- Nếu stream Ollama kết thúc dở, app chia đôi batch hiện tại và tiếp tục với các batch nhỏ hơn. Nếu JSON
+  đã kết thúc nhưng vẫn thiếu ID bắt buộc sau các lần retry, app cũng chia batch thay vì dừng cả book.
+  Ollama do app tự chạy ghi stdout/stderr vào
   `_internal/runtime/logs/ollama-server.log` để chẩn đoán runner/GPU khi có lỗi.
 - Người dùng lọc preset người kể theo giới tính và miền ngay trong Thiết lập; dropdown chỉ hiện tên của
   toàn bộ giọng Bắc, Nam và Trung không thuộc kiểu tin tức. Label `Giọng kể chuyện` là header foldout
@@ -46,7 +84,7 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   sẵn preview cho cả 10 preset hợp lệ nên không nạp model TTS chỉ để nghe thử.
 - Chất lượng và giọng người kể được lưu cùng sách và khóa sau khi sách bắt đầu. Chế độ tài nguyên
   và ngưỡng GPU là setting global, không tạo sách mới khi thay đổi và được worker nhận tại checkpoint kế tiếp.
-  Bấm `Sách mới` đặt lại thiết lập sách về `Cân bằng`, mọi giới tính, mọi miền và giọng `Phạm Tuyên`,
+  Bấm `Sách mới` đặt lại thiết lập sách về `Chất lượng cao`, mọi giới tính, mọi miền và giọng `Phạm Tuyên`,
   nhưng giữ nguyên hai thiết lập global này. Nút này chỉ bật khi đang mở một sách đã tồn tại; trong bản
   nháp sách mới chưa chạy, nút bị vô hiệu hóa vì không có sách cũ nào cần rời khỏi.
 - Nhân vật có tên ưu tiên cao nhất giọng tự nhiên miền Bắc, tiếp theo là giọng tự nhiên miền Nam. Các giọng còn lại

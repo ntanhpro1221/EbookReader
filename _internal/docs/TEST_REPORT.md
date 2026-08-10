@@ -1,8 +1,9 @@
 # Test report
 
-Ngày cập nhật: 2026-08-03
+Ngày cập nhật: 2026-08-10
 
-Trạng thái source hiện tại: **208/208 test pass** trên Python 3.11.9, gồm pronunciation,
+Trạng thái source hiện tại: **309/309 test pass** trên Python 3.11.9, gồm CLI/supervisor headless,
+quality policy/evidence, pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
 Các dependency kiểm thử chỉ được cài tạm và đã được gỡ khỏi runtime của app sau khi kiểm tra.
@@ -12,6 +13,12 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 
 ## Phạm vi tự động
 
+- CLI headless tạo exact numeric range inclusive, dry-run không ghi dữ liệu, đọc status/report/log qua SQLite read-only,
+  chạy component test, validate artifact QA và phát JSON/exit code UTF-8 ổn định kể cả database hỏng;
+- supervisor nền không mở console, redirect log, khóa double-start, xác minh PID/create-time/project/token,
+  chỉ handshake READY sau worker bootstrap, giữ stop request bền qua process độc lập và chặn force-stop ABA;
+- creation lock serialize hai lệnh tạo cùng manifest/title nhưng khác settings; recovery bỏ qua namespace control
+  `runtime/background` để không xóa state/handshake atomic đang được ghi;
 - settings bất biến và cấm prompt/silent replacement;
 - import nhiều TXT hoặc folder, natural sort và loại file không hợp lệ;
 - one-click startup qua shortcut `Ebook Reader` ở root/Start Menu trỏ thẳng tới `_internal\Ebook Reader.vbs`;
@@ -109,6 +116,11 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;
 - pipeline mock không cần model;
 - cache inference VieNeu được thu hồi trong `finally` sau cả attempt thành công lẫn thất bại;
+- unload VieNeu/Whisper trên Windows trim working set sau GC/CUDA cache release, tránh RAM physical
+  bị giữ lại qua nhiều lần chuyển model trong book dài;
+- hội thoại một hoặc hai từ có tối đa tám ký tự dùng ngân sách cực ngắn; repair câu đã chạm trần VieNeu
+  giảm ngân sách từ 24 xuống 12 frame, riêng câu một ký tự giảm xuống 6 frame; attempt checkpoint giữ ngân sách
+  này qua các vòng repair sau khi warning cũ đã được xóa;
 - FFmpeg thật: ghép, khoảng nghỉ, encode và decode verify.
 - Windows `fsync` cho WAV/silence dùng descriptor read-write, được bao phủ bởi test FFmpeg thật.
 
