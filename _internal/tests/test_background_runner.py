@@ -27,6 +27,14 @@ from ebook_reader.background_runner import (
 from ebook_reader.io_utils import atomic_write_json
 
 
+def test_default_startup_timeout_envelops_strict_worker_bootstrap() -> None:
+    assert (
+        background_runner.DEFAULT_STARTUP_TIMEOUT_SECONDS
+        > background_runner.WORKER_BOOTSTRAP_TIMEOUT_SECONDS
+    )
+    assert background_runner.WORKER_BOOTSTRAP_TIMEOUT_SECONDS >= 90.0
+
+
 def _fake_worker_success(
     project_root: str,
     message_queue: Any,

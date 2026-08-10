@@ -22,6 +22,13 @@ from ebook_reader.database import (
 from ebook_reader.project import create_or_open_project
 
 
+def test_cli_default_startup_timeout_covers_supervisor_bootstrap() -> None:
+    assert (
+        cli.DEFAULT_BACKGROUND_STARTUP_TIMEOUT_SECONDS
+        >= background_runner.DEFAULT_STARTUP_TIMEOUT_SECONDS
+    )
+
+
 def _write_sources(root: Path, names: list[str]) -> list[Path]:
     root.mkdir(parents=True, exist_ok=True)
     paths = []

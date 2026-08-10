@@ -305,6 +305,7 @@ def run_worker(
 
     try:
         run_lock.acquire()
+        _configure_logging(paths.logs / "ebook_reader.log")
         bootstrap_db = ProjectDB(paths.db, synchronous="FULL")
         locked_settings = _load_locked_settings(paths, bootstrap_db)
         settings = _apply_runtime_resource_overrides(
@@ -319,7 +320,6 @@ def run_worker(
             synchronous=str(settings["safety"].get("sqlite_synchronous", "FULL")),
         )
         _validate_project_inputs(paths, db, settings)
-        _configure_logging(paths.logs / "ebook_reader.log")
         set_worker_priority(str(settings["resources"].get("worker_priority", "below_normal")))
 
         generation = int(db.book()["run_generation"]) + 1
