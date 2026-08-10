@@ -301,6 +301,27 @@ def test_run_defaults_to_ready_handshaken_background_status(
     assert result.data["background"]["instance_id"] == "instance-1"
 
 
+def test_run_json_returns_nonzero_when_background_fails_immediately_after_ready(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    project_root = _create_project(tmp_path)
+
+    def fail_after_ready(*_args, **_kwargs):
+        raise background_runner.BackgroundStartError("worker failed immediately")
+
+    monkeypatch.setattr(background_runner, "start_background", fail_after_ready)
+
+    exit_code = cli.main(["run", str(project_root), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == cli.EXIT_RUNTIME_ERROR
+    assert payload["ok"] is False
+    assert payload["exit_code"] == cli.EXIT_RUNTIME_ERROR
+    assert payload["error"] == "worker failed immediately"
+
+
 def test_waiting_stop_returns_nonzero_if_supervisor_is_still_running(
     tmp_path: Path,
     monkeypatch,

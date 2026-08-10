@@ -532,8 +532,13 @@ def start_background(
                 outcome = str(handshake.get("outcome", "")).casefold()
                 if outcome == "ready":
                     status = get_status(paths.project_root)
-                    if status.instance_id == instance_id and status.running:
-                        return status
+                    if status.instance_id == instance_id:
+                        if status.running or status.state in {"completed", "stopped"}:
+                            return status
+                        if status.state == "failed":
+                            raise BackgroundStartError(
+                                status.detail or "Background worker failed immediately after READY"
+                            )
                     detail = status.detail or "READY handshake không có supervisor hợp lệ"
                     _terminate_owned_launch(process)
                     _record_launch_failure(paths, instance_id, detail)

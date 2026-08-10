@@ -253,6 +253,125 @@ def test_start_waits_for_matching_ready_handshake(
     assert status.instance_id is not None
 
 
+@pytest.mark.parametrize(
+    ("terminal_state", "exit_code"),
+    [("completed", 0), ("stopped", 0)],
+)
+def test_start_preserves_matching_terminal_state_when_worker_finishes_after_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    terminal_state: str,
+    exit_code: int,
+) -> None:
+    project = _make_project(tmp_path)
+    paths = BackgroundPaths.for_project(project)
+
+    class FakeProcess:
+        pid = os.getpid()
+
+        @staticmethod
+        def poll() -> int:
+            return exit_code
+
+    def fake_spawn(control: BackgroundPaths, instance_id: str, _python: Path) -> FakeProcess:
+        state = _active_state(project, instance_id)
+        state.update(
+            {
+                "state": terminal_state,
+                "finished_at": "2026-08-10T01:00:00Z",
+                "exit_code": exit_code,
+                "stop_requested": terminal_state == "stopped",
+                "detail": f"worker already {terminal_state}",
+            }
+        )
+        atomic_write_json(control.state, state)
+        atomic_write_json(
+            control.handshake,
+            {
+                "schema_version": 1,
+                "instance_id": instance_id,
+                "project_root": str(project.resolve()),
+                "outcome": "ready",
+                "detail": "ready",
+            },
+        )
+        return FakeProcess()
+
+    monkeypatch.setattr(background_runner, "_spawn_detached_supervisor", fake_spawn)
+
+    status = start_background(project, python_executable=Path(os.sys.executable), startup_timeout=1.0)
+    persisted = json.loads(paths.state.read_text(encoding="utf-8"))
+
+    assert status.state == terminal_state
+    assert status.running is False
+    assert status.exit_code == exit_code
+    assert status.detail == f"worker already {terminal_state}"
+    assert persisted["state"] == terminal_state
+    assert persisted["detail"] == f"worker already {terminal_state}"
+
+
+def test_start_reports_matching_failed_state_after_ready_without_overwriting_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = _make_project(tmp_path)
+    paths = BackgroundPaths.for_project(project)
+
+    class FakeProcess:
+        pid = os.getpid()
+
+        @staticmethod
+        def poll() -> int:
+            return 1
+
+    def fake_spawn(control: BackgroundPaths, instance_id: str, _python: Path) -> FakeProcess:
+        state = _active_state(project, instance_id)
+        state.update(
+            {
+                "state": "failed",
+                "finished_at": "2026-08-10T01:00:00Z",
+                "exit_code": 1,
+                "detail": "worker failed immediately",
+            }
+        )
+        atomic_write_json(control.state, state)
+        atomic_write_json(
+            control.handshake,
+            {
+                "schema_version": 1,
+                "instance_id": instance_id,
+                "project_root": str(project.resolve()),
+                "outcome": "ready",
+                "detail": "ready",
+            },
+        )
+        return FakeProcess()
+
+    terminated: list[int] = []
+    launch_failures: list[str] = []
+    monkeypatch.setattr(background_runner, "_spawn_detached_supervisor", fake_spawn)
+    monkeypatch.setattr(
+        background_runner,
+        "_terminate_owned_launch",
+        lambda process: terminated.append(int(process.pid)),
+    )
+    monkeypatch.setattr(
+        background_runner,
+        "_record_launch_failure",
+        lambda _paths, _instance_id, detail: launch_failures.append(detail),
+    )
+
+    with pytest.raises(BackgroundStartError, match="worker failed immediately"):
+        start_background(project, python_executable=Path(os.sys.executable), startup_timeout=1.0)
+    persisted = json.loads(paths.state.read_text(encoding="utf-8"))
+
+    assert terminated == []
+    assert launch_failures == []
+    assert persisted["state"] == "failed"
+    assert persisted["exit_code"] == 1
+    assert persisted["detail"] == "worker failed immediately"
+
+
 def test_missing_python_runtime_does_not_publish_a_stuck_starting_state(tmp_path: Path) -> None:
     project = _make_project(tmp_path)
     paths = BackgroundPaths.for_project(project)
