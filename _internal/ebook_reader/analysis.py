@@ -741,12 +741,8 @@ def _repair_addressee_speakers(
             normalize_speaker_name(local_speaker_label(speaker) if is_local_speaker(speaker) else speaker)
             == normalize_speaker_name(target)
         )
-        generic_speaker_with_target = target is not None and (
-            is_local_speaker(speaker) or speaker == "UNKNOWN"
-        )
         if not (
             speaker_matches_target
-            or generic_speaker_with_target
             or _speaker_is_directly_addressed(text, speaker)
         ):
             continue

@@ -23,6 +23,14 @@ from .voice_catalog import (
 
 
 LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP = 12
+LOCAL_CHILD_LABEL_PREFIXES = (
+    "cậu bé",
+    "cô bé",
+    "đứa bé",
+    "đứa trẻ",
+    "trẻ em",
+    "trẻ nhỏ",
+)
 
 
 PRONOUNS = {
@@ -307,18 +315,32 @@ def _compatible_local_traits(left: list[Any], right: list[Any], field: str) -> b
     return not left_values or not right_values or bool(left_values & right_values)
 
 
+def _local_continuity_family(speaker: str, rows: list[Any]) -> str:
+    label = normalize_name(local_speaker_label(speaker))
+    if any(
+        label == prefix or label.startswith(f"{prefix} ")
+        for prefix in LOCAL_CHILD_LABEL_PREFIXES
+    ):
+        return f"child::{_majority(rows, 'gender')}"
+    return f"label::{label}"
+
+
 def _merge_adjacent_local_speakers(
     db: ProjectDB,
     log: Callable[[str], None],
 ) -> None:
     rows = list(db.list_segments())
-    grouped: dict[tuple[int, str], dict[str, list[Any]]] = defaultdict(lambda: defaultdict(list))
+    identities: dict[tuple[int, str], list[Any]] = defaultdict(list)
     for row in rows:
         speaker = str(row["speaker"])
         if not is_local_speaker(speaker):
             continue
-        key = (int(row["chapter_id"]), normalize_name(local_speaker_label(speaker)))
-        grouped[key][speaker].append(row)
+        identities[(int(row["chapter_id"]), speaker)].append(row)
+
+    grouped: dict[tuple[int, str], dict[str, list[Any]]] = defaultdict(dict)
+    for (chapter_id, speaker), speaker_rows in identities.items():
+        family = _local_continuity_family(speaker, speaker_rows)
+        grouped[(chapter_id, family)][speaker] = speaker_rows
 
     for identities in grouped.values():
         ordered = sorted(
@@ -336,7 +358,12 @@ def _merge_adjacent_local_speakers(
                 speaker_rows,
                 "gender",
             ) and _compatible_local_traits(canonical_rows, speaker_rows, "age")
-            if first_seq - canonical_last_seq > LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP or not compatible:
+            gap = first_seq - canonical_last_seq
+            if (
+                gap <= 0
+                or gap > LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP
+                or not compatible
+            ):
                 canonical_speaker = speaker
                 canonical_rows = speaker_rows
                 canonical_last_seq = max(int(row["seq"]) for row in speaker_rows)

@@ -1043,6 +1043,29 @@ def test_bare_name_vocative_is_repaired_but_self_introduction_is_not() -> None:
     assert validated[self_intro["stable_id"]]["speaker"] == "Lucien"
 
 
+def test_titled_addressee_does_not_replace_an_established_local_identity() -> None:
+    row = {
+        **analysis_group()[0],
+        "text": "“Đi thôi, anh Lucien. Chúng ta ra quảng trường.”",
+        "kind_hint": "dialogue",
+    }
+    item = analysis_item(row["stable_id"])
+    item.update(
+        {
+            "kind": "dialogue",
+            "speaker": "NPC_LOCAL:trẻ em bụi bẩn",
+            "gender": "male",
+            "age": "child",
+        }
+    )
+
+    validated = _validate([row], {"segments": [item]}, local_scope="stable")
+    data = validated[row["stable_id"]]
+
+    assert local_speaker_display(data["speaker"]) == "NPC trẻ em bụi bẩn"
+    assert ADDRESSEE_REPAIR_NOTE not in data["notes"]
+
+
 def test_generic_same_paragraph_attribution_locks_one_child_voice() -> None:
     group = [
         {

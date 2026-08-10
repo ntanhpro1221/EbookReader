@@ -241,7 +241,7 @@ def test_adjacent_local_child_scopes_merge_to_one_character_and_voice(tmp_path: 
         tmp_path,
         [
             ("NPC_LOCAL::c00001::batch-a::cậu bé", "male"),
-            ("NPC_LOCAL::c00001::batch-b::cậu bé", "male"),
+            ("NPC_LOCAL::c00001::batch-b::trẻ em bụi bẩn", "male"),
         ],
     )
 
@@ -251,6 +251,21 @@ def test_adjacent_local_child_scopes_merge_to_one_character_and_voice(tmp_path: 
     assert len({str(row["speaker"]) for row in rows}) == 1
     assert len({int(row["canonical_character_id"]) for row in rows}) == 1
     assert len({int(row["voice_profile_id"]) for row in rows}) == 1
+
+
+def test_interleaved_local_children_remain_distinct(tmp_path: Path) -> None:
+    first = "NPC_LOCAL::c00001::batch-a::cậu bé áo xanh"
+    second = "NPC_LOCAL::c00001::batch-b::trẻ em áo đỏ"
+    db = _identity_db(
+        tmp_path,
+        [(first, "male"), (second, "male"), (first, "male"), (second, "male")],
+    )
+
+    build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    rows = db.list_segments()
+    assert len({str(row["speaker"]) for row in rows}) == 2
+    assert len({int(row["canonical_character_id"]) for row in rows}) == 2
 
 
 def test_relational_description_is_not_merged_with_named_character(tmp_path: Path) -> None:
