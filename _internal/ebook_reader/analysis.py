@@ -75,12 +75,19 @@ GENERIC_SPEAKER_TRAITS = {
     "người đàn ông trung niên": ("male", "adult"),
     "người đàn ông": ("male", "adult"),
     "người phụ nữ": ("female", "adult"),
+    "người phụ nữ mặc áo choàng đen": ("female", "adult"),
     "ông lão": ("male", "elderly"),
     "bà lão": ("female", "elderly"),
+    "giám mục": ("male", "adult"),
+    "người dân": ("unknown", "unknown"),
 }
 GENERIC_CHILD_LABELS = {"trẻ em", "đứa bé", "đứa trẻ", "trẻ nhỏ"}
 DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘"})
 DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’"})
+GENERIC_SPEECH_ATTRIBUTION_PATTERN = re.compile(
+    r"\b(?:nói|hỏi|đáp|trả lời|lên tiếng|thì thầm|quát|kêu|thốt lên|gào|hét|hô)\b",
+    flags=re.IGNORECASE,
+)
 NAME_TOKEN_PATTERN = re.compile(
     r"(?<![\wÀ-ỹĐđ])([A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*)(?![\wÀ-ỹĐđ])"
 )
@@ -515,7 +522,10 @@ def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
 
 
 def _generic_speaker_attribution(text: str, *, prefer_last: bool) -> str | None:
-    if not text.rstrip().endswith((":", "：")):
+    if (
+        not text.rstrip().endswith((":", "："))
+        and GENERIC_SPEECH_ATTRIBUTION_PATTERN.search(text) is None
+    ):
         return None
     matches: list[tuple[int, str]] = []
     for label in GENERIC_SPEAKER_TRAITS:
@@ -984,12 +994,20 @@ def _occurrence_has_corrupted_joiner(text: str, start: int, end: int) -> bool:
     )
 
 
+def _occurrence_touches_unicode_letter(text: str, start: int, end: int) -> bool:
+    return bool(
+        (start > 0 and text[start - 1].isalpha())
+        or (end < len(text) and text[end].isalpha())
+    )
+
+
 def _whole_name_occurrences(text: str, surface: str) -> list[re.Match[str]]:
     pattern = re.compile(r"(?<!\w)" + re.escape(surface) + r"(?!\w)")
     return [
         match
         for match in pattern.finditer(text)
         if not _occurrence_has_corrupted_joiner(text, match.start(), match.end())
+        and not _occurrence_touches_unicode_letter(text, match.start(), match.end())
     ]
 
 
@@ -1072,7 +1090,11 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             if value[:1].islower():
                 lowercase_text_keys.add(_name_candidate_key(value))
         for match in LATIN_PROPER_NAME_SURFACE_PATTERN.finditer(text):
-            if _occurrence_has_corrupted_joiner(text, match.start(), match.end()):
+            if _occurrence_has_corrupted_joiner(
+                text,
+                match.start(),
+                match.end(),
+            ) or _occurrence_touches_unicode_letter(text, match.start(), match.end()):
                 continue
             match_key = _name_candidate_key(match.group(0))
             if (

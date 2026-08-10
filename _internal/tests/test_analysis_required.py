@@ -309,6 +309,20 @@ def test_weak_short_names_and_corrupted_entities_are_not_candidates() -> None:
     )
 
 
+def test_ascii_name_scanner_rejects_fragments_of_vietnamese_words() -> None:
+    rows = [
+        {
+            "speaker": "NARRATOR",
+            "kind": "narration",
+            "text": "Giám mục kể về châu Âu thời Trung Cổ.",
+        }
+    ]
+
+    candidates = _name_candidate_contexts(rows)
+
+    assert {candidate["surface"] for candidate in candidates}.isdisjoint({"Gi", "Trung C"})
+
+
 def test_batch_pronunciation_checkpoint_rejects_fragments_and_garbage() -> None:
     db = FakeDB()
     db.rows = [
@@ -972,6 +986,54 @@ def test_same_paragraph_action_beats_override_wrong_dialogue_speakers() -> None:
         assert data["speaker"] == speaker
         assert data["gender"] == "unknown"
         assert EXPLICIT_ATTRIBUTION_NOTE in data["notes"]
+
+
+def test_generic_speech_attribution_locks_bishop_descriptions() -> None:
+    group = [
+        {
+            "stable_id": "d1",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": "“Ngươi sẽ bằng lòng sám hối chứ?”",
+            "kind_hint": "dialogue",
+        },
+        {
+            "stable_id": "n1",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": "Người đàn ông trung niên hỏi đầy ôn hòa và xót thương.",
+            "kind_hint": "narration",
+        },
+        {
+            "stable_id": "n2",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "Giám mục cầu nguyện, sau đó lớn giọng:",
+            "kind_hint": "narration",
+        },
+        {
+            "stable_id": "d2",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "“Hãy xuống địa ngục dưới thánh quang.”",
+            "kind_hint": "dialogue",
+        },
+    ]
+    items = [analysis_item(row["stable_id"]) for row in group]
+    items[0].update(
+        {"kind": "dialogue", "speaker": "NPC_LOCAL:áo choàng trắng", "gender": "male"}
+    )
+    items[2].update({"kind": "narration", "speaker": "NARRATOR"})
+    items[3].update({"kind": "dialogue", "speaker": "NPC_LOCAL:giam muc", "gender": "male"})
+
+    validated = _validate(group, {"segments": items}, local_scope="scene")
+
+    assert local_speaker_display(validated["d1"]["speaker"]) == "NPC người đàn ông trung niên"
+    assert validated["d1"]["gender"] == "male"
+    assert validated["d1"]["age"] == "adult"
+    assert local_speaker_display(validated["d2"]["speaker"]) == "NPC giám mục"
+    assert validated["d2"]["gender"] == "male"
+    assert validated["d2"]["age"] == "adult"
 
 
 def test_speech_verb_before_quote_overrides_speaker_but_weak_context_does_not() -> None:

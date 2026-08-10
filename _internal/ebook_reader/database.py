@@ -1532,6 +1532,36 @@ class ProjectDB:
             )
             return int(cursor.rowcount)
 
+    def rewrite_segment_speakers(
+        self,
+        segment_ids: list[int],
+        *,
+        speaker: str,
+        gender: str,
+        age: str,
+        analysis_notes: str,
+    ) -> int:
+        if not segment_ids:
+            return 0
+        placeholders = ",".join("?" for _segment_id in segment_ids)
+        with self.connect() as conn:
+            cursor = conn.execute(
+                f"""
+                UPDATE segments SET speaker=?,gender=?,age=?,analysis_notes=?,
+                    canonical_character_id=NULL,voice_profile_id=NULL,updated_at=?
+                WHERE id IN ({placeholders})
+                """,
+                (
+                    speaker,
+                    gender,
+                    age,
+                    analysis_notes[:500],
+                    time.time(),
+                    *segment_ids,
+                ),
+            )
+            return int(cursor.rowcount)
+
     def normalize_thought_speakers(self) -> int:
         with self.connect() as conn:
             cursor = conn.execute(

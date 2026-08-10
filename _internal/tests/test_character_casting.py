@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.character_registry import build_registry_and_cast
+from ebook_reader.analysis import EXPLICIT_ATTRIBUTION_NOTE, local_speaker_label
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.voice_catalog import (
@@ -118,6 +119,62 @@ def _identity_db(tmp_path: Path, speakers: list[tuple[str, str]]) -> ProjectDB:
                 "status": "analyzed",
             }
             for seq, (speaker, gender) in enumerate(speakers, 1)
+        ],
+    )
+    return db
+
+
+def _reconciliation_db(tmp_path: Path) -> ProjectDB:
+    db = ProjectDB(tmp_path / "reconciliation.sqlite3")
+    db.initialize_book(
+        title="Book",
+        project_root=tmp_path,
+        settings={},
+        settings_hash="settings",
+        input_manifest_hash="manifest",
+    )
+    chapter_id = db.ensure_chapters(
+        [
+            {
+                "chapter_index": 1,
+                "title": "One",
+                "input_path": tmp_path / "one.txt",
+                "input_sha256": "source",
+                "input_size": 1,
+                "output_mp3": tmp_path / "one.mp3",
+            }
+        ]
+    )[0]
+    rows = [
+        (1, 1, "“Lời của người đàn ông.”", "NPC_LOCAL::c00001::a::người đàn ông trung niên", "male", "adult", "personality=priest"),
+        (10, 10, "“Lời của giám mục.”", "NPC_LOCAL::c00001::b::giam muc", "male", "adult", "personality=priest"),
+        (20, 20, "“Lời nguyền đầu tiên!”", "NPC_LOCAL::c00001::c::người phụ nữ mặc áo choàng đen", "female", "adult", f"personality=madwoman; {EXPLICIT_ATTRIBUTION_NOTE}"),
+        (21, 21, "“Điên rồi!”", "NPC_LOCAL::c00001::c::phu nu ao choang den", "female", "unknown", "personality=madwoman"),
+        (22, 22, "“Độc ác quá!”", "NPC_LOCAL::c00001::c::phu nu ao choang den", "female", "unknown", "personality=madwoman"),
+        (23, 23, "“Thiêu ả đi!”", "NPC_LOCAL::c00001::c::phu nu ao choang den", "female", "unknown", "personality=madwoman"),
+        (24, 24, "Những người dân nghèo trên quảng trường gào thét đến lạc giọng.", "NARRATOR", "unknown", "unknown", "personality=narrator"),
+        (30, 30, "“Từ trong biển lửa, ta sẽ chứng kiến tất cả sụp đổ.", "NPC_LOCAL::c00001::d::phu nu ao choang den", "female", "adult", "personality=madwoman"),
+        (31, 31, "Ta sẽ chứng kiến các ngươi trầm luân!”", "NPC_LOCAL::c00001::e::thần lửa", "male", "unknown", "personality=deity"),
+    ]
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {
+                "stable_id": f"c1s{seq}",
+                "seq": seq,
+                "paragraph_index": paragraph,
+                "text": text,
+                "text_sha256": f"text-{seq}",
+                "kind_hint": "narration" if speaker == "NARRATOR" else "dialogue",
+                "kind": "narration" if speaker == "NARRATOR" else "dialogue",
+                "speaker": speaker,
+                "gender": gender,
+                "age": age,
+                "confidence": 0.95,
+                "analysis_notes": notes,
+                "status": "analyzed",
+            }
+            for seq, paragraph, text, speaker, gender, age, notes in rows
         ],
     )
     return db
@@ -266,6 +323,23 @@ def test_interleaved_local_children_remain_distinct(tmp_path: Path) -> None:
     rows = db.list_segments()
     assert len({str(row["speaker"]) for row in rows}) == 2
     assert len({int(row["canonical_character_id"]) for row in rows}) == 2
+
+
+def test_reconciliation_repairs_crowd_continuation_and_role_aliases(tmp_path: Path) -> None:
+    db = _reconciliation_db(tmp_path)
+
+    build_registry_and_cast(db, build_settings(), lambda _message: None)
+
+    rows = {int(row["seq"]): row for row in db.list_segments()}
+    bishop_rows = [rows[1], rows[10]]
+    witch_rows = [rows[20], rows[30], rows[31]]
+    crowd_rows = [rows[21], rows[22], rows[23]]
+    assert len({int(row["canonical_character_id"]) for row in bishop_rows}) == 1
+    assert len({int(row["voice_profile_id"]) for row in bishop_rows}) == 1
+    assert len({int(row["canonical_character_id"]) for row in witch_rows}) == 1
+    assert len({int(row["voice_profile_id"]) for row in witch_rows}) == 1
+    assert {local_speaker_label(row["speaker"]) for row in crowd_rows} == {"người dân"}
+    assert {str(row["gender"]) for row in crowd_rows} == {"unknown"}
 
 
 def test_relational_description_is_not_merged_with_named_character(tmp_path: Path) -> None:

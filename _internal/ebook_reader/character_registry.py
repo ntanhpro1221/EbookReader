@@ -5,6 +5,10 @@ from collections import Counter, defaultdict
 from typing import Any, Callable
 
 from .analysis import (
+    CONTINUED_DIALOGUE_LOCK_NOTE,
+    DIALOGUE_CLOSERS,
+    DIALOGUE_OPENERS,
+    EXPLICIT_ATTRIBUTION_NOTE,
     _canonical_speaker,
     is_local_speaker,
     local_speaker_display,
@@ -23,6 +27,7 @@ from .voice_catalog import (
 
 
 LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP = 12
+LOCAL_ROLE_CONTINUITY_MAX_SEGMENT_GAP = 40
 LOCAL_CHILD_LABEL_PREFIXES = (
     "cậu bé",
     "cô bé",
@@ -31,6 +36,21 @@ LOCAL_CHILD_LABEL_PREFIXES = (
     "trẻ em",
     "trẻ nhỏ",
 )
+LOCAL_LABEL_STOPWORDS = {"mac", "nguoi"}
+LOCAL_PERSONALITY_ROLE_FAMILIES = {
+    "bishop": "religious_officiant",
+    "giam_muc": "religious_officiant",
+    "madwoman": "condemned_woman",
+    "priest": "religious_officiant",
+    "witch": "condemned_woman",
+}
+CROWD_DIALOGUE_BLOCK_MAX_SEGMENTS = 8
+CROWD_ATTRIBUTION_PATTERN = re.compile(
+    r"(?:người dân|dân nghèo|dân chúng|đám đông|mọi người).{0,180}"
+    r"(?:gào|hét|hô|la|thét|kêu)",
+    flags=re.IGNORECASE,
+)
+CROWD_ANALYSIS_NOTES = "personality=crowd; đã khóa người nói từ lời dẫn tập thể kế tiếp"
 
 
 PRONOUNS = {
@@ -315,6 +335,28 @@ def _compatible_local_traits(left: list[Any], right: list[Any], field: str) -> b
     return not left_values or not right_values or bool(left_values & right_values)
 
 
+def _personality_role_family(rows: list[Any]) -> str | None:
+    families: set[str] = set()
+    for row in rows:
+        match = re.match(r"personality=([^;]+)", str(row["analysis_notes"] or ""))
+        if match is None:
+            continue
+        role = slugify(match.group(1))
+        family = LOCAL_PERSONALITY_ROLE_FAMILIES.get(role)
+        if family is not None:
+            families.add(family)
+    return next(iter(families)) if len(families) == 1 else None
+
+
+def _semantic_local_label(label: str) -> str:
+    tokens = [
+        token
+        for token in slugify(label).split("_")
+        if token and token not in LOCAL_LABEL_STOPWORDS
+    ]
+    return "_".join(tokens)
+
+
 def _local_continuity_family(speaker: str, rows: list[Any]) -> str:
     label = normalize_name(local_speaker_label(speaker))
     if any(
@@ -322,7 +364,119 @@ def _local_continuity_family(speaker: str, rows: list[Any]) -> str:
         for prefix in LOCAL_CHILD_LABEL_PREFIXES
     ):
         return f"child::{_majority(rows, 'gender')}"
-    return f"label::{label}"
+    role_family = _personality_role_family(rows)
+    if role_family is not None:
+        return f"role::{role_family}"
+    return f"label::{_semantic_local_label(label)}"
+
+
+def _local_speaker_with_label(speaker: str, label: str) -> str | None:
+    if not is_local_speaker(speaker):
+        return None
+    prefix, _separator, _old_label = speaker.rpartition("::")
+    return f"{prefix}::{label}" if prefix else None
+
+
+def _repair_cross_batch_dialogue_continuations(
+    db: ProjectDB,
+    log: Callable[[str], None],
+) -> None:
+    rows = sorted(db.list_segments(), key=lambda row: (int(row["chapter_id"]), int(row["seq"])))
+    previous: dict[str, Any] | None = None
+    repaired = 0
+    for row in rows:
+        current = {
+            "row": row,
+            "kind": str(row["kind"]),
+            "speaker": str(row["speaker"]),
+            "gender": str(row["gender"]),
+            "age": str(row["age"]),
+            "analysis_notes": str(row["analysis_notes"] or ""),
+        }
+        if previous is not None:
+            previous_row = previous["row"]
+            same_chapter = int(previous_row["chapter_id"]) == int(row["chapter_id"])
+            adjacent_paragraph = int(row["paragraph_index"]) == int(
+                previous_row["paragraph_index"]
+            ) + 1
+            previous_text = str(previous_row["text"]).rstrip()
+            text = str(row["text"]).lstrip()
+            continuation = bool(
+                same_chapter
+                and adjacent_paragraph
+                and previous["kind"] == "dialogue"
+                and current["kind"] == "dialogue"
+                and previous_text
+                and text
+                and previous_text[-1] not in DIALOGUE_CLOSERS
+                and text[0] not in DIALOGUE_OPENERS
+            )
+            if continuation and current["speaker"] != previous["speaker"]:
+                notes = str(previous["analysis_notes"])
+                if CONTINUED_DIALOGUE_LOCK_NOTE not in notes:
+                    notes = (
+                        f"{notes}; {CONTINUED_DIALOGUE_LOCK_NOTE}"
+                        if notes
+                        else CONTINUED_DIALOGUE_LOCK_NOTE
+                    )
+                repaired += db.rewrite_segment_speakers(
+                    [int(row["id"])],
+                    speaker=str(previous["speaker"]),
+                    gender=str(previous["gender"]),
+                    age=str(previous["age"]),
+                    analysis_notes=notes,
+                )
+                current.update(
+                    {
+                        "speaker": previous["speaker"],
+                        "gender": previous["gender"],
+                        "age": previous["age"],
+                        "analysis_notes": notes,
+                    }
+                )
+        previous = current
+    if repaired:
+        log(f"Đã giữ identity xuyên batch cho {repaired} câu thoại nối tiếp.")
+
+
+def _repair_crowd_dialogue_blocks(
+    db: ProjectDB,
+    log: Callable[[str], None],
+) -> None:
+    rows = sorted(db.list_segments(), key=lambda row: (int(row["chapter_id"]), int(row["seq"])))
+    repaired = 0
+    for index, row in enumerate(rows):
+        if str(row["kind"]) != "narration" or CROWD_ATTRIBUTION_PATTERN.search(str(row["text"])) is None:
+            continue
+        block: list[Any] = []
+        cursor = index - 1
+        while cursor >= 0 and len(block) < CROWD_DIALOGUE_BLOCK_MAX_SEGMENTS:
+            candidate = rows[cursor]
+            if int(candidate["chapter_id"]) != int(row["chapter_id"]):
+                break
+            if str(candidate["kind"]) != "dialogue":
+                break
+            if EXPLICIT_ATTRIBUTION_NOTE in str(candidate["analysis_notes"] or ""):
+                break
+            block.append(candidate)
+            cursor -= 1
+        if not block:
+            continue
+        by_target: dict[str, list[int]] = defaultdict(list)
+        for candidate in block:
+            target = _local_speaker_with_label(str(candidate["speaker"]), "người dân")
+            if target is not None:
+                by_target[target].append(int(candidate["id"]))
+        for target, segment_ids in by_target.items():
+            repaired += db.rewrite_segment_speakers(
+                segment_ids,
+                speaker=target,
+                gender="unknown",
+                age="unknown",
+                analysis_notes=CROWD_ANALYSIS_NOTES,
+            )
+    if repaired:
+        log(f"Đã sửa {repaired} câu hô của đám đông từ lời dẫn tập thể kế tiếp.")
 
 
 def _merge_adjacent_local_speakers(
@@ -342,7 +496,7 @@ def _merge_adjacent_local_speakers(
         family = _local_continuity_family(speaker, speaker_rows)
         grouped[(chapter_id, family)][speaker] = speaker_rows
 
-    for identities in grouped.values():
+    for (_chapter_id, family), identities in grouped.items():
         ordered = sorted(
             identities.items(),
             key=lambda item: min(int(row["seq"]) for row in item[1]),
@@ -359,9 +513,14 @@ def _merge_adjacent_local_speakers(
                 "gender",
             ) and _compatible_local_traits(canonical_rows, speaker_rows, "age")
             gap = first_seq - canonical_last_seq
+            max_gap = (
+                LOCAL_ROLE_CONTINUITY_MAX_SEGMENT_GAP
+                if family.startswith("role::")
+                else LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP
+            )
             if (
                 gap <= 0
-                or gap > LOCAL_SPEAKER_CONTINUITY_MAX_SEGMENT_GAP
+                or gap > max_gap
                 or not compatible
             ):
                 canonical_speaker = speaker
@@ -396,6 +555,8 @@ def build_registry_and_cast(
         if reserved and speaker != reserved:
             db.rewrite_speaker(speaker, reserved)
 
+    _repair_cross_batch_dialogue_continuations(db, log)
+    _repair_crowd_dialogue_blocks(db, log)
     aliases_by_speaker = _canonicalize_named_speakers(db, log)
     _merge_adjacent_local_speakers(db, log)
     _merge_local_speakers_with_named_identity(db, log)
