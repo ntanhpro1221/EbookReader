@@ -14,7 +14,9 @@ from ebook_reader.analysis import (
     EXPLICIT_ATTRIBUTION_NOTE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
+    AnalysisOutputBudgetError,
     AnalysisRequestStopped,
+    AnalysisWallTimeoutError,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
     _cmu_pronunciation_to_vietnamese,
@@ -1372,6 +1374,154 @@ def test_incomplete_stream_raises_specific_error_and_closes_response() -> None:
         analyzer._request(group)
 
     assert session.response.closed is True
+
+
+def test_streaming_analysis_wall_timeout_raises_specific_error_and_closes_response(
+    monkeypatch,
+) -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    monotonic_values = iter((0.0, 421.0))
+    monkeypatch.setattr("ebook_reader.analysis.time.monotonic", lambda: next(monotonic_values))
+
+    with pytest.raises(AnalysisWallTimeoutError, match="420s wall-time limit"):
+        analyzer._request(group)
+
+    assert session.response.closed is True
+
+
+def test_streaming_analysis_output_budget_raises_specific_error_and_closes_response() -> None:
+    group = analysis_group()
+    session = FakeSession({})
+
+    class OutputBudgetResponse(FakeResponse):
+        def iter_lines(self, decode_unicode=False):
+            line = json.dumps(
+                {
+                    "response": '{"segments":[',
+                    "done": True,
+                    "done_reason": "length",
+                    "eval_count": 1024,
+                }
+            )
+            yield line if decode_unicode else line.encode("utf-8")
+
+    session.response = OutputBudgetResponse({})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    with pytest.raises(AnalysisOutputBudgetError, match="output-token budget"):
+        analyzer._request(group)
+
+    assert session.response.closed is True
+
+
+def test_wall_timeout_splits_twenty_segment_batch_immediately_and_preserves_scope(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"c1s{index}",
+            "chapter_id": 1,
+            "text": f"Đoạn {index}.",
+            "kind_hint": "dialogue",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 21)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 20, "batch_chars": 10000}}
+    )
+    logs: list[str] = []
+    analyzer = OllamaBookAnalyzer(settings, db, logs.append)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    request_sizes: list[int] = []
+
+    def request(group, **_kwargs):
+        request_sizes.append(len(group))
+        if len(group) == 20:
+            raise AnalysisWallTimeoutError("wall-time test timeout")
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            item.update(
+                {"kind": "dialogue", "speaker": "NPC_LOCAL:lính gác", "gender": "male"}
+            )
+            items.append(item)
+        return {"segments": items}
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert request_sizes == [20, 10, 10]
+    speakers = {data["speaker"] for _segment_id, data, _threshold in db.updated}
+    assert len(speakers) == 1
+    assert _local_scope_for_group(db.rows) in next(iter(speakers))
+    assert any("vượt giới hạn thời gian 1; tự chia thành 10 + 10 segment" in log for log in logs)
+
+
+def test_wall_timeout_single_segment_uses_bounded_retries_without_split(monkeypatch) -> None:
+    db = FakeDB()
+    settings = build_settings(overrides={"analysis": {"max_retries": 3}})
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    request_sizes: list[int] = []
+
+    def request(group, **_kwargs):
+        request_sizes.append(len(group))
+        raise AnalysisWallTimeoutError("single-segment wall-time test timeout")
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert request_sizes == [1, 1, 1]
+    assert any(event[1] == "REQUIRED_ANALYSIS_BATCH_FAILED" for event in db.events)
+
+
+def test_output_budget_exhaustion_splits_batch_without_retrying_same_size(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"c1s{index}",
+            "chapter_id": 1,
+            "text": f"Đoạn {index}.",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    request_sizes: list[int] = []
+
+    def request(group, **_kwargs):
+        request_sizes.append(len(group))
+        if len(group) == 4:
+            raise AnalysisOutputBudgetError("output budget test exhaustion")
+        return {
+            "segments": [analysis_item(str(row["stable_id"])) for row in group],
+        }
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert request_sizes == [4, 2, 2]
+    assert len(db.updated) == 4
 
 
 def test_incomplete_stream_splits_batch_instead_of_retrying_same_size(monkeypatch) -> None:

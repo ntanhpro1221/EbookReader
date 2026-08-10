@@ -341,6 +341,14 @@ class OllamaStreamIncompleteError(RuntimeError):
     pass
 
 
+class AnalysisWallTimeoutError(TimeoutError):
+    pass
+
+
+class AnalysisOutputBudgetError(RuntimeError):
+    pass
+
+
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -1658,6 +1666,8 @@ class OllamaBookAnalyzer:
         parts: list[str] = []
         response: requests.Response | None = None
         completed = False
+        completion_reason = ""
+        evaluation_count: int | None = None
         request["stream"] = True
         try:
             response = self.session.post(
@@ -1674,7 +1684,7 @@ class OllamaBookAnalyzer:
                 now = time.monotonic()
                 elapsed = now - started
                 if elapsed > wall_timeout:
-                    raise TimeoutError(
+                    raise AnalysisWallTimeoutError(
                         f"Ollama analysis exceeded {wall_timeout:.0f}s wall-time limit"
                     )
                 if raw_line:
@@ -1684,6 +1694,12 @@ class OllamaBookAnalyzer:
                         raise RuntimeError(str(envelope["error"]))
                     parts.append(str(envelope.get("response", "")))
                     completed = bool(envelope.get("done", False))
+                    if completed:
+                        completion_reason = str(envelope.get("done_reason", "")).casefold()
+                        try:
+                            evaluation_count = int(envelope["eval_count"])
+                        except (KeyError, TypeError, ValueError):
+                            evaluation_count = None
                 if activity is not None and now - last_activity >= ANALYSIS_ACTIVITY_SECONDS:
                     activity(int(elapsed), sum(len(part) for part in parts))
                     last_activity = now
@@ -1696,7 +1712,20 @@ class OllamaBookAnalyzer:
         finally:
             if response is not None:
                 response.close()
-        return json.loads("".join(parts) or "{}")
+        response_text = "".join(parts) or "{}"
+        if completion_reason == "length":
+            raise AnalysisOutputBudgetError(
+                "Ollama analysis exhausted its output-token budget before completing the JSON response"
+            )
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError as exc:
+            output_limit = int(request.get("options", {}).get("num_predict", 0))
+            if output_limit > 0 and evaluation_count is not None and evaluation_count >= output_limit:
+                raise AnalysisOutputBudgetError(
+                    "Ollama analysis exhausted its output-token budget before completing the JSON response"
+                ) from exc
+            raise
 
     def _request(
         self,
@@ -1862,7 +1891,7 @@ class OllamaBookAnalyzer:
             validated: dict[str, dict[str, Any]] = {}
             payload: dict[str, Any] = {}
             last_error = "AI analysis is unavailable"
-            split_incomplete_stream = False
+            split_scalable_failure = False
             received_incomplete_ids = False
             if llm_ready:
                 for attempt in range(retry_count):
@@ -1887,7 +1916,11 @@ class OllamaBookAnalyzer:
                         received_incomplete_ids = True
                     except AnalysisRequestStopped:
                         raise
-                    except OllamaStreamIncompleteError as exc:
+                    except (
+                        AnalysisOutputBudgetError,
+                        AnalysisWallTimeoutError,
+                        OllamaStreamIncompleteError,
+                    ) as exc:
                         last_error = str(exc)
                         if len(group) > 1:
                             self.log(
@@ -1899,18 +1932,24 @@ class OllamaBookAnalyzer:
                                 (first_half, local_scope),
                                 (second_half, local_scope),
                             ]
+                            if isinstance(exc, AnalysisWallTimeoutError):
+                                split_reason = "Batch vượt giới hạn thời gian"
+                            elif isinstance(exc, AnalysisOutputBudgetError):
+                                split_reason = "Batch chạm trần token đầu ra"
+                            else:
+                                split_reason = "Stream batch bị ngắt"
                             self.log(
-                                f"Stream batch {group_index} bị ngắt; tự chia thành "
+                                f"{split_reason} {group_index}; tự chia thành "
                                 f"{len(first_half)} + {len(second_half)} segment. "
                                 f"Tổng số batch còn lại hiện là {len(groups)}."
                             )
-                            split_incomplete_stream = True
+                            split_scalable_failure = True
                             break
                     except Exception as exc:  # noqa: BLE001
                         last_error = str(exc)
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
-            if split_incomplete_stream:
+            if split_scalable_failure:
                 continue
             if received_incomplete_ids and len(validated) != len(group) and len(group) > 1:
                 first_half, second_half = _split_analysis_group(group)
