@@ -25,7 +25,10 @@ from .database import (
     ProjectDB,
 )
 from .io_utils import stable_int
-from .models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
+from .models import (
+    CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE,
+    ENGLISH_NAME_PRONUNCIATION_SOURCE,
+)
 from .resource_manager import trim_process_working_set
 from .text_processing import normalize_vocalizations_for_tts
 
@@ -75,6 +78,12 @@ GENERATION_FRAME_CAP_FIELD = "generation_frame_cap"
 DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS = -45.0
 CLARITY_MAX_TEMPERATURE = 0.78
 CLARITY_MAX_TOP_P = 0.90
+LOCKED_ENGLISH_NAME_PRONUNCIATION_SOURCES = frozenset(
+    {
+        ENGLISH_NAME_PRONUNCIATION_SOURCE,
+        CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE,
+    }
+)
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
@@ -304,8 +313,10 @@ class TTSCoordinator:
         self.vieneu = VieNeuEngine(settings, log)
         self._pronunciation_pattern: re.Pattern[str] | None = None
         self._pronunciation_map: dict[str, str] = {}
+        self._pronunciation_metadata: dict[str, Any] = {}
         self._exact_pronunciation_pattern: re.Pattern[str] | None = None
         self._exact_pronunciation_map: dict[str, str] = {}
+        self._exact_pronunciation_metadata: dict[str, Any] = {}
 
     def unload_all(self) -> None:
         self.vieneu.unload()
@@ -333,7 +344,7 @@ class TTSCoordinator:
             "pitch_semitones": int(profile["pitch_semitones"] or 0),
         }
 
-    def spoken_text(self, row: Any) -> str:
+    def _load_pronunciations(self) -> None:
         if self._pronunciation_pattern is None:
             minimum = float(self.settings["analysis"].get("low_confidence_threshold", 0.58))
             pronunciations = self.db.list_pronunciations(minimum)
@@ -351,6 +362,10 @@ class TTSCoordinator:
                 " ".join(str(item["surface"]).casefold().split()): str(item["spoken_form"])
                 for item in pronunciations
             }
+            self._pronunciation_metadata = {
+                " ".join(str(item["surface"]).casefold().split()): item
+                for item in pronunciations
+            }
             surfaces = [str(item["surface"]) for item in pronunciations]
             self._pronunciation_pattern = (
                 re.compile(
@@ -364,6 +379,9 @@ class TTSCoordinator:
                 str(item["surface"]): str(item["spoken_form"])
                 for item in exact_pronunciations
             }
+            self._exact_pronunciation_metadata = {
+                str(item["surface"]): item for item in exact_pronunciations
+            }
             exact_surfaces = [str(item["surface"]) for item in exact_pronunciations]
             self._exact_pronunciation_pattern = (
                 re.compile(r"(?<!\w)(?:" + "|".join(re.escape(value) for value in exact_surfaces) + r")(?!\w)")
@@ -371,16 +389,212 @@ class TTSCoordinator:
                 else re.compile(r"(?!x)x")
             )
 
-        def replace(match: re.Match[str]) -> str:
-            key = " ".join(match.group(0).casefold().split())
-            return self._pronunciation_map.get(key, match.group(0))
+    @staticmethod
+    def _source_span(
+        origins: list[tuple[int, int]],
+        start: int,
+        end: int,
+    ) -> tuple[int, int]:
+        matched_origins = origins[start:end]
+        if not matched_origins:
+            return start, end
+        return min(origin[0] for origin in matched_origins), max(
+            origin[1] for origin in matched_origins
+        )
 
-        def replace_exact(match: re.Match[str]) -> str:
-            return self._exact_pronunciation_map.get(match.group(0), match.group(0))
+    def _substitute_pronunciations(
+        self,
+        text: str,
+        origins: list[tuple[int, int]],
+        anchor_tags: list[frozenset[int]],
+        pattern: re.Pattern[str],
+        pronunciation_map: dict[str, str],
+        metadata_map: dict[str, Any],
+        *,
+        case_sensitive: bool,
+        source_text: str,
+        anchors: list[dict[str, Any]],
+    ) -> tuple[str, list[tuple[int, int]], list[frozenset[int]]]:
+        output_parts: list[str] = []
+        output_origins: list[tuple[int, int]] = []
+        output_anchor_tags: list[frozenset[int]] = []
+        cursor = 0
+        for match in pattern.finditer(text):
+            output_parts.append(text[cursor : match.start()])
+            output_origins.extend(origins[cursor : match.start()])
+            output_anchor_tags.extend(anchor_tags[cursor : match.start()])
+            matched_text = match.group(0)
+            key = (
+                matched_text
+                if case_sensitive
+                else " ".join(matched_text.casefold().split())
+            )
+            replacement = pronunciation_map.get(key, matched_text)
+            source_start, source_end = self._source_span(
+                origins,
+                match.start(),
+                match.end(),
+            )
+            metadata = metadata_map.get(key)
+            replacement_anchor_tags = set().union(
+                *anchor_tags[match.start() : match.end()]
+            )
+            if (
+                replacement != matched_text
+                and metadata is not None
+                and int(_row_value(metadata, "locked", 0)) == 1
+                and str(_row_value(metadata, "source", ""))
+                in LOCKED_ENGLISH_NAME_PRONUNCIATION_SOURCES
+            ):
+                anchor_index = len(anchors)
+                replacement_anchor_tags.add(anchor_index)
+                anchors.append(
+                    {
+                        "pronunciation_id": int(metadata["id"]),
+                        "surface": str(metadata["surface"]),
+                        "normalized_surface": str(metadata["normalized_surface"]),
+                        "matched_surface": source_text[source_start:source_end],
+                        "spoken_form": str(metadata["spoken_form"]),
+                        "source": str(metadata["source"]),
+                        "source_start": source_start,
+                        "source_end": source_end,
+                        "_anchor_index": anchor_index,
+                        "_execution_order": len(anchors),
+                    }
+                )
+            output_parts.append(replacement)
+            output_origins.extend([(source_start, source_end)] * len(replacement))
+            output_anchor_tags.extend(
+                [frozenset(replacement_anchor_tags)] * len(replacement)
+            )
+            cursor = match.end()
+        output_parts.append(text[cursor:])
+        output_origins.extend(origins[cursor:])
+        output_anchor_tags.extend(anchor_tags[cursor:])
+        return "".join(output_parts), output_origins, output_anchor_tags
 
-        text = self._exact_pronunciation_pattern.sub(replace_exact, str(row["text"]))
-        text = self._pronunciation_pattern.sub(replace, text)
-        return normalize_vocalizations_for_tts(text)
+    @staticmethod
+    def _private_use_markers(text: str, count: int) -> list[str]:
+        occupied = set(text)
+        markers: list[str] = []
+        for start, end in ((0xF0000, 0xFFFFE), (0x100000, 0x10FFFE)):
+            for codepoint in range(start, end):
+                marker = chr(codepoint)
+                if marker in occupied:
+                    continue
+                markers.append(marker)
+                occupied.add(marker)
+                if len(markers) == count:
+                    return markers
+        raise RuntimeError("Unable to allocate pronunciation anchor markers")
+
+    def _normalize_with_anchor_spans(
+        self,
+        text: str,
+        anchor_tags: list[frozenset[int]],
+        anchors: list[dict[str, Any]],
+    ) -> str:
+        normalized_text = normalize_vocalizations_for_tts(text)
+        if not anchors:
+            return normalized_text
+        positions: dict[int, list[int]] = {
+            int(anchor["_anchor_index"]): [] for anchor in anchors
+        }
+        for position, tags in enumerate(anchor_tags):
+            for anchor_index in tags:
+                positions[anchor_index].append(position)
+        markers = self._private_use_markers(text, len(anchors) * 2)
+        marker_events: dict[str, tuple[dict[str, Any], str]] = {}
+        boundary_markers: dict[int, list[str]] = {}
+        for anchor, start_marker, end_marker in zip(
+            anchors,
+            markers[::2],
+            markers[1::2],
+            strict=True,
+        ):
+            anchor_positions = positions[int(anchor["_anchor_index"])]
+            if not anchor_positions:
+                raise RuntimeError("Applied pronunciation anchor has no spoken text span")
+            start = min(anchor_positions)
+            end = max(anchor_positions) + 1
+            boundary_markers.setdefault(start, []).append(start_marker)
+            boundary_markers.setdefault(end, []).append(end_marker)
+            marker_events[start_marker] = (anchor, "start")
+            marker_events[end_marker] = (anchor, "end")
+        marked_parts: list[str] = []
+        for boundary in range(len(text) + 1):
+            marked_parts.extend(boundary_markers.get(boundary, ()))
+            if boundary < len(text):
+                marked_parts.append(text[boundary])
+        normalized_marked_text = normalize_vocalizations_for_tts("".join(marked_parts))
+        visible_characters: list[str] = []
+        for character in normalized_marked_text:
+            marker_event = marker_events.get(character)
+            if marker_event is None:
+                visible_characters.append(character)
+                continue
+            anchor, boundary = marker_event
+            anchor[f"spoken_{boundary}"] = len(visible_characters)
+        if "".join(visible_characters) != normalized_text:
+            raise RuntimeError("Pronunciation anchor markers changed spoken-text normalization")
+        for anchor in anchors:
+            if "spoken_start" not in anchor or "spoken_end" not in anchor:
+                raise RuntimeError("Pronunciation anchor marker was lost during normalization")
+        return normalized_text
+
+    def spoken_text_with_anchors(
+        self,
+        row: Any,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        self._load_pronunciations()
+        source_text = str(row["text"])
+        origins = [(index, index + 1) for index in range(len(source_text))]
+        anchor_tags = [frozenset() for _character in source_text]
+        anchors: list[dict[str, Any]] = []
+        text, origins, anchor_tags = self._substitute_pronunciations(
+            source_text,
+            origins,
+            anchor_tags,
+            self._exact_pronunciation_pattern,
+            self._exact_pronunciation_map,
+            self._exact_pronunciation_metadata,
+            case_sensitive=True,
+            source_text=source_text,
+            anchors=anchors,
+        )
+        text, _origins, anchor_tags = self._substitute_pronunciations(
+            text,
+            origins,
+            anchor_tags,
+            self._pronunciation_pattern,
+            self._pronunciation_map,
+            self._pronunciation_metadata,
+            case_sensitive=False,
+            source_text=source_text,
+            anchors=anchors,
+        )
+        text = self._normalize_with_anchor_spans(text, anchor_tags, anchors)
+        anchors.sort(
+            key=lambda item: (
+                int(item["source_start"]),
+                int(item["source_end"]),
+                int(item["_execution_order"]),
+            )
+        )
+        occurrences: dict[int, int] = {}
+        for order, anchor in enumerate(anchors, start=1):
+            pronunciation_id = int(anchor["pronunciation_id"])
+            occurrence = occurrences.get(pronunciation_id, 0) + 1
+            occurrences[pronunciation_id] = occurrence
+            anchor["occurrence"] = occurrence
+            anchor["order"] = order
+            del anchor["_anchor_index"]
+            del anchor["_execution_order"]
+        return text, anchors
+
+    def spoken_text(self, row: Any) -> str:
+        text, _anchors = self.spoken_text_with_anchors(row)
+        return text
 
     def _spoken_row(self, row: Any) -> dict[str, Any]:
         result = dict(row)

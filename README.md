@@ -170,6 +170,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Mỗi WAV phải qua kiểm tra tín hiệu và đối chiếu nội dung bằng Whisper; WAV đủ dài còn được UTMOSv2 so với preview đã khóa của đúng giọng đọc trước khi chapter được xuất bản.
 - Mỗi lượt nghe Whisper (direct/repeated, beam/greedy) có evidence riêng gắn với checksum WAV. Lặp câu ngắn chỉ được
   dùng để nâng một verdict thành đạt; nếu lượt lặp vẫn lỗi, tool giữ transcript và metric direct tốt hơn thay vì che lỗi.
+- Tên tiếng Anh đã khóa phát âm được kiểm tra như anchor riêng ở từng lượt giải mã. Tool chỉ chấp nhận đúng spelling
+  nguồn, đúng chuỗi âm tiết đã khóa hoặc dạng ghép âm tiết xác định; các alias gần giống như `Lucy/Lucian` không thể
+  lọt qua chỉ vì metric của cả câu vẫn cao.
 - Khi hai lượt Whisper xác nhận mismatch, tool tạo lại bằng delivery `clarity`: giữ nguyên nhân vật, giọng, pitch và
   câu đọc, chỉ giảm độ ngẫu nhiên của sampling. WAV sửa chỉ được duyệt khi cả beam và greedy đều đạt; số vòng được
   checkpoint nên dừng/chạy lại không bỏ qua xác nhận hoặc sửa vô hạn.

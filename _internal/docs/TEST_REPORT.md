@@ -115,6 +115,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
 - evidence của từng decode Whisper được lưu ở stage riêng và không thể làm final ASR gate đạt; repeated-short chỉ
   promote khi chính lượt lặp `pass`, còn lượt lặp vẫn lỗi không được ghi đè direct transcript/metrics tốt hơn;
+- locked English-name anchor giữ pronunciation ID, source span và occurrence; regression chấp nhận đúng spelling,
+  spoken form/dạng ghép token nhưng chặn `Lucien → Lucy/Lucian/Lusienne`, thiếu occurrence, sai thứ tự, repeat3 thiếu
+  và homograph ở sai vị trí (`Mây may áo` không được lấy động từ `may` để thay cho tên bị đọc sai);
+  mọi verdict `ASR_INCONCLUSIVE` giữ nguyên để không quy lỗi model/ngữ cảnh thành lỗi TTS;
 - ASR repair dùng delivery `clarity` với voice/profile/pitch/text khóa nguyên và sampling variance thấp hơn; candidate
   chỉ đạt khi cả beam lẫn greedy cùng `pass`. Regression bao phủ pass/fail theo cả hai thứ tự, giới hạn repair hữu hạn,
   và crash giữa hai decode rồi resume vẫn buộc nghe lại đủ cặp mà không sinh vượt budget;

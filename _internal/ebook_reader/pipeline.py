@@ -7,7 +7,16 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .analysis import AnalysisRequestStopped, OllamaBookAnalyzer
-from .asr import ASR_INCONCLUSIVE, ASR_MISMATCH, ASR_PASS, WhisperVerifier
+from .asr import (
+    ASR_INCONCLUSIVE,
+    ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+    ASR_MISMATCH,
+    ASR_PASS,
+    LOCKED_NAME_ANCHOR_METRICS_KEY,
+    SHORT_CONTEXT_REPEAT_COUNT,
+    WhisperVerifier,
+    adjudicate_locked_name_anchors,
+)
 from .audio_io import (
     AudioQualityError,
     ChapterQualityError,
@@ -604,6 +613,16 @@ class BookPipeline:
             if confirmation
             else f"beam{int(self.settings.get('asr', {}).get('beam_size', 5))}"
         )
+        anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
+        anchor_failure_codes = (
+            [
+                str(code)
+                for code in anchor_metrics.get("failure_codes", [])
+                if str(code).strip()
+            ]
+            if isinstance(anchor_metrics, dict)
+            else []
+        )
         metrics = {
             "verdict": asr_verdict,
             "reason": str(result.get("reason", "ASR_INCONCLUSIVE")),
@@ -636,7 +655,15 @@ class BookPipeline:
             "split_checkpoint_seed": signal.get("split_checkpoint_seed"),
             "split_seed_salt_prefix": signal.get("split_seed_salt_prefix"),
             "split_parts": signal.get("split_parts", []),
+            LOCKED_NAME_ANCHOR_METRICS_KEY: anchor_metrics,
+            "failure_codes": anchor_failure_codes,
         }
+        evidence_failure_codes = list(anchor_failure_codes)
+        if evidence_verdict != QUALITY_VERDICT_PASS:
+            reason = str(metrics["reason"])
+            if reason not in evidence_failure_codes:
+                evidence_failure_codes.append(reason)
+        metrics["failure_codes"] = list(evidence_failure_codes)
         check_id = self.db.record_quality_check(
             scope=QUALITY_SCOPE_SEGMENT,
             stage=SEGMENT_ASR_DECODE_QUALITY_STAGE,
@@ -646,11 +673,7 @@ class BookPipeline:
             policy_version=QUALITY_POLICY_VERSION,
             verdict=evidence_verdict,
             metrics=metrics,
-            failure_codes=(
-                (str(metrics["reason"]),)
-                if evidence_verdict != QUALITY_VERDICT_PASS
-                else ()
-            ),
+            failure_codes=tuple(evidence_failure_codes),
             attempt=self._next_segment_quality_attempt(
                 segment_id,
                 SEGMENT_ASR_DECODE_QUALITY_STAGE,
@@ -674,6 +697,21 @@ class BookPipeline:
         segment_id = int(item["id"])
         _wav_path, artifact_sha256 = self._validated_segment_wav_identity(item)
         reason = str(result.get("reason", "ok"))
+        anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
+        result_failure_codes: list[str] = []
+        for code in result.get("failure_codes", []):
+            normalized_code = str(code).strip()
+            if normalized_code and normalized_code not in result_failure_codes:
+                result_failure_codes.append(normalized_code)
+        if isinstance(anchor_metrics, dict):
+            for code in anchor_metrics.get("failure_codes", []):
+                normalized_code = str(code).strip()
+                if normalized_code and normalized_code not in result_failure_codes:
+                    result_failure_codes.append(normalized_code)
+        if verdict == QUALITY_VERDICT_PASS:
+            result_failure_codes = []
+        elif reason not in result_failure_codes:
+            result_failure_codes.append(reason)
         self.db.record_quality_check(
             scope=QUALITY_SCOPE_SEGMENT,
             stage=SEGMENT_AUDIO_QUALITY_STAGE,
@@ -694,14 +732,21 @@ class BookPipeline:
                 ),
                 "dual_decode_required": bool(result.get("dual_decode_required", False)),
                 "dual_decode_passed": bool(result.get("dual_decode_passed", False)),
+                "confirmation_verdicts": list(
+                    result.get("confirmation_verdicts", [])
+                ),
                 "tts_error": str(result.get("tts_error", "")),
+                "decode_failure_reasons": list(
+                    result.get("decode_failure_reasons", [])
+                ),
                 "decode_evidence": list(decode_evidence or []),
+                LOCKED_NAME_ANCHOR_METRICS_KEY: anchor_metrics,
                 "repeated_short_context": (
                     str(result.get("selected_context_mode", "")) == "repeat3"
                     or str(result.get("reason", "")) == "ASR_REPEATED_SHORT_PASS"
                 ),
             },
-            failure_codes=(reason,) if verdict != QUALITY_VERDICT_PASS else (),
+            failure_codes=tuple(result_failure_codes),
             attempt=self._next_segment_quality_attempt(segment_id),
         )
 
@@ -1697,6 +1742,77 @@ class BookPipeline:
             except (TypeError, ValueError):
                 return -1
 
+        def aggregate_decode_failures(
+            results: list[dict[str, Any]],
+        ) -> dict[str, Any]:
+            failed = [result for result in results if _asr_verdict(result) != ASR_PASS]
+            if not failed:
+                return dict(results[-1])
+            anchor_failed = [
+                result
+                for result in failed
+                if isinstance(result.get(LOCKED_NAME_ANCHOR_METRICS_KEY), dict)
+                and result[LOCKED_NAME_ANCHOR_METRICS_KEY].get("passed") is False
+            ]
+            mismatches = [
+                result for result in failed if _asr_verdict(result) == ASR_MISMATCH
+            ]
+            endpoint_failed = [
+                result for result in failed if bool(result.get("endpoint_repair"))
+            ]
+            selected = (
+                endpoint_failed[-1]
+                if endpoint_failed
+                else anchor_failed[-1]
+                if anchor_failed
+                else mismatches[-1]
+                if mismatches
+                else failed[-1]
+            )
+            failure_codes: list[str] = []
+            failure_reasons: list[str] = []
+            for result in failed:
+                reason = str(result.get("reason", "ASR_INCONCLUSIVE"))
+                if reason not in failure_reasons:
+                    failure_reasons.append(reason)
+                for code in result.get("failure_codes", []):
+                    normalized_code = str(code).strip()
+                    if normalized_code and normalized_code not in failure_codes:
+                        failure_codes.append(normalized_code)
+                anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
+                if isinstance(anchor_metrics, dict):
+                    for code in anchor_metrics.get("failure_codes", []):
+                        normalized_code = str(code).strip()
+                        if normalized_code and normalized_code not in failure_codes:
+                            failure_codes.append(normalized_code)
+                if reason not in failure_codes:
+                    failure_codes.append(reason)
+            combined = {
+                **selected,
+                "failure_codes": failure_codes,
+                "decode_failure_reasons": failure_reasons,
+                "endpoint_repair": bool(endpoint_failed),
+            }
+            if anchor_failed:
+                combined[LOCKED_NAME_ANCHOR_METRICS_KEY] = anchor_failed[-1][
+                    LOCKED_NAME_ANCHOR_METRICS_KEY
+                ]
+            return combined
+
+        def spoken_text_and_anchors(
+            item: dict[str, Any],
+        ) -> tuple[str, list[dict[str, Any]]]:
+            provider = getattr(self.tts, "spoken_text_with_anchors", None)
+            if not callable(provider):
+                return self.tts.spoken_text(item), []
+            spoken_text, raw_anchors = provider(item)
+            anchors = [
+                dict(anchor)
+                for anchor in raw_anchors
+                if isinstance(anchor, dict)
+            ]
+            return str(spoken_text), anchors
+
         def decode_candidate(
             item: dict[str, Any],
             *,
@@ -1704,12 +1820,17 @@ class BookPipeline:
             repair_round: int | None,
             delivery_mode: str,
         ) -> dict[str, Any]:
-            expected_text = self.tts.spoken_text(item)
+            expected_text, locked_name_anchors = spoken_text_and_anchors(item)
             wav_path = Path(str(item["wav_path"]))
             direct = verifier.verify(
                 expected_text,
                 wav_path,
                 confirmation=confirmation,
+            )
+            direct = adjudicate_locked_name_anchors(
+                expected_text,
+                direct,
+                locked_name_anchors,
             )
             repeated: dict[str, Any] | None = None
             selected = direct
@@ -1721,6 +1842,12 @@ class BookPipeline:
                     expected_text,
                     wav_path,
                     confirmation=confirmation,
+                )
+                repeated = adjudicate_locked_name_anchors(
+                    expected_text,
+                    repeated,
+                    locked_name_anchors,
+                    repeat_count=SHORT_CONTEXT_REPEAT_COUNT,
                 )
                 if _asr_verdict(repeated) == ASR_PASS:
                     selected = repeated
@@ -1850,8 +1977,8 @@ class BookPipeline:
                 if bool(result.get("endpoint_repair")):
                     confirmed.append(item)
                 elif ASR_MISMATCH in {first_verdict, second_verdict}:
-                    mismatch_result = (
-                        result if second_verdict == ASR_MISMATCH else first_result
+                    mismatch_result = aggregate_decode_failures(
+                        [first_result, result]
                     )
                     last_results[segment_id] = {
                         **mismatch_result,
@@ -1862,8 +1989,11 @@ class BookPipeline:
                     }
                     confirmed.append(item)
                 else:
+                    inconclusive_result = aggregate_decode_failures(
+                        [first_result, result]
+                    )
                     last_results[segment_id] = {
-                        **result,
+                        **inconclusive_result,
                         "passed": False,
                         "verdict": ASR_INCONCLUSIVE,
                         "repairable": False,
@@ -1906,7 +2036,17 @@ class BookPipeline:
                 beam_verdict = _asr_verdict(beam_result)
                 greedy_verdict = _asr_verdict(greedy_result)
                 if self._ceiling_endpoint_requires_repair(item):
-                    result = require_endpoint_repair(item, greedy_result)
+                    result = {
+                        **aggregate_decode_failures(
+                            [
+                                beam_result,
+                                require_endpoint_repair(item, greedy_result),
+                            ]
+                        ),
+                        "dual_decode_required": True,
+                        "dual_decode_passed": False,
+                        "confirmation_verdicts": [beam_verdict, greedy_verdict],
+                    }
                 elif beam_verdict == ASR_PASS and greedy_verdict == ASR_PASS:
                     result = {
                         **greedy_result,
@@ -1919,18 +2059,8 @@ class BookPipeline:
                     self._progress(label, index, len(items))
                     continue
                 else:
-                    failed_results = [
-                        candidate
-                        for candidate in (beam_result, greedy_result)
-                        if _asr_verdict(candidate) != ASR_PASS
-                    ]
-                    mismatch_results = [
-                        candidate
-                        for candidate in failed_results
-                        if _asr_verdict(candidate) == ASR_MISMATCH
-                    ]
-                    selected_failure = (
-                        mismatch_results[-1] if mismatch_results else failed_results[-1]
+                    selected_failure = aggregate_decode_failures(
+                        [beam_result, greedy_result]
                     )
                     result = {
                         **selected_failure,
@@ -2047,7 +2177,12 @@ class BookPipeline:
             reason = str(result.get("reason", "ASR_INCONCLUSIVE"))
             warning = (
                 reason
-                if verdict == ASR_INCONCLUSIVE or reason == ACTIVE_CEILING_ENDPOINT_REPAIR_REASON
+                if verdict == ASR_INCONCLUSIVE
+                or reason
+                in {
+                    ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
+                    ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+                }
                 else "ASR_MISMATCH_UNRESOLVED"
             )
             severe = bool(result.get("severe", False))
@@ -2078,7 +2213,11 @@ class BookPipeline:
                     else (
                         "Active endpoint remained at the TTS frame ceiling after all repair rounds"
                         if reason == ACTIVE_CEILING_ENDPOINT_REPAIR_REASON
-                        else "ASR mismatch remained after all configured repair rounds"
+                        else (
+                            "Locked-name pronunciation remained mismatched after all repair rounds"
+                            if reason == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+                            else "ASR mismatch remained after all configured repair rounds"
+                        )
                     )
                 ),
                 warning_code=warning,
@@ -2268,6 +2407,17 @@ class BookPipeline:
                     "confirmation_decode": metrics.get("confirmation_decode"),
                     "dual_decode_required": metrics.get("dual_decode_required"),
                     "dual_decode_passed": metrics.get("dual_decode_passed"),
+                    "confirmation_verdicts": metrics.get(
+                        "confirmation_verdicts",
+                        [],
+                    ),
+                    "decode_failure_reasons": metrics.get(
+                        "decode_failure_reasons",
+                        [],
+                    ),
+                    LOCKED_NAME_ANCHOR_METRICS_KEY: metrics.get(
+                        LOCKED_NAME_ANCHOR_METRICS_KEY
+                    ),
                     "decode_evidence": metrics.get("decode_evidence", []),
                     "failure_codes": failure_codes,
                     "attempt": int(check["attempt"]) if check is not None else None,

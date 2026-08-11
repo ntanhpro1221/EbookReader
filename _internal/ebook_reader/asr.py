@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 import math
 import re
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Callable
 
@@ -30,12 +31,428 @@ SHORT_CONTEXT_GAP_SECONDS = 0.24
 ASR_PASS = "pass"
 ASR_MISMATCH = "mismatch"
 ASR_INCONCLUSIVE = "inconclusive"
+ASR_LOCKED_NAME_ANCHOR_MISMATCH = "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"
 
 
 def normalize_transcript(text: str) -> str:
     text = text.casefold().replace("đ", "d")
     text = re.sub(r"[^0-9a-zà-ỹ\s]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _json_safe_anchor_value(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, bool)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe_anchor_value(item) for key, item in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_json_safe_anchor_value(item) for item in value]
+    return str(value)
+
+
+def _locked_name_anchor_forms(anchor: Mapping[str, Any]) -> list[tuple[str, tuple[str, ...]]]:
+    spoken_tokens = tuple(normalize_transcript(str(anchor.get("spoken_form", ""))).split())
+    surface = str(anchor.get("surface", "")).strip()
+    if not surface:
+        surface = str(anchor.get("normalized_surface", "")).strip()
+    surface_tokens = tuple(normalize_transcript(surface).split())
+    candidates = [
+        ("spoken_form", spoken_tokens),
+        ("source_spelling", surface_tokens),
+        ("joined_spoken_form", ("".join(spoken_tokens),) if spoken_tokens else ()),
+    ]
+    forms: list[tuple[str, tuple[str, ...]]] = []
+    seen: set[tuple[str, ...]] = set()
+    for kind, tokens in candidates:
+        if not tokens or tokens in seen:
+            continue
+        forms.append((kind, tokens))
+        seen.add(tokens)
+    return forms
+
+
+def _locked_name_anchor_token_span(
+    expected_spoken_text: str,
+    expected_tokens: list[str],
+    anchor: Mapping[str, Any],
+) -> tuple[int, int] | str:
+    spoken_start = anchor.get("spoken_start")
+    spoken_end = anchor.get("spoken_end")
+    if spoken_start is None or spoken_end is None:
+        return "missing_spoken_span"
+    if (
+        isinstance(spoken_start, bool)
+        or not isinstance(spoken_start, int)
+        or isinstance(spoken_end, bool)
+        or not isinstance(spoken_end, int)
+        or spoken_start < 0
+        or spoken_end <= spoken_start
+        or spoken_end > len(expected_spoken_text)
+    ):
+        return "invalid_spoken_span"
+
+    normalized_spoken_form = normalize_transcript(
+        str(anchor.get("spoken_form", ""))
+    )
+    normalized_span = normalize_transcript(
+        expected_spoken_text[spoken_start:spoken_end]
+    )
+    if not normalized_spoken_form or normalized_span != normalized_spoken_form:
+        return "spoken_span_text_mismatch"
+
+    prefix_tokens = normalize_transcript(expected_spoken_text[:spoken_start]).split()
+    span_tokens = normalized_span.split()
+    suffix_tokens = normalize_transcript(expected_spoken_text[spoken_end:]).split()
+    if prefix_tokens + span_tokens + suffix_tokens != expected_tokens:
+        return "spoken_span_token_boundary_mismatch"
+    return len(prefix_tokens), len(prefix_tokens) + len(span_tokens)
+
+
+def _build_locked_name_alignment_units(
+    expected_spoken_text: str,
+    anchors: list[dict[str, Any]],
+    repeat_count: int,
+) -> tuple[list[dict[str, Any]], dict[tuple[int, int], str]]:
+    expected_tokens = normalize_transcript(expected_spoken_text).split()
+    base_units: list[dict[str, Any]] = []
+    invalid_anchor_indexes: dict[int, str] = {}
+    cursor = 0
+    for anchor_index, anchor in enumerate(anchors):
+        token_span = _locked_name_anchor_token_span(
+            expected_spoken_text,
+            expected_tokens,
+            anchor,
+        )
+        if isinstance(token_span, str):
+            invalid_anchor_indexes[anchor_index] = token_span
+            continue
+        anchor_start, anchor_end = token_span
+        if anchor_start < cursor:
+            invalid_anchor_indexes[anchor_index] = "spoken_span_order_invalid"
+            continue
+        base_units.extend(
+            {"kind": "token", "token": token}
+            for token in expected_tokens[cursor:anchor_start]
+        )
+        base_units.append(
+            {
+                "kind": "anchor",
+                "anchor_index": anchor_index,
+                "forms": _locked_name_anchor_forms(anchor),
+            }
+        )
+        cursor = anchor_end
+    base_units.extend(
+        {"kind": "token", "token": token}
+        for token in expected_tokens[cursor:]
+    )
+
+    units: list[dict[str, Any]] = []
+    invalid_occurrences: dict[tuple[int, int], str] = {}
+    for repeat_index in range(repeat_count):
+        for unit in base_units:
+            repeated_unit = dict(unit)
+            if repeated_unit["kind"] == "anchor":
+                repeated_unit["repeat_index"] = repeat_index
+            units.append(repeated_unit)
+        invalid_occurrences.update(
+            {
+                (repeat_index, anchor_index): reason
+                for anchor_index, reason in invalid_anchor_indexes.items()
+            }
+        )
+    return units, invalid_occurrences
+
+
+def _minimum_cost_locked_name_alignment(
+    units: list[dict[str, Any]],
+    transcript_tokens: list[str],
+) -> tuple[tuple[int, int, int, int], list[dict[str, Any]]]:
+    """Align semantic expected units to tokens while preserving ordinary context.
+
+    Score fields are edit cost, negative ordinary exact matches, negative exact
+    anchor matches, and structural edit count. Ordinary exact matches deliberately
+    precede anchor matches in the tie-break: an accepted anchor spelling cannot
+    steal a later homograph that belongs to ordinary sentence context.
+    """
+
+    score_by_state: dict[tuple[int, int], tuple[int, int, int, int]] = {
+        (0, 0): (0, 0, 0, 0)
+    }
+    predecessor: dict[
+        tuple[int, int],
+        tuple[tuple[int, int], dict[str, Any]],
+    ] = {}
+
+    def update(
+        state: tuple[int, int],
+        next_state: tuple[int, int],
+        delta: tuple[int, int, int, int],
+        operation: dict[str, Any],
+    ) -> None:
+        current = score_by_state[state]
+        candidate = tuple(left + right for left, right in zip(current, delta))
+        existing = score_by_state.get(next_state)
+        if existing is not None and existing <= candidate:
+            return
+        score_by_state[next_state] = candidate
+        predecessor[next_state] = (state, operation)
+
+    for unit_index in range(len(units) + 1):
+        for transcript_index in range(len(transcript_tokens) + 1):
+            state = (unit_index, transcript_index)
+            if state not in score_by_state:
+                continue
+            if transcript_index < len(transcript_tokens):
+                update(
+                    state,
+                    (unit_index, transcript_index + 1),
+                    (1, 0, 0, 1),
+                    {"kind": "insert_transcript"},
+                )
+            if unit_index >= len(units):
+                continue
+
+            unit = units[unit_index]
+            if unit["kind"] == "token":
+                update(
+                    state,
+                    (unit_index + 1, transcript_index),
+                    (1, 0, 0, 1),
+                    {"kind": "delete_token"},
+                )
+                if transcript_index < len(transcript_tokens):
+                    exact = unit["token"] == transcript_tokens[transcript_index]
+                    update(
+                        state,
+                        (unit_index + 1, transcript_index + 1),
+                        (0, -1, 0, 0) if exact else (1, 0, 0, 0),
+                        {"kind": "match_token" if exact else "substitute_token"},
+                    )
+                continue
+
+            anchor_operation = {
+                "anchor_index": unit["anchor_index"],
+                "repeat_index": unit["repeat_index"],
+            }
+            update(
+                state,
+                (unit_index + 1, transcript_index),
+                (1, 0, 0, 1),
+                {
+                    **anchor_operation,
+                    "kind": "delete_anchor",
+                    "token_start": transcript_index,
+                    "token_end": transcript_index,
+                },
+            )
+            if transcript_index < len(transcript_tokens):
+                update(
+                    state,
+                    (unit_index + 1, transcript_index + 1),
+                    (1, 0, 0, 0),
+                    {
+                        **anchor_operation,
+                        "kind": "substitute_anchor",
+                        "token_start": transcript_index,
+                        "token_end": transcript_index + 1,
+                    },
+                )
+            for form_kind, form_tokens in unit["forms"]:
+                form_end = transcript_index + len(form_tokens)
+                if tuple(transcript_tokens[transcript_index:form_end]) != form_tokens:
+                    continue
+                update(
+                    state,
+                    (unit_index + 1, form_end),
+                    (0, 0, -1, 0),
+                    {
+                        **anchor_operation,
+                        "kind": "match_anchor",
+                        "form_kind": form_kind,
+                        "tokens": form_tokens,
+                        "token_start": transcript_index,
+                        "token_end": form_end,
+                    },
+                )
+
+    final_state = (len(units), len(transcript_tokens))
+    operations: list[dict[str, Any]] = []
+    state = final_state
+    while state != (0, 0):
+        previous_state, operation = predecessor[state]
+        operations.append(operation)
+        state = previous_state
+    operations.reverse()
+    return score_by_state[final_state], operations
+
+
+def adjudicate_locked_name_anchors(
+    expected_spoken_text: str,
+    asr_result: dict[str, Any],
+    anchors: Sequence[Mapping[str, Any]],
+    repeat_count: int = 1,
+) -> dict[str, Any]:
+    """Require exact locked-name forms in an ASR transcript without fuzzy aliases.
+
+    Every anchor carries an end-exclusive character span into the exact
+    ``expected_spoken_text``. Repeated-short ASR must pass the complete aligned
+    sequence for every repeated copy, so callers pass its audio repeat count
+    through ``repeat_count``.
+    """
+
+    if not anchors:
+        return asr_result
+    if isinstance(repeat_count, bool) or not isinstance(repeat_count, int) or repeat_count < 1:
+        raise ValueError("repeat_count must be a positive integer")
+
+    result = dict(asr_result)
+    normalized_transcript = normalize_transcript(str(result.get("transcript", "")))
+    transcript_tokens = normalized_transcript.split()
+    normalized_expected = normalize_transcript(expected_spoken_text)
+    safe_anchors = [
+        {
+            str(key): _json_safe_anchor_value(value)
+            for key, value in anchor.items()
+        }
+        for anchor in anchors
+    ]
+    required_occurrence_count = len(safe_anchors) * repeat_count
+    precedence_inconclusive = result.get("verdict") == ASR_INCONCLUSIVE
+    evidence: list[dict[str, Any]] = []
+
+    if precedence_inconclusive:
+        for repeat_index in range(repeat_count):
+            for anchor_index, anchor in enumerate(safe_anchors):
+                evidence.append(
+                    {
+                        **anchor,
+                        "repeat_index": repeat_index,
+                        "required_order": len(evidence),
+                        "anchor_index": anchor_index,
+                        "status": "skipped_inconclusive",
+                        "matched": False,
+                    }
+                )
+        result[LOCKED_NAME_ANCHOR_METRICS_KEY] = {
+            "version": 1,
+            "status": "skipped_inconclusive",
+            "adjudicated": False,
+            "passed": None,
+            "failure_codes": [],
+            "repeat_count": repeat_count,
+            "anchor_count": len(safe_anchors),
+            "required_occurrence_count": required_occurrence_count,
+            "matched_occurrence_count": 0,
+            "expected_token_count": len(normalized_expected.split()),
+            "transcript_token_count": len(transcript_tokens),
+            "anchors": evidence,
+        }
+        return result
+
+    units, invalid_occurrences = _build_locked_name_alignment_units(
+        expected_spoken_text,
+        safe_anchors,
+        repeat_count,
+    )
+    alignment_score, operations = _minimum_cost_locked_name_alignment(
+        units,
+        transcript_tokens,
+    )
+    anchor_operations = {
+        (operation["repeat_index"], operation["anchor_index"]): operation
+        for operation in operations
+        if operation["kind"]
+        in {"match_anchor", "substitute_anchor", "delete_anchor"}
+    }
+    matched_occurrence_count = 0
+    for repeat_index in range(repeat_count):
+        for anchor_index, anchor in enumerate(safe_anchors):
+            forms = _locked_name_anchor_forms(anchor)
+            occurrence = (repeat_index, anchor_index)
+            operation = anchor_operations.get(occurrence)
+            anchor_evidence = {
+                **anchor,
+                "repeat_index": repeat_index,
+                "required_order": len(evidence),
+                "anchor_index": anchor_index,
+                "accepted_forms": [
+                    {"kind": kind, "tokens": list(tokens)}
+                    for kind, tokens in forms
+                ],
+            }
+            if occurrence in invalid_occurrences:
+                anchor_evidence.update(
+                    {
+                        "status": "invalid_expected_anchor_span",
+                        "matched": False,
+                        "span_validation_error": invalid_occurrences[occurrence],
+                    }
+                )
+            elif operation is not None and operation["kind"] == "match_anchor":
+                matched_occurrence_count += 1
+                anchor_evidence.update(
+                    {
+                        "status": "matched",
+                        "matched": True,
+                        "matched_form": operation["form_kind"],
+                        "matched_tokens": list(operation["tokens"]),
+                        "matched_token_start": operation["token_start"],
+                        "matched_token_end": operation["token_end"],
+                    }
+                )
+            else:
+                anchor_evidence.update(
+                    {
+                        "status": "missing_or_wrong",
+                        "matched": False,
+                    }
+                )
+                if operation is not None:
+                    token_start = operation["token_start"]
+                    token_end = operation["token_end"]
+                    anchor_evidence.update(
+                        {
+                            "alignment_operation": operation["kind"],
+                            "aligned_token_start": token_start,
+                            "aligned_token_end": token_end,
+                            "aligned_tokens": transcript_tokens[token_start:token_end],
+                        }
+                    )
+            evidence.append(anchor_evidence)
+
+    anchors_passed = matched_occurrence_count == required_occurrence_count
+    result[LOCKED_NAME_ANCHOR_METRICS_KEY] = {
+        "version": 1,
+        "status": "pass" if anchors_passed else "fail",
+        "adjudicated": True,
+        "passed": anchors_passed,
+        "failure_codes": [] if anchors_passed else [ASR_LOCKED_NAME_ANCHOR_MISMATCH],
+        "repeat_count": repeat_count,
+        "anchor_count": len(safe_anchors),
+        "required_occurrence_count": required_occurrence_count,
+        "matched_occurrence_count": matched_occurrence_count,
+        "expected_token_count": len(normalized_expected.split()),
+        "transcript_token_count": len(transcript_tokens),
+        "alignment_edit_cost": alignment_score[0],
+        "ordinary_exact_match_count": -alignment_score[1],
+        "anchors": evidence,
+    }
+    if anchors_passed:
+        return result
+
+    result.update(
+        {
+            "passed": False,
+            "verdict": ASR_MISMATCH,
+            "reason": ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+            "repairable": True,
+        }
+    )
+    return result
 
 
 def _edit_distance(left: list[str], right: list[str]) -> int:

@@ -68,6 +68,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Mỗi lượt Whisper trực tiếp, lặp-ngắn, beam và greedy phải ghi evidence riêng theo đúng checksum WAV/policy.
   Lặp-ngắn chỉ được thay kết quả trực tiếp khi nó chuyển verdict thành `pass`; một kết quả lặp vẫn lỗi không được
   ghi đè transcript/similarity/WER trực tiếp tốt hơn. Evidence decode không được dùng thay final segment gate.
+- Mỗi pronunciation tiếng Anh đã khóa và thực sự được thay trong `spoken_text` phải tạo anchor theo đúng ID/occurrence.
+  ASR chỉ được chấp nhận spelling nguồn, spoken-form token hoặc dạng ghép token xác định; không fuzzy-alias tên khác.
+  Tất cả occurrence phải gắn đúng vị trí bằng alignment toàn câu ở từng direct/repeat/beam/greedy decode; không được
+  lấy một homograph ở vị trí khác để lấp tên bị sai. `ASR_INCONCLUSIVE` vẫn giữ precedence.
 - ASR repair phải giữ nguyên speaker, voice profile, pitch và `spoken_text`; chế độ `clarity` chỉ hạ sampling variance.
   WAV clarity chỉ được commit `verified` khi beam và greedy đều `pass`. Repair round phải nằm trong signal checkpoint
   để crash/resume không bỏ qua lượt xác nhận kép hoặc vượt quá `asr.repair_rounds`.

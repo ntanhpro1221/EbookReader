@@ -288,6 +288,23 @@ def _asr_result(
     }
 
 
+def _locked_lucien_anchor(*, spoken_start: int = 4) -> dict[str, object]:
+    return {
+        "pronunciation_id": 7,
+        "surface": "Lucien",
+        "normalized_surface": "lucien",
+        "matched_surface": "Lucien",
+        "spoken_form": "Lu-si-en",
+        "source": "english_name_transliteration",
+        "source_start": 4,
+        "source_end": 10,
+        "spoken_start": spoken_start,
+        "spoken_end": spoken_start + len("Lu-si-en"),
+        "occurrence": 1,
+        "order": 1,
+    }
+
+
 def test_repeated_short_decode_cannot_replace_better_direct_failure(
     tmp_path: Path,
 ) -> None:
@@ -405,6 +422,307 @@ def test_repeated_short_pass_can_promote_a_direct_mismatch(tmp_path: Path) -> No
         False,
         True,
     ]
+
+
+def test_locked_name_anchor_can_promote_exact_repeated_short_decode(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=0)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Lu-si-en!",
+        [_locked_lucien_anchor(spoken_start=0)],
+    )
+
+    class RepeatedAnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return True
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return _asr_result(ASR_PASS, "Lucy", similarity=0.96, wer=0.1)
+
+        def verify_repeated_short(
+            self,
+            _text: str,
+            _wav: Path,
+            *,
+            confirmation: bool = False,
+        ):
+            return _asr_result(
+                ASR_PASS,
+                "Lucien Lu-si-en Lusien",
+                similarity=1.0,
+                wer=0.0,
+            )
+
+    pipeline._verify_chapter_audio(chapter, RepeatedAnchorVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] == "verified"
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_metrics["selected_context_mode"] == "repeat3"
+    assert final_metrics["locked_name_anchor_metrics"]["repeat_count"] == 3
+    assert final_metrics["locked_name_anchor_metrics"]["passed"] is True
+    assert [item["selected"] for item in final_metrics["decode_evidence"]] == [
+        False,
+        True,
+    ]
+
+
+def test_locked_name_anchor_forces_clarity_after_two_aggregate_asr_passes(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Anh Lu-si-en đã đến.",
+        [_locked_lucien_anchor()],
+    )
+    scripted_results = [
+        _asr_result(ASR_PASS, "Anh Lucy đã đến.", similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, "Anh Lucian đã đến.", similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, "Anh Lucien đã đến.", similarity=1.0, wer=0.0),
+        _asr_result(ASR_PASS, "Anh Lu-si-en đã đến.", similarity=1.0, wer=0.0),
+    ]
+
+    class AnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, AnchorVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] == "verified"
+    assert pipeline.tts.delivery_modes == ["clarity"]
+    with pipeline.db.connect() as conn:
+        decode_checks = list(
+            conn.execute(
+                "SELECT verdict,metrics_json FROM quality_checks WHERE stage=? ORDER BY id",
+                (SEGMENT_ASR_DECODE_QUALITY_STAGE,),
+            )
+        )
+    assert [str(check["verdict"]) for check in decode_checks] == [
+        "fail",
+        "fail",
+        "pass",
+        "pass",
+    ]
+    decode_metrics = [json.loads(str(check["metrics_json"])) for check in decode_checks]
+    assert [item["reason"] for item in decode_metrics[:2]] == [
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+    ]
+    assert all(
+        item["locked_name_anchor_metrics"]["passed"] is True
+        for item in decode_metrics[2:]
+    )
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_check["verdict"] == "pass"
+    assert final_metrics["dual_decode_passed"] is True
+    assert final_metrics["locked_name_anchor_metrics"]["passed"] is True
+
+    pipeline._export_reports(incremental=True)
+    report = json.loads(
+        (pipeline.paths.reports / "audiobook_quality_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    report_evidence = report["segment_content_evidence"][0]
+    assert report_evidence["locked_name_anchor_metrics"]["passed"] is True
+    assert len(report_evidence["decode_evidence"]) == 2
+
+
+def test_clarity_locked_name_mismatch_blocks_publication(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Anh Lu-si-en đã đến.",
+        [_locked_lucien_anchor()],
+    )
+    scripted_results = [
+        _asr_result(ASR_PASS, "Anh Lucy đã đến.", similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, "Anh Lucian đã đến.", similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, "Anh Lucien đã đến.", similarity=1.0, wer=0.0),
+        _asr_result(ASR_PASS, "Anh Lucian đã đến.", similarity=0.96, wer=0.1),
+    ]
+
+    class AnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, AnchorVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] == "failed"
+    assert "ASR_LOCKED_NAME_ANCHOR_MISMATCH" in str(fresh["warning_code"])
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    assert final_check["verdict"] == "fail"
+    assert json.loads(str(final_check["failure_codes_json"])) == [
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+    ]
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_metrics["locked_name_anchor_metrics"]["passed"] is False
+    assert final_metrics["dual_decode_passed"] is False
+
+    pipeline._export_reports(incremental=True)
+    report = json.loads(
+        (pipeline.paths.reports / "audiobook_quality_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    evidence = report["segment_content_evidence"][0]
+    assert evidence["verdict"] == "fail"
+    assert evidence["failure_codes"] == ["ASR_LOCKED_NAME_ANCHOR_MISMATCH"]
+    assert evidence["locked_name_anchor_metrics"]["passed"] is False
+    assert evidence["decode_evidence"][-1]["reason"] == (
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+    )
+
+
+def test_clarity_final_gate_preserves_anchor_failure_from_either_decode(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Anh Lu-si-en đã đến.",
+        [_locked_lucien_anchor()],
+    )
+    scripted_results = [
+        _asr_result(ASR_MISMATCH, "sai ban đầu", similarity=0.1, wer=1.0),
+        _asr_result(ASR_MISMATCH, "sai xác nhận", similarity=0.1, wer=1.0),
+        _asr_result(ASR_PASS, "Anh Lucy đã đến.", similarity=0.96, wer=0.1),
+        _asr_result(
+            ASR_MISMATCH,
+            "Anh Lucien nói sai phần còn lại.",
+            similarity=0.5,
+            wer=0.8,
+        ),
+    ]
+
+    class AnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, AnchorVerifier())
+
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    assert final_check["verdict"] == "fail"
+    assert json.loads(str(final_check["failure_codes_json"])) == [
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        "ASR_MISMATCH",
+    ]
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_metrics["reason"] == "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+    assert final_metrics["locked_name_anchor_metrics"]["passed"] is False
+    assert final_metrics["decode_failure_reasons"] == [
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        "ASR_MISMATCH",
+    ]
+    assert [
+        item["locked_name_anchor_metrics"]["passed"]
+        for item in final_metrics["decode_evidence"]
+    ] == [False, True]
+
+
+def test_clarity_endpoint_failure_does_not_hide_beam_anchor_failure(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Anh Lu-si-en đã đến.",
+        [_locked_lucien_anchor()],
+    )
+    original_synthesize = pipeline.tts.synthesize_atomic
+
+    def synthesize_with_active_endpoint(*args, **kwargs):
+        checksum, metrics, seed = original_synthesize(*args, **kwargs)
+        metrics["generation_ceiling_hit"] = 1.0
+        metrics["generation_endpoint_active"] = 1.0
+        return checksum, metrics, seed
+
+    pipeline.tts.synthesize_atomic = synthesize_with_active_endpoint
+    scripted_results = [
+        _asr_result(ASR_MISMATCH, "sai ban đầu", similarity=0.1, wer=1.0),
+        _asr_result(ASR_MISMATCH, "sai xác nhận", similarity=0.1, wer=1.0),
+        _asr_result(ASR_PASS, "Anh Lucy đã đến.", similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, "Anh Lucien đã đến.", similarity=1.0, wer=0.0),
+    ]
+
+    class AnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, AnchorVerifier())
+
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    assert final_check["verdict"] == "fail"
+    assert json.loads(str(final_check["failure_codes_json"])) == [
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING",
+    ]
+    metrics = json.loads(str(final_check["metrics_json"]))
+    assert metrics["reason"] == "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING"
+    assert metrics["locked_name_anchor_metrics"]["passed"] is False
+    assert metrics["decode_failure_reasons"] == [
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING",
+    ]
+    assert metrics["dual_decode_required"] is True
+    assert metrics["dual_decode_passed"] is False
+    assert metrics["confirmation_verdicts"] == ["mismatch", "pass"]
 
 
 @pytest.mark.parametrize(
@@ -722,6 +1040,36 @@ def test_same_policy_final_asr_failure_is_not_regenerated_on_resume(
     fresh = pipeline.db.get_segment(int(row["id"]))
     assert fresh["status"] == "failed"
     assert fresh["generation_repair_round"] == 0
+
+
+def test_previous_policy_asr_failure_does_not_freeze_current_policy_resume(
+    tmp_path: Path,
+) -> None:
+    pipeline, _chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+        artifact_sha256=str(row["wav_sha256"]),
+        policy_hash=pipeline.quality_policy_hash,
+        policy_version=QUALITY_POLICY_VERSION,
+        verdict="fail",
+        metrics={"reason": "ASR_MISMATCH_UNRESOLVED"},
+    )
+    assert pipeline._segment_has_current_asr_failure(row) is True
+
+    replacement_policy = json.loads(json.dumps(pipeline.quality_policy))
+    replacement_policy["algorithms"]["asr_content"] = "future-anchor-policy"
+    replacement_hash = quality_policy_hash(replacement_policy)
+    pipeline.db.set_current_quality_policy(
+        policy_hash=replacement_hash,
+        policy_version=QUALITY_POLICY_VERSION,
+        policy=replacement_policy,
+    )
+    pipeline.quality_policy = replacement_policy
+    pipeline.quality_policy_hash = replacement_hash
+
+    assert pipeline._segment_has_current_asr_failure(row) is False
 
 
 def test_crash_after_final_asr_failure_gate_is_fail_closed_on_resume(
@@ -1156,7 +1504,10 @@ def test_failed_clarity_tts_records_final_content_failure_for_retained_wav(
     assert evidence["verdict"] == "fail"
     assert evidence["current_artifact"] is True
     assert evidence["current_policy_verified"] is False
-    assert evidence["failure_codes"] == ["ASR_CLARITY_TTS_REGENERATION_FAILED"]
+    assert evidence["failure_codes"] == [
+        "ASR_MISMATCH",
+        "ASR_CLARITY_TTS_REGENERATION_FAILED",
+    ]
 
 
 def test_crash_before_final_asr_status_keeps_retained_wav_budget_exhausted(
