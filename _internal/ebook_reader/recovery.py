@@ -102,11 +102,9 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
     current_policy = db.current_quality_policy()
     if current_policy is not None:
         policy_hash = str(current_policy["policy_hash"])
-        repair_rounds = int(settings.get("asr", {}).get("repair_rounds", 0))
         report.invalidated_candidates = db.reconcile_segment_candidate_artifacts(policy_hash)
         report.candidate_resume_plans = db.list_segment_candidate_resume_plans(
             policy_hash,
-            repair_rounds,
         )
         report.stale_candidates = db.count_stale_segment_candidates(policy_hash)
 

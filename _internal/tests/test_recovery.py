@@ -494,6 +494,7 @@ def test_recovery_preserves_incumbent_and_exposes_candidate_resume_plan(tmp_path
             "tts_attempt": 0,
             "wav_path": str((paths.work / "candidates" / "c1s1" / "r0.wav").resolve()),
             "wav_sha256": "",
+            "perceptual_required": False,
         }
     ]
 

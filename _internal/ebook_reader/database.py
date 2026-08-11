@@ -15,7 +15,7 @@ from .models import BookStatus, ChapterStatus, SegmentStatus
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -249,6 +249,7 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     segment_id INTEGER NOT NULL REFERENCES segments(id) ON DELETE CASCADE,
     policy_hash TEXT NOT NULL REFERENCES quality_policies(policy_hash),
     repair_round INTEGER NOT NULL CHECK (repair_round >= 0),
+    repair_budget INTEGER NOT NULL CHECK (repair_budget >= 1),
     incumbent_sha256 TEXT NOT NULL,
     expected_voice_profile_id INTEGER NOT NULL REFERENCES voice_profiles(id),
     expected_pitch_semitones INTEGER NOT NULL,
@@ -268,6 +269,9 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     greedy_result_json TEXT,
     beam_check_id INTEGER REFERENCES quality_checks(id),
     greedy_check_id INTEGER REFERENCES quality_checks(id),
+    perceptual_required INTEGER NOT NULL DEFAULT 0 CHECK (perceptual_required IN (0,1)),
+    perceptual_result_json TEXT,
+    perceptual_check_id INTEGER REFERENCES quality_checks(id),
     final_check_id INTEGER REFERENCES quality_checks(id),
     failure_reason TEXT,
     created_at REAL NOT NULL,
@@ -289,6 +293,10 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     CHECK (
         (greedy_check_id IS NULL AND greedy_result_json IS NULL)
         OR (greedy_check_id IS NOT NULL AND greedy_result_json IS NOT NULL)
+    ),
+    CHECK (
+        (perceptual_check_id IS NULL AND perceptual_result_json IS NULL)
+        OR (perceptual_check_id IS NOT NULL AND perceptual_result_json IS NOT NULL)
     ),
     CHECK (
         state NOT IN ('beam_recorded','dual_failed','dual_passed','promoted')
@@ -449,11 +457,37 @@ class ProjectDB:
         candidate_columns = {
             str(row[1]) for row in conn.execute("PRAGMA table_info(segment_candidates)")
         }
+        if "repair_budget" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN repair_budget "
+                "INTEGER NOT NULL DEFAULT 1 CHECK(repair_budget >= 1)"
+            )
+            conn.execute(
+                "UPDATE segment_candidates SET repair_budget=repair_round + 1"
+            )
+        if "perceptual_required" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN perceptual_required "
+                "INTEGER NOT NULL DEFAULT 0 CHECK(perceptual_required IN (0,1))"
+            )
+        if "perceptual_result_json" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN perceptual_result_json TEXT"
+            )
+        if "perceptual_check_id" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN perceptual_check_id "
+                "INTEGER REFERENCES quality_checks(id)"
+            )
+        candidate_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(segment_candidates)")
+        }
         required_candidate_columns = {
             "id",
             "segment_id",
             "policy_hash",
             "repair_round",
+            "repair_budget",
             "incumbent_sha256",
             "expected_voice_profile_id",
             "expected_pitch_semitones",
@@ -468,6 +502,9 @@ class ProjectDB:
             "greedy_result_json",
             "beam_check_id",
             "greedy_check_id",
+            "perceptual_required",
+            "perceptual_result_json",
+            "perceptual_check_id",
             "final_check_id",
             "failure_reason",
             "created_at",
@@ -1712,6 +1749,20 @@ class ProjectDB:
                 "beam_quality_check_id": int(candidate["beam_check_id"]),
                 "greedy_quality_check_id": int(candidate["greedy_check_id"]),
                 "decode_evidence": [beam_metrics, greedy_metrics],
+                "perceptual_required": bool(candidate["perceptual_required"]),
+                "perceptual_quality_check_id": (
+                    int(candidate["perceptual_check_id"])
+                    if candidate["perceptual_check_id"] is not None
+                    else None
+                ),
+                "perceptual_evidence": (
+                    ProjectDB._json_object(
+                        candidate["perceptual_result_json"],
+                        "candidate perceptual metrics",
+                    )
+                    if candidate["perceptual_result_json"] is not None
+                    else None
+                ),
                 "promotion_warning_code": str(warning_code).strip() if warning_code else None,
             }
         )
@@ -1854,6 +1905,7 @@ class ProjectDB:
         return {
             "candidate_id": int(row["id"]),
             "repair_round": int(row["repair_round"]),
+            "repair_budget": int(row["repair_budget"]),
             "state": str(row["state"]),
             "incumbent_sha256": str(row["incumbent_sha256"]),
             "expected_voice_profile_id": int(row["expected_voice_profile_id"]),
@@ -1869,12 +1921,19 @@ class ProjectDB:
             "greedy_check_id": (
                 int(row["greedy_check_id"]) if row["greedy_check_id"] is not None else None
             ),
+            "perceptual_required": bool(row["perceptual_required"]),
+            "perceptual_check_id": (
+                int(row["perceptual_check_id"])
+                if row["perceptual_check_id"] is not None
+                else None
+            ),
             "final_check_id": (
                 int(row["final_check_id"]) if row["final_check_id"] is not None else None
             ),
             "signal": decoded_result("signal_json"),
             "beam_result": decoded_result("beam_result_json"),
             "greedy_result": decoded_result("greedy_result_json"),
+            "perceptual_result": decoded_result("perceptual_result_json"),
             "failure_reason": str(row["failure_reason"] or ""),
             "promoted_at": (
                 float(row["promoted_at"]) if row["promoted_at"] is not None else None
@@ -1893,6 +1952,7 @@ class ProjectDB:
         wav_path: Path,
         candidates_root: Path,
         tts_attempt: int = 0,
+        perceptual_required: bool = False,
     ) -> sqlite3.Row:
         normalized_round = int(repair_round)
         normalized_max = int(max_repair_rounds)
@@ -1950,6 +2010,8 @@ class ProjectDB:
                     != expected_voice_profile_id
                     or int(existing["expected_pitch_semitones"])
                     != expected_pitch_semitones
+                    or int(existing["repair_budget"]) != normalized_max
+                    or bool(existing["perceptual_required"]) != bool(perceptual_required)
                     or int(existing["generation_seed"]) != int(generation_seed)
                     or int(existing["tts_attempt"]) != normalized_attempt
                     or str(existing["wav_path"]) != normalized_path
@@ -1964,6 +2026,13 @@ class ProjectDB:
                 raise RuntimeError("candidate rounds must be contiguous and allocated in order")
             if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in rows):
                 raise RuntimeError("same-policy candidate rounds cannot mix incumbent artifacts")
+            if any(int(row["repair_budget"]) != normalized_max for row in rows):
+                raise RuntimeError("same-policy candidate rounds cannot mix repair budgets")
+            if any(
+                bool(row["perceptual_required"]) != bool(perceptual_required)
+                for row in rows
+            ):
+                raise RuntimeError("same-policy candidate rounds cannot mix perceptual requirements")
             if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in rows):
                 raise RuntimeError("the previous candidate round is not a terminal failure")
             occupied_paths = [
@@ -1983,15 +2052,17 @@ class ProjectDB:
                 cursor = conn.execute(
                     """
                     INSERT INTO segment_candidates(
-                        segment_id,policy_hash,repair_round,incumbent_sha256,
+                        segment_id,policy_hash,repair_round,repair_budget,incumbent_sha256,
                         expected_voice_profile_id,expected_pitch_semitones,state,
-                        tts_attempt,generation_seed,wav_path,created_at,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                        tts_attempt,generation_seed,wav_path,perceptual_required,
+                        created_at,updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         int(segment_id),
                         str(policy_hash).strip(),
                         normalized_round,
+                        normalized_max,
                         normalized_incumbent,
                         expected_voice_profile_id,
                         expected_pitch_semitones,
@@ -1999,6 +2070,7 @@ class ProjectDB:
                         normalized_attempt,
                         int(generation_seed),
                         normalized_path,
+                        int(bool(perceptual_required)),
                         now,
                         now,
                     ),
@@ -2324,6 +2396,133 @@ class ProjectDB:
             )
             return self._candidate_row_conn(conn, candidate_id)
 
+    def _validated_candidate_perceptual_check_conn(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        quality_check_id: int,
+    ) -> tuple[sqlite3.Row, dict[str, Any]]:
+        check = conn.execute(
+            "SELECT * FROM quality_checks WHERE id=?",
+            (int(quality_check_id),),
+        ).fetchone()
+        if check is None:
+            raise KeyError(f"Unknown quality check id: {quality_check_id}")
+        if (
+            str(check["scope"]) != QUALITY_SCOPE_SEGMENT
+            or str(check["stage"]) != SEGMENT_PERCEPTUAL_QUALITY_STAGE
+            or int(check["segment_id"] or -1) != int(candidate["segment_id"])
+            or str(check["artifact_sha256"]).casefold() != str(candidate["wav_sha256"])
+            or str(check["policy_hash"]) != str(candidate["policy_hash"])
+        ):
+            raise RuntimeError(
+                "perceptual evidence does not belong to this segment candidate"
+            )
+        evidence_verdict = str(check["verdict"])
+        if evidence_verdict not in {QUALITY_VERDICT_PASS, "inconclusive", "fail"}:
+            raise RuntimeError("candidate perceptual evidence has an unsupported verdict")
+        metrics = self._json_object(
+            check["metrics_json"],
+            "candidate perceptual metrics",
+        )
+        perceptual_verdict = str(metrics.get("verdict", "")).strip().casefold()
+        short_audio_exemption = (
+            str(metrics.get("policy_exemption", "")).strip().casefold()
+            == "short_audio"
+        )
+        if evidence_verdict == QUALITY_VERDICT_PASS:
+            if perceptual_verdict != "ok" and not short_audio_exemption:
+                raise RuntimeError(
+                    "passing candidate perceptual evidence contradicts its metrics"
+                )
+            if bool(metrics.get("review_required", False)):
+                raise RuntimeError(
+                    "passing candidate perceptual evidence cannot require review"
+                )
+        elif perceptual_verdict == "ok" or short_audio_exemption:
+            raise RuntimeError(
+                "failed candidate perceptual evidence contradicts its metrics"
+            )
+        signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        signal_provenance = self._candidate_signal_provenance(signal)
+        try:
+            baseline_pitch = int(metrics["baseline_pitch_semitones"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "candidate perceptual evidence lacks baseline pitch provenance"
+            ) from exc
+        if baseline_pitch != int(signal_provenance["effective_pitch_semitones"]):
+            raise RuntimeError(
+                "candidate perceptual baseline pitch differs from its signal checkpoint"
+            )
+        return check, metrics
+
+    def checkpoint_segment_candidate_perceptual(
+        self,
+        candidate_id: int,
+        *,
+        quality_check_id: int,
+    ) -> sqlite3.Row:
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            if not bool(candidate["perceptual_required"]):
+                raise RuntimeError(
+                    "segment candidate was not allocated with mandatory perceptual QA"
+                )
+            check, metrics = self._validated_candidate_perceptual_check_conn(
+                conn,
+                candidate,
+                quality_check_id,
+            )
+            result_json = json.dumps(metrics, ensure_ascii=False, sort_keys=True)
+            if candidate["perceptual_check_id"] is not None:
+                if (
+                    int(candidate["perceptual_check_id"]) == int(quality_check_id)
+                    and str(candidate["perceptual_result_json"] or "") == result_json
+                ):
+                    return candidate
+                raise RuntimeError(
+                    "candidate perceptual evidence was already checkpointed"
+                )
+            if str(candidate["state"]) != SEGMENT_CANDIDATE_DUAL_PASSED:
+                raise RuntimeError(
+                    "candidate perceptual checkpoint requires two passing ASR decodes"
+                )
+            passed = str(check["verdict"]) == QUALITY_VERDICT_PASS
+            next_state = (
+                SEGMENT_CANDIDATE_DUAL_PASSED
+                if passed
+                else SEGMENT_CANDIDATE_DUAL_FAILED
+            )
+            failure_reason = (
+                None
+                if passed
+                else f"perceptual={metrics.get('reason', check['verdict'])}"
+            )
+            cursor = conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,perceptual_check_id=?,perceptual_result_json=?,
+                    failure_reason=?,updated_at=?
+                WHERE id=? AND state=? AND perceptual_check_id IS NULL
+                """,
+                (
+                    next_state,
+                    int(quality_check_id),
+                    result_json,
+                    failure_reason,
+                    time.time(),
+                    int(candidate_id),
+                    SEGMENT_CANDIDATE_DUAL_PASSED,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("candidate perceptual checkpoint transition CAS failed")
+            return self._candidate_row_conn(conn, candidate_id)
+
     def mark_segment_candidate_tts_failed(
         self,
         candidate_id: int,
@@ -2482,6 +2681,31 @@ class ProjectDB:
                             )
                     except RuntimeError as exc:
                         invalid_reason = str(exc)
+                if invalid_reason is None and candidate["perceptual_check_id"] is not None:
+                    if not bool(candidate["perceptual_required"]):
+                        invalid_reason = (
+                            "candidate has perceptual evidence without a mandatory perceptual gate"
+                        )
+                    else:
+                        try:
+                            perceptual_check, _metrics = (
+                                self._validated_candidate_perceptual_check_conn(
+                                    conn,
+                                    candidate,
+                                    int(candidate["perceptual_check_id"]),
+                                )
+                            )
+                            if (
+                                str(candidate["state"])
+                                == SEGMENT_CANDIDATE_DUAL_PASSED
+                                and str(perceptual_check["verdict"])
+                                != QUALITY_VERDICT_PASS
+                            ):
+                                invalid_reason = (
+                                    "actionable candidate perceptual evidence is not passing"
+                                )
+                        except (KeyError, RuntimeError) as exc:
+                            invalid_reason = str(exc)
                 if invalid_reason:
                     self._invalidate_candidate_conn(conn, candidate, invalid_reason)
                     invalidated += 1
@@ -2504,10 +2728,12 @@ class ProjectDB:
         self,
         segment_id: int,
         policy_hash: str,
-        max_repair_rounds: int,
+        max_repair_rounds: int | None = None,
     ) -> dict[str, Any]:
-        normalized_max = int(max_repair_rounds)
-        if normalized_max < 0:
+        requested_max = (
+            int(max_repair_rounds) if max_repair_rounds is not None else None
+        )
+        if requested_max is not None and requested_max < 0:
             raise ValueError("ASR repair budget must be non-negative")
         with self.connect() as conn:
             policy = self._require_candidate_policy_conn(conn, policy_hash, active=False)
@@ -2529,6 +2755,23 @@ class ProjectDB:
                     "candidate_id": None,
                     "repair_round": None,
                 }
+            if rows:
+                stored_budgets = {int(row["repair_budget"]) for row in rows}
+                if len(stored_budgets) != 1:
+                    raise RuntimeError(
+                        "same-policy candidate rounds contain mixed repair budgets"
+                    )
+                normalized_max = next(iter(stored_budgets))
+                if requested_max is not None and requested_max != normalized_max:
+                    raise RuntimeError(
+                        "stored candidate repair budget differs from the active repair context"
+                    )
+            else:
+                if requested_max is None:
+                    raise ValueError(
+                        "a repair budget is required before the first candidate allocation"
+                    )
+                normalized_max = requested_max
             promoted = [row for row in rows if str(row["state"]) == SEGMENT_CANDIDATE_PROMOTED]
             if promoted:
                 if len(promoted) != 1 or any(
@@ -2589,12 +2832,19 @@ class ProjectDB:
                 segment = self._require_candidate_incumbent_conn(conn, candidate)
                 self._require_candidate_voice_profile_conn(conn, candidate, segment)
                 state = str(candidate["state"])
-                action = {
-                    SEGMENT_CANDIDATE_GENERATING: "generate",
-                    SEGMENT_CANDIDATE_SIGNAL_PASSED: "decode_beam",
-                    SEGMENT_CANDIDATE_BEAM_RECORDED: "decode_greedy",
-                    SEGMENT_CANDIDATE_DUAL_PASSED: "promote",
-                }.get(state)
+                if state == SEGMENT_CANDIDATE_DUAL_PASSED:
+                    action = (
+                        "verify_perceptual"
+                        if bool(candidate["perceptual_required"])
+                        and candidate["perceptual_check_id"] is None
+                        else "promote"
+                    )
+                else:
+                    action = {
+                        SEGMENT_CANDIDATE_GENERATING: "generate",
+                        SEGMENT_CANDIDATE_SIGNAL_PASSED: "decode_beam",
+                        SEGMENT_CANDIDATE_BEAM_RECORDED: "decode_greedy",
+                    }.get(state)
                 if action is None:
                     raise RuntimeError(f"unsupported actionable candidate state: {state}")
                 return {
@@ -2608,6 +2858,7 @@ class ProjectDB:
                     "tts_attempt": int(candidate["tts_attempt"]),
                     "wav_path": str(candidate["wav_path"]),
                     "wav_sha256": str(candidate["wav_sha256"] or ""),
+                    "perceptual_required": bool(candidate["perceptual_required"]),
                 }
             if len(rows) < normalized_max:
                 return {
@@ -2628,7 +2879,7 @@ class ProjectDB:
     def list_segment_candidate_resume_plans(
         self,
         policy_hash: str,
-        max_repair_rounds: int,
+        max_repair_rounds: int | None = None,
     ) -> list[dict[str, Any]]:
         with self.connect() as conn:
             segment_ids = [
@@ -2707,6 +2958,26 @@ class ProjectDB:
                 or str(greedy_check["verdict"]) != QUALITY_VERDICT_PASS
             ):
                 raise RuntimeError("candidate dual-decode ledger does not contain two passing checks")
+            if bool(candidate["perceptual_required"]):
+                if candidate["perceptual_check_id"] is None:
+                    raise RuntimeError(
+                        "segment candidate cannot be promoted before perceptual QA passes"
+                    )
+                perceptual_check, _perceptual_metrics = (
+                    self._validated_candidate_perceptual_check_conn(
+                        conn,
+                        candidate,
+                        int(candidate["perceptual_check_id"]),
+                    )
+                )
+                if str(perceptual_check["verdict"]) != QUALITY_VERDICT_PASS:
+                    raise RuntimeError(
+                        "segment candidate perceptual ledger is not passing"
+                    )
+            elif candidate["perceptual_check_id"] is not None:
+                raise RuntimeError(
+                    "segment candidate has unexpected perceptual QA evidence"
+                )
             final_metrics = self._candidate_final_metrics(
                 candidate,
                 beam_metrics,
@@ -2881,6 +3152,8 @@ class ProjectDB:
             )
             if [int(row["repair_round"]) for row in candidates] != list(range(normalized_max)):
                 raise RuntimeError("repair exhaustion requires every configured candidate round")
+            if any(int(row["repair_budget"]) != normalized_max for row in candidates):
+                raise RuntimeError("repair exhaustion candidate budget differs from its ledger")
             if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in candidates):
                 raise RuntimeError("repair exhaustion cannot finalize while a candidate remains actionable")
             if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in candidates):
