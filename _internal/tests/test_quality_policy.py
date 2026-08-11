@@ -30,6 +30,9 @@ def test_quality_policy_hash_is_stable_and_changes_with_content_thresholds() -> 
 
     changed = build_settings(overrides={"asr": {"min_similarity": 0.91}})
     assert quality_policy_hash(first) != quality_policy_hash(build_quality_policy(changed))
+    assert first["algorithms"]["asr_content"] == (
+        "evidenced_clarity_double_decode_cer_v3"
+    )
 
 
 def test_quality_policy_fingerprints_every_critical_implementation_file() -> None:

@@ -8,10 +8,13 @@ import pytest
 
 from ebook_reader.database import (
     CHAPTER_POST_ENCODE_QUALITY_STAGE,
+    GENERATION_DELIVERY_CLARITY,
+    GENERATION_DELIVERY_PRIMARY,
     QUALITY_SCOPE_CHAPTER,
     QUALITY_SCOPE_SEGMENT,
     QUALITY_VERDICT_PASS,
     SCHEMA_VERSION,
+    SEGMENT_ASR_DECODE_QUALITY_STAGE,
     SEGMENT_AUDIO_QUALITY_STAGE,
     ProjectDB,
 )
@@ -66,6 +69,32 @@ def test_warning_codes_are_merged_without_duplicates(tmp_path: Path) -> None:
     assert db.get_segment(segment_id)["warning_code"] == "TTS_SPLIT_RECOVERY|ASR_ERROR"
 
 
+def test_signal_checkpoint_commits_derived_warnings_atomically(tmp_path: Path) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    wav_path = tmp_path / "segment.wav"
+    wav_path.write_bytes(b"wav")
+
+    db.mark_signal_passed(
+        segment_id,
+        wav_path=wav_path,
+        wav_sha256="a" * 64,
+        duration=1.0,
+        signal={"pitch_variant_skipped": 1.0},
+        generation_seed=17,
+        warning_codes=(
+            "TTS_SPLIT_RECOVERY",
+            "TTS_PITCH_VARIANT_SKIPPED",
+            "TTS_PITCH_VARIANT_SKIPPED",
+        ),
+    )
+
+    row = db.get_segment(segment_id)
+    assert row["status"] == "signal_passed"
+    assert row["warning_code"] == (
+        "TTS_SPLIT_RECOVERY|TTS_PITCH_VARIANT_SKIPPED"
+    )
+
+
 def test_new_generation_clears_old_audio_warnings_but_keeps_analysis_warning(
     tmp_path: Path,
 ) -> None:
@@ -106,6 +135,40 @@ def test_short_ceiling_frame_cap_survives_interruption_and_reopen(tmp_path: Path
     assert recovered["generation_frame_cap"] == 12
     reopened.mark_verified(segment_id)
     assert reopened.get_segment(segment_id)["generation_frame_cap"] is None
+
+
+def test_clarity_generation_checkpoint_survives_interruption_until_explicit_reset(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    with pytest.raises(ValueError, match="clarity generation requires"):
+        db.mark_generating(
+            segment_id,
+            seed=16,
+            delivery_mode=GENERATION_DELIVERY_CLARITY,
+            policy_hash="policy-v1",
+        )
+    db.mark_generating(
+        segment_id,
+        seed=17,
+        delivery_mode=GENERATION_DELIVERY_CLARITY,
+        repair_round=0,
+        policy_hash="policy-v1",
+    )
+
+    reopened = ProjectDB(db.path)
+    assert reopened.reset_in_progress_segments() == 1
+    recovered = reopened.get_segment(segment_id)
+    assert recovered["status"] == "pending"
+    assert recovered["generation_delivery_mode"] == GENERATION_DELIVERY_CLARITY
+    assert recovered["generation_repair_round"] == 0
+    assert recovered["generation_policy_hash"] == "policy-v1"
+
+    reopened.reset_segment_pending(segment_id, "explicit clean regeneration")
+    reset = reopened.get_segment(segment_id)
+    assert reset["generation_delivery_mode"] == GENERATION_DELIVERY_PRIMARY
+    assert reset["generation_repair_round"] is None
+    assert reset["generation_policy_hash"] is None
 
 
 def test_audio_reset_keeps_locked_analysis_and_casting(tmp_path: Path) -> None:
@@ -313,7 +376,7 @@ def test_legacy_v0_migration_uses_a_versioned_backup_and_is_idempotent(tmp_path:
     assert dict(reopened.list_chapters()[0]) == before_chapter
 
 
-def test_schema_v2_without_generation_frame_cap_migrates_to_v3(tmp_path: Path) -> None:
+def test_schema_v2_without_generation_frame_cap_migrates_to_current(tmp_path: Path) -> None:
     path = tmp_path / "project.sqlite3"
     legacy = ProjectDB(path)
     with legacy.connect() as conn:
@@ -338,6 +401,39 @@ def test_schema_v2_without_generation_frame_cap_migrates_to_v3(tmp_path: Path) -
     assert version == SCHEMA_VERSION
     assert "generation_frame_cap" not in backup_columns
     assert backup_version == 2
+
+
+def test_schema_v3_adds_durable_generation_context(tmp_path: Path) -> None:
+    path = tmp_path / "project.sqlite3"
+    legacy = ProjectDB(path)
+    context_columns = {
+        "generation_delivery_mode",
+        "generation_repair_round",
+        "generation_policy_hash",
+    }
+    with legacy.connect() as conn:
+        for column in reversed(tuple(context_columns)):
+            conn.execute(f"ALTER TABLE segments DROP COLUMN {column}")
+        conn.execute("PRAGMA user_version=3")
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")}
+    assert context_columns.isdisjoint(columns)
+
+    migrated = ProjectDB(path)
+    backup = path.with_name(f"{path.name}.pre-v3-to-v{SCHEMA_VERSION}.bak")
+    with migrated.connect() as conn:
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")}
+        version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+    with closing(sqlite3.connect(backup)) as conn:
+        backup_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(segments)")
+        }
+        backup_version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+
+    assert backup.is_file()
+    assert context_columns.issubset(columns)
+    assert version == SCHEMA_VERSION
+    assert context_columns.isdisjoint(backup_columns)
+    assert backup_version == 3
 
 
 def test_chapter_artifact_requires_passing_metadata_for_the_current_quality_policy(
@@ -448,6 +544,23 @@ def test_segment_audio_requires_matching_current_policy_pass_check(tmp_path: Pat
         policy={"profile": "audiobook"},
     )
     quality = db.quality_metadata_for_current_policy()
+
+    assert db.segment_audio_is_current_qa_verified(
+        segment_id,
+        wav_sha256,
+        SEGMENT_AUDIO_QUALITY_STAGE,
+    ) is False
+
+    db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_ASR_DECODE_QUALITY_STAGE,
+        artifact_sha256=wav_sha256,
+        policy_hash=str(quality["policy_hash"]),
+        policy_version=int(quality["policy_version"]),
+        verdict=QUALITY_VERDICT_PASS,
+        segment_id=segment_id,
+        metrics={"decode_mode": "beam5", "selected": True},
+    )
 
     assert db.segment_audio_is_current_qa_verified(
         segment_id,

@@ -13,13 +13,19 @@ from .models import BookStatus, ChapterStatus, SegmentStatus
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
 SEGMENT_AUDIO_QUALITY_STAGE = "segment_audio_v1"
+SEGMENT_ASR_DECODE_QUALITY_STAGE = "segment_asr_decode_v1"
 SEGMENT_PERCEPTUAL_QUALITY_STAGE = "segment_perceptual_v1"
 CHAPTER_POST_ENCODE_QUALITY_STAGE = "chapter_post_encode_v1"
+GENERATION_DELIVERY_PRIMARY = "primary"
+GENERATION_DELIVERY_CLARITY = "clarity"
+GENERATION_DELIVERY_MODES = frozenset(
+    {GENERATION_DELIVERY_PRIMARY, GENERATION_DELIVERY_CLARITY}
+)
 QUALITY_VERDICT_PASS = "pass"
 QUALITY_VERDICTS = {
     QUALITY_VERDICT_PASS,
@@ -95,6 +101,13 @@ CREATE TABLE IF NOT EXISTS segments (
     generation_frame_cap INTEGER CHECK(
         generation_frame_cap IS NULL OR generation_frame_cap > 0
     ),
+    generation_delivery_mode TEXT NOT NULL DEFAULT 'primary' CHECK(
+        generation_delivery_mode IN ('primary','clarity')
+    ),
+    generation_repair_round INTEGER CHECK(
+        generation_repair_round IS NULL OR generation_repair_round >= 0
+    ),
+    generation_policy_hash TEXT,
     wav_path TEXT,
     wav_sha256 TEXT,
     wav_duration REAL,
@@ -309,6 +322,23 @@ class ProjectDB:
                 CHECK(generation_frame_cap IS NULL OR generation_frame_cap > 0)
                 """
             )
+        if "generation_delivery_mode" not in segment_columns:
+            conn.execute(
+                """
+                ALTER TABLE segments ADD COLUMN generation_delivery_mode TEXT
+                NOT NULL DEFAULT 'primary'
+                CHECK(generation_delivery_mode IN ('primary','clarity'))
+                """
+            )
+        if "generation_repair_round" not in segment_columns:
+            conn.execute(
+                """
+                ALTER TABLE segments ADD COLUMN generation_repair_round INTEGER
+                CHECK(generation_repair_round IS NULL OR generation_repair_round >= 0)
+                """
+            )
+        if "generation_policy_hash" not in segment_columns:
+            conn.execute("ALTER TABLE segments ADD COLUMN generation_policy_hash TEXT")
 
         book_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
         if "casting_finalized" not in book_columns:
@@ -662,7 +692,35 @@ class ProjectDB:
                 ),
             )
 
-    def mark_generating(self, segment_id: int, seed: int) -> None:
+    def mark_generating(
+        self,
+        segment_id: int,
+        seed: int,
+        *,
+        delivery_mode: str | None = None,
+        repair_round: int | None = None,
+        policy_hash: str | None = None,
+    ) -> None:
+        normalized_delivery = (
+            str(delivery_mode).strip().casefold()
+            if delivery_mode is not None
+            else None
+        )
+        if (
+            normalized_delivery is not None
+            and normalized_delivery not in GENERATION_DELIVERY_MODES
+        ):
+            raise ValueError(f"Unsupported generation delivery mode: {delivery_mode}")
+        normalized_round = int(repair_round) if repair_round is not None else None
+        if normalized_round is not None and normalized_round < 0:
+            raise ValueError("generation repair round must be non-negative")
+        if normalized_delivery == GENERATION_DELIVERY_PRIMARY and normalized_round is not None:
+            raise ValueError("primary generation cannot carry an ASR repair round")
+        if normalized_delivery == GENERATION_DELIVERY_CLARITY and normalized_round is None:
+            raise ValueError("clarity generation requires an ASR repair round")
+        normalized_policy_hash = str(policy_hash or "").strip() or None
+        if normalized_delivery is not None and normalized_policy_hash is None:
+            raise ValueError("generation delivery checkpoints require a quality policy hash")
         with self.transaction() as conn:
             row = conn.execute(
                 "SELECT chapter_id,warning_code FROM segments WHERE id=?", (segment_id,)
@@ -672,20 +730,40 @@ class ProjectDB:
             retained_warning = self._without_audio_attempt_warnings(
                 str(row["warning_code"]) if row["warning_code"] else None
             )
-            conn.execute(
-                """
-                UPDATE segments SET status=?,attempt_count=attempt_count+1,generation_seed=?,
-                    asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
-                    warning_code=?,error=NULL,updated_at=? WHERE id=?
-                """,
-                (
-                    SegmentStatus.GENERATING.value,
-                    seed,
-                    retained_warning,
-                    time.time(),
-                    segment_id,
-                ),
-            )
+            if normalized_delivery is None:
+                conn.execute(
+                    """
+                    UPDATE segments SET status=?,attempt_count=attempt_count+1,generation_seed=?,
+                        asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
+                        warning_code=?,error=NULL,updated_at=? WHERE id=?
+                    """,
+                    (
+                        SegmentStatus.GENERATING.value,
+                        seed,
+                        retained_warning,
+                        time.time(),
+                        segment_id,
+                    ),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE segments SET status=?,attempt_count=attempt_count+1,generation_seed=?,
+                        generation_delivery_mode=?,generation_repair_round=?,
+                        generation_policy_hash=?,asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
+                        warning_code=?,error=NULL,updated_at=? WHERE id=?
+                    """,
+                    (
+                        SegmentStatus.GENERATING.value,
+                        seed,
+                        normalized_delivery,
+                        normalized_round,
+                        normalized_policy_hash,
+                        retained_warning,
+                        time.time(),
+                        segment_id,
+                    ),
+                )
             self._refresh_chapter_counts_conn(conn, int(row["chapter_id"]))
 
     def mark_signal_passed(
@@ -697,12 +775,30 @@ class ProjectDB:
         duration: float,
         signal: dict[str, Any],
         generation_seed: int | None = None,
+        warning_codes: Sequence[str] = (),
     ) -> None:
-        with self.connect() as conn:
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT warning_code FROM segments WHERE id=?",
+                (segment_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            merged_warning = (
+                str(row["warning_code"])
+                if row["warning_code"]
+                else None
+            )
+            for warning_code in warning_codes:
+                merged_warning = self._merge_warning_codes(
+                    merged_warning,
+                    str(warning_code),
+                )
             conn.execute(
                 """
                 UPDATE segments SET status=?,wav_path=?,wav_sha256=?,wav_duration=?,signal_json=?,
-                    generation_seed=COALESCE(?,generation_seed),error=NULL,updated_at=? WHERE id=?
+                    generation_seed=COALESCE(?,generation_seed),warning_code=?,error=NULL,
+                    updated_at=? WHERE id=?
                 """,
                 (
                     SegmentStatus.SIGNAL_PASSED.value,
@@ -711,6 +807,7 @@ class ProjectDB:
                     duration,
                     json.dumps(signal, ensure_ascii=False),
                     generation_seed,
+                    merged_warning,
                     time.time(),
                     segment_id,
                 ),
@@ -846,7 +943,8 @@ class ProjectDB:
                             THEN ? ELSE ? END
                     ),wav_path=NULL,wav_sha256=NULL,wav_duration=NULL,
                     signal_json=NULL,asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,
-                    warning_code=NULL,generation_seed=NULL,error=?,updated_at=?
+                    warning_code=NULL,generation_seed=NULL,generation_delivery_mode='primary',
+                    generation_repair_round=NULL,generation_policy_hash=NULL,error=?,updated_at=?
                 WHERE id=?
                 """,
                 (

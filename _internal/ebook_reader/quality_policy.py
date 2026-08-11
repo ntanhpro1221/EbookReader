@@ -113,7 +113,7 @@ def build_quality_policy(settings: dict[str, Any]) -> dict[str, Any]:
             "text_parser": "spoken_token_invariant_v2",
             "casting": "canonical_identity_gender_gate_v2",
             "segment_signal": "signal_gate_v2",
-            "asr_content": "three_state_double_decode_cer_v2",
+            "asr_content": "evidenced_clarity_double_decode_cer_v3",
             "perceptual_naturalness": "utmosv2_relative_voice_baseline_v1",
             "chapter_mastering": "two_pass_loudnorm_full_decode_v1",
         },

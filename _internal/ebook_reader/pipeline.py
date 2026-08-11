@@ -24,6 +24,7 @@ from .database import (
     QUALITY_SCOPE_CHAPTER,
     QUALITY_SCOPE_SEGMENT,
     QUALITY_VERDICT_PASS,
+    SEGMENT_ASR_DECODE_QUALITY_STAGE,
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
@@ -50,6 +51,8 @@ from .quality_policy import (
     quality_policy_hash,
 )
 from .tts import (
+    DELIVERY_CLARITY,
+    DELIVERY_PRIMARY,
     GENERATION_CEILING_METRIC,
     GENERATION_CEILING_WARNING,
     GENERATION_ENDPOINT_ACTIVE_METRIC,
@@ -68,6 +71,23 @@ QUALITY_VERDICT_FAIL = "fail"
 CHAPTER_AUDIO_PIPELINE_FAILURE_CODE = "CHAPTER_AUDIO_PIPELINE_FAILED"
 CHAPTER_QUALITY_REPAIR_ACTION = "retry_after_quality_or_policy_change"
 ACTIVE_CEILING_ENDPOINT_REPAIR_REASON = "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING"
+ASR_CLARITY_REPAIR_ROUND_METRIC = "asr_clarity_repair_round"
+PITCH_VARIANT_SKIPPED_WARNING = "TTS_PITCH_VARIANT_SKIPPED"
+TTS_SIGNAL_PROVENANCE_FIELDS = (
+    "tts_delivery_mode",
+    ASR_CLARITY_REPAIR_ROUND_METRIC,
+    "spoken_text_sha256",
+    "voice_profile_id",
+    "pitch_semitones",
+    "effective_pitch_semitones",
+    "pitch_variant_skipped",
+    "pitch_variant_mixed",
+    GENERATION_CEILING_METRIC,
+    GENERATION_ENDPOINT_ACTIVE_METRIC,
+    "split_checkpoint_seed",
+    "split_seed_salt_prefix",
+    "split_parts",
+)
 
 
 def unresolved_asr_is_fatal(result: dict[str, Any], failure_policy: str) -> bool:
@@ -479,8 +499,20 @@ class BookPipeline:
         result: dict[str, Any],
         *,
         confirmation: bool,
+        decode_evidence: list[dict[str, Any]] | None = None,
     ) -> None:
-        segment_id = int(item["id"])
+        self._record_segment_audio_gate(
+            item,
+            result,
+            verdict=QUALITY_VERDICT_PASS,
+            confirmation=confirmation,
+            decode_evidence=decode_evidence,
+        )
+
+    def _validated_segment_wav_identity(
+        self,
+        item: dict[str, Any],
+    ) -> tuple[Path, str]:
         wav_path = Path(str(item["wav_path"] or ""))
         artifact_sha256 = str(item["wav_sha256"] or "").strip()
         if (
@@ -491,6 +523,157 @@ class BookPipeline:
             raise AudioQualityError(
                 f"WAV changed before the ASR quality checkpoint for {item['stable_id']}"
             )
+        return wav_path, artifact_sha256
+
+    @staticmethod
+    def _segment_signal_provenance(item: dict[str, Any]) -> dict[str, Any]:
+        try:
+            decoded = json.loads(str(item.get("signal_json") or "{}"))
+        except (TypeError, json.JSONDecodeError):
+            return {}
+        return decoded if isinstance(decoded, dict) else {}
+
+    @staticmethod
+    def _signal_warning_codes(
+        signal: dict[str, Any],
+        *,
+        split_recovery: bool = False,
+    ) -> tuple[str, ...]:
+        warnings: list[str] = []
+        if split_recovery:
+            warnings.append("TTS_SPLIT_RECOVERY")
+        if signal.get("pace_outlier"):
+            warnings.append("TTS_PACE_OUTLIER")
+        if signal.get("pitch_variant_skipped") or signal.get("pitch_variant_mixed"):
+            warnings.append(PITCH_VARIANT_SKIPPED_WARNING)
+        if signal.get(GENERATION_CEILING_METRIC):
+            warnings.append(GENERATION_CEILING_WARNING)
+        return tuple(warnings)
+
+    def _record_segment_asr_decode_evidence(
+        self,
+        item: dict[str, Any],
+        result: dict[str, Any],
+        *,
+        confirmation: bool,
+        context_mode: str,
+        selected: bool,
+        repair_round: int | None,
+        delivery_mode: str,
+    ) -> dict[str, Any]:
+        segment_id = int(item["id"])
+        _wav_path, artifact_sha256 = self._validated_segment_wav_identity(item)
+        asr_verdict = _asr_verdict(result)
+        evidence_verdict = (
+            QUALITY_VERDICT_PASS
+            if asr_verdict == ASR_PASS
+            else ASR_INCONCLUSIVE
+            if asr_verdict == ASR_INCONCLUSIVE
+            else QUALITY_VERDICT_FAIL
+        )
+        signal = self._segment_signal_provenance(item)
+        voice_provider = getattr(self.tts, "locked_voice_provenance", None)
+        locked_voice = (
+            dict(voice_provider(item))
+            if callable(voice_provider)
+            else {
+                "voice_profile_id": item.get("voice_profile_id"),
+                "pitch_semitones": None,
+            }
+        )
+        warning_codes = set(str(item.get("warning_code") or "").split("|"))
+        pitch_variant_skipped = bool(
+            signal.get("pitch_variant_skipped", False)
+            or PITCH_VARIANT_SKIPPED_WARNING in warning_codes
+        )
+        configured_pitch = signal.get(
+            "pitch_semitones",
+            locked_voice.get("pitch_semitones"),
+        )
+        effective_pitch = signal.get(
+            "effective_pitch_semitones",
+            0 if pitch_variant_skipped else configured_pitch,
+        )
+        spoken_text_sha256 = str(signal.get("spoken_text_sha256") or "")
+        if not spoken_text_sha256:
+            spoken_text_sha256 = hashlib.sha256(
+                self.tts.spoken_text(item).encode("utf-8")
+            ).hexdigest()
+        decode_mode = (
+            "greedy"
+            if confirmation
+            else f"beam{int(self.settings.get('asr', {}).get('beam_size', 5))}"
+        )
+        metrics = {
+            "verdict": asr_verdict,
+            "reason": str(result.get("reason", "ASR_INCONCLUSIVE")),
+            "transcript": str(result.get("transcript", "")),
+            "similarity": float(result.get("similarity", 0.0)),
+            "wer": float(result.get("wer", 1.0)),
+            "repairable": bool(result.get("repairable", False)),
+            "severe": bool(result.get("severe", False)),
+            "decode_mode": decode_mode,
+            "context_mode": str(context_mode),
+            "selected": bool(selected),
+            "repair_round": repair_round,
+            "delivery_mode": str(delivery_mode),
+            "generation_seed": (
+                int(item["generation_seed"])
+                if item.get("generation_seed") is not None
+                else None
+            ),
+            "spoken_text_sha256": spoken_text_sha256,
+            "voice_profile_id": signal.get(
+                "voice_profile_id",
+                locked_voice.get("voice_profile_id"),
+            ),
+            "pitch_semitones": configured_pitch,
+            "effective_pitch_semitones": effective_pitch,
+            "pitch_variant_skipped": pitch_variant_skipped,
+            "generation_kind": (
+                "split" if signal.get("split_parts") else "direct"
+            ),
+            "split_checkpoint_seed": signal.get("split_checkpoint_seed"),
+            "split_seed_salt_prefix": signal.get("split_seed_salt_prefix"),
+            "split_parts": signal.get("split_parts", []),
+        }
+        check_id = self.db.record_quality_check(
+            scope=QUALITY_SCOPE_SEGMENT,
+            stage=SEGMENT_ASR_DECODE_QUALITY_STAGE,
+            segment_id=segment_id,
+            artifact_sha256=artifact_sha256,
+            policy_hash=self.quality_policy_hash,
+            policy_version=QUALITY_POLICY_VERSION,
+            verdict=evidence_verdict,
+            metrics=metrics,
+            failure_codes=(
+                (str(metrics["reason"]),)
+                if evidence_verdict != QUALITY_VERDICT_PASS
+                else ()
+            ),
+            attempt=self._next_segment_quality_attempt(
+                segment_id,
+                SEGMENT_ASR_DECODE_QUALITY_STAGE,
+            ),
+        )
+        return {
+            "quality_check_id": check_id,
+            "artifact_sha256": artifact_sha256,
+            **metrics,
+        }
+
+    def _record_segment_audio_gate(
+        self,
+        item: dict[str, Any],
+        result: dict[str, Any],
+        *,
+        verdict: str,
+        confirmation: bool,
+        decode_evidence: list[dict[str, Any]] | None = None,
+    ) -> None:
+        segment_id = int(item["id"])
+        _wav_path, artifact_sha256 = self._validated_segment_wav_identity(item)
+        reason = str(result.get("reason", "ok"))
         self.db.record_quality_check(
             scope=QUALITY_SCOPE_SEGMENT,
             stage=SEGMENT_AUDIO_QUALITY_STAGE,
@@ -498,18 +681,27 @@ class BookPipeline:
             artifact_sha256=artifact_sha256,
             policy_hash=self.quality_policy_hash,
             policy_version=QUALITY_POLICY_VERSION,
-            verdict=QUALITY_VERDICT_PASS,
+            verdict=verdict,
             metrics={
                 "verdict": _asr_verdict(result),
-                "reason": str(result.get("reason", "ok")),
+                "reason": reason,
                 "transcript": str(result.get("transcript", "")),
                 "similarity": float(result.get("similarity", 0.0)),
                 "wer": float(result.get("wer", 0.0)),
                 "confirmation_decode": bool(confirmation),
+                "selected_context_mode": str(
+                    result.get("selected_context_mode", "direct")
+                ),
+                "dual_decode_required": bool(result.get("dual_decode_required", False)),
+                "dual_decode_passed": bool(result.get("dual_decode_passed", False)),
+                "tts_error": str(result.get("tts_error", "")),
+                "decode_evidence": list(decode_evidence or []),
                 "repeated_short_context": (
-                    str(result.get("reason", "")) == "ASR_REPEATED_SHORT_PASS"
+                    str(result.get("selected_context_mode", "")) == "repeat3"
+                    or str(result.get("reason", "")) == "ASR_REPEATED_SHORT_PASS"
                 ),
             },
+            failure_codes=(reason,) if verdict != QUALITY_VERDICT_PASS else (),
             attempt=self._next_segment_quality_attempt(segment_id),
         )
 
@@ -532,6 +724,21 @@ class BookPipeline:
             int(row["id"]),
             artifact_sha256,
             SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+        )
+
+    def _segment_has_current_asr_failure(self, row: Any) -> bool:
+        artifact_sha256 = str(row["wav_sha256"] or "").strip()
+        if not artifact_sha256:
+            return False
+        check = self.db.latest_quality_check(
+            scope=QUALITY_SCOPE_SEGMENT,
+            stage=SEGMENT_AUDIO_QUALITY_STAGE,
+            segment_id=int(row["id"]),
+        )
+        return bool(
+            check is not None
+            and str(check["artifact_sha256"] or "") == artifact_sha256
+            and str(check["verdict"]) in {QUALITY_VERDICT_FAIL, ASR_INCONCLUSIVE}
         )
 
     def _chapter_has_current_segment_audio_qa(self, chapter_id: int) -> bool:
@@ -876,6 +1083,11 @@ class BookPipeline:
         row: Any,
         metrics: dict[str, float],
     ) -> None:
+        checkpoint_metrics: dict[str, Any] = dict(metrics)
+        existing_signal = self._segment_signal_provenance(dict(row))
+        for field in TTS_SIGNAL_PROVENANCE_FIELDS:
+            if field in existing_signal:
+                checkpoint_metrics[field] = existing_signal[field]
         generation_seed = (
             int(row["generation_seed"])
             if row["generation_seed"] is not None
@@ -886,12 +1098,14 @@ class BookPipeline:
             int(row["id"]),
             wav_path=Path(str(row["wav_path"])),
             wav_sha256=str(row["wav_sha256"]),
-            duration=float(metrics["duration"]),
-            signal=metrics,
+            duration=float(checkpoint_metrics["duration"]),
+            signal=checkpoint_metrics,
             generation_seed=generation_seed,
+            warning_codes=self._signal_warning_codes(
+                checkpoint_metrics,
+                split_recovery=bool(checkpoint_metrics.get("split_parts")),
+            ),
         )
-        if metrics.get("pace_outlier"):
-            self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
 
     def _process_chapter(self, chapter: Any, verifier: WhisperVerifier) -> None:
         chapter_id = int(chapter["id"])
@@ -916,7 +1130,6 @@ class BookPipeline:
         rows = self.db.list_segments(chapter_id=chapter_id)
         for row in rows:
             if str(row["status"]) in {
-                SegmentStatus.GENERATING.value,
                 SegmentStatus.SIGNAL_PASSED.value,
                 SegmentStatus.ASR_PASSED.value,
             } and not row["wav_path"]:
@@ -930,6 +1143,14 @@ class BookPipeline:
             self._progress(tts_label, index - 1, len(current_rows))
             status = str(row["status"])
             signal_valid, signal_metrics = self._inspect_existing_segment(row)
+            if signal_valid and self._segment_has_current_asr_failure(row):
+                if status != SegmentStatus.FAILED.value:
+                    self.db.mark_failed(
+                        int(row["id"]),
+                        "Current-policy ASR content gate already failed before worker interruption",
+                        warning_code="ASR_CONTENT_GATE_FAILED",
+                    )
+                continue
             if (
                 status in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}
                 and signal_valid
@@ -954,6 +1175,47 @@ class BookPipeline:
                 continue
             if row["voice_profile_id"] is None:
                 self.db.mark_failed(int(row["id"]), "No locked voice profile")
+                continue
+            interrupted_clarity = (
+                str(row["generation_delivery_mode"] or "") == DELIVERY_CLARITY
+                and str(row["generation_policy_hash"] or "") == self.quality_policy_hash
+                and row["generation_repair_round"] is not None
+                and status
+                in {
+                    SegmentStatus.PENDING.value,
+                    SegmentStatus.ANALYZED.value,
+                    SegmentStatus.GENERATING.value,
+                    SegmentStatus.FAILED.value,
+                }
+            )
+            if interrupted_clarity:
+                stored_round = int(row["generation_repair_round"])
+                next_round = (
+                    stored_round + 1
+                    if status == SegmentStatus.FAILED.value
+                    else stored_round
+                )
+                repair_rounds = int(self.settings["asr"].get("repair_rounds", 2))
+                if next_round >= repair_rounds:
+                    self.db.mark_failed(
+                        int(row["id"]),
+                        "ASR clarity repair budget was exhausted across worker restarts",
+                        warning_code="ASR_CLARITY_REPAIR_BUDGET_EXHAUSTED",
+                    )
+                    continue
+                self._resource_gate(
+                    f"resume ASR clarity chapter {chapter['chapter_index']} segment {row['seq']}",
+                    keep_engine="vieneu",
+                )
+                repair_item = self._checkpoint_short_ceiling_repair(row)
+                self._process_single_segment(
+                    repair_item,
+                    chapter,
+                    seed_salt_prefix=f"asr_clarity_repair_{next_round}",
+                    repair_short_utterance=True,
+                    delivery_mode=DELIVERY_CLARITY,
+                    asr_repair_round=next_round,
+                )
                 continue
             self._resource_gate(
                 f"chapter {chapter['chapter_index']} segment {row['seq']}",
@@ -1145,6 +1407,8 @@ class BookPipeline:
         seed_salt_prefix: str = "primary",
         *,
         repair_short_utterance: bool = False,
+        delivery_mode: str = DELIVERY_PRIMARY,
+        asr_repair_round: int | None = None,
     ) -> None:
         output = self._chunk_path(row)
         last_error = ""
@@ -1156,13 +1420,20 @@ class BookPipeline:
                 self.db.mark_generating(
                     int(row["id"]),
                     self.tts.generation_seed(row, seed_salt),
+                    delivery_mode=delivery_mode,
+                    repair_round=asr_repair_round,
+                    policy_hash=self.quality_policy_hash,
                 )
                 checksum, metrics, seed = self.tts.synthesize_atomic(
                     row,
                     output,
                     seed_salt=seed_salt,
                     repair_short_utterance=repair_short_utterance,
+                    delivery_mode=delivery_mode,
                 )
+                metrics["tts_delivery_mode"] = delivery_mode
+                if asr_repair_round is not None:
+                    metrics[ASR_CLARITY_REPAIR_ROUND_METRIC] = int(asr_repair_round)
                 if self.settings.get("quality_profile") == "high_quality":
                     retry_reasons = []
                     if metrics.get("pace_outlier"):
@@ -1180,25 +1451,21 @@ class BookPipeline:
                     duration=float(metrics["duration"]),
                     signal=metrics,
                     generation_seed=seed,
+                    warning_codes=self._signal_warning_codes(metrics),
                 )
                 self._reset_tts_failure_streak()
                 if metrics.get("pace_outlier"):
-                    self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
                     self.log(
                         f"TTS segment {row['stable_id']} lệch tốc độ mục tiêu "
                         f"({metrics['chars_per_second']:.2f} chars/s) nhưng vẫn trong giới hạn an toàn; "
                         "chuyển sang Whisper kiểm tra."
                     )
                 if metrics.get("pitch_variant_skipped"):
-                    self.db.set_segment_warning_code(
-                        int(row["id"]),
-                        "TTS_PITCH_VARIANT_SKIPPED",
+                    self.log(
+                        f"TTS segment {row['stable_id']} không thể áp dụng pitch đã khóa; "
+                        "giữ waveform để QA chặn xuất bản high-quality."
                     )
                 if metrics.get(GENERATION_CEILING_METRIC):
-                    self.db.set_segment_warning_code(
-                        int(row["id"]),
-                        GENERATION_CEILING_WARNING,
-                    )
                     self.log(
                         f"TTS segment {row['stable_id']} dùng hết ngân sách frame; "
                         "giữ waveform để kiểm tra tín hiệu và Whisper thay vì tự kết luận audio sai."
@@ -1232,9 +1499,24 @@ class BookPipeline:
                 "đang thử chia nhỏ để cứu."
             )
             try:
-                split_seed = self.tts.generation_seed(row, "split")
-                self.db.mark_generating(int(row["id"]), split_seed)
-                self._synthesize_split(row, output)
+                split_seed_salt = f"{seed_salt_prefix}_split"
+                split_seed = self.tts.generation_seed(row, split_seed_salt)
+                self.db.mark_generating(
+                    int(row["id"]),
+                    split_seed,
+                    delivery_mode=delivery_mode,
+                    repair_round=asr_repair_round,
+                    policy_hash=self.quality_policy_hash,
+                )
+                split_provenance = (
+                    self._synthesize_split(
+                        row,
+                        output,
+                        delivery_mode=delivery_mode,
+                        seed_salt_prefix=split_seed_salt,
+                    )
+                    or []
+                )
                 valid, metrics, reason = inspect_wav(
                     output,
                     spoken_text,
@@ -1243,15 +1525,52 @@ class BookPipeline:
                 )
                 if not valid:
                     raise AudioQualityError(reason)
+                metrics["tts_delivery_mode"] = delivery_mode
+                if asr_repair_round is not None:
+                    metrics[ASR_CLARITY_REPAIR_ROUND_METRIC] = int(asr_repair_round)
+                metrics["spoken_text_sha256"] = hashlib.sha256(
+                    spoken_text.encode("utf-8")
+                ).hexdigest()
+                metrics["split_checkpoint_seed"] = split_seed
+                metrics["split_seed_salt_prefix"] = split_seed_salt
+                metrics["split_parts"] = split_provenance
+                if split_provenance:
+                    first_part = split_provenance[0]
+                    metrics["voice_profile_id"] = first_part.get("voice_profile_id")
+                    metrics["pitch_semitones"] = first_part.get("pitch_semitones")
+                    effective_pitches = {
+                        part.get("effective_pitch_semitones")
+                        for part in split_provenance
+                    }
+                    metrics["effective_pitch_semitones"] = (
+                        next(iter(effective_pitches))
+                        if len(effective_pitches) == 1
+                        else None
+                    )
+                    metrics["pitch_variant_mixed"] = float(len(effective_pitches) > 1)
+                    metrics["pitch_variant_skipped"] = float(
+                        any(part.get("pitch_variant_skipped") for part in split_provenance)
+                    )
+                    metrics[GENERATION_CEILING_METRIC] = float(
+                        any(part.get(GENERATION_CEILING_METRIC) for part in split_provenance)
+                    )
+                    metrics[GENERATION_ENDPOINT_ACTIVE_METRIC] = float(
+                        any(
+                            part.get(GENERATION_CEILING_METRIC)
+                            and part.get(GENERATION_ENDPOINT_ACTIVE_METRIC)
+                            for part in split_provenance
+                        )
+                    )
                 checksum = sha256_file(output)
                 self.db.mark_signal_passed(
                     int(row["id"]), wav_path=output, wav_sha256=checksum,
                     duration=float(metrics["duration"]), signal=metrics, generation_seed=split_seed,
+                    warning_codes=self._signal_warning_codes(
+                        metrics,
+                        split_recovery=True,
+                    ),
                 )
                 self._reset_tts_failure_streak()
-                self.db.set_segment_warning_code(int(row["id"]), "TTS_SPLIT_RECOVERY")
-                if metrics.get("pace_outlier"):
-                    self.db.set_segment_warning_code(int(row["id"]), "TTS_PACE_OUTLIER")
                 self.log(f"Đã cứu TTS segment {row['stable_id']} bằng cách chia nhỏ.")
                 return
             except Exception as exc:  # noqa: BLE001
@@ -1272,7 +1591,14 @@ class BookPipeline:
                 f"TTS circuit breaker opened after {failure_limit} identical failures: {last_error}"
             )
 
-    def _synthesize_split(self, row: Any, output: Path) -> None:
+    def _synthesize_split(
+        self,
+        row: Any,
+        output: Path,
+        *,
+        delivery_mode: str = DELIVERY_PRIMARY,
+        seed_salt_prefix: str = "split",
+    ) -> list[dict[str, Any]]:
         text = self.tts.spoken_text(row)
         if len(text) < 100:
             raise AudioQualityError("segment too short to split safely")
@@ -1291,6 +1617,7 @@ class BookPipeline:
         if len(pieces) < 2:
             raise AudioQualityError("split produced fewer than two pieces")
         part_paths: list[Path] = []
+        part_provenance: list[dict[str, Any]] = []
         try:
             for index, piece in enumerate(pieces):
                 part_row = dict(row)
@@ -1298,8 +1625,42 @@ class BookPipeline:
                 part_row["stable_id"] = f"{row['stable_id']}_part{index:02d}"
                 part_path = output.with_name(output.stem + f".split{index:02d}.wav")
                 part_paths.append(part_path)
-                self.tts.synthesize_atomic(part_row, part_path, seed_salt=f"split_{index}")
+                _checksum, part_metrics, part_seed = self.tts.synthesize_atomic(
+                    part_row,
+                    part_path,
+                    seed_salt=f"{seed_salt_prefix}_part_{index}",
+                    delivery_mode=delivery_mode,
+                )
+                part_provenance.append(
+                    {
+                        "index": index,
+                        "generation_seed": part_seed,
+                        "spoken_text_sha256": part_metrics.get("spoken_text_sha256"),
+                        "voice_profile_id": part_metrics.get("voice_profile_id"),
+                        "pitch_semitones": part_metrics.get("pitch_semitones"),
+                        "effective_pitch_semitones": part_metrics.get(
+                            "effective_pitch_semitones"
+                        ),
+                        "pitch_variant_skipped": part_metrics.get(
+                            "pitch_variant_skipped",
+                            0.0,
+                        ),
+                        GENERATION_CEILING_METRIC: part_metrics.get(
+                            GENERATION_CEILING_METRIC,
+                            0.0,
+                        ),
+                        GENERATION_ENDPOINT_ACTIVE_METRIC: part_metrics.get(
+                            GENERATION_ENDPOINT_ACTIVE_METRIC,
+                            0.0,
+                        ),
+                        "delivery_mode": part_metrics.get(
+                            "tts_delivery_mode",
+                            delivery_mode,
+                        ),
+                    }
+                )
             merge_wav_parts_atomic(part_paths, output, text, self.settings, segment=row)
+            return part_provenance
         finally:
             for path in part_paths:
                 path.unlink(missing_ok=True)
@@ -1309,6 +1670,7 @@ class BookPipeline:
         rows = self.db.list_segments(chapter_id=chapter_id)
         pending: list[dict[str, Any]] = []
         last_results: dict[int, dict[str, Any]] = {}
+        decode_histories: dict[tuple[int, str], list[dict[str, Any]]] = {}
         for row in rows:
             if str(row["status"]) == SegmentStatus.FAILED.value:
                 continue
@@ -1319,11 +1681,121 @@ class BookPipeline:
                 continue
             pending.append(dict(row))
 
+        def artifact_history(item: dict[str, Any]) -> list[dict[str, Any]]:
+            key = (int(item["id"]), str(item.get("wav_sha256") or ""))
+            return decode_histories.setdefault(key, [])
+
+        def delivery_mode_for(item: dict[str, Any]) -> str:
+            signal = self._segment_signal_provenance(item)
+            mode = str(signal.get("tts_delivery_mode") or DELIVERY_PRIMARY).strip().casefold()
+            return DELIVERY_CLARITY if mode == DELIVERY_CLARITY else DELIVERY_PRIMARY
+
+        def completed_clarity_round(item: dict[str, Any]) -> int:
+            signal = self._segment_signal_provenance(item)
+            try:
+                return max(-1, int(signal.get(ASR_CLARITY_REPAIR_ROUND_METRIC, -1)))
+            except (TypeError, ValueError):
+                return -1
+
+        def decode_candidate(
+            item: dict[str, Any],
+            *,
+            confirmation: bool,
+            repair_round: int | None,
+            delivery_mode: str,
+        ) -> dict[str, Any]:
+            expected_text = self.tts.spoken_text(item)
+            wav_path = Path(str(item["wav_path"]))
+            direct = verifier.verify(
+                expected_text,
+                wav_path,
+                confirmation=confirmation,
+            )
+            repeated: dict[str, Any] | None = None
+            selected = direct
+            selected_context = "direct"
+            if _asr_verdict(direct) != ASR_PASS and verifier.can_verify_repeated_short(
+                expected_text
+            ):
+                repeated = verifier.verify_repeated_short(
+                    expected_text,
+                    wav_path,
+                    confirmation=confirmation,
+                )
+                if _asr_verdict(repeated) == ASR_PASS:
+                    selected = repeated
+                    selected_context = "repeat3"
+
+            candidates = [("direct", direct)]
+            if repeated is not None:
+                candidates.append(("repeat3", repeated))
+            history = artifact_history(item)
+            for context_mode, candidate in candidates:
+                evidence = self._record_segment_asr_decode_evidence(
+                    item,
+                    candidate,
+                    confirmation=confirmation,
+                    context_mode=context_mode,
+                    selected=context_mode == selected_context,
+                    repair_round=repair_round,
+                    delivery_mode=delivery_mode,
+                )
+                history.append(evidence)
+            return {
+                **selected,
+                "selected_context_mode": selected_context,
+                "confirmation_decode": confirmation,
+            }
+
+        def require_endpoint_repair(
+            item: dict[str, Any],
+            result: dict[str, Any],
+        ) -> dict[str, Any]:
+            if not self._ceiling_endpoint_requires_repair(item):
+                return result
+            self.log(
+                f"TTS segment {item['stable_id']} đã qua Whisper nhưng chạm trần khi "
+                "endpoint còn hoạt động; bắt buộc tạo lại để tránh audio bị cắt."
+            )
+            return {
+                **result,
+                "passed": False,
+                "verdict": ASR_MISMATCH,
+                "reason": ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
+                "repairable": True,
+                "severe": False,
+                "endpoint_repair": True,
+            }
+
+        def commit_pass(
+            item: dict[str, Any],
+            result: dict[str, Any],
+            *,
+            confirmation: bool,
+        ) -> None:
+            segment_id = int(item["id"])
+            existing_warning = str(item.get("warning_code") or "") or None
+            self.db.mark_asr_result(
+                segment_id,
+                passed=True,
+                transcript=str(result["transcript"]),
+                similarity=float(result["similarity"]),
+                wer=float(result["wer"]),
+            )
+            self._record_segment_audio_pass(
+                item,
+                result,
+                confirmation=confirmation,
+                decode_evidence=artifact_history(item),
+            )
+            self.db.mark_verified(segment_id, warning_code=existing_warning)
+
         def verify_rows(
             items: list[dict[str, Any]],
             label: str,
             *,
             confirmation: bool = False,
+            repair_round: int | None = None,
         ) -> list[dict[str, Any]]:
             issues: list[dict[str, Any]] = []
             self._progress(label, 0, len(items))
@@ -1332,47 +1804,16 @@ class BookPipeline:
                     f"Whisper chapter {chapter['chapter_index']} segment {item['seq']}",
                     release_active=verifier.unload,
                 )
-                expected_text = self.tts.spoken_text(item)
-                result = verifier.verify(
-                    expected_text,
-                    Path(str(item["wav_path"])),
+                result = decode_candidate(
+                    item,
                     confirmation=confirmation,
+                    repair_round=repair_round,
+                    delivery_mode=delivery_mode_for(item),
                 )
-                if _asr_verdict(result) != ASR_PASS and verifier.can_verify_repeated_short(
-                    expected_text
-                ):
-                    result = verifier.verify_repeated_short(
-                        expected_text,
-                        Path(str(item["wav_path"])),
-                        confirmation=confirmation,
-                    )
-                if self._ceiling_endpoint_requires_repair(item):
-                    result = {
-                        **result,
-                        "passed": False,
-                        "verdict": ASR_MISMATCH,
-                        "reason": ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
-                        "repairable": True,
-                        "severe": False,
-                        "endpoint_repair": True,
-                    }
-                    self.log(
-                        f"TTS segment {item['stable_id']} đã qua Whisper nhưng chạm trần khi "
-                        "endpoint còn hoạt động; bắt buộc tạo lại để tránh audio bị cắt."
-                    )
+                result = require_endpoint_repair(item, result)
                 last_results[int(item["id"])] = result
-                existing_warning = str(item.get("warning_code") or "") or None
                 if _asr_verdict(result) == ASR_PASS:
-                    self.db.mark_asr_result(
-                        int(item["id"]), passed=True, transcript=str(result["transcript"]),
-                        similarity=float(result["similarity"]), wer=float(result["wer"]),
-                    )
-                    self._record_segment_audio_pass(
-                        item,
-                        result,
-                        confirmation=confirmation,
-                    )
-                    self.db.mark_verified(int(item["id"]), warning_code=existing_warning)
+                    commit_pass(item, result, confirmation=confirmation)
                 else:
                     issues.append(item)
                 self._progress(label, index, len(items))
@@ -1406,73 +1847,198 @@ class BookPipeline:
                 result = last_results.get(segment_id, {})
                 first_verdict = _asr_verdict(first_result)
                 second_verdict = _asr_verdict(result)
-                if (
-                    first_verdict == ASR_MISMATCH
-                    and second_verdict == ASR_MISMATCH
-                    and bool(result.get("repairable", True))
-                ):
+                if bool(result.get("endpoint_repair")):
+                    confirmed.append(item)
+                elif ASR_MISMATCH in {first_verdict, second_verdict}:
+                    mismatch_result = (
+                        result if second_verdict == ASR_MISMATCH else first_result
+                    )
+                    last_results[segment_id] = {
+                        **mismatch_result,
+                        "passed": False,
+                        "verdict": ASR_MISMATCH,
+                        "repairable": True,
+                        "confirmation_verdicts": [first_verdict, second_verdict],
+                    }
                     confirmed.append(item)
                 else:
-                    if first_verdict != second_verdict:
-                        last_results[segment_id] = {
-                            **result,
-                            "passed": False,
-                            "verdict": ASR_INCONCLUSIVE,
-                            "reason": "ASR_CONFIRMATION_DISAGREED",
-                            "repairable": False,
-                            "severe": False,
-                        }
+                    last_results[segment_id] = {
+                        **result,
+                        "passed": False,
+                        "verdict": ASR_INCONCLUSIVE,
+                        "repairable": False,
+                        "confirmation_verdicts": [first_verdict, second_verdict],
+                    }
                     rejected.append(item)
             return confirmed, rejected
 
+        def verify_clarity_rows(
+            items: list[dict[str, Any]],
+            label: str,
+            *,
+            repair_round: int | None,
+        ) -> list[dict[str, Any]]:
+            remaining: list[dict[str, Any]] = []
+            self._progress(label, 0, len(items))
+            for index, item in enumerate(items, 1):
+                artifact_history(item).clear()
+                item_repair_round = (
+                    completed_clarity_round(item)
+                    if repair_round is None
+                    else repair_round
+                )
+                self._resource_gate(
+                    f"Whisper clarity chapter {chapter['chapter_index']} segment {item['seq']}",
+                    release_active=verifier.unload,
+                )
+                beam_result = decode_candidate(
+                    item,
+                    confirmation=False,
+                    repair_round=item_repair_round,
+                    delivery_mode=DELIVERY_CLARITY,
+                )
+                greedy_result = decode_candidate(
+                    item,
+                    confirmation=True,
+                    repair_round=item_repair_round,
+                    delivery_mode=DELIVERY_CLARITY,
+                )
+                beam_verdict = _asr_verdict(beam_result)
+                greedy_verdict = _asr_verdict(greedy_result)
+                if self._ceiling_endpoint_requires_repair(item):
+                    result = require_endpoint_repair(item, greedy_result)
+                elif beam_verdict == ASR_PASS and greedy_verdict == ASR_PASS:
+                    result = {
+                        **greedy_result,
+                        "dual_decode_required": True,
+                        "dual_decode_passed": True,
+                        "confirmation_verdicts": [beam_verdict, greedy_verdict],
+                    }
+                    last_results[int(item["id"])] = result
+                    commit_pass(item, result, confirmation=True)
+                    self._progress(label, index, len(items))
+                    continue
+                else:
+                    failed_results = [
+                        candidate
+                        for candidate in (beam_result, greedy_result)
+                        if _asr_verdict(candidate) != ASR_PASS
+                    ]
+                    mismatch_results = [
+                        candidate
+                        for candidate in failed_results
+                        if _asr_verdict(candidate) == ASR_MISMATCH
+                    ]
+                    selected_failure = (
+                        mismatch_results[-1] if mismatch_results else failed_results[-1]
+                    )
+                    result = {
+                        **selected_failure,
+                        "passed": False,
+                        "dual_decode_required": True,
+                        "dual_decode_passed": False,
+                        "confirmation_verdicts": [beam_verdict, greedy_verdict],
+                    }
+                last_results[int(item["id"])] = result
+                remaining.append(item)
+                self._progress(label, index, len(items))
+            return remaining
+
         verification_label = f"Kiểm tra phát âm chapter {chapter['chapter_index']}"
-        issues = verify_rows(pending, verification_label)
+        clarity_pending = [
+            item for item in pending if delivery_mode_for(item) == DELIVERY_CLARITY
+        ]
+        primary_pending = [
+            item for item in pending if delivery_mode_for(item) != DELIVERY_CLARITY
+        ]
+        issues = verify_rows(primary_pending, verification_label)
+        resumed_clarity_mismatches = verify_clarity_rows(
+            clarity_pending,
+            f"Xác nhận clarity chapter {chapter['chapter_index']}",
+            repair_round=None,
+        )
         final_mismatches: list[dict[str, Any]] = []
         mismatches, unrepairable = confirm_repair_candidates(
             issues,
             f"Xác nhận lệch nội dung chapter {chapter['chapter_index']}",
         )
         final_mismatches.extend(unrepairable)
+        next_repair_round = {
+            int(item["id"]): 0
+            for item in mismatches
+        }
+        for item in resumed_clarity_mismatches:
+            next_repair_round[int(item["id"])] = completed_clarity_round(item) + 1
+        mismatches.extend(resumed_clarity_mismatches)
         repair_rounds = int(self.settings["asr"].get("repair_rounds", 2))
         for repair_round in range(repair_rounds):
             if not mismatches:
                 break
+            scheduled = [
+                item
+                for item in mismatches
+                if next_repair_round.get(int(item["id"]), 0) == repair_round
+            ]
+            waiting = [
+                item
+                for item in mismatches
+                if next_repair_round.get(int(item["id"]), 0) != repair_round
+            ]
+            if not scheduled:
+                mismatches = waiting
+                continue
             verifier.unload()
             regenerated: list[dict[str, Any]] = []
+            generation_failed: list[dict[str, Any]] = []
             repair_label = (
                 f"Sửa audio chapter {chapter['chapter_index']} — vòng {repair_round + 1}"
             )
-            self._progress(repair_label, 0, len(mismatches))
-            for index, item in enumerate(mismatches, 1):
+            self._progress(repair_label, 0, len(scheduled))
+            for index, item in enumerate(scheduled, 1):
                 self._resource_gate(
                     f"ASR repair chapter {chapter['chapter_index']} segment {item['seq']}",
                     keep_engine=None,
                 )
-                # Retry the locked primary voice with a different deterministic seed.
+                # Keep the locked voice/profile and lower only sampling variance.
                 repair_item = self._checkpoint_short_ceiling_repair(item)
                 self._process_single_segment(
                     repair_item,
                     chapter,
-                    seed_salt_prefix=f"asr_repair_{repair_round}",
+                    seed_salt_prefix=f"asr_clarity_repair_{repair_round}",
                     repair_short_utterance=True,
+                    delivery_mode=DELIVERY_CLARITY,
+                    asr_repair_round=repair_round,
                 )
                 fresh = self.db.get_segment(int(item["id"]))
                 if str(fresh["status"]) == SegmentStatus.SIGNAL_PASSED.value:
                     regenerated.append(dict(fresh))
-                self._progress(repair_label, index, len(mismatches))
+                elif str(fresh["status"]) == SegmentStatus.FAILED.value:
+                    artifact_valid, _metrics = self._inspect_existing_segment(fresh)
+                    previous_result = last_results.get(int(item["id"]), {})
+                    last_results[int(item["id"])] = {
+                        **previous_result,
+                        "passed": False,
+                        "verdict": ASR_MISMATCH,
+                        "reason": "ASR_CLARITY_TTS_REGENERATION_FAILED",
+                        "repairable": True,
+                        "dual_decode_required": True,
+                        "dual_decode_passed": False,
+                        "tts_error": str(fresh["error"] or ""),
+                        "artifact_valid_for_asr_gate": artifact_valid,
+                    }
+                    generation_failed.append(dict(fresh))
+                self._progress(repair_label, index, len(scheduled))
             self.tts.unload_all()
-            verified_mismatches = verify_rows(
+            failed_round = verify_clarity_rows(
                 regenerated,
                 f"Kiểm tra lại chapter {chapter['chapter_index']} — vòng {repair_round + 1}",
+                repair_round=repair_round,
             )
-            mismatches, unrepairable = confirm_repair_candidates(
-                verified_mismatches,
-                (
-                    f"Xác nhận lệch nội dung chapter {chapter['chapter_index']} "
-                    f"— vòng {repair_round + 1}"
-                ),
-            )
-            final_mismatches.extend(unrepairable)
+            for item in failed_round:
+                next_repair_round[int(item["id"])] = repair_round + 1
+            for item in generation_failed:
+                next_repair_round[int(item["id"])] = repair_round + 1
+            mismatches = waiting + failed_round + generation_failed
 
         final_mismatches.extend(mismatches)
         for item in sorted(final_mismatches, key=lambda row: int(row["seq"])):
@@ -1487,6 +2053,18 @@ class BookPipeline:
             severe = bool(result.get("severe", False))
             if severe:
                 warning = "ASR_SEVERE_MISMATCH"
+            if bool(result.get("artifact_valid_for_asr_gate", True)):
+                self._record_segment_audio_gate(
+                    item,
+                    result,
+                    verdict=(
+                        ASR_INCONCLUSIVE
+                        if verdict == ASR_INCONCLUSIVE
+                        else QUALITY_VERDICT_FAIL
+                    ),
+                    confirmation=bool(result.get("confirmation_decode", False)),
+                    decode_evidence=artifact_history(item),
+                )
             self.db.mark_asr_result(
                 int(item["id"]), passed=False, transcript=str(result.get("transcript", "")),
                 similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
@@ -1630,6 +2208,9 @@ class BookPipeline:
                     "latest_quality_check": latest_quality_check,
                 }
             )
+        content_checks = self.db.latest_segment_quality_checks(
+            SEGMENT_AUDIO_QUALITY_STAGE
+        )
         perceptual_checks = self.db.latest_segment_quality_checks(
             SEGMENT_PERCEPTUAL_QUALITY_STAGE
         )
@@ -1637,6 +2218,65 @@ class BookPipeline:
             int(chapter["id"]): int(chapter["chapter_index"])
             for chapter in chapters
         }
+        content_evidence: list[dict[str, Any]] = []
+        for row in segments:
+            segment_id = int(row["id"])
+            check = content_checks.get(segment_id)
+            metrics: dict[str, Any] = {}
+            failure_codes: list[Any] = []
+            if check is not None:
+                try:
+                    decoded_metrics = json.loads(str(check["metrics_json"] or "{}"))
+                except (TypeError, json.JSONDecodeError):
+                    decoded_metrics = {}
+                if isinstance(decoded_metrics, dict):
+                    metrics = decoded_metrics
+                try:
+                    decoded_failure_codes = json.loads(
+                        str(check["failure_codes_json"] or "[]")
+                    )
+                except (TypeError, json.JSONDecodeError):
+                    decoded_failure_codes = []
+                if isinstance(decoded_failure_codes, list):
+                    failure_codes = decoded_failure_codes
+            wav_sha256 = str(row["wav_sha256"] or "")
+            evidence_sha256 = (
+                str(check["artifact_sha256"] or "") if check is not None else ""
+            )
+            verdict = str(check["verdict"]) if check is not None else "missing"
+            current_artifact = bool(evidence_sha256 and evidence_sha256 == wav_sha256)
+            content_evidence.append(
+                {
+                    "segment_id": segment_id,
+                    "stable_id": str(row["stable_id"]),
+                    "chapter_id": int(row["chapter_id"]),
+                    "chapter_index": chapter_indexes.get(int(row["chapter_id"])),
+                    "seq": int(row["seq"]),
+                    "wav_path": str(row["wav_path"] or ""),
+                    "wav_sha256": wav_sha256,
+                    "evidence_present": check is not None,
+                    "evidence_artifact_sha256": evidence_sha256,
+                    "current_artifact": current_artifact,
+                    "current_policy_verified": (
+                        current_artifact and verdict == QUALITY_VERDICT_PASS
+                    ),
+                    "verdict": verdict,
+                    "reason": metrics.get("reason"),
+                    "transcript": metrics.get("transcript"),
+                    "similarity": metrics.get("similarity"),
+                    "wer": metrics.get("wer"),
+                    "confirmation_decode": metrics.get("confirmation_decode"),
+                    "dual_decode_required": metrics.get("dual_decode_required"),
+                    "dual_decode_passed": metrics.get("dual_decode_passed"),
+                    "decode_evidence": metrics.get("decode_evidence", []),
+                    "failure_codes": failure_codes,
+                    "attempt": int(check["attempt"]) if check is not None else None,
+                    "policy_hash": str(check["policy_hash"]) if check is not None else None,
+                    "policy_version": (
+                        int(check["policy_version"]) if check is not None else None
+                    ),
+                }
+            )
         perceptual_evidence: list[dict[str, Any]] = []
         if self._perceptual_qa_enabled():
             for row in segments:
@@ -1810,6 +2450,7 @@ class BookPipeline:
                     ],
                     "segments": warnings,
                 },
+                "segment_content_evidence": content_evidence,
                 "segment_perceptual_evidence": perceptual_evidence,
                 "chapters": chapter_quality,
             },

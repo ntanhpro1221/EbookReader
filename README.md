@@ -168,9 +168,16 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 ## QA nghe tự động
 
 - Mỗi WAV phải qua kiểm tra tín hiệu và đối chiếu nội dung bằng Whisper; WAV đủ dài còn được UTMOSv2 so với preview đã khóa của đúng giọng đọc trước khi chapter được xuất bản.
+- Mỗi lượt nghe Whisper (direct/repeated, beam/greedy) có evidence riêng gắn với checksum WAV. Lặp câu ngắn chỉ được
+  dùng để nâng một verdict thành đạt; nếu lượt lặp vẫn lỗi, tool giữ transcript và metric direct tốt hơn thay vì che lỗi.
+- Khi hai lượt Whisper xác nhận mismatch, tool tạo lại bằng delivery `clarity`: giữ nguyên nhân vật, giọng, pitch và
+  câu đọc, chỉ giảm độ ngẫu nhiên của sampling. WAV sửa chỉ được duyệt khi cả beam và greedy đều đạt; số vòng được
+  checkpoint nên dừng/chạy lại không bỏ qua xác nhận hoặc sửa vô hạn.
 - UTMOSv2 chỉ là bằng chứng bổ sung về độ tự nhiên, không thay thế Whisper và không tự chứng minh audio đạt. Baseline được khớp theo đúng giọng và mức pitch thực tế. Câu ngắn dưới `1,5` giây được miễn MOS sau khi smoke thật cho thấy model dễ phạt sai câu cảm xúc ngắn; nội dung của chúng vẫn bắt buộc qua Whisper.
 - Segment bị UTMOS yêu cầu review được tạo lại tối đa hai vòng bằng seed mới; mỗi vòng đều phải qua lại Whisper và UTMOS. Nếu vẫn không đạt, chapter bị giữ lại thay vì xuất bản hoặc lặp vô hạn cùng một WAV.
-- `audiobook_quality_report.json` ghi verdict, MOS, baseline, độ lệch, checksum và policy cho từng segment. Một chapter chỉ được tính đạt khi toàn bộ segment có evidence hiện hành, không còn warning chặn và MP3 qua mastering/decode/checksum.
+- `audiobook_quality_report.json` ghi final transcript/CER-WER, từng decode evidence, verdict, MOS, baseline, độ lệch,
+  checksum và policy cho từng segment. Một chapter chỉ được tính đạt khi toàn bộ segment có evidence hiện hành,
+  không còn warning chặn và MP3 qua mastering/decode/checksum.
 - Setup tải checkpoint và hai snapshot model nền theo revision bất biến vào `_internal/runtime`, rồi smoke-load hoàn toàn offline. Worker chất lượng cao kiểm toàn bộ runtime contract trước recovery nên không phân tích/TTS cả sách rồi mới phát hiện thiếu model.
 
 ## Đầu ra

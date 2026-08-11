@@ -113,6 +113,13 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - pronunciation checkpoint theo từng tên, tự sửa `A-der-on → A-đe-ron` mà không lặp request; khi một tên
   không thể sửa, các tên hợp lệ vẫn được khóa và retry chỉ còn đúng ID lỗi với feedback validator;
 - Whisper nhận waveform mono 16 kHz được đọc/resample trong process, không gọi FFmpeg theo từng WAV;
+- evidence của từng decode Whisper được lưu ở stage riêng và không thể làm final ASR gate đạt; repeated-short chỉ
+  promote khi chính lượt lặp `pass`, còn lượt lặp vẫn lỗi không được ghi đè direct transcript/metrics tốt hơn;
+- ASR repair dùng delivery `clarity` với voice/profile/pitch/text khóa nguyên và sampling variance thấp hơn; candidate
+  chỉ đạt khi cả beam lẫn greedy cùng `pass`. Regression bao phủ pass/fail theo cả hai thứ tự, giới hạn repair hữu hạn,
+  và crash giữa hai decode rồi resume vẫn buộc nghe lại đủ cặp mà không sinh vượt budget;
+- final ASR pass/fail cùng danh sách decode evidence, checksum và policy được xuất cho từng segment trong
+  `audiobook_quality_report.json`;
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;
 - pipeline mock không cần model;
 - cache inference VieNeu được thu hồi trong `finally` sau cả attempt thành công lẫn thất bại;

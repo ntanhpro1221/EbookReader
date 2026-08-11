@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -16,6 +17,7 @@ from ebook_reader.audio_io import (
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.tts import (
+    DELIVERY_CLARITY,
     TTSCoordinator,
     VieNeuEngine,
     apply_pitch_variant,
@@ -123,6 +125,98 @@ def test_short_utterance_uses_conservative_sampling() -> None:
     assert sampling["max_new_frames"] == 24
     assert sampling["temperature"] == pytest.approx(0.72)
     assert sampling["top_p"] == pytest.approx(0.90)
+
+
+def test_clarity_delivery_only_lowers_sampling_variance() -> None:
+    row = {
+        "text": "Thiêu chết ả phù thủy tà ác khốn kiếp đó đi!",
+        "speaker": "Đám đông",
+        "emotion": "angry",
+        "intensity": 3,
+        "pace": "normal",
+    }
+
+    primary = vieneu_sampling_for_segment(row)
+    clarity = vieneu_sampling_for_segment(row, delivery_mode=DELIVERY_CLARITY)
+
+    assert primary["temperature"] > clarity["temperature"]
+    assert primary["top_p"] > clarity["top_p"]
+    assert clarity["temperature"] == pytest.approx(0.78)
+    assert clarity["top_p"] == pytest.approx(0.90)
+    assert clarity["top_k"] == primary["top_k"]
+    assert clarity["repetition_penalty"] == primary["repetition_penalty"]
+    assert clarity["max_new_frames"] == primary["max_new_frames"]
+
+    with pytest.raises(ValueError, match="Unsupported TTS delivery mode"):
+        vieneu_sampling_for_segment(row, delivery_mode="unknown")
+
+
+def test_clarity_delivery_preserves_locked_voice_pitch_and_spoken_text(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    profile_id = db.upsert_voice_profile(
+        {
+            "voice_key": "crowd",
+            "engine": "vieneu",
+            "preset_name": "Xuân Vĩnh",
+            "description": "Đám đông",
+            "seed": 1234,
+            "pitch_semitones": -1,
+            "status": "ready",
+        }
+    )
+    coordinator = TTSCoordinator(build_settings(), db, lambda _message: None)
+    row = {
+        "voice_profile_id": profile_id,
+        "stable_id": "clarity_1",
+        "text": "Thiêu chết ả!",
+        "kind": "dialogue",
+        "speaker": "Đám đông",
+        "emotion": "angry",
+        "intensity": 3,
+        "pace": "normal",
+    }
+    generated: list[tuple[dict, dict, dict]] = []
+    pitch_steps: list[int] = []
+
+    def generate_one(spoken_row, profile, _seed, *, sampling):
+        generated.append((dict(spoken_row), dict(profile), dict(sampling)))
+        return np.asarray([0.1, -0.1], dtype=np.float32)
+
+    def apply_pitch(audio, _sample_rate, steps):
+        pitch_steps.append(int(steps))
+        return audio
+
+    monkeypatch.setattr(coordinator.vieneu, "generate_one", generate_one)
+    monkeypatch.setattr(coordinator, "generation_seed", lambda _row, _salt="": 1)
+    monkeypatch.setattr(tts_module, "apply_pitch_variant", apply_pitch)
+    monkeypatch.setattr(
+        tts_module,
+        "atomic_write_wav",
+        lambda *_args, **_kwargs: ("checksum", {"duration": 1.0}),
+    )
+
+    _checksum, primary_metrics, _seed = coordinator.synthesize_atomic(
+        row,
+        tmp_path / "primary.wav",
+    )
+    _checksum, clarity_metrics, _seed = coordinator.synthesize_atomic(
+        row,
+        tmp_path / "clarity.wav",
+        delivery_mode=DELIVERY_CLARITY,
+    )
+
+    assert generated[0][0] == generated[1][0]
+    assert generated[0][1]["id"] == generated[1][1]["id"] == profile_id
+    assert generated[0][2]["temperature"] > generated[1][2]["temperature"]
+    assert generated[0][2]["top_p"] > generated[1][2]["top_p"]
+    assert pitch_steps == [-1, -1]
+    assert primary_metrics["spoken_text_sha256"] == clarity_metrics["spoken_text_sha256"]
+    assert primary_metrics["voice_profile_id"] == clarity_metrics["voice_profile_id"]
+    assert primary_metrics["pitch_semitones"] == clarity_metrics["pitch_semitones"] == -1
+    assert clarity_metrics["tts_delivery_mode"] == DELIVERY_CLARITY
 
 
 def test_short_utterance_repair_halves_a_persisted_generation_ceiling() -> None:
@@ -325,8 +419,17 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
         lambda *_args, **_kwargs: ("checksum", {"duration": 1.0}),
     )
 
-    coordinator.synthesize_atomic(row, tmp_path / "segment.wav")
+    _checksum, primary_metrics, _seed = coordinator.synthesize_atomic(
+        row,
+        tmp_path / "segment.wav",
+    )
     assert release_calls == 1
+    assert primary_metrics["tts_delivery_mode"] == "primary"
+    assert primary_metrics["spoken_text_sha256"] == hashlib.sha256(
+        row["text"].encode("utf-8")
+    ).hexdigest()
+    assert primary_metrics["voice_profile_id"] == profile_id
+    assert primary_metrics["pitch_semitones"] == 1
 
     monkeypatch.setattr(
         tts_module,

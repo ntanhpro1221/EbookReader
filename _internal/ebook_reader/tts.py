@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import hashlib
 import random
 import re
 from pathlib import Path
@@ -17,7 +18,12 @@ from .audio_io import (
     segment_duration_policy,
     vieneu_generation_reached_frame_ceiling,
 )
-from .database import ProjectDB
+from .database import (
+    GENERATION_DELIVERY_CLARITY as DELIVERY_CLARITY,
+    GENERATION_DELIVERY_MODES as DELIVERY_MODES,
+    GENERATION_DELIVERY_PRIMARY as DELIVERY_PRIMARY,
+    ProjectDB,
+)
 from .io_utils import stable_int
 from .models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
 from .resource_manager import trim_process_working_set
@@ -67,6 +73,8 @@ GENERATION_CEILING_METRIC = "generation_ceiling_hit"
 GENERATION_ENDPOINT_ACTIVE_METRIC = "generation_endpoint_active"
 GENERATION_FRAME_CAP_FIELD = "generation_frame_cap"
 DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS = -45.0
+CLARITY_MAX_TEMPERATURE = 0.78
+CLARITY_MAX_TOP_P = 0.90
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
@@ -156,7 +164,11 @@ def vieneu_sampling_for_segment(
     settings: dict[str, Any] | None = None,
     *,
     repair_short_utterance: bool = False,
+    delivery_mode: str = DELIVERY_PRIMARY,
 ) -> dict[str, float | int]:
+    normalized_delivery = str(delivery_mode).strip().casefold()
+    if normalized_delivery not in DELIVERY_MODES:
+        raise ValueError(f"Unsupported TTS delivery mode: {delivery_mode}")
     text = str(_row_value(row, "text", ""))
     emotion = str(_row_value(row, "emotion", "neutral"))
     pace = str(_row_value(row, "pace", "normal"))
@@ -167,6 +179,9 @@ def vieneu_sampling_for_segment(
         base_temperature + PACE_TEMPERATURE_OFFSETS.get(pace, 0.0) + 0.015 * intensity,
     )
     top_p = min(0.98, 0.92 + 0.015 * intensity)
+    if normalized_delivery == DELIVERY_CLARITY:
+        temperature = min(temperature, CLARITY_MAX_TEMPERATURE)
+        top_p = min(top_p, CLARITY_MAX_TOP_P)
     max_new_frames = _max_new_frames(row, settings)
     if is_short_utterance(text):
         temperature = min(temperature, SHORT_UTTERANCE_MAX_TEMPERATURE)
@@ -311,6 +326,13 @@ class TTSCoordinator:
             return self.db.voice_profile_by_key("narrator")
         return self.db.voice_profile(int(row["voice_profile_id"]))
 
+    def locked_voice_provenance(self, row: Any) -> dict[str, int]:
+        profile = self._voice_profile_for_row(row)
+        return {
+            "voice_profile_id": int(profile["id"]),
+            "pitch_semitones": int(profile["pitch_semitones"] or 0),
+        }
+
     def spoken_text(self, row: Any) -> str:
         if self._pronunciation_pattern is None:
             minimum = float(self.settings["analysis"].get("low_confidence_threshold", 0.58))
@@ -383,7 +405,8 @@ class TTSCoordinator:
         seed_salt: str = "",
         *,
         repair_short_utterance: bool = False,
-    ) -> tuple[str, dict[str, float], int]:
+        delivery_mode: str = DELIVERY_PRIMARY,
+    ) -> tuple[str, dict[str, Any], int]:
         try:
             profile = self._voice_profile_for_row(row)
             seed = self.generation_seed(row, seed_salt)
@@ -392,6 +415,7 @@ class TTSCoordinator:
                 spoken_row,
                 self.settings,
                 repair_short_utterance=repair_short_utterance,
+                delivery_mode=delivery_mode,
             )
             audio = self.vieneu.generate_one(
                 spoken_row,
@@ -438,6 +462,15 @@ class TTSCoordinator:
             )
             if pitch_variant_skipped:
                 metrics["pitch_variant_skipped"] = 1.0
+            metrics["tts_delivery_mode"] = str(delivery_mode).strip().casefold()
+            metrics["spoken_text_sha256"] = hashlib.sha256(
+                str(spoken_row["text"]).encode("utf-8")
+            ).hexdigest()
+            metrics["voice_profile_id"] = int(profile["id"])
+            metrics["pitch_semitones"] = pitch_steps
+            metrics["effective_pitch_semitones"] = (
+                0 if pitch_variant_skipped else pitch_steps
+            )
             if generation_ceiling_hit:
                 endpoint_floor_dbfs = float(
                     self.settings.get("audio", {}).get(
