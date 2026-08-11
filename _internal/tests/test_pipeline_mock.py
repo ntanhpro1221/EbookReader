@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,6 +23,7 @@ from ebook_reader.database import (
     SEGMENT_ASR_DECODE_QUALITY_STAGE,
     SEGMENT_AUDIO_QUALITY_STAGE,
 )
+from ebook_reader.io_utils import sha256_file
 from ebook_reader.models import ResourceLevel
 from ebook_reader.pipeline import BookPipeline, CriticalResourceStop, unresolved_asr_is_fatal
 from ebook_reader.project import create_or_open_project
@@ -54,6 +56,11 @@ class FakeTTS:
         self.unload_calls += 1
 
     def generation_seed(self, row, seed_salt=""):
+        if str(seed_salt).startswith("asr_clarity_candidate_"):
+            return 1_000 + int.from_bytes(
+                hashlib.sha256(str(seed_salt).encode("utf-8")).digest()[:4],
+                "big",
+            )
         return 1
 
     def spoken_text(self, row):
@@ -71,7 +78,11 @@ class FakeTTS:
         self.synthesize_calls += 1
         self.delivery_modes.append(str(delivery_mode))
         self.seed_salts.append(str(seed_salt))
-        audio = np.sin(np.linspace(0, 50, 96000, dtype=np.float32)) * 0.12
+        seed = self.generation_seed(row, seed_salt)
+        phase = float(seed % 997) / 997.0
+        audio = np.sin(
+            np.linspace(phase, 50 + phase, 96000, dtype=np.float32)
+        ) * 0.12
         checksum, metrics = atomic_write_wav(
             output,
             audio,
@@ -80,7 +91,22 @@ class FakeTTS:
             self.settings,
             segment=row,
         )
-        return checksum, metrics, 1
+        profile = self.db.voice_profile(int(row["voice_profile_id"]))
+        pitch_semitones = int(profile["pitch_semitones"] or 0)
+        metrics.update(
+            {
+                "tts_delivery_mode": str(delivery_mode).strip().casefold(),
+                "spoken_text_sha256": hashlib.sha256(
+                    str(row["text"]).encode("utf-8")
+                ).hexdigest(),
+                "voice_profile_id": int(profile["id"]),
+                "pitch_semitones": pitch_semitones,
+                "effective_pitch_semitones": pitch_semitones,
+                "pitch_variant_skipped": 0.0,
+                "pitch_variant_mixed": 0.0,
+            }
+        )
+        return checksum, metrics, seed
 
 
 class FakeNotifier:
@@ -100,10 +126,20 @@ class ScriptedShortTTS:
         self.calls: list[dict[str, object]] = []
         self.generation_seed_salts: list[str] = []
         self.unload_calls = 0
+        self.settings = None
+        self.db = None
+
+    def bind(self, settings, db):
+        self.settings = settings
+        self.db = db
+        return self
+
+    def _seed(self, seed_salt: str) -> int:
+        return len(self.calls) + len(seed_salt) + 1
 
     def generation_seed(self, _row, seed_salt=""):
         self.generation_seed_salts.append(str(seed_salt))
-        return len(self.calls) + len(seed_salt) + 1
+        return self._seed(str(seed_salt))
 
     def spoken_text(self, row):
         return str(row["text"])
@@ -111,12 +147,13 @@ class ScriptedShortTTS:
     def synthesize_atomic(
         self,
         row,
-        _output,
+        output,
         seed_salt="",
         *,
         repair_short_utterance=False,
         delivery_mode="primary",
     ):
+        seed = self._seed(str(seed_salt))
         self.calls.append(
             {
                 "seed_salt": seed_salt,
@@ -128,7 +165,37 @@ class ScriptedShortTTS:
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, BaseException):
             raise outcome
-        return "a" * 64, dict(outcome), len(self.calls)
+        if self.settings is None or self.db is None:
+            return "a" * 64, dict(outcome), seed
+        duration = float(outcome.get("duration", 1.0))
+        sample_rate = int(self.settings["tts"]["sample_rate"])
+        sample_count = max(1, round(duration * sample_rate))
+        audio = np.sin(np.linspace(0, 50, sample_count, dtype=np.float32)) * 0.12
+        checksum, metrics = atomic_write_wav(
+            output,
+            audio,
+            sample_rate,
+            str(row["text"]),
+            self.settings,
+            segment=row,
+        )
+        metrics.update(dict(outcome))
+        profile = self.db.voice_profile(int(row["voice_profile_id"]))
+        pitch_semitones = int(profile["pitch_semitones"] or 0)
+        metrics.update(
+            {
+                "tts_delivery_mode": str(delivery_mode).strip().casefold(),
+                "spoken_text_sha256": hashlib.sha256(
+                    str(row["text"]).encode("utf-8")
+                ).hexdigest(),
+                "voice_profile_id": int(profile["id"]),
+                "pitch_semitones": pitch_semitones,
+                "effective_pitch_semitones": pitch_semitones,
+                "pitch_variant_skipped": 0.0,
+                "pitch_variant_mixed": 0.0,
+            }
+        )
+        return checksum, metrics, seed
 
     def unload_all(self):
         self.unload_calls += 1
@@ -177,6 +244,26 @@ class PassingShortVerifier:
         self.unload_calls += 1
 
 
+def _assign_locked_test_narrator(db) -> int:
+    profile_id = db.upsert_voice_profile(
+        {
+            "voice_key": "narrator",
+            "engine": "vieneu",
+            "preset_name": "Xuân Vĩnh",
+            "description": "Locked test narrator",
+            "seed": 1,
+            "pitch_semitones": 0,
+            "status": "ready",
+        }
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET voice_profile_id=?",
+            (profile_id,),
+        )
+    return profile_id
+
+
 def _short_tts_pipeline(tmp_path: Path, *, repair_rounds: int = 2):
     source = tmp_path / "001.txt"
     source.write_text("“Điên rồi!”", encoding="utf-8")
@@ -202,16 +289,60 @@ def _short_tts_pipeline(tmp_path: Path, *, repair_rounds: int = 2):
     )
     pipeline._recover()
     pipeline._ensure_segments()
+    _assign_locked_test_narrator(db)
     chapter = db.list_chapters()[0]
     row = db.list_segments(chapter_id=int(chapter["id"]))[0]
     pipeline._resource_gate = lambda *_args, **_kwargs: None
     pipeline._progress = lambda *_args, **_kwargs: None
-    pipeline._record_segment_audio_pass = lambda *_args, **_kwargs: None
-    pipeline._record_segment_audio_gate = lambda *_args, **_kwargs: None
-    pipeline._record_segment_asr_decode_evidence = (
-        lambda *_args, **_kwargs: {"quality_check_id": 1}
-    )
     return pipeline, chapter, row
+
+
+def _checkpoint_short_ceiling_incumbent(
+    pipeline: BookPipeline,
+    row,
+    *,
+    duration: float = 1.92,
+) -> None:
+    output = pipeline._chunk_path(row)
+    sample_rate = int(pipeline.settings["tts"]["sample_rate"])
+    audio = np.sin(
+        np.linspace(0, 50, round(duration * sample_rate), dtype=np.float32)
+    ) * 0.12
+    checksum, metrics = atomic_write_wav(
+        output,
+        audio,
+        sample_rate,
+        str(row["text"]),
+        pipeline.settings,
+        segment=row,
+    )
+    profile = pipeline.db.voice_profile(int(row["voice_profile_id"]))
+    pitch_semitones = int(profile["pitch_semitones"] or 0)
+    metrics.update(
+        {
+            "generation_ceiling_hit": 1.0,
+            "generation_endpoint_active": 1.0,
+            "trailing_rms": 0.05,
+            "tts_delivery_mode": "primary",
+            "spoken_text_sha256": hashlib.sha256(
+                str(row["text"]).encode("utf-8")
+            ).hexdigest(),
+            "voice_profile_id": int(profile["id"]),
+            "pitch_semitones": pitch_semitones,
+            "effective_pitch_semitones": pitch_semitones,
+            "pitch_variant_skipped": 0.0,
+            "pitch_variant_mixed": 0.0,
+        }
+    )
+    pipeline.db.mark_signal_passed(
+        int(row["id"]),
+        wav_path=output,
+        wav_sha256=checksum,
+        duration=float(metrics["duration"]),
+        signal=metrics,
+        generation_seed=1,
+        warning_codes=["TTS_GENERATION_CEILING_REACHED"],
+    )
 
 
 def _asr_signal_pipeline(tmp_path: Path, *, repair_rounds: int):
@@ -244,6 +375,7 @@ def _asr_signal_pipeline(tmp_path: Path, *, repair_rounds: int):
     pipeline.tts = FakeTTS(settings, db)
     pipeline._recover()
     pipeline._ensure_segments()
+    _assign_locked_test_narrator(db)
     chapter = db.list_chapters()[0]
     row = db.list_segments(chapter_id=int(chapter["id"]))[0]
     wav = pipeline._chunk_path(row)
@@ -755,13 +887,17 @@ def test_clarity_final_gate_preserves_anchor_failure_from_either_decode(
     assert final_metrics["reason"] == "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
     assert final_metrics["locked_name_anchor_metrics"]["passed"] is False
     assert final_metrics["decode_failure_reasons"] == [
-        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
-        "ASR_MISMATCH",
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
     ]
-    assert [
-        item["locked_name_anchor_metrics"]["passed"]
-        for item in final_metrics["decode_evidence"]
-    ] == [False, True]
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert len(attempts) == 1
+    assert attempts[0]["beam_result"]["reason"] == "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+    assert attempts[0]["greedy_result"]["reason"] == "ASR_MISMATCH"
+    assert attempts[0]["beam_result"]["locked_name_anchor_metrics"]["passed"] is False
+    assert attempts[0]["greedy_result"]["locked_name_anchor_metrics"]["passed"] is True
 
 
 def test_clarity_endpoint_failure_does_not_hide_beam_anchor_failure(
@@ -808,19 +944,24 @@ def test_clarity_endpoint_failure_does_not_hide_beam_anchor_failure(
     assert final_check is not None
     assert final_check["verdict"] == "fail"
     assert json.loads(str(final_check["failure_codes_json"])) == [
-        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
-        "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING",
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
     ]
     metrics = json.loads(str(final_check["metrics_json"]))
-    assert metrics["reason"] == "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING"
+    assert metrics["reason"] == "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
     assert metrics["locked_name_anchor_metrics"]["passed"] is False
-    assert metrics["decode_failure_reasons"] == [
-        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
-        "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING",
-    ]
-    assert metrics["dual_decode_required"] is True
+    assert metrics["decode_failure_reasons"] == ["ASR_LOCKED_NAME_ANCHOR_MISMATCH"]
+    assert metrics["dual_decode_required"] is False
     assert metrics["dual_decode_passed"] is False
-    assert metrics["confirmation_verdicts"] == ["mismatch", "pass"]
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert len(attempts) == 1
+    assert attempts[0]["state"] == "dual_failed"
+    assert attempts[0]["signal"]["generation_endpoint_active"] == 1.0
+    assert "blocking_signal=generation_endpoint_active" in attempts[0]["failure_reason"]
+    assert attempts[0]["beam_result"]["reason"] == "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+    assert attempts[0]["greedy_result"]["verdict"] == ASR_PASS
 
 
 @pytest.mark.parametrize(
@@ -839,6 +980,9 @@ def test_clarity_repair_requires_two_independent_asr_passes(
     expected_gate: str,
 ) -> None:
     pipeline, chapter, row, expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
     scripted_results = [
         _asr_result(ASR_MISMATCH, "sai ban đầu", similarity=0.1, wer=1.0),
         _asr_result(ASR_MISMATCH, "sai xác nhận", similarity=0.1, wer=1.0),
@@ -871,7 +1015,9 @@ def test_clarity_repair_requires_two_independent_asr_passes(
     fresh = pipeline.db.get_segment(int(row["id"]))
     assert fresh["status"] == expected_status
     assert pipeline.tts.delivery_modes == ["clarity"]
-    assert pipeline.tts.seed_salts == ["asr_clarity_repair_0_0"]
+    assert pipeline.tts.seed_salts == ["asr_clarity_candidate_0_0"]
+    assert incumbent_path.read_bytes() == incumbent_bytes
+    assert sha256_file(incumbent_path) == incumbent_sha256
     final_check = pipeline.db.latest_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
@@ -880,37 +1026,31 @@ def test_clarity_repair_requires_two_independent_asr_passes(
     assert final_check is not None
     assert final_check["verdict"] == expected_gate
     metrics = json.loads(str(final_check["metrics_json"]))
-    assert metrics["dual_decode_required"] is True
-    assert metrics["dual_decode_passed"] is (expected_gate == "pass")
-    assert len(metrics["decode_evidence"]) == 2
-    assert {item["decode_mode"] for item in metrics["decode_evidence"]} == {
-        "beam5",
-        "greedy",
-    }
-    assert {item["delivery_mode"] for item in metrics["decode_evidence"]} == {
-        "clarity"
-    }
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert len(attempts) == 1
+    assert attempts[0]["beam_result"]["verdict"] == clarity_beam
+    assert attempts[0]["greedy_result"]["verdict"] == clarity_greedy
+    if expected_gate == "pass":
+        assert metrics["dual_decode_required"] is True
+        assert metrics["dual_decode_passed"] is True
+        assert attempts[0]["state"] == "promoted"
+        assert Path(str(fresh["wav_path"])) == Path(str(attempts[0]["wav_path"]))
+        assert str(fresh["wav_sha256"]) != incumbent_sha256
+    else:
+        assert metrics["dual_decode_required"] is False
+        assert metrics["dual_decode_passed"] is False
+        assert attempts[0]["state"] == "dual_failed"
+        assert Path(str(fresh["wav_path"])) == Path(str(row["wav_path"]))
+        assert str(fresh["wav_sha256"]) == incumbent_sha256
 
 
 def test_resume_of_clarity_candidate_still_requires_both_decodes(
     tmp_path: Path,
 ) -> None:
     pipeline, chapter, row, expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
-    signal = json.loads(str(row["signal_json"]))
-    signal.update(
-        {
-            "tts_delivery_mode": "clarity",
-            "asr_clarity_repair_round": 0,
-        }
-    )
-    pipeline.db.mark_signal_passed(
-        int(row["id"]),
-        wav_path=Path(str(row["wav_path"])),
-        wav_sha256=str(row["wav_sha256"]),
-        duration=float(row["wav_duration"]),
-        signal=signal,
-        generation_seed=int(row["generation_seed"] or 1),
-    )
 
     class CrashAfterBeamVerifier:
         calls = 0
@@ -923,16 +1063,22 @@ def test_resume_of_clarity_candidate_still_requires_both_decodes(
 
         def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
             self.calls += 1
-            if self.calls == 1:
+            if self.calls <= 2:
+                return _asr_result(ASR_MISMATCH, "primary sai", similarity=0.1, wer=1.0)
+            if self.calls == 3:
                 return _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0)
             raise RuntimeError("simulated crash between clarity decodes")
 
     with pytest.raises(RuntimeError, match="simulated crash"):
         pipeline._verify_chapter_audio(chapter, CrashAfterBeamVerifier())
     assert pipeline.db.get_segment(int(row["id"]))["status"] == "signal_passed"
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["beam_recorded"]
 
     scripted_results = [
-        _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0),
         _asr_result(ASR_MISMATCH, "greedy sai", similarity=0.1, wer=1.0),
     ]
 
@@ -950,7 +1096,14 @@ def test_resume_of_clarity_candidate_still_requires_both_decodes(
 
     fresh = pipeline.db.get_segment(int(row["id"]))
     assert fresh["status"] == "failed"
-    assert pipeline.tts.synthesize_calls == 0
+    assert pipeline.tts.synthesize_calls == 1
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert attempts[0]["state"] == "dual_failed"
+    assert attempts[0]["beam_result"]["verdict"] == ASR_PASS
+    assert attempts[0]["greedy_result"]["verdict"] == ASR_MISMATCH
     final_check = pipeline.db.latest_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
@@ -958,9 +1111,167 @@ def test_resume_of_clarity_candidate_still_requires_both_decodes(
     )
     assert final_check is not None
     metrics = json.loads(str(final_check["metrics_json"]))
-    assert metrics["dual_decode_required"] is True
+    assert metrics["dual_decode_required"] is False
     assert metrics["dual_decode_passed"] is False
     assert len(metrics["decode_evidence"]) == 2
+
+
+def test_tampered_candidate_is_invalidated_before_next_round_is_promoted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline, chapter, row, expected = _asr_signal_pipeline(tmp_path, repair_rounds=2)
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
+
+    class TriggerVerifier:
+        calls = 0
+
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            self.calls += 1
+            if self.calls <= 2:
+                return _asr_result(ASR_MISMATCH, "primary sai", similarity=0.1, wer=1.0)
+            return _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0)
+
+    original_record = pipeline._record_segment_asr_decode_evidence
+
+    def crash_before_candidate_decode_checkpoint(item, *args, **kwargs):
+        if item.get("segment_candidate_id") is not None:
+            raise RuntimeError("simulated crash before candidate decode checkpoint")
+        return original_record(item, *args, **kwargs)
+
+    monkeypatch.setattr(
+        pipeline,
+        "_record_segment_asr_decode_evidence",
+        crash_before_candidate_decode_checkpoint,
+    )
+    with pytest.raises(RuntimeError, match="before candidate decode checkpoint"):
+        pipeline._verify_chapter_audio(chapter, TriggerVerifier())
+
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["signal_passed"]
+    first_candidate_path = Path(str(attempts[0]["wav_path"]))
+    first_candidate_path.write_bytes(first_candidate_path.read_bytes() + b"tampered")
+
+    monkeypatch.setattr(
+        pipeline,
+        "_record_segment_asr_decode_evidence",
+        original_record,
+    )
+
+    class PassingVerifier:
+        calls = 0
+
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            self.calls += 1
+            return _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0)
+
+    verifier = PassingVerifier()
+    pipeline._verify_chapter_audio(chapter, verifier)
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["invalid", "promoted"]
+    assert verifier.calls == 2
+    assert pipeline.tts.seed_salts == [
+        "asr_clarity_candidate_0_0",
+        "asr_clarity_candidate_1_0",
+    ]
+    assert Path(str(fresh["wav_path"])) == Path(str(attempts[1]["wav_path"]))
+    assert incumbent_path.read_bytes() == incumbent_bytes
+    assert sha256_file(incumbent_path) == incumbent_sha256
+
+
+def test_dual_passed_candidate_resumes_at_atomic_promotion_without_redecode(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline, chapter, row, expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
+    scripted_results = [
+        _asr_result(ASR_MISMATCH, "primary sai", similarity=0.1, wer=1.0),
+        _asr_result(ASR_MISMATCH, "confirmation sai", similarity=0.1, wer=1.0),
+        _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0),
+        _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0),
+    ]
+
+    class ScriptedVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    original_promote = pipeline.db.promote_segment_candidate
+    monkeypatch.setattr(
+        pipeline.db,
+        "promote_segment_candidate",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("simulated crash before atomic promotion")
+        ),
+    )
+    with pytest.raises(RuntimeError, match="before atomic promotion"):
+        pipeline._verify_chapter_audio(chapter, ScriptedVerifier())
+
+    crashed = pipeline.db.get_segment(int(row["id"]))
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["dual_passed"]
+    assert crashed["wav_path"] == row["wav_path"]
+    assert crashed["wav_sha256"] == row["wav_sha256"]
+    assert incumbent_path.read_bytes() == incumbent_bytes
+
+    monkeypatch.setattr(pipeline.db, "promote_segment_candidate", original_promote)
+
+    class NoDecodeVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            raise AssertionError("promotion resume must not inspect ASR capability")
+
+        def verify(self, *_args, **_kwargs):
+            raise AssertionError("promotion resume must not rerun Whisper")
+
+    calls_before_resume = pipeline.tts.synthesize_calls
+    pipeline._verify_chapter_audio(chapter, NoDecodeVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert attempts[0]["state"] == "promoted"
+    assert Path(str(fresh["wav_path"])) == Path(str(attempts[0]["wav_path"]))
+    assert str(fresh["wav_sha256"]) != incumbent_sha256
+    assert pipeline.tts.synthesize_calls == calls_before_resume
+    assert incumbent_path.read_bytes() == incumbent_bytes
 
 
 def test_recheckpoint_preserves_clarity_provenance_after_partial_asr_commit(
@@ -1258,7 +1569,7 @@ def test_high_quality_ceiling_waveform_is_checkpointed_for_whisper(tmp_path: Pat
             }
         ]
     )
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
 
     pipeline._process_single_segment(row, chapter)
 
@@ -1314,23 +1625,10 @@ def test_active_ceiling_endpoint_repairs_after_any_whisper_verdict_and_clears_ca
     initial_verdict: str,
 ) -> None:
     pipeline, chapter, row = _short_tts_pipeline(tmp_path)
-    initial = pipeline._chunk_path(row)
-    pipeline.db.mark_signal_passed(
-        int(row["id"]),
-        wav_path=initial,
-        wav_sha256="b" * 64,
-        duration=1.92,
-        signal={
-            "duration": 1.92,
-            "generation_ceiling_hit": 1.0,
-            "generation_endpoint_active": 1.0,
-            "trailing_rms": 0.05,
-        },
-    )
-    pipeline.db.set_segment_warning_code(int(row["id"]), "TTS_GENERATION_CEILING_REACHED")
+    _checkpoint_short_ceiling_incumbent(pipeline, row)
     scripted = ScriptedShortTTS([{"duration": 0.88, "trailing_rms": 0.0}])
     verifier = PassingShortVerifier(initial_verdict)
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
 
     pipeline._verify_chapter_audio(chapter, verifier)
 
@@ -1347,24 +1645,16 @@ def test_active_ceiling_endpoint_repairs_are_finite_and_remain_blocking(
     tmp_path: Path,
 ) -> None:
     pipeline, chapter, row = _short_tts_pipeline(tmp_path, repair_rounds=2)
-    initial = pipeline._chunk_path(row)
     endpoint_metrics = {
         "duration": 0.96,
         "generation_ceiling_hit": 1.0,
         "generation_endpoint_active": 1.0,
         "trailing_rms": 0.05,
     }
-    pipeline.db.mark_signal_passed(
-        int(row["id"]),
-        wav_path=initial,
-        wav_sha256="c" * 64,
-        duration=1.92,
-        signal={**endpoint_metrics, "duration": 1.92},
-    )
-    pipeline.db.set_segment_warning_code(int(row["id"]), "TTS_GENERATION_CEILING_REACHED")
+    _checkpoint_short_ceiling_incumbent(pipeline, row)
     scripted = ScriptedShortTTS([endpoint_metrics, endpoint_metrics])
     verifier = PassingShortVerifier()
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
 
     pipeline._verify_chapter_audio(chapter, verifier)
 
@@ -1375,7 +1665,16 @@ def test_active_ceiling_endpoint_repairs_are_finite_and_remain_blocking(
     assert [call["delivery_mode"] for call in scripted.calls] == ["clarity", "clarity"]
     assert updated["status"] == "failed"
     assert updated["generation_frame_cap"] == 12
-    assert "Active endpoint remained" in str(updated["error"])
+    assert updated["error"] == "ASR mismatch remained after all immutable repair candidates"
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["dual_failed", "dual_failed"]
+    assert all(
+        attempt["signal"]["generation_endpoint_active"] == 1.0
+        for attempt in attempts
+    )
 
 
 def test_short_tts_failure_does_not_attempt_semantic_split(
@@ -1386,7 +1685,7 @@ def test_short_tts_failure_does_not_attempt_semantic_split(
     scripted = ScriptedShortTTS(
         [AudioQualityError("generation failed") for _attempt in range(4)]
     )
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
     pipeline._synthesize_split = lambda *_args, **_kwargs: pytest.fail(
         "short utterance must not be split"
@@ -1417,7 +1716,7 @@ def test_non_short_tts_failure_keeps_existing_split_recovery(
     def fake_split(item, _output, **_kwargs):
         split_calls.append(str(item["stable_id"]))
 
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     pipeline._synthesize_split = fake_split
     monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(
@@ -1453,7 +1752,7 @@ def test_clarity_split_fallback_uses_distinct_round_seed_salts(
         split_prefixes.append(str(kwargs["seed_salt_prefix"]))
         return []
 
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     pipeline._synthesize_split = fake_split
     monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(
@@ -1520,7 +1819,7 @@ def test_split_fallback_aggregates_later_part_pitch_and_ceiling_failures(
             },
         ]
 
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     pipeline._synthesize_split = fake_split
     monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
     monkeypatch.setattr(
@@ -1558,7 +1857,7 @@ def test_failed_clarity_tts_records_final_content_failure_for_retained_wav(
             for _attempt in range(int(pipeline.settings["tts"]["max_retries"]))
         ]
     )
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
 
     class MismatchVerifier:
@@ -1589,8 +1888,14 @@ def test_failed_clarity_tts_records_final_content_failure_for_retained_wav(
     assert final_check["verdict"] == "fail"
     assert final_check["artifact_sha256"] == row["wav_sha256"]
     metrics = json.loads(str(final_check["metrics_json"]))
-    assert metrics["reason"] == "ASR_CLARITY_TTS_REGENERATION_FAILED"
-    assert "clarity inference failed" in metrics["tts_error"]
+    assert metrics["reason"] == "ASR_MISMATCH"
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert len(attempts) == 1
+    assert attempts[0]["state"] == "tts_failed"
+    assert "clarity inference failed" in attempts[0]["failure_reason"]
 
     pipeline._export_reports(incremental=True)
     report = json.loads(
@@ -1602,13 +1907,73 @@ def test_failed_clarity_tts_records_final_content_failure_for_retained_wav(
     assert evidence["verdict"] == "fail"
     assert evidence["current_artifact"] is True
     assert evidence["current_policy_verified"] is False
-    assert evidence["failure_codes"] == [
-        "ASR_MISMATCH",
-        "ASR_CLARITY_TTS_REGENERATION_FAILED",
+    assert evidence["failure_codes"] == ["ASR_MISMATCH"]
+    candidate_evidence = report["segment_repair_candidates"]
+    assert len(candidate_evidence) == 1
+    assert candidate_evidence[0]["current_policy"] is True
+    assert candidate_evidence[0]["attempts"][0]["state"] == "tts_failed"
+    assert "clarity inference failed" in candidate_evidence[0]["attempts"][0][
+        "failure_reason"
     ]
 
 
-def test_crash_before_final_asr_status_keeps_retained_wav_budget_exhausted(
+def test_report_marks_prior_policy_candidate_history_as_stale(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+
+    class MismatchVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return _asr_result(
+                ASR_MISMATCH,
+                "sai nội dung",
+                similarity=0.1,
+                wer=1.0,
+            )
+
+    pipeline._verify_chapter_audio(chapter, MismatchVerifier())
+    old_policy_hash = pipeline.quality_policy_hash
+
+    new_settings = json.loads(json.dumps(pipeline.settings))
+    new_settings["asr"]["min_similarity"] = min(
+        0.99,
+        float(new_settings["asr"]["min_similarity"]) + 0.01,
+    )
+    refreshed = BookPipeline(
+        paths=pipeline.paths,
+        db=pipeline.db,
+        settings=new_settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    refreshed.tts = FakeTTS(new_settings, pipeline.db)
+    refreshed._recover()
+    assert refreshed.quality_policy_hash != old_policy_hash
+    refreshed._export_reports(incremental=True)
+
+    report = json.loads(
+        (pipeline.paths.reports / "audiobook_quality_report.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    candidate_evidence = report["segment_repair_candidates"]
+    assert len(candidate_evidence) == 1
+    assert candidate_evidence[0]["policy_hash"] == old_policy_hash
+    assert candidate_evidence[0]["current_policy"] is False
+    assert candidate_evidence[0]["attempts"][0]["state"] == "dual_failed"
+    content_evidence = report["segment_content_evidence"][0]
+    assert content_evidence["evidence_present"] is False
+    assert content_evidence["current_policy_verified"] is False
+
+
+def test_crash_before_atomic_exhaustion_keeps_candidate_budget_exhausted(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1619,7 +1984,7 @@ def test_crash_before_final_asr_status_keeps_retained_wav_budget_exhausted(
             for _attempt in range(int(pipeline.settings["tts"]["max_retries"]))
         ]
     )
-    pipeline.tts = scripted
+    pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     monkeypatch.setattr(pipeline_module.time, "sleep", lambda _seconds: None)
 
     class MismatchVerifier:
@@ -1637,18 +2002,47 @@ def test_crash_before_final_asr_status_keeps_retained_wav_budget_exhausted(
                 wer=1.0,
             )
 
-    original_mark_asr_result = pipeline.db.mark_asr_result
+    original_finalize = pipeline.db.finalize_segment_candidate_exhaustion
     monkeypatch.setattr(
         pipeline.db,
-        "mark_asr_result",
+        "finalize_segment_candidate_exhaustion",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            RuntimeError("simulated crash after final gate")
+            RuntimeError("simulated crash before atomic exhaustion")
         ),
     )
-    with pytest.raises(RuntimeError, match="simulated crash after final gate"):
+    with pytest.raises(RuntimeError, match="simulated crash before atomic exhaustion"):
         pipeline._verify_chapter_audio(chapter, MismatchVerifier())
 
     crashed = pipeline.db.get_segment(int(row["id"]))
+    trigger_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert trigger_check is not None
+    assert trigger_check["verdict"] == "repair"
+    assert trigger_check["artifact_sha256"] == row["wav_sha256"]
+    assert crashed["status"] == "signal_passed"
+    assert crashed["wav_path"] == row["wav_path"]
+    assert crashed["wav_sha256"] == row["wav_sha256"]
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["tts_failed"]
+    calls_before_resume = len(scripted.calls)
+
+    monkeypatch.setattr(
+        pipeline.db,
+        "finalize_segment_candidate_exhaustion",
+        original_finalize,
+    )
+    pipeline._verify_chapter_audio(chapter, MismatchVerifier())
+
+    assert len(scripted.calls) == calls_before_resume
+    resumed = pipeline.db.get_segment(int(row["id"]))
+    assert resumed["status"] == "failed"
+    assert resumed["wav_path"] == row["wav_path"]
     final_check = pipeline.db.latest_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
@@ -1657,20 +2051,6 @@ def test_crash_before_final_asr_status_keeps_retained_wav_budget_exhausted(
     assert final_check is not None
     assert final_check["verdict"] == "fail"
     assert final_check["artifact_sha256"] == row["wav_sha256"]
-    assert crashed["status"] == "failed"
-    assert crashed["generation_delivery_mode"] == "clarity"
-    assert crashed["generation_repair_round"] == 0
-    calls_before_resume = len(scripted.calls)
-
-    monkeypatch.setattr(pipeline.db, "mark_asr_result", original_mark_asr_result)
-    pipeline._verify_chapter_audio = lambda *_args, **_kwargs: (_ for _ in ()).throw(
-        RuntimeError("stop after synthesis stage")
-    )
-    with pytest.raises(RuntimeError, match="stop after synthesis stage"):
-        pipeline._process_chapter(chapter, SimpleNamespace(unload=lambda: None))
-
-    assert len(scripted.calls) == calls_before_resume
-    assert pipeline.db.get_segment(int(row["id"]))["status"] == "failed"
 
 
 def test_report_treats_previous_policy_content_evidence_as_missing(
@@ -1867,7 +2247,10 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
         path_key = str(wav_path)
         verify_calls_by_path[path_key] = verify_calls_by_path.get(path_key, 0) + 1
         verified_texts.append(expected)
-        passed = verify_calls_by_path[path_key] > 2
+        passed = (
+            "candidates" in Path(wav_path).parts
+            or verify_calls_by_path[path_key] > 2
+        )
         return {
             "passed": passed,
             "transcript": expected if passed else "sai nội dung",
@@ -1899,7 +2282,9 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert db.list_chapters()[0]["status"] == "completed"
     assert db.casting_is_finalized() is True
     segments = db.list_segments()
-    assert int(segments[0]["generation_seed"]) == 1
+    assert int(segments[0]["generation_seed"]) != 1
+    assert segments[0]["generation_delivery_mode"] == "clarity"
+    assert "candidates" in Path(str(segments[0]["wav_path"])).parts
     assert segments[0]["kind"] == "narration"
     assert segments[0]["text"] == "Rầm! Cánh cửa mở ra."
     assert segments[0]["status"] in {"verified", "warning"}
@@ -1913,7 +2298,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert any(label.startswith("Chuẩn bị và chia văn bản") for label in progress_labels)
     assert any(label.startswith("Tạo audio chapter") for label in progress_labels)
     assert any(label.startswith("Kiểm tra phát âm chapter") for label in progress_labels)
-    assert any(label.startswith("Sửa audio chapter") for label in progress_labels)
+    assert any(label.startswith("Tạo candidate clarity chapter") for label in progress_labels)
     assert any(label.startswith("Ghép và kiểm tra MP3 chapter") for label in progress_labels)
     assert pronunciation_passes == 1
     quality_report = json.loads(
@@ -1924,6 +2309,14 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     assert all(item["evidence_present"] for item in content_evidence)
     assert all(item["current_policy_verified"] for item in content_evidence)
     assert all(item["decode_evidence"] for item in content_evidence)
+    repair_evidence = quality_report["segment_repair_candidates"]
+    assert len(repair_evidence) == len(segments)
+    assert all(item["current_policy"] for item in repair_evidence)
+    assert all(item["promoted"] for item in repair_evidence)
+    assert all(
+        item["attempts"][0]["state"] == "promoted"
+        for item in repair_evidence
+    )
 
     # A full resume/reopen pass must preserve locked voice identities and skip valid output.
     resumed = BookPipeline(
@@ -1942,6 +2335,7 @@ def test_mock_pipeline_completes_without_interactive_prompt(tmp_path: Path, monk
     # A legacy verified/warning WAV has no policy-bound segment QA evidence. Resume must
     # reuse the valid waveform, rerun ASR, and avoid paying for TTS generation again.
     with db.connect() as conn:
+        conn.execute("DELETE FROM segment_candidates")
         conn.execute(
             "DELETE FROM quality_checks WHERE scope=?",
             (QUALITY_SCOPE_SEGMENT,),
