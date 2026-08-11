@@ -48,6 +48,10 @@ ANALYSIS_OUTPUT_MAX_TOKENS = 6144
 ANALYSIS_REQUEST_MAX_SECONDS = 420.0
 ANALYSIS_STREAM_IDLE_SECONDS = 90.0
 ANALYSIS_ACTIVITY_SECONDS = 60.0
+SEMANTIC_NOTE_MIN_LETTERS = 4
+SEMANTIC_DOMINANCE_MIN_SEGMENTS = 8
+SEMANTIC_DOMINANCE_RATIO = 0.75
+SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS = 3
 MAX_PRONUNCIATIONS_PER_BATCH = 32
 NAME_PRONUNCIATION_BATCH_SIZE = 20
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
@@ -84,6 +88,35 @@ GENERIC_SPEAKER_TRAITS = {
 GENERIC_CHILD_LABELS = {"trẻ em", "đứa bé", "đứa trẻ", "trẻ nhỏ"}
 DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘"})
 DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’"})
+NEGATED_DISTRESS_PATTERN = re.compile(
+    r"\b(?:không|chẳng|chưa)\s+(?:(?:còn|hề)\s+)?(?:sợ|lo|buồn|đau)\b"
+    r"|\bhết\s+(?:sợ|lo|buồn|đau)\b",
+    flags=re.IGNORECASE,
+)
+HAPPY_EVIDENCE_PATTERN = re.compile(
+    r"\b(?:vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|hạnh\s+phúc|hân\s+hoan|"
+    r"nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
+    flags=re.IGNORECASE,
+)
+HAPPY_CONTRADICTION_PATTERNS: dict[str, re.Pattern[str]] = {
+    "afraid": re.compile(
+        r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
+        r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
+        r"thất\s+thần|bàng\s+hoàng|hỗn\s+loạn)\b",
+        flags=re.IGNORECASE,
+    ),
+    "angry": re.compile(
+        r"\b(?:độc\s+ác|khốn\s+kiếp|đáng\s+chết|nguyền\s+rủa|gào\s+thét|gào|quát|"
+        r"chửi\s+rủa|thiêu\s+chết|thiêu(?:\s+\S+){0,5}\s+đi|"
+        r"giết(?:\s+\S+){0,5}\s+đi|tan\s+nát)\b",
+        flags=re.IGNORECASE,
+    ),
+    "distressed": re.compile(
+        r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết|"
+        r"choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
+        flags=re.IGNORECASE,
+    ),
+}
 GENERIC_SPEECH_ATTRIBUTION_PATTERN = re.compile(
     r"\b(?:nói|hỏi|đáp|trả lời|lên tiếng|thì thầm|quát|kêu|thốt lên|gào|hét|hô)\b",
     flags=re.IGNORECASE,
@@ -423,12 +456,16 @@ Quy tắc:
 5. Không sửa văn bản. Không bịa nhân vật chỉ vì đại từ hắn/cô ấy/nàng.
 6. Cảm xúc phải tiết chế; intensity=3 chỉ dùng ở cao trào rõ ràng. pace và volume phải phản ánh
    cách thể hiện: lời thì thầm thường soft, lời quát/giận dữ mạnh thường loud, không mặc định mọi câu là normal.
+   Chỉ dùng happy khi chính người nói hoặc điểm nhìn đang vui, nhẹ nhõm hay mừng rỡ. Không dùng happy cho
+   sợ hãi, đau đớn, lời đe dọa/kết tội, đám đông phẫn nộ, cười điên cuồng hoặc cảnh chỉ có nhịp nhanh.
 7. gender/age mô tả người nói, NARRATOR dùng unknown.
 8. Với mọi tên riêng tiếng Anh hoặc tên fantasy phương Tây viết bằng chữ Latin, luôn thêm pronunciation,
    kể cả khi tên có vẻ ngắn hoặc quen thuộc. surface phải xuất hiện nguyên văn trong batch; spoken_form phải
    là cách ghi âm tiết thuần Việt giúp TTS đọc tự nhiên, không dịch nghĩa và không dùng IPA. Với thuật ngữ
    khó đọc khác cũng làm tương tự; không thêm từ phổ thông hoặc tên thuần Việt.
-9. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
+9. notes phải giải thích ngắn gọn lựa chọn cảm xúc/cách thể hiện của đúng segment; không được để trống,
+   chỉ ghi dấu câu, hoặc sao chép một placeholder cho cả batch.
+10. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
 """
 
 
@@ -957,6 +994,54 @@ def _validate(
     _repair_same_paragraph_speakers(group, result)
     _repair_continued_dialogue_speakers(group, result)
     return result
+
+
+def _semantic_delivery_issues(
+    group: list[Any],
+    validated: dict[str, dict[str, Any]],
+) -> tuple[dict[str, str], bool]:
+    """Reject schema-valid delivery metadata that clearly contradicts strong text cues."""
+    rows_by_id = {str(row["stable_id"]): row for row in group}
+    issues: dict[str, str] = {}
+    emotion_contradictions: set[str] = set()
+    for seg_id, data in validated.items():
+        reasons: list[str] = []
+        notes = str(data.get("notes", "")).strip()
+        if sum(character.isalpha() for character in notes) < SEMANTIC_NOTE_MIN_LETTERS:
+            reasons.append("notes không có giải thích ngữ nghĩa đủ nội dung")
+        if str(data.get("emotion", "neutral")) == "happy":
+            row = rows_by_id.get(seg_id)
+            if row is not None:
+                text = NEGATED_DISTRESS_PATTERN.sub(" ", str(row["text"]))
+                cue_matches = [
+                    (label, match.group(0))
+                    for label, pattern in HAPPY_CONTRADICTION_PATTERNS.items()
+                    if (match := pattern.search(text)) is not None
+                ]
+                if cue_matches and not HAPPY_EVIDENCE_PATTERN.search(text):
+                    reasons.append(
+                        "emotion=happy mâu thuẫn với cue rõ ràng: "
+                        + ", ".join(
+                            f'{label}="{cue}"'
+                            for label, cue in cue_matches
+                        )
+                    )
+                    emotion_contradictions.add(seg_id)
+        if reasons:
+            issues[seg_id] = "; ".join(reasons)
+
+    emotion_counts = Counter(
+        str(data.get("emotion", "neutral"))
+        for data in validated.values()
+    )
+    dominant_count = max(emotion_counts.values(), default=0)
+    dominant_ratio = dominant_count / len(group) if group else 0.0
+    happy_batch_collapsed = (
+        len(group) >= SEMANTIC_DOMINANCE_MIN_SEGMENTS
+        and dominant_ratio >= SEMANTIC_DOMINANCE_RATIO
+        and len(emotion_contradictions) >= SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS
+    )
+    return issues, happy_batch_collapsed
 
 
 def _batch_id(index: int) -> str:
@@ -1733,6 +1818,7 @@ class OllamaBookAnalyzer:
         *,
         stop_requested: Callable[[], bool] | None = None,
         activity: Callable[[int, int], None] | None = None,
+        validation_feedback: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         chapter_titles: list[str] = []
         rows: list[dict[str, Any]] = []
@@ -1760,6 +1846,19 @@ class OllamaBookAnalyzer:
             f"Nhân vật đã biết từ các phần trước:\n{self._known_summary()}\n\n"
             f"Các đoạn liên tiếp:\n{json.dumps(rows, ensure_ascii=False, indent=2)}"
         )
+        if validation_feedback:
+            stable_to_batch = {stable: batch for batch, stable in batch_to_stable.items()}
+            feedback_lines = [
+                f"- {stable_to_batch[stable_id]}: {reason}"
+                for stable_id, reason in validation_feedback.items()
+                if stable_id in stable_to_batch
+            ]
+            if feedback_lines:
+                prompt += (
+                    "\n\nKết quả lần trước không qua kiểm tra semantic. Hãy phân tích lại toàn batch, "
+                    "đặc biệt sửa đúng các lỗi sau; không sao chép nhãn sang ID lân cận:\n"
+                    + "\n".join(feedback_lines)
+                )
         request = {
             "model": self.model,
             "system": SYSTEM_PROMPT,
@@ -1893,6 +1992,8 @@ class OllamaBookAnalyzer:
             last_error = "AI analysis is unavailable"
             split_scalable_failure = False
             received_incomplete_ids = False
+            received_semantic_issues = False
+            validation_feedback: dict[str, str] = {}
             if llm_ready:
                 for attempt in range(retry_count):
                     attempt_number = attempt + 1
@@ -1901,19 +2002,56 @@ class OllamaBookAnalyzer:
                         f"{len(group)} segment, lần {attempt_number}/{retry_count}."
                     )
                     try:
-                        payload = self._request(
-                            group,
-                            stop_requested=stop_requested,
-                            activity=lambda elapsed, chars, batch=group_index, current=attempt_number: self.log(
+                        request_kwargs: dict[str, Any] = {
+                            "stop_requested": stop_requested,
+                            "activity": lambda elapsed, chars, batch=group_index, current=attempt_number: self.log(
                                 f"Phân tích batch {batch}/{len(groups)} lần {current}/{retry_count} "
                                 f"vẫn đang chạy: {elapsed}s, đã nhận {chars:,} ký tự JSON."
                             ),
-                        )
+                        }
+                        if validation_feedback:
+                            request_kwargs["validation_feedback"] = validation_feedback
+                        payload = self._request(group, **request_kwargs)
                         validated = _validate(group, payload, local_scope=local_scope)
+                        semantic_issues, happy_batch_collapsed = _semantic_delivery_issues(
+                            group, validated
+                        )
+                        if semantic_issues:
+                            validation_feedback = semantic_issues
+                            received_semantic_issues = True
+                            if happy_batch_collapsed:
+                                validated = {}
+                            else:
+                                for seg_id in semantic_issues:
+                                    validated.pop(seg_id, None)
+                            issue_summary = "; ".join(
+                                f"{seg_id}: {reason}"
+                                for seg_id, reason in list(semantic_issues.items())[:6]
+                            )
+                            last_error = (
+                                f"semantic delivery validation rejected {len(semantic_issues)}/"
+                                f"{len(group)} segment: {issue_summary}"
+                            )
+                            self.log(
+                                f"Phân tích batch {group_index} không qua semantic lần "
+                                f"{attempt_number}: {last_error}"
+                            )
+                            self.db.event(
+                                "warning",
+                                "ANALYSIS_SEMANTIC_REJECTED",
+                                last_error,
+                                {
+                                    "batch_index": group_index,
+                                    "attempt": attempt_number,
+                                    "happy_batch_collapsed": happy_batch_collapsed,
+                                    "issues": semantic_issues,
+                                },
+                            )
                         if len(validated) == len(group):
                             break
-                        last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
-                        received_incomplete_ids = True
+                        if not semantic_issues:
+                            last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
+                            received_incomplete_ids = True
                     except AnalysisRequestStopped:
                         raise
                     except (
@@ -1959,6 +2097,18 @@ class OllamaBookAnalyzer:
                 ]
                 self.log(
                     f"Batch {group_index} vẫn trả thiếu ID sau {retry_count} lần; tự chia thành "
+                    f"{len(first_half)} + {len(second_half)} segment. "
+                    f"Tổng số batch còn lại hiện là {len(groups)}."
+                )
+                continue
+            if received_semantic_issues and len(validated) != len(group) and len(group) > 1:
+                first_half, second_half = _split_analysis_group(group)
+                groups[group_offset : group_offset + 1] = [
+                    (first_half, local_scope),
+                    (second_half, local_scope),
+                ]
+                self.log(
+                    f"Batch {group_index} vẫn không qua semantic sau {retry_count} lần; tự chia thành "
                     f"{len(first_half)} + {len(second_half)} segment. "
                     f"Tổng số batch còn lại hiện là {len(groups)}."
                 )

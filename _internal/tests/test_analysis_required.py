@@ -25,6 +25,7 @@ from ebook_reader.analysis import (
     _local_name_fallback,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
+    _semantic_delivery_issues,
     _valid_vietnamese_spoken_form,
     _validate,
     is_local_speaker,
@@ -146,7 +147,7 @@ def analysis_item(segment_id):
         "volume": "normal",
         "confidence": 1.0,
         "personality_hint": "",
-        "notes": "",
+        "notes": "Ngữ cảnh phù hợp với cách thể hiện.",
     }
 
 
@@ -223,6 +224,25 @@ def test_unknown_batch_id_is_not_fuzzily_mapped() -> None:
     validated = _validate(group, payload)
 
     assert list(validated) == [group[0]["stable_id"]]
+
+
+def test_semantic_retry_feedback_uses_only_constrained_batch_ids() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    analyzer._request(
+        group,
+        validation_feedback={
+            str(group[0]["stable_id"]): "emotion=happy mâu thuẫn với cue afraid",
+        },
+    )
+
+    assert session.request is not None
+    prompt = session.request["json"]["prompt"]
+    assert "- S001: emotion=happy mâu thuẫn với cue afraid" in prompt
+    assert str(group[0]["stable_id"]) not in prompt
 
 
 def test_name_candidates_include_speakers_and_one_off_capitalized_names() -> None:
@@ -1287,6 +1307,260 @@ def test_analysis_calibrates_repeated_maximum_intensity(
     validated = _validate([row], {"segments": [item]})
 
     assert validated[row["stable_id"]]["intensity"] == expected
+
+
+def test_semantic_delivery_rejects_v8_collapsed_happy_batch() -> None:
+    texts = [
+        "Cậu cảm thấy choáng váng yếu nhược, hai chân mềm nhũn, nghiêng ngả sắp ngã.",
+        "Sắc mặt cậu trắng bệch, chỉ liếc nhìn đã vô cùng kinh hãi.",
+        "Mọi thứ xa lạ khiến đầu óc cậu hỗn loạn.",
+        "Cảm giác lo sợ cực độ nhanh chóng lên men.",
+        "Một loại dự cảm xấu lặng lẽ nhen nhóm trong lòng.",
+        "Trong tâm trí hỗn loạn nảy ra một ý nghĩ nực cười.",
+        "“Anh tỉnh rồi?”",
+        "Cậu bé nhìn thấy anh thì vô cùng kinh ngạc và mừng rỡ.",
+    ]
+    group = [
+        {
+            "id": index,
+            "stable_id": f"v8s{index}",
+            "chapter_id": 1,
+            "text": text,
+            "kind_hint": "narration",
+        }
+        for index, text in enumerate(texts)
+    ]
+    validated = {
+        str(row["stable_id"]): {
+            **analysis_item(str(row["stable_id"])),
+            "emotion": "happy",
+            "intensity": 2,
+            "notes": ",",
+        }
+        for row in group
+    }
+
+    issues, batch_collapsed = _semantic_delivery_issues(group, validated)
+
+    assert batch_collapsed is True
+    assert set(issues) == {str(row["stable_id"]) for row in group}
+    assert "emotion=happy" in issues["v8s0"]
+    assert "notes" in issues["v8s6"]
+
+
+def test_semantic_delivery_accepts_coherent_happy_and_neutral_batches() -> None:
+    happy_group = [
+        {
+            "stable_id": f"happy{index}",
+            "text": f"Mọi người vui mừng và nhẹ nhõm khi nhận tin tốt số {index}.",
+        }
+        for index in range(8)
+    ]
+    happy = {
+        str(row["stable_id"]): {
+            **analysis_item(str(row["stable_id"])),
+            "emotion": "happy",
+            "notes": "Niềm vui và sự nhẹ nhõm được nói rõ trong câu.",
+        }
+        for row in happy_group
+    }
+    neutral_group = [
+        {"stable_id": f"neutral{index}", "text": f"Căn phòng có cửa sổ số {index}."}
+        for index in range(8)
+    ]
+    neutral = {
+        str(row["stable_id"]): analysis_item(str(row["stable_id"]))
+        for row in neutral_group
+    }
+
+    assert _semantic_delivery_issues(happy_group, happy) == ({}, False)
+    assert _semantic_delivery_issues(neutral_group, neutral) == ({}, False)
+
+
+def test_semantic_delivery_does_not_treat_negated_fear_as_happy_contradiction() -> None:
+    group = [{"stable_id": "relieved", "text": "Cô không còn sợ, trong lòng vui mừng nhẹ nhõm."}]
+    validated = {
+        "relieved": {
+            **analysis_item("relieved"),
+            "emotion": "happy",
+            "notes": "Cô đã hết sợ và cảm thấy vui mừng rõ ràng.",
+        }
+    }
+
+    assert _semantic_delivery_issues(group, validated) == ({}, False)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_cue"),
+    [
+        (
+            "Sợ hãi và phấn khích hiện rõ trong giọng nói, nỗi lo sợ vẫn chưa dứt.",
+            "Sợ hãi",
+        ),
+        ("Cậu thấy may mắn nhưng vẫn phải dằn nỗi lo sợ xuống.", "lo sợ"),
+    ],
+)
+def test_semantic_delivery_rejects_mixed_negative_affect_as_happy(
+    text: str,
+    expected_cue: str,
+) -> None:
+    group = [{"stable_id": "mixed", "text": text}]
+    validated = {
+        "mixed": {
+            **analysis_item("mixed"),
+            "emotion": "happy",
+            "notes": "Câu chứa nhiều cảm xúc đan xen.",
+        }
+    }
+
+    issues, _collapsed = _semantic_delivery_issues(group, validated)
+
+    assert "mixed" in issues
+    assert expected_cue in issues["mixed"]
+
+
+def test_semantic_delivery_keeps_explicit_excitement_as_excited() -> None:
+    group = [{"stable_id": "excited", "text": "Cậu vô cùng phấn khích khi cánh cửa mở ra."}]
+    validated = {
+        "excited": {
+            **analysis_item("excited"),
+            "emotion": "excited",
+            "notes": "Sự phấn khích được nêu trực tiếp.",
+        }
+    }
+
+    assert _semantic_delivery_issues(group, validated) == ({}, False)
+
+
+def test_semantic_delivery_rejects_happy_crowd_condemnation_individually() -> None:
+    texts = ["“Độc ác quá!”", "“Ả ta thật đáng chết!”", "“Thiêu ả thành tro đi!”"]
+    group = [
+        {"stable_id": f"crowd{index}", "text": text}
+        for index, text in enumerate(texts)
+    ]
+    validated = {
+        str(row["stable_id"]): {
+            **analysis_item(str(row["stable_id"])),
+            "emotion": "happy",
+            "notes": "Đám đông đang đồng thanh kết tội người phụ nữ.",
+        }
+        for row in group
+    }
+
+    issues, batch_collapsed = _semantic_delivery_issues(group, validated)
+
+    assert set(issues) == {"crowd0", "crowd1", "crowd2"}
+    assert batch_collapsed is False
+
+
+def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"semantic{index}",
+            "chapter_id": 1,
+            "text": text,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index, text in enumerate(
+            (
+                "Sắc mặt cậu trắng bệch vì kinh hãi.",
+                "Cảm giác lo sợ cực độ dâng lên.",
+                "Một dự cảm xấu khiến cô bất an.",
+                "Tâm trí anh hỗn loạn vì hoảng sợ.",
+            ),
+            1,
+        )
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000, "max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[dict[str, str] | None] = []
+
+    def request(group, **kwargs):
+        feedback_seen.append(kwargs.get("validation_feedback"))
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            if len(feedback_seen) == 1:
+                item.update({"emotion": "happy", "intensity": 2, "notes": ","})
+            else:
+                item.update(
+                    {
+                        "emotion": "afraid",
+                        "intensity": 2,
+                        "pace": "fast",
+                        "notes": "Nỗi sợ được nêu trực tiếp trong câu.",
+                    }
+                )
+            items.append(item)
+        return {"segments": items}
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert feedback_seen[0] is None
+    assert set(feedback_seen[1] or {}) == {str(row["stable_id"]) for row in db.rows}
+    assert len(db.updated) == 4
+    assert {data["emotion"] for _segment_id, data, _threshold in db.updated} == {"afraid"}
+    assert any(event[1] == "ANALYSIS_SEMANTIC_REJECTED" for event in db.events)
+
+
+def test_persistent_semantic_delivery_failure_splits_until_singletons(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"split-semantic{index}",
+            "chapter_id": 1,
+            "text": f"Cảm giác lo sợ cực độ dâng lên lần {index}.",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000, "max_retries": 2}}
+    )
+    logs: list[str] = []
+    analyzer = OllamaBookAnalyzer(settings, db, logs.append)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    request_sizes: list[int] = []
+
+    def request(group, **_kwargs):
+        request_sizes.append(len(group))
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            if len(group) > 1:
+                item.update({"emotion": "happy", "notes": ","})
+            else:
+                item.update(
+                    {
+                        "emotion": "afraid",
+                        "pace": "fast",
+                        "notes": "Nỗi sợ được nêu trực tiếp trong câu.",
+                    }
+                )
+            items.append(item)
+        return {"segments": items}
+
+    monkeypatch.setattr(analyzer, "_request", request)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert request_sizes == [4, 4, 2, 2, 1, 1, 2, 2, 1, 1]
+    assert len(db.updated) == 4
+    assert any("vẫn không qua semantic" in message for message in logs)
 
 
 def test_every_thought_uses_narrator_without_character_identity() -> None:

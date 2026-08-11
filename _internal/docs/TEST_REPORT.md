@@ -46,6 +46,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   heartbeat vào Log mỗi phút để không còn im lặng trong một request dài;
 - stream analysis thiếu gói kết thúc được phân loại riêng và tự chia đôi batch ngay; batch con giữ nguyên
   checkpoint/progress, còn stdout/stderr của Ollama ẩn được nối vào `runtime/logs/ollama-server.log`;
+- semantic delivery gate từ chối output Qwen đúng schema nhưng suy biến: notes chỉ có dấu câu, batch `happy`
+  mâu thuẫn hàng loạt với cue sợ hãi/giận dữ/đau đớn; evidence ghi đúng cụm từ đã khớp, retry có feedback
+  theo đúng ID rồi chia đôi hữu hạn; batch vui thật, narration trung tính và cue sợ đã bị phủ định vẫn được chấp nhận;
 - Ollama server do worker tự khởi động chạy ẩn, được theo dõi quyền sở hữu và chỉ tiến trình do app tạo
   mới bị dừng sau giai đoạn phân tích;
 - project lock, voice profile lock và resume;
