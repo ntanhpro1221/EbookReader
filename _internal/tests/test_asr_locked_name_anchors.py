@@ -6,8 +6,11 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.asr import (
+    ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT,
+    ANCHOR_COMPARISON_NORMALIZED_EXACT,
     ASR_INCONCLUSIVE,
     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+    ASR_LOCKED_NAME_CANONICAL_PASS,
     ASR_MISMATCH,
     ASR_PASS,
     LOCKED_NAME_ANCHOR_METRICS_KEY,
@@ -96,7 +99,74 @@ def test_locked_name_anchor_accepts_only_exact_supported_forms(
     assert metrics["status"] == "pass"
     assert metrics["matched_occurrence_count"] == 1
     assert metrics["anchors"][0]["matched_form"] == matched_form
+    assert metrics["anchors"][0]["matched_comparison_mode"] == (
+        ANCHOR_COMPARISON_NORMALIZED_EXACT
+    )
     assert LOCKED_NAME_ANCHOR_METRICS_KEY not in original
+
+
+@pytest.mark.parametrize(
+    ("expected", "transcript", "anchor", "matched_form"),
+    [
+        (
+            "E-vân đã đến.",
+            "Evan đã đến.",
+            _anchor("Evans", "E-vân"),
+            "joined_spoken_form",
+        ),
+        (
+            "A-đe-ron đã đến.",
+            "A de rón đã đến.",
+            _anchor("Aderon", "A-đe-ron"),
+            "spoken_form",
+        ),
+    ],
+)
+def test_locked_name_anchor_accepts_only_diacritic_folded_spoken_forms(
+    expected: str,
+    transcript: str,
+    anchor: dict[str, object],
+    matched_form: str,
+) -> None:
+    result = adjudicate_locked_name_anchors(
+        expected,
+        _asr_result(transcript),
+        [anchor],
+    )
+
+    assert result["passed"] is True
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    evidence = metrics["anchors"][0]
+    assert evidence["matched_form"] == matched_form
+    assert evidence["matched_comparison_mode"] == (
+        ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT
+    )
+
+
+@pytest.mark.parametrize(
+    ("surface", "spoken_form", "wrong_name"),
+    [
+        ("Lucien", "Lu-si-en", "Lucy"),
+        ("Lucien", "Lu-si-en", "Lucian"),
+        ("Tracy", "Trây-si", "Casey"),
+        ("Wayne", "Uên", "Warner"),
+        ("Aderon", "A-đe-ron", "Adairon"),
+    ],
+)
+def test_diacritic_folded_anchor_forms_do_not_become_fuzzy_aliases(
+    surface: str,
+    spoken_form: str,
+    wrong_name: str,
+) -> None:
+    result = adjudicate_locked_name_anchors(
+        spoken_form,
+        _asr_result(wrong_name),
+        [_anchor(surface, spoken_form)],
+    )
+
+    assert result["passed"] is False
+    assert result["reason"] == ASR_LOCKED_NAME_ANCHOR_MISMATCH
 
 
 @pytest.mark.parametrize(
@@ -253,6 +323,154 @@ def test_passing_anchor_does_not_override_an_existing_asr_mismatch() -> None:
     metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
     assert isinstance(metrics, dict)
     assert metrics["status"] == "pass"
+
+
+def test_canonical_anchor_metrics_promote_only_the_generic_tokenization_mismatch() -> None:
+    original = _asr_result(
+        "Tên của mình là Lucien.",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+    original["similarity"] = 0.875
+    original["wer"] = 3 / 7
+
+    result = adjudicate_locked_name_anchors(
+        "Tên của mình là Lu-si-en.",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=16)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result["passed"] is True
+    assert result["verdict"] == ASR_PASS
+    assert result["reason"] == ASR_LOCKED_NAME_CANONICAL_PASS
+    assert result["similarity"] == 0.875
+    assert result["wer"] == 3 / 7
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["raw_similarity"] == 0.875
+    assert metrics["raw_wer"] == 3 / 7
+    assert metrics["canonical_similarity"] == 1.0
+    assert metrics["canonical_cer"] == 0.0
+    assert metrics["canonical_wer"] == 0.0
+    assert metrics["canonical_threshold_passed"] is True
+    assert metrics["canonical_promoted"] is True
+
+
+def test_canonical_anchor_metrics_do_not_hide_unrelated_content_errors() -> None:
+    original = _asr_result(
+        "Người kia gọi Lucien vào ngày mai.",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    result = adjudicate_locked_name_anchors(
+        "Tên của mình là Lu-si-en hôm nay.",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=16)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result["passed"] is False
+    assert result["verdict"] == ASR_MISMATCH
+    assert result["reason"] == "ASR_MISMATCH"
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["passed"] is True
+    assert metrics["canonical_threshold_passed"] is False
+    assert metrics["canonical_promoted"] is False
+
+
+def test_canonical_anchor_metrics_demote_a_raw_pass_with_content_error() -> None:
+    original = _asr_result(
+        "Lu-si-en bbbb aaaa aaaa",
+        verdict=ASR_PASS,
+        reason="ok",
+        repairable=False,
+    )
+    original["similarity"] = 0.90
+    original["wer"] = 0.10
+
+    result = adjudicate_locked_name_anchors(
+        "Lu-si-en aaaa aaaa aaaa",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=0)],
+        min_similarity=0.82,
+        max_wer=0.30,
+    )
+
+    assert result["passed"] is False
+    assert result["verdict"] == ASR_MISMATCH
+    assert result["reason"] == "ASR_MISMATCH"
+    assert result["repairable"] is True
+    assert result["severe"] is False
+    assert result["similarity"] == 0.90
+    assert result["wer"] == 0.10
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["passed"] is True
+    assert metrics["raw_similarity"] == 0.90
+    assert metrics["raw_wer"] == 0.10
+    assert metrics["canonical_similarity"] == 0.75
+    assert metrics["canonical_cer"] == 0.25
+    assert metrics["canonical_wer"] == 0.25
+    assert metrics["canonical_threshold_passed"] is False
+    assert metrics["canonical_promoted"] is False
+    assert metrics["canonical_demoted"] is True
+
+
+def test_canonical_anchor_metrics_never_promote_a_custom_mismatch_reason() -> None:
+    original = _asr_result(
+        "Tên của mình là Lucien.",
+        verdict=ASR_MISMATCH,
+        reason="CUSTOM_POLICY_MISMATCH",
+        repairable=False,
+    )
+
+    result = adjudicate_locked_name_anchors(
+        "Tên của mình là Lu-si-en.",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=16)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result["passed"] is False
+    assert result["verdict"] == ASR_MISMATCH
+    assert result["reason"] == "CUSTOM_POLICY_MISMATCH"
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["canonical_threshold_passed"] is True
+    assert metrics["canonical_promoted"] is False
+
+
+def test_canonical_anchor_metrics_promote_repeated_short_exact_forms() -> None:
+    original = _asr_result(
+        "Lucien Lu-si-en Lusien",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    result = adjudicate_locked_name_anchors(
+        "Lu-si-en!",
+        original,
+        [_anchor("Lucien", "Lu-si-en")],
+        repeat_count=3,
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result["verdict"] == ASR_PASS
+    assert result["reason"] == ASR_LOCKED_NAME_CANONICAL_PASS
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["matched_occurrence_count"] == 3
+    assert metrics["canonical_wer"] == 0.0
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 import math
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, Callable
@@ -32,7 +33,12 @@ ASR_PASS = "pass"
 ASR_MISMATCH = "mismatch"
 ASR_INCONCLUSIVE = "inconclusive"
 ASR_LOCKED_NAME_ANCHOR_MISMATCH = "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
+ASR_LOCKED_NAME_CANONICAL_PASS = "ASR_LOCKED_NAME_CANONICAL_PASS"
 LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"
+LOCKED_NAME_ANCHOR_METRICS_VERSION = 2
+ASR_WER_SIMILARITY_MARGIN = 0.12
+ANCHOR_COMPARISON_NORMALIZED_EXACT = "normalized_exact"
+ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT = "diacritic_folded_exact"
 
 
 def normalize_transcript(text: str) -> str:
@@ -53,24 +59,53 @@ def _json_safe_anchor_value(value: Any) -> Any:
     return str(value)
 
 
-def _locked_name_anchor_forms(anchor: Mapping[str, Any]) -> list[tuple[str, tuple[str, ...]]]:
+def _diacritic_folded_token(token: str) -> str:
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFD", token)
+        if unicodedata.category(character) != "Mn"
+    )
+
+
+def _locked_name_anchor_forms(
+    anchor: Mapping[str, Any],
+) -> list[tuple[str, tuple[str, ...], str]]:
     spoken_tokens = tuple(normalize_transcript(str(anchor.get("spoken_form", ""))).split())
     surface = str(anchor.get("surface", "")).strip()
     if not surface:
         surface = str(anchor.get("normalized_surface", "")).strip()
     surface_tokens = tuple(normalize_transcript(surface).split())
+    folded_spoken_tokens = tuple(
+        _diacritic_folded_token(token)
+        for token in spoken_tokens
+    )
     candidates = [
-        ("spoken_form", spoken_tokens),
-        ("source_spelling", surface_tokens),
-        ("joined_spoken_form", ("".join(spoken_tokens),) if spoken_tokens else ()),
+        ("spoken_form", spoken_tokens, ANCHOR_COMPARISON_NORMALIZED_EXACT),
+        ("source_spelling", surface_tokens, ANCHOR_COMPARISON_NORMALIZED_EXACT),
+        (
+            "joined_spoken_form",
+            ("".join(spoken_tokens),) if spoken_tokens else (),
+            ANCHOR_COMPARISON_NORMALIZED_EXACT,
+        ),
+        (
+            "spoken_form",
+            folded_spoken_tokens,
+            ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT,
+        ),
+        (
+            "joined_spoken_form",
+            ("".join(folded_spoken_tokens),) if folded_spoken_tokens else (),
+            ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT,
+        ),
     ]
-    forms: list[tuple[str, tuple[str, ...]]] = []
-    seen: set[tuple[str, ...]] = set()
-    for kind, tokens in candidates:
-        if not tokens or tokens in seen:
+    forms: list[tuple[str, tuple[str, ...], str]] = []
+    seen: set[tuple[tuple[str, ...], str]] = set()
+    for kind, tokens, comparison_mode in candidates:
+        key = (tokens, comparison_mode)
+        if not tokens or key in seen:
             continue
-        forms.append((kind, tokens))
-        seen.add(tokens)
+        forms.append((kind, tokens, comparison_mode))
+        seen.add(key)
     return forms
 
 
@@ -261,9 +296,15 @@ def _minimum_cost_locked_name_alignment(
                         "token_end": transcript_index + 1,
                     },
                 )
-            for form_kind, form_tokens in unit["forms"]:
+            for form_kind, form_tokens, comparison_mode in unit["forms"]:
                 form_end = transcript_index + len(form_tokens)
-                if tuple(transcript_tokens[transcript_index:form_end]) != form_tokens:
+                matched_tokens = tuple(transcript_tokens[transcript_index:form_end])
+                comparison_tokens = (
+                    tuple(_diacritic_folded_token(token) for token in matched_tokens)
+                    if comparison_mode == ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT
+                    else matched_tokens
+                )
+                if comparison_tokens != form_tokens:
                     continue
                 update(
                     state,
@@ -273,7 +314,9 @@ def _minimum_cost_locked_name_alignment(
                         **anchor_operation,
                         "kind": "match_anchor",
                         "form_kind": form_kind,
-                        "tokens": form_tokens,
+                        "comparison_mode": comparison_mode,
+                        "form_tokens": form_tokens,
+                        "matched_tokens": matched_tokens,
                         "token_start": transcript_index,
                         "token_end": form_end,
                     },
@@ -290,11 +333,91 @@ def _minimum_cost_locked_name_alignment(
     return score_by_state[final_state], operations
 
 
+def _semantic_anchor_token(
+    repeat_index: int,
+    anchor_index: int,
+    anchor_count: int,
+) -> str:
+    ordinal = repeat_index * anchor_count + anchor_index
+    if ordinal >= 65_534:
+        raise ValueError("Too many locked-name anchor occurrences")
+    return chr(0xF0000 + ordinal)
+
+
+def _canonical_locked_name_metrics(
+    units: list[dict[str, Any]],
+    operations: list[dict[str, Any]],
+    transcript_tokens: list[str],
+    anchor_count: int,
+) -> tuple[float, float, float]:
+    expected_tokens = [
+        _semantic_anchor_token(
+            int(unit["repeat_index"]),
+            int(unit["anchor_index"]),
+            anchor_count,
+        )
+        if unit["kind"] == "anchor"
+        else str(unit["token"])
+        for unit in units
+    ]
+    actual_tokens: list[str] = []
+    transcript_cursor = 0
+    for operation in operations:
+        kind = str(operation["kind"])
+        if kind in {"insert_transcript", "match_token", "substitute_token"}:
+            actual_tokens.append(transcript_tokens[transcript_cursor])
+            transcript_cursor += 1
+        elif kind == "match_anchor":
+            actual_tokens.append(
+                _semantic_anchor_token(
+                    int(operation["repeat_index"]),
+                    int(operation["anchor_index"]),
+                    anchor_count,
+                )
+            )
+            transcript_cursor += len(operation["matched_tokens"])
+        elif kind == "substitute_anchor":
+            actual_tokens.append(transcript_tokens[transcript_cursor])
+            transcript_cursor += 1
+    if transcript_cursor != len(transcript_tokens):
+        raise RuntimeError("Locked-name canonical alignment did not consume transcript")
+
+    expected_characters = list(" ".join(expected_tokens))
+    actual_characters = list(" ".join(actual_tokens))
+    character_error_rate = _edit_distance(
+        expected_characters,
+        actual_characters,
+    ) / max(1, len(expected_characters))
+    similarity = max(0.0, 1.0 - character_error_rate)
+    word_error_rate = _edit_distance(
+        expected_tokens,
+        actual_tokens,
+    ) / max(1, len(expected_tokens))
+    return float(similarity), float(character_error_rate), float(word_error_rate)
+
+
+def _passes_asr_content_thresholds(
+    transcript_present: bool,
+    similarity: float,
+    wer: float,
+    *,
+    min_similarity: float,
+    max_wer: float,
+) -> bool:
+    return transcript_present and not (
+        similarity < min_similarity
+        or (wer > max_wer and similarity < min_similarity + ASR_WER_SIMILARITY_MARGIN)
+    )
+
+
 def adjudicate_locked_name_anchors(
     expected_spoken_text: str,
     asr_result: dict[str, Any],
     anchors: Sequence[Mapping[str, Any]],
     repeat_count: int = 1,
+    *,
+    min_similarity: float | None = None,
+    max_wer: float | None = None,
 ) -> dict[str, Any]:
     """Require exact locked-name forms in an ASR transcript without fuzzy aliases.
 
@@ -338,7 +461,7 @@ def adjudicate_locked_name_anchors(
                     }
                 )
         result[LOCKED_NAME_ANCHOR_METRICS_KEY] = {
-            "version": 1,
+            "version": LOCKED_NAME_ANCHOR_METRICS_VERSION,
             "status": "skipped_inconclusive",
             "adjudicated": False,
             "passed": None,
@@ -380,8 +503,12 @@ def adjudicate_locked_name_anchors(
                 "required_order": len(evidence),
                 "anchor_index": anchor_index,
                 "accepted_forms": [
-                    {"kind": kind, "tokens": list(tokens)}
-                    for kind, tokens in forms
+                    {
+                        "kind": kind,
+                        "tokens": list(tokens),
+                        "comparison_mode": comparison_mode,
+                    }
+                    for kind, tokens, comparison_mode in forms
                 ],
             }
             if occurrence in invalid_occurrences:
@@ -399,7 +526,8 @@ def adjudicate_locked_name_anchors(
                         "status": "matched",
                         "matched": True,
                         "matched_form": operation["form_kind"],
-                        "matched_tokens": list(operation["tokens"]),
+                        "matched_comparison_mode": operation["comparison_mode"],
+                        "matched_tokens": list(operation["matched_tokens"]),
                         "matched_token_start": operation["token_start"],
                         "matched_token_end": operation["token_end"],
                     }
@@ -425,8 +553,41 @@ def adjudicate_locked_name_anchors(
             evidence.append(anchor_evidence)
 
     anchors_passed = matched_occurrence_count == required_occurrence_count
+    canonical_similarity: float | None = None
+    canonical_cer: float | None = None
+    canonical_wer: float | None = None
+    canonical_threshold_passed: bool | None = None
+    canonical_promoted = False
+    canonical_demoted = False
+    if anchors_passed:
+        canonical_similarity, canonical_cer, canonical_wer = (
+            _canonical_locked_name_metrics(
+                units,
+                operations,
+                transcript_tokens,
+                len(safe_anchors),
+            )
+        )
+        if min_similarity is not None and max_wer is not None:
+            canonical_threshold_passed = _passes_asr_content_thresholds(
+                bool(transcript_tokens),
+                canonical_similarity,
+                canonical_wer,
+                min_similarity=float(min_similarity),
+                max_wer=float(max_wer),
+            )
+            canonical_promoted = bool(
+                canonical_threshold_passed
+                and result.get("verdict") == ASR_MISMATCH
+                and result.get("reason") == "ASR_MISMATCH"
+            )
+            canonical_demoted = bool(
+                not canonical_threshold_passed
+                and result.get("verdict") == ASR_PASS
+            )
+
     result[LOCKED_NAME_ANCHOR_METRICS_KEY] = {
-        "version": 1,
+        "version": LOCKED_NAME_ANCHOR_METRICS_VERSION,
         "status": "pass" if anchors_passed else "fail",
         "adjudicated": True,
         "passed": anchors_passed,
@@ -439,9 +600,39 @@ def adjudicate_locked_name_anchors(
         "transcript_token_count": len(transcript_tokens),
         "alignment_edit_cost": alignment_score[0],
         "ordinary_exact_match_count": -alignment_score[1],
+        "raw_similarity": result.get("similarity"),
+        "raw_wer": result.get("wer"),
+        "canonical_similarity": canonical_similarity,
+        "canonical_cer": canonical_cer,
+        "canonical_wer": canonical_wer,
+        "canonical_min_similarity": min_similarity,
+        "canonical_max_wer": max_wer,
+        "canonical_threshold_passed": canonical_threshold_passed,
+        "canonical_promoted": canonical_promoted,
+        "canonical_demoted": canonical_demoted,
         "anchors": evidence,
     }
     if anchors_passed:
+        if canonical_promoted:
+            result.update(
+                {
+                    "passed": True,
+                    "verdict": ASR_PASS,
+                    "reason": ASR_LOCKED_NAME_CANONICAL_PASS,
+                    "repairable": False,
+                    "severe": False,
+                }
+            )
+        elif canonical_demoted:
+            result.update(
+                {
+                    "passed": False,
+                    "verdict": ASR_MISMATCH,
+                    "reason": "ASR_MISMATCH",
+                    "repairable": True,
+                    "severe": False,
+                }
+            )
         return result
 
     result.update(
@@ -705,8 +896,12 @@ class WhisperVerifier:
             }
         min_similarity = float(self.settings.get("min_similarity", 0.58))
         max_wer = float(self.settings.get("max_wer", 0.58))
-        passed = bool(transcript) and not (
-            similarity < min_similarity or (wer > max_wer and similarity < min_similarity + 0.12)
+        passed = _passes_asr_content_thresholds(
+            bool(transcript),
+            similarity,
+            wer,
+            min_similarity=min_similarity,
+            max_wer=max_wer,
         )
         return {
             "passed": passed,

@@ -1831,6 +1831,8 @@ class BookPipeline:
                 expected_text,
                 direct,
                 locked_name_anchors,
+                min_similarity=float(self.settings["asr"]["min_similarity"]),
+                max_wer=float(self.settings["asr"]["max_wer"]),
             )
             repeated: dict[str, Any] | None = None
             selected = direct
@@ -1848,6 +1850,8 @@ class BookPipeline:
                     repeated,
                     locked_name_anchors,
                     repeat_count=SHORT_CONTEXT_REPEAT_COUNT,
+                    min_similarity=float(self.settings["asr"]["min_similarity"]),
+                    max_wer=float(self.settings["asr"]["max_wer"]),
                 )
                 if _asr_verdict(repeated) == ASR_PASS:
                     selected = repeated

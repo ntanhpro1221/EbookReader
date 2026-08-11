@@ -8,7 +8,12 @@ import numpy as np
 import pytest
 
 import ebook_reader.pipeline as pipeline_module
-from ebook_reader.asr import ASR_INCONCLUSIVE, ASR_MISMATCH, ASR_PASS
+from ebook_reader.asr import (
+    ASR_INCONCLUSIVE,
+    ASR_LOCKED_NAME_CANONICAL_PASS,
+    ASR_MISMATCH,
+    ASR_PASS,
+)
 from ebook_reader.audio_io import AudioQualityError, ChapterQualityError, atomic_write_wav
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
@@ -451,10 +456,10 @@ def test_locked_name_anchor_can_promote_exact_repeated_short_decode(
             confirmation: bool = False,
         ):
             return _asr_result(
-                ASR_PASS,
+                ASR_MISMATCH,
                 "Lucien Lu-si-en Lusien",
-                similarity=1.0,
-                wer=0.0,
+                similarity=0.45,
+                wer=2 / 3,
             )
 
     pipeline._verify_chapter_audio(chapter, RepeatedAnchorVerifier())
@@ -469,12 +474,105 @@ def test_locked_name_anchor_can_promote_exact_repeated_short_decode(
     assert final_check is not None
     final_metrics = json.loads(str(final_check["metrics_json"]))
     assert final_metrics["selected_context_mode"] == "repeat3"
+    assert final_metrics["reason"] == ASR_LOCKED_NAME_CANONICAL_PASS
     assert final_metrics["locked_name_anchor_metrics"]["repeat_count"] == 3
     assert final_metrics["locked_name_anchor_metrics"]["passed"] is True
+    assert final_metrics["locked_name_anchor_metrics"]["canonical_promoted"] is True
     assert [item["selected"] for item in final_metrics["decode_evidence"]] == [
         False,
         True,
     ]
+
+
+def test_locked_name_canonical_metrics_preserve_the_v7_lucien_candidate(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=0)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Tên của mình là Lu-si-en.",
+        [_locked_lucien_anchor(spoken_start=16)],
+    )
+
+    class CanonicalAnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return _asr_result(
+                ASR_MISMATCH,
+                "Tên của mình là Lucien.",
+                similarity=0.875,
+                wer=3 / 7,
+            )
+
+    pipeline._verify_chapter_audio(chapter, CanonicalAnchorVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] == "verified"
+    assert fresh["asr_similarity"] == 0.875
+    assert fresh["asr_wer"] == 3 / 7
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_metrics["reason"] == ASR_LOCKED_NAME_CANONICAL_PASS
+    anchor_metrics = final_metrics["locked_name_anchor_metrics"]
+    assert anchor_metrics["canonical_min_similarity"] == 0.78
+    assert anchor_metrics["canonical_max_wer"] == 0.3
+    assert anchor_metrics["canonical_promoted"] is True
+
+
+def test_confirmation_decode_can_use_locked_name_canonical_metrics(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Tên của mình là Lu-si-en.",
+        [_locked_lucien_anchor(spoken_start=16)],
+    )
+    scripted_results = [
+        _asr_result(ASR_PASS, "Tên của mình là Lucy.", similarity=0.92, wer=0.2),
+        _asr_result(
+            ASR_MISMATCH,
+            "Tên của mình là Lucien.",
+            similarity=0.875,
+            wer=3 / 7,
+        ),
+    ]
+
+    class ConfirmationAnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, ConfirmationAnchorVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] == "verified"
+    assert pipeline.tts.delivery_modes == []
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_metrics["confirmation_decode"] is True
+    assert final_metrics["reason"] == ASR_LOCKED_NAME_CANONICAL_PASS
+    assert [
+        item["reason"] for item in final_metrics["decode_evidence"]
+    ] == ["ASR_LOCKED_NAME_ANCHOR_MISMATCH", ASR_LOCKED_NAME_CANONICAL_PASS]
 
 
 def test_locked_name_anchor_forces_clarity_after_two_aggregate_asr_passes(
