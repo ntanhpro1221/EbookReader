@@ -109,6 +109,28 @@ class FakeTTS:
         return checksum, metrics, seed
 
 
+class PassPerceptualVerifier:
+    def __init__(self) -> None:
+        self.verify_calls = 0
+        self.unload_calls = 0
+
+    def verify(self, _wav, _preset, *, pitch_semitones=0):
+        self.verify_calls += 1
+        return {
+            "verdict": "ok",
+            "reason": "PERCEPTUAL_WITHIN_VOICE_BASELINE",
+            "score": 4.0,
+            "baseline_score": 4.0,
+            "baseline_delta": 0.0,
+            "baseline_pitch_semitones": pitch_semitones,
+            "review_required": False,
+            "duration_seconds": 2.0,
+        }
+
+    def unload(self) -> None:
+        self.unload_calls += 1
+
+
 class FakeNotifier:
     def __init__(self):
         self.critical_calls = []
@@ -373,6 +395,7 @@ def _asr_signal_pipeline(tmp_path: Path, *, repair_rounds: int):
         emit=lambda _kind, _payload: None,
     )
     pipeline.tts = FakeTTS(settings, db)
+    pipeline.perceptual_qa = PassPerceptualVerifier()
     pipeline._recover()
     pipeline._ensure_segments()
     _assign_locked_test_narrator(db)
@@ -1047,6 +1070,74 @@ def test_clarity_repair_requires_two_independent_asr_passes(
         assert str(fresh["wav_sha256"]) == incumbent_sha256
 
 
+def test_asr_candidate_with_perceptual_review_never_replaces_incumbent(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
+    scripted_results = [
+        _asr_result(ASR_MISMATCH, "primary sai", similarity=0.1, wer=1.0),
+        _asr_result(ASR_MISMATCH, "confirmation sai", similarity=0.1, wer=1.0),
+        _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0),
+        _asr_result(ASR_PASS, expected, similarity=1.0, wer=0.0),
+    ]
+
+    class ScriptedVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    class ReviewPerceptualVerifier:
+        verify_calls = 0
+
+        def verify(self, _wav, _preset, *, pitch_semitones=0):
+            self.verify_calls += 1
+            return {
+                "verdict": "review",
+                "reason": "PERCEPTUAL_BASELINE_DROP",
+                "score": 1.8,
+                "baseline_score": 3.0,
+                "baseline_delta": -1.2,
+                "baseline_pitch_semitones": pitch_semitones,
+                "review_required": True,
+                "duration_seconds": 2.0,
+            }
+
+        def unload(self) -> None:
+            return None
+
+    pipeline.perceptual_qa = ReviewPerceptualVerifier()
+    pipeline._verify_chapter_audio(chapter, ScriptedVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+
+    assert pipeline.perceptual_qa.verify_calls == 1
+    assert [attempt["state"] for attempt in attempts] == ["dual_failed"]
+    assert attempts[0]["perceptual_result"]["verdict"] == "review"
+    assert fresh["status"] == "failed"
+    assert fresh["wav_path"] == row["wav_path"]
+    assert fresh["wav_sha256"] == incumbent_sha256
+    assert incumbent_path.read_bytes() == incumbent_bytes
+    assert final_check["artifact_sha256"] == incumbent_sha256
+    assert final_check["verdict"] == "fail"
+
+
 def test_resume_of_clarity_candidate_still_requires_both_decodes(
     tmp_path: Path,
 ) -> None:
@@ -1243,6 +1334,10 @@ def test_dual_passed_candidate_resumes_at_atomic_promotion_without_redecode(
         pipeline.quality_policy_hash,
     )
     assert [attempt["state"] for attempt in attempts] == ["dual_passed"]
+    assert attempts[0]["perceptual_result"]["verdict"] == "ok"
+    assert attempts[0]["perceptual_check_id"] is not None
+    perceptual_calls_before_resume = pipeline.perceptual_qa.verify_calls
+    assert perceptual_calls_before_resume == 1
     assert crashed["wav_path"] == row["wav_path"]
     assert crashed["wav_sha256"] == row["wav_sha256"]
     assert incumbent_path.read_bytes() == incumbent_bytes
@@ -1271,6 +1366,7 @@ def test_dual_passed_candidate_resumes_at_atomic_promotion_without_redecode(
     assert Path(str(fresh["wav_path"])) == Path(str(attempts[0]["wav_path"]))
     assert str(fresh["wav_sha256"]) != incumbent_sha256
     assert pipeline.tts.synthesize_calls == calls_before_resume
+    assert pipeline.perceptual_qa.verify_calls == perceptual_calls_before_resume
     assert incumbent_path.read_bytes() == incumbent_bytes
 
 

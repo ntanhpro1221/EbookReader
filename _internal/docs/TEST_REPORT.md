@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-11
 
-Trạng thái source hiện tại: **500/500 test pass** trên Python 3.11.9, gồm CLI/supervisor headless,
+Trạng thái source hiện tại: **504/504 test pass** trên Python 3.11.9, gồm CLI/supervisor headless,
 quality policy/evidence, pronunciation,
 completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
 parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
@@ -125,7 +125,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   budget hữu hạn và exhaustion vẫn giữ đúng checksum/transcript incumbent;
 - pipeline chạy ledger end-to-end: crash trước decode checkpoint chạy lại đúng candidate, WAV candidate bị tamper được
   đánh `invalid`, crash sau dual-pass chỉ resume giao dịch promotion mà không chạy lại TTS/Whisper; báo cáo
-  `segment_repair_candidates` xuất từng policy/round/path/SHA/seed, signal, beam, greedy và trạng thái promote/fail;
+  `segment_repair_candidates` xuất từng policy/round/path/SHA/seed, signal, beam, greedy, UTMOS và trạng thái promote/fail;
+- perceptual repair không còn reset/ghi đè incumbent: mỗi candidate phải qua signal gate, hai decode Whisper và UTMOS
+  trên cùng checksum trước promotion. Review hết budget giữ nguyên path/SHA/bytes incumbent; restart không synth hoặc
+  decode thêm, còn crash sau UTMOS pass chỉ resume transaction promotion;
 - final ASR pass/fail cùng danh sách decode evidence, checksum và policy được xuất cho từng segment trong
   `audiobook_quality_report.json`;
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;

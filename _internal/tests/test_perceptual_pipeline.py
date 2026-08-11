@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -211,20 +212,36 @@ def _install_fake_repair_synthesis(
     seed_salts: list[str] = []
     statuses_before_synthesis: list[str] = []
 
-    def synthesize(row, _chapter, seed_salt_prefix="primary", **_kwargs) -> None:
+    def synthesize_candidate(row, candidate, _chapter, **_kwargs):
         segment_id = int(row["id"])
         statuses_before_synthesis.append(str(pipeline.db.get_segment(segment_id)["status"]))
-        seed_salts.append(str(seed_salt_prefix))
-        wav = pipeline._chunk_path(row)
+        repair_round = int(candidate["repair_round"])
+        seed_salts.append(pipeline._segment_candidate_seed_salt(repair_round, 0))
+        wav = Path(str(candidate["wav_path"]))
         wav.parent.mkdir(parents=True, exist_ok=True)
         amplitude = 0.02 + (0.01 * len(seed_salts))
         sf.write(wav, np.full(16_000, amplitude, dtype=np.float32), 16_000)
-        pipeline.db.mark_signal_passed(
-            segment_id,
-            wav_path=wav,
-            wav_sha256=sha256_file(wav),
-            duration=1.0,
-            signal={"duration": 1.0},
+        profile = pipeline.db.voice_profile(int(row["voice_profile_id"]))
+        pitch_semitones = int(profile["pitch_semitones"] or 0)
+        metrics = {
+            "duration": 1.0,
+            "tts_delivery_mode": "clarity",
+            "asr_clarity_repair_round": repair_round,
+            "spoken_text_sha256": hashlib.sha256(
+                pipeline.tts.spoken_text(row).encode("utf-8")
+            ).hexdigest(),
+            "voice_profile_id": int(profile["id"]),
+            "pitch_semitones": pitch_semitones,
+            "effective_pitch_semitones": pitch_semitones,
+            "pitch_variant_skipped": 0.0,
+            "pitch_variant_mixed": 0.0,
+        }
+        return pipeline._checkpoint_segment_candidate_signal(
+            candidate,
+            wav,
+            sha256_file(wav),
+            metrics,
+            int(candidate["generation_seed"]),
         )
 
     monkeypatch.setattr(
@@ -232,7 +249,7 @@ def _install_fake_repair_synthesis(
         "_inspect_existing_segment",
         lambda _row: (True, {"duration": 1.0}),
     )
-    monkeypatch.setattr(pipeline, "_process_single_segment", synthesize)
+    monkeypatch.setattr(pipeline, "_process_segment_candidate", synthesize_candidate)
     return seed_salts, statuses_before_synthesis
 
 
@@ -435,6 +452,9 @@ def test_perceptual_review_regenerates_then_passes_in_same_chapter_cycle(
         ]
     )
     verifier = PassingWhisperVerifier()
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
     seed_salts, statuses_before_synthesis = _install_fake_repair_synthesis(
         pipeline,
         monkeypatch,
@@ -449,14 +469,23 @@ def test_perceptual_review_regenerates_then_passes_in_same_chapter_cycle(
         stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
         segment_id=int(row["id"]),
     )
-    assert seed_salts == ["perceptual_repair_0"]
-    assert statuses_before_synthesis == ["analyzed"]
+    assert seed_salts == ["asr_clarity_candidate_0_0"]
+    assert statuses_before_synthesis == ["warning"]
     assert verifier.verify_calls == 2
     assert pipeline.perceptual_qa.verify_calls == 2
     assert check is not None
     assert check["verdict"] == QUALITY_VERDICT_PASS
     assert fresh["status"] == "verified"
     assert fresh["warning_code"] is None
+    assert fresh["wav_sha256"] != incumbent_sha256
+    assert Path(str(fresh["wav_path"])) != incumbent_path
+    assert incumbent_path.read_bytes() == incumbent_bytes
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["promoted"]
+    assert attempts[0]["perceptual_result"]["verdict"] == "ok"
 
 
 def test_persistent_perceptual_review_uses_bounded_repairs_then_blocks(
@@ -476,6 +505,9 @@ def test_persistent_perceptual_review_uses_bounded_repairs_then_blocks(
     }
     pipeline.perceptual_qa = SequencePerceptualVerifier([review])
     verifier = PassingWhisperVerifier()
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
     seed_salts, statuses_before_synthesis = _install_fake_repair_synthesis(
         pipeline,
         monkeypatch,
@@ -490,15 +522,42 @@ def test_persistent_perceptual_review_uses_bounded_repairs_then_blocks(
         stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
         segment_id=int(row["id"]),
     )
-    assert seed_salts == ["perceptual_repair_0", "perceptual_repair_1"]
-    assert statuses_before_synthesis == ["analyzed", "analyzed"]
-    assert verifier.verify_calls == 3
+    assert seed_salts == ["asr_clarity_candidate_0_0", "asr_clarity_candidate_1_0"]
+    assert statuses_before_synthesis == ["warning", "warning"]
+    assert verifier.verify_calls == 4
     assert pipeline.perceptual_qa.verify_calls == 3
     assert latest is not None
     assert latest["attempt"] == 3
     assert latest["verdict"] == "inconclusive"
     assert fresh["status"] == "warning"
     assert "PERCEPTUAL_NATURALNESS_REVIEW" in str(fresh["warning_code"])
+    assert fresh["wav_sha256"] == incumbent_sha256
+    assert Path(str(fresh["wav_path"])) == incumbent_path
+    assert incumbent_path.read_bytes() == incumbent_bytes
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["dual_failed", "dual_failed"]
+    assert all(
+        attempt["perceptual_result"]["verdict"] == "review"
+        for attempt in attempts
+    )
+
+    synthesis_count = len(seed_salts)
+    decode_count = verifier.verify_calls
+    with pytest.raises(ChapterQualityError, match="requires repair or review"):
+        pipeline._process_chapter(chapter, verifier)  # type: ignore[arg-type]
+    assert len(seed_salts) == synthesis_count
+    assert verifier.verify_calls == decode_count
+    assert pipeline.perceptual_qa.verify_calls == 4
+    assert [
+        attempt["state"]
+        for attempt in pipeline.db.segment_candidate_attempt_summary(
+            int(row["id"]),
+            pipeline.quality_policy_hash,
+        )
+    ] == ["dual_failed", "dual_failed"]
 
 
 def test_perceptual_inconclusive_does_not_trigger_regeneration(
@@ -523,7 +582,7 @@ def test_perceptual_inconclusive_does_not_trigger_regeneration(
         pipeline._process_chapter(chapter, verifier)  # type: ignore[arg-type]
 
     assert seed_salts == []
-    assert verifier.verify_calls == 1
+    assert verifier.verify_calls == 0
     assert pipeline.perceptual_qa.verify_calls == 1
 
 

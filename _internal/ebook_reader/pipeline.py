@@ -767,14 +767,18 @@ class BookPipeline:
         device = str(self.settings.get("perceptual_qa", {}).get("device", "cpu"))
         return device.strip().casefold().startswith("cuda")
 
-    def _segment_has_current_audio_qa(self, row: Any) -> bool:
+    def _segment_has_current_content_qa(self, row: Any) -> bool:
         artifact_sha256 = str(row["wav_sha256"] or "").strip()
-        if not self.db.segment_audio_is_current_qa_verified(
+        return self.db.segment_audio_is_current_qa_verified(
             int(row["id"]),
             artifact_sha256,
             SEGMENT_AUDIO_QUALITY_STAGE,
-        ):
+        )
+
+    def _segment_has_current_audio_qa(self, row: Any) -> bool:
+        if not self._segment_has_current_content_qa(row):
             return False
+        artifact_sha256 = str(row["wav_sha256"] or "").strip()
         return not self._perceptual_qa_enabled() or self.db.segment_audio_is_current_qa_verified(
             int(row["id"]),
             artifact_sha256,
@@ -814,7 +818,7 @@ class BookPipeline:
         *,
         verdict: str,
         failure_codes: tuple[str, ...] = (),
-    ) -> None:
+    ) -> int:
         segment_id = int(item["id"])
         artifact_sha256 = str(item["wav_sha256"] or "").strip()
         wav_path = Path(str(item["wav_path"] or ""))
@@ -826,7 +830,7 @@ class BookPipeline:
             raise AudioQualityError(
                 f"WAV changed before perceptual QA evidence for {item['stable_id']}"
             )
-        self.db.record_quality_check(
+        return self.db.record_quality_check(
             scope=QUALITY_SCOPE_SEGMENT,
             stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
             segment_id=segment_id,
@@ -857,6 +861,130 @@ class BookPipeline:
             pitch_semitones = 0
         return profile, pitch_semitones
 
+    def _evaluate_perceptual_audio_item(
+        self,
+        row: Any,
+        *,
+        gate_label: str,
+    ) -> dict[str, Any]:
+        perceptual_uses_gpu = self._perceptual_qa_uses_gpu()
+        self._resource_gate(
+            gate_label,
+            release_active=self.perceptual_qa.unload,
+            require_gpu=perceptual_uses_gpu,
+            require_cpu_io=not perceptual_uses_gpu,
+        )
+        profile, baseline_pitch_semitones = self._effective_perceptual_profile(row)
+        preset_name = str(profile["preset_name"] or "").strip()
+        result = self.perceptual_qa.verify(
+            Path(str(row["wav_path"])),
+            preset_name,
+            pitch_semitones=baseline_pitch_semitones,
+        )
+        perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
+        reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
+        short_audio_exemption = (
+            perceptual_verdict == PERCEPTUAL_INCONCLUSIVE
+            and reason == "PERCEPTUAL_SHORT_AUDIO"
+        )
+        return {
+            **result,
+            "baseline_pitch_semitones": baseline_pitch_semitones,
+            "policy_exemption": "short_audio" if short_audio_exemption else None,
+        }
+
+    @staticmethod
+    def _classify_perceptual_result(
+        result: dict[str, Any],
+    ) -> tuple[str, tuple[str, ...]]:
+        perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
+        if perceptual_verdict == PERCEPTUAL_OK or result.get("policy_exemption") == "short_audio":
+            return QUALITY_VERDICT_PASS, ()
+        reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
+        warning_code = (
+            "PERCEPTUAL_NATURALNESS_REVIEW"
+            if perceptual_verdict == PERCEPTUAL_REVIEW
+            else reason
+        )
+        return "inconclusive", (warning_code,)
+
+    def _verify_segment_candidate_perceptual(
+        self,
+        segment: Any,
+        candidate: Any,
+        chapter: Any,
+    ) -> Any:
+        candidate_item = self._segment_candidate_item(segment, candidate)
+        baseline_pitch_semitones = 0
+        try:
+            result = self._evaluate_perceptual_audio_item(
+                candidate_item,
+                gate_label=(
+                    f"UTMOSv2 candidate chapter {chapter['chapter_index']} "
+                    f"segment {segment['seq']}"
+                ),
+            )
+        except (PerceptualQAUnavailable, KeyError, TypeError, ValueError) as exc:
+            reason = (
+                exc.reason
+                if isinstance(exc, PerceptualQAUnavailable)
+                else "PERCEPTUAL_EVIDENCE_ERROR"
+            )
+            try:
+                _profile, baseline_pitch_semitones = self._effective_perceptual_profile(
+                    candidate_item
+                )
+            except (KeyError, TypeError, ValueError):
+                baseline_pitch_semitones = 0
+            result = {
+                "verdict": PERCEPTUAL_INCONCLUSIVE,
+                "reason": reason,
+                "review_required": True,
+                "baseline_pitch_semitones": baseline_pitch_semitones,
+                "error": str(exc),
+            }
+            self._record_segment_perceptual_evidence(
+                candidate_item,
+                result,
+                verdict=QUALITY_VERDICT_FAIL,
+                failure_codes=(reason,),
+            )
+            raise ChapterQualityError(
+                f"Mandatory perceptual QA is unavailable for {segment['stable_id']}: {exc}",
+                metrics={
+                    "segment_id": int(segment["id"]),
+                    "candidate_id": int(candidate["id"]),
+                    **result,
+                },
+                failure_codes=(reason,),
+                review_required=True,
+            ) from exc
+
+        evidence_verdict, failure_codes = self._classify_perceptual_result(result)
+        quality_check_id = self._record_segment_perceptual_evidence(
+            candidate_item,
+            result,
+            verdict=evidence_verdict,
+            failure_codes=failure_codes,
+        )
+        perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
+        if evidence_verdict != QUALITY_VERDICT_PASS and perceptual_verdict != PERCEPTUAL_REVIEW:
+            reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
+            raise ChapterQualityError(
+                f"Perceptual QA is inconclusive for {segment['stable_id']}: {reason}",
+                metrics={
+                    "segment_id": int(segment["id"]),
+                    "candidate_id": int(candidate["id"]),
+                    **result,
+                },
+                failure_codes=failure_codes,
+                review_required=True,
+            )
+        return self.db.checkpoint_segment_candidate_perceptual(
+            int(candidate["id"]),
+            quality_check_id=quality_check_id,
+        )
+
     def _verify_chapter_perceptual_audio(self, chapter: Any) -> list[dict[str, Any]]:
         if not self._perceptual_qa_enabled():
             return []
@@ -873,7 +1001,6 @@ class BookPipeline:
             )
         ]
         label = f"Perceptual QA chapter {chapter['chapter_index']}"
-        perceptual_uses_gpu = self._perceptual_qa_uses_gpu()
         review_candidates: list[dict[str, Any]] = []
         self._progress(label, 0, len(pending))
         for index, row in enumerate(pending, 1):
@@ -888,25 +1015,17 @@ class BookPipeline:
                     failure_codes=("PERCEPTUAL_ASR_EVIDENCE_MISSING",),
                     review_required=True,
                 )
-            self._resource_gate(
-                f"UTMOSv2 chapter {chapter['chapter_index']} segment {row['seq']}",
-                release_active=self.perceptual_qa.unload,
-                require_gpu=perceptual_uses_gpu,
-                require_cpu_io=not perceptual_uses_gpu,
-            )
             baseline_pitch_semitones = 0
             try:
-                profile, baseline_pitch_semitones = self._effective_perceptual_profile(row)
-                preset_name = str(profile["preset_name"] or "").strip()
-                result = self.perceptual_qa.verify(
-                    Path(str(row["wav_path"])),
-                    preset_name,
-                    pitch_semitones=baseline_pitch_semitones,
+                result = self._evaluate_perceptual_audio_item(
+                    row,
+                    gate_label=(
+                        f"UTMOSv2 chapter {chapter['chapter_index']} segment {row['seq']}"
+                    ),
                 )
-                result = {
-                    **result,
-                    "baseline_pitch_semitones": baseline_pitch_semitones,
-                }
+                baseline_pitch_semitones = int(
+                    result.get("baseline_pitch_semitones", 0)
+                )
             except (PerceptualQAUnavailable, KeyError, TypeError, ValueError) as exc:
                 reason = (
                     exc.reason
@@ -934,17 +1053,9 @@ class BookPipeline:
                     review_required=True,
                 ) from exc
 
-            reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
             perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
-            short_audio_exemption = (
-                perceptual_verdict == PERCEPTUAL_INCONCLUSIVE
-                and reason == "PERCEPTUAL_SHORT_AUDIO"
-            )
-            result = {
-                **result,
-                "policy_exemption": "short_audio" if short_audio_exemption else None,
-            }
-            if perceptual_verdict == PERCEPTUAL_OK or short_audio_exemption:
+            evidence_verdict, failure_codes = self._classify_perceptual_result(result)
+            if evidence_verdict == QUALITY_VERDICT_PASS:
                 self._record_segment_perceptual_evidence(
                     row,
                     result,
@@ -952,16 +1063,12 @@ class BookPipeline:
                 )
                 self.db.mark_perceptual_result(int(row["id"]))
             else:
-                warning_code = (
-                    "PERCEPTUAL_NATURALNESS_REVIEW"
-                    if perceptual_verdict == PERCEPTUAL_REVIEW
-                    else reason
-                )
+                warning_code = failure_codes[0]
                 self._record_segment_perceptual_evidence(
                     row,
                     result,
-                    verdict="inconclusive",
-                    failure_codes=(warning_code,),
+                    verdict=evidence_verdict,
+                    failure_codes=failure_codes,
                 )
                 self.db.mark_perceptual_result(
                     int(row["id"]),
@@ -971,6 +1078,211 @@ class BookPipeline:
                     review_candidates.append(dict(row))
             self._progress(label, index, len(pending))
         return review_candidates
+
+    def _repair_chapter_perceptual_candidates(
+        self,
+        chapter: Any,
+        verifier: WhisperVerifier,
+        review_candidates: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        repair_rounds = int(
+            self.settings.get("perceptual_qa", {}).get("repair_rounds", 0)
+        )
+        if not review_candidates or repair_rounds <= 0:
+            return review_candidates
+        repair_targets = {
+            int(item["id"]): dict(item)
+            for item in review_candidates
+        }
+        unresolved: list[dict[str, Any]] = []
+        maximum_state_iterations = max(8, repair_rounds * 6 + 8)
+        for _state_iteration in range(maximum_state_iterations):
+            if not repair_targets:
+                break
+            self.db.reconcile_segment_candidate_artifacts(self.quality_policy_hash)
+            generation_jobs: list[tuple[dict[str, Any], Any]] = []
+            beam_jobs: list[tuple[dict[str, Any], Any]] = []
+            greedy_jobs: list[tuple[dict[str, Any], Any]] = []
+            perceptual_jobs: list[tuple[dict[str, Any], Any]] = []
+            promotion_jobs: list[tuple[dict[str, Any], Any]] = []
+            completed_ids: list[int] = []
+            progressed = False
+
+            for segment_id in list(repair_targets):
+                segment = dict(self.db.get_segment(segment_id))
+                plan = self.db.segment_candidate_resume_plan(
+                    segment_id,
+                    self.quality_policy_hash,
+                    repair_rounds,
+                )
+                action = str(plan["action"])
+                if action == "allocate":
+                    candidate = self._allocate_segment_candidate(
+                        segment,
+                        int(plan["repair_round"]),
+                        repair_rounds,
+                    )
+                    generation_jobs.append((segment, candidate))
+                    progressed = True
+                elif action == "generate":
+                    generation_jobs.append(
+                        (
+                            segment,
+                            self.db.get_segment_candidate(int(plan["candidate_id"])),
+                        )
+                    )
+                elif action == "decode_beam":
+                    beam_jobs.append(
+                        (segment, self.db.get_segment_candidate(int(plan["candidate_id"])))
+                    )
+                elif action == "decode_greedy":
+                    greedy_jobs.append(
+                        (segment, self.db.get_segment_candidate(int(plan["candidate_id"])))
+                    )
+                elif action == "verify_perceptual":
+                    perceptual_jobs.append(
+                        (segment, self.db.get_segment_candidate(int(plan["candidate_id"])))
+                    )
+                elif action == "promote":
+                    promotion_jobs.append(
+                        (segment, self.db.get_segment_candidate(int(plan["candidate_id"])))
+                    )
+                elif action == "exhausted":
+                    unresolved.append(segment)
+                    completed_ids.append(segment_id)
+                    progressed = True
+                elif action == "complete":
+                    completed_ids.append(segment_id)
+                    progressed = True
+                elif action in {"stale_policy", "stale_incumbent"}:
+                    raise RuntimeError(
+                        f"perceptual candidate resume refused {action} for segment {segment_id}"
+                    )
+                else:
+                    raise RuntimeError(
+                        f"unsupported perceptual candidate resume action: {action}"
+                    )
+
+            for segment_id in completed_ids:
+                repair_targets.pop(segment_id, None)
+
+            if generation_jobs:
+                verifier.unload()
+                self.perceptual_qa.unload()
+                label = f"Tạo candidate perceptual chapter {chapter['chapter_index']}"
+                self._progress(label, 0, len(generation_jobs))
+                for index, (segment, candidate) in enumerate(generation_jobs, 1):
+                    self._resource_gate(
+                        f"candidate perceptual chapter {chapter['chapter_index']} "
+                        f"segment {segment['seq']}",
+                        keep_engine=None,
+                    )
+                    self._process_segment_candidate(segment, candidate, chapter)
+                    self._progress(label, index, len(generation_jobs))
+                self.tts.unload_all()
+                progressed = True
+                continue
+
+            if beam_jobs or greedy_jobs:
+                self.tts.unload_all()
+                decode_jobs = [
+                    *[(False, item, candidate) for item, candidate in beam_jobs],
+                    *[(True, item, candidate) for item, candidate in greedy_jobs],
+                ]
+                label = f"Whisper candidate perceptual chapter {chapter['chapter_index']}"
+                self._progress(label, 0, len(decode_jobs))
+                for index, (confirmation, segment, candidate) in enumerate(decode_jobs, 1):
+                    candidate_item = self._segment_candidate_item(segment, candidate)
+                    self._resource_gate(
+                        f"Whisper candidate perceptual chapter {chapter['chapter_index']} "
+                        f"segment {segment['seq']}",
+                        release_active=verifier.unload,
+                    )
+                    result = self._decode_audio_candidate(
+                        candidate_item,
+                        verifier,
+                        confirmation=confirmation,
+                        repair_round=int(candidate["repair_round"]),
+                        delivery_mode=DELIVERY_CLARITY,
+                    )
+                    self.db.checkpoint_segment_candidate_decode(
+                        int(candidate["id"]),
+                        quality_check_id=int(result["selected_quality_check_id"]),
+                        confirmation=confirmation,
+                    )
+                    self._progress(label, index, len(decode_jobs))
+                progressed = True
+                continue
+
+            if perceptual_jobs:
+                verifier.unload()
+                label = f"UTMOSv2 candidate perceptual chapter {chapter['chapter_index']}"
+                self._progress(label, 0, len(perceptual_jobs))
+                for index, (segment, candidate) in enumerate(perceptual_jobs, 1):
+                    self._verify_segment_candidate_perceptual(
+                        segment,
+                        candidate,
+                        chapter,
+                    )
+                    self._progress(label, index, len(perceptual_jobs))
+                progressed = True
+                continue
+
+            if promotion_jobs:
+                for segment, candidate in promotion_jobs:
+                    candidate_item = self._segment_candidate_item(segment, candidate)
+                    signal_valid, _signal_metrics = self._inspect_existing_segment(
+                        candidate_item
+                    )
+                    if not signal_valid:
+                        self.db.mark_segment_candidate_invalid(
+                            int(candidate["id"]),
+                            expected_wav_sha256=str(candidate["wav_sha256"]),
+                            reason=(
+                                "perceptual candidate failed signal validation immediately "
+                                "before promotion"
+                            ),
+                        )
+                        progressed = True
+                        continue
+                    signal = self._segment_signal_provenance(candidate_item)
+                    warning_code = "|".join(
+                        self._signal_warning_codes(
+                            signal,
+                            split_recovery=bool(signal.get("split_parts")),
+                        )
+                    ) or None
+                    promoted = self.db.promote_segment_candidate(
+                        int(candidate["id"]),
+                        validated_wav_sha256=str(candidate["wav_sha256"]),
+                        repair_action="promote_perceptual_repair_candidate",
+                        attempt=self._next_segment_quality_attempt(int(segment["id"])),
+                        warning_code=warning_code,
+                    )
+                    if str(promoted["state"]) == SEGMENT_CANDIDATE_PROMOTED:
+                        repair_targets.pop(int(segment["id"]), None)
+                        self.db.event(
+                            "info",
+                            "PERCEPTUAL_CANDIDATE_PROMOTED",
+                            f"Immutable perceptual candidate promoted for {segment['stable_id']}",
+                            {
+                                "candidate_id": int(candidate["id"]),
+                                "repair_round": int(candidate["repair_round"]),
+                                "wav_sha256": str(candidate["wav_sha256"]),
+                            },
+                        )
+                    progressed = True
+                continue
+
+            if not progressed:
+                raise RuntimeError("perceptual candidate state machine made no progress")
+        else:
+            raise RuntimeError(
+                "perceptual candidate state machine exceeded its finite transition budget"
+            )
+        if repair_targets:
+            raise RuntimeError("perceptual candidate state machine stopped with unfinished repairs")
+        return unresolved
 
     def _chapter_audio_evidence_sha256(self, chapter_id: int) -> str:
         digest = hashlib.sha256()
@@ -1131,7 +1443,7 @@ class BookPipeline:
         valid, _ = self._inspect_existing_segment(row)
         if not valid:
             return False
-        return self._segment_has_current_audio_qa(row)
+        return self._segment_has_current_content_qa(row)
 
     def _recheckpoint_segment_for_current_audio_qa(
         self,
@@ -1209,7 +1521,7 @@ class BookPipeline:
             if (
                 status in {SegmentStatus.VERIFIED.value, SegmentStatus.WARNING.value}
                 and signal_valid
-                and self._segment_has_current_audio_qa(row)
+                and self._segment_has_current_content_qa(row)
             ):
                 continue
             if signal_valid and status in {
@@ -1286,42 +1598,11 @@ class BookPipeline:
         self._verify_chapter_audio(chapter, verifier)
         verifier.unload()
         perceptual_reviews = self._verify_chapter_perceptual_audio(chapter)
-        perceptual_repair_rounds = int(
-            self.settings.get("perceptual_qa", {}).get("repair_rounds", 0)
+        perceptual_reviews = self._repair_chapter_perceptual_candidates(
+            chapter,
+            verifier,
+            perceptual_reviews,
         )
-        for repair_round in range(perceptual_repair_rounds):
-            if not perceptual_reviews:
-                break
-            self.perceptual_qa.unload()
-            repair_label = (
-                f"Perceptual repair chapter {chapter['chapter_index']} "
-                f"- round {repair_round + 1}"
-            )
-            self._progress(repair_label, 0, len(perceptual_reviews))
-            for index, item in enumerate(perceptual_reviews, 1):
-                segment_id = int(item["id"])
-                self.db.reset_segment_pending(
-                    segment_id,
-                    f"Perceptual QA repair round {repair_round + 1}",
-                )
-                fresh = dict(self.db.get_segment(segment_id))
-                self._resource_gate(
-                    (
-                        f"Perceptual repair chapter {chapter['chapter_index']} "
-                        f"segment {fresh['seq']}"
-                    ),
-                    keep_engine=None,
-                )
-                self._process_single_segment(
-                    fresh,
-                    chapter,
-                    seed_salt_prefix=f"perceptual_repair_{repair_round}",
-                )
-                self._progress(repair_label, index, len(perceptual_reviews))
-            self.tts.unload_all()
-            self._verify_chapter_audio(chapter, verifier)
-            verifier.unload()
-            perceptual_reviews = self._verify_chapter_perceptual_audio(chapter)
 
         rows = self.db.list_segments(chapter_id=chapter_id)
         blocking_warnings = self._high_quality_blocking_segment_warnings(rows)
@@ -1489,6 +1770,7 @@ class BookPipeline:
             generation_seed=self.tts.generation_seed(row, seed_salt),
             wav_path=self._segment_candidate_path(row, repair_round),
             candidates_root=self._segment_candidate_root(),
+            perceptual_required=self._perceptual_qa_enabled(),
         )
 
     def _segment_candidate_item(self, segment: Any, candidate: Any) -> dict[str, Any]:
@@ -1985,6 +2267,91 @@ class BookPipeline:
             for path in part_paths:
                 path.unlink(missing_ok=True)
 
+    def _spoken_text_and_anchors(
+        self,
+        item: dict[str, Any],
+    ) -> tuple[str, list[dict[str, Any]]]:
+        provider = getattr(self.tts, "spoken_text_with_anchors", None)
+        if not callable(provider):
+            return self.tts.spoken_text(item), []
+        spoken_text, raw_anchors = provider(item)
+        anchors = [dict(anchor) for anchor in raw_anchors if isinstance(anchor, dict)]
+        return str(spoken_text), anchors
+
+    def _decode_audio_candidate(
+        self,
+        item: dict[str, Any],
+        verifier: WhisperVerifier,
+        *,
+        confirmation: bool,
+        repair_round: int | None,
+        delivery_mode: str,
+        evidence_sink: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        expected_text, locked_name_anchors = self._spoken_text_and_anchors(item)
+        wav_path = Path(str(item["wav_path"]))
+        direct = verifier.verify(
+            expected_text,
+            wav_path,
+            confirmation=confirmation,
+        )
+        direct = adjudicate_locked_name_anchors(
+            expected_text,
+            direct,
+            locked_name_anchors,
+            min_similarity=float(self.settings["asr"]["min_similarity"]),
+            max_wer=float(self.settings["asr"]["max_wer"]),
+        )
+        repeated: dict[str, Any] | None = None
+        selected = direct
+        selected_context = "direct"
+        if _asr_verdict(direct) != ASR_PASS and verifier.can_verify_repeated_short(
+            expected_text
+        ):
+            repeated = verifier.verify_repeated_short(
+                expected_text,
+                wav_path,
+                confirmation=confirmation,
+            )
+            repeated = adjudicate_locked_name_anchors(
+                expected_text,
+                repeated,
+                locked_name_anchors,
+                repeat_count=SHORT_CONTEXT_REPEAT_COUNT,
+                min_similarity=float(self.settings["asr"]["min_similarity"]),
+                max_wer=float(self.settings["asr"]["max_wer"]),
+            )
+            if _asr_verdict(repeated) == ASR_PASS:
+                selected = repeated
+                selected_context = "repeat3"
+
+        candidates = [("direct", direct)]
+        if repeated is not None:
+            candidates.append(("repeat3", repeated))
+        selected_evidence: dict[str, Any] | None = None
+        for context_mode, candidate in candidates:
+            evidence = self._record_segment_asr_decode_evidence(
+                item,
+                candidate,
+                confirmation=confirmation,
+                context_mode=context_mode,
+                selected=context_mode == selected_context,
+                repair_round=repair_round,
+                delivery_mode=delivery_mode,
+            )
+            if evidence_sink is not None:
+                evidence_sink.append(evidence)
+            if context_mode == selected_context:
+                selected_evidence = evidence
+        if selected_evidence is None:
+            raise RuntimeError("selected ASR decode evidence was not recorded")
+        return {
+            **selected,
+            "selected_context_mode": selected_context,
+            "confirmation_decode": confirmation,
+            "selected_quality_check_id": int(selected_evidence["quality_check_id"]),
+        }
+
     def _verify_chapter_audio(self, chapter: Any, verifier: WhisperVerifier) -> None:
         chapter_id = int(chapter["id"])
         rows = self.db.list_segments(chapter_id=chapter_id)
@@ -2074,20 +2441,6 @@ class BookPipeline:
                 ]
             return combined
 
-        def spoken_text_and_anchors(
-            item: dict[str, Any],
-        ) -> tuple[str, list[dict[str, Any]]]:
-            provider = getattr(self.tts, "spoken_text_with_anchors", None)
-            if not callable(provider):
-                return self.tts.spoken_text(item), []
-            spoken_text, raw_anchors = provider(item)
-            anchors = [
-                dict(anchor)
-                for anchor in raw_anchors
-                if isinstance(anchor, dict)
-            ]
-            return str(spoken_text), anchors
-
         def decode_candidate(
             item: dict[str, Any],
             *,
@@ -2095,69 +2448,14 @@ class BookPipeline:
             repair_round: int | None,
             delivery_mode: str,
         ) -> dict[str, Any]:
-            expected_text, locked_name_anchors = spoken_text_and_anchors(item)
-            wav_path = Path(str(item["wav_path"]))
-            direct = verifier.verify(
-                expected_text,
-                wav_path,
+            return self._decode_audio_candidate(
+                item,
+                verifier,
                 confirmation=confirmation,
+                repair_round=repair_round,
+                delivery_mode=delivery_mode,
+                evidence_sink=artifact_history(item),
             )
-            direct = adjudicate_locked_name_anchors(
-                expected_text,
-                direct,
-                locked_name_anchors,
-                min_similarity=float(self.settings["asr"]["min_similarity"]),
-                max_wer=float(self.settings["asr"]["max_wer"]),
-            )
-            repeated: dict[str, Any] | None = None
-            selected = direct
-            selected_context = "direct"
-            if _asr_verdict(direct) != ASR_PASS and verifier.can_verify_repeated_short(
-                expected_text
-            ):
-                repeated = verifier.verify_repeated_short(
-                    expected_text,
-                    wav_path,
-                    confirmation=confirmation,
-                )
-                repeated = adjudicate_locked_name_anchors(
-                    expected_text,
-                    repeated,
-                    locked_name_anchors,
-                    repeat_count=SHORT_CONTEXT_REPEAT_COUNT,
-                    min_similarity=float(self.settings["asr"]["min_similarity"]),
-                    max_wer=float(self.settings["asr"]["max_wer"]),
-                )
-                if _asr_verdict(repeated) == ASR_PASS:
-                    selected = repeated
-                    selected_context = "repeat3"
-
-            candidates = [("direct", direct)]
-            if repeated is not None:
-                candidates.append(("repeat3", repeated))
-            history = artifact_history(item)
-            selected_evidence: dict[str, Any] | None = None
-            for context_mode, candidate in candidates:
-                evidence = self._record_segment_asr_decode_evidence(
-                    item,
-                    candidate,
-                    confirmation=confirmation,
-                    context_mode=context_mode,
-                    selected=context_mode == selected_context,
-                    repair_round=repair_round,
-                    delivery_mode=delivery_mode,
-                )
-                history.append(evidence)
-                if context_mode == selected_context:
-                    selected_evidence = evidence
-            if selected_evidence is None:
-                raise RuntimeError("selected ASR decode evidence was not recorded")
-            return {
-                **selected,
-                "selected_context_mode": selected_context,
-                "confirmation_decode": confirmation,
-                "selected_quality_check_id": int(selected_evidence["quality_check_id"]),
-            }
 
         def require_endpoint_repair(
             item: dict[str, Any],
@@ -2443,6 +2741,7 @@ class BookPipeline:
             generation_jobs: list[tuple[dict[str, Any], Any]] = []
             beam_jobs: list[tuple[dict[str, Any], Any]] = []
             greedy_jobs: list[tuple[dict[str, Any], Any]] = []
+            perceptual_jobs: list[tuple[dict[str, Any], Any]] = []
             promotion_jobs: list[tuple[dict[str, Any], Any]] = []
             completed_ids: list[int] = []
             progressed = False
@@ -2479,6 +2778,10 @@ class BookPipeline:
                     )
                 elif action == "decode_greedy":
                     greedy_jobs.append(
+                        (item, self.db.get_segment_candidate(int(plan["candidate_id"])))
+                    )
+                elif action == "verify_perceptual":
+                    perceptual_jobs.append(
                         (item, self.db.get_segment_candidate(int(plan["candidate_id"])))
                     )
                 elif action == "promote":
@@ -2554,6 +2857,7 @@ class BookPipeline:
 
             if generation_jobs:
                 verifier.unload()
+                self.perceptual_qa.unload()
                 repair_label = f"Tạo candidate clarity chapter {chapter['chapter_index']}"
                 self._progress(repair_label, 0, len(generation_jobs))
                 for index, (item, candidate) in enumerate(generation_jobs, 1):
@@ -2616,6 +2920,22 @@ class BookPipeline:
                     else:
                         last_results[segment_id] = result
                     self._progress(decode_label, index, len(decode_jobs))
+                progressed = True
+                continue
+
+            if perceptual_jobs:
+                verifier.unload()
+                perceptual_label = (
+                    f"Perceptual QA candidate clarity chapter {chapter['chapter_index']}"
+                )
+                self._progress(perceptual_label, 0, len(perceptual_jobs))
+                for index, (segment, candidate) in enumerate(perceptual_jobs, 1):
+                    self._verify_segment_candidate_perceptual(
+                        segment,
+                        candidate,
+                        chapter,
+                    )
+                    self._progress(perceptual_label, index, len(perceptual_jobs))
                 progressed = True
                 continue
 
