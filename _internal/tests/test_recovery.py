@@ -421,3 +421,168 @@ def test_recovery_requeues_legacy_verified_wav_for_asr_without_resetting_audio(
     assert updated["asr_wer"] is None
     assert updated["warning_code"] == "LOW_ANALYSIS_CONFIDENCE|TTS_PACE_OUTLIER"
     assert "current locked quality policy" in str(updated["error"])
+
+
+def test_recovery_preserves_incumbent_and_exposes_candidate_resume_plan(tmp_path: Path) -> None:
+    paths, settings, db, row = setup_db(tmp_path)
+    profile_id = db.upsert_voice_profile(
+        {
+            "voice_key": "recovery-candidate-voice",
+            "engine": "vieneu",
+            "preset_name": "Recovery Candidate",
+            "description": "Recovery candidate test voice",
+            "seed": 9,
+            "pitch_semitones": 0,
+            "status": "ready",
+        }
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET voice_profile_id=? WHERE id=?",
+            (profile_id, int(row["id"])),
+        )
+    wav = paths.chunks / "chapter_00001" / "0000000.wav"
+    audio = np.sin(np.linspace(0, 30, 48_000, dtype=np.float32)) * 0.1
+    wav_sha256, metrics = atomic_write_wav(wav, audio, 48_000, row["text"], settings)
+    db.mark_signal_passed(
+        int(row["id"]),
+        wav_path=wav,
+        wav_sha256=wav_sha256,
+        duration=float(metrics["duration"]),
+        signal=metrics,
+        generation_seed=11,
+    )
+    db.set_current_quality_policy(
+        policy_hash="candidate-recovery-policy",
+        policy_version=1,
+        policy={"asr": {"repair_rounds": int(settings["asr"]["repair_rounds"])}},
+    )
+    candidate = db.allocate_segment_candidate(
+        segment_id=int(row["id"]),
+        policy_hash="candidate-recovery-policy",
+        repair_round=0,
+        max_repair_rounds=int(settings["asr"]["repair_rounds"]),
+        incumbent_sha256=wav_sha256,
+        generation_seed=21,
+        wav_path=paths.work / "candidates" / "c1s1" / "r0.wav",
+        candidates_root=paths.work / "candidates",
+    )
+    db.mark_generating(
+        int(row["id"]),
+        seed=21,
+        delivery_mode="clarity",
+        repair_round=0,
+        policy_hash="candidate-recovery-policy",
+    )
+
+    report = recover_project(paths, db, settings)
+    recovered = db.get_segment(int(row["id"]))
+
+    assert report.reset_in_progress == 0
+    assert recovered["status"] == "signal_passed"
+    assert recovered["wav_path"] == str(wav.resolve())
+    assert recovered["wav_sha256"] == wav_sha256
+    assert report.candidate_resume_plans == [
+        {
+            "segment_id": int(row["id"]),
+            "policy_hash": "candidate-recovery-policy",
+            "action": "generate",
+            "candidate_id": int(candidate["id"]),
+            "repair_round": 0,
+            "state": "generating",
+            "generation_seed": 21,
+            "tts_attempt": 0,
+            "wav_path": str((paths.work / "candidates" / "c1s1" / "r0.wav").resolve()),
+            "wav_sha256": "",
+        }
+    ]
+
+
+def test_recovery_invalidates_corrupt_candidate_and_advances_round(tmp_path: Path) -> None:
+    paths, settings, db, row = setup_db(tmp_path)
+    profile_id = db.upsert_voice_profile(
+        {
+            "voice_key": "recovery-corrupt-candidate",
+            "engine": "vieneu",
+            "preset_name": "Recovery Candidate",
+            "description": "Recovery corrupt candidate test voice",
+            "seed": 10,
+            "pitch_semitones": 0,
+            "status": "ready",
+        }
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET voice_profile_id=? WHERE id=?",
+            (profile_id, int(row["id"])),
+        )
+    incumbent = paths.chunks / "chapter_00001" / "0000000.wav"
+    audio = np.sin(np.linspace(0, 30, 48_000, dtype=np.float32)) * 0.1
+    incumbent_sha256, incumbent_metrics = atomic_write_wav(
+        incumbent,
+        audio,
+        48_000,
+        row["text"],
+        settings,
+    )
+    db.mark_signal_passed(
+        int(row["id"]),
+        wav_path=incumbent,
+        wav_sha256=incumbent_sha256,
+        duration=float(incumbent_metrics["duration"]),
+        signal=incumbent_metrics,
+        generation_seed=31,
+    )
+    db.set_current_quality_policy(
+        policy_hash="candidate-corrupt-policy",
+        policy_version=1,
+        policy={"asr": {"repair_rounds": int(settings["asr"]["repair_rounds"])}},
+    )
+    candidate_path = paths.work / "candidates" / "c1s1" / "r0.wav"
+    candidate_path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_path.write_bytes(b"candidate-before-corruption")
+    candidate_sha256 = sha256_file(candidate_path)
+    candidate = db.allocate_segment_candidate(
+        segment_id=int(row["id"]),
+        policy_hash="candidate-corrupt-policy",
+        repair_round=0,
+        max_repair_rounds=int(settings["asr"]["repair_rounds"]),
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=32,
+        wav_path=candidate_path,
+        candidates_root=paths.work / "candidates",
+    )
+    db.checkpoint_segment_candidate_signal(
+        int(candidate["id"]),
+        expected_generation_seed=32,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        duration=1.0,
+        signal={
+            "duration": 1.0,
+            "tts_delivery_mode": "clarity",
+            "asr_clarity_repair_round": 0,
+            "spoken_text_sha256": "1" * 64,
+            "voice_profile_id": profile_id,
+            "pitch_semitones": 0,
+            "effective_pitch_semitones": 0,
+            "pitch_variant_skipped": False,
+            "pitch_variant_mixed": False,
+        },
+    )
+    candidate_path.write_bytes(b"candidate-after-corruption")
+
+    report = recover_project(paths, db, settings)
+
+    assert report.invalidated_candidates == 1
+    assert db.get_segment_candidate(int(candidate["id"]))["state"] == "invalid"
+    assert db.get_segment(int(row["id"]))["wav_sha256"] == incumbent_sha256
+    assert report.candidate_resume_plans == [
+        {
+            "segment_id": int(row["id"]),
+            "policy_hash": "candidate-corrupt-policy",
+            "action": "allocate",
+            "candidate_id": None,
+            "repair_round": 1,
+        }
+    ]

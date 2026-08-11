@@ -119,9 +119,11 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   spoken form/dạng ghép token nhưng chặn `Lucien → Lucy/Lucian/Lusienne`, thiếu occurrence, sai thứ tự, repeat3 thiếu
   và homograph ở sai vị trí (`Mây may áo` không được lấy động từ `may` để thay cho tên bị đọc sai);
   mọi verdict `ASR_INCONCLUSIVE` giữ nguyên để không quy lỗi model/ngữ cảnh thành lỗi TTS;
-- ASR repair dùng delivery `clarity` với voice/profile/pitch/text khóa nguyên và sampling variance thấp hơn; candidate
-  chỉ đạt khi cả beam lẫn greedy cùng `pass`. Regression bao phủ pass/fail theo cả hai thứ tự, giới hạn repair hữu hạn,
-  và crash giữa hai decode rồi resume vẫn buộc nghe lại đủ cặp mà không sinh vượt budget;
+- ASR repair dùng delivery `clarity` với voice/profile/pitch/text khóa nguyên và sampling variance thấp hơn; mỗi candidate
+  nằm ở path bất biến riêng và không thay incumbent trước khi cả beam lẫn greedy cùng `pass`. Ledger SQLite khóa round,
+  seed, voice/pitch, checksum và evidence; promotion commit final gate + CAS con trỏ + trạng thái trong một transaction.
+  Regression bao phủ crash/reopen, replay payload khác, casting đổi, path trùng, WAV mất/tamper, promotion rollback,
+  budget hữu hạn và exhaustion vẫn giữ đúng checksum/transcript incumbent;
 - final ASR pass/fail cùng danh sách decode evidence, checksum và policy được xuất cho từng segment trong
   `audiobook_quality_report.json`;
 - thermal hysteresis, atomic chapter assembly và cleanup file `.part` trong recovery;

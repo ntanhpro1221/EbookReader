@@ -75,6 +75,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - ASR repair phải giữ nguyên speaker, voice profile, pitch và `spoken_text`; chế độ `clarity` chỉ hạ sampling variance.
   WAV clarity chỉ được commit `verified` khi beam và greedy đều `pass`. Repair round phải nằm trong signal checkpoint
   để crash/resume không bỏ qua lượt xác nhận kép hoặc vượt quá `asr.repair_rounds`.
+- Mỗi WAV clarity phải được ghi vào candidate path bất biến riêng; không được thay file hoặc con trỏ SQLite của artifact
+  đang giữ trước khi candidate qua đủ beam + greedy. Final quality-check, CAS đổi con trỏ segment và trạng thái `promoted`
+  phải commit trong cùng một transaction. Candidate hỏng/mất file phải thành terminal `invalid`; hết budget phải đóng gate
+  trên đúng checksum incumbent và giữ nguyên audio incumbent.
 - Vocalization cực ngắn/kéo dài phải được chuẩn hóa thành âm tiết tiếng Việt ổn định. Output chạm đúng trần frame
   của VieNeu phải đi tiếp qua signal/Whisper validation, không được tự động coi là audio sai chỉ từ sample count.
   Nếu endpoint vẫn còn hoạt động ở đúng trần thì phải repair kể cả Whisper nhận đúng; không fade/cắt waveform để lách.

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from .audio_io import inspect_wav, verify_mp3
@@ -24,6 +24,9 @@ class RecoveryReport:
     invalid_mp3: int = 0
     stale_leases: int = 0
     completed_verified: bool = False
+    candidate_resume_plans: list[dict] = field(default_factory=list)
+    stale_candidates: int = 0
+    invalidated_candidates: int = 0
 
 
 class RecoveryError(RuntimeError):
@@ -96,6 +99,16 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
     )
     report.reset_in_progress = db.reset_in_progress_segments()
     report.stale_leases = db.clear_all_worker_leases()
+    current_policy = db.current_quality_policy()
+    if current_policy is not None:
+        policy_hash = str(current_policy["policy_hash"])
+        repair_rounds = int(settings.get("asr", {}).get("repair_rounds", 0))
+        report.invalidated_candidates = db.reconcile_segment_candidate_artifacts(policy_hash)
+        report.candidate_resume_plans = db.list_segment_candidate_resume_plans(
+            policy_hash,
+            repair_rounds,
+        )
+        report.stale_candidates = db.count_stale_segment_candidates(policy_hash)
 
     if str(db.book()["status"]) == "completed":
         completed_ok = True
@@ -221,6 +234,9 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             "reset_missing_or_corrupt": report.reset_missing_or_corrupt,
             "invalid_mp3": report.invalid_mp3,
             "stale_leases": report.stale_leases,
+            "candidate_resume_plans": report.candidate_resume_plans,
+            "stale_candidates": report.stale_candidates,
+            "invalidated_candidates": report.invalidated_candidates,
         },
     )
     return report

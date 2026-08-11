@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import sqlite3
 import time
@@ -8,12 +9,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
+from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, SegmentStatus
 
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -33,6 +35,34 @@ QUALITY_VERDICTS = {
     "inconclusive",
     "fail",
 }
+SEGMENT_CANDIDATE_GENERATING = "generating"
+SEGMENT_CANDIDATE_SIGNAL_PASSED = "signal_passed"
+SEGMENT_CANDIDATE_BEAM_RECORDED = "beam_recorded"
+SEGMENT_CANDIDATE_DUAL_FAILED = "dual_failed"
+SEGMENT_CANDIDATE_DUAL_PASSED = "dual_passed"
+SEGMENT_CANDIDATE_TTS_FAILED = "tts_failed"
+SEGMENT_CANDIDATE_INVALID = "invalid"
+SEGMENT_CANDIDATE_PROMOTED = "promoted"
+SEGMENT_CANDIDATE_STATES = frozenset(
+    {
+        SEGMENT_CANDIDATE_GENERATING,
+        SEGMENT_CANDIDATE_SIGNAL_PASSED,
+        SEGMENT_CANDIDATE_BEAM_RECORDED,
+        SEGMENT_CANDIDATE_DUAL_FAILED,
+        SEGMENT_CANDIDATE_DUAL_PASSED,
+        SEGMENT_CANDIDATE_TTS_FAILED,
+        SEGMENT_CANDIDATE_INVALID,
+        SEGMENT_CANDIDATE_PROMOTED,
+    }
+)
+SEGMENT_CANDIDATE_FAILURE_STATES = frozenset(
+    {
+        SEGMENT_CANDIDATE_DUAL_FAILED,
+        SEGMENT_CANDIDATE_TTS_FAILED,
+        SEGMENT_CANDIDATE_INVALID,
+    }
+)
+SEGMENT_CANDIDATE_EXHAUSTION_ACTION = "candidate_repair_exhausted"
 
 
 SCHEMA = """
@@ -214,6 +244,66 @@ CREATE TABLE IF NOT EXISTS quality_checks (
     )
 );
 
+CREATE TABLE IF NOT EXISTS segment_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    segment_id INTEGER NOT NULL REFERENCES segments(id) ON DELETE CASCADE,
+    policy_hash TEXT NOT NULL REFERENCES quality_policies(policy_hash),
+    repair_round INTEGER NOT NULL CHECK (repair_round >= 0),
+    incumbent_sha256 TEXT NOT NULL,
+    expected_voice_profile_id INTEGER NOT NULL REFERENCES voice_profiles(id),
+    expected_pitch_semitones INTEGER NOT NULL,
+    state TEXT NOT NULL CHECK (
+        state IN (
+            'generating','signal_passed','beam_recorded','dual_failed',
+            'dual_passed','tts_failed','invalid','promoted'
+        )
+    ),
+    tts_attempt INTEGER NOT NULL DEFAULT 0 CHECK (tts_attempt >= 0),
+    generation_seed INTEGER NOT NULL,
+    wav_path TEXT NOT NULL UNIQUE,
+    wav_sha256 TEXT,
+    wav_duration REAL CHECK (wav_duration IS NULL OR wav_duration > 0),
+    signal_json TEXT,
+    beam_result_json TEXT,
+    greedy_result_json TEXT,
+    beam_check_id INTEGER REFERENCES quality_checks(id),
+    greedy_check_id INTEGER REFERENCES quality_checks(id),
+    final_check_id INTEGER REFERENCES quality_checks(id),
+    failure_reason TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    promoted_at REAL,
+    UNIQUE(segment_id, policy_hash, repair_round),
+    CHECK (
+        state IN ('generating','tts_failed')
+        OR (
+            wav_sha256 IS NOT NULL
+            AND wav_duration IS NOT NULL
+            AND signal_json IS NOT NULL
+        )
+    ),
+    CHECK (
+        (beam_check_id IS NULL AND beam_result_json IS NULL)
+        OR (beam_check_id IS NOT NULL AND beam_result_json IS NOT NULL)
+    ),
+    CHECK (
+        (greedy_check_id IS NULL AND greedy_result_json IS NULL)
+        OR (greedy_check_id IS NOT NULL AND greedy_result_json IS NOT NULL)
+    ),
+    CHECK (
+        state NOT IN ('beam_recorded','dual_failed','dual_passed','promoted')
+        OR beam_check_id IS NOT NULL
+    ),
+    CHECK (
+        state NOT IN ('dual_failed','dual_passed','promoted')
+        OR greedy_check_id IS NOT NULL
+    ),
+    CHECK (
+        (state = 'promoted' AND promoted_at IS NOT NULL AND final_check_id IS NOT NULL)
+        OR (state <> 'promoted' AND promoted_at IS NULL)
+    )
+);
+
 CREATE TABLE IF NOT EXISTS runtime_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp REAL NOT NULL,
@@ -243,6 +333,8 @@ CREATE INDEX IF NOT EXISTS idx_quality_checks_segment
     ON quality_checks(segment_id, stage, policy_hash, id);
 CREATE INDEX IF NOT EXISTS idx_quality_checks_chapter
     ON quality_checks(chapter_id, stage, policy_hash, id);
+CREATE INDEX IF NOT EXISTS idx_segment_candidates_resume
+    ON segment_candidates(segment_id, policy_hash, state, repair_round);
 """
 
 
@@ -352,6 +444,41 @@ class ProjectDB:
                       AND status IN ('signal_passed','asr_passed','verified','warning','failed')
                 )
                 """
+            )
+
+        candidate_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(segment_candidates)")
+        }
+        required_candidate_columns = {
+            "id",
+            "segment_id",
+            "policy_hash",
+            "repair_round",
+            "incumbent_sha256",
+            "expected_voice_profile_id",
+            "expected_pitch_semitones",
+            "state",
+            "tts_attempt",
+            "generation_seed",
+            "wav_path",
+            "wav_sha256",
+            "wav_duration",
+            "signal_json",
+            "beam_result_json",
+            "greedy_result_json",
+            "beam_check_id",
+            "greedy_check_id",
+            "final_check_id",
+            "failure_reason",
+            "created_at",
+            "updated_at",
+            "promoted_at",
+        }
+        missing_candidate_columns = required_candidate_columns - candidate_columns
+        if missing_candidate_columns:
+            raise RuntimeError(
+                "segment_candidates schema is incomplete: "
+                + ", ".join(sorted(missing_candidate_columns))
             )
 
     @contextmanager
@@ -1287,6 +1414,25 @@ class ProjectDB:
                     "SELECT DISTINCT chapter_id FROM segments WHERE status IN ('generating','asr_passed')"
                 )
             ]
+            # Candidate generation owns a separate immutable path. If legacy orchestration happened
+            # to mark the segment itself as generating, restore the retained incumbent checkpoint
+            # instead of deleting it. Phase-2 orchestration never mutates the segment during clarity.
+            conn.execute(
+                """
+                UPDATE segments SET status='signal_passed',
+                    asr_text=NULL,asr_similarity=NULL,asr_wer=NULL,error=?,updated_at=?
+                WHERE status='generating'
+                  AND wav_path IS NOT NULL AND wav_sha256 IS NOT NULL
+                  AND wav_duration IS NOT NULL AND signal_json IS NOT NULL
+                  AND EXISTS(
+                      SELECT 1 FROM segment_candidates
+                      WHERE segment_candidates.segment_id=segments.id
+                        AND segment_candidates.incumbent_sha256=segments.wav_sha256
+                        AND segment_candidates.state<>'promoted'
+                  )
+                """,
+                (reason, time.time()),
+            )
             cursor = conn.execute(
                 """
                 UPDATE segments SET status=(
@@ -1458,6 +1604,1423 @@ class ProjectDB:
                     time.time(),
                 ),
             )
+            return int(cursor.lastrowid)
+
+    @staticmethod
+    def _normalized_sha256(value: str, label: str) -> str:
+        normalized = str(value or "").strip().casefold()
+        if len(normalized) != 64 or any(character not in "0123456789abcdef" for character in normalized):
+            raise ValueError(f"{label} must be a 64-character hexadecimal SHA-256")
+        return normalized
+
+    @staticmethod
+    def _json_object(value: Any, label: str) -> dict[str, Any]:
+        try:
+            decoded = json.loads(str(value or "{}"))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"{label} is not valid JSON") from exc
+        if not isinstance(decoded, dict):
+            raise RuntimeError(f"{label} must be a JSON object")
+        return decoded
+
+    @staticmethod
+    def _candidate_signal_provenance(signal: dict[str, Any]) -> dict[str, Any]:
+        required_fields = {
+            "spoken_text_sha256",
+            "voice_profile_id",
+            "pitch_semitones",
+            "effective_pitch_semitones",
+            "pitch_variant_skipped",
+            "pitch_variant_mixed",
+        }
+        missing = required_fields - signal.keys()
+        if missing:
+            raise ValueError(
+                "segment candidate signal lacks locked provenance: "
+                + ", ".join(sorted(missing))
+            )
+        ProjectDB._normalized_sha256(
+            str(signal["spoken_text_sha256"]),
+            "segment candidate spoken-text checksum",
+        )
+        try:
+            voice_profile_id = int(signal["voice_profile_id"])
+            pitch_semitones = int(signal["pitch_semitones"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("segment candidate voice and pitch provenance must be integers") from exc
+        if voice_profile_id <= 0:
+            raise ValueError("segment candidate voice profile id must be positive")
+        for field in ("pitch_variant_skipped", "pitch_variant_mixed"):
+            if signal[field] not in (False, True, 0, 1, 0.0, 1.0):
+                raise ValueError(f"segment candidate {field} must be boolean")
+        pitch_skipped = bool(signal["pitch_variant_skipped"])
+        pitch_mixed = bool(signal["pitch_variant_mixed"])
+        effective_value = signal["effective_pitch_semitones"]
+        if pitch_mixed:
+            if effective_value is not None:
+                raise ValueError("mixed candidate pitch provenance requires a null effective pitch")
+            effective_pitch = None
+        else:
+            try:
+                effective_pitch = int(effective_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("candidate effective pitch provenance must be an integer") from exc
+        if pitch_skipped and effective_pitch != 0:
+            raise ValueError("a skipped pitch transform must retain effective pitch zero")
+        return {
+            "spoken_text_sha256": str(signal["spoken_text_sha256"]).casefold(),
+            "voice_profile_id": voice_profile_id,
+            "pitch_semitones": pitch_semitones,
+            "effective_pitch_semitones": effective_pitch,
+            "pitch_variant_skipped": pitch_skipped,
+            "pitch_variant_mixed": pitch_mixed,
+        }
+
+    @staticmethod
+    def _candidate_blocking_signal_flags(signal: dict[str, Any]) -> tuple[str, ...]:
+        blocking_flags: list[str] = []
+        for field in (
+            "pace_outlier",
+            "pitch_variant_skipped",
+            "pitch_variant_mixed",
+            "generation_endpoint_active",
+        ):
+            value = signal.get(field, False)
+            if value not in (False, True, 0, 1, 0.0, 1.0):
+                raise RuntimeError(f"candidate signal flag {field} is not boolean")
+            if bool(value):
+                blocking_flags.append(field)
+        return tuple(blocking_flags)
+
+    @staticmethod
+    def _candidate_final_metrics(
+        candidate: sqlite3.Row,
+        beam_metrics: dict[str, Any],
+        greedy_metrics: dict[str, Any],
+        *,
+        warning_code: str | None,
+    ) -> dict[str, Any]:
+        final_metrics = dict(greedy_metrics)
+        final_metrics.update(
+            {
+                "dual_decode_required": True,
+                "dual_decode_passed": True,
+                "confirmation_verdicts": [
+                    str(beam_metrics.get("verdict", "")),
+                    str(greedy_metrics.get("verdict", "")),
+                ],
+                "beam_quality_check_id": int(candidate["beam_check_id"]),
+                "greedy_quality_check_id": int(candidate["greedy_check_id"]),
+                "decode_evidence": [beam_metrics, greedy_metrics],
+                "promotion_warning_code": str(warning_code).strip() if warning_code else None,
+            }
+        )
+        return final_metrics
+
+    @staticmethod
+    def _candidate_row_conn(conn: sqlite3.Connection, candidate_id: int) -> sqlite3.Row:
+        row = conn.execute(
+            "SELECT * FROM segment_candidates WHERE id=?",
+            (int(candidate_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown segment candidate id: {candidate_id}")
+        return row
+
+    @staticmethod
+    def _require_candidate_policy_conn(
+        conn: sqlite3.Connection,
+        policy_hash: str,
+        *,
+        active: bool = True,
+    ) -> sqlite3.Row:
+        normalized_hash = str(policy_hash or "").strip()
+        row = conn.execute(
+            "SELECT * FROM quality_policies WHERE policy_hash=?",
+            (normalized_hash,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("segment candidate quality policy is not registered")
+        if active and not bool(row["active"]):
+            raise RuntimeError("segment candidate quality policy is no longer active")
+        return row
+
+    @staticmethod
+    def _require_candidate_incumbent_conn(
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+    ) -> sqlite3.Row:
+        segment = conn.execute(
+            "SELECT * FROM segments WHERE id=?",
+            (int(candidate["segment_id"]),),
+        ).fetchone()
+        if segment is None:
+            raise KeyError(f"Unknown segment id: {candidate['segment_id']}")
+        if str(segment["wav_sha256"] or "").casefold() != str(candidate["incumbent_sha256"]):
+            raise RuntimeError("segment candidate incumbent checksum changed")
+        return segment
+
+    @staticmethod
+    def _expected_segment_voice_profile_conn(
+        conn: sqlite3.Connection,
+        segment: sqlite3.Row,
+    ) -> sqlite3.Row:
+        if str(segment["kind"] or "").strip().casefold() == "thought":
+            profile = conn.execute(
+                "SELECT * FROM voice_profiles WHERE voice_key=? COLLATE NOCASE",
+                ("narrator",),
+            ).fetchone()
+            if profile is None:
+                raise RuntimeError("thought candidate requires the locked narrator voice profile")
+        else:
+            if segment["voice_profile_id"] is None:
+                raise RuntimeError("segment candidate requires an assigned locked voice profile")
+            profile = conn.execute(
+                "SELECT * FROM voice_profiles WHERE id=?",
+                (int(segment["voice_profile_id"]),),
+            ).fetchone()
+            if profile is None:
+                raise RuntimeError("segment candidate voice profile does not exist")
+        if not bool(profile["locked"]):
+            raise RuntimeError("segment candidate voice profile is not locked")
+        return profile
+
+    @classmethod
+    def _require_candidate_voice_profile_conn(
+        cls,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        segment: sqlite3.Row,
+    ) -> sqlite3.Row:
+        profile = cls._expected_segment_voice_profile_conn(conn, segment)
+        if (
+            int(candidate["expected_voice_profile_id"]) != int(profile["id"])
+            or int(candidate["expected_pitch_semitones"])
+            != int(profile["pitch_semitones"] or 0)
+        ):
+            raise RuntimeError("segment candidate voice casting changed after allocation")
+        return profile
+
+    @staticmethod
+    def _candidate_file_error(candidate: sqlite3.Row) -> str | None:
+        wav_path = Path(str(candidate["wav_path"] or ""))
+        wav_sha256 = str(candidate["wav_sha256"] or "").strip().casefold()
+        if not wav_sha256:
+            return "candidate WAV checksum is missing"
+        if not wav_path.is_file():
+            return "candidate WAV is missing"
+        try:
+            if sha256_file(wav_path) != wav_sha256:
+                return "candidate WAV checksum does not match its immutable checkpoint"
+        except OSError as exc:
+            return f"candidate WAV could not be read: {exc}"
+        return None
+
+    @staticmethod
+    def _invalidate_candidate_conn(
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        reason: str,
+    ) -> sqlite3.Row:
+        if str(candidate["state"]) == SEGMENT_CANDIDATE_PROMOTED:
+            raise RuntimeError("a promoted segment candidate cannot be invalidated")
+        conn.execute(
+            """
+            UPDATE segment_candidates SET state=?,failure_reason=?,updated_at=?
+            WHERE id=? AND state=?
+            """,
+            (
+                SEGMENT_CANDIDATE_INVALID,
+                str(reason)[-8000:],
+                time.time(),
+                int(candidate["id"]),
+                str(candidate["state"]),
+            ),
+        )
+        return ProjectDB._candidate_row_conn(conn, int(candidate["id"]))
+
+    @staticmethod
+    def _candidate_summary(row: sqlite3.Row) -> dict[str, Any]:
+        def decoded_result(field: str) -> dict[str, Any] | None:
+            value = row[field]
+            if value is None:
+                return None
+            try:
+                decoded = json.loads(str(value))
+            except (TypeError, json.JSONDecodeError):
+                return {"invalid_json": True}
+            return decoded if isinstance(decoded, dict) else {"invalid_json": True}
+
+        return {
+            "candidate_id": int(row["id"]),
+            "repair_round": int(row["repair_round"]),
+            "state": str(row["state"]),
+            "incumbent_sha256": str(row["incumbent_sha256"]),
+            "expected_voice_profile_id": int(row["expected_voice_profile_id"]),
+            "expected_pitch_semitones": int(row["expected_pitch_semitones"]),
+            "wav_path": str(row["wav_path"]),
+            "wav_sha256": str(row["wav_sha256"] or ""),
+            "wav_duration": (
+                float(row["wav_duration"]) if row["wav_duration"] is not None else None
+            ),
+            "generation_seed": int(row["generation_seed"]),
+            "tts_attempt": int(row["tts_attempt"]),
+            "beam_check_id": int(row["beam_check_id"]) if row["beam_check_id"] is not None else None,
+            "greedy_check_id": (
+                int(row["greedy_check_id"]) if row["greedy_check_id"] is not None else None
+            ),
+            "final_check_id": (
+                int(row["final_check_id"]) if row["final_check_id"] is not None else None
+            ),
+            "signal": decoded_result("signal_json"),
+            "beam_result": decoded_result("beam_result_json"),
+            "greedy_result": decoded_result("greedy_result_json"),
+            "failure_reason": str(row["failure_reason"] or ""),
+            "promoted_at": (
+                float(row["promoted_at"]) if row["promoted_at"] is not None else None
+            ),
+        }
+
+    def allocate_segment_candidate(
+        self,
+        *,
+        segment_id: int,
+        policy_hash: str,
+        repair_round: int,
+        max_repair_rounds: int,
+        incumbent_sha256: str,
+        generation_seed: int,
+        wav_path: Path,
+        candidates_root: Path,
+        tts_attempt: int = 0,
+    ) -> sqlite3.Row:
+        normalized_round = int(repair_round)
+        normalized_max = int(max_repair_rounds)
+        normalized_attempt = int(tts_attempt)
+        normalized_incumbent = self._normalized_sha256(
+            incumbent_sha256,
+            "segment candidate incumbent checksum",
+        )
+        normalized_path = str(wav_path.resolve())
+        normalized_candidates_root = str(candidates_root.resolve())
+        path_key = normalized_path.casefold()
+        root_prefix = normalized_candidates_root.rstrip("\\/").casefold() + os.sep.casefold()
+        if not path_key.startswith(root_prefix):
+            raise ValueError("segment candidate WAV path must be under the dedicated candidates root")
+        if normalized_max < 0:
+            raise ValueError("ASR repair budget must be non-negative")
+        if normalized_round < 0 or normalized_round >= normalized_max:
+            raise ValueError("segment candidate repair round exceeds the same-policy budget")
+        if normalized_attempt < 0:
+            raise ValueError("segment candidate TTS attempt must be non-negative")
+
+        now = time.time()
+        with self.transaction() as conn:
+            self._require_candidate_policy_conn(conn, policy_hash)
+            segment = conn.execute(
+                "SELECT * FROM segments WHERE id=?",
+                (int(segment_id),),
+            ).fetchone()
+            if segment is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            if str(segment["wav_sha256"] or "").casefold() != normalized_incumbent:
+                raise RuntimeError("cannot allocate a candidate for a stale incumbent artifact")
+            expected_profile = self._expected_segment_voice_profile_conn(conn, segment)
+            expected_voice_profile_id = int(expected_profile["id"])
+            expected_pitch_semitones = int(expected_profile["pitch_semitones"] or 0)
+
+            rows = list(
+                conn.execute(
+                    """
+                    SELECT * FROM segment_candidates
+                    WHERE segment_id=? AND policy_hash=?
+                    ORDER BY repair_round
+                    """,
+                    (int(segment_id), str(policy_hash).strip()),
+                )
+            )
+            existing = next(
+                (row for row in rows if int(row["repair_round"]) == normalized_round),
+                None,
+            )
+            if existing is not None:
+                if (
+                    str(existing["incumbent_sha256"]) != normalized_incumbent
+                    or int(existing["expected_voice_profile_id"])
+                    != expected_voice_profile_id
+                    or int(existing["expected_pitch_semitones"])
+                    != expected_pitch_semitones
+                    or int(existing["generation_seed"]) != int(generation_seed)
+                    or int(existing["tts_attempt"]) != normalized_attempt
+                    or str(existing["wav_path"]) != normalized_path
+                ):
+                    raise RuntimeError("candidate resume metadata differs from its durable checkpoint")
+                return existing
+
+            rounds = [int(row["repair_round"]) for row in rows]
+            if any(round_index >= normalized_max for round_index in rounds):
+                raise RuntimeError("stored candidate rounds exceed the supplied same-policy budget")
+            if rounds != list(range(normalized_round)):
+                raise RuntimeError("candidate rounds must be contiguous and allocated in order")
+            if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in rows):
+                raise RuntimeError("same-policy candidate rounds cannot mix incumbent artifacts")
+            if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in rows):
+                raise RuntimeError("the previous candidate round is not a terminal failure")
+            occupied_paths = [
+                str(row[0])
+                for row in conn.execute(
+                    """
+                    SELECT wav_path FROM segments WHERE wav_path IS NOT NULL
+                    UNION ALL
+                    SELECT wav_path FROM segment_candidates
+                    """
+                )
+            ]
+            if any(path.casefold() == path_key for path in occupied_paths):
+                raise RuntimeError("segment candidate WAV path collides with an immutable audio artifact")
+
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO segment_candidates(
+                        segment_id,policy_hash,repair_round,incumbent_sha256,
+                        expected_voice_profile_id,expected_pitch_semitones,state,
+                        tts_attempt,generation_seed,wav_path,created_at,updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        int(segment_id),
+                        str(policy_hash).strip(),
+                        normalized_round,
+                        normalized_incumbent,
+                        expected_voice_profile_id,
+                        expected_pitch_semitones,
+                        SEGMENT_CANDIDATE_GENERATING,
+                        normalized_attempt,
+                        int(generation_seed),
+                        normalized_path,
+                        now,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise RuntimeError("segment candidate allocation conflicts with durable metadata") from exc
+            return self._candidate_row_conn(conn, int(cursor.lastrowid))
+
+    def restart_segment_candidate_generation(
+        self,
+        candidate_id: int,
+        *,
+        expected_generation_seed: int,
+        generation_seed: int,
+        tts_attempt: int,
+    ) -> sqlite3.Row:
+        normalized_attempt = int(tts_attempt)
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            if str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING:
+                raise RuntimeError("only an uncommitted generating candidate can restart TTS")
+            current_attempt = int(candidate["tts_attempt"])
+            if normalized_attempt == current_attempt and int(generation_seed) == int(
+                candidate["generation_seed"]
+            ):
+                return candidate
+            if int(candidate["generation_seed"]) != int(expected_generation_seed):
+                raise RuntimeError("segment candidate generation seed CAS failed")
+            if normalized_attempt != current_attempt + 1:
+                raise RuntimeError("segment candidate TTS attempts must advance exactly once")
+            conn.execute(
+                """
+                UPDATE segment_candidates
+                SET tts_attempt=?,generation_seed=?,updated_at=?
+                WHERE id=? AND state=? AND generation_seed=?
+                """,
+                (
+                    normalized_attempt,
+                    int(generation_seed),
+                    time.time(),
+                    int(candidate_id),
+                    SEGMENT_CANDIDATE_GENERATING,
+                    int(expected_generation_seed),
+                ),
+            )
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def checkpoint_segment_candidate_signal(
+        self,
+        candidate_id: int,
+        *,
+        expected_generation_seed: int,
+        wav_path: Path,
+        wav_sha256: str,
+        duration: float,
+        signal: dict[str, Any],
+    ) -> sqlite3.Row:
+        normalized_path = str(wav_path.resolve())
+        normalized_sha256 = self._normalized_sha256(
+            wav_sha256,
+            "segment candidate WAV checksum",
+        )
+        normalized_duration = float(duration)
+        if normalized_duration <= 0:
+            raise ValueError("segment candidate WAV duration must be positive")
+        if not isinstance(signal, dict):
+            raise ValueError("segment candidate signal checkpoint must be a dictionary")
+        if str(signal.get("tts_delivery_mode", "")).strip().casefold() != GENERATION_DELIVERY_CLARITY:
+            raise ValueError("segment candidate signal must use clarity delivery")
+        try:
+            signal_round = int(signal["asr_clarity_repair_round"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("segment candidate signal lacks its clarity repair round") from exc
+        signal_provenance = self._candidate_signal_provenance(signal)
+        signal_json = json.dumps(signal, ensure_ascii=False, sort_keys=True)
+        wav_file = Path(normalized_path)
+        if not wav_file.is_file():
+            raise RuntimeError("segment candidate WAV is missing before its signal checkpoint")
+        if sha256_file(wav_file) != normalized_sha256:
+            raise RuntimeError("segment candidate WAV checksum differs before its signal checkpoint")
+
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            if (
+                signal_provenance["voice_profile_id"]
+                != int(candidate["expected_voice_profile_id"])
+                or signal_provenance["pitch_semitones"]
+                != int(candidate["expected_pitch_semitones"])
+            ):
+                raise ValueError("candidate signal voice provenance differs from locked casting")
+            if (
+                not signal_provenance["pitch_variant_skipped"]
+                and not signal_provenance["pitch_variant_mixed"]
+                and signal_provenance["effective_pitch_semitones"]
+                != int(candidate["expected_pitch_semitones"])
+            ):
+                raise ValueError("candidate signal effective pitch differs from locked casting")
+            if int(candidate["repair_round"]) != signal_round:
+                raise ValueError("segment candidate signal repair round does not match its ledger row")
+            if int(candidate["generation_seed"]) != int(expected_generation_seed):
+                raise RuntimeError("segment candidate generation seed CAS failed")
+            if str(candidate["wav_path"]) != normalized_path:
+                raise RuntimeError("segment candidate WAV path differs from its allocation")
+            state = str(candidate["state"])
+            if state != SEGMENT_CANDIDATE_GENERATING:
+                if (
+                    state in SEGMENT_CANDIDATE_STATES - {SEGMENT_CANDIDATE_GENERATING}
+                    and str(candidate["wav_sha256"] or "") == normalized_sha256
+                    and float(candidate["wav_duration"] or 0.0) == normalized_duration
+                    and str(candidate["signal_json"] or "") == signal_json
+                ):
+                    return candidate
+                raise RuntimeError("segment candidate signal checkpoint transition CAS failed")
+            conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,wav_sha256=?,wav_duration=?,signal_json=?,updated_at=?
+                WHERE id=? AND state=? AND generation_seed=?
+                """,
+                (
+                    SEGMENT_CANDIDATE_SIGNAL_PASSED,
+                    normalized_sha256,
+                    normalized_duration,
+                    signal_json,
+                    time.time(),
+                    int(candidate_id),
+                    SEGMENT_CANDIDATE_GENERATING,
+                    int(expected_generation_seed),
+                ),
+            )
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def _validated_candidate_decode_check_conn(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        quality_check_id: int,
+        *,
+        confirmation: bool,
+    ) -> tuple[sqlite3.Row, dict[str, Any]]:
+        check = conn.execute(
+            "SELECT * FROM quality_checks WHERE id=?",
+            (int(quality_check_id),),
+        ).fetchone()
+        if check is None:
+            raise KeyError(f"Unknown quality check id: {quality_check_id}")
+        if (
+            str(check["scope"]) != QUALITY_SCOPE_SEGMENT
+            or str(check["stage"]) != SEGMENT_ASR_DECODE_QUALITY_STAGE
+            or int(check["segment_id"] or -1) != int(candidate["segment_id"])
+            or str(check["artifact_sha256"]).casefold() != str(candidate["wav_sha256"])
+            or str(check["policy_hash"]) != str(candidate["policy_hash"])
+        ):
+            raise RuntimeError("ASR decode evidence does not belong to this segment candidate")
+        metrics = self._json_object(check["metrics_json"], "candidate ASR decode metrics")
+        decode_mode = str(metrics.get("decode_mode", "")).strip().casefold()
+        expected_mode = decode_mode == "greedy" if confirmation else decode_mode.startswith("beam")
+        if not expected_mode or not bool(metrics.get("selected", False)):
+            raise RuntimeError("candidate ASR checkpoint must reference the selected decode evidence")
+        if (
+            str(metrics.get("delivery_mode", "")).strip().casefold() != GENERATION_DELIVERY_CLARITY
+            or int(metrics.get("repair_round", -1)) != int(candidate["repair_round"])
+            or int(metrics.get("generation_seed", -1)) != int(candidate["generation_seed"])
+        ):
+            raise RuntimeError("candidate ASR decode provenance differs from its generation checkpoint")
+        signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        signal_provenance = self._candidate_signal_provenance(signal)
+        try:
+            decode_provenance = self._candidate_signal_provenance(metrics)
+        except ValueError as exc:
+            raise RuntimeError("candidate ASR decode lacks locked voice or pitch provenance") from exc
+        if decode_provenance != signal_provenance:
+            raise RuntimeError("candidate ASR locked provenance differs from its signal checkpoint")
+        if check["verdict"] not in {QUALITY_VERDICT_PASS, "fail", "inconclusive"}:
+            raise RuntimeError("candidate ASR decode evidence has an unsupported verdict")
+        evidence_verdict = str(check["verdict"])
+        metrics_verdict = str(metrics.get("verdict", "")).strip().casefold()
+        metrics_passed = metrics.get("passed")
+        verdict_consistent = (
+            evidence_verdict == QUALITY_VERDICT_PASS
+            and metrics_verdict == QUALITY_VERDICT_PASS
+            and metrics_passed is True
+        ) or (
+            evidence_verdict == "fail"
+            and metrics_verdict == "mismatch"
+            and metrics_passed is False
+        ) or (
+            evidence_verdict == "inconclusive"
+            and metrics_verdict == "inconclusive"
+            and metrics_passed is False
+        )
+        if not verdict_consistent:
+            raise RuntimeError("candidate ASR quality-check verdict contradicts its metrics")
+        if evidence_verdict == QUALITY_VERDICT_PASS:
+            transcript = metrics.get("transcript")
+            if not isinstance(transcript, str) or not transcript.strip():
+                raise RuntimeError("passing candidate ASR evidence requires a transcript")
+            try:
+                similarity = float(metrics["similarity"])
+                wer = float(metrics["wer"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    "passing candidate ASR evidence requires numeric similarity and WER"
+                ) from exc
+            if not math.isfinite(similarity) or not 0.0 <= similarity <= 1.0:
+                raise RuntimeError("passing candidate ASR similarity is outside [0, 1]")
+            if not math.isfinite(wer) or wer < 0.0:
+                raise RuntimeError("passing candidate ASR WER must be finite and non-negative")
+        return check, metrics
+
+    def checkpoint_segment_candidate_decode(
+        self,
+        candidate_id: int,
+        *,
+        quality_check_id: int,
+        confirmation: bool,
+    ) -> sqlite3.Row:
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            check, metrics = self._validated_candidate_decode_check_conn(
+                conn,
+                candidate,
+                quality_check_id,
+                confirmation=confirmation,
+            )
+            state = str(candidate["state"])
+            result_json = json.dumps(metrics, ensure_ascii=False, sort_keys=True)
+            if not confirmation:
+                if candidate["beam_check_id"] is not None:
+                    if int(candidate["beam_check_id"]) == int(quality_check_id):
+                        return candidate
+                    raise RuntimeError("candidate beam decode was already checkpointed")
+                if state != SEGMENT_CANDIDATE_SIGNAL_PASSED:
+                    raise RuntimeError("candidate beam decode transition CAS failed")
+                conn.execute(
+                    """
+                    UPDATE segment_candidates
+                    SET state=?,beam_check_id=?,beam_result_json=?,updated_at=?
+                    WHERE id=? AND state=? AND beam_check_id IS NULL
+                    """,
+                    (
+                        SEGMENT_CANDIDATE_BEAM_RECORDED,
+                        int(quality_check_id),
+                        result_json,
+                        time.time(),
+                        int(candidate_id),
+                        SEGMENT_CANDIDATE_SIGNAL_PASSED,
+                    ),
+                )
+                return self._candidate_row_conn(conn, candidate_id)
+
+            if candidate["greedy_check_id"] is not None:
+                if int(candidate["greedy_check_id"]) == int(quality_check_id):
+                    return candidate
+                raise RuntimeError("candidate greedy decode was already checkpointed")
+            if state != SEGMENT_CANDIDATE_BEAM_RECORDED or candidate["beam_check_id"] is None:
+                raise RuntimeError("candidate greedy decode transition CAS failed")
+            beam_check = conn.execute(
+                "SELECT verdict FROM quality_checks WHERE id=?",
+                (int(candidate["beam_check_id"]),),
+            ).fetchone()
+            if beam_check is None:
+                raise RuntimeError("candidate beam decode evidence is missing")
+            dual_passed = (
+                str(beam_check["verdict"]) == QUALITY_VERDICT_PASS
+                and str(check["verdict"]) == QUALITY_VERDICT_PASS
+            )
+            signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+            blocking_signal_flags = self._candidate_blocking_signal_flags(signal)
+            dual_passed = dual_passed and not blocking_signal_flags
+            next_state = (
+                SEGMENT_CANDIDATE_DUAL_PASSED
+                if dual_passed
+                else SEGMENT_CANDIDATE_DUAL_FAILED
+            )
+            failure_reason = None
+            if not dual_passed:
+                beam_metrics = self._json_object(
+                    candidate["beam_result_json"],
+                    "candidate beam result",
+                )
+                failure_reason = "; ".join(
+                    value
+                    for value in (
+                        f"beam={beam_metrics.get('reason', beam_check['verdict'])}",
+                        f"greedy={metrics.get('reason', check['verdict'])}",
+                    )
+                    if value
+                )
+                if blocking_signal_flags:
+                    failure_reason = "; ".join(
+                        value
+                        for value in (
+                            failure_reason,
+                            "blocking_signal=" + ",".join(blocking_signal_flags),
+                        )
+                        if value
+                    )
+            conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,greedy_check_id=?,greedy_result_json=?,failure_reason=?,updated_at=?
+                WHERE id=? AND state=? AND greedy_check_id IS NULL
+                """,
+                (
+                    next_state,
+                    int(quality_check_id),
+                    result_json,
+                    failure_reason,
+                    time.time(),
+                    int(candidate_id),
+                    SEGMENT_CANDIDATE_BEAM_RECORDED,
+                ),
+            )
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def mark_segment_candidate_tts_failed(
+        self,
+        candidate_id: int,
+        *,
+        expected_generation_seed: int,
+        error: str,
+    ) -> sqlite3.Row:
+        normalized_error = str(error or "").strip()
+        if not normalized_error:
+            raise ValueError("segment candidate TTS failure must include a reason")
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            if str(candidate["state"]) == SEGMENT_CANDIDATE_TTS_FAILED:
+                if (
+                    int(candidate["generation_seed"]) == int(expected_generation_seed)
+                    and str(candidate["failure_reason"] or "") == normalized_error[-8000:]
+                ):
+                    return candidate
+                raise RuntimeError("segment candidate TTS failure replay payload differs")
+            if (
+                str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING
+                or int(candidate["generation_seed"]) != int(expected_generation_seed)
+            ):
+                raise RuntimeError("segment candidate TTS failure transition CAS failed")
+            conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,failure_reason=?,updated_at=?
+                WHERE id=? AND state=? AND generation_seed=?
+                """,
+                (
+                    SEGMENT_CANDIDATE_TTS_FAILED,
+                    normalized_error[-8000:],
+                    time.time(),
+                    int(candidate_id),
+                    SEGMENT_CANDIDATE_GENERATING,
+                    int(expected_generation_seed),
+                ),
+            )
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def mark_segment_candidate_invalid(
+        self,
+        candidate_id: int,
+        *,
+        expected_wav_sha256: str,
+        reason: str,
+    ) -> sqlite3.Row:
+        normalized_sha256 = self._normalized_sha256(
+            expected_wav_sha256,
+            "segment candidate invalidation checksum",
+        )
+        normalized_reason = str(reason or "").strip()
+        if not normalized_reason:
+            raise ValueError("segment candidate invalidation must include a reason")
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            state = str(candidate["state"])
+            if state == SEGMENT_CANDIDATE_INVALID:
+                if (
+                    str(candidate["wav_sha256"] or "") == normalized_sha256
+                    and str(candidate["failure_reason"] or "") == normalized_reason[-8000:]
+                ):
+                    return candidate
+                raise RuntimeError("segment candidate invalidation replay payload differs")
+            if state in {SEGMENT_CANDIDATE_GENERATING, SEGMENT_CANDIDATE_TTS_FAILED}:
+                raise RuntimeError("candidate has no committed WAV to invalidate")
+            if state == SEGMENT_CANDIDATE_PROMOTED:
+                raise RuntimeError("a promoted segment candidate cannot be invalidated")
+            if str(candidate["wav_sha256"] or "") != normalized_sha256:
+                raise RuntimeError("segment candidate invalidation checksum CAS failed")
+            conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,failure_reason=?,updated_at=?
+                WHERE id=? AND state=? AND wav_sha256=?
+                """,
+                (
+                    SEGMENT_CANDIDATE_INVALID,
+                    normalized_reason[-8000:],
+                    time.time(),
+                    int(candidate_id),
+                    state,
+                    normalized_sha256,
+                ),
+            )
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def get_segment_candidate(self, candidate_id: int) -> sqlite3.Row:
+        with self.connect() as conn:
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def list_segment_candidates(
+        self,
+        *,
+        segment_id: int | None = None,
+        policy_hash: str | None = None,
+    ) -> list[sqlite3.Row]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if segment_id is not None:
+            clauses.append("segment_id=?")
+            params.append(int(segment_id))
+        if policy_hash is not None:
+            clauses.append("policy_hash=?")
+            params.append(str(policy_hash).strip())
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    f"SELECT * FROM segment_candidates{where} ORDER BY segment_id,repair_round",
+                    params,
+                )
+            )
+
+    def reconcile_segment_candidate_artifacts(self, policy_hash: str) -> int:
+        invalidated = 0
+        with self.transaction() as conn:
+            self._require_candidate_policy_conn(conn, policy_hash)
+            candidates = list(
+                conn.execute(
+                    """
+                    SELECT * FROM segment_candidates
+                    WHERE policy_hash=? AND state NOT IN ('generating','tts_failed','invalid','promoted')
+                    ORDER BY segment_id,repair_round
+                    """,
+                    (str(policy_hash).strip(),),
+                )
+            )
+            for candidate in candidates:
+                invalid_reason: str | None = None
+                try:
+                    segment = self._require_candidate_incumbent_conn(conn, candidate)
+                    self._require_candidate_voice_profile_conn(conn, candidate, segment)
+                except (KeyError, RuntimeError) as exc:
+                    invalid_reason = str(exc)
+                if invalid_reason is None:
+                    invalid_reason = self._candidate_file_error(candidate)
+                if invalid_reason is None and str(candidate["state"]) == SEGMENT_CANDIDATE_DUAL_PASSED:
+                    try:
+                        signal = self._json_object(
+                            candidate["signal_json"],
+                            "candidate signal metrics",
+                        )
+                        blocking_flags = self._candidate_blocking_signal_flags(signal)
+                        if blocking_flags:
+                            invalid_reason = (
+                                "candidate signal retains blocking TTS flags: "
+                                + ", ".join(blocking_flags)
+                            )
+                    except RuntimeError as exc:
+                        invalid_reason = str(exc)
+                if invalid_reason:
+                    self._invalidate_candidate_conn(conn, candidate, invalid_reason)
+                    invalidated += 1
+        return invalidated
+
+    def segment_candidate_attempt_summary(
+        self,
+        segment_id: int,
+        policy_hash: str,
+    ) -> list[dict[str, Any]]:
+        return [
+            self._candidate_summary(row)
+            for row in self.list_segment_candidates(
+                segment_id=segment_id,
+                policy_hash=policy_hash,
+            )
+        ]
+
+    def segment_candidate_resume_plan(
+        self,
+        segment_id: int,
+        policy_hash: str,
+        max_repair_rounds: int,
+    ) -> dict[str, Any]:
+        normalized_max = int(max_repair_rounds)
+        if normalized_max < 0:
+            raise ValueError("ASR repair budget must be non-negative")
+        with self.connect() as conn:
+            policy = self._require_candidate_policy_conn(conn, policy_hash, active=False)
+            rows = list(
+                conn.execute(
+                    """
+                    SELECT * FROM segment_candidates
+                    WHERE segment_id=? AND policy_hash=?
+                    ORDER BY repair_round
+                    """,
+                    (int(segment_id), str(policy_hash).strip()),
+                )
+            )
+            if not bool(policy["active"]):
+                return {
+                    "segment_id": int(segment_id),
+                    "policy_hash": str(policy_hash).strip(),
+                    "action": "stale_policy",
+                    "candidate_id": None,
+                    "repair_round": None,
+                }
+            promoted = [row for row in rows if str(row["state"]) == SEGMENT_CANDIDATE_PROMOTED]
+            if promoted:
+                if len(promoted) != 1 or any(
+                    str(row["state"])
+                    not in SEGMENT_CANDIDATE_FAILURE_STATES | {SEGMENT_CANDIDATE_PROMOTED}
+                    for row in rows
+                ):
+                    raise RuntimeError("promoted candidate ledger has another actionable candidate")
+                segment = conn.execute(
+                    "SELECT wav_sha256 FROM segments WHERE id=?",
+                    (int(segment_id),),
+                ).fetchone()
+                if segment is None or str(segment["wav_sha256"] or "") != str(
+                    promoted[0]["wav_sha256"] or ""
+                ):
+                    raise RuntimeError("promoted candidate is not the current segment artifact")
+                return {
+                    "segment_id": int(segment_id),
+                    "policy_hash": str(policy_hash).strip(),
+                    "action": "complete",
+                    "candidate_id": int(promoted[0]["id"]),
+                    "repair_round": int(promoted[0]["repair_round"]),
+                    "state": SEGMENT_CANDIDATE_PROMOTED,
+                }
+            if rows:
+                incumbents = {str(row["incumbent_sha256"]) for row in rows}
+                if len(incumbents) != 1:
+                    raise RuntimeError("same-policy candidate rounds contain mixed incumbent artifacts")
+                segment = conn.execute(
+                    "SELECT wav_sha256 FROM segments WHERE id=?",
+                    (int(segment_id),),
+                ).fetchone()
+                if segment is None:
+                    raise KeyError(f"Unknown segment id: {segment_id}")
+                if str(segment["wav_sha256"] or "").casefold() not in incumbents:
+                    return {
+                        "segment_id": int(segment_id),
+                        "policy_hash": str(policy_hash).strip(),
+                        "action": "stale_incumbent",
+                        "candidate_id": None,
+                        "repair_round": None,
+                    }
+            if any(int(row["repair_round"]) >= normalized_max for row in rows):
+                raise RuntimeError("stored candidate rounds exceed the supplied same-policy budget")
+            if [int(row["repair_round"]) for row in rows] != list(range(len(rows))):
+                raise RuntimeError("stored candidate rounds are not contiguous")
+
+            actionable = [
+                row
+                for row in rows
+                if str(row["state"])
+                not in SEGMENT_CANDIDATE_FAILURE_STATES | {SEGMENT_CANDIDATE_PROMOTED}
+            ]
+            if len(actionable) > 1:
+                raise RuntimeError("multiple segment candidates are simultaneously actionable")
+            if actionable:
+                candidate = actionable[0]
+                segment = self._require_candidate_incumbent_conn(conn, candidate)
+                self._require_candidate_voice_profile_conn(conn, candidate, segment)
+                state = str(candidate["state"])
+                action = {
+                    SEGMENT_CANDIDATE_GENERATING: "generate",
+                    SEGMENT_CANDIDATE_SIGNAL_PASSED: "decode_beam",
+                    SEGMENT_CANDIDATE_BEAM_RECORDED: "decode_greedy",
+                    SEGMENT_CANDIDATE_DUAL_PASSED: "promote",
+                }.get(state)
+                if action is None:
+                    raise RuntimeError(f"unsupported actionable candidate state: {state}")
+                return {
+                    "segment_id": int(segment_id),
+                    "policy_hash": str(policy_hash).strip(),
+                    "action": action,
+                    "candidate_id": int(candidate["id"]),
+                    "repair_round": int(candidate["repair_round"]),
+                    "state": state,
+                    "generation_seed": int(candidate["generation_seed"]),
+                    "tts_attempt": int(candidate["tts_attempt"]),
+                    "wav_path": str(candidate["wav_path"]),
+                    "wav_sha256": str(candidate["wav_sha256"] or ""),
+                }
+            if len(rows) < normalized_max:
+                return {
+                    "segment_id": int(segment_id),
+                    "policy_hash": str(policy_hash).strip(),
+                    "action": "allocate",
+                    "candidate_id": None,
+                    "repair_round": len(rows),
+                }
+            return {
+                "segment_id": int(segment_id),
+                "policy_hash": str(policy_hash).strip(),
+                "action": "exhausted",
+                "candidate_id": None,
+                "repair_round": None,
+            }
+
+    def list_segment_candidate_resume_plans(
+        self,
+        policy_hash: str,
+        max_repair_rounds: int,
+    ) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            segment_ids = [
+                int(row[0])
+                for row in conn.execute(
+                    """
+                    SELECT DISTINCT segment_id FROM segment_candidates
+                    WHERE policy_hash=? ORDER BY segment_id
+                    """,
+                    (str(policy_hash).strip(),),
+                )
+            ]
+        return [
+            self.segment_candidate_resume_plan(segment_id, policy_hash, max_repair_rounds)
+            for segment_id in segment_ids
+        ]
+
+    def count_stale_segment_candidates(self, active_policy_hash: str) -> int:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM segment_candidates WHERE policy_hash<>? AND state<>'promoted'",
+                (str(active_policy_hash).strip(),),
+            ).fetchone()
+            return int(row[0] if row is not None else 0)
+
+    def promote_segment_candidate(
+        self,
+        candidate_id: int,
+        *,
+        validated_wav_sha256: str,
+        repair_action: str | None = None,
+        attempt: int,
+        warning_code: str | None = None,
+    ) -> sqlite3.Row:
+        normalized_sha256 = self._normalized_sha256(
+            validated_wav_sha256,
+            "validated segment candidate checksum",
+        )
+        normalized_attempt = int(attempt)
+        if normalized_attempt < 1:
+            raise ValueError("candidate final audio attempt must be positive")
+        normalized_repair_action = str(repair_action).strip() if repair_action else None
+        normalized_warning_code = str(warning_code).strip() if warning_code else None
+        with self.transaction() as conn:
+            candidate = self._candidate_row_conn(conn, candidate_id)
+            policy = self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            segment = conn.execute(
+                "SELECT * FROM segments WHERE id=?",
+                (int(candidate["segment_id"]),),
+            ).fetchone()
+            if segment is None:
+                raise KeyError(f"Unknown segment id: {candidate['segment_id']}")
+            if str(candidate["wav_sha256"] or "") != normalized_sha256:
+                raise RuntimeError("validated candidate checksum differs from the durable signal checkpoint")
+            candidate_state = str(candidate["state"])
+            if candidate_state not in {
+                SEGMENT_CANDIDATE_DUAL_PASSED,
+                SEGMENT_CANDIDATE_PROMOTED,
+            }:
+                raise RuntimeError("segment candidate cannot be promoted before both ASR decodes pass")
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            beam_check, beam_metrics = self._validated_candidate_decode_check_conn(
+                conn,
+                candidate,
+                int(candidate["beam_check_id"]),
+                confirmation=False,
+            )
+            greedy_check, greedy_metrics = self._validated_candidate_decode_check_conn(
+                conn,
+                candidate,
+                int(candidate["greedy_check_id"]),
+                confirmation=True,
+            )
+            if (
+                str(beam_check["verdict"]) != QUALITY_VERDICT_PASS
+                or str(greedy_check["verdict"]) != QUALITY_VERDICT_PASS
+            ):
+                raise RuntimeError("candidate dual-decode ledger does not contain two passing checks")
+            final_metrics = self._candidate_final_metrics(
+                candidate,
+                beam_metrics,
+                greedy_metrics,
+                warning_code=normalized_warning_code,
+            )
+            final_metrics_json = json.dumps(final_metrics, ensure_ascii=False, sort_keys=True)
+            if candidate_state == SEGMENT_CANDIDATE_PROMOTED:
+                if (
+                    str(segment["wav_sha256"] or "") == normalized_sha256
+                    and candidate["final_check_id"] is not None
+                ):
+                    final_check = conn.execute(
+                        "SELECT * FROM quality_checks WHERE id=?",
+                        (int(candidate["final_check_id"]),),
+                    ).fetchone()
+                    if (
+                        final_check is not None
+                        and str(final_check["verdict"]) == QUALITY_VERDICT_PASS
+                        and str(final_check["metrics_json"]) == final_metrics_json
+                        and str(final_check["failure_codes_json"]) == "[]"
+                        and final_check["repair_action"] == normalized_repair_action
+                        and int(final_check["attempt"]) == normalized_attempt
+                    ):
+                        return candidate
+                raise RuntimeError("segment candidate promotion replay does not match the committed result")
+            if str(segment["wav_sha256"] or "").casefold() != str(candidate["incumbent_sha256"]):
+                raise RuntimeError("segment candidate incumbent checksum changed")
+            file_error = self._candidate_file_error(candidate)
+            if file_error:
+                return self._invalidate_candidate_conn(conn, candidate, file_error)
+            signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+            self._candidate_signal_provenance(signal)
+            blocking_signal_flags = self._candidate_blocking_signal_flags(signal)
+            if blocking_signal_flags:
+                return self._invalidate_candidate_conn(
+                    conn,
+                    candidate,
+                    "candidate signal retains blocking TTS flags: "
+                    + ", ".join(blocking_signal_flags),
+                )
+            final_check_cursor = conn.execute(
+                """
+                INSERT INTO quality_checks(
+                    scope,stage,segment_id,chapter_id,artifact_sha256,
+                    policy_hash,policy_version,verdict,metrics_json,
+                    failure_codes_json,repair_action,attempt,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    QUALITY_SCOPE_SEGMENT,
+                    SEGMENT_AUDIO_QUALITY_STAGE,
+                    int(candidate["segment_id"]),
+                    None,
+                    normalized_sha256,
+                    str(candidate["policy_hash"]),
+                    int(policy["policy_version"]),
+                    QUALITY_VERDICT_PASS,
+                    final_metrics_json,
+                    "[]",
+                    normalized_repair_action,
+                    normalized_attempt,
+                    time.time(),
+                ),
+            )
+            final_quality_check_id = int(final_check_cursor.lastrowid)
+            retained_warning = self._without_audio_attempt_warnings(
+                str(segment["warning_code"]) if segment["warning_code"] else None
+            )
+            merged_warning = self._merge_warning_codes(retained_warning, normalized_warning_code)
+            status = SegmentStatus.WARNING.value if merged_warning else SegmentStatus.VERIFIED.value
+            now = time.time()
+            segment_cursor = conn.execute(
+                """
+                UPDATE segments SET
+                    status=?,generation_seed=?,generation_frame_cap=NULL,
+                    generation_delivery_mode=?,generation_repair_round=?,generation_policy_hash=?,
+                    wav_path=?,wav_sha256=?,wav_duration=?,signal_json=?,
+                    asr_text=?,asr_similarity=?,asr_wer=?,warning_code=?,error=NULL,updated_at=?
+                WHERE id=? AND wav_sha256=?
+                """,
+                (
+                    status,
+                    int(candidate["generation_seed"]),
+                    GENERATION_DELIVERY_CLARITY,
+                    int(candidate["repair_round"]),
+                    str(candidate["policy_hash"]),
+                    str(candidate["wav_path"]),
+                    normalized_sha256,
+                    float(candidate["wav_duration"]),
+                    str(candidate["signal_json"]),
+                    str(final_metrics.get("transcript", "")),
+                    float(final_metrics.get("similarity", 0.0)),
+                    float(final_metrics.get("wer", 1.0)),
+                    merged_warning,
+                    now,
+                    int(candidate["segment_id"]),
+                    str(candidate["incumbent_sha256"]),
+                ),
+            )
+            if segment_cursor.rowcount != 1:
+                raise RuntimeError("segment candidate promotion lost the incumbent CAS")
+            candidate_cursor = conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,final_check_id=?,promoted_at=?,updated_at=?
+                WHERE id=? AND state=?
+                """,
+                (
+                    SEGMENT_CANDIDATE_PROMOTED,
+                    final_quality_check_id,
+                    now,
+                    now,
+                    int(candidate_id),
+                    SEGMENT_CANDIDATE_DUAL_PASSED,
+                ),
+            )
+            if candidate_cursor.rowcount != 1:
+                raise RuntimeError("segment candidate promotion state CAS failed")
+            self._refresh_chapter_counts_conn(conn, int(segment["chapter_id"]))
+            return self._candidate_row_conn(conn, candidate_id)
+
+    def finalize_segment_candidate_exhaustion(
+        self,
+        *,
+        segment_id: int,
+        policy_hash: str,
+        max_repair_rounds: int,
+        incumbent_sha256: str,
+        trigger_quality_check_id: int,
+        error: str,
+        warning_code: str,
+        final_verdict: str = "fail",
+        failure_codes: Sequence[str] = (),
+    ) -> int:
+        normalized_max = int(max_repair_rounds)
+        normalized_incumbent = self._normalized_sha256(
+            incumbent_sha256,
+            "repair exhaustion incumbent checksum",
+        )
+        normalized_verdict = str(final_verdict).strip().casefold()
+        normalized_error = str(error or "").strip()[-8000:]
+        normalized_warning_code = str(warning_code or "").strip()
+        requested_failure_codes = [
+            str(code).strip() for code in failure_codes if str(code).strip()
+        ]
+        if normalized_max < 0:
+            raise ValueError("ASR repair budget must be non-negative")
+        if normalized_verdict not in {"fail", "inconclusive"}:
+            raise ValueError("repair exhaustion verdict must be fail or inconclusive")
+        if not normalized_error or not normalized_warning_code:
+            raise ValueError("repair exhaustion requires an error and warning code")
+
+        with self.transaction() as conn:
+            policy = self._require_candidate_policy_conn(conn, policy_hash)
+            segment = conn.execute(
+                "SELECT * FROM segments WHERE id=?",
+                (int(segment_id),),
+            ).fetchone()
+            if segment is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            if str(segment["wav_sha256"] or "").casefold() != normalized_incumbent:
+                raise RuntimeError("repair exhaustion incumbent checksum CAS failed")
+            candidates = list(
+                conn.execute(
+                    """
+                    SELECT * FROM segment_candidates
+                    WHERE segment_id=? AND policy_hash=? ORDER BY repair_round
+                    """,
+                    (int(segment_id), str(policy_hash).strip()),
+                )
+            )
+            if [int(row["repair_round"]) for row in candidates] != list(range(normalized_max)):
+                raise RuntimeError("repair exhaustion requires every configured candidate round")
+            if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in candidates):
+                raise RuntimeError("repair exhaustion cannot finalize while a candidate remains actionable")
+            if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in candidates):
+                raise RuntimeError("repair exhaustion candidates do not share the current incumbent")
+
+            trigger = conn.execute(
+                "SELECT * FROM quality_checks WHERE id=?",
+                (int(trigger_quality_check_id),),
+            ).fetchone()
+            if trigger is None:
+                raise KeyError(f"Unknown quality check id: {trigger_quality_check_id}")
+            if (
+                str(trigger["scope"]) != QUALITY_SCOPE_SEGMENT
+                or str(trigger["stage"]) != SEGMENT_AUDIO_QUALITY_STAGE
+                or int(trigger["segment_id"] or -1) != int(segment_id)
+                or str(trigger["artifact_sha256"]).casefold() != normalized_incumbent
+                or str(trigger["policy_hash"]) != str(policy_hash).strip()
+                or str(trigger["verdict"]) != "repair"
+            ):
+                raise RuntimeError("repair trigger does not belong to the retained incumbent artifact")
+            trigger_metrics = self._json_object(trigger["metrics_json"], "repair trigger metrics")
+            try:
+                trigger_failure_codes = json.loads(str(trigger["failure_codes_json"] or "[]"))
+            except (TypeError, json.JSONDecodeError):
+                trigger_failure_codes = []
+            merged_failure_codes: list[str] = []
+            for code in [*trigger_failure_codes, *requested_failure_codes]:
+                normalized_code = str(code).strip()
+                if normalized_code and normalized_code not in merged_failure_codes:
+                    merged_failure_codes.append(normalized_code)
+            summaries = [self._candidate_summary(row) for row in candidates]
+            final_metrics = {
+                **trigger_metrics,
+                "repair_exhausted": True,
+                "repair_trigger_quality_check_id": int(trigger_quality_check_id),
+                "candidate_rounds_configured": normalized_max,
+                "candidate_attempts": summaries,
+                "incumbent_sha256": normalized_incumbent,
+                "repair_exhaustion_verdict": normalized_verdict,
+                "repair_exhaustion_error": normalized_error,
+                "repair_exhaustion_warning_code": normalized_warning_code,
+                "repair_exhaustion_failure_codes": merged_failure_codes,
+            }
+            final_metrics_json = json.dumps(final_metrics, ensure_ascii=False, sort_keys=True)
+            failure_codes_json = json.dumps(merged_failure_codes, ensure_ascii=False)
+            existing = list(
+                conn.execute(
+                    """
+                    SELECT * FROM quality_checks
+                    WHERE scope=? AND stage=? AND segment_id=? AND artifact_sha256=?
+                      AND policy_hash=?
+                    ORDER BY id DESC
+                    """,
+                    (
+                        QUALITY_SCOPE_SEGMENT,
+                        SEGMENT_AUDIO_QUALITY_STAGE,
+                        int(segment_id),
+                        normalized_incumbent,
+                        str(policy_hash).strip(),
+                    ),
+                )
+            )
+            for check in existing:
+                metrics = self._json_object(check["metrics_json"], "existing repair exhaustion metrics")
+                if (
+                    bool(metrics.get("repair_exhausted", False))
+                    and int(metrics.get("repair_trigger_quality_check_id", -1))
+                    == int(trigger_quality_check_id)
+                ):
+                    if (
+                        str(check["verdict"]) == normalized_verdict
+                        and str(check["metrics_json"]) == final_metrics_json
+                        and str(check["failure_codes_json"]) == failure_codes_json
+                        and str(check["repair_action"] or "")
+                        == SEGMENT_CANDIDATE_EXHAUSTION_ACTION
+                    ):
+                        return int(check["id"])
+                    raise RuntimeError("repair exhaustion replay payload differs")
+            attempt_row = conn.execute(
+                """
+                SELECT MAX(attempt) FROM quality_checks
+                WHERE scope=? AND stage=? AND segment_id=? AND policy_hash=?
+                """,
+                (
+                    QUALITY_SCOPE_SEGMENT,
+                    SEGMENT_AUDIO_QUALITY_STAGE,
+                    int(segment_id),
+                    str(policy_hash).strip(),
+                ),
+            ).fetchone()
+            attempt = int(attempt_row[0] or 0) + 1
+            cursor = conn.execute(
+                """
+                INSERT INTO quality_checks(
+                    scope,stage,segment_id,chapter_id,artifact_sha256,
+                    policy_hash,policy_version,verdict,metrics_json,
+                    failure_codes_json,repair_action,attempt,created_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    QUALITY_SCOPE_SEGMENT,
+                    SEGMENT_AUDIO_QUALITY_STAGE,
+                    int(segment_id),
+                    None,
+                    normalized_incumbent,
+                    str(policy_hash).strip(),
+                    int(policy["policy_version"]),
+                    normalized_verdict,
+                    final_metrics_json,
+                    failure_codes_json,
+                    SEGMENT_CANDIDATE_EXHAUSTION_ACTION,
+                    attempt,
+                    time.time(),
+                ),
+            )
+            retained_warning = self._without_audio_attempt_warnings(
+                str(segment["warning_code"]) if segment["warning_code"] else None
+            )
+            merged_warning = self._merge_warning_codes(retained_warning, normalized_warning_code)
+            segment_cursor = conn.execute(
+                """
+                UPDATE segments SET status=?,asr_text=?,asr_similarity=?,asr_wer=?,
+                    warning_code=?,error=?,updated_at=?
+                WHERE id=? AND wav_sha256=?
+                """,
+                (
+                    SegmentStatus.FAILED.value,
+                    str(trigger_metrics.get("transcript", "")),
+                    float(trigger_metrics.get("similarity", 0.0)),
+                    float(trigger_metrics.get("wer", 1.0)),
+                    merged_warning,
+                    normalized_error,
+                    time.time(),
+                    int(segment_id),
+                    normalized_incumbent,
+                ),
+            )
+            if segment_cursor.rowcount != 1:
+                raise RuntimeError("repair exhaustion lost the incumbent CAS")
+            self._refresh_chapter_counts_conn(conn, int(segment["chapter_id"]))
             return int(cursor.lastrowid)
 
     def latest_quality_check(
