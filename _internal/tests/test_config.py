@@ -3,6 +3,8 @@ from __future__ import annotations
 import pytest
 
 from ebook_reader.config import (
+    ANALYSIS_RETRY_POLICY_VERSION,
+    ANALYSIS_RETRY_SETTING_KEYS,
     DIRECTOR_CRITIC_SETTING_KEYS,
     build_settings,
     load_settings,
@@ -32,6 +34,9 @@ def test_unattended_safety_defaults() -> None:
     assert high_quality["analysis"]["director_critic_required"] is True
     assert high_quality["analysis"]["director_confidence_cap"] == 0.95
     assert high_quality["analysis"]["low_confidence_policy"] == "fail"
+    assert high_quality["analysis"]["batch_segments"] == 5
+    assert high_quality["analysis"]["retry_policy_version"] == ANALYSIS_RETRY_POLICY_VERSION
+    assert high_quality["analysis"]["retry_temperatures"] == [0.1, 0.2, 0.3]
     assert high_quality["perceptual_qa"]["enabled"] is True
     assert high_quality["perceptual_qa"]["failure_policy"] == "fail"
     assert high_quality["perceptual_qa"]["repair_rounds"] == 2
@@ -151,7 +156,7 @@ def test_legacy_locked_settings_are_normalized_in_memory_without_changing_raw_ha
     tmp_path,
 ) -> None:
     legacy = build_settings()
-    for key in DIRECTOR_CRITIC_SETTING_KEYS:
+    for key in DIRECTOR_CRITIC_SETTING_KEYS | ANALYSIS_RETRY_SETTING_KEYS:
         legacy["analysis"].pop(key)
     original_hash = settings_hash(legacy)
     path = tmp_path / "book_settings.json"
@@ -162,9 +167,12 @@ def test_legacy_locked_settings_are_normalized_in_memory_without_changing_raw_ha
 
     assert settings_hash(loaded) == original_hash
     assert DIRECTOR_CRITIC_SETTING_KEYS.isdisjoint(loaded["analysis"])
+    assert ANALYSIS_RETRY_SETTING_KEYS.isdisjoint(loaded["analysis"])
     assert effective["analysis"]["director_critic_enabled"] is True
     assert effective["analysis"]["director_critic_required"] is True
     assert effective["analysis"]["low_confidence_policy"] == "fail"
+    assert effective["analysis"]["retry_policy_version"] == ANALYSIS_RETRY_POLICY_VERSION
+    assert effective["analysis"]["retry_temperatures"] == [0.1, 0.2, 0.3]
     assert settings_hash(legacy) == original_hash
 
 
@@ -174,3 +182,48 @@ def test_partially_missing_director_settings_are_not_treated_as_legacy() -> None
 
     with pytest.raises(ValueError, match="Missing analysis director critic settings"):
         validate_settings(normalize_legacy_locked_settings(settings))
+
+
+def test_retry_only_legacy_settings_are_normalized_without_raw_hash_drift() -> None:
+    settings = build_settings()
+    for key in ANALYSIS_RETRY_SETTING_KEYS:
+        settings["analysis"].pop(key)
+    original_hash = settings_hash(settings)
+
+    effective = normalize_legacy_locked_settings(settings)
+
+    assert settings_hash(settings) == original_hash
+    assert ANALYSIS_RETRY_SETTING_KEYS.isdisjoint(settings["analysis"])
+    assert effective["analysis"]["retry_policy_version"] == ANALYSIS_RETRY_POLICY_VERSION
+    assert effective["analysis"]["retry_temperatures"] == [0.1, 0.2, 0.3]
+    validate_settings(effective)
+
+
+def test_partially_missing_retry_settings_are_not_treated_as_legacy() -> None:
+    settings = build_settings()
+    settings["analysis"].pop("retry_temperatures")
+
+    with pytest.raises(ValueError, match="Missing analysis retry settings"):
+        validate_settings(normalize_legacy_locked_settings(settings))
+
+
+@pytest.mark.parametrize(
+    "temperatures",
+    [
+        [0.1, 0.2],
+        [0.1, 0.2, float("nan")],
+        [0.1, 0.2, float("inf")],
+        [0.1, 0.2, -0.1],
+        [0.1, 0.2, 1.1],
+        [0.1, 0.2, True],
+        "0.1,0.2,0.3",
+    ],
+)
+def test_invalid_retry_temperature_schedule_is_rejected(temperatures) -> None:
+    with pytest.raises(ValueError, match="analysis.retry_temperatures"):
+        build_settings(overrides={"analysis": {"retry_temperatures": temperatures}})
+
+
+def test_unknown_retry_policy_version_is_rejected() -> None:
+    with pytest.raises(ValueError, match="analysis.retry_policy_version"):
+        build_settings(overrides={"analysis": {"retry_policy_version": "future_v2"}})

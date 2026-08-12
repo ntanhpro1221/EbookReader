@@ -20,6 +20,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "model": "qwen3:8b",
         "base_url": "http://127.0.0.1:11434",
         "temperature": 0.1,
+        "retry_policy_version": "adaptive_seeded_v1",
+        "retry_temperatures": [0.1, 0.2, 0.3],
         "num_ctx": 16384,
         "batch_segments": 28,
         "batch_chars": 6200,
@@ -162,6 +164,14 @@ DIRECTOR_CRITIC_SETTING_KEYS = frozenset(
     }
 )
 
+ANALYSIS_RETRY_POLICY_VERSION = "adaptive_seeded_v1"
+ANALYSIS_RETRY_SETTING_KEYS = frozenset(
+    {
+        "retry_policy_version",
+        "retry_temperatures",
+    }
+)
+
 
 PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     "fast": {
@@ -172,7 +182,7 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     "balanced": {},
     "high_quality": {
         "analysis": {
-            "batch_segments": 20,
+            "batch_segments": 5,
             "low_confidence_threshold": 0.65,
             "low_confidence_policy": "fail",
             "director_critic_enabled": True,
@@ -202,21 +212,30 @@ def is_legacy_director_settings(settings: dict[str, Any]) -> bool:
     return DIRECTOR_CRITIC_SETTING_KEYS.isdisjoint(analysis)
 
 
+def is_legacy_analysis_retry_settings(settings: dict[str, Any]) -> bool:
+    analysis = settings.get("analysis", {})
+    if not isinstance(analysis, dict):
+        return False
+    return ANALYSIS_RETRY_SETTING_KEYS.isdisjoint(analysis)
+
+
 def normalize_legacy_locked_settings(settings: dict[str, Any]) -> dict[str, Any]:
     """Build effective settings for a pre-director project without rewriting its lock files."""
     effective = deepcopy(settings)
-    if not is_legacy_director_settings(effective):
-        return effective
     analysis = effective.get("analysis")
     if not isinstance(analysis, dict):
         return effective
     defaults = DEFAULT_SETTINGS["analysis"]
-    for key in DIRECTOR_CRITIC_SETTING_KEYS:
-        analysis[key] = deepcopy(defaults[key])
-    if effective.get("quality_profile") == "high_quality":
-        analysis["director_critic_enabled"] = True
-        analysis["director_critic_required"] = True
-        analysis["low_confidence_policy"] = "fail"
+    if is_legacy_director_settings(effective):
+        for key in DIRECTOR_CRITIC_SETTING_KEYS:
+            analysis[key] = deepcopy(defaults[key])
+        if effective.get("quality_profile") == "high_quality":
+            analysis["director_critic_enabled"] = True
+            analysis["director_critic_required"] = True
+            analysis["low_confidence_policy"] = "fail"
+    if is_legacy_analysis_retry_settings(effective):
+        for key in ANALYSIS_RETRY_SETTING_KEYS:
+            analysis[key] = deepcopy(defaults[key])
     return effective
 
 
@@ -271,6 +290,12 @@ def validate_settings(settings: dict[str, Any]) -> None:
             "Missing analysis director critic settings: "
             + ", ".join(sorted(missing_director_settings))
         )
+    missing_retry_settings = ANALYSIS_RETRY_SETTING_KEYS - set(analysis)
+    if missing_retry_settings:
+        raise ValueError(
+            "Missing analysis retry settings: "
+            + ", ".join(sorted(missing_retry_settings))
+        )
     parsed_url = urlparse(str(analysis.get("base_url", "")))
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
         raise ValueError("analysis.base_url must be a valid HTTP(S) URL")
@@ -287,6 +312,27 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Analysis batch limits must be positive")
     if int(analysis.get("max_retries", 0)) < 1 or float(analysis.get("timeout_seconds", 0)) <= 0:
         raise ValueError("Analysis retry and timeout settings must be positive")
+    if analysis.get("retry_policy_version") != ANALYSIS_RETRY_POLICY_VERSION:
+        raise ValueError(
+            "analysis.retry_policy_version must name the supported adaptive retry policy"
+        )
+    retry_temperatures = analysis.get("retry_temperatures")
+    if (
+        not isinstance(retry_temperatures, list)
+        or len(retry_temperatures) < int(analysis["max_retries"])
+    ):
+        raise ValueError(
+            "analysis.retry_temperatures must contain at least analysis.max_retries values"
+        )
+    for temperature in retry_temperatures:
+        if (
+            type(temperature) not in {int, float}
+            or not math.isfinite(float(temperature))
+            or not 0.0 <= float(temperature) <= 1.0
+        ):
+            raise ValueError(
+                "analysis.retry_temperatures values must be finite numbers between 0 and 1"
+            )
     if int(analysis.get("director_critic_max_retries", 0)) < 1:
         raise ValueError("analysis.director_critic_max_retries must be positive")
     threshold = float(analysis.get("low_confidence_threshold", 0.58))
