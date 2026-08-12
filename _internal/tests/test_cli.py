@@ -181,6 +181,31 @@ def test_status_and_integrity_validation_work_before_first_run(tmp_path: Path) -
     assert validation["checks"]["all_chapters_complete"] is False
 
 
+def test_validate_rejects_analyzed_high_quality_project_without_model_lock(
+    tmp_path: Path,
+) -> None:
+    project_root = _create_project(tmp_path, ["000.txt"])
+    db = ProjectDB(project_root / "project.sqlite3")
+    chapter_id = int(db.list_chapters()[0]["id"])
+    db.replace_chapter_segments(
+        chapter_id,
+        [{
+            "stable_id": "c1s1",
+            "seq": 0,
+            "text": "Nội dung.",
+            "text_sha256": "text-sha",
+            "kind_hint": "narration",
+        }],
+    )
+    db.update_analysis(int(db.list_segments()[0]["id"]), {"confidence": 0.9})
+
+    validation = cli.validate_project(project_root)
+
+    assert validation["ok"] is False
+    assert validation["checks"]["analysis_model_lock"] is False
+    assert any("model name/digest" in error for error in validation["errors"])
+
+
 def test_status_is_strictly_read_only_for_database_and_project_sidecars(tmp_path: Path) -> None:
     project_root = _create_project(tmp_path)
 

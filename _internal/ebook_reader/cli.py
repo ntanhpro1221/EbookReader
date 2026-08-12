@@ -19,7 +19,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
-from .config import PROFILE_OVERRIDES, build_settings, load_settings, settings_hash, validate_settings
+from .config import (
+    PROFILE_OVERRIDES,
+    build_settings,
+    is_legacy_director_settings,
+    load_settings,
+    load_settings_raw,
+    normalize_legacy_locked_settings,
+    settings_hash,
+    validate_settings,
+)
 from .database import (
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
@@ -327,7 +336,7 @@ def _open_project(
 
 
 def _load_locked_settings_read_only(paths: ProjectPaths, db: ProjectDB) -> dict[str, Any]:
-    external = load_settings(paths.settings)
+    external = load_settings_raw(paths.settings)
     book = db.book()
     try:
         locked = json.loads(str(book["settings_json"]))
@@ -335,13 +344,38 @@ def _load_locked_settings_read_only(paths: ProjectPaths, db: ProjectDB) -> dict[
         raise RuntimeError("Settings JSON in SQLite is corrupt") from exc
     if not isinstance(locked, dict):
         raise RuntimeError("Settings JSON in SQLite must be an object")
-    validate_settings(locked)
     locked_hash = settings_hash(locked)
     if locked_hash != str(book["settings_hash"]):
         raise RuntimeError("Settings JSON in SQLite does not match its locked settings_hash")
     if settings_hash(external) != locked_hash:
         raise RuntimeError("book_settings.json differs from the settings locked in SQLite")
-    return locked
+    effective = normalize_legacy_locked_settings(locked)
+    validate_settings(effective)
+    return effective
+
+
+def _validate_analysis_provenance_read_only(
+    db: ProjectDB,
+    settings: dict[str, Any],
+) -> None:
+    analysis_started = db.casting_is_finalized() or any(
+        str(row["status"]) != "pending" for row in db.list_segments()
+    )
+    if settings.get("quality_profile") != "high_quality" or not analysis_started:
+        return
+    raw_locked = json.loads(str(db.book()["settings_json"]))
+    if not isinstance(raw_locked, dict):
+        raise RuntimeError("Settings JSON in SQLite must be an object")
+    if is_legacy_director_settings(raw_locked):
+        raise RuntimeError(
+            "Legacy high_quality analysis checkpoints predate mandatory director critic"
+        )
+    model_lock = db.analysis_model_lock()
+    expected_model = str(settings.get("analysis", {}).get("model", ""))
+    if model_lock is None or str(model_lock["model_name"]) != expected_model:
+        raise RuntimeError(
+            "High-quality analysis checkpoints are missing the locked model name/digest"
+        )
 
 
 def _validate_project_inputs_read_only(
@@ -453,6 +487,19 @@ def validate_project(project_root: Path | str, *, require_complete: bool = False
         checks["settings_lock"] = True
     except (KeyError, TypeError, ValueError, RuntimeError) as exc:
         checks["settings_lock"] = False
+        errors.append(str(exc))
+    try:
+        _validate_analysis_provenance_read_only(db, settings)
+        checks["analysis_model_lock"] = True
+    except (
+        IndexError,
+        KeyError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+        json.JSONDecodeError,
+    ) as exc:
+        checks["analysis_model_lock"] = False
         errors.append(str(exc))
 
     recorded_root = Path(str(book["project_root"])).resolve()

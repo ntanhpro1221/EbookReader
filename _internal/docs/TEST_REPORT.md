@@ -51,6 +51,14 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   đúng cụm từ đã khớp, retry có feedback theo đúng ID rồi chia đôi hữu hạn; batch vui thật, narration trung tính,
   mixed-affect và cue nằm trong phủ định/ngăn cấm cục bộ vẫn được chấp nhận; template neutral-zero vẫn bị chặn
   riêng sau khi batch đã chia dưới 8 segment và kết thúc bắt buộc ở singleton thay vì checkpoint dữ liệu suy biến;
+- high-quality director critic chạy lượt self-review thứ hai mà không thấy confidence/notes/personality của generator;
+  contract cục bộ từ chối root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
+  candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate
+  luôn có precedence vì critic cùng Qwen là correlated self-review chứ không phải model độc lập;
+- Ollama model name/digest được khóa bền theo book và đối chiếu trước/sau mọi request generator, critic và name review;
+  digest đổi giữa request/resume fail-closed. Batch segment, pronunciation proposal và event ACCEPTED commit cùng một
+  transaction CAS; regression trigger/reopen chứng minh lỗi event rollback cả segment lẫn pronunciation. Legacy
+  high-quality đã có checkpoint trước critic bị từ chối để tránh trộn hai contract analysis;
 - Ollama server do worker tự khởi động chạy ẩn, được theo dõi quyền sở hữu và chỉ tiến trình do app tạo
   mới bị dừng sau giai đoạn phân tích;
 - project lock, voice profile lock và resume;

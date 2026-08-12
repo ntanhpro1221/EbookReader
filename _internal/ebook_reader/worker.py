@@ -12,7 +12,14 @@ from typing import Any
 
 import psutil
 
-from .config import deep_merge, load_settings, settings_hash, validate_settings
+from .config import (
+    deep_merge,
+    is_legacy_director_settings,
+    load_settings_raw,
+    normalize_legacy_locked_settings,
+    settings_hash,
+    validate_settings,
+)
 from .database import ProjectDB
 from .io_utils import sha256_file
 from .models import BookStatus, ProjectPaths
@@ -105,13 +112,14 @@ class ProjectRunLock:
 
 
 def _load_locked_settings(paths: ProjectPaths, db: ProjectDB) -> dict[str, Any]:
-    external = load_settings(paths.settings)
+    external = load_settings_raw(paths.settings)
     book = db.book()
     try:
         locked = json.loads(str(book["settings_json"]))
     except (TypeError, json.JSONDecodeError) as exc:
         raise RuntimeError("Settings trong SQLite bị hỏng") from exc
-    validate_settings(locked)
+    if not isinstance(locked, dict):
+        raise RuntimeError("Settings trong SQLite phải là JSON object")
     locked_hash = settings_hash(locked)
     if locked_hash != str(book["settings_hash"]):
         raise RuntimeError("Settings trong SQLite không khớp settings_hash đã khóa")
@@ -119,7 +127,25 @@ def _load_locked_settings(paths: ProjectPaths, db: ProjectDB) -> dict[str, Any]:
         raise RuntimeError(
             "book_settings.json khác settings đã khóa trong SQLite; từ chối resume để tránh đổi giọng/model"
         )
-    return locked
+    legacy_director_settings = is_legacy_director_settings(locked)
+    effective = normalize_legacy_locked_settings(locked)
+    validate_settings(effective)
+    analysis_started = db.casting_is_finalized() or any(
+        str(row["status"]) != "pending" for row in db.list_segments()
+    )
+    if effective.get("quality_profile") == "high_quality" and analysis_started:
+        if legacy_director_settings:
+            raise RuntimeError(
+                "Project high_quality cũ đã có checkpoint phân tích nhưng chưa có "
+                "director critic; hãy tạo project sạch để không trộn metadata cũ với policy mới"
+            )
+        model_lock = db.analysis_model_lock()
+        expected_model = str(effective.get("analysis", {}).get("model", ""))
+        if model_lock is None or str(model_lock["model_name"]) != expected_model:
+            raise RuntimeError(
+                "Project high_quality đã có checkpoint phân tích nhưng thiếu khóa model/digest hợp lệ"
+            )
+    return effective
 
 
 def _apply_runtime_resource_overrides(

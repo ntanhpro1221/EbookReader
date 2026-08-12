@@ -147,6 +147,17 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   từ chối riêng ở mọi `kind`, kể cả khi batch đã chia xuống dưới ngưỡng dominance hoặc singleton. Với dialogue/thought,
   `neutral` vẫn bị từ chối khi có cue trực tiếp, trừ trường hợp thật sự có cả affect dương và âm; cue nằm đúng phạm vi
   phủ định/ngăn cấm không được tính là mâu thuẫn.
+- Profile `high_quality` bắt buộc chạy một lượt director critic thứ hai trên candidate analysis bất biến. Critic không
+  được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
+  cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
+  độc lập, nên không bao giờ được vượt qua semantic gate tất định hoặc biến một field khác candidate thành pass.
+- Confidence được commit phải nằm trên ngưỡng khóa và không vượt cap của director. Model name + digest Ollama phải được
+  khóa bền ở cấp book, kiểm tra lại trước và sau mọi request generator, critic và pronunciation; tag/digest đổi giữa
+  request hoặc giữa hai lần resume phải fail-closed. Project high-quality legacy đã có analysis checkpoint nhưng chưa có
+  critic contract không được trộn dữ liệu cũ/mới; phải tạo project sạch.
+- Batch được critic chấp nhận, event evidence và pronunciation proposal đã validate phải commit trong cùng một transaction
+  SQLite với CAS trên ID, source hash và trạng thái segment. Crash không được để lại batch analyzed thiếu event hoặc thiếu
+  pronunciation; retry critic/schema giữ nguyên candidate hash, còn singleton persistent failure phải dừng hữu hạn.
 - GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
   kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
 - Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:

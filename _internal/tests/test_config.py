@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from ebook_reader.config import build_settings, validate_settings
+from ebook_reader.config import (
+    DIRECTOR_CRITIC_SETTING_KEYS,
+    build_settings,
+    load_settings,
+    normalize_legacy_locked_settings,
+    settings_hash,
+    validate_settings,
+)
 
 
 def test_unattended_safety_defaults() -> None:
@@ -21,6 +28,10 @@ def test_unattended_safety_defaults() -> None:
     assert settings["perceptual_qa"]["enabled"] is False
 
     high_quality = build_settings("high_quality")
+    assert high_quality["analysis"]["director_critic_enabled"] is True
+    assert high_quality["analysis"]["director_critic_required"] is True
+    assert high_quality["analysis"]["director_confidence_cap"] == 0.95
+    assert high_quality["analysis"]["low_confidence_policy"] == "fail"
     assert high_quality["perceptual_qa"]["enabled"] is True
     assert high_quality["perceptual_qa"]["failure_policy"] == "fail"
     assert high_quality["perceptual_qa"]["repair_rounds"] == 2
@@ -93,6 +104,12 @@ def test_remote_analysis_requires_explicit_opt_in() -> None:
     assert settings["safety"]["allow_remote_analysis"] is True
 
 
+@pytest.mark.parametrize("model", ["qwen3", "qwen3:", ":8b", "qwen3:latest extra"])
+def test_analysis_model_requires_an_explicit_canonical_tag(model: str) -> None:
+    with pytest.raises(ValueError, match="canonical name:tag"):
+        build_settings(overrides={"analysis": {"model": model}})
+
+
 def test_required_asr_cannot_be_disabled_or_downgraded_to_warning() -> None:
     with pytest.raises(ValueError, match="cannot be disabled"):
         build_settings(overrides={"asr": {"enabled": False}})
@@ -122,3 +139,38 @@ def test_required_asr_cannot_be_disabled_or_downgraded_to_warning() -> None:
 def test_high_quality_requires_mandatory_analysis() -> None:
     with pytest.raises(ValueError, match="mandatory book analysis"):
         build_settings(overrides={"analysis": {"enabled": False, "required": False}})
+
+    with pytest.raises(ValueError, match="analysis director critic"):
+        build_settings(overrides={"analysis": {"director_critic_enabled": False}})
+
+    with pytest.raises(ValueError, match="low_confidence_policy=fail"):
+        build_settings(overrides={"analysis": {"low_confidence_policy": "auto_with_warning"}})
+
+
+def test_legacy_locked_settings_are_normalized_in_memory_without_changing_raw_hash(
+    tmp_path,
+) -> None:
+    legacy = build_settings()
+    for key in DIRECTOR_CRITIC_SETTING_KEYS:
+        legacy["analysis"].pop(key)
+    original_hash = settings_hash(legacy)
+    path = tmp_path / "book_settings.json"
+    path.write_text(__import__("json").dumps(legacy, ensure_ascii=False), encoding="utf-8")
+
+    loaded = load_settings(path)
+    effective = normalize_legacy_locked_settings(loaded)
+
+    assert settings_hash(loaded) == original_hash
+    assert DIRECTOR_CRITIC_SETTING_KEYS.isdisjoint(loaded["analysis"])
+    assert effective["analysis"]["director_critic_enabled"] is True
+    assert effective["analysis"]["director_critic_required"] is True
+    assert effective["analysis"]["low_confidence_policy"] == "fail"
+    assert settings_hash(legacy) == original_hash
+
+
+def test_partially_missing_director_settings_are_not_treated_as_legacy() -> None:
+    settings = build_settings()
+    settings["analysis"].pop("director_confidence_cap")
+
+    with pytest.raises(ValueError, match="Missing analysis director critic settings"):
+        validate_settings(normalize_legacy_locked_settings(settings))

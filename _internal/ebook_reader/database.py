@@ -15,7 +15,7 @@ from .models import BookStatus, ChapterStatus, SegmentStatus
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -82,7 +82,15 @@ CREATE TABLE IF NOT EXISTS book (
     updated_at REAL NOT NULL,
     last_error TEXT,
     run_generation INTEGER NOT NULL DEFAULT 0,
-    casting_finalized INTEGER NOT NULL DEFAULT 0
+    casting_finalized INTEGER NOT NULL DEFAULT 0,
+    analysis_model_name TEXT,
+    analysis_model_digest TEXT,
+    analysis_model_locked_at REAL,
+    CHECK (
+        (analysis_model_name IS NULL AND analysis_model_digest IS NULL AND analysis_model_locked_at IS NULL)
+        OR (analysis_model_name IS NOT NULL AND analysis_model_digest IS NOT NULL
+            AND analysis_model_locked_at IS NOT NULL)
+    )
 );
 
 CREATE TABLE IF NOT EXISTS chapters (
@@ -453,6 +461,12 @@ class ProjectDB:
                 )
                 """
             )
+        if "analysis_model_name" not in book_columns:
+            conn.execute("ALTER TABLE book ADD COLUMN analysis_model_name TEXT")
+        if "analysis_model_digest" not in book_columns:
+            conn.execute("ALTER TABLE book ADD COLUMN analysis_model_digest TEXT")
+        if "analysis_model_locked_at" not in book_columns:
+            conn.execute("ALTER TABLE book ADD COLUMN analysis_model_locked_at REAL")
 
         candidate_columns = {
             str(row[1]) for row in conn.execute("PRAGMA table_info(segment_candidates)")
@@ -616,6 +630,50 @@ class ProjectDB:
 
     def casting_is_finalized(self) -> bool:
         return bool(int(self.book()["casting_finalized"]))
+
+    def analysis_model_lock(self) -> dict[str, Any] | None:
+        book = self.book()
+        model_name = str(book["analysis_model_name"] or "").strip()
+        model_digest = str(book["analysis_model_digest"] or "").strip()
+        locked_at = book["analysis_model_locked_at"]
+        if not model_name and not model_digest and locked_at is None:
+            return None
+        if not model_name or not model_digest or locked_at is None:
+            raise RuntimeError("Analysis model lock is incomplete")
+        return {
+            "model_name": model_name,
+            "model_digest": model_digest,
+            "locked_at": float(locked_at),
+        }
+
+    def lock_analysis_model(self, model_name: str, model_digest: str) -> None:
+        normalized_name = str(model_name).strip()
+        normalized_digest = str(model_digest).strip()
+        if not normalized_name or not normalized_digest:
+            raise ValueError("Analysis model name and digest must be non-empty")
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT analysis_model_name,analysis_model_digest,analysis_model_locked_at "
+                "FROM book WHERE id=1"
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Project database has not been initialized")
+            locked_name = str(row["analysis_model_name"] or "").strip()
+            locked_digest = str(row["analysis_model_digest"] or "").strip()
+            locked_at = row["analysis_model_locked_at"]
+            if not locked_name and not locked_digest and locked_at is None:
+                conn.execute(
+                    "UPDATE book SET analysis_model_name=?,analysis_model_digest=?,"
+                    "analysis_model_locked_at=?,updated_at=? WHERE id=1",
+                    (normalized_name, normalized_digest, time.time(), time.time()),
+                )
+                return
+            if not locked_name or not locked_digest or locked_at is None:
+                raise RuntimeError("Analysis model lock is incomplete")
+            if locked_name != normalized_name or locked_digest != normalized_digest:
+                raise RuntimeError(
+                    "Analysis model differs from the model name/digest locked for this book"
+                )
 
     def finalize_casting(self) -> None:
         with self.connect() as conn:
@@ -818,6 +876,24 @@ class ProjectDB:
         data: dict[str, Any],
         low_confidence_threshold: float = 0.58,
     ) -> None:
+        values = self._analysis_update_values(data, low_confidence_threshold, time.time())
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE segments SET
+                    kind=?,speaker=?,gender=?,age=?,emotion=?,intensity=?,pace=?,volume=?,
+                    confidence=?,analysis_notes=?,warning_code=?,status=?,updated_at=?
+                WHERE id=?
+                """,
+                (*values, segment_id),
+            )
+
+    @staticmethod
+    def _analysis_update_values(
+        data: dict[str, Any],
+        low_confidence_threshold: float,
+        now: float,
+    ) -> tuple[Any, ...]:
         confidence = float(data.get("confidence", 0.5))
         warning = "LOW_ANALYSIS_CONFIDENCE" if confidence < low_confidence_threshold else None
         status = SegmentStatus.WARNING.value if warning else SegmentStatus.ANALYZED.value
@@ -830,29 +906,89 @@ class ProjectDB:
             )
             if value
         )
-        with self.connect() as conn:
+        return (
+            data.get("kind", "narration"),
+            data.get("speaker", "NARRATOR"),
+            data.get("gender", "unknown"),
+            data.get("age", "unknown"),
+            data.get("emotion", "neutral"),
+            int(data.get("intensity", 1)),
+            data.get("pace", "normal"),
+            data.get("volume", "normal"),
+            confidence,
+            analysis_notes,
+            warning,
+            status,
+            now,
+        )
+
+    def update_analysis_batch_with_event(
+        self,
+        rows: Sequence[dict[str, Any]],
+        *,
+        low_confidence_threshold: float,
+        event_level: str,
+        event_code: str,
+        event_message: str,
+        event_details: dict[str, Any],
+        analysis_model_name: str,
+        analysis_model_digest: str,
+        pronunciations: Sequence[dict[str, Any]] = (),
+    ) -> None:
+        if not rows:
+            raise ValueError("Analysis batch cannot be empty")
+        now = time.time()
+        with self.transaction() as conn:
+            model_lock = conn.execute(
+                "SELECT analysis_model_name,analysis_model_digest FROM book WHERE id=1"
+            ).fetchone()
+            if (
+                model_lock is None
+                or str(model_lock["analysis_model_name"] or "") != str(analysis_model_name)
+                or str(model_lock["analysis_model_digest"] or "") != str(analysis_model_digest)
+            ):
+                raise RuntimeError(
+                    "Analysis model lock changed before director batch commit"
+                )
+            for row in rows:
+                expected_status = str(row.get("expected_status", SegmentStatus.PENDING.value))
+                cursor = conn.execute(
+                    """
+                    UPDATE segments SET
+                        kind=?,speaker=?,gender=?,age=?,emotion=?,intensity=?,pace=?,volume=?,
+                        confidence=?,analysis_notes=?,warning_code=?,status=?,updated_at=?
+                    WHERE id=? AND stable_id=? AND text_sha256=? AND status=?
+                    """,
+                    (
+                        *self._analysis_update_values(
+                            dict(row["data"]),
+                            low_confidence_threshold,
+                            now,
+                        ),
+                        int(row["segment_id"]),
+                        str(row["stable_id"]),
+                        str(row["text_sha256"]),
+                        expected_status,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise RuntimeError(
+                        "Analysis batch CAS failed for "
+                        f"{row['stable_id']}: status or source hash changed"
+                    )
+            for pronunciation in pronunciations:
+                self._upsert_pronunciation_conn(conn, pronunciation, now)
             conn.execute(
                 """
-                UPDATE segments SET
-                    kind=?,speaker=?,gender=?,age=?,emotion=?,intensity=?,pace=?,volume=?,
-                    confidence=?,analysis_notes=?,warning_code=?,status=?,updated_at=?
-                WHERE id=?
+                INSERT INTO runtime_events(timestamp,level,code,message,details_json)
+                VALUES(?,?,?,?,?)
                 """,
                 (
-                    data.get("kind", "narration"),
-                    data.get("speaker", "NARRATOR"),
-                    data.get("gender", "unknown"),
-                    data.get("age", "unknown"),
-                    data.get("emotion", "neutral"),
-                    int(data.get("intensity", 1)),
-                    data.get("pace", "normal"),
-                    data.get("volume", "normal"),
-                    confidence,
-                    analysis_notes,
-                    warning,
-                    status,
-                    time.time(),
-                    segment_id,
+                    now,
+                    event_level,
+                    event_code,
+                    event_message,
+                    json.dumps(event_details, ensure_ascii=False),
                 ),
             )
 
@@ -1287,8 +1423,27 @@ class ProjectDB:
     ) -> None:
         now = time.time()
         with self.connect() as conn:
-            conn.execute(
-                """
+            self._upsert_pronunciation_conn(
+                conn,
+                {
+                    "surface": surface,
+                    "normalized_surface": normalized_surface,
+                    "spoken_form": spoken_form,
+                    "confidence": confidence,
+                    "source": source,
+                    "locked": locked,
+                },
+                now,
+            )
+
+    @staticmethod
+    def _upsert_pronunciation_conn(
+        conn: sqlite3.Connection,
+        pronunciation: dict[str, Any],
+        now: float,
+    ) -> None:
+        conn.execute(
+            """
                 INSERT INTO pronunciations(
                     surface,normalized_surface,spoken_form,confidence,source,locked,created_at,updated_at
                 ) VALUES(?,?,?,?,?,?,?,?)
@@ -1312,9 +1467,18 @@ class ProjectDB:
                     END,
                     locked=MAX(pronunciations.locked, excluded.locked),
                     updated_at=excluded.updated_at
-                """,
-                (surface, normalized_surface, spoken_form, confidence, source, int(locked), now, now),
-            )
+            """,
+            (
+                str(pronunciation["surface"]),
+                str(pronunciation["normalized_surface"]),
+                str(pronunciation["spoken_form"]),
+                float(pronunciation["confidence"]),
+                str(pronunciation.get("source", "analysis")),
+                int(bool(pronunciation.get("locked", False))),
+                now,
+                now,
+            ),
+        )
 
     def list_pronunciations(self, minimum_confidence: float = 0.0) -> list[sqlite3.Row]:
         with self.connect() as conn:

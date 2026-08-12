@@ -26,6 +26,14 @@ from ebook_reader.config import build_settings
 from ebook_reader.tts import TTSCoordinator
 
 
+ANALYSIS_MODEL_NAME = "qwen3:8b"
+ANALYSIS_MODEL_DIGEST = "sha256:analysis-model"
+ANALYSIS_MODEL_COMMIT = {
+    "analysis_model_name": ANALYSIS_MODEL_NAME,
+    "analysis_model_digest": ANALYSIS_MODEL_DIGEST,
+}
+
+
 def _segment_db(tmp_path: Path) -> tuple[ProjectDB, int]:
     db = ProjectDB(tmp_path / "project.sqlite3")
     db.initialize_book(
@@ -60,6 +68,49 @@ def _segment_db(tmp_path: Path) -> tuple[ProjectDB, int]:
         ],
     )
     return db, int(db.list_segments()[0]["id"])
+
+
+def _analysis_batch_db(
+    tmp_path: Path,
+    *,
+    lock_model: bool = True,
+) -> tuple[ProjectDB, list[dict]]:
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    db.initialize_book(
+        title="Book",
+        project_root=tmp_path,
+        settings={},
+        settings_hash="settings",
+        input_manifest_hash="manifest",
+    )
+    chapter_id = db.ensure_chapters(
+        [
+            {
+                "chapter_index": 1,
+                "title": "One",
+                "input_path": tmp_path / "one.txt",
+                "input_sha256": "source",
+                "input_size": 1,
+                "output_mp3": tmp_path / "one.mp3",
+            }
+        ]
+    )[0]
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {
+                "stable_id": f"c1s{index}",
+                "seq": index - 1,
+                "text": f"Text {index}",
+                "text_sha256": f"text-{index}",
+                "kind_hint": "narration",
+            }
+            for index in range(1, 3)
+        ],
+    )
+    if lock_model:
+        db.lock_analysis_model(ANALYSIS_MODEL_NAME, ANALYSIS_MODEL_DIGEST)
+    return db, [dict(row) for row in db.list_segments()]
 
 
 def _candidate_db(tmp_path: Path) -> tuple[ProjectDB, int, str, Path]:
@@ -299,6 +350,292 @@ def test_signal_checkpoint_commits_derived_warnings_atomically(tmp_path: Path) -
     assert row["warning_code"] == (
         "TTS_SPLIT_RECOVERY|TTS_PITCH_VARIANT_SKIPPED"
     )
+
+
+def test_analysis_director_batch_and_accept_event_commit_atomically(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    batch = [
+        {
+            "segment_id": row["id"],
+            "stable_id": row["stable_id"],
+            "text_sha256": row["text_sha256"],
+            "expected_status": "pending",
+            "data": {
+                "kind": "narration",
+                "speaker": "NARRATOR",
+                "gender": "unknown",
+                "age": "unknown",
+                "emotion": "neutral",
+                "intensity": 1,
+                "pace": "normal",
+                "volume": "normal",
+                "confidence": 0.9,
+                "notes": "Lượt phản biện đồng ý.",
+            },
+        }
+        for row in source_rows
+    ]
+
+    db.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="accepted",
+        event_details={"candidate_hash": "candidate"},
+        **ANALYSIS_MODEL_COMMIT,
+        pronunciations=[{
+            "surface": "Michael",
+            "normalized_surface": "michael",
+            "spoken_form": "Mai-cồ",
+            "confidence": 0.91,
+            "source": "analysis",
+        }],
+    )
+
+    assert {row["status"] for row in db.list_segments()} == {"analyzed"}
+    event = db.list_events()[-1]
+    assert event["code"] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+    assert json.loads(event["details_json"])["candidate_hash"] == "candidate"
+    pronunciation = db.list_pronunciations()[0]
+    assert pronunciation["surface"] == "Michael"
+    assert pronunciation["spoken_form"] == "Mai-cồ"
+
+
+def test_analysis_director_batch_trigger_failure_rolls_back_every_row_and_event(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER reject_second_analysis
+            BEFORE UPDATE ON segments
+            WHEN NEW.stable_id='c1s2'
+            BEGIN
+                SELECT RAISE(ABORT, 'reject second analysis');
+            END
+            """
+        )
+    batch = [
+        {
+            "segment_id": row["id"],
+            "stable_id": row["stable_id"],
+            "text_sha256": row["text_sha256"],
+            "expected_status": "pending",
+            "data": {
+                "kind": "narration",
+                "speaker": "NARRATOR",
+                "confidence": 0.9,
+            },
+        }
+        for row in source_rows
+    ]
+
+    with pytest.raises(sqlite3.IntegrityError, match="reject second analysis"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": "candidate"},
+            **ANALYSIS_MODEL_COMMIT,
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert not any(
+        row["code"] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+        for row in db.list_events()
+    )
+
+
+def test_analysis_director_batch_cas_rejects_stale_source_without_partial_update(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    batch = [
+        {
+            "segment_id": row["id"],
+            "stable_id": row["stable_id"],
+            "text_sha256": "stale" if index == 1 else row["text_sha256"],
+            "expected_status": "pending",
+            "data": {"confidence": 0.9},
+        }
+        for index, row in enumerate(source_rows)
+    ]
+
+    with pytest.raises(RuntimeError, match="CAS failed"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": "candidate"},
+            **ANALYSIS_MODEL_COMMIT,
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert not any(
+        row["code"] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+        for row in db.list_events()
+    )
+
+
+def test_analysis_director_event_failure_rolls_back_pronunciation_and_segments(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER reject_director_accept_event
+            BEFORE INSERT ON runtime_events
+            WHEN NEW.code='ANALYSIS_DIRECTOR_CRITIC_ACCEPTED'
+            BEGIN
+                SELECT RAISE(ABORT, 'reject director event');
+            END
+            """
+        )
+    batch = [
+        {
+            "segment_id": row["id"],
+            "stable_id": row["stable_id"],
+            "text_sha256": row["text_sha256"],
+            "expected_status": "pending",
+            "data": {"confidence": 0.9},
+        }
+        for row in source_rows
+    ]
+
+    with pytest.raises(sqlite3.IntegrityError, match="reject director event"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": "candidate"},
+            **ANALYSIS_MODEL_COMMIT,
+            pronunciations=[{
+                "surface": "Michael",
+                "normalized_surface": "michael",
+                "spoken_form": "Mai-cồ",
+                "confidence": 0.91,
+            }],
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert db.list_pronunciations() == []
+
+
+def test_analysis_model_lock_is_idempotent_durable_and_rejects_drift(tmp_path: Path) -> None:
+    db, _source_rows = _analysis_batch_db(tmp_path, lock_model=False)
+
+    assert db.analysis_model_lock() is None
+    db.lock_analysis_model("qwen3:8b", "sha256:first")
+    first = db.analysis_model_lock()
+    db.lock_analysis_model("qwen3:8b", "sha256:first")
+    reopened = ProjectDB(db.path)
+
+    assert reopened.analysis_model_lock() == first
+    with pytest.raises(RuntimeError, match="differs from the model name/digest"):
+        reopened.lock_analysis_model("qwen3:8b", "sha256:second")
+    with pytest.raises(RuntimeError, match="differs from the model name/digest"):
+        reopened.lock_analysis_model("qwen3:4b", "sha256:first")
+
+
+def test_director_commit_rejects_missing_model_lock_without_partial_state(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE book SET analysis_model_name=NULL,analysis_model_digest=NULL,"
+            "analysis_model_locked_at=NULL WHERE id=1"
+        )
+    batch = [
+        {
+            "segment_id": row["id"],
+            "stable_id": row["stable_id"],
+            "text_sha256": row["text_sha256"],
+            "expected_status": "pending",
+            "data": {"confidence": 0.9},
+        }
+        for row in source_rows
+    ]
+
+    with pytest.raises(RuntimeError, match="model lock changed"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must not commit",
+            event_details={"candidate_hash": "candidate"},
+            **ANALYSIS_MODEL_COMMIT,
+            pronunciations=[{
+                "surface": "Michael",
+                "normalized_surface": "michael",
+                "spoken_form": "Mai-cồ",
+                "confidence": 0.91,
+            }],
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert db.list_pronunciations() == []
+    assert not any(
+        row["code"] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+        for row in db.list_events()
+    )
+
+
+def test_schema_v6_adds_empty_analysis_model_lock_columns(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-v6.sqlite3"
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE book (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                title TEXT NOT NULL,
+                project_root TEXT NOT NULL,
+                settings_hash TEXT NOT NULL,
+                settings_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                stage TEXT NOT NULL DEFAULT 'created',
+                input_manifest_hash TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                last_error TEXT,
+                run_generation INTEGER NOT NULL DEFAULT 0,
+                casting_finalized INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO book(
+                id,title,project_root,settings_hash,settings_json,status,stage,
+                input_manifest_hash,created_at,updated_at
+            ) VALUES(1,'Legacy',?,'settings','{}','created','created','manifest',1,1)
+            """,
+            (str(tmp_path),),
+        )
+        conn.execute("PRAGMA user_version=6")
+
+    migrated = ProjectDB(path)
+    backup = path.with_name(f"{path.name}.pre-v6-to-v{SCHEMA_VERSION}.bak")
+    with migrated.connect() as conn:
+        columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
+
+    assert backup.is_file()
+    assert {
+        "analysis_model_name",
+        "analysis_model_digest",
+        "analysis_model_locked_at",
+    } <= columns
+    assert migrated.analysis_model_lock() is None
 
 
 def test_new_generation_clears_old_audio_warnings_but_keeps_analysis_warning(

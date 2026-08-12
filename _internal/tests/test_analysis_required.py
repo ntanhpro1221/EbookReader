@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 from itertools import product
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,12 +16,16 @@ from ebook_reader.analysis import (
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
+    AnalysisModelDigestError,
     AnalysisRequestStopped,
     AnalysisWallTimeoutError,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
+    _adjudicate_director_critic,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
+    _director_candidate_hash,
+    _director_candidate_rows,
     _local_scope_for_group,
     _local_name_fallback,
     _name_candidate_contexts,
@@ -34,11 +39,16 @@ from ebook_reader.analysis import (
 from ebook_reader.config import build_settings
 
 
+ORIGINAL_DIRECTOR_CRITIC_REQUEST = OllamaBookAnalyzer._request_director_critic
+ORIGINAL_ANALYZER_INIT = OllamaBookAnalyzer.__init__
+
+
 class FakeDB:
     def __init__(self):
         self.events = []
         self.pronunciations = []
         self.updated = []
+        self.analysis_model = None
         self.rows = [
             {
                 "id": 1,
@@ -65,6 +75,34 @@ class FakeDB:
 
     def update_analysis(self, segment_id, data, low_confidence_threshold):
         self.updated.append((segment_id, data, low_confidence_threshold))
+
+    def update_analysis_batch_with_event(
+        self,
+        rows,
+        *,
+        low_confidence_threshold,
+        event_level,
+        event_code,
+        event_message,
+        event_details,
+        analysis_model_name,
+        analysis_model_digest,
+        pronunciations=(),
+    ):
+        self.lock_analysis_model(analysis_model_name, analysis_model_digest)
+        self.updated.extend(
+            (row["segment_id"], row["data"], low_confidence_threshold)
+            for row in rows
+        )
+        for pronunciation in pronunciations:
+            self.upsert_pronunciation(**pronunciation)
+        self.event(event_level, event_code, event_message, event_details)
+
+    def lock_analysis_model(self, model_name, model_digest):
+        model_lock = (model_name, model_digest)
+        if self.analysis_model is not None and self.analysis_model != model_lock:
+            raise RuntimeError("Analysis model differs from the model locked for this book")
+        self.analysis_model = model_lock
 
     def list_pronunciations(self, minimum_confidence=0.0):
         return [
@@ -124,10 +162,29 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, payload):
+    def __init__(self, payload, *, model_digests=None):
         self.payload = payload
         self.request = None
         self.response = FakeResponse(payload)
+        self.model_digests = list(model_digests or ["sha256:test-model-digest"])
+        self.tags_calls = 0
+
+    def get(self, _url, timeout):
+        assert timeout == 10
+        index = min(self.tags_calls, len(self.model_digests) - 1)
+        digest = self.model_digests[index]
+        self.tags_calls += 1
+
+        class TagsResponse:
+            @staticmethod
+            def raise_for_status():
+                return None
+
+            @staticmethod
+            def json():
+                return {"models": [{"name": "qwen3:8b", "digest": digest}]}
+
+        return TagsResponse()
 
     def post(self, _url, *, json, timeout, stream):
         self.request = {"json": json, "timeout": timeout, "stream": stream}
@@ -168,6 +225,42 @@ def analysis_group():
             "kind_hint": "narration",
         },
     ]
+
+
+def director_critic_payload(group, validated, *, confidence=0.9, corrections=None):
+    candidate_rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    corrections = corrections or {}
+    verdicts = []
+    for index, row in enumerate(candidate_rows):
+        corrected = {**row["candidate"], **corrections.get(index, {})}
+        verdicts.append(
+            {
+                "id": row["id"],
+                "accept": corrected == row["candidate"],
+                **corrected,
+                "rationale": "Chức năng câu và delivery được đối chiếu với ngữ cảnh.",
+                "critic_confidence": confidence,
+            }
+        )
+    return {"candidate_hash": candidate_hash, "verdicts": verdicts}, candidate_hash
+
+
+@pytest.fixture(autouse=True)
+def _accept_second_pass_director_critic(monkeypatch):
+    def initialize_with_test_digest(self, *args, **kwargs):
+        ORIGINAL_ANALYZER_INIT(self, *args, **kwargs)
+        self._model_digest = "sha256:test-model-digest"
+
+    def accept(_self, group, validated, **_kwargs):
+        return director_critic_payload(group, validated)
+
+    monkeypatch.setattr(OllamaBookAnalyzer, "__init__", initialize_with_test_digest)
+    monkeypatch.setattr(OllamaBookAnalyzer, "_request_director_critic", accept)
+
+
+def _trust_locked_test_digest(analyzer, monkeypatch) -> None:
+    monkeypatch.setattr(analyzer, "_verify_locked_model_digest", lambda _phase: None)
 
 
 def test_required_analysis_does_not_silently_fall_back(monkeypatch) -> None:
@@ -214,6 +307,29 @@ def test_request_uses_constrained_batch_ids_and_restores_stable_ids() -> None:
     assert group[0]["stable_id"] not in request["prompt"]
 
 
+def test_model_digest_lookup_matches_the_exact_canonical_tag() -> None:
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+
+    class TagsResponse:
+        @staticmethod
+        def raise_for_status():
+            return None
+
+        @staticmethod
+        def json():
+            return {
+                "models": [
+                    {"name": "qwen3:4b", "digest": "sha256:wrong-first"},
+                    {"name": "qwen3:8b", "digest": "sha256:exact"},
+                    {"name": "qwen3:latest", "digest": "sha256:wrong-last"},
+                ]
+            }
+
+    analyzer.session = SimpleNamespace(get=lambda _url, timeout: TagsResponse())
+
+    assert analyzer._current_model_digest() == "sha256:exact"
+
+
 def test_unknown_batch_id_is_not_fuzzily_mapped() -> None:
     group = analysis_group()
     session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S0002")]})
@@ -224,6 +340,39 @@ def test_unknown_batch_id_is_not_fuzzily_mapped() -> None:
     validated = _validate(group, payload)
 
     assert list(validated) == [group[0]["stable_id"]]
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -float("inf"), True, "0.9"])
+def test_analysis_rejects_nonfinite_or_non_numeric_confidence(invalid) -> None:
+    group = analysis_group()[:1]
+    item = analysis_item(str(group[0]["stable_id"]))
+    item["confidence"] = invalid
+
+    with pytest.raises(ValueError, match="confidence"):
+        _validate(group, {"segments": [item]})
+
+
+def test_momentary_delivery_is_not_persisted_as_character_personality() -> None:
+    narration = analysis_group()[0]
+    dialogue = {**analysis_group()[1], "kind_hint": "dialogue"}
+    narrator_item = analysis_item(str(narration["stable_id"]))
+    narrator_item["personality_hint"] = "lo âu"
+    dialogue_item = analysis_item(str(dialogue["stable_id"]))
+    dialogue_item.update(
+        {
+            "kind": "dialogue",
+            "speaker": "Lucien",
+            "personality_hint": "bất ngờ",
+        }
+    )
+
+    validated = _validate(
+        [narration, dialogue],
+        {"segments": [narrator_item, dialogue_item]},
+    )
+
+    assert validated[str(narration["stable_id"])]["personality_hint"] == ""
+    assert validated[str(dialogue["stable_id"])]["personality_hint"] == ""
 
 
 def test_semantic_retry_feedback_uses_only_constrained_batch_ids() -> None:
@@ -243,6 +392,275 @@ def test_semantic_retry_feedback_uses_only_constrained_batch_ids() -> None:
     prompt = session.request["json"]["prompt"]
     assert "- S001: emotion=happy mâu thuẫn với cue afraid" in prompt
     assert str(group[0]["stable_id"]) not in prompt
+
+
+def test_director_critic_request_is_blind_to_generator_self_assessment() -> None:
+    group = analysis_group()
+    validated = {
+        str(row["stable_id"]): {
+            **analysis_item(str(row["stable_id"])),
+            "confidence": 1.0,
+            "personality_hint": "do not expose",
+            "notes": "do not expose either",
+        }
+        for row in group
+    }
+    candidate_rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    session = FakeSession(
+        {
+            "candidate_hash": candidate_hash,
+            "verdicts": [
+                {
+                    "id": row["id"],
+                    "accept": True,
+                    **row["candidate"],
+                    "rationale": "Lời kể trung tính phù hợp chức năng câu.",
+                    "critic_confidence": 0.88,
+                }
+                for row in candidate_rows
+            ],
+        }
+    )
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    payload, actual_hash = ORIGINAL_DIRECTOR_CRITIC_REQUEST(analyzer, group, validated)
+
+    assert payload["candidate_hash"] == actual_hash == candidate_hash
+    request = session.request["json"]
+    assert "batch_signature_count" in request["prompt"]
+    assert "previous_text" in request["prompt"]
+    assert "next_text" in request["prompt"]
+    assert "do not expose" not in request["prompt"]
+    assert '"confidence"' not in request["prompt"]
+    assert '"notes"' not in request["prompt"]
+    assert request["format"]["properties"]["candidate_hash"]["enum"] == [candidate_hash]
+    assert "dữ liệu nguồn không đáng tin cậy" in request["system"]
+
+
+@pytest.mark.parametrize("request_kind", ["generator", "critic"])
+@pytest.mark.parametrize(
+    ("model_digests", "phase"),
+    [
+        (["sha256:changed"], "before"),
+        (["sha256:test-model-digest", "sha256:changed"], "after"),
+    ],
+)
+def test_analysis_requests_reject_model_digest_changes(
+    request_kind,
+    model_digests,
+    phase,
+) -> None:
+    group = analysis_group()
+    validated = {
+        str(row["stable_id"]): analysis_item(str(row["stable_id"]))
+        for row in group
+    }
+    if request_kind == "generator":
+        payload = {"segments": [analysis_item("S001"), analysis_item("S002")]}
+    else:
+        payload, _candidate_hash = director_critic_payload(group, validated)
+    session = FakeSession(payload, model_digests=model_digests)
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    with pytest.raises(RuntimeError, match=f"digest changed {phase}"):
+        if request_kind == "generator":
+            analyzer._request(group)
+        else:
+            ORIGINAL_DIRECTOR_CRITIC_REQUEST(analyzer, group, validated)
+
+    assert (session.request is not None) is (phase == "after")
+
+
+def test_director_adjudicator_requires_exact_unique_verdict_contract() -> None:
+    group = analysis_group()
+    validated = {
+        str(row["stable_id"]): analysis_item(str(row["stable_id"]))
+        for row in group
+    }
+    valid_payload, candidate_hash = director_critic_payload(group, validated)
+    malformed_payloads = []
+
+    duplicate = json.loads(json.dumps(valid_payload))
+    duplicate["verdicts"][1]["id"] = duplicate["verdicts"][0]["id"]
+    malformed_payloads.append(duplicate)
+
+    unknown = json.loads(json.dumps(valid_payload))
+    unknown["verdicts"][1]["id"] = "S999"
+    malformed_payloads.append(unknown)
+
+    wrong_count = json.loads(json.dumps(valid_payload))
+    wrong_count["verdicts"].append({**wrong_count["verdicts"][0], "id": "S999"})
+    malformed_payloads.append(wrong_count)
+
+    unknown_root_field = json.loads(json.dumps(valid_payload))
+    unknown_root_field["untrusted"] = True
+    malformed_payloads.append(unknown_root_field)
+
+    unknown_verdict_field = json.loads(json.dumps(valid_payload))
+    unknown_verdict_field["verdicts"][0]["untrusted"] = True
+    malformed_payloads.append(unknown_verdict_field)
+
+    for payload in malformed_payloads:
+        issues, evidence = _adjudicate_director_critic(
+            group,
+            validated,
+            payload,
+            candidate_hash=candidate_hash,
+        )
+
+        assert issues
+        assert all(reason.startswith("DIRECTOR_INVALID_RESPONSE") for reason in issues.values())
+        assert {row["stable_id"] for row in evidence["segments"]} == set(validated)
+
+
+@pytest.mark.parametrize(
+    "confidence",
+    [float("nan"), float("inf"), float("-inf"), "0.9", 0.64],
+)
+def test_director_adjudicator_rejects_nonfinite_or_below_floor_confidence(
+    confidence,
+) -> None:
+    group = [analysis_group()[0]]
+    stable_id = str(group[0]["stable_id"])
+    validated = {stable_id: analysis_item(stable_id)}
+    payload, candidate_hash = director_critic_payload(
+        group,
+        validated,
+        confidence=confidence,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {stable_id: "DIRECTOR_INVALID_RESPONSE uncalibrated evidence"}
+    assert "critic" not in evidence["segments"][0]
+
+
+def test_director_adjudicator_rejects_v10_template_corrections_by_field_only() -> None:
+    texts = [
+        "Chương 01 - Giàn hỏa thiêu rực cháy",
+        "Khói dày khiến phổi và yết hầu như bị thiêu đốt.",
+        "‘Không được ngủ… sẽ chết mất.’",
+        "‘Tỉnh dậy, phải tỉnh dậy!’",
+        "Cậu cố vùng khỏi bóng tối.",
+        "Một tia sáng đỏ xuất hiện.",
+        "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Ánh sáng chuyển sang trắng xóa.",
+        "“Ha…”",
+        "Cậu bật dậy sau cơn ác mộng.",
+        "Cậu nhận ra mình vừa bị bóng đè.",
+        "Nghĩ lại cậu vẫn tim đập chân run.",
+        "Nhịp tim dần bình tĩnh trở lại.",
+        "‘Bảo sao không mơ thấy ác mộng cơ chứ.’",
+        "Cảnh lạ khiến cậu đực mặt.",
+        "Mọi bộ bàn gỗ đều biến mất.",
+        "Nơi này là một chiếc giường gỗ.",
+        "“Đây là đâu?”",
+    ]
+    group = [
+        {
+            "stable_id": f"v10-{index}",
+            "text": text,
+            "text_sha256": f"sha-{index}",
+            "kind_hint": "thought" if index in {2, 3, 13} else (
+                "dialogue" if index in {8, 17} else "narration"
+            ),
+        }
+        for index, text in enumerate(texts)
+    ]
+    validated = {}
+    for index, row in enumerate(group):
+        item = analysis_item(str(row["stable_id"]))
+        item["kind"] = row["kind_hint"]
+        if item["kind"] == "dialogue":
+            item["speaker"] = "Hạ Phong"
+        if index in {2, 3, 11}:
+            item.update({"emotion": "afraid", "intensity": 2, "pace": "fast", "volume": "soft"})
+        validated[str(row["stable_id"])] = item
+    corrections = {
+        1: {"emotion": "afraid", "intensity": 1},
+        2: {"volume": "normal"},
+        3: {"emotion": "excited", "volume": "normal"},
+        6: {"emotion": "sad", "intensity": 2},
+        8: {"emotion": "surprised", "intensity": 1},
+        11: {"pace": "normal"},
+        13: {"emotion": "sarcastic", "intensity": 1},
+        17: {"emotion": "surprised", "intensity": 1},
+    }
+    payload, candidate_hash = director_critic_payload(
+        group,
+        validated,
+        corrections=corrections,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert set(issues) == {f"v10-{index}" for index in corrections}
+    assert issues["v10-2"] == "DIRECTOR_FIELD_MISMATCH fields=volume"
+    assert "normal" not in issues["v10-2"]
+    evidence_by_id = {row["stable_id"]: row for row in evidence["segments"]}
+    assert evidence_by_id["v10-2"]["field_deltas"] == ["volume:soft->normal"]
+
+
+def test_director_agreement_caps_blanket_generator_confidence() -> None:
+    group = [
+        {
+            "stable_id": "confidence-cap",
+            "text": "Căn phòng im lặng.",
+            "text_sha256": "source-sha",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {"confidence-cap": analysis_item("confidence-cap")}
+    payload, candidate_hash = director_critic_payload(group, validated, confidence=0.99)
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {}
+    assert validated["confidence-cap"]["confidence"] == pytest.approx(0.95)
+    assert evidence["segments"][0]["derived_confidence"] == pytest.approx(0.95)
+
+
+def test_director_rejects_blanket_maximum_critic_confidence() -> None:
+    group = [
+        {
+            "stable_id": f"uniform-{index}",
+            "text": f"Câu {index}.",
+            "text_sha256": f"sha-{index}",
+            "kind_hint": "narration",
+        }
+        for index in range(2)
+    ]
+    validated = {str(row["stable_id"]): analysis_item(str(row["stable_id"])) for row in group}
+    payload, candidate_hash = director_critic_payload(group, validated, confidence=0.99)
+
+    issues, _evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert set(issues) == {"uniform-0", "uniform-1"}
+    assert set(issues.values()) == {"DIRECTOR_INVALID_RESPONSE blanket maximum confidence"}
 
 
 def test_name_candidates_include_speakers_and_one_off_capitalized_names() -> None:
@@ -590,6 +1008,7 @@ def test_invalid_aderon_boundary_is_repaired_without_repeating_the_request(monke
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     attempts = 0
 
     def response(_request, **_kwargs):
@@ -615,6 +1034,87 @@ def test_invalid_aderon_boundary_is_repaired_without_repeating_the_request(monke
     assert any(event[1] == "NAME_PRONUNCIATION_BOUNDARY_REPAIRED" for event in db.events)
 
 
+def test_name_pronunciation_digest_drift_is_fatal_without_fallback(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Giáo đường Aderon nằm ở trung tâm thành phố.",
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    request_count = 0
+
+    def response(_request, **_kwargs):
+        nonlocal request_count
+        request_count += 1
+        return {"names": []}
+
+    def verify(phase):
+        if phase.startswith("after name"):
+            raise AnalysisModelDigestError("digest changed after name request")
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+    monkeypatch.setattr(analyzer, "_verify_locked_model_digest", verify)
+
+    with pytest.raises(AnalysisModelDigestError, match="digest changed"):
+        analyzer.reconcile_name_pronunciations()
+
+    assert request_count == 1
+    assert db.pronunciations == []
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -float("inf"), True, "0.9"])
+def test_name_pronunciation_rejects_invalid_confidence_without_locking(
+    monkeypatch,
+    invalid,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Wolf bước vào phòng.",
+            "kind_hint": "dialogue",
+            "kind": "dialogue",
+            "status": "analyzed",
+            "speaker": "Wolf",
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        analyzer,
+        "_stream_json_response",
+        lambda _request, **_kwargs: {
+            "names": [
+                {
+                    "id": "N001",
+                    "convert": True,
+                    "spoken_form": "Uôn",
+                    "confidence": invalid,
+                    "reason": "Tên fantasy",
+                }
+            ]
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="could not resolve"):
+        analyzer.reconcile_name_pronunciations()
+
+    assert not any(row["surface"] == "Wolf" for row in db.pronunciations)
+
+
 def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> None:
     db = FakeDB()
     db.rows = [
@@ -630,6 +1130,7 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     attempts = 0
 
     def response(_request, **_kwargs):
@@ -673,6 +1174,7 @@ def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
     requested_ids: list[list[str]] = []
 
@@ -719,6 +1221,7 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
     attempts = 0
 
@@ -763,6 +1266,7 @@ def test_uncertain_short_names_are_left_verbatim_when_reconciliation_fails(
     ]
     analyzer = OllamaBookAnalyzer(build_settings(profile="balanced"), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
     attempts = 0
 
@@ -801,6 +1305,7 @@ def test_high_quality_blocks_unresolved_short_name_pronunciation(monkeypatch) ->
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
     monkeypatch.setattr(
         analyzer,
@@ -835,6 +1340,7 @@ def test_high_confidence_contextual_short_name_can_be_locked(monkeypatch) -> Non
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
     monkeypatch.setattr(
         analyzer,
         "_stream_json_response",
@@ -1972,6 +2478,274 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     assert any(event[1] == "ANALYSIS_SEMANTIC_REJECTED" for event in db.events)
 
 
+def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeypatch) -> None:
+    db = FakeDB()
+    settings = build_settings(overrides={"analysis": {"max_retries": 2}})
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    generator_feedback = []
+    critic_calls = 0
+
+    def generate(group, **kwargs):
+        generator_feedback.append(kwargs.get("validation_feedback"))
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    def critic(_group, validated, **_kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        corrections = {0: {"emotion": "surprised"}} if critic_calls == 1 else None
+        return director_critic_payload(_group, validated, corrections=corrections)
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert generator_feedback[0] is None
+    assert generator_feedback[1] == {"c1s1": "DIRECTOR_FIELD_MISMATCH fields=emotion"}
+    assert "surprised" not in str(generator_feedback[1])
+    assert [event[1] for event in db.events] == [
+        "ANALYSIS_DIRECTOR_CRITIC_REJECTED",
+        "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+    ]
+    assert db.updated[0][1]["confidence"] == pytest.approx(0.9)
+
+
+def test_persistent_director_rejection_splits_then_fails_singleton(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"director-{index}",
+            "chapter_id": 1,
+            "text": f"Câu kể số {index}.",
+            "text_sha256": f"sha-{index}",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000, "max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    generator_sizes = []
+    critic_sizes = []
+
+    def generate(group, **_kwargs):
+        generator_sizes.append(len(group))
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    def reject(group, validated, **_kwargs):
+        critic_sizes.append(len(group))
+        return director_critic_payload(
+            group,
+            validated,
+            corrections={index: {"pace": "fast"} for index in range(len(group))},
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", reject)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert generator_sizes == [4, 4, 2, 2, 1, 1]
+    assert critic_sizes == generator_sizes
+    assert db.updated == []
+    assert any(event[1] == "REQUIRED_ANALYSIS_BATCH_FAILED" for event in db.events)
+
+
+def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "varied-neutral",
+            "chapter_id": 1,
+            "text": "Căn phòng có một ô cửa sổ.",
+            "text_sha256": "neutral-sha",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 2,
+            "stable_id": "varied-question",
+            "chapter_id": 1,
+            "text": "“Anh đã về sao?”",
+            "text_sha256": "question-sha",
+            "kind_hint": "dialogue",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def generate(group, **_kwargs):
+        first = analysis_item(str(group[0]["stable_id"]))
+        second = analysis_item(str(group[1]["stable_id"]))
+        second.update(
+            {
+                "kind": "dialogue",
+                "speaker": "Lucien",
+                "emotion": "surprised",
+                "intensity": 1,
+            }
+        )
+        return {"segments": [first, second]}
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(db.updated) == 2
+    accepted = next(event for event in db.events if event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED")
+    details = accepted[3]
+    assert details["candidate_hash"]
+    assert details["critic_contract"]["model"] == "qwen3:8b"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v1"
+    assert {row["text_sha256"] for row in details["segments"]} == {
+        "neutral-sha",
+        "question-sha",
+    }
+    assert db.analysis_model == ("qwen3:8b", "sha256:test-model-digest")
+
+
+def test_director_accept_commits_validated_pronunciation_with_batch(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows[0].update(
+        {
+            "text": (
+                "VICTOR gặp LUCIEN, NATASHA và Herodotus. "
+                "STHNTS đứng cạnh Michael; VICT,OR quay đi."
+            ),
+            "text_sha256": "michael-source-sha",
+        }
+    )
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def generate(group, **_kwargs):
+        return {
+            "segments": [analysis_item(str(group[0]["stable_id"]))],
+            "pronunciations": [
+                {
+                    "surface": "Michael",
+                    "spoken_form": "Mai-cồ",
+                    "confidence": 0.94,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(
+        analyzer,
+        "_checkpoint_pronunciations",
+        lambda *_args, **_kwargs: pytest.fail("critic path must not autocommit pronunciations"),
+    )
+
+    analyzer.analyze_all(lambda: False)
+
+    assert [(row["surface"], row["spoken_form"]) for row in db.pronunciations] == [
+        ("Michael", "Mai-cồ")
+    ]
+    assert db.analysis_model == ("qwen3:8b", "sha256:test-model-digest")
+
+
+def test_high_quality_rejects_low_generator_confidence_before_director_commit(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def generate(group, **_kwargs):
+        item = analysis_item(str(group[0]["stable_id"]))
+        item["confidence"] = 0.1
+        return {
+            "segments": [item],
+            "pronunciations": [
+                {
+                    "surface": "Michael",
+                    "spoken_form": "Mai-cồ",
+                    "confidence": 0.94,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+
+    with pytest.raises(RuntimeError, match="below the locked threshold"):
+        analyzer.analyze_all(lambda: False)
+
+    assert db.updated == []
+    assert db.pronunciations == []
+    assert not any(event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED" for event in db.events)
+
+
+def test_director_timeout_splits_once_and_reuses_bounded_pipeline(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"critic-timeout-{index}",
+            "chapter_id": 1,
+            "text": f"Câu {index}.",
+            "text_sha256": f"sha-{index}",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    generator_sizes = []
+    critic_sizes = []
+
+    def generate(group, **_kwargs):
+        generator_sizes.append(len(group))
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    def critic(group, validated, **_kwargs):
+        critic_sizes.append(len(group))
+        if len(group) == 4:
+            raise AnalysisWallTimeoutError("critic timeout")
+        return director_critic_payload(group, validated)
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert generator_sizes == [4, 2, 2]
+    assert critic_sizes == [4, 4, 2, 2]
+    assert len(db.updated) == 4
+
+
+def test_director_request_honors_stop_before_network() -> None:
+    group = analysis_group()
+    validated = {str(row["stable_id"]): analysis_item(str(row["stable_id"])) for row in group}
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+
+    with pytest.raises(AnalysisRequestStopped):
+        ORIGINAL_DIRECTOR_CRITIC_REQUEST(
+            analyzer,
+            group,
+            validated,
+            stop_requested=lambda: True,
+        )
+
+
 def test_persistent_semantic_delivery_failure_splits_until_singletons(monkeypatch) -> None:
     db = FakeDB()
     db.rows = [
@@ -2116,7 +2890,7 @@ def test_thought_uses_narrator_without_retry_or_warning(monkeypatch) -> None:
     assert attempts == 1
     assert db.updated[0][1]["kind"] == "thought"
     assert db.updated[0][1]["speaker"] == "NARRATOR"
-    assert db.events == []
+    assert [event[1] for event in db.events] == ["ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"]
     assert not any("không xác định" in message for message in logs)
 
 
@@ -2443,7 +3217,7 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(
     class TagsResponse:
         @staticmethod
         def json():
-            return {"models": [{"name": "qwen3:8b"}]}
+            return {"models": [{"name": "qwen3:8b", "digest": "sha256:installed"}]}
 
     class StartupSession:
         @staticmethod
@@ -2474,6 +3248,7 @@ def test_analyzer_starts_and_stops_only_its_managed_ollama_process(
     analyzer.session = StartupSession()
 
     assert analyzer.ensure_available() is True
+    assert analyzer._model_digest == "sha256:installed"
     assert analyzer._managed_ollama_process is managed
     expected_log = runtime_root / "logs" / "ollama-server.log"
     assert analyzer._managed_ollama_log_path == expected_log
@@ -2497,15 +3272,28 @@ def test_analyzer_pulls_an_allowed_missing_model_without_a_console(monkeypatch) 
     monkeypatch.setattr("ebook_reader.analysis.shutil.which", lambda _name: "ollama.exe")
 
     class EmptyTagsResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
         @staticmethod
-        def json():
-            return {"models": []}
+        def raise_for_status():
+            return None
+
+        def json(self):
+            return self.payload
 
     class EmptyTagsSession:
+        calls = 0
+
         @staticmethod
         def get(_url, timeout):
             assert timeout == 10
-            return EmptyTagsResponse()
+            EmptyTagsSession.calls += 1
+            if EmptyTagsSession.calls == 1:
+                return EmptyTagsResponse({"models": []})
+            return EmptyTagsResponse(
+                {"models": [{"name": "qwen3:8b", "digest": "sha256:downloaded"}]}
+            )
 
     analyzer.session = EmptyTagsSession()
     calls: list[tuple[list[str], bool]] = []
@@ -2515,4 +3303,5 @@ def test_analyzer_pulls_an_allowed_missing_model_without_a_console(monkeypatch) 
     )
 
     assert analyzer.ensure_available() is True
+    assert analyzer._model_digest == "sha256:downloaded"
     assert calls == [(["ollama.exe", "pull", "qwen3:8b"], True)]

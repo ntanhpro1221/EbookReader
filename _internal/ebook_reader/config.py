@@ -27,6 +27,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "timeout_seconds": 900,
         "low_confidence_threshold": 0.58,
         "low_confidence_policy": "auto_with_warning",
+        "director_critic_enabled": False,
+        "director_critic_required": False,
+        "director_critic_temperature": 0.2,
+        "director_critic_max_retries": 2,
+        "director_confidence_cap": 0.95,
     },
     "voices": {
         "narrator_gender": "male",
@@ -147,6 +152,17 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 }
 
 
+DIRECTOR_CRITIC_SETTING_KEYS = frozenset(
+    {
+        "director_critic_enabled",
+        "director_critic_required",
+        "director_critic_temperature",
+        "director_critic_max_retries",
+        "director_confidence_cap",
+    }
+)
+
+
 PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     "fast": {
         "analysis": {"model": "qwen3:4b", "batch_segments": 40},
@@ -155,7 +171,13 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
     },
     "balanced": {},
     "high_quality": {
-        "analysis": {"batch_segments": 20, "low_confidence_threshold": 0.65},
+        "analysis": {
+            "batch_segments": 20,
+            "low_confidence_threshold": 0.65,
+            "low_confidence_policy": "fail",
+            "director_critic_enabled": True,
+            "director_critic_required": True,
+        },
         "asr": {"min_words": 1, "min_similarity": 0.78, "max_wer": 0.30, "repair_rounds": 3},
         "perceptual_qa": {"enabled": True, "failure_policy": "fail"},
         "tts": {"max_retries": 4, "batch_size": 8},
@@ -171,6 +193,31 @@ def deep_merge(base: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
         else:
             result[key] = deepcopy(value)
     return result
+
+
+def is_legacy_director_settings(settings: dict[str, Any]) -> bool:
+    analysis = settings.get("analysis", {})
+    if not isinstance(analysis, dict):
+        return False
+    return DIRECTOR_CRITIC_SETTING_KEYS.isdisjoint(analysis)
+
+
+def normalize_legacy_locked_settings(settings: dict[str, Any]) -> dict[str, Any]:
+    """Build effective settings for a pre-director project without rewriting its lock files."""
+    effective = deepcopy(settings)
+    if not is_legacy_director_settings(effective):
+        return effective
+    analysis = effective.get("analysis")
+    if not isinstance(analysis, dict):
+        return effective
+    defaults = DEFAULT_SETTINGS["analysis"]
+    for key in DIRECTOR_CRITIC_SETTING_KEYS:
+        analysis[key] = deepcopy(defaults[key])
+    if effective.get("quality_profile") == "high_quality":
+        analysis["director_critic_enabled"] = True
+        analysis["director_critic_required"] = True
+        analysis["low_confidence_policy"] = "fail"
+    return effective
 
 
 def build_settings(profile: str = "high_quality", overrides: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -207,6 +254,23 @@ def validate_settings(settings: dict[str, Any]) -> None:
     if settings.get("tts", {}).get("allow_silent_replacement"):
         raise ValueError("Silent replacement is forbidden because it can hide missing narration")
     analysis = settings.get("analysis", {})
+    if not isinstance(analysis, dict):
+        raise ValueError("analysis settings must be an object")
+    model_name = str(analysis.get("model", "")).strip()
+    model_base, separator, model_tag = model_name.rpartition(":")
+    if (
+        not separator
+        or not model_base
+        or not model_tag
+        or any(character.isspace() for character in model_name)
+    ):
+        raise ValueError("analysis.model must use an explicit canonical name:tag")
+    missing_director_settings = DIRECTOR_CRITIC_SETTING_KEYS - set(analysis)
+    if missing_director_settings:
+        raise ValueError(
+            "Missing analysis director critic settings: "
+            + ", ".join(sorted(missing_director_settings))
+        )
     parsed_url = urlparse(str(analysis.get("base_url", "")))
     if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
         raise ValueError("analysis.base_url must be a valid HTTP(S) URL")
@@ -223,15 +287,32 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Analysis batch limits must be positive")
     if int(analysis.get("max_retries", 0)) < 1 or float(analysis.get("timeout_seconds", 0)) <= 0:
         raise ValueError("Analysis retry and timeout settings must be positive")
+    if int(analysis.get("director_critic_max_retries", 0)) < 1:
+        raise ValueError("analysis.director_critic_max_retries must be positive")
     threshold = float(analysis.get("low_confidence_threshold", 0.58))
     if not 0.0 <= threshold <= 1.0:
         raise ValueError("analysis.low_confidence_threshold must be between 0 and 1")
     if analysis.get("low_confidence_policy") not in {"auto_with_warning", "fail"}:
         raise ValueError("Unsupported analysis.low_confidence_policy")
+    director_cap = float(analysis.get("director_confidence_cap", 0.95))
+    if not 0.0 < director_cap < 1.0:
+        raise ValueError("analysis.director_confidence_cap must be between 0 and 1")
+    if analysis.get("director_critic_required") and not analysis.get("director_critic_enabled"):
+        raise ValueError("Required analysis director critic cannot be disabled")
     if settings.get("quality_profile") == "high_quality" and (
         not analysis.get("enabled") or not analysis.get("required")
     ):
         raise ValueError("high_quality requires enabled mandatory book analysis")
+    if settings.get("quality_profile") == "high_quality" and (
+        not analysis.get("director_critic_enabled")
+        or not analysis.get("director_critic_required")
+    ):
+        raise ValueError("high_quality requires the mandatory analysis director critic")
+    if (
+        settings.get("quality_profile") == "high_quality"
+        and analysis.get("low_confidence_policy") != "fail"
+    ):
+        raise ValueError("high_quality requires analysis.low_confidence_policy=fail")
 
     voices = settings.get("voices", {})
     narrator_voice = str(voices.get("narrator_voice", "")).strip()
@@ -383,6 +464,13 @@ def save_settings(path: Path, settings: dict[str, Any]) -> None:
 
 
 def load_settings(path: Path) -> dict[str, Any]:
+    data = load_settings_raw(path)
+    validate_settings(normalize_legacy_locked_settings(data))
+    return data
+
+
+def load_settings_raw(path: Path) -> dict[str, Any]:
     data = json.loads(path.read_text(encoding="utf-8"))
-    validate_settings(data)
+    if not isinstance(data, dict):
+        raise ValueError("Settings JSON must be an object")
     return data

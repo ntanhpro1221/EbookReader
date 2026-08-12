@@ -10,7 +10,12 @@ from types import SimpleNamespace
 import pytest
 
 from ebook_reader import worker as worker_module
-from ebook_reader.config import build_settings, save_settings, settings_hash
+from ebook_reader.config import (
+    DIRECTOR_CRITIC_SETTING_KEYS,
+    build_settings,
+    save_settings,
+    settings_hash,
+)
 from ebook_reader.database import ProjectDB
 from ebook_reader.io_utils import sha256_file
 from ebook_reader.models import ProjectPaths
@@ -58,6 +63,70 @@ def test_worker_rejects_external_settings_that_differ_from_sqlite(tmp_path: Path
     save_settings(paths.settings, tampered)
 
     with pytest.raises(RuntimeError, match="khác settings đã khóa"):
+        _load_locked_settings(paths, db)
+
+
+def _legacy_director_project(tmp_path: Path) -> tuple[ProjectPaths, dict, ProjectDB]:
+    paths = ProjectPaths.build(tmp_path / "legacy-project")
+    settings = build_settings()
+    for key in DIRECTOR_CRITIC_SETTING_KEYS:
+        settings["analysis"].pop(key)
+    paths.settings.write_text(json.dumps(settings, ensure_ascii=False), encoding="utf-8")
+    db = ProjectDB(paths.db)
+    db.initialize_book(
+        title="Legacy",
+        project_root=paths.root,
+        settings=settings,
+        settings_hash=settings_hash(settings),
+        input_manifest_hash="manifest",
+    )
+    return paths, settings, db
+
+
+def test_worker_normalizes_legacy_director_settings_only_after_raw_lock_comparison(
+    tmp_path: Path,
+) -> None:
+    paths, raw_settings, db = _legacy_director_project(tmp_path)
+    original_file = paths.settings.read_bytes()
+    original_hash = settings_hash(raw_settings)
+
+    effective = _load_locked_settings(paths, db)
+
+    assert effective["analysis"]["director_critic_enabled"] is True
+    assert effective["analysis"]["director_critic_required"] is True
+    assert effective["analysis"]["low_confidence_policy"] == "fail"
+    assert paths.settings.read_bytes() == original_file
+    assert str(db.book()["settings_hash"]) == original_hash
+
+
+def test_worker_rejects_legacy_high_quality_project_after_analysis_started(
+    tmp_path: Path,
+) -> None:
+    paths, _raw_settings, db = _legacy_director_project(tmp_path)
+    chapter_id = db.ensure_chapters(
+        [{
+            "chapter_index": 1,
+            "title": "One",
+            "input_path": tmp_path / "one.txt",
+            "input_sha256": "source",
+            "input_size": 1,
+            "output_mp3": paths.chapters / "one.mp3",
+        }]
+    )[0]
+    db.replace_chapter_segments(
+        chapter_id,
+        [{
+            "stable_id": "c1s1",
+            "seq": 0,
+            "text": "Text",
+            "text_sha256": "text",
+            "kind_hint": "narration",
+        }],
+    )
+    segment_id = int(db.list_segments()[0]["id"])
+    db.update_analysis(segment_id, {"confidence": 0.9})
+
+    with pytest.raises(RuntimeError, match="tạo project sạch"):
         _load_locked_settings(paths, db)
 
 
