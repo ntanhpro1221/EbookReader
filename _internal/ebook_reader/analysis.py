@@ -52,6 +52,7 @@ SEMANTIC_NOTE_MIN_LETTERS = 4
 SEMANTIC_DOMINANCE_MIN_SEGMENTS = 8
 SEMANTIC_DOMINANCE_RATIO = 0.75
 SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS = 3
+NEUTRAL_ZERO_DELIVERY_SIGNATURE = ("neutral", 0, "normal", "normal")
 MAX_PRONUNCIATIONS_PER_BATCH = 32
 NAME_PRONUNCIATION_BATCH_SIZE = 20
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
@@ -88,35 +89,100 @@ GENERIC_SPEAKER_TRAITS = {
 GENERIC_CHILD_LABELS = {"trẻ em", "đứa bé", "đứa trẻ", "trẻ nhỏ"}
 DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘"})
 DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’"})
-NEGATED_DISTRESS_PATTERN = re.compile(
-    r"\b(?:không|chẳng|chưa)\s+(?:(?:còn|hề)\s+)?(?:sợ|lo|buồn|đau)\b"
-    r"|\bhết\s+(?:sợ|lo|buồn|đau)\b",
+SCOPED_AFFECT_NEGATION_PREFIX_PATTERN = re.compile(
+    r"(?:\b(?:không|chẳng|chưa)"
+    r"(?:\s+(?:còn|hề|bao\s+giờ|từng|hoàn\s+toàn)){0,2}"
+    r"|\bhết)\s*$",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_ASSERTION_PREFIX_PATTERN = re.compile(
+    r"(?:\b(?:không|chẳng)\s+"
+    r"(?:(?:thể|phải|được(?:\s+phép)?)\s+)?(?:không|chẳng)"
+    r"|\b(?:không|chẳng|chưa)\s+(?:hết|khỏi|ngừng))\s*$",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_PROHIBITION_PREFIX_PATTERN = re.compile(
+    r"\b(?:đừng|chớ|không\s+được(?:\s+phép)?)"
+    r"(?:\s+(?:bao\s+giờ|vội|có)){0,2}\s*$",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_NEGATION_SUFFIX_PATTERN = re.compile(
+    r"^\s+(?:(?:đã|hoàn\s+toàn)\s+){0,2}"
+    r"(?:hết|tan\s+biến|biến\s+mất|không\s+còn(?:\s+nữa)?|chẳng\s+còn(?:\s+nữa)?)\b",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_HISTORICAL_PREFIX_PATTERN = re.compile(
+    r"\b(?:đã\s+từng|từng)\s*$",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_META_PREFIX_PATTERN = re.compile(
+    r"\b(?:dòng\s+chữ|từ|cụm\s+từ|khái\s+niệm|thuật\s+ngữ)\s+[\"“‘']?\s*$",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_META_SUFFIX_PATTERN = re.compile(
+    r"^\s*[\"”’']?\s+(?:là\s+một\s+(?:danh|tính|động)\s+từ|được\s+định\s+nghĩa)\b",
+    flags=re.IGNORECASE,
+)
+SCOPED_AFFECT_NEGATION_CONJUNCTION_PATTERN = re.compile(
+    r"^\s*(?:và|hay|hoặc)\s*$",
+    flags=re.IGNORECASE,
+)
+MIXED_AFFECT_BRIDGE_PATTERN = re.compile(
+    r"^\s*,?\s*(?:"
+    r"(?:và|nhưng|song)(?:\s+(?:vẫn|cũng|lại|rất|vô\s+cùng)){0,2}"
+    r"|(?:lại\s+)?vừa"
+    r"|(?:xen\s+lẫn|đan\s+xen)(?:\s+(?:với|niềm|nỗi))?"
+    r"|(?:và\s+)?cùng\s+lúc|đồng\s+thời"
+    r")\s*$",
     flags=re.IGNORECASE,
 )
 HAPPY_EVIDENCE_PATTERN = re.compile(
-    r"\b(?:vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|hạnh\s+phúc|hân\s+hoan|"
+    r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
+    r"hạnh\s+phúc|hân\s+hoan|"
     r"nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
     flags=re.IGNORECASE,
 )
-HAPPY_CONTRADICTION_PATTERNS: dict[str, re.Pattern[str]] = {
+EXCITED_EVIDENCE_PATTERN = re.compile(
+    r"\b(?:phấn\s+khích|háo\s+hức|nôn\s+nóng)\b",
+    flags=re.IGNORECASE,
+)
+STRONG_NON_HAPPY_CUE_PATTERNS: dict[str, re.Pattern[str]] = {
     "afraid": re.compile(
         r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
         r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
-        r"thất\s+thần|bàng\s+hoàng|hỗn\s+loạn)\b",
+        r"thất\s+thần|bàng\s+hoàng|hỗn\s+loạn|sẽ\s+chết\s+mất|"
+        r"sắp\s+chết(?:\s+mất|\s+thôi)|kinh\s+hoàng|"
+        r"tim\s+đập\s+chân\s+run|tim\s+thắt)\b",
         flags=re.IGNORECASE,
     ),
     "angry": re.compile(
         r"\b(?:độc\s+ác|khốn\s+kiếp|đáng\s+chết|nguyền\s+rủa|gào\s+thét|gào|quát|"
-        r"chửi\s+rủa|thiêu\s+chết|thiêu(?:\s+\S+){0,5}\s+đi|"
-        r"giết(?:\s+\S+){0,5}\s+đi|tan\s+nát)\b",
+        r"chửi\s+rủa|thiêu\s+chết(?!\s*(?:…|\.{3}))|"
+        r"thiêu(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|"
+        r"giết(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|tan\s+nát)\b",
+        flags=re.IGNORECASE,
+    ),
+    "sad": re.compile(
+        r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết)\b",
+        flags=re.IGNORECASE,
+    ),
+    "surprised": re.compile(
+        r"\b(?:kinh\s+ngạc|sững\s+sờ|đực\s+mặt|không\s+thể\s+tin)\b",
         flags=re.IGNORECASE,
     ),
     "distressed": re.compile(
-        r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết|"
-        r"choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
+        r"\b(?:choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
         flags=re.IGNORECASE,
     ),
 }
+NEGATIVE_AFFECT_CUES = frozenset({"afraid", "angry", "distressed", "sad"})
+POSITIVE_AFFECT_CUES = frozenset({"excited", "happy"})
+NEUTRAL_CONTRADICTION_CUES = frozenset(
+    {"afraid", "angry", "distressed", "excited", "happy", "sad", "surprised"}
+)
+DIRECT_NEUTRAL_AFFECT_CUES = frozenset(
+    {"afraid", "angry", "excited", "happy", "sad", "surprised"}
+)
 GENERIC_SPEECH_ATTRIBUTION_PATTERN = re.compile(
     r"\b(?:nói|hỏi|đáp|trả lời|lên tiếng|thì thầm|quát|kêu|thốt lên|gào|hét|hô)\b",
     flags=re.IGNORECASE,
@@ -458,6 +524,8 @@ Quy tắc:
    cách thể hiện: lời thì thầm thường soft, lời quát/giận dữ mạnh thường loud, không mặc định mọi câu là normal.
    Chỉ dùng happy khi chính người nói hoặc điểm nhìn đang vui, nhẹ nhõm hay mừng rỡ. Không dùng happy cho
    sợ hãi, đau đớn, lời đe dọa/kết tội, đám đông phẫn nộ, cười điên cuồng hoặc cảnh chỉ có nhịp nhanh.
+   Không mặc định neutral/intensity=0 cho cả batch nếu từng segment có cue sợ hãi, giận dữ, buồn đau,
+   kinh ngạc hoặc vui mừng rõ ràng; mixed-affect thực sự mới có thể giữ neutral có chủ ý.
 7. gender/age mô tả người nói, NARRATOR dùng unknown.
 8. Với mọi tên riêng tiếng Anh hoặc tên fantasy phương Tây viết bằng chữ Latin, luôn thêm pronunciation,
    kể cả khi tên có vẻ ngắn hoặc quen thuộc. surface phải xuất hiện nguyên văn trong batch; spoken_form phải
@@ -996,6 +1064,95 @@ def _validate(
     return result
 
 
+def _affect_match_is_suppressed(
+    text: str,
+    match: re.Match[str],
+) -> bool:
+    prefix = text[: match.start()]
+    suffix = text[match.end() :]
+    asserted_double_negative = (
+        SCOPED_AFFECT_ASSERTION_PREFIX_PATTERN.search(prefix) is not None
+    )
+    return bool(
+        (
+            SCOPED_AFFECT_NEGATION_PREFIX_PATTERN.search(prefix) is not None
+            and not asserted_double_negative
+        )
+        or SCOPED_AFFECT_PROHIBITION_PREFIX_PATTERN.search(prefix) is not None
+        or SCOPED_AFFECT_NEGATION_SUFFIX_PATTERN.search(suffix) is not None
+        or SCOPED_AFFECT_HISTORICAL_PREFIX_PATTERN.search(prefix) is not None
+        or SCOPED_AFFECT_META_PREFIX_PATTERN.search(prefix) is not None
+        or SCOPED_AFFECT_META_SUFFIX_PATTERN.search(suffix) is not None
+    )
+
+
+def _semantic_cue_matches(text: str) -> dict[str, re.Match[str]]:
+    patterns = {
+        **STRONG_NON_HAPPY_CUE_PATTERNS,
+        "happy": HAPPY_EVIDENCE_PATTERN,
+        "excited": EXCITED_EVIDENCE_PATTERN,
+    }
+    candidates = sorted(
+        (
+            (match.start(), -match.end(), label, match)
+            for label, pattern in patterns.items()
+            for match in pattern.finditer(text)
+        ),
+        key=lambda item: (item[0], item[1], item[2]),
+    )
+    matches: dict[str, re.Match[str]] = {}
+    last_suppressed_end: int | None = None
+    for _start, _negative_end, label, match in candidates:
+        suppressed = _affect_match_is_suppressed(text, match)
+        if not suppressed and last_suppressed_end is not None:
+            bridge = text[last_suppressed_end : match.start()]
+            suppressed = (
+                SCOPED_AFFECT_NEGATION_CONJUNCTION_PATTERN.fullmatch(bridge)
+                is not None
+            )
+        if suppressed:
+            last_suppressed_end = match.end()
+            continue
+        last_suppressed_end = None
+        matches.setdefault(label, match)
+    return matches
+
+
+def _has_explicit_opposing_affect(
+    text: str,
+    cue_matches: dict[str, re.Match[str]],
+) -> bool:
+    negative_matches = [
+        cue_matches[label]
+        for label in NEGATIVE_AFFECT_CUES
+        if label in cue_matches
+    ]
+    positive_matches = [
+        cue_matches[label]
+        for label in POSITIVE_AFFECT_CUES
+        if label in cue_matches
+    ]
+    for negative_match in negative_matches:
+        for positive_match in positive_matches:
+            first, second = sorted(
+                (negative_match, positive_match),
+                key=lambda match: match.start(),
+            )
+            bridge = text[first.end() : second.start()]
+            if MIXED_AFFECT_BRIDGE_PATTERN.fullmatch(bridge) is not None:
+                return True
+    return False
+
+
+def _delivery_signature(data: dict[str, Any]) -> tuple[str, int, str, str]:
+    return (
+        str(data.get("emotion", "neutral")),
+        int(data.get("intensity", 1)),
+        str(data.get("pace", "normal")),
+        str(data.get("volume", "normal")),
+    )
+
+
 def _semantic_delivery_issues(
     group: list[Any],
     validated: dict[str, dict[str, Any]],
@@ -1003,45 +1160,132 @@ def _semantic_delivery_issues(
     """Reject schema-valid delivery metadata that clearly contradicts strong text cues."""
     rows_by_id = {str(row["stable_id"]): row for row in group}
     issues: dict[str, str] = {}
-    emotion_contradictions: set[str] = set()
+    happy_contradictions: set[str] = set()
+    opposing_affect_ids: set[str] = set()
+    cue_matches_by_id: dict[str, dict[str, str]] = {}
     for seg_id, data in validated.items():
         reasons: list[str] = []
         notes = str(data.get("notes", "")).strip()
         if sum(character.isalpha() for character in notes) < SEMANTIC_NOTE_MIN_LETTERS:
             reasons.append("notes không có giải thích ngữ nghĩa đủ nội dung")
-        if str(data.get("emotion", "neutral")) == "happy":
-            row = rows_by_id.get(seg_id)
-            if row is not None:
-                text = NEGATED_DISTRESS_PATTERN.sub(" ", str(row["text"]))
-                cue_matches = [
-                    (label, match.group(0))
-                    for label, pattern in HAPPY_CONTRADICTION_PATTERNS.items()
-                    if (match := pattern.search(text)) is not None
-                ]
-                if cue_matches and not HAPPY_EVIDENCE_PATTERN.search(text):
-                    reasons.append(
-                        "emotion=happy mâu thuẫn với cue rõ ràng: "
-                        + ", ".join(
-                            f'{label}="{cue}"'
-                            for label, cue in cue_matches
-                        )
-                    )
-                    emotion_contradictions.add(seg_id)
+        row = rows_by_id.get(seg_id)
+        text = str(row["text"]) if row is not None else ""
+        cue_match_objects = _semantic_cue_matches(text)
+        cue_matches = {
+            label: match.group(0) for label, match in cue_match_objects.items()
+        }
+        cue_matches_by_id[seg_id] = cue_matches
+        emotion = str(data.get("emotion", "neutral"))
+        non_happy_matches = {
+            label: cue
+            for label, cue in cue_matches.items()
+            if label != "happy"
+        }
+        if emotion == "happy" and non_happy_matches and "happy" not in cue_matches:
+            reasons.append(
+                "emotion=happy mâu thuẫn với cue rõ ràng: "
+                + ", ".join(
+                    f'{label}="{cue}"'
+                    for label, cue in non_happy_matches.items()
+                )
+            )
+            happy_contradictions.add(seg_id)
+        neutral_matches = {
+            label: cue
+            for label, cue in cue_matches.items()
+            if label in NEUTRAL_CONTRADICTION_CUES
+        }
+        has_opposing_affect = _has_explicit_opposing_affect(text, cue_match_objects)
+        if has_opposing_affect:
+            opposing_affect_ids.add(seg_id)
+        signature = _delivery_signature(data)
+        kind = str(data.get("kind", "narration"))
+        direct_neutral_matches = {
+            label: cue
+            for label, cue in neutral_matches.items()
+            if label in DIRECT_NEUTRAL_AFFECT_CUES
+        }
+        contradiction_matches = (
+            neutral_matches
+            if signature == NEUTRAL_ZERO_DELIVERY_SIGNATURE
+            else direct_neutral_matches
+        )
+        if (
+            emotion == "neutral"
+            and contradiction_matches
+            and not has_opposing_affect
+            and (
+                signature == NEUTRAL_ZERO_DELIVERY_SIGNATURE
+                or kind in {"dialogue", "thought"}
+            )
+        ):
+            cue_evidence = ", ".join(
+                f'{label}="{cue}"' for label, cue in contradiction_matches.items()
+            )
+            contradiction = (
+                f"delivery signature {NEUTRAL_ZERO_DELIVERY_SIGNATURE}"
+                if signature == NEUTRAL_ZERO_DELIVERY_SIGNATURE
+                else "emotion=neutral"
+            )
+            reasons.append(
+                f"{contradiction} mâu thuẫn với cue trực tiếp: {cue_evidence}"
+            )
         if reasons:
             issues[seg_id] = "; ".join(reasons)
 
     emotion_counts = Counter(
-        str(data.get("emotion", "neutral"))
-        for data in validated.values()
+        str(data.get("emotion", "neutral")) for data in validated.values()
     )
-    dominant_count = max(emotion_counts.values(), default=0)
-    dominant_ratio = dominant_count / len(group) if group else 0.0
+    dominant_emotion, dominant_emotion_count = (
+        emotion_counts.most_common(1)[0] if emotion_counts else ("neutral", 0)
+    )
+    dominant_emotion_ratio = dominant_emotion_count / len(group) if group else 0.0
+    neutral_zero_ids = {
+        seg_id
+        for seg_id, data in validated.items()
+        if _delivery_signature(data) == NEUTRAL_ZERO_DELIVERY_SIGNATURE
+    }
+    neutral_zero_ratio = len(neutral_zero_ids) / len(group) if group else 0.0
+    neutral_zero_cue_ids = {
+        seg_id
+        for seg_id in neutral_zero_ids
+        if seg_id not in opposing_affect_ids
+        if set(cue_matches_by_id.get(seg_id, {})) & NEUTRAL_CONTRADICTION_CUES
+    }
     happy_batch_collapsed = (
         len(group) >= SEMANTIC_DOMINANCE_MIN_SEGMENTS
-        and dominant_ratio >= SEMANTIC_DOMINANCE_RATIO
-        and len(emotion_contradictions) >= SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS
+        and dominant_emotion == "happy"
+        and dominant_emotion_ratio >= SEMANTIC_DOMINANCE_RATIO
+        and len(happy_contradictions) >= SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS
     )
-    return issues, happy_batch_collapsed
+    neutral_zero_batch_collapsed = (
+        len(group) >= SEMANTIC_DOMINANCE_MIN_SEGMENTS
+        and neutral_zero_ratio >= SEMANTIC_DOMINANCE_RATIO
+        and len(neutral_zero_cue_ids) >= SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS
+    )
+    semantic_batch_collapsed = happy_batch_collapsed or neutral_zero_batch_collapsed
+    if semantic_batch_collapsed:
+        collapse_issue_ids = (
+            happy_contradictions if happy_batch_collapsed else neutral_zero_cue_ids
+        )
+        collapse_signature = (
+            f"emotion={dominant_emotion}"
+            if happy_batch_collapsed
+            else f"delivery signature {NEUTRAL_ZERO_DELIVERY_SIGNATURE}"
+        )
+        for seg_id in collapse_issue_ids:
+            if seg_id in issues:
+                continue
+            cue_evidence = ", ".join(
+                f'{label}="{cue}"'
+                for label, cue in cue_matches_by_id.get(seg_id, {}).items()
+                if label in NEUTRAL_CONTRADICTION_CUES
+            )
+            issues[seg_id] = (
+                f"{collapse_signature} bị lặp trên batch dù có cue: "
+                + cue_evidence
+            )
+    return issues, semantic_batch_collapsed
 
 
 def _batch_id(index: int) -> str:
@@ -2013,13 +2257,13 @@ class OllamaBookAnalyzer:
                             request_kwargs["validation_feedback"] = validation_feedback
                         payload = self._request(group, **request_kwargs)
                         validated = _validate(group, payload, local_scope=local_scope)
-                        semantic_issues, happy_batch_collapsed = _semantic_delivery_issues(
+                        semantic_issues, semantic_batch_collapsed = _semantic_delivery_issues(
                             group, validated
                         )
                         if semantic_issues:
                             validation_feedback = semantic_issues
                             received_semantic_issues = True
-                            if happy_batch_collapsed:
+                            if semantic_batch_collapsed:
                                 validated = {}
                             else:
                                 for seg_id in semantic_issues:
@@ -2043,7 +2287,7 @@ class OllamaBookAnalyzer:
                                 {
                                     "batch_index": group_index,
                                     "attempt": attempt_number,
-                                    "happy_batch_collapsed": happy_batch_collapsed,
+                                    "semantic_batch_collapsed": semantic_batch_collapsed,
                                     "issues": semantic_issues,
                                 },
                             )

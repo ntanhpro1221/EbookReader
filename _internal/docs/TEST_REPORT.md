@@ -47,8 +47,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - stream analysis thiếu gói kết thúc được phân loại riêng và tự chia đôi batch ngay; batch con giữ nguyên
   checkpoint/progress, còn stdout/stderr của Ollama ẩn được nối vào `runtime/logs/ollama-server.log`;
 - semantic delivery gate từ chối output Qwen đúng schema nhưng suy biến: notes chỉ có dấu câu, batch `happy`
-  mâu thuẫn hàng loạt với cue sợ hãi/giận dữ/đau đớn; evidence ghi đúng cụm từ đã khớp, retry có feedback
-  theo đúng ID rồi chia đôi hữu hạn; batch vui thật, narration trung tính và cue sợ đã bị phủ định vẫn được chấp nhận;
+  mâu thuẫn hàng loạt, hoặc template `neutral/intensity=0/normal` phủ lên nhiều cue cảm xúc rõ ràng; evidence ghi
+  đúng cụm từ đã khớp, retry có feedback theo đúng ID rồi chia đôi hữu hạn; batch vui thật, narration trung tính,
+  mixed-affect và cue nằm trong phủ định/ngăn cấm cục bộ vẫn được chấp nhận; template neutral-zero vẫn bị chặn
+  riêng sau khi batch đã chia dưới 8 segment và kết thúc bắt buộc ở singleton thay vì checkpoint dữ liệu suy biến;
 - Ollama server do worker tự khởi động chạy ẩn, được theo dõi quyền sở hữu và chỉ tiến trình do app tạo
   mới bị dừng sau giai đoạn phân tích;
 - project lock, voice profile lock và resume;

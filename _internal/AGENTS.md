@@ -139,9 +139,14 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Phản hồi Ollama đã kết thúc nhưng thiếu ID segment bắt buộc được retry theo policy; nếu batch nhiều phần tử
   vẫn thiếu sau các lần retry, phải chia đôi batch và tiếp tục. Chỉ được kết luận lỗi bắt buộc khi batch đơn
   không thể tạo đủ kết quả hợp lệ.
-- Phản hồi analysis đúng schema vẫn phải qua semantic delivery gate trước checkpoint. `notes` chỉ có dấu câu
-  hoặc emotion `happy` mâu thuẫn với cue sợ hãi/giận dữ/đau đớn rõ ràng phải bị từ chối, ghi đúng cue đã khớp, gửi feedback cụ thể
+- Phản hồi analysis đúng schema vẫn phải qua semantic delivery gate trước checkpoint. `notes` chỉ có dấu câu,
+  emotion `happy` mâu thuẫn, hoặc cả batch bị co về `neutral/intensity=0/normal` dù có nhiều cue cảm xúc rõ ràng
+  phải bị từ chối; gate ghi đúng cue đã khớp và gửi feedback cụ thể
   vào lần retry và chia đôi batch nếu vẫn sai. Nhãn đồng nhất đơn thuần không đủ để kết tội một batch hợp lệ.
+- Một segment có đúng signature `neutral/intensity=0/pace=normal/volume=normal` và cue cảm xúc mạnh phải bị
+  từ chối riêng ở mọi `kind`, kể cả khi batch đã chia xuống dưới ngưỡng dominance hoặc singleton. Với dialogue/thought,
+  `neutral` vẫn bị từ chối khi có cue trực tiếp, trừ trường hợp thật sự có cả affect dương và âm; cue nằm đúng phạm vi
+  phủ định/ngăn cấm không được tính là mâu thuẫn.
 - GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
   kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
 - Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:
