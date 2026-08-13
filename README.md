@@ -117,6 +117,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Tiêu đề chương được nhận diện hẹp từ vị trí và grammar nguồn, đọc bằng narrator trung tính và không truyền cảm xúc của câu
   kế bên vào row phản biện. Critic vẫn phải trích dẫn nguyên văn đúng text; verdict thô và structural override được lưu tách
   biệt để báo cáo không giả rằng model đã đồng ý với khóa của host.
+- Một narration chỉ bị host chặn vì suy sụp thể chất khi cùng lúc có bằng chứng hô hấp bị tổn thương và ý thức suy giảm;
+  mô tả mệt/bệnh đơn lẻ vẫn để director quyết định, tránh ép emotion chỉ bằng một keyword.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
 - Từ tượng thanh như `rầm`, `uỳnh` ở nguyên trong câu của người kể hoặc nhân vật, được đọc và kiểm tra tốc độ như

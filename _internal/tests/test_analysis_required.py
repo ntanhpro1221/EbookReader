@@ -874,6 +874,26 @@ def test_host_feedback_is_canonical_and_excludes_raw_injection() -> None:
     assert "notes" not in feedback
 
 
+def test_physical_collapse_feedback_is_typed_and_does_not_forward_source_text() -> None:
+    stable_id = str(analysis_group()[0]["stable_id"])
+    raw_reason = (
+        'emotion=neutral mâu thuẫn với cue trực tiếp: physical_collapse="phổi và '
+        'yết hầu đang bị thiêu đốt"'
+    )
+
+    issues = _structured_feedback_issues({stable_id: raw_reason})
+    payload = issues[0].canonical_payload("S001")
+
+    assert payload == {
+        "id": "S001",
+        "code": "HOST_PHYSICAL_COLLAPSE_MISMATCH",
+        "fields": ["emotion"],
+        "allowed_emotions": ["afraid", "tired"],
+        "rule": "respiratory_injury_with_consciousness_loss",
+    }
+    assert "phổi" not in json.dumps(payload, ensure_ascii=False)
+
+
 def test_compound_semantic_feedback_preserves_notes_delivery_and_template_dimensions() -> None:
     stable_id = str(analysis_group()[0]["stable_id"])
     raw_reason = (
@@ -3494,6 +3514,81 @@ def test_semantic_delivery_keeps_neutral_physical_distress_in_narration() -> Non
             "emotion": "neutral",
             "intensity": 0,
             "notes": "Người kể mô tả trạng thái thể chất suy kiệt rõ ràng.",
+        }
+    }
+
+    assert _semantic_delivery_issues(group, validated) == ({}, False)
+
+
+def test_semantic_delivery_rejects_neutral_respiratory_and_consciousness_collapse() -> None:
+    text = (
+        "Khói dày ngùn ngụt bốc lên, mỗi một hơi hít vào đều tạo nên âm thanh khò khè, "
+        "giống như thể phổi và yết hầu đang bị thiêu đốt. Ý thức của Hạ Phong rất nhanh "
+        "liền trở nên mơ hồ."
+    )
+    group = [{"stable_id": "physical-collapse", "text": text, "kind_hint": "narration"}]
+    validated = {
+        "physical-collapse": {
+            **analysis_item("physical-collapse"),
+            "emotion": "neutral",
+            "intensity": 0,
+            "notes": "Mô tả tổn thương hô hấp và ý thức đang suy giảm.",
+        }
+    }
+
+    issues, batch_collapsed = _semantic_delivery_issues(group, validated)
+
+    assert batch_collapsed is False
+    assert 'physical_collapse="phổi và yết hầu đang bị thiêu đốt"' in issues[
+        "physical-collapse"
+    ]
+
+
+def test_semantic_delivery_keeps_neutral_single_clinical_observation() -> None:
+    group = [
+        {
+            "stable_id": "clinical-observation",
+            "text": "Bác sĩ ghi rằng ý thức bệnh nhân hơi mơ hồ sau khi tỉnh dậy.",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {
+        "clinical-observation": {
+            **analysis_item("clinical-observation"),
+            "emotion": "neutral",
+            "intensity": 0,
+            "notes": "Người kể thuật lại một quan sát lâm sàng đơn lẻ.",
+        }
+    }
+
+    assert _semantic_delivery_issues(group, validated) == ({}, False)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        (
+            "Phổi và yết hầu không bị thiêu đốt. "
+            "Ý thức của anh nhanh chóng trở nên mơ hồ."
+        ),
+        (
+            "Phổi và yết hầu đang bị thiêu đốt, nhưng ý thức của anh không còn mơ hồ."
+        ),
+        (
+            "Phổi và yết hầu đang bị thiêu đốt, nhưng ý thức của anh đã hết mơ hồ."
+        ),
+    ],
+)
+def test_semantic_delivery_does_not_treat_negated_or_resolved_collapse_as_active(
+    text: str,
+) -> None:
+    group = [{"stable_id": "resolved-collapse", "text": text, "kind_hint": "narration"}]
+    validated = {
+        "resolved-collapse": {
+            **analysis_item("resolved-collapse"),
+            "emotion": "neutral",
+            "intensity": 0,
+            "notes": "Người kể mô tả trạng thái đã được phủ định hoặc giải quyết.",
         }
     }
 
