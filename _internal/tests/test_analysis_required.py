@@ -13,6 +13,8 @@ from ebook_reader.analysis import (
     ANALYSIS_OUTPUT_MAX_TOKENS,
     CMUDICT_PATH,
     EXPLICIT_ATTRIBUTION_NOTE,
+    HOST_AFFECT_ISSUE_CODE,
+    HOST_DESPERATE_EXERTION_RULE,
     HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
     HOST_PHYSICAL_COLLAPSE_RULE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
@@ -2857,7 +2859,7 @@ def test_director_content_row_binds_source_verified_semantic_emotion_lock() -> N
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v1",
+            "policy_version": "host_semantic_lock_v2",
             "stable_id": "physical-collapse",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -2898,6 +2900,198 @@ def test_physical_collapse_semantic_lock_is_not_created_for_mixed_affect() -> No
     assert adjudication.issues == ()
     assert adjudication.evidence == ()
     assert candidate_rows[0]["host_locked_fields"] == {}
+
+
+@pytest.mark.parametrize("emotion", ["afraid", "sad", "tired"])
+def test_desperate_exertion_creates_source_bound_semantic_lock(emotion: str) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "desperate-exertion",
+        "chapter_id": 1,
+        "seq": 6,
+        "paragraph_index": 7,
+        "text": (
+            "Được ánh sáng đó chiếu rọi, Hạ Phong cảm thấy sức lực của mình dần "
+            "hồi phục, vì vậy cậu tuyệt vọng gắng gượng đến gần ánh sáng đó."
+        ),
+        "kind_hint": "narration",
+    }
+    validated = {
+        "desperate-exertion": {
+            **analysis_item("desperate-exertion"),
+            "emotion": emotion,
+            "intensity": 2,
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    clearance = adjudication.clearance_payload(candidate_hash)
+
+    assert adjudication.issues == ()
+    assert candidate_rows[0]["host_locked_fields"] == {"emotion": emotion}
+    assert clearance["semantic_locks"] == [
+        {
+            "policy_version": "host_semantic_lock_v2",
+            "stable_id": "desperate-exertion",
+            "text_sha256": sha256_text(row["text"]),
+            "source_role": "content",
+            "field": "emotion",
+            "rule": "narration_desperate_exertion",
+            "cue_class": "desperate_exertion",
+            "candidate_emotion": emotion,
+            "allowed_emotions": ["afraid", "sad", "tired"],
+            "related_stable_id": "",
+            "related_text_sha256": "",
+        }
+    ]
+
+
+@pytest.mark.parametrize("emotion", ["neutral", "surprised"])
+def test_desperate_exertion_rejects_emotion_outside_source_bound_set(
+    emotion: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "desperate-exertion",
+        "chapter_id": 1,
+        "seq": 6,
+        "paragraph_index": 7,
+        "text": "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "kind_hint": "narration",
+    }
+    validated = {
+        "desperate-exertion": {
+            **analysis_item("desperate-exertion"),
+            "emotion": emotion,
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+
+    assert len(adjudication.issues) == 1
+    assert adjudication.issues[0].code == HOST_AFFECT_ISSUE_CODE
+    assert adjudication.issues[0].rule == HOST_DESPERATE_EXERTION_RULE
+    assert adjudication.issues[0].allowed_emotions == ("afraid", "sad", "tired")
+    assert adjudication.issues[0].feedback_issue().canonical_payload() == {
+        "id": "desperate-exertion",
+        "code": HOST_AFFECT_ISSUE_CODE,
+        "fields": ["emotion"],
+        "allowed_emotions": ["afraid", "sad", "tired"],
+        "rule": HOST_DESPERATE_EXERTION_RULE,
+    }
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cậu không còn tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Cậu từng tuyệt vọng gắng gượng trong quãng đời trước.",
+        "Ông nhắc lại câu “cậu tuyệt vọng gắng gượng” rồi giải thích.",
+        "Cậu tuyệt vọng gắng gượng nhưng vẫn vui mừng vì mọi người an toàn.",
+        "Một nỗ lực tuyệt vọng gắng gượng diễn ra trong im lặng.",
+        "Cậu tuyệt vọng đến gần ánh sáng.",
+        "Nếu cậu tuyệt vọng gắng gượng đến gần ánh sáng, cậu sẽ kiệt sức.",
+        "Tôi không tin cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Không có chuyện cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi không hề tin rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi không còn tin rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi chưa từng nghĩ rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Không ai tin rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Có lẽ cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Dường như cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Nghe nói cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi nghi ngờ rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Liệu cậu tuyệt vọng gắng gượng đến gần ánh sáng?",
+    ],
+)
+def test_desperate_exertion_lock_excludes_ambiguous_or_suppressed_sources(
+    text: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "not-direct-desperate-exertion",
+        "chapter_id": 1,
+        "seq": 6,
+        "paragraph_index": 7,
+        "text": text,
+        "kind_hint": "narration",
+    }
+    validated = {
+        "not-direct-desperate-exertion": {
+            **analysis_item("not-direct-desperate-exertion"),
+            "emotion": "neutral",
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+    candidate_rows = _director_candidate_rows([row], validated)
+
+    assert adjudication.issues == ()
+    assert adjudication.evidence == ()
+    assert candidate_rows[0]["host_locked_fields"] == {}
+
+
+def test_desperate_exertion_lock_requires_candidate_narration_kind() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "desperate-exertion-kind",
+        "chapter_id": 1,
+        "seq": 6,
+        "paragraph_index": 7,
+        "text": "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "kind_hint": "narration",
+    }
+    validated = {
+        "desperate-exertion-kind": {
+            **analysis_item("desperate-exertion-kind"),
+            "kind": "thought",
+            "emotion": "neutral",
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+
+    assert adjudication.issues == ()
+    assert adjudication.evidence == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cậu không sợ hãi và kinh hoàng; sau đó cậu tuyệt vọng gắng gượng "
+        "đến gần ánh sáng.",
+        "Cậu không vui mừng và phấn khích; sau đó cậu tuyệt vọng gắng gượng "
+        "đến gần ánh sáng.",
+        "Cậu khóc rồi cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Đau lòng, cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+    ],
+)
+def test_desperate_exertion_lock_preserves_coordinated_negation_scope(
+    text: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "coordinated-negation",
+        "chapter_id": 1,
+        "seq": 6,
+        "paragraph_index": 7,
+        "text": text,
+        "kind_hint": "narration",
+    }
+    validated = {
+        "coordinated-negation": {
+            **analysis_item("coordinated-negation"),
+            "emotion": "sad",
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+
+    assert adjudication.issues == ()
+    assert len(adjudication.evidence) == 1
+    assert adjudication.evidence[0].rule == HOST_DESPERATE_EXERTION_RULE
 
 
 @pytest.mark.parametrize(
@@ -3153,7 +3347,7 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
     assert item["field_deltas"] == ["emotion:afraid->neutral"]
     assert item["effective_accept"] is True
     assert item["host_semantic_override"] == {
-        "policy_version": "host_semantic_lock_v1",
+        "policy_version": "host_semantic_lock_v2",
         "stable_id": "physical-collapse",
         "text_sha256": sha256_text(row["text"]),
         "rule": "respiratory_injury_with_consciousness_loss",
@@ -3221,6 +3415,62 @@ def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
     )
 
     assert issues == {"physical-collapse": expected_issue}
+    assert evidence["segments"][0]["effective_accept"] is False
+    assert "host_semantic_override" not in evidence["segments"][0]
+
+
+@pytest.mark.parametrize(
+    ("correction", "raw_accept", "expected_issue"),
+    [
+        (
+            {"emotion": "neutral", "intensity": 0},
+            True,
+            "DIRECTOR_INVALID_RESPONSE accept_with_delta",
+        ),
+        ({}, False, "DIRECTOR_INVALID_RESPONSE reject_without_delta"),
+        ({"emotion": "tired"}, False, "DIRECTOR_FIELD_MISMATCH fields=emotion"),
+    ],
+)
+def test_desperate_exertion_lock_never_overrides_invalid_or_allowed_dissent(
+    correction: dict[str, object],
+    raw_accept: bool,
+    expected_issue: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "desperate-exertion",
+        "chapter_id": 1,
+        "seq": 6,
+        "paragraph_index": 7,
+        "text": "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "kind_hint": "narration",
+    }
+    validated = {
+        "desperate-exertion": {
+            **analysis_item("desperate-exertion"),
+            "emotion": "sad",
+            "intensity": 2,
+        }
+    }
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: correction},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+    payload["verdicts"][0]["accept"] = raw_accept
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {"desperate-exertion": expected_issue}
     assert evidence["segments"][0]["effective_accept"] is False
     assert "host_semantic_override" not in evidence["segments"][0]
 
@@ -4498,6 +4748,77 @@ def test_retry_retains_host_pass_constraint_while_fixing_other_semantic_issue(
     assert db.rows[0]["text"] not in forwarded_feedback
     assert "rationale" not in forwarded_feedback
     assert len(db.updated) == 2
+
+
+def test_desperate_exertion_retry_receives_typed_allowed_emotions(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    source_text = (
+        "Được ánh sáng đó chiếu rọi, Hạ Phong cảm thấy sức lực của mình dần "
+        "hồi phục, vì vậy cậu tuyệt vọng gắng gượng đến gần ánh sáng đó."
+    )
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "desperate-exertion",
+            "chapter_id": 1,
+            "seq": 6,
+            "paragraph_index": 7,
+            "text": source_text,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+    ]
+    settings = build_settings(
+        overrides={
+            "analysis": {
+                "batch_segments": 1,
+                "batch_chars": 10000,
+                "max_retries": 2,
+            }
+        }
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+
+    def generate(group, **kwargs):
+        del group
+        feedback = kwargs.get("validation_feedback")
+        feedback_seen.append(feedback)
+        item = analysis_item("desperate-exertion")
+        if feedback:
+            constraint = next(
+                issue
+                for issue in feedback
+                if issue.stable_id == "desperate-exertion"
+                and issue.rule == HOST_DESPERATE_EXERTION_RULE
+            )
+            assert constraint.code == HOST_AFFECT_ISSUE_CODE
+            assert constraint.fields == ("emotion",)
+            assert constraint.allowed_emotions == ("afraid", "sad", "tired")
+            item.update({"emotion": "tired", "intensity": 2})
+        else:
+            item.update({"emotion": "neutral", "intensity": 0})
+        return {"segments": [item]}
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(feedback_seen) == 2
+    assert feedback_seen[0] is None
+    forwarded_feedback = json.dumps(
+        [issue.canonical_payload() for issue in feedback_seen[1] or ()],
+        ensure_ascii=False,
+    )
+    assert source_text not in forwarded_feedback
+    assert "rationale" not in forwarded_feedback
+    assert len(db.updated) == 1
+    assert db.updated[0][1]["emotion"] == "tired"
 
 
 def test_critic_exhaustion_does_not_clear_prior_deterministic_feedback(

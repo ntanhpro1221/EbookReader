@@ -1103,6 +1103,10 @@ def test_analysis_candidate_rejects_mandatory_heading_lock_when_omitted(
             "Phổi và yết hầu đang bị thiêu đốt. Ý thức của anh liền mất dần.",
             "narration",
         ),
+        (
+            "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+            "narration",
+        ),
     ),
 )
 def test_analysis_candidate_rejects_mandatory_semantic_lock_when_omitted(
@@ -1124,6 +1128,137 @@ def test_analysis_candidate_rejects_mandatory_semantic_lock_when_omitted(
             source_rows,
             candidate=envelope,
         )
+
+
+@pytest.mark.parametrize("candidate_emotion", ["afraid", "sad", "tired"])
+def test_analysis_candidate_accepts_source_bound_desperate_exertion_lock(
+    tmp_path: Path,
+    candidate_emotion: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=(
+            "Được ánh sáng đó chiếu rọi, Hạ Phong cảm thấy sức lực dần hồi phục, "
+            "vì vậy cậu tuyệt vọng gắng gượng đến gần ánh sáng đó.",
+        ),
+    )
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion=candidate_emotion,
+    )
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule="narration_desperate_exertion",
+        cue_class="desperate_exertion",
+        allowed_emotions=["afraid", "sad", "tired"],
+    )
+
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+
+    assert candidate["state"] == "allocated"
+
+
+@pytest.mark.parametrize("candidate_emotion", ["neutral", "surprised"])
+def test_analysis_candidate_rejects_invalid_mandatory_desperate_exertion_emotion(
+    tmp_path: Path,
+    candidate_emotion: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",),
+    )
+    envelope = _analysis_acceptance_envelope(source_rows, emotion=candidate_emotion)
+
+    with pytest.raises(RuntimeError, match="mandatory host semantic emotion"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+        )
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Cậu không còn tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Cậu từng tuyệt vọng gắng gượng trong quãng đời trước.",
+        "Ông nhắc lại câu “cậu tuyệt vọng gắng gượng” rồi giải thích.",
+        "Cậu tuyệt vọng gắng gượng nhưng vẫn vui mừng vì mọi người an toàn.",
+        "Một nỗ lực tuyệt vọng gắng gượng diễn ra trong im lặng.",
+        "Cậu tuyệt vọng đến gần ánh sáng.",
+        "Nếu cậu tuyệt vọng gắng gượng đến gần ánh sáng, cậu sẽ kiệt sức.",
+        "Tôi không tin cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Không có chuyện cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi không hề tin rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi không còn tin rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi chưa từng nghĩ rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Không ai tin rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Có lẽ cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Dường như cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Nghe nói cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Tôi nghi ngờ rằng cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Liệu cậu tuyệt vọng gắng gượng đến gần ánh sáng?",
+    ),
+)
+def test_analysis_candidate_rejects_desperate_exertion_lock_on_ambiguous_source(
+    tmp_path: Path,
+    text: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _semantic_lock_envelope(source_rows, candidate_emotion="sad")
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule="narration_desperate_exertion",
+        cue_class="desperate_exertion",
+        allowed_emotions=["afraid", "sad", "tired"],
+    )
+
+    with pytest.raises(RuntimeError, match="semantic clearance is not source-bound"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=clearance,
+        )
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Cậu không sợ hãi và kinh hoàng; sau đó cậu tuyệt vọng gắng gượng "
+        "đến gần ánh sáng.",
+        "Cậu không vui mừng và phấn khích; sau đó cậu tuyệt vọng gắng gượng "
+        "đến gần ánh sáng.",
+        "Cậu khóc rồi cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+        "Đau lòng, cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+    ),
+)
+def test_analysis_candidate_accepts_desperate_exertion_after_coordinated_negation(
+    tmp_path: Path,
+    text: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _semantic_lock_envelope(source_rows, candidate_emotion="sad")
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule="narration_desperate_exertion",
+        cue_class="desperate_exertion",
+        allowed_emotions=["afraid", "sad", "tired"],
+    )
+
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+
+    assert candidate["state"] == "allocated"
 
 
 def test_analysis_candidate_rejects_mandatory_adjacent_lock_when_omitted(
@@ -1531,6 +1666,13 @@ def test_analysis_candidate_rejects_tampered_host_clearance_metadata(
             "respiratory_injury_with_consciousness_loss",
             "physical_collapse",
             ["afraid", "tired"],
+        ),
+        (
+            "Cậu đi về phía ánh sáng trong im lặng.",
+            "narration",
+            "narration_desperate_exertion",
+            "desperate_exertion",
+            ["afraid", "sad", "tired"],
         ),
     ),
 )

@@ -77,7 +77,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
 DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v3"
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v3"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v4"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -93,11 +93,13 @@ HOST_PHYSICAL_COLLAPSE_ISSUE_CODE = "HOST_PHYSICAL_COLLAPSE_MISMATCH"
 HOST_DIRECT_SELF_PRESERVATION_RULE = "thought_self_preservation_mortality"
 HOST_ADJACENT_WAKE_RULE = "adjacent_thought_wake_self_rescue"
 HOST_PHYSICAL_COLLAPSE_RULE = "respiratory_injury_with_consciousness_loss"
+HOST_DESPERATE_EXERTION_RULE = "narration_desperate_exertion"
 HOST_AFFECT_RULES = frozenset(
     {
         HOST_DIRECT_SELF_PRESERVATION_RULE,
         HOST_ADJACENT_WAKE_RULE,
         HOST_PHYSICAL_COLLAPSE_RULE,
+        HOST_DESPERATE_EXERTION_RULE,
     }
 )
 ANALYSIS_FEEDBACK_CODES = frozenset(
@@ -153,6 +155,23 @@ PHYSICAL_RESPIRATORY_INJURY_PATTERN = re.compile(
 PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN = re.compile(
     r"\bý\s+thức(?:\s+(?!(?:không|chẳng|chưa|hết|khỏi)\b)[^\s.,!?;:…]+){0,10}\s+"
     r"(?:mơ\s+hồ|lịm\s+dần|mất\s+dần)\b",
+    flags=re.IGNORECASE,
+)
+HOST_DESPERATE_EXERTION_PATTERN = re.compile(
+    r"\b(?:tôi|ta|mình|bản\s+thân|anh|chị|ông|bà|cô|cậu|hắn|nó|họ)\s+"
+    r"tuyệt\s+vọng\s+gắng\s+gượng\b",
+    flags=re.IGNORECASE,
+)
+HOST_DESPERATE_EXERTION_QUOTE_CHARACTERS = frozenset("\"'“”‘’")
+HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?…;:])[^.!?…;:]*\b(?:nếu|giả\s+(?:sử|như)|liệu|"
+    r"phải\s+chăng|hay\s+là|có\s+lẽ|có\s+thể|dường\s+như|hình\s+như|"
+    r"nghe\s+(?:nói|bảo)|(?:nghĩ|tưởng|tin|nghi\s+ngờ|nói|kể|bảo)"
+    r"(?:\s+rằng)?|"
+    r"(?:không\s+ai|(?:không|chẳng|chưa)(?:\s+(?:hề|còn|thể|từng|"
+    r"bao\s+giờ|thật\s+sự|thực\s+sự|hoàn\s+toàn)){0,2})\s+"
+    r"(?:(?:tin|nghĩ)(?:\s+rằng)?|cho\s+rằng)|không\s+có\s+chuyện)\b"
+    r"[^.!?…;:]*$",
     flags=re.IGNORECASE,
 )
 CHAPTER_HEADING_NOTES = "Tiêu đề chương được khóa delivery trung tính."
@@ -1630,6 +1649,25 @@ def _qualified_host_self_preservation_match(text: str) -> re.Match[str] | None:
     return match
 
 
+def _qualified_host_desperate_exertion_match(text: str) -> re.Match[str] | None:
+    if (
+        any(character in text for character in HOST_DESPERATE_EXERTION_QUOTE_CHARACTERS)
+        or text.rstrip().endswith("?")
+    ):
+        return None
+    matches = list(HOST_DESPERATE_EXERTION_PATTERN.finditer(text))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    if HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN.search(
+        text[: match.start()]
+    ) is not None:
+        return None
+    if _affect_match_is_suppressed(text, match):
+        return None
+    return match if set(_semantic_cue_matches(text)) == {"sad"} else None
+
+
 def _host_previous_source(
     group: list[Any],
     index: int,
@@ -1676,6 +1714,7 @@ def _host_affect_adjudication(
     evidence: list[HostAffectEvidence] = []
     issue_ids: set[str] = set()
     afraid_only = ("afraid",)
+    desperate_exertion_emotions = ("afraid", "sad", "tired")
     for index, row in enumerate(group):
         stable_id = str(row["stable_id"])
         candidate = validated.get(stable_id)
@@ -1715,6 +1754,38 @@ def _host_affect_adjudication(
                             rule=HOST_PHYSICAL_COLLAPSE_RULE,
                             candidate_emotion=candidate_emotion,
                             allowed_emotions=allowed_emotions,
+                            evidence=item_evidence,
+                        )
+                    )
+                continue
+            desperate_exertion_match = _qualified_host_desperate_exertion_match(
+                str(row["text"])
+            )
+            if desperate_exertion_match is not None:
+                candidate_emotion = str(candidate.get("emotion", "neutral"))
+                outcome = (
+                    "pass"
+                    if candidate_emotion in desperate_exertion_emotions
+                    else "reject"
+                )
+                item_evidence = HostAffectEvidence(
+                    stable_id=stable_id,
+                    text_sha256=_source_text_sha256(row),
+                    rule=HOST_DESPERATE_EXERTION_RULE,
+                    cue_class="desperate_exertion",
+                    candidate_emotion=candidate_emotion,
+                    allowed_emotions=desperate_exertion_emotions,
+                    outcome=outcome,
+                )
+                evidence.append(item_evidence)
+                if outcome == "reject":
+                    issues.append(
+                        HostAffectIssue(
+                            stable_id=stable_id,
+                            code=HOST_AFFECT_ISSUE_CODE,
+                            rule=HOST_DESPERATE_EXERTION_RULE,
+                            candidate_emotion=candidate_emotion,
+                            allowed_emotions=desperate_exertion_emotions,
                             evidence=item_evidence,
                         )
                     )

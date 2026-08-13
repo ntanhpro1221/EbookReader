@@ -59,9 +59,9 @@ def test_quality_policy_locks_installed_dependency_versions_and_direct_urls() ->
 def test_quality_policy_has_separate_parser_and_casting_fingerprints() -> None:
     policy = build_quality_policy(build_settings())
 
-    assert ANALYSIS_CASTING_STAGE == "analysis_casting_v5"
+    assert ANALYSIS_CASTING_STAGE == "analysis_casting_v6"
     assert policy["algorithms"]["casting"] == (
-        "canonical_identity_host_semantic_lock_director_ledger_v6"
+        "canonical_identity_host_semantic_lock_director_ledger_v7"
     )
     assert TEXT_SEGMENTATION_IMPLEMENTATION_FILES == ("text_processing.py",)
     assert "analysis.py" in ANALYSIS_CASTING_IMPLEMENTATION_FILES

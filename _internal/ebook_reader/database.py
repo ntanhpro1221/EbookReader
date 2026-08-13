@@ -132,8 +132,8 @@ ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v1"
-ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v4"
-ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v1"
+ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v5"
+ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v2"
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
     r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
@@ -213,6 +213,12 @@ ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS = {
         "source_kind": "narration",
         "requires_related": False,
     },
+    "narration_desperate_exertion": {
+        "cue_class": "desperate_exertion",
+        "allowed_emotions": ("afraid", "sad", "tired"),
+        "source_kind": "narration",
+        "requires_related": False,
+    },
 }
 ANALYSIS_HOST_MORTALITY_PATTERN = re.compile(
     r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
@@ -260,6 +266,23 @@ ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN = re.compile(
     r"(?:mơ\s+hồ|lịm\s+dần|mất\s+dần)\b",
     flags=re.IGNORECASE,
 )
+ANALYSIS_HOST_DESPERATE_EXERTION_PATTERN = re.compile(
+    r"\b(?:tôi|ta|mình|bản\s+thân|anh|chị|ông|bà|cô|cậu|hắn|nó|họ)\s+"
+    r"tuyệt\s+vọng\s+gắng\s+gượng\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_DESPERATE_EXERTION_QUOTE_CHARACTERS = frozenset("\"'“”‘’")
+ANALYSIS_HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?…;:])[^.!?…;:]*\b(?:nếu|giả\s+(?:sử|như)|liệu|"
+    r"phải\s+chăng|hay\s+là|có\s+lẽ|có\s+thể|dường\s+như|hình\s+như|"
+    r"nghe\s+(?:nói|bảo)|(?:nghĩ|tưởng|tin|nghi\s+ngờ|nói|kể|bảo)"
+    r"(?:\s+rằng)?|"
+    r"(?:không\s+ai|(?:không|chẳng|chưa)(?:\s+(?:hề|còn|thể|từng|"
+    r"bao\s+giờ|thật\s+sự|thực\s+sự|hoàn\s+toàn)){0,2})\s+"
+    r"(?:(?:tin|nghĩ)(?:\s+rằng)?|cho\s+rằng)|không\s+có\s+chuyện)\b"
+    r"[^.!?…;:]*$",
+    flags=re.IGNORECASE,
+)
 ANALYSIS_SCOPED_NEGATION_PREFIX_PATTERN = re.compile(
     r"(?:\b(?:không|chẳng|chưa)"
     r"(?:\s+(?:còn|hề|bao\s+giờ|từng|hoàn\s+toàn)){0,2}"
@@ -294,6 +317,10 @@ ANALYSIS_SCOPED_META_SUFFIX_PATTERN = re.compile(
     r"^\s*[\"”’']?\s+(?:là\s+một\s+(?:danh|tính|động)\s+từ|được\s+định\s+nghĩa)\b",
     flags=re.IGNORECASE,
 )
+ANALYSIS_SCOPED_NEGATION_CONJUNCTION_PATTERN = re.compile(
+    r"^\s*(?:và|hay|hoặc)\s*$",
+    flags=re.IGNORECASE,
+)
 ANALYSIS_AFRAID_CUE_PATTERN = re.compile(
     r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
     r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
@@ -302,16 +329,16 @@ ANALYSIS_AFRAID_CUE_PATTERN = re.compile(
     r"tim\s+đập\s+chân\s+run|tim\s+thắt)\b",
     flags=re.IGNORECASE,
 )
-ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
+ANALYSIS_SAD_CUE_PATTERN = re.compile(
+    r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_OTHER_AFFECT_CUE_PATTERNS = (
     re.compile(
         r"\b(?:độc\s+ác|khốn\s+kiếp|đáng\s+chết|nguyền\s+rủa|gào\s+thét|gào|quát|"
         r"chửi\s+rủa|thiêu\s+chết(?!\s*(?:…|\.{3}))|"
         r"thiêu(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|"
         r"giết(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|tan\s+nát)\b",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết)\b",
         flags=re.IGNORECASE,
     ),
     re.compile(
@@ -332,6 +359,18 @@ ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
         flags=re.IGNORECASE,
     ),
 )
+ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
+    ANALYSIS_SAD_CUE_PATTERN,
+    *ANALYSIS_OTHER_AFFECT_CUE_PATTERNS,
+)
+ANALYSIS_HOST_AFFECT_CUE_PATTERNS = {
+    "afraid": ANALYSIS_AFRAID_CUE_PATTERN,
+    "sad": ANALYSIS_SAD_CUE_PATTERN,
+    **{
+        f"other_{index}": pattern
+        for index, pattern in enumerate(ANALYSIS_OTHER_AFFECT_CUE_PATTERNS)
+    },
+}
 
 
 def _analysis_source_match_is_suppressed(text: str, match: re.Match[str]) -> bool:
@@ -353,6 +392,35 @@ def _analysis_source_match_is_suppressed(text: str, match: re.Match[str]) -> boo
     )
 
 
+def _analysis_source_active_affect_matches(
+    text: str,
+) -> dict[str, re.Match[str]]:
+    candidates = sorted(
+        (
+            (match.start(), -match.end(), label, match)
+            for label, pattern in ANALYSIS_HOST_AFFECT_CUE_PATTERNS.items()
+            for match in pattern.finditer(text)
+        ),
+        key=lambda item: (item[0], item[1], item[2]),
+    )
+    active: dict[str, re.Match[str]] = {}
+    last_suppressed_end: int | None = None
+    for _start, _negative_end, label, match in candidates:
+        suppressed = _analysis_source_match_is_suppressed(text, match)
+        if not suppressed and last_suppressed_end is not None:
+            bridge = text[last_suppressed_end : match.start()]
+            suppressed = (
+                ANALYSIS_SCOPED_NEGATION_CONJUNCTION_PATTERN.fullmatch(bridge)
+                is not None
+            )
+        if suppressed:
+            last_suppressed_end = match.end()
+            continue
+        last_suppressed_end = None
+        active.setdefault(label, match)
+    return active
+
+
 def _analysis_source_has_physical_collapse(text: str) -> bool:
     respiratory = ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN.search(text)
     consciousness = ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN.search(text)
@@ -369,6 +437,37 @@ def _analysis_source_has_physical_collapse(text: str) -> bool:
             if not _analysis_source_match_is_suppressed(text, other_match):
                 return False
     return True
+
+
+def _analysis_source_has_desperate_exertion(text: str) -> bool:
+    if (
+        any(
+            character in text
+            for character in ANALYSIS_HOST_DESPERATE_EXERTION_QUOTE_CHARACTERS
+        )
+        or text.rstrip().endswith("?")
+    ):
+        return False
+    matches = list(ANALYSIS_HOST_DESPERATE_EXERTION_PATTERN.finditer(text))
+    if len(matches) != 1:
+        return False
+    if ANALYSIS_HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN.search(
+        text[: matches[0].start()]
+    ) is not None:
+        return False
+    if _analysis_source_match_is_suppressed(text, matches[0]):
+        return False
+    active_matches = _analysis_source_active_affect_matches(text)
+    if set(active_matches) != {"sad"}:
+        return False
+    respiratory = ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN.search(text)
+    consciousness = ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN.search(text)
+    return not (
+        respiratory is not None
+        and consciousness is not None
+        and not _analysis_source_match_is_suppressed(text, respiratory)
+        and not _analysis_source_match_is_suppressed(text, consciousness)
+    )
 
 
 def _analysis_source_has_active_physical_pair(text: str) -> bool:
@@ -1757,7 +1856,11 @@ class ProjectDB:
                 else (
                     ANALYSIS_HOST_WAKE_PATTERN.fullmatch(source_text) is not None
                     if rule == "adjacent_thought_wake_self_rescue"
-                    else _analysis_source_has_physical_collapse(source_text)
+                    else (
+                        _analysis_source_has_physical_collapse(source_text)
+                        if rule == "respiratory_injury_with_consciousness_loss"
+                        else _analysis_source_has_desperate_exertion(source_text)
+                    )
                 )
             )
             if (
@@ -1805,6 +1908,13 @@ class ProjectDB:
             and _analysis_source_has_physical_collapse(source_text)
         ):
             rule = "respiratory_injury_with_consciousness_loss"
+        elif (
+            source_kind == "narration"
+            and candidate_kind == "narration"
+            and not is_chapter_heading
+            and _analysis_source_has_desperate_exertion(source_text)
+        ):
+            rule = "narration_desperate_exertion"
         elif source_kind == "thought" and candidate_kind == "thought":
             if _analysis_source_has_self_preservation_mortality(source_text):
                 rule = "thought_self_preservation_mortality"
