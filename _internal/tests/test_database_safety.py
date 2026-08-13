@@ -322,13 +322,14 @@ def _semantic_lock_envelope(
     candidate_emotion: str = "afraid",
 ) -> dict:
     envelope = _analysis_acceptance_envelope(source_rows)
+    for index, source_row in enumerate(source_rows):
+        source_kind = str(source_row["kind_hint"])
+        envelope["segments"][index]["data"]["kind"] = source_kind
+        envelope["critic_rows"][index]["candidate"]["kind"] = source_kind
     segment = envelope["segments"][locked_index]
     critic_row = envelope["critic_rows"][locked_index]
-    source_kind = str(source_rows[locked_index]["kind_hint"])
-    segment["data"]["kind"] = source_kind
     segment["data"]["emotion"] = candidate_emotion
     segment["data"]["intensity"] = 2
-    critic_row["candidate"]["kind"] = source_kind
     critic_row["candidate"]["emotion"] = candidate_emotion
     critic_row["candidate"]["intensity"] = 2
     critic_row["host_locked_fields"] = {"emotion": candidate_emotion}
@@ -399,6 +400,19 @@ def _host_semantic_clearance(
             "semantic_locks": [semantic_lock],
         }
     }
+
+
+def _merge_host_semantic_clearances(*clearances: dict) -> dict:
+    merged = copy.deepcopy(clearances[0])
+    host = merged["host_affect_clearance"]
+    for clearance in clearances[1:]:
+        incoming = clearance["host_affect_clearance"]
+        assert incoming["candidate_hash"] == host["candidate_hash"]
+        assert incoming["checked_segment_count"] == host["checked_segment_count"]
+        host["evidence"].extend(copy.deepcopy(incoming["evidence"]))
+        host["semantic_locks"].extend(copy.deepcopy(incoming["semantic_locks"]))
+    host["matched_rule_count"] = len(host["semantic_locks"])
+    return merged
 
 
 def _semantic_override_evidence(
@@ -1228,6 +1242,152 @@ def test_analysis_candidate_rejects_desperate_exertion_lock_on_ambiguous_source(
 
 
 @pytest.mark.parametrize(
+    ("texts", "kind_hints", "relabel_index", "preserve_thought_indexes"),
+    [
+        (
+            ("‘Mình sẽ chết mất.’", "Nội dung tiếp theo."),
+            ("thought", "narration"),
+            0,
+            (),
+        ),
+        (
+            (
+                "Phổi và yết hầu đang bị thiêu đốt. Ý thức của anh liền mất dần.",
+                "Cậu cố mở mắt.",
+            ),
+            ("narration", "narration"),
+            0,
+            (),
+        ),
+        (
+            (
+                "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+                "Ánh sáng vẫn ở phía trước.",
+            ),
+            ("narration", "narration"),
+            0,
+            (),
+        ),
+        (
+            ("‘Mình sẽ chết mất.’", "‘Tỉnh dậy, phải tỉnh dậy!’"),
+            ("thought", "thought"),
+            1,
+            (0,),
+        ),
+    ],
+)
+def test_analysis_candidate_rejects_mandatory_semantic_kind_lock_when_omitted(
+    tmp_path: Path,
+    texts: tuple[str, ...],
+    kind_hints: tuple[str, ...],
+    relabel_index: int,
+    preserve_thought_indexes: tuple[int, ...],
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=texts,
+        kind_hints=kind_hints,
+    )
+    envelope = _analysis_acceptance_envelope(source_rows)
+    for index in preserve_thought_indexes:
+        envelope["segments"][index]["data"]["kind"] = "thought"
+        envelope["critic_rows"][index]["candidate"]["kind"] = "thought"
+    target_kind = "thought" if kind_hints[relabel_index] == "narration" else "narration"
+    envelope["segments"][relabel_index]["data"]["kind"] = target_kind
+    envelope["critic_rows"][relabel_index]["candidate"]["kind"] = target_kind
+
+    with pytest.raises(RuntimeError, match="source-owned boundary"):
+        _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+
+def test_analysis_candidate_allows_ordinary_narration_to_implicit_thought(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Mình đang ở đâu thế này?", "Nội dung tiếp theo."),
+    )
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["segments"][0]["data"]["kind"] = "thought"
+    envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
+
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+    assert str(candidate["state"]) == "allocated"
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Phổi và yết hầu không còn bị thiêu đốt, ý thức đã tỉnh táo và anh vui mừng.",
+        "Ông nhắc lại câu “cậu tuyệt vọng gắng gượng” rồi giải thích.",
+        "Nếu cậu tuyệt vọng gắng gượng đến gần ánh sáng, cậu sẽ kiệt sức.",
+    ),
+)
+def test_analysis_candidate_allows_ambiguous_narration_to_thought(
+    tmp_path: Path,
+    text: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["segments"][0]["data"]["kind"] = "thought"
+    envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
+
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+    assert str(candidate["state"]) == "allocated"
+
+
+def test_analysis_candidate_revalidates_source_owned_kind_after_reopen(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("‘Mình đang ở đâu?’", "Nội dung tiếp theo."),
+        kind_hints=("thought", "narration"),
+    )
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["segments"][0]["data"]["kind"] = "thought"
+    envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    tampered = copy.deepcopy(envelope)
+    tampered["segments"][0]["data"]["kind"] = "narration"
+    tampered["critic_rows"][0]["candidate"]["kind"] = "narration"
+    tampered_json = json.dumps(
+        tampered,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    tampered_candidate_hash = _canonical_hash(tampered["critic_rows"])
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET candidate_json=?,candidate_hash=?,envelope_hash=? "
+            "WHERE id=?",
+            (
+                tampered_json,
+                tampered_candidate_hash,
+                sha256_text(tampered_json),
+                int(candidate["id"]),
+            ),
+        )
+
+    with pytest.raises(RuntimeError, match="source-owned boundary"):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+
+
+def test_analysis_candidate_rejects_unsupported_durable_kind(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["segments"][0]["data"]["kind"] = "unsupported"
+    envelope["critic_rows"][0]["candidate"]["kind"] = "unsupported"
+
+    with pytest.raises(RuntimeError, match="kind is not supported"):
+        _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+
+@pytest.mark.parametrize(
     "text",
     (
         "Cậu không sợ hãi và kinh hoàng; sau đó cậu tuyệt vọng gắng gượng "
@@ -1756,13 +1916,28 @@ def test_analysis_candidate_binds_adjacent_semantic_lock_to_mortality_source(
         )
     source_rows = [dict(row) for row in db.list_segments()]
     envelope = _semantic_lock_envelope(source_rows, locked_index=1)
-    clearance = _host_semantic_clearance(
+    envelope["segments"][0]["data"].update({"emotion": "afraid", "intensity": 2})
+    envelope["critic_rows"][0]["candidate"].update(
+        {"emotion": "afraid", "intensity": 2}
+    )
+    envelope["critic_rows"][0]["host_locked_fields"] = {"emotion": "afraid"}
+    direct_clearance = _host_semantic_clearance(
+        envelope,
+        rule="thought_self_preservation_mortality",
+        cue_class="self_preservation_mortality",
+        allowed_emotions=["afraid"],
+    )
+    adjacent_clearance = _host_semantic_clearance(
         envelope,
         locked_index=1,
         rule="adjacent_thought_wake_self_rescue",
         cue_class="wake_self_rescue_after_mortality",
         allowed_emotions=["afraid"],
         related_index=0,
+    )
+    clearance = _merge_host_semantic_clearances(
+        direct_clearance,
+        adjacent_clearance,
     )
 
     candidate = _allocate_analysis_candidate(
@@ -1774,10 +1949,10 @@ def test_analysis_candidate_binds_adjacent_semantic_lock_to_mortality_source(
     assert candidate["state"] == "allocated"
 
     forged = copy.deepcopy(clearance)
-    forged["host_affect_clearance"]["semantic_locks"][0][
+    forged["host_affect_clearance"]["semantic_locks"][1][
         "related_text_sha256"
     ] = "f" * 64
-    forged["host_affect_clearance"]["evidence"][0][
+    forged["host_affect_clearance"]["evidence"][1][
         "related_text_sha256"
     ] = "f" * 64
     with pytest.raises(RuntimeError, match="related provenance"):
@@ -1907,13 +2082,28 @@ def test_analysis_candidate_rejects_non_immediate_adjacent_semantic_source(
         )
     source_rows = [dict(row) for row in db.list_segments()]
     envelope = _semantic_lock_envelope(source_rows, locked_index=2)
-    clearance = _host_semantic_clearance(
+    envelope["segments"][0]["data"].update({"emotion": "afraid", "intensity": 2})
+    envelope["critic_rows"][0]["candidate"].update(
+        {"emotion": "afraid", "intensity": 2}
+    )
+    envelope["critic_rows"][0]["host_locked_fields"] = {"emotion": "afraid"}
+    direct_clearance = _host_semantic_clearance(
+        envelope,
+        rule="thought_self_preservation_mortality",
+        cue_class="self_preservation_mortality",
+        allowed_emotions=["afraid"],
+    )
+    adjacent_clearance = _host_semantic_clearance(
         envelope,
         locked_index=2,
         rule="adjacent_thought_wake_self_rescue",
         cue_class="wake_self_rescue_after_mortality",
         allowed_emotions=["afraid"],
         related_index=0,
+    )
+    clearance = _merge_host_semantic_clearances(
+        direct_clearance,
+        adjacent_clearance,
     )
 
     with pytest.raises(RuntimeError, match="related provenance"):

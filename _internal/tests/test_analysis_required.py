@@ -17,6 +17,7 @@ from ebook_reader.analysis import (
     HOST_DESPERATE_EXERTION_RULE,
     HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
     HOST_PHYSICAL_COLLAPSE_RULE,
+    HOST_SOURCE_KIND_ISSUE_CODE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
@@ -43,6 +44,7 @@ from ebook_reader.analysis import (
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
     _semantic_delivery_issues,
+    _source_kind_feedback_issues,
     _structured_feedback_issues,
     _valid_vietnamese_spoken_form,
     _validate,
@@ -2348,6 +2350,98 @@ def test_analysis_retries_when_model_shifts_a_valid_kind_to_the_wrong_id() -> No
     assert validated == {}
 
 
+def test_analysis_rejects_explicit_thought_relabelled_as_narration() -> None:
+    row = {
+        **analysis_group()[0],
+        "kind_hint": "thought",
+        "text": "‘Tỉnh dậy, phải tỉnh dậy!’",
+    }
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "narration", "speaker": "NARRATOR"})
+
+    payload = {"segments": [item]}
+
+    assert _validate([row], payload) == {}
+    assert [issue.canonical_payload() for issue in _source_kind_feedback_issues([row], payload)] == [
+        {
+            "id": row["stable_id"],
+            "code": HOST_SOURCE_KIND_ISSUE_CODE,
+            "fields": ["kind"],
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("text", "rule"),
+    [
+        (
+            "Phổi và yết hầu đang bị thiêu đốt. Ý thức của anh nhanh chóng trở nên mơ hồ.",
+            HOST_PHYSICAL_COLLAPSE_RULE,
+        ),
+        (
+            "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+            HOST_DESPERATE_EXERTION_RULE,
+        ),
+    ],
+)
+def test_analysis_rejects_mandatory_narration_relabelled_as_thought(
+    text: str,
+    rule: str,
+) -> None:
+    row = {**analysis_group()[0], "kind_hint": "narration", "text": text}
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "thought", "speaker": "NARRATOR"})
+    payload = {"segments": [item]}
+
+    assert _validate([row], payload) == {}
+    assert [issue.canonical_payload() for issue in _source_kind_feedback_issues([row], payload)] == [
+        {
+            "id": row["stable_id"],
+            "code": HOST_SOURCE_KIND_ISSUE_CODE,
+            "fields": ["kind"],
+            "rule": rule,
+        }
+    ]
+
+
+def test_analysis_keeps_ordinary_narration_to_implicit_thought_compatibility() -> None:
+    row = {
+        **analysis_group()[0],
+        "kind_hint": "narration",
+        "text": "Mình đang ở đâu thế này?",
+    }
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "thought", "speaker": "NARRATOR"})
+    payload = {"segments": [item]}
+
+    validated = _validate([row], payload)
+
+    assert validated[row["stable_id"]]["kind"] == "thought"
+    assert _source_kind_feedback_issues([row], payload) == ()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        (
+            "Phổi và yết hầu không còn bị thiêu đốt, ý thức đã tỉnh táo và anh vui mừng."
+        ),
+        "Ông nhắc lại câu “cậu tuyệt vọng gắng gượng” rồi giải thích.",
+        "Nếu cậu tuyệt vọng gắng gượng đến gần ánh sáng, cậu sẽ kiệt sức.",
+    ],
+)
+def test_analysis_does_not_lock_ambiguous_narration_kind(text: str) -> None:
+    row = {**analysis_group()[0], "kind_hint": "narration", "text": text}
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "thought", "speaker": "NARRATOR"})
+    payload = {"segments": [item]}
+
+    validated = _validate([row], payload)
+
+    assert validated[row["stable_id"]]["kind"] == "thought"
+    assert _source_kind_feedback_issues([row], payload) == ()
+
+
 @pytest.mark.parametrize(
     ("kind", "text", "emotion", "expected"),
     [
@@ -2791,6 +2885,27 @@ def test_host_structural_heading_lock_preserves_generator_proposal_then_canonica
     )
 
 
+def test_heading_semantic_phrase_uses_structural_lock_not_narration_kind_gate() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "chapter-heading-semantic-phrase",
+        "chapter_id": 1,
+        "seq": 0,
+        "paragraph_index": 0,
+        "text": "Chương 01 - Cậu tuyệt vọng gắng gượng",
+        "kind_hint": "narration",
+    }
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "thought", "speaker": "NARRATOR", "emotion": "sad"})
+
+    validated = _validate([row], {"segments": [item]})
+    locks = _apply_host_structural_locks([row], validated)
+
+    assert locks[0]["generator_fields"]["kind"] == "thought"
+    assert validated[row["stable_id"]]["kind"] == "narration"
+    assert validated[row["stable_id"]]["emotion"] == "neutral"
+
+
 def test_director_heading_row_is_target_only_but_content_keeps_neighbors() -> None:
     group = [
         {
@@ -3033,7 +3148,7 @@ def test_desperate_exertion_lock_excludes_ambiguous_or_suppressed_sources(
     assert candidate_rows[0]["host_locked_fields"] == {}
 
 
-def test_desperate_exertion_lock_requires_candidate_narration_kind() -> None:
+def test_host_adjudication_rejects_mandatory_narration_kind_bypass() -> None:
     row = {
         "id": 1,
         "stable_id": "desperate-exertion-kind",
@@ -3051,10 +3166,8 @@ def test_desperate_exertion_lock_requires_candidate_narration_kind() -> None:
         }
     }
 
-    adjudication = _host_affect_adjudication([row], validated)
-
-    assert adjudication.issues == ()
-    assert adjudication.evidence == ()
+    with pytest.raises(ValueError, match="source-kind violation"):
+        _host_affect_adjudication([row], validated)
 
 
 @pytest.mark.parametrize(
@@ -4659,6 +4772,86 @@ def test_retry_retains_host_constraints_while_fixing_later_semantic_issue(
         )
     assert len(db.updated) == 3
     assert {data["emotion"] for _segment_id, data, _threshold in db.updated} == {"afraid"}
+
+
+def test_retry_merges_source_kind_and_host_affect_failures_in_one_attempt(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "physical-collapse",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": (
+                "Phổi và yết hầu đang bị thiêu đốt. "
+                "Ý thức của anh nhanh chóng trở nên mơ hồ."
+            ),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 2,
+            "stable_id": "mortality-thought",
+            "chapter_id": 1,
+            "seq": 2,
+            "paragraph_index": 2,
+            "text": "‘Mình sẽ chết mất.’",
+            "kind_hint": "thought",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 2, "batch_chars": 10000, "max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+
+    def generate(group, **kwargs):
+        feedback = kwargs.get("validation_feedback")
+        feedback_seen.append(feedback)
+        repaired = len(feedback_seen) > 1
+        physical = analysis_item("physical-collapse")
+        physical.update(
+            {
+                "kind": "narration",
+                "emotion": "afraid" if repaired else "neutral",
+                "intensity": 2 if repaired else 0,
+            }
+        )
+        mortality = analysis_item("mortality-thought")
+        mortality.update(
+            {
+                "kind": "thought" if repaired else "narration",
+                "emotion": "afraid" if repaired else "neutral",
+                "intensity": 2 if repaired else 0,
+            }
+        )
+        return {"segments": [physical, mortality]}
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(feedback_seen) == 2
+    assert feedback_seen[0] is None
+    assert {(issue.stable_id, issue.code) for issue in feedback_seen[1] or ()} >= {
+        ("physical-collapse", HOST_PHYSICAL_COLLAPSE_ISSUE_CODE),
+        ("mortality-thought", HOST_SOURCE_KIND_ISSUE_CODE),
+    }
+    rejection = next(
+        event for event in db.events if event[1] == "ANALYSIS_SEMANTIC_REJECTED"
+    )
+    assert rejection[3]["host_adjudication"]["issues"][0]["stable_id"] == (
+        "physical-collapse"
+    )
+    assert len(db.updated) == 2
 
 
 def test_retry_retains_host_pass_constraint_while_fixing_other_semantic_issue(

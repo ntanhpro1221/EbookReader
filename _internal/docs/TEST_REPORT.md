@@ -58,6 +58,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - semantic lock bền khóa emotion đã qua self-preservation/adjacent-wake/physical-collapse/desperate-exertion vào source hash và critic candidate.
   Chỉ raw dissent hợp lệ đổi riêng field khóa ra ngoài allowed set mới có override audit; accept-with-delta, reject-no-delta,
   delta thêm field hoặc dissent sang một emotion khác vẫn được host cho phép đều bị chặn;
+- dialogue và thought boundary đã được source parser nhận diện là source-owned: model không được đổi chúng sang loại khác để
+  né speaker/semantic lock; narration chỉ có thể được nâng thành thought khi source không khớp một semantic lock narration bắt buộc;
 - high-quality director critic chạy lượt self-review thứ hai mà không thấy confidence/notes/personality của generator;
   contract cục bộ từ chối root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate

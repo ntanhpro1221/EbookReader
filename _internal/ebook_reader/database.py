@@ -1903,19 +1903,17 @@ class ProjectDB:
         related_text_sha256 = ""
         if (
             source_kind == "narration"
-            and candidate_kind == "narration"
             and not is_chapter_heading
             and _analysis_source_has_physical_collapse(source_text)
         ):
             rule = "respiratory_injury_with_consciousness_loss"
         elif (
             source_kind == "narration"
-            and candidate_kind == "narration"
             and not is_chapter_heading
             and _analysis_source_has_desperate_exertion(source_text)
         ):
             rule = "narration_desperate_exertion"
-        elif source_kind == "thought" and candidate_kind == "thought":
+        elif source_kind == "thought":
             if _analysis_source_has_self_preservation_mortality(source_text):
                 rule = "thought_self_preservation_mortality"
             elif ANALYSIS_HOST_WAKE_PATTERN.fullmatch(source_text) is not None:
@@ -1941,6 +1939,8 @@ class ProjectDB:
         if not rule:
             return None
         rule_contract = ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[rule]
+        if candidate_kind != str(rule_contract["source_kind"]):
+            raise RuntimeError("Analysis candidate kind violates a source-owned boundary")
         candidate_emotion = str(candidate["emotion"])
         allowed_emotions = list(rule_contract["allowed_emotions"])
         if candidate_emotion not in allowed_emotions:
@@ -1995,6 +1995,23 @@ class ProjectDB:
             ):
                 raise RuntimeError(
                     "Analysis candidate source metadata differs from the segment ledger"
+                )
+            source_kind = str(stored["kind_hint"])
+            candidate_kind = str(critic_row["candidate"]["kind"])
+            if (
+                source_kind not in ANALYSIS_CRITIC_KINDS
+                or candidate_kind not in ANALYSIS_CRITIC_KINDS
+            ):
+                raise RuntimeError("Analysis candidate kind is not supported")
+            crosses_dialogue_boundary = (candidate_kind == "dialogue") != (
+                source_kind == "dialogue"
+            )
+            loses_explicit_thought = (
+                source_kind == "thought" and candidate_kind != "thought"
+            )
+            if crosses_dialogue_boundary or loses_explicit_thought:
+                raise RuntimeError(
+                    "Analysis candidate kind violates a source-owned boundary"
                 )
             if str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING:
                 if (
