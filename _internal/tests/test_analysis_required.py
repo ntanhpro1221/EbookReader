@@ -31,7 +31,9 @@ from ebook_reader.analysis import (
     _director_candidate_rows,
     _director_critic_request_contract,
     _generator_request_contract,
+    _apply_host_structural_locks,
     _host_affect_adjudication,
+    _is_explicit_chapter_heading,
     _local_scope_for_group,
     _local_name_fallback,
     _name_candidate_contexts,
@@ -45,7 +47,7 @@ from ebook_reader.analysis import (
     local_speaker_display,
 )
 from ebook_reader.config import build_settings
-from ebook_reader.database import ProjectDB
+from ebook_reader.database import ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH, ProjectDB
 from ebook_reader.io_utils import sha256_text
 
 
@@ -470,6 +472,7 @@ def director_critic_payload(
                 "accept": corrected == row["candidate"],
                 **corrected,
                 "rationale": "Chức năng câu và delivery được đối chiếu với ngữ cảnh.",
+                "evidence_quote": row["text"][:ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH],
                 "critic_confidence": confidence,
             }
         )
@@ -938,6 +941,7 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
                     "accept": True,
                     **row["candidate"],
                     "rationale": "Lời kể trung tính phù hợp chức năng câu.",
+                    "evidence_quote": row["text"],
                     "critic_confidence": 0.88,
                 }
                 for row in candidate_rows
@@ -2659,6 +2663,398 @@ def test_semantic_delivery_keeps_neutral_physical_recovery_thought() -> None:
     assert _semantic_delivery_issues(group, validated) == ({}, False)
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Chương 01 - Giàn hỏa thiêu rực cháy",
+        "Chapter IV: The Return",
+        "Hồi 2",
+        "Phần III — Tái sinh",
+        "Part 4 - Awakening",
+        "Quyển V: Khởi nguyên",
+        "Book 6",
+        "Tập VII - Bóng tối",
+        "Volume 8: Dawn",
+    ],
+)
+def test_explicit_chapter_heading_matcher_accepts_only_structural_first_row(text: str) -> None:
+    row = {
+        "stable_id": "heading",
+        "seq": 0,
+        "paragraph_index": 0,
+        "text": text,
+        "kind_hint": "narration",
+    }
+
+    assert _is_explicit_chapter_heading(row) is True
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"seq": 1},
+        {"paragraph_index": 1},
+        {"kind_hint": "thought"},
+        {"text": "“Chương 01 - Giàn hỏa thiêu rực cháy”"},
+        {"text": "Ở Chương 01 - Giàn hỏa thiêu rực cháy"},
+        {"text": "Chương 01 kể về giàn hỏa thiêu rực cháy."},
+        {"text": "Chương Một - Giàn hỏa thiêu rực cháy"},
+        {"text": "Chương 01 -"},
+    ],
+)
+def test_explicit_chapter_heading_matcher_rejects_content_lookalikes(update: dict) -> None:
+    row = {
+        "stable_id": "heading-lookalike",
+        "seq": 0,
+        "paragraph_index": 0,
+        "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+        "kind_hint": "narration",
+        **update,
+    }
+
+    assert _is_explicit_chapter_heading(row) is False
+
+
+def test_host_structural_heading_lock_preserves_generator_proposal_then_canonicalizes() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "chapter-heading",
+        "chapter_id": 1,
+        "seq": 0,
+        "paragraph_index": 0,
+        "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+        "kind_hint": "narration",
+    }
+    item = analysis_item("chapter-heading")
+    item.update({"emotion": "angry", "intensity": 2, "pace": "fast", "volume": "loud"})
+    validated = _validate([row], {"segments": [item]})
+
+    locks = _apply_host_structural_locks([row], validated)
+
+    assert locks == (
+        {
+            "policy_version": "chapter_heading_lock_v1",
+            "stable_id": "chapter-heading",
+            "text_sha256": sha256_text(row["text"]),
+            "source_role": "chapter_heading",
+            "context_policy": "target_only",
+            "evidence_quote": row["text"],
+            "generator_fields": {
+                "kind": "narration",
+                "speaker": "NARRATOR",
+                "emotion": "angry",
+                "intensity": 2,
+                "pace": "fast",
+                "volume": "loud",
+            },
+            "generator_notes": "Ngữ cảnh phù hợp với cách thể hiện.",
+            "locked_fields": {
+                "kind": "narration",
+                "speaker": "NARRATOR",
+                "emotion": "neutral",
+                "intensity": 0,
+                "pace": "normal",
+                "volume": "normal",
+            },
+        },
+    )
+    assert {
+        field: validated["chapter-heading"][field]
+        for field in ("kind", "speaker", "emotion", "intensity", "pace", "volume")
+    } == locks[0]["locked_fields"]
+    assert validated["chapter-heading"]["notes"] == (
+        "Tiêu đề chương được khóa delivery trung tính."
+    )
+
+
+def test_director_heading_row_is_target_only_but_content_keeps_neighbors() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "content",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": "Khói dày khiến Hạ Phong hoảng sợ.",
+            "kind_hint": "narration",
+        },
+    ]
+    validated = {
+        str(row["stable_id"]): analysis_item(str(row["stable_id"])) for row in group
+    }
+    _apply_host_structural_locks(group, validated)
+
+    rows = _director_candidate_rows(group, validated)
+
+    assert rows[0]["source_role"] == "chapter_heading"
+    assert rows[0]["context_policy"] == "target_only"
+    assert rows[0]["host_locked_fields"] == rows[0]["candidate"]
+    assert rows[0]["previous_text"] == rows[0]["next_text"] == ""
+    assert rows[1]["source_role"] == "content"
+    assert rows[1]["context_policy"] == "adjacent_context"
+    assert rows[1]["host_locked_fields"] == {}
+    assert rows[1]["previous_text"] == group[0]["text"]
+
+
+def test_director_heading_locked_field_dissent_is_audited_without_veto() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {"heading": {**analysis_item("heading"), "confidence": 0.92}}
+    _apply_host_structural_locks(group, validated)
+    rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(rows)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        confidence=0.86,
+        corrections={
+            0: {
+                "emotion": "afraid",
+                "intensity": 2,
+                "pace": "fast",
+                "volume": "loud",
+            }
+        },
+        candidate_rows=rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_cap=0.95,
+    )
+
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["critic"]["emotion"] == "afraid"
+    assert item["effective_accept"] is True
+    assert item["field_deltas"] == [
+        "emotion:neutral->afraid",
+        "intensity:0->2",
+        "pace:normal->fast",
+        "volume:normal->loud",
+    ]
+    assert item["host_structural_override"] == {
+        "policy_version": "chapter_heading_lock_v1",
+        "stable_id": "heading",
+        "text_sha256": sha256_text(group[0]["text"]),
+        "source_role": "chapter_heading",
+        "context_policy": "target_only",
+        "locked_fields": rows[0]["candidate"],
+        "raw_accept": False,
+        "raw_field_deltas": item["field_deltas"],
+    }
+    assert validated["heading"]["confidence"] == pytest.approx(0.86)
+
+
+def test_director_cannot_override_critic_before_heading_delivery_is_host_locked() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "unlocked-heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {
+        "unlocked-heading": {
+            **analysis_item("unlocked-heading"),
+            "emotion": "angry",
+            "intensity": 2,
+        }
+    }
+    payload, candidate_hash = director_critic_payload(
+        group,
+        validated,
+        corrections={0: {"emotion": "neutral", "intensity": 0}},
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {
+        "unlocked-heading": "DIRECTOR_FIELD_MISMATCH fields=emotion,intensity"
+    }
+    assert "host_structural_override" not in evidence["segments"][0]
+    assert evidence["segments"][0]["effective_accept"] is False
+
+
+def test_director_mixed_batch_still_rejects_invalid_content_evidence_quote() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "content",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": "Khói dày khiến Hạ Phong hoảng sợ.",
+            "kind_hint": "narration",
+        },
+    ]
+    validated = {
+        str(row["stable_id"]): analysis_item(str(row["stable_id"])) for row in group
+    }
+    _apply_host_structural_locks(group, validated)
+    rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(rows)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        corrections={0: {"emotion": "afraid"}},
+        candidate_rows=rows,
+        candidate_hash=candidate_hash,
+    )
+    payload["verdicts"][1]["evidence_quote"] = "không có trong source"
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert set(issues) == {"content"}
+    assert issues["content"].startswith("DIRECTOR_INVALID_RESPONSE")
+    assert evidence["segments"][0]["effective_accept"] is True
+    assert "host_structural_override" in evidence["segments"][0]
+
+
+def test_director_rejects_an_oversized_quote_even_when_it_is_source_text() -> None:
+    row = {
+        **analysis_group()[0],
+        "text": "Bằng chứng nguyên văn " + ("rất dài " * 40),
+    }
+    stable_id = str(row["stable_id"])
+    validated = {stable_id: analysis_item(stable_id)}
+    payload, candidate_hash = director_critic_payload([row], validated)
+    payload["verdicts"][0]["evidence_quote"] = row["text"]
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {stable_id: "DIRECTOR_INVALID_RESPONSE uncalibrated evidence"}
+    assert "critic" not in evidence["segments"][0]
+
+
+def test_structural_heading_neighbor_leak_is_canonicalized_and_checkpointed(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "structural-heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "text_sha256": sha256_text("Chương 01 - Giàn hỏa thiêu rực cháy"),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def generate(group, **_kwargs):
+        item = analysis_item(str(group[0]["stable_id"]))
+        item.update(
+            {
+                "emotion": "afraid",
+                "intensity": 2,
+                "pace": "fast",
+                "volume": "loud",
+                "notes": "Đã suy diễn nhầm cảm xúc từ nội dung đứng ngay sau tiêu đề.",
+            }
+        )
+        return {"segments": [item]}
+
+    def dissenting_critic(group, validated, **kwargs):
+        return director_critic_payload(
+            group,
+            validated,
+            corrections={
+                0: {
+                    "emotion": "afraid",
+                    "intensity": 2,
+                    "pace": "fast",
+                    "volume": "loud",
+                }
+            },
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", dissenting_critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(db.updated) == 1
+    saved = db.updated[0][1]
+    assert {
+        field: saved[field]
+        for field in ("kind", "speaker", "emotion", "intensity", "pace", "volume")
+    } == {
+        "kind": "narration",
+        "speaker": "NARRATOR",
+        "emotion": "neutral",
+        "intensity": 0,
+        "pace": "normal",
+        "volume": "normal",
+    }
+    accepted = next(
+        event for event in db.events if event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+    )
+    lock = accepted[3]["host_affect_clearance"]["structural_locks"][0]
+    assert lock["generator_fields"]["emotion"] == "afraid"
+    assert lock["locked_fields"]["emotion"] == "neutral"
+    evidence = accepted[3]["segments"][0]
+    assert evidence["critic"]["emotion"] == "afraid"
+    assert evidence["effective_accept"] is True
+    assert evidence["host_structural_override"]["raw_field_deltas"]
+
+
 def test_host_affect_first_batch_rejects_only_self_preservation_thoughts() -> None:
     texts = [
         "Chương 01 - Giàn hỏa thiêu rực cháy",
@@ -3672,7 +4068,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v1"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v2"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

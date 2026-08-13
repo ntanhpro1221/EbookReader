@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -118,6 +119,52 @@ ANALYSIS_PRONUNCIATION_FIELDS = frozenset(
         "locked",
     }
 )
+ANALYSIS_CRITIC_DELIVERY_FIELDS = (
+    "kind",
+    "speaker",
+    "emotion",
+    "intensity",
+    "pace",
+    "volume",
+)
+ANALYSIS_SOURCE_ROLE_CONTENT = "content"
+ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
+ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
+ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
+ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v1"
+ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
+ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
+    r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
+    r"(?:\d{1,5}|[ivxlcdm]{1,12})"
+    r"(?:\s*[-\u2013\u2014:]\s*\S(?:.*\S)?)?\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_CHAPTER_HEADING_DELIVERY = {
+    "kind": "narration",
+    "speaker": "NARRATOR",
+    "emotion": "neutral",
+    "intensity": 0,
+    "pace": "normal",
+    "volume": "normal",
+}
+ANALYSIS_CRITIC_KINDS = frozenset({"narration", "dialogue", "thought"})
+ANALYSIS_CRITIC_EMOTIONS = frozenset(
+    {
+        "neutral",
+        "happy",
+        "sad",
+        "angry",
+        "afraid",
+        "surprised",
+        "tender",
+        "sarcastic",
+        "excited",
+        "tired",
+        "whispering",
+    }
+)
+ANALYSIS_CRITIC_PACES = frozenset({"slow", "normal", "fast"})
+ANALYSIS_CRITIC_VOLUMES = frozenset({"soft", "normal", "loud"})
 
 
 SCHEMA = """
@@ -1234,24 +1281,35 @@ class ProjectDB:
             raise ValueError(
                 "Analysis acceptance envelope requires one non-empty critic row per segment"
             )
-        critic_delivery_fields = (
-            "kind",
-            "speaker",
-            "emotion",
-            "intensity",
-            "pace",
-            "volume",
-        )
         for index, (segment, critic_row) in enumerate(
             zip(segment_items, critic_rows, strict=True),
             1,
         ):
             candidate_delivery = critic_row.get("candidate")
+            source_role = critic_row.get("source_role")
+            context_policy = critic_row.get("context_policy")
+            is_content_row = (
+                source_role == ANALYSIS_SOURCE_ROLE_CONTENT
+                and context_policy == ANALYSIS_CONTEXT_POLICY_ADJACENT
+                and critic_row.get("host_locked_fields") == {}
+            )
+            is_chapter_heading_row = (
+                source_role == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
+                and context_policy == ANALYSIS_CONTEXT_POLICY_TARGET_ONLY
+                and critic_row.get("host_locked_fields")
+                == ANALYSIS_CHAPTER_HEADING_DELIVERY
+                and critic_row.get("previous_text") == ""
+                and critic_row.get("next_text") == ""
+                and candidate_delivery == ANALYSIS_CHAPTER_HEADING_DELIVERY
+            )
             if (
                 set(critic_row) != {
                     "id",
                     "paragraph",
                     "hint",
+                    "source_role",
+                    "context_policy",
+                    "host_locked_fields",
                     "previous_text",
                     "text",
                     "next_text",
@@ -1270,16 +1328,56 @@ class ProjectDB:
                 or sha256_text(str(critic_row["text"]))
                 != str(segment["text_sha256"])
                 or not isinstance(candidate_delivery, dict)
-                or set(candidate_delivery) != set(critic_delivery_fields)
+                or set(candidate_delivery) != set(ANALYSIS_CRITIC_DELIVERY_FIELDS)
                 or any(
                     candidate_delivery[field] != segment["data"][field]
-                    for field in critic_delivery_fields
+                    for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 )
+                or not (is_content_row or is_chapter_heading_row)
             ):
                 raise ValueError(
                     "Analysis critic rows do not map exactly to source IDs/hashes/delivery"
                 )
         return commit_rows
+
+    @classmethod
+    def _validate_analysis_candidate_sources_conn(
+        cls,
+        conn: sqlite3.Connection,
+        candidate_json: str,
+    ) -> None:
+        candidate = json.loads(candidate_json)
+        for segment, critic_row in zip(
+            candidate["segments"],
+            candidate["critic_rows"],
+            strict=True,
+        ):
+            stored = conn.execute(
+                "SELECT stable_id,text,text_sha256,seq,paragraph_index,kind_hint "
+                "FROM segments WHERE id=?",
+                (int(segment["segment_id"]),),
+            ).fetchone()
+            if (
+                stored is None
+                or str(stored["stable_id"]) != str(segment["stable_id"])
+                or str(stored["text_sha256"]) != str(segment["text_sha256"])
+                or str(stored["text"]) != str(critic_row["text"])
+                or int(stored["paragraph_index"]) != int(critic_row["paragraph"])
+                or str(stored["kind_hint"]) != str(critic_row["hint"])
+            ):
+                raise RuntimeError(
+                    "Analysis candidate source metadata differs from the segment ledger"
+                )
+            if str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING:
+                if (
+                    int(stored["seq"]) != 0
+                    or int(stored["paragraph_index"]) != 0
+                    or str(stored["kind_hint"]) != "narration"
+                    or ANALYSIS_CHAPTER_HEADING_PATTERN.fullmatch(str(stored["text"])) is None
+                ):
+                    raise RuntimeError(
+                        "Chapter heading structural role is not source-metadata-bound"
+                    )
 
     @classmethod
     def _validate_analysis_acceptance_evidence(
@@ -1288,6 +1386,7 @@ class ProjectDB:
         commit_envelope_json: str,
         evidence: dict[str, Any],
         reserved_contract_json: str,
+        deterministic_issue_json: str,
     ) -> None:
         candidate = json.loads(candidate_json)
         commit = json.loads(commit_envelope_json)
@@ -1298,14 +1397,87 @@ class ProjectDB:
             str(item["stable_id"]): item for item in commit["segments"]
         }
         critic_rows = candidate["critic_rows"]
-        critic_delivery_by_stable = {
-            str(segment["stable_id"]): dict(critic_row["candidate"])
+        critic_row_by_stable = {
+            str(segment["stable_id"]): critic_row
             for segment, critic_row in zip(
                 candidate["segments"],
                 critic_rows,
                 strict=True,
             )
         }
+        critic_delivery_by_stable = {
+            stable_id: dict(critic_row["candidate"])
+            for stable_id, critic_row in critic_row_by_stable.items()
+        }
+        _critic_rows_json, candidate_hash = cls._canonical_analysis_json(
+            critic_rows,
+            "accepted evidence candidate critic rows",
+        )
+        if str(evidence.get("candidate_hash", "")) != candidate_hash:
+            raise RuntimeError("Accepted critic evidence candidate hash is invalid")
+        try:
+            deterministic_issues = json.loads(deterministic_issue_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Deterministic analysis issue JSON is invalid") from exc
+        if not isinstance(deterministic_issues, dict):
+            raise RuntimeError("Deterministic analysis issues must be an object")
+        clearance = deterministic_issues.get("host_affect_clearance")
+        structural_lock_items = (
+            clearance.get("structural_locks", [])
+            if isinstance(clearance, dict)
+            else []
+        )
+        if not isinstance(structural_lock_items, list):
+            raise RuntimeError("Host structural clearance locks must be an array")
+        structural_locks: dict[str, dict[str, Any]] = {}
+        for lock in structural_lock_items:
+            if not isinstance(lock, dict):
+                raise RuntimeError("Host structural clearance lock must be an object")
+            stable_id = str(lock.get("stable_id", "")).strip()
+            if not stable_id or stable_id in structural_locks:
+                raise RuntimeError("Host structural clearance lock has invalid stable ID")
+            structural_locks[stable_id] = lock
+        heading_stable_ids = {
+            stable_id
+            for stable_id, critic_row in critic_row_by_stable.items()
+            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
+        }
+        if heading_stable_ids:
+            if (
+                not isinstance(clearance, dict)
+                or clearance.get("status") != "cleared"
+                or clearance.get("candidate_hash") != candidate_hash
+                or set(structural_locks) != heading_stable_ids
+            ):
+                raise RuntimeError(
+                    "Accepted chapter headings require exact deterministic structural clearance"
+                )
+            for stable_id, lock in structural_locks.items():
+                critic_row = critic_row_by_stable[stable_id]
+                expected_lock_fields = {
+                    "stable_id": stable_id,
+                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                    "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
+                    "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
+                    "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+                    "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
+                }
+                if any(lock.get(key) != value for key, value in expected_lock_fields.items()):
+                    raise RuntimeError(
+                        "Accepted chapter heading structural clearance is not source-bound"
+                    )
+                if (
+                    critic_row["previous_text"] != ""
+                    or critic_row["next_text"] != ""
+                    or critic_row["host_locked_fields"]
+                    != ANALYSIS_CHAPTER_HEADING_DELIVERY
+                    or critic_row["candidate"] != ANALYSIS_CHAPTER_HEADING_DELIVERY
+                ):
+                    raise RuntimeError(
+                        "Accepted chapter heading violates target-only canonical delivery"
+                    )
+        elif structural_locks:
+            raise RuntimeError("Structural clearance cannot authorize content rows")
         try:
             reserved_contract = json.loads(reserved_contract_json)
         except json.JSONDecodeError as exc:
@@ -1340,9 +1512,9 @@ class ProjectDB:
             evidence_by_stable[stable_id] = item
         if set(evidence_by_stable) != set(candidate_segments):
             raise ValueError("Accepted critic evidence segment set differs from candidate")
-        delivery_fields = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
         for stable_id, item in evidence_by_stable.items():
             candidate_projection = critic_delivery_by_stable[stable_id]
+            critic_row = critic_row_by_stable[stable_id]
             critic = item.get("critic")
             derived_confidence = item.get("derived_confidence")
             generator_confidence = candidate_segments[stable_id]["data"].get("confidence")
@@ -1358,14 +1530,90 @@ class ProjectDB:
                 confidence_cap,
                 derived_confidence,
             )
+            critic_fields = {
+                *ANALYSIS_CRITIC_DELIVERY_FIELDS,
+                "accept",
+                "rationale",
+                "evidence_quote",
+                "confidence",
+            }
+            evidence_quote = critic.get("evidence_quote") if isinstance(critic, dict) else None
+            raw_delivery = (
+                {field: critic.get(field) for field in ANALYSIS_CRITIC_DELIVERY_FIELDS}
+                if isinstance(critic, dict)
+                else {}
+            )
+            critic_schema_valid = (
+                isinstance(critic, dict)
+                and set(critic) == critic_fields
+                and type(critic.get("accept")) is bool
+                and isinstance(critic.get("kind"), str)
+                and critic.get("kind") in ANALYSIS_CRITIC_KINDS
+                and isinstance(critic.get("speaker"), str)
+                and len(critic["speaker"]) <= 120
+                and isinstance(critic.get("emotion"), str)
+                and critic.get("emotion") in ANALYSIS_CRITIC_EMOTIONS
+                and type(critic.get("intensity")) is int
+                and 0 <= int(critic["intensity"]) <= 3
+                and isinstance(critic.get("pace"), str)
+                and critic.get("pace") in ANALYSIS_CRITIC_PACES
+                and isinstance(critic.get("volume"), str)
+                and critic.get("volume") in ANALYSIS_CRITIC_VOLUMES
+                and isinstance(critic.get("rationale"), str)
+                and sum(character.isalpha() for character in critic["rationale"]) >= 4
+                and len(critic["rationale"]) <= 200
+                and type(critic.get("confidence")) in {int, float}
+                and math.isfinite(float(critic["confidence"]))
+                and 0.0 <= float(critic["confidence"]) <= 0.99
+            )
+            raw_deltas = [
+                f"{field}:{candidate_projection[field]}->{raw_delivery[field]}"
+                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+                if raw_delivery.get(field) != candidate_projection[field]
+            ]
+            raw_agreement = (
+                isinstance(critic, dict)
+                and critic.get("accept") is True
+                and not raw_deltas
+            )
+            raw_accept_value = critic.get("accept") if isinstance(critic, dict) else None
+            is_heading = (
+                critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
+            )
+            override = item.get("host_structural_override")
+            expected_override = (
+                {
+                    "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+                    "stable_id": stable_id,
+                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                    "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
+                    "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
+                    "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
+                    "raw_accept": raw_accept_value,
+                    "raw_field_deltas": raw_deltas,
+                }
+                if is_heading and raw_accept_value is False and raw_deltas
+                else None
+            )
+            structural_override_valid = (
+                is_heading
+                and raw_accept_value is False
+                and bool(raw_deltas)
+                and override == expected_override
+            )
             if (
                 str(item.get("text_sha256", ""))
                 != str(candidate_segments[stable_id]["text_sha256"])
                 or item.get("candidate") != candidate_projection
-                or item.get("field_deltas") != []
-                or not isinstance(critic, dict)
-                or critic.get("accept") is not True
-                or any(critic.get(field) != candidate_projection[field] for field in delivery_fields)
+                or not critic_schema_valid
+                or not isinstance(evidence_quote, str)
+                or not evidence_quote.strip()
+                or len(evidence_quote) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+                or evidence_quote not in str(critic_row["text"])
+                or item.get("field_deltas") != raw_deltas
+                or item.get("effective_accept") is not True
+                or (raw_agreement and override is not None)
+                or (not raw_agreement and not structural_override_valid)
                 or any(type(value) not in {int, float} for value in numeric_confidences)
                 or any(not math.isfinite(float(value)) for value in numeric_confidences)
                 or float(derived_confidence)
@@ -1469,6 +1717,7 @@ class ProjectDB:
             "stored analysis candidate",
         )
         cls._analysis_candidate_commit_rows(candidate_json)
+        cls._validate_analysis_candidate_sources_conn(conn, candidate_json)
         _critic_json, candidate_hash = cls._canonical_analysis_json(
             candidate["critic_rows"],
             "stored analysis critic rows",
@@ -1773,6 +2022,7 @@ class ProjectDB:
         )
         now = time.time()
         with self.transaction() as conn:
+            self._validate_analysis_candidate_sources_conn(conn, candidate_json)
             existing = conn.execute(
                 """
                 SELECT * FROM analysis_candidates
@@ -1831,6 +2081,12 @@ class ProjectDB:
     def get_analysis_candidate(self, analysis_candidate_id: int) -> sqlite3.Row:
         with self.connect() as conn:
             return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+
+    def has_analysis_candidates(self) -> bool:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM analysis_candidates LIMIT 1)"
+            ).fetchone()[0] == 1
 
     def record_analysis_candidate_generator_contract(
         self,
@@ -2232,6 +2488,7 @@ class ProjectDB:
                     commit_envelope_json,
                     evidence,
                     str(attempt["contract_json"]),
+                    str(candidate["deterministic_issue_json"]),
                 )
             else:
                 if commit_envelope is not None:

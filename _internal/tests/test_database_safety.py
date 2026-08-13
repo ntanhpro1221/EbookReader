@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.database import (
+    ANALYSIS_CHAPTER_HEADING_DELIVERY,
+    ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
     CHAPTER_POST_ENCODE_QUALITY_STAGE,
     GENERATION_DELIVERY_CLARITY,
     GENERATION_DELIVERY_PRIMARY,
@@ -78,6 +80,7 @@ def _analysis_batch_db(
     tmp_path: Path,
     *,
     lock_model: bool = True,
+    texts: tuple[str, ...] = ("Text 1", "Text 2"),
 ) -> tuple[ProjectDB, list[dict]]:
     db = ProjectDB(tmp_path / "project.sqlite3")
     db.initialize_book(
@@ -105,11 +108,11 @@ def _analysis_batch_db(
             {
                 "stable_id": f"c1s{index}",
                 "seq": index - 1,
-                "text": f"Text {index}",
-                "text_sha256": sha256_text(f"Text {index}"),
+                "text": text,
+                "text_sha256": sha256_text(text),
                 "kind_hint": "narration",
             }
-            for index in range(1, 3)
+            for index, text in enumerate(texts, 1)
         ],
     )
     if lock_model:
@@ -151,6 +154,9 @@ def _analysis_acceptance_envelope(
                 "id": f"S{index:03d}",
                 "paragraph": int(row["paragraph_index"]),
                 "hint": str(row["kind_hint"]),
+                "source_role": "content",
+                "context_policy": "adjacent_context",
+                "host_locked_fields": {},
                 "previous_text": "",
                 "text": str(row["text"]),
                 "next_text": "",
@@ -206,16 +212,93 @@ def _accepted_critic_evidence(envelope: dict) -> dict:
                     **candidate,
                     "accept": True,
                     "rationale": "Đồng ý với delivery theo đúng bằng chứng nguồn.",
+                    "evidence_quote": critic_row["text"],
                     "confidence": segment["data"]["confidence"],
                 },
                 "field_deltas": [],
                 "derived_confidence": segment["data"]["confidence"],
+                "effective_accept": True,
             }
         )
     return {
+        "candidate_hash": _canonical_hash(envelope["critic_rows"]),
         "critic_contract": _accepted_critic_contract(),
         "segments": rows,
     }
+
+
+def _chapter_heading_envelope(source_rows: list[dict]) -> dict:
+    envelope = _analysis_acceptance_envelope(source_rows)
+    heading_segment = envelope["segments"][0]
+    heading_row = envelope["critic_rows"][0]
+    for field, value in ANALYSIS_CHAPTER_HEADING_DELIVERY.items():
+        heading_segment["data"][field] = value
+    heading_row["source_role"] = "chapter_heading"
+    heading_row["context_policy"] = "target_only"
+    heading_row["host_locked_fields"] = dict(ANALYSIS_CHAPTER_HEADING_DELIVERY)
+    heading_row["previous_text"] = ""
+    heading_row["next_text"] = ""
+    heading_row["candidate"] = dict(ANALYSIS_CHAPTER_HEADING_DELIVERY)
+    return envelope
+
+
+def _chapter_heading_clearance(envelope: dict) -> dict:
+    segment = envelope["segments"][0]
+    return {
+        "host_affect_clearance": {
+            "status": "cleared",
+            "candidate_hash": _canonical_hash(envelope["critic_rows"]),
+            "structural_locks": [
+                {
+                    "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+                    "stable_id": segment["stable_id"],
+                    "text_sha256": segment["text_sha256"],
+                    "source_role": "chapter_heading",
+                    "context_policy": "target_only",
+                    "locked_fields": dict(ANALYSIS_CHAPTER_HEADING_DELIVERY),
+                    "generator_fields": {
+                        "emotion": "afraid",
+                        "intensity": 2,
+                        "pace": "fast",
+                    },
+                }
+            ],
+        }
+    }
+
+
+def _heading_override_evidence(envelope: dict) -> dict:
+    evidence = _accepted_critic_evidence(envelope)
+    segment = envelope["segments"][0]
+    item = evidence["segments"][0]
+    critic = item["critic"]
+    critic.update(
+        {
+            "accept": False,
+            "emotion": "afraid",
+            "intensity": 2,
+            "pace": "fast",
+            "rationale": "Tiêu đề có từ ngữ gợi cảm giác nguy hiểm.",
+            "evidence_quote": envelope["critic_rows"][0]["text"],
+        }
+    )
+    deltas = [
+        "emotion:neutral->afraid",
+        "intensity:0->2",
+        "pace:normal->fast",
+    ]
+    item["field_deltas"] = deltas
+    item["host_structural_override"] = {
+        "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+        "stable_id": segment["stable_id"],
+        "text_sha256": segment["text_sha256"],
+        "source_role": "chapter_heading",
+        "context_policy": "target_only",
+        "locked_fields": dict(ANALYSIS_CHAPTER_HEADING_DELIVERY),
+        "raw_accept": False,
+        "raw_field_deltas": deltas,
+    }
+    return evidence
 
 
 def _allocate_analysis_candidate(
@@ -224,6 +307,7 @@ def _allocate_analysis_candidate(
     *,
     context_hash: str = ANALYSIS_CONTEXT_HASH,
     candidate: dict | None = None,
+    deterministic_issues: dict | None = None,
     critic_max_attempts: int = 2,
 ):
     envelope = candidate or _analysis_acceptance_envelope(source_rows)
@@ -236,7 +320,7 @@ def _allocate_analysis_candidate(
         candidate_hash=_canonical_hash(envelope["critic_rows"]),
         candidate=envelope,
         generator_contract={"attempt": 1, "seed": 101},
-        deterministic_issues={},
+        deterministic_issues=deterministic_issues or {},
         critic_max_attempts=critic_max_attempts,
     )
 
@@ -534,7 +618,9 @@ def test_analysis_candidate_reservation_survives_reopen_and_consumes_crashed_int
     tmp_path: Path,
 ) -> None:
     db, source_rows = _analysis_batch_db(tmp_path)
+    assert db.has_analysis_candidates() is False
     candidate = _allocate_analysis_candidate(db, source_rows, critic_max_attempts=2)
+    assert db.has_analysis_candidates() is True
     first = db.reserve_analysis_critic_attempt(
         int(candidate["id"]),
         expected_state="allocated",
@@ -718,6 +804,187 @@ def test_analysis_candidate_rejects_arbitrarily_lowered_derived_confidence(
             outcome={"accepted": True},
             evidence=evidence,
             commit_envelope=commit_envelope,
+        )
+
+
+def test_analysis_candidate_rejects_critic_quote_outside_current_source_text(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["segments"][0]["critic"]["evidence_quote"] = "Text 2"
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_analysis_candidate_accepts_source_bound_chapter_heading_override(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _heading_override_evidence(envelope)
+
+    completed = db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True, "host_structural_override": True},
+        evidence=evidence,
+        commit_envelope=envelope,
+    )
+
+    assert completed["state"] == "completed"
+    snapshot = ProjectDB(db.path).analysis_candidate_acceptance_envelope(
+        int(candidate["id"])
+    )
+    stored_evidence = snapshot["critic_evidence"]
+    assert stored_evidence["segments"][0]["critic"]["emotion"] == "afraid"
+    assert stored_evidence["segments"][0]["host_structural_override"][
+        "locked_fields"
+    ] == ANALYSIS_CHAPTER_HEADING_DELIVERY
+    assert snapshot["commit_envelope"]["segments"][0]["data"]["emotion"] == "neutral"
+
+
+def test_analysis_candidate_rejects_heading_role_on_first_prose_segment(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Khói dày phủ kín căn phòng.", "Hạ Phong bật tỉnh."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+
+    with pytest.raises(RuntimeError, match="not source-metadata-bound"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=clearance,
+        )
+
+
+def test_analysis_candidate_rejects_forged_structural_override_on_content(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    forged_clearance = _chapter_heading_clearance(envelope)
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=forged_clearance,
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    item = evidence["segments"][0]
+    item["critic"].update({"accept": False, "emotion": "afraid"})
+    item["field_deltas"] = ["emotion:neutral->afraid"]
+    item["host_structural_override"] = {
+        "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+        "stable_id": item["stable_id"],
+        "text_sha256": item["text_sha256"],
+        "source_role": "chapter_heading",
+        "context_policy": "target_only",
+        "locked_fields": dict(ANALYSIS_CHAPTER_HEADING_DELIVERY),
+        "raw_accept": False,
+        "raw_field_deltas": item["field_deltas"],
+    }
+
+    with pytest.raises(RuntimeError, match="Structural clearance cannot authorize content"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_analysis_candidate_rejects_tampered_heading_structural_clearance(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+    clearance["host_affect_clearance"]["structural_locks"][0][
+        "text_sha256"
+    ] = "f" * 64
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+
+    with pytest.raises(RuntimeError, match="structural clearance is not source-bound"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=_heading_override_evidence(envelope),
+            commit_envelope=envelope,
         )
 
 

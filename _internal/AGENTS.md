@@ -151,6 +151,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
   độc lập, nên không bao giờ được vượt qua semantic gate tất định hoặc biến một field khác candidate thành pass.
+- Tiêu đề chương chỉ được nhận diện bằng source metadata đầu chapter và grammar tiêu đề độc lập. Host phải khóa delivery
+  tiêu đề về narrator trung tính, không gửi ngữ cảnh hàng xóm cho row đó và vẫn giữ nguyên proposal/verdict thô để audit.
+  Structural override chỉ được phép cho đúng row đã khóa; mọi content row vẫn chịu critic bình thường. Mỗi verdict critic
+  phải trích nguyên văn bằng chứng không rỗng từ chính text cùng ID, không được lấy bằng chứng từ row lân cận.
 - Confidence được commit phải nằm trên ngưỡng khóa và không vượt cap của director. Model name + digest Ollama phải được
   khóa bền ở cấp book, kiểm tra lại trước và sau mọi request generator, critic và pronunciation; tag/digest đổi giữa
   request hoặc giữa hai lần resume phải fail-closed. Project high-quality legacy đã có analysis checkpoint nhưng chưa có
@@ -164,7 +168,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   `critic_accepted` phải commit lại đúng envelope mà không gọi model, còn candidate projection lặp lại không được reset budget.
 - Policy/group/context fingerprint của ledger phải khóa model digest, system/schema version, source hash và metadata ngữ cảnh
   mà host dùng (stable ID, chapter, paragraph, kind và hàng xóm). Parent candidate và lịch sử child attempt phải liên tục,
-  khớp trạng thái; mismatch/tamper phải fail-closed trước request hoặc commit.
+  khớp trạng thái; SQLite phải tự đối chiếu lại source role/seq/paragraph/kind/text của structural row. Mismatch/tamper phải
+  fail-closed trước request hoặc commit. Chỉ cần ledger analysis đã có candidate là analysis đã bắt đầu, kể cả mọi segment
+  còn `pending`; casting fingerprint đổi sau điểm đó phải yêu cầu project sạch.
 - GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
   kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
 - Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:

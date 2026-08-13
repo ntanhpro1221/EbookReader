@@ -58,10 +58,16 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - host affect gate khóa hẹp hai beat tự-bảo-toàn: thought có cue tử vong trực tiếp và wake/self-rescue thought liền kề;
   feedback là JSON typed/whitelist không chứa source/rationale tự do, trường hợp third-party/meta/khác chapter-paragraph không
   bị lan cue. Context/group fingerprint bao gồm stable ID, source hash, chapter, paragraph, kind và hai hàng xóm;
+- tiêu đề chương thật được nhận diện hẹp bằng vị trí/metadata/grammar, canonical thành narrator trung tính và gửi critic theo
+  `target_only` không có neighbor text. Critic vẫn phải trả đúng schema/hash và quote nguyên văn từ đúng source; bất đồng thô
+  trên riêng heading được lưu cùng structural override, còn bất đồng hoặc quote sai ở content vẫn từ chối cả batch;
 - schema v8 lưu acceptance envelope đầy đủ, projection hash mà critic nhìn thấy, mọi generator contract và critic intent/outcome.
   Intent được reserve trước HTTP; protocol-invalid retry đúng candidate với seed mới, field mismatch lặp projection thì chia
   batch hữu hạn, còn crash sau `critic_accepted` resume/commit không gọi Ollama. Hash JSON, quan hệ parent-child, attempt liên tục,
-  exact confidence `min(generator, critic, cap)` và model/policy/context CAS đều được kiểm tra lại khi đọc/commit;
+  exact confidence `min(generator, critic, cap)`, source role/seq/paragraph/kind/text và model/policy/context CAS đều được kiểm
+  tra lại khi đọc/commit; forged content override, quote lấy từ row khác và structural clearance bị sửa đều fail-closed;
+- resume coi durable analysis candidate là checkpoint đã bắt đầu ngay cả khi segment vẫn `pending`, vì vậy casting fingerprint
+  mới không thể tái dùng ledger critic theo contract cũ;
 - Ollama model name/digest được khóa bền theo book và đối chiếu trước/sau mọi request generator, critic và name review;
   digest đổi giữa request/resume fail-closed. Batch segment, pronunciation proposal và event ACCEPTED commit cùng một
   transaction CAS; regression trigger/reopen chứng minh lỗi event rollback cả segment lẫn pronunciation. Legacy

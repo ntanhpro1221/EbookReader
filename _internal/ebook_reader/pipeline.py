@@ -391,8 +391,14 @@ class BookPipeline:
                 "Text segmentation implementation changed after segments were checkpointed; "
                 "create a clean project so stale text cannot be republished"
             )
-        analysis_started = self.db.casting_is_finalized() or any(
-            str(row["status"]) != SegmentStatus.PENDING.value for row in rows
+        analysis_candidates_exist = getattr(self.db, "has_analysis_candidates", None)
+        analysis_started = (
+            self.db.casting_is_finalized()
+            or (
+                callable(analysis_candidates_exist)
+                and bool(analysis_candidates_exist())
+            )
+            or any(str(row["status"]) != SegmentStatus.PENDING.value for row in rows)
         )
         if analysis_started and previous_stages.get(ANALYSIS_CASTING_STAGE) != current_stages.get(
             ANALYSIS_CASTING_STAGE

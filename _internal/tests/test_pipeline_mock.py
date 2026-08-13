@@ -2574,6 +2574,47 @@ def test_resume_rejects_locked_casting_from_a_different_fingerprint(tmp_path: Pa
         changed._recover()
 
 
+def test_resume_rejects_old_analysis_candidate_even_when_segments_are_pending(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "001.txt"
+    source.write_text("Nội dung đủ dài để kiểm tra candidate fingerprint.", encoding="utf-8")
+    settings = build_settings()
+    paths, db, settings = create_or_open_project(
+        [source],
+        tmp_path / "out",
+        settings,
+        "Candidate fingerprint",
+    )
+    original = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    original._recover()
+    original._ensure_segments()
+    assert all(str(row["status"]) == "pending" for row in db.list_segments())
+    monkeypatch.setattr(db, "has_analysis_candidates", lambda: True)
+
+    changed = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    changed.quality_policy["stage_fingerprints"][ANALYSIS_CASTING_STAGE] = "changed"
+    changed.quality_policy_hash = quality_policy_hash(changed.quality_policy)
+
+    with pytest.raises(RuntimeError, match="Analysis/casting implementation changed"):
+        changed._recover()
+
+
 def test_chapter_quality_failure_is_checkpointed_and_later_chapters_continue(
     tmp_path: Path,
     monkeypatch,
