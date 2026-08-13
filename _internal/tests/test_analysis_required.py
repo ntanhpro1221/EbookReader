@@ -13,6 +13,8 @@ from ebook_reader.analysis import (
     ANALYSIS_OUTPUT_MAX_TOKENS,
     CMUDICT_PATH,
     EXPLICIT_ATTRIBUTION_NOTE,
+    HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
+    HOST_PHYSICAL_COLLAPSE_RULE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
@@ -2825,6 +2827,404 @@ def test_director_heading_row_is_target_only_but_content_keeps_neighbors() -> No
     assert rows[1]["previous_text"] == group[0]["text"]
 
 
+def test_director_content_row_binds_source_verified_semantic_emotion_lock() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "physical-collapse",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": (
+            "Phổi và yết hầu đang bị thiêu đốt. "
+            "Ý thức của anh nhanh chóng trở nên mơ hồ."
+        ),
+        "kind_hint": "narration",
+    }
+    validated = {
+        "physical-collapse": {
+            **analysis_item("physical-collapse"),
+            "emotion": "afraid",
+            "intensity": 2,
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    clearance = adjudication.clearance_payload(candidate_hash)
+
+    assert adjudication.issues == ()
+    assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
+    assert clearance["semantic_locks"] == [
+        {
+            "policy_version": "host_semantic_lock_v1",
+            "stable_id": "physical-collapse",
+            "text_sha256": sha256_text(row["text"]),
+            "source_role": "content",
+            "field": "emotion",
+            "rule": "respiratory_injury_with_consciousness_loss",
+            "cue_class": "physical_collapse",
+            "candidate_emotion": "afraid",
+            "allowed_emotions": ["afraid", "tired"],
+            "related_stable_id": "",
+            "related_text_sha256": "",
+        }
+    ]
+
+
+def test_physical_collapse_semantic_lock_is_not_created_for_mixed_affect() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "mixed-physical-collapse",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": (
+            "Phổi và yết hầu đang bị thiêu đốt, ý thức dần trở nên mơ hồ, "
+            "nhưng anh vẫn vui mừng vì mọi người đã thoát được."
+        ),
+        "kind_hint": "narration",
+    }
+    validated = {
+        "mixed-physical-collapse": {
+            **analysis_item("mixed-physical-collapse"),
+            "emotion": "neutral",
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+    candidate_rows = _director_candidate_rows([row], validated)
+
+    assert adjudication.issues == ()
+    assert adjudication.evidence == ()
+    assert candidate_rows[0]["host_locked_fields"] == {}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tôi không còn nghĩ rằng mình sẽ chết mất.",
+        "Tôi không thể nghĩ mình sẽ chết mất.",
+        "Tôi đã từng nghĩ mình sẽ chết mất, nhưng giờ đã an toàn.",
+    ],
+)
+def test_mortality_semantic_lock_is_not_created_for_resolved_cognition(
+    text: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "resolved-mortality",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": text,
+        "kind_hint": "thought",
+    }
+    validated = {
+        "resolved-mortality": {
+            **analysis_item("resolved-mortality"),
+            "kind": "thought",
+            "emotion": "afraid",
+            "intensity": 2,
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"emotion": "neutral"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert adjudication.issues == ()
+    assert adjudication.evidence == ()
+    assert candidate_rows[0]["host_locked_fields"] == {}
+    assert issues == {
+        "resolved-mortality": "DIRECTOR_FIELD_MISMATCH fields=emotion",
+    }
+    assert "host_semantic_override" not in evidence["segments"][0]
+
+
+def test_mortality_semantic_lock_keeps_active_first_person_cognition() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "active-mortality",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": "Tôi nghĩ rằng mình sẽ chết mất.",
+        "kind_hint": "thought",
+    }
+    validated = {
+        "active-mortality": {
+            **analysis_item("active-mortality"),
+            "kind": "thought",
+            "emotion": "afraid",
+            "intensity": 2,
+        }
+    }
+
+    adjudication = _host_affect_adjudication([row], validated)
+    candidate_rows = _director_candidate_rows([row], validated)
+
+    assert adjudication.issues == ()
+    assert [item.rule for item in adjudication.evidence] == [
+        "thought_self_preservation_mortality",
+    ]
+    assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
+
+
+def test_director_adjacent_wake_lock_uses_original_context_for_override() -> None:
+    mortality_text = "‘Không được… Không được ngủ… sẽ chết mất.’"
+    wake_text = "‘Tỉnh dậy, phải tỉnh dậy!’"
+    row = {
+        "id": 2,
+        "stable_id": "wake-thought",
+        "chapter_id": 1,
+        "seq": 2,
+        "paragraph_index": 2,
+        "text": wake_text,
+        "kind_hint": "thought",
+    }
+    original_context = {
+        "wake-thought": {
+            "previous_stable_id": "mortality-thought",
+            "previous_text": mortality_text,
+            "previous_text_sha256": sha256_text(mortality_text),
+            "previous_chapter_id": 1,
+            "previous_paragraph_index": 1,
+            "previous_kind_hint": "thought",
+        }
+    }
+    validated = {
+        "wake-thought": {
+            **analysis_item("wake-thought"),
+            "kind": "thought",
+            "emotion": "afraid",
+            "intensity": 2,
+        }
+    }
+    candidate_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"emotion": "neutral"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        original_context=original_context,
+    )
+
+    assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
+    assert issues == {}
+    assert evidence["segments"][0]["host_semantic_override"]["rule"] == (
+        "adjacent_thought_wake_self_rescue"
+    )
+
+
+def test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic(
+    monkeypatch,
+) -> None:
+    mortality_text = "‘Không được… Không được ngủ… sẽ chết mất.’"
+    wake_text = "‘Tỉnh dậy, phải tỉnh dậy!’"
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "mortality-thought",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": mortality_text,
+            "text_sha256": sha256_text(mortality_text),
+            "kind_hint": "thought",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        },
+        {
+            "id": 2,
+            "stable_id": "wake-thought",
+            "chapter_id": 1,
+            "seq": 2,
+            "paragraph_index": 2,
+            "text": wake_text,
+            "text_sha256": sha256_text(wake_text),
+            "kind_hint": "thought",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def generate(group, **_kwargs):
+        assert [str(row["stable_id"]) for row in group] == ["wake-thought"]
+        item = analysis_item("wake-thought")
+        item.update({"kind": "thought", "emotion": "afraid", "intensity": 2})
+        return {"segments": [item]}
+
+    def dissent(group, validated, **kwargs):
+        return director_critic_payload(
+            group,
+            validated,
+            corrections={0: {"emotion": "neutral"}},
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", dissent)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(db.updated) == 1
+    assert db.updated[0][1]["emotion"] == "afraid"
+    evidence = json.loads(db.analysis_critic_attempts[0]["evidence_json"])
+    assert evidence["segments"][0]["host_semantic_override"]["rule"] == (
+        "adjacent_thought_wake_self_rescue"
+    )
+
+
+def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
+    row = {
+        "id": 1,
+        "stable_id": "physical-collapse",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": (
+            "Phổi và yết hầu đang bị thiêu đốt. "
+            "Ý thức của anh nhanh chóng trở nên mơ hồ."
+        ),
+        "kind_hint": "narration",
+    }
+    validated = {
+        "physical-collapse": {
+            **analysis_item("physical-collapse"),
+            "emotion": "afraid",
+            "intensity": 2,
+            "confidence": 0.92,
+        }
+    }
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        confidence=0.86,
+        corrections={0: {"emotion": "neutral"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_cap=0.95,
+    )
+
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["critic"]["accept"] is False
+    assert item["critic"]["emotion"] == "neutral"
+    assert item["field_deltas"] == ["emotion:afraid->neutral"]
+    assert item["effective_accept"] is True
+    assert item["host_semantic_override"] == {
+        "policy_version": "host_semantic_lock_v1",
+        "stable_id": "physical-collapse",
+        "text_sha256": sha256_text(row["text"]),
+        "rule": "respiratory_injury_with_consciousness_loss",
+        "field": "emotion",
+        "candidate_value": "afraid",
+        "allowed_values": ["afraid", "tired"],
+        "raw_accept": False,
+        "raw_field_deltas": ["emotion:afraid->neutral"],
+    }
+    assert validated["physical-collapse"]["confidence"] == pytest.approx(0.86)
+
+
+@pytest.mark.parametrize(
+    ("correction", "raw_accept", "expected_issue"),
+    [
+        (
+            {"emotion": "neutral", "intensity": 0},
+            True,
+            "DIRECTOR_INVALID_RESPONSE accept_with_delta",
+        ),
+        ({}, False, "DIRECTOR_INVALID_RESPONSE reject_without_delta"),
+        ({"emotion": "tired"}, False, "DIRECTOR_FIELD_MISMATCH fields=emotion"),
+    ],
+)
+def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
+    correction: dict[str, object],
+    raw_accept: bool,
+    expected_issue: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "physical-collapse",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": (
+            "Phổi và yết hầu đang bị thiêu đốt. "
+            "Ý thức của anh nhanh chóng trở nên mơ hồ."
+        ),
+        "kind_hint": "narration",
+    }
+    validated = {
+        "physical-collapse": {
+            **analysis_item("physical-collapse"),
+            "emotion": "afraid",
+            "intensity": 2,
+        }
+    }
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: correction},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+    payload["verdicts"][0]["accept"] = raw_accept
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {"physical-collapse": expected_issue}
+    assert evidence["segments"][0]["effective_accept"] is False
+    assert "host_semantic_override" not in evidence["segments"][0]
+
+
 def test_director_heading_locked_field_dissent_is_audited_without_veto() -> None:
     group = [
         {
@@ -3998,21 +4398,165 @@ def test_retry_retains_host_constraints_while_fixing_later_semantic_issue(
     analyzer.analyze_all(lambda: False)
 
     assert feedback_seen[0] is None
-    assert {
-        (issue.stable_id, issue.code) for issue in feedback_seen[1] or ()
-    } == {
-        ("mortality-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
-        ("wake-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
-    }
-    assert {
-        (issue.stable_id, issue.code) for issue in feedback_seen[2] or ()
-    } == {
+    expected_constraints = {
         ("mortality-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
         ("physical-collapse", "HOST_PHYSICAL_COLLAPSE_MISMATCH"),
         ("wake-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
     }
+    for feedback in feedback_seen[1:]:
+        assert {(issue.stable_id, issue.code) for issue in feedback or ()} == (
+            expected_constraints
+        )
     assert len(db.updated) == 3
     assert {data["emotion"] for _segment_id, data, _threshold in db.updated} == {"afraid"}
+
+
+def test_retry_retains_host_pass_constraint_while_fixing_other_semantic_issue(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "physical-collapse",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": (
+                "Phổi và yết hầu đang bị thiêu đốt. "
+                "Ý thức của anh nhanh chóng trở nên mơ hồ."
+            ),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 2,
+            "stable_id": "other-fear",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "Cậu sợ hãi trước bóng tối.",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 2, "batch_chars": 10000, "max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+
+    def generate(group, **kwargs):
+        feedback = kwargs.get("validation_feedback")
+        feedback_seen.append(feedback)
+        physical_constraint_present = any(
+            issue.stable_id == "physical-collapse"
+            and issue.code == HOST_PHYSICAL_COLLAPSE_ISSUE_CODE
+            and issue.allowed_emotions == ("afraid", "tired")
+            and issue.rule == HOST_PHYSICAL_COLLAPSE_RULE
+            for issue in feedback or ()
+        )
+        physical = analysis_item("physical-collapse")
+        physical.update(
+            {
+                "emotion": (
+                    "afraid"
+                    if len(feedback_seen) == 1 or physical_constraint_present
+                    else "neutral"
+                ),
+                "intensity": 2,
+            }
+        )
+        other = analysis_item("other-fear")
+        if len(feedback_seen) > 1:
+            other.update({"emotion": "afraid", "intensity": 2, "pace": "fast"})
+        return {"segments": [physical, other]}
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(feedback_seen) == 2
+    assert feedback_seen[0] is None
+    assert {
+        (issue.stable_id, issue.code, issue.allowed_emotions, issue.rule)
+        for issue in feedback_seen[1] or ()
+    } >= {
+        (
+            "physical-collapse",
+            HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
+            ("afraid", "tired"),
+            HOST_PHYSICAL_COLLAPSE_RULE,
+        )
+    }
+    forwarded_feedback = json.dumps(
+        [issue.canonical_payload() for issue in feedback_seen[1] or ()],
+        ensure_ascii=False,
+    )
+    assert db.rows[0]["text"] not in forwarded_feedback
+    assert "rationale" not in forwarded_feedback
+    assert len(db.updated) == 2
+
+
+def test_critic_exhaustion_does_not_clear_prior_deterministic_feedback(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows[0].update(
+        {
+            "stable_id": "physical-collapse",
+            "paragraph_index": 1,
+            "text": (
+                "Phổi và yết hầu đang bị thiêu đốt. "
+                "Ý thức của anh nhanh chóng trở nên mơ hồ."
+            ),
+            "kind_hint": "narration",
+        }
+    )
+    settings = build_settings(overrides={"analysis": {"max_retries": 3}})
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+    critic_calls = 0
+
+    def generate(group, **kwargs):
+        feedback_seen.append(kwargs.get("validation_feedback"))
+        item = analysis_item(str(group[0]["stable_id"]))
+        if kwargs.get("validation_feedback"):
+            item.update({"emotion": "afraid", "intensity": 2})
+        return {"segments": [item]}
+
+    def invalid_critic(group, validated, **kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        payload, candidate_hash = director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+        payload["verdicts"][0]["accept"] = False
+        return payload, candidate_hash
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", invalid_critic)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert len(feedback_seen) == 3
+    assert feedback_seen[0] is None
+    for feedback in feedback_seen[1:]:
+        assert feedback is not None
+        assert any(
+            issue.code == "HOST_PHYSICAL_COLLAPSE_MISMATCH"
+            for issue in feedback
+        )
+    assert critic_calls == 2
+    assert db.updated == []
 
 
 def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeypatch) -> None:
@@ -4268,7 +4812,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v2"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v3"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

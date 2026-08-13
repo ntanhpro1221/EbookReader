@@ -132,6 +132,8 @@ ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v1"
+ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v4"
+ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v1"
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
     r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
@@ -165,6 +167,257 @@ ANALYSIS_CRITIC_EMOTIONS = frozenset(
 )
 ANALYSIS_CRITIC_PACES = frozenset({"slow", "normal", "fast"})
 ANALYSIS_CRITIC_VOLUMES = frozenset({"soft", "normal", "loud"})
+ANALYSIS_HOST_SEMANTIC_LOCK_FIELDS = frozenset(
+    {
+        "policy_version",
+        "stable_id",
+        "text_sha256",
+        "source_role",
+        "field",
+        "rule",
+        "cue_class",
+        "candidate_emotion",
+        "allowed_emotions",
+        "related_stable_id",
+        "related_text_sha256",
+    }
+)
+ANALYSIS_HOST_CLEARANCE_FIELDS = frozenset(
+    {
+        "policy_version",
+        "status",
+        "candidate_hash",
+        "checked_segment_count",
+        "matched_rule_count",
+        "evidence",
+        "structural_locks",
+        "semantic_locks",
+    }
+)
+ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS = {
+    "thought_self_preservation_mortality": {
+        "cue_class": "self_preservation_mortality",
+        "allowed_emotions": ("afraid",),
+        "source_kind": "thought",
+        "requires_related": False,
+    },
+    "adjacent_thought_wake_self_rescue": {
+        "cue_class": "wake_self_rescue_after_mortality",
+        "allowed_emotions": ("afraid",),
+        "source_kind": "thought",
+        "requires_related": True,
+    },
+    "respiratory_injury_with_consciousness_loss": {
+        "cue_class": "physical_collapse",
+        "allowed_emotions": ("afraid", "tired"),
+        "source_kind": "narration",
+        "requires_related": False,
+    },
+}
+ANALYSIS_HOST_MORTALITY_PATTERN = re.compile(
+    r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SUBJECTLESS_SELF_CONTROL_PATTERN = re.compile(
+    r"^\s*[\"'“”‘’]*\s*không\s+được\s*(?:…|\.{3})\s*"
+    r"không\s+được\s+ngủ\s*(?:…|\.{3})\s*"
+    r"(?:sẽ|sắp)\s+chết\s+(?:mất|thôi)\s*[.!?…\"'“”‘’]*\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_EXPERIENCER_PATTERN = re.compile(
+    r"\b(?:tôi|ta|mình|bản\s+thân|mày|mi|ngươi|hắn|nó|anh|chị|ông|bà|cô|"
+    r"cậu|chúng\s+tôi|chúng\s+ta|chúng\s+mày|chúng\s+nó|họ)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SELF_EXPERIENCERS = frozenset(
+    {"tôi", "ta", "mình", "bản thân", "chúng tôi", "chúng ta"}
+)
+ANALYSIS_HOST_MORTALITY_COGNITION_PREFIX_PATTERN = re.compile(
+    r"\b(?:nghĩ|tưởng|cho\s+rằng|tin)(?:\s+rằng)?"
+    r"(?:\s+(?:tôi|ta|mình|bản\s+thân|chúng\s+tôi|chúng\s+ta))?\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_MORTALITY_RESOLVED_COGNITION_PREFIX_PATTERN = re.compile(
+    r"\b(?:đã\s+từng|từng|không\s+còn|chẳng\s+còn|không|chẳng|chưa)"
+    r"(?:\s+(?:còn|hề|bao\s+giờ|từng|thật\s+sự|thực\s+sự|thể)){0,2}\s+"
+    r"(?:nghĩ|tưởng|cho\s+rằng|tin)(?:\s+rằng)?"
+    r"(?:\s+(?:tôi|ta|mình|bản\s+thân|chúng\s+tôi|chúng\s+ta))?\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_WAKE_PATTERN = re.compile(
+    r"^\s*[\"'“”‘’]*\s*tỉnh\s+dậy\s*[,!?.…-]*\s*"
+    r"(?:phải|mau|hãy|cố\s+)?\s*tỉnh\s+dậy\s*[!?.…\"'“”‘’]*\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN = re.compile(
+    r"\b(?:phổi(?:\s+và\s+yết\s+hầu)?|yết\s+hầu)"
+    r"(?:\s+(?:đang|như|gần\s+như)){0,2}\s+(?:bị\s+)?"
+    r"(?:thiêu\s+đốt|bỏng\s+rát)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN = re.compile(
+    r"\bý\s+thức(?:\s+(?!(?:không|chẳng|chưa|hết|khỏi)\b)[^\s.,!?;:…]+){0,10}\s+"
+    r"(?:mơ\s+hồ|lịm\s+dần|mất\s+dần)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_NEGATION_PREFIX_PATTERN = re.compile(
+    r"(?:\b(?:không|chẳng|chưa)"
+    r"(?:\s+(?:còn|hề|bao\s+giờ|từng|hoàn\s+toàn)){0,2}"
+    r"|\bhết)\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_ASSERTION_PREFIX_PATTERN = re.compile(
+    r"(?:\b(?:không|chẳng)\s+"
+    r"(?:(?:thể|phải|được(?:\s+phép)?)\s+)?(?:không|chẳng)"
+    r"|\b(?:không|chẳng|chưa)\s+(?:hết|khỏi|ngừng))\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_PROHIBITION_PREFIX_PATTERN = re.compile(
+    r"\b(?:đừng|chớ|không\s+được(?:\s+phép)?)"
+    r"(?:\s+(?:bao\s+giờ|vội|có)){0,2}\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_NEGATION_SUFFIX_PATTERN = re.compile(
+    r"^\s+(?:(?:đã|hoàn\s+toàn)\s+){0,2}"
+    r"(?:hết|tan\s+biến|biến\s+mất|không\s+còn(?:\s+nữa)?|chẳng\s+còn(?:\s+nữa)?)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_HISTORICAL_PREFIX_PATTERN = re.compile(
+    r"\b(?:đã\s+từng|từng)\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_META_PREFIX_PATTERN = re.compile(
+    r"\b(?:dòng\s+chữ|từ|cụm\s+từ|khái\s+niệm|thuật\s+ngữ)\s+[\"“‘']?\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SCOPED_META_SUFFIX_PATTERN = re.compile(
+    r"^\s*[\"”’']?\s+(?:là\s+một\s+(?:danh|tính|động)\s+từ|được\s+định\s+nghĩa)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_AFRAID_CUE_PATTERN = re.compile(
+    r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
+    r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
+    r"thất\s+thần|bàng\s+hoàng|hỗn\s+loạn|sẽ\s+chết\s+mất|"
+    r"sắp\s+chết(?:\s+mất|\s+thôi)|kinh\s+hoàng|"
+    r"tim\s+đập\s+chân\s+run|tim\s+thắt)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
+    re.compile(
+        r"\b(?:độc\s+ác|khốn\s+kiếp|đáng\s+chết|nguyền\s+rủa|gào\s+thét|gào|quát|"
+        r"chửi\s+rủa|thiêu\s+chết(?!\s*(?:…|\.{3}))|"
+        r"thiêu(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|"
+        r"giết(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|tan\s+nát)\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết)\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:kinh\s+ngạc|sững\s+sờ|đực\s+mặt|không\s+thể\s+tin)\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
+        r"hạnh\s+phúc|hân\s+hoan|nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:phấn\s+khích|háo\s+hức|nôn\s+nóng)\b",
+        flags=re.IGNORECASE,
+    ),
+)
+
+
+def _analysis_source_match_is_suppressed(text: str, match: re.Match[str]) -> bool:
+    prefix = text[: match.start()]
+    suffix = text[match.end() :]
+    asserted_double_negative = (
+        ANALYSIS_SCOPED_ASSERTION_PREFIX_PATTERN.search(prefix) is not None
+    )
+    return bool(
+        (
+            ANALYSIS_SCOPED_NEGATION_PREFIX_PATTERN.search(prefix) is not None
+            and not asserted_double_negative
+        )
+        or ANALYSIS_SCOPED_PROHIBITION_PREFIX_PATTERN.search(prefix) is not None
+        or ANALYSIS_SCOPED_NEGATION_SUFFIX_PATTERN.search(suffix) is not None
+        or ANALYSIS_SCOPED_HISTORICAL_PREFIX_PATTERN.search(prefix) is not None
+        or ANALYSIS_SCOPED_META_PREFIX_PATTERN.search(prefix) is not None
+        or ANALYSIS_SCOPED_META_SUFFIX_PATTERN.search(suffix) is not None
+    )
+
+
+def _analysis_source_has_physical_collapse(text: str) -> bool:
+    respiratory = ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN.search(text)
+    consciousness = ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN.search(text)
+    physical_match = bool(
+        respiratory is not None
+        and consciousness is not None
+        and not _analysis_source_match_is_suppressed(text, respiratory)
+        and not _analysis_source_match_is_suppressed(text, consciousness)
+    )
+    if not physical_match:
+        return False
+    for pattern in (ANALYSIS_AFRAID_CUE_PATTERN, *ANALYSIS_NON_AFRAID_CUE_PATTERNS):
+        for other_match in pattern.finditer(text):
+            if not _analysis_source_match_is_suppressed(text, other_match):
+                return False
+    return True
+
+
+def _analysis_source_has_active_physical_pair(text: str) -> bool:
+    respiratory = ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN.search(text)
+    consciousness = ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN.search(text)
+    return bool(
+        respiratory is not None
+        and consciousness is not None
+        and not _analysis_source_match_is_suppressed(text, respiratory)
+        and not _analysis_source_match_is_suppressed(text, consciousness)
+    )
+
+
+def _analysis_source_has_self_preservation_mortality(text: str) -> bool:
+    matches = list(ANALYSIS_HOST_MORTALITY_PATTERN.finditer(text))
+    if len(matches) != 1:
+        return False
+    match = matches[0]
+    if _analysis_source_match_is_suppressed(text, match):
+        return False
+    experiencers = list(ANALYSIS_HOST_EXPERIENCER_PATTERN.finditer(text[: match.start()]))
+    if experiencers:
+        nearest = " ".join(experiencers[-1].group(0).casefold().split())
+        if nearest not in ANALYSIS_HOST_SELF_EXPERIENCERS:
+            return False
+    elif ANALYSIS_HOST_SUBJECTLESS_SELF_CONTROL_PATTERN.fullmatch(text) is None:
+        return False
+    afraid_matches = [
+        afraid_match
+        for afraid_match in ANALYSIS_AFRAID_CUE_PATTERN.finditer(text)
+        if not _analysis_source_match_is_suppressed(text, afraid_match)
+    ]
+    if not afraid_matches:
+        return False
+    prefix = text[: match.start()]
+    cognition = ANALYSIS_HOST_MORTALITY_COGNITION_PREFIX_PATTERN.search(prefix)
+    if (
+        cognition is not None
+        and ANALYSIS_HOST_MORTALITY_RESOLVED_COGNITION_PREFIX_PATTERN.search(
+            prefix[: cognition.end()]
+        )
+        is not None
+    ):
+        return False
+    for pattern in ANALYSIS_NON_AFRAID_CUE_PATTERNS:
+        for other_match in pattern.finditer(text):
+            if not _analysis_source_match_is_suppressed(text, other_match):
+                return False
+    return not _analysis_source_has_active_physical_pair(text)
 
 
 SCHEMA = """
@@ -1288,10 +1541,21 @@ class ProjectDB:
             candidate_delivery = critic_row.get("candidate")
             source_role = critic_row.get("source_role")
             context_policy = critic_row.get("context_policy")
+            host_locked_fields = critic_row.get("host_locked_fields")
+            content_host_lock_is_valid = (
+                host_locked_fields == {}
+                or (
+                    isinstance(host_locked_fields, dict)
+                    and set(host_locked_fields) == {"emotion"}
+                    and isinstance(candidate_delivery, dict)
+                    and host_locked_fields["emotion"]
+                    == candidate_delivery.get("emotion")
+                )
+            )
             is_content_row = (
                 source_role == ANALYSIS_SOURCE_ROLE_CONTENT
                 and context_policy == ANALYSIS_CONTEXT_POLICY_ADJACENT
-                and critic_row.get("host_locked_fields") == {}
+                and content_host_lock_is_valid
             )
             is_chapter_heading_row = (
                 source_role == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
@@ -1341,19 +1605,273 @@ class ProjectDB:
         return commit_rows
 
     @classmethod
+    def _analysis_host_lock_contract(
+        cls,
+        candidate_json: str,
+        deterministic_issue_json: str,
+    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        try:
+            candidate = json.loads(candidate_json)
+            deterministic_issues = json.loads(deterministic_issue_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Durable analysis host-lock JSON is invalid") from exc
+        if not isinstance(candidate, dict) or not isinstance(deterministic_issues, dict):
+            raise RuntimeError("Durable analysis host-lock contract must contain objects")
+        segments = candidate.get("segments")
+        critic_rows = candidate.get("critic_rows")
+        if not isinstance(segments, list) or not isinstance(critic_rows, list):
+            raise RuntimeError("Durable analysis host-lock candidate is incomplete")
+        segment_by_stable = {
+            str(segment["stable_id"]): segment for segment in segments
+        }
+        critic_row_by_stable = {
+            str(segment["stable_id"]): critic_row
+            for segment, critic_row in zip(segments, critic_rows, strict=True)
+        }
+        _critic_rows_json, candidate_hash = cls._canonical_analysis_json(
+            critic_rows,
+            "analysis host-lock critic rows",
+        )
+        heading_stable_ids = {
+            stable_id
+            for stable_id, critic_row in critic_row_by_stable.items()
+            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
+        }
+        semantic_row_ids = {
+            stable_id
+            for stable_id, critic_row in critic_row_by_stable.items()
+            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CONTENT
+            and critic_row["host_locked_fields"] != {}
+        }
+        clearance = deterministic_issues.get("host_affect_clearance")
+        if clearance is None:
+            if heading_stable_ids or semantic_row_ids:
+                raise RuntimeError(
+                    "Analysis host-locked rows require durable deterministic clearance"
+                )
+            return {}, {}
+        if (
+            not isinstance(clearance, dict)
+            or set(clearance) != ANALYSIS_HOST_CLEARANCE_FIELDS
+            or clearance.get("status") != "cleared"
+            or clearance.get("policy_version") != ANALYSIS_HOST_AFFECT_POLICY_VERSION
+            or clearance.get("candidate_hash") != candidate_hash
+            or type(clearance.get("checked_segment_count")) is not int
+            or int(clearance["checked_segment_count"]) != len(segments)
+        ):
+            raise RuntimeError("Analysis host clearance is not candidate-bound")
+        structural_lock_items = clearance.get("structural_locks", [])
+        semantic_lock_items = clearance.get("semantic_locks", [])
+        if not isinstance(structural_lock_items, list):
+            raise RuntimeError("Host structural clearance locks must be an array")
+        if not isinstance(semantic_lock_items, list):
+            raise RuntimeError("Host semantic clearance locks must be an array")
+        structural_locks: dict[str, dict[str, Any]] = {}
+        for lock in structural_lock_items:
+            if not isinstance(lock, dict):
+                raise RuntimeError("Host structural clearance lock must be an object")
+            stable_id = str(lock.get("stable_id", "")).strip()
+            if not stable_id or stable_id in structural_locks:
+                raise RuntimeError("Host structural clearance lock has invalid stable ID")
+            structural_locks[stable_id] = lock
+        semantic_locks: dict[str, dict[str, Any]] = {}
+        for lock in semantic_lock_items:
+            if not isinstance(lock, dict) or set(lock) != ANALYSIS_HOST_SEMANTIC_LOCK_FIELDS:
+                raise RuntimeError("Host semantic clearance lock has invalid schema")
+            stable_id = str(lock.get("stable_id", "")).strip()
+            if not stable_id or stable_id in semantic_locks:
+                raise RuntimeError("Host semantic clearance lock has invalid stable ID")
+            semantic_locks[stable_id] = lock
+        expected_semantic_evidence: list[dict[str, Any]] = []
+        for lock in semantic_lock_items:
+            item = {
+                "stable_id": lock["stable_id"],
+                "text_sha256": lock["text_sha256"],
+                "rule": lock["rule"],
+                "cue_class": lock["cue_class"],
+                "candidate_emotion": lock["candidate_emotion"],
+                "allowed_emotions": lock["allowed_emotions"],
+                "outcome": "pass",
+            }
+            if lock["related_stable_id"]:
+                item["related_stable_id"] = lock["related_stable_id"]
+            if lock["related_text_sha256"]:
+                item["related_text_sha256"] = lock["related_text_sha256"]
+            expected_semantic_evidence.append(item)
+        if (
+            type(clearance.get("matched_rule_count")) is not int
+            or int(clearance["matched_rule_count"]) != len(semantic_lock_items)
+            or clearance.get("evidence") != expected_semantic_evidence
+        ):
+            raise RuntimeError("Analysis host clearance evidence is not lock-bound")
+        if set(structural_locks) != heading_stable_ids:
+            raise RuntimeError(
+                "Host structural clearance differs from chapter-heading rows"
+            )
+        if set(semantic_locks) != semantic_row_ids:
+            raise RuntimeError("Host semantic clearance differs from locked content rows")
+        if set(structural_locks) & set(semantic_locks):
+            raise RuntimeError("Structural and semantic host locks must be disjoint")
+        for stable_id, lock in structural_locks.items():
+            segment = segment_by_stable[stable_id]
+            critic_row = critic_row_by_stable[stable_id]
+            expected_lock_fields = {
+                "stable_id": stable_id,
+                "text_sha256": str(segment["text_sha256"]),
+                "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
+                "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
+                "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+                "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
+            }
+            if any(lock.get(key) != value for key, value in expected_lock_fields.items()):
+                raise RuntimeError(
+                    "Accepted chapter heading structural clearance is not source-bound"
+                )
+            if (
+                critic_row["previous_text"] != ""
+                or critic_row["next_text"] != ""
+                or critic_row["host_locked_fields"]
+                != ANALYSIS_CHAPTER_HEADING_DELIVERY
+                or critic_row["candidate"] != ANALYSIS_CHAPTER_HEADING_DELIVERY
+            ):
+                raise RuntimeError(
+                    "Accepted chapter heading violates target-only canonical delivery"
+                )
+        for stable_id, lock in semantic_locks.items():
+            segment = segment_by_stable[stable_id]
+            critic_row = critic_row_by_stable[stable_id]
+            rule = str(lock["rule"])
+            rule_contract = ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS.get(rule)
+            if rule_contract is None:
+                raise RuntimeError("Host semantic clearance uses an unknown rule")
+            allowed_emotions = lock["allowed_emotions"]
+            expected_allowed_emotions = list(rule_contract["allowed_emotions"])
+            candidate_emotion = str(lock["candidate_emotion"])
+            related_stable_id = lock["related_stable_id"]
+            related_text_sha256 = lock["related_text_sha256"]
+            requires_related = bool(rule_contract["requires_related"])
+            source_text = str(critic_row["text"])
+            source_semantics_valid = (
+                _analysis_source_has_self_preservation_mortality(source_text)
+                if rule == "thought_self_preservation_mortality"
+                else (
+                    ANALYSIS_HOST_WAKE_PATTERN.fullmatch(source_text) is not None
+                    if rule == "adjacent_thought_wake_self_rescue"
+                    else _analysis_source_has_physical_collapse(source_text)
+                )
+            )
+            if (
+                lock["policy_version"] != ANALYSIS_HOST_SEMANTIC_POLICY_VERSION
+                or lock["text_sha256"] != str(segment["text_sha256"])
+                or lock["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT
+                or lock["field"] != "emotion"
+                or lock["cue_class"] != rule_contract["cue_class"]
+                or allowed_emotions != expected_allowed_emotions
+                or candidate_emotion not in expected_allowed_emotions
+                or critic_row["candidate"]["emotion"] != candidate_emotion
+                or critic_row["candidate"]["kind"] != rule_contract["source_kind"]
+                or critic_row["host_locked_fields"]
+                != {"emotion": candidate_emotion}
+                or critic_row["hint"] != rule_contract["source_kind"]
+                or not isinstance(related_stable_id, str)
+                or not isinstance(related_text_sha256, str)
+                or requires_related
+                != bool(related_stable_id and related_text_sha256)
+                or bool(related_stable_id) != bool(related_text_sha256)
+                or not source_semantics_valid
+            ):
+                raise RuntimeError("Host semantic clearance is not source-bound")
+        return structural_locks, semantic_locks
+
+    @staticmethod
+    def _analysis_mandatory_semantic_lock_conn(
+        conn: sqlite3.Connection,
+        stored: sqlite3.Row,
+        critic_row: dict[str, Any],
+        *,
+        is_chapter_heading: bool,
+    ) -> dict[str, Any] | None:
+        source_kind = str(stored["kind_hint"])
+        candidate = critic_row["candidate"]
+        candidate_kind = str(candidate["kind"])
+        source_text = str(stored["text"])
+        rule = ""
+        related_stable_id = ""
+        related_text_sha256 = ""
+        if (
+            source_kind == "narration"
+            and candidate_kind == "narration"
+            and not is_chapter_heading
+            and _analysis_source_has_physical_collapse(source_text)
+        ):
+            rule = "respiratory_injury_with_consciousness_loss"
+        elif source_kind == "thought" and candidate_kind == "thought":
+            if _analysis_source_has_self_preservation_mortality(source_text):
+                rule = "thought_self_preservation_mortality"
+            elif ANALYSIS_HOST_WAKE_PATTERN.fullmatch(source_text) is not None:
+                related = conn.execute(
+                    "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                    "FROM segments WHERE chapter_id=? AND seq=?",
+                    (int(stored["chapter_id"]), int(stored["seq"]) - 1),
+                ).fetchone()
+                if (
+                    related is not None
+                    and str(related["kind_hint"]) == "thought"
+                    and int(related["chapter_id"]) == int(stored["chapter_id"])
+                    and int(related["seq"]) + 1 == int(stored["seq"])
+                    and int(related["paragraph_index"]) + 1
+                    == int(stored["paragraph_index"])
+                    and _analysis_source_has_self_preservation_mortality(
+                        str(related["text"])
+                    )
+                ):
+                    rule = "adjacent_thought_wake_self_rescue"
+                    related_stable_id = str(related["stable_id"])
+                    related_text_sha256 = str(related["text_sha256"])
+        if not rule:
+            return None
+        rule_contract = ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[rule]
+        candidate_emotion = str(candidate["emotion"])
+        allowed_emotions = list(rule_contract["allowed_emotions"])
+        if candidate_emotion not in allowed_emotions:
+            raise RuntimeError(
+                "Analysis candidate violates a mandatory host semantic emotion"
+            )
+        return {
+            "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+            "stable_id": str(stored["stable_id"]),
+            "text_sha256": str(stored["text_sha256"]),
+            "source_role": ANALYSIS_SOURCE_ROLE_CONTENT,
+            "field": "emotion",
+            "rule": rule,
+            "cue_class": rule_contract["cue_class"],
+            "candidate_emotion": candidate_emotion,
+            "allowed_emotions": allowed_emotions,
+            "related_stable_id": related_stable_id,
+            "related_text_sha256": related_text_sha256,
+        }
+
+    @classmethod
     def _validate_analysis_candidate_sources_conn(
         cls,
         conn: sqlite3.Connection,
         candidate_json: str,
+        deterministic_issue_json: str,
     ) -> None:
         candidate = json.loads(candidate_json)
+        structural_locks, semantic_locks = cls._analysis_host_lock_contract(
+            candidate_json,
+            deterministic_issue_json,
+        )
+        stored_by_stable: dict[str, sqlite3.Row] = {}
+        critic_row_by_stable: dict[str, dict[str, Any]] = {}
         for segment, critic_row in zip(
             candidate["segments"],
             candidate["critic_rows"],
             strict=True,
         ):
             stored = conn.execute(
-                "SELECT stable_id,text,text_sha256,seq,paragraph_index,kind_hint "
+                "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
                 "FROM segments WHERE id=?",
                 (int(segment["segment_id"]),),
             ).fetchone()
@@ -1378,6 +1896,62 @@ class ProjectDB:
                     raise RuntimeError(
                         "Chapter heading structural role is not source-metadata-bound"
                     )
+            stored_by_stable[str(stored["stable_id"])] = stored
+            critic_row_by_stable[str(stored["stable_id"])] = critic_row
+        mandatory_heading_ids: set[str] = set()
+        mandatory_semantic_locks: dict[str, dict[str, Any]] = {}
+        for stable_id, stored in stored_by_stable.items():
+            is_chapter_heading = bool(
+                int(stored["seq"]) == 0
+                and int(stored["paragraph_index"]) == 0
+                and str(stored["kind_hint"]) == "narration"
+                and ANALYSIS_CHAPTER_HEADING_PATTERN.fullmatch(str(stored["text"]))
+                is not None
+            )
+            if is_chapter_heading:
+                mandatory_heading_ids.add(stable_id)
+            mandatory_lock = cls._analysis_mandatory_semantic_lock_conn(
+                conn,
+                stored,
+                critic_row_by_stable[stable_id],
+                is_chapter_heading=is_chapter_heading,
+            )
+            if mandatory_lock is not None:
+                mandatory_semantic_locks[stable_id] = mandatory_lock
+        for stable_id, lock in semantic_locks.items():
+            related_stable_id = str(lock["related_stable_id"])
+            if not related_stable_id:
+                continue
+            current = stored_by_stable[stable_id]
+            related = conn.execute(
+                "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                "FROM segments WHERE stable_id=?",
+                (related_stable_id,),
+            ).fetchone()
+            if (
+                related is None
+                or str(related["text_sha256"]) != str(lock["related_text_sha256"])
+                or str(related["kind_hint"]) != "thought"
+                or str(current["kind_hint"]) != "thought"
+                or int(related["chapter_id"]) != int(current["chapter_id"])
+                or int(related["seq"]) + 1 != int(current["seq"])
+                or int(related["paragraph_index"]) + 1
+                != int(current["paragraph_index"])
+                or not _analysis_source_has_self_preservation_mortality(
+                    str(related["text"])
+                )
+            ):
+                raise RuntimeError(
+                    "Adjacent host semantic clearance has invalid related provenance"
+                )
+        if set(structural_locks) != mandatory_heading_ids:
+            raise RuntimeError(
+                "Host structural clearance differs from source-derived chapter headings"
+            )
+        if semantic_locks != mandatory_semantic_locks:
+            raise RuntimeError(
+                "Host semantic clearance differs from source-derived mandatory locks"
+            )
 
     @classmethod
     def _validate_analysis_acceptance_evidence(
@@ -1415,69 +1989,10 @@ class ProjectDB:
         )
         if str(evidence.get("candidate_hash", "")) != candidate_hash:
             raise RuntimeError("Accepted critic evidence candidate hash is invalid")
-        try:
-            deterministic_issues = json.loads(deterministic_issue_json)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Deterministic analysis issue JSON is invalid") from exc
-        if not isinstance(deterministic_issues, dict):
-            raise RuntimeError("Deterministic analysis issues must be an object")
-        clearance = deterministic_issues.get("host_affect_clearance")
-        structural_lock_items = (
-            clearance.get("structural_locks", [])
-            if isinstance(clearance, dict)
-            else []
+        _structural_locks, semantic_locks = cls._analysis_host_lock_contract(
+            candidate_json,
+            deterministic_issue_json,
         )
-        if not isinstance(structural_lock_items, list):
-            raise RuntimeError("Host structural clearance locks must be an array")
-        structural_locks: dict[str, dict[str, Any]] = {}
-        for lock in structural_lock_items:
-            if not isinstance(lock, dict):
-                raise RuntimeError("Host structural clearance lock must be an object")
-            stable_id = str(lock.get("stable_id", "")).strip()
-            if not stable_id or stable_id in structural_locks:
-                raise RuntimeError("Host structural clearance lock has invalid stable ID")
-            structural_locks[stable_id] = lock
-        heading_stable_ids = {
-            stable_id
-            for stable_id, critic_row in critic_row_by_stable.items()
-            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
-        }
-        if heading_stable_ids:
-            if (
-                not isinstance(clearance, dict)
-                or clearance.get("status") != "cleared"
-                or clearance.get("candidate_hash") != candidate_hash
-                or set(structural_locks) != heading_stable_ids
-            ):
-                raise RuntimeError(
-                    "Accepted chapter headings require exact deterministic structural clearance"
-                )
-            for stable_id, lock in structural_locks.items():
-                critic_row = critic_row_by_stable[stable_id]
-                expected_lock_fields = {
-                    "stable_id": stable_id,
-                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
-                    "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
-                    "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
-                    "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
-                    "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
-                }
-                if any(lock.get(key) != value for key, value in expected_lock_fields.items()):
-                    raise RuntimeError(
-                        "Accepted chapter heading structural clearance is not source-bound"
-                    )
-                if (
-                    critic_row["previous_text"] != ""
-                    or critic_row["next_text"] != ""
-                    or critic_row["host_locked_fields"]
-                    != ANALYSIS_CHAPTER_HEADING_DELIVERY
-                    or critic_row["candidate"] != ANALYSIS_CHAPTER_HEADING_DELIVERY
-                ):
-                    raise RuntimeError(
-                        "Accepted chapter heading violates target-only canonical delivery"
-                    )
-        elif structural_locks:
-            raise RuntimeError("Structural clearance cannot authorize content rows")
         try:
             reserved_contract = json.loads(reserved_contract_json)
         except json.JSONDecodeError as exc:
@@ -1571,6 +2086,11 @@ class ProjectDB:
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 if raw_delivery.get(field) != candidate_projection[field]
             ]
+            raw_delta_fields = {
+                field
+                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+                if raw_delivery.get(field) != candidate_projection[field]
+            }
             raw_agreement = (
                 isinstance(critic, dict)
                 and critic.get("accept") is True
@@ -1580,8 +2100,8 @@ class ProjectDB:
             is_heading = (
                 critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
             )
-            override = item.get("host_structural_override")
-            expected_override = (
+            structural_override = item.get("host_structural_override")
+            expected_structural_override = (
                 {
                     "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
                     "stable_id": stable_id,
@@ -1599,7 +2119,45 @@ class ProjectDB:
                 is_heading
                 and raw_accept_value is False
                 and bool(raw_deltas)
-                and override == expected_override
+                and structural_override == expected_structural_override
+            )
+            semantic_lock = semantic_locks.get(stable_id)
+            semantic_override = item.get("host_semantic_override")
+            semantic_field = (
+                str(semantic_lock["field"])
+                if semantic_lock is not None
+                else ""
+            )
+            semantic_allowed_values = (
+                list(semantic_lock["allowed_emotions"])
+                if semantic_lock is not None
+                else []
+            )
+            expected_semantic_override = (
+                {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "stable_id": stable_id,
+                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                    "rule": semantic_lock["rule"],
+                    "field": semantic_field,
+                    "candidate_value": semantic_lock["candidate_emotion"],
+                    "allowed_values": semantic_allowed_values,
+                    "raw_accept": False,
+                    "raw_field_deltas": raw_deltas,
+                }
+                if (
+                    semantic_lock is not None
+                    and raw_accept_value is False
+                    and bool(raw_delta_fields)
+                    and raw_delta_fields <= {semantic_field}
+                    and raw_delivery.get(semantic_field)
+                    not in semantic_allowed_values
+                )
+                else None
+            )
+            semantic_override_valid = (
+                expected_semantic_override is not None
+                and semantic_override == expected_semantic_override
             )
             if (
                 str(item.get("text_sha256", ""))
@@ -1612,8 +2170,25 @@ class ProjectDB:
                 or evidence_quote not in str(critic_row["text"])
                 or item.get("field_deltas") != raw_deltas
                 or item.get("effective_accept") is not True
-                or (raw_agreement and override is not None)
-                or (not raw_agreement and not structural_override_valid)
+                or (
+                    raw_agreement
+                    and (
+                        structural_override is not None
+                        or semantic_override is not None
+                    )
+                )
+                or (
+                    not raw_agreement
+                    and structural_override_valid == semantic_override_valid
+                )
+                or (
+                    structural_override is not None
+                    and not structural_override_valid
+                )
+                or (
+                    semantic_override is not None
+                    and not semantic_override_valid
+                )
                 or any(type(value) not in {int, float} for value in numeric_confidences)
                 or any(not math.isfinite(float(value)) for value in numeric_confidences)
                 or float(derived_confidence)
@@ -1697,6 +2272,8 @@ class ProjectDB:
         cls,
         conn: sqlite3.Connection,
         analysis_candidate_id: int,
+        *,
+        validate_completed_acceptance: bool = True,
     ) -> sqlite3.Row:
         row = conn.execute(
             "SELECT * FROM analysis_candidates WHERE id=?",
@@ -1717,7 +2294,6 @@ class ProjectDB:
             "stored analysis candidate",
         )
         cls._analysis_candidate_commit_rows(candidate_json)
-        cls._validate_analysis_candidate_sources_conn(conn, candidate_json)
         _critic_json, candidate_hash = cls._canonical_analysis_json(
             candidate["critic_rows"],
             "stored analysis critic rows",
@@ -1729,6 +2305,11 @@ class ProjectDB:
         issue_json, issue_hash = cls._canonical_analysis_json(
             deterministic_issues,
             "stored deterministic analysis issues",
+        )
+        cls._validate_analysis_candidate_sources_conn(
+            conn,
+            candidate_json,
+            issue_json,
         )
         if (
             str(row["candidate_json"]) != candidate_json
@@ -1754,6 +2335,22 @@ class ProjectDB:
                 or str(row["commit_envelope_hash"]) != commit_hash
             ):
                 raise RuntimeError("Analysis commit envelope hash verification failed")
+        if (
+            validate_completed_acceptance
+            and str(row["state"])
+            in {ANALYSIS_CANDIDATE_CRITIC_ACCEPTED, ANALYSIS_CANDIDATE_ACCEPTED}
+        ):
+            attempt_number = int(row["critic_attempt_count"])
+            if attempt_number < 1:
+                raise RuntimeError(
+                    "Accepted analysis candidate has no completed critic evidence"
+                )
+            cls._analysis_critic_attempt_row_conn(
+                conn,
+                analysis_candidate_id,
+                attempt_number,
+                candidate_row=row,
+            )
         return row
 
     @classmethod
@@ -1762,6 +2359,8 @@ class ProjectDB:
         conn: sqlite3.Connection,
         analysis_candidate_id: int,
         attempt_number: int,
+        *,
+        candidate_row: sqlite3.Row | None = None,
     ) -> sqlite3.Row:
         row = conn.execute(
             "SELECT * FROM analysis_critic_attempts "
@@ -1794,7 +2393,11 @@ class ProjectDB:
         ):
             raise RuntimeError("Analysis critic intent hash verification failed")
         if str(row["state"]) == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
-            candidate = cls._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate = candidate_row or cls._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
+                validate_completed_acceptance=False,
+            )
             try:
                 outcome = json.loads(str(row["outcome_json"]))
                 evidence = json.loads(str(row["evidence_json"]))
@@ -1834,6 +2437,21 @@ class ProjectDB:
                 or str(row["completion_hash"]) != completion_hash
             ):
                 raise RuntimeError("Analysis critic completion hash verification failed")
+            if completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                if (
+                    candidate["commit_envelope_json"] is None
+                    or candidate["deterministic_issue_json"] is None
+                ):
+                    raise RuntimeError(
+                        "Accepted analysis candidate lacks its durable acceptance envelope"
+                    )
+                cls._validate_analysis_acceptance_evidence(
+                    str(candidate["candidate_json"]),
+                    str(candidate["commit_envelope_json"]),
+                    evidence,
+                    contract_json,
+                    str(candidate["deterministic_issue_json"]),
+                )
         return row
 
     @classmethod
@@ -2022,7 +2640,11 @@ class ProjectDB:
         )
         now = time.time()
         with self.transaction() as conn:
-            self._validate_analysis_candidate_sources_conn(conn, candidate_json)
+            self._validate_analysis_candidate_sources_conn(
+                conn,
+                candidate_json,
+                issue_json,
+            )
             existing = conn.execute(
                 """
                 SELECT * FROM analysis_candidates

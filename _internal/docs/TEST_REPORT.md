@@ -55,6 +55,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   neutral cho suy kiệt thể chất hoặc quan sát lâm sàng đơn lẻ để không biến keyword gate thành đạo diễn cảm xúc rộng;
 - host affect nguồn hẹp được adjudicate trước semantic cue chung và mọi constraint typed đã xác minh được tích lũy trong
   cùng target group, nên retry sửa câu sau không làm câu trước quay lại delivery đã bị từ chối;
+- semantic lock bền khóa emotion đã qua self-preservation/adjacent-wake/physical-collapse vào source hash và critic candidate.
+  Chỉ raw dissent hợp lệ đổi riêng field khóa ra ngoài allowed set mới có override audit; accept-with-delta, reject-no-delta,
+  delta thêm field hoặc dissent sang một emotion khác vẫn được host cho phép đều bị chặn;
 - high-quality director critic chạy lượt self-review thứ hai mà không thấy confidence/notes/personality của generator;
   contract cục bộ từ chối root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate

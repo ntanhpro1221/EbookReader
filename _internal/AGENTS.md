@@ -151,6 +151,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   `neutral/intensity=0`; một mô tả thể chất hoặc quan sát lâm sàng đơn lẻ không đủ để kích hoạt rule này.
 - Rule affect nguồn hẹp phải chạy trước semantic cue chung. Constraint deterministic đã phát hiện phải được tích lũy trong
   suốt retry của cùng target group, không được ghi đè bởi lỗi của lần sau hoặc chuyển thành feedback tự do.
+- Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Critic dissent
+  chỉ được host override khi `accept=false`, có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host cho phép;
+  raw verdict/delta vẫn phải lưu. `accept=true` kèm delta, `accept=false` không delta, delta field khác, hoặc đổi giữa hai giá trị
+  đều được host cho phép đều phải fail-closed, không được giả thành critic pass.
 - Profile `high_quality` bắt buộc chạy một lượt director critic thứ hai trên candidate analysis bất biến. Critic không
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model

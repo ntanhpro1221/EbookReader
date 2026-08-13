@@ -27,6 +27,8 @@ from .database import (
     ANALYSIS_CONTEXT_POLICY_ADJACENT,
     ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
+    ANALYSIS_HOST_AFFECT_POLICY_VERSION,
+    ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
     ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
     ANALYSIS_SOURCE_ROLE_CONTENT,
@@ -73,9 +75,9 @@ SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS = 3
 NEUTRAL_ZERO_DELIVERY_SIGNATURE = ("neutral", 0, "normal", "normal")
 DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
-DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v2"
-HOST_AFFECT_POLICY_VERSION = "host_affect_v3"
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v2"
+DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v3"
+HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v3"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -125,6 +127,18 @@ HOST_EXPERIENCER_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 HOST_SELF_EXPERIENCERS = frozenset({"tôi", "ta", "mình", "bản thân", "chúng tôi", "chúng ta"})
+HOST_MORTALITY_COGNITION_PREFIX_PATTERN = re.compile(
+    r"\b(?:nghĩ|tưởng|cho\s+rằng|tin)(?:\s+rằng)?"
+    r"(?:\s+(?:tôi|ta|mình|bản\s+thân|chúng\s+tôi|chúng\s+ta))?\s*$",
+    flags=re.IGNORECASE,
+)
+HOST_MORTALITY_RESOLVED_COGNITION_PREFIX_PATTERN = re.compile(
+    r"\b(?:đã\s+từng|từng|không\s+còn|chẳng\s+còn|không|chẳng|chưa)"
+    r"(?:\s+(?:còn|hề|bao\s+giờ|từng|thật\s+sự|thực\s+sự|thể)){0,2}\s+"
+    r"(?:nghĩ|tưởng|cho\s+rằng|tin)(?:\s+rằng)?"
+    r"(?:\s+(?:tôi|ta|mình|bản\s+thân|chúng\s+tôi|chúng\s+ta))?\s*$",
+    flags=re.IGNORECASE,
+)
 HOST_WAKE_SELF_RESCUE_PATTERN = re.compile(
     r"^\s*[\"'“”‘’]*\s*tỉnh\s+dậy\s*[,!?.…-]*\s*"
     r"(?:phải|mau|hãy|cố\s+)?\s*tỉnh\s+dậy\s*[!?.…\"'“”‘’]*\s*$",
@@ -709,6 +723,9 @@ Chỉ accept=true khi kind, speaker, emotion, intensity, pace và volume đều 
 Mỗi verdict phải có evidence_quote là một chuỗi con nguyên văn, không rỗng của chính trường text cùng ID,
 tối đa {ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH} ký tự. Chọn cụm ngắn nhất đủ làm bằng chứng delivery,
 không sao chép nguyên một segment dài.
+Mọi field có trong host_locked_fields là constraint nguồn đã được host xác minh và là bất biến. Nếu không đồng ý với
+field khóa, hãy trả accept=false cùng correction thật của bạn; không được vừa accept=true vừa thay đổi field, hoặc
+accept=false mà chép nguyên candidate.
 source_role=chapter_heading và context_policy=target_only là tiêu đề chương độc lập: previous_text/next_text cố ý để
 trống và host_locked_fields là bất biến. Không suy diễn delivery của tiêu đề từ nội dung lân cận; vẫn trả đánh giá
 sáu trường ban đầu của riêng bạn để host có thể lưu audit nếu bạn không đồng ý với khóa cấu trúc.
@@ -1451,6 +1468,19 @@ class HostAffectEvidence:
     related_stable_id: str = ""
     related_text_sha256: str = ""
 
+    def feedback_issue(self) -> AnalysisFeedbackIssue:
+        return AnalysisFeedbackIssue(
+            stable_id=self.stable_id,
+            code=(
+                HOST_PHYSICAL_COLLAPSE_ISSUE_CODE
+                if self.rule == HOST_PHYSICAL_COLLAPSE_RULE
+                else HOST_AFFECT_ISSUE_CODE
+            ),
+            fields=("emotion",),
+            allowed_emotions=self.allowed_emotions,
+            rule=self.rule,
+        )
+
     def event_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "stable_id": self.stable_id,
@@ -1525,6 +1555,29 @@ class HostAffectAdjudication:
     ) -> dict[str, Any]:
         if self.issues:
             raise ValueError("Host affect clearance cannot be created for a rejected candidate")
+        semantic_locks = []
+        semantic_stable_ids: set[str] = set()
+        for item in self.evidence:
+            if item.outcome != "pass":
+                continue
+            if item.stable_id in semantic_stable_ids:
+                raise ValueError("Host semantic clearance requires one lock per segment")
+            semantic_stable_ids.add(item.stable_id)
+            semantic_locks.append(
+                {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "stable_id": item.stable_id,
+                    "text_sha256": item.text_sha256,
+                    "source_role": ANALYSIS_SOURCE_ROLE_CONTENT,
+                    "field": "emotion",
+                    "rule": item.rule,
+                    "cue_class": item.cue_class,
+                    "candidate_emotion": item.candidate_emotion,
+                    "allowed_emotions": list(item.allowed_emotions),
+                    "related_stable_id": item.related_stable_id,
+                    "related_text_sha256": item.related_text_sha256,
+                }
+            )
         return {
             "policy_version": self.policy_version,
             "status": "cleared",
@@ -1533,6 +1586,7 @@ class HostAffectAdjudication:
             "matched_rule_count": len(self.evidence),
             "evidence": [item.event_payload() for item in self.evidence],
             "structural_locks": copy.deepcopy(list(structural_locks)),
+            "semantic_locks": semantic_locks,
         }
 
 
@@ -1566,6 +1620,12 @@ def _host_mortality_match(text: str) -> re.Match[str] | None:
 def _qualified_host_self_preservation_match(text: str) -> re.Match[str] | None:
     match = _host_mortality_match(text)
     if match is None or set(_semantic_cue_matches(text)) != {"afraid"}:
+        return None
+    prefix = text[: match.start()]
+    cognition = HOST_MORTALITY_COGNITION_PREFIX_PATTERN.search(prefix)
+    if cognition is not None and HOST_MORTALITY_RESOLVED_COGNITION_PREFIX_PATTERN.search(
+        prefix[: cognition.end()]
+    ) is not None:
         return None
     return match
 
@@ -1622,6 +1682,43 @@ def _host_affect_adjudication(
         if candidate is None:
             continue
         source_kind = str(_row_optional_value(row, "kind_hint", ""))
+        if (
+            source_kind == "narration"
+            and str(candidate.get("kind", "")) == "narration"
+            and not _is_explicit_chapter_heading(row)
+        ):
+            physical_cues = _semantic_cue_matches(str(row["text"]))
+            physical_match = (
+                physical_cues.get("physical_collapse")
+                if set(physical_cues) == {"physical_collapse"}
+                else None
+            )
+            if physical_match is not None:
+                allowed_emotions = ("afraid", "tired")
+                candidate_emotion = str(candidate.get("emotion", "neutral"))
+                outcome = "pass" if candidate_emotion in allowed_emotions else "reject"
+                item_evidence = HostAffectEvidence(
+                    stable_id=stable_id,
+                    text_sha256=_source_text_sha256(row),
+                    rule=HOST_PHYSICAL_COLLAPSE_RULE,
+                    cue_class="physical_collapse",
+                    candidate_emotion=candidate_emotion,
+                    allowed_emotions=allowed_emotions,
+                    outcome=outcome,
+                )
+                evidence.append(item_evidence)
+                if outcome == "reject":
+                    issues.append(
+                        HostAffectIssue(
+                            stable_id=stable_id,
+                            code=HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
+                            rule=HOST_PHYSICAL_COLLAPSE_RULE,
+                            candidate_emotion=candidate_emotion,
+                            allowed_emotions=allowed_emotions,
+                            evidence=item_evidence,
+                        )
+                    )
+                continue
         if source_kind != "thought" or str(candidate.get("kind", "")) != "thought":
             continue
         text = str(row["text"])
@@ -2479,6 +2576,16 @@ def _director_candidate_rows(
     signature_counts = Counter(
         _delivery_signature(data) for data in validated.values()
     )
+    host_adjudication = _host_affect_adjudication(
+        group,
+        validated,
+        original_context=original_context,
+    )
+    semantic_locked_emotions = {
+        item.stable_id: item.candidate_emotion
+        for item in host_adjudication.evidence
+        if item.outcome == "pass"
+    }
     rows: list[dict[str, Any]] = []
     for index, row in enumerate(group):
         stable_id = str(row["stable_id"])
@@ -2494,7 +2601,11 @@ def _director_candidate_rows(
             previous_text, next_text = _neighbor_texts(group, index, original_context)
             source_role = ANALYSIS_SOURCE_ROLE_CONTENT
             context_policy = ANALYSIS_CONTEXT_POLICY_ADJACENT
-            host_locked_fields = {}
+            host_locked_fields = (
+                {"emotion": semantic_locked_emotions[stable_id]}
+                if stable_id in semantic_locked_emotions
+                else {}
+            )
         rows.append(
             {
                 "id": _batch_id(index + 1),
@@ -3042,6 +3153,7 @@ def _adjudicate_director_critic(
     candidate_hash: str,
     confidence_cap: float = DIRECTOR_CONFIDENCE_MAX,
     confidence_floor: float = 0.0,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     stable_by_batch = {
         _batch_id(index): str(row["stable_id"])
@@ -3064,6 +3176,16 @@ def _adjudicate_director_critic(
     }
     evidence_by_stable = {
         str(item["stable_id"]): item for item in evidence["segments"]
+    }
+    host_adjudication = _host_affect_adjudication(
+        group,
+        validated,
+        original_context=original_context,
+    )
+    semantic_lock_by_stable = {
+        item.stable_id: item
+        for item in host_adjudication.evidence
+        if item.outcome == "pass"
     }
     if not isinstance(payload, dict) or set(payload) != DIRECTOR_CRITIC_ROOT_FIELDS:
         return (
@@ -3190,6 +3312,7 @@ def _adjudicate_director_critic(
         raw_accept = verdict.get("accept") is True
         accepted = raw_accept and not deltas
         structural_override: dict[str, Any] | None = None
+        semantic_override: dict[str, Any] | None = None
         heading_delivery_is_locked = (
             _is_explicit_chapter_heading(rows_by_stable[stable_id])
             and all(
@@ -3209,13 +3332,36 @@ def _adjudicate_director_critic(
                 "raw_field_deltas": deltas,
             }
             accepted = True
+        semantic_lock = semantic_lock_by_stable.get(stable_id)
+        delta_fields = tuple(delta.split(":", 1)[0] for delta in deltas)
+        if (
+            semantic_lock is not None
+            and not raw_accept
+            and delta_fields == ("emotion",)
+            and candidate["emotion"] == semantic_lock.candidate_emotion
+            and corrected["emotion"] not in semantic_lock.allowed_emotions
+        ):
+            semantic_override = {
+                "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                "stable_id": stable_id,
+                "text_sha256": _source_text_sha256(rows_by_stable[stable_id]),
+                "rule": semantic_lock.rule,
+                "field": "emotion",
+                "candidate_value": semantic_lock.candidate_emotion,
+                "allowed_values": list(semantic_lock.allowed_emotions),
+                "raw_accept": False,
+                "raw_field_deltas": deltas,
+            }
+            accepted = True
         if not accepted:
-            issues[stable_id] = (
-                "DIRECTOR_FIELD_MISMATCH fields="
-                + ",".join(delta.split(":", 1)[0] for delta in deltas)
-                if deltas
-                else "DIRECTOR_INVALID_RESPONSE reject_without_delta"
-            )
+            if raw_accept and deltas:
+                issues[stable_id] = "DIRECTOR_INVALID_RESPONSE accept_with_delta"
+            elif deltas:
+                issues[stable_id] = "DIRECTOR_FIELD_MISMATCH fields=" + ",".join(
+                    delta_fields
+                )
+            else:
+                issues[stable_id] = "DIRECTOR_INVALID_RESPONSE reject_without_delta"
         derived_confidence = min(
             max(0.0, float(candidate.get("confidence", 0.5))),
             critic_confidence,
@@ -3237,6 +3383,8 @@ def _adjudicate_director_critic(
         )
         if structural_override is not None:
             evidence_by_stable[stable_id]["host_structural_override"] = structural_override
+        if semantic_override is not None:
+            evidence_by_stable[stable_id]["host_semantic_override"] = semantic_override
         if accepted:
             candidate["confidence"] = derived_confidence
     if (
@@ -3935,6 +4083,7 @@ class OllamaBookAnalyzer:
                     candidate_hash=candidate_hash,
                     confidence_cap=confidence_cap,
                     confidence_floor=confidence_floor,
+                    original_context=original_context,
                 )
             except (AnalysisRequestStopped, AnalysisModelDigestError):
                 raise
@@ -4230,6 +4379,14 @@ class OllamaBookAnalyzer:
                             validated,
                             original_context=original_context,
                         )
+                        validation_feedback = _merge_feedback_issues(
+                            validation_feedback,
+                            tuple(
+                                item.feedback_issue()
+                                for item in host_adjudication.evidence
+                                if item.outcome == "pass"
+                            ),
+                        )
                         if host_adjudication.issues:
                             semantic_issues: dict[str, str] = {}
                             semantic_batch_collapsed = False
@@ -4468,7 +4625,6 @@ class OllamaBookAnalyzer:
                                 elif candidate_state == ANALYSIS_CANDIDATE_TERMINAL:
                                     received_director_critic_issues = True
                                     durable_critic_exhausted = True
-                                    validation_feedback = ()
                                     validated = {}
                                     last_error = (
                                         "durable director critic attempt budget is exhausted"
@@ -4554,6 +4710,7 @@ class OllamaBookAnalyzer:
                                             candidate_hash=candidate_hash,
                                             confidence_cap=director_confidence_cap,
                                             confidence_floor=confidence_threshold,
+                                            original_context=original_context,
                                         )
                                     )
                                     retryable_invalid = bool(critic_issues) and all(
@@ -4640,7 +4797,6 @@ class OllamaBookAnalyzer:
                         if critic_request_started:
                             validated = {}
                             received_director_critic_issues = True
-                            validation_feedback = ()
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
             if repeated_director_candidate and len(validated) != len(group) and len(group) > 1:

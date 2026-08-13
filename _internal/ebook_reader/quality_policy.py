@@ -17,7 +17,7 @@ HASH_CHUNK_BYTES = 1024 * 1024
 CHAPTER_QUALITY_STAGE = "chapter_post_encode_v1"
 SEGMENT_CONTENT_STAGE = "segment_asr_content_v1"
 TEXT_SEGMENTATION_STAGE = "text_segmentation_v1"
-ANALYSIS_CASTING_STAGE = "analysis_casting_v4"
+ANALYSIS_CASTING_STAGE = "analysis_casting_v5"
 TEXT_SEGMENTATION_IMPLEMENTATION_FILES = (
     "text_processing.py",
 )
@@ -111,7 +111,7 @@ def build_quality_policy(settings: dict[str, Any]) -> dict[str, Any]:
         "runtime_dependencies": installed_dependency_provenance(),
         "algorithms": {
             "text_parser": "spoken_token_invariant_v2",
-            "casting": "canonical_identity_structural_heading_director_ledger_v5",
+            "casting": "canonical_identity_host_semantic_lock_director_ledger_v6",
             "segment_signal": "signal_gate_v2",
             "asr_content": "locked_name_anchor_semantic_metrics_clarity_double_decode_v5",
             "perceptual_naturalness": "utmosv2_relative_voice_baseline_v1",

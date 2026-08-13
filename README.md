@@ -121,6 +121,8 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   mô tả mệt/bệnh đơn lẻ vẫn để director quyết định, tránh ép emotion chỉ bằng một keyword.
 - Các constraint deterministic đã xác minh được giữ xuyên suốt retry của cùng target group; sửa một câu sau không được làm
   câu trước quay lại nhãn đã bị host từ chối.
+- Critic vẫn lưu dissent thô với emotion nguồn đã khóa. Chỉ dissent đúng protocol, đổi riêng emotion ra ngoài tập host cho
+  phép mới được host override; response tự nhận accept nhưng đổi field hoặc reject mà không sửa field luôn bị từ chối.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
 - Từ tượng thanh như `rầm`, `uỳnh` ở nguyên trong câu của người kể hoặc nhân vật, được đọc và kiểm tra tốc độ như
