@@ -9,13 +9,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Sequence
 
-from .io_utils import sha256_file
+from .io_utils import sha256_file, sha256_text
 from .models import BookStatus, ChapterStatus, SegmentStatus
 
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -63,6 +63,61 @@ SEGMENT_CANDIDATE_FAILURE_STATES = frozenset(
     }
 )
 SEGMENT_CANDIDATE_EXHAUSTION_ACTION = "candidate_repair_exhausted"
+ANALYSIS_CANDIDATE_ALLOCATED = "allocated"
+ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT = "critic_in_flight"
+ANALYSIS_CANDIDATE_CRITIC_INVALID = "critic_invalid"
+ANALYSIS_CANDIDATE_CRITIC_ACCEPTED = "critic_accepted"
+ANALYSIS_CANDIDATE_CRITIC_REJECTED = "critic_rejected"
+ANALYSIS_CANDIDATE_ACCEPTED = "accepted"
+ANALYSIS_CANDIDATE_TERMINAL = "terminal"
+ANALYSIS_CANDIDATE_SUPERSEDED = "superseded"
+ANALYSIS_CANDIDATE_STATES = frozenset(
+    {
+        ANALYSIS_CANDIDATE_ALLOCATED,
+        ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT,
+        ANALYSIS_CANDIDATE_CRITIC_INVALID,
+        ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+        ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+        ANALYSIS_CANDIDATE_ACCEPTED,
+        ANALYSIS_CANDIDATE_TERMINAL,
+        ANALYSIS_CANDIDATE_SUPERSEDED,
+    }
+)
+ANALYSIS_CRITIC_ATTEMPT_RESERVED = "reserved"
+ANALYSIS_CRITIC_ATTEMPT_COMPLETED = "completed"
+ANALYSIS_CRITIC_ATTEMPT_ABANDONED = "abandoned"
+ANALYSIS_CRITIC_ATTEMPT_STATES = frozenset(
+    {
+        ANALYSIS_CRITIC_ATTEMPT_RESERVED,
+        ANALYSIS_CRITIC_ATTEMPT_COMPLETED,
+        ANALYSIS_CRITIC_ATTEMPT_ABANDONED,
+    }
+)
+ANALYSIS_ACCEPTED_DELIVERY_FIELDS = frozenset(
+    {
+        "kind",
+        "speaker",
+        "gender",
+        "age",
+        "emotion",
+        "intensity",
+        "pace",
+        "volume",
+        "confidence",
+        "personality_hint",
+        "notes",
+    }
+)
+ANALYSIS_PRONUNCIATION_FIELDS = frozenset(
+    {
+        "surface",
+        "normalized_surface",
+        "spoken_form",
+        "confidence",
+        "source",
+        "locked",
+    }
+)
 
 
 SCHEMA = """
@@ -320,6 +375,97 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     )
 );
 
+CREATE TABLE IF NOT EXISTS analysis_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    policy_fingerprint TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    model_digest TEXT NOT NULL,
+    group_fingerprint TEXT NOT NULL,
+    context_hash TEXT NOT NULL,
+    candidate_hash TEXT NOT NULL,
+    candidate_json TEXT NOT NULL,
+    envelope_hash TEXT NOT NULL,
+    commit_envelope_json TEXT,
+    commit_envelope_hash TEXT,
+    state TEXT NOT NULL CHECK (
+        state IN (
+            'allocated','critic_in_flight','critic_invalid','critic_accepted',
+            'critic_rejected','accepted','terminal','superseded'
+        )
+    ),
+    initial_generator_contract_json TEXT NOT NULL,
+    initial_generator_contract_hash TEXT NOT NULL,
+    deterministic_issue_json TEXT NOT NULL,
+    deterministic_issue_hash TEXT NOT NULL,
+    critic_attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (critic_attempt_count >= 0),
+    critic_max_attempts INTEGER NOT NULL CHECK (critic_max_attempts >= 1),
+    terminal_reason TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    accepted_at REAL,
+    UNIQUE(
+        policy_fingerprint,model_name,model_digest,group_fingerprint,context_hash,candidate_hash
+    ),
+    CHECK (critic_attempt_count <= critic_max_attempts),
+    CHECK (
+        (commit_envelope_json IS NULL AND commit_envelope_hash IS NULL)
+        OR (commit_envelope_json IS NOT NULL AND commit_envelope_hash IS NOT NULL)
+    ),
+    CHECK (
+        state NOT IN ('critic_accepted','accepted') OR commit_envelope_json IS NOT NULL
+    ),
+    CHECK (
+        (state = 'accepted' AND accepted_at IS NOT NULL)
+        OR (state <> 'accepted' AND accepted_at IS NULL)
+    ),
+    CHECK (
+        state NOT IN ('terminal','superseded') OR terminal_reason IS NOT NULL
+    )
+);
+
+CREATE TABLE IF NOT EXISTS analysis_candidate_generator_contracts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_candidate_id INTEGER NOT NULL
+        REFERENCES analysis_candidates(id) ON DELETE CASCADE,
+    generator_contract_hash TEXT NOT NULL,
+    generator_contract_json TEXT NOT NULL,
+    first_seen_at REAL NOT NULL,
+    last_seen_at REAL NOT NULL,
+    occurrence_count INTEGER NOT NULL DEFAULT 1 CHECK (occurrence_count >= 1),
+    UNIQUE(analysis_candidate_id,generator_contract_hash)
+);
+
+CREATE TABLE IF NOT EXISTS analysis_critic_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_candidate_id INTEGER NOT NULL
+        REFERENCES analysis_candidates(id) ON DELETE CASCADE,
+    attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+    state TEXT NOT NULL CHECK (state IN ('reserved','completed','abandoned')),
+    intent_json TEXT NOT NULL,
+    intent_hash TEXT NOT NULL,
+    contract_json TEXT NOT NULL,
+    contract_hash TEXT NOT NULL,
+    outcome_json TEXT,
+    outcome_hash TEXT,
+    evidence_json TEXT,
+    evidence_hash TEXT,
+    completion_hash TEXT,
+    reserved_at REAL NOT NULL,
+    completed_at REAL,
+    UNIQUE(analysis_candidate_id,attempt_number),
+    CHECK (
+        (state = 'reserved' AND completed_at IS NULL AND outcome_json IS NULL
+            AND outcome_hash IS NULL AND evidence_json IS NULL AND evidence_hash IS NULL
+            AND completion_hash IS NULL)
+        OR (state = 'completed' AND completed_at IS NOT NULL AND outcome_json IS NOT NULL
+            AND outcome_hash IS NOT NULL AND evidence_json IS NOT NULL
+            AND evidence_hash IS NOT NULL AND completion_hash IS NOT NULL)
+        OR (state = 'abandoned' AND completed_at IS NOT NULL AND outcome_json IS NULL
+            AND outcome_hash IS NULL AND evidence_json IS NULL AND evidence_hash IS NULL
+            AND completion_hash IS NULL)
+    )
+);
+
 CREATE TABLE IF NOT EXISTS runtime_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp REAL NOT NULL,
@@ -351,6 +497,17 @@ CREATE INDEX IF NOT EXISTS idx_quality_checks_chapter
     ON quality_checks(chapter_id, stage, policy_hash, id);
 CREATE INDEX IF NOT EXISTS idx_segment_candidates_resume
     ON segment_candidates(segment_id, policy_hash, state, repair_round);
+CREATE INDEX IF NOT EXISTS idx_analysis_candidates_exact
+    ON analysis_candidates(
+        policy_fingerprint,model_name,model_digest,group_fingerprint,context_hash,candidate_hash
+    );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_candidates_actionable_scope
+    ON analysis_candidates(
+        policy_fingerprint,model_name,model_digest,group_fingerprint,context_hash
+    )
+    WHERE state IN ('allocated','critic_in_flight','critic_invalid','critic_accepted');
+CREATE INDEX IF NOT EXISTS idx_analysis_critic_attempts_candidate
+    ON analysis_critic_attempts(analysis_candidate_id,attempt_number);
 """
 
 
@@ -530,6 +687,87 @@ class ProjectDB:
             raise RuntimeError(
                 "segment_candidates schema is incomplete: "
                 + ", ".join(sorted(missing_candidate_columns))
+            )
+
+        required_analysis_candidate_columns = {
+            "id",
+            "policy_fingerprint",
+            "model_name",
+            "model_digest",
+            "group_fingerprint",
+            "context_hash",
+            "candidate_hash",
+            "candidate_json",
+            "envelope_hash",
+            "commit_envelope_json",
+            "commit_envelope_hash",
+            "state",
+            "initial_generator_contract_json",
+            "initial_generator_contract_hash",
+            "deterministic_issue_json",
+            "deterministic_issue_hash",
+            "critic_attempt_count",
+            "critic_max_attempts",
+            "terminal_reason",
+            "created_at",
+            "updated_at",
+            "accepted_at",
+        }
+        analysis_candidate_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(analysis_candidates)")
+        }
+        if analysis_candidate_columns and "envelope_hash" not in analysis_candidate_columns:
+            conn.execute("ALTER TABLE analysis_candidates ADD COLUMN envelope_hash TEXT")
+            conn.execute(
+                "UPDATE analysis_candidates SET envelope_hash=candidate_hash "
+                "WHERE envelope_hash IS NULL"
+            )
+        if analysis_candidate_columns and "commit_envelope_json" not in analysis_candidate_columns:
+            conn.execute(
+                "ALTER TABLE analysis_candidates ADD COLUMN commit_envelope_json TEXT"
+            )
+        if analysis_candidate_columns and "commit_envelope_hash" not in analysis_candidate_columns:
+            conn.execute(
+                "ALTER TABLE analysis_candidates ADD COLUMN commit_envelope_hash TEXT"
+            )
+        analysis_candidate_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(analysis_candidates)")
+        }
+        missing_analysis_candidate_columns = (
+            required_analysis_candidate_columns - analysis_candidate_columns
+        )
+        if missing_analysis_candidate_columns:
+            raise RuntimeError(
+                "analysis_candidates schema is incomplete: "
+                + ", ".join(sorted(missing_analysis_candidate_columns))
+            )
+        required_analysis_attempt_columns = {
+            "id",
+            "analysis_candidate_id",
+            "attempt_number",
+            "state",
+            "intent_json",
+            "intent_hash",
+            "contract_json",
+            "contract_hash",
+            "outcome_json",
+            "outcome_hash",
+            "evidence_json",
+            "evidence_hash",
+            "completion_hash",
+            "reserved_at",
+            "completed_at",
+        }
+        analysis_attempt_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(analysis_critic_attempts)")
+        }
+        missing_analysis_attempt_columns = (
+            required_analysis_attempt_columns - analysis_attempt_columns
+        )
+        if missing_analysis_attempt_columns:
+            raise RuntimeError(
+                "analysis_critic_attempts schema is incomplete: "
+                + ", ".join(sorted(missing_analysis_attempt_columns))
             )
 
     @contextmanager
@@ -870,6 +1108,1397 @@ class ProjectDB:
         ]
         return "|".join(values) or None
 
+    @staticmethod
+    def _canonical_analysis_json(value: Any, label: str) -> tuple[str, str]:
+        try:
+            payload = json.dumps(
+                value,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be finite canonical JSON") from exc
+        return payload, sha256_text(payload)
+
+    @staticmethod
+    def _analysis_candidate_identity(
+        *,
+        policy_fingerprint: str,
+        model_name: str,
+        model_digest: str,
+        group_fingerprint: str,
+        context_hash: str,
+        candidate_hash: str,
+    ) -> tuple[str, str, str, str, str, str]:
+        identity = tuple(
+            str(value).strip()
+            for value in (
+                policy_fingerprint,
+                model_name,
+                model_digest,
+                group_fingerprint,
+                context_hash,
+                candidate_hash,
+            )
+        )
+        if any(not value for value in identity):
+            raise ValueError("Analysis candidate identity fields must be non-empty")
+        return identity  # type: ignore[return-value]
+
+    @classmethod
+    def _analysis_candidate_commit_rows(
+        cls,
+        candidate_json: str,
+    ) -> dict[str, dict[str, Any]]:
+        try:
+            candidate = json.loads(candidate_json)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Durable analysis candidate JSON is invalid") from exc
+        if not isinstance(candidate, dict) or set(candidate) != {
+            "segments",
+            "pronunciations",
+            "critic_rows",
+        }:
+            raise ValueError(
+                "Analysis acceptance envelope requires exact segments/pronunciations/critic_rows"
+            )
+        segment_items = candidate.get("segments")
+        if not isinstance(segment_items, list) or not segment_items:
+            raise ValueError("Analysis candidate must contain a non-empty segments array")
+        commit_rows: dict[str, dict[str, Any]] = {}
+        for item in segment_items:
+            if not isinstance(item, dict) or set(item) != {
+                "segment_id",
+                "stable_id",
+                "text_sha256",
+                "data",
+            }:
+                raise ValueError(
+                    "Analysis candidate segments require exact segment_id/stable_id/"
+                    "text_sha256/data fields"
+                )
+            stable_id = str(item["stable_id"]).strip()
+            text_sha256 = str(item["text_sha256"]).strip()
+            data = item["data"]
+            if (
+                type(item["segment_id"]) is not int
+                or int(item["segment_id"]) < 1
+                or not stable_id
+                or not text_sha256
+                or not isinstance(data, dict)
+                or not data
+            ):
+                raise ValueError("Analysis candidate segment provenance is incomplete")
+            if set(data) != ANALYSIS_ACCEPTED_DELIVERY_FIELDS:
+                raise ValueError(
+                    "Analysis candidate segment data does not contain the full validated delivery"
+                )
+            if stable_id in commit_rows:
+                raise ValueError("Analysis candidate contains duplicate stable IDs")
+            data_json, _data_hash = cls._canonical_analysis_json(
+                data,
+                "analysis candidate segment data",
+            )
+            commit_rows[stable_id] = {
+                "segment_id": int(item["segment_id"]),
+                "stable_id": stable_id,
+                "text_sha256": text_sha256,
+                "data_json": data_json,
+            }
+        pronunciation_items = candidate["pronunciations"]
+        if not isinstance(pronunciation_items, list):
+            raise ValueError("Analysis candidate pronunciations must be an array")
+        normalized_surfaces: set[str] = set()
+        for pronunciation in pronunciation_items:
+            if (
+                not isinstance(pronunciation, dict)
+                or set(pronunciation) != ANALYSIS_PRONUNCIATION_FIELDS
+            ):
+                raise ValueError(
+                    "Analysis candidate pronunciation does not contain validated fields"
+                )
+            normalized_surface = str(pronunciation["normalized_surface"]).strip()
+            if not normalized_surface or normalized_surface in normalized_surfaces:
+                raise ValueError(
+                    "Analysis candidate pronunciations require unique normalized surfaces"
+                )
+            normalized_surfaces.add(normalized_surface)
+        critic_rows = candidate["critic_rows"]
+        if (
+            not isinstance(critic_rows, list)
+            or len(critic_rows) != len(segment_items)
+            or any(not isinstance(row, dict) or not row for row in critic_rows)
+        ):
+            raise ValueError(
+                "Analysis acceptance envelope requires one non-empty critic row per segment"
+            )
+        critic_delivery_fields = (
+            "kind",
+            "speaker",
+            "emotion",
+            "intensity",
+            "pace",
+            "volume",
+        )
+        for index, (segment, critic_row) in enumerate(
+            zip(segment_items, critic_rows, strict=True),
+            1,
+        ):
+            candidate_delivery = critic_row.get("candidate")
+            if (
+                set(critic_row) != {
+                    "id",
+                    "paragraph",
+                    "hint",
+                    "previous_text",
+                    "text",
+                    "next_text",
+                    "candidate",
+                    "batch_signature_count",
+                }
+                or str(critic_row.get("id", "")) != f"S{index:03d}"
+                or type(critic_row.get("paragraph")) is not int
+                or int(critic_row["paragraph"]) < 0
+                or not isinstance(critic_row.get("hint"), str)
+                or not isinstance(critic_row.get("previous_text"), str)
+                or not isinstance(critic_row.get("text"), str)
+                or not isinstance(critic_row.get("next_text"), str)
+                or type(critic_row.get("batch_signature_count")) is not int
+                or int(critic_row["batch_signature_count"]) < 1
+                or sha256_text(str(critic_row["text"]))
+                != str(segment["text_sha256"])
+                or not isinstance(candidate_delivery, dict)
+                or set(candidate_delivery) != set(critic_delivery_fields)
+                or any(
+                    candidate_delivery[field] != segment["data"][field]
+                    for field in critic_delivery_fields
+                )
+            ):
+                raise ValueError(
+                    "Analysis critic rows do not map exactly to source IDs/hashes/delivery"
+                )
+        return commit_rows
+
+    @classmethod
+    def _validate_analysis_acceptance_evidence(
+        cls,
+        candidate_json: str,
+        commit_envelope_json: str,
+        evidence: dict[str, Any],
+        reserved_contract_json: str,
+    ) -> None:
+        candidate = json.loads(candidate_json)
+        commit = json.loads(commit_envelope_json)
+        candidate_segments = {
+            str(item["stable_id"]): item for item in candidate["segments"]
+        }
+        commit_segments = {
+            str(item["stable_id"]): item for item in commit["segments"]
+        }
+        critic_rows = candidate["critic_rows"]
+        critic_delivery_by_stable = {
+            str(segment["stable_id"]): dict(critic_row["candidate"])
+            for segment, critic_row in zip(
+                candidate["segments"],
+                critic_rows,
+                strict=True,
+            )
+        }
+        try:
+            reserved_contract = json.loads(reserved_contract_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Reserved critic contract JSON is invalid") from exc
+        canonical_reserved_contract, _reserved_contract_hash = cls._canonical_analysis_json(
+            reserved_contract,
+            "reserved analysis critic contract",
+        )
+        critic_contract = evidence.get("critic_contract")
+        if not isinstance(critic_contract, dict):
+            raise ValueError("Accepted critic evidence requires its durable critic contract")
+        canonical_evidence_contract, _evidence_contract_hash = cls._canonical_analysis_json(
+            critic_contract,
+            "accepted critic evidence contract",
+        )
+        if canonical_evidence_contract != canonical_reserved_contract:
+            raise RuntimeError(
+                "Accepted critic evidence contract differs from the reserved request contract"
+            )
+        if not str(critic_contract.get("policy_version", "")).strip():
+            raise RuntimeError("Accepted critic evidence contract lacks its policy version")
+        evidence_segments = evidence.get("segments")
+        if not isinstance(evidence_segments, list):
+            raise ValueError("Accepted critic evidence requires a segments array")
+        evidence_by_stable: dict[str, dict[str, Any]] = {}
+        for item in evidence_segments:
+            if not isinstance(item, dict):
+                raise ValueError("Accepted critic segment evidence must be an object")
+            stable_id = str(item.get("stable_id", ""))
+            if not stable_id or stable_id in evidence_by_stable:
+                raise ValueError("Accepted critic evidence contains invalid stable IDs")
+            evidence_by_stable[stable_id] = item
+        if set(evidence_by_stable) != set(candidate_segments):
+            raise ValueError("Accepted critic evidence segment set differs from candidate")
+        delivery_fields = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
+        for stable_id, item in evidence_by_stable.items():
+            candidate_projection = critic_delivery_by_stable[stable_id]
+            critic = item.get("critic")
+            derived_confidence = item.get("derived_confidence")
+            generator_confidence = candidate_segments[stable_id]["data"].get("confidence")
+            critic_confidence = critic.get("confidence") if isinstance(critic, dict) else None
+            confidence_cap = (
+                critic_contract.get("confidence_cap")
+                if isinstance(critic_contract, dict)
+                else None
+            )
+            numeric_confidences = (
+                generator_confidence,
+                critic_confidence,
+                confidence_cap,
+                derived_confidence,
+            )
+            if (
+                str(item.get("text_sha256", ""))
+                != str(candidate_segments[stable_id]["text_sha256"])
+                or item.get("candidate") != candidate_projection
+                or item.get("field_deltas") != []
+                or not isinstance(critic, dict)
+                or critic.get("accept") is not True
+                or any(critic.get(field) != candidate_projection[field] for field in delivery_fields)
+                or any(type(value) not in {int, float} for value in numeric_confidences)
+                or any(not math.isfinite(float(value)) for value in numeric_confidences)
+                or float(derived_confidence)
+                != min(
+                    float(generator_confidence),
+                    float(critic_confidence),
+                    float(confidence_cap),
+                )
+                or float(commit_segments[stable_id]["data"]["confidence"])
+                != float(derived_confidence)
+            ):
+                raise RuntimeError(
+                    "Accepted critic evidence does not bind exact delivery/confidence for "
+                    f"{stable_id}"
+                )
+
+    @classmethod
+    def _validated_analysis_commit_envelope(
+        cls,
+        candidate_json: str,
+        commit_envelope: dict[str, Any],
+    ) -> tuple[str, str]:
+        commit_json, commit_hash = cls._canonical_analysis_json(
+            commit_envelope,
+            "analysis commit envelope",
+        )
+        candidate_rows = cls._analysis_candidate_commit_rows(candidate_json)
+        commit_rows = cls._analysis_candidate_commit_rows(commit_json)
+        candidate = json.loads(candidate_json)
+        commit = json.loads(commit_json)
+        for field in ("critic_rows", "pronunciations"):
+            candidate_field_json, _candidate_field_hash = cls._canonical_analysis_json(
+                candidate[field],
+                f"analysis candidate {field}",
+            )
+            commit_field_json, _commit_field_hash = cls._canonical_analysis_json(
+                commit[field],
+                f"analysis commit {field}",
+            )
+            if candidate_field_json != commit_field_json:
+                raise RuntimeError(
+                    f"Analysis commit envelope changed immutable {field}"
+                )
+        if set(candidate_rows) != set(commit_rows):
+            raise RuntimeError("Analysis commit envelope changed the candidate segment set")
+        candidate_segments = {
+            str(item["stable_id"]): item for item in candidate["segments"]
+        }
+        commit_segments = {
+            str(item["stable_id"]): item for item in commit["segments"]
+        }
+        for stable_id, candidate_row in candidate_rows.items():
+            commit_row = commit_rows[stable_id]
+            if (
+                int(candidate_row["segment_id"]) != int(commit_row["segment_id"])
+                or str(candidate_row["text_sha256"]) != str(commit_row["text_sha256"])
+            ):
+                raise RuntimeError(
+                    "Analysis commit envelope changed segment source provenance"
+                )
+            candidate_data = dict(candidate_segments[stable_id]["data"])
+            commit_data = dict(commit_segments[stable_id]["data"])
+            candidate_confidence = candidate_data.pop("confidence")
+            commit_confidence = commit_data.pop("confidence")
+            if candidate_data != commit_data:
+                raise RuntimeError(
+                    "Analysis commit envelope changed critic-visible delivery data"
+                )
+            if (
+                type(candidate_confidence) not in {int, float}
+                or type(commit_confidence) not in {int, float}
+                or not 0.0 <= float(commit_confidence) <= float(candidate_confidence) <= 1.0
+            ):
+                raise RuntimeError(
+                    "Analysis commit envelope confidence is not a bounded critic cap"
+                )
+        return commit_json, commit_hash
+
+    @classmethod
+    def _analysis_candidate_row_conn(
+        cls,
+        conn: sqlite3.Connection,
+        analysis_candidate_id: int,
+    ) -> sqlite3.Row:
+        row = conn.execute(
+            "SELECT * FROM analysis_candidates WHERE id=?",
+            (int(analysis_candidate_id),),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Unknown analysis candidate id: {analysis_candidate_id}")
+        try:
+            candidate = json.loads(str(row["candidate_json"]))
+            generator_contract = json.loads(
+                str(row["initial_generator_contract_json"])
+            )
+            deterministic_issues = json.loads(str(row["deterministic_issue_json"]))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Analysis candidate ledger contains invalid JSON") from exc
+        candidate_json, envelope_hash = cls._canonical_analysis_json(
+            candidate,
+            "stored analysis candidate",
+        )
+        cls._analysis_candidate_commit_rows(candidate_json)
+        _critic_json, candidate_hash = cls._canonical_analysis_json(
+            candidate["critic_rows"],
+            "stored analysis critic rows",
+        )
+        generator_json, generator_hash = cls._canonical_analysis_json(
+            generator_contract,
+            "stored analysis generator contract",
+        )
+        issue_json, issue_hash = cls._canonical_analysis_json(
+            deterministic_issues,
+            "stored deterministic analysis issues",
+        )
+        if (
+            str(row["candidate_json"]) != candidate_json
+            or str(row["candidate_hash"]) != candidate_hash
+            or str(row["envelope_hash"]) != envelope_hash
+            or str(row["initial_generator_contract_json"]) != generator_json
+            or str(row["initial_generator_contract_hash"]) != generator_hash
+            or str(row["deterministic_issue_json"]) != issue_json
+            or str(row["deterministic_issue_hash"]) != issue_hash
+        ):
+            raise RuntimeError("Analysis candidate ledger hash verification failed")
+        if row["commit_envelope_json"] is not None:
+            try:
+                commit_envelope = json.loads(str(row["commit_envelope_json"]))
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Analysis commit envelope contains invalid JSON") from exc
+            commit_json, commit_hash = cls._validated_analysis_commit_envelope(
+                candidate_json,
+                commit_envelope,
+            )
+            if (
+                str(row["commit_envelope_json"]) != commit_json
+                or str(row["commit_envelope_hash"]) != commit_hash
+            ):
+                raise RuntimeError("Analysis commit envelope hash verification failed")
+        return row
+
+    @classmethod
+    def _analysis_critic_attempt_row_conn(
+        cls,
+        conn: sqlite3.Connection,
+        analysis_candidate_id: int,
+        attempt_number: int,
+    ) -> sqlite3.Row:
+        row = conn.execute(
+            "SELECT * FROM analysis_critic_attempts "
+            "WHERE analysis_candidate_id=? AND attempt_number=?",
+            (int(analysis_candidate_id), int(attempt_number)),
+        ).fetchone()
+        if row is None:
+            raise KeyError(
+                "Unknown analysis critic attempt: "
+                f"candidate={analysis_candidate_id}, attempt={attempt_number}"
+            )
+        try:
+            intent = json.loads(str(row["intent_json"]))
+            contract = json.loads(str(row["contract_json"]))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Analysis critic intent ledger contains invalid JSON") from exc
+        intent_json, intent_hash = cls._canonical_analysis_json(
+            intent,
+            "stored analysis critic intent",
+        )
+        contract_json, contract_hash = cls._canonical_analysis_json(
+            contract,
+            "stored analysis critic contract",
+        )
+        if (
+            str(row["intent_json"]) != intent_json
+            or str(row["intent_hash"]) != intent_hash
+            or str(row["contract_json"]) != contract_json
+            or str(row["contract_hash"]) != contract_hash
+        ):
+            raise RuntimeError("Analysis critic intent hash verification failed")
+        if str(row["state"]) == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
+            candidate = cls._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            try:
+                outcome = json.loads(str(row["outcome_json"]))
+                evidence = json.loads(str(row["evidence_json"]))
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(
+                    "Analysis critic completion ledger contains invalid JSON"
+                ) from exc
+            outcome_json, outcome_hash = cls._canonical_analysis_json(
+                outcome,
+                "stored analysis critic outcome",
+            )
+            evidence_json, evidence_hash = cls._canonical_analysis_json(
+                evidence,
+                "stored analysis critic evidence",
+            )
+            completion_candidate_state = str(outcome.get("candidate_state", ""))
+            completion_envelope_hash = (
+                candidate["commit_envelope_hash"]
+                if completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+                else None
+            )
+            _completion_json, completion_hash = cls._canonical_analysis_json(
+                {
+                    "commit_envelope_hash": completion_envelope_hash,
+                    "contract_hash": contract_hash,
+                    "evidence_hash": evidence_hash,
+                    "intent_hash": intent_hash,
+                    "outcome_hash": outcome_hash,
+                },
+                "stored analysis critic completion",
+            )
+            if (
+                str(row["outcome_json"]) != outcome_json
+                or str(row["outcome_hash"]) != outcome_hash
+                or str(row["evidence_json"]) != evidence_json
+                or str(row["evidence_hash"]) != evidence_hash
+                or str(row["completion_hash"]) != completion_hash
+            ):
+                raise RuntimeError("Analysis critic completion hash verification failed")
+        return row
+
+    @classmethod
+    def _validate_analysis_critic_attempt_history_conn(
+        cls,
+        conn: sqlite3.Connection,
+        analysis_candidate_id: int,
+        expected_count: int,
+        parent_state: str | None = None,
+    ) -> list[sqlite3.Row]:
+        rows = list(
+            conn.execute(
+                "SELECT * FROM analysis_critic_attempts "
+                "WHERE analysis_candidate_id=? ORDER BY attempt_number",
+                (int(analysis_candidate_id),),
+            )
+        )
+        if len(rows) != int(expected_count) or [
+            int(row["attempt_number"]) for row in rows
+        ] != list(range(1, int(expected_count) + 1)):
+            raise RuntimeError("Analysis critic attempt history is not contiguous")
+        validated = [
+            cls._analysis_critic_attempt_row_conn(
+                conn,
+                analysis_candidate_id,
+                int(row["attempt_number"]),
+            )
+            for row in rows
+        ]
+        if not validated:
+            if parent_state not in {None, ANALYSIS_CANDIDATE_ALLOCATED}:
+                raise RuntimeError("Analysis candidate state has no critic attempt history")
+            return validated
+        last = validated[-1]
+        last_state = str(last["state"])
+        if parent_state == ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT:
+            if last_state != ANALYSIS_CRITIC_ATTEMPT_RESERVED:
+                raise RuntimeError("In-flight analysis candidate lacks a reserved final attempt")
+        elif parent_state in {
+            ANALYSIS_CANDIDATE_CRITIC_INVALID,
+            ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+            ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+        }:
+            if last_state != ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
+                raise RuntimeError("Analysis candidate final critic attempt is not completed")
+            outcome = json.loads(str(last["outcome_json"]))
+            if str(outcome.get("candidate_state", "")) != parent_state:
+                raise RuntimeError("Analysis candidate state differs from its final critic outcome")
+        for prior in validated[:-1]:
+            if str(prior["state"]) == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
+                outcome = json.loads(str(prior["outcome_json"]))
+                if str(outcome.get("candidate_state", "")) != ANALYSIS_CANDIDATE_CRITIC_INVALID:
+                    raise RuntimeError("Non-final critic completion is not a retryable invalid result")
+            elif str(prior["state"]) != ANALYSIS_CRITIC_ATTEMPT_ABANDONED:
+                raise RuntimeError("Non-final critic attempt has an invalid durable state")
+        return validated
+
+    @classmethod
+    def _analysis_generator_contract_row(
+        cls,
+        row: sqlite3.Row,
+    ) -> sqlite3.Row:
+        try:
+            contract = json.loads(str(row["generator_contract_json"]))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "Analysis generator contract ledger contains invalid JSON"
+            ) from exc
+        contract_json, contract_hash = cls._canonical_analysis_json(
+            contract,
+            "stored analysis generator contract",
+        )
+        if (
+            str(row["generator_contract_json"]) != contract_json
+            or str(row["generator_contract_hash"]) != contract_hash
+        ):
+            raise RuntimeError("Analysis generator contract hash verification failed")
+        return row
+
+    @classmethod
+    def _validate_analysis_generator_contract_history_conn(
+        cls,
+        conn: sqlite3.Connection,
+        analysis_candidate_id: int,
+        *,
+        require_nonempty: bool = True,
+    ) -> list[sqlite3.Row]:
+        rows = list(
+            conn.execute(
+                "SELECT * FROM analysis_candidate_generator_contracts "
+                "WHERE analysis_candidate_id=? ORDER BY id",
+                (int(analysis_candidate_id),),
+            )
+        )
+        if require_nonempty and not rows:
+            raise RuntimeError("Analysis candidate has no generator contract history")
+        return [cls._analysis_generator_contract_row(row) for row in rows]
+
+    @classmethod
+    def _record_analysis_generator_contract_conn(
+        cls,
+        conn: sqlite3.Connection,
+        analysis_candidate_id: int,
+        contract_json: str,
+        contract_hash: str,
+        now: float,
+    ) -> None:
+        rows = cls._validate_analysis_generator_contract_history_conn(
+            conn,
+            analysis_candidate_id,
+            require_nonempty=False,
+        )
+        existing = next(
+            (
+                row
+                for row in rows
+                if str(row["generator_contract_hash"]) == contract_hash
+            ),
+            None,
+        )
+        if existing is not None:
+            if str(existing["generator_contract_json"]) != contract_json:
+                raise RuntimeError("Analysis generator contract hash collision")
+            return
+        conn.execute(
+            """
+            INSERT INTO analysis_candidate_generator_contracts(
+                analysis_candidate_id,generator_contract_hash,generator_contract_json,
+                first_seen_at,last_seen_at,occurrence_count
+            ) VALUES(?,?,?,?,?,1)
+            """,
+            (int(analysis_candidate_id), contract_hash, contract_json, now, now),
+        )
+
+    def allocate_or_resume_analysis_candidate(
+        self,
+        *,
+        policy_fingerprint: str,
+        model_name: str,
+        model_digest: str,
+        group_fingerprint: str,
+        context_hash: str,
+        candidate_hash: str,
+        candidate: Any,
+        generator_contract: dict[str, Any],
+        deterministic_issues: dict[str, Any],
+        critic_max_attempts: int,
+    ) -> sqlite3.Row:
+        identity = self._analysis_candidate_identity(
+            policy_fingerprint=policy_fingerprint,
+            model_name=model_name,
+            model_digest=model_digest,
+            group_fingerprint=group_fingerprint,
+            context_hash=context_hash,
+            candidate_hash=candidate_hash,
+        )
+        if not isinstance(candidate, dict):
+            raise ValueError("Analysis candidate must be a JSON object")
+        if not isinstance(generator_contract, dict):
+            raise ValueError("Analysis generator contract must be a JSON object")
+        if not isinstance(deterministic_issues, dict):
+            raise ValueError("Deterministic analysis issues must be a JSON object")
+        normalized_budget = int(critic_max_attempts)
+        if normalized_budget < 1:
+            raise ValueError("Analysis critic attempt budget must be positive")
+        candidate_json, envelope_hash = self._canonical_analysis_json(
+            candidate,
+            "analysis candidate",
+        )
+        self._analysis_candidate_commit_rows(candidate_json)
+        _critic_rows_json, computed_candidate_hash = self._canonical_analysis_json(
+            candidate["critic_rows"],
+            "analysis candidate critic rows",
+        )
+        if identity[-1] != computed_candidate_hash:
+            raise ValueError(
+                "Analysis candidate hash does not match the critic-visible rows"
+            )
+        generator_json, generator_hash = self._canonical_analysis_json(
+            generator_contract,
+            "analysis generator contract",
+        )
+        issue_json, issue_hash = self._canonical_analysis_json(
+            deterministic_issues,
+            "deterministic analysis issues",
+        )
+        now = time.time()
+        with self.transaction() as conn:
+            existing = conn.execute(
+                """
+                SELECT * FROM analysis_candidates
+                WHERE policy_fingerprint=? AND model_name=? AND model_digest=?
+                  AND group_fingerprint=? AND context_hash=? AND candidate_hash=?
+                """,
+                identity,
+            ).fetchone()
+            if existing is None:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO analysis_candidates(
+                        policy_fingerprint,model_name,model_digest,group_fingerprint,
+                        context_hash,candidate_hash,candidate_json,envelope_hash,state,
+                        initial_generator_contract_json,initial_generator_contract_hash,
+                        deterministic_issue_json,deterministic_issue_hash,
+                        critic_attempt_count,critic_max_attempts,created_at,updated_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?,?,?)
+                    """,
+                    (
+                        *identity,
+                        candidate_json,
+                        envelope_hash,
+                        ANALYSIS_CANDIDATE_ALLOCATED,
+                        generator_json,
+                        generator_hash,
+                        issue_json,
+                        issue_hash,
+                        normalized_budget,
+                        now,
+                        now,
+                    ),
+                )
+                analysis_candidate_id = int(cursor.lastrowid)
+            else:
+                analysis_candidate_id = int(existing["id"])
+                if (
+                    str(existing["candidate_json"]) != candidate_json
+                    or str(existing["envelope_hash"]) != envelope_hash
+                    or str(existing["deterministic_issue_json"]) != issue_json
+                    or str(existing["deterministic_issue_hash"]) != issue_hash
+                    or int(existing["critic_max_attempts"]) != normalized_budget
+                ):
+                    raise RuntimeError(
+                        "Analysis candidate replay differs from its durable identity ledger"
+                    )
+            self._record_analysis_generator_contract_conn(
+                conn,
+                analysis_candidate_id,
+                generator_json,
+                generator_hash,
+                now,
+            )
+            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+
+    def get_analysis_candidate(self, analysis_candidate_id: int) -> sqlite3.Row:
+        with self.connect() as conn:
+            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+
+    def record_analysis_candidate_generator_contract(
+        self,
+        analysis_candidate_id: int,
+        generator_contract: dict[str, Any],
+    ) -> sqlite3.Row:
+        if not isinstance(generator_contract, dict):
+            raise ValueError("Analysis generator contract must be a JSON object")
+        contract_json, contract_hash = self._canonical_analysis_json(
+            generator_contract,
+            "analysis generator contract",
+        )
+        now = time.time()
+        with self.transaction() as conn:
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._record_analysis_generator_contract_conn(
+                conn,
+                int(candidate["id"]),
+                contract_json,
+                contract_hash,
+                now,
+            )
+            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+
+    def get_analysis_candidate_exact(
+        self,
+        *,
+        policy_fingerprint: str,
+        model_name: str,
+        model_digest: str,
+        group_fingerprint: str,
+        context_hash: str,
+        candidate_hash: str,
+    ) -> sqlite3.Row | None:
+        identity = self._analysis_candidate_identity(
+            policy_fingerprint=policy_fingerprint,
+            model_name=model_name,
+            model_digest=model_digest,
+            group_fingerprint=group_fingerprint,
+            context_hash=context_hash,
+            candidate_hash=candidate_hash,
+        )
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM analysis_candidates
+                WHERE policy_fingerprint=? AND model_name=? AND model_digest=?
+                  AND group_fingerprint=? AND context_hash=? AND candidate_hash=?
+                """,
+                identity,
+            ).fetchone()
+            return (
+                self._analysis_candidate_row_conn(conn, int(row["id"]))
+                if row is not None
+                else None
+            )
+
+    def find_resumable_analysis_candidate(
+        self,
+        *,
+        policy_fingerprint: str,
+        model_name: str,
+        model_digest: str,
+        group_fingerprint: str,
+        context_hash: str,
+    ) -> sqlite3.Row | None:
+        scope = tuple(
+            str(value).strip()
+            for value in (
+                policy_fingerprint,
+                model_name,
+                model_digest,
+                group_fingerprint,
+                context_hash,
+            )
+        )
+        if any(not value for value in scope):
+            raise ValueError("Analysis candidate resume scope fields must be non-empty")
+        actionable_states = (
+            ANALYSIS_CANDIDATE_ALLOCATED,
+            ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT,
+            ANALYSIS_CANDIDATE_CRITIC_INVALID,
+            ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+        )
+        marks = ",".join("?" for _ in actionable_states)
+        with self.connect() as conn:
+            rows = list(
+                conn.execute(
+                    f"""
+                    SELECT * FROM analysis_candidates
+                    WHERE policy_fingerprint=? AND model_name=? AND model_digest=?
+                      AND group_fingerprint=? AND context_hash=?
+                      AND state IN ({marks})
+                    ORDER BY id
+                    """,
+                    (*scope, *actionable_states),
+                )
+            )
+            if len(rows) > 1:
+                raise RuntimeError(
+                    "Analysis resume scope contains multiple actionable candidates"
+                )
+            if not rows:
+                return None
+            candidate = self._analysis_candidate_row_conn(conn, int(rows[0]["id"]))
+            self._validate_analysis_generator_contract_history_conn(
+                conn,
+                int(candidate["id"]),
+            )
+            self._validate_analysis_critic_attempt_history_conn(
+                conn,
+                int(candidate["id"]),
+                int(candidate["critic_attempt_count"]),
+                str(candidate["state"]),
+            )
+            return candidate
+
+    def analysis_candidate_acceptance_envelope(
+        self,
+        analysis_candidate_id: int,
+    ) -> dict[str, Any]:
+        with self.connect() as conn:
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._validate_analysis_generator_contract_history_conn(
+                conn,
+                int(candidate["id"]),
+            )
+            self._validate_analysis_critic_attempt_history_conn(
+                conn,
+                int(candidate["id"]),
+                int(candidate["critic_attempt_count"]),
+                str(candidate["state"]),
+            )
+            if str(candidate["state"]) not in {
+                ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+                ANALYSIS_CANDIDATE_ACCEPTED,
+            }:
+                raise RuntimeError("Analysis candidate has not been accepted by the critic")
+            attempts = list(
+                conn.execute(
+                    "SELECT * FROM analysis_critic_attempts "
+                    "WHERE analysis_candidate_id=? ORDER BY attempt_number",
+                    (int(analysis_candidate_id),),
+                )
+            )
+            completed = [
+                attempt
+                for attempt in attempts
+                if str(attempt["state"]) == ANALYSIS_CRITIC_ATTEMPT_COMPLETED
+            ]
+            if not completed:
+                raise RuntimeError("Accepted analysis candidate has no completed critic evidence")
+            final_attempt = self._analysis_critic_attempt_row_conn(
+                conn,
+                analysis_candidate_id,
+                int(completed[-1]["attempt_number"]),
+            )
+        return {
+            "candidate_id": int(candidate["id"]),
+            "candidate_hash": str(candidate["candidate_hash"]),
+            "policy_fingerprint": str(candidate["policy_fingerprint"]),
+            "model_name": str(candidate["model_name"]),
+            "model_digest": str(candidate["model_digest"]),
+            "group_fingerprint": str(candidate["group_fingerprint"]),
+            "context_hash": str(candidate["context_hash"]),
+            "candidate": json.loads(str(candidate["candidate_json"])),
+            "envelope_hash": str(candidate["envelope_hash"]),
+            "commit_envelope": json.loads(str(candidate["commit_envelope_json"])),
+            "commit_envelope_hash": str(candidate["commit_envelope_hash"]),
+            "critic_outcome": json.loads(str(final_attempt["outcome_json"])),
+            "critic_evidence": json.loads(str(final_attempt["evidence_json"])),
+            "critic_attempt_number": int(final_attempt["attempt_number"]),
+            "critic_completion_hash": str(final_attempt["completion_hash"]),
+        }
+
+    def list_analysis_candidate_generator_contracts(
+        self,
+        analysis_candidate_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as conn:
+            self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            return self._validate_analysis_generator_contract_history_conn(
+                conn,
+                analysis_candidate_id,
+            )
+
+    def list_analysis_critic_attempts(
+        self,
+        analysis_candidate_id: int,
+    ) -> list[sqlite3.Row]:
+        with self.connect() as conn:
+            self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            rows = list(
+                conn.execute(
+                    "SELECT * FROM analysis_critic_attempts "
+                    "WHERE analysis_candidate_id=? ORDER BY attempt_number",
+                    (int(analysis_candidate_id),),
+                )
+            )
+            return [
+                self._analysis_critic_attempt_row_conn(
+                    conn,
+                    analysis_candidate_id,
+                    int(row["attempt_number"]),
+                )
+                for row in rows
+            ]
+
+    def reserve_analysis_critic_attempt(
+        self,
+        analysis_candidate_id: int,
+        *,
+        expected_state: str,
+        max_attempts: int,
+        intent: dict[str, Any],
+        contract: dict[str, Any],
+    ) -> sqlite3.Row:
+        normalized_expected_state = str(expected_state).strip()
+        if normalized_expected_state not in {
+            ANALYSIS_CANDIDATE_ALLOCATED,
+            ANALYSIS_CANDIDATE_CRITIC_INVALID,
+            ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT,
+        }:
+            raise ValueError("Analysis critic reservation requires an actionable candidate state")
+        if not isinstance(intent, dict) or not isinstance(contract, dict):
+            raise ValueError("Analysis critic intent and contract must be JSON objects")
+        normalized_budget = int(max_attempts)
+        if normalized_budget < 1:
+            raise ValueError("Analysis critic attempt budget must be positive")
+        intent_json, intent_hash = self._canonical_analysis_json(
+            intent,
+            "analysis critic intent",
+        )
+        contract_json, contract_hash = self._canonical_analysis_json(
+            contract,
+            "analysis critic contract",
+        )
+        now = time.time()
+        with self.transaction() as conn:
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            state = str(candidate["state"])
+            if state != normalized_expected_state:
+                raise RuntimeError(
+                    "Analysis critic reservation state CAS failed: "
+                    f"expected {normalized_expected_state}, found {state}"
+                )
+            stored_budget = int(candidate["critic_max_attempts"])
+            attempt_count = int(candidate["critic_attempt_count"])
+            self._validate_analysis_critic_attempt_history_conn(
+                conn,
+                int(candidate["id"]),
+                attempt_count,
+                state,
+            )
+            if stored_budget != normalized_budget:
+                raise RuntimeError("Analysis critic attempt budget differs from its durable ledger")
+            if attempt_count >= stored_budget:
+                raise RuntimeError("Analysis critic attempt budget is exhausted")
+            if state == ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT:
+                self._analysis_critic_attempt_row_conn(
+                    conn,
+                    analysis_candidate_id,
+                    attempt_count,
+                )
+                abandoned = conn.execute(
+                    """
+                    UPDATE analysis_critic_attempts
+                    SET state=?,completed_at=?
+                    WHERE analysis_candidate_id=? AND attempt_number=? AND state=?
+                    """,
+                    (
+                        ANALYSIS_CRITIC_ATTEMPT_ABANDONED,
+                        now,
+                        int(analysis_candidate_id),
+                        attempt_count,
+                        ANALYSIS_CRITIC_ATTEMPT_RESERVED,
+                    ),
+                )
+                if abandoned.rowcount != 1:
+                    raise RuntimeError(
+                        "Analysis critic in-flight candidate has no matching reserved intent"
+                    )
+            attempt_number = attempt_count + 1
+            updated = conn.execute(
+                """
+                UPDATE analysis_candidates
+                SET state=?,critic_attempt_count=?,updated_at=?
+                WHERE id=? AND state=? AND critic_attempt_count=? AND critic_max_attempts=?
+                """,
+                (
+                    ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT,
+                    attempt_number,
+                    now,
+                    int(analysis_candidate_id),
+                    normalized_expected_state,
+                    attempt_count,
+                    normalized_budget,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("Analysis critic attempt reservation CAS failed")
+            conn.execute(
+                """
+                INSERT INTO analysis_critic_attempts(
+                    analysis_candidate_id,attempt_number,state,intent_json,intent_hash,
+                    contract_json,contract_hash,reserved_at
+                ) VALUES(?,?,?,?,?,?,?,?)
+                """,
+                (
+                    int(analysis_candidate_id),
+                    attempt_number,
+                    ANALYSIS_CRITIC_ATTEMPT_RESERVED,
+                    intent_json,
+                    intent_hash,
+                    contract_json,
+                    contract_hash,
+                    now,
+                ),
+            )
+            return self._analysis_critic_attempt_row_conn(
+                conn,
+                analysis_candidate_id,
+                attempt_number,
+            )
+
+    def complete_analysis_critic_attempt(
+        self,
+        analysis_candidate_id: int,
+        attempt_number: int,
+        *,
+        expected_intent_hash: str,
+        expected_contract_hash: str,
+        result_state: str,
+        outcome: dict[str, Any],
+        evidence: dict[str, Any],
+        commit_envelope: dict[str, Any] | None = None,
+    ) -> sqlite3.Row:
+        normalized_result_state = str(result_state).strip()
+        if normalized_result_state not in {
+            ANALYSIS_CANDIDATE_CRITIC_INVALID,
+            ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+            ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+        }:
+            raise ValueError("Unsupported analysis critic completion state")
+        if not isinstance(outcome, dict) or not isinstance(evidence, dict):
+            raise ValueError("Analysis critic outcome and evidence must be JSON objects")
+        normalized_intent_hash = str(expected_intent_hash).strip()
+        normalized_contract_hash = str(expected_contract_hash).strip()
+        if not normalized_intent_hash or not normalized_contract_hash:
+            raise ValueError("Analysis critic completion requires intent and contract hashes")
+        outcome_json, outcome_hash = self._canonical_analysis_json(
+            {
+                "candidate_state": normalized_result_state,
+                "payload": outcome,
+            },
+            "analysis critic outcome",
+        )
+        evidence_json, evidence_hash = self._canonical_analysis_json(
+            evidence,
+            "analysis critic evidence",
+        )
+        now = time.time()
+        with self.transaction() as conn:
+            attempt = self._analysis_critic_attempt_row_conn(
+                conn,
+                analysis_candidate_id,
+                attempt_number,
+            )
+            if (
+                str(attempt["intent_hash"]) != normalized_intent_hash
+                or str(attempt["contract_hash"]) != normalized_contract_hash
+            ):
+                raise RuntimeError("Analysis critic completion provenance hash CAS failed")
+            attempt_state = str(attempt["state"])
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._validate_analysis_generator_contract_history_conn(
+                conn,
+                analysis_candidate_id,
+            )
+            self._validate_analysis_critic_attempt_history_conn(
+                conn,
+                analysis_candidate_id,
+                int(candidate["critic_attempt_count"]),
+                parent_state=str(candidate["state"]),
+            )
+            if normalized_result_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                if commit_envelope is None:
+                    raise ValueError(
+                        "Accepted analysis critic completion requires a commit envelope"
+                    )
+                commit_envelope_json, commit_envelope_hash = (
+                    self._validated_analysis_commit_envelope(
+                        str(candidate["candidate_json"]),
+                        commit_envelope,
+                    )
+                )
+                self._validate_analysis_acceptance_evidence(
+                    str(candidate["candidate_json"]),
+                    commit_envelope_json,
+                    evidence,
+                    str(attempt["contract_json"]),
+                )
+            else:
+                if commit_envelope is not None:
+                    raise ValueError(
+                        "Only an accepted analysis critic completion may store a commit envelope"
+                    )
+                commit_envelope_json = None
+                commit_envelope_hash = None
+            completion_json, completion_hash = self._canonical_analysis_json(
+                {
+                    "commit_envelope_hash": commit_envelope_hash,
+                    "contract_hash": normalized_contract_hash,
+                    "evidence_hash": evidence_hash,
+                    "intent_hash": normalized_intent_hash,
+                    "outcome_hash": outcome_hash,
+                },
+                "analysis critic completion",
+            )
+            del completion_json
+            if attempt_state == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
+                if (
+                    str(attempt["completion_hash"] or "") == completion_hash
+                    and str(attempt["outcome_json"] or "") == outcome_json
+                    and str(attempt["evidence_json"] or "") == evidence_json
+                    and (
+                        normalized_result_state
+                        != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+                        or (
+                            str(candidate["commit_envelope_hash"] or "")
+                            == str(commit_envelope_hash or "")
+                            and str(candidate["commit_envelope_json"] or "")
+                            == str(commit_envelope_json or "")
+                        )
+                    )
+                ):
+                    return attempt
+                raise RuntimeError("Analysis critic completion replay payload differs")
+            if attempt_state != ANALYSIS_CRITIC_ATTEMPT_RESERVED:
+                raise RuntimeError("Abandoned analysis critic intent cannot be completed")
+            if (
+                str(candidate["state"]) != ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT
+                or int(candidate["critic_attempt_count"]) != int(attempt_number)
+            ):
+                raise RuntimeError("Analysis critic completion candidate CAS failed")
+            completed = conn.execute(
+                """
+                UPDATE analysis_critic_attempts
+                SET state=?,outcome_json=?,outcome_hash=?,evidence_json=?,evidence_hash=?,
+                    completion_hash=?,completed_at=?
+                WHERE analysis_candidate_id=? AND attempt_number=? AND state=?
+                  AND intent_hash=? AND contract_hash=?
+                """,
+                (
+                    ANALYSIS_CRITIC_ATTEMPT_COMPLETED,
+                    outcome_json,
+                    outcome_hash,
+                    evidence_json,
+                    evidence_hash,
+                    completion_hash,
+                    now,
+                    int(analysis_candidate_id),
+                    int(attempt_number),
+                    ANALYSIS_CRITIC_ATTEMPT_RESERVED,
+                    normalized_intent_hash,
+                    normalized_contract_hash,
+                ),
+            )
+            if completed.rowcount != 1:
+                raise RuntimeError("Analysis critic completion attempt CAS failed")
+            updated = conn.execute(
+                """
+                UPDATE analysis_candidates
+                SET state=?,commit_envelope_json=?,commit_envelope_hash=?,updated_at=?
+                WHERE id=? AND state=? AND critic_attempt_count=?
+                """,
+                (
+                    normalized_result_state,
+                    commit_envelope_json,
+                    commit_envelope_hash,
+                    now,
+                    int(analysis_candidate_id),
+                    ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT,
+                    int(attempt_number),
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("Analysis critic completion state CAS failed")
+            return self._analysis_critic_attempt_row_conn(
+                conn,
+                analysis_candidate_id,
+                attempt_number,
+            )
+
+    def _mark_analysis_candidate_final_state(
+        self,
+        analysis_candidate_id: int,
+        *,
+        expected_state: str,
+        final_state: str,
+        reason: str,
+    ) -> sqlite3.Row:
+        normalized_expected_state = str(expected_state).strip()
+        if normalized_expected_state not in ANALYSIS_CANDIDATE_STATES:
+            raise ValueError("Unsupported expected analysis candidate state")
+        if final_state not in {
+            ANALYSIS_CANDIDATE_TERMINAL,
+            ANALYSIS_CANDIDATE_SUPERSEDED,
+        }:
+            raise ValueError("Unsupported final analysis candidate state")
+        normalized_reason = str(reason).strip()
+        if not normalized_reason:
+            raise ValueError("Final analysis candidate state requires a reason")
+        now = time.time()
+        with self.transaction() as conn:
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            state = str(candidate["state"])
+            attempt_count = int(candidate["critic_attempt_count"])
+            self._validate_analysis_critic_attempt_history_conn(
+                conn,
+                analysis_candidate_id,
+                attempt_count,
+                state,
+            )
+            if state == final_state:
+                if str(candidate["terminal_reason"] or "") == normalized_reason:
+                    return candidate
+                raise RuntimeError("Analysis candidate final-state replay reason differs")
+            if state != normalized_expected_state:
+                raise RuntimeError(
+                    "Analysis candidate final-state CAS failed: "
+                    f"expected {normalized_expected_state}, found {state}"
+                )
+            if state == ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT:
+                abandoned = conn.execute(
+                    """
+                    UPDATE analysis_critic_attempts SET state=?,completed_at=?
+                    WHERE analysis_candidate_id=? AND attempt_number=? AND state=?
+                    """,
+                    (
+                        ANALYSIS_CRITIC_ATTEMPT_ABANDONED,
+                        now,
+                        int(analysis_candidate_id),
+                        int(candidate["critic_attempt_count"]),
+                        ANALYSIS_CRITIC_ATTEMPT_RESERVED,
+                    ),
+                )
+                if abandoned.rowcount != 1:
+                    raise RuntimeError(
+                        "Analysis candidate has no reserved critic intent to terminate"
+                    )
+            updated = conn.execute(
+                """
+                UPDATE analysis_candidates
+                SET state=?,terminal_reason=?,updated_at=?
+                WHERE id=? AND state=?
+                """,
+                (
+                    final_state,
+                    normalized_reason,
+                    now,
+                    int(analysis_candidate_id),
+                    normalized_expected_state,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("Analysis candidate final-state update CAS failed")
+            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+
+    def mark_analysis_candidate_terminal(
+        self,
+        analysis_candidate_id: int,
+        *,
+        expected_state: str,
+        reason: str,
+    ) -> sqlite3.Row:
+        return self._mark_analysis_candidate_final_state(
+            analysis_candidate_id,
+            expected_state=expected_state,
+            final_state=ANALYSIS_CANDIDATE_TERMINAL,
+            reason=reason,
+        )
+
+    def mark_analysis_candidate_superseded(
+        self,
+        analysis_candidate_id: int,
+        *,
+        expected_state: str,
+        reason: str,
+    ) -> sqlite3.Row:
+        return self._mark_analysis_candidate_final_state(
+            analysis_candidate_id,
+            expected_state=expected_state,
+            final_state=ANALYSIS_CANDIDATE_SUPERSEDED,
+            reason=reason,
+        )
+
+    def finalize_exhausted_analysis_critic_candidate(
+        self,
+        analysis_candidate_id: int,
+        *,
+        reason: str,
+    ) -> sqlite3.Row:
+        normalized_reason = str(reason).strip()
+        if not normalized_reason:
+            raise ValueError("Exhausted analysis critic candidate requires a reason")
+        now = time.time()
+        with self.transaction() as conn:
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            state = str(candidate["state"])
+            attempt_count = int(candidate["critic_attempt_count"])
+            self._validate_analysis_critic_attempt_history_conn(
+                conn,
+                analysis_candidate_id,
+                attempt_count,
+                state,
+            )
+            if state == ANALYSIS_CANDIDATE_TERMINAL:
+                if str(candidate["terminal_reason"] or "") == normalized_reason:
+                    return candidate
+                raise RuntimeError("Analysis critic exhaustion replay reason differs")
+            max_attempts = int(candidate["critic_max_attempts"])
+            if attempt_count < max_attempts:
+                raise RuntimeError("Analysis critic attempt budget is not exhausted")
+            if state == ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT:
+                abandoned = conn.execute(
+                    """
+                    UPDATE analysis_critic_attempts SET state=?,completed_at=?
+                    WHERE analysis_candidate_id=? AND attempt_number=? AND state=?
+                    """,
+                    (
+                        ANALYSIS_CRITIC_ATTEMPT_ABANDONED,
+                        now,
+                        int(analysis_candidate_id),
+                        attempt_count,
+                        ANALYSIS_CRITIC_ATTEMPT_RESERVED,
+                    ),
+                )
+                if abandoned.rowcount != 1:
+                    raise RuntimeError(
+                        "Exhausted analysis critic candidate has no reserved final intent"
+                    )
+            elif state not in {
+                ANALYSIS_CANDIDATE_CRITIC_INVALID,
+                ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+            }:
+                raise RuntimeError(
+                    "Analysis critic candidate is not in an exhaustible state"
+                )
+            updated = conn.execute(
+                """
+                UPDATE analysis_candidates SET state=?,terminal_reason=?,updated_at=?
+                WHERE id=? AND state=? AND critic_attempt_count=? AND critic_max_attempts=?
+                """,
+                (
+                    ANALYSIS_CANDIDATE_TERMINAL,
+                    normalized_reason,
+                    now,
+                    int(analysis_candidate_id),
+                    state,
+                    attempt_count,
+                    max_attempts,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("Analysis critic exhaustion terminal CAS failed")
+            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+
     def update_analysis(
         self,
         segment_id: int,
@@ -934,9 +2563,36 @@ class ProjectDB:
         analysis_model_name: str,
         analysis_model_digest: str,
         pronunciations: Sequence[dict[str, Any]] = (),
+        analysis_candidate_id: int | None = None,
+        expected_analysis_candidate_state: str = ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+        analysis_policy_fingerprint: str | None = None,
+        analysis_group_fingerprint: str | None = None,
+        analysis_context_hash: str | None = None,
     ) -> None:
         if not rows:
             raise ValueError("Analysis batch cannot be empty")
+        if (
+            analysis_candidate_id is not None
+            and expected_analysis_candidate_state != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+        ):
+            raise ValueError(
+                "Director batch commit can only accept a critic_accepted analysis candidate"
+            )
+        expected_candidate_scope = tuple(
+            str(value or "").strip()
+            for value in (
+                analysis_policy_fingerprint,
+                analysis_group_fingerprint,
+                analysis_context_hash,
+            )
+        )
+        if analysis_candidate_id is not None and any(
+            not value for value in expected_candidate_scope
+        ):
+            raise ValueError(
+                "Director batch candidate commit requires policy/group/context fingerprints"
+            )
+        durable_event_details = dict(event_details)
         now = time.time()
         with self.transaction() as conn:
             model_lock = conn.execute(
@@ -950,7 +2606,119 @@ class ProjectDB:
                 raise RuntimeError(
                     "Analysis model lock changed before director batch commit"
                 )
+            analysis_candidate: sqlite3.Row | None = None
+            durable_commit_rows: dict[str, dict[str, Any]] | None = None
+            if analysis_candidate_id is not None:
+                analysis_candidate = self._analysis_candidate_row_conn(
+                    conn,
+                    analysis_candidate_id,
+                )
+                self._validate_analysis_generator_contract_history_conn(
+                    conn,
+                    analysis_candidate_id,
+                )
+                self._validate_analysis_critic_attempt_history_conn(
+                    conn,
+                    analysis_candidate_id,
+                    int(analysis_candidate["critic_attempt_count"]),
+                    parent_state=str(analysis_candidate["state"]),
+                )
+                if (
+                    str(analysis_candidate["state"])
+                    != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+                    or str(analysis_candidate["model_name"]) != str(analysis_model_name)
+                    or str(analysis_candidate["model_digest"])
+                    != str(analysis_model_digest)
+                    or str(analysis_candidate["policy_fingerprint"])
+                    != expected_candidate_scope[0]
+                    or str(analysis_candidate["group_fingerprint"])
+                    != expected_candidate_scope[1]
+                    or str(analysis_candidate["context_hash"])
+                    != expected_candidate_scope[2]
+                    or not str(analysis_candidate["commit_envelope_hash"] or "")
+                    or not str(analysis_candidate["commit_envelope_json"] or "")
+                ):
+                    raise RuntimeError(
+                        "Analysis candidate identity or critic_accepted state changed before batch commit"
+                    )
+                critic_attempt = self._analysis_critic_attempt_row_conn(
+                    conn,
+                    int(analysis_candidate["id"]),
+                    int(analysis_candidate["critic_attempt_count"]),
+                )
+                critic_outcome = json.loads(str(critic_attempt["outcome_json"]))
+                if (
+                    str(critic_attempt["state"])
+                    != ANALYSIS_CRITIC_ATTEMPT_COMPLETED
+                    or str(critic_outcome.get("candidate_state", ""))
+                    != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+                ):
+                    raise RuntimeError(
+                        "Analysis candidate lacks matching completed critic acceptance"
+                    )
+                durable_event_details.update(
+                    {
+                        "analysis_candidate_id": int(analysis_candidate["id"]),
+                        "candidate_hash": str(analysis_candidate["candidate_hash"]),
+                        "commit_envelope_hash": str(
+                            analysis_candidate["commit_envelope_hash"]
+                        ),
+                        "critic_attempt_number": int(critic_attempt["attempt_number"]),
+                        "critic_completion_hash": str(critic_attempt["completion_hash"]),
+                        "critic_contract_hash": str(critic_attempt["contract_hash"]),
+                        "critic_evidence_hash": str(critic_attempt["evidence_hash"]),
+                        "critic_intent_hash": str(critic_attempt["intent_hash"]),
+                        "policy_fingerprint": str(
+                            analysis_candidate["policy_fingerprint"]
+                        ),
+                        "group_fingerprint": str(
+                            analysis_candidate["group_fingerprint"]
+                        ),
+                        "context_hash": str(analysis_candidate["context_hash"]),
+                    }
+                )
+                durable_commit_rows = self._analysis_candidate_commit_rows(
+                    str(analysis_candidate["commit_envelope_json"]),
+                )
+                durable_envelope = json.loads(
+                    str(analysis_candidate["commit_envelope_json"])
+                )
+                durable_pronunciation_json, _durable_pronunciation_hash = (
+                    self._canonical_analysis_json(
+                        durable_envelope["pronunciations"],
+                        "durable analysis candidate pronunciations",
+                    )
+                )
+                pronunciation_json, _pronunciation_hash = self._canonical_analysis_json(
+                    list(pronunciations),
+                    "analysis batch pronunciations",
+                )
+                if pronunciation_json != durable_pronunciation_json:
+                    raise RuntimeError(
+                        "Analysis batch pronunciations differ from the durable candidate"
+                    )
+                if len(durable_commit_rows) != len(rows):
+                    raise RuntimeError(
+                        "Analysis batch differs from the durable candidate segment set"
+                    )
             for row in rows:
+                if durable_commit_rows is not None:
+                    stable_id = str(row["stable_id"])
+                    durable_row = durable_commit_rows.get(stable_id)
+                    row_data_json, _row_data_hash = self._canonical_analysis_json(
+                        dict(row["data"]),
+                        "analysis batch segment data",
+                    )
+                    if (
+                        durable_row is None
+                        or int(durable_row["segment_id"]) != int(row["segment_id"])
+                        or str(durable_row["text_sha256"]) != str(row["text_sha256"])
+                        or str(durable_row["data_json"]) != row_data_json
+                    ):
+                        raise RuntimeError(
+                            "Analysis batch row/data differs from the durable candidate: "
+                            f"{stable_id}"
+                        )
                 expected_status = str(row.get("expected_status", SegmentStatus.PENDING.value))
                 cursor = conn.execute(
                     """
@@ -978,6 +2746,27 @@ class ProjectDB:
                     )
             for pronunciation in pronunciations:
                 self._upsert_pronunciation_conn(conn, pronunciation, now)
+            if analysis_candidate is not None:
+                accepted = conn.execute(
+                    """
+                    UPDATE analysis_candidates
+                    SET state=?,accepted_at=?,updated_at=?
+                    WHERE id=? AND state=? AND model_name=? AND model_digest=?
+                      AND candidate_hash=?
+                    """,
+                    (
+                        ANALYSIS_CANDIDATE_ACCEPTED,
+                        now,
+                        now,
+                        int(analysis_candidate["id"]),
+                        ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+                        str(analysis_model_name),
+                        str(analysis_model_digest),
+                        str(analysis_candidate["candidate_hash"]),
+                    ),
+                )
+                if accepted.rowcount != 1:
+                    raise RuntimeError("Analysis candidate acceptance CAS failed")
             conn.execute(
                 """
                 INSERT INTO runtime_events(timestamp,level,code,message,details_json)
@@ -988,7 +2777,7 @@ class ProjectDB:
                     event_level,
                     event_code,
                     event_message,
-                    json.dumps(event_details, ensure_ascii=False),
+                    json.dumps(durable_event_details, ensure_ascii=False),
                 ),
             )
 

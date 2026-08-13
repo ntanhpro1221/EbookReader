@@ -224,6 +224,7 @@ def test_invalid_retry_temperature_schedule_is_rejected(temperatures) -> None:
         build_settings(overrides={"analysis": {"retry_temperatures": temperatures}})
 
 
-def test_unknown_retry_policy_version_is_rejected() -> None:
+@pytest.mark.parametrize("policy_version", ["adaptive_seeded_v1", "future_v2"])
+def test_stale_or_unknown_retry_policy_version_is_rejected(policy_version: str) -> None:
     with pytest.raises(ValueError, match="analysis.retry_policy_version"):
-        build_settings(overrides={"analysis": {"retry_policy_version": "future_v2"}})
+        build_settings(overrides={"analysis": {"retry_policy_version": policy_version}})

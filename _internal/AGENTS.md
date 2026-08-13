@@ -158,6 +158,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Batch được critic chấp nhận, event evidence và pronunciation proposal đã validate phải commit trong cùng một transaction
   SQLite với CAS trên ID, source hash và trạng thái segment. Crash không được để lại batch analyzed thiếu event hoặc thiếu
   pronunciation; retry critic/schema giữ nguyên candidate hash, còn singleton persistent failure phải dừng hữu hạn.
+- Candidate analysis high-quality phải có hai identity tách biệt: hash projection delivery mà critic nhìn thấy và hash
+  acceptance envelope đầy đủ gồm source, metadata, confidence và pronunciation. Intent critic phải được reserve bền trước
+  HTTP; mọi attempt, generator contract và kết quả phải re-hash khi đọc. Crash sau reserve tiêu attempt hiện tại, crash sau
+  `critic_accepted` phải commit lại đúng envelope mà không gọi model, còn candidate projection lặp lại không được reset budget.
+- Policy/group/context fingerprint của ledger phải khóa model digest, system/schema version, source hash và metadata ngữ cảnh
+  mà host dùng (stable ID, chapter, paragraph, kind và hàng xóm). Parent candidate và lịch sử child attempt phải liên tục,
+  khớp trạng thái; mismatch/tamper phải fail-closed trước request hoặc commit.
 - GUI chỉ cung cấp một lệnh **Dừng**; đây không phải một chế độ an toàn riêng. Lệnh Dừng yêu cầu worker
   kết thúc ở ranh giới gần nhất, còn đóng cửa sổ được phép kết thúc worker ngay.
 - Tính an toàn phải đến từ transaction SQLite, file `.part` + atomic replace, checksum và recovery:

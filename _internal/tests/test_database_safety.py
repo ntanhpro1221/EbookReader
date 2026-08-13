@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import sqlite3
 from contextlib import closing
@@ -20,7 +21,7 @@ from ebook_reader.database import (
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
 )
-from ebook_reader.io_utils import sha256_file
+from ebook_reader.io_utils import sha256_file, sha256_text
 from ebook_reader.models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
 from ebook_reader.config import build_settings
 from ebook_reader.tts import TTSCoordinator
@@ -32,6 +33,9 @@ ANALYSIS_MODEL_COMMIT = {
     "analysis_model_name": ANALYSIS_MODEL_NAME,
     "analysis_model_digest": ANALYSIS_MODEL_DIGEST,
 }
+ANALYSIS_POLICY_FINGERPRINT = "director-policy-v2"
+ANALYSIS_GROUP_FINGERPRINT = "group-source-v1"
+ANALYSIS_CONTEXT_HASH = "group-context-v1"
 
 
 def _segment_db(tmp_path: Path) -> tuple[ProjectDB, int]:
@@ -102,7 +106,7 @@ def _analysis_batch_db(
                 "stable_id": f"c1s{index}",
                 "seq": index - 1,
                 "text": f"Text {index}",
-                "text_sha256": f"text-{index}",
+                "text_sha256": sha256_text(f"Text {index}"),
                 "kind_hint": "narration",
             }
             for index in range(1, 3)
@@ -111,6 +115,130 @@ def _analysis_batch_db(
     if lock_model:
         db.lock_analysis_model(ANALYSIS_MODEL_NAME, ANALYSIS_MODEL_DIGEST)
     return db, [dict(row) for row in db.list_segments()]
+
+
+def _analysis_acceptance_envelope(
+    source_rows: list[dict],
+    *,
+    emotion: str = "neutral",
+) -> dict:
+    segments = []
+    critic_rows = []
+    for index, row in enumerate(source_rows, 1):
+        data = {
+            "kind": "narration",
+            "speaker": "NARRATOR",
+            "gender": "unknown",
+            "age": "unknown",
+            "emotion": emotion,
+            "intensity": 1,
+            "pace": "normal",
+            "volume": "normal",
+            "confidence": 0.9,
+            "personality_hint": "",
+            "notes": "Lượt phản biện đồng ý.",
+        }
+        segments.append(
+            {
+                "segment_id": int(row["id"]),
+                "stable_id": str(row["stable_id"]),
+                "text_sha256": str(row["text_sha256"]),
+                "data": data,
+            }
+        )
+        critic_rows.append(
+            {
+                "id": f"S{index:03d}",
+                "paragraph": int(row["paragraph_index"]),
+                "hint": str(row["kind_hint"]),
+                "previous_text": "",
+                "text": str(row["text"]),
+                "next_text": "",
+                "candidate": {
+                    key: data[key]
+                    for key in ("kind", "speaker", "emotion", "intensity", "pace", "volume")
+                },
+                "batch_signature_count": len(source_rows),
+            }
+        )
+    return {
+        "segments": segments,
+        "pronunciations": [],
+        "critic_rows": critic_rows,
+    }
+
+
+def _canonical_hash(value: object) -> str:
+    return sha256_text(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    )
+
+
+def _accepted_critic_contract() -> dict:
+    return {
+        "policy_version": "second_pass_v1",
+        "confidence_cap": 0.95,
+        "seed": 11,
+        "temperature": 0.0,
+    }
+
+
+def _accepted_critic_evidence(envelope: dict) -> dict:
+    rows = []
+    for segment, critic_row in zip(
+        envelope["segments"],
+        envelope["critic_rows"],
+        strict=True,
+    ):
+        candidate = dict(critic_row["candidate"])
+        rows.append(
+            {
+                "stable_id": segment["stable_id"],
+                "text_sha256": segment["text_sha256"],
+                "candidate": candidate,
+                "critic": {
+                    **candidate,
+                    "accept": True,
+                    "rationale": "Đồng ý với delivery theo đúng bằng chứng nguồn.",
+                    "confidence": segment["data"]["confidence"],
+                },
+                "field_deltas": [],
+                "derived_confidence": segment["data"]["confidence"],
+            }
+        )
+    return {
+        "critic_contract": _accepted_critic_contract(),
+        "segments": rows,
+    }
+
+
+def _allocate_analysis_candidate(
+    db: ProjectDB,
+    source_rows: list[dict],
+    *,
+    context_hash: str = ANALYSIS_CONTEXT_HASH,
+    candidate: dict | None = None,
+    critic_max_attempts: int = 2,
+):
+    envelope = candidate or _analysis_acceptance_envelope(source_rows)
+    return db.allocate_or_resume_analysis_candidate(
+        policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        model_name=ANALYSIS_MODEL_NAME,
+        model_digest=ANALYSIS_MODEL_DIGEST,
+        group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        context_hash=context_hash,
+        candidate_hash=_canonical_hash(envelope["critic_rows"]),
+        candidate=envelope,
+        generator_contract={"attempt": 1, "seed": 101},
+        deterministic_issues={},
+        critic_max_attempts=critic_max_attempts,
+    )
 
 
 def _candidate_db(tmp_path: Path) -> tuple[ProjectDB, int, str, Path]:
@@ -402,6 +530,761 @@ def test_analysis_director_batch_and_accept_event_commit_atomically(tmp_path: Pa
     assert pronunciation["spoken_form"] == "Mai-cồ"
 
 
+def test_analysis_candidate_reservation_survives_reopen_and_consumes_crashed_intent(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, critic_max_attempts=2)
+    first = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"]), "attempt": 1},
+        contract={"seed": 11, "temperature": 0.2},
+    )
+
+    reopened = ProjectDB(db.path)
+    resumable = reopened.find_resumable_analysis_candidate(
+        policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        model_name=ANALYSIS_MODEL_NAME,
+        model_digest=ANALYSIS_MODEL_DIGEST,
+        group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+    assert int(resumable["id"]) == int(candidate["id"])
+    second = reopened.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="critic_in_flight",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"]), "attempt": 2},
+        contract={"seed": 12, "temperature": 0.2},
+    )
+
+    assert int(first["attempt_number"]) == 1
+    assert int(second["attempt_number"]) == 2
+    attempts = reopened.list_analysis_critic_attempts(int(candidate["id"]))
+    assert [row["state"] for row in attempts] == ["abandoned", "reserved"]
+    with pytest.raises(RuntimeError, match="budget is exhausted"):
+        reopened.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="critic_in_flight",
+            max_attempts=2,
+            intent={"attempt": 3},
+            contract={"seed": 13},
+        )
+
+
+def test_analysis_candidate_records_generator_retries_without_resetting_critic_budget(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, critic_max_attempts=2)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    retry_contract = {"attempt": 2, "seed": 202, "blind_envelope_hash": "changed"}
+
+    db.record_analysis_candidate_generator_contract(int(candidate["id"]), retry_contract)
+    replay = db.record_analysis_candidate_generator_contract(
+        int(candidate["id"]),
+        retry_contract,
+    )
+
+    contracts = db.list_analysis_candidate_generator_contracts(int(candidate["id"]))
+    assert len(contracts) == 2
+    assert {int(row["occurrence_count"]) for row in contracts} == {1}
+    assert int(replay["critic_attempt_count"]) == int(attempt["attempt_number"]) == 1
+    assert replay["state"] == "critic_in_flight"
+
+
+def test_final_crashed_critic_intent_can_be_terminalized_after_budget_exhaustion(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, critic_max_attempts=1)
+    db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=1,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+
+    reopened = ProjectDB(db.path)
+    terminal = reopened.finalize_exhausted_analysis_critic_candidate(
+        int(candidate["id"]),
+        reason="final critic request crashed",
+    )
+    replay = reopened.finalize_exhausted_analysis_critic_candidate(
+        int(candidate["id"]),
+        reason="final critic request crashed",
+    )
+
+    assert terminal["state"] == replay["state"] == "terminal"
+    assert reopened.list_analysis_critic_attempts(int(candidate["id"]))[0]["state"] == (
+        "abandoned"
+    )
+
+
+def test_analysis_candidate_completion_is_exact_idempotent_and_reopenable_without_model(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    completion_kwargs = {
+        "expected_intent_hash": str(attempt["intent_hash"]),
+        "expected_contract_hash": str(attempt["contract_hash"]),
+        "result_state": "critic_accepted",
+        "outcome": {"accepted": True},
+        "evidence": _accepted_critic_evidence(_analysis_acceptance_envelope(source_rows)),
+        "commit_envelope": _analysis_acceptance_envelope(source_rows),
+    }
+
+    completed = db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        **completion_kwargs,
+    )
+    replay = ProjectDB(db.path).complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        **completion_kwargs,
+    )
+
+    assert replay["completion_hash"] == completed["completion_hash"]
+    reopened = ProjectDB(db.path)
+    resumable = reopened.find_resumable_analysis_candidate(
+        policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        model_name=ANALYSIS_MODEL_NAME,
+        model_digest=ANALYSIS_MODEL_DIGEST,
+        group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+    snapshot = reopened.analysis_candidate_acceptance_envelope(int(candidate["id"]))
+    assert resumable["state"] == "critic_accepted"
+    assert snapshot["candidate"] == _analysis_acceptance_envelope(source_rows)
+    assert snapshot["critic_outcome"] == {
+        "candidate_state": "critic_accepted",
+        "payload": {"accepted": True},
+    }
+    different_evidence = _accepted_critic_evidence(
+        _analysis_acceptance_envelope(source_rows)
+    )
+    different_evidence["segments"][0]["critic"]["rationale"] = "Khác nhưng vẫn hợp lệ."
+    with pytest.raises(RuntimeError, match="replay payload differs"):
+        reopened.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            **{**completion_kwargs, "evidence": different_evidence},
+        )
+
+
+def test_analysis_candidate_rejects_arbitrarily_lowered_derived_confidence(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    commit_envelope = copy.deepcopy(envelope)
+    commit_envelope["segments"][0]["data"]["confidence"] = 0.7
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["segments"][0]["derived_confidence"] = 0.7
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=commit_envelope,
+        )
+
+
+def test_analysis_candidate_rejects_evidence_contract_not_reserved_for_request(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["critic_contract"] = {
+        **evidence["critic_contract"],
+        "seed": 999,
+        "temperature": 0.9,
+    }
+
+    with pytest.raises(RuntimeError, match="differs from the reserved request contract"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_analysis_candidate_resume_rejects_tampered_child_ledgers(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    candidate_id = int(candidate["id"])
+    db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET intent_json=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            ('{"candidate_hash":"tampered"}', candidate_id),
+        )
+    with pytest.raises(RuntimeError, match="intent hash verification"):
+        db.reserve_analysis_critic_attempt(
+            candidate_id,
+            expected_state="critic_in_flight",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract={"seed": 12},
+        )
+
+    untouched = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        context_hash="second-context",
+    )
+    untouched_id = int(untouched["id"])
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidate_generator_contracts SET generator_contract_json=? "
+            "WHERE analysis_candidate_id=?",
+            ('{"attempt":999}', untouched_id),
+        )
+    with pytest.raises(RuntimeError, match="generator contract hash verification"):
+        db.list_analysis_candidate_generator_contracts(untouched_id)
+    with pytest.raises(RuntimeError, match="generator contract hash verification"):
+        db.find_resumable_analysis_candidate(
+            policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            model_name=ANALYSIS_MODEL_NAME,
+            model_digest=ANALYSIS_MODEL_DIGEST,
+            group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            context_hash="second-context",
+        )
+
+
+def test_analysis_candidate_resume_rejects_tampered_completed_critic_evidence(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET evidence_json=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            ('{"reason":"tampered"}', candidate_id),
+        )
+
+    with pytest.raises(RuntimeError, match="completion hash verification"):
+        db.find_resumable_analysis_candidate(
+            policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            model_name=ANALYSIS_MODEL_NAME,
+            model_digest=ANALYSIS_MODEL_DIGEST,
+            group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+
+def test_analysis_candidate_resume_rejects_parent_child_state_mismatch(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET state='abandoned',outcome_json=NULL,"
+            "outcome_hash=NULL,evidence_json=NULL,evidence_hash=NULL,completion_hash=NULL "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (candidate_id,),
+        )
+
+    with pytest.raises(RuntimeError, match="final critic attempt is not completed"):
+        db.find_resumable_analysis_candidate(
+            policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            model_name=ANALYSIS_MODEL_NAME,
+            model_digest=ANALYSIS_MODEL_DIGEST,
+            group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+
+def test_analysis_candidate_completion_rehashes_prior_critic_attempts(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    first_attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(first_attempt["intent_hash"]),
+        expected_contract_hash=str(first_attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    second_attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="critic_invalid",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET evidence_json=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            ('{"reason":"tampered"}', candidate_id),
+        )
+
+    with pytest.raises(RuntimeError, match="completion hash verification"):
+        db.complete_analysis_critic_attempt(
+            candidate_id,
+            2,
+            expected_intent_hash=str(second_attempt["intent_hash"]),
+            expected_contract_hash=str(second_attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=_accepted_critic_evidence(envelope),
+            commit_envelope=envelope,
+        )
+
+    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_in_flight"
+
+
+@pytest.mark.parametrize(
+    ("tamper_target", "expected_error"),
+    (
+        ("prior_critic_attempt", "completion hash verification"),
+        ("generator_contract", "generator contract hash verification"),
+    ),
+)
+def test_analysis_candidate_commit_rehashes_complete_child_history(
+    tmp_path: Path,
+    tamper_target: str,
+    expected_error: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    first_attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(first_attempt["intent_hash"]),
+        expected_contract_hash=str(first_attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    second_attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="critic_invalid",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        2,
+        expected_intent_hash=str(second_attempt["intent_hash"]),
+        expected_contract_hash=str(second_attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    with db.connect() as conn:
+        if tamper_target == "prior_critic_attempt":
+            conn.execute(
+                "UPDATE analysis_critic_attempts SET evidence_json=? "
+                "WHERE analysis_candidate_id=? AND attempt_number=1",
+                ('{"reason":"tampered"}', candidate_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE analysis_candidate_generator_contracts "
+                "SET generator_contract_json=? WHERE analysis_candidate_id=?",
+                ('{"attempt":999}', candidate_id),
+            )
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in envelope["segments"]
+    ]
+
+    with pytest.raises(RuntimeError, match=expected_error):
+        db.analysis_candidate_acceptance_envelope(candidate_id)
+    with pytest.raises(RuntimeError, match=expected_error):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": str(candidate["candidate_hash"])},
+            **ANALYSIS_MODEL_COMMIT,
+            analysis_candidate_id=candidate_id,
+            analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_accepted"
+
+
+def test_analysis_candidate_identity_is_strict_and_terminal_candidates_do_not_reopen(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    first = _allocate_analysis_candidate(db, source_rows)
+    isolated = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        context_hash="different-context",
+    )
+    terminal = db.mark_analysis_candidate_terminal(
+        int(first["id"]),
+        expected_state="allocated",
+        reason="deterministic mismatch repeated",
+    )
+    replay = _allocate_analysis_candidate(db, source_rows)
+
+    assert int(isolated["id"]) != int(first["id"])
+    assert terminal["state"] == replay["state"] == "terminal"
+    assert db.find_resumable_analysis_candidate(
+        policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        model_name=ANALYSIS_MODEL_NAME,
+        model_digest=ANALYSIS_MODEL_DIGEST,
+        group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        context_hash=ANALYSIS_CONTEXT_HASH,
+    ) is None
+    assert db.get_analysis_candidate_exact(
+        policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        model_name=ANALYSIS_MODEL_NAME,
+        model_digest=ANALYSIS_MODEL_DIGEST,
+        group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        context_hash="different-context",
+        candidate_hash=str(isolated["candidate_hash"]),
+    )["id"] == isolated["id"]
+
+
+def test_analysis_candidate_scope_allows_only_one_actionable_candidate(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    first = _allocate_analysis_candidate(db, source_rows)
+    changed = _analysis_acceptance_envelope(source_rows, emotion="angry")
+
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+        _allocate_analysis_candidate(db, source_rows, candidate=changed)
+
+    db.mark_analysis_candidate_superseded(
+        int(first["id"]),
+        expected_state="allocated",
+        reason="generator produced a different critic-visible candidate",
+    )
+    second = _allocate_analysis_candidate(db, source_rows, candidate=changed)
+    assert int(second["id"]) != int(first["id"])
+
+
+def test_analysis_candidate_read_rehashes_durable_json(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET envelope_hash='tampered' WHERE id=?",
+            (int(candidate["id"]),),
+        )
+
+    with pytest.raises(RuntimeError, match="hash verification failed"):
+        db.get_analysis_candidate(int(candidate["id"]))
+
+
+def test_analysis_candidate_acceptance_binds_exact_durable_rows_and_rolls_back(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in envelope["segments"]
+    ]
+    batch[1]["data"]["emotion"] = "angry"
+
+    with pytest.raises(RuntimeError, match="differs from the durable candidate"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": str(candidate["candidate_hash"])},
+            **ANALYSIS_MODEL_COMMIT,
+            analysis_candidate_id=int(candidate["id"]),
+            analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == "critic_accepted"
+    assert not any(
+        row["code"] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+        for row in db.list_events()
+    )
+
+
+def test_analysis_candidate_acceptance_commits_envelope_rows_and_pronunciations(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["pronunciations"] = [
+        {
+            "surface": "Michael",
+            "normalized_surface": "michael",
+            "spoken_form": "Mai-cồ",
+            "confidence": 0.91,
+            "source": "analysis",
+            "locked": False,
+        }
+    ]
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in envelope["segments"]
+    ]
+
+    db.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        pronunciations=envelope["pronunciations"],
+        analysis_candidate_id=int(candidate["id"]),
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    assert {row["status"] for row in db.list_segments()} == {"analyzed"}
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == "accepted"
+    assert db.list_pronunciations()[0]["normalized_surface"] == "michael"
+    event_details = json.loads(db.list_events()[-1]["details_json"])
+    assert event_details["analysis_candidate_id"] == int(candidate["id"])
+    assert event_details["critic_completion_hash"]
+    assert event_details["critic_evidence_hash"]
+    assert event_details["commit_envelope_hash"]
+
+
+def test_analysis_candidate_acceptance_transition_rolls_back_with_event_trigger(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TRIGGER reject_candidate_accept_event
+            BEFORE INSERT ON runtime_events
+            WHEN NEW.code='ANALYSIS_DIRECTOR_CRITIC_ACCEPTED'
+            BEGIN SELECT RAISE(ABORT, 'candidate accept crash'); END
+            """
+        )
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in envelope["segments"]
+    ]
+
+    with pytest.raises(sqlite3.IntegrityError, match="candidate accept crash"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="accepted",
+            event_details={"candidate_hash": str(candidate["candidate_hash"])},
+            **ANALYSIS_MODEL_COMMIT,
+            analysis_candidate_id=int(candidate["id"]),
+            analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+    assert {row["status"] for row in db.list_segments()} == {"pending"}
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == "critic_accepted"
+
+
 def test_analysis_director_batch_trigger_failure_rolls_back_every_row_and_event(
     tmp_path: Path,
 ) -> None:
@@ -636,6 +1519,47 @@ def test_schema_v6_adds_empty_analysis_model_lock_columns(tmp_path: Path) -> Non
         "analysis_model_locked_at",
     } <= columns
     assert migrated.analysis_model_lock() is None
+
+
+def test_schema_v7_migrates_durable_analysis_candidate_ledger(tmp_path: Path) -> None:
+    path = tmp_path / "legacy-v7.sqlite3"
+    ProjectDB(path)
+    with sqlite3.connect(path) as conn:
+        conn.execute("DROP TABLE analysis_critic_attempts")
+        conn.execute("DROP TABLE analysis_candidate_generator_contracts")
+        conn.execute("DROP TABLE analysis_candidates")
+        conn.execute("PRAGMA user_version=7")
+
+    migrated = ProjectDB(path)
+    backup = path.with_name(f"{path.name}.pre-v7-to-v{SCHEMA_VERSION}.bak")
+    with migrated.connect() as conn:
+        version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        tables = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        candidate_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(analysis_candidates)")
+        }
+
+    assert version == SCHEMA_VERSION
+    assert backup.is_file()
+    assert {
+        "analysis_candidates",
+        "analysis_candidate_generator_contracts",
+        "analysis_critic_attempts",
+    } <= tables
+    assert {
+        "policy_fingerprint",
+        "model_digest",
+        "group_fingerprint",
+        "context_hash",
+        "candidate_json",
+        "critic_attempt_count",
+    } <= candidate_columns
 
 
 def test_new_generation_clears_old_audio_warnings_but_keeps_analysis_warning(

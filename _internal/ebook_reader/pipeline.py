@@ -418,7 +418,12 @@ class BookPipeline:
         self.db.update_book(status=BookStatus.ANALYZING.value, stage="full_book_analysis")
         self._state("running", "Đang phân tích toàn bộ book trước khi tạo audio.")
 
-        analyzer = OllamaBookAnalyzer(self.settings, self.db, self.log)
+        analyzer = OllamaBookAnalyzer(
+            self.settings,
+            self.db,
+            self.log,
+            quality_policy_hash=self.quality_policy_hash,
+        )
         try:
             analyzer.analyze_all(
                 self.stop_requested,

@@ -10,13 +10,20 @@ import subprocess
 import time
 import unicodedata
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 import requests
 
 from .config import ANALYSIS_RETRY_POLICY_VERSION
-from .database import ProjectDB
+from .database import (
+    ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+    ANALYSIS_CANDIDATE_CRITIC_INVALID,
+    ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+    ANALYSIS_CANDIDATE_TERMINAL,
+    ProjectDB,
+)
 from .io_utils import run_hidden, sha256_text
 from .models import (
     CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE,
@@ -59,6 +66,8 @@ NEUTRAL_ZERO_DELIVERY_SIGNATURE = ("neutral", 0, "normal", "normal")
 DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
 DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v1"
+HOST_AFFECT_POLICY_VERSION = "host_affect_v1"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v1"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -67,6 +76,46 @@ DIRECTOR_CRITIC_VERDICT_FIELDS = frozenset(
     {
         "id", "accept", *DIRECTOR_DELIVERY_FIELDS, "rationale", "critic_confidence",
     }
+)
+HOST_AFFECT_ISSUE_CODE = "HOST_AFFECT_EMOTION_MISMATCH"
+HOST_DIRECT_SELF_PRESERVATION_RULE = "thought_self_preservation_mortality"
+HOST_ADJACENT_WAKE_RULE = "adjacent_thought_wake_self_rescue"
+HOST_AFFECT_RULES = frozenset(
+    {
+        HOST_DIRECT_SELF_PRESERVATION_RULE,
+        HOST_ADJACENT_WAKE_RULE,
+    }
+)
+ANALYSIS_FEEDBACK_CODES = frozenset(
+    {
+        HOST_AFFECT_ISSUE_CODE,
+        "SEMANTIC_DELIVERY_MISMATCH",
+        "SEMANTIC_EXPLANATION_REQUIRED",
+        "SEMANTIC_TEMPLATE_COLLAPSE",
+        "DIRECTOR_FIELD_MISMATCH",
+    }
+)
+ANALYSIS_FEEDBACK_FIELDS = frozenset({*DIRECTOR_DELIVERY_FIELDS, "notes"})
+HOST_SELF_PRESERVATION_MORTALITY_PATTERN = re.compile(
+    r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
+    flags=re.IGNORECASE,
+)
+HOST_SUBJECTLESS_SELF_CONTROL_PATTERN = re.compile(
+    r"^\s*[\"'“”‘’]*\s*không\s+được\s*(?:…|\.{3})\s*"
+    r"không\s+được\s+ngủ\s*(?:…|\.{3})\s*"
+    r"(?:sẽ|sắp)\s+chết\s+(?:mất|thôi)\s*[.!?…\"'“”‘’]*\s*$",
+    flags=re.IGNORECASE,
+)
+HOST_EXPERIENCER_PATTERN = re.compile(
+    r"\b(?:tôi|ta|mình|bản\s+thân|mày|mi|ngươi|hắn|nó|anh|chị|ông|bà|cô|"
+    r"cậu|chúng\s+tôi|chúng\s+ta|chúng\s+mày|chúng\s+nó|họ)\b",
+    flags=re.IGNORECASE,
+)
+HOST_SELF_EXPERIENCERS = frozenset({"tôi", "ta", "mình", "bản thân", "chúng tôi", "chúng ta"})
+HOST_WAKE_SELF_RESCUE_PATTERN = re.compile(
+    r"^\s*[\"'“”‘’]*\s*tỉnh\s+dậy\s*[,!?.…-]*\s*"
+    r"(?:phải|mau|hãy|cố\s+)?\s*tỉnh\s+dậy\s*[!?.…\"'“”‘’]*\s*$",
+    flags=re.IGNORECASE,
 )
 MOMENTARY_PERSONALITY_HINTS = frozenset(
     {
@@ -1269,6 +1318,340 @@ def _delivery_signature(data: dict[str, Any]) -> tuple[str, int, str, str]:
     )
 
 
+@dataclass(frozen=True)
+class AnalysisFeedbackIssue:
+    stable_id: str
+    code: str
+    fields: tuple[str, ...] = ()
+    allowed_emotions: tuple[str, ...] = ()
+    rule: str = ""
+
+    def canonical_payload(self, identifier: str | None = None) -> dict[str, Any]:
+        if type(self.code) is not str or self.code not in ANALYSIS_FEEDBACK_CODES:
+            raise ValueError(f"Unsupported analysis feedback code: {self.code}")
+        if type(self.fields) is not tuple:
+            raise ValueError("Analysis feedback fields must be a typed tuple")
+        if any(
+            type(field) is not str or field not in ANALYSIS_FEEDBACK_FIELDS
+            for field in self.fields
+        ):
+            raise ValueError(f"Unsupported analysis feedback fields: {self.fields}")
+        if type(self.allowed_emotions) is not tuple:
+            raise ValueError("Analysis feedback emotions must be a typed tuple")
+        if any(
+            type(emotion) is not str or emotion not in ALLOWED_EMOTIONS
+            for emotion in self.allowed_emotions
+        ):
+            raise ValueError(
+                f"Unsupported analysis feedback emotions: {self.allowed_emotions}"
+            )
+        if type(self.rule) is not str or (self.rule and self.rule not in HOST_AFFECT_RULES):
+            raise ValueError(f"Unsupported host affect feedback rule: {self.rule}")
+        resolved_id = identifier if identifier is not None else self.stable_id
+        if type(resolved_id) is not str or not resolved_id.strip():
+            raise ValueError("Analysis feedback ID must be a non-empty string")
+        fields = tuple(self.fields)
+        allowed_emotions = tuple(self.allowed_emotions)
+        if self.code == HOST_AFFECT_ISSUE_CODE:
+            if fields != ("emotion",) or not allowed_emotions or not self.rule:
+                raise ValueError("Host affect feedback is missing its canonical constraints")
+        elif self.code == "SEMANTIC_EXPLANATION_REQUIRED":
+            if fields != ("notes",) or allowed_emotions or self.rule:
+                raise ValueError("Semantic explanation feedback must target notes only")
+        elif self.code == "SEMANTIC_DELIVERY_MISMATCH":
+            if fields != ("emotion",) or allowed_emotions or self.rule:
+                raise ValueError("Semantic delivery feedback must target emotion only")
+        elif self.code == "SEMANTIC_TEMPLATE_COLLAPSE":
+            if (
+                fields != ("emotion", "intensity", "pace", "volume")
+                or allowed_emotions
+                or self.rule
+            ):
+                raise ValueError("Semantic template feedback has invalid target fields")
+        elif (
+            not fields
+            or "notes" in fields
+            or allowed_emotions
+            or self.rule
+        ):
+            raise ValueError("Director feedback has invalid canonical constraints")
+        payload: dict[str, Any] = {
+            "id": resolved_id,
+            "code": self.code,
+        }
+        if fields:
+            payload["fields"] = list(fields)
+        if allowed_emotions:
+            payload["allowed_emotions"] = list(allowed_emotions)
+        if self.rule:
+            payload["rule"] = self.rule
+        return payload
+
+
+@dataclass(frozen=True)
+class HostAffectEvidence:
+    stable_id: str
+    text_sha256: str
+    rule: str
+    cue_class: str
+    candidate_emotion: str
+    allowed_emotions: tuple[str, ...]
+    outcome: str
+    related_stable_id: str = ""
+    related_text_sha256: str = ""
+
+    def event_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "stable_id": self.stable_id,
+            "text_sha256": self.text_sha256,
+            "rule": self.rule,
+            "cue_class": self.cue_class,
+            "candidate_emotion": self.candidate_emotion,
+            "allowed_emotions": list(self.allowed_emotions),
+            "outcome": self.outcome,
+        }
+        if self.related_stable_id:
+            payload["related_stable_id"] = self.related_stable_id
+        if self.related_text_sha256:
+            payload["related_text_sha256"] = self.related_text_sha256
+        return payload
+
+
+@dataclass(frozen=True)
+class HostAffectIssue:
+    stable_id: str
+    code: str
+    rule: str
+    candidate_emotion: str
+    allowed_emotions: tuple[str, ...]
+    evidence: HostAffectEvidence
+
+    def feedback_issue(self) -> AnalysisFeedbackIssue:
+        return AnalysisFeedbackIssue(
+            stable_id=self.stable_id,
+            code=self.code,
+            fields=("emotion",),
+            allowed_emotions=self.allowed_emotions,
+            rule=self.rule,
+        )
+
+    def event_payload(self) -> dict[str, Any]:
+        return {
+            "stable_id": self.stable_id,
+            "code": self.code,
+            "rule": self.rule,
+            "candidate_emotion": self.candidate_emotion,
+            "allowed_emotions": list(self.allowed_emotions),
+        }
+
+
+@dataclass(frozen=True)
+class HostAffectAdjudication:
+    policy_version: str
+    checked_segment_count: int
+    issues: tuple[HostAffectIssue, ...]
+    evidence: tuple[HostAffectEvidence, ...]
+
+    def issue_fingerprint(self) -> str:
+        material = [issue.event_payload() for issue in self.issues]
+        return sha256_text(
+            json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        )
+
+    def event_payload(self) -> dict[str, Any]:
+        return {
+            "policy_version": self.policy_version,
+            "checked_segment_count": self.checked_segment_count,
+            "issues": [issue.event_payload() for issue in self.issues],
+            "evidence": [item.event_payload() for item in self.evidence],
+        }
+
+    def clearance_payload(self, candidate_hash: str) -> dict[str, Any]:
+        if self.issues:
+            raise ValueError("Host affect clearance cannot be created for a rejected candidate")
+        return {
+            "policy_version": self.policy_version,
+            "status": "cleared",
+            "candidate_hash": candidate_hash,
+            "checked_segment_count": self.checked_segment_count,
+            "matched_rule_count": len(self.evidence),
+            "evidence": [item.event_payload() for item in self.evidence],
+        }
+
+
+def _row_optional_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
+def _row_optional_int(row: Any, key: str) -> int | None:
+    value = _row_optional_value(row, key)
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _host_mortality_match(text: str) -> re.Match[str] | None:
+    matches = list(HOST_SELF_PRESERVATION_MORTALITY_PATTERN.finditer(text))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    experiencers = list(HOST_EXPERIENCER_PATTERN.finditer(text[: match.start()]))
+    if not experiencers:
+        return match if HOST_SUBJECTLESS_SELF_CONTROL_PATTERN.fullmatch(text) else None
+    nearest_experiencer = " ".join(experiencers[-1].group(0).casefold().split())
+    return match if nearest_experiencer in HOST_SELF_EXPERIENCERS else None
+
+
+def _qualified_host_self_preservation_match(text: str) -> re.Match[str] | None:
+    match = _host_mortality_match(text)
+    if match is None or set(_semantic_cue_matches(text)) != {"afraid"}:
+        return None
+    return match
+
+
+def _host_previous_source(
+    group: list[Any],
+    index: int,
+    original_context: dict[str, dict[str, Any]] | None,
+) -> dict[str, Any] | None:
+    row = group[index]
+    stable_id = str(row["stable_id"])
+    if original_context is not None:
+        context = original_context.get(stable_id, {})
+        previous_stable_id = str(context.get("previous_stable_id", ""))
+        if previous_stable_id:
+            return {
+                "stable_id": previous_stable_id,
+                "text": str(context.get("previous_text", "")),
+                "text_sha256": str(context.get("previous_text_sha256", "")),
+                "chapter_id": context.get("previous_chapter_id"),
+                "paragraph_index": context.get("previous_paragraph_index"),
+                "kind_hint": str(context.get("previous_kind_hint", "")),
+            }
+    if index <= 0:
+        return None
+    previous = group[index - 1]
+    return {
+        "stable_id": str(previous["stable_id"]),
+        "text": str(previous["text"]),
+        "text_sha256": _source_text_sha256(previous),
+        "chapter_id": _row_optional_value(previous, "chapter_id"),
+        "paragraph_index": _row_optional_value(previous, "paragraph_index"),
+        "kind_hint": str(_row_optional_value(previous, "kind_hint", "")),
+    }
+
+
+def _host_affect_adjudication(
+    group: list[Any],
+    validated: dict[str, dict[str, Any]],
+    *,
+    original_context: dict[str, dict[str, Any]] | None = None,
+    policy_version: str = HOST_AFFECT_POLICY_VERSION,
+) -> HostAffectAdjudication:
+    """Apply only source-scoped affect rules whose false-positive surface is narrow."""
+    if policy_version != HOST_AFFECT_POLICY_VERSION:
+        raise ValueError("Unsupported host affect policy")
+    issues: list[HostAffectIssue] = []
+    evidence: list[HostAffectEvidence] = []
+    issue_ids: set[str] = set()
+    afraid_only = ("afraid",)
+    for index, row in enumerate(group):
+        stable_id = str(row["stable_id"])
+        candidate = validated.get(stable_id)
+        if candidate is None:
+            continue
+        source_kind = str(_row_optional_value(row, "kind_hint", ""))
+        if source_kind != "thought" or str(candidate.get("kind", "")) != "thought":
+            continue
+        text = str(row["text"])
+        candidate_emotion = str(candidate.get("emotion", "neutral"))
+        direct_match = _qualified_host_self_preservation_match(text)
+        if direct_match is not None:
+            outcome = "pass" if candidate_emotion in afraid_only else "reject"
+            item_evidence = HostAffectEvidence(
+                stable_id=stable_id,
+                text_sha256=_source_text_sha256(row),
+                rule=HOST_DIRECT_SELF_PRESERVATION_RULE,
+                cue_class="self_preservation_mortality",
+                candidate_emotion=candidate_emotion,
+                allowed_emotions=afraid_only,
+                outcome=outcome,
+            )
+            evidence.append(item_evidence)
+            if outcome == "reject":
+                issues.append(
+                    HostAffectIssue(
+                        stable_id=stable_id,
+                        code=HOST_AFFECT_ISSUE_CODE,
+                        rule=HOST_DIRECT_SELF_PRESERVATION_RULE,
+                        candidate_emotion=candidate_emotion,
+                        allowed_emotions=afraid_only,
+                        evidence=item_evidence,
+                    )
+                )
+                issue_ids.add(stable_id)
+        if (
+            stable_id in issue_ids
+            or HOST_WAKE_SELF_RESCUE_PATTERN.fullmatch(text) is None
+        ):
+            continue
+        previous = _host_previous_source(group, index, original_context)
+        if previous is None or str(previous["kind_hint"]) != "thought":
+            continue
+        chapter_id = _row_optional_int(row, "chapter_id")
+        paragraph_index = _row_optional_int(row, "paragraph_index")
+        try:
+            previous_chapter_id = int(previous["chapter_id"])
+            previous_paragraph_index = int(previous["paragraph_index"])
+        except (TypeError, ValueError):
+            continue
+        if (
+            chapter_id is None
+            or paragraph_index is None
+            or previous_chapter_id != chapter_id
+            or previous_paragraph_index + 1 != paragraph_index
+            or _qualified_host_self_preservation_match(str(previous["text"])) is None
+        ):
+            continue
+        previous_text_sha256 = str(previous["text_sha256"]) or sha256_text(
+            str(previous["text"])
+        )
+        outcome = "pass" if candidate_emotion in afraid_only else "reject"
+        item_evidence = HostAffectEvidence(
+            stable_id=stable_id,
+            text_sha256=_source_text_sha256(row),
+            rule=HOST_ADJACENT_WAKE_RULE,
+            cue_class="wake_self_rescue_after_mortality",
+            candidate_emotion=candidate_emotion,
+            allowed_emotions=afraid_only,
+            outcome=outcome,
+            related_stable_id=str(previous["stable_id"]),
+            related_text_sha256=previous_text_sha256,
+        )
+        evidence.append(item_evidence)
+        if outcome == "reject":
+            issues.append(
+                HostAffectIssue(
+                    stable_id=stable_id,
+                    code=HOST_AFFECT_ISSUE_CODE,
+                    rule=HOST_ADJACENT_WAKE_RULE,
+                    candidate_emotion=candidate_emotion,
+                    allowed_emotions=afraid_only,
+                    evidence=item_evidence,
+                )
+            )
+    return HostAffectAdjudication(
+        policy_version=policy_version,
+        checked_segment_count=len(group),
+        issues=tuple(issues),
+        evidence=tuple(evidence),
+    )
+
+
 def _semantic_delivery_issues(
     group: list[Any],
     validated: dict[str, dict[str, Any]],
@@ -1989,7 +2372,7 @@ def _director_candidate_rows(
     group: list[Any],
     validated: dict[str, dict[str, Any]],
     *,
-    original_context: dict[str, dict[str, str]] | None = None,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     signature_counts = Counter(
         _delivery_signature(data) for data in validated.values()
@@ -2017,9 +2400,9 @@ def _director_candidate_rows(
     return rows
 
 
-def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, str]]:
+def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, Any]]:
     """Bind each source row to its immutable same-chapter neighbors before resume filtering."""
-    context_by_id: dict[str, dict[str, str]] = {}
+    context_by_id: dict[str, dict[str, Any]] = {}
     for index, row in enumerate(rows):
         chapter_id = int(row["chapter_id"])
         previous_row = rows[index - 1] if index else None
@@ -2035,6 +2418,56 @@ def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, str]]:
                 if next_row is not None and int(next_row["chapter_id"]) == chapter_id
                 else ""
             ),
+            "previous_stable_id": (
+                str(previous_row["stable_id"])
+                if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
+                else ""
+            ),
+            "previous_text_sha256": (
+                _source_text_sha256(previous_row)
+                if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
+                else ""
+            ),
+            "previous_chapter_id": (
+                int(previous_row["chapter_id"])
+                if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
+                else None
+            ),
+            "previous_paragraph_index": (
+                _row_optional_int(previous_row, "paragraph_index")
+                if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
+                else None
+            ),
+            "previous_kind_hint": (
+                str(previous_row["kind_hint"])
+                if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
+                else ""
+            ),
+            "next_stable_id": (
+                str(next_row["stable_id"])
+                if next_row is not None and int(next_row["chapter_id"]) == chapter_id
+                else ""
+            ),
+            "next_text_sha256": (
+                _source_text_sha256(next_row)
+                if next_row is not None and int(next_row["chapter_id"]) == chapter_id
+                else ""
+            ),
+            "next_chapter_id": (
+                int(next_row["chapter_id"])
+                if next_row is not None and int(next_row["chapter_id"]) == chapter_id
+                else None
+            ),
+            "next_paragraph_index": (
+                _row_optional_int(next_row, "paragraph_index")
+                if next_row is not None and int(next_row["chapter_id"]) == chapter_id
+                else None
+            ),
+            "next_kind_hint": (
+                str(next_row["kind_hint"])
+                if next_row is not None and int(next_row["chapter_id"]) == chapter_id
+                else ""
+            ),
         }
     return context_by_id
 
@@ -2042,7 +2475,7 @@ def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, str]]:
 def _neighbor_texts(
     group: list[Any],
     index: int,
-    original_context: dict[str, dict[str, str]] | None,
+    original_context: dict[str, dict[str, Any]] | None,
 ) -> tuple[str, str]:
     stable_id = str(group[index]["stable_id"])
     if original_context is not None and stable_id in original_context:
@@ -2070,16 +2503,38 @@ def _source_text_sha256(row: Any) -> str:
 
 def _analysis_context_hash(
     group: list[Any],
-    original_context: dict[str, dict[str, str]] | None,
+    original_context: dict[str, dict[str, Any]] | None,
 ) -> str:
     context = []
     for index, row in enumerate(group):
         previous_text, next_text = _neighbor_texts(group, index, original_context)
+        source_context = (
+            original_context.get(str(row["stable_id"]), {})
+            if original_context is not None
+            else {}
+        )
         context.append(
             {
                 "stable_id": str(row["stable_id"]),
+                "chapter_id": int(row["chapter_id"]),
+                "paragraph_index": _row_optional_int(row, "paragraph_index"),
+                "kind_hint": str(row["kind_hint"]),
+                "previous_stable_id": str(source_context.get("previous_stable_id", "")),
                 "previous_text_sha256": sha256_text(previous_text),
+                "previous_source_text_sha256": str(
+                    source_context.get("previous_text_sha256", "")
+                ),
+                "previous_chapter_id": source_context.get("previous_chapter_id"),
+                "previous_paragraph_index": source_context.get("previous_paragraph_index"),
+                "previous_kind_hint": str(source_context.get("previous_kind_hint", "")),
+                "next_stable_id": str(source_context.get("next_stable_id", "")),
                 "next_text_sha256": sha256_text(next_text),
+                "next_source_text_sha256": str(
+                    source_context.get("next_text_sha256", "")
+                ),
+                "next_chapter_id": source_context.get("next_chapter_id"),
+                "next_paragraph_index": source_context.get("next_paragraph_index"),
+                "next_kind_hint": str(source_context.get("next_kind_hint", "")),
             }
         )
     return sha256_text(
@@ -2089,12 +2544,15 @@ def _analysis_context_hash(
 
 def _analysis_group_fingerprint(
     group: list[Any],
-    original_context: dict[str, dict[str, str]] | None = None,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     sources = [
         {
             "stable_id": str(row["stable_id"]),
             "text_sha256": _source_text_sha256(row),
+            "chapter_id": int(row["chapter_id"]),
+            "paragraph_index": _row_optional_int(row, "paragraph_index"),
+            "kind_hint": str(row["kind_hint"]),
         }
         for row in group
     ]
@@ -2107,11 +2565,207 @@ def _analysis_group_fingerprint(
     )
 
 
-def _analysis_feedback_hash(validation_feedback: dict[str, str] | None) -> str:
-    feedback = {
-        str(stable_id): str(reason)
-        for stable_id, reason in (validation_feedback or {}).items()
+def _analysis_policy_fingerprint(
+    settings: dict[str, Any],
+    quality_policy_hash: str | None,
+) -> str:
+    material = {
+        "version": ANALYSIS_LEDGER_POLICY_VERSION,
+        "quality_policy_hash": str(quality_policy_hash or "standalone").strip(),
+        "retry_policy_version": str(settings["retry_policy_version"]),
+        "host_policy_version": HOST_AFFECT_POLICY_VERSION,
+        "director_policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
+        "generator_system_prompt_hash": sha256_text(SYSTEM_PROMPT),
+        "director_system_prompt_hash": sha256_text(DIRECTOR_CRITIC_SYSTEM_PROMPT),
+        "generator_schema_hash": sha256_text(
+            json.dumps(OUTPUT_SCHEMA, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        ),
+        "director_schema_hash": sha256_text(
+            json.dumps(
+                DIRECTOR_CRITIC_SCHEMA,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        ),
+        "max_retries": int(settings.get("max_retries", 3)),
+        "retry_temperatures": [float(value) for value in settings["retry_temperatures"]],
+        "director_critic_max_retries": int(
+            settings.get("director_critic_max_retries", 2)
+        ),
+        "director_critic_temperature": float(
+            settings.get("director_critic_temperature", 0.0)
+        ),
+        "director_confidence_cap": float(
+            settings.get("director_confidence_cap", DIRECTOR_CONFIDENCE_MAX)
+        ),
+        "low_confidence_threshold": float(
+            settings.get("low_confidence_threshold", 0.58)
+        ),
     }
+    return sha256_text(
+        json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    )
+
+
+def _analysis_candidate_envelope(
+    group: list[Any],
+    validated: dict[str, dict[str, Any]],
+    pronunciations: list[dict[str, Any]],
+    critic_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    ordered_fields = (
+        "kind",
+        "speaker",
+        "gender",
+        "age",
+        "emotion",
+        "intensity",
+        "pace",
+        "volume",
+        "confidence",
+        "personality_hint",
+        "notes",
+    )
+    return {
+        "segments": [
+            {
+                "segment_id": int(row["id"]),
+                "stable_id": str(row["stable_id"]),
+                "text_sha256": _source_text_sha256(row),
+                "data": {
+                    field: copy.deepcopy(validated[str(row["stable_id"])][field])
+                    for field in ordered_fields
+                },
+            }
+            for row in group
+        ],
+        "pronunciations": copy.deepcopy(pronunciations),
+        "critic_rows": copy.deepcopy(critic_rows),
+    }
+
+
+def _analysis_envelope_validated(candidate: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(segment["stable_id"]): copy.deepcopy(segment["data"])
+        for segment in candidate["segments"]
+    }
+
+
+def _analysis_commit_envelope(
+    candidate: dict[str, Any],
+    validated: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    commit = copy.deepcopy(candidate)
+    for segment in commit["segments"]:
+        stable_id = str(segment["stable_id"])
+        segment["data"]["confidence"] = validated[stable_id]["confidence"]
+    return commit
+
+
+def _analysis_candidate_deterministic_evidence(
+    host_clearance: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "host_affect_clearance": copy.deepcopy(host_clearance),
+        "semantic_issues": [],
+    }
+
+
+def _legacy_feedback_issues(
+    stable_id: str,
+    reason: str,
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    if reason.startswith("DIRECTOR_FIELD_MISMATCH fields="):
+        fields = tuple(field.strip() for field in reason.partition("=")[2].split(","))
+        if not fields:
+            raise ValueError("Director field-mismatch feedback is missing fields")
+        return (
+            AnalysisFeedbackIssue(
+                stable_id=stable_id,
+                code="DIRECTOR_FIELD_MISMATCH",
+                fields=fields,
+            ),
+        )
+    if reason.startswith(("DIRECTOR_INVALID_RESPONSE", "DIRECTOR_CANDIDATE_HASH_MISMATCH")):
+        return ()
+    issues: list[AnalysisFeedbackIssue] = []
+    if "notes không có giải thích" in reason:
+        issues.append(
+            AnalysisFeedbackIssue(
+                stable_id=stable_id,
+                code="SEMANTIC_EXPLANATION_REQUIRED",
+                fields=("notes",),
+            )
+        )
+    if "bị lặp trên batch" in reason:
+        issues.append(
+            AnalysisFeedbackIssue(
+                stable_id=stable_id,
+                code="SEMANTIC_TEMPLATE_COLLAPSE",
+                fields=("emotion", "intensity", "pace", "volume"),
+            )
+        )
+    if "mâu thuẫn" in reason:
+        issues.append(
+            AnalysisFeedbackIssue(
+                stable_id=stable_id,
+                code="SEMANTIC_DELIVERY_MISMATCH",
+                fields=("emotion",),
+            )
+        )
+    if not issues:
+        issues.append(
+            AnalysisFeedbackIssue(
+                stable_id=stable_id,
+                code="SEMANTIC_DELIVERY_MISMATCH",
+                fields=("emotion",),
+            )
+        )
+    return tuple(issues)
+
+
+def _structured_feedback_issues(
+    validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+    *,
+    allowed_stable_ids: set[str] | None = None,
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    if isinstance(validation_feedback, dict):
+        issues = tuple(
+            issue
+            for stable_id, reason in validation_feedback.items()
+            for issue in _legacy_feedback_issues(str(stable_id), str(reason))
+        )
+    else:
+        issues = tuple(validation_feedback or ())
+    constrained: set[AnalysisFeedbackIssue] = set()
+    for issue in issues:
+        if type(issue) is not AnalysisFeedbackIssue:
+            raise ValueError("Analysis feedback must contain typed issue objects")
+        issue.canonical_payload()
+        if allowed_stable_ids is None or issue.stable_id in allowed_stable_ids:
+            constrained.add(issue)
+    return tuple(
+        sorted(
+            constrained,
+            key=lambda issue: (
+                issue.stable_id,
+                issue.code,
+                issue.rule,
+                issue.fields,
+                issue.allowed_emotions,
+            ),
+        )
+    )
+
+
+def _analysis_feedback_hash(
+    validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+) -> str:
+    feedback = [
+        issue.canonical_payload()
+        for issue in _structured_feedback_issues(validation_feedback)
+    ]
     return sha256_text(
         json.dumps(feedback, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     )
@@ -2125,12 +2779,16 @@ def _analysis_retry_seed(
     group_fingerprint: str,
     attempt: int,
     candidate_hash: str = "",
+    host_policy_version: str = HOST_AFFECT_POLICY_VERSION,
+    director_policy_version: str = DIRECTOR_CRITIC_POLICY_VERSION,
 ) -> int:
     material = {
         "attempt": attempt,
         "candidate_hash": candidate_hash,
         "group_fingerprint": group_fingerprint,
+        "host_policy_version": host_policy_version,
         "model_digest": model_digest,
+        "director_policy_version": director_policy_version,
         "retry_policy_version": retry_policy_version,
         "role": role,
     }
@@ -2147,8 +2805,8 @@ def _generator_request_contract(
     model_digest: str,
     group: list[Any],
     attempt: int,
-    validation_feedback: dict[str, str] | None,
-    original_context: dict[str, dict[str, str]] | None = None,
+    validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     temperatures = settings["retry_temperatures"]
     if attempt < 1 or attempt > len(temperatures):
@@ -2159,14 +2817,15 @@ def _generator_request_contract(
     context_hash = _analysis_context_hash(group, original_context)
     group_fingerprint = _analysis_group_fingerprint(group, original_context)
     group_ids = {str(row["stable_id"]) for row in group}
-    constrained_feedback = {
-        str(stable_id): str(reason)
-        for stable_id, reason in (validation_feedback or {}).items()
-        if str(stable_id) in group_ids
-    }
+    constrained_feedback = _structured_feedback_issues(
+        validation_feedback,
+        allowed_stable_ids=group_ids,
+    )
     return {
         "role": "generator",
         "retry_policy_version": retry_policy_version,
+        "host_policy_version": HOST_AFFECT_POLICY_VERSION,
+        "director_policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
         "model": model,
         "digest": model_digest,
         "attempt": attempt,
@@ -2177,6 +2836,8 @@ def _generator_request_contract(
             role="generator",
             group_fingerprint=group_fingerprint,
             attempt=attempt,
+            host_policy_version=HOST_AFFECT_POLICY_VERSION,
+            director_policy_version=DIRECTOR_CRITIC_POLICY_VERSION,
         ),
         "group_fingerprint": group_fingerprint,
         "context_hash": context_hash,
@@ -2192,7 +2853,7 @@ def _director_critic_request_contract(
     group: list[Any],
     attempt: int,
     candidate_hash: str,
-    original_context: dict[str, dict[str, str]] | None = None,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     retry_policy_version = str(settings["retry_policy_version"])
     if retry_policy_version != ANALYSIS_RETRY_POLICY_VERSION:
@@ -2202,6 +2863,12 @@ def _director_critic_request_contract(
     return {
         "role": "director_critic",
         "retry_policy_version": retry_policy_version,
+        "host_policy_version": HOST_AFFECT_POLICY_VERSION,
+        "director_policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
+        "policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
+        "confidence_cap": float(
+            settings.get("director_confidence_cap", DIRECTOR_CONFIDENCE_MAX)
+        ),
         "model": model,
         "digest": model_digest,
         "attempt": attempt,
@@ -2213,6 +2880,8 @@ def _director_critic_request_contract(
             group_fingerprint=group_fingerprint,
             attempt=attempt,
             candidate_hash=candidate_hash,
+            host_policy_version=HOST_AFFECT_POLICY_VERSION,
+            director_policy_version=DIRECTOR_CRITIC_POLICY_VERSION,
         ),
         "group_fingerprint": group_fingerprint,
         "context_hash": context_hash,
@@ -2435,9 +3104,20 @@ def _analysis_output_token_limit(segment_count: int, num_ctx: int) -> int:
 
 
 class OllamaBookAnalyzer:
-    def __init__(self, settings: dict[str, Any], db: ProjectDB, log: Callable[[str], None]) -> None:
+    def __init__(
+        self,
+        settings: dict[str, Any],
+        db: ProjectDB,
+        log: Callable[[str], None],
+        *,
+        quality_policy_hash: str | None = None,
+    ) -> None:
         self.settings = settings["analysis"]
         self.quality_profile = str(settings.get("quality_profile", "balanced"))
+        self.analysis_policy_fingerprint = _analysis_policy_fingerprint(
+            self.settings,
+            quality_policy_hash,
+        )
         self.allow_downloads = bool(settings.get("safety", {}).get("allow_network_downloads_during_job", False))
         self.db = db
         self.log = log
@@ -2693,9 +3373,9 @@ class OllamaBookAnalyzer:
         *,
         stop_requested: Callable[[], bool] | None = None,
         activity: Callable[[int, int], None] | None = None,
-        validation_feedback: dict[str, str] | None = None,
+        validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None = None,
         request_contract: dict[str, Any] | None = None,
-        original_context: dict[str, dict[str, str]] | None = None,
+        original_context: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if stop_requested is not None and stop_requested():
             raise AnalysisRequestStopped("Stop requested before Ollama request")
@@ -2730,16 +3410,25 @@ class OllamaBookAnalyzer:
         )
         if validation_feedback:
             stable_to_batch = {stable: batch for batch, stable in batch_to_stable.items()}
-            feedback_lines = [
-                f"- {stable_to_batch[stable_id]}: {reason}"
-                for stable_id, reason in validation_feedback.items()
-                if stable_id in stable_to_batch
+            feedback_payload = [
+                issue.canonical_payload(stable_to_batch[issue.stable_id])
+                for issue in _structured_feedback_issues(
+                    validation_feedback,
+                    allowed_stable_ids=set(stable_to_batch),
+                )
             ]
-            if feedback_lines:
+            if feedback_payload:
                 prompt += (
-                    "\n\nKết quả lần trước không qua kiểm tra semantic. Hãy phân tích lại toàn batch, "
-                    "đặc biệt sửa đúng các lỗi sau; không sao chép nhãn sang ID lân cận:\n"
-                    + "\n".join(feedback_lines)
+                    "\n\nKết quả lần trước không qua kiểm tra host. Hãy phân tích lại toàn batch, "
+                    "chỉ sửa các trường trong danh sách lỗi canonical dưới đây và không sao chép "
+                    "nhãn sang ID lân cận. Mã lỗi/rule/allowed_emotions là whitelist do host tạo; "
+                    "không suy diễn thêm nội dung phản biện:\n"
+                    + json.dumps(
+                        feedback_payload,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    )
                 )
         expected_contract = _generator_request_contract(
             self.settings,
@@ -2797,9 +3486,14 @@ class OllamaBookAnalyzer:
         candidate_rows: list[dict[str, Any]] | None = None,
         candidate_hash: str | None = None,
         request_contract: dict[str, Any] | None = None,
-        original_context: dict[str, dict[str, str]] | None = None,
+        original_context: dict[str, dict[str, Any]] | None = None,
+        preflight_checked: bool = False,
     ) -> tuple[dict[str, Any], str]:
-        if stop_requested is not None and stop_requested():
+        if (
+            not preflight_checked
+            and stop_requested is not None
+            and stop_requested()
+        ):
             raise AnalysisRequestStopped("Stop requested before Ollama request")
         if self.settings.get("director_critic_required", False) and not self._model_digest:
             raise RuntimeError("Required director critic is missing the locked Ollama model digest")
@@ -2845,7 +3539,8 @@ class OllamaBookAnalyzer:
                 ),
             },
         }
-        self._verify_locked_model_digest("before director critic request")
+        if not preflight_checked:
+            self._verify_locked_model_digest("before director critic request")
         payload = self._stream_json_response(
             request,
             stop_requested=stop_requested,
@@ -2869,6 +3564,7 @@ class OllamaBookAnalyzer:
         if not isinstance(raw_items, list):
             return []
         validated: list[dict[str, Any]] = []
+        normalized_surfaces: set[str] = set()
         for item in raw_items:
             if not isinstance(item, dict):
                 continue
@@ -2889,15 +3585,19 @@ class OllamaBookAnalyzer:
                 continue
             if surface.casefold() == spoken_form.casefold():
                 continue
+            normalized_surface = _name_candidate_key(surface)
+            if normalized_surface in normalized_surfaces:
+                continue
             if not _valid_vietnamese_spoken_form(surface, spoken_form):
                 repaired = _repair_vietnamese_syllable_boundaries(surface, spoken_form)
                 if repaired is None:
-                    continue
+                        continue
                 spoken_form = repaired
+            normalized_surfaces.add(normalized_surface)
             validated.append(
                 {
                     "surface": surface,
-                    "normalized_surface": _name_candidate_key(surface),
+                    "normalized_surface": normalized_surface,
                     "spoken_form": spoken_form,
                     "confidence": confidence,
                     "source": "analysis",
@@ -2917,6 +3617,213 @@ class OllamaBookAnalyzer:
                 locked=bool(pronunciation["locked"]),
             )
 
+    def _analysis_ledger_enabled(self) -> bool:
+        required_methods = (
+            "allocate_or_resume_analysis_candidate",
+            "analysis_candidate_acceptance_envelope",
+            "complete_analysis_critic_attempt",
+            "finalize_exhausted_analysis_critic_candidate",
+            "find_resumable_analysis_candidate",
+            "get_analysis_candidate",
+            "get_analysis_candidate_exact",
+            "list_analysis_critic_attempts",
+            "record_analysis_candidate_generator_contract",
+            "reserve_analysis_critic_attempt",
+            "analysis_model_lock",
+            "update_analysis_batch_with_event",
+        )
+        return all(callable(getattr(self.db, method, None)) for method in required_methods)
+
+    @staticmethod
+    def _durable_host_clearance(candidate_row: Any) -> dict[str, Any]:
+        deterministic = json.loads(str(candidate_row["deterministic_issue_json"]))
+        clearance = deterministic.get("host_affect_clearance")
+        if (
+            not isinstance(clearance, dict)
+            or clearance.get("status") != "cleared"
+            or clearance.get("policy_version") != HOST_AFFECT_POLICY_VERSION
+            or clearance.get("candidate_hash") != str(candidate_row["candidate_hash"])
+        ):
+            raise RuntimeError("Durable analysis candidate lacks exact host affect clearance")
+        return clearance
+
+    @staticmethod
+    def _durable_generator_contract(candidate_row: Any) -> dict[str, Any]:
+        contract = json.loads(str(candidate_row["initial_generator_contract_json"]))
+        if not isinstance(contract, dict):
+            raise RuntimeError("Durable analysis candidate generator contract is invalid")
+        return contract
+
+    def _durable_director_rejection(
+        self,
+        candidate_row: Any,
+    ) -> tuple[dict[str, str], dict[str, Any]]:
+        attempts = self.db.list_analysis_critic_attempts(int(candidate_row["id"]))
+        if not attempts:
+            raise RuntimeError("Rejected analysis candidate has no durable critic attempt")
+        outcome = json.loads(str(attempts[-1]["outcome_json"]))
+        evidence = json.loads(str(attempts[-1]["evidence_json"]))
+        issues = outcome.get("payload", {}).get("issues")
+        if not isinstance(issues, dict) or not all(
+            isinstance(stable_id, str) and isinstance(reason, str)
+            for stable_id, reason in issues.items()
+        ):
+            raise RuntimeError("Rejected analysis candidate has invalid durable issues")
+        return issues, evidence
+
+    def _run_durable_director_critic(
+        self,
+        *,
+        candidate_row: Any,
+        group: list[Any],
+        original_context: dict[str, dict[str, Any]],
+        stop_requested: Callable[[], bool],
+        group_index: int,
+        group_count: int,
+        confidence_cap: float,
+        confidence_floor: float,
+    ) -> tuple[Any, dict[str, str], dict[str, Any], dict[str, dict[str, Any]]]:
+        candidate_id = int(candidate_row["id"])
+        candidate = json.loads(str(candidate_row["candidate_json"]))
+        candidate_hash = str(candidate_row["candidate_hash"])
+        max_attempts = int(candidate_row["critic_max_attempts"])
+        generator_contract = self._durable_generator_contract(candidate_row)
+        while True:
+            candidate_row = self.db.get_analysis_candidate(candidate_id)
+            state = str(candidate_row["state"])
+            if state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                return candidate_row, {}, {}, _analysis_envelope_validated(
+                    self.db.analysis_candidate_acceptance_envelope(candidate_id)[
+                        "commit_envelope"
+                    ]
+                )
+            if state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
+                issues, evidence = self._durable_director_rejection(candidate_row)
+                return candidate_row, issues, evidence, {}
+            if state == ANALYSIS_CANDIDATE_TERMINAL:
+                return candidate_row, {}, {}, {}
+            attempt_count = int(candidate_row["critic_attempt_count"])
+            if attempt_count >= max_attempts:
+                candidate_row = self.db.finalize_exhausted_analysis_critic_candidate(
+                    candidate_id,
+                    reason="director_critic_attempt_budget_exhausted",
+                )
+                return candidate_row, {}, {}, {}
+            attempt_number = attempt_count + 1
+            request_contract = _director_critic_request_contract(
+                self.settings,
+                model=self.model,
+                model_digest=str(self._model_digest),
+                group=group,
+                attempt=attempt_number,
+                candidate_hash=candidate_hash,
+                original_context=original_context,
+            )
+            intent = {
+                "policy_fingerprint": str(candidate_row["policy_fingerprint"]),
+                "model_name": str(candidate_row["model_name"]),
+                "model_digest": str(candidate_row["model_digest"]),
+                "group_fingerprint": str(candidate_row["group_fingerprint"]),
+                "context_hash": str(candidate_row["context_hash"]),
+                "candidate_hash": candidate_hash,
+                "envelope_hash": str(candidate_row["envelope_hash"]),
+                "attempt": attempt_number,
+            }
+            if stop_requested():
+                raise AnalysisRequestStopped("Stop requested before director critic intent")
+            self._verify_locked_model_digest("before director critic request")
+            if stop_requested():
+                raise AnalysisRequestStopped("Stop requested before director critic intent")
+            reserved = self.db.reserve_analysis_critic_attempt(
+                candidate_id,
+                expected_state=state,
+                max_attempts=max_attempts,
+                intent=intent,
+                contract=request_contract,
+            )
+            attempt_validated = _analysis_envelope_validated(candidate)
+            try:
+                critic_payload, returned_candidate_hash = self._request_director_critic(
+                    group,
+                    attempt_validated,
+                    stop_requested=stop_requested,
+                    activity=lambda elapsed, chars, batch=group_index: self.log(
+                        f"Director critic batch {batch}/{group_count} is still running: "
+                        f"{elapsed}s, {chars:,} JSON characters received."
+                    ),
+                    candidate_rows=copy.deepcopy(candidate["critic_rows"]),
+                    candidate_hash=candidate_hash,
+                    request_contract=request_contract,
+                    original_context=original_context,
+                    preflight_checked=True,
+                )
+                if returned_candidate_hash != candidate_hash:
+                    critic_payload = {
+                        "candidate_hash": returned_candidate_hash,
+                        "verdicts": critic_payload.get("verdicts", []),
+                    }
+                critic_issues, critic_evidence = _adjudicate_director_critic(
+                    group,
+                    attempt_validated,
+                    critic_payload,
+                    candidate_hash=candidate_hash,
+                    confidence_cap=confidence_cap,
+                    confidence_floor=confidence_floor,
+                )
+            except (AnalysisRequestStopped, AnalysisModelDigestError):
+                raise
+            except BaseException:
+                raise
+            retryable_invalid = bool(critic_issues) and all(
+                reason.startswith((
+                    "DIRECTOR_INVALID_RESPONSE",
+                    "DIRECTOR_CANDIDATE_HASH_MISMATCH",
+                ))
+                for reason in critic_issues.values()
+            )
+            result_state = (
+                ANALYSIS_CANDIDATE_CRITIC_INVALID
+                if retryable_invalid
+                else (
+                    ANALYSIS_CANDIDATE_CRITIC_REJECTED
+                    if critic_issues
+                    else ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+                )
+            )
+            critic_evidence["critic_contract"] = copy.deepcopy(request_contract)
+            critic_evidence["critic_attempt_contracts"] = [
+                json.loads(str(item["contract_json"]))
+                for item in self.db.list_analysis_critic_attempts(candidate_id)
+            ]
+            critic_evidence["generator_contract"] = generator_contract
+            commit_envelope = (
+                _analysis_commit_envelope(candidate, attempt_validated)
+                if result_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+                else None
+            )
+            self.db.complete_analysis_critic_attempt(
+                candidate_id,
+                int(reserved["attempt_number"]),
+                expected_intent_hash=str(reserved["intent_hash"]),
+                expected_contract_hash=str(reserved["contract_hash"]),
+                result_state=result_state,
+                outcome={
+                    "issues": critic_issues,
+                    "retryable_invalid": retryable_invalid,
+                },
+                evidence=critic_evidence,
+                commit_envelope=commit_envelope,
+            )
+            candidate_row = self.db.get_analysis_candidate(candidate_id)
+            if result_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                return candidate_row, {}, critic_evidence, attempt_validated
+            if result_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
+                return candidate_row, critic_issues, critic_evidence, {}
+            self.log(
+                "Director critic returned invalid evidence; retrying the same durable "
+                f"candidate_hash={candidate_hash}, attempt {attempt_number + 1}/{max_attempts}."
+            )
+
     def analyze_all(
         self,
         stop_requested: Callable[[], bool],
@@ -2929,26 +3836,55 @@ class OllamaBookAnalyzer:
         if not pending:
             self.log("Toàn bộ segment đã có checkpoint phân tích.")
             return
-        llm_ready = self.ensure_available()
-        if (
-            llm_ready
-            and self.settings.get("director_critic_required", False)
-            and not self._model_digest
-        ):
+        required = bool(self.settings.get("enabled", True) and self.settings.get("required", True))
+        director_critic_enabled = bool(self.settings.get("director_critic_enabled", False))
+        director_critic_required = bool(self.settings.get("director_critic_required", False))
+        ledger_required = self.quality_profile == "high_quality" and director_critic_enabled
+        ledger_available = self._analysis_ledger_enabled()
+        if ledger_required and not ledger_available:
             raise RuntimeError(
-                "Phản biện đạo diễn bắt buộc không thể khóa Ollama model vì /api/tags thiếu digest."
+                "High-quality director analysis requires the durable analysis candidate ledger"
             )
-        if llm_ready:
-            if not self._model_digest:
-                raise RuntimeError("Ollama model digest is unavailable; refusing mixed analysis")
-            self.db.lock_analysis_model(self.model, self._model_digest)
-        if not llm_ready:
-            if self.settings.get("enabled", True) and self.settings.get("required", True):
+        ledger_enabled = ledger_required
+        llm_ready: bool | None = None
+        if ledger_enabled:
+            model_lock = self.db.analysis_model_lock()
+            if model_lock is not None:
+                if str(model_lock["model_name"]) != self.model:
+                    raise RuntimeError(
+                        "Configured analysis model differs from the model locked for this book"
+                    )
+                self._model_digest = str(model_lock["model_digest"])
+
+        def ensure_llm_ready() -> bool:
+            nonlocal llm_ready
+            if llm_ready is not None:
+                return llm_ready
+            llm_ready = self.ensure_available()
+            if llm_ready and director_critic_required and not self._model_digest:
+                raise RuntimeError(
+                    "Phản biện đạo diễn bắt buộc không thể khóa Ollama model vì /api/tags thiếu digest."
+                )
+            if llm_ready:
+                if not self._model_digest:
+                    raise RuntimeError(
+                        "Ollama model digest is unavailable; refusing mixed analysis"
+                    )
+                self.db.lock_analysis_model(self.model, self._model_digest)
+            elif required:
                 raise RuntimeError(
                     f"Ollama/Qwen model {self.model} không sẵn sàng. "
                     "Pipeline dừng thay vì âm thầm hạ chất lượng phân tích toàn book."
                 )
-            self.log("Phân tích AI bị tắt/không bắt buộc; dùng heuristic và đánh warning, không dừng hỏi người dùng.")
+            else:
+                self.log(
+                    "Phân tích AI bị tắt/không bắt buộc; dùng heuristic và đánh warning, "
+                    "không dừng hỏi người dùng."
+                )
+            return llm_ready
+
+        if not ledger_enabled:
+            ensure_llm_ready()
         configured_max_segments = int(self.settings.get("batch_segments", 28))
         max_segments = min(configured_max_segments, HIGH_QUALITY_ANALYSIS_BATCH_SEGMENTS)
         max_chars = int(self.settings.get("batch_chars", 6200))
@@ -2990,9 +3926,6 @@ class OllamaBookAnalyzer:
 
         done = len(all_rows) - len(pending)
         total = len(all_rows)
-        required = bool(self.settings.get("enabled", True) and self.settings.get("required", True))
-        director_critic_enabled = bool(self.settings.get("director_critic_enabled", False))
-        director_critic_required = bool(self.settings.get("director_critic_required", False))
         director_confidence_cap = float(
             self.settings.get("director_confidence_cap", DIRECTOR_CONFIDENCE_MAX)
         )
@@ -3010,13 +3943,81 @@ class OllamaBookAnalyzer:
             payload: dict[str, Any] = {}
             last_error = "AI analysis is unavailable"
             split_scalable_failure = False
+            repeated_host_candidate = False
+            repeated_director_candidate = False
             received_incomplete_ids = False
             received_semantic_issues = False
             received_director_critic_issues = False
-            validation_feedback: dict[str, str] = {}
+            validation_feedback: tuple[AnalysisFeedbackIssue, ...] = ()
+            previous_host_rejection: tuple[str, str] | None = None
             accepted_director_evidence: dict[str, Any] | None = None
             accepted_generator_contract: dict[str, Any] | None = None
-            if llm_ready:
+            accepted_host_clearance: dict[str, Any] | None = None
+            accepted_pronunciations: list[dict[str, Any]] = []
+            accepted_analysis_candidate_id: int | None = None
+            durable_critic_exhausted = False
+            group_fingerprint = _analysis_group_fingerprint(group, original_context)
+            context_hash = _analysis_context_hash(group, original_context)
+            resumable_candidate = None
+            if ledger_enabled and self._model_digest:
+                resumable_candidate = self.db.find_resumable_analysis_candidate(
+                    policy_fingerprint=self.analysis_policy_fingerprint,
+                    model_name=self.model,
+                    model_digest=str(self._model_digest),
+                    group_fingerprint=group_fingerprint,
+                    context_hash=context_hash,
+                )
+            if resumable_candidate is not None:
+                if str(resumable_candidate["state"]) != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                    ensure_llm_ready()
+                    (
+                        resumable_candidate,
+                        durable_issues,
+                        durable_evidence,
+                        durable_validated,
+                    ) = self._run_durable_director_critic(
+                        candidate_row=resumable_candidate,
+                        group=group,
+                        original_context=original_context,
+                        stop_requested=stop_requested,
+                        group_index=group_index,
+                        group_count=len(groups),
+                        confidence_cap=director_confidence_cap,
+                        confidence_floor=confidence_threshold,
+                    )
+                    if durable_issues:
+                        validation_feedback = _structured_feedback_issues(durable_issues)
+                        received_director_critic_issues = True
+                        last_error = "durable director critic rejected the candidate"
+                    elif str(resumable_candidate["state"]) == ANALYSIS_CANDIDATE_TERMINAL:
+                        durable_critic_exhausted = True
+                        received_director_critic_issues = True
+                        last_error = "durable director critic attempt budget is exhausted"
+                    elif durable_validated:
+                        validated = durable_validated
+                        accepted_director_evidence = durable_evidence
+                if str(resumable_candidate["state"]) == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                    acceptance = self.db.analysis_candidate_acceptance_envelope(
+                        int(resumable_candidate["id"])
+                    )
+                    commit_envelope = acceptance["commit_envelope"]
+                    validated = _analysis_envelope_validated(commit_envelope)
+                    accepted_pronunciations = copy.deepcopy(
+                        commit_envelope["pronunciations"]
+                    )
+                    accepted_director_evidence = acceptance["critic_evidence"]
+                    accepted_generator_contract = self._durable_generator_contract(
+                        resumable_candidate
+                    )
+                    accepted_host_clearance = self._durable_host_clearance(
+                        resumable_candidate
+                    )
+                    accepted_analysis_candidate_id = int(resumable_candidate["id"])
+            if (
+                accepted_director_evidence is None
+                and not durable_critic_exhausted
+                and ensure_llm_ready()
+            ):
                 for attempt in range(retry_count):
                     attempt_number = attempt + 1
                     critic_request_started = False
@@ -3051,7 +4052,7 @@ class OllamaBookAnalyzer:
                             group, validated
                         )
                         if semantic_issues:
-                            validation_feedback = semantic_issues
+                            validation_feedback = _structured_feedback_issues(semantic_issues)
                             received_semantic_issues = True
                             if semantic_batch_collapsed:
                                 validated = {}
@@ -3079,11 +4080,71 @@ class OllamaBookAnalyzer:
                                     "attempt": attempt_number,
                                     "semantic_batch_collapsed": semantic_batch_collapsed,
                                     "issues": semantic_issues,
+                                    "structured_feedback": [
+                                        issue.canonical_payload()
+                                        for issue in validation_feedback
+                                    ],
                                     "generator_contract": generator_contract,
                                 },
                             )
+                        host_adjudication: HostAffectAdjudication | None = None
+                        if not semantic_issues and len(validated) == len(group):
+                            host_adjudication = _host_affect_adjudication(
+                                group,
+                                validated,
+                                original_context=original_context,
+                            )
+                            if host_adjudication.issues:
+                                candidate_rows = _director_candidate_rows(
+                                    group,
+                                    validated,
+                                    original_context=original_context,
+                                )
+                                candidate_hash = _director_candidate_hash(candidate_rows)
+                                issue_fingerprint = host_adjudication.issue_fingerprint()
+                                repeated_host_candidate = previous_host_rejection == (
+                                    candidate_hash,
+                                    issue_fingerprint,
+                                )
+                                previous_host_rejection = (candidate_hash, issue_fingerprint)
+                                validation_feedback = tuple(
+                                    issue.feedback_issue()
+                                    for issue in host_adjudication.issues
+                                )
+                                received_semantic_issues = True
+                                validated = {}
+                                last_error = (
+                                    "host affect adjudication rejected "
+                                    f"{len(host_adjudication.issues)}/{len(group)} segment"
+                                )
+                                self.log(
+                                    f"Phán quyết cảm xúc host từ chối batch {group_index} lần "
+                                    f"{attempt_number}: {last_error}"
+                                )
+                                self.db.event(
+                                    "warning",
+                                    "ANALYSIS_HOST_AFFECT_REJECTED",
+                                    last_error,
+                                    {
+                                        "batch_index": group_index,
+                                        "attempt": attempt_number,
+                                        "candidate_hash": candidate_hash,
+                                        "host_issue_fingerprint": issue_fingerprint,
+                                        "repeated_candidate": repeated_host_candidate,
+                                        "structured_feedback": [
+                                            issue.canonical_payload()
+                                            for issue in validation_feedback
+                                        ],
+                                        "host_adjudication": host_adjudication.event_payload(),
+                                        "generator_contract": generator_contract,
+                                    },
+                                )
+                                if repeated_host_candidate:
+                                    break
                         if (
                             not semantic_issues
+                            and host_adjudication is not None
+                            and not host_adjudication.issues
                             and len(validated) == len(group)
                             and director_critic_enabled
                         ):
@@ -3097,28 +4158,186 @@ class OllamaBookAnalyzer:
                             critic_retry_count = int(
                                 self.settings.get("director_critic_max_retries", 2)
                             )
-                            critic_attempt_contracts: list[dict[str, Any]] = []
-                            for critic_attempt in range(critic_retry_count):
-                                critic_request_contract = _director_critic_request_contract(
-                                    self.settings,
-                                    model=self.model,
-                                    model_digest=str(self._model_digest),
-                                    group=group,
-                                    attempt=critic_attempt + 1,
-                                    candidate_hash=candidate_hash,
-                                    original_context=original_context,
+                            if ledger_enabled:
+                                candidate_pronunciations = self._validated_pronunciations(
+                                    group,
+                                    payload,
                                 )
-                                critic_attempt_contracts.append(critic_request_contract)
-                                try:
+                                host_clearance = host_adjudication.clearance_payload(
+                                    candidate_hash
+                                )
+                                candidate_envelope = _analysis_candidate_envelope(
+                                    group,
+                                    validated,
+                                    candidate_pronunciations,
+                                    candidate_rows,
+                                )
+                                ledger_generator_contract = {
+                                    **generator_contract,
+                                    "acceptance_envelope_hash": sha256_text(
+                                        json.dumps(
+                                            candidate_envelope,
+                                            ensure_ascii=False,
+                                            sort_keys=True,
+                                            separators=(",", ":"),
+                                            allow_nan=False,
+                                        )
+                                    ),
+                                }
+                                analysis_candidate = self.db.get_analysis_candidate_exact(
+                                    policy_fingerprint=self.analysis_policy_fingerprint,
+                                    model_name=self.model,
+                                    model_digest=str(self._model_digest),
+                                    group_fingerprint=group_fingerprint,
+                                    context_hash=context_hash,
+                                    candidate_hash=candidate_hash,
+                                )
+                                if analysis_candidate is not None:
+                                    repeated_director_candidate = (
+                                        str(analysis_candidate["state"])
+                                        == ANALYSIS_CANDIDATE_CRITIC_REJECTED
+                                    )
+                                    analysis_candidate = (
+                                        self.db.record_analysis_candidate_generator_contract(
+                                            int(analysis_candidate["id"]),
+                                            ledger_generator_contract,
+                                        )
+                                    )
+                                else:
+                                    analysis_candidate = (
+                                        self.db.allocate_or_resume_analysis_candidate(
+                                            policy_fingerprint=(
+                                                self.analysis_policy_fingerprint
+                                            ),
+                                            model_name=self.model,
+                                            model_digest=str(self._model_digest),
+                                            group_fingerprint=group_fingerprint,
+                                            context_hash=context_hash,
+                                            candidate_hash=candidate_hash,
+                                            candidate=candidate_envelope,
+                                            generator_contract=ledger_generator_contract,
+                                            deterministic_issues=(
+                                                _analysis_candidate_deterministic_evidence(
+                                                    host_clearance
+                                                )
+                                            ),
+                                            critic_max_attempts=critic_retry_count,
+                                        )
+                                    )
+                                (
+                                    analysis_candidate,
+                                    critic_issues,
+                                    critic_evidence,
+                                    critic_validated,
+                                ) = self._run_durable_director_critic(
+                                    candidate_row=analysis_candidate,
+                                    group=group,
+                                    original_context=original_context,
+                                    stop_requested=stop_requested,
+                                    group_index=group_index,
+                                    group_count=len(groups),
+                                    confidence_cap=director_confidence_cap,
+                                    confidence_floor=confidence_threshold,
+                                )
+                                candidate_state = str(analysis_candidate["state"])
+                                if candidate_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                                    acceptance = (
+                                        self.db.analysis_candidate_acceptance_envelope(
+                                            int(analysis_candidate["id"])
+                                        )
+                                    )
+                                    commit_envelope = acceptance["commit_envelope"]
+                                    validated = _analysis_envelope_validated(
+                                        commit_envelope
+                                    )
+                                    accepted_pronunciations = copy.deepcopy(
+                                        commit_envelope["pronunciations"]
+                                    )
+                                    accepted_director_evidence = acceptance[
+                                        "critic_evidence"
+                                    ]
+                                    accepted_generator_contract = (
+                                        self._durable_generator_contract(
+                                            analysis_candidate
+                                        )
+                                    )
+                                    accepted_host_clearance = (
+                                        self._durable_host_clearance(
+                                            analysis_candidate
+                                        )
+                                    )
+                                    accepted_analysis_candidate_id = int(
+                                        analysis_candidate["id"]
+                                    )
+                                elif candidate_state == ANALYSIS_CANDIDATE_TERMINAL:
+                                    received_director_critic_issues = True
+                                    durable_critic_exhausted = True
+                                    validation_feedback = ()
+                                    validated = {}
+                                    last_error = (
+                                        "durable director critic attempt budget is exhausted"
+                                    )
+                                else:
+                                    received_director_critic_issues = True
+                                    validation_feedback = _structured_feedback_issues(
+                                        critic_issues
+                                    )
+                                    validated = {}
+                                    issue_summary = "; ".join(
+                                        f"{seg_id}: {reason}"
+                                        for seg_id, reason in list(
+                                            critic_issues.items()
+                                        )[:6]
+                                    )
+                                    last_error = (
+                                        "director critic rejected "
+                                        f"{len(critic_issues)}/{len(group)} segment: "
+                                        f"{issue_summary}"
+                                    )
+                                    self.db.event(
+                                        "warning",
+                                        "ANALYSIS_DIRECTOR_CRITIC_REJECTED",
+                                        last_error,
+                                        {
+                                            "batch_index": group_index,
+                                            "attempt": attempt_number,
+                                            "candidate_hash": candidate_hash,
+                                            "issues": critic_issues,
+                                            "structured_feedback": [
+                                                issue.canonical_payload()
+                                                for issue in validation_feedback
+                                            ],
+                                            "generator_contract": generator_contract,
+                                            "critic_request_contract": (
+                                                critic_evidence.get("critic_contract", {})
+                                            ),
+                                            "evidence": critic_evidence,
+                                        },
+                                    )
+                                    if repeated_director_candidate:
+                                        break
+                            else:
+                                critic_attempt_contracts: list[dict[str, Any]] = []
+                                for critic_attempt in range(critic_retry_count):
+                                    critic_request_contract = (
+                                        _director_critic_request_contract(
+                                            self.settings,
+                                            model=self.model,
+                                            model_digest=str(self._model_digest),
+                                            group=group,
+                                            attempt=critic_attempt + 1,
+                                            candidate_hash=candidate_hash,
+                                            original_context=original_context,
+                                        )
+                                    )
+                                    critic_attempt_contracts.append(
+                                        critic_request_contract
+                                    )
                                     critic_payload, returned_candidate_hash = (
                                         self._request_director_critic(
                                             group,
                                             validated,
                                             stop_requested=stop_requested,
-                                            activity=lambda elapsed, chars, batch=group_index, current=attempt_number: self.log(
-                                                f"Phản biện đạo diễn batch {batch}/{len(groups)} lần {current} "
-                                                f"vẫn đang chạy: {elapsed}s, đã nhận {chars:,} ký tự JSON."
-                                            ),
                                             candidate_rows=candidate_rows,
                                             candidate_hash=candidate_hash,
                                             request_contract=critic_request_contract,
@@ -3127,15 +4346,18 @@ class OllamaBookAnalyzer:
                                     )
                                     if returned_candidate_hash != candidate_hash:
                                         raise RuntimeError(
-                                            "Director critic transport returned a different candidate hash"
+                                            "Director critic transport returned a different "
+                                            "candidate hash"
                                         )
-                                    critic_issues, critic_evidence = _adjudicate_director_critic(
-                                        group,
-                                        validated,
-                                        critic_payload,
-                                        candidate_hash=candidate_hash,
-                                        confidence_cap=director_confidence_cap,
-                                        confidence_floor=confidence_threshold,
+                                    critic_issues, critic_evidence = (
+                                        _adjudicate_director_critic(
+                                            group,
+                                            validated,
+                                            critic_payload,
+                                            candidate_hash=candidate_hash,
+                                            confidence_cap=director_confidence_cap,
+                                            confidence_floor=confidence_threshold,
+                                        )
                                     )
                                     retryable_invalid = bool(critic_issues) and all(
                                         reason.startswith((
@@ -3144,62 +4366,39 @@ class OllamaBookAnalyzer:
                                         ))
                                         for reason in critic_issues.values()
                                     )
-                                    if not retryable_invalid or critic_attempt + 1 >= critic_retry_count:
+                                    if not retryable_invalid:
                                         break
-                                except (AnalysisRequestStopped, AnalysisModelDigestError):
-                                    raise
-                                except Exception:  # noqa: BLE001
-                                    if critic_attempt + 1 >= critic_retry_count:
-                                        raise
-                                self.log(
-                                    "Phản biện đạo diễn trả evidence không hợp lệ; retry cùng "
-                                    f"candidate_hash={candidate_hash}, lần {critic_attempt + 2}/"
-                                    f"{critic_retry_count}."
+                                critic_evidence["critic_contract"] = copy.deepcopy(
+                                    critic_request_contract
                                 )
-                            critic_evidence["critic_contract"] = {
-                                "policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
-                                **critic_request_contract,
-                                "confidence_cap": director_confidence_cap,
-                            }
-                            critic_evidence["critic_attempt_contracts"] = critic_attempt_contracts
-                            critic_evidence["generator_contract"] = generator_contract
-                            if critic_issues:
-                                received_director_critic_issues = True
-                                validation_feedback = critic_issues
-                                validated = {}
-                                issue_summary = "; ".join(
-                                    f"{seg_id}: {reason}"
-                                    for seg_id, reason in list(critic_issues.items())[:6]
+                                critic_evidence["critic_attempt_contracts"] = (
+                                    critic_attempt_contracts
                                 )
-                                last_error = (
-                                    "director critic rejected "
-                                    f"{len(critic_issues)}/{len(group)} segment: {issue_summary}"
+                                critic_evidence["generator_contract"] = (
+                                    generator_contract
                                 )
-                                self.log(
-                                    f"Phản biện đạo diễn batch {group_index} từ chối lần "
-                                    f"{attempt_number}: {last_error}"
-                                )
-                                self.db.event(
-                                    "warning",
-                                    "ANALYSIS_DIRECTOR_CRITIC_REJECTED",
-                                    last_error,
-                                    {
-                                        "batch_index": group_index,
-                                        "attempt": attempt_number,
-                                        "candidate_hash": candidate_hash,
-                                        "issues": critic_issues,
-                                        "generator_contract": generator_contract,
-                                        "critic_request_contract": critic_request_contract,
-                                        "critic_attempt_contracts": critic_attempt_contracts,
-                                        "evidence": critic_evidence,
-                                    },
-                                )
-                            else:
-                                accepted_director_evidence = critic_evidence
-                                accepted_generator_contract = generator_contract
+                                if critic_issues:
+                                    received_director_critic_issues = True
+                                    validation_feedback = _structured_feedback_issues(
+                                        critic_issues
+                                    )
+                                    validated = {}
+                                    last_error = "director critic rejected candidate"
+                                else:
+                                    accepted_director_evidence = critic_evidence
+                                    accepted_generator_contract = generator_contract
+                                    accepted_host_clearance = (
+                                        host_adjudication.clearance_payload(
+                                            candidate_hash
+                                        )
+                                    )
                         if len(validated) == len(group):
                             break
-                        if not semantic_issues and not received_director_critic_issues:
+                        if (
+                            not semantic_issues
+                            and not (host_adjudication and host_adjudication.issues)
+                            and not received_director_critic_issues
+                        ):
                             last_error = f"LLM returned {len(validated)}/{len(group)} IDs"
                             received_incomplete_ids = True
                     except (AnalysisRequestStopped, AnalysisModelDigestError):
@@ -3209,6 +4408,8 @@ class OllamaBookAnalyzer:
                         AnalysisWallTimeoutError,
                         OllamaStreamIncompleteError,
                     ) as exc:
+                        if critic_request_started and ledger_enabled:
+                            raise
                         last_error = str(exc)
                         if len(group) > 1:
                             self.log(
@@ -3234,16 +4435,37 @@ class OllamaBookAnalyzer:
                             split_scalable_failure = True
                             break
                     except Exception as exc:  # noqa: BLE001
+                        if critic_request_started and ledger_enabled:
+                            raise
                         last_error = str(exc)
                         if critic_request_started:
                             validated = {}
                             received_director_critic_issues = True
-                            validation_feedback = {
-                                str(row["stable_id"]): "DIRECTOR_INVALID_RESPONSE"
-                                for row in group
-                            }
+                            validation_feedback = ()
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
+            if repeated_director_candidate and len(validated) != len(group) and len(group) > 1:
+                first_half, second_half = _split_analysis_group(group)
+                groups[group_offset : group_offset + 1] = [
+                    (first_half, local_scope),
+                    (second_half, local_scope),
+                ]
+                self.log(
+                    f"Batch {group_index} repeated a critic-rejected candidate projection; "
+                    f"split early into {len(first_half)} + {len(second_half)} segments."
+                )
+                continue
+            if repeated_host_candidate and len(validated) != len(group) and len(group) > 1:
+                first_half, second_half = _split_analysis_group(group)
+                groups[group_offset : group_offset + 1] = [
+                    (first_half, local_scope),
+                    (second_half, local_scope),
+                ]
+                self.log(
+                    f"Batch {group_index} lặp nguyên candidate và lỗi host; tự chia sớm thành "
+                    f"{len(first_half)} + {len(second_half)} segment."
+                )
+                continue
             if split_scalable_failure:
                 continue
             if received_incomplete_ids and len(validated) != len(group) and len(group) > 1:
@@ -3356,9 +4578,18 @@ class OllamaBookAnalyzer:
                     raise RuntimeError(
                         f"Accepted generator contract is missing at batch {group_index}"
                     )
-                accepted_pronunciations = self._validated_pronunciations(group, payload)
+                if accepted_host_clearance is None:
+                    raise RuntimeError(
+                        f"Accepted host affect clearance is missing at batch {group_index}"
+                    )
+                if accepted_analysis_candidate_id is None:
+                    accepted_pronunciations = self._validated_pronunciations(
+                        group,
+                        payload,
+                    )
                 accepted_details = {
                     "batch_index": group_index,
+                    "host_affect_clearance": accepted_host_clearance,
                     **accepted_director_evidence,
                 }
                 self.db.update_analysis_batch_with_event(
@@ -3383,6 +4614,18 @@ class OllamaBookAnalyzer:
                     analysis_model_name=self.model,
                     analysis_model_digest=str(self._model_digest),
                     pronunciations=accepted_pronunciations,
+                    **(
+                        {
+                            "analysis_candidate_id": accepted_analysis_candidate_id,
+                            "analysis_policy_fingerprint": (
+                                self.analysis_policy_fingerprint
+                            ),
+                            "analysis_group_fingerprint": group_fingerprint,
+                            "analysis_context_hash": context_hash,
+                        }
+                        if accepted_analysis_candidate_id is not None
+                        else {}
+                    ),
                 )
             for row in group:
                 data = validated.get(str(row["stable_id"])) or _heuristic(row)

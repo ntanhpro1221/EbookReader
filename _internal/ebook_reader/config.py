@@ -20,7 +20,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "model": "qwen3:8b",
         "base_url": "http://127.0.0.1:11434",
         "temperature": 0.1,
-        "retry_policy_version": "adaptive_seeded_v1",
+        "retry_policy_version": "adaptive_seeded_v2",
         "retry_temperatures": [0.1, 0.2, 0.3],
         "num_ctx": 16384,
         "batch_segments": 28,
@@ -164,7 +164,7 @@ DIRECTOR_CRITIC_SETTING_KEYS = frozenset(
     }
 )
 
-ANALYSIS_RETRY_POLICY_VERSION = "adaptive_seeded_v1"
+ANALYSIS_RETRY_POLICY_VERSION = "adaptive_seeded_v2"
 ANALYSIS_RETRY_SETTING_KEYS = frozenset(
     {
         "retry_policy_version",

@@ -109,6 +109,11 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   cho mọi giọng, chapter, lần resume và câu đối chiếu ASR. Mỗi tên hợp lệ được checkpoint riêng; ranh giới
   âm tiết kiểu `A-der-on` được sửa cơ học thành `A-đe-ron`, còn retry chỉ gửi lại đúng các tên vẫn chưa hợp lệ
   cùng lý do từ chối thay vì chạy lại toàn batch với cùng prompt.
+- Ở profile chất lượng cao, metadata delivery do Qwen đề xuất phải qua semantic/host gate và một lượt director critic
+  thứ hai trước khi checkpoint. Generator và critic dùng cùng model nên đây chỉ là self-review có kiểm soát; critic
+  không được phép vượt qua luật tất định hoặc âm thầm sửa field. Candidate, request intent, evidence, model digest và
+  ngân sách retry được ghi vào ledger SQLite trước/sau request, vì vậy kill giữa chừng sẽ tiếp tục đúng candidate thay
+  vì reset vòng phản biện. Batch đã được critic chấp nhận có thể hoàn tất transaction sau khi resume mà không gọi Ollama lại.
 - Sau khi khóa settings/giọng, tool tạo và kiểm tra audio theo từng chapter.
 - Mỗi file TXT luôn tạo đúng một MP3 chapter tương ứng; app không tự ghép thêm MP3 toàn book.
 - Từ tượng thanh như `rầm`, `uỳnh` ở nguyên trong câu của người kể hoặc nhân vật, được đọc và kiểm tra tốc độ như
@@ -125,6 +130,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 
 - WAV/MP3 ghi qua file `.part`, kiểm tra rồi mới atomic rename.
 - SQLite là nguồn trạng thái chính; không coi file tồn tại là đã hoàn tất.
+- Candidate analysis đã qua host gate và mọi attempt critic cũng là checkpoint bền trong SQLite. Event ACCEPTED,
+  pronunciation proposal và toàn bộ segment trong batch chỉ chuyển trạng thái cùng một transaction có CAS/hash;
+  không có trạng thái nửa batch hoặc evidence gắn nhầm candidate sau crash.
 - Mỗi project chỉ cho phép một worker; settings trong SQLite và source hash được kiểm tra lại khi resume.
 - Byte TXT dùng để segment phải khớp đúng hash đã khóa; source đổi ngay trong lúc đọc cũng làm job dừng.
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.

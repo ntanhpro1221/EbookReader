@@ -16,33 +16,42 @@ from ebook_reader.analysis import (
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
+    AnalysisFeedbackIssue,
     AnalysisModelDigestError,
     AnalysisRequestStopped,
     AnalysisWallTimeoutError,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
     _adjudicate_director_critic,
+    _analysis_context_hash,
+    _analysis_group_fingerprint,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
     _director_candidate_hash,
     _director_candidate_rows,
     _director_critic_request_contract,
     _generator_request_contract,
+    _host_affect_adjudication,
     _local_scope_for_group,
     _local_name_fallback,
     _name_candidate_contexts,
     _repair_vietnamese_syllable_boundaries,
     _semantic_delivery_issues,
+    _structured_feedback_issues,
     _valid_vietnamese_spoken_form,
     _validate,
+    _original_neighbor_context,
     is_local_speaker,
     local_speaker_display,
 )
 from ebook_reader.config import build_settings
+from ebook_reader.database import ProjectDB
+from ebook_reader.io_utils import sha256_text
 
 
 ORIGINAL_DIRECTOR_CRITIC_REQUEST = OllamaBookAnalyzer._request_director_critic
 ORIGINAL_ANALYZER_INIT = OllamaBookAnalyzer.__init__
+ORIGINAL_MODEL_DIGEST_VERIFY = OllamaBookAnalyzer._verify_locked_model_digest
 
 
 class FakeDB:
@@ -51,6 +60,8 @@ class FakeDB:
         self.pronunciations = []
         self.updated = []
         self.analysis_model = None
+        self.analysis_candidates = []
+        self.analysis_critic_attempts = []
         self.rows = [
             {
                 "id": 1,
@@ -90,7 +101,18 @@ class FakeDB:
         analysis_model_name,
         analysis_model_digest,
         pronunciations=(),
+        analysis_candidate_id=None,
+        expected_analysis_candidate_state="critic_accepted",
+        analysis_policy_fingerprint=None,
+        analysis_group_fingerprint=None,
+        analysis_context_hash=None,
     ):
+        del (
+            expected_analysis_candidate_state,
+            analysis_policy_fingerprint,
+            analysis_group_fingerprint,
+            analysis_context_hash,
+        )
         self.lock_analysis_model(analysis_model_name, analysis_model_digest)
         self.updated.extend(
             (row["segment_id"], row["data"], low_confidence_threshold)
@@ -98,7 +120,205 @@ class FakeDB:
         )
         for pronunciation in pronunciations:
             self.upsert_pronunciation(**pronunciation)
+        if analysis_candidate_id is not None:
+            self.get_analysis_candidate(analysis_candidate_id)["state"] = "accepted"
         self.event(event_level, event_code, event_message, event_details)
+
+    def analysis_model_lock(self):
+        if self.analysis_model is None:
+            return None
+        return {
+            "model_name": self.analysis_model[0],
+            "model_digest": self.analysis_model[1],
+            "locked_at": 1.0,
+        }
+
+    @staticmethod
+    def _ledger_hash(value):
+        return sha256_text(
+            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        )
+
+    def allocate_or_resume_analysis_candidate(
+        self,
+        *,
+        policy_fingerprint,
+        model_name,
+        model_digest,
+        group_fingerprint,
+        context_hash,
+        candidate_hash,
+        candidate,
+        generator_contract,
+        deterministic_issues,
+        critic_max_attempts,
+    ):
+        existing = self.get_analysis_candidate_exact(
+            policy_fingerprint=policy_fingerprint,
+            model_name=model_name,
+            model_digest=model_digest,
+            group_fingerprint=group_fingerprint,
+            context_hash=context_hash,
+            candidate_hash=candidate_hash,
+        )
+        if existing is not None:
+            return existing
+        row = {
+            "id": len(self.analysis_candidates) + 1,
+            "policy_fingerprint": policy_fingerprint,
+            "model_name": model_name,
+            "model_digest": model_digest,
+            "group_fingerprint": group_fingerprint,
+            "context_hash": context_hash,
+            "candidate_hash": candidate_hash,
+            "candidate_json": json.dumps(candidate, ensure_ascii=False),
+            "envelope_hash": self._ledger_hash(candidate),
+            "initial_generator_contract_json": json.dumps(
+                generator_contract,
+                ensure_ascii=False,
+            ),
+            "deterministic_issue_json": json.dumps(
+                deterministic_issues,
+                ensure_ascii=False,
+            ),
+            "state": "allocated",
+            "critic_attempt_count": 0,
+            "critic_max_attempts": critic_max_attempts,
+            "commit_envelope_json": None,
+            "commit_envelope_hash": None,
+        }
+        self.analysis_candidates.append(row)
+        return row
+
+    def get_analysis_candidate(self, analysis_candidate_id):
+        return next(
+            row
+            for row in self.analysis_candidates
+            if row["id"] == analysis_candidate_id
+        )
+
+    def get_analysis_candidate_exact(self, **identity):
+        return next(
+            (
+                row
+                for row in self.analysis_candidates
+                if all(row[key] == value for key, value in identity.items())
+            ),
+            None,
+        )
+
+    def find_resumable_analysis_candidate(self, **scope):
+        actionable = {"allocated", "critic_in_flight", "critic_invalid", "critic_accepted"}
+        return next(
+            (
+                row
+                for row in self.analysis_candidates
+                if row["state"] in actionable
+                and all(row[key] == value for key, value in scope.items())
+            ),
+            None,
+        )
+
+    def record_analysis_candidate_generator_contract(
+        self,
+        analysis_candidate_id,
+        generator_contract,
+    ):
+        del generator_contract
+        return self.get_analysis_candidate(analysis_candidate_id)
+
+    def reserve_analysis_critic_attempt(
+        self,
+        analysis_candidate_id,
+        *,
+        expected_state,
+        max_attempts,
+        intent,
+        contract,
+    ):
+        candidate = self.get_analysis_candidate(analysis_candidate_id)
+        assert candidate["state"] == expected_state
+        assert candidate["critic_max_attempts"] == max_attempts
+        candidate["critic_attempt_count"] += 1
+        candidate["state"] = "critic_in_flight"
+        attempt = {
+            "analysis_candidate_id": analysis_candidate_id,
+            "attempt_number": candidate["critic_attempt_count"],
+            "state": "reserved",
+            "intent_hash": self._ledger_hash(intent),
+            "contract_hash": self._ledger_hash(contract),
+            "contract_json": json.dumps(contract, ensure_ascii=False),
+            "outcome_json": None,
+            "evidence_json": None,
+        }
+        self.analysis_critic_attempts.append(attempt)
+        return attempt
+
+    def complete_analysis_critic_attempt(
+        self,
+        analysis_candidate_id,
+        attempt_number,
+        *,
+        expected_intent_hash,
+        expected_contract_hash,
+        result_state,
+        outcome,
+        evidence,
+        commit_envelope=None,
+    ):
+        attempt = next(
+            item
+            for item in self.analysis_critic_attempts
+            if item["analysis_candidate_id"] == analysis_candidate_id
+            and item["attempt_number"] == attempt_number
+        )
+        assert attempt["intent_hash"] == expected_intent_hash
+        assert attempt["contract_hash"] == expected_contract_hash
+        attempt["state"] = "completed"
+        attempt["outcome_json"] = json.dumps(
+            {"candidate_state": result_state, "payload": outcome},
+            ensure_ascii=False,
+        )
+        attempt["evidence_json"] = json.dumps(evidence, ensure_ascii=False)
+        candidate = self.get_analysis_candidate(analysis_candidate_id)
+        candidate["state"] = result_state
+        if commit_envelope is not None:
+            candidate["commit_envelope_json"] = json.dumps(
+                commit_envelope,
+                ensure_ascii=False,
+            )
+            candidate["commit_envelope_hash"] = self._ledger_hash(commit_envelope)
+        return attempt
+
+    def list_analysis_critic_attempts(self, analysis_candidate_id):
+        return [
+            attempt
+            for attempt in self.analysis_critic_attempts
+            if attempt["analysis_candidate_id"] == analysis_candidate_id
+        ]
+
+    def finalize_exhausted_analysis_critic_candidate(
+        self,
+        analysis_candidate_id,
+        *,
+        reason,
+    ):
+        candidate = self.get_analysis_candidate(analysis_candidate_id)
+        candidate["state"] = "terminal"
+        candidate["terminal_reason"] = reason
+        return candidate
+
+    def analysis_candidate_acceptance_envelope(self, analysis_candidate_id):
+        candidate = self.get_analysis_candidate(analysis_candidate_id)
+        attempt = self.list_analysis_critic_attempts(analysis_candidate_id)[-1]
+        return {
+            "candidate_id": analysis_candidate_id,
+            "candidate_hash": candidate["candidate_hash"],
+            "candidate": json.loads(candidate["candidate_json"]),
+            "commit_envelope": json.loads(candidate["commit_envelope_json"]),
+            "critic_outcome": json.loads(attempt["outcome_json"]),
+            "critic_evidence": json.loads(attempt["evidence_json"]),
+        }
 
     def lock_analysis_model(self, model_name, model_digest):
         model_lock = (model_name, model_digest)
@@ -256,6 +476,43 @@ def director_critic_payload(
     return {"candidate_hash": candidate_hash, "verdicts": verdicts}, candidate_hash
 
 
+def production_analysis_db(tmp_path):
+    db = ProjectDB(tmp_path / "project.sqlite3")
+    db.initialize_book(
+        title="Book",
+        project_root=tmp_path,
+        settings={},
+        settings_hash="settings",
+        input_manifest_hash="manifest",
+    )
+    chapter_id = db.ensure_chapters(
+        [
+            {
+                "chapter_index": 1,
+                "title": "One",
+                "input_path": tmp_path / "one.txt",
+                "input_sha256": "source",
+                "input_size": 1,
+                "output_mp3": tmp_path / "one.mp3",
+            }
+        ]
+    )[0]
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {
+                "stable_id": "c1s1",
+                "seq": 0,
+                "paragraph_index": 0,
+                "text": "Text one.",
+                "text_sha256": sha256_text("Text one."),
+                "kind_hint": "narration",
+            }
+        ],
+    )
+    return db
+
+
 @pytest.fixture(autouse=True)
 def _accept_second_pass_director_critic(monkeypatch):
     def initialize_with_test_digest(self, *args, **kwargs):
@@ -272,6 +529,11 @@ def _accept_second_pass_director_critic(monkeypatch):
 
     monkeypatch.setattr(OllamaBookAnalyzer, "__init__", initialize_with_test_digest)
     monkeypatch.setattr(OllamaBookAnalyzer, "_request_director_critic", accept)
+    monkeypatch.setattr(
+        OllamaBookAnalyzer,
+        "_verify_locked_model_digest",
+        lambda _self, _phase: None,
+    )
 
 
 def _trust_locked_test_digest(analyzer, monkeypatch) -> None:
@@ -450,6 +712,45 @@ def test_retry_contract_and_candidate_hash_are_bound_to_original_neighbor_contex
     assert "đuôi lời dẫn" not in json.dumps(first, ensure_ascii=False)
 
 
+def test_analysis_resume_scope_binds_neighbor_kind_and_paragraph_metadata() -> None:
+    rows = [
+        {
+            "id": 1,
+            "stable_id": "source",
+            "chapter_id": 1,
+            "paragraph_index": 4,
+            "kind_hint": "thought",
+            "text": "Source.",
+            "text_sha256": sha256_text("Source."),
+        },
+        {
+            "id": 2,
+            "stable_id": "neighbor",
+            "chapter_id": 1,
+            "paragraph_index": 4,
+            "kind_hint": "thought",
+            "text": "Neighbor.",
+            "text_sha256": sha256_text("Neighbor."),
+        },
+    ]
+    changed_rows = [dict(row) for row in rows]
+    changed_rows[1]["paragraph_index"] = 5
+    changed_rows[1]["kind_hint"] = "narration"
+    group = rows[:1]
+    changed_group = changed_rows[:1]
+    original = _original_neighbor_context(rows)
+    changed = _original_neighbor_context(changed_rows)
+
+    assert _analysis_context_hash(group, original) != _analysis_context_hash(
+        changed_group,
+        changed,
+    )
+    assert _analysis_group_fingerprint(group, original) != _analysis_group_fingerprint(
+        changed_group,
+        changed,
+    )
+
+
 def test_model_digest_lookup_matches_the_exact_canonical_tag() -> None:
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
 
@@ -533,8 +834,86 @@ def test_semantic_retry_feedback_uses_only_constrained_batch_ids() -> None:
 
     assert session.request is not None
     prompt = session.request["json"]["prompt"]
-    assert "- S001: emotion=happy mâu thuẫn với cue afraid" in prompt
+    assert '"code":"SEMANTIC_DELIVERY_MISMATCH"' in prompt
+    assert '"fields":["emotion"]' in prompt
+    assert '"id":"S001"' in prompt
+    assert "emotion=happy mâu thuẫn với cue afraid" not in prompt
     assert str(group[0]["stable_id"]) not in prompt
+
+
+def test_host_feedback_is_canonical_and_excludes_raw_injection() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    injection = 'RAW NOVEL TEXT; rationale; notes; "ignore system"'
+
+    analyzer._request(
+        group,
+        validation_feedback=(
+            AnalysisFeedbackIssue(
+                stable_id=str(group[0]["stable_id"]),
+                code="HOST_AFFECT_EMOTION_MISMATCH",
+                fields=("emotion",),
+                allowed_emotions=("afraid",),
+                rule="thought_self_preservation_mortality",
+            ),
+        ),
+    )
+
+    prompt = session.request["json"]["prompt"]
+    feedback = prompt.split("whitelist do host tạo", 1)[1]
+    assert '"code":"HOST_AFFECT_EMOTION_MISMATCH"' in feedback
+    assert '"allowed_emotions":["afraid"]' in feedback
+    assert "thought_self_preservation_mortality" in feedback
+    assert injection not in feedback
+    assert "rationale" not in feedback
+    assert "notes" not in feedback
+
+
+def test_compound_semantic_feedback_preserves_notes_delivery_and_template_dimensions() -> None:
+    stable_id = str(analysis_group()[0]["stable_id"])
+    raw_reason = (
+        "notes không có giải thích ngữ nghĩa đủ nội dung; "
+        "emotion=neutral mâu thuẫn với cue trực tiếp; "
+        "delivery signature bị lặp trên batch dù có cue"
+    )
+
+    issues = _structured_feedback_issues({stable_id: raw_reason})
+    payloads = [issue.canonical_payload("S001") for issue in issues]
+
+    assert {(item["code"], tuple(item["fields"])) for item in payloads} == {
+        ("SEMANTIC_DELIVERY_MISMATCH", ("emotion",)),
+        ("SEMANTIC_EXPLANATION_REQUIRED", ("notes",)),
+        ("SEMANTIC_TEMPLATE_COLLAPSE", ("emotion", "intensity", "pace", "volume")),
+    }
+    assert raw_reason not in json.dumps(payloads, ensure_ascii=False)
+
+
+@pytest.mark.parametrize(
+    "issue",
+    [
+        AnalysisFeedbackIssue(
+            stable_id="unsafe-field",
+            code="HOST_AFFECT_EMOTION_MISMATCH",
+            fields=("emotion", "raw_text"),
+            allowed_emotions=("afraid",),
+            rule="thought_self_preservation_mortality",
+        ),
+        AnalysisFeedbackIssue(
+            stable_id="unsafe-emotion",
+            code="HOST_AFFECT_EMOTION_MISMATCH",
+            fields=("emotion",),
+            allowed_emotions=("afraid", "panic<script>"),
+            rule="thought_self_preservation_mortality",
+        ),
+    ],
+)
+def test_structured_feedback_rejects_non_whitelisted_constraints(
+    issue: AnalysisFeedbackIssue,
+) -> None:
+    with pytest.raises(ValueError, match="Unsupported analysis feedback"):
+        _structured_feedback_issues((issue,))
 
 
 def test_director_critic_request_is_blind_to_generator_self_assessment() -> None:
@@ -600,6 +979,7 @@ def test_analysis_requests_reject_model_digest_changes(
     request_kind,
     model_digests,
     phase,
+    monkeypatch,
 ) -> None:
     group = analysis_group()
     validated = {
@@ -613,6 +993,11 @@ def test_analysis_requests_reject_model_digest_changes(
     session = FakeSession(payload, model_digests=model_digests)
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
     analyzer.session = session
+    monkeypatch.setattr(
+        analyzer,
+        "_verify_locked_model_digest",
+        ORIGINAL_MODEL_DIGEST_VERIFY.__get__(analyzer, OllamaBookAnalyzer),
+    )
 
     with pytest.raises(RuntimeError, match=f"digest changed {phase}"):
         if request_kind == "generator":
@@ -693,7 +1078,7 @@ def test_director_adjudicator_rejects_nonfinite_or_below_floor_confidence(
     assert "critic" not in evidence["segments"][0]
 
 
-def test_director_adjudicator_rejects_v10_template_corrections_by_field_only() -> None:
+def test_director_adjudicator_rejects_template_corrections_by_field_only() -> None:
     texts = [
         "Chương 01 - Giàn hỏa thiêu rực cháy",
         "Khói dày khiến phổi và yết hầu như bị thiêu đốt.",
@@ -716,7 +1101,7 @@ def test_director_adjudicator_rejects_v10_template_corrections_by_field_only() -
     ]
     group = [
         {
-            "stable_id": f"v10-{index}",
+            "stable_id": f"director-template-{index}",
             "text": text,
             "text_sha256": f"sha-{index}",
             "kind_hint": "thought" if index in {2, 3, 13} else (
@@ -757,11 +1142,13 @@ def test_director_adjudicator_rejects_v10_template_corrections_by_field_only() -
         candidate_hash=candidate_hash,
     )
 
-    assert set(issues) == {f"v10-{index}" for index in corrections}
-    assert issues["v10-2"] == "DIRECTOR_FIELD_MISMATCH fields=volume"
-    assert "normal" not in issues["v10-2"]
+    assert set(issues) == {f"director-template-{index}" for index in corrections}
+    assert issues["director-template-2"] == "DIRECTOR_FIELD_MISMATCH fields=volume"
+    assert "normal" not in issues["director-template-2"]
     evidence_by_id = {row["stable_id"]: row for row in evidence["segments"]}
-    assert evidence_by_id["v10-2"]["field_deltas"] == ["volume:soft->normal"]
+    assert evidence_by_id["director-template-2"]["field_deltas"] == [
+        "volume:soft->normal"
+    ]
 
 
 def test_director_agreement_caps_blanket_generator_confidence() -> None:
@@ -2272,6 +2659,333 @@ def test_semantic_delivery_keeps_neutral_physical_recovery_thought() -> None:
     assert _semantic_delivery_issues(group, validated) == ({}, False)
 
 
+def test_host_affect_first_batch_rejects_only_self_preservation_thoughts() -> None:
+    texts = [
+        "Chương 01 - Giàn hỏa thiêu rực cháy",
+        (
+            "Khói dày ngùn ngụt bốc lên, mỗi một hơi hít vào đều tạo nên những âm thanh "
+            "khò khè. Ý thức của Hạ Phong rất nhanh liền trở nên mơ hồ."
+        ),
+        "‘Không được… Không được ngủ… sẽ chết mất.’",
+        "‘Tỉnh dậy, phải tỉnh dậy!’",
+        (
+            "Ánh sáng đỏ rực vô tận đột nhiên mờ đi. Như thể một người sắp chết đuối, "
+            "Hạ Phong vùng ra khỏi bóng tối."
+        ),
+    ]
+    kinds = ["narration", "narration", "thought", "thought", "narration"]
+    group = [
+        {
+            "id": index + 1,
+            "stable_id": f"host-affect-{index}",
+            "chapter_id": 1,
+            "paragraph_index": index,
+            "text": text,
+            "kind_hint": kinds[index],
+        }
+        for index, text in enumerate(texts)
+    ]
+    validated = {}
+    for row in group:
+        item = analysis_item(str(row["stable_id"]))
+        item.update(
+            {
+                "kind": row["kind_hint"],
+                "speaker": "NARRATOR",
+                "emotion": "angry" if row["kind_hint"] == "thought" else "neutral",
+                "intensity": 2 if row["kind_hint"] == "thought" else 0,
+            }
+        )
+        validated[str(row["stable_id"])] = _validate([row], {"segments": [item]})[
+            str(row["stable_id"])
+        ]
+
+    adjudication = _host_affect_adjudication(group, validated)
+
+    assert [issue.stable_id for issue in adjudication.issues] == [
+        "host-affect-2",
+        "host-affect-3",
+    ]
+    assert [issue.rule for issue in adjudication.issues] == [
+        "thought_self_preservation_mortality",
+        "adjacent_thought_wake_self_rescue",
+    ]
+    assert {issue.allowed_emotions for issue in adjudication.issues} == {("afraid",)}
+    assert "host-affect-1" not in {issue.stable_id for issue in adjudication.issues}
+    assert "host-affect-4" not in {issue.stable_id for issue in adjudication.issues}
+
+
+def test_host_affect_accepts_valid_afraid_and_hostile_angry_command() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "self-preservation",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": "‘Mình sẽ chết mất.’",
+            "kind_hint": "thought",
+        },
+        {
+            "id": 2,
+            "stable_id": "hostile-command",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "“Thiêu hắn đi!”",
+            "kind_hint": "dialogue",
+        },
+    ]
+    validated = {}
+    for row, emotion in zip(group, ("afraid", "angry"), strict=True):
+        item = analysis_item(str(row["stable_id"]))
+        item.update(
+            {
+                "kind": row["kind_hint"],
+                "speaker": "NARRATOR" if row["kind_hint"] == "thought" else "UNKNOWN",
+                "emotion": emotion,
+                "intensity": 2,
+            }
+        )
+        validated[str(row["stable_id"])] = _validate([row], {"segments": [item]})[
+            str(row["stable_id"])
+        ]
+
+    adjudication = _host_affect_adjudication(group, validated)
+
+    assert adjudication.issues == ()
+    assert len(adjudication.evidence) == 1
+    assert adjudication.evidence[0].outcome == "pass"
+
+
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [
+        ("Ông ấy sắp chết.", "thought"),
+        ("‘Có người sẽ chết mất.’", "thought"),
+        ("‘Không ai sẽ chết mất.’", "thought"),
+        ("‘Rồi sẽ chết mất một con người.’", "thought"),
+        ("‘Cụm từ sẽ chết mất chỉ là một ví dụ.’", "thought"),
+        ("Đám đông trở nên hỗn loạn.", "narration"),
+        ("Một dự cảm xấu thoáng qua.", "narration"),
+        ("Cậu dằn nỗi lo sợ xuống.", "narration"),
+    ],
+)
+def test_host_affect_does_not_reject_ambiguous_or_third_party_source(
+    text: str,
+    kind: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "negative-control",
+        "chapter_id": 1,
+        "paragraph_index": 1,
+        "text": text,
+        "kind_hint": kind,
+    }
+    item = analysis_item(str(row["stable_id"]))
+    item.update({"kind": kind, "emotion": "neutral", "speaker": "NARRATOR"})
+    validated = _validate([row], {"segments": [item]})
+
+    assert _host_affect_adjudication([row], validated).issues == ()
+
+
+@pytest.mark.parametrize(
+    "previous_text",
+    [
+        "‘Cụm từ sẽ chết mất chỉ là một ví dụ.’",
+        "‘Có người sẽ chết mất.’",
+        "‘Hắn sẽ chết mất.’",
+    ],
+)
+def test_host_affect_wake_rule_requires_qualified_self_preservation_source(
+    previous_text: str,
+) -> None:
+    rows = [
+        {
+            "id": 1,
+            "stable_id": "unqualified-previous",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": previous_text,
+            "kind_hint": "thought",
+        },
+        {
+            "id": 2,
+            "stable_id": "wake-thought",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "‘Tỉnh dậy, phải tỉnh dậy!’",
+            "kind_hint": "thought",
+        },
+    ]
+    validated = {}
+    for row in rows:
+        item = analysis_item(str(row["stable_id"]))
+        item.update({"kind": "thought", "speaker": "NARRATOR", "emotion": "neutral"})
+        validated.update(_validate([row], {"segments": [item]}))
+
+    assert _host_affect_adjudication(rows, validated).issues == ()
+
+
+@pytest.mark.parametrize(
+    "boundary_update",
+    [
+        {"chapter_id": 2},
+        {"paragraph_index": 4},
+        {"kind_hint": "narration"},
+    ],
+)
+def test_host_affect_adjacent_rule_does_not_cross_source_boundaries(
+    boundary_update: dict[str, object],
+) -> None:
+    previous = {
+        "id": 1,
+        "stable_id": "previous-thought",
+        "chapter_id": 1,
+        "paragraph_index": 1,
+        "text": "‘Không được… Không được ngủ… sẽ chết mất.’",
+        "kind_hint": "thought",
+    }
+    current = {
+        "id": 2,
+        "stable_id": "wake-thought",
+        "chapter_id": 1,
+        "paragraph_index": 2,
+        "text": "‘Tỉnh dậy, phải tỉnh dậy!’",
+        "kind_hint": "thought",
+        **boundary_update,
+    }
+    validated = {}
+    for row in (previous, current):
+        item = analysis_item(str(row["stable_id"]))
+        item.update(
+            {
+                "kind": row["kind_hint"],
+                "speaker": "NARRATOR",
+                "emotion": "angry",
+            }
+        )
+        validated[str(row["stable_id"])] = _validate([row], {"segments": [item]}).get(
+            str(row["stable_id"]),
+            {"kind": row["kind_hint"], "emotion": "angry"},
+        )
+
+    issues = _host_affect_adjudication([previous, current], validated).issues
+
+    assert [issue.stable_id for issue in issues] == ["previous-thought"]
+
+
+def test_repeated_host_candidate_splits_before_third_generator_or_critic(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"repeat-host-{index}",
+            "chapter_id": 1,
+            "paragraph_index": index,
+            "text": (
+                "‘Không được… Không được ngủ… sẽ chết mất.’"
+                if index == 1
+                else f"Đoạn kể {index}."
+            ),
+            "kind_hint": "thought" if index == 1 else "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 5)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000, "max_retries": 3}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    generator_sizes: list[int] = []
+    critic_sizes: list[int] = []
+
+    def generate(group, **_kwargs):
+        generator_sizes.append(len(group))
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            item.update(
+                {
+                    "kind": row["kind_hint"],
+                    "speaker": "NARRATOR",
+                    "emotion": "angry" if row["kind_hint"] == "thought" else "neutral",
+                    "intensity": 2 if row["kind_hint"] == "thought" else 0,
+                }
+            )
+            items.append(item)
+        return {"segments": items}
+
+    def critic(group, validated, **kwargs):
+        critic_sizes.append(len(group))
+        return director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert generator_sizes[:3] == [4, 4, 2]
+    assert generator_sizes.count(4) == 2
+    assert 4 not in critic_sizes
+    repeated = [
+        event
+        for event in db.events
+        if event[1] == "ANALYSIS_HOST_AFFECT_REJECTED"
+        and event[3]["repeated_candidate"]
+    ]
+    assert len(repeated) >= 1
+
+
+def test_repeated_host_candidate_fails_singleton_without_critic(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows[0].update(
+        {
+            "text": "‘Không được… Không được ngủ… sẽ chết mất.’",
+            "kind_hint": "thought",
+            "paragraph_index": 1,
+        }
+    )
+    settings = build_settings(overrides={"analysis": {"max_retries": 3}})
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    generator_calls = 0
+    critic_calls = 0
+
+    def generate(group, **_kwargs):
+        nonlocal generator_calls
+        generator_calls += 1
+        item = analysis_item(str(group[0]["stable_id"]))
+        item.update({"kind": "thought", "speaker": "NARRATOR", "emotion": "angry"})
+        return {"segments": [item]}
+
+    def critic(*_args, **_kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        raise AssertionError("host rejection must occur before critic")
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert generator_calls == 2
+    assert critic_calls == 0
+    assert db.updated == []
+
+
 def test_semantic_delivery_rejects_neutral_direct_emotion_but_keeps_mixed_narration() -> None:
     group = [
         {"stable_id": "fear", "text": "‘Mình sẽ chết mất.’"},
@@ -2656,7 +3370,7 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
     monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
-    feedback_seen: list[dict[str, str] | None] = []
+    feedback_seen: list[object | None] = []
     contracts_seen: list[dict[str, object]] = []
 
     def request(group, **kwargs):
@@ -2684,7 +3398,9 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     analyzer.analyze_all(lambda: False)
 
     assert feedback_seen[0] is None
-    assert set(feedback_seen[1] or {}) == {str(row["stable_id"]) for row in db.rows}
+    assert {issue.stable_id for issue in feedback_seen[1] or ()} == {
+        str(row["stable_id"]) for row in db.rows
+    }
     assert [contract["attempt"] for contract in contracts_seen] == [1, 2]
     assert [contract["temperature"] for contract in contracts_seen] == [0.1, 0.2]
     assert contracts_seen[0]["seed"] != contracts_seen[1]["seed"]
@@ -2695,7 +3411,9 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
         event for event in db.events if event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
     )
     assert semantic_rejection[3]["generator_contract"] == contracts_seen[0]
-    assert accepted[3]["generator_contract"] == contracts_seen[1]
+    accepted_generator_contract = dict(accepted[3]["generator_contract"])
+    assert accepted_generator_contract.pop("acceptance_envelope_hash")
+    assert accepted_generator_contract == contracts_seen[1]
     assert len(db.updated) == 4
     assert {data["emotion"] for _segment_id, data, _threshold in db.updated} == {"afraid"}
     assert any(event[1] == "ANALYSIS_SEMANTIC_REJECTED" for event in db.events)
@@ -2714,7 +3432,10 @@ def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeyp
     def generate(group, **kwargs):
         generator_feedback.append(kwargs.get("validation_feedback"))
         generator_contracts.append(kwargs["request_contract"])
-        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+        items = [analysis_item(str(row["stable_id"])) for row in group]
+        if kwargs.get("validation_feedback"):
+            items[0]["emotion"] = "surprised"
+        return {"segments": items}
 
     def critic(_group, validated, **kwargs):
         nonlocal critic_calls
@@ -2734,13 +3455,21 @@ def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeyp
     analyzer.analyze_all(lambda: False)
 
     assert generator_feedback[0] is None
-    assert generator_feedback[1] == {"c1s1": "DIRECTOR_FIELD_MISMATCH fields=emotion"}
+    assert generator_feedback[1] == (
+        AnalysisFeedbackIssue(
+            stable_id="c1s1",
+            code="DIRECTOR_FIELD_MISMATCH",
+            fields=("emotion",),
+        ),
+    )
     assert "surprised" not in str(generator_feedback[1])
     rejected_details = db.events[0][3]
     accepted_details = db.events[1][3]
     assert rejected_details["generator_contract"] == generator_contracts[0]
     assert rejected_details["critic_request_contract"]["candidate_hash"]
-    assert accepted_details["generator_contract"] == generator_contracts[1]
+    accepted_generator_contract = dict(accepted_details["generator_contract"])
+    assert accepted_generator_contract.pop("acceptance_envelope_hash")
+    assert accepted_generator_contract == generator_contracts[1]
     assert generator_contracts[0]["seed"] != generator_contracts[1]["seed"]
     assert [event[1] for event in db.events] == [
         "ANALYSIS_DIRECTOR_CRITIC_REJECTED",
@@ -2889,7 +3618,7 @@ def test_persistent_director_rejection_splits_then_fails_singleton(monkeypatch) 
         analyzer.analyze_all(lambda: False)
 
     assert generator_sizes == [4, 4, 2, 2, 1, 1]
-    assert critic_sizes == generator_sizes
+    assert critic_sizes == [4, 2, 1]
     assert db.updated == []
     assert any(event[1] == "REQUIRED_ANALYSIS_BATCH_FAILED" for event in db.events)
 
@@ -3023,7 +3752,7 @@ def test_high_quality_rejects_low_generator_confidence_before_director_commit(
     assert not any(event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED" for event in db.events)
 
 
-def test_director_timeout_splits_once_and_reuses_bounded_pipeline(monkeypatch) -> None:
+def test_director_timeout_leaves_reserved_candidate_for_durable_resume(monkeypatch) -> None:
     db = FakeDB()
     db.rows = [
         {
@@ -3064,11 +3793,150 @@ def test_director_timeout_splits_once_and_reuses_bounded_pipeline(monkeypatch) -
     monkeypatch.setattr(analyzer, "_request", generate)
     monkeypatch.setattr(analyzer, "_request_director_critic", critic)
 
-    analyzer.analyze_all(lambda: False)
+    with pytest.raises(AnalysisWallTimeoutError, match="critic timeout"):
+        analyzer.analyze_all(lambda: False)
 
-    assert generator_sizes == [4, 2, 2]
-    assert critic_sizes == [4, 4, 2, 2]
-    assert len(db.updated) == 4
+    assert generator_sizes == [4]
+    assert critic_sizes == [4]
+    assert db.updated == []
+    assert db.analysis_candidates[0]["state"] == "critic_in_flight"
+    assert db.analysis_candidates[0]["critic_attempt_count"] == 1
+
+
+def test_critic_accepted_reopen_commits_without_ollama_or_regeneration(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db = production_analysis_db(tmp_path)
+    settings = build_settings()
+    first = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(first, "ensure_available", lambda: True)
+    generator_calls = 0
+
+    def generate(group, **_kwargs):
+        nonlocal generator_calls
+        generator_calls += 1
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    monkeypatch.setattr(first, "_request", generate)
+    original_commit = db.update_analysis_batch_with_event
+
+    def crash_before_commit(*_args, **_kwargs):
+        raise RuntimeError("injected accepted-before-commit crash")
+
+    monkeypatch.setattr(db, "update_analysis_batch_with_event", crash_before_commit)
+    with pytest.raises(RuntimeError, match="accepted-before-commit"):
+        first.analyze_all(lambda: False)
+
+    candidate = db.find_resumable_analysis_candidate(
+        policy_fingerprint=first.analysis_policy_fingerprint,
+        model_name=first.model,
+        model_digest="sha256:test-model-digest",
+        group_fingerprint=_analysis_group_fingerprint(
+            db.list_segments(),
+            _original_neighbor_context(db.list_segments()),
+        ),
+        context_hash=_analysis_context_hash(
+            db.list_segments(),
+            _original_neighbor_context(db.list_segments()),
+        ),
+    )
+    assert candidate is not None
+    assert candidate["state"] == "critic_accepted"
+    monkeypatch.setattr(db, "update_analysis_batch_with_event", original_commit)
+
+    reopened = ProjectDB(tmp_path / "project.sqlite3")
+    second = OllamaBookAnalyzer(settings, reopened, lambda _message: None)
+    monkeypatch.setattr(
+        second,
+        "ensure_available",
+        lambda: pytest.fail("accepted resume must not call Ollama"),
+    )
+    monkeypatch.setattr(
+        second,
+        "_request",
+        lambda *_args, **_kwargs: pytest.fail("accepted resume must not regenerate"),
+    )
+
+    second.analyze_all(lambda: False)
+
+    assert generator_calls == 1
+    resumed = reopened.get_analysis_candidate(int(candidate["id"]))
+    assert resumed["state"] == "accepted"
+    segment = reopened.list_segments()[0]
+    assert segment["status"] in {"analyzed", "warning"}
+    assert segment["confidence"] == pytest.approx(0.9)
+
+
+def test_invalid_critic_reopen_retries_same_candidate_without_generator(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    db = production_analysis_db(tmp_path)
+    settings = build_settings()
+    first = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(first, "ensure_available", lambda: True)
+    generator_calls = 0
+    critic_calls = 0
+
+    def generate(group, **_kwargs):
+        nonlocal generator_calls
+        generator_calls += 1
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    def crash_after_first_invalid(group, validated, **kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        if critic_calls == 1:
+            return {"bad": "schema"}, kwargs["candidate_hash"]
+        raise KeyboardInterrupt("injected reopen after invalid")
+
+    monkeypatch.setattr(first, "_request", generate)
+    monkeypatch.setattr(first, "_request_director_critic", crash_after_first_invalid)
+    with pytest.raises(KeyboardInterrupt, match="reopen after invalid"):
+        first.analyze_all(lambda: False)
+    candidate = db.find_resumable_analysis_candidate(
+        policy_fingerprint=first.analysis_policy_fingerprint,
+        model_name=first.model,
+        model_digest="sha256:test-model-digest",
+        group_fingerprint=_analysis_group_fingerprint(
+            db.list_segments(),
+            _original_neighbor_context(db.list_segments()),
+        ),
+        context_hash=_analysis_context_hash(
+            db.list_segments(),
+            _original_neighbor_context(db.list_segments()),
+        ),
+    )
+    assert candidate is not None
+    assert candidate["state"] == "critic_in_flight"
+    assert candidate["critic_attempt_count"] == 2
+
+    reopened = ProjectDB(tmp_path / "project.sqlite3")
+    second = OllamaBookAnalyzer(settings, reopened, lambda _message: None)
+    monkeypatch.setattr(second, "ensure_available", lambda: True)
+    monkeypatch.setattr(
+        second,
+        "_request",
+        lambda *_args, **_kwargs: pytest.fail("invalid resume must not regenerate"),
+    )
+    monkeypatch.setattr(
+        second,
+        "_request_director_critic",
+        lambda group, validated, **kwargs: director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="attempt budget is exhausted"):
+        second.analyze_all(lambda: False)
+
+    terminal = reopened.get_analysis_candidate(int(candidate["id"]))
+    assert terminal["state"] == "terminal"
+    assert generator_calls == 1
 
 
 def test_director_request_honors_stop_before_network() -> None:
@@ -3083,6 +3951,76 @@ def test_director_request_honors_stop_before_network() -> None:
             validated,
             stop_requested=lambda: True,
         )
+
+
+def test_durable_director_stop_before_network_does_not_consume_attempt(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    settings = build_settings()
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr(
+        analyzer,
+        "_request",
+        lambda group, **_kwargs: {
+            "segments": [analysis_item(str(row["stable_id"])) for row in group]
+        },
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "_request_director_critic",
+        lambda *_args, **_kwargs: pytest.fail("critic transport must not start"),
+    )
+    stop_checks = 0
+
+    def stop_requested() -> bool:
+        nonlocal stop_checks
+        stop_checks += 1
+        return stop_checks > 1
+
+    with pytest.raises(AnalysisRequestStopped, match="before director critic intent"):
+        analyzer.analyze_all(stop_requested)
+
+    assert len(db.analysis_candidates) == 1
+    assert db.analysis_candidates[0]["state"] == "allocated"
+    assert db.analysis_candidates[0]["critic_attempt_count"] == 0
+    assert db.analysis_critic_attempts == []
+
+
+def test_durable_director_digest_preflight_does_not_consume_attempt(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    settings = build_settings()
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr(
+        analyzer,
+        "_request",
+        lambda group, **_kwargs: {
+            "segments": [analysis_item(str(row["stable_id"])) for row in group]
+        },
+    )
+    monkeypatch.setattr(
+        analyzer,
+        "_request_director_critic",
+        lambda *_args, **_kwargs: pytest.fail("critic transport must not start"),
+    )
+
+    def verify(phase: str) -> None:
+        if phase == "before director critic request":
+            raise AnalysisModelDigestError("digest changed before critic dispatch")
+
+    monkeypatch.setattr(analyzer, "_verify_locked_model_digest", verify)
+
+    with pytest.raises(AnalysisModelDigestError, match="before critic dispatch"):
+        analyzer.analyze_all(lambda: False)
+
+    assert len(db.analysis_candidates) == 1
+    assert db.analysis_candidates[0]["state"] == "allocated"
+    assert db.analysis_candidates[0]["critic_attempt_count"] == 0
+    assert db.analysis_critic_attempts == []
 
 
 def test_persistent_semantic_delivery_failure_splits_until_singletons(monkeypatch) -> None:
