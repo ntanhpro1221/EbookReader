@@ -149,6 +149,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   phủ định/ngăn cấm không được tính là mâu thuẫn.
 - Narration có đồng thời bằng chứng tổn thương hô hấp nghiêm trọng và suy giảm ý thức không được checkpoint thành
   `neutral/intensity=0`; một mô tả thể chất hoặc quan sát lâm sàng đơn lẻ không đủ để kích hoạt rule này.
+- Rule affect nguồn hẹp phải chạy trước semantic cue chung. Constraint deterministic đã phát hiện phải được tích lũy trong
+  suốt retry của cùng target group, không được ghi đè bởi lỗi của lần sau hoặc chuyển thành feedback tự do.
 - Profile `high_quality` bắt buộc chạy một lượt director critic thứ hai trên candidate analysis bất biến. Critic không
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model

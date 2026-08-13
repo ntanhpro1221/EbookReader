@@ -3910,6 +3910,111 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     assert any(event[1] == "ANALYSIS_SEMANTIC_REJECTED" for event in db.events)
 
 
+def test_retry_retains_host_constraints_while_fixing_later_semantic_issue(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "physical-collapse",
+            "chapter_id": 1,
+            "paragraph_index": 1,
+            "text": (
+                "Phổi và yết hầu đang bị thiêu đốt. "
+                "Ý thức của Hạ Phong rất nhanh liền trở nên mơ hồ."
+            ),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 2,
+            "stable_id": "mortality-thought",
+            "chapter_id": 1,
+            "paragraph_index": 2,
+            "text": "‘Không được… Không được ngủ… sẽ chết mất.’",
+            "kind_hint": "thought",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 3,
+            "stable_id": "wake-thought",
+            "chapter_id": 1,
+            "paragraph_index": 3,
+            "text": "‘Tỉnh dậy, phải tỉnh dậy!’",
+            "kind_hint": "thought",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 3, "batch_chars": 10000, "max_retries": 3}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+
+    def generate(group, **kwargs):
+        feedback_seen.append(kwargs.get("validation_feedback"))
+        call = len(feedback_seen)
+        items = []
+        for row in group:
+            stable_id = str(row["stable_id"])
+            item = analysis_item(stable_id)
+            item.update(
+                {
+                    "kind": row["kind_hint"],
+                    "speaker": "NARRATOR",
+                    "notes": "Delivery được chọn từ nguy hiểm trực tiếp trong cùng câu.",
+                }
+            )
+            if stable_id == "physical-collapse":
+                item["emotion"] = "afraid" if call == 3 else "neutral"
+                item["intensity"] = 2 if call == 3 else 0
+            elif call == 1:
+                item["emotion"] = "neutral" if stable_id == "mortality-thought" else "angry"
+                item["intensity"] = 2
+            else:
+                item["emotion"] = "afraid"
+                item["intensity"] = 2
+                item["pace"] = "fast"
+            items.append(item)
+        return {"segments": items}
+
+    def critic(group, validated, **kwargs):
+        return director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert feedback_seen[0] is None
+    assert {
+        (issue.stable_id, issue.code) for issue in feedback_seen[1] or ()
+    } == {
+        ("mortality-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
+        ("wake-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
+    }
+    assert {
+        (issue.stable_id, issue.code) for issue in feedback_seen[2] or ()
+    } == {
+        ("mortality-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
+        ("physical-collapse", "HOST_PHYSICAL_COLLAPSE_MISMATCH"),
+        ("wake-thought", "HOST_AFFECT_EMOTION_MISMATCH"),
+    }
+    assert len(db.updated) == 3
+    assert {data["emotion"] for _segment_id, data, _threshold in db.updated} == {"afraid"}
+
+
 def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeypatch) -> None:
     db = FakeDB()
     settings = build_settings(overrides={"analysis": {"max_retries": 2}})

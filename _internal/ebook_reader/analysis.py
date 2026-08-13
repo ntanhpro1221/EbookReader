@@ -74,7 +74,7 @@ NEUTRAL_ZERO_DELIVERY_SIGNATURE = ("neutral", 0, "normal", "normal")
 DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
 DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v2"
-HOST_AFFECT_POLICY_VERSION = "host_affect_v2"
+HOST_AFFECT_POLICY_VERSION = "host_affect_v3"
 ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v2"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
@@ -2884,6 +2884,16 @@ def _structured_feedback_issues(
     )
 
 
+def _merge_feedback_issues(
+    current: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+    incoming: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    """Retain every host-verified constraint for the lifetime of one target group."""
+    return _structured_feedback_issues(
+        (*_structured_feedback_issues(current), *_structured_feedback_issues(incoming))
+    )
+
+
 def _analysis_feedback_hash(
     validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
 ) -> str:
@@ -4215,11 +4225,23 @@ class OllamaBookAnalyzer:
                             group,
                             validated,
                         )
-                        semantic_issues, semantic_batch_collapsed = _semantic_delivery_issues(
-                            group, validated
+                        host_adjudication = _host_affect_adjudication(
+                            group,
+                            validated,
+                            original_context=original_context,
                         )
+                        if host_adjudication.issues:
+                            semantic_issues: dict[str, str] = {}
+                            semantic_batch_collapsed = False
+                        else:
+                            semantic_issues, semantic_batch_collapsed = (
+                                _semantic_delivery_issues(group, validated)
+                            )
                         if semantic_issues:
-                            validation_feedback = _structured_feedback_issues(semantic_issues)
+                            validation_feedback = _merge_feedback_issues(
+                                validation_feedback,
+                                semantic_issues,
+                            )
                             received_semantic_issues = True
                             if semantic_batch_collapsed:
                                 validated = {}
@@ -4254,13 +4276,7 @@ class OllamaBookAnalyzer:
                                     "generator_contract": generator_contract,
                                 },
                             )
-                        host_adjudication: HostAffectAdjudication | None = None
                         if not semantic_issues and len(validated) == len(group):
-                            host_adjudication = _host_affect_adjudication(
-                                group,
-                                validated,
-                                original_context=original_context,
-                            )
                             if host_adjudication.issues:
                                 candidate_rows = _director_candidate_rows(
                                     group,
@@ -4274,9 +4290,12 @@ class OllamaBookAnalyzer:
                                     issue_fingerprint,
                                 )
                                 previous_host_rejection = (candidate_hash, issue_fingerprint)
-                                validation_feedback = tuple(
-                                    issue.feedback_issue()
-                                    for issue in host_adjudication.issues
+                                validation_feedback = _merge_feedback_issues(
+                                    validation_feedback,
+                                    tuple(
+                                        issue.feedback_issue()
+                                        for issue in host_adjudication.issues
+                                    ),
                                 )
                                 received_semantic_issues = True
                                 validated = {}
@@ -4456,8 +4475,9 @@ class OllamaBookAnalyzer:
                                     )
                                 else:
                                     received_director_critic_issues = True
-                                    validation_feedback = _structured_feedback_issues(
-                                        critic_issues
+                                    validation_feedback = _merge_feedback_issues(
+                                        validation_feedback,
+                                        critic_issues,
                                     )
                                     validated = {}
                                     issue_summary = "; ".join(
@@ -4556,8 +4576,9 @@ class OllamaBookAnalyzer:
                                 )
                                 if critic_issues:
                                     received_director_critic_issues = True
-                                    validation_feedback = _structured_feedback_issues(
-                                        critic_issues
+                                    validation_feedback = _merge_feedback_issues(
+                                        validation_feedback,
+                                        critic_issues,
                                     )
                                     validated = {}
                                     last_error = "director critic rejected candidate"
