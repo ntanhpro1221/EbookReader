@@ -127,6 +127,37 @@ ANALYSIS_CRITIC_DELIVERY_FIELDS = (
     "pace",
     "volume",
 )
+ANALYSIS_DELIVERY_NOTE_VERSION = "delivery_note_v1"
+ANALYSIS_DELIVERY_NOTE_PREFIX = f"{ANALYSIS_DELIVERY_NOTE_VERSION}="
+ANALYSIS_DELIVERY_NOTE_FIELDS = (
+    "kind",
+    "emotion",
+    "intensity",
+    "pace",
+    "volume",
+)
+ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
+EXPLICIT_ATTRIBUTION_NOTE = "đã khóa người nói từ lời dẫn cùng đoạn văn"
+PARAGRAPH_SPEAKER_LOCK_NOTE = "đã đồng nhất người nói trong cùng đoạn văn"
+CONTINUED_DIALOGUE_LOCK_NOTE = "đã giữ người nói cho câu thoại nối tiếp"
+CHAPTER_HEADING_NOTE = "Tiêu đề chương được khóa delivery trung tính."
+CROWD_SPEAKER_LOCK_NOTE = "đã khóa người nói từ lời dẫn tập thể kế tiếp"
+ANALYSIS_HOST_NOTE_MARKERS = (
+    EXPLICIT_ATTRIBUTION_NOTE,
+    ADDRESSEE_REPAIR_NOTE,
+    PARAGRAPH_SPEAKER_LOCK_NOTE,
+    CONTINUED_DIALOGUE_LOCK_NOTE,
+    CHAPTER_HEADING_NOTE,
+    CROWD_SPEAKER_LOCK_NOTE,
+)
+ANALYSIS_CANDIDATE_CONTENT_NOTE_MARKERS = frozenset(
+    {
+        EXPLICIT_ATTRIBUTION_NOTE,
+        ADDRESSEE_REPAIR_NOTE,
+        PARAGRAPH_SPEAKER_LOCK_NOTE,
+        CONTINUED_DIALOGUE_LOCK_NOTE,
+    }
+)
 ANALYSIS_SOURCE_ROLE_CONTENT = "content"
 ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
@@ -192,6 +223,12 @@ ANALYSIS_HOST_CLEARANCE_FIELDS = frozenset(
         "evidence",
         "structural_locks",
         "semantic_locks",
+    }
+)
+ANALYSIS_DETERMINISTIC_ISSUE_FIELDS = frozenset(
+    {
+        "host_affect_clearance",
+        "semantic_issues",
     }
 )
 ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS = {
@@ -371,6 +408,84 @@ ANALYSIS_HOST_AFFECT_CUE_PATTERNS = {
         for index, pattern in enumerate(ANALYSIS_OTHER_AFFECT_CUE_PATTERNS)
     },
 }
+
+
+def canonical_analysis_note(
+    data: dict[str, Any],
+    markers: Sequence[str] = (),
+) -> str:
+    if not isinstance(data, dict):
+        raise ValueError("Analysis delivery note data must be an object")
+    missing = [field for field in ANALYSIS_DELIVERY_NOTE_FIELDS if field not in data]
+    if missing:
+        raise ValueError(
+            "Analysis delivery note is missing fields: " + ", ".join(missing)
+        )
+    kind = data["kind"]
+    emotion = data["emotion"]
+    intensity = data["intensity"]
+    pace = data["pace"]
+    volume = data["volume"]
+    if not isinstance(kind, str) or kind not in ANALYSIS_CRITIC_KINDS:
+        raise ValueError(f"Unsupported analysis delivery note kind: {kind}")
+    if not isinstance(emotion, str) or emotion not in ANALYSIS_CRITIC_EMOTIONS:
+        raise ValueError(f"Unsupported analysis delivery note emotion: {emotion}")
+    if type(intensity) is not int or not 0 <= intensity <= 3:
+        raise ValueError("Analysis delivery note intensity must be an integer from 0 to 3")
+    if not isinstance(pace, str) or pace not in ANALYSIS_CRITIC_PACES:
+        raise ValueError(f"Unsupported analysis delivery note pace: {pace}")
+    if not isinstance(volume, str) or volume not in ANALYSIS_CRITIC_VOLUMES:
+        raise ValueError(f"Unsupported analysis delivery note volume: {volume}")
+    if isinstance(markers, (str, bytes)):
+        raise ValueError("Analysis delivery note markers must be a sequence")
+    marker_values = tuple(markers)
+    if any(not isinstance(marker, str) for marker in marker_values):
+        raise ValueError("Analysis delivery note markers must be strings")
+    unknown_markers = set(marker_values) - set(ANALYSIS_HOST_NOTE_MARKERS)
+    if unknown_markers:
+        raise ValueError("Analysis delivery note contains an unrecognized host marker")
+    payload = {
+        "kind": kind,
+        "emotion": emotion,
+        "intensity": intensity,
+        "pace": pace,
+        "volume": volume,
+    }
+    note = ANALYSIS_DELIVERY_NOTE_PREFIX + json.dumps(
+        payload,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    ordered_markers = tuple(
+        marker for marker in ANALYSIS_HOST_NOTE_MARKERS if marker in marker_values
+    )
+    return "; ".join((note, *ordered_markers))
+
+
+def analysis_note_markers(data: dict[str, Any]) -> tuple[str, ...]:
+    if data.get("personality_hint") != "":
+        raise ValueError("Analysis personality_hint must be empty")
+    note = data.get("notes")
+    if not isinstance(note, str):
+        raise ValueError("Analysis notes must be a canonical delivery note")
+    base_note = canonical_analysis_note(data)
+    if note == base_note:
+        return ()
+    marker_prefix = f"{base_note}; "
+    if not note.startswith(marker_prefix):
+        raise ValueError("Analysis notes must use the canonical delivery note contract")
+    markers = tuple(note[len(marker_prefix):].split("; "))
+    if (
+        not markers
+        or any(not marker for marker in markers)
+        or len(markers) != len(set(markers))
+        or canonical_analysis_note(data, markers) != note
+    ):
+        raise ValueError(
+            "Analysis notes may contain only ordered recognized host markers"
+        )
+    return markers
 
 
 def _analysis_source_match_is_suppressed(text: str, match: re.Match[str]) -> bool:
@@ -1594,6 +1709,9 @@ class ProjectDB:
                 raise ValueError(
                     "Analysis candidate segment data does not contain the full validated delivery"
                 )
+            note_markers = analysis_note_markers(data)
+            if note_markers:
+                raise ValueError("Analysis candidate notes must not persist host markers")
             if stable_id in commit_rows:
                 raise ValueError("Analysis candidate contains duplicate stable IDs")
             data_json, _data_hash = cls._canonical_analysis_json(
@@ -1605,6 +1723,7 @@ class ProjectDB:
                 "stable_id": stable_id,
                 "text_sha256": text_sha256,
                 "data_json": data_json,
+                "note_markers": note_markers,
             }
         pronunciation_items = candidate["pronunciations"]
         if not isinstance(pronunciation_items, list):
@@ -1716,6 +1835,8 @@ class ProjectDB:
             raise RuntimeError("Durable analysis host-lock JSON is invalid") from exc
         if not isinstance(candidate, dict) or not isinstance(deterministic_issues, dict):
             raise RuntimeError("Durable analysis host-lock contract must contain objects")
+        if set(deterministic_issues) != ANALYSIS_DETERMINISTIC_ISSUE_FIELDS:
+            raise RuntimeError("Durable deterministic analysis issues have invalid schema")
         segments = candidate.get("segments")
         critic_rows = candidate.get("critic_rows")
         if not isinstance(segments, list) or not isinstance(critic_rows, list):
@@ -1723,6 +1844,9 @@ class ProjectDB:
         segment_by_stable = {
             str(segment["stable_id"]): segment for segment in segments
         }
+        semantic_issues = deterministic_issues["semantic_issues"]
+        if not isinstance(semantic_issues, list):
+            raise RuntimeError("Durable semantic analysis issues must be an array")
         critic_row_by_stable = {
             str(segment["stable_id"]): critic_row
             for segment, critic_row in zip(segments, critic_rows, strict=True)
@@ -3511,17 +3635,85 @@ class ProjectDB:
         data: dict[str, Any],
         low_confidence_threshold: float = 0.58,
     ) -> None:
-        values = self._analysis_update_values(data, low_confidence_threshold, time.time())
-        with self.connect() as conn:
-            conn.execute(
+        if not isinstance(data, dict):
+            raise ValueError("Analysis update data must be an object")
+        with self.transaction() as conn:
+            current = conn.execute(
+                "SELECT * FROM segments WHERE id=?",
+                (int(segment_id),),
+            ).fetchone()
+            if current is None:
+                raise KeyError(f"Unknown segment id: {segment_id}")
+            merged = self._merged_analysis_update_data(current, data)
+            values = self._analysis_update_values(
+                merged,
+                low_confidence_threshold,
+                time.time(),
+            )
+            updated = conn.execute(
                 """
                 UPDATE segments SET
                     kind=?,speaker=?,gender=?,age=?,emotion=?,intensity=?,pace=?,volume=?,
                     confidence=?,analysis_notes=?,warning_code=?,status=?,updated_at=?
                 WHERE id=?
                 """,
-                (*values, segment_id),
+                (*values, int(segment_id)),
             )
+            if updated.rowcount != 1:
+                raise RuntimeError("Analysis update segment CAS failed")
+
+    @staticmethod
+    def _merged_analysis_update_data(
+        current: sqlite3.Row,
+        updates: dict[str, Any],
+    ) -> dict[str, Any]:
+        allowed_fields = ANALYSIS_ACCEPTED_DELIVERY_FIELDS - {"personality_hint", "notes"}
+        unknown_fields = set(updates) - ANALYSIS_ACCEPTED_DELIVERY_FIELDS
+        if unknown_fields:
+            raise ValueError("Analysis update contains unsupported fields")
+        if updates.get("personality_hint", "") != "":
+            raise ValueError("Analysis personality_hint must be empty")
+        current_delivery = {
+            "kind": str(current["kind"] or current["kind_hint"] or "narration"),
+            "speaker": str(current["speaker"] or "NARRATOR"),
+            "gender": str(current["gender"] or "unknown"),
+            "age": str(current["age"] or "unknown"),
+            "emotion": str(current["emotion"] or "neutral"),
+            "intensity": int(current["intensity"] if current["intensity"] is not None else 1),
+            "pace": str(current["pace"] or "normal"),
+            "volume": str(current["volume"] or "normal"),
+            "confidence": float(
+                current["confidence"] if current["confidence"] is not None else 0.5
+            ),
+        }
+        current_note = str(current["analysis_notes"] or "")
+        current_note_data = {
+            **current_delivery,
+            "personality_hint": "",
+            "notes": current_note,
+        }
+        if current_note:
+            analysis_note_markers(current_note_data)
+        merged = {
+            **current_delivery,
+            **{
+                field: updates[field]
+                for field in allowed_fields
+                if field in updates
+            },
+            "personality_hint": "",
+            "notes": "",
+        }
+        requested_note = updates.get("notes")
+        if requested_note is not None:
+            if not isinstance(requested_note, str):
+                raise ValueError("Analysis notes must be a canonical delivery note")
+            requested_note_data = {**merged, "notes": requested_note}
+            requested_markers = analysis_note_markers(requested_note_data)
+            if requested_markers:
+                raise ValueError("Analysis update notes must not persist host markers")
+        merged["notes"] = canonical_analysis_note(merged)
+        return merged
 
     @staticmethod
     def _analysis_update_values(
@@ -3532,15 +3724,8 @@ class ProjectDB:
         confidence = float(data.get("confidence", 0.5))
         warning = "LOW_ANALYSIS_CONFIDENCE" if confidence < low_confidence_threshold else None
         status = SegmentStatus.WARNING.value if warning else SegmentStatus.ANALYZED.value
-        personality = str(data.get("personality_hint", "")).strip()
-        notes = str(data.get("notes", "")).strip()
-        analysis_notes = "; ".join(
-            value for value in (
-                f"personality={personality}" if personality else "",
-                notes,
-            )
-            if value
-        )
+        analysis_note_markers(data)
+        analysis_notes = data["notes"]
         return (
             data.get("kind", "narration"),
             data.get("speaker", "NARRATOR"),
@@ -6528,28 +6713,63 @@ class ProjectDB:
         speaker: str,
         gender: str,
         age: str,
-        analysis_notes: str,
     ) -> int:
         if not segment_ids:
             return 0
+        normalized_segment_ids = [int(segment_id) for segment_id in segment_ids]
+        if len(normalized_segment_ids) != len(set(normalized_segment_ids)):
+            raise ValueError("Segment speaker rewrite IDs must be unique")
         placeholders = ",".join("?" for _segment_id in segment_ids)
-        with self.connect() as conn:
-            cursor = conn.execute(
-                f"""
-                UPDATE segments SET speaker=?,gender=?,age=?,analysis_notes=?,
-                    canonical_character_id=NULL,voice_profile_id=NULL,updated_at=?
-                WHERE id IN ({placeholders})
-                """,
-                (
-                    speaker,
-                    gender,
-                    age,
-                    analysis_notes[:500],
-                    time.time(),
-                    *segment_ids,
-                ),
+        with self.transaction() as conn:
+            rows = list(
+                conn.execute(
+                    f"""
+                    SELECT id,kind,emotion,intensity,pace,volume,analysis_notes
+                    FROM segments WHERE id IN ({placeholders}) ORDER BY id
+                    """,
+                    normalized_segment_ids,
+                )
             )
-            return int(cursor.rowcount)
+            if len(rows) != len(normalized_segment_ids):
+                raise KeyError("Segment speaker rewrite contains an unknown segment ID")
+            notes_by_id: dict[int, str] = {}
+            for row in rows:
+                current_delivery = {
+                    "kind": str(row["kind"]),
+                    "emotion": str(row["emotion"]),
+                    "intensity": int(row["intensity"]),
+                    "pace": str(row["pace"]),
+                    "volume": str(row["volume"]),
+                    "personality_hint": "",
+                    "notes": str(row["analysis_notes"] or ""),
+                }
+                if current_delivery["kind"] != "dialogue":
+                    raise ValueError("Segment speaker rewrite requires dialogue segments")
+                if current_delivery["notes"]:
+                    analysis_note_markers(current_delivery)
+                notes_by_id[int(row["id"])] = canonical_analysis_note(current_delivery)
+            now = time.time()
+            rewritten = 0
+            for segment_id in normalized_segment_ids:
+                cursor = conn.execute(
+                    """
+                    UPDATE segments SET speaker=?,gender=?,age=?,analysis_notes=?,
+                        canonical_character_id=NULL,voice_profile_id=NULL,updated_at=?
+                    WHERE id=?
+                    """,
+                    (
+                        speaker,
+                        gender,
+                        age,
+                        notes_by_id[segment_id],
+                        now,
+                        segment_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise RuntimeError("Segment speaker rewrite CAS failed")
+                rewritten += 1
+            return rewritten
 
     def normalize_thought_speakers(self) -> int:
         with self.connect() as conn:

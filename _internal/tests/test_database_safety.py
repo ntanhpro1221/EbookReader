@@ -14,6 +14,7 @@ from ebook_reader.database import (
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
     CHAPTER_POST_ENCODE_QUALITY_STAGE,
+    CONTINUED_DIALOGUE_LOCK_NOTE,
     GENERATION_DELIVERY_CLARITY,
     GENERATION_DELIVERY_PRIMARY,
     QUALITY_SCOPE_CHAPTER,
@@ -24,6 +25,7 @@ from ebook_reader.database import (
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
+    canonical_analysis_note,
 )
 from ebook_reader.io_utils import sha256_file, sha256_text
 from ebook_reader.models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
@@ -40,6 +42,25 @@ ANALYSIS_MODEL_COMMIT = {
 ANALYSIS_POLICY_FINGERPRINT = "director-policy-v2"
 ANALYSIS_GROUP_FINGERPRINT = "group-source-v1"
 ANALYSIS_CONTEXT_HASH = "group-context-v1"
+
+
+def _canonical_analysis_data(**overrides: object) -> dict:
+    data = {
+        "kind": "narration",
+        "speaker": "NARRATOR",
+        "gender": "unknown",
+        "age": "unknown",
+        "emotion": "neutral",
+        "intensity": 1,
+        "pace": "normal",
+        "volume": "normal",
+        "confidence": 0.9,
+        "personality_hint": "",
+        "notes": "",
+    }
+    data.update(overrides)
+    data["notes"] = canonical_analysis_note(data)
+    return data
 
 
 def _segment_db(tmp_path: Path) -> tuple[ProjectDB, int]:
@@ -148,8 +169,9 @@ def _analysis_acceptance_envelope(
             "volume": "normal",
             "confidence": 0.9,
             "personality_hint": "",
-            "notes": "Lượt phản biện đồng ý.",
+            "notes": "",
         }
+        data["notes"] = canonical_analysis_note(data)
         segments.append(
             {
                 "segment_id": int(row["id"]),
@@ -193,6 +215,22 @@ def _canonical_hash(value: object) -> str:
             allow_nan=False,
         )
     )
+
+
+def _deterministic_analysis_issues(
+    source_rows: list[dict],
+    clearance: dict | None = None,
+) -> dict:
+    del source_rows
+    return {
+        "host_affect_clearance": clearance,
+        "semantic_issues": [],
+    }
+
+
+def _refresh_analysis_note(envelope: dict, index: int) -> None:
+    data = envelope["segments"][index]["data"]
+    data["notes"] = canonical_analysis_note(data)
 
 
 def _accepted_critic_contract() -> dict:
@@ -242,6 +280,9 @@ def _chapter_heading_envelope(source_rows: list[dict]) -> dict:
     heading_row = envelope["critic_rows"][0]
     for field, value in ANALYSIS_CHAPTER_HEADING_DELIVERY.items():
         heading_segment["data"][field] = value
+    heading_segment["data"]["notes"] = canonical_analysis_note(
+        heading_segment["data"]
+    )
     heading_row["source_role"] = "chapter_heading"
     heading_row["context_policy"] = "target_only"
     heading_row["host_locked_fields"] = dict(ANALYSIS_CHAPTER_HEADING_DELIVERY)
@@ -325,11 +366,13 @@ def _semantic_lock_envelope(
     for index, source_row in enumerate(source_rows):
         source_kind = str(source_row["kind_hint"])
         envelope["segments"][index]["data"]["kind"] = source_kind
+        _refresh_analysis_note(envelope, index)
         envelope["critic_rows"][index]["candidate"]["kind"] = source_kind
     segment = envelope["segments"][locked_index]
     critic_row = envelope["critic_rows"][locked_index]
     segment["data"]["emotion"] = candidate_emotion
     segment["data"]["intensity"] = 2
+    _refresh_analysis_note(envelope, locked_index)
     critic_row["candidate"]["emotion"] = candidate_emotion
     critic_row["candidate"]["intensity"] = 2
     critic_row["host_locked_fields"] = {"emotion": candidate_emotion}
@@ -468,7 +511,14 @@ def _allocate_analysis_candidate(
         candidate_hash=_canonical_hash(envelope["critic_rows"]),
         candidate=envelope,
         generator_contract={"attempt": 1, "seed": 101},
-        deterministic_issues=deterministic_issues or {},
+        deterministic_issues=(
+            _deterministic_analysis_issues(source_rows)
+            if deterministic_issues is None
+            else _deterministic_analysis_issues(
+                source_rows,
+                deterministic_issues.get("host_affect_clearance"),
+            )
+        ),
         critic_max_attempts=critic_max_attempts,
     )
 
@@ -676,6 +726,217 @@ def _dual_pass_candidate(
     return db.get_segment_candidate(candidate_id), candidate_sha256
 
 
+def test_segment_speaker_rewrite_rebuilds_marker_free_canonical_note(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    with db.connect() as conn:
+        row = db.get_segment(segment_id)
+        legacy_note = canonical_analysis_note(
+            {**dict(row), "kind": "dialogue"},
+            (CONTINUED_DIALOGUE_LOCK_NOTE,),
+        )
+        conn.execute(
+            "UPDATE segments SET kind='dialogue',analysis_notes=? WHERE id=?",
+            (legacy_note, segment_id),
+        )
+    row = db.get_segment(segment_id)
+
+    rewritten = db.rewrite_segment_speakers(
+        [segment_id],
+        speaker="ALISA",
+        gender="female",
+        age="adult",
+    )
+
+    result = db.get_segment(segment_id)
+    assert rewritten == 1
+    assert result["speaker"] == "ALISA"
+    assert result["analysis_notes"] == canonical_analysis_note(dict(result))
+    assert CONTINUED_DIALOGUE_LOCK_NOTE not in result["analysis_notes"]
+
+
+def test_segment_speaker_rewrite_does_not_accept_analysis_notes_argument(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+
+    with pytest.raises(TypeError, match="analysis_notes"):
+        db.rewrite_segment_speakers(
+            [segment_id],
+            speaker="FORGED",
+            gender="unknown",
+            age="unknown",
+            analysis_notes="copied director prose",
+        )
+
+    assert db.get_segment(segment_id)["speaker"] == "NARRATOR"
+
+
+def test_segment_speaker_rewrite_rejects_dialogue_marker_on_narration(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    with pytest.raises(ValueError, match="dialogue segments"):
+        db.rewrite_segment_speakers(
+            [segment_id],
+            speaker="FORGED",
+            gender="unknown",
+            age="unknown",
+        )
+
+    assert db.get_segment(segment_id)["speaker"] == "NARRATOR"
+
+
+def test_segment_speaker_rewrite_rejects_noncanonical_current_note_atomically(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET kind='dialogue',analysis_notes='forged' WHERE id=?",
+            (segment_id,),
+        )
+
+    with pytest.raises(ValueError, match="canonical delivery note"):
+        db.rewrite_segment_speakers(
+            [segment_id],
+            speaker="FORGED",
+            gender="unknown",
+            age="unknown",
+        )
+
+    assert db.get_segment(segment_id)["speaker"] == "NARRATOR"
+
+
+def test_segment_speaker_rewrite_rebuilds_each_row_note_from_its_own_delivery(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    first_id = int(source_rows[0]["id"])
+    second_id = int(source_rows[1]["id"])
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET kind='dialogue'"
+        )
+        conn.execute(
+            "UPDATE segments SET emotion='angry',intensity=2 WHERE id=?", (second_id,)
+        )
+
+    rewritten = db.rewrite_segment_speakers(
+        [first_id, second_id],
+        speaker="ALISA",
+        gender="female",
+        age="adult",
+    )
+
+    rows = db.list_segments()
+    assert rewritten == 2
+    assert {row["speaker"] for row in rows} == {"ALISA"}
+    assert all(
+        row["analysis_notes"] == canonical_analysis_note(dict(row))
+        for row in rows
+    )
+    assert rows[0]["analysis_notes"] != rows[1]["analysis_notes"]
+
+
+def test_partial_analysis_update_merges_current_delivery_and_builds_canonical_note(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+
+    db.update_analysis(segment_id, {"confidence": 0.9})
+
+    row = db.get_segment(segment_id)
+    assert row["kind"] == "narration"
+    assert row["speaker"] == "NARRATOR"
+    assert row["emotion"] == "neutral"
+    assert row["confidence"] == 0.9
+    assert row["analysis_notes"] == canonical_analysis_note(dict(row))
+
+
+def test_partial_analysis_update_rebuilds_note_after_delivery_change(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    db.update_analysis(segment_id, {"confidence": 0.9})
+
+    db.update_analysis(
+        segment_id,
+        {"emotion": "angry", "intensity": 2, "volume": "loud"},
+    )
+
+    row = db.get_segment(segment_id)
+    assert row["emotion"] == "angry"
+    assert row["intensity"] == 2
+    assert row["volume"] == "loud"
+    assert row["analysis_notes"] == canonical_analysis_note(dict(row))
+
+
+@pytest.mark.parametrize(
+    "updates",
+    (
+        {"personality_hint": "stoic"},
+        {"notes": "director prose"},
+    ),
+)
+def test_partial_analysis_update_rejects_untrusted_note_fields_atomically(
+    tmp_path: Path,
+    updates: dict,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    before = dict(db.get_segment(segment_id))
+
+    with pytest.raises(ValueError, match="personality_hint|canonical delivery note"):
+        db.update_analysis(segment_id, updates)
+
+    after = dict(db.get_segment(segment_id))
+    assert after["kind"] == before["kind"]
+    assert after["confidence"] == before["confidence"]
+    assert after["analysis_notes"] == before["analysis_notes"]
+
+
+def test_direct_analysis_update_rejects_recognized_marker_atomically(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    data = _canonical_analysis_data(kind="dialogue", speaker="ALISA")
+    data["notes"] = canonical_analysis_note(
+        data,
+        (CONTINUED_DIALOGUE_LOCK_NOTE,),
+    )
+
+    with pytest.raises(ValueError, match="must not persist host markers"):
+        db.update_analysis(segment_id, data)
+
+    row = db.get_segment(segment_id)
+    assert row["kind"] == "narration"
+    assert row["speaker"] == "NARRATOR"
+    assert row["analysis_notes"] == ""
+
+
+def test_partial_analysis_update_strips_valid_legacy_marker_from_current_note(
+    tmp_path: Path,
+) -> None:
+    db, segment_id = _segment_db(tmp_path)
+    row = db.get_segment(segment_id)
+    legacy_note = canonical_analysis_note(
+        dict(row),
+        (CONTINUED_DIALOGUE_LOCK_NOTE,),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET analysis_notes=? WHERE id=?",
+            (legacy_note, segment_id),
+        )
+
+    db.update_analysis(segment_id, {"confidence": 0.9})
+
+    result = db.get_segment(segment_id)
+    assert result["analysis_notes"] == canonical_analysis_note(dict(result))
+    assert CONTINUED_DIALOGUE_LOCK_NOTE not in result["analysis_notes"]
+
+
 def test_warning_codes_are_merged_without_duplicates(tmp_path: Path) -> None:
     db, segment_id = _segment_db(tmp_path)
 
@@ -720,18 +981,7 @@ def test_analysis_director_batch_and_accept_event_commit_atomically(tmp_path: Pa
             "stable_id": row["stable_id"],
             "text_sha256": row["text_sha256"],
             "expected_status": "pending",
-            "data": {
-                "kind": "narration",
-                "speaker": "NARRATOR",
-                "gender": "unknown",
-                "age": "unknown",
-                "emotion": "neutral",
-                "intensity": 1,
-                "pace": "normal",
-                "volume": "normal",
-                "confidence": 0.9,
-                "notes": "Lượt phản biện đồng ý.",
-            },
+            "data": _canonical_analysis_data(),
         }
         for row in source_rows
     ]
@@ -951,6 +1201,106 @@ def test_analysis_candidate_rejects_arbitrarily_lowered_derived_confidence(
             result_state="critic_accepted",
             outcome={"accepted": True},
             evidence=evidence,
+            commit_envelope=commit_envelope,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    (
+        ("personality_hint", "stoic", "personality_hint must be empty"),
+        ("notes", "Director prose must not persist.", "canonical delivery note"),
+        (
+            "notes",
+            "delivery_note_v1={\"kind\":\"narration\",\"emotion\":\"neutral\","
+            "\"intensity\":1,\"pace\":\"normal\",\"volume\":\"normal\"}; forged",
+            "unrecognized host marker",
+        ),
+    ),
+)
+def test_analysis_candidate_rejects_personality_and_noncanonical_notes(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    error: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["segments"][0]["data"][field] = value
+
+    with pytest.raises(ValueError, match=error):
+        _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+
+def test_analysis_candidate_rejects_recognized_host_markers(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    data = envelope["segments"][0]["data"]
+    data["notes"] = canonical_analysis_note(
+        data,
+        (CONTINUED_DIALOGUE_LOCK_NOTE,),
+    )
+
+    with pytest.raises(ValueError, match="must not persist host markers"):
+        _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+
+@pytest.mark.parametrize("field", ("personality_hint", "notes"))
+def test_analysis_candidate_rejects_note_tamper_after_rehash(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    tampered = copy.deepcopy(envelope)
+    tampered["segments"][0]["data"][field] = "forged"
+    tampered_json = json.dumps(
+        tampered,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET candidate_json=?,envelope_hash=? WHERE id=?",
+            (tampered_json, sha256_text(tampered_json), int(candidate["id"])),
+        )
+
+    with pytest.raises(ValueError, match="personality_hint|canonical delivery note"):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+
+
+@pytest.mark.parametrize("field", ("personality_hint", "notes"))
+def test_analysis_commit_rejects_personality_or_note_injection(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    commit_envelope = copy.deepcopy(envelope)
+    commit_envelope["segments"][0]["data"][field] = "forged"
+
+    with pytest.raises(ValueError, match="personality_hint|canonical delivery note"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=_accepted_critic_evidence(envelope),
             commit_envelope=commit_envelope,
         )
 
@@ -1291,9 +1641,11 @@ def test_analysis_candidate_rejects_mandatory_semantic_kind_lock_when_omitted(
     envelope = _analysis_acceptance_envelope(source_rows)
     for index in preserve_thought_indexes:
         envelope["segments"][index]["data"]["kind"] = "thought"
+        _refresh_analysis_note(envelope, index)
         envelope["critic_rows"][index]["candidate"]["kind"] = "thought"
     target_kind = "thought" if kind_hints[relabel_index] == "narration" else "narration"
     envelope["segments"][relabel_index]["data"]["kind"] = target_kind
+    _refresh_analysis_note(envelope, relabel_index)
     envelope["critic_rows"][relabel_index]["candidate"]["kind"] = target_kind
 
     with pytest.raises(RuntimeError, match="source-owned boundary"):
@@ -1309,6 +1661,7 @@ def test_analysis_candidate_allows_ordinary_narration_to_implicit_thought(
     )
     envelope = _analysis_acceptance_envelope(source_rows)
     envelope["segments"][0]["data"]["kind"] = "thought"
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
 
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
@@ -1331,6 +1684,7 @@ def test_analysis_candidate_allows_ambiguous_narration_to_thought(
     db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
     envelope = _analysis_acceptance_envelope(source_rows)
     envelope["segments"][0]["data"]["kind"] = "thought"
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
 
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
@@ -1348,10 +1702,12 @@ def test_analysis_candidate_revalidates_source_owned_kind_after_reopen(
     )
     envelope = _analysis_acceptance_envelope(source_rows)
     envelope["segments"][0]["data"]["kind"] = "thought"
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     tampered = copy.deepcopy(envelope)
     tampered["segments"][0]["data"]["kind"] = "narration"
+    _refresh_analysis_note(tampered, 0)
     tampered["critic_rows"][0]["candidate"]["kind"] = "narration"
     tampered_json = json.dumps(
         tampered,
@@ -1383,7 +1739,7 @@ def test_analysis_candidate_rejects_unsupported_durable_kind(tmp_path: Path) -> 
     envelope["segments"][0]["data"]["kind"] = "unsupported"
     envelope["critic_rows"][0]["candidate"]["kind"] = "unsupported"
 
-    with pytest.raises(RuntimeError, match="kind is not supported"):
+    with pytest.raises(ValueError, match="Unsupported analysis delivery note kind"):
         _allocate_analysis_candidate(db, source_rows, candidate=envelope)
 
 
@@ -1438,6 +1794,7 @@ def test_analysis_candidate_rejects_mandatory_adjacent_lock_when_omitted(
     wake_row = source_rows[1]
     envelope = _analysis_acceptance_envelope([wake_row], emotion="afraid")
     envelope["segments"][0]["data"]["kind"] = "thought"
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
 
     with pytest.raises(RuntimeError, match="source-derived mandatory locks"):
@@ -1464,6 +1821,7 @@ def test_analysis_candidate_rejects_invalid_mandatory_adjacent_emotion(
     wake_row = dict(db.list_segments()[1])
     envelope = _analysis_acceptance_envelope([wake_row])
     envelope["segments"][0]["data"]["kind"] = "thought"
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
 
     with pytest.raises(RuntimeError, match="mandatory host semantic emotion"):
@@ -1499,6 +1857,7 @@ def test_analysis_candidate_rejects_invalid_mandatory_semantic_emotion(
     )
     envelope = _analysis_acceptance_envelope(source_rows)
     envelope["segments"][0]["data"]["kind"] = kind_hint
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = kind_hint
 
     with pytest.raises(RuntimeError, match="mandatory host semantic emotion"):
@@ -1917,6 +2276,7 @@ def test_analysis_candidate_binds_adjacent_semantic_lock_to_mortality_source(
     source_rows = [dict(row) for row in db.list_segments()]
     envelope = _semantic_lock_envelope(source_rows, locked_index=1)
     envelope["segments"][0]["data"].update({"emotion": "afraid", "intensity": 2})
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"].update(
         {"emotion": "afraid", "intensity": 2}
     )
@@ -2046,6 +2406,7 @@ def test_analysis_candidate_rejects_semantic_lock_when_candidate_kind_changes(
     )
     envelope = _semantic_lock_envelope(source_rows)
     envelope["segments"][0]["data"]["kind"] = "dialogue"
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "dialogue"
     clearance = _host_semantic_clearance(
         envelope,
@@ -2083,6 +2444,7 @@ def test_analysis_candidate_rejects_non_immediate_adjacent_semantic_source(
     source_rows = [dict(row) for row in db.list_segments()]
     envelope = _semantic_lock_envelope(source_rows, locked_index=2)
     envelope["segments"][0]["data"].update({"emotion": "afraid", "intensity": 2})
+    _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"].update(
         {"emotion": "afraid", "intensity": 2}
     )
@@ -2133,7 +2495,7 @@ def test_analysis_candidate_revalidates_semantic_lock_on_reopen(
         candidate=envelope,
         deterministic_issues=clearance,
     )
-    tampered = copy.deepcopy(clearance)
+    tampered = json.loads(str(candidate["deterministic_issue_json"]))
     tampered["host_affect_clearance"]["semantic_locks"][0][
         "allowed_emotions"
     ] = ["afraid", "neutral"]
@@ -2790,11 +3152,7 @@ def test_analysis_director_batch_trigger_failure_rolls_back_every_row_and_event(
             "stable_id": row["stable_id"],
             "text_sha256": row["text_sha256"],
             "expected_status": "pending",
-            "data": {
-                "kind": "narration",
-                "speaker": "NARRATOR",
-                "confidence": 0.9,
-            },
+            "data": _canonical_analysis_data(),
         }
         for row in source_rows
     ]
@@ -2827,7 +3185,7 @@ def test_analysis_director_batch_cas_rejects_stale_source_without_partial_update
             "stable_id": row["stable_id"],
             "text_sha256": "stale" if index == 1 else row["text_sha256"],
             "expected_status": "pending",
-            "data": {"confidence": 0.9},
+            "data": _canonical_analysis_data(),
         }
         for index, row in enumerate(source_rows)
     ]
@@ -2871,7 +3229,7 @@ def test_analysis_director_event_failure_rolls_back_pronunciation_and_segments(
             "stable_id": row["stable_id"],
             "text_sha256": row["text_sha256"],
             "expected_status": "pending",
-            "data": {"confidence": 0.9},
+            "data": _canonical_analysis_data(),
         }
         for row in source_rows
     ]
@@ -3126,17 +3484,13 @@ def test_audio_reset_keeps_locked_analysis_and_casting(tmp_path: Path) -> None:
     db, segment_id = _segment_db(tmp_path)
     db.update_analysis(
         segment_id,
-        {
-            "kind": "dialogue",
-            "speaker": "LUCIEN",
-            "gender": "male",
-            "age": "adult",
-            "emotion": "neutral",
-            "intensity": 1,
-            "pace": "normal",
-            "volume": "normal",
-            "confidence": 1.0,
-        },
+        _canonical_analysis_data(
+            kind="dialogue",
+            speaker="LUCIEN",
+            gender="male",
+            age="adult",
+            confidence=1.0,
+        ),
     )
     profile_id = db.upsert_voice_profile({
         "voice_key": "lucien",

@@ -46,8 +46,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   heartbeat vào Log mỗi phút để không còn im lặng trong một request dài;
 - stream analysis thiếu gói kết thúc được phân loại riêng và tự chia đôi batch ngay; batch con giữ nguyên
   checkpoint/progress, còn stdout/stderr của Ollama ẩn được nối vào `runtime/logs/ollama-server.log`;
-- semantic delivery gate từ chối output Qwen đúng schema nhưng suy biến: notes chỉ có dấu câu, batch `happy`
-  mâu thuẫn hàng loạt, hoặc template `neutral/intensity=0/normal` phủ lên nhiều cue cảm xúc rõ ràng; evidence ghi
+- semantic delivery gate từ chối output Qwen đúng schema nhưng suy biến: batch `happy` mâu thuẫn hàng loạt hoặc
+  template `neutral/intensity=0/normal` phủ lên nhiều cue cảm xúc rõ ràng; evidence ghi
   đúng cụm từ đã khớp, retry có feedback theo đúng ID rồi chia đôi hữu hạn; batch vui thật, narration trung tính,
   mixed-affect và cue nằm trong phủ định/ngăn cấm cục bộ vẫn được chấp nhận; template neutral-zero vẫn bị chặn
   riêng sau khi batch đã chia dưới 8 segment và kết thúc bắt buộc ở singleton thay vì checkpoint dữ liệu suy biến;
@@ -60,6 +60,12 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   delta thêm field hoặc dissent sang một emotion khác vẫn được host cho phép đều bị chặn;
 - dialogue và thought boundary đã được source parser nhận diện là source-owned: model không được đổi chúng sang loại khác để
   né speaker/semantic lock; narration chỉ có thể được nâng thành thought khi source không khớp một semantic lock narration bắt buộc;
+- `notes` và `personality_hint` tự do không còn thuộc output model hay acceptance envelope. Host tạo `delivery_note_v1`
+  chỉ từ delivery đã kiểm; segment note không chứa marker điều khiển và marker repair tạm bị xóa trước candidate. Projection
+  analysis đã chấp nhận nằm trong ledger+critic source-bound; bước casting chỉ reconcile speaker bằng transform source-derived,
+  deterministic và có fingerprint stage riêng. DB tính lại và từ chối note/personality/marker không canonical khi allocate,
+  reopen, direct update và commit. Character registry không còn dùng prose delivery làm personality hay marker legacy làm
+  quyền điều khiển identity, và speaker repair không sao chép note lân cận;
 - high-quality director critic chạy lượt self-review thứ hai mà không thấy confidence/notes/personality của generator;
   contract cục bộ từ chối root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate

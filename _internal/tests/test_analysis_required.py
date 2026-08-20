@@ -10,6 +10,7 @@ import pytest
 
 from ebook_reader.analysis import (
     ADDRESSEE_REPAIR_NOTE,
+    ANALYSIS_LEDGER_POLICY_VERSION,
     ANALYSIS_OUTPUT_MAX_TOKENS,
     CMUDICT_PATH,
     EXPLICIT_ATTRIBUTION_NOTE,
@@ -27,8 +28,11 @@ from ebook_reader.analysis import (
     AnalysisWallTimeoutError,
     OllamaBookAnalyzer,
     OllamaStreamIncompleteError,
+    OUTPUT_SCHEMA,
+    SYSTEM_PROMPT,
     _adjudicate_director_critic,
     _analysis_context_hash,
+    _analysis_candidate_envelope,
     _analysis_group_fingerprint,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
@@ -36,12 +40,14 @@ from ebook_reader.analysis import (
     _director_candidate_rows,
     _director_critic_request_contract,
     _generator_request_contract,
+    _canonicalize_analysis_notes,
     _apply_host_structural_locks,
     _host_affect_adjudication,
     _is_explicit_chapter_heading,
     _local_scope_for_group,
     _local_name_fallback,
     _name_candidate_contexts,
+    _record_host_note_marker,
     _repair_vietnamese_syllable_boundaries,
     _semantic_delivery_issues,
     _source_kind_feedback_issues,
@@ -53,7 +59,13 @@ from ebook_reader.analysis import (
     local_speaker_display,
 )
 from ebook_reader.config import build_settings
-from ebook_reader.database import ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH, ProjectDB
+from ebook_reader.database import (
+    ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
+    CONTINUED_DIALOGUE_LOCK_NOTE,
+    PARAGRAPH_SPEAKER_LOCK_NOTE,
+    ProjectDB,
+    canonical_analysis_note,
+)
 from ebook_reader.io_utils import sha256_text
 
 
@@ -805,17 +817,32 @@ def test_analysis_rejects_nonfinite_or_non_numeric_confidence(invalid) -> None:
         _validate(group, {"segments": [item]})
 
 
-def test_momentary_delivery_is_not_persisted_as_character_personality() -> None:
+def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
+    segment_schema = OUTPUT_SCHEMA["properties"]["segments"]["items"]
+
+    assert segment_schema["additionalProperties"] is False
+    assert "personality_hint" not in segment_schema["properties"]
+    assert "notes" not in segment_schema["properties"]
+    assert "personality_hint" not in segment_schema["required"]
+    assert "notes" not in segment_schema["required"]
+    assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
+    assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v6"
+
+
+def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
     narration = analysis_group()[0]
     dialogue = {**analysis_group()[1], "kind_hint": "dialogue"}
     narrator_item = analysis_item(str(narration["stable_id"]))
     narrator_item["personality_hint"] = "lo âu"
+    narrator_item["notes"] = "Nội dung tự do của model ở segment trước."
     dialogue_item = analysis_item(str(dialogue["stable_id"]))
     dialogue_item.update(
         {
             "kind": "dialogue",
             "speaker": "Lucien",
-            "personality_hint": "bất ngờ",
+            "personality_hint": "gan lì và điềm tĩnh",
+            "notes": EXPLICIT_ATTRIBUTION_NOTE,
         }
     )
 
@@ -826,6 +853,147 @@ def test_momentary_delivery_is_not_persisted_as_character_personality() -> None:
 
     assert validated[str(narration["stable_id"])]["personality_hint"] == ""
     assert validated[str(dialogue["stable_id"])]["personality_hint"] == ""
+    assert validated[str(narration["stable_id"])]["notes"] == canonical_analysis_note(
+        validated[str(narration["stable_id"])]
+    )
+    assert validated[str(dialogue["stable_id"])]["notes"] == canonical_analysis_note(
+        validated[str(dialogue["stable_id"])]
+    )
+    serialized = json.dumps(validated, ensure_ascii=False)
+    assert "Nội dung tự do" not in serialized
+    assert "gan lì" not in serialized
+    assert EXPLICIT_ATTRIBUTION_NOTE not in serialized
+
+
+def test_canonical_note_is_deterministic_and_removes_generator_tamper_surface() -> None:
+    group = analysis_group()[:1]
+    stable_id = str(group[0]["stable_id"])
+    first_item = analysis_item(stable_id)
+    first_item.update(
+        {
+            "emotion": "surprised",
+            "intensity": 2,
+            "pace": "fast",
+            "personality_hint": "free trait A",
+            "notes": "free explanation A",
+        }
+    )
+    second_item = {**first_item}
+    second_item.update(
+        {
+            "personality_hint": "free trait B",
+            "notes": "free explanation B",
+        }
+    )
+
+    first = _validate(group, {"segments": [first_item]})
+    second = _validate(group, {"segments": [second_item]})
+    first_rows = _director_candidate_rows(group, first)
+    second_rows = _director_candidate_rows(group, second)
+    first_envelope = _analysis_candidate_envelope(group, first, [], first_rows)
+    second_envelope = _analysis_candidate_envelope(group, second, [], second_rows)
+
+    assert first == second
+    assert first_envelope == second_envelope
+    assert first[stable_id]["notes"] == canonical_analysis_note(first[stable_id])
+    serialized = json.dumps(first_envelope, ensure_ascii=False)
+    assert "free trait" not in serialized
+    assert "free explanation" not in serialized
+
+    tampered = json.loads(json.dumps(first, ensure_ascii=False))
+    tampered[stable_id]["notes"] = "free explanation after validation"
+    with pytest.raises(ValueError, match="canonical delivery note"):
+        _analysis_candidate_envelope(group, tampered, [], first_rows)
+
+
+def test_neighbor_notes_cannot_leak_into_candidate_envelope() -> None:
+    group = [
+        {
+            "id": 6,
+            "stable_id": "sunrise-light",
+            "chapter_id": 1,
+            "seq": 5,
+            "paragraph_index": 5,
+            "text": (
+                "Như thể một người sắp chết đuối, Hạ Phong dùng hết sức bình sinh "
+                "vùng ra khỏi bóng tối."
+            ),
+            "kind_hint": "narration",
+        },
+        {
+            "id": 7,
+            "stable_id": "desperate-recovery",
+            "chapter_id": 1,
+            "seq": 6,
+            "paragraph_index": 6,
+            "text": "Đột nhiên, một tia sáng màu đỏ xuất hiện trước mặt cậu.",
+            "kind_hint": "narration",
+        },
+    ]
+    first = analysis_item("sunrise-light")
+    first.update(
+        {
+            "emotion": "tired",
+            "intensity": 1,
+            "pace": "fast",
+            "notes": "Một tia sáng màu đỏ xuất hiện trước mặt cậu.",
+            "personality_hint": "bình tĩnh từ segment kế bên",
+        }
+    )
+    second = analysis_item("desperate-recovery")
+    second.update(
+        {
+            "notes": "Hạ Phong tuyệt vọng vùng ra khỏi bóng tối.",
+            "personality_hint": "tuyệt vọng từ segment trước",
+        }
+    )
+
+    validated = _validate(group, {"segments": [first, second]})
+    candidate_rows = _director_candidate_rows(group, validated)
+    envelope = _analysis_candidate_envelope(
+        group,
+        validated,
+        [],
+        candidate_rows,
+    )
+
+    assert validated["sunrise-light"]["notes"] == canonical_analysis_note(
+        validated["sunrise-light"]
+    )
+    assert validated["desperate-recovery"]["notes"] == canonical_analysis_note(
+        validated["desperate-recovery"]
+    )
+    assert validated["sunrise-light"]["notes"] != validated["desperate-recovery"]["notes"]
+    serialized = json.dumps(envelope, ensure_ascii=False)
+    assert "segment kế bên" not in serialized
+    assert "segment trước" not in serialized
+    assert "tuyệt vọng vùng ra" not in serialized
+
+
+def test_host_repair_markers_are_private_and_never_persisted() -> None:
+    data = analysis_item("stable-markers")
+    data["personality_hint"] = "untrusted"
+    data["notes"] = "untrusted model prose"
+    for marker in (
+        CONTINUED_DIALOGUE_LOCK_NOTE,
+        ADDRESSEE_REPAIR_NOTE,
+        PARAGRAPH_SPEAKER_LOCK_NOTE,
+        EXPLICIT_ATTRIBUTION_NOTE,
+        CONTINUED_DIALOGUE_LOCK_NOTE,
+    ):
+        _record_host_note_marker(data, marker)
+
+    _canonicalize_analysis_notes({"stable-markers": data})
+
+    assert data["personality_hint"] == ""
+    assert data["notes"] == canonical_analysis_note(data)
+    assert "untrusted" not in data["notes"]
+    assert all(marker not in data["notes"] for marker in (
+        EXPLICIT_ATTRIBUTION_NOTE,
+        ADDRESSEE_REPAIR_NOTE,
+        PARAGRAPH_SPEAKER_LOCK_NOTE,
+        CONTINUED_DIALOGUE_LOCK_NOTE,
+    ))
 
 
 def test_semantic_retry_feedback_uses_only_constrained_batch_ids() -> None:
@@ -900,7 +1068,7 @@ def test_physical_collapse_feedback_is_typed_and_does_not_forward_source_text() 
     assert "phổi" not in json.dumps(payload, ensure_ascii=False)
 
 
-def test_compound_semantic_feedback_preserves_notes_delivery_and_template_dimensions() -> None:
+def test_compound_semantic_feedback_excludes_host_owned_notes_dimension() -> None:
     stable_id = str(analysis_group()[0]["stable_id"])
     raw_reason = (
         "notes không có giải thích ngữ nghĩa đủ nội dung; "
@@ -913,7 +1081,6 @@ def test_compound_semantic_feedback_preserves_notes_delivery_and_template_dimens
 
     assert {(item["code"], tuple(item["fields"])) for item in payloads} == {
         ("SEMANTIC_DELIVERY_MISMATCH", ("emotion",)),
-        ("SEMANTIC_EXPLANATION_REQUIRED", ("notes",)),
         ("SEMANTIC_TEMPLATE_COLLAPSE", ("emotion", "intensity", "pace", "volume")),
     }
     assert raw_reason not in json.dumps(payloads, ensure_ascii=False)
@@ -2025,7 +2192,10 @@ def test_addressee_name_cannot_become_the_local_speaker_identity() -> None:
 
     assert len(set(speakers)) == 1
     assert local_speaker_display(speakers[0]) == "NPC người gọi Lucien"
-    assert ADDRESSEE_REPAIR_NOTE in validated[group[0]["stable_id"]]["notes"]
+    assert validated[group[0]["stable_id"]]["notes"] == canonical_analysis_note(
+        validated[group[0]["stable_id"]]
+    )
+    assert ADDRESSEE_REPAIR_NOTE not in validated[group[0]["stable_id"]]["notes"]
 
 
 def test_same_paragraph_action_beats_override_wrong_dialogue_speakers() -> None:
@@ -2079,7 +2249,8 @@ def test_same_paragraph_action_beats_override_wrong_dialogue_speakers() -> None:
         data = validated[f"d{paragraph_index}"]
         assert data["speaker"] == speaker
         assert data["gender"] == "unknown"
-        assert EXPLICIT_ATTRIBUTION_NOTE in data["notes"]
+        assert data["notes"] == canonical_analysis_note(data)
+        assert EXPLICIT_ATTRIBUTION_NOTE not in data["notes"]
 
 
 def test_generic_speech_attribution_locks_bishop_descriptions() -> None:
@@ -2168,7 +2339,8 @@ def test_speech_verb_before_quote_overrides_speaker_but_weak_context_does_not() 
     validated = _validate(group, {"segments": items})
 
     assert validated["d1"]["speaker"] == "John"
-    assert EXPLICIT_ATTRIBUTION_NOTE in validated["d1"]["notes"]
+    assert validated["d1"]["notes"] == canonical_analysis_note(validated["d1"])
+    assert EXPLICIT_ATTRIBUTION_NOTE not in validated["d1"]["notes"]
     assert validated["d2"]["speaker"] == "ALISA"
     assert EXPLICIT_ATTRIBUTION_NOTE not in validated["d2"]["notes"]
 
@@ -2260,8 +2432,10 @@ def test_generic_same_paragraph_attribution_locks_one_child_voice() -> None:
     assert local_speaker_display(first["speaker"]) == "NPC cậu bé"
     assert first["gender"] == second["gender"] == "male"
     assert first["age"] == second["age"] == "child"
-    assert EXPLICIT_ATTRIBUTION_NOTE in first["notes"]
-    assert EXPLICIT_ATTRIBUTION_NOTE in second["notes"]
+    assert first["notes"] == canonical_analysis_note(first)
+    assert second["notes"] == canonical_analysis_note(second)
+    assert EXPLICIT_ATTRIBUTION_NOTE not in first["notes"]
+    assert EXPLICIT_ATTRIBUTION_NOTE not in second["notes"]
 
 
 def test_multiline_dialogue_keeps_previous_speaker_and_normalizes_child_label() -> None:
@@ -2507,9 +2681,9 @@ def test_semantic_delivery_rejects_v8_collapsed_happy_batch() -> None:
     issues, batch_collapsed = _semantic_delivery_issues(group, validated)
 
     assert batch_collapsed is True
-    assert set(issues) == {str(row["stable_id"]) for row in group}
+    assert set(issues) == {f"v8s{index}" for index in range(6)}
     assert "emotion=happy" in issues["v8s0"]
-    assert "notes" in issues["v8s6"]
+    assert "v8s6" not in issues
 
 
 def test_semantic_delivery_rejects_v9_all_neutral_zero_template() -> None:
@@ -2865,7 +3039,15 @@ def test_host_structural_heading_lock_preserves_generator_proposal_then_canonica
                 "pace": "fast",
                 "volume": "loud",
             },
-            "generator_notes": "Ngữ cảnh phù hợp với cách thể hiện.",
+            "generator_notes": canonical_analysis_note(
+                {
+                    "kind": "narration",
+                    "emotion": "angry",
+                    "intensity": 2,
+                    "pace": "fast",
+                    "volume": "loud",
+                }
+            ),
             "locked_fields": {
                 "kind": "narration",
                 "speaker": "NARRATOR",
@@ -2880,8 +3062,8 @@ def test_host_structural_heading_lock_preserves_generator_proposal_then_canonica
         field: validated["chapter-heading"][field]
         for field in ("kind", "speaker", "emotion", "intensity", "pace", "volume")
     } == locks[0]["locked_fields"]
-    assert validated["chapter-heading"]["notes"] == (
-        "Tiêu đề chương được khóa delivery trung tính."
+    assert validated["chapter-heading"]["notes"] == canonical_analysis_note(
+        locks[0]["locked_fields"],
     )
 
 

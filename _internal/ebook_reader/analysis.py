@@ -18,6 +18,7 @@ import requests
 
 from .config import ANALYSIS_RETRY_POLICY_VERSION
 from .database import (
+    ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_CHAPTER_HEADING_PATTERN,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
     ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
@@ -32,7 +33,12 @@ from .database import (
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
     ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
     ANALYSIS_SOURCE_ROLE_CONTENT,
+    CONTINUED_DIALOGUE_LOCK_NOTE,
+    EXPLICIT_ATTRIBUTION_NOTE,
+    PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
+    analysis_note_markers,
+    canonical_analysis_note,
 )
 from .io_utils import run_hidden, sha256_text
 from .models import (
@@ -68,7 +74,6 @@ ANALYSIS_REQUEST_MAX_SECONDS = 420.0
 ANALYSIS_STREAM_IDLE_SECONDS = 90.0
 ANALYSIS_ACTIVITY_SECONDS = 60.0
 HIGH_QUALITY_ANALYSIS_BATCH_SEGMENTS = 5
-SEMANTIC_NOTE_MIN_LETTERS = 4
 SEMANTIC_DOMINANCE_MIN_SEGMENTS = 5
 SEMANTIC_DOMINANCE_RATIO = 0.75
 SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS = 3
@@ -77,7 +82,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
 DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v3"
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v5"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v6"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -109,12 +114,11 @@ ANALYSIS_FEEDBACK_CODES = frozenset(
         HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
         HOST_SOURCE_KIND_ISSUE_CODE,
         "SEMANTIC_DELIVERY_MISMATCH",
-        "SEMANTIC_EXPLANATION_REQUIRED",
         "SEMANTIC_TEMPLATE_COLLAPSE",
         "DIRECTOR_FIELD_MISMATCH",
     }
 )
-ANALYSIS_FEEDBACK_FIELDS = frozenset({*DIRECTOR_DELIVERY_FIELDS, "notes"})
+ANALYSIS_FEEDBACK_FIELDS = frozenset(DIRECTOR_DELIVERY_FIELDS)
 HOST_SELF_PRESERVATION_MORTALITY_PATTERN = re.compile(
     r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
     flags=re.IGNORECASE,
@@ -176,13 +180,6 @@ HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN = re.compile(
     r"[^.!?…;:]*$",
     flags=re.IGNORECASE,
 )
-CHAPTER_HEADING_NOTES = "Tiêu đề chương được khóa delivery trung tính."
-MOMENTARY_PERSONALITY_HINTS = frozenset(
-    {
-        "trung lập", "lo âu", "bất lực", "bất ngờ", "sợ hãi", "vui vẻ", "buồn bã",
-        "giận dữ", "kinh ngạc", "mệt mỏi", "thì thầm",
-    }
-)
 MAX_PRONUNCIATIONS_PER_BATCH = 32
 NAME_PRONUNCIATION_BATCH_SIZE = 20
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
@@ -193,10 +190,6 @@ SHORT_NAME_MIN_CONFIDENCE = 0.9
 AUTOMATIC_PRONUNCIATION_REPAIR_CONFIDENCE = 0.85
 CMUDICT_TRANSLITERATION_CONFIDENCE = 0.98
 LOCAL_NAME_FALLBACK_CONFIDENCE = 0.88
-ADDRESSEE_REPAIR_NOTE = "đã tách người nói khỏi tên người được gọi"
-EXPLICIT_ATTRIBUTION_NOTE = "đã khóa người nói từ lời dẫn cùng đoạn văn"
-PARAGRAPH_SPEAKER_LOCK_NOTE = "đã đồng nhất người nói trong cùng đoạn văn"
-CONTINUED_DIALOGUE_LOCK_NOTE = "đã giữ người nói cho câu thoại nối tiếp"
 DIRECT_ADDRESS_TITLES = (
     "anh", "chị", "ông", "bà", "ngài", "cô", "chú", "bác", "dì", "cậu", "em",
     "cha", "mẹ", "thầy", "sư phụ", "đại nhân", "đội trưởng",
@@ -614,12 +607,10 @@ OUTPUT_SCHEMA: dict[str, Any] = {
                     "pace": {"type": "string", "enum": sorted(ALLOWED_PACES)},
                     "volume": {"type": "string", "enum": sorted(ALLOWED_VOLUMES)},
                     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "personality_hint": {"type": "string", "maxLength": 160},
-                    "notes": {"type": "string", "maxLength": 240},
                 },
                 "required": [
                     "id", "kind", "speaker", "gender", "age", "emotion", "intensity",
-                    "pace", "volume", "confidence", "personality_hint", "notes",
+                    "pace", "volume", "confidence",
                 ],
                 "additionalProperties": False,
             },
@@ -724,12 +715,9 @@ Quy tắc:
    kể cả khi tên có vẻ ngắn hoặc quen thuộc. surface phải xuất hiện nguyên văn trong batch; spoken_form phải
    là cách ghi âm tiết thuần Việt giúp TTS đọc tự nhiên, không dịch nghĩa và không dùng IPA. Với thuật ngữ
    khó đọc khác cũng làm tương tự; không thêm từ phổ thông hoặc tên thuần Việt.
-9. personality_hint chỉ mô tả đặc điểm tính cách bền vững của nhân vật qua nhiều cảnh. Không sao chép cảm xúc
-   hay delivery nhất thời như trung lập/lo âu/bất lực/bất ngờ. Với NARRATOR, chỉ dùng trait người kể ổn định
-   nếu có bằng chứng toàn truyện, nếu không phải để trống.
-10. notes phải giải thích ngắn gọn lựa chọn cảm xúc/cách thể hiện của đúng segment; không được để trống,
-   chỉ ghi dấu câu, hoặc sao chép một placeholder cho cả batch.
-11. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
+9. Không trả personality_hint hoặc notes. Hai trường đó thuộc quyền sở hữu của host và được host tự tạo sau
+   khi kiểm tra kind, speaker, emotion, intensity, pace và volume; không chèn giải thích tự do vào bất kỳ field nào.
+10. Trả JSON đúng schema, không có văn bản bên ngoài JSON.
 """
 
 
@@ -801,13 +789,6 @@ def _bounded_confidence(value: Any, default: float = 0.0) -> float:
     if not math.isfinite(confidence):
         raise ValueError("confidence must be finite")
     return max(0.0, min(1.0, confidence))
-
-
-def _persistent_personality_hint(value: Any, speaker: str) -> str:
-    hint = " ".join(str(value or "").split()).strip()[:300]
-    if speaker == "NARRATOR" or hint.casefold() in MOMENTARY_PERSONALITY_HINTS:
-        return ""
-    return hint
 
 
 def _calibrated_intensity(text: str, kind: str, emotion: str, requested: Any) -> int:
@@ -997,6 +978,71 @@ def _trailing_speech_attribution(text: str) -> str | None:
     return speaker
 
 
+_HOST_NOTE_MARKERS_KEY = "_host_note_markers"
+
+_SPEAKER_REPAIR_KEY_BY_MARKER = {
+    EXPLICIT_ATTRIBUTION_NOTE: "explicit_attribution",
+    ADDRESSEE_REPAIR_NOTE: "addressee",
+    PARAGRAPH_SPEAKER_LOCK_NOTE: "paragraph_speaker_lock",
+    CONTINUED_DIALOGUE_LOCK_NOTE: "continued_dialogue",
+}
+
+
+def _has_host_note_marker(data: dict[str, Any], marker: str) -> bool:
+    return marker in data.get(_HOST_NOTE_MARKERS_KEY, ())
+
+
+def _record_host_note_marker(data: dict[str, Any], marker: str) -> None:
+    if marker not in _SPEAKER_REPAIR_KEY_BY_MARKER:
+        raise ValueError("Unsupported host speaker-repair marker")
+    markers = data.setdefault(_HOST_NOTE_MARKERS_KEY, [])
+    if not isinstance(markers, list):
+        raise ValueError("Host analysis-note markers must use private list storage")
+    if marker not in markers:
+        markers.append(marker)
+
+
+def _explicit_speaker_attribution(
+    group: list[Any],
+    index: int,
+    result: dict[str, dict[str, Any]],
+) -> str | None:
+    row = group[index]
+    data = result.get(str(row["stable_id"]))
+    if data is None or data["kind"] != "dialogue":
+        return None
+    attributed_speaker: str | None = None
+    if index > 0 and _same_paragraph(group[index - 1], row):
+        previous = group[index - 1]
+        previous_data = result.get(str(previous["stable_id"]))
+        if previous_data is not None and previous_data["kind"] == "narration":
+            attributed_speaker = _trailing_speech_attribution(str(previous["text"]))
+            if attributed_speaker is None:
+                label = _generic_speaker_attribution(
+                    str(previous["text"]),
+                    prefer_last=True,
+                )
+                if label is not None:
+                    attributed_speaker = f"{LOCAL_SPEAKER_REQUEST_PREFIX}{label}"
+    if (
+        attributed_speaker is None
+        and index + 1 < len(group)
+        and _same_paragraph(row, group[index + 1])
+    ):
+        following = group[index + 1]
+        following_data = result.get(str(following["stable_id"]))
+        if following_data is not None and following_data["kind"] == "narration":
+            attributed_speaker = _leading_proper_name(str(following["text"]))
+            if attributed_speaker is None:
+                label = _generic_speaker_attribution(
+                    str(following["text"]),
+                    prefer_last=False,
+                )
+                if label is not None:
+                    attributed_speaker = f"{LOCAL_SPEAKER_REQUEST_PREFIX}{label}"
+    return attributed_speaker
+
+
 def _repair_explicit_attribution(
     group: list[Any],
     result: dict[str, dict[str, Any]],
@@ -1005,37 +1051,9 @@ def _repair_explicit_attribution(
     for index, row in enumerate(group):
         seg_id = str(row["stable_id"])
         data = result.get(seg_id)
-        if data is None or data["kind"] != "dialogue":
+        if data is None:
             continue
-        attributed_speaker: str | None = None
-        if index > 0 and _same_paragraph(group[index - 1], row):
-            previous = group[index - 1]
-            previous_data = result.get(str(previous["stable_id"]))
-            if previous_data is not None and previous_data["kind"] == "narration":
-                attributed_speaker = _trailing_speech_attribution(str(previous["text"]))
-                if attributed_speaker is None:
-                    label = _generic_speaker_attribution(
-                        str(previous["text"]),
-                        prefer_last=True,
-                    )
-                    if label is not None:
-                        attributed_speaker = f"{LOCAL_SPEAKER_REQUEST_PREFIX}{label}"
-        if (
-            attributed_speaker is None
-            and index + 1 < len(group)
-            and _same_paragraph(row, group[index + 1])
-        ):
-            following = group[index + 1]
-            following_data = result.get(str(following["stable_id"]))
-            if following_data is not None and following_data["kind"] == "narration":
-                attributed_speaker = _leading_proper_name(str(following["text"]))
-                if attributed_speaker is None:
-                    label = _generic_speaker_attribution(
-                        str(following["text"]),
-                        prefer_last=False,
-                    )
-                    if label is not None:
-                        attributed_speaker = f"{LOCAL_SPEAKER_REQUEST_PREFIX}{label}"
+        attributed_speaker = _explicit_speaker_attribution(group, index, result)
         if attributed_speaker is None:
             continue
         attributed_speaker = _canonical_speaker(attributed_speaker)
@@ -1064,10 +1082,7 @@ def _repair_explicit_attribution(
             )
             data["age"] = attributed_traits[1] if attributed_traits[1] != "unknown" else resolved_age
         data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
-        notes = str(data.get("notes", ""))
-        data["notes"] = (
-            f"{notes}; {EXPLICIT_ATTRIBUTION_NOTE}" if notes else EXPLICIT_ATTRIBUTION_NOTE
-        )[:500]
+        _record_host_note_marker(data, EXPLICIT_ATTRIBUTION_NOTE)
 
 
 def normalize_speaker_name(value: str) -> str:
@@ -1098,7 +1113,7 @@ def _repair_addressee_speakers(
     for seg_id, data in result.items():
         if data["kind"] != "dialogue":
             continue
-        if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", "")):
+        if _has_host_note_marker(data, EXPLICIT_ATTRIBUTION_NOTE):
             continue
         speaker = str(data["speaker"])
         row = rows_by_id[seg_id]
@@ -1126,10 +1141,7 @@ def _repair_addressee_speakers(
         if replacement is None:
             continue
         data["speaker"] = replacement
-        notes = str(data.get("notes", ""))
-        data["notes"] = (
-            f"{notes}; {ADDRESSEE_REPAIR_NOTE}" if notes else ADDRESSEE_REPAIR_NOTE
-        )[:500]
+        _record_host_note_marker(data, ADDRESSEE_REPAIR_NOTE)
 
 
 def _repair_same_paragraph_speakers(
@@ -1153,8 +1165,8 @@ def _repair_same_paragraph_speakers(
         anchors = [
             data
             for _row, data in entries
-            if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", ""))
-            or ADDRESSEE_REPAIR_NOTE in str(data.get("notes", ""))
+            if _has_host_note_marker(data, EXPLICIT_ATTRIBUTION_NOTE)
+            or _has_host_note_marker(data, ADDRESSEE_REPAIR_NOTE)
         ]
         anchor_speakers = {str(data["speaker"]) for data in anchors}
         if len(anchor_speakers) != 1:
@@ -1163,18 +1175,13 @@ def _repair_same_paragraph_speakers(
         for _row, data in entries:
             if str(data["speaker"]) == str(anchor["speaker"]):
                 continue
-            if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", "")):
+            if _has_host_note_marker(data, EXPLICIT_ATTRIBUTION_NOTE):
                 continue
             data["speaker"] = anchor["speaker"]
             data["gender"] = anchor["gender"]
             data["age"] = anchor["age"]
             data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
-            notes = str(data.get("notes", ""))
-            data["notes"] = (
-                f"{notes}; {PARAGRAPH_SPEAKER_LOCK_NOTE}"
-                if notes
-                else PARAGRAPH_SPEAKER_LOCK_NOTE
-            )[:500]
+            _record_host_note_marker(data, PARAGRAPH_SPEAKER_LOCK_NOTE)
 
 
 def _repair_continued_dialogue_speakers(
@@ -1209,12 +1216,21 @@ def _repair_continued_dialogue_speakers(
         data["gender"] = previous["gender"]
         data["age"] = previous["age"]
         data["confidence"] = max(float(data.get("confidence", 0.0)), 0.95)
-        notes = str(data.get("notes", ""))
-        data["notes"] = (
-            f"{notes}; {CONTINUED_DIALOGUE_LOCK_NOTE}"
-            if notes
-            else CONTINUED_DIALOGUE_LOCK_NOTE
-        )[:500]
+        _record_host_note_marker(data, CONTINUED_DIALOGUE_LOCK_NOTE)
+
+
+def _canonicalize_analysis_notes(
+    result: dict[str, dict[str, Any]],
+) -> None:
+    """Keep repair provenance private and persist only deterministic delivery notes."""
+    for data in result.values():
+        raw_markers = data.pop(_HOST_NOTE_MARKERS_KEY, ())
+        if not isinstance(raw_markers, (list, tuple)):
+            raise ValueError("Host analysis-note markers must be a sequence")
+        if any(marker not in _SPEAKER_REPAIR_KEY_BY_MARKER for marker in raw_markers):
+            raise ValueError("Unsupported private host speaker-repair marker")
+        data["personality_hint"] = ""
+        data["notes"] = canonical_analysis_note(data)
 
 
 def _heuristic(row: Any) -> dict[str, Any]:
@@ -1231,8 +1247,7 @@ def _heuristic(row: Any) -> dict[str, Any]:
         emotion, pace = "afraid", "fast"
     elif any(word in lowered for word in ("cười", "vui", "hạnh phúc", "mừng")):
         emotion = "happy"
-    return {
-        "id": row["stable_id"],
+    data = {
         "kind": kind,
         "speaker": speaker,
         "gender": "unknown",
@@ -1243,8 +1258,10 @@ def _heuristic(row: Any) -> dict[str, Any]:
         "volume": volume,
         "confidence": 0.25,
         "personality_hint": "",
-        "notes": "heuristic fallback",
+        "notes": "",
     }
+    _canonicalize_analysis_notes({str(row["stable_id"]): data})
+    return data
 
 
 def _validate(
@@ -1286,7 +1303,6 @@ def _validate(
         else:
             speaker = _canonical_local_request(speaker, gender)
             speaker = _scope_local_speaker(speaker, rows_by_id[seg_id], local_scope)
-        notes = str(item.get("notes", ""))[:500]
         emotion = _safe_choice(item.get("emotion"), ALLOWED_EMOTIONS, "neutral")
         result[seg_id] = {
             "kind": kind,
@@ -1303,15 +1319,14 @@ def _validate(
             "pace": _safe_choice(item.get("pace"), ALLOWED_PACES, "normal"),
             "volume": _safe_choice(item.get("volume"), ALLOWED_VOLUMES, "normal"),
             "confidence": _bounded_confidence(item.get("confidence"), 0.5),
-            "personality_hint": _persistent_personality_hint(
-                item.get("personality_hint", ""), speaker
-            ),
-            "notes": notes[:500],
+            "personality_hint": "",
+            "notes": "",
         }
     _repair_explicit_attribution(group, result, local_scope)
     _repair_addressee_speakers(group, result, local_scope)
     _repair_same_paragraph_speakers(group, result)
     _repair_continued_dialogue_speakers(group, result)
+    _canonicalize_analysis_notes(result)
     return result
 
 
@@ -1450,9 +1465,6 @@ class AnalysisFeedbackIssue:
         if self.code in {HOST_AFFECT_ISSUE_CODE, HOST_PHYSICAL_COLLAPSE_ISSUE_CODE}:
             if fields != ("emotion",) or not allowed_emotions or not self.rule:
                 raise ValueError("Host affect feedback is missing its canonical constraints")
-        elif self.code == "SEMANTIC_EXPLANATION_REQUIRED":
-            if fields != ("notes",) or allowed_emotions or self.rule:
-                raise ValueError("Semantic explanation feedback must target notes only")
         elif self.code == "SEMANTIC_DELIVERY_MISMATCH":
             if fields != ("emotion",) or allowed_emotions or self.rule:
                 raise ValueError("Semantic delivery feedback must target emotion only")
@@ -1468,7 +1480,6 @@ class AnalysisFeedbackIssue:
                 raise ValueError("Source-kind feedback must target kind only")
         elif (
             not fields
-            or "notes" in fields
             or allowed_emotions
             or self.rule
         ):
@@ -1968,9 +1979,6 @@ def _semantic_delivery_issues(
     cue_matches_by_id: dict[str, dict[str, str]] = {}
     for seg_id, data in validated.items():
         reasons: list[str] = []
-        notes = str(data.get("notes", "")).strip()
-        if sum(character.isalpha() for character in notes) < SEMANTIC_NOTE_MIN_LETTERS:
-            reasons.append("notes không có giải thích ngữ nghĩa đủ nội dung")
         row = rows_by_id.get(seg_id)
         text = str(row["text"]) if row is not None else ""
         cue_match_objects = _semantic_cue_matches(text)
@@ -2699,7 +2707,8 @@ def _apply_host_structural_locks(
         }
         generator_notes = str(candidate.get("notes", ""))
         candidate.update(copy.deepcopy(ANALYSIS_CHAPTER_HEADING_DELIVERY))
-        candidate["notes"] = CHAPTER_HEADING_NOTES
+        candidate["personality_hint"] = ""
+        candidate["notes"] = canonical_analysis_note(candidate)
         locks.append(
             {
                 "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
@@ -3002,6 +3011,12 @@ def _analysis_candidate_envelope(
         "personality_hint",
         "notes",
     )
+    canonical_data: dict[str, dict[str, Any]] = {}
+    for row in group:
+        stable_id = str(row["stable_id"])
+        data = validated[stable_id]
+        analysis_note_markers(data)
+        canonical_data[stable_id] = copy.deepcopy(data)
     return {
         "segments": [
             {
@@ -3009,7 +3024,7 @@ def _analysis_candidate_envelope(
                 "stable_id": str(row["stable_id"]),
                 "text_sha256": _source_text_sha256(row),
                 "data": {
-                    field: copy.deepcopy(validated[str(row["stable_id"])][field])
+                    field: copy.deepcopy(canonical_data[str(row["stable_id"])][field])
                     for field in ordered_fields
                 },
             }
@@ -3065,14 +3080,6 @@ def _legacy_feedback_issues(
     if reason.startswith(("DIRECTOR_INVALID_RESPONSE", "DIRECTOR_CANDIDATE_HASH_MISMATCH")):
         return ()
     issues: list[AnalysisFeedbackIssue] = []
-    if "notes không có giải thích" in reason:
-        issues.append(
-            AnalysisFeedbackIssue(
-                stable_id=stable_id,
-                code="SEMANTIC_EXPLANATION_REQUIRED",
-                fields=("notes",),
-            )
-        )
     if "bị lặp trên batch" in reason:
         issues.append(
             AnalysisFeedbackIssue(
@@ -5068,46 +5075,6 @@ class OllamaBookAnalyzer:
                     raise RuntimeError(
                         f"Analysis confidence is below the locked threshold for {row['stable_id']}"
                     )
-            explicit_attribution_ids = [
-                seg_id
-                for seg_id, data in validated.items()
-                if EXPLICIT_ATTRIBUTION_NOTE in str(data.get("notes", ""))
-            ]
-            if explicit_attribution_ids:
-                message = (
-                    f"Đã khóa người nói cho {len(explicit_attribution_ids)} đoạn thoại "
-                    f"từ lời dẫn cùng paragraph ở batch {group_index}."
-                )
-                self.log(message)
-                self.db.event(
-                    "info",
-                    "EXPLICIT_SPEAKER_ATTRIBUTION_LOCKED",
-                    message,
-                    {
-                        "batch_index": group_index,
-                        "segment_ids": explicit_attribution_ids,
-                    },
-                )
-            repaired_addressee_ids = [
-                seg_id
-                for seg_id, data in validated.items()
-                if ADDRESSEE_REPAIR_NOTE in str(data.get("notes", ""))
-            ]
-            if repaired_addressee_ids:
-                message = (
-                    f"Đã sửa {len(repaired_addressee_ids)} segment trong batch {group_index}: "
-                    "tên người được gọi không còn bị dùng làm người nói."
-                )
-                self.log(message)
-                self.db.event(
-                    "warning",
-                    "ADDRESSEE_SPEAKER_REPAIRED",
-                    message,
-                    {
-                        "batch_index": group_index,
-                        "segment_ids": repaired_addressee_ids,
-                    },
-                )
             if director_critic_required and accepted_director_evidence is None:
                 raise RuntimeError(
                     f"Phản biện đạo diễn bắt buộc thiếu evidence ở batch {group_index}"
@@ -5169,9 +5136,10 @@ class OllamaBookAnalyzer:
             for row in group:
                 data = validated.get(str(row["stable_id"])) or _heuristic(row)
                 if accepted_director_evidence is None:
+                    checkpoint_data = copy.deepcopy(data)
                     self.db.update_analysis(
                         int(row["id"]),
-                        data,
+                        checkpoint_data,
                         low_confidence_threshold=confidence_threshold,
                     )
                 speaker = _canonical_speaker(data.get("speaker", "UNKNOWN"))

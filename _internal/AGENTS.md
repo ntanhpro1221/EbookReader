@@ -123,7 +123,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   phân vai, tránh cùng một người bị khóa hai giọng hoặc hai pitch khác nhau.
 - Tên trong lời gọi trực tiếp như `Anh Lucien!` hoặc `Iven, ...` là addressee, không phải bằng chứng về speaker.
   Nếu analysis vẫn gán tên đó làm người nói, validation phải tách thành NPC cục bộ `người gọi <tên>`, áp dụng
-  nhất quán cho cùng local speaker trong batch và ghi event `ADDRESSEE_SPEAKER_REPAIRED`.
+  nhất quán cho cùng local speaker trong batch. Repair marker chỉ được dùng tạm trong validation; projection speaker
+  đã sửa mới là dữ liệu được candidate ledger và critic khóa.
 - Segment mới được cân theo K-weighted LUFS; giọng kể có anchor nhỉnh hơn hội thoại trung tính và
   chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
 - Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
@@ -139,8 +140,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Phản hồi Ollama đã kết thúc nhưng thiếu ID segment bắt buộc được retry theo policy; nếu batch nhiều phần tử
   vẫn thiếu sau các lần retry, phải chia đôi batch và tiếp tục. Chỉ được kết luận lỗi bắt buộc khi batch đơn
   không thể tạo đủ kết quả hợp lệ.
-- Phản hồi analysis đúng schema vẫn phải qua semantic delivery gate trước checkpoint. `notes` chỉ có dấu câu,
-  emotion `happy` mâu thuẫn, hoặc cả batch bị co về `neutral/intensity=0/normal` dù có nhiều cue cảm xúc rõ ràng
+- Phản hồi analysis đúng schema vẫn phải qua semantic delivery gate trước checkpoint. Emotion `happy` mâu thuẫn
+  hoặc cả batch bị co về `neutral/intensity=0/normal` dù có nhiều cue cảm xúc rõ ràng
   phải bị từ chối; gate ghi đúng cue đã khớp và gửi feedback cụ thể
   vào lần retry và chia đôi batch nếu vẫn sai. Nhãn đồng nhất đơn thuần không đủ để kết tội một batch hợp lệ.
 - Một segment có đúng signature `neutral/intensity=0/pace=normal/volume=normal` và cue cảm xúc mạnh phải bị
@@ -159,6 +160,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
   độc lập, nên không bao giờ được vượt qua semantic gate tất định hoặc biến một field khác candidate thành pass.
+- Model không được sở hữu `notes` hoặc `personality_hint` được commit. Host phải tạo note canonical chỉ từ delivery cuối
+  sau repair; personality model phải rỗng và segment note không được chứa marker điều khiển. Marker repair chỉ là state tạm
+  trong một lượt validation và phải bị xóa trước candidate. Candidate ledger + critic khóa projection analysis đã chấp nhận;
+  bước casting sau đó chỉ được phép reconcile speaker bằng phép biến đổi source-derived, deterministic và được khóa bằng
+  fingerprint stage riêng. SQLite phải tính lại và từ chối note/personality/marker không canonical khi allocate, reopen,
+  direct update và commit. Speaker repair không được sao chép note từ segment khác, và character registry không được dùng
+  prose delivery làm personality hoặc dùng marker legacy làm quyền điều khiển identity.
 - Tiêu đề chương chỉ được nhận diện bằng source metadata đầu chapter và grammar tiêu đề độc lập. Host phải khóa delivery
   tiêu đề về narrator trung tính, không gửi ngữ cảnh hàng xóm cho row đó và vẫn giữ nguyên proposal/verdict thô để audit.
   Structural override chỉ được phép cho đúng row đã khóa; mọi content row vẫn chịu critic bình thường. Mỗi verdict critic
@@ -247,6 +255,10 @@ Từ thư mục `_internal`:
 python -m compileall -q ebook_reader tests scripts
 python -m pytest
 ```
+
+- Trên Windows/PowerShell, luôn gọi một interpreter tường minh rồi truyền toàn bộ test path trong cùng một
+  invocation (có thể dùng array + splatting). Không bao giờ đặt các path `test_*.py` thành những câu lệnh trần
+  ở các dòng riêng vì Windows sẽ mở `OpenWith.exe`/“Pick an app” cho từng file.
 
 Definition of done:
 
