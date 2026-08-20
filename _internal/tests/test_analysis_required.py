@@ -14,6 +14,7 @@ from ebook_reader.analysis import (
     ANALYSIS_LEDGER_POLICY_VERSION,
     ANALYSIS_OUTPUT_MAX_TOKENS,
     CMUDICT_PATH,
+    DIRECTOR_CRITIC_POLICY_VERSION,
     EXPLICIT_ATTRIBUTION_NOTE,
     HOST_AFFECT_ISSUE_CODE,
     HOST_DESPERATE_EXERTION_RULE,
@@ -37,6 +38,7 @@ from ebook_reader.analysis import (
     _analysis_context_hash,
     _analysis_candidate_envelope,
     _analysis_group_fingerprint,
+    _analysis_policy_fingerprint,
     _cmu_pronunciation_to_vietnamese,
     _cmu_pronunciations,
     _director_candidate_hash,
@@ -64,6 +66,7 @@ from ebook_reader.analysis import (
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
+    ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     CONTINUED_DIALOGUE_LOCK_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
@@ -86,6 +89,17 @@ V20_STUNNED_BLANK_MIND_TEXT = (
     "bỗng đập thẳng vào mắt cậu. Giống như thể bị một cây chùy lớn nện vào đầu, "
     "cậu đực mặt ra, đầu óc một mảng trắng xóa."
 )
+V21_SEQ13_PREVIOUS_TEXT = (
+    "Sau khi quả tim đang đập bình bịch trong lồng ngực bình tĩnh trở lại, Hạ Phong "
+    "mới tập trung tinh thần, nhớ ra bản thân đang thâu đêm làm dở bài luận văn tốt "
+    "nghiệp tại phòng đọc mở cửa 24/24 trong thư viện tổng hợp của trường. Cậu bèn "
+    "thầm cười giễu:"
+)
+V21_SEQ13_TEXT = (
+    "‘Mấy ngày gần đây toàn sinh hoạt bất quy tắc kiểu cú đêm thế này, bảo sao không "
+    "mơ thấy ác mộng chân thực như vậy cơ chứ.’"
+)
+V21_SEQ13_NEXT_TEXT = V20_STUNNED_BLANK_MIND_TEXT
 
 
 class FakeDB:
@@ -841,7 +855,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v6"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v4"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v7"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -1172,6 +1187,9 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
     assert request["options"]["temperature"] == 0.2
     assert 1 <= request["options"]["seed"] <= (2 ** 31) - 1
     assert "dữ liệu nguồn không đáng tin cậy" in request["system"]
+    assert "context_policy=previous_context_only là suy nghĩ nội tâm" in request["system"]
+    assert "next_text cố ý để trống" in request["system"]
+    assert "Không suy diễn emotion, intensity, pace hoặc volume" in request["system"]
     assert "kind=thought bắt buộc dùng speaker=NARRATOR" in request["system"]
     assert "ít nhất một trong\nsáu trường phải khác candidate" in request["system"]
     assert "cả sáu trường vẫn y hệt candidate là response không hợp lệ" in request["system"]
@@ -3140,6 +3158,228 @@ def test_director_heading_row_is_target_only_but_content_keeps_neighbors() -> No
     assert rows[1]["previous_text"] == group[0]["text"]
 
 
+def test_v21_split_singleton_thought_critic_keeps_prior_attribution_and_masks_next_affect(
+) -> None:
+    source_rows = [
+        {
+            "id": 13,
+            "stable_id": "c00001_s0000012_040f30f9df84",
+            "chapter_id": 1,
+            "seq": 12,
+            "paragraph_index": 11,
+            "text": V21_SEQ13_PREVIOUS_TEXT,
+            "kind_hint": "narration",
+        },
+        {
+            "id": 14,
+            "stable_id": "c00001_s0000013_3addf4e2e280",
+            "chapter_id": 1,
+            "seq": 13,
+            "paragraph_index": 11,
+            "text": V21_SEQ13_TEXT,
+            "kind_hint": "thought",
+        },
+        {
+            "id": 15,
+            "stable_id": "c00001_s0000014_d444672b9a24",
+            "chapter_id": 1,
+            "seq": 14,
+            "paragraph_index": 12,
+            "text": V21_SEQ13_NEXT_TEXT,
+            "kind_hint": "narration",
+        },
+    ]
+    row = source_rows[1]
+    validated = {
+        row["stable_id"]: {
+            **analysis_item(row["stable_id"]),
+            "kind": "thought",
+            "emotion": "neutral",
+            "intensity": 0,
+        }
+    }
+    original_context = _original_neighbor_context(source_rows)
+
+    critic_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+
+    assert critic_rows[0]["source_role"] == "content"
+    assert critic_rows[0]["context_policy"] == ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+    assert original_context[row["stable_id"]]["next_text"] == V21_SEQ13_NEXT_TEXT
+    assert critic_rows[0]["previous_text"] == V21_SEQ13_PREVIOUS_TEXT
+    assert critic_rows[0]["previous_text"].endswith("Cậu bèn thầm cười giễu:")
+    assert critic_rows[0]["next_text"] == ""
+    serialized = json.dumps(critic_rows, ensure_ascii=False)
+    assert "bỗng đập thẳng vào mắt cậu" not in serialized
+    assert "cây chùy lớn nện vào đầu" not in serialized
+
+
+def test_generator_thought_request_still_receives_both_adjacent_source_rows() -> None:
+    row = {
+        "id": 14,
+        "stable_id": "c00001_s0000013_3addf4e2e280",
+        "chapter_id": 1,
+        "seq": 13,
+        "paragraph_index": 11,
+        "text": V21_SEQ13_TEXT,
+        "kind_hint": "thought",
+    }
+    response = analysis_item("S001")
+    response["kind"] = "thought"
+    session = FakeSession({"segments": [response]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    analyzer._request(
+        [row],
+        original_context={
+            row["stable_id"]: {
+                "previous_text": V21_SEQ13_PREVIOUS_TEXT,
+                "next_text": V21_SEQ13_NEXT_TEXT,
+            }
+        },
+    )
+
+    assert session.request is not None
+    prompt = session.request["json"]["prompt"]
+    assert V21_SEQ13_PREVIOUS_TEXT in prompt
+    assert V21_SEQ13_NEXT_TEXT in prompt
+
+
+@pytest.mark.parametrize("kind_hint", ["narration", "dialogue"])
+def test_director_non_thought_content_keeps_adjacent_context(kind_hint: str) -> None:
+    row = {
+        "id": 1,
+        "stable_id": f"ordinary-{kind_hint}",
+        "chapter_id": 1,
+        "seq": 1,
+        "paragraph_index": 1,
+        "text": "Câu nguồn hiện tại.",
+        "kind_hint": kind_hint,
+    }
+    candidate = analysis_item(row["stable_id"])
+    if kind_hint == "dialogue":
+        candidate.update({"kind": "dialogue", "speaker": "Lucien"})
+    original_context = {
+        row["stable_id"]: {
+            "previous_text": "Câu nguồn ngay trước.",
+            "next_text": "Câu nguồn ngay sau.",
+        }
+    }
+
+    critic_row = _director_candidate_rows(
+        [row],
+        {row["stable_id"]: candidate},
+        original_context=original_context,
+    )[0]
+
+    assert critic_row["context_policy"] == "adjacent_context"
+    assert critic_row["previous_text"] == "Câu nguồn ngay trước."
+    assert critic_row["next_text"] == "Câu nguồn ngay sau."
+
+
+def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bound() -> None:
+    settings = build_settings()["analysis"]
+    row = {
+        "id": 14,
+        "stable_id": "c00001_s0000013_3addf4e2e280",
+        "chapter_id": 1,
+        "seq": 13,
+        "paragraph_index": 11,
+        "text": V21_SEQ13_TEXT,
+        "kind_hint": "thought",
+    }
+    validated = {
+        row["stable_id"]: {
+            **analysis_item(row["stable_id"]),
+            "kind": "thought",
+        }
+    }
+    first_context = {
+        row["stable_id"]: {
+            "previous_text": V21_SEQ13_PREVIOUS_TEXT,
+            "next_text": V21_SEQ13_NEXT_TEXT,
+        }
+    }
+    changed_future_context = {
+        row["stable_id"]: {
+            "previous_text": V21_SEQ13_PREVIOUS_TEXT,
+            "next_text": "Một sự kiện nguồn khác xảy ra sau suy nghĩ.",
+        }
+    }
+    changed_previous_context = {
+        row["stable_id"]: {
+            "previous_text": "Một lời dẫn nguồn khác:",
+            "next_text": V21_SEQ13_NEXT_TEXT,
+        }
+    }
+    first_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=first_context,
+    )
+    changed_future_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=changed_future_context,
+    )
+    changed_previous_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=changed_previous_context,
+    )
+    first_hash = _director_candidate_hash(first_rows)
+    changed_future_hash = _director_candidate_hash(changed_future_rows)
+    changed_previous_hash = _director_candidate_hash(changed_previous_rows)
+    first_contract = _director_critic_request_contract(
+        settings,
+        model="qwen3:8b",
+        model_digest="sha256:locked",
+        group=[row],
+        attempt=1,
+        candidate_hash=first_hash,
+        original_context=first_context,
+    )
+    changed_future_contract = _director_critic_request_contract(
+        settings,
+        model="qwen3:8b",
+        model_digest="sha256:locked",
+        group=[row],
+        attempt=1,
+        candidate_hash=changed_future_hash,
+        original_context=changed_future_context,
+    )
+
+    assert first_hash == changed_future_hash
+    assert first_hash != changed_previous_hash
+    assert first_contract["policy_version"] == "second_pass_v4"
+    assert first_contract["context_hash"] != changed_future_contract["context_hash"]
+    assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
+    assert first_contract["seed"] != changed_future_contract["seed"]
+
+
+def test_previous_only_policy_fingerprint_does_not_match_stale_v3_ledger(
+    monkeypatch,
+) -> None:
+    settings = build_settings()["analysis"]
+    current = _analysis_policy_fingerprint(settings, "quality-policy")
+
+    monkeypatch.setattr(
+        "ebook_reader.analysis.DIRECTOR_CRITIC_POLICY_VERSION",
+        "second_pass_v3",
+    )
+    monkeypatch.setattr(
+        "ebook_reader.analysis.ANALYSIS_LEDGER_POLICY_VERSION",
+        "analysis_ledger_v6",
+    )
+    stale = _analysis_policy_fingerprint(settings, "quality-policy")
+
+    assert current != stale
+
+
 def test_director_content_row_binds_source_verified_semantic_emotion_lock() -> None:
     row = {
         "id": 1,
@@ -3539,6 +3779,9 @@ def test_director_adjacent_wake_lock_uses_original_context_for_override() -> Non
         original_context=original_context,
     )
 
+    assert candidate_rows[0]["context_policy"] == ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+    assert candidate_rows[0]["previous_text"] == mortality_text
+    assert candidate_rows[0]["next_text"] == ""
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
     assert issues == {}
     assert evidence["segments"][0]["host_semantic_override"]["rule"] == (
@@ -5834,7 +6077,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v3"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v4"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

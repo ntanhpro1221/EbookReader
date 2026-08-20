@@ -10,6 +10,7 @@ import pytest
 
 from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
+    ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
@@ -72,6 +73,21 @@ DIRECT_NARRATION_AFFECT_LOCK_CASES = (
         "surprised",
         "afraid",
     ),
+)
+V21_SEQ12_PREVIOUS_TEXT = (
+    "Sau khi quả tim đang đập bình bịch trong lồng ngực bình tĩnh trở lại, Hạ "
+    "Phong mới tập trung tinh thần, nhớ ra bản thân đang thâu đêm làm dở bài "
+    "luận văn tốt nghiệp tại phòng đọc mở cửa 24/24 trong thư viện tổng hợp của "
+    "trường. Cậu bèn thầm cười giễu:"
+)
+V21_SEQ13_THOUGHT_TEXT = (
+    "‘Mấy ngày gần đây toàn sinh hoạt bất quy tắc kiểu cú đêm thế này, bảo sao "
+    "không mơ thấy ác mộng chân thực như vậy cơ chứ.’"
+)
+V21_SEQ12_STABLE_ID = "c00001_s0000012_040f30f9df84"
+V21_SEQ13_STABLE_ID = "c00001_s0000013_3addf4e2e280"
+V21_SEQ13_TEXT_SHA256 = (
+    "3addf4e2e280f94186326177ddaa1a5b75c1fa6e7b6fa0f522de8b2bad1ab8b2"
 )
 
 
@@ -185,10 +201,24 @@ def _analysis_acceptance_envelope(
     source_rows: list[dict],
     *,
     emotion: str = "neutral",
+    previous_text_by_stable_id: dict[str, str] | None = None,
 ) -> dict:
     segments = []
     critic_rows = []
+    source_by_position = {
+        (int(row["chapter_id"]), int(row["seq"])): row for row in source_rows
+    }
+    previous_overrides = previous_text_by_stable_id or {}
     for index, row in enumerate(source_rows, 1):
+        source_kind = str(row["kind_hint"])
+        stable_id = str(row["stable_id"])
+        previous = source_by_position.get(
+            (int(row["chapter_id"]), int(row["seq"]) - 1)
+        )
+        previous_text = previous_overrides.get(
+            stable_id,
+            str(previous["text"])[-500:] if previous is not None else "",
+        )
         data = {
             "kind": "narration",
             "speaker": "NARRATOR",
@@ -206,7 +236,7 @@ def _analysis_acceptance_envelope(
         segments.append(
             {
                 "segment_id": int(row["id"]),
-                "stable_id": str(row["stable_id"]),
+                "stable_id": stable_id,
                 "text_sha256": str(row["text_sha256"]),
                 "data": data,
             }
@@ -215,11 +245,15 @@ def _analysis_acceptance_envelope(
             {
                 "id": f"S{index:03d}",
                 "paragraph": int(row["paragraph_index"]),
-                "hint": str(row["kind_hint"]),
+                "hint": source_kind,
                 "source_role": "content",
-                "context_policy": "adjacent_context",
+                "context_policy": (
+                    ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+                    if source_kind == "thought"
+                    else "adjacent_context"
+                ),
                 "host_locked_fields": {},
-                "previous_text": "",
+                "previous_text": previous_text if source_kind == "thought" else "",
                 "text": str(row["text"]),
                 "next_text": "",
                 "candidate": {
@@ -234,6 +268,55 @@ def _analysis_acceptance_envelope(
         "pronunciations": [],
         "critic_rows": critic_rows,
     }
+
+
+def _thought_acceptance_envelope(
+    source_rows: list[dict],
+    *,
+    previous_text_by_stable_id: dict[str, str] | None = None,
+) -> dict:
+    envelope = _analysis_acceptance_envelope(
+        source_rows,
+        previous_text_by_stable_id=previous_text_by_stable_id,
+    )
+    for index, source_row in enumerate(source_rows):
+        if str(source_row["kind_hint"]) != "thought":
+            raise ValueError("Thought envelope helper requires thought source rows")
+        envelope["segments"][index]["data"].update(
+            {"kind": "thought", "intensity": 0}
+        )
+        _refresh_analysis_note(envelope, index)
+        envelope["critic_rows"][index]["candidate"].update(
+            {"kind": "thought", "intensity": 0}
+        )
+    return envelope
+
+
+def _v21_thought_context_db(
+    tmp_path: Path,
+) -> tuple[ProjectDB, list[dict], dict]:
+    db, _source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=(V21_SEQ12_PREVIOUS_TEXT, V21_SEQ13_THOUGHT_TEXT),
+        kind_hints=("narration", "thought"),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET seq=seq+12,paragraph_index=paragraph_index+12"
+        )
+        conn.execute(
+            "UPDATE segments SET stable_id=CASE seq WHEN 12 THEN ? ELSE ? END",
+            (V21_SEQ12_STABLE_ID, V21_SEQ13_STABLE_ID),
+        )
+    source_rows = [dict(row) for row in db.list_segments()]
+    previous_row, thought_row = source_rows
+    envelope = _thought_acceptance_envelope(
+        [thought_row],
+        previous_text_by_stable_id={
+            str(thought_row["stable_id"]): str(previous_row["text"])[-500:]
+        },
+    )
+    return db, source_rows, envelope
 
 
 def _canonical_hash(value: object) -> str:
@@ -1365,6 +1448,296 @@ def test_analysis_candidate_rejects_critic_quote_outside_current_source_text(
         )
 
 
+def test_v21_thought_context_survives_allocate_reopen_and_commit(
+    tmp_path: Path,
+) -> None:
+    assert ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY == "previous_context_only"
+    assert sha256_text(V21_SEQ13_THOUGHT_TEXT) == V21_SEQ13_TEXT_SHA256
+    db, source_rows, envelope = _v21_thought_context_db(tmp_path)
+    previous_row, thought_row = source_rows
+    assert int(previous_row["seq"]) == 12
+    assert int(thought_row["seq"]) == 13
+    assert str(thought_row["stable_id"]) == V21_SEQ13_STABLE_ID
+    candidate = _allocate_analysis_candidate(
+        db,
+        [thought_row],
+        candidate=envelope,
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+
+    reopened = ProjectDB(db.path)
+    snapshot = reopened.analysis_candidate_acceptance_envelope(candidate_id)
+    critic_row = snapshot["commit_envelope"]["critic_rows"][0]
+    assert critic_row["source_role"] == "content"
+    assert critic_row["context_policy"] == ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+    assert critic_row["previous_text"] == V21_SEQ12_PREVIOUS_TEXT[-500:]
+    assert critic_row["next_text"] == ""
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in snapshot["commit_envelope"]["segments"]
+    ]
+    reopened.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="V21 thought context accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    committed = {
+        str(row["stable_id"]): row for row in reopened.list_segments()
+    }
+    assert committed[V21_SEQ12_STABLE_ID]["status"] == "pending"
+    assert committed[V21_SEQ13_STABLE_ID]["status"] == "analyzed"
+    assert committed[V21_SEQ13_STABLE_ID]["emotion"] == "neutral"
+    assert reopened.get_analysis_candidate(candidate_id)["state"] == "accepted"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "omit_previous",
+        "omit_policy",
+        "forged_previous",
+        "forged_next",
+        "forged_policy",
+    ),
+)
+def test_v21_thought_context_rejects_omitted_or_forged_allocation(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    db, source_rows, envelope = _v21_thought_context_db(tmp_path)
+    critic_row = envelope["critic_rows"][0]
+    if mutation == "omit_previous":
+        del critic_row["previous_text"]
+    elif mutation == "omit_policy":
+        del critic_row["context_policy"]
+    elif mutation == "forged_previous":
+        critic_row["previous_text"] = "forged previous source"
+    elif mutation == "forged_next":
+        critic_row["next_text"] = STUNNED_BLANK_MIND_TEXT
+    else:
+        critic_row["context_policy"] = "adjacent_context"
+
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match="source IDs|source-ledger-bound",
+    ):
+        _allocate_analysis_candidate(
+            db,
+            [source_rows[1]],
+            candidate=envelope,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("previous_text", "forged durable previous source"),
+        ("next_text", STUNNED_BLANK_MIND_TEXT),
+        ("context_policy", "adjacent_context"),
+    ),
+)
+def test_v21_thought_context_revalidates_durable_candidate_on_reopen(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    db, source_rows, envelope = _v21_thought_context_db(tmp_path)
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        candidate=envelope,
+    )
+    tampered = copy.deepcopy(envelope)
+    tampered["critic_rows"][0][field] = value
+    tampered_json = json.dumps(
+        tampered,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET candidate_json=?,candidate_hash=?,"
+            "envelope_hash=? WHERE id=?",
+            (
+                tampered_json,
+                _canonical_hash(tampered["critic_rows"]),
+                sha256_text(tampered_json),
+                int(candidate["id"]),
+            ),
+        )
+
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match="source IDs|source-ledger-bound",
+    ):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+
+
+def test_thought_context_at_chapter_start_rejects_cross_chapter_predecessor(
+    tmp_path: Path,
+) -> None:
+    db, first_chapter_rows = _analysis_batch_db(
+        tmp_path,
+        texts=(V21_SEQ12_PREVIOUS_TEXT,),
+    )
+    chapter_id = db.ensure_chapters(
+        [
+            {
+                "chapter_index": 2,
+                "title": "Two",
+                "input_path": tmp_path / "two.txt",
+                "input_sha256": "source-two",
+                "input_size": 1,
+                "output_mp3": tmp_path / "two.mp3",
+            }
+        ]
+    )[0]
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {
+                "stable_id": V21_SEQ13_STABLE_ID,
+                "seq": 0,
+                "text": V21_SEQ13_THOUGHT_TEXT,
+                "text_sha256": V21_SEQ13_TEXT_SHA256,
+                "kind_hint": "thought",
+            }
+        ],
+    )
+    thought_row = dict(db.list_segments()[-1])
+    envelope = _thought_acceptance_envelope([thought_row])
+    candidate = _allocate_analysis_candidate(
+        db,
+        [thought_row],
+        candidate=envelope,
+    )
+    assert candidate["state"] == "allocated"
+    assert envelope["critic_rows"][0]["previous_text"] == ""
+
+    forged = copy.deepcopy(envelope)
+    forged["critic_rows"][0]["previous_text"] = str(
+        first_chapter_rows[0]["text"]
+    )[-500:]
+    with pytest.raises(RuntimeError, match="source-ledger-bound"):
+        _allocate_analysis_candidate(
+            db,
+            [thought_row],
+            context_hash="cross-chapter-context",
+            candidate=forged,
+        )
+
+
+def test_v21_thought_context_replays_predecessor_again_before_commit(
+    tmp_path: Path,
+) -> None:
+    db, source_rows, envelope = _v21_thought_context_db(tmp_path)
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        candidate=envelope,
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    forged_previous = "forged predecessor after critic acceptance"
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET text=?,text_sha256=? WHERE stable_id=?",
+            (
+                forged_previous,
+                sha256_text(forged_previous),
+                V21_SEQ12_STABLE_ID,
+            ),
+        )
+    segment = envelope["segments"][0]
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+    ]
+
+    with pytest.raises(RuntimeError, match="source-ledger-bound"):
+        db.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": str(candidate["candidate_hash"])},
+            **ANALYSIS_MODEL_COMMIT,
+            analysis_candidate_id=candidate_id,
+            analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+    thought = next(
+        row
+        for row in db.list_segments()
+        if str(row["stable_id"]) == V21_SEQ13_STABLE_ID
+    )
+    assert thought["status"] == "pending"
+    with db.connect() as conn:
+        stored_state = conn.execute(
+            "SELECT state FROM analysis_candidates WHERE id=?",
+            (candidate_id,),
+        ).fetchone()["state"]
+    assert stored_state == "critic_accepted"
+
+
 def test_analysis_candidate_accepts_source_bound_chapter_heading_override(
     tmp_path: Path,
 ) -> None:
@@ -2349,7 +2722,13 @@ def test_analysis_candidate_rejects_mandatory_adjacent_lock_when_omitted(
         conn.execute("UPDATE segments SET paragraph_index=seq WHERE chapter_id=1")
     source_rows = [dict(row) for row in db.list_segments()]
     wake_row = source_rows[1]
-    envelope = _analysis_acceptance_envelope([wake_row], emotion="afraid")
+    envelope = _analysis_acceptance_envelope(
+        [wake_row],
+        emotion="afraid",
+        previous_text_by_stable_id={
+            str(wake_row["stable_id"]): str(source_rows[0]["text"])[-500:]
+        },
+    )
     envelope["segments"][0]["data"]["kind"] = "thought"
     _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"
@@ -2375,8 +2754,14 @@ def test_analysis_candidate_rejects_invalid_mandatory_adjacent_emotion(
     )
     with db.connect() as conn:
         conn.execute("UPDATE segments SET paragraph_index=seq WHERE chapter_id=1")
-    wake_row = dict(db.list_segments()[1])
-    envelope = _analysis_acceptance_envelope([wake_row])
+    source_rows = [dict(row) for row in db.list_segments()]
+    wake_row = source_rows[1]
+    envelope = _analysis_acceptance_envelope(
+        [wake_row],
+        previous_text_by_stable_id={
+            str(wake_row["stable_id"]): str(source_rows[0]["text"])[-500:]
+        },
+    )
     envelope["segments"][0]["data"]["kind"] = "thought"
     _refresh_analysis_note(envelope, 0)
     envelope["critic_rows"][0]["candidate"]["kind"] = "thought"

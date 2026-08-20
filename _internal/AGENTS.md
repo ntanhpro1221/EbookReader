@@ -164,6 +164,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
   độc lập, nên không bao giờ được vượt qua semantic gate tất định hoặc biến một field khác candidate thành pass.
+- Director critic cho source `kind_hint=thought` chỉ nhận `previous_context_only`: giữ đúng source trước liền kề để hiểu
+  lời dẫn/attribution nhưng bắt buộc để `next_text` rỗng, ngăn sự kiện tương lai cho mượn emotion/intensity/pace/volume
+  vào suy nghĩ hiện tại. Generator vẫn nhận adjacent context; narration/dialogue critic vẫn dùng `adjacent_context`.
 - Model không được sở hữu `notes` hoặc `personality_hint` được commit. Host phải tạo note canonical chỉ từ delivery cuối
   sau repair; personality model phải rỗng và segment note không được chứa marker điều khiển. Marker repair chỉ là state tạm
   trong một lượt validation và phải bị xóa trước candidate. Candidate ledger + critic khóa projection analysis đã chấp nhận;

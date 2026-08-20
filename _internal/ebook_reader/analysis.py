@@ -26,6 +26,7 @@ from .database import (
     ANALYSIS_CANDIDATE_CRITIC_REJECTED,
     ANALYSIS_CANDIDATE_TERMINAL,
     ANALYSIS_CONTEXT_POLICY_ADJACENT,
+    ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
@@ -82,9 +83,9 @@ SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS = 3
 NEUTRAL_ZERO_DELIVERY_SIGNATURE = ("neutral", 0, "normal", "normal")
 DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
-DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v3"
+DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v4"
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v6"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v7"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -745,6 +746,9 @@ accept=false mà chép nguyên candidate.
 source_role=chapter_heading và context_policy=target_only là tiêu đề chương độc lập: previous_text/next_text cố ý để
 trống và host_locked_fields là bất biến. Không suy diễn delivery của tiêu đề từ nội dung lân cận; vẫn trả đánh giá
 sáu trường ban đầu của riêng bạn để host có thể lưu audit nếu bạn không đồng ý với khóa cấu trúc.
+source_role=content và context_policy=previous_context_only là suy nghĩ nội tâm: previous_text chỉ giúp xác định
+lời dẫn/chức năng đã xảy ra trước câu; next_text cố ý để trống. Không suy diễn emotion, intensity, pace hoặc volume
+của suy nghĩ từ sự kiện xảy ra sau câu.
 Mọi segment kind=thought bắt buộc dùng speaker=NARRATOR vì người kể đọc độc thoại nội tâm; không được từ chối
 candidate chỉ vì NARRATOR không phải danh tính của nhân vật đang nghĩ.
 Nếu bất kỳ trường nào chưa đúng, accept=false và trả toàn bộ sáu trường với giá trị đã sửa; ít nhất một trong
@@ -2812,7 +2816,11 @@ def _director_candidate_rows(
         else:
             previous_text, next_text = _neighbor_texts(group, index, original_context)
             source_role = ANALYSIS_SOURCE_ROLE_CONTENT
-            context_policy = ANALYSIS_CONTEXT_POLICY_ADJACENT
+            if str(row["kind_hint"]) == "thought":
+                next_text = ""
+                context_policy = ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+            else:
+                context_policy = ANALYSIS_CONTEXT_POLICY_ADJACENT
             host_locked_fields = (
                 {"emotion": semantic_locked_emotions[stable_id]}
                 if stable_id in semantic_locked_emotions

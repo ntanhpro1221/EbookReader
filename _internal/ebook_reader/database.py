@@ -161,6 +161,7 @@ ANALYSIS_CANDIDATE_CONTENT_NOTE_MARKERS = frozenset(
 ANALYSIS_SOURCE_ROLE_CONTENT = "content"
 ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
+ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY = "previous_context_only"
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v1"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v6"
@@ -1925,9 +1926,17 @@ class ProjectDB:
                     == candidate_delivery.get("emotion")
                 )
             )
-            is_content_row = (
+            is_adjacent_content_row = (
                 source_role == ANALYSIS_SOURCE_ROLE_CONTENT
                 and context_policy == ANALYSIS_CONTEXT_POLICY_ADJACENT
+                and critic_row.get("hint") != "thought"
+                and content_host_lock_is_valid
+            )
+            is_previous_only_content_row = (
+                source_role == ANALYSIS_SOURCE_ROLE_CONTENT
+                and context_policy == ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+                and critic_row.get("hint") == "thought"
+                and critic_row.get("next_text") == ""
                 and content_host_lock_is_valid
             )
             is_chapter_heading_row = (
@@ -1970,7 +1979,11 @@ class ProjectDB:
                     candidate_delivery[field] != segment["data"][field]
                     for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 )
-                or not (is_content_row or is_chapter_heading_row)
+                or not (
+                    is_adjacent_content_row
+                    or is_previous_only_content_row
+                    or is_chapter_heading_row
+                )
             ):
                 raise ValueError(
                     "Analysis critic rows do not map exactly to source IDs/hashes/delivery"
@@ -2294,6 +2307,33 @@ class ProjectDB:
             if crosses_dialogue_boundary or loses_explicit_thought:
                 raise RuntimeError(
                     "Analysis candidate kind violates a source-owned boundary"
+                )
+            if source_kind == "thought":
+                previous = conn.execute(
+                    "SELECT text FROM segments WHERE chapter_id=? AND seq=?",
+                    (int(stored["chapter_id"]), int(stored["seq"]) - 1),
+                ).fetchone()
+                expected_previous_text = (
+                    str(previous["text"])[-500:] if previous is not None else ""
+                )
+                if (
+                    str(critic_row["source_role"])
+                    != ANALYSIS_SOURCE_ROLE_CONTENT
+                    or str(critic_row["context_policy"])
+                    != ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+                    or str(critic_row["previous_text"]) != expected_previous_text
+                    or str(critic_row["next_text"]) != ""
+                ):
+                    raise RuntimeError(
+                        "Thought analysis context is not source-ledger-bound"
+                    )
+            elif (
+                str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CONTENT
+                and str(critic_row["context_policy"])
+                != ANALYSIS_CONTEXT_POLICY_ADJACENT
+            ):
+                raise RuntimeError(
+                    "Content analysis context policy is not source-ledger-bound"
                 )
             if str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING:
                 if (

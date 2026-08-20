@@ -1,12 +1,10 @@
 # Test report
 
-Ngày cập nhật: 2026-08-11
+Ngày cập nhật: 2026-08-20
 
-Trạng thái source hiện tại: **504/504 test pass** trên Python 3.11.9, gồm CLI/supervisor headless,
-quality policy/evidence, pronunciation,
-completed fast-path, batch-local analysis ID/NPC identity, VieNeu preset/emotion adapter,
-parser dấu câu/ngoặc kép, cân mức âm lượng/tốc độ, Whisper in-process audio và FFmpeg encode/decode thật.
-Compileall cho source/test, `git diff --check` và `ruff 0.9.10 check _internal` đều pass.
+Đợt sửa contract director critic V21: **609/609 test trọng tâm pass** cho analysis bắt buộc,
+database safety và quality policy trên Python 3.11.9. Compileall cho source/test, `git diff --check`
+và Ruff trên toàn bộ file bị ảnh hưởng đều pass; đợt này không chạy model/GPU hoặc pipeline audiobook thật.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -73,6 +71,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   contract cục bộ từ chối root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate
   luôn có precedence vì critic cùng Qwen là correlated self-review chứ không phải model độc lập;
+- source thought được gửi riêng cho critic theo `previous_context_only`: giữ lời dẫn trước nhưng xóa `next_text`, trong khi
+  generator và critic narration/dialogue vẫn dùng adjacent context. Regression V21 seq13 khóa cả split singleton, hash/contract
+  resume source-bound và ngăn cue sững người ở seq14 bị mượn để sửa emotion/intensity/pace của seq13;
 - host affect gate khóa hẹp hai beat tự-bảo-toàn: thought có cue tử vong trực tiếp và wake/self-rescue thought liền kề;
   feedback là JSON typed/whitelist không chứa source/rationale tự do, trường hợp third-party/meta/khác chapter-paragraph không
   bị lan cue. Context/group fingerprint bao gồm stable ID, source hash, chapter, paragraph, kind và hai hàng xóm;
