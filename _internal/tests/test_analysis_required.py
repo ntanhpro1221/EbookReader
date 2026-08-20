@@ -45,6 +45,7 @@ from ebook_reader.analysis import (
     _director_candidate_hash,
     _director_candidate_rows,
     _director_critic_request_contract,
+    _director_critic_schema,
     _generator_request_contract,
     _canonicalize_analysis_notes,
     _apply_host_structural_locks,
@@ -518,7 +519,6 @@ def director_critic_payload(
         verdicts.append(
             {
                 "id": row["id"],
-                "accept": corrected == row["candidate"],
                 **corrected,
                 "rationale": "Chức năng câu và delivery được đối chiếu với ngữ cảnh.",
                 "evidence_quote": row["text"][:ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH],
@@ -786,6 +786,8 @@ def test_director_transport_contract_is_immutable_but_candidate_bound() -> None:
     assert first == repeated
     assert first["temperature"] == settings["director_critic_temperature"]
     assert first["confidence_floor"] == settings["low_confidence_threshold"]
+    assert first["evidence_policy"] == "target_substring_v1"
+    assert first["evidence_text_sha256"] == ""
     assert first["seed"] != changed_candidate["seed"]
     assert first["group_fingerprint"] == changed_candidate["group_fingerprint"]
 
@@ -944,8 +946,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v5"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v8"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v6"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v9"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -1284,7 +1286,6 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
             "verdicts": [
                 {
                     "id": row["id"],
-                    "accept": True,
                     **row["candidate"],
                     "rationale": "Lời kể trung tính phù hợp chức năng câu.",
                     "evidence_quote": row["text"],
@@ -1307,6 +1308,10 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
     assert "do not expose" not in request["prompt"]
     assert '"confidence"' not in request["prompt"]
     assert '"notes"' not in request["prompt"]
+    assert '"accept"' not in request["prompt"]
+    assert "accept" not in request["format"]["properties"]["verdicts"]["items"][
+        "properties"
+    ]
     assert request["format"]["properties"]["candidate_hash"]["enum"] == [candidate_hash]
     assert request["options"]["temperature"] == 0.2
     assert 1 <= request["options"]["seed"] <= (2 ** 31) - 1
@@ -1315,9 +1320,106 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
     assert "next_text cố ý để trống" in request["system"]
     assert "Không suy diễn emotion, intensity, pace hoặc volume" in request["system"]
     assert "kind=thought bắt buộc dùng speaker=NARRATOR" in request["system"]
-    assert "ít nhất một trong\nsáu trường phải khác candidate" in request["system"]
-    assert "cả sáu trường vẫn y hệt candidate là response không hợp lệ" in request["system"]
+    assert "host tự suy ra đồng ý khi cả sáu trường trùng candidate" in request["system"]
+    assert "Nếu cả sáu trường đã đúng, chép đúng cả sáu giá trị candidate" in request[
+        "system"
+    ]
     assert "thought/NARRATOR/afraid/2/fast/normal" in request["system"]
+
+
+@pytest.mark.parametrize(
+    ("quality_profile", "expected_floor"),
+    [("high_quality", 0.65), ("balanced", 0.0)],
+)
+def test_singleton_director_request_binds_confidence_and_exact_short_quote(
+    quality_profile,
+    expected_floor,
+) -> None:
+    group = [
+        {
+            "id": 9,
+            "stable_id": "v23-short-critic",
+            "chapter_id": 1,
+            "seq": 8,
+            "paragraph_index": 9,
+            "text": "“Ha…”",
+            "kind_hint": "dialogue",
+        }
+    ]
+    validated = {
+        "v23-short-critic": {
+            **analysis_item("v23-short-critic"),
+            "kind": "dialogue",
+            "speaker": "Hạ Phong",
+        }
+    }
+    candidate_rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        confidence=max(expected_floor, 0.8),
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+    session = FakeSession(payload)
+    settings = build_settings(quality_profile)
+    analyzer = OllamaBookAnalyzer(
+        settings,
+        FakeDB(),
+        lambda _message: None,
+    )
+    analyzer.session = session
+    request_contract = _director_critic_request_contract(
+        settings["analysis"],
+        model=analyzer.model,
+        model_digest="sha256:test-model-digest",
+        group=group,
+        attempt=1,
+        candidate_hash=candidate_hash,
+    )
+
+    returned, returned_hash = ORIGINAL_DIRECTOR_CRITIC_REQUEST(
+        analyzer,
+        group,
+        validated,
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+        request_contract=request_contract,
+    )
+
+    assert returned == payload
+    assert returned_hash == candidate_hash
+    request = session.request["json"]
+    verdict_properties = request["format"]["properties"]["verdicts"]["items"][
+        "properties"
+    ]
+    assert verdict_properties["critic_confidence"]["minimum"] == expected_floor
+    assert verdict_properties["evidence_quote"]["enum"] == ["“Ha…”"]
+    assert f"confidence_floor={expected_floor}" in request["prompt"]
+    assert "confidence_cap=0.95" in request["prompt"]
+    assert "evidence_quote phải sao chép nguyên văn toàn bộ trường text" in request["prompt"]
+    assert "Với request multi-row" in request["system"]
+    assert "request singleton có text\nđủ ngắn, phải sao chép nguyên văn toàn bộ" in request[
+        "system"
+    ]
+    assert "boolean đồng ý/từ chối" in request["system"]
+    assert "evidence_policy=singleton_full_target_v1" in request["prompt"]
+    assert request_contract["evidence_policy"] == "singleton_full_target_v1"
+    assert request_contract["evidence_text_sha256"] == sha256_text("“Ha…”")
+
+
+def test_multirow_director_schema_keeps_source_substring_quote_contract() -> None:
+    schema = _director_critic_schema(
+        ["S001", "S002"],
+        "candidate-hash",
+        confidence_floor=0.65,
+        singleton_source_text="không được khóa cho multirow",
+    )
+    verdict_properties = schema["properties"]["verdicts"]["items"]["properties"]
+
+    assert verdict_properties["critic_confidence"]["minimum"] == 0.65
+    assert "enum" not in verdict_properties["evidence_quote"]
 
 
 @pytest.mark.parametrize("request_kind", ["generator", "critic"])
@@ -1404,11 +1506,18 @@ def test_director_adjudicator_requires_exact_unique_verdict_contract() -> None:
 
 
 @pytest.mark.parametrize(
-    "confidence",
-    [float("nan"), float("inf"), float("-inf"), "0.9", 0.64],
+    ("confidence", "expected_reason"),
+    [
+        (float("nan"), "DIRECTOR_INVALID_RESPONSE critic_confidence"),
+        (float("inf"), "DIRECTOR_INVALID_RESPONSE critic_confidence"),
+        (float("-inf"), "DIRECTOR_INVALID_RESPONSE critic_confidence"),
+        ("0.9", "DIRECTOR_INVALID_RESPONSE critic_confidence"),
+        (0.64, "DIRECTOR_INVALID_RESPONSE confidence_below_floor"),
+    ],
 )
 def test_director_adjudicator_rejects_nonfinite_or_below_floor_confidence(
     confidence,
+    expected_reason,
 ) -> None:
     group = [analysis_group()[0]]
     stable_id = str(group[0]["stable_id"])
@@ -1427,8 +1536,142 @@ def test_director_adjudicator_rejects_nonfinite_or_below_floor_confidence(
         confidence_floor=0.65,
     )
 
-    assert issues == {stable_id: "DIRECTOR_INVALID_RESPONSE uncalibrated evidence"}
+    assert issues == {stable_id: expected_reason}
     assert "critic" not in evidence["segments"][0]
+
+
+@pytest.mark.parametrize(
+    ("invalid_field", "invalid_value", "expected_reason"),
+    [
+        (
+            "critic_confidence",
+            0.64,
+            "DIRECTOR_INVALID_RESPONSE confidence_below_floor",
+        ),
+        ("rationale", "...", "DIRECTOR_INVALID_RESPONSE rationale"),
+        ("evidence_quote", "Ha", "DIRECTOR_INVALID_RESPONSE evidence_quote"),
+    ],
+)
+def test_v23_singleton_invalid_critic_reason_is_durable_and_candidate_is_unchanged(
+    invalid_field,
+    invalid_value,
+    expected_reason,
+) -> None:
+    group = [
+        {
+            "id": 9,
+            "stable_id": "v23-short-critic",
+            "chapter_id": 1,
+            "seq": 8,
+            "paragraph_index": 9,
+            "text": "“Ha…”",
+            "kind_hint": "dialogue",
+        }
+    ]
+    candidate = {
+        **analysis_item("v23-short-critic"),
+        "kind": "dialogue",
+        "speaker": "Hạ Phong",
+        "confidence": 0.9,
+    }
+    validated = {"v23-short-critic": candidate}
+    payload, candidate_hash = director_critic_payload(group, validated, confidence=0.8)
+    payload["verdicts"][0][invalid_field] = invalid_value
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {"v23-short-critic": expected_reason}
+    assert candidate["confidence"] == 0.9
+    assert "critic" not in evidence["segments"][0]
+
+
+def test_invalid_multirow_critic_does_not_partially_mutate_valid_candidate() -> None:
+    group = analysis_group()
+    validated = {
+        str(row["stable_id"]): {
+            **analysis_item(str(row["stable_id"])),
+            "confidence": 0.9,
+        }
+        for row in group
+    }
+    payload, candidate_hash = director_critic_payload(group, validated, confidence=0.8)
+    payload["verdicts"][1]["evidence_quote"] = "không thuộc source"
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {
+        str(group[1]["stable_id"]): "DIRECTOR_INVALID_RESPONSE evidence_quote"
+    }
+    assert all(candidate["confidence"] == 0.9 for candidate in validated.values())
+    assert evidence["segments"][0]["derived_confidence"] == 0.8
+
+
+def test_v23_singleton_invalid_reason_is_checkpointed_in_durable_outcome(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows[0].update(
+        {
+            "seq": 8,
+            "paragraph_index": 9,
+            "text": "“Ha…”",
+            "kind_hint": "dialogue",
+        }
+    )
+    settings = build_settings(
+        overrides={
+            "analysis": {
+                "max_retries": 1,
+                "director_critic_max_retries": 1,
+            }
+        }
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+
+    def generate(group, **_kwargs):
+        item = analysis_item(str(group[0]["stable_id"]))
+        item.update({"kind": "dialogue", "speaker": "Hạ Phong"})
+        return {"segments": [item]}
+
+    def invalid_quote(group, validated, **kwargs):
+        payload, candidate_hash = director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+        payload["verdicts"][0]["evidence_quote"] = "Ha"
+        return payload, candidate_hash
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", invalid_quote)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert len(db.analysis_critic_attempts) == 1
+    outcome = json.loads(db.analysis_critic_attempts[0]["outcome_json"])
+    assert outcome == {
+        "candidate_state": "critic_invalid",
+        "payload": {
+            "issues": {"c1s1": "DIRECTOR_INVALID_RESPONSE evidence_quote"},
+            "retryable_invalid": True,
+        },
+    }
+    assert db.updated == []
 
 
 def test_director_adjudicator_rejects_template_corrections_by_field_only() -> None:
@@ -3493,13 +3736,13 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v5"
+    assert first_contract["policy_version"] == "second_pass_v6"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
 
 
-def test_v22_confidence_policy_fingerprint_does_not_match_stale_v21_ledger(
+def test_v23_critic_liveness_policy_fingerprint_does_not_match_stale_v22_ledger(
     monkeypatch,
 ) -> None:
     settings = build_settings()["analysis"]
@@ -3507,11 +3750,11 @@ def test_v22_confidence_policy_fingerprint_does_not_match_stale_v21_ledger(
 
     monkeypatch.setattr(
         "ebook_reader.analysis.DIRECTOR_CRITIC_POLICY_VERSION",
-        "second_pass_v4",
+        "second_pass_v5",
     )
     monkeypatch.setattr(
         "ebook_reader.analysis.ANALYSIS_LEDGER_POLICY_VERSION",
-        "analysis_ledger_v7",
+        "analysis_ledger_v8",
     )
     stale = _analysis_policy_fingerprint(settings, "quality-policy")
 
@@ -4051,20 +4294,17 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
 
 
 @pytest.mark.parametrize(
-    ("correction", "raw_accept", "expected_issue"),
+    ("correction", "expected_issue"),
     [
         (
             {"emotion": "neutral", "intensity": 0},
-            True,
-            "DIRECTOR_INVALID_RESPONSE accept_with_delta",
+            "DIRECTOR_FIELD_MISMATCH fields=emotion,intensity",
         ),
-        ({}, False, "DIRECTOR_INVALID_RESPONSE reject_without_delta"),
-        ({"emotion": "tired"}, False, "DIRECTOR_FIELD_MISMATCH fields=emotion"),
+        ({"emotion": "tired"}, "DIRECTOR_FIELD_MISMATCH fields=emotion"),
     ],
 )
 def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
     correction: dict[str, object],
-    raw_accept: bool,
     expected_issue: str,
 ) -> None:
     row = {
@@ -4095,8 +4335,6 @@ def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
         candidate_rows=candidate_rows,
         candidate_hash=candidate_hash,
     )
-    payload["verdicts"][0]["accept"] = raw_accept
-
     issues, evidence = _adjudicate_director_critic(
         [row],
         validated,
@@ -4110,20 +4348,17 @@ def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
 
 
 @pytest.mark.parametrize(
-    ("correction", "raw_accept", "expected_issue"),
+    ("correction", "expected_issue"),
     [
         (
             {"emotion": "neutral", "intensity": 0},
-            True,
-            "DIRECTOR_INVALID_RESPONSE accept_with_delta",
+            "DIRECTOR_FIELD_MISMATCH fields=emotion,intensity",
         ),
-        ({}, False, "DIRECTOR_INVALID_RESPONSE reject_without_delta"),
-        ({"emotion": "tired"}, False, "DIRECTOR_FIELD_MISMATCH fields=emotion"),
+        ({"emotion": "tired"}, "DIRECTOR_FIELD_MISMATCH fields=emotion"),
     ],
 )
 def test_desperate_exertion_lock_never_overrides_invalid_or_allowed_dissent(
     correction: dict[str, object],
-    raw_accept: bool,
     expected_issue: str,
 ) -> None:
     row = {
@@ -4151,8 +4386,6 @@ def test_desperate_exertion_lock_never_overrides_invalid_or_allowed_dissent(
         candidate_rows=candidate_rows,
         candidate_hash=candidate_hash,
     )
-    payload["verdicts"][0]["accept"] = raw_accept
-
     issues, evidence = _adjudicate_director_critic(
         [row],
         validated,
@@ -4334,7 +4567,7 @@ def test_director_rejects_an_oversized_quote_even_when_it_is_source_text() -> No
         candidate_hash=candidate_hash,
     )
 
-    assert issues == {stable_id: "DIRECTOR_INVALID_RESPONSE uncalibrated evidence"}
+    assert issues == {stable_id: "DIRECTOR_INVALID_RESPONSE evidence_quote"}
     assert "critic" not in evidence["segments"][0]
 
 
@@ -6049,7 +6282,7 @@ def test_critic_exhaustion_does_not_clear_prior_deterministic_feedback(
             candidate_rows=kwargs["candidate_rows"],
             candidate_hash=kwargs["candidate_hash"],
         )
-        payload["verdicts"][0]["accept"] = False
+        payload["verdicts"][0]["evidence_quote"] = "không thuộc source"
         return payload, candidate_hash
 
     monkeypatch.setattr(analyzer, "_request", generate)
@@ -6173,7 +6406,7 @@ def test_invalid_critic_transport_retry_keeps_identical_request_contract(monkeyp
     assert len(db.updated) == 1
 
 
-def test_critic_reject_without_field_delta_retries_same_candidate_with_new_seed(
+def test_critic_agreement_is_derived_from_zero_field_delta_without_retry(
     monkeypatch,
 ) -> None:
     db = FakeDB()
@@ -6197,17 +6430,6 @@ def test_critic_reject_without_field_delta_retries_same_candidate_with_new_seed(
             candidate_rows=kwargs["candidate_rows"],
             candidate_hash=kwargs["candidate_hash"],
         )
-        if len(critic_contracts) == 1:
-            payload["verdicts"][0]["accept"] = False
-            issues, _evidence = _adjudicate_director_critic(
-                group,
-                validated,
-                payload,
-                candidate_hash=candidate_hash,
-            )
-            assert issues == {
-                "c1s1": "DIRECTOR_INVALID_RESPONSE reject_without_delta",
-            }
         return payload, candidate_hash
 
     monkeypatch.setattr(analyzer, "_request", generate)
@@ -6216,11 +6438,12 @@ def test_critic_reject_without_field_delta_retries_same_candidate_with_new_seed(
     analyzer.analyze_all(lambda: False)
 
     assert generator_calls == 1
-    assert candidate_hashes[0] == candidate_hashes[1]
-    assert [contract["attempt"] for contract in critic_contracts] == [1, 2]
-    assert critic_contracts[0]["seed"] != critic_contracts[1]["seed"]
+    assert candidate_hashes == [critic_contracts[0]["candidate_hash"]]
+    assert [contract["attempt"] for contract in critic_contracts] == [1]
     accepted = next(event for event in db.events if event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED")
     assert accepted[3]["critic_attempt_contracts"] == critic_contracts
+    assert accepted[3]["segments"][0]["critic"]["accept"] is True
+    assert accepted[3]["segments"][0]["field_deltas"] == []
     assert len(db.updated) == 1
 
 
@@ -6323,7 +6546,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v5"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v6"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

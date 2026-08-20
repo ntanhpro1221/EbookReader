@@ -156,10 +156,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   bỏ qua director critic.
 - Rule affect nguồn hẹp phải chạy trước semantic cue chung. Constraint deterministic đã phát hiện phải được tích lũy trong
   suốt retry của cùng target group, không được ghi đè bởi lỗi của lần sau hoặc chuyển thành feedback tự do.
-- Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Critic dissent
-  chỉ được host override khi `accept=false`, có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host cho phép;
-  raw verdict/delta vẫn phải lưu. `accept=true` kèm delta, `accept=false` không delta, delta field khác, hoặc đổi giữa hai giá trị
-  đều được host cho phép đều phải fail-closed, không được giả thành critic pass.
+- Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Critic correction
+  chỉ được host override khi có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host cho phép; raw field delta
+  vẫn phải lưu. Không delta được host suy là agreement; delta field khác hoặc đổi giữa hai giá trị đều được host cho phép phải
+  fail-closed, không được giả thành critic pass.
 - Profile `high_quality` bắt buộc chạy một lượt director critic thứ hai trên candidate analysis bất biến. Critic không
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
@@ -178,13 +178,16 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   tiêu đề về narrator trung tính cùng confidence candidate `0.95`, không gửi ngữ cảnh hàng xóm cho row đó và vẫn giữ
   nguyên proposal/confidence/verdict thô để audit. Confidence commit sau critic vẫn là min của candidate khóa, reviewer và cap.
   Structural override chỉ được phép cho đúng row đã khóa; mọi content row vẫn chịu critic bình thường. Mỗi verdict critic
-  phải trích nguyên văn bằng chứng ngắn, không rỗng từ chính text cùng ID, không được lấy bằng chứng từ row lân cận
-  hoặc sao chép nguyên một segment dài vượt giới hạn schema.
+  phải trích nguyên văn bằng chứng không rỗng từ chính text cùng ID, không được lấy bằng chứng từ row lân cận. Multi-row
+  dùng source substring ngắn; singleton có toàn bộ target dài từ 1 đến giới hạn quote phải khóa schema và contract vào exact
+  full target + source hash. Critic model không trả boolean accept: host suy agreement chỉ khi cả sáu delivery field không có
+  delta, và evidence compatibility phải lưu accept đúng bằng kết quả host-derived đó.
 - Với analysis bắt buộc ở profile `high_quality`, mọi content candidate dưới `low_confidence_threshold` phải bị từ chối
   bằng feedback số typed trước critic/candidate ledger. Prompt generator luôn phải mang đúng floor; schema áp floor trực tiếp
   cho batch không có tiêu đề, còn batch trộn tiêu đề+nội dung phải giữ proposal confidence thô của tiêu đề và dùng host gate
   để áp floor lên content. Tiêu đề cấu trúc được normalize trước gate này. Confidence được commit phải nằm trên ngưỡng khóa
-  và không vượt cap của director.
+  và không vượt cap của director. Contract critic phải khóa đúng floor/cap trong schema + prompt, evidence policy + target hash;
+  confidence dưới floor, rationale lỗi và evidence quote lỗi phải có reason host-derived riêng trong durable outcome.
   Model name + digest Ollama phải được
   khóa bền ở cấp book, kiểm tra lại trước và sau mọi request generator, critic và pronunciation; tag/digest đổi giữa
   request hoặc giữa hai lần resume phải fail-closed. Project high-quality legacy đã có analysis checkpoint nhưng chưa có

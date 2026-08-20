@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from .database import ANALYSIS_CRITIC_CONFIDENCE_MAX
+
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "quality_profile": "high_quality",
@@ -343,6 +345,14 @@ def validate_settings(settings: dict[str, Any]) -> None:
     director_cap = float(analysis.get("director_confidence_cap", 0.95))
     if not 0.0 < director_cap < 1.0:
         raise ValueError("analysis.director_confidence_cap must be between 0 and 1")
+    if (
+        analysis.get("low_confidence_policy") == "fail"
+        and threshold > min(director_cap, ANALYSIS_CRITIC_CONFIDENCE_MAX)
+    ):
+        raise ValueError(
+            "analysis.low_confidence_threshold must not exceed the director "
+            "confidence cap or critic schema maximum under fail policy"
+        )
     if analysis.get("director_critic_required") and not analysis.get("director_critic_enabled"):
         raise ValueError("Required analysis director critic cannot be disabled")
     if settings.get("quality_profile") == "high_quality" and (

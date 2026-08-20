@@ -5,6 +5,8 @@ Ngày cập nhật: 2026-08-20
 Đợt sửa confidence contract V22: **634/634 test trọng tâm pass** cho analysis bắt buộc,
 database safety và quality policy trên Python 3.11.9. Compileall cho source/test, `git diff --check`
 và Ruff trên toàn bộ file bị ảnh hưởng đều pass; đợt này không chạy model/GPU hoặc pipeline audiobook thật.
+Hardening sau bằng chứng V23 `“Ha…”` đã khóa critic schema/prompt theo durable floor, exact singleton target + source hash,
+bỏ boolean accept khỏi model contract và tách reason confidence/rationale/quote; suite analysis + quality policy liên quan pass.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -57,8 +59,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   source-only với DB replay; chúng khóa `kind=narration`, gửi allowed emotion typed theo đúng ID, không lan từ hàng xóm và
   vẫn bắt model trả candidate mới trước director critic;
 - semantic lock bền khóa emotion đã qua self-preservation/adjacent-wake/physical-collapse/desperate-exertion/recalled-fear/stunned-blank-mind vào source hash và critic candidate.
-  Chỉ raw dissent hợp lệ đổi riêng field khóa ra ngoài allowed set mới có override audit; accept-with-delta, reject-no-delta,
-  delta thêm field hoặc dissent sang một emotion khác vẫn được host cho phép đều bị chặn;
+  Chỉ correction đổi riêng field khóa ra ngoài allowed set mới có override audit; agreement được host suy từ sáu field không
+  delta, còn delta thêm field hoặc correction sang một emotion khác vẫn được host cho phép đều bị chặn;
 - dialogue và thought boundary đã được source parser nhận diện là source-owned: model không được đổi chúng sang loại khác để
   né speaker/semantic lock; narration chỉ có thể được nâng thành thought khi source không khớp một semantic lock narration bắt buộc;
 - `notes` và `personality_hint` tự do không còn thuộc output model hay acceptance envelope. Host tạo `delivery_note_v1`
@@ -70,7 +72,11 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - high-quality director critic chạy lượt self-review thứ hai mà không thấy confidence/notes/personality của generator;
   content generator confidence dưới floor bị feedback typed và retry trước mọi critic/ledger allocation; schema/prompt mang
   floor ở batch không có heading, còn batch hỗn hợp giữ schema floor `0` để proposal confidence thô của heading vẫn tới host.
-  Contract critic khóa cả floor; root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
+  Contract critic khóa cả floor/cap và evidence policy. Singleton có target dài 1..240 ký tự dùng
+  `singleton_full_target_v1`, exact source SHA và enum quote bằng toàn target; multi-row giữ `target_substring_v1`.
+  Model không còn trả boolean accept: host suy agreement từ sáu field không delta, correction từ field delta, rồi chỉ lưu
+  `critic.accept` compatibility bằng đúng kết quả host-derived. Root/item thừa, ID thiếu/trùng/lạ, string thay số, NaN/Inf,
+  confidence dưới ngưỡng, rationale lỗi và quote lỗi có category durable riêng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate
   luôn có precedence vì critic cùng Qwen là correlated self-review chứ không phải model độc lập;
 - source thought được gửi riêng cho critic theo `previous_context_only`: giữ lời dẫn trước nhưng xóa `next_text`, trong khi
@@ -86,7 +92,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - schema v8 lưu acceptance envelope đầy đủ, projection hash mà critic nhìn thấy, mọi generator contract và critic intent/outcome.
   Intent được reserve trước HTTP; protocol-invalid retry đúng candidate với seed mới, field mismatch lặp projection thì chia
   batch hữu hạn, còn crash sau `critic_accepted` resume/commit không gọi Ollama. Hash JSON, quan hệ parent-child, attempt liên tục,
-  exact confidence `min(generator, critic, cap)`, source role/seq/paragraph/kind/text và model/policy/context CAS đều được kiểm
+  exact confidence `min(generator, critic, cap)`, evidence policy/full-target SHA, source role/seq/paragraph/kind/text và
+  model/policy/context CAS đều được kiểm
   tra lại khi đọc/commit; forged content override, quote lấy từ row khác và structural clearance bị sửa đều fail-closed;
 - resume coi durable analysis candidate là checkpoint đã bắt đầu ngay cả khi segment vẫn `pending`, vì vậy casting fingerprint
   mới không thể tái dùng ledger critic theo contract cũ;

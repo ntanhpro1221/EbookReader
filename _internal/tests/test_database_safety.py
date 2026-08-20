@@ -12,6 +12,9 @@ from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
+    ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+    ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
+    ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
@@ -348,11 +351,25 @@ def _refresh_analysis_note(envelope: dict, index: int) -> None:
     data["notes"] = canonical_analysis_note(data)
 
 
-def _accepted_critic_contract() -> dict:
+def _accepted_critic_contract(envelope: dict | None = None) -> dict:
+    critic_rows = envelope["critic_rows"] if envelope is not None else []
+    singleton_text = (
+        str(critic_rows[0]["text"])
+        if len(critic_rows) == 1
+        and 1 <= len(str(critic_rows[0]["text"])) <= 240
+        else ""
+    )
     return {
-        "policy_version": "second_pass_v1",
+        "policy_version": ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
+        "director_policy_version": ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
         "confidence_floor": 0.65,
         "confidence_cap": 0.95,
+        "evidence_policy": (
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+            if singleton_text
+            else ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
+        ),
+        "evidence_text_sha256": sha256_text(singleton_text) if singleton_text else "",
         "seed": 11,
         "temperature": 0.0,
     }
@@ -385,7 +402,7 @@ def _accepted_critic_evidence(envelope: dict) -> dict:
         )
     return {
         "candidate_hash": _canonical_hash(envelope["critic_rows"]),
-        "critic_contract": _accepted_critic_contract(),
+        "critic_contract": _accepted_critic_contract(envelope),
         "segments": rows,
     }
 
@@ -1395,39 +1412,50 @@ def test_v22_critic_below_floor_cannot_complete_an_accepted_candidate(
 
 
 @pytest.mark.parametrize(
-    "contract",
+    ("field", "value"),
     (
-        {"policy_version": "second_pass_v1", "confidence_cap": 0.95},
-        {
-            "policy_version": "second_pass_v1",
-            "confidence_floor": -0.01,
-            "confidence_cap": 0.95,
-        },
-        {
-            "policy_version": "second_pass_v1",
-            "confidence_floor": 0.65,
-            "confidence_cap": 1.01,
-        },
-        {
-            "policy_version": "second_pass_v1",
-            "confidence_floor": 0.96,
-            "confidence_cap": 0.95,
-        },
-        {
-            "policy_version": "second_pass_v1",
-            "confidence_floor": float("nan"),
-            "confidence_cap": 0.95,
-        },
+        ("confidence_floor", None),
+        ("confidence_floor", -0.01),
+        ("confidence_cap", 1.01),
+        ("confidence_floor", 0.96),
+        ("confidence_floor", float("nan")),
     ),
 )
 def test_v22_critic_reserve_rejects_invalid_confidence_contract(
     tmp_path: Path,
-    contract: dict,
+    field: str,
+    value: object,
 ) -> None:
     db, source_rows = _analysis_batch_db(tmp_path)
     candidate = _allocate_analysis_candidate(db, source_rows)
+    contract = _accepted_critic_contract()
+    if value is None:
+        del contract[field]
+    else:
+        contract[field] = value
 
     with pytest.raises(ValueError, match="confidence floor/cap"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v24_critic_reserve_rejects_floor_above_schema_maximum(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    contract = _accepted_critic_contract()
+    contract["confidence_floor"] = 0.995
+    contract["confidence_cap"] = 0.999
+
+    with pytest.raises(ValueError, match="critic schema maximum"):
         db.reserve_analysis_critic_attempt(
             int(candidate["id"]),
             expected_state="allocated",
@@ -1456,7 +1484,7 @@ def test_v22_acceptance_rejects_critic_floor_or_cap_contract_tamper(
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"])},
-        contract=_accepted_critic_contract(),
+        contract=_accepted_critic_contract(envelope),
     )
     evidence = _accepted_critic_evidence(envelope)
     evidence["critic_contract"][field] = value
@@ -1474,7 +1502,7 @@ def test_v22_acceptance_rejects_critic_floor_or_cap_contract_tamper(
         )
 
 
-def test_v22_reopen_rejects_rehashed_invalid_critic_floor_contract(
+def test_v24_reopen_rejects_rehashed_critic_floor_above_schema_maximum(
     tmp_path: Path,
 ) -> None:
     db, source_rows = _analysis_batch_db(tmp_path)
@@ -1487,7 +1515,8 @@ def test_v22_reopen_rejects_rehashed_invalid_critic_floor_contract(
         contract=_accepted_critic_contract(),
     )
     tampered_contract = _accepted_critic_contract()
-    tampered_contract["confidence_floor"] = -0.01
+    tampered_contract["confidence_floor"] = 0.995
+    tampered_contract["confidence_cap"] = 0.999
     tampered_json = json.dumps(
         tampered_contract,
         ensure_ascii=False,
@@ -1502,7 +1531,7 @@ def test_v22_reopen_rejects_rehashed_invalid_critic_floor_contract(
             (tampered_json, sha256_text(tampered_json), int(candidate["id"])),
         )
 
-    with pytest.raises(RuntimeError, match="confidence floor/cap"):
+    with pytest.raises(RuntimeError, match="critic schema maximum"):
         ProjectDB(db.path).find_resumable_analysis_candidate(
             policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
             model_name=ANALYSIS_MODEL_NAME,
@@ -1510,6 +1539,373 @@ def test_v22_reopen_rejects_rehashed_invalid_critic_floor_contract(
             group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
             context_hash=ANALYSIS_CONTEXT_HASH,
         )
+
+
+@pytest.mark.parametrize("policy_field", ("policy_version", "director_policy_version"))
+def test_v23_critic_reserve_rejects_stale_v5_policy(
+    tmp_path: Path,
+    policy_field: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract[policy_field] = "second_pass_v5"
+
+    with pytest.raises(ValueError, match="current director policy"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        (
+            "evidence_policy",
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
+        ),
+        ("evidence_text_sha256", "f" * 64),
+    ),
+)
+def test_v23_singleton_contract_rejects_forged_evidence_policy_or_hash(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=("“Ha…”",))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract[field] = value
+
+    with pytest.raises(ValueError, match="evidence policy is not source-bound"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
+    tmp_path: Path,
+) -> None:
+    source_text = "“Ha…”"
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    contract = _accepted_critic_contract(envelope)
+    assert contract["policy_version"] == "second_pass_v6"
+    assert contract["director_policy_version"] == "second_pass_v6"
+    assert (
+        contract["evidence_policy"]
+        == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+    )
+    assert contract["evidence_text_sha256"] == sha256_text(source_text)
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+
+    reopened_after_reserve = ProjectDB(db.path)
+    evidence = _accepted_critic_evidence(envelope)
+    assert evidence["segments"][0]["critic"]["evidence_quote"] == source_text
+    assert evidence["segments"][0]["critic"]["accept"] is True
+    reopened_after_reserve.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=evidence,
+        commit_envelope=envelope,
+    )
+
+    reopened_after_accept = ProjectDB(db.path)
+    snapshot = reopened_after_accept.analysis_candidate_acceptance_envelope(candidate_id)
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in snapshot["commit_envelope"]["segments"]
+    ]
+    reopened_after_accept.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    committed = ProjectDB(db.path).list_segments()[0]
+    assert committed["status"] == "analyzed"
+    assert ProjectDB(db.path).get_analysis_candidate(candidate_id)["state"] == "accepted"
+
+
+@pytest.mark.parametrize(
+    "forged_quote",
+    (
+        "Ha...",
+        "“Ha...”",
+        "Hạ Phong đột ngột bật dậy thở dốc.",
+        "“Ha…” Hạ Phong đột ngột bật dậy thở dốc.",
+    ),
+)
+def test_v23_singleton_full_target_rejects_normalized_or_context_quote(
+    tmp_path: Path,
+    forged_quote: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=("“Ha…”",))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["segments"][0]["critic"]["evidence_quote"] = forged_quote
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_v23_db_recomputes_host_accept_from_exact_field_deltas(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=("“Ha…”",))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["segments"][0]["critic"]["accept"] = False
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_v23_long_singleton_uses_source_substring_policy_without_hash(
+    tmp_path: Path,
+) -> None:
+    source_text = "Một đoạn nguồn dài " + ("rất " * 70)
+    assert len(source_text) > 240
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    contract = _accepted_critic_contract(envelope)
+
+    assert (
+        contract["evidence_policy"]
+        == ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
+    )
+    assert contract["evidence_text_sha256"] == ""
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["segments"][0]["critic"]["evidence_quote"] = "Một đoạn nguồn dài"
+    db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=evidence,
+        commit_envelope=envelope,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    (
+        ("policy_version", "second_pass_v5", "current director policy"),
+        ("director_policy_version", "second_pass_v5", "current director policy"),
+        ("evidence_text_sha256", "f" * 64, "evidence policy is not source-bound"),
+    ),
+)
+def test_v23_reopen_rejects_rehashed_policy_or_evidence_contract_tamper(
+    tmp_path: Path,
+    field: str,
+    value: str,
+    error: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=("“Ha…”",))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    tampered_contract = _accepted_critic_contract(envelope)
+    tampered_contract[field] = value
+    tampered_json = json.dumps(
+        tampered_contract,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET contract_json=?,contract_hash=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (tampered_json, sha256_text(tampered_json), candidate_id),
+        )
+
+    with pytest.raises(RuntimeError, match=error):
+        ProjectDB(db.path).find_resumable_analysis_candidate(
+            policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            model_name=ANALYSIS_MODEL_NAME,
+            model_digest=ANALYSIS_MODEL_DIGEST,
+            group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+
+
+def test_v23_reopen_and_commit_reject_rehashed_singleton_quote_tamper(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=("“Ha…”",))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    with db.connect() as conn:
+        stored_attempt = conn.execute(
+            "SELECT * FROM analysis_critic_attempts "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (candidate_id,),
+        ).fetchone()
+        stored_candidate = conn.execute(
+            "SELECT * FROM analysis_candidates WHERE id=?",
+            (candidate_id,),
+        ).fetchone()
+        tampered_evidence = json.loads(str(stored_attempt["evidence_json"]))
+        tampered_evidence["segments"][0]["critic"]["evidence_quote"] = "Ha..."
+        evidence_json, evidence_hash = db._canonical_analysis_json(
+            tampered_evidence,
+            "tampered singleton evidence",
+        )
+        _completion_json, completion_hash = db._canonical_analysis_json(
+            {
+                "commit_envelope_hash": stored_candidate["commit_envelope_hash"],
+                "contract_hash": stored_attempt["contract_hash"],
+                "evidence_hash": evidence_hash,
+                "intent_hash": stored_attempt["intent_hash"],
+                "outcome_hash": stored_attempt["outcome_hash"],
+            },
+            "tampered singleton completion",
+        )
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET evidence_json=?,evidence_hash=?,"
+            "completion_hash=? WHERE analysis_candidate_id=? AND attempt_number=1",
+            (evidence_json, evidence_hash, completion_hash, candidate_id),
+        )
+
+    reopened = ProjectDB(db.path)
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        reopened.get_analysis_candidate(candidate_id)
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in envelope["segments"]
+    ]
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        reopened.update_analysis_batch_with_event(
+            batch,
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back",
+            event_details={"candidate_hash": str(candidate["candidate_hash"])},
+            **ANALYSIS_MODEL_COMMIT,
+            analysis_candidate_id=candidate_id,
+            analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+        )
+    assert ProjectDB(db.path).list_segments()[0]["status"] == "pending"
 
 
 @pytest.mark.parametrize(
@@ -1594,7 +1990,7 @@ def test_analysis_commit_rejects_personality_or_note_injection(
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"])},
-        contract=_accepted_critic_contract(),
+        contract=_accepted_critic_contract(envelope),
     )
     commit_envelope = copy.deepcopy(envelope)
     commit_envelope["segments"][0]["data"][field] = "forged"
@@ -1657,12 +2053,13 @@ def test_v21_thought_context_survives_allocate_reopen_and_commit(
         candidate=envelope,
     )
     candidate_id = int(candidate["id"])
+    critic_contract = _accepted_critic_contract(envelope)
     attempt = db.reserve_analysis_critic_attempt(
         candidate_id,
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"])},
-        contract=_accepted_critic_contract(),
+        contract=critic_contract,
     )
     db.complete_analysis_critic_attempt(
         candidate_id,
@@ -1869,7 +2266,7 @@ def test_v21_thought_context_replays_predecessor_again_before_commit(
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"])},
-        contract=_accepted_critic_contract(),
+        contract=_accepted_critic_contract(envelope),
     )
     db.complete_analysis_critic_attempt(
         candidate_id,
@@ -2707,19 +3104,25 @@ def test_direct_narration_affect_critic_dissent_cannot_override_commit(
         deterministic_issues=clearance,
     )
     candidate_id = int(candidate["id"])
+    critic_contract = _accepted_critic_contract(envelope)
     attempt = db.reserve_analysis_critic_attempt(
         candidate_id,
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"])},
-        contract=_accepted_critic_contract(),
+        contract=critic_contract,
     )
     evidence = _semantic_override_evidence(
         envelope,
         clearance,
         corrected_emotion=wrong_emotion,
     )
-    evidence["segments"][0]["critic"]["evidence_quote"] = text[-160:]
+    evidence["segments"][0]["critic"]["evidence_quote"] = (
+        text
+        if critic_contract["evidence_policy"]
+        == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+        else text[-160:]
+    )
     db.complete_analysis_critic_attempt(
         candidate_id,
         1,
@@ -4142,7 +4545,13 @@ def test_analysis_candidate_completion_rehashes_prior_critic_attempts(
             commit_envelope=envelope,
         )
 
-    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_in_flight"
+    with pytest.raises(RuntimeError, match="completion hash verification"):
+        db.get_analysis_candidate(candidate_id)
+    with db.connect() as conn:
+        assert conn.execute(
+            "SELECT state FROM analysis_candidates WHERE id=?",
+            (candidate_id,),
+        ).fetchone()["state"] == "critic_in_flight"
 
 
 @pytest.mark.parametrize(
@@ -4236,7 +4645,13 @@ def test_analysis_candidate_commit_rehashes_complete_child_history(
         )
 
     assert {row["status"] for row in db.list_segments()} == {"pending"}
-    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_accepted"
+    with pytest.raises(RuntimeError, match=expected_error):
+        db.get_analysis_candidate(candidate_id)
+    with db.connect() as conn:
+        assert conn.execute(
+            "SELECT state FROM analysis_candidates WHERE id=?",
+            (candidate_id,),
+        ).fetchone()["state"] == "critic_accepted"
 
 
 def test_analysis_candidate_identity_is_strict_and_terminal_candidates_do_not_reopen(

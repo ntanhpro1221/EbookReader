@@ -152,6 +152,26 @@ def test_high_quality_requires_mandatory_analysis() -> None:
         build_settings(overrides={"analysis": {"low_confidence_policy": "auto_with_warning"}})
 
 
+@pytest.mark.parametrize(
+    "threshold,director_cap",
+    [
+        (0.96, 0.95),
+        (0.995, 0.999),
+    ],
+)
+def test_fail_confidence_floor_must_fit_director_contract(
+    threshold: float,
+    director_cap: float,
+) -> None:
+    with pytest.raises(ValueError, match="must not exceed the director"):
+        build_settings(overrides={
+            "analysis": {
+                "low_confidence_threshold": threshold,
+                "director_confidence_cap": director_cap,
+            }
+        })
+
+
 def test_legacy_locked_settings_are_normalized_in_memory_without_changing_raw_hash(
     tmp_path,
 ) -> None:

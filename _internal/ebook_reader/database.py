@@ -166,7 +166,13 @@ ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v6"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v6"
+ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
+ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
+    "singleton_full_target_v1"
+)
+ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING = "target_substring_v1"
 ANALYSIS_CHAPTER_HEADING_CONFIDENCE = 0.95
 ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
     r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
@@ -1809,26 +1815,82 @@ class ProjectDB:
         return payload, sha256_text(payload)
 
     @staticmethod
+    def _analysis_critic_evidence_contract(
+        candidate_json: str,
+    ) -> tuple[str, str]:
+        try:
+            candidate = json.loads(candidate_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Analysis critic evidence candidate JSON is invalid") from exc
+        critic_rows = candidate.get("critic_rows") if isinstance(candidate, dict) else None
+        if not isinstance(critic_rows, list) or not critic_rows:
+            raise RuntimeError("Analysis critic evidence candidate rows are incomplete")
+        if len(critic_rows) == 1:
+            source_text = critic_rows[0].get("text")
+            if (
+                isinstance(source_text, str)
+                and 1 <= len(source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+            ):
+                return (
+                    ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+                    sha256_text(source_text),
+                )
+        return ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING, ""
+
+    @classmethod
     def _analysis_critic_confidence_bounds(
+        cls,
         contract: dict[str, Any],
         *,
         durable: bool,
+        candidate_json: str | None = None,
     ) -> tuple[float, float]:
         error_type = RuntimeError if durable else ValueError
         confidence_floor = contract.get("confidence_floor")
         confidence_cap = contract.get("confidence_cap")
-        if not str(contract.get("policy_version", "")).strip():
-            raise error_type("Analysis critic contract lacks its policy version")
+        if (
+            contract.get("policy_version")
+            != ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
+            or contract.get("director_policy_version")
+            != ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
+        ):
+            raise error_type(
+                "Analysis critic contract does not use the current director policy"
+            )
         if (
             type(confidence_floor) not in {int, float}
             or type(confidence_cap) not in {int, float}
             or not math.isfinite(float(confidence_floor))
             or not math.isfinite(float(confidence_cap))
             or not 0.0 <= float(confidence_floor) <= float(confidence_cap) <= 1.0
+            or float(confidence_floor) > ANALYSIS_CRITIC_CONFIDENCE_MAX
         ):
             raise error_type(
-                "Analysis critic confidence floor/cap must be finite ordered values within [0,1]"
+                "Analysis critic confidence floor/cap must be finite ordered values within "
+                "[0,1], and the floor cannot exceed the critic schema maximum"
             )
+        evidence_policy = contract.get("evidence_policy")
+        evidence_text_sha256 = contract.get("evidence_text_sha256")
+        if (
+            evidence_policy
+            not in {
+                ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+                ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
+            }
+            or not isinstance(evidence_text_sha256, str)
+        ):
+            raise error_type("Analysis critic contract has invalid evidence policy fields")
+        if candidate_json is not None:
+            expected_evidence_policy, expected_evidence_text_sha256 = (
+                cls._analysis_critic_evidence_contract(candidate_json)
+            )
+            if (
+                evidence_policy != expected_evidence_policy
+                or evidence_text_sha256 != expected_evidence_text_sha256
+            ):
+                raise error_type(
+                    "Analysis critic evidence policy is not source-bound"
+                )
         return float(confidence_floor), float(confidence_cap)
 
     @staticmethod
@@ -2552,7 +2614,9 @@ class ProjectDB:
         confidence_floor, confidence_cap = cls._analysis_critic_confidence_bounds(
             critic_contract,
             durable=True,
+            candidate_json=candidate_json,
         )
+        evidence_policy = str(critic_contract["evidence_policy"])
         evidence_segments = evidence.get("segments")
         if not isinstance(evidence_segments, list):
             raise ValueError("Accepted critic evidence requires a segments array")
@@ -2615,7 +2679,7 @@ class ProjectDB:
                 and len(critic["rationale"]) <= 200
                 and type(critic.get("confidence")) in {int, float}
                 and math.isfinite(float(critic["confidence"]))
-                and 0.0 <= float(critic["confidence"]) <= 0.99
+                and 0.0 <= float(critic["confidence"]) <= ANALYSIS_CRITIC_CONFIDENCE_MAX
             )
             raw_deltas = [
                 f"{field}:{candidate_projection[field]}->{raw_delivery[field]}"
@@ -2627,10 +2691,11 @@ class ProjectDB:
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 if raw_delivery.get(field) != candidate_projection[field]
             }
+            host_derived_accept = not raw_deltas
             raw_agreement = (
                 isinstance(critic, dict)
-                and critic.get("accept") is True
-                and not raw_deltas
+                and critic.get("accept") is host_derived_accept
+                and host_derived_accept
             )
             raw_accept_value = critic.get("accept") if isinstance(critic, dict) else None
             is_heading = (
@@ -2704,7 +2769,17 @@ class ProjectDB:
                 or not isinstance(evidence_quote, str)
                 or not evidence_quote.strip()
                 or len(evidence_quote) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
-                or evidence_quote not in str(critic_row["text"])
+                or (
+                    evidence_policy
+                    == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+                    and evidence_quote != str(critic_row["text"])
+                )
+                or (
+                    evidence_policy
+                    == ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
+                    and evidence_quote not in str(critic_row["text"])
+                )
+                or critic.get("accept") is not host_derived_accept
                 or item.get("field_deltas") != raw_deltas
                 or item.get("effective_accept") is not True
                 or (
@@ -2922,7 +2997,17 @@ class ProjectDB:
             contract = json.loads(str(row["contract_json"]))
         except json.JSONDecodeError as exc:
             raise RuntimeError("Analysis critic intent ledger contains invalid JSON") from exc
-        cls._analysis_critic_confidence_bounds(contract, durable=True)
+        contract_candidate = candidate_row or conn.execute(
+            "SELECT candidate_json FROM analysis_candidates WHERE id=?",
+            (int(analysis_candidate_id),),
+        ).fetchone()
+        if contract_candidate is None:
+            raise RuntimeError("Analysis critic contract has no parent candidate")
+        cls._analysis_critic_confidence_bounds(
+            contract,
+            durable=True,
+            candidate_json=str(contract_candidate["candidate_json"]),
+        )
         intent_json, intent_hash = cls._canonical_analysis_json(
             intent,
             "stored analysis critic intent",
@@ -3248,7 +3333,19 @@ class ProjectDB:
 
     def get_analysis_candidate(self, analysis_candidate_id: int) -> sqlite3.Row:
         with self.connect() as conn:
-            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._validate_analysis_generator_contract_history_conn(
+                conn,
+                int(candidate["id"]),
+            )
+            if int(candidate["critic_attempt_count"]) > 0:
+                self._validate_analysis_critic_attempt_history_conn(
+                    conn,
+                    int(candidate["id"]),
+                    int(candidate["critic_attempt_count"]),
+                    str(candidate["state"]),
+                )
+            return candidate
 
     def has_analysis_candidates(self) -> bool:
         with self.connect() as conn:
@@ -3499,6 +3596,13 @@ class ProjectDB:
         now = time.time()
         with self.transaction() as conn:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            confidence_floor, _confidence_cap = (
+                self._analysis_critic_confidence_bounds(
+                    contract,
+                    durable=False,
+                    candidate_json=str(candidate["candidate_json"]),
+                )
+            )
             candidate_payload = json.loads(str(candidate["candidate_json"]))
             below_floor_ids = [
                 str(segment["stable_id"])
