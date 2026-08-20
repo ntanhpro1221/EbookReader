@@ -55,7 +55,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   neutral cho suy kiệt thể chất hoặc quan sát lâm sàng đơn lẻ để không biến keyword gate thành đạo diễn cảm xúc rộng;
 - host affect nguồn hẹp được adjudicate trước semantic cue chung và mọi constraint typed đã xác minh được tích lũy trong
   cùng target group, nên retry sửa câu sau không làm câu trước quay lại delivery đã bị từ chối;
-- semantic lock bền khóa emotion đã qua self-preservation/adjacent-wake/physical-collapse/desperate-exertion vào source hash và critic candidate.
+- hai rule narration hẹp cho nỗi sợ còn dai dẳng khi hồi tưởng và trạng thái sững người đầu óc trắng xóa dùng chung predicate
+  source-only với DB replay; chúng khóa `kind=narration`, gửi allowed emotion typed theo đúng ID, không lan từ hàng xóm và
+  vẫn bắt model trả candidate mới trước director critic;
+- semantic lock bền khóa emotion đã qua self-preservation/adjacent-wake/physical-collapse/desperate-exertion/recalled-fear/stunned-blank-mind vào source hash và critic candidate.
   Chỉ raw dissent hợp lệ đổi riêng field khóa ra ngoài allowed set mới có override audit; accept-with-delta, reject-no-delta,
   delta thêm field hoặc dissent sang một emotion khác vẫn được host cho phép đều bị chặn;
 - dialogue và thought boundary đã được source parser nhận diện là source-owned: model không được đổi chúng sang loại khác để

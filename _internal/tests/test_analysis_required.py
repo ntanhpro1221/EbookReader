@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from collections import Counter
 from itertools import product
 from types import SimpleNamespace
 
@@ -18,7 +19,9 @@ from ebook_reader.analysis import (
     HOST_DESPERATE_EXERTION_RULE,
     HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
     HOST_PHYSICAL_COLLAPSE_RULE,
+    HOST_RECALLED_PERSISTENT_FEAR_RULE,
     HOST_SOURCE_KIND_ISSUE_CODE,
+    HOST_STUNNED_BLANK_MIND_RULE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
@@ -72,6 +75,17 @@ from ebook_reader.io_utils import sha256_text
 ORIGINAL_DIRECTOR_CRITIC_REQUEST = OllamaBookAnalyzer._request_director_critic
 ORIGINAL_ANALYZER_INIT = OllamaBookAnalyzer.__init__
 ORIGINAL_MODEL_DIGEST_VERIFY = OllamaBookAnalyzer._verify_locked_model_digest
+V20_RECALLED_FEAR_TEXT = (
+    "Giấc mơ này chân thực tới dị thường, khiến cho Hạ Phong đến giờ nghĩ lại vẫn "
+    "tim đập chân run. Cộng thêm việc không cảm nhận thấy sự tồn tại của ngọn lửa, "
+    "cậu bèn ngồi thừ người ra, một lúc lâu vẫn chưa hoàn hồn."
+)
+V20_STUNNED_BLANK_MIND_TEXT = (
+    "Nhưng tới khi Hạ Phong nhìn ra phía trước, chuẩn bị đứng lên và thu lại sách "
+    "tham khảo để trở về ký túc xá, một cảnh tượng kỳ lạ không sao tưởng tượng được "
+    "bỗng đập thẳng vào mắt cậu. Giống như thể bị một cây chùy lớn nện vào đầu, "
+    "cậu đực mặt ra, đầu óc một mảng trắng xóa."
+)
 
 
 class FakeDB:
@@ -3156,7 +3170,7 @@ def test_director_content_row_binds_source_verified_semantic_emotion_lock() -> N
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v2",
+            "policy_version": "host_semantic_lock_v3",
             "stable_id": "physical-collapse",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -3230,7 +3244,7 @@ def test_desperate_exertion_creates_source_bound_semantic_lock(emotion: str) -> 
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": emotion}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v2",
+            "policy_version": "host_semantic_lock_v3",
             "stable_id": "desperate-exertion",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -3642,7 +3656,7 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
     assert item["field_deltas"] == ["emotion:afraid->neutral"]
     assert item["effective_accept"] is True
     assert item["host_semantic_override"] == {
-        "policy_version": "host_semantic_lock_v2",
+        "policy_version": "host_semantic_lock_v3",
         "stable_id": "physical-collapse",
         "text_sha256": sha256_text(row["text"]),
         "rule": "respiratory_injury_with_consciousness_loss",
@@ -4117,6 +4131,201 @@ def test_host_affect_accepts_valid_afraid_and_hostile_angry_command() -> None:
     assert adjudication.evidence[0].outcome == "pass"
 
 
+def test_v20_narration_cues_create_typed_durable_host_locks() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "v20-recalled-fear",
+            "chapter_id": 1,
+            "paragraph_index": 11,
+            "text": V20_RECALLED_FEAR_TEXT,
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "v20-stunned-blank-mind",
+            "chapter_id": 1,
+            "paragraph_index": 14,
+            "text": V20_STUNNED_BLANK_MIND_TEXT,
+            "kind_hint": "narration",
+        },
+    ]
+    rejected = {}
+    for row in group:
+        item = analysis_item(str(row["stable_id"]))
+        item.update({"emotion": "neutral", "intensity": 1})
+        rejected.update(_validate([row], {"segments": [item]}))
+
+    adjudication = _host_affect_adjudication(group, rejected)
+
+    assert [issue.rule for issue in adjudication.issues] == [
+        HOST_RECALLED_PERSISTENT_FEAR_RULE,
+        HOST_STUNNED_BLANK_MIND_RULE,
+    ]
+    assert [issue.allowed_emotions for issue in adjudication.issues] == [
+        ("afraid",),
+        ("surprised",),
+    ]
+    assert [issue.feedback_issue().canonical_payload() for issue in adjudication.issues] == [
+        {
+            "id": "v20-recalled-fear",
+            "code": HOST_AFFECT_ISSUE_CODE,
+            "fields": ["emotion"],
+            "allowed_emotions": ["afraid"],
+            "rule": HOST_RECALLED_PERSISTENT_FEAR_RULE,
+        },
+        {
+            "id": "v20-stunned-blank-mind",
+            "code": HOST_AFFECT_ISSUE_CODE,
+            "fields": ["emotion"],
+            "allowed_emotions": ["surprised"],
+            "rule": HOST_STUNNED_BLANK_MIND_RULE,
+        },
+    ]
+
+    accepted = {}
+    for row, emotion in zip(group, ("afraid", "surprised"), strict=True):
+        item = analysis_item(str(row["stable_id"]))
+        item.update({"emotion": emotion, "intensity": 2})
+        accepted.update(_validate([row], {"segments": [item]}))
+    clearance = _host_affect_adjudication(group, accepted)
+
+    assert clearance.issues == ()
+    assert [item.outcome for item in clearance.evidence] == ["pass", "pass"]
+    semantic_locks = clearance.clearance_payload("candidate")["semantic_locks"]
+    assert [lock["rule"] for lock in semantic_locks] == [
+        HOST_RECALLED_PERSISTENT_FEAR_RULE,
+        HOST_STUNNED_BLANK_MIND_RULE,
+    ]
+    assert [lock["cue_class"] for lock in semantic_locks] == [
+        "recalled_persistent_fear",
+        "stunned_blank_mind",
+    ]
+
+
+def test_v20_narration_cues_lock_source_kind_before_affect_adjudication() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "v20-recalled-fear",
+            "chapter_id": 1,
+            "paragraph_index": 11,
+            "text": V20_RECALLED_FEAR_TEXT,
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "v20-stunned-blank-mind",
+            "chapter_id": 1,
+            "paragraph_index": 14,
+            "text": V20_STUNNED_BLANK_MIND_TEXT,
+            "kind_hint": "narration",
+        },
+    ]
+    payload = {"segments": []}
+    for row in group:
+        item = analysis_item(str(row["stable_id"]))
+        item["kind"] = "thought"
+        payload["segments"].append(item)
+
+    issues = _source_kind_feedback_issues(group, payload)
+
+    assert [(issue.stable_id, issue.rule) for issue in issues] == [
+        ("v20-recalled-fear", HOST_RECALLED_PERSISTENT_FEAR_RULE),
+        ("v20-stunned-blank-mind", HOST_STUNNED_BLANK_MIND_RULE),
+    ]
+    assert all(issue.fields == ("kind",) for issue in issues)
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Hạ Phong không còn nghĩ lại vẫn tim đập chân run.",
+        "Nếu Hạ Phong nghĩ lại vẫn tim đập chân run, cậu sẽ xin nghỉ.",
+        "Hạ Phong nghĩ lại vẫn tim đập chân run nhưng lại vui mừng nhẹ nhõm.",
+        "Cô dịu dàng ôm đứa trẻ đang nghĩ lại vẫn tim đập chân run.",
+        "Hạ Phong vẫn tim đập chân run.",
+        "Cậu không còn đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cậu đực mặt ra, đầu óc một mảng trắng xóa nhưng lại vui mừng.",
+        "Cậu đực mặt ra, đầu óc một mảng trắng xóa, tim đập chân run.",
+        "Cô dịu dàng ôm đứa trẻ đang đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Đầu óc cậu một mảng trắng xóa rồi cậu đực mặt ra.",
+    ),
+)
+def test_v20_narrow_narration_rules_exclude_ambiguous_or_mixed_source(
+    text: str,
+) -> None:
+    row = {
+        "id": 1,
+        "stable_id": "negative-v20-host-rule",
+        "chapter_id": 1,
+        "paragraph_index": 1,
+        "text": text,
+        "kind_hint": "narration",
+    }
+    item = analysis_item(str(row["stable_id"]))
+    item.update({"emotion": "neutral", "intensity": 1})
+    validated = _validate([row], {"segments": [item]})
+    thought_request = {"segments": [{**item, "kind": "thought"}]}
+
+    assert _host_affect_adjudication([row], validated).issues == ()
+    assert _host_affect_adjudication([row], validated).evidence == ()
+    assert _source_kind_feedback_issues([row], thought_request) == ()
+
+
+def test_v20_host_rules_follow_source_ids_without_neighbor_spread() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "v20-recalled-fear",
+            "chapter_id": 1,
+            "paragraph_index": 11,
+            "text": V20_RECALLED_FEAR_TEXT,
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "v20-stunned-blank-mind",
+            "chapter_id": 1,
+            "paragraph_index": 14,
+            "text": V20_STUNNED_BLANK_MIND_TEXT,
+            "kind_hint": "narration",
+        },
+        {
+            "id": 3,
+            "stable_id": "neutral-neighbor",
+            "chapter_id": 1,
+            "paragraph_index": 15,
+            "text": "Cậu chậm rãi nhìn quanh căn phòng xa lạ.",
+            "kind_hint": "narration",
+        },
+    ]
+    validated = {}
+    for row, emotion in zip(group, ("surprised", "afraid", "neutral"), strict=True):
+        item = analysis_item(str(row["stable_id"]))
+        item.update({"emotion": emotion, "intensity": 1})
+        validated.update(_validate([row], {"segments": [item]}))
+
+    adjudication = _host_affect_adjudication(
+        group,
+        validated,
+        original_context={
+            "neutral-neighbor": {
+                "previous_text": V20_STUNNED_BLANK_MIND_TEXT,
+                "next_text": V20_RECALLED_FEAR_TEXT,
+            }
+        },
+    )
+
+    assert [(issue.stable_id, issue.rule) for issue in adjudication.issues] == [
+        ("v20-recalled-fear", HOST_RECALLED_PERSISTENT_FEAR_RULE),
+        ("v20-stunned-blank-mind", HOST_STUNNED_BLANK_MIND_RULE),
+    ]
+    assert "neutral-neighbor" not in {
+        item.stable_id for item in (*adjudication.issues, *adjudication.evidence)
+    }
+
+
 @pytest.mark.parametrize(
     ("text", "kind"),
     [
@@ -4306,6 +4515,123 @@ def test_repeated_host_candidate_splits_before_third_generator_or_critic(
         and event[3]["repeated_candidate"]
     ]
     assert len(repeated) >= 1
+
+
+def test_v20_host_rules_split_then_reject_wrong_nonneutral_before_critic(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "v20-recalled-fear",
+            "chapter_id": 1,
+            "seq": 11,
+            "paragraph_index": 11,
+            "text": V20_RECALLED_FEAR_TEXT,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 2,
+            "stable_id": "v20-stunned-blank-mind",
+            "chapter_id": 1,
+            "seq": 14,
+            "paragraph_index": 14,
+            "text": V20_STUNNED_BLANK_MIND_TEXT,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    settings = build_settings(
+        overrides={
+            "analysis": {
+                "batch_segments": 2,
+                "batch_chars": 10000,
+                "max_retries": 3,
+            }
+        }
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    calls_by_group: Counter[tuple[str, ...]] = Counter()
+    feedback_seen: list[tuple[tuple[str, ...], tuple[AnalysisFeedbackIssue, ...]]] = []
+    critic_groups: list[tuple[str, ...]] = []
+
+    def generate(group, **kwargs):
+        group_ids = tuple(str(row["stable_id"]) for row in group)
+        calls_by_group[group_ids] += 1
+        feedback = tuple(kwargs.get("validation_feedback") or ())
+        feedback_seen.append((group_ids, feedback))
+        items = []
+        for row in group:
+            stable_id = str(row["stable_id"])
+            item = analysis_item(stable_id)
+            if len(group) > 1 or calls_by_group[group_ids] == 1:
+                emotion = "neutral"
+            elif calls_by_group[group_ids] == 2:
+                emotion = (
+                    "surprised" if stable_id == "v20-recalled-fear" else "afraid"
+                )
+            else:
+                emotion = (
+                    "afraid" if stable_id == "v20-recalled-fear" else "surprised"
+                )
+            item.update({"emotion": emotion, "intensity": 2})
+            items.append(item)
+        return {"segments": items}
+
+    def critic(group, validated, **kwargs):
+        critic_groups.append(tuple(str(row["stable_id"]) for row in group))
+        return director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    full_group = ("v20-recalled-fear", "v20-stunned-blank-mind")
+    assert calls_by_group[full_group] == 2
+    assert calls_by_group[("v20-recalled-fear",)] == 3
+    assert calls_by_group[("v20-stunned-blank-mind",)] == 3
+    assert critic_groups == [
+        ("v20-recalled-fear",),
+        ("v20-stunned-blank-mind",),
+    ]
+    assert [data["emotion"] for _segment_id, data, _threshold in db.updated] == [
+        "afraid",
+        "surprised",
+    ]
+    singleton_feedback = [
+        feedback
+        for group_ids, feedback in feedback_seen
+        if len(group_ids) == 1 and feedback
+    ]
+    assert {
+        (issue.stable_id, issue.rule, issue.allowed_emotions)
+        for feedback in singleton_feedback
+        for issue in feedback
+        if issue.code == HOST_AFFECT_ISSUE_CODE
+    } == {
+        (
+            "v20-recalled-fear",
+            HOST_RECALLED_PERSISTENT_FEAR_RULE,
+            ("afraid",),
+        ),
+        (
+            "v20-stunned-blank-mind",
+            HOST_STUNNED_BLANK_MIND_RULE,
+            ("surprised",),
+        ),
+    }
 
 
 def test_repeated_host_candidate_fails_singleton_without_critic(monkeypatch) -> None:

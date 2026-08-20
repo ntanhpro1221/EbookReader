@@ -25,6 +25,8 @@ from ebook_reader.database import (
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
+    analysis_source_has_recalled_persistent_fear,
+    analysis_source_has_stunned_blank_mind,
     canonical_analysis_note,
 )
 from ebook_reader.io_utils import sha256_file, sha256_text
@@ -42,6 +44,35 @@ ANALYSIS_MODEL_COMMIT = {
 ANALYSIS_POLICY_FINGERPRINT = "director-policy-v2"
 ANALYSIS_GROUP_FINGERPRINT = "group-source-v1"
 ANALYSIS_CONTEXT_HASH = "group-context-v1"
+RECALLED_PERSISTENT_FEAR_TEXT = (
+    "Giấc mơ này chân thực tới dị thường, khiến cho Hạ Phong đến giờ nghĩ lại "
+    "vẫn tim đập chân run. Cộng thêm việc không cảm nhận thấy sự tồn tại của "
+    "ngọn lửa, cậu bèn ngồi thừ người ra, một lúc lâu vẫn chưa hoàn hồn."
+)
+STUNNED_BLANK_MIND_TEXT = (
+    "Nhưng tới khi Hạ Phong nhìn ra phía trước, chuẩn bị đứng lên và thu lại sách "
+    "tham khảo để trở về ký túc xá, một cảnh tượng kỳ lạ không sao tưởng tượng "
+    "được bỗng đập thẳng vào mắt cậu. Giống như thể bị một cây chùy lớn nện vào "
+    "đầu, cậu đực mặt ra, đầu óc một mảng trắng xóa."
+)
+DIRECT_NARRATION_AFFECT_LOCK_CASES = (
+    (
+        RECALLED_PERSISTENT_FEAR_TEXT,
+        "narration_recalled_persistent_fear",
+        "recalled_persistent_fear",
+        ("afraid",),
+        "afraid",
+        "surprised",
+    ),
+    (
+        STUNNED_BLANK_MIND_TEXT,
+        "narration_stunned_blank_mind",
+        "stunned_blank_mind",
+        ("surprised",),
+        "surprised",
+        "afraid",
+    ),
+)
 
 
 def _canonical_analysis_data(**overrides: object) -> dict:
@@ -1456,34 +1487,548 @@ def test_analysis_candidate_rejects_mandatory_heading_lock_when_omitted(
         )
 
 
+def test_direct_narration_affect_source_authority_accepts_exact_smoke_rows() -> None:
+    assert ANALYSIS_HOST_AFFECT_POLICY_VERSION == "host_affect_v6"
+    assert ANALYSIS_HOST_SEMANTIC_POLICY_VERSION == "host_semantic_lock_v3"
+    assert analysis_source_has_recalled_persistent_fear(
+        RECALLED_PERSISTENT_FEAR_TEXT
+    )
+    assert analysis_source_has_stunned_blank_mind(STUNNED_BLANK_MIND_TEXT)
+    assert not analysis_source_has_stunned_blank_mind(
+        RECALLED_PERSISTENT_FEAR_TEXT
+    )
+    assert not analysis_source_has_recalled_persistent_fear(
+        STUNNED_BLANK_MIND_TEXT
+    )
+    assert analysis_source_has_recalled_persistent_fear(
+        "Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run."
+    )
+    assert analysis_source_has_recalled_persistent_fear(
+        "Đèn đã tắt. Hạ Phong nghĩ lại vẫn tim đập chân run."
+    )
+    assert analysis_source_has_recalled_persistent_fear(
+        "Giấc mơ ấy chân thực đến dị thường, làm cho Hạ Phong nghĩ lại "
+        "vẫn tim đập chân run."
+    )
+    assert analysis_source_has_stunned_blank_mind(
+        "Cậu đực mặt ra, đầu óc một mảng trắng xóa."
+    )
+    assert analysis_source_has_stunned_blank_mind(
+        "Đèn đã tắt. Cậu đực mặt ra, đầu óc một mảng trắng xóa."
+    )
+    assert analysis_source_has_stunned_blank_mind(
+        "Giống như bị cây chùy nặng đập vào đầu, cậu đực mặt ra, "
+        "đầu óc một mảng trắng xóa."
+    )
+
+
 @pytest.mark.parametrize(
-    ("text", "kind_hint"),
+    "text",
+    (
+        "Hạ Phong không còn nghĩ lại vẫn tim đập chân run.",
+        "Hạ Phong từng nghĩ lại vẫn tim đập chân run.",
+        "Nếu Hạ Phong nghĩ lại vẫn tim đập chân run, cậu sẽ xin nghỉ.",
+        "Nghe nói Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Không phải Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Không đúng là Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Không chắc Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Chưa chắc Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Đâu phải Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Cô phủ nhận Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Cô nói Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Cô nói rằng Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Cô cho rằng Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Cô nghi ngờ Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Theo lời kể, Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Có vẻ Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Có vẻ như Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Có vẻ là Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Người ta đồn rằng Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Theo tin đồn, Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Theo lời đồn, Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Nghe đồn Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Tương truyền Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Tưởng tượng rằng Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run.",
+        "Không có bằng chứng rằng Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Chưa có bằng chứng rằng Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Có vẻ một ký ức hiện lên, làm cho Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Không chắc một ký ức hiện lên, làm cho Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Theo lời đồn, một ký ức hiện lên, làm cho Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Cô phủ nhận chuyện một ký ức hiện lên, làm cho Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Nếu một ký ức hiện lên, làm cho Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Trước đây Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Ngày trước, Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Hồi ấy, Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Đã có lúc Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Khi đó Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Hồi đó Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Ngày ấy Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Thuở ấy Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Lúc trước Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Trước kia Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Năm xưa Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Xưa kia Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Trong quá khứ Hạ Phong nghĩ lại vẫn tim đập chân run.",
+        "Hạ Phong giả vờ nghĩ lại vẫn tim đập chân run.",
+        "Ông nhắc lại câu “Hạ Phong nghĩ lại vẫn tim đập chân run”.",
+        "Cụm từ Hạ Phong nghĩ lại vẫn tim đập chân run được định nghĩa ở đây.",
+        "Hạ Phong nghĩ lại vẫn tim đập chân run nhưng lại vui mừng nhẹ nhõm.",
+        "Cô dịu dàng ôm đứa trẻ đang nghĩ lại vẫn tim đập chân run.",
+        "Hạ Phong vẫn tim đập chân run.",
+        "Liệu Hạ Phong nghĩ lại vẫn tim đập chân run?",
+        (
+            "Hạ Phong nghĩ lại vẫn tim đập chân run. "
+            "Hạ Phong nghĩ lại vẫn tim đập chân run."
+        ),
+    ),
+)
+def test_recalled_persistent_fear_source_authority_excludes_ambiguous_rows(
+    text: str,
+) -> None:
+    assert not analysis_source_has_recalled_persistent_fear(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Cậu không còn đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cậu từng đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Nếu cậu đực mặt ra, đầu óc một mảng trắng xóa thì hãy ngồi xuống.",
+        "Nghe nói cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Không phải cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Không đúng là cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Không chắc cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Chưa chắc cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Đâu phải cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cô phủ nhận cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cô nói cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cô nói rằng cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cô cho rằng cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cô nghi ngờ cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Theo lời kể, cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Có vẻ cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Có vẻ như cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Có vẻ là cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Người ta đồn rằng cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Theo tin đồn, cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Theo lời đồn, cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Nghe đồn cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Tương truyền cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Tưởng tượng rằng cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Không có bằng chứng rằng cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Chưa có bằng chứng rằng cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Trước đây cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Ngày trước, cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Hồi ấy, cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Đã có lúc cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Khi đó cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Hồi đó cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Ngày ấy cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Thuở ấy cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Lúc trước cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Trước kia cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Năm xưa cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Xưa kia cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Trong quá khứ cậu đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cậu giả vờ đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Ông nhắc lại câu “cậu đực mặt ra, đầu óc một mảng trắng xóa”.",
+        "Cậu đực mặt ra, đầu óc một mảng trắng xóa nhưng lại vui mừng.",
+        (
+            "Cậu đực mặt ra, đầu óc một mảng trắng xóa, "
+            "tim đập chân run."
+        ),
+        "Cô dịu dàng ôm đứa trẻ đang đực mặt ra, đầu óc một mảng trắng xóa.",
+        "Cậu đực mặt ra.",
+        "Đầu óc cậu một mảng trắng xóa rồi cậu đực mặt ra.",
+        "Liệu cậu đực mặt ra, đầu óc một mảng trắng xóa?",
+    ),
+)
+def test_stunned_blank_mind_source_authority_excludes_ambiguous_rows(
+    text: str,
+) -> None:
+    assert not analysis_source_has_stunned_blank_mind(text)
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    (
+        ", nếu lời đồn là đúng.",
+        ", theo lời đồn.",
+        ", có lẽ vậy.",
+        ", người ta nói thế.",
+        ", nhưng đó chỉ là lời đồn.",
+        ", nhưng điều đó không đúng.",
+        ", nhưng đó không phải sự thật.",
+        ", nhưng cậu chỉ giả vờ.",
+        ", nhưng thực ra cậu hoàn toàn bình tĩnh.",
+        "; tuy nhiên đó chỉ là giả thuyết.",
+        ": đó chỉ là ví dụ.",
+    ),
+)
+def test_direct_narration_affect_source_authority_rejects_outer_scope_suffix(
+    suffix: str,
+) -> None:
+    assert not analysis_source_has_recalled_persistent_fear(
+        f"Hạ Phong đến giờ nghĩ lại vẫn tim đập chân run{suffix}"
+    )
+    assert not analysis_source_has_stunned_blank_mind(
+        f"Cậu đực mặt ra, đầu óc một mảng trắng xóa{suffix}"
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Cậu đực mặt ra, nhưng đó chỉ là giả vờ, đầu óc một mảng trắng xóa.",
+        "Cậu đực mặt ra, người ta nói đầu óc một mảng trắng xóa.",
+        "Cậu đực mặt ra, đầu óc có lẽ một mảng trắng xóa.",
+        "Cậu đực mặt ra, đầu óc được đồn là trắng xóa.",
+        "Cậu đực mặt ra, đầu óc không hề trắng xóa.",
+        "Cậu đực mặt ra, đầu óc chưa từng trắng xóa.",
+        "Cậu đực mặt ra, đầu óc giả vờ trắng xóa.",
+    ),
+)
+def test_stunned_blank_mind_source_authority_rejects_nonassertive_bridge(
+    text: str,
+) -> None:
+    assert not analysis_source_has_stunned_blank_mind(text)
+
+
+@pytest.mark.parametrize(
+    (
+        "text",
+        "rule",
+        "cue_class",
+        "allowed_emotions",
+        "candidate_emotion",
+        "wrong_emotion",
+    ),
+    DIRECT_NARRATION_AFFECT_LOCK_CASES,
+)
+def test_analysis_candidate_accepts_source_bound_direct_narration_affect_lock(
+    tmp_path: Path,
+    text: str,
+    rule: str,
+    cue_class: str,
+    allowed_emotions: tuple[str, ...],
+    candidate_emotion: str,
+    wrong_emotion: str,
+) -> None:
+    del wrong_emotion
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion=candidate_emotion,
+    )
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule=rule,
+        cue_class=cue_class,
+        allowed_emotions=list(allowed_emotions),
+    )
+
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+
+    durable_clearance = json.loads(str(candidate["deterministic_issue_json"]))[
+        "host_affect_clearance"
+    ]
+    assert candidate["state"] == "allocated"
+    assert durable_clearance["policy_version"] == "host_affect_v6"
+    assert durable_clearance["semantic_locks"] == clearance[
+        "host_affect_clearance"
+    ]["semantic_locks"]
+
+
+@pytest.mark.parametrize(
+    (
+        "text",
+        "rule",
+        "cue_class",
+        "allowed_emotions",
+        "candidate_emotion",
+        "wrong_emotion",
+    ),
+    DIRECT_NARRATION_AFFECT_LOCK_CASES,
+)
+def test_analysis_candidate_rejects_invalid_direct_narration_affect_emotion(
+    tmp_path: Path,
+    text: str,
+    rule: str,
+    cue_class: str,
+    allowed_emotions: tuple[str, ...],
+    candidate_emotion: str,
+    wrong_emotion: str,
+) -> None:
+    del rule, cue_class, allowed_emotions, candidate_emotion
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _analysis_acceptance_envelope(source_rows, emotion=wrong_emotion)
+
+    with pytest.raises(RuntimeError, match="mandatory host semantic emotion"):
+        _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+
+@pytest.mark.parametrize(
+    ("forged_field", "forged_value", "expected_error"),
+    (
+        ("rule", "forged_direct_narration_rule", "unknown rule"),
+        ("cue_class", "forged_direct_affect", "source-bound"),
+        ("allowed_emotions", ["afraid", "neutral"], "source-bound"),
+        ("text_sha256", "f" * 64, "source-bound"),
+    ),
+)
+@pytest.mark.parametrize(
+    (
+        "text",
+        "rule",
+        "cue_class",
+        "allowed_emotions",
+        "candidate_emotion",
+        "wrong_emotion",
+    ),
+    DIRECT_NARRATION_AFFECT_LOCK_CASES,
+)
+def test_analysis_candidate_rejects_forged_direct_narration_affect_lock(
+    tmp_path: Path,
+    text: str,
+    rule: str,
+    cue_class: str,
+    allowed_emotions: tuple[str, ...],
+    candidate_emotion: str,
+    wrong_emotion: str,
+    forged_field: str,
+    forged_value: object,
+    expected_error: str,
+) -> None:
+    del wrong_emotion
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion=candidate_emotion,
+    )
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule=rule,
+        cue_class=cue_class,
+        allowed_emotions=list(allowed_emotions),
+    )
+    host_clearance = clearance["host_affect_clearance"]
+    host_clearance["semantic_locks"][0][forged_field] = forged_value
+    host_clearance["evidence"][0][forged_field] = forged_value
+
+    with pytest.raises(RuntimeError, match=expected_error):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=clearance,
+        )
+
+
+@pytest.mark.parametrize(
+    (
+        "text",
+        "rule",
+        "cue_class",
+        "allowed_emotions",
+        "candidate_emotion",
+        "wrong_emotion",
+    ),
+    DIRECT_NARRATION_AFFECT_LOCK_CASES,
+)
+def test_analysis_candidate_revalidates_direct_narration_affect_lock_on_reopen(
+    tmp_path: Path,
+    text: str,
+    rule: str,
+    cue_class: str,
+    allowed_emotions: tuple[str, ...],
+    candidate_emotion: str,
+    wrong_emotion: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion=candidate_emotion,
+    )
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule=rule,
+        cue_class=cue_class,
+        allowed_emotions=list(allowed_emotions),
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    tampered = json.loads(str(candidate["deterministic_issue_json"]))
+    forged_allowed = [*allowed_emotions, wrong_emotion]
+    host_clearance = tampered["host_affect_clearance"]
+    host_clearance["semantic_locks"][0]["allowed_emotions"] = forged_allowed
+    host_clearance["evidence"][0]["allowed_emotions"] = forged_allowed
+    tampered_json = json.dumps(
+        tampered,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET deterministic_issue_json=?,"
+            "deterministic_issue_hash=? WHERE id=?",
+            (tampered_json, sha256_text(tampered_json), int(candidate["id"])),
+        )
+
+    with pytest.raises(RuntimeError, match="semantic clearance is not source-bound"):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+
+
+@pytest.mark.parametrize(
+    (
+        "text",
+        "rule",
+        "cue_class",
+        "allowed_emotions",
+        "candidate_emotion",
+        "wrong_emotion",
+    ),
+    DIRECT_NARRATION_AFFECT_LOCK_CASES,
+)
+def test_direct_narration_affect_critic_dissent_cannot_override_commit(
+    tmp_path: Path,
+    text: str,
+    rule: str,
+    cue_class: str,
+    allowed_emotions: tuple[str, ...],
+    candidate_emotion: str,
+    wrong_emotion: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion=candidate_emotion,
+    )
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule=rule,
+        cue_class=cue_class,
+        allowed_emotions=list(allowed_emotions),
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _semantic_override_evidence(
+        envelope,
+        clearance,
+        corrected_emotion=wrong_emotion,
+    )
+    evidence["segments"][0]["critic"]["evidence_quote"] = text[-160:]
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True, "host_semantic_override": True},
+        evidence=evidence,
+        commit_envelope=envelope,
+    )
+
+    reopened = ProjectDB(db.path)
+    snapshot = reopened.analysis_candidate_acceptance_envelope(candidate_id)
+    stored_item = snapshot["critic_evidence"]["segments"][0]
+    assert stored_item["critic"]["emotion"] == wrong_emotion
+    assert stored_item["host_semantic_override"]["allowed_values"] == list(
+        allowed_emotions
+    )
+    assert (
+        snapshot["commit_envelope"]["segments"][0]["data"]["emotion"]
+        == candidate_emotion
+    )
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in snapshot["commit_envelope"]["segments"]
+    ]
+    reopened.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="host-locked direct affect accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    committed = reopened.list_segments()[0]
+    assert committed["status"] == "analyzed"
+    assert committed["emotion"] == candidate_emotion
+    assert reopened.get_analysis_candidate(candidate_id)["state"] == "accepted"
+
+
+@pytest.mark.parametrize(
+    ("text", "kind_hint", "candidate_emotion"),
     (
         (
             "‘Không được… Không được ngủ… sẽ chết mất.’",
             "thought",
+            "afraid",
         ),
         (
             "Phổi và yết hầu đang bị thiêu đốt. Ý thức của anh liền mất dần.",
             "narration",
+            "afraid",
         ),
         (
             "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
             "narration",
+            "afraid",
         ),
+        (RECALLED_PERSISTENT_FEAR_TEXT, "narration", "afraid"),
+        (STUNNED_BLANK_MIND_TEXT, "narration", "surprised"),
     ),
 )
 def test_analysis_candidate_rejects_mandatory_semantic_lock_when_omitted(
     tmp_path: Path,
     text: str,
     kind_hint: str,
+    candidate_emotion: str,
 ) -> None:
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=(text,),
         kind_hints=(kind_hint,),
     )
-    envelope = _semantic_lock_envelope(source_rows)
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion=candidate_emotion,
+    )
     envelope["critic_rows"][0]["host_locked_fields"] = {}
 
     with pytest.raises(RuntimeError, match="source-derived mandatory locks"):
@@ -1614,6 +2159,18 @@ def test_analysis_candidate_rejects_desperate_exertion_lock_on_ambiguous_source(
                 "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
                 "Ánh sáng vẫn ở phía trước.",
             ),
+            ("narration", "narration"),
+            0,
+            (),
+        ),
+        (
+            (RECALLED_PERSISTENT_FEAR_TEXT, "Nội dung tiếp theo."),
+            ("narration", "narration"),
+            0,
+            (),
+        ),
+        (
+            (STUNNED_BLANK_MIND_TEXT, "Nội dung tiếp theo."),
             ("narration", "narration"),
             0,
             (),
@@ -2192,6 +2749,20 @@ def test_analysis_candidate_rejects_tampered_host_clearance_metadata(
             "narration_desperate_exertion",
             "desperate_exertion",
             ["afraid", "sad", "tired"],
+        ),
+        (
+            "Hạ Phong bình tĩnh đọc sách trong thư viện.",
+            "narration",
+            "narration_recalled_persistent_fear",
+            "recalled_persistent_fear",
+            ["afraid"],
+        ),
+        (
+            "Hạ Phong bình tĩnh đọc sách trong thư viện.",
+            "narration",
+            "narration_stunned_blank_mind",
+            "stunned_blank_mind",
+            ["surprised"],
         ),
     ),
 )

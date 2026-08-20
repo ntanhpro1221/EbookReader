@@ -37,6 +37,8 @@ from .database import (
     EXPLICIT_ATTRIBUTION_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
+    analysis_source_has_recalled_persistent_fear,
+    analysis_source_has_stunned_blank_mind,
     analysis_note_markers,
     canonical_analysis_note,
 )
@@ -100,12 +102,16 @@ HOST_DIRECT_SELF_PRESERVATION_RULE = "thought_self_preservation_mortality"
 HOST_ADJACENT_WAKE_RULE = "adjacent_thought_wake_self_rescue"
 HOST_PHYSICAL_COLLAPSE_RULE = "respiratory_injury_with_consciousness_loss"
 HOST_DESPERATE_EXERTION_RULE = "narration_desperate_exertion"
+HOST_RECALLED_PERSISTENT_FEAR_RULE = "narration_recalled_persistent_fear"
+HOST_STUNNED_BLANK_MIND_RULE = "narration_stunned_blank_mind"
 HOST_AFFECT_RULES = frozenset(
     {
         HOST_DIRECT_SELF_PRESERVATION_RULE,
         HOST_ADJACENT_WAKE_RULE,
         HOST_PHYSICAL_COLLAPSE_RULE,
         HOST_DESPERATE_EXERTION_RULE,
+        HOST_RECALLED_PERSISTENT_FEAR_RULE,
+        HOST_STUNNED_BLANK_MIND_RULE,
     }
 )
 ANALYSIS_FEEDBACK_CODES = frozenset(
@@ -1690,6 +1696,24 @@ def _qualified_host_desperate_exertion_match(text: str) -> re.Match[str] | None:
     return match if set(_semantic_cue_matches(text)) == {"sad"} else None
 
 
+def _source_narration_direct_affect_contract(
+    text: str,
+) -> tuple[str, str, tuple[str, ...]] | None:
+    if analysis_source_has_recalled_persistent_fear(text):
+        return (
+            HOST_RECALLED_PERSISTENT_FEAR_RULE,
+            "recalled_persistent_fear",
+            ("afraid",),
+        )
+    if analysis_source_has_stunned_blank_mind(text):
+        return (
+            HOST_STUNNED_BLANK_MIND_RULE,
+            "stunned_blank_mind",
+            ("surprised",),
+        )
+    return None
+
+
 def _source_narration_semantic_rule(row: Any) -> str:
     """Return a source-only rule whose narration kind must survive model analysis."""
     if (
@@ -1703,7 +1727,8 @@ def _source_narration_semantic_rule(row: Any) -> str:
         return HOST_PHYSICAL_COLLAPSE_RULE
     if _qualified_host_desperate_exertion_match(text) is not None:
         return HOST_DESPERATE_EXERTION_RULE
-    return ""
+    direct_affect_contract = _source_narration_direct_affect_contract(text)
+    return direct_affect_contract[0] if direct_affect_contract is not None else ""
 
 
 def _source_kind_transition_rule(row: Any, requested_kind: str) -> str | None:
@@ -1875,6 +1900,35 @@ def _host_affect_adjudication(
                             rule=HOST_DESPERATE_EXERTION_RULE,
                             candidate_emotion=candidate_emotion,
                             allowed_emotions=desperate_exertion_emotions,
+                            evidence=item_evidence,
+                        )
+                    )
+                continue
+            direct_affect_contract = _source_narration_direct_affect_contract(
+                str(row["text"])
+            )
+            if direct_affect_contract is not None:
+                rule, cue_class, allowed_emotions = direct_affect_contract
+                candidate_emotion = str(candidate.get("emotion", "neutral"))
+                outcome = "pass" if candidate_emotion in allowed_emotions else "reject"
+                item_evidence = HostAffectEvidence(
+                    stable_id=stable_id,
+                    text_sha256=_source_text_sha256(row),
+                    rule=rule,
+                    cue_class=cue_class,
+                    candidate_emotion=candidate_emotion,
+                    allowed_emotions=allowed_emotions,
+                    outcome=outcome,
+                )
+                evidence.append(item_evidence)
+                if outcome == "reject":
+                    issues.append(
+                        HostAffectIssue(
+                            stable_id=stable_id,
+                            code=HOST_AFFECT_ISSUE_CODE,
+                            rule=rule,
+                            candidate_emotion=candidate_emotion,
+                            allowed_emotions=allowed_emotions,
                             evidence=item_evidence,
                         )
                     )

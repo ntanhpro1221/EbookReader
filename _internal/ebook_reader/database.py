@@ -163,8 +163,8 @@ ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v1"
-ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v5"
-ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v2"
+ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v6"
+ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
     r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
@@ -256,6 +256,18 @@ ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS = {
         "source_kind": "narration",
         "requires_related": False,
     },
+    "narration_recalled_persistent_fear": {
+        "cue_class": "recalled_persistent_fear",
+        "allowed_emotions": ("afraid",),
+        "source_kind": "narration",
+        "requires_related": False,
+    },
+    "narration_stunned_blank_mind": {
+        "cue_class": "stunned_blank_mind",
+        "allowed_emotions": ("surprised",),
+        "source_kind": "narration",
+        "requires_related": False,
+    },
 }
 ANALYSIS_HOST_MORTALITY_PATTERN = re.compile(
     r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
@@ -320,6 +332,53 @@ ANALYSIS_HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN = re.compile(
     r"[^.!?…;:]*$",
     flags=re.IGNORECASE,
 )
+ANALYSIS_HOST_DIRECT_AFFECT_QUOTE_CHARACTERS = frozenset("\"'“”‘’")
+ANALYSIS_HOST_DIRECT_AFFECT_QUESTION_CHARACTERS = frozenset("?？")
+ANALYSIS_HOST_DIRECT_AFFECT_SENTENCE_START_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?…])\s*$",
+)
+ANALYSIS_HOST_DIRECT_AFFECT_TERMINAL_SUFFIX_PATTERN = re.compile(
+    r"\s*(?:[.!…])?\s*",
+)
+ANALYSIS_HOST_RECALLED_PERSISTENT_FEAR_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?…])\s*giấc\s+mơ\s+(?:này|ấy|đó)\s+chân\s+thực\s+"
+    r"(?:tới|đến)\s+dị\s+thường,\s*(?:khiến|làm)\s+cho\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_RECALLED_PERSISTENT_FEAR_SUFFIX_PATTERN = re.compile(
+    r"\.\s*Cộng\s+thêm\s+việc\s+không\s+cảm\s+nhận\s+thấy\s+sự\s+"
+    r"tồn\s+tại\s+của\s+ngọn\s+lửa,\s*cậu\s+bèn\s+ngồi\s+thừ\s+"
+    r"người\s+ra,\s*một\s+lúc\s+lâu\s+vẫn\s+chưa\s+hoàn\s+hồn\.\s*",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_STUNNED_BLANK_MIND_PREFIX_PATTERN = re.compile(
+    r"(?:^|[.!?…])\s*giống\s+như(?:\s+thể)?\s+bị"
+    r"\s+(?:một\s+)?cây\s+chùy"
+    r"(?:\s+(?:lớn|nặng|khổng\s+lồ))?\s+(?:nện|đập)\s+vào\s+đầu,\s*$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_VIETNAMESE_UPPERCASE_PATTERN = (
+    r"[A-ZÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊ"
+    r"ÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴ]"
+)
+ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN = (
+    r"(?:tôi|ta|mình|anh|chị|ông|bà|cô|cậu|hắn|nó|họ|"
+    rf"(?-i:{ANALYSIS_HOST_VIETNAMESE_UPPERCASE_PATTERN}[A-Za-zÀ-ỹĐđ]*"
+    rf"(?:\s+{ANALYSIS_HOST_VIETNAMESE_UPPERCASE_PATTERN}"
+    r"[A-Za-zÀ-ỹĐđ]*){0,1}))"
+)
+ANALYSIS_HOST_RECALLED_PERSISTENT_FEAR_PATTERN = re.compile(
+    rf"\b{ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN}\s+"
+    r"(?:(?:đến|tới)\s+giờ\s+)?(?:nghĩ|nhớ)\s+lại\s+vẫn"
+    r"(?:\s+(?:còn|đang))?\s+tim\s+đập\s+chân\s+run\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_STUNNED_BLANK_MIND_PATTERN = re.compile(
+    rf"\b{ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN}\s+(?:đứng\s+)?"
+    r"đực\s+mặt(?:\s+ra)?\s*,\s*đầu\s+óc"
+    r"(?:\s+một\s+mảng)?\s+trắng\s+xóa\b",
+    flags=re.IGNORECASE,
+)
 ANALYSIS_SCOPED_NEGATION_PREFIX_PATTERN = re.compile(
     r"(?:\b(?:không|chẳng|chưa)"
     r"(?:\s+(?:còn|hề|bao\s+giờ|từng|hoàn\s+toàn)){0,2}"
@@ -370,31 +429,36 @@ ANALYSIS_SAD_CUE_PATTERN = re.compile(
     r"\b(?:khóc|nước\s+mắt|đau\s+lòng|tuyệt\s+vọng|đau\s+đớn|kêu\s+thảm\s+thiết)\b",
     flags=re.IGNORECASE,
 )
+ANALYSIS_ANGRY_CUE_PATTERN = re.compile(
+    r"\b(?:độc\s+ác|khốn\s+kiếp|đáng\s+chết|nguyền\s+rủa|gào\s+thét|gào|quát|"
+    r"chửi\s+rủa|thiêu\s+chết(?!\s*(?:…|\.{3}))|"
+    r"thiêu(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|"
+    r"giết(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|tan\s+nát)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_SURPRISED_CUE_PATTERN = re.compile(
+    r"\b(?:kinh\s+ngạc|sững\s+sờ|đực\s+mặt|không\s+thể\s+tin)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_DISTRESSED_CUE_PATTERN = re.compile(
+    r"\b(?:choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HAPPY_CUE_PATTERN = re.compile(
+    r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
+    r"hạnh\s+phúc|hân\s+hoan|nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_EXCITED_CUE_PATTERN = re.compile(
+    r"\b(?:phấn\s+khích|háo\s+hức|nôn\s+nóng)\b",
+    flags=re.IGNORECASE,
+)
 ANALYSIS_OTHER_AFFECT_CUE_PATTERNS = (
-    re.compile(
-        r"\b(?:độc\s+ác|khốn\s+kiếp|đáng\s+chết|nguyền\s+rủa|gào\s+thét|gào|quát|"
-        r"chửi\s+rủa|thiêu\s+chết(?!\s*(?:…|\.{3}))|"
-        r"thiêu(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|"
-        r"giết(?:\s+[^\s.,!?;:…“”‘’]+){0,5}\s+đi|tan\s+nát)\b",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:kinh\s+ngạc|sững\s+sờ|đực\s+mặt|không\s+thể\s+tin)\b",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
-        r"hạnh\s+phúc|hân\s+hoan|nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"\b(?:phấn\s+khích|háo\s+hức|nôn\s+nóng)\b",
-        flags=re.IGNORECASE,
-    ),
+    ANALYSIS_ANGRY_CUE_PATTERN,
+    ANALYSIS_SURPRISED_CUE_PATTERN,
+    ANALYSIS_DISTRESSED_CUE_PATTERN,
+    ANALYSIS_HAPPY_CUE_PATTERN,
+    ANALYSIS_EXCITED_CUE_PATTERN,
 )
 ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
     ANALYSIS_SAD_CUE_PATTERN,
@@ -402,11 +466,12 @@ ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
 )
 ANALYSIS_HOST_AFFECT_CUE_PATTERNS = {
     "afraid": ANALYSIS_AFRAID_CUE_PATTERN,
+    "angry": ANALYSIS_ANGRY_CUE_PATTERN,
+    "distressed": ANALYSIS_DISTRESSED_CUE_PATTERN,
+    "excited": ANALYSIS_EXCITED_CUE_PATTERN,
+    "happy": ANALYSIS_HAPPY_CUE_PATTERN,
     "sad": ANALYSIS_SAD_CUE_PATTERN,
-    **{
-        f"other_{index}": pattern
-        for index, pattern in enumerate(ANALYSIS_OTHER_AFFECT_CUE_PATTERNS)
-    },
+    "surprised": ANALYSIS_SURPRISED_CUE_PATTERN,
 }
 
 
@@ -536,6 +601,80 @@ def _analysis_source_active_affect_matches(
     return active
 
 
+def _analysis_source_has_narrow_direct_affect(
+    text: str,
+    *,
+    pattern: re.Pattern[str],
+    cue_class: str,
+    allowed_outer_prefix_patterns: tuple[re.Pattern[str], ...] = (),
+    allowed_suffix_patterns: tuple[re.Pattern[str], ...] = (),
+) -> bool:
+    if any(
+        character in text
+        for character in (
+            *ANALYSIS_HOST_DIRECT_AFFECT_QUOTE_CHARACTERS,
+            *ANALYSIS_HOST_DIRECT_AFFECT_QUESTION_CHARACTERS,
+        )
+    ):
+        return False
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        return False
+    match = matches[0]
+    outer_prefix = text[: match.start()]
+    if (
+        ANALYSIS_HOST_DIRECT_AFFECT_SENTENCE_START_PREFIX_PATTERN.search(
+            outer_prefix
+        )
+        is None
+        and not any(
+            prefix_pattern.search(outer_prefix) is not None
+            for prefix_pattern in allowed_outer_prefix_patterns
+        )
+    ):
+        return False
+    suffix = text[match.end() :]
+    if (
+        ANALYSIS_HOST_DIRECT_AFFECT_TERMINAL_SUFFIX_PATTERN.fullmatch(suffix)
+        is None
+        and not any(
+            suffix_pattern.fullmatch(suffix) is not None
+            for suffix_pattern in allowed_suffix_patterns
+        )
+    ):
+        return False
+    if _analysis_source_match_is_suppressed(text, match):
+        return False
+    return set(_analysis_source_active_affect_matches(text)) == {cue_class}
+
+
+def analysis_source_has_recalled_persistent_fear(text: str) -> bool:
+    """Return whether narration directly asserts a still-active recalled fear."""
+    return _analysis_source_has_narrow_direct_affect(
+        text,
+        pattern=ANALYSIS_HOST_RECALLED_PERSISTENT_FEAR_PATTERN,
+        cue_class="afraid",
+        allowed_outer_prefix_patterns=(
+            ANALYSIS_HOST_RECALLED_PERSISTENT_FEAR_PREFIX_PATTERN,
+        ),
+        allowed_suffix_patterns=(
+            ANALYSIS_HOST_RECALLED_PERSISTENT_FEAR_SUFFIX_PATTERN,
+        ),
+    )
+
+
+def analysis_source_has_stunned_blank_mind(text: str) -> bool:
+    """Return whether narration directly pairs a stunned stare with a blank mind."""
+    return _analysis_source_has_narrow_direct_affect(
+        text,
+        pattern=ANALYSIS_HOST_STUNNED_BLANK_MIND_PATTERN,
+        cue_class="surprised",
+        allowed_outer_prefix_patterns=(
+            ANALYSIS_HOST_STUNNED_BLANK_MIND_PREFIX_PATTERN,
+        ),
+    )
+
+
 def _analysis_source_has_physical_collapse(text: str) -> bool:
     respiratory = ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN.search(text)
     consciousness = ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN.search(text)
@@ -632,6 +771,22 @@ def _analysis_source_has_self_preservation_mortality(text: str) -> bool:
             if not _analysis_source_match_is_suppressed(text, other_match):
                 return False
     return not _analysis_source_has_active_physical_pair(text)
+
+
+def _analysis_source_matches_host_semantic_rule(text: str, rule: str) -> bool:
+    if rule == "thought_self_preservation_mortality":
+        return _analysis_source_has_self_preservation_mortality(text)
+    if rule == "adjacent_thought_wake_self_rescue":
+        return ANALYSIS_HOST_WAKE_PATTERN.fullmatch(text) is not None
+    if rule == "respiratory_injury_with_consciousness_loss":
+        return _analysis_source_has_physical_collapse(text)
+    if rule == "narration_desperate_exertion":
+        return _analysis_source_has_desperate_exertion(text)
+    if rule == "narration_recalled_persistent_fear":
+        return analysis_source_has_recalled_persistent_fear(text)
+    if rule == "narration_stunned_blank_mind":
+        return analysis_source_has_stunned_blank_mind(text)
+    return False
 
 
 SCHEMA = """
@@ -1974,18 +2129,9 @@ class ProjectDB:
             related_text_sha256 = lock["related_text_sha256"]
             requires_related = bool(rule_contract["requires_related"])
             source_text = str(critic_row["text"])
-            source_semantics_valid = (
-                _analysis_source_has_self_preservation_mortality(source_text)
-                if rule == "thought_self_preservation_mortality"
-                else (
-                    ANALYSIS_HOST_WAKE_PATTERN.fullmatch(source_text) is not None
-                    if rule == "adjacent_thought_wake_self_rescue"
-                    else (
-                        _analysis_source_has_physical_collapse(source_text)
-                        if rule == "respiratory_injury_with_consciousness_loss"
-                        else _analysis_source_has_desperate_exertion(source_text)
-                    )
-                )
+            source_semantics_valid = _analysis_source_matches_host_semantic_rule(
+                source_text,
+                rule,
             )
             if (
                 lock["policy_version"] != ANALYSIS_HOST_SEMANTIC_POLICY_VERSION
@@ -2037,6 +2183,18 @@ class ProjectDB:
             and _analysis_source_has_desperate_exertion(source_text)
         ):
             rule = "narration_desperate_exertion"
+        elif (
+            source_kind == "narration"
+            and not is_chapter_heading
+            and analysis_source_has_recalled_persistent_fear(source_text)
+        ):
+            rule = "narration_recalled_persistent_fear"
+        elif (
+            source_kind == "narration"
+            and not is_chapter_heading
+            and analysis_source_has_stunned_blank_mind(source_text)
+        ):
+            rule = "narration_stunned_blank_mind"
         elif source_kind == "thought":
             if _analysis_source_has_self_preservation_mortality(source_text):
                 rule = "thought_self_preservation_mortality"
