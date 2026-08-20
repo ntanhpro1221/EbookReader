@@ -46,6 +46,7 @@ from ebook_reader.analysis import (
     _director_candidate_rows,
     _director_critic_request_contract,
     _director_critic_schema,
+    _direct_cue_feedback_issues,
     _generator_request_contract,
     _canonicalize_analysis_notes,
     _apply_host_structural_locks,
@@ -104,6 +105,12 @@ V21_SEQ13_TEXT = (
     "mơ thấy ác mộng chân thực như vậy cơ chứ.’"
 )
 V21_SEQ13_NEXT_TEXT = V20_STUNNED_BLANK_MIND_TEXT
+V25_SEQ9_TEXT = (
+    "Hạ Phong đột ngột bật dậy thở dốc. Không ngờ cậu lại mơ thấy cảnh hỏa hoạn "
+    "kinh hoàng. Trước khi bị ngọn lửa nóng rực thiêu đốt, cậu trong mơ đã rơi vào "
+    "hôn mê vì hít quá nhiều khói dày, chỉ có thể mơ hồ và tuyệt vọng chờ ngọn lửa "
+    "lan tới."
+)
 
 
 class FakeDB:
@@ -947,7 +954,7 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
     assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v7"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v10"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v11"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -1166,6 +1173,34 @@ def test_host_feedback_is_canonical_and_excludes_raw_injection() -> None:
     assert injection not in feedback
     assert "rationale" not in feedback
     assert "notes" not in feedback
+
+
+def test_generic_direct_cue_feedback_prompt_marks_choices_as_advisory() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    analyzer._request(
+        group,
+        validation_feedback=(
+            AnalysisFeedbackIssue(
+                stable_id=str(group[0]["stable_id"]),
+                code="SEMANTIC_DELIVERY_MISMATCH",
+                fields=("emotion",),
+                allowed_emotions=("afraid", "sad"),
+            ),
+        ),
+    )
+
+    prompt = session.request["json"]["prompt"]
+    assert "Với mã HOST_*" in prompt
+    assert "ràng buộc cứng" in prompt
+    assert "SEMANTIC_DELIVERY_MISMATCH" in prompt
+    assert "chỉ là các lựa chọn gợi ý" in prompt
+    assert "đó không phải whitelist cứng" in prompt
+    assert "hãy chọn cảm xúc phù hợp nhất" in prompt
+    assert '"allowed_emotions":["afraid","sad"]' in prompt
 
 
 def test_physical_collapse_feedback_is_typed_and_does_not_forward_source_text() -> None:
@@ -5528,6 +5563,129 @@ def test_semantic_delivery_rejects_multiple_same_valence_cues_in_thought() -> No
     assert 'sad="tuyệt vọng"' in issues["same-valence"]
 
 
+def test_v25_seq9_neutral_retry_gets_deterministic_source_derived_choices() -> None:
+    group = [
+        {
+            "stable_id": "v25-seq9",
+            "text": V25_SEQ9_TEXT,
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {
+        "v25-seq9": {
+            **analysis_item("v25-seq9"),
+            "emotion": "neutral",
+            "intensity": 0,
+        }
+    }
+    semantic_issues, batch_collapsed = _semantic_delivery_issues(group, validated)
+
+    feedback = _direct_cue_feedback_issues(group, validated, semantic_issues)
+
+    assert batch_collapsed is False
+    assert feedback == (
+        AnalysisFeedbackIssue(
+            stable_id="v25-seq9",
+            code="SEMANTIC_DELIVERY_MISMATCH",
+            fields=("emotion",),
+            allowed_emotions=("afraid", "sad"),
+        ),
+    )
+    payload = feedback[0].canonical_payload("S001")
+    assert payload == {
+        "id": "S001",
+        "code": "SEMANTIC_DELIVERY_MISMATCH",
+        "fields": ["emotion"],
+        "allowed_emotions": ["afraid", "sad"],
+    }
+    assert set(payload) == {"id", "code", "fields", "allowed_emotions"}
+    assert V25_SEQ9_TEXT not in json.dumps(payload, ensure_ascii=False)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Cậu không tuyệt vọng trước tin xấu.",
+        "Anh đã từng sợ hãi, nhưng giờ hoàn toàn bình tĩnh.",
+        "Ông giải thích rằng “tuyệt vọng” là một danh từ.",
+        "Cô vừa sợ hãi vừa phấn khích.",
+        "Cậu choáng váng yếu nhược, hai chân mềm nhũn và nghiêng ngả sắp ngã.",
+    ],
+)
+def test_direct_cue_retry_choices_ignore_suppressed_opposing_and_distress(
+    text: str,
+) -> None:
+    group = [{"stable_id": "not-direct", "text": text, "kind_hint": "narration"}]
+    validated = {
+        "not-direct": {
+            **analysis_item("not-direct"),
+            "emotion": "neutral",
+            "intensity": 0,
+        }
+    }
+
+    assert _direct_cue_feedback_issues(
+        group,
+        validated,
+        {"not-direct": "semantic rejection"},
+    ) == ()
+
+
+@pytest.mark.parametrize("emotion", ["tender", "tired"])
+def test_direct_cue_retry_choices_do_not_constrain_nonneutral_delivery(
+    emotion: str,
+) -> None:
+    group = [
+        {"stable_id": "nonneutral", "text": V25_SEQ9_TEXT, "kind_hint": "narration"}
+    ]
+    validated = {
+        "nonneutral": {
+            **analysis_item("nonneutral"),
+            "emotion": emotion,
+        }
+    }
+
+    assert _direct_cue_feedback_issues(
+        group,
+        validated,
+        {"nonneutral": "semantic rejection"},
+    ) == ()
+
+
+def test_direct_cue_retry_choices_skip_physical_and_host_rule_paths() -> None:
+    physical_text = (
+        "Phổi và yết hầu đang bị thiêu đốt. "
+        "Ý thức của anh nhanh chóng trở nên mơ hồ."
+    )
+    group = [
+        {
+            "stable_id": "physical",
+            "text": physical_text,
+            "kind_hint": "narration",
+        },
+        {
+            "stable_id": "host-rule",
+            "text": "Cậu tuyệt vọng gắng gượng đến gần ánh sáng.",
+            "kind_hint": "narration",
+        },
+    ]
+    validated = {
+        stable_id: {
+            **analysis_item(stable_id),
+            "emotion": "neutral",
+            "intensity": 0,
+        }
+        for stable_id in ("physical", "host-rule")
+    }
+
+    assert _direct_cue_feedback_issues(
+        group,
+        validated,
+        {stable_id: "semantic rejection" for stable_id in validated},
+        excluded_stable_ids=frozenset({"host-rule"}),
+    ) == ()
+
+
 def test_semantic_delivery_keeps_neutral_physical_distress_in_narration() -> None:
     group = [
         {
@@ -5936,6 +6094,152 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     assert len(db.updated) == 4
     assert {data["emotion"] for _segment_id, data, _threshold in db.updated} == {"afraid"}
     assert any(event[1] == "ANALYSIS_SEMANTIC_REJECTED" for event in db.events)
+
+
+@pytest.mark.parametrize("repaired_emotion", ["afraid", "sad", "tired"])
+def test_v25_seq9_advisory_retry_reaches_critic_without_exact_membership_gate(
+    monkeypatch,
+    repaired_emotion: str,
+) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "v25-seq9",
+            "chapter_id": 1,
+            "seq": 9,
+            "paragraph_index": 10,
+            "text": V25_SEQ9_TEXT,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+    ]
+    settings = build_settings(
+        overrides={
+            "analysis": {
+                "batch_segments": 1,
+                "batch_chars": 10000,
+                "max_retries": 2,
+            }
+        }
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+    critic_calls = 0
+
+    def generate(group, **kwargs):
+        del group
+        feedback = kwargs.get("validation_feedback")
+        feedback_seen.append(feedback)
+        item = analysis_item("v25-seq9")
+        item.update(
+            {
+                "kind": "narration",
+                "speaker": "NARRATOR",
+                "emotion": "neutral" if feedback is None else repaired_emotion,
+                "intensity": 0 if feedback is None else 2,
+            }
+        )
+        return {"segments": [item]}
+
+    def critic(group, validated, **kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        assert validated["v25-seq9"]["emotion"] == repaired_emotion
+        return director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert feedback_seen == [
+        None,
+        (
+            AnalysisFeedbackIssue(
+                stable_id="v25-seq9",
+                code="SEMANTIC_DELIVERY_MISMATCH",
+                fields=("emotion",),
+                allowed_emotions=("afraid", "sad"),
+            ),
+        ),
+    ]
+    assert critic_calls == 1
+    assert len(db.updated) == 1
+    assert db.updated[0][1]["emotion"] == repaired_emotion
+
+
+def test_v25_seq9_repeated_neutral_still_fails_before_critic(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "v25-seq9",
+            "chapter_id": 1,
+            "seq": 9,
+            "paragraph_index": 10,
+            "text": V25_SEQ9_TEXT,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+    ]
+    settings = build_settings(
+        overrides={
+            "analysis": {
+                "batch_segments": 1,
+                "batch_chars": 10000,
+                "max_retries": 2,
+            }
+        }
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+
+    def generate(group, **kwargs):
+        del group
+        feedback_seen.append(kwargs.get("validation_feedback"))
+        item = analysis_item("v25-seq9")
+        item.update(
+            {
+                "kind": "narration",
+                "speaker": "NARRATOR",
+                "emotion": "neutral",
+                "intensity": 0,
+            }
+        )
+        return {"segments": [item]}
+
+    def critic(*_args, **_kwargs):
+        raise AssertionError("repeated neutral must fail before critic")
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert len(feedback_seen) == 2
+    assert feedback_seen[0] is None
+    assert feedback_seen[1] == (
+        AnalysisFeedbackIssue(
+            stable_id="v25-seq9",
+            code="SEMANTIC_DELIVERY_MISMATCH",
+            fields=("emotion",),
+            allowed_emotions=("afraid", "sad"),
+        ),
+    )
+    assert db.updated == []
 
 
 def test_required_hq_low_confidence_repairs_before_critic_or_ledger(monkeypatch) -> None:

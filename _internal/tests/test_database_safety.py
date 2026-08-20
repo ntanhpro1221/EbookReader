@@ -2702,7 +2702,7 @@ def test_analysis_candidate_rejects_mandatory_heading_lock_when_omitted(
 
 
 def test_direct_narration_affect_source_authority_accepts_exact_smoke_rows() -> None:
-    assert ANALYSIS_HOST_AFFECT_POLICY_VERSION == "host_affect_v6"
+    assert ANALYSIS_HOST_AFFECT_POLICY_VERSION == "host_affect_v7"
     assert ANALYSIS_HOST_SEMANTIC_POLICY_VERSION == "host_semantic_lock_v3"
     assert analysis_source_has_recalled_persistent_fear(
         RECALLED_PERSISTENT_FEAR_TEXT
@@ -2952,7 +2952,7 @@ def test_analysis_candidate_accepts_source_bound_direct_narration_affect_lock(
         "host_affect_clearance"
     ]
     assert candidate["state"] == "allocated"
-    assert durable_clearance["policy_version"] == "host_affect_v6"
+    assert durable_clearance["policy_version"] == "host_affect_v7"
     assert durable_clearance["semantic_locks"] == clearance[
         "host_affect_clearance"
     ]["semantic_locks"]

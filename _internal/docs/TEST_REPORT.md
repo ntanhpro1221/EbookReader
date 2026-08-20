@@ -59,6 +59,10 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   neutral cho suy kiệt thể chất hoặc quan sát lâm sàng đơn lẻ để không biến keyword gate thành đạo diễn cảm xúc rộng;
 - host affect nguồn hẹp được adjudicate trước semantic cue chung và mọi constraint typed đã xác minh được tích lũy trong
   cùng target group, nên retry sửa câu sau không làm câu trước quay lại delivery đã bị từ chối;
+- neutral bị semantic cue chung từ chối nhận `allowed_emotions` advisory là hợp deterministic các emotion tương thích với
+  cue trực tiếp của chính source. Payload typed không mang source/cue/rationale; phủ định, historical/meta, affect đối nghịch,
+  distressed chung và physical/host-rule không tạo lựa chọn này. Non-neutral không bị exact-membership gate hay auto-mutation,
+  và candidate retry vẫn phải qua nguyên validation cùng director critic;
 - hai rule narration hẹp cho nỗi sợ còn dai dẳng khi hồi tưởng và trạng thái sững người đầu óc trắng xóa dùng chung predicate
   source-only với DB replay; chúng khóa `kind=narration`, gửi allowed emotion typed theo đúng ID, không lan từ hàng xóm và
   vẫn bắt model trả candidate mới trước director critic;

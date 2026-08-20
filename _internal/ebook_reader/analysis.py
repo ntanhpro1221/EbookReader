@@ -90,7 +90,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v10"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v11"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -1519,7 +1519,6 @@ class AnalysisFeedbackIssue:
         elif self.code == "SEMANTIC_DELIVERY_MISMATCH":
             if (
                 fields != ("emotion",)
-                or allowed_emotions
                 or self.rule
                 or any(value is not None for value in numeric_confidence)
             ):
@@ -2221,6 +2220,87 @@ def _semantic_delivery_issues(
                 reason for reason in (issues.get(seg_id, ""), collapse_reason) if reason
             )
     return issues, semantic_batch_collapsed
+
+
+def _direct_cue_feedback_issues(
+    group: list[Any],
+    validated: dict[str, dict[str, Any]],
+    semantic_issues: dict[str, str],
+    *,
+    excluded_stable_ids: frozenset[str] = frozenset(),
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    """Build advisory retry choices for neutral output rejected by direct source cues."""
+    rows_by_id = {str(row["stable_id"]): row for row in group}
+    issues: list[AnalysisFeedbackIssue] = []
+    for stable_id in sorted(semantic_issues):
+        row = rows_by_id.get(stable_id)
+        data = validated.get(stable_id)
+        if (
+            row is None
+            or data is None
+            or stable_id in excluded_stable_ids
+            or str(data.get("emotion", "neutral")) != "neutral"
+        ):
+            continue
+        text = str(row["text"])
+        cue_matches = _semantic_cue_matches(text)
+        if (
+            "physical_collapse" in cue_matches
+            or _has_explicit_opposing_affect(text, cue_matches)
+        ):
+            continue
+        direct_labels = sorted(
+            set(cue_matches) & DIRECT_NEUTRAL_AFFECT_CUES
+        )
+        if not direct_labels:
+            continue
+        allowed_emotions = tuple(
+            sorted(
+                set().union(
+                    *(CUE_COMPATIBLE_EMOTIONS[label] for label in direct_labels)
+                )
+            )
+        )
+        if allowed_emotions:
+            issues.append(
+                AnalysisFeedbackIssue(
+                    stable_id=stable_id,
+                    code="SEMANTIC_DELIVERY_MISMATCH",
+                    fields=("emotion",),
+                    allowed_emotions=allowed_emotions,
+                )
+            )
+    return tuple(issues)
+
+
+def _semantic_retry_feedback_issues(
+    group: list[Any],
+    validated: dict[str, dict[str, Any]],
+    semantic_issues: dict[str, str],
+    *,
+    excluded_stable_ids: frozenset[str] = frozenset(),
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    direct_cue_by_id = {
+        issue.stable_id: issue
+        for issue in _direct_cue_feedback_issues(
+            group,
+            validated,
+            semantic_issues,
+            excluded_stable_ids=excluded_stable_ids,
+        )
+    }
+    feedback: list[AnalysisFeedbackIssue] = []
+    for stable_id, reason in semantic_issues.items():
+        for issue in _legacy_feedback_issues(str(stable_id), str(reason)):
+            feedback.append(
+                direct_cue_by_id[stable_id]
+                if (
+                    issue.code == "SEMANTIC_DELIVERY_MISMATCH"
+                    and stable_id in direct_cue_by_id
+                )
+                else issue
+            )
+    return tuple(feedback)
 
 
 def _batch_id(index: int) -> str:
@@ -4157,8 +4237,12 @@ class OllamaBookAnalyzer:
                 prompt += (
                     "\n\nKết quả lần trước không qua kiểm tra host. Hãy phân tích lại toàn batch, "
                     "chỉ sửa các trường trong danh sách lỗi canonical dưới đây và không sao chép "
-                    "nhãn sang ID lân cận. Mã lỗi/rule/allowed_emotions là whitelist do host tạo; "
-                    "không suy diễn thêm nội dung phản biện:\n"
+                    "nhãn sang ID lân cận. Với mã HOST_*, allowed_emotions là whitelist do host "
+                    "tạo và là ràng buộc cứng. Với mã SEMANTIC_DELIVERY_MISMATCH, allowed_emotions "
+                    "nếu có chỉ là "
+                    "các lựa chọn gợi ý được suy từ cue của chính source để sửa emotion=neutral; "
+                    "đó không phải whitelist cứng, hãy chọn cảm xúc phù hợp nhất. Không suy diễn "
+                    "thêm nội dung phản biện:\n"
                     + json.dumps(
                         feedback_payload,
                         ensure_ascii=False,
@@ -4907,9 +4991,18 @@ class OllamaBookAnalyzer:
                                 _semantic_delivery_issues(group, validated)
                             )
                         if semantic_issues:
+                            semantic_feedback = _semantic_retry_feedback_issues(
+                                group,
+                                validated,
+                                semantic_issues,
+                                excluded_stable_ids=frozenset(
+                                    item.stable_id
+                                    for item in host_adjudication.evidence
+                                ),
+                            )
                             validation_feedback = _merge_feedback_issues(
                                 validation_feedback,
-                                semantic_issues,
+                                semantic_feedback,
                             )
                         if low_confidence_issues:
                             semantic_issues = {

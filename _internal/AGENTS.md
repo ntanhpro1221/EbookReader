@@ -156,6 +156,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   bỏ qua director critic.
 - Rule affect nguồn hẹp phải chạy trước semantic cue chung. Constraint deterministic đã phát hiện phải được tích lũy trong
   suốt retry của cùng target group, không được ghi đè bởi lỗi của lần sau hoặc chuyển thành feedback tự do.
+- Semantic cue chung chỉ được dùng `allowed_emotions` source-derived làm lựa chọn retry advisory khi chính candidate
+  `emotion=neutral` bị từ chối. Tập lựa chọn phải hợp deterministic từ cue trực tiếp không bị phủ định/meta/lịch sử và
+  không có affect đối nghịch, không chứa source/cue/rationale trong payload. Đây không phải host whitelist, semantic lock
+  hay exact-membership gate: model vẫn phải chọn delivery tốt nhất và candidate sửa xong vẫn qua đủ validation + critic.
 - Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Critic correction
   chỉ được host override khi có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host cho phép; raw field delta
   vẫn phải lưu. Không delta được host suy là agreement; delta field khác hoặc đổi giữa hai giá trị đều được host cho phép phải
