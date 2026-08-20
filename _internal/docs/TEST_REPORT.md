@@ -7,6 +7,10 @@ database safety và quality policy trên Python 3.11.9. Compileall cho source/te
 và Ruff trên toàn bộ file bị ảnh hưởng đều pass; đợt này không chạy model/GPU hoặc pipeline audiobook thật.
 Hardening sau bằng chứng V23 `“Ha…”` đã khóa critic schema/prompt theo durable floor, exact singleton target + source hash,
 bỏ boolean accept khỏi model contract và tách reason confidence/rationale/quote; suite analysis + quality policy liên quan pass.
+Hardening sau bằng chứng V24 giữ confidence derived/validated/commit của chapter heading structural-lock ở đúng `0.95`
+trong cả agreement, structural override và batch trộn; raw critic confidence vẫn được lưu và vẫn phải qua durable floor,
+còn content tiếp tục dùng `min(generator, critic, cap)`. Suite analysis/database/quality liên quan, Ruff, compileall và
+`git diff --check` đều pass; đợt này không gọi model/GPU hay pipeline thật.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -87,12 +91,14 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   bị lan cue. Context/group fingerprint bao gồm stable ID, source hash, chapter, paragraph, kind và hai hàng xóm;
 - tiêu đề chương thật được nhận diện hẹp bằng vị trí/metadata/grammar, canonical thành narrator trung tính với candidate
   confidence `0.95`, đồng thời giữ proposal confidence thô trong structural audit, rồi gửi critic theo `target_only` không có
-  neighbor text. Critic vẫn phải trả đúng schema/hash và quote ngắn nguyên văn từ đúng source; bất đồng thô
+  neighbor text. Critic confidence thô vẫn phải qua floor và được lưu để audit, nhưng confidence derived/validated/commit
+  của heading đã khóa luôn giữ đúng `0.95`; bất đồng delivery thô
   trên riêng heading được lưu cùng structural override, còn bất đồng hoặc quote sai ở content vẫn từ chối cả batch;
 - schema v8 lưu acceptance envelope đầy đủ, projection hash mà critic nhìn thấy, mọi generator contract và critic intent/outcome.
   Intent được reserve trước HTTP; protocol-invalid retry đúng candidate với seed mới, field mismatch lặp projection thì chia
   batch hữu hạn, còn crash sau `critic_accepted` resume/commit không gọi Ollama. Hash JSON, quan hệ parent-child, attempt liên tục,
-  exact confidence `min(generator, critic, cap)`, evidence policy/full-target SHA, source role/seq/paragraph/kind/text và
+  exact confidence `min(generator, critic, cap)` cho content cùng ngoại lệ deterministic heading khóa ở `0.95`,
+  evidence policy/full-target SHA, source role/seq/paragraph/kind/text và
   model/policy/context CAS đều được kiểm
   tra lại khi đọc/commit; forged content override, quote lấy từ row khác và structural clearance bị sửa đều fail-closed;
 - resume coi durable analysis candidate là checkpoint đã bắt đầu ngay cả khi segment vẫn `pending`, vì vậy casting fingerprint

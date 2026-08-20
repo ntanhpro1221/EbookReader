@@ -166,7 +166,7 @@ ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v6"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v6"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v7"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -2813,10 +2813,14 @@ class ProjectDB:
                     )
                 )
                 or float(derived_confidence)
-                != min(
-                    float(generator_confidence),
-                    float(critic_confidence),
-                    float(confidence_cap),
+                != (
+                    ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+                    if is_heading
+                    else min(
+                        float(generator_confidence),
+                        float(critic_confidence),
+                        float(confidence_cap),
+                    )
                 )
                 or float(commit_confidence) != float(derived_confidence)
             ):

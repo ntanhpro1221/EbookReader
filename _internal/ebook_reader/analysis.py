@@ -90,7 +90,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v9"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v10"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -3754,10 +3754,14 @@ def _adjudicate_director_critic(
                 issues[stable_id] = "DIRECTOR_FIELD_MISMATCH fields=" + ",".join(
                     delta_fields
                 )
-        derived_confidence = min(
-            max(0.0, float(candidate.get("confidence", 0.5))),
-            critic_confidence,
-            confidence_cap,
+        derived_confidence = (
+            ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+            if heading_delivery_is_locked
+            else min(
+                max(0.0, float(candidate.get("confidence", 0.5))),
+                critic_confidence,
+                confidence_cap,
+            )
         )
         evidence_by_stable[stable_id].update(
             {
@@ -4301,8 +4305,9 @@ class OllamaBookAnalyzer:
                 "Hợp đồng confidence bền vững: "
                 f"confidence_floor={json.dumps(confidence_floor)}; "
                 f"confidence_cap={json.dumps(confidence_cap)}. "
-                "critic_confidence không được thấp hơn floor; confidence cuối được host "
-                "giới hạn bởi cap.\n"
+                "critic_confidence không được thấp hơn floor. Với content, confidence cuối "
+                "được host giới hạn bởi generator, critic và cap; chapter heading đã khóa "
+                "cấu trúc luôn giữ confidence 0.95.\n"
                 f"evidence_policy={evidence_policy}.\n"
                 f"{singleton_quote_instruction}\n"
                 "Hãy phản biện từng candidate sau mà không suy đoán notes/confidence của lượt trước:\n"

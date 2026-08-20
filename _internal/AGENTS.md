@@ -176,7 +176,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   prose delivery làm personality hoặc dùng marker legacy làm quyền điều khiển identity.
 - Tiêu đề chương chỉ được nhận diện bằng source metadata đầu chapter và grammar tiêu đề độc lập. Host phải khóa delivery
   tiêu đề về narrator trung tính cùng confidence candidate `0.95`, không gửi ngữ cảnh hàng xóm cho row đó và vẫn giữ
-  nguyên proposal/confidence/verdict thô để audit. Confidence commit sau critic vẫn là min của candidate khóa, reviewer và cap.
+  nguyên proposal/confidence/verdict thô để audit. Critic confidence vẫn phải qua floor nhưng chỉ là evidence thô cho row
+  cấu trúc; derived/validated/commit confidence của tiêu đề đã khóa phải luôn giữ đúng `0.95`, kể cả khi critic hoặc cap thấp hơn.
+  Content row mới tính confidence commit bằng `min(generator, critic, cap)`.
   Structural override chỉ được phép cho đúng row đã khóa; mọi content row vẫn chịu critic bình thường. Mỗi verdict critic
   phải trích nguyên văn bằng chứng không rỗng từ chính text cùng ID, không được lấy bằng chứng từ row lân cận. Multi-row
   dùng source substring ngắn; singleton có toàn bộ target dài từ 1 đến giới hạn quote phải khóa schema và contract vào exact

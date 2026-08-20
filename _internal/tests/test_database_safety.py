@@ -1606,8 +1606,8 @@ def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     candidate_id = int(candidate["id"])
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v6"
-    assert contract["director_policy_version"] == "second_pass_v6"
+    assert contract["policy_version"] == "second_pass_v7"
+    assert contract["director_policy_version"] == "second_pass_v7"
     assert (
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
@@ -2375,11 +2375,12 @@ def test_analysis_candidate_accepts_source_bound_chapter_heading_override(
     assert snapshot["commit_envelope"]["segments"][0]["data"]["emotion"] == "neutral"
 
 
-def test_v22_heading_raw_tiny_confidence_is_locked_reopened_and_committed(
+def test_v24_heading_critic_confidence_preserves_lock_through_reopen_and_commit(
     tmp_path: Path,
 ) -> None:
     assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
     assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
+    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v7"
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
@@ -2411,6 +2412,39 @@ def test_v22_heading_raw_tiny_confidence_is_locked_reopened_and_committed(
         contract=_accepted_critic_contract(),
     )
     reopened_after_reserve = ProjectDB(db.path)
+    evidence = _accepted_critic_evidence(envelope)
+    heading_evidence = evidence["segments"][0]
+    heading_evidence["critic"]["confidence"] = 0.85
+    assert heading_evidence["derived_confidence"] == 0.95
+
+    forged_commit_envelope = copy.deepcopy(envelope)
+    forged_commit_envelope["segments"][0]["data"]["confidence"] = 0.85
+    with pytest.raises(ValueError, match="heading candidate confidence"):
+        reopened_after_reserve.complete_analysis_critic_attempt(
+            candidate_id,
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=forged_commit_envelope,
+        )
+
+    forged_evidence = copy.deepcopy(evidence)
+    forged_evidence["segments"][0]["derived_confidence"] = 0.85
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        reopened_after_reserve.complete_analysis_critic_attempt(
+            candidate_id,
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=forged_evidence,
+            commit_envelope=envelope,
+        )
+
     reopened_after_reserve.complete_analysis_critic_attempt(
         candidate_id,
         1,
@@ -2418,7 +2452,7 @@ def test_v22_heading_raw_tiny_confidence_is_locked_reopened_and_committed(
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_accepted",
         outcome={"accepted": True},
-        evidence=_accepted_critic_evidence(envelope),
+        evidence=evidence,
         commit_envelope=envelope,
     )
 
@@ -2426,6 +2460,9 @@ def test_v22_heading_raw_tiny_confidence_is_locked_reopened_and_committed(
     snapshot = reopened_after_accept.analysis_candidate_acceptance_envelope(candidate_id)
     assert snapshot["candidate"]["segments"][0]["data"]["confidence"] == 0.95
     assert snapshot["commit_envelope"]["segments"][0]["data"]["confidence"] == 0.95
+    stored_heading_evidence = snapshot["critic_evidence"]["segments"][0]
+    assert stored_heading_evidence["critic"]["confidence"] == 0.85
+    assert stored_heading_evidence["derived_confidence"] == 0.95
     batch = [
         {
             "segment_id": segment["segment_id"],

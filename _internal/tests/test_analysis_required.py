@@ -946,8 +946,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v6"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v9"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v7"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v10"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -3736,13 +3736,13 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v6"
+    assert first_contract["policy_version"] == "second_pass_v7"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
 
 
-def test_v23_critic_liveness_policy_fingerprint_does_not_match_stale_v22_ledger(
+def test_v24_heading_confidence_policy_fingerprint_does_not_match_stale_v23_ledger(
     monkeypatch,
 ) -> None:
     settings = build_settings()["analysis"]
@@ -3750,11 +3750,11 @@ def test_v23_critic_liveness_policy_fingerprint_does_not_match_stale_v22_ledger(
 
     monkeypatch.setattr(
         "ebook_reader.analysis.DIRECTOR_CRITIC_POLICY_VERSION",
-        "second_pass_v5",
+        "second_pass_v6",
     )
     monkeypatch.setattr(
         "ebook_reader.analysis.ANALYSIS_LEDGER_POLICY_VERSION",
-        "analysis_ledger_v8",
+        "analysis_ledger_v9",
     )
     stale = _analysis_policy_fingerprint(settings, "quality-policy")
 
@@ -4459,7 +4459,144 @@ def test_director_heading_locked_field_dissent_is_audited_without_veto() -> None
         "raw_accept": False,
         "raw_field_deltas": item["field_deltas"],
     }
-    assert validated["heading"]["confidence"] == pytest.approx(0.86)
+    assert item["critic"]["confidence"] == pytest.approx(0.86)
+    assert item["derived_confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    assert validated["heading"]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+
+
+def test_director_heading_agreement_keeps_locked_confidence_above_critic_and_cap() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {"heading": {**analysis_item("heading"), "confidence": 0.72}}
+    _apply_host_structural_locks(group, validated)
+    rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(rows)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        confidence=0.65,
+        candidate_rows=rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+        confidence_cap=0.70,
+    )
+
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["critic"]["confidence"] == pytest.approx(0.65)
+    assert item["critic"]["accept"] is True
+    assert item["derived_confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    assert "host_structural_override" not in item
+    assert validated["heading"]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+
+
+def test_director_heading_critic_confidence_still_must_meet_floor() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {"heading": {**analysis_item("heading"), "confidence": 0.72}}
+    _apply_host_structural_locks(group, validated)
+    rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(rows)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        confidence=0.64,
+        candidate_rows=rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {"heading": "DIRECTOR_INVALID_RESPONSE confidence_below_floor"}
+    assert "critic" not in evidence["segments"][0]
+    assert validated["heading"]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+
+
+def test_director_mixed_batch_keeps_heading_lock_and_caps_content_confidence() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Giàn hỏa thiêu rực cháy",
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "content",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": "Khói dày khiến Hạ Phong hoảng sợ.",
+            "kind_hint": "narration",
+        },
+    ]
+    validated = {
+        "heading": {**analysis_item("heading"), "confidence": 0.72},
+        "content": {**analysis_item("content"), "confidence": 0.90},
+    }
+    _apply_host_structural_locks(group, validated)
+    rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(rows)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        confidence=0.80,
+        candidate_rows=rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+        confidence_cap=0.75,
+    )
+
+    assert issues == {}
+    evidence_by_id = {item["stable_id"]: item for item in evidence["segments"]}
+    assert evidence_by_id["heading"]["critic"]["confidence"] == pytest.approx(0.80)
+    assert evidence_by_id["heading"]["derived_confidence"] == (
+        ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    )
+    assert evidence_by_id["content"]["derived_confidence"] == pytest.approx(0.75)
+    assert validated["heading"]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    assert validated["content"]["confidence"] == pytest.approx(0.75)
 
 
 def test_director_cannot_override_critic_before_heading_delivery_is_host_locked() -> None:
@@ -5850,7 +5987,7 @@ def test_required_hq_low_confidence_repairs_before_critic_or_ledger(monkeypatch)
         return director_critic_payload(
             group,
             validated,
-            confidence=ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
+            confidence=0.70,
             candidate_rows=kwargs["candidate_rows"],
             candidate_hash=kwargs["candidate_hash"],
         )
@@ -5896,11 +6033,19 @@ def test_required_hq_low_confidence_repairs_before_critic_or_ledger(monkeypatch)
     ]
     saved_by_id = {segment_id: data for segment_id, data, _floor in db.updated}
     assert saved_by_id[1]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
-    assert saved_by_id[2]["confidence"] == pytest.approx(0.88)
+    assert saved_by_id[2]["confidence"] == pytest.approx(0.70)
     accepted_details = db.events[1][3]
     heading_lock = accepted_details["host_affect_clearance"]["structural_locks"][0]
     assert heading_lock["generator_confidence"] == 1e-16
     assert heading_lock["locked_confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    accepted_by_id = {
+        item["stable_id"]: item for item in accepted_details["segments"]
+    }
+    assert accepted_by_id["heading"]["critic"]["confidence"] == pytest.approx(0.70)
+    assert accepted_by_id["heading"]["derived_confidence"] == (
+        ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    )
+    assert accepted_by_id["content"]["derived_confidence"] == pytest.approx(0.70)
 
 
 def test_retry_retains_host_constraints_while_fixing_later_semantic_issue(
@@ -6546,7 +6691,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v6"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v7"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",
