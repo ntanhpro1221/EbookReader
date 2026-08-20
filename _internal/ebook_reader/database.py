@@ -163,10 +163,11 @@ ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
 ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY = "previous_context_only"
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
-ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v1"
+ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v6"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
+ANALYSIS_CHAPTER_HEADING_CONFIDENCE = 0.95
 ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
     r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
     r"(?:\d{1,5}|[ivxlcdm]{1,12})"
@@ -181,6 +182,21 @@ ANALYSIS_CHAPTER_HEADING_DELIVERY = {
     "pace": "normal",
     "volume": "normal",
 }
+ANALYSIS_HOST_STRUCTURAL_LOCK_FIELDS = frozenset(
+    {
+        "policy_version",
+        "stable_id",
+        "text_sha256",
+        "source_role",
+        "context_policy",
+        "evidence_quote",
+        "generator_fields",
+        "generator_notes",
+        "generator_confidence",
+        "locked_fields",
+        "locked_confidence",
+    }
+)
 ANALYSIS_CRITIC_KINDS = frozenset({"narration", "dialogue", "thought"})
 ANALYSIS_CRITIC_EMOTIONS = frozenset(
     {
@@ -1793,6 +1809,29 @@ class ProjectDB:
         return payload, sha256_text(payload)
 
     @staticmethod
+    def _analysis_critic_confidence_bounds(
+        contract: dict[str, Any],
+        *,
+        durable: bool,
+    ) -> tuple[float, float]:
+        error_type = RuntimeError if durable else ValueError
+        confidence_floor = contract.get("confidence_floor")
+        confidence_cap = contract.get("confidence_cap")
+        if not str(contract.get("policy_version", "")).strip():
+            raise error_type("Analysis critic contract lacks its policy version")
+        if (
+            type(confidence_floor) not in {int, float}
+            or type(confidence_cap) not in {int, float}
+            or not math.isfinite(float(confidence_floor))
+            or not math.isfinite(float(confidence_cap))
+            or not 0.0 <= float(confidence_floor) <= float(confidence_cap) <= 1.0
+        ):
+            raise error_type(
+                "Analysis critic confidence floor/cap must be finite ordered values within [0,1]"
+            )
+        return float(confidence_floor), float(confidence_cap)
+
+    @staticmethod
     def _analysis_candidate_identity(
         *,
         policy_fingerprint: str,
@@ -1864,6 +1903,15 @@ class ProjectDB:
             if set(data) != ANALYSIS_ACCEPTED_DELIVERY_FIELDS:
                 raise ValueError(
                     "Analysis candidate segment data does not contain the full validated delivery"
+                )
+            confidence = data.get("confidence")
+            if (
+                type(confidence) not in {int, float}
+                or not math.isfinite(float(confidence))
+                or not 0.0 <= float(confidence) <= 1.0
+            ):
+                raise ValueError(
+                    "Analysis candidate confidence must be finite and within [0,1]"
                 )
             note_markers = analysis_note_markers(data)
             if note_markers:
@@ -1948,6 +1996,14 @@ class ProjectDB:
                 and critic_row.get("next_text") == ""
                 and candidate_delivery == ANALYSIS_CHAPTER_HEADING_DELIVERY
             )
+            if (
+                is_chapter_heading_row
+                and float(segment["data"]["confidence"])
+                != ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+            ):
+                raise ValueError(
+                    "Analysis chapter heading candidate confidence must equal its host lock"
+                )
             if (
                 set(critic_row) != {
                     "id",
@@ -2059,8 +2115,11 @@ class ProjectDB:
             raise RuntimeError("Host semantic clearance locks must be an array")
         structural_locks: dict[str, dict[str, Any]] = {}
         for lock in structural_lock_items:
-            if not isinstance(lock, dict):
-                raise RuntimeError("Host structural clearance lock must be an object")
+            if (
+                not isinstance(lock, dict)
+                or set(lock) != ANALYSIS_HOST_STRUCTURAL_LOCK_FIELDS
+            ):
+                raise RuntimeError("Host structural clearance lock has invalid schema")
             stable_id = str(lock.get("stable_id", "")).strip()
             if not stable_id or stable_id in structural_locks:
                 raise RuntimeError("Host structural clearance lock has invalid stable ID")
@@ -2106,15 +2165,42 @@ class ProjectDB:
         for stable_id, lock in structural_locks.items():
             segment = segment_by_stable[stable_id]
             critic_row = critic_row_by_stable[stable_id]
+            generator_fields = lock["generator_fields"]
+            generator_confidence = lock["generator_confidence"]
+            generator_delivery_valid = (
+                isinstance(generator_fields, dict)
+                and set(generator_fields) == set(ANALYSIS_CRITIC_DELIVERY_FIELDS)
+                and isinstance(generator_fields.get("kind"), str)
+                and generator_fields.get("kind") in ANALYSIS_CRITIC_KINDS
+                and isinstance(generator_fields.get("speaker"), str)
+                and len(generator_fields["speaker"]) <= 120
+                and isinstance(generator_fields.get("emotion"), str)
+                and generator_fields.get("emotion") in ANALYSIS_CRITIC_EMOTIONS
+                and type(generator_fields.get("intensity")) is int
+                and 0 <= int(generator_fields["intensity"]) <= 3
+                and isinstance(generator_fields.get("pace"), str)
+                and generator_fields.get("pace") in ANALYSIS_CRITIC_PACES
+                and isinstance(generator_fields.get("volume"), str)
+                and generator_fields.get("volume") in ANALYSIS_CRITIC_VOLUMES
+            )
             expected_lock_fields = {
                 "stable_id": stable_id,
                 "text_sha256": str(segment["text_sha256"]),
                 "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
                 "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
                 "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+                "evidence_quote": str(critic_row["text"]),
                 "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
+                "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
             }
-            if any(lock.get(key) != value for key, value in expected_lock_fields.items()):
+            if (
+                any(lock.get(key) != value for key, value in expected_lock_fields.items())
+                or not generator_delivery_valid
+                or not isinstance(lock["generator_notes"], str)
+                or type(generator_confidence) not in {int, float}
+                or not math.isfinite(float(generator_confidence))
+                or not 0.0 <= float(generator_confidence) <= 1.0
+            ):
                 raise RuntimeError(
                     "Accepted chapter heading structural clearance is not source-bound"
                 )
@@ -2124,6 +2210,8 @@ class ProjectDB:
                 or critic_row["host_locked_fields"]
                 != ANALYSIS_CHAPTER_HEADING_DELIVERY
                 or critic_row["candidate"] != ANALYSIS_CHAPTER_HEADING_DELIVERY
+                or float(segment["data"]["confidence"])
+                != ANALYSIS_CHAPTER_HEADING_CONFIDENCE
             ):
                 raise RuntimeError(
                     "Accepted chapter heading violates target-only canonical delivery"
@@ -2461,8 +2549,10 @@ class ProjectDB:
             raise RuntimeError(
                 "Accepted critic evidence contract differs from the reserved request contract"
             )
-        if not str(critic_contract.get("policy_version", "")).strip():
-            raise RuntimeError("Accepted critic evidence contract lacks its policy version")
+        confidence_floor, confidence_cap = cls._analysis_critic_confidence_bounds(
+            critic_contract,
+            durable=True,
+        )
         evidence_segments = evidence.get("segments")
         if not isinstance(evidence_segments, list):
             raise ValueError("Accepted critic evidence requires a segments array")
@@ -2483,16 +2573,13 @@ class ProjectDB:
             derived_confidence = item.get("derived_confidence")
             generator_confidence = candidate_segments[stable_id]["data"].get("confidence")
             critic_confidence = critic.get("confidence") if isinstance(critic, dict) else None
-            confidence_cap = (
-                critic_contract.get("confidence_cap")
-                if isinstance(critic_contract, dict)
-                else None
-            )
+            commit_confidence = commit_segments[stable_id]["data"].get("confidence")
             numeric_confidences = (
                 generator_confidence,
                 critic_confidence,
                 confidence_cap,
                 derived_confidence,
+                commit_confidence,
             )
             critic_fields = {
                 *ANALYSIS_CRITIC_DELIVERY_FIELDS,
@@ -2558,6 +2645,7 @@ class ProjectDB:
                     "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
                     "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
                     "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
+                    "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
                     "raw_accept": raw_accept_value,
                     "raw_field_deltas": raw_deltas,
                 }
@@ -2640,14 +2728,22 @@ class ProjectDB:
                 )
                 or any(type(value) not in {int, float} for value in numeric_confidences)
                 or any(not math.isfinite(float(value)) for value in numeric_confidences)
+                or any(
+                    float(value) < confidence_floor
+                    for value in (
+                        generator_confidence,
+                        critic_confidence,
+                        derived_confidence,
+                        commit_confidence,
+                    )
+                )
                 or float(derived_confidence)
                 != min(
                     float(generator_confidence),
                     float(critic_confidence),
                     float(confidence_cap),
                 )
-                or float(commit_segments[stable_id]["data"]["confidence"])
-                != float(derived_confidence)
+                or float(commit_confidence) != float(derived_confidence)
             ):
                 raise RuntimeError(
                     "Accepted critic evidence does not bind exact delivery/confidence for "
@@ -2826,6 +2922,7 @@ class ProjectDB:
             contract = json.loads(str(row["contract_json"]))
         except json.JSONDecodeError as exc:
             raise RuntimeError("Analysis critic intent ledger contains invalid JSON") from exc
+        cls._analysis_critic_confidence_bounds(contract, durable=True)
         intent_json, intent_hash = cls._canonical_analysis_json(
             intent,
             "stored analysis critic intent",
@@ -3387,6 +3484,10 @@ class ProjectDB:
         normalized_budget = int(max_attempts)
         if normalized_budget < 1:
             raise ValueError("Analysis critic attempt budget must be positive")
+        confidence_floor, _confidence_cap = self._analysis_critic_confidence_bounds(
+            contract,
+            durable=False,
+        )
         intent_json, intent_hash = self._canonical_analysis_json(
             intent,
             "analysis critic intent",
@@ -3398,6 +3499,17 @@ class ProjectDB:
         now = time.time()
         with self.transaction() as conn:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate_payload = json.loads(str(candidate["candidate_json"]))
+            below_floor_ids = [
+                str(segment["stable_id"])
+                for segment in candidate_payload["segments"]
+                if float(segment["data"]["confidence"]) < confidence_floor
+            ]
+            if below_floor_ids:
+                raise RuntimeError(
+                    "Analysis candidate confidence is below the reserved critic floor: "
+                    + ",".join(below_floor_ids)
+                )
             state = str(candidate["state"])
             if state != normalized_expected_state:
                 raise RuntimeError(

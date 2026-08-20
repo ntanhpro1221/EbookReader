@@ -2,7 +2,7 @@
 
 Ngày cập nhật: 2026-08-20
 
-Đợt sửa contract director critic V21: **609/609 test trọng tâm pass** cho analysis bắt buộc,
+Đợt sửa confidence contract V22: **634/634 test trọng tâm pass** cho analysis bắt buộc,
 database safety và quality policy trên Python 3.11.9. Compileall cho source/test, `git diff --check`
 và Ruff trên toàn bộ file bị ảnh hưởng đều pass; đợt này không chạy model/GPU hoặc pipeline audiobook thật.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
@@ -68,7 +68,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   reopen, direct update và commit. Character registry không còn dùng prose delivery làm personality hay marker legacy làm
   quyền điều khiển identity, và speaker repair không sao chép note lân cận;
 - high-quality director critic chạy lượt self-review thứ hai mà không thấy confidence/notes/personality của generator;
-  contract cục bộ từ chối root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
+  content generator confidence dưới floor bị feedback typed và retry trước mọi critic/ledger allocation; schema/prompt mang
+  floor ở batch không có heading, còn batch hỗn hợp giữ schema floor `0` để proposal confidence thô của heading vẫn tới host.
+  Contract critic khóa cả floor; root/item thừa, ID thiếu/trùng/lạ, kiểu bool/string thay số, NaN/Inf và confidence dưới ngưỡng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate
   luôn có precedence vì critic cùng Qwen là correlated self-review chứ không phải model độc lập;
 - source thought được gửi riêng cho critic theo `previous_context_only`: giữ lời dẫn trước nhưng xóa `next_text`, trong khi
@@ -77,8 +79,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - host affect gate khóa hẹp hai beat tự-bảo-toàn: thought có cue tử vong trực tiếp và wake/self-rescue thought liền kề;
   feedback là JSON typed/whitelist không chứa source/rationale tự do, trường hợp third-party/meta/khác chapter-paragraph không
   bị lan cue. Context/group fingerprint bao gồm stable ID, source hash, chapter, paragraph, kind và hai hàng xóm;
-- tiêu đề chương thật được nhận diện hẹp bằng vị trí/metadata/grammar, canonical thành narrator trung tính và gửi critic theo
-  `target_only` không có neighbor text. Critic vẫn phải trả đúng schema/hash và quote ngắn nguyên văn từ đúng source; bất đồng thô
+- tiêu đề chương thật được nhận diện hẹp bằng vị trí/metadata/grammar, canonical thành narrator trung tính với candidate
+  confidence `0.95`, đồng thời giữ proposal confidence thô trong structural audit, rồi gửi critic theo `target_only` không có
+  neighbor text. Critic vẫn phải trả đúng schema/hash và quote ngắn nguyên văn từ đúng source; bất đồng thô
   trên riêng heading được lưu cùng structural override, còn bất đồng hoặc quote sai ở content vẫn từ chối cả batch;
 - schema v8 lưu acceptance envelope đầy đủ, projection hash mà critic nhìn thấy, mọi generator contract và critic intent/outcome.
   Intent được reserve trước HTTP; protocol-invalid retry đúng candidate với seed mới, field mismatch lặp projection thì chia

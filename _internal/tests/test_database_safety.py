@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.database import (
+    ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
@@ -350,6 +351,7 @@ def _refresh_analysis_note(envelope: dict, index: int) -> None:
 def _accepted_critic_contract() -> dict:
     return {
         "policy_version": "second_pass_v1",
+        "confidence_floor": 0.65,
         "confidence_cap": 0.95,
         "seed": 11,
         "temperature": 0.0,
@@ -394,6 +396,7 @@ def _chapter_heading_envelope(source_rows: list[dict]) -> dict:
     heading_row = envelope["critic_rows"][0]
     for field, value in ANALYSIS_CHAPTER_HEADING_DELIVERY.items():
         heading_segment["data"][field] = value
+    heading_segment["data"]["confidence"] = ANALYSIS_CHAPTER_HEADING_CONFIDENCE
     heading_segment["data"]["notes"] = canonical_analysis_note(
         heading_segment["data"]
     )
@@ -406,8 +409,20 @@ def _chapter_heading_envelope(source_rows: list[dict]) -> dict:
     return envelope
 
 
-def _chapter_heading_clearance(envelope: dict) -> dict:
+def _chapter_heading_clearance(
+    envelope: dict,
+    *,
+    generator_confidence: float = 0.9,
+) -> dict:
     segment = envelope["segments"][0]
+    generator_fields = {
+        "kind": "narration",
+        "speaker": "NARRATOR",
+        "emotion": "afraid",
+        "intensity": 2,
+        "pace": "fast",
+        "volume": "loud",
+    }
     return {
         "host_affect_clearance": {
             "policy_version": ANALYSIS_HOST_AFFECT_POLICY_VERSION,
@@ -423,12 +438,12 @@ def _chapter_heading_clearance(envelope: dict) -> dict:
                     "text_sha256": segment["text_sha256"],
                     "source_role": "chapter_heading",
                     "context_policy": "target_only",
+                    "evidence_quote": envelope["critic_rows"][0]["text"],
                     "locked_fields": dict(ANALYSIS_CHAPTER_HEADING_DELIVERY),
-                    "generator_fields": {
-                        "emotion": "afraid",
-                        "intensity": 2,
-                        "pace": "fast",
-                    },
+                    "generator_fields": generator_fields,
+                    "generator_notes": "raw generator audit note",
+                    "generator_confidence": generator_confidence,
+                    "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
                 }
             ],
             "semantic_locks": [],
@@ -464,6 +479,7 @@ def _heading_override_evidence(envelope: dict) -> dict:
         "source_role": "chapter_heading",
         "context_policy": "target_only",
         "locked_fields": dict(ANALYSIS_CHAPTER_HEADING_DELIVERY),
+        "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
         "raw_accept": False,
         "raw_field_deltas": deltas,
     }
@@ -1138,7 +1154,7 @@ def test_analysis_candidate_reservation_survives_reopen_and_consumes_crashed_int
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"]), "attempt": 1},
-        contract={"seed": 11, "temperature": 0.2},
+        contract={**_accepted_critic_contract(), "seed": 11, "temperature": 0.2},
     )
 
     reopened = ProjectDB(db.path)
@@ -1155,7 +1171,7 @@ def test_analysis_candidate_reservation_survives_reopen_and_consumes_crashed_int
         expected_state="critic_in_flight",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"]), "attempt": 2},
-        contract={"seed": 12, "temperature": 0.2},
+        contract={**_accepted_critic_contract(), "seed": 12, "temperature": 0.2},
     )
 
     assert int(first["attempt_number"]) == 1
@@ -1168,7 +1184,7 @@ def test_analysis_candidate_reservation_survives_reopen_and_consumes_crashed_int
             expected_state="critic_in_flight",
             max_attempts=2,
             intent={"attempt": 3},
-            contract={"seed": 13},
+            contract={**_accepted_critic_contract(), "seed": 13},
         )
 
 
@@ -1316,6 +1332,183 @@ def test_analysis_candidate_rejects_arbitrarily_lowered_derived_confidence(
             outcome={"accepted": True},
             evidence=evidence,
             commit_envelope=commit_envelope,
+        )
+
+
+def test_v22_content_candidate_below_floor_is_rejected_before_critic_reserve(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    envelope["segments"][0]["data"]["confidence"] = 0.64
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+    with pytest.raises(RuntimeError, match="below the reserved critic floor"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=_accepted_critic_contract(),
+        )
+
+    reopened = ProjectDB(db.path)
+    assert reopened.get_analysis_candidate(int(candidate["id"]))["state"] == "allocated"
+    assert reopened.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v22_critic_below_floor_cannot_complete_an_accepted_candidate(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    commit_envelope = copy.deepcopy(envelope)
+    for index, item in enumerate(evidence["segments"]):
+        item["critic"]["confidence"] = 0.64
+        item["derived_confidence"] = 0.64
+        commit_envelope["segments"][index]["data"]["confidence"] = 0.64
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=commit_envelope,
+        )
+
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == (
+        "critic_in_flight"
+    )
+
+
+@pytest.mark.parametrize(
+    "contract",
+    (
+        {"policy_version": "second_pass_v1", "confidence_cap": 0.95},
+        {
+            "policy_version": "second_pass_v1",
+            "confidence_floor": -0.01,
+            "confidence_cap": 0.95,
+        },
+        {
+            "policy_version": "second_pass_v1",
+            "confidence_floor": 0.65,
+            "confidence_cap": 1.01,
+        },
+        {
+            "policy_version": "second_pass_v1",
+            "confidence_floor": 0.96,
+            "confidence_cap": 0.95,
+        },
+        {
+            "policy_version": "second_pass_v1",
+            "confidence_floor": float("nan"),
+            "confidence_cap": 0.95,
+        },
+    ),
+)
+def test_v22_critic_reserve_rejects_invalid_confidence_contract(
+    tmp_path: Path,
+    contract: dict,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+
+    with pytest.raises(ValueError, match="confidence floor/cap"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("confidence_floor", 0.5), ("confidence_cap", 0.9)),
+)
+def test_v22_acceptance_rejects_critic_floor_or_cap_contract_tamper(
+    tmp_path: Path,
+    field: str,
+    value: float,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["critic_contract"][field] = value
+
+    with pytest.raises(RuntimeError, match="differs from the reserved request contract"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_v22_reopen_rejects_rehashed_invalid_critic_floor_contract(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    tampered_contract = _accepted_critic_contract()
+    tampered_contract["confidence_floor"] = -0.01
+    tampered_json = json.dumps(
+        tampered_contract,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET contract_json=?,contract_hash=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (tampered_json, sha256_text(tampered_json), int(candidate["id"])),
+        )
+
+    with pytest.raises(RuntimeError, match="confidence floor/cap"):
+        ProjectDB(db.path).find_resumable_analysis_candidate(
+            policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            model_name=ANALYSIS_MODEL_NAME,
+            model_digest=ANALYSIS_MODEL_DIGEST,
+            group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            context_hash=ANALYSIS_CONTEXT_HASH,
         )
 
 
@@ -1783,6 +1976,220 @@ def test_analysis_candidate_accepts_source_bound_chapter_heading_override(
         "locked_fields"
     ] == ANALYSIS_CHAPTER_HEADING_DELIVERY
     assert snapshot["commit_envelope"]["segments"][0]["data"]["emotion"] == "neutral"
+
+
+def test_v22_heading_raw_tiny_confidence_is_locked_reopened_and_committed(
+    tmp_path: Path,
+) -> None:
+    assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
+    assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(
+        envelope,
+        generator_confidence=1e-16,
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    candidate_id = int(candidate["id"])
+    durable_candidate = json.loads(str(candidate["candidate_json"]))
+    durable_clearance = json.loads(str(candidate["deterministic_issue_json"]))
+    heading_lock = durable_clearance["host_affect_clearance"]["structural_locks"][0]
+    assert durable_candidate["segments"][0]["data"]["confidence"] == 0.95
+    assert heading_lock["generator_confidence"] == 1e-16
+    assert heading_lock["locked_confidence"] == 0.95
+
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(),
+    )
+    reopened_after_reserve = ProjectDB(db.path)
+    reopened_after_reserve.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+
+    reopened_after_accept = ProjectDB(db.path)
+    snapshot = reopened_after_accept.analysis_candidate_acceptance_envelope(candidate_id)
+    assert snapshot["candidate"]["segments"][0]["data"]["confidence"] == 0.95
+    assert snapshot["commit_envelope"]["segments"][0]["data"]["confidence"] == 0.95
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in snapshot["commit_envelope"]["segments"]
+    ]
+    reopened_after_accept.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    committed_heading = ProjectDB(db.path).list_segments()[0]
+    assert committed_heading["confidence"] == 0.95
+    assert committed_heading["status"] == "analyzed"
+    assert ProjectDB(db.path).get_analysis_candidate(candidate_id)["state"] == "accepted"
+
+
+@pytest.mark.parametrize(
+    ("tamper_field", "tamper_value", "error"),
+    (
+        ("locked_confidence", 0.94, "structural clearance is not source-bound"),
+        ("generator_confidence", -0.01, "structural clearance is not source-bound"),
+        ("generator_confidence", 1.01, "structural clearance is not source-bound"),
+        ("evidence_quote", "forged source", "structural clearance is not source-bound"),
+    ),
+)
+def test_v22_heading_rejects_forged_structural_confidence_audit(
+    tmp_path: Path,
+    tamper_field: str,
+    tamper_value: object,
+    error: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Khởi đầu", "Nội dung."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+    clearance["host_affect_clearance"]["structural_locks"][0][tamper_field] = (
+        tamper_value
+    )
+
+    with pytest.raises(RuntimeError, match=error):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=clearance,
+        )
+
+
+@pytest.mark.parametrize("missing_field", ("generator_confidence", "locked_confidence"))
+def test_v22_heading_rejects_missing_structural_confidence_fields(
+    tmp_path: Path,
+    missing_field: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Khởi đầu", "Nội dung."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+    del clearance["host_affect_clearance"]["structural_locks"][0][missing_field]
+
+    with pytest.raises(RuntimeError, match="structural clearance lock has invalid schema"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=clearance,
+        )
+
+
+def test_v22_heading_rejects_incomplete_generator_delivery_audit(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Khởi đầu", "Nội dung."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+    del clearance["host_affect_clearance"]["structural_locks"][0][
+        "generator_fields"
+    ]["speaker"]
+
+    with pytest.raises(RuntimeError, match="structural clearance is not source-bound"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=clearance,
+        )
+
+
+def test_v22_heading_rejects_candidate_confidence_below_fixed_lock(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Khởi đầu", "Nội dung."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    envelope["segments"][0]["data"]["confidence"] = 0.94
+
+    with pytest.raises(ValueError, match="heading candidate confidence"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            deterministic_issues=_chapter_heading_clearance(envelope),
+        )
+
+
+def test_v22_heading_revalidates_locked_confidence_on_reopen(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Khởi đầu", "Nội dung."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=_chapter_heading_clearance(envelope),
+    )
+    tampered = json.loads(str(candidate["deterministic_issue_json"]))
+    tampered["host_affect_clearance"]["structural_locks"][0][
+        "locked_confidence"
+    ] = 0.94
+    tampered_json = json.dumps(
+        tampered,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET deterministic_issue_json=?,"
+            "deterministic_issue_hash=? WHERE id=?",
+            (tampered_json, sha256_text(tampered_json), int(candidate["id"])),
+        )
+
+    with pytest.raises(RuntimeError, match="structural clearance is not source-bound"):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
 
 
 def test_analysis_candidate_rejects_heading_role_on_first_prose_segment(
@@ -3580,7 +3987,7 @@ def test_analysis_candidate_resume_rejects_tampered_child_ledgers(tmp_path: Path
             expected_state="critic_in_flight",
             max_attempts=2,
             intent={"candidate_hash": str(candidate["candidate_hash"])},
-            contract={"seed": 12},
+            contract={**_accepted_critic_contract(), "seed": 12},
         )
 
     untouched = _allocate_analysis_candidate(

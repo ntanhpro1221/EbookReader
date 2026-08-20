@@ -175,11 +175,17 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   direct update và commit. Speaker repair không được sao chép note từ segment khác, và character registry không được dùng
   prose delivery làm personality hoặc dùng marker legacy làm quyền điều khiển identity.
 - Tiêu đề chương chỉ được nhận diện bằng source metadata đầu chapter và grammar tiêu đề độc lập. Host phải khóa delivery
-  tiêu đề về narrator trung tính, không gửi ngữ cảnh hàng xóm cho row đó và vẫn giữ nguyên proposal/verdict thô để audit.
+  tiêu đề về narrator trung tính cùng confidence candidate `0.95`, không gửi ngữ cảnh hàng xóm cho row đó và vẫn giữ
+  nguyên proposal/confidence/verdict thô để audit. Confidence commit sau critic vẫn là min của candidate khóa, reviewer và cap.
   Structural override chỉ được phép cho đúng row đã khóa; mọi content row vẫn chịu critic bình thường. Mỗi verdict critic
   phải trích nguyên văn bằng chứng ngắn, không rỗng từ chính text cùng ID, không được lấy bằng chứng từ row lân cận
   hoặc sao chép nguyên một segment dài vượt giới hạn schema.
-- Confidence được commit phải nằm trên ngưỡng khóa và không vượt cap của director. Model name + digest Ollama phải được
+- Với analysis bắt buộc ở profile `high_quality`, mọi content candidate dưới `low_confidence_threshold` phải bị từ chối
+  bằng feedback số typed trước critic/candidate ledger. Prompt generator luôn phải mang đúng floor; schema áp floor trực tiếp
+  cho batch không có tiêu đề, còn batch trộn tiêu đề+nội dung phải giữ proposal confidence thô của tiêu đề và dùng host gate
+  để áp floor lên content. Tiêu đề cấu trúc được normalize trước gate này. Confidence được commit phải nằm trên ngưỡng khóa
+  và không vượt cap của director.
+  Model name + digest Ollama phải được
   khóa bền ở cấp book, kiểm tra lại trước và sau mọi request generator, critic và pronunciation; tag/digest đổi giữa
   request hoặc giữa hai lần resume phải fail-closed. Project high-quality legacy đã có analysis checkpoint nhưng chưa có
   critic contract không được trộn dữ liệu cũ/mới; phải tạo project sạch.

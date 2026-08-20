@@ -19,6 +19,7 @@ import requests
 from .config import ANALYSIS_RETRY_POLICY_VERSION
 from .database import (
     ADDRESSEE_REPAIR_NOTE,
+    ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_PATTERN,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
     ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
@@ -83,9 +84,9 @@ SEMANTIC_DOMINANCE_MIN_CONTRADICTIONS = 3
 NEUTRAL_ZERO_DELIVERY_SIGNATURE = ("neutral", 0, "normal", "normal")
 DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = 0.99
-DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v4"
+DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v5"
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v7"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v8"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -99,6 +100,7 @@ DIRECTOR_CRITIC_VERDICT_FIELDS = frozenset(
 HOST_AFFECT_ISSUE_CODE = "HOST_AFFECT_EMOTION_MISMATCH"
 HOST_PHYSICAL_COLLAPSE_ISSUE_CODE = "HOST_PHYSICAL_COLLAPSE_MISMATCH"
 HOST_SOURCE_KIND_ISSUE_CODE = "HOST_SOURCE_KIND_MISMATCH"
+LOW_CONFIDENCE_ISSUE_CODE = "SEMANTIC_CONFIDENCE_BELOW_FLOOR"
 HOST_DIRECT_SELF_PRESERVATION_RULE = "thought_self_preservation_mortality"
 HOST_ADJACENT_WAKE_RULE = "adjacent_thought_wake_self_rescue"
 HOST_PHYSICAL_COLLAPSE_RULE = "respiratory_injury_with_consciousness_loss"
@@ -121,11 +123,12 @@ ANALYSIS_FEEDBACK_CODES = frozenset(
         HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
         HOST_SOURCE_KIND_ISSUE_CODE,
         "SEMANTIC_DELIVERY_MISMATCH",
+        LOW_CONFIDENCE_ISSUE_CODE,
         "SEMANTIC_TEMPLATE_COLLAPSE",
         "DIRECTOR_FIELD_MISMATCH",
     }
 )
-ANALYSIS_FEEDBACK_FIELDS = frozenset(DIRECTOR_DELIVERY_FIELDS)
+ANALYSIS_FEEDBACK_FIELDS = frozenset((*DIRECTOR_DELIVERY_FIELDS, "confidence"))
 HOST_SELF_PRESERVATION_MORTALITY_PATTERN = re.compile(
     r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
     flags=re.IGNORECASE,
@@ -1445,6 +1448,8 @@ class AnalysisFeedbackIssue:
     fields: tuple[str, ...] = ()
     allowed_emotions: tuple[str, ...] = ()
     rule: str = ""
+    observed_confidence: float | None = None
+    minimum_confidence: float | None = None
 
     def canonical_payload(self, identifier: str | None = None) -> dict[str, Any]:
         if type(self.code) is not str or self.code not in ANALYSIS_FEEDBACK_CODES:
@@ -1472,26 +1477,63 @@ class AnalysisFeedbackIssue:
             raise ValueError("Analysis feedback ID must be a non-empty string")
         fields = tuple(self.fields)
         allowed_emotions = tuple(self.allowed_emotions)
+        numeric_confidence = (
+            self.observed_confidence,
+            self.minimum_confidence,
+        )
+        for value in numeric_confidence:
+            if value is not None and (
+                type(value) not in {int, float}
+                or not math.isfinite(float(value))
+                or not 0.0 <= float(value) <= 1.0
+            ):
+                raise ValueError("Analysis feedback confidence must be finite and bounded")
         if self.code in {HOST_AFFECT_ISSUE_CODE, HOST_PHYSICAL_COLLAPSE_ISSUE_CODE}:
-            if fields != ("emotion",) or not allowed_emotions or not self.rule:
+            if (
+                fields != ("emotion",)
+                or not allowed_emotions
+                or not self.rule
+                or any(value is not None for value in numeric_confidence)
+            ):
                 raise ValueError("Host affect feedback is missing its canonical constraints")
+        elif self.code == LOW_CONFIDENCE_ISSUE_CODE:
+            if (
+                fields != ("confidence",)
+                or allowed_emotions
+                or self.rule
+                or self.observed_confidence is None
+                or self.minimum_confidence is None
+                or not float(self.observed_confidence) < float(self.minimum_confidence)
+            ):
+                raise ValueError("Low-confidence feedback has invalid canonical constraints")
         elif self.code == "SEMANTIC_DELIVERY_MISMATCH":
-            if fields != ("emotion",) or allowed_emotions or self.rule:
+            if (
+                fields != ("emotion",)
+                or allowed_emotions
+                or self.rule
+                or any(value is not None for value in numeric_confidence)
+            ):
                 raise ValueError("Semantic delivery feedback must target emotion only")
         elif self.code == "SEMANTIC_TEMPLATE_COLLAPSE":
             if (
                 fields != ("emotion", "intensity", "pace", "volume")
                 or allowed_emotions
                 or self.rule
+                or any(value is not None for value in numeric_confidence)
             ):
                 raise ValueError("Semantic template feedback has invalid target fields")
         elif self.code == HOST_SOURCE_KIND_ISSUE_CODE:
-            if fields != ("kind",) or allowed_emotions:
+            if (
+                fields != ("kind",)
+                or allowed_emotions
+                or any(value is not None for value in numeric_confidence)
+            ):
                 raise ValueError("Source-kind feedback must target kind only")
         elif (
             not fields
             or allowed_emotions
             or self.rule
+            or any(value is not None for value in numeric_confidence)
         ):
             raise ValueError("Director feedback has invalid canonical constraints")
         payload: dict[str, Any] = {
@@ -1504,6 +1546,9 @@ class AnalysisFeedbackIssue:
             payload["allowed_emotions"] = list(allowed_emotions)
         if self.rule:
             payload["rule"] = self.rule
+        if self.code == LOW_CONFIDENCE_ISSUE_CODE:
+            payload["observed_confidence"] = float(self.observed_confidence)
+            payload["minimum_confidence"] = float(self.minimum_confidence)
         return payload
 
 
@@ -2723,12 +2768,25 @@ def _short_name_local_fallback_is_safe(candidate: dict[str, Any]) -> bool:
     return len(onset) <= 1 or onset in LATIN_NAME_ONSET_READINGS
 
 
-def _output_schema_for_batch(batch_ids: list[str]) -> dict[str, Any]:
+def _output_schema_for_batch(
+    batch_ids: list[str],
+    *,
+    confidence_floor: float = 0.0,
+) -> dict[str, Any]:
+    if (
+        type(confidence_floor) not in {int, float}
+        or not math.isfinite(float(confidence_floor))
+        or not 0.0 <= float(confidence_floor) <= 1.0
+    ):
+        raise ValueError("Generator confidence floor must be finite and bounded")
     schema = copy.deepcopy(OUTPUT_SCHEMA)
     segments = schema["properties"]["segments"]
     segments["minItems"] = len(batch_ids)
     segments["maxItems"] = len(batch_ids)
     segments["items"]["properties"]["id"]["enum"] = batch_ids
+    segments["items"]["properties"]["confidence"]["minimum"] = float(
+        confidence_floor
+    )
     pronunciations = schema["properties"]["pronunciations"]
     pronunciations["maxItems"] = min(
         MAX_PRONUNCIATIONS_PER_BATCH,
@@ -2764,7 +2822,9 @@ def _apply_host_structural_locks(
             for field in DIRECTOR_DELIVERY_FIELDS
         }
         generator_notes = str(candidate.get("notes", ""))
+        generator_confidence = float(candidate["confidence"])
         candidate.update(copy.deepcopy(ANALYSIS_CHAPTER_HEADING_DELIVERY))
+        candidate["confidence"] = ANALYSIS_CHAPTER_HEADING_CONFIDENCE
         candidate["personality_hint"] = ""
         candidate["notes"] = canonical_analysis_note(candidate)
         locks.append(
@@ -2777,10 +2837,39 @@ def _apply_host_structural_locks(
                 "evidence_quote": str(row["text"]),
                 "generator_fields": generator_fields,
                 "generator_notes": generator_notes,
+                "generator_confidence": generator_confidence,
                 "locked_fields": copy.deepcopy(ANALYSIS_CHAPTER_HEADING_DELIVERY),
+                "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
             }
         )
     return tuple(locks)
+
+
+def _low_confidence_feedback_issues(
+    group: list[Any],
+    validated: dict[str, dict[str, Any]],
+    minimum_confidence: float,
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    """Reject source content below the required HQ floor before critic/ledger work."""
+    issues = []
+    for row in group:
+        stable_id = str(row["stable_id"])
+        candidate = validated.get(stable_id)
+        if candidate is None or _is_explicit_chapter_heading(row):
+            continue
+        observed_confidence = float(candidate["confidence"])
+        if observed_confidence >= minimum_confidence:
+            continue
+        issues.append(
+            AnalysisFeedbackIssue(
+                stable_id=stable_id,
+                code=LOW_CONFIDENCE_ISSUE_CODE,
+                fields=("confidence",),
+                observed_confidence=observed_confidence,
+                minimum_confidence=minimum_confidence,
+            )
+        )
+    return tuple(issues)
 
 
 def _director_candidate_rows(
@@ -3208,6 +3297,16 @@ def _structured_feedback_issues(
                 issue.rule,
                 issue.fields,
                 issue.allowed_emotions,
+                (
+                    -1.0
+                    if issue.observed_confidence is None
+                    else float(issue.observed_confidence)
+                ),
+                (
+                    -1.0
+                    if issue.minimum_confidence is None
+                    else float(issue.minimum_confidence)
+                ),
             ),
         )
     )
@@ -3332,6 +3431,11 @@ def _director_critic_request_contract(
         "policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
         "confidence_cap": float(
             settings.get("director_confidence_cap", DIRECTOR_CONFIDENCE_MAX)
+        ),
+        "confidence_floor": (
+            float(settings.get("low_confidence_threshold", 0.58))
+            if settings.get("low_confidence_policy") == "fail"
+            else 0.0
         ),
         "model": model,
         "digest": model_digest,
@@ -3533,6 +3637,8 @@ def _adjudicate_director_critic(
         semantic_override: dict[str, Any] | None = None
         heading_delivery_is_locked = (
             _is_explicit_chapter_heading(rows_by_stable[stable_id])
+            and float(candidate.get("confidence", -1.0))
+            == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
             and all(
                 candidate[field] == expected
                 for field, expected in ANALYSIS_CHAPTER_HEADING_DELIVERY.items()
@@ -3546,6 +3652,7 @@ def _adjudicate_director_critic(
                 "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
                 "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
                 "locked_fields": copy.deepcopy(ANALYSIS_CHAPTER_HEADING_DELIVERY),
+                "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
                 "raw_accept": False,
                 "raw_field_deltas": deltas,
             }
@@ -3940,6 +4047,28 @@ class OllamaBookAnalyzer:
             f"Nhân vật đã biết từ các phần trước:\n{self._known_summary()}\n\n"
             f"Các đoạn liên tiếp:\n{json.dumps(rows, ensure_ascii=False, indent=2)}"
         )
+        required_hq_confidence_floor = (
+            float(self.settings.get("low_confidence_threshold", 0.58))
+            if (
+                self.quality_profile == "high_quality"
+                and bool(self.settings.get("enabled", True))
+                and bool(self.settings.get("required", True))
+                and self.settings.get("low_confidence_policy") == "fail"
+            )
+            else 0.0
+        )
+        if required_hq_confidence_floor > 0.0:
+            prompt += (
+                "\n\nRàng buộc confidence của profile high_quality bắt buộc: mọi đoạn nội "
+                "dung không phải tiêu đề chương cấu trúc phải trả confidence tối thiểu "
+                f"{required_hq_confidence_floor:.2f}. Tiêu đề cấu trúc được host khóa "
+                "confidence riêng sau khi lưu proposal thô để audit."
+            )
+        schema_confidence_floor = (
+            0.0
+            if any(_is_explicit_chapter_heading(row) for row in group)
+            else required_hq_confidence_floor
+        )
         if validation_feedback:
             stable_to_batch = {stable: batch for batch, stable in batch_to_stable.items()}
             feedback_payload = [
@@ -3978,7 +4107,10 @@ class OllamaBookAnalyzer:
             "model": self.model,
             "system": SYSTEM_PROMPT,
             "prompt": prompt,
-            "format": _output_schema_for_batch(list(batch_to_stable)),
+            "format": _output_schema_for_batch(
+                list(batch_to_stable),
+                confidence_floor=schema_confidence_floor,
+            ),
             "keep_alive": "30m",
             "options": {
                 "temperature": request_contract["temperature"],
@@ -4470,6 +4602,16 @@ class OllamaBookAnalyzer:
             self.settings.get("director_confidence_cap", DIRECTOR_CONFIDENCE_MAX)
         )
         confidence_threshold = float(self.settings.get("low_confidence_threshold", 0.58))
+        director_confidence_floor = (
+            confidence_threshold
+            if self.settings.get("low_confidence_policy") == "fail"
+            else 0.0
+        )
+        enforce_precritic_confidence = (
+            required
+            and self.quality_profile == "high_quality"
+            and self.settings.get("low_confidence_policy") == "fail"
+        )
         retry_count = int(self.settings.get("max_retries", 3))
         group_offset = 0
         while group_offset < len(groups):
@@ -4523,7 +4665,7 @@ class OllamaBookAnalyzer:
                         group_index=group_index,
                         group_count=len(groups),
                         confidence_cap=director_confidence_cap,
-                        confidence_floor=confidence_threshold,
+                        confidence_floor=director_confidence_floor,
                     )
                     if durable_issues:
                         validation_feedback = _structured_feedback_issues(durable_issues)
@@ -4597,6 +4739,19 @@ class OllamaBookAnalyzer:
                             group,
                             validated,
                         )
+                        low_confidence_issues = (
+                            _low_confidence_feedback_issues(
+                                group,
+                                validated,
+                                confidence_threshold,
+                            )
+                            if enforce_precritic_confidence
+                            else ()
+                        )
+                        validation_feedback = _merge_feedback_issues(
+                            validation_feedback,
+                            low_confidence_issues,
+                        )
                         host_adjudication = _host_affect_adjudication(
                             group,
                             validated,
@@ -4629,6 +4784,18 @@ class OllamaBookAnalyzer:
                                 validation_feedback,
                                 semantic_issues,
                             )
+                        if low_confidence_issues:
+                            semantic_issues = {
+                                **semantic_issues,
+                                **{
+                                    issue.stable_id: (
+                                        f"{issue.code} fields=confidence "
+                                        f"observed_confidence={issue.observed_confidence:.17g} "
+                                        f"minimum_confidence={issue.minimum_confidence:.17g}"
+                                    )
+                                    for issue in low_confidence_issues
+                                },
+                            }
                         if source_kind_issues:
                             semantic_issues = {
                                 **{
@@ -4843,7 +5010,7 @@ class OllamaBookAnalyzer:
                                     group_index=group_index,
                                     group_count=len(groups),
                                     confidence_cap=director_confidence_cap,
-                                    confidence_floor=confidence_threshold,
+                                    confidence_floor=director_confidence_floor,
                                 )
                                 candidate_state = str(analysis_candidate["state"])
                                 if candidate_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
@@ -4962,7 +5129,7 @@ class OllamaBookAnalyzer:
                                             critic_payload,
                                             candidate_hash=candidate_hash,
                                             confidence_cap=director_confidence_cap,
-                                            confidence_floor=confidence_threshold,
+                                            confidence_floor=director_confidence_floor,
                                             original_context=original_context,
                                         )
                                     )

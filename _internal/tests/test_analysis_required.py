@@ -23,6 +23,7 @@ from ebook_reader.analysis import (
     HOST_RECALLED_PERSISTENT_FEAR_RULE,
     HOST_SOURCE_KIND_ISSUE_CODE,
     HOST_STUNNED_BLANK_MIND_RULE,
+    LOW_CONFIDENCE_ISSUE_CODE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
@@ -50,6 +51,7 @@ from ebook_reader.analysis import (
     _host_affect_adjudication,
     _is_explicit_chapter_heading,
     _local_scope_for_group,
+    _low_confidence_feedback_issues,
     _local_name_fallback,
     _name_candidate_contexts,
     _record_host_note_marker,
@@ -65,6 +67,7 @@ from ebook_reader.analysis import (
 )
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
+    ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     CONTINUED_DIALOGUE_LOCK_NOTE,
@@ -624,6 +627,7 @@ def test_request_uses_constrained_batch_ids_and_restores_stable_ids() -> None:
     assert segment_schema["minItems"] == len(group)
     assert segment_schema["maxItems"] == len(group)
     assert segment_schema["items"]["properties"]["id"]["enum"] == ["S001", "S002"]
+    assert segment_schema["items"]["properties"]["confidence"]["minimum"] == 0.65
     assert request["format"]["properties"]["pronunciations"]["maxItems"] >= len(group)
     assert request["options"]["num_predict"] <= ANALYSIS_OUTPUT_MAX_TOKENS
     assert request["options"]["temperature"] == 0.1
@@ -634,8 +638,76 @@ def test_request_uses_constrained_batch_ids_and_restores_stable_ids() -> None:
     assert '"id": "S001"' in request["prompt"]
     assert '"previous_text": ""' in request["prompt"]
     assert '"next_text": "Đoạn thứ hai."' in request["prompt"]
+    assert "confidence tối thiểu 0.65" in request["prompt"]
     assert "dữ liệu nguồn không đáng tin cậy" in request["system"]
     assert group[0]["stable_id"] not in request["prompt"]
+
+
+def test_non_hq_generator_keeps_the_legacy_zero_confidence_schema_floor() -> None:
+    group = analysis_group()
+    session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
+    analyzer = OllamaBookAnalyzer(build_settings("balanced"), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    analyzer._request(group)
+
+    request = session.request["json"]
+    confidence_schema = request["format"]["properties"]["segments"]["items"][
+        "properties"
+    ]["confidence"]
+    assert confidence_schema["minimum"] == 0.0
+    assert "confidence tối thiểu" not in request["prompt"]
+
+
+def test_mixed_heading_batch_keeps_raw_heading_confidence_for_host_normalization() -> None:
+    group = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Khởi đầu",
+            "kind_hint": "narration",
+        },
+        {
+            "id": 2,
+            "stable_id": "content",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": "Một đoạn nội dung cần được phân tích.",
+            "kind_hint": "narration",
+        },
+    ]
+    heading = {**analysis_item("S001"), "confidence": 1e-16}
+    content = {**analysis_item("S002"), "confidence": 0.64}
+    session = FakeSession({"segments": [heading, content]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    payload = analyzer._request(group)
+    validated = _validate(group, payload)
+    locks = _apply_host_structural_locks(group, validated)
+    confidence_issues = _low_confidence_feedback_issues(group, validated, 0.65)
+
+    confidence_schema = session.request["json"]["format"]["properties"]["segments"][
+        "items"
+    ]["properties"]["confidence"]
+    assert confidence_schema["minimum"] == 0.0
+    assert "confidence tối thiểu 0.65" in session.request["json"]["prompt"]
+    assert locks[0]["generator_confidence"] == 1e-16
+    assert locks[0]["locked_confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    assert validated["heading"]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    assert confidence_issues == (
+        AnalysisFeedbackIssue(
+            stable_id="content",
+            code=LOW_CONFIDENCE_ISSUE_CODE,
+            fields=("confidence",),
+            observed_confidence=0.64,
+            minimum_confidence=0.65,
+        ),
+    )
 
 
 def test_adaptive_retry_contract_is_deterministic_source_bound_and_text_free() -> None:
@@ -713,8 +785,25 @@ def test_director_transport_contract_is_immutable_but_candidate_bound() -> None:
 
     assert first == repeated
     assert first["temperature"] == settings["director_critic_temperature"]
+    assert first["confidence_floor"] == settings["low_confidence_threshold"]
     assert first["seed"] != changed_candidate["seed"]
     assert first["group_fingerprint"] == changed_candidate["group_fingerprint"]
+
+
+def test_non_fail_director_contract_does_not_turn_warning_threshold_into_a_floor() -> None:
+    settings = build_settings("balanced")["analysis"]
+
+    contract = _director_critic_request_contract(
+        settings,
+        model="qwen3:8b",
+        model_digest="sha256:locked",
+        group=analysis_group(),
+        attempt=1,
+        candidate_hash="candidate",
+    )
+
+    assert settings["low_confidence_policy"] == "auto_with_warning"
+    assert contract["confidence_floor"] == 0.0
 
 
 def test_retry_contract_and_candidate_hash_are_bound_to_original_neighbor_context() -> None:
@@ -855,8 +944,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v4"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v7"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v5"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v8"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -1095,6 +1184,41 @@ def test_physical_collapse_feedback_is_typed_and_does_not_forward_source_text() 
         "rule": "respiratory_injury_with_consciousness_loss",
     }
     assert "phổi" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_low_confidence_feedback_is_typed_numeric_and_source_text_free() -> None:
+    row = {
+        **analysis_group()[0],
+        "text": "Nguồn riêng tư tuyệt đối không được chép vào feedback.",
+    }
+    stable_id = str(row["stable_id"])
+    validated = {
+        stable_id: {
+            **analysis_item(stable_id),
+            "confidence": 1e-16,
+        }
+    }
+
+    issues = _low_confidence_feedback_issues([row], validated, 0.65)
+
+    assert issues == (
+        AnalysisFeedbackIssue(
+            stable_id=stable_id,
+            code=LOW_CONFIDENCE_ISSUE_CODE,
+            fields=("confidence",),
+            observed_confidence=1e-16,
+            minimum_confidence=0.65,
+        ),
+    )
+    payload = issues[0].canonical_payload("S001")
+    assert payload == {
+        "id": "S001",
+        "code": "SEMANTIC_CONFIDENCE_BELOW_FLOOR",
+        "fields": ["confidence"],
+        "observed_confidence": 1e-16,
+        "minimum_confidence": 0.65,
+    }
+    assert row["text"] not in json.dumps(payload, ensure_ascii=False)
 
 
 def test_compound_semantic_feedback_excludes_host_owned_notes_dimension() -> None:
@@ -3050,14 +3174,22 @@ def test_host_structural_heading_lock_preserves_generator_proposal_then_canonica
         "kind_hint": "narration",
     }
     item = analysis_item("chapter-heading")
-    item.update({"emotion": "angry", "intensity": 2, "pace": "fast", "volume": "loud"})
+    item.update(
+        {
+            "emotion": "angry",
+            "intensity": 2,
+            "pace": "fast",
+            "volume": "loud",
+            "confidence": 1e-16,
+        }
+    )
     validated = _validate([row], {"segments": [item]})
 
     locks = _apply_host_structural_locks([row], validated)
 
     assert locks == (
         {
-            "policy_version": "chapter_heading_lock_v1",
+            "policy_version": "chapter_heading_lock_v2",
             "stable_id": "chapter-heading",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "chapter_heading",
@@ -3080,6 +3212,7 @@ def test_host_structural_heading_lock_preserves_generator_proposal_then_canonica
                     "volume": "loud",
                 }
             ),
+            "generator_confidence": 1e-16,
             "locked_fields": {
                 "kind": "narration",
                 "speaker": "NARRATOR",
@@ -3088,12 +3221,17 @@ def test_host_structural_heading_lock_preserves_generator_proposal_then_canonica
                 "pace": "normal",
                 "volume": "normal",
             },
+            "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
         },
     )
     assert {
         field: validated["chapter-heading"][field]
         for field in ("kind", "speaker", "emotion", "intensity", "pace", "volume")
     } == locks[0]["locked_fields"]
+    assert validated["chapter-heading"]["confidence"] == (
+        ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    )
+    assert _low_confidence_feedback_issues([row], validated, 0.65) == ()
     assert validated["chapter-heading"]["notes"] == canonical_analysis_note(
         locks[0]["locked_fields"],
     )
@@ -3355,13 +3493,13 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v4"
+    assert first_contract["policy_version"] == "second_pass_v5"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
 
 
-def test_previous_only_policy_fingerprint_does_not_match_stale_v3_ledger(
+def test_v22_confidence_policy_fingerprint_does_not_match_stale_v21_ledger(
     monkeypatch,
 ) -> None:
     settings = build_settings()["analysis"]
@@ -3369,11 +3507,11 @@ def test_previous_only_policy_fingerprint_does_not_match_stale_v3_ledger(
 
     monkeypatch.setattr(
         "ebook_reader.analysis.DIRECTOR_CRITIC_POLICY_VERSION",
-        "second_pass_v3",
+        "second_pass_v4",
     )
     monkeypatch.setattr(
         "ebook_reader.analysis.ANALYSIS_LEDGER_POLICY_VERSION",
-        "analysis_ledger_v6",
+        "analysis_ledger_v7",
     )
     stale = _analysis_policy_fingerprint(settings, "quality-policy")
 
@@ -4078,12 +4216,13 @@ def test_director_heading_locked_field_dissent_is_audited_without_veto() -> None
         "volume:normal->loud",
     ]
     assert item["host_structural_override"] == {
-        "policy_version": "chapter_heading_lock_v1",
+        "policy_version": "chapter_heading_lock_v2",
         "stable_id": "heading",
         "text_sha256": sha256_text(group[0]["text"]),
         "source_role": "chapter_heading",
         "context_policy": "target_only",
         "locked_fields": rows[0]["candidate"],
+        "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
         "raw_accept": False,
         "raw_field_deltas": item["field_deltas"],
     }
@@ -4226,6 +4365,7 @@ def test_structural_heading_neighbor_leak_is_canonicalized_and_checkpointed(monk
                 "intensity": 2,
                 "pace": "fast",
                 "volume": "loud",
+                "confidence": 1e-16,
                 "notes": "Đã suy diễn nhầm cảm xúc từ nội dung đứng ngay sau tiêu đề.",
             }
         )
@@ -4235,6 +4375,7 @@ def test_structural_heading_neighbor_leak_is_canonicalized_and_checkpointed(monk
         return director_critic_payload(
             group,
             validated,
+            confidence=ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
             corrections={
                 0: {
                     "emotion": "afraid",
@@ -4265,12 +4406,15 @@ def test_structural_heading_neighbor_leak_is_canonicalized_and_checkpointed(monk
         "pace": "normal",
         "volume": "normal",
     }
+    assert saved["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
     accepted = next(
         event for event in db.events if event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
     )
     lock = accepted[3]["host_affect_clearance"]["structural_locks"][0]
     assert lock["generator_fields"]["emotion"] == "afraid"
+    assert lock["generator_confidence"] == 1e-16
     assert lock["locked_fields"]["emotion"] == "neutral"
+    assert lock["locked_confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
     evidence = accepted[3]["segments"][0]
     assert evidence["critic"]["emotion"] == "afraid"
     assert evidence["effective_accept"] is True
@@ -5424,6 +5568,108 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     assert any(event[1] == "ANALYSIS_SEMANTIC_REJECTED" for event in db.events)
 
 
+def test_required_hq_low_confidence_repairs_before_critic_or_ledger(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1,
+            "stable_id": "heading",
+            "chapter_id": 1,
+            "seq": 0,
+            "paragraph_index": 0,
+            "text": "Chương 01 - Khởi đầu",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 2,
+            "stable_id": "content",
+            "chapter_id": 1,
+            "seq": 1,
+            "paragraph_index": 1,
+            "text": "Một đoạn nội dung cần được phân tích.",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"max_retries": 2, "low_confidence_threshold": 0.65}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    feedback_seen: list[tuple[AnalysisFeedbackIssue, ...] | None] = []
+    critic_calls = 0
+
+    def generate(group, **kwargs):
+        feedback_seen.append(kwargs.get("validation_feedback"))
+        heading = analysis_item(str(group[0]["stable_id"]))
+        heading["confidence"] = 1e-16
+        content = analysis_item(str(group[1]["stable_id"]))
+        content["confidence"] = 1e-16 if len(feedback_seen) == 1 else 0.88
+        return {"segments": [heading, content]}
+
+    def critic(group, validated, **kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        assert len(db.analysis_candidates) == 1
+        return director_critic_payload(
+            group,
+            validated,
+            confidence=ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert critic_calls == 1
+    assert len(db.analysis_candidates) == 1
+    assert feedback_seen == [
+        None,
+        (
+            AnalysisFeedbackIssue(
+                stable_id="content",
+                code=LOW_CONFIDENCE_ISSUE_CODE,
+                fields=("confidence",),
+                observed_confidence=1e-16,
+                minimum_confidence=0.65,
+            ),
+        ),
+    ]
+    assert [event[1] for event in db.events] == [
+        "ANALYSIS_SEMANTIC_REJECTED",
+        "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+    ]
+    rejected_details = db.events[0][3]
+    assert rejected_details["issues"] == {
+        "content": (
+            "SEMANTIC_CONFIDENCE_BELOW_FLOOR fields=confidence "
+            "observed_confidence=9.9999999999999998e-17 minimum_confidence=0.65000000000000002"
+        )
+    }
+    assert rejected_details["structured_feedback"] == [
+        {
+            "id": "content",
+            "code": "SEMANTIC_CONFIDENCE_BELOW_FLOOR",
+            "fields": ["confidence"],
+            "observed_confidence": 1e-16,
+            "minimum_confidence": 0.65,
+        }
+    ]
+    saved_by_id = {segment_id: data for segment_id, data, _floor in db.updated}
+    assert saved_by_id[1]["confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+    assert saved_by_id[2]["confidence"] == pytest.approx(0.88)
+    accepted_details = db.events[1][3]
+    heading_lock = accepted_details["host_affect_clearance"]["structural_locks"][0]
+    assert heading_lock["generator_confidence"] == 1e-16
+    assert heading_lock["locked_confidence"] == ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+
+
 def test_retry_retains_host_constraints_while_fixing_later_semantic_issue(
     monkeypatch,
 ) -> None:
@@ -6077,7 +6323,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v4"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v5"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",
@@ -6149,12 +6395,29 @@ def test_high_quality_rejects_low_generator_confidence_before_director_commit(
 
     monkeypatch.setattr(analyzer, "_request", generate)
 
-    with pytest.raises(RuntimeError, match="below the locked threshold"):
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
         analyzer.analyze_all(lambda: False)
 
     assert db.updated == []
     assert db.pronunciations == []
-    assert not any(event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED" for event in db.events)
+    assert db.analysis_candidates == []
+    assert all(
+        event[1] != "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+        for event in db.events
+    )
+    assert any(
+        event[1] == "ANALYSIS_SEMANTIC_REJECTED"
+        and event[3]["structured_feedback"] == [
+            {
+                "id": "c1s1",
+                "code": "SEMANTIC_CONFIDENCE_BELOW_FLOOR",
+                "fields": ["confidence"],
+                "observed_confidence": 0.1,
+                "minimum_confidence": 0.65,
+            }
+        ]
+        for event in db.events
+    )
 
 
 def test_director_timeout_leaves_reserved_candidate_for_durable_resume(monkeypatch) -> None:
