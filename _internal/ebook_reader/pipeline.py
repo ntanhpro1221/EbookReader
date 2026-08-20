@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -3067,11 +3068,45 @@ class BookPipeline:
         try:
             self._export_reports(incremental=incremental)
         except Exception as exc:  # noqa: BLE001
-            self.db.event(
-                "warning",
-                "QUALITY_REPORT_EXPORT_FAILED",
-                f"Could not export the incremental quality report: {exc}",
-            )
+            try:
+                self.db.event(
+                    "warning",
+                    "QUALITY_REPORT_EXPORT_FAILED",
+                    f"Could not export the incremental quality report: {exc}",
+                )
+            except Exception:  # noqa: BLE001
+                logging.exception("Could not record quality report export failure")
+
+    def refresh_terminal_reports(self) -> None:
+        """Refresh JSON snapshots after the terminal DB state and event are committed.
+
+        This deliberately uses only the report exporter. The worker owns the
+        unrecoverable-error transition and must isolate any write failure so the
+        original pipeline exception remains authoritative.
+        """
+        self._export_reports(incremental=True)
+
+    @classmethod
+    def refresh_terminal_reports_without_runtime(
+        cls,
+        *,
+        paths: ProjectPaths,
+        db: ProjectDB,
+        settings: dict[str, Any],
+    ) -> None:
+        """Refresh reports before a normal pipeline instance can be constructed.
+
+        The reporting view intentionally bypasses ``__init__`` so startup-error
+        reporting cannot construct resource managers, TTS, perceptual QA, or model
+        backends. ``_export_reports`` needs only these report-specific attributes.
+        """
+        reporter = object.__new__(cls)
+        reporter.paths = paths
+        reporter.db = db
+        reporter.settings = settings
+        reporter.quality_policy = build_quality_policy(settings)
+        reporter.quality_policy_hash = quality_policy_hash(reporter.quality_policy)
+        reporter._export_reports(incremental=True)
 
     def _export_reports(self, *, incremental: bool = False) -> None:
         segments = [dict(row) for row in self.db.list_segments()]

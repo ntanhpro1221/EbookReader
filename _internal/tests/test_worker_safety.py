@@ -18,13 +18,16 @@ from ebook_reader.config import (
 )
 from ebook_reader.database import ProjectDB
 from ebook_reader.io_utils import sha256_file
-from ebook_reader.models import ProjectPaths
+from ebook_reader.models import BookStatus, ProjectPaths
+from ebook_reader.pipeline import BookPipeline
 from ebook_reader.worker import (
     ProjectRunLock,
     _apply_locked_model_cache_environment,
     _apply_model_network_policy,
     _apply_runtime_resource_overrides,
     _emit_pipeline_result,
+    _finalize_requested_stop,
+    _finalize_unrecoverable_failure,
     _load_locked_settings,
     _validate_model_runtime_contract,
     _validate_project_inputs,
@@ -285,3 +288,382 @@ def test_worker_reports_completed_with_errors_as_failure(tmp_path: Path) -> None
     assert message["ok"] is False
     assert message["critical"] is True
     assert "1 chapter chưa thể xuất MP3" in message["text"]
+
+
+def _reporting_pipeline(paths: ProjectPaths, settings: dict, db: ProjectDB) -> BookPipeline:
+    return BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+
+
+def test_unrecoverable_failure_refreshes_reports_after_terminal_db_event(
+    tmp_path: Path,
+) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+    pipeline = _reporting_pipeline(paths, settings, db)
+    db.update_book(
+        status=BookStatus.ANALYZING.value,
+        stage="full_book_analysis",
+    )
+    pipeline.refresh_terminal_reports()
+    initial_report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    assert initial_report["book"]["status"] == BookStatus.ANALYZING.value
+
+    original_error = RuntimeError("director critic singleton failed")
+    _finalize_unrecoverable_failure(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+        error=original_error,
+        traceback_details="traceback sentinel",
+    )
+
+    book = db.book()
+    report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    runtime_events = json.loads(
+        (paths.reports / "runtime_events.json").read_text(encoding="utf-8")
+    )
+    terminal_events = [
+        row for row in runtime_events if row["code"] == "UNRECOVERABLE_PIPELINE_ERROR"
+    ]
+    assert str(book["status"]) == BookStatus.ERROR.value
+    assert str(book["stage"]) == "unrecoverable_error"
+    assert str(book["last_error"]) == str(original_error)
+    assert report["book"]["status"] == BookStatus.ERROR.value
+    assert report["book"]["stage"] == "unrecoverable_error"
+    assert runtime_events[-1]["code"] == "UNRECOVERABLE_PIPELINE_ERROR"
+    assert len(terminal_events) == 1
+    assert terminal_events[0]["message"] == str(original_error)
+    assert "traceback sentinel" in terminal_events[0]["details_json"]
+
+
+def test_unrecoverable_failure_report_write_error_does_not_mask_or_duplicate_event(
+    monkeypatch,
+    caplog,
+    tmp_path: Path,
+) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+    pipeline = _reporting_pipeline(paths, settings, db)
+    db.update_book(
+        status=BookStatus.ANALYZING.value,
+        stage="full_book_analysis",
+    )
+    pipeline.refresh_terminal_reports()
+
+    def fail_report_refresh() -> None:
+        raise OSError("report volume is read-only")
+
+    monkeypatch.setattr(pipeline, "refresh_terminal_reports", fail_report_refresh)
+    original_error = RuntimeError("original pipeline failure")
+
+    _finalize_unrecoverable_failure(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+        error=original_error,
+        traceback_details="original traceback",
+    )
+
+    book = db.book()
+    db_events = [dict(row) for row in db.list_events()]
+    stale_report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    terminal_events = [
+        row for row in db_events if row["code"] == "UNRECOVERABLE_PIPELINE_ERROR"
+    ]
+    assert str(book["status"]) == BookStatus.ERROR.value
+    assert str(book["last_error"]) == str(original_error)
+    assert stale_report["book"]["status"] == BookStatus.ANALYZING.value
+    assert len(terminal_events) == 1
+    assert terminal_events[0]["message"] == str(original_error)
+    assert not any(row["code"] == "QUALITY_REPORT_EXPORT_FAILED" for row in db_events)
+    assert "Could not refresh reports after unrecoverable pipeline error" in caplog.text
+
+
+def test_requested_stop_refreshes_reports_after_terminal_db_event(tmp_path: Path) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+    pipeline = _reporting_pipeline(paths, settings, db)
+    db.update_book(
+        status=BookStatus.ANALYZING.value,
+        stage="full_book_analysis",
+    )
+    pipeline.refresh_terminal_reports()
+
+    _finalize_requested_stop(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+    )
+
+    report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    runtime_events = json.loads(
+        (paths.reports / "runtime_events.json").read_text(encoding="utf-8")
+    )
+    stopped_events = [row for row in runtime_events if row["code"] == "PIPELINE_STOPPED"]
+    assert str(db.book()["status"]) == BookStatus.STOPPED.value
+    assert str(db.book()["stage"]) == "stopped"
+    assert report["book"]["status"] == BookStatus.STOPPED.value
+    assert report["book"]["stage"] == "stopped"
+    assert runtime_events[-1]["code"] == "PIPELINE_STOPPED"
+    assert len(stopped_events) == 1
+
+
+def test_requested_stop_report_failure_preserves_stopped_result(
+    monkeypatch,
+    caplog,
+    tmp_path: Path,
+) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+    pipeline = _reporting_pipeline(paths, settings, db)
+    db.update_book(
+        status=BookStatus.ANALYZING.value,
+        stage="full_book_analysis",
+    )
+    pipeline.refresh_terminal_reports()
+
+    def fail_report_refresh() -> None:
+        raise OSError("report volume is read-only")
+
+    monkeypatch.setattr(pipeline, "refresh_terminal_reports", fail_report_refresh)
+
+    _finalize_requested_stop(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+    )
+
+    stale_report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    stopped_events = [
+        dict(row) for row in db.list_events() if row["code"] == "PIPELINE_STOPPED"
+    ]
+    assert str(db.book()["status"]) == BookStatus.STOPPED.value
+    assert str(db.book()["stage"]) == "stopped"
+    assert stale_report["book"]["status"] == BookStatus.ANALYZING.value
+    assert len(stopped_events) == 1
+    assert "Could not refresh reports after requested pipeline stop" in caplog.text
+
+
+def test_critical_resource_stop_refreshes_reports_without_changing_finished_payload(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    paths, _settings, db, _source = _project(tmp_path)
+    reason = "available RAM 0.7 GB is below the critical threshold"
+
+    class NoopThread:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def start(self) -> None:
+            pass
+
+    class CriticalStopPipeline:
+        def __init__(self, *, paths, db, settings, **_kwargs) -> None:
+            self.paths = paths
+            self.db = db
+            self.settings = settings
+
+        def prepare_recovery(self) -> None:
+            self.db.update_book(
+                status=BookStatus.CASTING.value,
+                stage="voice_cast_locked",
+            )
+            BookPipeline.refresh_terminal_reports_without_runtime(
+                paths=self.paths,
+                db=self.db,
+                settings=self.settings,
+            )
+
+        def run(self, *, recovery_already_run: bool) -> None:
+            assert recovery_already_run is True
+            self.db.update_book(
+                status=BookStatus.STOPPED.value,
+                stage="critical_stop",
+                error=reason,
+            )
+            self.db.event(
+                "critical",
+                "CRITICAL_RESOURCE_STOP",
+                reason,
+                {"checkpoint": "xác minh preset VieNeu"},
+            )
+            raise worker_module.CriticalResourceStop(reason)
+
+        def refresh_terminal_reports(self) -> None:
+            BookPipeline.refresh_terminal_reports_without_runtime(
+                paths=self.paths,
+                db=self.db,
+                settings=self.settings,
+            )
+
+    monkeypatch.setattr(worker_module, "BookPipeline", CriticalStopPipeline)
+    monkeypatch.setattr(worker_module, "WorkerHeartbeat", NoopThread)
+    monkeypatch.setattr(worker_module, "ParentWatchdog", NoopThread)
+    monkeypatch.setattr(worker_module, "_configure_logging", lambda _path: None)
+    monkeypatch.setattr(
+        worker_module,
+        "_apply_locked_model_cache_environment",
+        lambda _settings: False,
+    )
+    monkeypatch.setattr(worker_module, "_apply_model_network_policy", lambda _settings: False)
+    monkeypatch.setattr(worker_module, "_validate_model_runtime_contract", lambda _settings: None)
+    monkeypatch.setattr(worker_module, "set_worker_priority", lambda _priority: None)
+    messages = Queue()
+    event = SimpleNamespace(is_set=lambda: False)
+
+    worker_module.run_worker(
+        str(paths.root),
+        messages,
+        event,
+        event,
+        os.getpid(),
+    )
+
+    emitted = []
+    while not messages.empty():
+        emitted.append(messages.get_nowait())
+    finished = [row for row in emitted if row["kind"] == "finished"]
+    report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    runtime_events = json.loads(
+        (paths.reports / "runtime_events.json").read_text(encoding="utf-8")
+    )
+    critical_events = [row for row in runtime_events if row["code"] == "CRITICAL_RESOURCE_STOP"]
+
+    assert finished == [{
+        "kind": "finished",
+        "ok": False,
+        "critical": True,
+        "text": f"Đã dừng vì điều kiện an toàn: {reason}",
+    }]
+    assert report["book"]["status"] == BookStatus.STOPPED.value
+    assert report["book"]["stage"] == "critical_stop"
+    assert runtime_events[-1]["code"] == "CRITICAL_RESOURCE_STOP"
+    assert len(critical_events) == 1
+    assert critical_events[0]["message"] == reason
+
+
+def test_startup_failure_without_pipeline_uses_report_only_refresh(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+    pipeline = _reporting_pipeline(paths, settings, db)
+    db.update_book(
+        status=BookStatus.ANALYZING.value,
+        stage="startup_validation",
+    )
+    pipeline.refresh_terminal_reports()
+
+    def fail_if_pipeline_runtime_is_constructed(*_args, **_kwargs) -> None:
+        raise AssertionError("terminal reporting must not construct pipeline runtime")
+
+    monkeypatch.setattr(BookPipeline, "__init__", fail_if_pipeline_runtime_is_constructed)
+    original_error = RuntimeError("Source chapter changed before worker startup")
+
+    _finalize_unrecoverable_failure(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=None,
+        error=original_error,
+        traceback_details="startup traceback sentinel",
+    )
+
+    report = json.loads(
+        (paths.reports / "audiobook_quality_report.json").read_text(encoding="utf-8")
+    )
+    runtime_events = json.loads(
+        (paths.reports / "runtime_events.json").read_text(encoding="utf-8")
+    )
+    terminal_events = [
+        row for row in runtime_events if row["code"] == "UNRECOVERABLE_PIPELINE_ERROR"
+    ]
+    assert str(db.book()["status"]) == BookStatus.ERROR.value
+    assert str(db.book()["last_error"]) == str(original_error)
+    assert report["book"]["status"] == BookStatus.ERROR.value
+    assert report["book"]["stage"] == "unrecoverable_error"
+    assert len(terminal_events) == 1
+    assert terminal_events[0]["message"] == str(original_error)
+    assert "startup traceback sentinel" in terminal_events[0]["details_json"]
+
+
+def test_startup_report_only_refresh_error_preserves_original_failure(
+    monkeypatch,
+    caplog,
+    tmp_path: Path,
+) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+
+    def fail_report_only_refresh(**_kwargs) -> None:
+        raise OSError("report-only construction failed")
+
+    monkeypatch.setattr(
+        BookPipeline,
+        "refresh_terminal_reports_without_runtime",
+        staticmethod(fail_report_only_refresh),
+    )
+    original_error = RuntimeError("original startup validation failure")
+
+    _finalize_unrecoverable_failure(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=None,
+        error=original_error,
+        traceback_details="original startup traceback",
+    )
+
+    terminal_events = [
+        dict(row)
+        for row in db.list_events()
+        if row["code"] == "UNRECOVERABLE_PIPELINE_ERROR"
+    ]
+    assert str(db.book()["status"]) == BookStatus.ERROR.value
+    assert str(db.book()["stage"]) == "unrecoverable_error"
+    assert str(db.book()["last_error"]) == str(original_error)
+    assert len(terminal_events) == 1
+    assert terminal_events[0]["message"] == str(original_error)
+    assert "Could not refresh reports after unrecoverable pipeline error" in caplog.text
+
+
+def test_safe_incremental_report_failure_cannot_be_replaced_by_event_write_failure(
+    monkeypatch,
+    caplog,
+    tmp_path: Path,
+) -> None:
+    paths, settings, db, _source = _project(tmp_path)
+    pipeline = _reporting_pipeline(paths, settings, db)
+
+    def fail_report_export(*, incremental: bool) -> None:
+        assert incremental is True
+        raise OSError("report write failed")
+
+    def fail_event_write(*_args, **_kwargs) -> None:
+        raise OSError("event write failed")
+
+    monkeypatch.setattr(pipeline, "_export_reports", fail_report_export)
+    monkeypatch.setattr(db, "event", fail_event_write)
+
+    pipeline._safe_export_reports(incremental=True)
+
+    assert "Could not record quality report export failure" in caplog.text

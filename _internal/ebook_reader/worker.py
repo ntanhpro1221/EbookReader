@@ -308,6 +308,92 @@ class ParentWatchdog(threading.Thread):
                 return
 
 
+def _refresh_terminal_reports_best_effort(
+    *,
+    paths: ProjectPaths,
+    db: ProjectDB | None,
+    settings: dict[str, Any] | None,
+    pipeline: BookPipeline | None,
+    transition: str,
+) -> None:
+    if db is None:
+        return
+    try:
+        if pipeline is not None:
+            pipeline.refresh_terminal_reports()
+        elif settings is not None:
+            BookPipeline.refresh_terminal_reports_without_runtime(
+                paths=paths,
+                db=db,
+                settings=settings,
+            )
+    except BaseException:  # noqa: BLE001
+        # Reports are derived snapshots. A disk/reporting failure must not replace
+        # the authoritative terminal transition or its process result.
+        logging.exception("Could not refresh reports after %s", transition)
+
+
+def _finalize_requested_stop(
+    *,
+    paths: ProjectPaths,
+    db: ProjectDB,
+    settings: dict[str, Any] | None,
+    pipeline: BookPipeline | None,
+) -> None:
+    """Persist a requested stop and refresh derived reports without changing its result."""
+    db.update_book(
+        status=BookStatus.STOPPED.value,
+        stage="stopped",
+        error="User/app stop requested",
+    )
+    db.event("info", "PIPELINE_STOPPED", "Pipeline stopped after a stop request")
+    _refresh_terminal_reports_best_effort(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+        transition="requested pipeline stop",
+    )
+
+
+def _finalize_unrecoverable_failure(
+    *,
+    paths: ProjectPaths,
+    db: ProjectDB | None,
+    settings: dict[str, Any] | None,
+    pipeline: BookPipeline | None,
+    error: BaseException,
+    traceback_details: str,
+) -> None:
+    """Persist one terminal failure and then refresh report snapshots best-effort."""
+    if db is None:
+        return
+    try:
+        db.update_book(
+            status=BookStatus.ERROR.value,
+            stage="unrecoverable_error",
+            error=str(error),
+        )
+    except Exception:  # noqa: BLE001
+        logging.exception("Could not persist unrecoverable pipeline status")
+    try:
+        db.event(
+            "critical",
+            "UNRECOVERABLE_PIPELINE_ERROR",
+            str(error),
+            {"traceback": traceback_details[-12000:]},
+        )
+    except Exception:  # noqa: BLE001
+        logging.exception("Could not persist unrecoverable pipeline event")
+    _refresh_terminal_reports_best_effort(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+        transition="unrecoverable pipeline error",
+    )
+
+
 def run_worker(
     project_root_str: str,
     message_queue: Queue,
@@ -324,6 +410,7 @@ def run_worker(
     run_lock = ProjectRunLock(paths.root / ".worker.lock")
     db: ProjectDB | None = None
     settings: dict[str, Any] | None = None
+    pipeline: BookPipeline | None = None
 
     def emit(kind: str, payload: dict[str, Any]) -> None:
         logging.info("EVENT %s %s", kind, payload)
@@ -402,14 +489,25 @@ def run_worker(
         _emit_pipeline_result(message_queue, db)
     except PipelineStopped:
         assert db is not None
-        db.update_book(status=BookStatus.STOPPED.value, stage="stopped", error="User/app stop requested")
-        db.event("info", "PIPELINE_STOPPED", "Pipeline stopped after a stop request")
+        _finalize_requested_stop(
+            paths=paths,
+            db=db,
+            settings=settings,
+            pipeline=pipeline,
+        )
         _emit(
             message_queue,
             "finished",
             {"ok": True, "stopped": True, "text": "Đã dừng; lần sau có thể tiếp tục."},
         )
     except CriticalResourceStop as exc:
+        _refresh_terminal_reports_best_effort(
+            paths=paths,
+            db=db,
+            settings=settings,
+            pipeline=pipeline,
+            transition="critical resource stop",
+        )
         _emit(
             message_queue,
             "finished",
@@ -418,13 +516,14 @@ def run_worker(
     except BaseException as exc:  # noqa: BLE001
         details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
         logging.exception("Unrecoverable pipeline error")
-        try:
-            if db is None:
-                raise RuntimeError("Database chưa mở được")
-            db.update_book(status=BookStatus.ERROR.value, stage="unrecoverable_error", error=str(exc))
-            db.event("critical", "UNRECOVERABLE_PIPELINE_ERROR", str(exc), {"traceback": details[-12000:]})
-        except Exception:
-            pass
+        _finalize_unrecoverable_failure(
+            paths=paths,
+            db=db,
+            settings=settings,
+            pipeline=pipeline,
+            error=exc,
+            traceback_details=details,
+        )
         _emit(message_queue, "log", {"text": details})
         _emit(message_queue, "finished", {"ok": False, "critical": True, "text": str(exc)})
         if settings is None or settings.get("safety", {}).get("notify_on_critical_stop", True):
