@@ -9,9 +9,11 @@ from pathlib import Path
 
 import pytest
 
+from ebook_reader.analysis import _analysis_context_hash, _original_neighbor_context
 from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
+    ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_CONTEXT_SOURCE_KIND_RULE,
@@ -37,6 +39,7 @@ from ebook_reader.database import (
     ProjectDB,
     analysis_critic_anchor_set_sha256,
     analysis_critic_per_id_anchor_map_sha256,
+    analysis_source_narration_precedes_next_paragraph_thought,
     analysis_source_narration_precedes_thought,
     analysis_source_has_recalled_persistent_fear,
     analysis_source_has_sleep_paralysis_helplessness,
@@ -142,6 +145,17 @@ V29_SEQ39_THOUGHT_TEXT = (
 )
 V29_SEQ38_STABLE_ID = "c00001_s0000038_6d1eebb237de"
 V29_SEQ39_STABLE_ID = "c00001_s0000039_55abbb7a19a4"
+V30_SEQ23_PREVIOUS_TEXT = (
+    "Bên kia cánh cửa gỗ lung lay sắp rớt là một cái bếp lò nhìn không ra màu "
+    "sắc ban đầu, bên trên treo một chiếc bình sành."
+)
+V30_SEQ24_NARRATION_TEXT = (
+    "Mọi thứ đều thật xa lạ, Hạ Phong căn bản không thể đoán được mình đang ở "
+    "đâu. Mà cảm giác yếu ớt cứ không ngừng lan ra càng khiến đầu óc cậu hỗn loạn."
+)
+V30_SEQ25_THOUGHT_TEXT = "‘Đây rốt cuộc là nơi nào?!"
+V30_SEQ24_STABLE_ID = "c00001_s0000024_3ab59bb4bd38"
+V30_SEQ25_STABLE_ID = "c00001_s0000025_1582edb61545"
 
 
 def _canonical_analysis_data(**overrides: object) -> dict:
@@ -287,6 +301,26 @@ def _analysis_acceptance_envelope(
                 str(next_row["kind_hint"]) if next_row is not None else ""
             ),
         )
+        masks_next_paragraph_thought = (
+            analysis_source_narration_precedes_next_paragraph_thought(
+                chapter_id=int(row["chapter_id"]),
+                seq=int(row["seq"]),
+                paragraph_index=int(row["paragraph_index"]),
+                kind_hint=source_kind,
+                next_chapter_id=(
+                    int(next_row["chapter_id"]) if next_row is not None else None
+                ),
+                next_seq=int(next_row["seq"]) if next_row is not None else None,
+                next_paragraph_index=(
+                    int(next_row["paragraph_index"])
+                    if next_row is not None
+                    else None
+                ),
+                next_kind_hint=(
+                    str(next_row["kind_hint"]) if next_row is not None else ""
+                ),
+            )
+        )
         previous_text = previous_overrides.get(
             stable_id,
             str(previous["text"])[-500:] if previous is not None else "",
@@ -324,6 +358,8 @@ def _analysis_acceptance_envelope(
                     if source_kind == "thought"
                     else ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
                     if masks_following_thought
+                    else ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+                    if masks_next_paragraph_thought
                     else "adjacent_context"
                 ),
                 "host_locked_fields": (
@@ -331,7 +367,9 @@ def _analysis_acceptance_envelope(
                 ),
                 "previous_text": (
                     previous_text
-                    if source_kind == "thought" or masks_following_thought
+                    if source_kind == "thought"
+                    or masks_following_thought
+                    or masks_next_paragraph_thought
                     else ""
                 ),
                 "text": str(row["text"]),
@@ -461,6 +499,40 @@ def _v30_v29_seq38_narration_before_thought_db(
     target_critic_row["previous_text"] = V29_SEQ37_PREVIOUS_TEXT
     target_critic_row["next_text"] = ""
     return db, source_rows, envelope
+
+
+def _v31_v30_seq24_next_paragraph_thought_db(
+    tmp_path: Path,
+) -> tuple[ProjectDB, list[dict], dict, str]:
+    db, _source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=(
+            V30_SEQ23_PREVIOUS_TEXT,
+            V30_SEQ24_NARRATION_TEXT,
+            V30_SEQ25_THOUGHT_TEXT,
+        ),
+        kind_hints=("narration", "narration", "thought"),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET seq=seq+23,"
+            "paragraph_index=CASE seq WHEN 0 THEN 20 WHEN 1 THEN 21 ELSE 22 END,"
+            "stable_id=CASE seq WHEN 0 THEN 'c00001_s0000023_v31' "
+            "WHEN 1 THEN ? ELSE ? END",
+            (V30_SEQ24_STABLE_ID, V30_SEQ25_STABLE_ID),
+        )
+    source_rows = [dict(row) for row in db.list_segments()]
+    envelope = _analysis_acceptance_envelope([source_rows[1]])
+    target_critic_row = envelope["critic_rows"][0]
+    target_critic_row["context_policy"] = (
+        ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+    )
+    target_critic_row["host_locked_fields"] = {}
+    target_critic_row["previous_text"] = V30_SEQ23_PREVIOUS_TEXT
+    target_critic_row["next_text"] = ""
+    with db.connect() as conn:
+        context_hash = db._analysis_candidate_context_hash_conn(conn, envelope)
+    return db, source_rows, envelope, context_hash
 
 
 def _v29_v28_seq10_sleep_paralysis_db(
@@ -2000,8 +2072,8 @@ def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     candidate_id = int(candidate["id"])
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v11"
-    assert contract["director_policy_version"] == "second_pass_v11"
+    assert contract["policy_version"] == "second_pass_v12"
+    assert contract["director_policy_version"] == "second_pass_v12"
     assert (
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
@@ -2152,8 +2224,8 @@ def test_v27_v26_seq18_anchor_evidence_survives_reserve_reopen_accept_and_commit
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
     )
-    assert contract["policy_version"] == "second_pass_v11"
-    assert contract["director_policy_version"] == "second_pass_v11"
+    assert contract["policy_version"] == "second_pass_v12"
+    assert contract["director_policy_version"] == "second_pass_v12"
     assert contract["evidence_text_sha256"] == V26_SEQ18_TEXT_SHA256
     assert contract["evidence_anchor_set_sha256"] == (
         analysis_critic_anchor_set_sha256(anchors)
@@ -2480,7 +2552,7 @@ def test_v28_per_id_anchor_map_binds_five_rows_through_reopen_and_commit(
     )
 
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v11"
+    assert contract["policy_version"] == "second_pass_v12"
     assert contract["evidence_policy"] == (
         ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
     )
@@ -2994,6 +3066,514 @@ def test_v28_narration_before_thought_predicate_is_exact_source_metadata(
     }
     metadata.update(overrides)
     assert analysis_source_narration_precedes_thought(**metadata) is expected
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected"),
+    (
+        ({}, True),
+        ({"next_paragraph_index": 21}, False),
+        ({"next_paragraph_index": 23}, False),
+        ({"next_kind_hint": "dialogue"}, False),
+        ({"next_chapter_id": 2}, False),
+        ({"next_seq": 26}, False),
+        ({"kind_hint": "thought"}, False),
+    ),
+)
+def test_v31_narration_before_next_paragraph_thought_predicate_is_exact(
+    overrides: dict[str, object],
+    expected: bool,
+) -> None:
+    metadata = {
+        "chapter_id": 1,
+        "seq": 24,
+        "paragraph_index": 21,
+        "kind_hint": "narration",
+        "next_chapter_id": 1,
+        "next_seq": 25,
+        "next_paragraph_index": 22,
+        "next_kind_hint": "thought",
+    }
+    metadata.update(overrides)
+    assert (
+        analysis_source_narration_precedes_next_paragraph_thought(**metadata)
+        is expected
+    )
+
+
+def test_v31_v30_seq24_mask_survives_reserve_reopen_accept_and_commit(
+    tmp_path: Path,
+) -> None:
+    assert ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT == (
+        "narration_precedes_next_paragraph_thought"
+    )
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    previous_row, target_row, thought_row = source_rows
+    assert _analysis_context_hash(
+        [target_row],
+        _original_neighbor_context(source_rows),
+    ) == context_hash
+    assert [int(row["seq"]) for row in source_rows] == [23, 24, 25]
+    assert [int(row["paragraph_index"]) for row in source_rows] == [20, 21, 22]
+    assert target_row["stable_id"] == V30_SEQ24_STABLE_ID
+    assert target_row["text_sha256"] == sha256_text(V30_SEQ24_NARRATION_TEXT)
+    assert thought_row["stable_id"] == V30_SEQ25_STABLE_ID
+    assert thought_row["text_sha256"] == sha256_text(V30_SEQ25_THOUGHT_TEXT)
+    critic_row = envelope["critic_rows"][0]
+    assert critic_row["context_policy"] == (
+        ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+    )
+    assert critic_row["previous_text"] == V30_SEQ23_PREVIOUS_TEXT
+    assert critic_row["next_text"] == ""
+    assert critic_row["host_locked_fields"] == {}
+
+    candidate = _allocate_analysis_candidate(
+        db,
+        [target_row],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    assert "host_source_kind_override" not in evidence["segments"][0]
+    reopened = ProjectDB(db.path)
+    reopened.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True, "next_paragraph_thought_masked": True},
+        evidence=evidence,
+        commit_envelope=envelope,
+    )
+    snapshot = ProjectDB(db.path).analysis_candidate_acceptance_envelope(
+        candidate_id
+    )
+    durable_row = snapshot["commit_envelope"]["critic_rows"][0]
+    assert durable_row["next_text"] == ""
+    assert durable_row["host_locked_fields"] == {}
+    segment = snapshot["commit_envelope"]["segments"][0]
+    ProjectDB(db.path).update_analysis_batch_with_event(
+        [
+            {
+                "segment_id": segment["segment_id"],
+                "stable_id": segment["stable_id"],
+                "text_sha256": segment["text_sha256"],
+                "expected_status": "pending",
+                "data": dict(segment["data"]),
+            }
+        ],
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="V31 seq24 next-paragraph mask accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=context_hash,
+    )
+    committed = {str(row["stable_id"]): row for row in db.list_segments()}
+    assert committed[V30_SEQ24_STABLE_ID]["status"] == "analyzed"
+    assert committed[V30_SEQ24_STABLE_ID]["kind"] == "narration"
+    assert committed[str(previous_row["stable_id"])]["status"] == "pending"
+    assert committed[V30_SEQ25_STABLE_ID]["status"] == "pending"
+
+
+def test_v31_seq24_mask_does_not_cover_critic_kind_dissent(tmp_path: Path) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    target_row = source_rows[1]
+    candidate = _allocate_analysis_candidate(
+        db,
+        [target_row],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    item = evidence["segments"][0]
+    item["critic"].update(
+        {
+            "accept": False,
+            "kind": "thought",
+            "rationale": "Critic vẫn đổi câu kể thành thought.",
+        }
+    )
+    item["field_deltas"] = ["kind:narration->thought"]
+    item["effective_accept"] = False
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+    item["host_source_kind_override"] = {
+        "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+        "rule": ANALYSIS_CONTEXT_SOURCE_KIND_RULE,
+    }
+    with pytest.raises(RuntimeError, match="unprotected override"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_rejected",
+            outcome={"accepted": False, "unresolved_fields": ["kind"]},
+            evidence=evidence,
+        )
+    del item["host_source_kind_override"]
+    db.complete_analysis_critic_attempt(
+        int(candidate["id"]),
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_rejected",
+        outcome={"accepted": False, "unresolved_fields": ["kind"]},
+        evidence=evidence,
+    )
+    assert ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))[
+        "state"
+    ] == "critic_rejected"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    (
+        ("context_policy", "adjacent_context", "source-ledger-bound"),
+        (
+            "context_policy",
+            ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT,
+            "candidate-bound",
+        ),
+        ("next_text", V30_SEQ25_THOUGHT_TEXT, "source IDs/hashes/delivery"),
+        ("previous_text", "forged predecessor", "source-ledger-bound"),
+        (
+            "host_locked_fields",
+            {"kind": "narration"},
+            "source-derived protections",
+        ),
+    ),
+)
+def test_v31_seq24_mask_rejects_injected_policy_lock_or_context(
+    tmp_path: Path,
+    field: str,
+    value: object,
+    error: str,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    envelope["critic_rows"][0][field] = value
+    with pytest.raises((ValueError, RuntimeError), match=error):
+        _allocate_analysis_candidate(
+            db,
+            [source_rows[1]],
+            context_hash=context_hash,
+            candidate=envelope,
+            deterministic_issues=_clean_host_clearance(envelope),
+        )
+    assert db.has_analysis_candidates() is False
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "rehash", "error"),
+    (
+        ("text", "‘Thought đã bị thay nội dung.’", False, "source text hash"),
+        ("text", "‘Thought đã bị thay và rehash.’", True, "context hash"),
+        ("text_sha256", "e" * 64, False, "source text hash"),
+        ("stable_id", "c00001_s0000025_changed", False, "context hash"),
+        ("paragraph_index", 23, False, "context hash"),
+        ("kind_hint", "dialogue", False, "context hash"),
+        ("seq", 26, False, "context hash"),
+    ),
+)
+def test_v31_seq24_mask_revalidates_next_source_on_reopen(
+    tmp_path: Path,
+    column: str,
+    value: object,
+    rehash: bool,
+    error: str,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    thought_row = source_rows[2]
+    with db.connect() as conn:
+        conn.execute(
+            f"UPDATE segments SET {column}=? WHERE id=?",
+            (value, int(thought_row["id"])),
+        )
+        if rehash:
+            conn.execute(
+                "UPDATE segments SET text_sha256=? WHERE id=?",
+                (sha256_text(str(value)), int(thought_row["id"])),
+            )
+    with pytest.raises(RuntimeError, match=error):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+
+
+@pytest.mark.parametrize(
+    ("column", "value", "rehash", "error"),
+    (
+        ("text", "Previous đã bị thay nội dung.", False, "source text hash"),
+        ("text", "Previous đã bị thay và rehash.", True, "context hash"),
+        ("text_sha256", "d" * 64, False, "source text hash"),
+        ("stable_id", "c00001_s0000023_changed", False, "context hash"),
+        ("paragraph_index", 19, False, "context hash"),
+        ("kind_hint", "dialogue", False, "context hash"),
+        ("seq", 22, False, "context hash"),
+    ),
+)
+def test_v31_seq24_mask_revalidates_previous_source_on_reopen_and_accept(
+    tmp_path: Path,
+    column: str,
+    value: object,
+    rehash: bool,
+    error: str,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    previous_row = source_rows[0]
+    with db.connect() as conn:
+        conn.execute(
+            f"UPDATE segments SET {column}=? WHERE id=?",
+            (value, int(previous_row["id"])),
+        )
+        if rehash:
+            conn.execute(
+                "UPDATE segments SET text_sha256=? WHERE id=?",
+                (sha256_text(str(value)), int(previous_row["id"])),
+            )
+    with pytest.raises(RuntimeError, match=error):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+    with pytest.raises(RuntimeError, match=error):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=_accepted_critic_evidence(envelope),
+            commit_envelope=envelope,
+        )
+
+
+@pytest.mark.parametrize("result_state", ("critic_accepted", "critic_rejected"))
+def test_v31_seq24_mask_revalidates_source_before_critic_completion(
+    tmp_path: Path,
+    result_state: str,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET paragraph_index=23 WHERE id=?",
+            (int(source_rows[2]["id"]),),
+        )
+    with pytest.raises(RuntimeError, match="context hash"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state=result_state,
+            outcome={"accepted": result_state == "critic_accepted"},
+            evidence=_accepted_critic_evidence(envelope),
+            commit_envelope=(envelope if result_state == "critic_accepted" else None),
+        )
+
+
+def test_v31_seq24_mask_revalidates_rehashed_next_source_before_commit(
+    tmp_path: Path,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+    replacement = "‘Thought đã bị thay sau khi critic chấp nhận.’"
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET text=?,text_sha256=? WHERE id=?",
+            (
+                replacement,
+                sha256_text(replacement),
+                int(source_rows[2]["id"]),
+            ),
+        )
+    reopened = ProjectDB(db.path)
+    with pytest.raises(RuntimeError, match="context hash"):
+        reopened.analysis_candidate_acceptance_envelope(candidate_id)
+    segment = envelope["segments"][0]
+    with pytest.raises(RuntimeError, match="context hash"):
+        reopened.update_analysis_batch_with_event(
+            [
+                {
+                    "segment_id": segment["segment_id"],
+                    "stable_id": segment["stable_id"],
+                    "text_sha256": segment["text_sha256"],
+                    "expected_status": "pending",
+                    "data": dict(segment["data"]),
+                }
+            ],
+            low_confidence_threshold=0.65,
+            event_level="info",
+            event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+            event_message="must roll back V31 source tamper",
+            event_details={"candidate_hash": str(candidate["candidate_hash"])},
+            **ANALYSIS_MODEL_COMMIT,
+            analysis_candidate_id=candidate_id,
+            analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            analysis_context_hash=context_hash,
+        )
+    assert reopened.get_segment(int(source_rows[1]["id"]))["status"] == "pending"
+
+
+def test_v31_cross_paragraph_mask_preserves_independent_semantic_lock(
+    tmp_path: Path,
+) -> None:
+    thought_text = "‘Mình vẫn chưa hiểu chuyện gì vừa xảy ra.’"
+    db, _source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=(RECALLED_PERSISTENT_FEAR_TEXT, thought_text),
+        kind_hints=("narration", "thought"),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET paragraph_index=CASE seq WHEN 0 THEN 7 ELSE 8 END"
+        )
+    source_rows = [dict(row) for row in db.list_segments()]
+    target_row = source_rows[0]
+    envelope = _semantic_lock_envelope(
+        [target_row],
+        candidate_emotion="afraid",
+    )
+    critic_row = envelope["critic_rows"][0]
+    critic_row["context_policy"] = (
+        ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+    )
+    critic_row["previous_text"] = ""
+    critic_row["next_text"] = ""
+    assert critic_row["host_locked_fields"] == {"emotion": "afraid"}
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule="narration_recalled_persistent_fear",
+        cue_class="recalled_persistent_fear",
+        allowed_emotions=["afraid"],
+    )
+    with db.connect() as conn:
+        context_hash = db._analysis_candidate_context_hash_conn(conn, envelope)
+    candidate = _allocate_analysis_candidate(
+        db,
+        [target_row],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    assert candidate["state"] == "allocated"
+
+    neutral_envelope = copy.deepcopy(envelope)
+    neutral_envelope["segments"][0]["data"]["emotion"] = "neutral"
+    _refresh_analysis_note(neutral_envelope, 0)
+    neutral_row = neutral_envelope["critic_rows"][0]
+    neutral_row["candidate"]["emotion"] = "neutral"
+    neutral_row["host_locked_fields"] = {}
+    with pytest.raises(RuntimeError, match="mandatory host semantic"):
+        _allocate_analysis_candidate(
+            db,
+            [target_row],
+            context_hash=context_hash,
+            candidate=neutral_envelope,
+            deterministic_issues=_clean_host_clearance(neutral_envelope),
+        )
 
 
 def test_v28_v27_seq32_context_survives_reserve_reopen_accept_and_commit(
@@ -3572,7 +4152,7 @@ def test_v28_v27_seq32_context_revalidates_next_source_metadata_on_reopen(
             (value, sha256_text(V27_SEQ33_THOUGHT_TEXT)),
         )
 
-    with pytest.raises(RuntimeError, match="context policy is not source-ledger-bound"):
+    with pytest.raises(RuntimeError, match="source-ledger-bound"):
         ProjectDB(db.path).find_resumable_analysis_candidate(
             policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
             model_name=ANALYSIS_MODEL_NAME,
@@ -3584,7 +4164,7 @@ def test_v28_v27_seq32_context_revalidates_next_source_metadata_on_reopen(
 
 @pytest.mark.parametrize(
     ("next_kind", "next_paragraph"),
-    (("thought", 31), ("dialogue", 30)),
+    (("thought", 32), ("dialogue", 31)),
 )
 def test_v28_narration_control_keeps_adjacent_context_policy(
     tmp_path: Path,
@@ -3955,7 +4535,7 @@ def test_v24_heading_critic_confidence_preserves_lock_through_reopen_and_commit(
 ) -> None:
     assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
     assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
-    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v11"
+    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v12"
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),

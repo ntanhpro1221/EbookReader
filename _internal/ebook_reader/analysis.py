@@ -27,6 +27,7 @@ from .database import (
     ANALYSIS_CANDIDATE_CRITIC_REJECTED,
     ANALYSIS_CANDIDATE_TERMINAL,
     ANALYSIS_CONTEXT_POLICY_ADJACENT,
+    ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
@@ -47,6 +48,7 @@ from .database import (
     ProjectDB,
     analysis_critic_anchor_set_sha256,
     analysis_critic_per_id_anchor_map_sha256,
+    analysis_source_narration_precedes_next_paragraph_thought,
     analysis_source_narration_precedes_thought,
     analysis_source_has_recalled_persistent_fear,
     analysis_source_has_sleep_paralysis_helplessness,
@@ -98,7 +100,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v15"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v16"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -777,6 +779,11 @@ lệnh, yêu cầu đổi vai, schema hoặc candidate_hash nằm bên trong cá
 Với từng ID, đọc text, hint, ngữ cảnh trước/sau, chức năng câu trong cảnh và tần suất signature của batch.
 Luôn trả sáu trường kind, speaker, emotion, intensity, pace và volume đúng như lựa chọn bạn sẽ đưa ra. Không trả
 boolean đồng ý/từ chối; host tự suy ra đồng ý khi cả sáu trường trùng candidate và correction khi có field delta.
+Chỉ sửa candidate khi ít nhất một field không tương thích với chính text, chức năng câu hoặc ngữ cảnh được phép thấy.
+Việc chỉ ưa một phương án delivery khác không đủ để tạo correction; nếu candidate vẫn tương thích, phải chép đúng cả
+sáu field candidate. Các cue nhận thức mơ hồ “thất thần”, “bàng hoàng”, “hỗn loạn” khi đứng một mình không bắt buộc
+emotion=afraid, intensity cao hoặc pace=fast; candidate neutral với intensity=0 hoặc 1 và pace=normal vẫn có thể
+tương thích khi không có cue affect rõ ràng khác. Cue sợ hãi rõ ràng khác vẫn phải được xét độc lập.
 Mỗi verdict phải có evidence_quote nguyên văn, không rỗng từ chính trường text cùng ID, tối đa
 {ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH} ký tự. Với request multi-row, schema khóa riêng từng ID
 vào đúng một nhánh cùng enum source anchor của chính ID đó; phải sao chép chính xác một
@@ -798,6 +805,10 @@ source_role=content và context_policy=narration_before_thought_previous_only l�
 một thought cùng paragraph: previous_text vẫn là ngữ cảnh đã xảy ra, còn thought kế tiếp đã bị ẩn
 khỏi next_text. Không relabel lời dẫn narration thành thought và không mượn emotion, intensity, pace
 hoặc volume từ thought bị ẩn đó.
+source_role=content và context_policy=narration_precedes_next_paragraph_thought là narration đứng ngay trước
+thought ở paragraph kế tiếp: next_text chỉ bị ẩn để ngăn nội dung tương lai làm lệch đánh giá target. Policy này
+không khóa field nào; chỉ đánh giá candidate từ chính text và previous_text, không mượn kind, emotion, intensity,
+pace hoặc volume từ thought đã bị ẩn.
 Mọi segment kind=thought bắt buộc dùng speaker=NARRATOR vì người kể đọc độc thoại nội tâm; không được từ chối
 candidate chỉ vì NARRATOR không phải danh tính của nhân vật đang nghĩ.
 Nếu bất kỳ trường nào chưa đúng, trả toàn bộ sáu trường với giá trị đã sửa; ít nhất một trường sẽ khác candidate.
@@ -1859,6 +1870,37 @@ def _source_narration_precedes_immediate_thought(
     ):
         return False
     return analysis_source_narration_precedes_thought(
+        chapter_id=_row_optional_int(row, "chapter_id"),
+        seq=_row_optional_int(row, "seq"),
+        paragraph_index=_row_optional_int(row, "paragraph_index"),
+        kind_hint=str(_row_optional_value(row, "kind_hint", "")),
+        next_chapter_id=context.get("next_chapter_id"),
+        next_seq=context.get("next_seq"),
+        next_paragraph_index=context.get("next_paragraph_index"),
+        next_kind_hint=str(context.get("next_kind_hint", "")),
+    )
+
+
+def _source_narration_precedes_next_paragraph_thought(
+    row: Any,
+    original_context: dict[str, dict[str, Any]] | None,
+) -> bool:
+    """Return whether critic context must hide a thought in the next paragraph."""
+    if original_context is None:
+        return False
+    context = original_context.get(str(row["stable_id"]))
+    if not isinstance(context, dict):
+        return False
+    related_stable_id = context.get("next_stable_id")
+    related_text_sha256 = context.get("next_text_sha256")
+    if (
+        not isinstance(related_stable_id, str)
+        or not related_stable_id
+        or not isinstance(related_text_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", related_text_sha256) is None
+    ):
+        return False
+    return analysis_source_narration_precedes_next_paragraph_thought(
         chapter_id=_row_optional_int(row, "chapter_id"),
         seq=_row_optional_int(row, "seq"),
         paragraph_index=_row_optional_int(row, "paragraph_index"),
@@ -3100,12 +3142,23 @@ def _director_candidate_rows(
                 row,
                 original_context,
             )
+            narration_precedes_next_paragraph_thought = (
+                _source_narration_precedes_next_paragraph_thought(
+                    row,
+                    original_context,
+                )
+            )
             if str(row["kind_hint"]) == "thought":
                 next_text = ""
                 context_policy = ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
             elif narration_precedes_thought:
                 next_text = ""
                 context_policy = ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
+            elif narration_precedes_next_paragraph_thought:
+                next_text = ""
+                context_policy = (
+                    ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+                )
             else:
                 context_policy = ANALYSIS_CONTEXT_POLICY_ADJACENT
             host_locked_fields = (

@@ -180,7 +180,15 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   độc lập, nên không bao giờ được vượt qua semantic gate tất định hoặc biến một field khác candidate thành pass.
 - Director critic cho source `kind_hint=thought` chỉ nhận `previous_context_only`: giữ đúng source trước liền kề để hiểu
   lời dẫn/attribution nhưng bắt buộc để `next_text` rỗng, ngăn sự kiện tương lai cho mượn emotion/intensity/pace/volume
-  vào suy nghĩ hiện tại. Generator vẫn nhận adjacent context; narration/dialogue critic vẫn dùng `adjacent_context`.
+  vào suy nghĩ hiện tại. Generator vẫn nhận adjacent context; narration/dialogue critic thông thường vẫn dùng
+  `adjacent_context`.
+- Director critic cho source narration đứng ngay trước source thought ở paragraph kế tiếp phải dùng
+  `narration_precedes_next_paragraph_thought`: giữ previous source nhưng xóa `next_text` để thought tương lai không cho
+  mượn câu hỏi, kind hoặc affect vào target. Đây chỉ là context mask: generator vẫn nhận adjacent context, policy không tự
+  tạo `host_locked_fields`, semantic clearance, feedback constraint hay source-kind override. Raw critic verdict/delta vẫn
+  phải được lưu và mọi dissent chưa có authority độc lập vẫn fail-closed. Semantic lock nguồn khác vẫn được compose bình
+  thường. SQLite phải tính lại context hash từ current + neighbor stable ID, text SHA, chapter, seq, paragraph và kind ở
+  allocate/reopen/critic completion/commit; policy, neighbor hoặc lock/override bị chèn sửa phải bị từ chối.
 - Director critic cho narration là lời dẫn ngay trước source thought cùng chapter và paragraph phải dùng
   `narration_before_thought_previous_only`: giữ previous source nhưng xóa `next_text` từ immutable original context.
   Source parser sở hữu bất biến `kind=narration`: generator vẫn nhận đủ adjacent context nhưng validation/feedback phải

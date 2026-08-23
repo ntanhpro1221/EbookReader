@@ -42,6 +42,17 @@ allocate/reopen/accept/commit; text-only tamper có stale hash bị chặn cho c
 Regression exact seq38, controls, composition, accepted/rejected replay/commit và tamper pass **845/845** test trong ba file
 analysis/database/quality; auditor độc lập chạy 33 test và kết luận không còn P0/P1. Full repository **1.291/1.291** test,
 Ruff, compileall, `pip check` và `git diff --check` đều pass trước runtime V30.
+Runtime V30 chạy project sạch tới 24/107 segment rồi dừng fail-safe ở seq24 trước casting/TTS. Forensic cho thấy target là
+narration không có câu hỏi, nhưng critic ở batch 1-2 dòng gọi nó là “câu hỏi bối rối” do mượn source thought seq25 đang lộ
+trong `next_text`; ở batch lớn chính critic từng đồng ý cả delivery neutral lẫn afraid. Không có bằng chứng để khóa
+emotion/intensity/pace hoặc nới kind authority qua mọi paragraph; project V30 không được resume sau khi policy đổi.
+Hardening V31 thêm policy riêng cho narration đứng ngay trước thought ở paragraph kế tiếp: chỉ critic bị xóa `next_text`,
+generator vẫn thấy adjacent context và policy mới không tự tạo kind/semantic lock hay override. Critic chỉ correction khi
+candidate không tương thích, không correction vì một phương án khác cũng hợp lý; cue `disoriented` đơn lẻ vẫn cho phép
+neutral, intensity 0/1 và pace normal. SQLite tính lại context hash từ current + neighbor stable ID, text SHA, chapter,
+seq, paragraph và kind khi allocate/reopen/critic completion/commit; injected policy, lock, override và source tamper đều
+fail-closed, còn semantic lock độc lập vẫn compose. Regression analysis/database/quality pass **886/886**, full repository
+**1.332/1.332**; Ruff, compileall, `pip check`, `git diff --check` và hai audit độc lập đều sạch trước runtime V31.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 

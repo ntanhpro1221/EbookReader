@@ -165,12 +165,15 @@ ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY = "previous_context_only"
 ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT = (
     "narration_before_thought_previous_only"
 )
+ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT = (
+    "narration_precedes_next_paragraph_thought"
+)
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_CONTEXT_SOURCE_KIND_RULE = "narration_precedes_immediate_thought"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v9"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v5"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v11"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v12"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -369,6 +372,33 @@ def analysis_source_narration_precedes_thought(
         and next_seq == seq + 1
         and type(next_paragraph_index) is int
         and next_paragraph_index == paragraph_index
+        and next_kind_hint == "thought"
+    )
+
+
+def analysis_source_narration_precedes_next_paragraph_thought(
+    *,
+    chapter_id: int | None,
+    seq: int | None,
+    paragraph_index: int | None,
+    kind_hint: str,
+    next_chapter_id: int | None,
+    next_seq: int | None,
+    next_paragraph_index: int | None,
+    next_kind_hint: str,
+) -> bool:
+    """Return whether a next-paragraph thought must be hidden from the critic."""
+    return bool(
+        type(chapter_id) is int
+        and type(seq) is int
+        and type(paragraph_index) is int
+        and kind_hint == "narration"
+        and type(next_chapter_id) is int
+        and next_chapter_id == chapter_id
+        and type(next_seq) is int
+        and next_seq == seq + 1
+        and type(next_paragraph_index) is int
+        and next_paragraph_index == paragraph_index + 1
         and next_kind_hint == "thought"
     )
 
@@ -2522,6 +2552,14 @@ class ProjectDB:
                 and critic_row.get("next_text") == ""
                 and content_host_lock_is_valid
             )
+            is_narration_before_next_paragraph_thought_content_row = (
+                source_role == ANALYSIS_SOURCE_ROLE_CONTENT
+                and context_policy
+                == ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+                and critic_row.get("hint") == "narration"
+                and critic_row.get("next_text") == ""
+                and content_host_lock_is_valid
+            )
             is_chapter_heading_row = (
                 source_role == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
                 and context_policy == ANALYSIS_CONTEXT_POLICY_TARGET_ONLY
@@ -2574,6 +2612,7 @@ class ProjectDB:
                     is_adjacent_content_row
                     or is_previous_only_content_row
                     or is_narration_before_thought_content_row
+                    or is_narration_before_next_paragraph_thought_content_row
                     or is_chapter_heading_row
                 )
             ):
@@ -2889,6 +2928,36 @@ class ProjectDB:
         return next_source
 
     @staticmethod
+    def _analysis_following_next_paragraph_thought_source_conn(
+        conn: sqlite3.Connection,
+        stored: sqlite3.Row,
+    ) -> sqlite3.Row | None:
+        next_source = conn.execute(
+            "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+            "FROM segments WHERE chapter_id=? AND seq=?",
+            (int(stored["chapter_id"]), int(stored["seq"]) + 1),
+        ).fetchone()
+        if next_source is None:
+            return None
+        if sha256_text(str(next_source["text"])) != str(next_source["text_sha256"]):
+            raise RuntimeError(
+                "Narration-before-next-paragraph-thought related source text hash "
+                "is invalid"
+            )
+        if not analysis_source_narration_precedes_next_paragraph_thought(
+            chapter_id=int(stored["chapter_id"]),
+            seq=int(stored["seq"]),
+            paragraph_index=int(stored["paragraph_index"]),
+            kind_hint=str(stored["kind_hint"]),
+            next_chapter_id=int(next_source["chapter_id"]),
+            next_seq=int(next_source["seq"]),
+            next_paragraph_index=int(next_source["paragraph_index"]),
+            next_kind_hint=str(next_source["kind_hint"]),
+        ):
+            return None
+        return next_source
+
+    @staticmethod
     def _analysis_mandatory_semantic_lock_conn(
         conn: sqlite3.Connection,
         stored: sqlite3.Row,
@@ -2990,13 +3059,132 @@ class ProjectDB:
         }
 
     @classmethod
+    def _analysis_candidate_context_hash_conn(
+        cls,
+        conn: sqlite3.Connection,
+        candidate: dict[str, Any],
+    ) -> str:
+        context: list[dict[str, Any]] = []
+        for segment in candidate["segments"]:
+            stored = conn.execute(
+                "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                "FROM segments WHERE id=?",
+                (int(segment["segment_id"]),),
+            ).fetchone()
+            if stored is None:
+                raise RuntimeError(
+                    "Analysis candidate context source is missing from the segment ledger"
+                )
+            if sha256_text(str(stored["text"])) != str(stored["text_sha256"]):
+                raise RuntimeError("Analysis candidate source text hash is invalid")
+            previous = conn.execute(
+                "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                "FROM segments WHERE chapter_id=? AND seq=?",
+                (int(stored["chapter_id"]), int(stored["seq"]) - 1),
+            ).fetchone()
+            next_source = conn.execute(
+                "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                "FROM segments WHERE chapter_id=? AND seq=?",
+                (int(stored["chapter_id"]), int(stored["seq"]) + 1),
+            ).fetchone()
+            for neighbor in (previous, next_source):
+                if (
+                    neighbor is not None
+                    and sha256_text(str(neighbor["text"]))
+                    != str(neighbor["text_sha256"])
+                ):
+                    raise RuntimeError(
+                        "Analysis candidate neighbor source text hash is invalid"
+                    )
+            previous_text = str(previous["text"])[-500:] if previous is not None else ""
+            next_text = str(next_source["text"])[:500] if next_source is not None else ""
+            context.append(
+                {
+                    "stable_id": str(stored["stable_id"]),
+                    "chapter_id": int(stored["chapter_id"]),
+                    "paragraph_index": int(stored["paragraph_index"]),
+                    "kind_hint": str(stored["kind_hint"]),
+                    "previous_stable_id": (
+                        str(previous["stable_id"]) if previous is not None else ""
+                    ),
+                    "previous_text_sha256": sha256_text(previous_text),
+                    "previous_source_text_sha256": (
+                        str(previous["text_sha256"]) if previous is not None else ""
+                    ),
+                    "previous_chapter_id": (
+                        int(previous["chapter_id"]) if previous is not None else None
+                    ),
+                    "previous_seq": int(previous["seq"]) if previous is not None else None,
+                    "previous_paragraph_index": (
+                        int(previous["paragraph_index"])
+                        if previous is not None
+                        else None
+                    ),
+                    "previous_kind_hint": (
+                        str(previous["kind_hint"]) if previous is not None else ""
+                    ),
+                    "next_stable_id": (
+                        str(next_source["stable_id"]) if next_source is not None else ""
+                    ),
+                    "next_text_sha256": sha256_text(next_text),
+                    "next_source_text_sha256": (
+                        str(next_source["text_sha256"])
+                        if next_source is not None
+                        else ""
+                    ),
+                    "next_chapter_id": (
+                        int(next_source["chapter_id"])
+                        if next_source is not None
+                        else None
+                    ),
+                    "next_seq": (
+                        int(next_source["seq"]) if next_source is not None else None
+                    ),
+                    "next_paragraph_index": (
+                        int(next_source["paragraph_index"])
+                        if next_source is not None
+                        else None
+                    ),
+                    "next_kind_hint": (
+                        str(next_source["kind_hint"])
+                        if next_source is not None
+                        else ""
+                    ),
+                }
+            )
+        _context_json, context_hash = cls._canonical_analysis_json(
+            context,
+            "analysis candidate source context",
+        )
+        return context_hash
+
+    @classmethod
     def _validate_analysis_candidate_sources_conn(
         cls,
         conn: sqlite3.Connection,
         candidate_json: str,
         deterministic_issue_json: str,
+        expected_context_hash: str | None = None,
     ) -> None:
         candidate = json.loads(candidate_json)
+        if any(
+            critic_row.get("context_policy")
+            == ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+            for critic_row in candidate["critic_rows"]
+        ):
+            live_context_hash = cls._analysis_candidate_context_hash_conn(
+                conn,
+                candidate,
+            )
+            if (
+                not isinstance(expected_context_hash, str)
+                or not expected_context_hash
+                or expected_context_hash != live_context_hash
+            ):
+                raise RuntimeError(
+                    "Narration-before-next-paragraph-thought context hash is not "
+                    "source-ledger-bound"
+                )
         structural_locks, semantic_locks, context_kind_locks = (
             cls._analysis_host_lock_contract(
                 candidate_json,
@@ -3018,6 +3206,8 @@ class ProjectDB:
             if (
                 stored is None
                 or str(stored["stable_id"]) != str(segment["stable_id"])
+                or sha256_text(str(stored["text"]))
+                != str(stored["text_sha256"])
                 or str(stored["text_sha256"]) != str(segment["text_sha256"])
                 or str(stored["text"]) != str(critic_row["text"])
                 or int(stored["paragraph_index"]) != int(critic_row["paragraph"])
@@ -3065,6 +3255,14 @@ class ProjectDB:
             elif str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CONTENT:
                 next_source = cls._analysis_following_thought_source_conn(conn, stored)
                 masks_following_thought = next_source is not None
+                next_paragraph_thought = (
+                    None
+                    if masks_following_thought
+                    else cls._analysis_following_next_paragraph_thought_source_conn(
+                        conn,
+                        stored,
+                    )
+                )
                 if masks_following_thought:
                     previous = conn.execute(
                         "SELECT text FROM segments WHERE chapter_id=? AND seq=?",
@@ -3086,6 +3284,25 @@ class ProjectDB:
                     if str(stored["stable_id"]) not in context_kind_locks:
                         raise RuntimeError(
                             "Narration-before-thought source kind is not host-locked"
+                        )
+                elif next_paragraph_thought is not None:
+                    previous = conn.execute(
+                        "SELECT text FROM segments WHERE chapter_id=? AND seq=?",
+                        (int(stored["chapter_id"]), int(stored["seq"]) - 1),
+                    ).fetchone()
+                    expected_previous_text = (
+                        str(previous["text"])[-500:] if previous is not None else ""
+                    )
+                    if (
+                        str(critic_row["context_policy"])
+                        != ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT
+                        or str(critic_row["previous_text"])
+                        != expected_previous_text
+                        or str(critic_row["next_text"]) != ""
+                    ):
+                        raise RuntimeError(
+                            "Narration-before-next-paragraph-thought context is not "
+                            "source-ledger-bound"
                         )
                 elif (
                     str(critic_row["context_policy"])
@@ -3631,9 +3848,17 @@ class ProjectDB:
             )
         }
         protected_ids = set(context_kind_locks) | semantic_source_kind_ids
-        if not protected_ids:
-            return
         evidence_segments = evidence.get("segments")
+        if not protected_ids:
+            if isinstance(evidence_segments, list) and any(
+                isinstance(item, dict)
+                and item.get("host_source_kind_override") is not None
+                for item in evidence_segments
+            ):
+                raise RuntimeError(
+                    "Rejected source-kind critic evidence contains an unprotected override"
+                )
+            return
         if not isinstance(evidence_segments, list):
             raise RuntimeError(
                 "Rejected source-kind critic evidence requires a segments array"
@@ -3875,6 +4100,7 @@ class ProjectDB:
             conn,
             candidate_json,
             issue_json,
+            str(row["context_hash"]),
         )
         if (
             str(row["candidate_json"]) != candidate_json
@@ -4228,6 +4454,7 @@ class ProjectDB:
                 conn,
                 candidate_json,
                 issue_json,
+                identity[4],
             )
             existing = conn.execute(
                 """
