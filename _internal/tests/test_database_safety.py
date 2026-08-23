@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import json
 import sqlite3
+import unicodedata
 from contextlib import closing
 from pathlib import Path
 
@@ -12,8 +13,10 @@ from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
+    ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
+    ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
@@ -30,9 +33,11 @@ from ebook_reader.database import (
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
+    analysis_critic_anchor_set_sha256,
     analysis_source_has_recalled_persistent_fear,
     analysis_source_has_stunned_blank_mind,
     canonical_analysis_note,
+    canonical_analysis_critic_source_anchors,
 )
 from ebook_reader.io_utils import sha256_file, sha256_text
 from ebook_reader.models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
@@ -92,6 +97,18 @@ V21_SEQ12_STABLE_ID = "c00001_s0000012_040f30f9df84"
 V21_SEQ13_STABLE_ID = "c00001_s0000013_3addf4e2e280"
 V21_SEQ13_TEXT_SHA256 = (
     "3addf4e2e280f94186326177ddaa1a5b75c1fa6e7b6fa0f522de8b2bad1ab8b2"
+)
+V26_SEQ18_TEXT = (
+    "Hạ Phong dù là một người tính cách có chút hướng nội, rụt rè, phản ứng không "
+    "đủ nhanh, nhưng lúc này vẫn nhận thấy được mọi chuyện rất sai: dẫu cho có cháy "
+    "thật, và cậu được người ta đưa tới bệnh viện đi chăng nữa, thì nơi này cũng "
+    "chẳng giống bệnh viện tí nào!"
+)
+V26_SEQ18_TEXT_SHA256 = (
+    "9acd51b63f0675c74dc5c0d91d75cd66fbb9af44a9815b381431f4d4598546c7"
+)
+V27_MAX_UNICODE_NO_WHITESPACE_TEXT = "".join(
+    chr(0x4E00 + index) for index in range(340)
 )
 
 
@@ -356,8 +373,13 @@ def _accepted_critic_contract(envelope: dict | None = None) -> dict:
     singleton_text = (
         str(critic_rows[0]["text"])
         if len(critic_rows) == 1
-        and 1 <= len(str(critic_rows[0]["text"])) <= 240
+        and 1 <= len(str(critic_rows[0]["text"]))
         else ""
+    )
+    anchors = (
+        canonical_analysis_critic_source_anchors(singleton_text)
+        if len(singleton_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+        else ()
     )
     return {
         "policy_version": ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
@@ -365,11 +387,17 @@ def _accepted_critic_contract(envelope: dict | None = None) -> dict:
         "confidence_floor": 0.65,
         "confidence_cap": 0.95,
         "evidence_policy": (
-            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+            if anchors
+            else ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
             if singleton_text
             else ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
         ),
         "evidence_text_sha256": sha256_text(singleton_text) if singleton_text else "",
+        "evidence_anchor_set_sha256": (
+            analysis_critic_anchor_set_sha256(anchors) if anchors else ""
+        ),
+        "evidence_anchor_count": len(anchors),
         "seed": 11,
         "temperature": 0.0,
     }
@@ -383,6 +411,12 @@ def _accepted_critic_evidence(envelope: dict) -> dict:
         strict=True,
     ):
         candidate = dict(critic_row["candidate"])
+        source_text = str(critic_row["text"])
+        evidence_quote = (
+            canonical_analysis_critic_source_anchors(source_text)[0]
+            if len(source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+            else source_text
+        )
         rows.append(
             {
                 "stable_id": segment["stable_id"],
@@ -392,7 +426,7 @@ def _accepted_critic_evidence(envelope: dict) -> dict:
                     **candidate,
                     "accept": True,
                     "rationale": "Đồng ý với delivery theo đúng bằng chứng nguồn.",
-                    "evidence_quote": critic_row["text"],
+                    "evidence_quote": evidence_quote,
                     "confidence": segment["data"]["confidence"],
                 },
                 "field_deltas": [],
@@ -1565,19 +1599,25 @@ def test_v23_critic_reserve_rejects_stale_v5_policy(
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "error"),
     (
         (
             "evidence_policy",
             ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
+            "invalid evidence policy fields",
         ),
-        ("evidence_text_sha256", "f" * 64),
+        (
+            "evidence_text_sha256",
+            "f" * 64,
+            "evidence policy is not source-bound",
+        ),
     ),
 )
 def test_v23_singleton_contract_rejects_forged_evidence_policy_or_hash(
     tmp_path: Path,
     field: str,
     value: str,
+    error: str,
 ) -> None:
     db, source_rows = _analysis_batch_db(tmp_path, texts=("“Ha…”",))
     envelope = _analysis_acceptance_envelope(source_rows)
@@ -1585,7 +1625,7 @@ def test_v23_singleton_contract_rejects_forged_evidence_policy_or_hash(
     contract = _accepted_critic_contract(envelope)
     contract[field] = value
 
-    with pytest.raises(ValueError, match="evidence policy is not source-bound"):
+    with pytest.raises(ValueError, match=error):
         db.reserve_analysis_critic_attempt(
             int(candidate["id"]),
             expected_state="allocated",
@@ -1606,8 +1646,8 @@ def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     candidate_id = int(candidate["id"])
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v7"
-    assert contract["director_policy_version"] == "second_pass_v7"
+    assert contract["policy_version"] == "second_pass_v8"
+    assert contract["director_policy_version"] == "second_pass_v8"
     assert (
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
@@ -1735,32 +1775,56 @@ def test_v23_db_recomputes_host_accept_from_exact_field_deltas(
         )
 
 
-def test_v23_long_singleton_uses_source_substring_policy_without_hash(
+def test_v27_v26_seq18_anchor_evidence_survives_reserve_reopen_accept_and_commit(
     tmp_path: Path,
 ) -> None:
-    source_text = "Một đoạn nguồn dài " + ("rất " * 70)
-    assert len(source_text) > 240
+    source_text = V26_SEQ18_TEXT
+    assert len(source_text) == 261
+    assert sha256_text(source_text) == V26_SEQ18_TEXT_SHA256
+    anchors = canonical_analysis_critic_source_anchors(source_text)
+    assert anchors == canonical_analysis_critic_source_anchors(source_text)
+    assert len(anchors) == len(set(anchors))
+    assert all(
+        anchor in source_text
+        and anchor.strip()
+        and len(anchor) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+        for anchor in anchors
+    )
+
     db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
     envelope = _analysis_acceptance_envelope(source_rows)
     contract = _accepted_critic_contract(envelope)
-
     assert (
         contract["evidence_policy"]
-        == ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
+        == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
     )
-    assert contract["evidence_text_sha256"] == ""
+    assert contract["policy_version"] == "second_pass_v8"
+    assert contract["director_policy_version"] == "second_pass_v8"
+    assert contract["evidence_text_sha256"] == V26_SEQ18_TEXT_SHA256
+    assert contract["evidence_anchor_set_sha256"] == (
+        analysis_critic_anchor_set_sha256(anchors)
+    )
+    assert contract["evidence_anchor_count"] == len(anchors)
+
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
     attempt = db.reserve_analysis_critic_attempt(
-        int(candidate["id"]),
+        candidate_id,
         expected_state="allocated",
         max_attempts=2,
         intent={"candidate_hash": str(candidate["candidate_hash"])},
         contract=contract,
     )
+
+    reopened_after_reserve = ProjectDB(db.path)
+    durable_attempt = reopened_after_reserve.list_analysis_critic_attempts(
+        candidate_id
+    )[0]
+    assert durable_attempt["contract_hash"] == attempt["contract_hash"]
     evidence = _accepted_critic_evidence(envelope)
-    evidence["segments"][0]["critic"]["evidence_quote"] = "Một đoạn nguồn dài"
-    db.complete_analysis_critic_attempt(
-        int(candidate["id"]),
+    assert evidence["segments"][0]["critic"]["evidence_quote"] in anchors
+    reopened_after_reserve.complete_analysis_critic_attempt(
+        candidate_id,
         1,
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
@@ -1769,6 +1833,264 @@ def test_v23_long_singleton_uses_source_substring_policy_without_hash(
         evidence=evidence,
         commit_envelope=envelope,
     )
+
+    reopened_after_accept = ProjectDB(db.path)
+    snapshot = reopened_after_accept.analysis_candidate_acceptance_envelope(candidate_id)
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in snapshot["commit_envelope"]["segments"]
+    ]
+    reopened_after_accept.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    committed = ProjectDB(db.path).list_segments()[0]
+    assert committed["status"] == "analyzed"
+    assert ProjectDB(db.path).get_analysis_candidate(candidate_id)["state"] == "accepted"
+
+
+@pytest.mark.parametrize(
+    ("source_text", "expected_policy", "expected_anchor_count"),
+    (
+        (
+            "ắ" * ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+            0,
+        ),
+        (
+            "ắ" * (ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH + 1),
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
+            2,
+        ),
+        (
+            V27_MAX_UNICODE_NO_WHITESPACE_TEXT,
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
+            2,
+        ),
+    ),
+)
+def test_v27_singleton_anchor_policy_has_exact_unicode_length_boundary(
+    tmp_path: Path,
+    source_text: str,
+    expected_policy: str,
+    expected_anchor_count: int,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+
+    assert contract["evidence_policy"] == expected_policy
+    assert contract["evidence_text_sha256"] == sha256_text(source_text)
+    assert contract["evidence_anchor_count"] == expected_anchor_count
+    if expected_anchor_count:
+        anchors = canonical_analysis_critic_source_anchors(source_text)
+        assert len(source_text) in {
+            ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH + 1,
+            340,
+        }
+        assert len(anchors) == len(set(anchors)) == expected_anchor_count
+        assert all(anchor in source_text for anchor in anchors)
+        assert "".join(anchors) == source_text
+    db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "evidence_text_sha256",
+        "evidence_anchor_set_sha256",
+        "evidence_anchor_count",
+    ),
+)
+def test_v27_long_singleton_reserve_requires_every_anchor_contract_field(
+    tmp_path: Path,
+    field: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(V26_SEQ18_TEXT,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract.pop(field)
+
+    with pytest.raises(ValueError, match="invalid evidence policy fields"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    (
+        (
+            "evidence_policy",
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+            "invalid evidence policy fields",
+        ),
+        (
+            "evidence_anchor_set_sha256",
+            "f" * 64,
+            "evidence policy is not source-bound",
+        ),
+        ("evidence_anchor_count", 99, "evidence policy is not source-bound"),
+    ),
+)
+def test_v27_long_singleton_reserve_rejects_forged_anchor_contract(
+    tmp_path: Path,
+    field: str,
+    value: object,
+    error: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(V26_SEQ18_TEXT,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract[field] = value
+
+    with pytest.raises(ValueError, match=error):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+
+@pytest.mark.parametrize(
+    "forged_quote",
+    (
+        "Hạ Phong",
+        unicodedata.normalize(
+            "NFD",
+            canonical_analysis_critic_source_anchors(V26_SEQ18_TEXT)[0],
+        ),
+        "Hạ Phong dù là một người tính cách có chút hướng nội",
+    ),
+)
+def test_v27_long_singleton_rejects_substring_or_normalized_quote_not_in_anchor_enum(
+    tmp_path: Path,
+    forged_quote: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(V26_SEQ18_TEXT,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    anchors = canonical_analysis_critic_source_anchors(V26_SEQ18_TEXT)
+    assert forged_quote not in anchors
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["segments"][0]["critic"]["evidence_quote"] = forged_quote
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_v27_source_anchor_contract_deduplicates_repeated_exact_halves(
+    tmp_path: Path,
+) -> None:
+    repeated_half = "A" * 169
+    source_text = f"{repeated_half} {repeated_half}"
+    assert len(source_text) == 339
+    anchors = canonical_analysis_critic_source_anchors(source_text)
+    assert anchors == (repeated_half,)
+
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+
+    assert contract["evidence_anchor_count"] == 1
+    assert contract["evidence_anchor_set_sha256"] == (
+        analysis_critic_anchor_set_sha256(anchors)
+    )
+    db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+
+
+def test_v27_reopen_rejects_rehashed_long_singleton_anchor_contract_tamper(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(V26_SEQ18_TEXT,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    tampered_contract = _accepted_critic_contract(envelope)
+    tampered_contract["evidence_anchor_set_sha256"] = "f" * 64
+    tampered_json = json.dumps(
+        tampered_contract,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET contract_json=?,contract_hash=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (tampered_json, sha256_text(tampered_json), candidate_id),
+        )
+
+    with pytest.raises(RuntimeError, match="evidence policy is not source-bound"):
+        ProjectDB(db.path).find_resumable_analysis_candidate(
+            policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+            model_name=ANALYSIS_MODEL_NAME,
+            model_digest=ANALYSIS_MODEL_DIGEST,
+            group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+            context_hash=ANALYSIS_CONTEXT_HASH,
+        )
 
 
 @pytest.mark.parametrize(
@@ -2380,7 +2702,7 @@ def test_v24_heading_critic_confidence_preserves_lock_through_reopen_and_commit(
 ) -> None:
     assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
     assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
-    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v7"
+    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v8"
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
@@ -3155,10 +3477,10 @@ def test_direct_narration_affect_critic_dissent_cannot_override_commit(
         corrected_emotion=wrong_emotion,
     )
     evidence["segments"][0]["critic"]["evidence_quote"] = (
-        text
+        canonical_analysis_critic_source_anchors(text)[0]
         if critic_contract["evidence_policy"]
-        == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
-        else text[-160:]
+        == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+        else text
     )
     db.complete_analysis_critic_attempt(
         candidate_id,

@@ -1,6 +1,6 @@
 # Test report
 
-Ngày cập nhật: 2026-08-20
+Ngày cập nhật: 2026-08-23
 
 Đợt sửa confidence contract V22: **634/634 test trọng tâm pass** cho analysis bắt buộc,
 database safety và quality policy trên Python 3.11.9. Compileall cho source/test, `git diff --check`
@@ -11,6 +11,10 @@ Hardening sau bằng chứng V24 giữ confidence derived/validated/commit của
 trong cả agreement, structural override và batch trộn; raw critic confidence vẫn được lưu và vẫn phải qua durable floor,
 còn content tiếp tục dùng `min(generator, critic, cap)`. Suite analysis/database/quality liên quan, Ruff, compileall và
 `git diff --check` đều pass; đợt này không gọi model/GPU hay pipeline thật.
+Hardening V27 sau failure thật tại seq18 dài 261 ký tự thay singleton substring tự do bằng tập source anchor deterministic:
+contract khóa source SHA + anchor-set SHA/count, schema dùng exact enum và host chỉ nhận đúng membership. Regression dùng nguyên
+text V26, biên 240/241 ký tự, short singleton và multi-row đều pass trong combined analysis + database + quality-policy suite;
+đợt sửa này không gọi model/GPU hoặc pipeline audiobook thật.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -81,7 +85,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   content generator confidence dưới floor bị feedback typed và retry trước mọi critic/ledger allocation; schema/prompt mang
   floor ở batch không có heading, còn batch hỗn hợp giữ schema floor `0` để proposal confidence thô của heading vẫn tới host.
   Contract critic khóa cả floor/cap và evidence policy. Singleton có target dài 1..240 ký tự dùng
-  `singleton_full_target_v1`, exact source SHA và enum quote bằng toàn target; multi-row giữ `target_substring_v1`.
+  `singleton_full_target_v1`, exact source SHA và enum quote bằng toàn target; singleton dài hơn dùng
+  `singleton_source_anchor_enum_v1`, exact source SHA + deterministic anchor-set SHA/count và enum chỉ gồm source anchor
+  nguyên văn không quá 240 ký tự; multi-row giữ `target_substring_v1`.
   Model không còn trả boolean accept: host suy agreement từ sáu field không delta, correction từ field delta, rồi chỉ lưu
   `critic.accept` compatibility bằng đúng kết quả host-derived. Root/item thừa, ID thiếu/trùng/lạ, string thay số, NaN/Inf,
   confidence dưới ngưỡng, rationale lỗi và quote lỗi có category durable riêng;
@@ -102,7 +108,7 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   Intent được reserve trước HTTP; protocol-invalid retry đúng candidate với seed mới, field mismatch lặp projection thì chia
   batch hữu hạn, còn crash sau `critic_accepted` resume/commit không gọi Ollama. Hash JSON, quan hệ parent-child, attempt liên tục,
   exact confidence `min(generator, critic, cap)` cho content cùng ngoại lệ deterministic heading khóa ở `0.95`,
-  evidence policy/full-target SHA, source role/seq/paragraph/kind/text và
+  evidence policy/full-target SHA/anchor-set SHA/count, source role/seq/paragraph/kind/text và
   model/policy/context CAS đều được kiểm
   tra lại khi đọc/commit; forged content override, quote lấy từ row khác và structural clearance bị sửa đều fail-closed;
 - resume coi durable analysis candidate là checkpoint đã bắt đầu ngay cả khi segment vẫn `pending`, vì vậy casting fingerprint

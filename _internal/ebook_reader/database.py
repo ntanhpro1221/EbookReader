@@ -166,13 +166,95 @@ ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v7"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v7"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v8"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
     "singleton_full_target_v1"
 )
+ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR = (
+    "singleton_source_anchor_enum_v1"
+)
 ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING = "target_substring_v1"
+
+
+def canonical_analysis_critic_source_anchors(source_text: str) -> tuple[str, ...]:
+    """Return stable exact-source evidence choices bounded by the critic schema."""
+    if not isinstance(source_text, str) or not source_text or not source_text.strip():
+        raise ValueError("Analysis critic source text must contain visible characters")
+
+    spans: list[tuple[int, int]] = []
+
+    def split_span(start: int, end: int) -> None:
+        if end - start <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
+            spans.append((start, end))
+            return
+
+        midpoint = start + (end - start) // 2
+        whitespace_runs = []
+        for match in re.finditer(r"\s+", source_text[start:end]):
+            run_start = start + match.start()
+            run_end = start + match.end()
+            if start < run_start and run_end < end:
+                whitespace_runs.append((run_start, run_end))
+        if whitespace_runs:
+            split_start, split_end = min(
+                whitespace_runs,
+                key=lambda item: (
+                    abs(item[0] + item[1] - 2 * midpoint),
+                    item[0],
+                ),
+            )
+        else:
+            split_start = midpoint
+            split_end = midpoint
+        split_span(start, split_start)
+        split_span(split_end, end)
+
+    split_span(0, len(source_text))
+    anchors: list[str] = []
+    seen: set[str] = set()
+    for start, end in spans:
+        anchor = source_text[start:end]
+        if not anchor or not anchor.strip() or anchor in seen:
+            continue
+        if (
+            len(anchor) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+            or anchor not in source_text
+        ):
+            raise RuntimeError("Analysis critic source anchor derivation is invalid")
+        seen.add(anchor)
+        anchors.append(anchor)
+    if not anchors:
+        raise ValueError("Analysis critic source text produced no usable evidence anchors")
+    return tuple(anchors)
+
+
+def analysis_critic_anchor_set_sha256(anchors: Sequence[str]) -> str:
+    if isinstance(anchors, (str, bytes)):
+        raise ValueError("Analysis critic anchors must be a sequence of exact strings")
+    values = tuple(anchors)
+    if (
+        not values
+        or any(
+            not isinstance(anchor, str)
+            or not anchor
+            or not anchor.strip()
+            or len(anchor) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+            for anchor in values
+        )
+        or len(set(values)) != len(values)
+    ):
+        raise ValueError("Analysis critic anchors must be unique non-empty bounded strings")
+    payload = json.dumps(
+        list(values),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return sha256_text(payload)
+
+
 ANALYSIS_CHAPTER_HEADING_CONFIDENCE = 0.95
 ANALYSIS_CHAPTER_HEADING_PATTERN = re.compile(
     r"^\s*(?:chương|chapter|hồi|phần|part|quyển|book|tập|volume)\s+"
@@ -1817,7 +1899,7 @@ class ProjectDB:
     @staticmethod
     def _analysis_critic_evidence_contract(
         candidate_json: str,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, str, int]:
         try:
             candidate = json.loads(candidate_json)
         except json.JSONDecodeError as exc:
@@ -1827,15 +1909,23 @@ class ProjectDB:
             raise RuntimeError("Analysis critic evidence candidate rows are incomplete")
         if len(critic_rows) == 1:
             source_text = critic_rows[0].get("text")
-            if (
-                isinstance(source_text, str)
-                and 1 <= len(source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
-            ):
+            if isinstance(source_text, str) and 1 <= len(source_text):
+                evidence_text_sha256 = sha256_text(source_text)
+                if len(source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
+                    anchors = canonical_analysis_critic_source_anchors(source_text)
+                    return (
+                        ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
+                        evidence_text_sha256,
+                        analysis_critic_anchor_set_sha256(anchors),
+                        len(anchors),
+                    )
                 return (
                     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
-                    sha256_text(source_text),
+                    evidence_text_sha256,
+                    "",
+                    0,
                 )
-        return ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING, ""
+        return ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING, "", "", 0
 
     @classmethod
     def _analysis_critic_confidence_bounds(
@@ -1871,22 +1961,58 @@ class ProjectDB:
             )
         evidence_policy = contract.get("evidence_policy")
         evidence_text_sha256 = contract.get("evidence_text_sha256")
+        evidence_anchor_set_sha256 = contract.get("evidence_anchor_set_sha256")
+        evidence_anchor_count = contract.get("evidence_anchor_count")
         if (
             evidence_policy
             not in {
                 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+                ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
                 ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
             }
             or not isinstance(evidence_text_sha256, str)
+            or not isinstance(evidence_anchor_set_sha256, str)
+            or type(evidence_anchor_count) is not int
+            or evidence_anchor_count < 0
         ):
             raise error_type("Analysis critic contract has invalid evidence policy fields")
-        if candidate_json is not None:
-            expected_evidence_policy, expected_evidence_text_sha256 = (
-                cls._analysis_critic_evidence_contract(candidate_json)
+        sha256_pattern = re.compile(r"[0-9a-f]{64}")
+        if evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET:
+            evidence_fields_valid = (
+                sha256_pattern.fullmatch(evidence_text_sha256) is not None
+                and evidence_anchor_set_sha256 == ""
+                and evidence_anchor_count == 0
             )
+        elif (
+            evidence_policy
+            == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+        ):
+            evidence_fields_valid = (
+                sha256_pattern.fullmatch(evidence_text_sha256) is not None
+                and sha256_pattern.fullmatch(evidence_anchor_set_sha256) is not None
+                and evidence_anchor_count > 0
+            )
+        else:
+            evidence_fields_valid = (
+                evidence_text_sha256 == ""
+                and evidence_anchor_set_sha256 == ""
+                and evidence_anchor_count == 0
+            )
+        if not evidence_fields_valid:
+            raise error_type("Analysis critic contract has invalid evidence policy fields")
+        if candidate_json is not None:
+            (
+                expected_evidence_policy,
+                expected_evidence_text_sha256,
+                expected_evidence_anchor_set_sha256,
+                expected_evidence_anchor_count,
+            ) = cls._analysis_critic_evidence_contract(candidate_json)
             if (
                 evidence_policy != expected_evidence_policy
                 or evidence_text_sha256 != expected_evidence_text_sha256
+                or evidence_anchor_set_sha256
+                != expected_evidence_anchor_set_sha256
+                or evidence_anchor_count != expected_evidence_anchor_count
             ):
                 raise error_type(
                     "Analysis critic evidence policy is not source-bound"
@@ -2617,6 +2743,12 @@ class ProjectDB:
             candidate_json=candidate_json,
         )
         evidence_policy = str(critic_contract["evidence_policy"])
+        singleton_source_anchors = frozenset(
+            canonical_analysis_critic_source_anchors(str(critic_rows[0]["text"]))
+            if evidence_policy
+            == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+            else ()
+        )
         evidence_segments = evidence.get("segments")
         if not isinstance(evidence_segments, list):
             raise ValueError("Accepted critic evidence requires a segments array")
@@ -2773,6 +2905,11 @@ class ProjectDB:
                     evidence_policy
                     == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
                     and evidence_quote != str(critic_row["text"])
+                )
+                or (
+                    evidence_policy
+                    == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+                    and evidence_quote not in singleton_source_anchors
                 )
                 or (
                     evidence_policy

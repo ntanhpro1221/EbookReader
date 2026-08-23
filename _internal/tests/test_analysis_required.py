@@ -75,6 +75,8 @@ from ebook_reader.database import (
     CONTINUED_DIALOGUE_LOCK_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
+    analysis_critic_anchor_set_sha256,
+    canonical_analysis_critic_source_anchors,
     canonical_analysis_note,
 )
 from ebook_reader.io_utils import sha256_text
@@ -110,6 +112,12 @@ V25_SEQ9_TEXT = (
     "kinh hoàng. Trước khi bị ngọn lửa nóng rực thiêu đốt, cậu trong mơ đã rơi vào "
     "hôn mê vì hít quá nhiều khói dày, chỉ có thể mơ hồ và tuyệt vọng chờ ngọn lửa "
     "lan tới."
+)
+V26_SEQ18_TEXT = (
+    "Hạ Phong dù là một người tính cách có chút hướng nội, rụt rè, phản ứng không "
+    "đủ nhanh, nhưng lúc này vẫn nhận thấy được mọi chuyện rất sai: dẫu cho có cháy "
+    "thật, và cậu được người ta đưa tới bệnh viện đi chăng nữa, thì nơi này cũng "
+    "chẳng giống bệnh viện tí nào!"
 )
 
 
@@ -523,12 +531,19 @@ def director_critic_payload(
     verdicts = []
     for index, row in enumerate(candidate_rows):
         corrected = {**row["candidate"], **corrections.get(index, {})}
+        source_text = str(row["text"])
+        evidence_quote = (
+            canonical_analysis_critic_source_anchors(source_text)[0]
+            if len(group) == 1
+            and len(source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+            else source_text[:ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH]
+        )
         verdicts.append(
             {
                 "id": row["id"],
                 **corrected,
                 "rationale": "Chức năng câu và delivery được đối chiếu với ngữ cảnh.",
-                "evidence_quote": row["text"][:ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH],
+                "evidence_quote": evidence_quote,
                 "critic_confidence": confidence,
             }
         )
@@ -795,6 +810,8 @@ def test_director_transport_contract_is_immutable_but_candidate_bound() -> None:
     assert first["confidence_floor"] == settings["low_confidence_threshold"]
     assert first["evidence_policy"] == "target_substring_v1"
     assert first["evidence_text_sha256"] == ""
+    assert first["evidence_anchor_set_sha256"] == ""
+    assert first["evidence_anchor_count"] == 0
     assert first["seed"] != changed_candidate["seed"]
     assert first["group_fingerprint"] == changed_candidate["group_fingerprint"]
 
@@ -953,8 +970,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v7"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v11"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v8"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v12"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -1435,13 +1452,170 @@ def test_singleton_director_request_binds_confidence_and_exact_short_quote(
     assert "confidence_cap=0.95" in request["prompt"]
     assert "evidence_quote phải sao chép nguyên văn toàn bộ trường text" in request["prompt"]
     assert "Với request multi-row" in request["system"]
-    assert "request singleton có text\nđủ ngắn, phải sao chép nguyên văn toàn bộ" in request[
-        "system"
-    ]
+    assert "text đủ ngắn phải sao chép nguyên văn toàn bộ" in request["system"]
     assert "boolean đồng ý/từ chối" in request["system"]
     assert "evidence_policy=singleton_full_target_v1" in request["prompt"]
     assert request_contract["evidence_policy"] == "singleton_full_target_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text("“Ha…”")
+    assert request_contract["evidence_anchor_set_sha256"] == ""
+    assert request_contract["evidence_anchor_count"] == 0
+
+
+def test_v26_long_singleton_request_binds_exact_source_anchor_enum() -> None:
+    assert len(V26_SEQ18_TEXT) == 261
+    assert len(V26_SEQ18_TEXT) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+    group = [
+        {
+            "id": 19,
+            "stable_id": "c00001_s0000018_9acd51b63f06",
+            "chapter_id": 1,
+            "seq": 18,
+            "paragraph_index": 16,
+            "text": V26_SEQ18_TEXT,
+            "kind_hint": "narration",
+        }
+    ]
+    stable_id = str(group[0]["stable_id"])
+    validated = {stable_id: analysis_item(stable_id)}
+    candidate_rows = _director_candidate_rows(group, validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    anchors = canonical_analysis_critic_source_anchors(V26_SEQ18_TEXT)
+    payload, _ = director_critic_payload(
+        group,
+        validated,
+        confidence=0.8,
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+    session = FakeSession(payload)
+    settings = build_settings("high_quality")
+    analyzer = OllamaBookAnalyzer(settings, FakeDB(), lambda _message: None)
+    analyzer.session = session
+    request_contract = _director_critic_request_contract(
+        settings["analysis"],
+        model=analyzer.model,
+        model_digest="sha256:test-model-digest",
+        group=group,
+        attempt=1,
+        candidate_hash=candidate_hash,
+    )
+
+    returned, returned_hash = ORIGINAL_DIRECTOR_CRITIC_REQUEST(
+        analyzer,
+        group,
+        validated,
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+        request_contract=request_contract,
+    )
+
+    assert returned == payload
+    assert returned_hash == candidate_hash
+    evidence_schema = session.request["json"]["format"]["properties"]["verdicts"][
+        "items"
+    ]["properties"]["evidence_quote"]
+    assert evidence_schema["enum"] == list(anchors)
+    assert all(anchor in V26_SEQ18_TEXT for anchor in anchors)
+    assert all(
+        1 <= len(anchor) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+        for anchor in anchors
+    )
+    assert "evidence_policy=singleton_source_anchor_enum_v1" in session.request[
+        "json"
+    ]["prompt"]
+    assert "chính xác một source anchor trong enum" in session.request["json"]["prompt"]
+    assert "không được tự cắt, nối hoặc chuẩn hóa anchor" in session.request["json"][
+        "system"
+    ]
+    assert request_contract["policy_version"] == "second_pass_v8"
+    assert request_contract["evidence_policy"] == "singleton_source_anchor_enum_v1"
+    assert request_contract["evidence_text_sha256"] == sha256_text(V26_SEQ18_TEXT)
+    assert request_contract["evidence_anchor_set_sha256"] == (
+        analysis_critic_anchor_set_sha256(anchors)
+    )
+    assert request_contract["evidence_anchor_count"] == len(anchors)
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {}
+    assert evidence["segments"][0]["critic"]["evidence_quote"] == anchors[0]
+
+
+def test_long_singleton_adjudicator_rejects_source_substring_outside_anchor_enum() -> None:
+    group = [
+        {
+            "id": 19,
+            "stable_id": "v26-long-critic",
+            "chapter_id": 1,
+            "seq": 18,
+            "paragraph_index": 16,
+            "text": V26_SEQ18_TEXT,
+            "kind_hint": "narration",
+        }
+    ]
+    stable_id = str(group[0]["stable_id"])
+    validated = {stable_id: analysis_item(stable_id)}
+    payload, candidate_hash = director_critic_payload(group, validated, confidence=0.8)
+    payload["verdicts"][0]["evidence_quote"] = V26_SEQ18_TEXT[:40]
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {stable_id: "DIRECTOR_INVALID_RESPONSE evidence_quote"}
+    assert "critic" not in evidence["segments"][0]
+
+
+def test_singleton_evidence_policy_boundary_switches_after_quote_limit() -> None:
+    settings = build_settings("high_quality")["analysis"]
+    at_limit_text = "A" * ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+    above_limit_text = "B" * (ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH + 1)
+
+    def contract_for(source_text: str) -> dict[str, object]:
+        group = [
+            {
+                "id": 1,
+                "stable_id": f"boundary-{len(source_text)}",
+                "chapter_id": 1,
+                "seq": 0,
+                "paragraph_index": 0,
+                "text": source_text,
+                "kind_hint": "narration",
+            }
+        ]
+        return _director_critic_request_contract(
+            settings,
+            model="qwen3:8b",
+            model_digest="sha256:locked",
+            group=group,
+            attempt=1,
+            candidate_hash="candidate",
+        )
+
+    at_limit = contract_for(at_limit_text)
+    above_limit = contract_for(above_limit_text)
+    above_anchors = canonical_analysis_critic_source_anchors(above_limit_text)
+
+    assert at_limit["evidence_policy"] == "singleton_full_target_v1"
+    assert at_limit["evidence_text_sha256"] == sha256_text(at_limit_text)
+    assert at_limit["evidence_anchor_set_sha256"] == ""
+    assert at_limit["evidence_anchor_count"] == 0
+    assert above_limit["evidence_policy"] == "singleton_source_anchor_enum_v1"
+    assert above_limit["evidence_text_sha256"] == sha256_text(above_limit_text)
+    assert above_limit["evidence_anchor_set_sha256"] == (
+        analysis_critic_anchor_set_sha256(above_anchors)
+    )
+    assert above_limit["evidence_anchor_count"] == len(above_anchors)
 
 
 def test_multirow_director_schema_keeps_source_substring_quote_contract() -> None:
@@ -3771,7 +3945,7 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v7"
+    assert first_contract["policy_version"] == "second_pass_v8"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
@@ -6995,7 +7169,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v7"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v8"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

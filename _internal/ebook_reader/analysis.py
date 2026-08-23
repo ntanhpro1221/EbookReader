@@ -31,6 +31,7 @@ from .database import (
     ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
     ANALYSIS_CRITIC_CONFIDENCE_MAX,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
+    ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
@@ -43,9 +44,11 @@ from .database import (
     EXPLICIT_ATTRIBUTION_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
+    analysis_critic_anchor_set_sha256,
     analysis_source_has_recalled_persistent_fear,
     analysis_source_has_stunned_blank_mind,
     analysis_note_markers,
+    canonical_analysis_critic_source_anchors,
     canonical_analysis_note,
 )
 from .io_utils import run_hidden, sha256_text
@@ -90,7 +93,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v11"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v12"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -752,8 +755,9 @@ Luôn trả sáu trường kind, speaker, emotion, intensity, pace và volume đ
 boolean đồng ý/từ chối; host tự suy ra đồng ý khi cả sáu trường trùng candidate và correction khi có field delta.
 Mỗi verdict phải có evidence_quote nguyên văn, không rỗng từ chính trường text cùng ID, tối đa
 {ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH} ký tự. Với request multi-row, chọn chuỗi con ngắn nhất đủ làm
-bằng chứng delivery và không sao chép nguyên một segment dài. Ngoại lệ: khi prompt nói request singleton có text
-đủ ngắn, phải sao chép nguyên văn toàn bộ trường text làm evidence_quote, kể cả dấu ngoặc và dấu ba chấm.
+bằng chứng delivery và không sao chép nguyên một segment dài. Ngoại lệ singleton do prompt và
+schema quy định: text đủ ngắn phải sao chép nguyên văn toàn bộ trường text, còn text dài
+phải chọn chính xác một source anchor trong enum; không được tự cắt, nối hoặc chuẩn hóa anchor.
 Mọi field có trong host_locked_fields là constraint nguồn đã được host xác minh và là bất biến. Nếu không đồng ý với
 field khóa, vẫn trả correction thật của bạn trong sáu trường để host lưu audit và áp đúng structural/semantic override.
 source_role=chapter_heading và context_policy=target_only là tiêu đề chương độc lập: previous_text/next_text cố ý để
@@ -3519,6 +3523,25 @@ def _director_critic_request_contract(
         <= len(singleton_source_text)
         <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
     )
+    singleton_source_anchors = (
+        canonical_analysis_critic_source_anchors(singleton_source_text)
+        if len(singleton_source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+        else ()
+    )
+    evidence_policy = (
+        ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+        if singleton_full_target
+        else (
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+            if singleton_source_anchors
+            else ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
+        )
+    )
+    evidence_text_sha256 = (
+        _source_text_sha256(group[0])
+        if singleton_full_target or singleton_source_anchors
+        else ""
+    )
     return {
         "role": "director_critic",
         "retry_policy_version": retry_policy_version,
@@ -3533,16 +3556,14 @@ def _director_critic_request_contract(
             if settings.get("low_confidence_policy") == "fail"
             else 0.0
         ),
-        "evidence_policy": (
-            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
-            if singleton_full_target
-            else ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
-        ),
-        "evidence_text_sha256": (
-            _source_text_sha256(group[0])
-            if singleton_full_target
+        "evidence_policy": evidence_policy,
+        "evidence_text_sha256": evidence_text_sha256,
+        "evidence_anchor_set_sha256": (
+            analysis_critic_anchor_set_sha256(singleton_source_anchors)
+            if singleton_source_anchors
             else ""
         ),
+        "evidence_anchor_count": len(singleton_source_anchors),
         "model": model,
         "digest": model_digest,
         "attempt": attempt,
@@ -3584,12 +3605,17 @@ def _director_critic_schema(
     verdicts["items"]["properties"]["id"]["enum"] = batch_ids
     verdict_properties = verdicts["items"]["properties"]
     verdict_properties["critic_confidence"]["minimum"] = float(confidence_floor)
-    if (
-        len(batch_ids) == 1
-        and isinstance(singleton_source_text, str)
-        and 1 <= len(singleton_source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
-    ):
-        verdict_properties["evidence_quote"]["enum"] = [singleton_source_text]
+    if len(batch_ids) == 1 and isinstance(singleton_source_text, str):
+        if 1 <= len(singleton_source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
+            evidence_quotes = (singleton_source_text,)
+        elif len(singleton_source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
+            evidence_quotes = canonical_analysis_critic_source_anchors(
+                singleton_source_text
+            )
+        else:
+            evidence_quotes = ()
+        if evidence_quotes:
+            verdict_properties["evidence_quote"]["enum"] = list(evidence_quotes)
     return schema
 
 
@@ -3745,16 +3771,24 @@ def _adjudicate_director_critic(
         ):
             issues[stable_id] = DIRECTOR_INVALID_RATIONALE_REASON
             continue
-        singleton_requires_exact_quote = (
-            len(group) == 1
-            and 1 <= len(source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+        singleton_allowed_quotes = (
+            (
+                (source_text,)
+                if len(source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+                else canonical_analysis_critic_source_anchors(source_text)
+            )
+            if len(group) == 1 and source_text
+            else ()
         )
         if (
             not isinstance(evidence_quote, str)
             or not evidence_quote.strip()
             or len(evidence_quote) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
             or evidence_quote not in source_text
-            or (singleton_requires_exact_quote and evidence_quote != source_text)
+            or (
+                bool(singleton_allowed_quotes)
+                and evidence_quote not in singleton_allowed_quotes
+            )
         ):
             issues[stable_id] = DIRECTOR_INVALID_EVIDENCE_QUOTE_REASON
             continue
@@ -4348,6 +4382,12 @@ class OllamaBookAnalyzer:
         batch_ids = [str(row["id"]) for row in candidate_rows]
         evidence_policy = str(request_contract["evidence_policy"])
         evidence_text_sha256 = str(request_contract["evidence_text_sha256"])
+        evidence_anchor_set_sha256 = str(
+            request_contract["evidence_anchor_set_sha256"]
+        )
+        evidence_anchor_count = request_contract["evidence_anchor_count"]
+        if type(evidence_anchor_count) is not int or evidence_anchor_count < 0:
+            raise RuntimeError("Director critic evidence anchor count is invalid")
         candidate_singleton_text = (
             str(candidate_rows[0]["text"])
             if len(candidate_rows) == 1
@@ -4360,27 +4400,61 @@ class OllamaBookAnalyzer:
                 <= len(candidate_singleton_text)
                 <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
                 or sha256_text(candidate_singleton_text) != evidence_text_sha256
+                or evidence_anchor_set_sha256
+                or evidence_anchor_count != 0
             ):
                 raise RuntimeError("Director critic singleton evidence contract changed")
             singleton_source_text = candidate_singleton_text
+        elif (
+            evidence_policy
+            == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+        ):
+            if (
+                candidate_singleton_text is None
+                or len(candidate_singleton_text)
+                <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+                or sha256_text(candidate_singleton_text) != evidence_text_sha256
+            ):
+                raise RuntimeError("Director critic source-anchor evidence target changed")
+            singleton_source_anchors = canonical_analysis_critic_source_anchors(
+                candidate_singleton_text
+            )
+            if (
+                analysis_critic_anchor_set_sha256(singleton_source_anchors)
+                != evidence_anchor_set_sha256
+                or len(singleton_source_anchors) != evidence_anchor_count
+            ):
+                raise RuntimeError("Director critic source-anchor set changed")
+            singleton_source_text = candidate_singleton_text
         elif evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING:
-            if evidence_text_sha256:
-                raise RuntimeError("Director critic substring evidence contract has a target hash")
+            if (
+                evidence_text_sha256
+                or evidence_anchor_set_sha256
+                or evidence_anchor_count != 0
+            ):
+                raise RuntimeError(
+                    "Director critic substring evidence contract has bound singleton fields"
+                )
             singleton_source_text = None
         else:
             raise RuntimeError("Director critic request has an unsupported evidence policy")
-        singleton_quote_instruction = (
-            "\nĐây là request singleton có text đủ ngắn: evidence_quote phải sao chép "
-            "nguyên văn toàn bộ trường text, kể cả dấu ngoặc và dấu ba chấm; schema chỉ "
-            "chấp nhận đúng chuỗi nguồn đó."
-            if (
-                singleton_source_text is not None
-                and 1
-                <= len(singleton_source_text)
-                <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+        if evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET:
+            singleton_quote_instruction = (
+                "\nĐây là request singleton có text đủ ngắn: evidence_quote phải sao chép "
+                "nguyên văn toàn bộ trường text, kể cả dấu ngoặc và dấu ba chấm; schema chỉ "
+                "chấp nhận đúng chuỗi nguồn đó."
             )
-            else ""
-        )
+        elif (
+            evidence_policy
+            == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+        ):
+            singleton_quote_instruction = (
+                "\nĐây là request singleton có text dài: evidence_quote phải sao chép "
+                "nguyên văn chính xác một source anchor trong enum của schema. Không tự cắt, "
+                "nối hoặc chuẩn hóa anchor."
+            )
+        else:
+            singleton_quote_instruction = ""
         request = {
             "model": self.model,
             "system": DIRECTOR_CRITIC_SYSTEM_PROMPT,

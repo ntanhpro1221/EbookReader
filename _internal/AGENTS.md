@@ -186,13 +186,17 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   Structural override chỉ được phép cho đúng row đã khóa; mọi content row vẫn chịu critic bình thường. Mỗi verdict critic
   phải trích nguyên văn bằng chứng không rỗng từ chính text cùng ID, không được lấy bằng chứng từ row lân cận. Multi-row
   dùng source substring ngắn; singleton có toàn bộ target dài từ 1 đến giới hạn quote phải khóa schema và contract vào exact
-  full target + source hash. Critic model không trả boolean accept: host suy agreement chỉ khi cả sáu delivery field không có
-  delta, và evidence compatibility phải lưu accept đúng bằng kết quả host-derived đó.
+  full target + source hash. Singleton dài hơn giới hạn quote phải dùng tập source anchor deterministic, nguyên văn và không
+  vượt giới hạn; schema chỉ chấp nhận đúng một anchor trong enum, còn contract bền phải khóa source hash, hash tập anchor và
+  số anchor. Không được tự cắt, nối, chuẩn hóa hoặc chấp nhận một substring ngoài enum. Critic model không trả boolean accept:
+  host suy agreement chỉ khi cả sáu delivery field không có delta, và evidence compatibility phải lưu accept đúng bằng kết
+  quả host-derived đó.
 - Với analysis bắt buộc ở profile `high_quality`, mọi content candidate dưới `low_confidence_threshold` phải bị từ chối
   bằng feedback số typed trước critic/candidate ledger. Prompt generator luôn phải mang đúng floor; schema áp floor trực tiếp
   cho batch không có tiêu đề, còn batch trộn tiêu đề+nội dung phải giữ proposal confidence thô của tiêu đề và dùng host gate
   để áp floor lên content. Tiêu đề cấu trúc được normalize trước gate này. Confidence được commit phải nằm trên ngưỡng khóa
-  và không vượt cap của director. Contract critic phải khóa đúng floor/cap trong schema + prompt, evidence policy + target hash;
+  và không vượt cap của director. Contract critic phải khóa đúng floor/cap trong schema + prompt, evidence policy + target hash
+  + anchor-set hash/count;
   confidence dưới floor, rationale lỗi và evidence quote lỗi phải có reason host-derived riêng trong durable outcome.
   Model name + digest Ollama phải được
   khóa bền ở cấp book, kiểm tra lại trước và sau mọi request generator, critic và pronunciation; tag/digest đổi giữa
