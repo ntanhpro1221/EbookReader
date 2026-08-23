@@ -167,9 +167,9 @@ ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT = (
 )
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
-ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v7"
-ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v9"
+ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v8"
+ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v4"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v10"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -490,6 +490,13 @@ ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS = {
         "source_kind": "narration",
         "requires_related": False,
     },
+    "narration_sleep_paralysis_helplessness": {
+        "cue_class": "sleep_paralysis_helplessness",
+        "allowed_emotions": ("afraid",),
+        "source_kind": "narration",
+        "requires_related": False,
+        "protects_source_kind": True,
+    },
 }
 ANALYSIS_HOST_MORTALITY_PATTERN = re.compile(
     r"\b(?:sẽ|sắp)\s+chết(?:\s+(?:mất|thôi))?\b",
@@ -599,6 +606,84 @@ ANALYSIS_HOST_STUNNED_BLANK_MIND_PATTERN = re.compile(
     rf"\b{ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN}\s+(?:đứng\s+)?"
     r"đực\s+mặt(?:\s+ra)?\s*,\s*đầu\s+óc"
     r"(?:\s+một\s+mảng)?\s+trắng\s+xóa\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_PATTERN = re.compile(
+    r"\bbị\s+bóng\s+đè\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_DREAM_AWARENESS_PATTERN = re.compile(
+    rf"\b{ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN}\s+"
+    r"(?:vẫn\s+)?(?:biết|nhận\s+thức)(?:\s+rõ)?\s+"
+    r"(?:rằng\s+)?(?:mình|bản\s+thân)\s+đang\s+(?:nằm\s+)?mơ\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_DESIRE_ESCAPE_PATTERN = re.compile(
+    r"\b(?:muốn|mong\s+muốn)\s+(?:tự\s+)?thoát\s+ra\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_MOTOR_HELPLESSNESS_PATTERN = re.compile(
+    r"\b(?:không|chẳng)\s+thể\s+(?:tự\s+)?"
+    r"(?:điều\s+khiển|kiểm\s+soát)\s+(?:được\s+)?"
+    r"(?:bản\s+thân|cơ\s+thể|chính\s+mình)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_NONASSERTIVE_PATTERN = re.compile(
+    r"(?:^|[.!?…;:])[^.!?…;:]*\b(?:nếu|giả\s+(?:sử|như)|liệu|"
+    r"phải\s+chăng|có\s+lẽ|có\s+thể|dường\s+như|hình\s+như|"
+    r"nghe\s+(?:nói|bảo)|(?:nghĩ|tưởng|tin|nghi\s+ngờ|nói|kể|bảo)"
+    r"(?:\s+rằng)?)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_RESOLVED_PATTERN = re.compile(
+    r"\b(?:(?:không|chẳng)\s+còn\s+(?:bị\s+)?bóng\s+đè|"
+    r"(?:đã|vừa)\s+(?:thoát|tỉnh)(?:\s+ra|\s+dậy)?|"
+    r"(?:giờ|nay)\s+(?:đã\s+)?(?:thoát|tỉnh|cử\s+động|điều\s+khiển))\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_META_PATTERN = re.compile(
+    r"\b(?:dòng\s+chữ|từ|cụm\s+từ|khái\s+niệm|thuật\s+ngữ|"
+    r"câu\s+chuyện|đoạn\s+văn)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_NEGATED_STATE_PATTERN = re.compile(
+    r"\b(?:không|chẳng)\s+phải\s+(?:là\s+)?(?:đang\s+)?(?:bị\s+)?"
+    r"bóng\s+đè\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_AFFECT_CONTRADICTION_PATTERN = re.compile(
+    r"\b(?:(?:không|chẳng)\s+(?:hề\s+)?(?:(?:cảm\s+)?thấy\s+)?"
+    r"(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|hoảng\s+sợ)|"
+    r"(?:không|chẳng)\s+có\s+(?:một\s+)?chút\s+"
+    r"(?:sợ\s+hãi|lo\s+sợ)(?:\s+nào)?|"
+    r"(?:vẫn\s+(?:hoàn\s+toàn\s+)?|hoàn\s+toàn\s+)"
+    r"(?:bình\s+tĩnh|điềm\s+tĩnh))\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_DENIED_AFFECT_PREFIX_PATTERN = re.compile(
+    r"\b(?:không|chẳng)\s+(?:hề\s+)?"
+    r"(?:(?:(?:cảm\s+)?thấy)\s+|(?:có\s+(?:một\s+)?chút)\s+)?$",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_EXPERIENCER_PATTERN = re.compile(
+    rf"\b{ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN}\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_PARALYSIS_CALM_ASSERTION_PATTERN = re.compile(
+    rf"\b{ANALYSIS_HOST_DIRECT_AFFECT_SUBJECT_PATTERN}\s+"
+    r"(?:(?:vẫn|hoàn\s+toàn)\s+){0,2}(?:bình\s+tĩnh|điềm\s+tĩnh)\b",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_SLEEP_TO_AWARENESS_BRIDGE_PATTERN = re.compile(
+    r"\s*(?:trước\s+đây\s*)?,?\s*",
+    flags=re.IGNORECASE,
+)
+ANALYSIS_HOST_AWARENESS_TO_DESIRE_BRIDGE_PATTERN = re.compile(
+    r"\s*,?\s*",
+)
+ANALYSIS_HOST_DESIRE_TO_MOTOR_BRIDGE_PATTERN = re.compile(
+    r"\s*,?\s*(?:nhưng|song)\s+(?:lại\s+)?"
+    r"(?:không\s+có\s+sức\s+lực\s*,\s*)?",
     flags=re.IGNORECASE,
 )
 ANALYSIS_SCOPED_NEGATION_PREFIX_PATTERN = re.compile(
@@ -897,6 +982,108 @@ def analysis_source_has_stunned_blank_mind(text: str) -> bool:
     )
 
 
+def analysis_source_has_sleep_paralysis_helplessness(text: str) -> bool:
+    """Return whether one source row asserts lucid sleep-paralysis helplessness."""
+    if (
+        not isinstance(text, str)
+        or any(
+            character in text
+            for character in (
+                *ANALYSIS_HOST_DIRECT_AFFECT_QUOTE_CHARACTERS,
+                *ANALYSIS_HOST_DIRECT_AFFECT_QUESTION_CHARACTERS,
+            )
+        )
+        or ANALYSIS_HOST_SLEEP_PARALYSIS_NONASSERTIVE_PATTERN.search(text) is not None
+        or ANALYSIS_HOST_SLEEP_PARALYSIS_RESOLVED_PATTERN.search(text) is not None
+        or ANALYSIS_HOST_SLEEP_PARALYSIS_META_PATTERN.search(text) is not None
+        or ANALYSIS_HOST_SLEEP_PARALYSIS_NEGATED_STATE_PATTERN.search(text)
+        is not None
+        or ANALYSIS_HOST_SLEEP_PARALYSIS_AFFECT_CONTRADICTION_PATTERN.search(text)
+        is not None
+        or ANALYSIS_HOST_SLEEP_PARALYSIS_CALM_ASSERTION_PATTERN.search(text)
+        is not None
+        or any(
+            _analysis_source_match_is_suppressed(text, match)
+            or ANALYSIS_HOST_SLEEP_PARALYSIS_DENIED_AFFECT_PREFIX_PATTERN.search(
+                text[: match.start()]
+            )
+            is not None
+            for match in ANALYSIS_AFRAID_CUE_PATTERN.finditer(text)
+        )
+    ):
+        return False
+    pattern_matches: list[re.Match[str]] = []
+    for pattern in (
+        ANALYSIS_HOST_SLEEP_PARALYSIS_PATTERN,
+        ANALYSIS_HOST_DREAM_AWARENESS_PATTERN,
+        ANALYSIS_HOST_DESIRE_ESCAPE_PATTERN,
+        ANALYSIS_HOST_MOTOR_HELPLESSNESS_PATTERN,
+    ):
+        matches = list(pattern.finditer(text))
+        if len(matches) != 1:
+            return False
+        pattern_matches.append(matches[0])
+    if [match.start() for match in pattern_matches] != sorted(
+        match.start() for match in pattern_matches
+    ):
+        return False
+    sleep_match, awareness_match, desire_match, motor_match = pattern_matches
+    if (
+        ANALYSIS_HOST_DIRECT_AFFECT_TERMINAL_SUFFIX_PATTERN.fullmatch(
+            text[motor_match.end() :]
+        )
+        is None
+    ):
+        return False
+    awareness_subject = ANALYSIS_HOST_SLEEP_PARALYSIS_EXPERIENCER_PATTERN.search(
+        awareness_match.group(0)
+    )
+    if awareness_subject is None:
+        return False
+    normalized_subject = " ".join(awareness_subject.group(0).casefold().split())
+    normalized_sleep_prefix = " ".join(
+        text[: sleep_match.start()].casefold().split()
+    )
+    if normalized_sleep_prefix not in {
+        "giống như mấy lần",
+        normalized_subject,
+        f"giống như {normalized_subject}",
+    }:
+        return False
+    subject_bridges = (
+        text[sleep_match.end() : awareness_match.start()],
+        text[awareness_match.end() : desire_match.start()],
+        text[desire_match.end() : motor_match.start()],
+    )
+    if not all(
+        pattern.fullmatch(bridge) is not None
+        for pattern, bridge in zip(
+            (
+                ANALYSIS_HOST_SLEEP_TO_AWARENESS_BRIDGE_PATTERN,
+                ANALYSIS_HOST_AWARENESS_TO_DESIRE_BRIDGE_PATTERN,
+                ANALYSIS_HOST_DESIRE_TO_MOTOR_BRIDGE_PATTERN,
+            ),
+            subject_bridges,
+            strict=True,
+        )
+    ):
+        return False
+    if any(
+        " ".join(subject.group(0).casefold().split()) != normalized_subject
+        for bridge in subject_bridges
+        for subject in ANALYSIS_HOST_SLEEP_PARALYSIS_EXPERIENCER_PATTERN.finditer(
+            bridge
+        )
+    ):
+        return False
+    if any(
+        _analysis_source_match_is_suppressed(text, match)
+        for match in pattern_matches[:-1]
+    ):
+        return False
+    return set(_analysis_source_active_affect_matches(text)) <= {"afraid"}
+
+
 def _analysis_source_has_physical_collapse(text: str) -> bool:
     respiratory = ANALYSIS_PHYSICAL_RESPIRATORY_INJURY_PATTERN.search(text)
     consciousness = ANALYSIS_PHYSICAL_CONSCIOUSNESS_LOSS_PATTERN.search(text)
@@ -1008,6 +1195,8 @@ def _analysis_source_matches_host_semantic_rule(text: str, rule: str) -> bool:
         return analysis_source_has_recalled_persistent_fear(text)
     if rule == "narration_stunned_blank_mind":
         return analysis_source_has_stunned_blank_mind(text)
+    if rule == "narration_sleep_paralysis_helplessness":
+        return analysis_source_has_sleep_paralysis_helplessness(text)
     return False
 
 
@@ -2284,10 +2473,21 @@ class ProjectDB:
                 host_locked_fields == {}
                 or (
                     isinstance(host_locked_fields, dict)
-                    and set(host_locked_fields) == {"emotion"}
                     and isinstance(candidate_delivery, dict)
-                    and host_locked_fields["emotion"]
-                    == candidate_delivery.get("emotion")
+                    and (
+                        (
+                            set(host_locked_fields) == {"emotion"}
+                            and host_locked_fields["emotion"]
+                            == candidate_delivery.get("emotion")
+                        )
+                        or (
+                            set(host_locked_fields) == {"kind", "emotion"}
+                            and host_locked_fields["kind"]
+                            == candidate_delivery.get("kind")
+                            and host_locked_fields["emotion"]
+                            == candidate_delivery.get("emotion")
+                        )
+                    )
                 )
             )
             is_adjacent_content_row = (
@@ -2570,7 +2770,14 @@ class ProjectDB:
                 or critic_row["candidate"]["emotion"] != candidate_emotion
                 or critic_row["candidate"]["kind"] != rule_contract["source_kind"]
                 or critic_row["host_locked_fields"]
-                != {"emotion": candidate_emotion}
+                != (
+                    {
+                        "kind": rule_contract["source_kind"],
+                        "emotion": candidate_emotion,
+                    }
+                    if bool(rule_contract.get("protects_source_kind", False))
+                    else {"emotion": candidate_emotion}
+                )
                 or critic_row["hint"] != rule_contract["source_kind"]
                 or not isinstance(related_stable_id, str)
                 or not isinstance(related_text_sha256, str)
@@ -2609,6 +2816,12 @@ class ProjectDB:
             and _analysis_source_has_desperate_exertion(source_text)
         ):
             rule = "narration_desperate_exertion"
+        elif (
+            source_kind == "narration"
+            and not is_chapter_heading
+            and analysis_source_has_sleep_paralysis_helplessness(source_text)
+        ):
+            rule = "narration_sleep_paralysis_helplessness"
         elif (
             source_kind == "narration"
             and not is_chapter_heading
@@ -3062,6 +3275,15 @@ class ProjectDB:
                 if semantic_lock is not None
                 else []
             )
+            semantic_rule_contract = (
+                ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS.get(str(semantic_lock["rule"]))
+                if semantic_lock is not None
+                else None
+            )
+            semantic_rule_protects_source_kind = bool(
+                semantic_rule_contract is not None
+                and semantic_rule_contract.get("protects_source_kind", False)
+            )
             expected_semantic_override = (
                 {
                     "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
@@ -3078,7 +3300,13 @@ class ProjectDB:
                     semantic_lock is not None
                     and raw_accept_value is False
                     and bool(raw_delta_fields)
-                    and raw_delta_fields <= {semantic_field}
+                    and (
+                        raw_delta_fields <= {semantic_field}
+                        or (
+                            semantic_rule_protects_source_kind
+                            and semantic_field in raw_delta_fields
+                        )
+                    )
                     and raw_delivery.get(semantic_field)
                     not in semantic_allowed_values
                 )
@@ -3087,6 +3315,69 @@ class ProjectDB:
             semantic_override_valid = (
                 expected_semantic_override is not None
                 and semantic_override == expected_semantic_override
+            )
+            source_kind_override = item.get("host_source_kind_override")
+            protected_source_kind = (
+                str(semantic_rule_contract["source_kind"])
+                if semantic_rule_contract is not None
+                and bool(semantic_rule_contract.get("protects_source_kind", False))
+                else ""
+            )
+            covered_source_kind_deltas = [
+                delta
+                for delta in raw_deltas
+                if delta.startswith("kind:")
+            ]
+            unresolved_source_kind_deltas = [
+                delta
+                for delta in raw_deltas
+                if not delta.startswith("kind:")
+            ]
+            expected_source_kind_override = (
+                {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "stable_id": stable_id,
+                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                    "rule": semantic_lock["rule"],
+                    "field": "kind",
+                    "candidate_value": protected_source_kind,
+                    "allowed_values": [protected_source_kind],
+                    "raw_accept": False,
+                    "raw_field_deltas": raw_deltas,
+                    "covered_field_deltas": covered_source_kind_deltas,
+                    "unresolved_field_deltas": unresolved_source_kind_deltas,
+                }
+                if (
+                    semantic_lock is not None
+                    and protected_source_kind
+                    and raw_accept_value is False
+                    and raw_delta_fields >= {"kind"}
+                    and candidate_projection["kind"] == protected_source_kind
+                    and raw_delivery.get("kind") == "thought"
+                    and len(covered_source_kind_deltas) == 1
+                )
+                else None
+            )
+            source_kind_override_valid = (
+                expected_source_kind_override is not None
+                and source_kind_override == expected_source_kind_override
+            )
+            covered_override_fields = (
+                set(raw_delta_fields)
+                if structural_override_valid
+                else {
+                    field
+                    for field, valid in (
+                        (semantic_field, semantic_override_valid),
+                        ("kind", source_kind_override_valid),
+                    )
+                    if field and valid
+                }
+            )
+            unresolved_override_fields = raw_delta_fields - covered_override_fields
+            override_resolution_valid = (
+                bool(covered_override_fields)
+                and not unresolved_override_fields
             )
             if (
                 str(item.get("text_sha256", ""))
@@ -3120,11 +3411,12 @@ class ProjectDB:
                     and (
                         structural_override is not None
                         or semantic_override is not None
+                        or source_kind_override is not None
                     )
                 )
                 or (
                     not raw_agreement
-                    and structural_override_valid == semantic_override_valid
+                    and not override_resolution_valid
                 )
                 or (
                     structural_override is not None
@@ -3133,6 +3425,10 @@ class ProjectDB:
                 or (
                     semantic_override is not None
                     and not semantic_override_valid
+                )
+                or (
+                    source_kind_override is not None
+                    and not source_kind_override_valid
                 )
                 or any(type(value) not in {int, float} for value in numeric_confidences)
                 or any(not math.isfinite(float(value)) for value in numeric_confidences)
@@ -3161,6 +3457,177 @@ class ProjectDB:
                     "Accepted critic evidence does not bind exact delivery/confidence for "
                     f"{stable_id}"
                 )
+
+    @classmethod
+    def _validate_analysis_rejected_source_kind_evidence(
+        cls,
+        candidate_json: str,
+        evidence: dict[str, Any],
+        deterministic_issue_json: str,
+    ) -> None:
+        candidate = json.loads(candidate_json)
+        _structural_locks, semantic_locks = cls._analysis_host_lock_contract(
+            candidate_json,
+            deterministic_issue_json,
+        )
+        protected_locks = {
+            stable_id: lock
+            for stable_id, lock in semantic_locks.items()
+            if bool(
+                ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[str(lock["rule"])].get(
+                    "protects_source_kind",
+                    False,
+                )
+            )
+        }
+        if not protected_locks:
+            return
+        evidence_segments = evidence.get("segments")
+        if not isinstance(evidence_segments, list):
+            raise RuntimeError(
+                "Rejected source-kind critic evidence requires a segments array"
+            )
+        evidence_by_stable = {
+            str(item.get("stable_id", "")): item
+            for item in evidence_segments
+            if isinstance(item, dict)
+        }
+        candidate_segments = {
+            str(item["stable_id"]): item for item in candidate["segments"]
+        }
+        critic_rows = {
+            str(segment["stable_id"]): critic_row
+            for segment, critic_row in zip(
+                candidate["segments"],
+                candidate["critic_rows"],
+                strict=True,
+            )
+        }
+        if (
+            len(evidence_by_stable) != len(evidence_segments)
+            or set(evidence_by_stable) != set(candidate_segments)
+            or any(
+                item.get("host_source_kind_override") is not None
+                for stable_id, item in evidence_by_stable.items()
+                if stable_id not in protected_locks
+            )
+        ):
+            raise RuntimeError(
+                "Rejected source-kind critic evidence has invalid segment binding"
+            )
+        for stable_id, lock in protected_locks.items():
+            item = evidence_by_stable.get(stable_id)
+            if item is None:
+                raise RuntimeError(
+                    "Rejected source-kind critic evidence omits a protected row"
+                )
+            candidate_projection = critic_rows[stable_id]["candidate"]
+            critic = item.get("critic")
+            if not isinstance(critic, dict):
+                raise RuntimeError(
+                    "Rejected source-kind critic evidence lacks a critic verdict"
+                )
+            raw_deltas = [
+                f"{field}:{candidate_projection[field]}->{critic.get(field)}"
+                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+                if critic.get(field) != candidate_projection[field]
+            ]
+            raw_delta_fields = {
+                field
+                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+                if critic.get(field) != candidate_projection[field]
+            }
+            rule_contract = ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[str(lock["rule"])]
+            protected_source_kind = str(rule_contract["source_kind"])
+            covered_kind_deltas = [
+                delta for delta in raw_deltas if delta.startswith("kind:")
+            ]
+            unresolved_kind_deltas = [
+                delta for delta in raw_deltas if not delta.startswith("kind:")
+            ]
+            expected_source_kind_override = (
+                {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "stable_id": stable_id,
+                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                    "rule": lock["rule"],
+                    "field": "kind",
+                    "candidate_value": protected_source_kind,
+                    "allowed_values": [protected_source_kind],
+                    "raw_accept": False,
+                    "raw_field_deltas": raw_deltas,
+                    "covered_field_deltas": covered_kind_deltas,
+                    "unresolved_field_deltas": unresolved_kind_deltas,
+                }
+                if (
+                    "kind" in raw_delta_fields
+                    and critic.get("kind") == "thought"
+                    and candidate_projection["kind"] == protected_source_kind
+                    and len(covered_kind_deltas) == 1
+                )
+                else None
+            )
+            allowed_emotions = list(lock["allowed_emotions"])
+            expected_semantic_override = (
+                {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "stable_id": stable_id,
+                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                    "rule": lock["rule"],
+                    "field": "emotion",
+                    "candidate_value": lock["candidate_emotion"],
+                    "allowed_values": allowed_emotions,
+                    "raw_accept": False,
+                    "raw_field_deltas": raw_deltas,
+                }
+                if (
+                    "emotion" in raw_delta_fields
+                    and candidate_projection["emotion"] == lock["candidate_emotion"]
+                    and critic.get("emotion") not in allowed_emotions
+                )
+                else None
+            )
+            source_kind_override_valid = (
+                item.get("host_source_kind_override")
+                == expected_source_kind_override
+            )
+            semantic_override_valid = (
+                item.get("host_semantic_override") == expected_semantic_override
+            )
+            covered_fields = {
+                field
+                for field, valid in (
+                    ("kind", source_kind_override_valid),
+                    ("emotion", semantic_override_valid),
+                )
+                if valid
+                and (
+                    (field == "kind" and expected_source_kind_override is not None)
+                    or (field == "emotion" and expected_semantic_override is not None)
+                )
+            }
+            unresolved_fields = raw_delta_fields - covered_fields
+            expected_effective_accept = not unresolved_fields
+            if (
+                str(item.get("text_sha256", ""))
+                != str(candidate_segments[stable_id]["text_sha256"])
+                or item.get("candidate") != candidate_projection
+                or item.get("field_deltas") != raw_deltas
+                or critic.get("accept") is not (not raw_deltas)
+                or not source_kind_override_valid
+                or not semantic_override_valid
+                or item.get("effective_accept") is not expected_effective_accept
+            ):
+                raise RuntimeError(
+                    "Rejected source-kind critic override is not source-bound"
+                )
+        if not any(
+            isinstance(item, dict) and item.get("effective_accept") is False
+            for item in evidence_segments
+        ):
+            raise RuntimeError(
+                "Rejected critic evidence has no unresolved segment"
+            )
 
     @classmethod
     def _validated_analysis_commit_envelope(
@@ -3418,6 +3885,12 @@ class ProjectDB:
                     str(candidate["commit_envelope_json"]),
                     evidence,
                     contract_json,
+                    str(candidate["deterministic_issue_json"]),
+                )
+            elif completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
+                cls._validate_analysis_rejected_source_kind_evidence(
+                    str(candidate["candidate_json"]),
+                    evidence,
                     str(candidate["deterministic_issue_json"]),
                 )
         return row
@@ -4121,6 +4594,12 @@ class ProjectDB:
                     )
                 commit_envelope_json = None
                 commit_envelope_hash = None
+                if normalized_result_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
+                    self._validate_analysis_rejected_source_kind_evidence(
+                        str(candidate["candidate_json"]),
+                        evidence,
+                        str(candidate["deterministic_issue_json"]),
+                    )
             completion_json, completion_hash = self._canonical_analysis_json(
                 {
                     "commit_envelope_hash": commit_envelope_hash,

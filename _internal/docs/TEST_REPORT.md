@@ -22,6 +22,15 @@ bằng policy source-bound riêng; generator vẫn thấy adjacent context và k
 seq31/32/33 V27, hai control khác paragraph/next dialogue và critic stub leak-sensitive đã pass trong combined
 analysis + database safety + quality-policy suite **723/723**; Ruff, compileall và `git diff --check` cũng pass.
 Đợt sửa không gọi model/GPU.
+Hardening V29 sau failure thật V28 seq10 thêm authority nguồn hẹp cho motif bóng đè còn nhận thức nhưng bất lực:
+predicate dùng chung với DB replay chỉ nhận grammar allowlist, cùng chủ thể và chuỗi cue liền mạch; phủ định, giả định,
+meta, trích dẫn, affect đối nghịch, trạng thái đã giải quyết, chủ thể/tân ngữ mơ hồ và mọi tiền tố ngoài allowlist đều
+fail-closed. Candidate khóa chính xác `kind=narration` + `emotion=afraid`; critic vẫn lưu nguyên verdict/delta thô và chỉ
+compose override cho hai field đã khóa, còn `intensity/pace/speaker/volume` vẫn unresolved. Một verdict protocol-invalid
+làm invalid toàn payload và retry cùng durable candidate. Regression exact seq10, negative adversarial, accepted/rejected
+reserve/reopen/replay/commit và policy fingerprint đã pass **818/818** test trong ba file thay đổi; auditor độc lập không còn
+P0/P1. Full repository **1.264/1.264** test, Ruff, compileall, `pip check` và `git diff --check` đều pass.
+Runtime V29 chưa được chạy tại thời điểm ghi mục này.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -77,9 +86,12 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
 - hai rule narration hẹp cho nỗi sợ còn dai dẳng khi hồi tưởng và trạng thái sững người đầu óc trắng xóa dùng chung predicate
   source-only với DB replay; chúng khóa `kind=narration`, gửi allowed emotion typed theo đúng ID, không lan từ hàng xóm và
   vẫn bắt model trả candidate mới trước director critic;
-- semantic lock bền khóa emotion đã qua self-preservation/adjacent-wake/physical-collapse/desperate-exertion/recalled-fear/stunned-blank-mind vào source hash và critic candidate.
-  Chỉ correction đổi riêng field khóa ra ngoài allowed set mới có override audit; agreement được host suy từ sáu field không
-  delta, còn delta thêm field hoặc correction sang một emotion khác vẫn được host cho phép đều bị chặn;
+- rule narration bóng đè/bất lực chỉ nhận đúng grammar tiền tố allowlist và chuỗi cue cùng chủ thể, source-only; nó khóa
+  `kind=narration` + `emotion=afraid`, không relabel lời kể “cậu biết... muốn...” thành thought và fail-closed với mọi
+  tiền tố/chủ thể/phủ định mơ hồ;
+- semantic lock bền khóa affect rule vào source hash và critic candidate. Lock một field chỉ override đúng delta field đó;
+  lock bóng đè được compose riêng source-kind + emotion nhưng vẫn giữ raw verdict/delta, còn mọi delta delivery khác bị chặn.
+  Agreement luôn được host suy từ sáu field; protocol-invalid ở bất kỳ row nào làm invalid toàn critic payload;
 - dialogue và thought boundary đã được source parser nhận diện là source-owned: model không được đổi chúng sang loại khác để
   né speaker/semantic lock; narration chỉ có thể được nâng thành thought khi source không khớp một semantic lock narration bắt buộc;
 - `notes` và `personality_hint` tự do không còn thuộc output model hay acceptance envelope. Host tạo `delivery_note_v1`

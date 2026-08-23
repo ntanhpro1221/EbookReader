@@ -154,16 +154,23 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   nguyên `kind=narration` và lần lượt chỉ cho phép emotion `afraid` hoặc `surprised`. Predicate nguồn dùng chung với
   DB replay là thẩm quyền duy nhất; không lan cue từ hàng xóm, không tự sửa output model và không dùng khóa này để
   bỏ qua director critic.
+- Rule `narration_sleep_paralysis_helplessness` chỉ được kích hoạt cho grammar nguồn allowlist: đúng tiền tố
+  `giống như mấy lần`, đúng chủ thể trực tiếp, hoặc `giống như <đúng chủ thể>`; sau đó phải có liền mạch
+  bóng đè -> nhận thức đang mơ -> muốn thoát -> bất lực điều khiển cơ thể, cùng một chủ thể và không có phủ định,
+  giả định, lời trích, meta, affect đối nghịch hoặc trạng thái đã giải quyết. Rule khóa đồng thời
+  `kind=narration` và `emotion=afraid`; câu kể ngôi ba “cậu biết... muốn...” không phải thought trực tiếp.
 - Rule affect nguồn hẹp phải chạy trước semantic cue chung. Constraint deterministic đã phát hiện phải được tích lũy trong
   suốt retry của cùng target group, không được ghi đè bởi lỗi của lần sau hoặc chuyển thành feedback tự do.
 - Semantic cue chung chỉ được dùng `allowed_emotions` source-derived làm lựa chọn retry advisory khi chính candidate
   `emotion=neutral` bị từ chối. Tập lựa chọn phải hợp deterministic từ cue trực tiếp không bị phủ định/meta/lịch sử và
   không có affect đối nghịch, không chứa source/cue/rationale trong payload. Đây không phải host whitelist, semantic lock
   hay exact-membership gate: model vẫn phải chọn delivery tốt nhất và candidate sửa xong vẫn qua đủ validation + critic.
-- Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Critic correction
-  chỉ được host override khi có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host cho phép; raw field delta
-  vẫn phải lưu. Không delta được host suy là agreement; delta field khác hoặc đổi giữa hai giá trị đều được host cho phép phải
-  fail-closed, không được giả thành critic pass.
+- Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Với lock một
+  field, critic correction chỉ được host override khi có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host
+  cho phép. Riêng rule bảo vệ cả source kind và emotion được phép compose hai override đúng hai field đó; mọi raw verdict/delta
+  vẫn phải lưu và `intensity/pace/speaker/volume` không được che. Không delta được host suy là agreement; mọi delta chưa được
+  lock bao phủ hoặc đổi giữa hai giá trị đều được host cho phép phải fail-closed. Chỉ cần một verdict trong payload critic sai
+  protocol thì toàn payload là `critic_invalid` và retry nguyên durable candidate, không lưu nửa batch thành rejected evidence.
 - Profile `high_quality` bắt buộc chạy một lượt director critic thứ hai trên candidate analysis bất biến. Critic không
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
