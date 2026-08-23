@@ -166,10 +166,11 @@ ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT = (
     "narration_before_thought_previous_only"
 )
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
+ANALYSIS_CONTEXT_SOURCE_KIND_RULE = "narration_precedes_immediate_thought"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
-ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v8"
-ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v4"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v10"
+ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v9"
+ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v5"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v11"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -727,8 +728,7 @@ ANALYSIS_SCOPED_NEGATION_CONJUNCTION_PATTERN = re.compile(
 ANALYSIS_AFRAID_CUE_PATTERN = re.compile(
     r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
     r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
-    r"thất\s+thần|bàng\s+hoàng|hỗn\s+loạn|sẽ\s+chết\s+mất|"
-    r"sắp\s+chết(?:\s+mất|\s+thôi)|kinh\s+hoàng|"
+    r"sẽ\s+chết\s+mất|sắp\s+chết(?:\s+mất|\s+thôi)|kinh\s+hoàng|"
     r"tim\s+đập\s+chân\s+run|tim\s+thắt)\b",
     flags=re.IGNORECASE,
 )
@@ -751,6 +751,10 @@ ANALYSIS_DISTRESSED_CUE_PATTERN = re.compile(
     r"\b(?:choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
     flags=re.IGNORECASE,
 )
+ANALYSIS_DISORIENTED_CUE_PATTERN = re.compile(
+    r"\b(?:thất\s+thần|bàng\s+hoàng|hỗn\s+loạn)\b",
+    flags=re.IGNORECASE,
+)
 ANALYSIS_HAPPY_CUE_PATTERN = re.compile(
     r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
     r"hạnh\s+phúc|hân\s+hoan|nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
@@ -764,6 +768,7 @@ ANALYSIS_OTHER_AFFECT_CUE_PATTERNS = (
     ANALYSIS_ANGRY_CUE_PATTERN,
     ANALYSIS_SURPRISED_CUE_PATTERN,
     ANALYSIS_DISTRESSED_CUE_PATTERN,
+    ANALYSIS_DISORIENTED_CUE_PATTERN,
     ANALYSIS_HAPPY_CUE_PATTERN,
     ANALYSIS_EXCITED_CUE_PATTERN,
 )
@@ -774,6 +779,7 @@ ANALYSIS_NON_AFRAID_CUE_PATTERNS = (
 ANALYSIS_HOST_AFFECT_CUE_PATTERNS = {
     "afraid": ANALYSIS_AFRAID_CUE_PATTERN,
     "angry": ANALYSIS_ANGRY_CUE_PATTERN,
+    "disoriented": ANALYSIS_DISORIENTED_CUE_PATTERN,
     "distressed": ANALYSIS_DISTRESSED_CUE_PATTERN,
     "excited": ANALYSIS_EXCITED_CUE_PATTERN,
     "happy": ANALYSIS_HAPPY_CUE_PATTERN,
@@ -2481,6 +2487,11 @@ class ProjectDB:
                             == candidate_delivery.get("emotion")
                         )
                         or (
+                            set(host_locked_fields) == {"kind"}
+                            and host_locked_fields["kind"]
+                            == candidate_delivery.get("kind")
+                        )
+                        or (
                             set(host_locked_fields) == {"kind", "emotion"}
                             and host_locked_fields["kind"]
                             == candidate_delivery.get("kind")
@@ -2576,7 +2587,11 @@ class ProjectDB:
         cls,
         candidate_json: str,
         deterministic_issue_json: str,
-    ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    ) -> tuple[
+        dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
+        dict[str, dict[str, Any]],
+    ]:
         try:
             candidate = json.loads(candidate_json)
             deterministic_issues = json.loads(deterministic_issue_json)
@@ -2609,19 +2624,53 @@ class ProjectDB:
             for stable_id, critic_row in critic_row_by_stable.items()
             if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
         }
+        context_kind_row_ids = {
+            stable_id
+            for stable_id, critic_row in critic_row_by_stable.items()
+            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CONTENT
+            and critic_row["context_policy"]
+            == ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
+        }
         semantic_row_ids = {
             stable_id
             for stable_id, critic_row in critic_row_by_stable.items()
             if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CONTENT
-            and critic_row["host_locked_fields"] != {}
+            and "emotion" in critic_row["host_locked_fields"]
         }
+        kind_locked_row_ids = {
+            stable_id
+            for stable_id, critic_row in critic_row_by_stable.items()
+            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CONTENT
+            and "kind" in critic_row["host_locked_fields"]
+        }
+        context_kind_locks = {
+            stable_id: {
+                "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                "rule": ANALYSIS_CONTEXT_SOURCE_KIND_RULE,
+                "source_kind": "narration",
+            }
+            for stable_id in context_kind_row_ids
+        }
+        if any(
+            critic_row_by_stable[stable_id]["candidate"]["kind"] != "narration"
+            or critic_row_by_stable[stable_id]["hint"] != "narration"
+            or critic_row_by_stable[stable_id]["next_text"] != ""
+            for stable_id in context_kind_row_ids
+        ) or not context_kind_row_ids <= kind_locked_row_ids:
+            raise RuntimeError(
+                "Narration-before-thought context kind lock is not candidate-bound"
+            )
         clearance = deterministic_issues.get("host_affect_clearance")
         if clearance is None:
             if heading_stable_ids or semantic_row_ids:
                 raise RuntimeError(
                     "Analysis host-locked rows require durable deterministic clearance"
                 )
-            return {}, {}
+            if kind_locked_row_ids != context_kind_row_ids:
+                raise RuntimeError(
+                    "Content source-kind lock is not source-ledger-bound"
+                )
+            return {}, {}, context_kind_locks
         if (
             not isinstance(clearance, dict)
             or set(clearance) != ANALYSIS_HOST_CLEARANCE_FIELDS
@@ -2769,15 +2818,6 @@ class ProjectDB:
                 or candidate_emotion not in expected_allowed_emotions
                 or critic_row["candidate"]["emotion"] != candidate_emotion
                 or critic_row["candidate"]["kind"] != rule_contract["source_kind"]
-                or critic_row["host_locked_fields"]
-                != (
-                    {
-                        "kind": rule_contract["source_kind"],
-                        "emotion": candidate_emotion,
-                    }
-                    if bool(rule_contract.get("protects_source_kind", False))
-                    else {"emotion": candidate_emotion}
-                )
                 or critic_row["hint"] != rule_contract["source_kind"]
                 or not isinstance(related_stable_id, str)
                 or not isinstance(related_text_sha256, str)
@@ -2787,7 +2827,66 @@ class ProjectDB:
                 or not source_semantics_valid
             ):
                 raise RuntimeError("Host semantic clearance is not source-bound")
-        return structural_locks, semantic_locks
+        semantic_source_kind_ids = {
+            stable_id
+            for stable_id, lock in semantic_locks.items()
+            if bool(
+                ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[str(lock["rule"])].get(
+                    "protects_source_kind",
+                    False,
+                )
+            )
+        }
+        if not semantic_source_kind_ids <= kind_locked_row_ids:
+            raise RuntimeError("Host semantic clearance is not source-bound")
+        if kind_locked_row_ids != context_kind_row_ids | semantic_source_kind_ids:
+            raise RuntimeError(
+                "Content source-kind locks differ from source-derived protections"
+            )
+        for stable_id, critic_row in critic_row_by_stable.items():
+            if critic_row["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT:
+                continue
+            expected_host_locked_fields: dict[str, Any] = {}
+            if stable_id in context_kind_row_ids | semantic_source_kind_ids:
+                expected_host_locked_fields["kind"] = critic_row["candidate"]["kind"]
+            if stable_id in semantic_locks:
+                expected_host_locked_fields["emotion"] = semantic_locks[stable_id][
+                    "candidate_emotion"
+                ]
+            if critic_row["host_locked_fields"] != expected_host_locked_fields:
+                raise RuntimeError(
+                    "Content host-locked fields differ from durable source locks"
+                )
+        return structural_locks, semantic_locks, context_kind_locks
+
+    @staticmethod
+    def _analysis_following_thought_source_conn(
+        conn: sqlite3.Connection,
+        stored: sqlite3.Row,
+    ) -> sqlite3.Row | None:
+        next_source = conn.execute(
+            "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+            "FROM segments WHERE chapter_id=? AND seq=?",
+            (int(stored["chapter_id"]), int(stored["seq"]) + 1),
+        ).fetchone()
+        if next_source is None:
+            return None
+        if sha256_text(str(next_source["text"])) != str(next_source["text_sha256"]):
+            raise RuntimeError(
+                "Narration-before-thought related source text hash is invalid"
+            )
+        if not analysis_source_narration_precedes_thought(
+            chapter_id=int(stored["chapter_id"]),
+            seq=int(stored["seq"]),
+            paragraph_index=int(stored["paragraph_index"]),
+            kind_hint=str(stored["kind_hint"]),
+            next_chapter_id=int(next_source["chapter_id"]),
+            next_seq=int(next_source["seq"]),
+            next_paragraph_index=int(next_source["paragraph_index"]),
+            next_kind_hint=str(next_source["kind_hint"]),
+        ):
+            return None
+        return next_source
 
     @staticmethod
     def _analysis_mandatory_semantic_lock_conn(
@@ -2845,6 +2944,14 @@ class ProjectDB:
                 ).fetchone()
                 if (
                     related is not None
+                    and sha256_text(str(related["text"]))
+                    != str(related["text_sha256"])
+                ):
+                    raise RuntimeError(
+                        "Adjacent semantic related source text hash is invalid"
+                    )
+                if (
+                    related is not None
                     and str(related["kind_hint"]) == "thought"
                     and int(related["chapter_id"]) == int(stored["chapter_id"])
                     and int(related["seq"]) + 1 == int(stored["seq"])
@@ -2890,9 +2997,11 @@ class ProjectDB:
         deterministic_issue_json: str,
     ) -> None:
         candidate = json.loads(candidate_json)
-        structural_locks, semantic_locks = cls._analysis_host_lock_contract(
-            candidate_json,
-            deterministic_issue_json,
+        structural_locks, semantic_locks, context_kind_locks = (
+            cls._analysis_host_lock_contract(
+                candidate_json,
+                deterministic_issue_json,
+            )
         )
         stored_by_stable: dict[str, sqlite3.Row] = {}
         critic_row_by_stable: dict[str, dict[str, Any]] = {}
@@ -2954,37 +3063,8 @@ class ProjectDB:
                         "Thought analysis context is not source-ledger-bound"
                     )
             elif str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CONTENT:
-                next_source = conn.execute(
-                    "SELECT chapter_id,seq,paragraph_index,kind_hint FROM segments "
-                    "WHERE chapter_id=? AND seq=?",
-                    (int(stored["chapter_id"]), int(stored["seq"]) + 1),
-                ).fetchone()
-                masks_following_thought = analysis_source_narration_precedes_thought(
-                    chapter_id=int(stored["chapter_id"]),
-                    seq=int(stored["seq"]),
-                    paragraph_index=int(stored["paragraph_index"]),
-                    kind_hint=source_kind,
-                    next_chapter_id=(
-                        int(next_source["chapter_id"])
-                        if next_source is not None
-                        else None
-                    ),
-                    next_seq=(
-                        int(next_source["seq"])
-                        if next_source is not None
-                        else None
-                    ),
-                    next_paragraph_index=(
-                        int(next_source["paragraph_index"])
-                        if next_source is not None
-                        else None
-                    ),
-                    next_kind_hint=(
-                        str(next_source["kind_hint"])
-                        if next_source is not None
-                        else ""
-                    ),
-                )
+                next_source = cls._analysis_following_thought_source_conn(conn, stored)
+                masks_following_thought = next_source is not None
                 if masks_following_thought:
                     previous = conn.execute(
                         "SELECT text FROM segments WHERE chapter_id=? AND seq=?",
@@ -3002,6 +3082,10 @@ class ProjectDB:
                     ):
                         raise RuntimeError(
                             "Narration-before-thought context is not source-ledger-bound"
+                        )
+                    if str(stored["stable_id"]) not in context_kind_locks:
+                        raise RuntimeError(
+                            "Narration-before-thought source kind is not host-locked"
                         )
                 elif (
                     str(critic_row["context_policy"])
@@ -3053,6 +3137,14 @@ class ProjectDB:
                 (related_stable_id,),
             ).fetchone()
             if (
+                related is not None
+                and sha256_text(str(related["text"]))
+                != str(related["text_sha256"])
+            ):
+                raise RuntimeError(
+                    "Adjacent semantic related source text hash is invalid"
+                )
+            if (
                 related is None
                 or str(related["text_sha256"]) != str(lock["related_text_sha256"])
                 or str(related["kind_hint"]) != "thought"
@@ -3078,8 +3170,85 @@ class ProjectDB:
             )
 
     @classmethod
+    def _analysis_expected_source_kind_override_conn(
+        cls,
+        conn: sqlite3.Connection,
+        *,
+        candidate_segment: dict[str, Any],
+        critic_row: dict[str, Any],
+        critic_delivery: dict[str, Any],
+        raw_deltas: list[str],
+        semantic_lock: dict[str, Any] | None,
+        context_kind_lock: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        candidate_projection = critic_row["candidate"]
+        covered_kind_deltas = [
+            delta for delta in raw_deltas if delta.startswith("kind:")
+        ]
+        if (
+            len(covered_kind_deltas) != 1
+            or candidate_projection["kind"] != "narration"
+            or critic_delivery.get("kind") != "thought"
+        ):
+            return None
+        related_provenance: dict[str, str] = {}
+        if context_kind_lock is not None:
+            stored = conn.execute(
+                "SELECT stable_id,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                "FROM segments WHERE id=?",
+                (int(candidate_segment["segment_id"]),),
+            ).fetchone()
+            next_source = (
+                cls._analysis_following_thought_source_conn(conn, stored)
+                if stored is not None
+                and str(stored["stable_id"]) == str(candidate_segment["stable_id"])
+                and str(stored["text_sha256"])
+                == str(candidate_segment["text_sha256"])
+                else None
+            )
+            if next_source is None:
+                raise RuntimeError(
+                    "Narration-before-thought source-kind override lost related provenance"
+                )
+            rule = str(context_kind_lock["rule"])
+            related_provenance = {
+                "related_stable_id": str(next_source["stable_id"]),
+                "related_text_sha256": str(next_source["text_sha256"]),
+            }
+        else:
+            semantic_rule_contract = (
+                ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS.get(str(semantic_lock["rule"]))
+                if semantic_lock is not None
+                else None
+            )
+            if not bool(
+                semantic_rule_contract is not None
+                and semantic_rule_contract.get("protects_source_kind", False)
+            ):
+                return None
+            rule = str(semantic_lock["rule"])
+        unresolved_kind_deltas = [
+            delta for delta in raw_deltas if not delta.startswith("kind:")
+        ]
+        return {
+            "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+            "stable_id": str(candidate_segment["stable_id"]),
+            "text_sha256": str(candidate_segment["text_sha256"]),
+            "rule": rule,
+            "field": "kind",
+            "candidate_value": "narration",
+            "allowed_values": ["narration"],
+            "raw_accept": False,
+            "raw_field_deltas": raw_deltas,
+            "covered_field_deltas": covered_kind_deltas,
+            "unresolved_field_deltas": unresolved_kind_deltas,
+            **related_provenance,
+        }
+
+    @classmethod
     def _validate_analysis_acceptance_evidence(
         cls,
+        conn: sqlite3.Connection,
         candidate_json: str,
         commit_envelope_json: str,
         evidence: dict[str, Any],
@@ -3113,9 +3282,11 @@ class ProjectDB:
         )
         if str(evidence.get("candidate_hash", "")) != candidate_hash:
             raise RuntimeError("Accepted critic evidence candidate hash is invalid")
-        _structural_locks, semantic_locks = cls._analysis_host_lock_contract(
-            candidate_json,
-            deterministic_issue_json,
+        _structural_locks, semantic_locks, context_kind_locks = (
+            cls._analysis_host_lock_contract(
+                candidate_json,
+                deterministic_issue_json,
+            )
         )
         try:
             reserved_contract = json.loads(reserved_contract_json)
@@ -3284,6 +3455,10 @@ class ProjectDB:
                 semantic_rule_contract is not None
                 and semantic_rule_contract.get("protects_source_kind", False)
             )
+            context_kind_lock = context_kind_locks.get(stable_id)
+            source_kind_is_protected = bool(
+                context_kind_lock is not None or semantic_rule_protects_source_kind
+            )
             expected_semantic_override = (
                 {
                     "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
@@ -3303,7 +3478,7 @@ class ProjectDB:
                     and (
                         raw_delta_fields <= {semantic_field}
                         or (
-                            semantic_rule_protects_source_kind
+                            source_kind_is_protected
                             and semantic_field in raw_delta_fields
                         )
                     )
@@ -3317,45 +3492,17 @@ class ProjectDB:
                 and semantic_override == expected_semantic_override
             )
             source_kind_override = item.get("host_source_kind_override")
-            protected_source_kind = (
-                str(semantic_rule_contract["source_kind"])
-                if semantic_rule_contract is not None
-                and bool(semantic_rule_contract.get("protects_source_kind", False))
-                else ""
-            )
-            covered_source_kind_deltas = [
-                delta
-                for delta in raw_deltas
-                if delta.startswith("kind:")
-            ]
-            unresolved_source_kind_deltas = [
-                delta
-                for delta in raw_deltas
-                if not delta.startswith("kind:")
-            ]
             expected_source_kind_override = (
-                {
-                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
-                    "stable_id": stable_id,
-                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
-                    "rule": semantic_lock["rule"],
-                    "field": "kind",
-                    "candidate_value": protected_source_kind,
-                    "allowed_values": [protected_source_kind],
-                    "raw_accept": False,
-                    "raw_field_deltas": raw_deltas,
-                    "covered_field_deltas": covered_source_kind_deltas,
-                    "unresolved_field_deltas": unresolved_source_kind_deltas,
-                }
-                if (
-                    semantic_lock is not None
-                    and protected_source_kind
-                    and raw_accept_value is False
-                    and raw_delta_fields >= {"kind"}
-                    and candidate_projection["kind"] == protected_source_kind
-                    and raw_delivery.get("kind") == "thought"
-                    and len(covered_source_kind_deltas) == 1
+                cls._analysis_expected_source_kind_override_conn(
+                    conn,
+                    candidate_segment=candidate_segments[stable_id],
+                    critic_row=critic_row,
+                    critic_delivery=raw_delivery,
+                    raw_deltas=raw_deltas,
+                    semantic_lock=semantic_lock,
+                    context_kind_lock=context_kind_lock,
                 )
+                if raw_accept_value is False
                 else None
             )
             source_kind_override_valid = (
@@ -3461,17 +3608,20 @@ class ProjectDB:
     @classmethod
     def _validate_analysis_rejected_source_kind_evidence(
         cls,
+        conn: sqlite3.Connection,
         candidate_json: str,
         evidence: dict[str, Any],
         deterministic_issue_json: str,
     ) -> None:
         candidate = json.loads(candidate_json)
-        _structural_locks, semantic_locks = cls._analysis_host_lock_contract(
-            candidate_json,
-            deterministic_issue_json,
+        _structural_locks, semantic_locks, context_kind_locks = (
+            cls._analysis_host_lock_contract(
+                candidate_json,
+                deterministic_issue_json,
+            )
         )
-        protected_locks = {
-            stable_id: lock
+        semantic_source_kind_ids = {
+            stable_id
             for stable_id, lock in semantic_locks.items()
             if bool(
                 ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[str(lock["rule"])].get(
@@ -3480,7 +3630,8 @@ class ProjectDB:
                 )
             )
         }
-        if not protected_locks:
+        protected_ids = set(context_kind_locks) | semantic_source_kind_ids
+        if not protected_ids:
             return
         evidence_segments = evidence.get("segments")
         if not isinstance(evidence_segments, list):
@@ -3509,19 +3660,20 @@ class ProjectDB:
             or any(
                 item.get("host_source_kind_override") is not None
                 for stable_id, item in evidence_by_stable.items()
-                if stable_id not in protected_locks
+                if stable_id not in protected_ids
             )
         ):
             raise RuntimeError(
                 "Rejected source-kind critic evidence has invalid segment binding"
             )
-        for stable_id, lock in protected_locks.items():
+        for stable_id in protected_ids:
             item = evidence_by_stable.get(stable_id)
             if item is None:
                 raise RuntimeError(
                     "Rejected source-kind critic evidence omits a protected row"
                 )
-            candidate_projection = critic_rows[stable_id]["candidate"]
+            critic_row = critic_rows[stable_id]
+            candidate_projection = critic_row["candidate"]
             critic = item.get("critic")
             if not isinstance(critic, dict):
                 raise RuntimeError(
@@ -3537,52 +3689,41 @@ class ProjectDB:
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 if critic.get(field) != candidate_projection[field]
             }
-            rule_contract = ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS[str(lock["rule"])]
-            protected_source_kind = str(rule_contract["source_kind"])
-            covered_kind_deltas = [
-                delta for delta in raw_deltas if delta.startswith("kind:")
-            ]
-            unresolved_kind_deltas = [
-                delta for delta in raw_deltas if not delta.startswith("kind:")
-            ]
+            semantic_lock = semantic_locks.get(stable_id)
+            context_kind_lock = context_kind_locks.get(stable_id)
             expected_source_kind_override = (
-                {
-                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
-                    "stable_id": stable_id,
-                    "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
-                    "rule": lock["rule"],
-                    "field": "kind",
-                    "candidate_value": protected_source_kind,
-                    "allowed_values": [protected_source_kind],
-                    "raw_accept": False,
-                    "raw_field_deltas": raw_deltas,
-                    "covered_field_deltas": covered_kind_deltas,
-                    "unresolved_field_deltas": unresolved_kind_deltas,
-                }
-                if (
-                    "kind" in raw_delta_fields
-                    and critic.get("kind") == "thought"
-                    and candidate_projection["kind"] == protected_source_kind
-                    and len(covered_kind_deltas) == 1
+                cls._analysis_expected_source_kind_override_conn(
+                    conn,
+                    candidate_segment=candidate_segments[stable_id],
+                    critic_row=critic_row,
+                    critic_delivery=critic,
+                    raw_deltas=raw_deltas,
+                    semantic_lock=semantic_lock,
+                    context_kind_lock=context_kind_lock,
                 )
-                else None
             )
-            allowed_emotions = list(lock["allowed_emotions"])
+            allowed_emotions = (
+                list(semantic_lock["allowed_emotions"])
+                if semantic_lock is not None
+                else []
+            )
             expected_semantic_override = (
                 {
                     "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
                     "stable_id": stable_id,
                     "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
-                    "rule": lock["rule"],
+                    "rule": semantic_lock["rule"],
                     "field": "emotion",
-                    "candidate_value": lock["candidate_emotion"],
+                    "candidate_value": semantic_lock["candidate_emotion"],
                     "allowed_values": allowed_emotions,
                     "raw_accept": False,
                     "raw_field_deltas": raw_deltas,
                 }
                 if (
-                    "emotion" in raw_delta_fields
-                    and candidate_projection["emotion"] == lock["candidate_emotion"]
+                    semantic_lock is not None
+                    and "emotion" in raw_delta_fields
+                    and candidate_projection["emotion"]
+                    == semantic_lock["candidate_emotion"]
                     and critic.get("emotion") not in allowed_emotions
                 )
                 else None
@@ -3881,6 +4022,7 @@ class ProjectDB:
                         "Accepted analysis candidate lacks its durable acceptance envelope"
                     )
                 cls._validate_analysis_acceptance_evidence(
+                    conn,
                     str(candidate["candidate_json"]),
                     str(candidate["commit_envelope_json"]),
                     evidence,
@@ -3889,6 +4031,7 @@ class ProjectDB:
                 )
             elif completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
                 cls._validate_analysis_rejected_source_kind_evidence(
+                    conn,
                     str(candidate["candidate_json"]),
                     evidence,
                     str(candidate["deterministic_issue_json"]),
@@ -4581,6 +4724,7 @@ class ProjectDB:
                     )
                 )
                 self._validate_analysis_acceptance_evidence(
+                    conn,
                     str(candidate["candidate_json"]),
                     commit_envelope_json,
                     evidence,
@@ -4596,6 +4740,7 @@ class ProjectDB:
                 commit_envelope_hash = None
                 if normalized_result_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
                     self._validate_analysis_rejected_source_kind_evidence(
+                        conn,
                         str(candidate["candidate_json"]),
                         evidence,
                         str(candidate["deterministic_issue_json"]),

@@ -20,6 +20,7 @@ from ebook_reader.analysis import (
     EXPLICIT_ATTRIBUTION_NOTE,
     HOST_AFFECT_ISSUE_CODE,
     HOST_DESPERATE_EXERTION_RULE,
+    HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
     HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
     HOST_PHYSICAL_COLLAPSE_RULE,
     HOST_RECALLED_PERSISTENT_FEAR_RULE,
@@ -134,6 +135,15 @@ V27_SEQ33_TEXT = "‘Phù thủy? Thế giới này là cái quái gì vậy?’
 V28_SEQ10_TEXT = (
     "Giống như mấy lần bị bóng đè trước đây, cậu biết rõ mình đang nằm mơ, muốn "
     "thoát ra nhưng lại không có sức lực, không thể điều khiển bản thân."
+)
+V29_SEQ37_TEXT = "“Anh tỉnh rồi?”"
+V29_SEQ38_TEXT = (
+    "Nhìn bộ trang phục mang phong cách cổ xưa khác hẳn với hiện đại của cậu bé, "
+    "Hạ Phong máy móc gật đầu, trong tâm trí hỗn loạn nảy ra một ý nghĩ nực cười:"
+)
+V29_SEQ39_TEXT = (
+    "‘Lucien, phù thủy, giáo đường, thiêu chết… Lẽ nào mình thật sự đã chuyển sinh? "
+    "Và còn chuyển sinh đến thời kỳ hắc ám có tục săn phù thủy ở châu Âu Trung Cổ nữa?’"
 )
 
 
@@ -566,6 +576,47 @@ def v27_seq31_33_rows():
             "paragraph_index": 30,
             "text": V27_SEQ33_TEXT,
             "text_sha256": sha256_text(V27_SEQ33_TEXT),
+            "kind_hint": "thought",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+
+
+def v29_seq37_39_rows():
+    return [
+        {
+            "id": 38,
+            "stable_id": "c00001_s0000037_55bf068518ab",
+            "chapter_id": 1,
+            "seq": 37,
+            "paragraph_index": 32,
+            "text": V29_SEQ37_TEXT,
+            "text_sha256": sha256_text(V29_SEQ37_TEXT),
+            "kind_hint": "dialogue",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 39,
+            "stable_id": "c00001_s0000038_6d1eebb237de",
+            "chapter_id": 1,
+            "seq": 38,
+            "paragraph_index": 33,
+            "text": V29_SEQ38_TEXT,
+            "text_sha256": sha256_text(V29_SEQ38_TEXT),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 40,
+            "stable_id": "c00001_s0000039_55abbb7a19a4",
+            "chapter_id": 1,
+            "seq": 39,
+            "paragraph_index": 33,
+            "text": V29_SEQ39_TEXT,
+            "text_sha256": sha256_text(V29_SEQ39_TEXT),
             "kind_hint": "thought",
             "status": "pending",
             "speaker": None,
@@ -1032,8 +1083,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v10"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v14"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v11"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v15"
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
     assert "cậu biết... muốn..." in DIRECTOR_CRITIC_SYSTEM_PROMPT
@@ -1606,7 +1657,7 @@ def test_v26_long_singleton_request_binds_exact_source_anchor_enum() -> None:
     assert "không được tự cắt, nối hoặc chuẩn hóa anchor" in session.request["json"][
         "system"
     ]
-    assert request_contract["policy_version"] == "second_pass_v10"
+    assert request_contract["policy_version"] == "second_pass_v11"
     assert request_contract["evidence_policy"] == "singleton_source_anchor_enum_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text(V26_SEQ18_TEXT)
     assert request_contract["evidence_anchor_set_sha256"] == (
@@ -3323,6 +3374,75 @@ def test_analysis_keeps_ordinary_narration_to_implicit_thought_compatibility() -
     assert _source_kind_feedback_issues([row], payload) == ()
 
 
+def test_v29_seq38_generator_cannot_relabel_narration_lead_in_as_thought() -> None:
+    source_rows = v29_seq37_39_rows()
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    original_context = _original_neighbor_context(source_rows)
+    item = analysis_item(stable_id)
+    item.update({"kind": "thought", "speaker": "NARRATOR"})
+    payload = {"segments": [item]}
+
+    assert _validate(
+        [row],
+        payload,
+        original_context=original_context,
+    ) == {}
+    assert [
+        issue.canonical_payload()
+        for issue in _source_kind_feedback_issues(
+            [row],
+            payload,
+            original_context=original_context,
+        )
+    ] == [
+        {
+            "id": stable_id,
+            "code": HOST_SOURCE_KIND_ISSUE_CODE,
+            "fields": ["kind"],
+            "rule": HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("target_overrides", "next_overrides"),
+    [
+        ({}, {"kind_hint": "narration"}),
+        ({}, {"paragraph_index": 34}),
+        ({}, {"seq": 40}),
+        ({}, {"chapter_id": 2}),
+        ({"kind_hint": "thought"}, {}),
+    ],
+)
+def test_context_kind_lock_requires_exact_immutable_narration_thought_transition(
+    target_overrides: dict[str, Any],
+    next_overrides: dict[str, Any],
+) -> None:
+    source_rows = v29_seq37_39_rows()
+    source_rows[1].update(target_overrides)
+    source_rows[2].update(next_overrides)
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    item = analysis_item(stable_id)
+    item.update({"kind": "thought", "speaker": "NARRATOR"})
+    payload = {"segments": [item]}
+    original_context = _original_neighbor_context(source_rows)
+
+    validated = _validate(
+        [row],
+        payload,
+        original_context=original_context,
+    )
+
+    assert validated[stable_id]["kind"] == "thought"
+    assert _source_kind_feedback_issues(
+        [row],
+        payload,
+        original_context=original_context,
+    ) == ()
+
+
 def test_v28_seq10_source_rule_locks_reported_cognition_to_afraid_narration() -> None:
     row = {
         "id": 11,
@@ -3381,7 +3501,7 @@ def test_v28_seq10_source_rule_locks_reported_cognition_to_afraid_narration() ->
         "kind": "narration",
         "emotion": "afraid",
     }
-    assert clearance["semantic_locks"][0]["policy_version"] == "host_semantic_lock_v4"
+    assert clearance["semantic_locks"][0]["policy_version"] == "host_semantic_lock_v5"
     assert clearance["semantic_locks"][0]["rule"] == (
         HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
     )
@@ -3969,15 +4089,80 @@ def test_semantic_delivery_rejects_v9_batch_two_dominant_neutral_one_signature()
 
     assert set(issues) == {
         "v9s21",
-        "v9s24",
         "v9s27",
         "v9s28",
         "v9s34",
         "v9s36",
-        "v9s38",
     }
     assert batch_collapsed is True
     assert "delivery signature ('neutral', 1, 'normal', 'normal')" in issues["v9s21"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        V29_SEQ38_TEXT,
+        "Thấy vẻ mặt thất thần của Hạ Phong, cậu bé cũng không lấy làm lạ:",
+        "Cậu bàng hoàng đứng lặng giữa căn phòng.",
+    ],
+)
+def test_disoriented_cues_do_not_reject_or_advise_neutral_delivery(text: str) -> None:
+    stable_id = "disoriented-neutral"
+    group = [{"stable_id": stable_id, "text": text, "kind_hint": "narration"}]
+    validated = {stable_id: analysis_item(stable_id)}
+
+    issues, batch_collapsed = _semantic_delivery_issues(group, validated)
+
+    assert issues == {}
+    assert batch_collapsed is False
+    assert _direct_cue_feedback_issues(group, validated, issues) == ()
+
+
+def test_disoriented_cue_remains_non_happy_evidence() -> None:
+    stable_id = "disoriented-happy"
+    group = [
+        {
+            "stable_id": stable_id,
+            "text": "Cậu thất thần nhìn căn phòng hỗn loạn.",
+            "kind_hint": "narration",
+        }
+    ]
+    candidate = analysis_item(stable_id)
+    candidate["emotion"] = "happy"
+
+    issues, batch_collapsed = _semantic_delivery_issues(
+        group,
+        {stable_id: candidate},
+    )
+
+    assert batch_collapsed is False
+    assert 'disoriented="thất thần"' in issues[stable_id]
+
+
+def test_explicit_fear_remains_direct_when_disorientation_is_also_present() -> None:
+    stable_id = "disoriented-with-fear"
+    group = [
+        {
+            "stable_id": stable_id,
+            "text": "Tâm trí anh hỗn loạn vì hoảng sợ.",
+            "kind_hint": "narration",
+        }
+    ]
+    validated = {stable_id: analysis_item(stable_id)}
+
+    issues, batch_collapsed = _semantic_delivery_issues(group, validated)
+    feedback = _direct_cue_feedback_issues(group, validated, issues)
+
+    assert batch_collapsed is False
+    assert 'afraid="hoảng sợ"' in issues[stable_id]
+    assert feedback == (
+        AnalysisFeedbackIssue(
+            stable_id=stable_id,
+            code="SEMANTIC_DELIVERY_MISMATCH",
+            fields=("emotion",),
+            allowed_emotions=("afraid",),
+        ),
+    )
 
 
 def test_semantic_delivery_does_not_treat_recalled_terms_as_performed_anger() -> None:
@@ -4374,7 +4559,7 @@ def test_v27_narration_lead_in_masks_same_paragraph_thought_from_critic_request(
     assert critic_row["previous_text"] == V27_SEQ31_TEXT
     assert critic_row["next_text"] == ""
     assert critic_row["candidate"]["kind"] == "narration"
-    assert critic_row["host_locked_fields"] == {}
+    assert critic_row["host_locked_fields"] == {"kind": "narration"}
     request = session.request["json"]
     assert V27_SEQ32_TEXT in request["prompt"]
     assert V27_SEQ31_TEXT in request["prompt"]
@@ -4536,7 +4721,7 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v10"
+    assert first_contract["policy_version"] == "second_pass_v11"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
@@ -4591,7 +4776,7 @@ def test_director_content_row_binds_source_verified_semantic_emotion_lock() -> N
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v4",
+            "policy_version": "host_semantic_lock_v5",
             "stable_id": "physical-collapse",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -4665,7 +4850,7 @@ def test_desperate_exertion_creates_source_bound_semantic_lock(emotion: str) -> 
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": emotion}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v4",
+            "policy_version": "host_semantic_lock_v5",
             "stable_id": "desperate-exertion",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -5080,7 +5265,7 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
     assert item["field_deltas"] == ["emotion:afraid->neutral"]
     assert item["effective_accept"] is True
     assert item["host_semantic_override"] == {
-        "policy_version": "host_semantic_lock_v4",
+        "policy_version": "host_semantic_lock_v5",
         "stable_id": "physical-collapse",
         "text_sha256": sha256_text(row["text"]),
         "rule": "respiratory_injury_with_consciousness_loss",
@@ -5091,6 +5276,185 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
         "raw_field_deltas": ["emotion:afraid->neutral"],
     }
     assert validated["physical-collapse"]["confidence"] == pytest.approx(0.86)
+
+
+def test_v29_seq38_kind_only_critic_dissent_uses_context_bound_override() -> None:
+    source_rows = v29_seq37_39_rows()
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    original_context = _original_neighbor_context(source_rows)
+    validated = {stable_id: analysis_item(stable_id)}
+    candidate_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        confidence=0.86,
+        corrections={0: {"kind": "thought"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        original_context=original_context,
+    )
+
+    assert candidate_rows[0]["host_locked_fields"] == {"kind": "narration"}
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["critic"]["accept"] is False
+    assert item["field_deltas"] == ["kind:narration->thought"]
+    assert item["effective_accept"] is True
+    assert item["host_source_kind_override"] == {
+        "policy_version": "host_semantic_lock_v5",
+        "stable_id": stable_id,
+        "text_sha256": sha256_text(V29_SEQ38_TEXT),
+        "rule": HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
+        "field": "kind",
+        "candidate_value": "narration",
+        "allowed_values": ["narration"],
+        "raw_accept": False,
+        "raw_field_deltas": ["kind:narration->thought"],
+        "covered_field_deltas": ["kind:narration->thought"],
+        "unresolved_field_deltas": [],
+        "related_stable_id": source_rows[2]["stable_id"],
+        "related_text_sha256": sha256_text(V29_SEQ39_TEXT),
+    }
+
+
+def test_v29_seq38_context_override_covers_only_kind_delta() -> None:
+    source_rows = v29_seq37_39_rows()
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    original_context = _original_neighbor_context(source_rows)
+    validated = {stable_id: analysis_item(stable_id)}
+    candidate_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={
+            0: {
+                "kind": "thought",
+                "emotion": "surprised",
+                "intensity": 1,
+                "pace": "fast",
+            }
+        },
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        original_context=original_context,
+    )
+
+    assert issues == {
+        stable_id: "DIRECTOR_FIELD_MISMATCH fields=emotion,intensity,pace",
+    }
+    item = evidence["segments"][0]
+    assert item["field_deltas"] == [
+        "kind:narration->thought",
+        "emotion:neutral->surprised",
+        "intensity:0->1",
+        "pace:normal->fast",
+    ]
+    assert item["effective_accept"] is False
+    assert item["host_source_kind_override"]["covered_field_deltas"] == [
+        "kind:narration->thought",
+    ]
+    assert item["host_source_kind_override"]["unresolved_field_deltas"] == [
+        "emotion:neutral->surprised",
+        "intensity:0->1",
+        "pace:normal->fast",
+    ]
+    assert "host_semantic_override" not in item
+
+
+def test_context_kind_and_sleep_emotion_overrides_compose_with_context_rule_priority() -> None:
+    next_text = "‘Mình phải tỉnh dậy.’"
+    row = {
+        "id": 11,
+        "stable_id": "context-and-sleep-lock",
+        "chapter_id": 1,
+        "seq": 10,
+        "paragraph_index": 9,
+        "text": V28_SEQ10_TEXT,
+        "text_sha256": sha256_text(V28_SEQ10_TEXT),
+        "kind_hint": "narration",
+    }
+    next_row = {
+        "id": 12,
+        "stable_id": "context-and-sleep-thought",
+        "chapter_id": 1,
+        "seq": 11,
+        "paragraph_index": 9,
+        "text": next_text,
+        "text_sha256": sha256_text(next_text),
+        "kind_hint": "thought",
+    }
+    original_context = _original_neighbor_context([row, next_row])
+    validated = {
+        row["stable_id"]: {
+            **analysis_item(row["stable_id"]),
+            "emotion": "afraid",
+            "intensity": 2,
+        }
+    }
+    candidate_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"kind": "thought", "emotion": "neutral"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        original_context=original_context,
+    )
+
+    assert candidate_rows[0]["host_locked_fields"] == {
+        "kind": "narration",
+        "emotion": "afraid",
+    }
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["effective_accept"] is True
+    assert item["host_source_kind_override"]["rule"] == (
+        HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE
+    )
+    assert item["host_source_kind_override"]["related_stable_id"] == next_row[
+        "stable_id"
+    ]
+    assert item["host_semantic_override"]["rule"] == (
+        HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+    )
 
 
 def test_sleep_paralysis_kind_only_critic_dissent_uses_source_bound_override() -> None:
@@ -5139,7 +5503,7 @@ def test_sleep_paralysis_kind_only_critic_dissent_uses_source_bound_override() -
     assert item["field_deltas"] == ["kind:narration->thought"]
     assert item["effective_accept"] is True
     assert item["host_source_kind_override"] == {
-        "policy_version": "host_semantic_lock_v4",
+        "policy_version": "host_semantic_lock_v5",
         "stable_id": row["stable_id"],
         "text_sha256": sha256_text(V28_SEQ10_TEXT),
         "rule": HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE,
@@ -5215,7 +5579,7 @@ def test_sleep_paralysis_overrides_kind_and_emotion_but_leaves_delivery_deltas_l
     ]
     assert item["effective_accept"] is False
     assert item["host_semantic_override"] == {
-        "policy_version": "host_semantic_lock_v4",
+        "policy_version": "host_semantic_lock_v5",
         "stable_id": row["stable_id"],
         "text_sha256": sha256_text(V28_SEQ10_TEXT),
         "rule": HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE,
@@ -8200,7 +8564,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v10"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v11"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

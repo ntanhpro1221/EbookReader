@@ -98,7 +98,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v14"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v15"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -130,6 +130,9 @@ HOST_DESPERATE_EXERTION_RULE = "narration_desperate_exertion"
 HOST_RECALLED_PERSISTENT_FEAR_RULE = "narration_recalled_persistent_fear"
 HOST_STUNNED_BLANK_MIND_RULE = "narration_stunned_blank_mind"
 HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE = "narration_sleep_paralysis_helplessness"
+HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE = (
+    "narration_precedes_immediate_thought"
+)
 HOST_AFFECT_RULES = frozenset(
     {
         HOST_DIRECT_SELF_PRESERVATION_RULE,
@@ -140,6 +143,9 @@ HOST_AFFECT_RULES = frozenset(
         HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE,
         HOST_STUNNED_BLANK_MIND_RULE,
     }
+)
+HOST_SOURCE_KIND_RULES = frozenset(
+    {*HOST_AFFECT_RULES, HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE}
 )
 ANALYSIS_FEEDBACK_CODES = frozenset(
     {
@@ -307,7 +313,7 @@ STRONG_NON_HAPPY_CUE_PATTERNS: dict[str, re.Pattern[str]] = {
     "afraid": re.compile(
         r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
         r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
-        r"thất\s+thần|bàng\s+hoàng|hỗn\s+loạn|sẽ\s+chết\s+mất|"
+        r"sẽ\s+chết\s+mất|"
         r"sắp\s+chết(?:\s+mất|\s+thôi)|kinh\s+hoàng|"
         r"tim\s+đập\s+chân\s+run|tim\s+thắt)\b",
         flags=re.IGNORECASE,
@@ -331,9 +337,13 @@ STRONG_NON_HAPPY_CUE_PATTERNS: dict[str, re.Pattern[str]] = {
         r"\b(?:choáng\s+váng|yếu\s+nhược|mềm\s+nhũn|sắp\s+ngã|bệnh\s+nặng|tồi\s+tàn)\b",
         flags=re.IGNORECASE,
     ),
+    "disoriented": re.compile(
+        r"\b(?:thất\s+thần|bàng\s+hoàng|hỗn\s+loạn)\b",
+        flags=re.IGNORECASE,
+    ),
 }
 NEGATIVE_AFFECT_CUES = frozenset(
-    {"afraid", "angry", "distressed", "physical_collapse", "sad"}
+    {"afraid", "angry", "disoriented", "distressed", "physical_collapse", "sad"}
 )
 POSITIVE_AFFECT_CUES = frozenset({"excited", "happy"})
 NEUTRAL_CONTRADICTION_CUES = frozenset(
@@ -1317,6 +1327,8 @@ def _validate(
     group: list[Any],
     payload: dict[str, Any],
     local_scope: str = "b0000",
+    *,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     expected = {str(row["stable_id"]) for row in group}
     rows_by_id = {str(row["stable_id"]): row for row in group}
@@ -1334,6 +1346,7 @@ def _validate(
         loses_source_owned_kind = _source_kind_transition_rule(
             rows_by_id[seg_id],
             requested_kind,
+            original_context=original_context,
         ) is not None
         if crosses_dialogue_boundary or loses_source_owned_kind:
             # A valid-but-incompatible kind normally means the model shifted one result to a
@@ -1506,8 +1519,13 @@ class AnalysisFeedbackIssue:
             raise ValueError(
                 f"Unsupported analysis feedback emotions: {self.allowed_emotions}"
             )
-        if type(self.rule) is not str or (self.rule and self.rule not in HOST_AFFECT_RULES):
-            raise ValueError(f"Unsupported host affect feedback rule: {self.rule}")
+        allowed_rules = (
+            HOST_SOURCE_KIND_RULES
+            if self.code == HOST_SOURCE_KIND_ISSUE_CODE
+            else HOST_AFFECT_RULES
+        )
+        if type(self.rule) is not str or (self.rule and self.rule not in allowed_rules):
+            raise ValueError(f"Unsupported host feedback rule: {self.rule}")
         resolved_id = identifier if identifier is not None else self.stable_id
         if type(resolved_id) is not str or not resolved_id.strip():
             raise ValueError("Analysis feedback ID must be a non-empty string")
@@ -1821,7 +1839,43 @@ def _source_narration_semantic_rule(row: Any) -> str:
     return direct_affect_contract[0] if direct_affect_contract is not None else ""
 
 
-def _source_kind_transition_rule(row: Any, requested_kind: str) -> str | None:
+def _source_narration_precedes_immediate_thought(
+    row: Any,
+    original_context: dict[str, dict[str, Any]] | None,
+) -> bool:
+    """Return whether immutable source metadata owns a narration-to-thought boundary."""
+    if original_context is None:
+        return False
+    context = original_context.get(str(row["stable_id"]))
+    if not isinstance(context, dict):
+        return False
+    related_stable_id = context.get("next_stable_id")
+    related_text_sha256 = context.get("next_text_sha256")
+    if (
+        not isinstance(related_stable_id, str)
+        or not related_stable_id
+        or not isinstance(related_text_sha256, str)
+        or re.fullmatch(r"[0-9a-f]{64}", related_text_sha256) is None
+    ):
+        return False
+    return analysis_source_narration_precedes_thought(
+        chapter_id=_row_optional_int(row, "chapter_id"),
+        seq=_row_optional_int(row, "seq"),
+        paragraph_index=_row_optional_int(row, "paragraph_index"),
+        kind_hint=str(_row_optional_value(row, "kind_hint", "")),
+        next_chapter_id=context.get("next_chapter_id"),
+        next_seq=context.get("next_seq"),
+        next_paragraph_index=context.get("next_paragraph_index"),
+        next_kind_hint=str(context.get("next_kind_hint", "")),
+    )
+
+
+def _source_kind_transition_rule(
+    row: Any,
+    requested_kind: str,
+    *,
+    original_context: dict[str, dict[str, Any]] | None = None,
+) -> str | None:
     """Return the host rule (possibly empty) when a candidate crosses a source boundary."""
     source_kind = str(_row_optional_value(row, "kind_hint", "narration"))
     if source_kind == "dialogue":
@@ -1831,6 +1885,8 @@ def _source_kind_transition_rule(row: Any, requested_kind: str) -> str | None:
     if source_kind == "thought":
         return "" if requested_kind != "thought" else None
     if source_kind == "narration" and requested_kind != "narration":
+        if _source_narration_precedes_immediate_thought(row, original_context):
+            return HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE
         rule = _source_narration_semantic_rule(row)
         return rule or None
     return None
@@ -1839,6 +1895,8 @@ def _source_kind_transition_rule(row: Any, requested_kind: str) -> str | None:
 def _source_kind_feedback_issues(
     group: list[Any],
     payload: dict[str, Any],
+    *,
+    original_context: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[AnalysisFeedbackIssue, ...]:
     """Convert valid-enum source-boundary violations into text-free retry constraints."""
     rows_by_id = {str(row["stable_id"]): row for row in group}
@@ -1857,7 +1915,11 @@ def _source_kind_feedback_issues(
         ):
             continue
         seen.add(stable_id)
-        rule = _source_kind_transition_rule(rows_by_id[stable_id], requested_kind)
+        rule = _source_kind_transition_rule(
+            rows_by_id[stable_id],
+            requested_kind,
+            original_context=original_context,
+        )
         if rule is None:
             continue
         issues.append(
@@ -1924,7 +1986,14 @@ def _host_affect_adjudication(
         if candidate is None:
             continue
         source_kind = str(_row_optional_value(row, "kind_hint", ""))
-        if _source_kind_transition_rule(row, str(candidate.get("kind", ""))) is not None:
+        if (
+            _source_kind_transition_rule(
+                row,
+                str(candidate.get("kind", "")),
+                original_context=original_context,
+            )
+            is not None
+        ):
             raise ValueError("Host affect adjudication received a source-kind violation")
         if (
             source_kind == "narration"
@@ -3027,24 +3096,26 @@ def _director_candidate_rows(
         else:
             previous_text, next_text = _neighbor_texts(group, index, original_context)
             source_role = ANALYSIS_SOURCE_ROLE_CONTENT
+            narration_precedes_thought = _source_narration_precedes_immediate_thought(
+                row,
+                original_context,
+            )
             if str(row["kind_hint"]) == "thought":
                 next_text = ""
                 context_policy = ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
-            elif _director_narration_precedes_thought(row, original_context):
+            elif narration_precedes_thought:
                 next_text = ""
                 context_policy = ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
             else:
                 context_policy = ANALYSIS_CONTEXT_POLICY_ADJACENT
+            host_locked_fields = (
+                {"kind": "narration"} if narration_precedes_thought else {}
+            )
             semantic_lock = semantic_locks.get(stable_id)
-            if semantic_lock is None:
-                host_locked_fields = {}
-            elif semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE:
-                host_locked_fields = {
-                    "kind": "narration",
-                    "emotion": semantic_lock.candidate_emotion,
-                }
-            else:
-                host_locked_fields = {"emotion": semantic_lock.candidate_emotion}
+            if semantic_lock is not None:
+                if semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE:
+                    host_locked_fields.setdefault("kind", "narration")
+                host_locked_fields["emotion"] = semantic_lock.candidate_emotion
         rows.append(
             {
                 "id": _batch_id(index + 1),
@@ -3063,27 +3134,6 @@ def _director_candidate_rows(
             }
         )
     return rows
-
-
-def _director_narration_precedes_thought(
-    row: Any,
-    original_context: dict[str, dict[str, Any]] | None,
-) -> bool:
-    if original_context is None:
-        return False
-    context = original_context.get(str(row["stable_id"]))
-    if not isinstance(context, dict):
-        return False
-    return analysis_source_narration_precedes_thought(
-        chapter_id=_row_optional_int(row, "chapter_id"),
-        seq=_row_optional_int(row, "seq"),
-        paragraph_index=_row_optional_int(row, "paragraph_index"),
-        kind_hint=str(_row_optional_value(row, "kind_hint", "")),
-        next_chapter_id=context.get("next_chapter_id"),
-        next_seq=context.get("next_seq"),
-        next_paragraph_index=context.get("next_paragraph_index"),
-        next_kind_hint=str(context.get("next_kind_hint", "")),
-    )
 
 
 def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, Any]]:
@@ -3972,16 +4022,34 @@ def _adjudicate_director_critic(
             (delta for delta in deltas if delta.split(":", 1)[0] == "kind"),
             "",
         )
+        context_kind_locked = bool(
+            candidate["kind"] == "narration"
+            and _source_narration_precedes_immediate_thought(
+                rows_by_stable[stable_id],
+                original_context,
+            )
+        )
+        protected_kind_rule = (
+            HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE
+            if context_kind_locked
+            else (
+                HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+                if (
+                    semantic_lock is not None
+                    and semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+                )
+                else ""
+            )
+        )
         if (
-            semantic_lock is not None
-            and semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+            protected_kind_rule
             and protected_kind_delta
-            and candidate["kind"] == "narration"
             and _source_kind_transition_rule(
                 rows_by_stable[stable_id],
                 corrected["kind"],
+                original_context=original_context,
             )
-            == semantic_lock.rule
+            == protected_kind_rule
         ):
             source_kind_unresolved_deltas = [
                 delta
@@ -3992,7 +4060,7 @@ def _adjudicate_director_critic(
                 "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
                 "stable_id": stable_id,
                 "text_sha256": _source_text_sha256(rows_by_stable[stable_id]),
-                "rule": semantic_lock.rule,
+                "rule": protected_kind_rule,
                 "field": "kind",
                 "candidate_value": "narration",
                 "allowed_values": ["narration"],
@@ -4001,6 +4069,16 @@ def _adjudicate_director_critic(
                 "covered_field_deltas": [protected_kind_delta],
                 "unresolved_field_deltas": source_kind_unresolved_deltas,
             }
+            if context_kind_locked:
+                context = (original_context or {}).get(stable_id, {})
+                source_kind_override.update(
+                    {
+                        "related_stable_id": str(context.get("next_stable_id", "")),
+                        "related_text_sha256": str(
+                            context.get("next_text_sha256", "")
+                        ),
+                    }
+                )
             host_covered_fields.add("kind")
         if (
             semantic_lock is not None
@@ -4008,6 +4086,7 @@ def _adjudicate_director_critic(
             and (
                 delta_fields == ("emotion",)
                 or semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+                or context_kind_locked
             )
             and candidate["emotion"] == semantic_lock.candidate_emotion
             and corrected["emotion"] not in semantic_lock.allowed_emotions
@@ -5205,8 +5284,17 @@ class OllamaBookAnalyzer:
                         if validation_feedback:
                             request_kwargs["validation_feedback"] = validation_feedback
                         payload = self._request(group, **request_kwargs)
-                        validated = _validate(group, payload, local_scope=local_scope)
-                        source_kind_issues = _source_kind_feedback_issues(group, payload)
+                        validated = _validate(
+                            group,
+                            payload,
+                            local_scope=local_scope,
+                            original_context=original_context,
+                        )
+                        source_kind_issues = _source_kind_feedback_issues(
+                            group,
+                            payload,
+                            original_context=original_context,
+                        )
                         validation_feedback = _merge_feedback_issues(
                             validation_feedback,
                             source_kind_issues,

@@ -30,7 +30,18 @@ compose override cho hai field đã khóa, còn `intensity/pace/speaker/volume` 
 làm invalid toàn payload và retry cùng durable candidate. Regression exact seq10, negative adversarial, accepted/rejected
 reserve/reopen/replay/commit và policy fingerprint đã pass **818/818** test trong ba file thay đổi; auditor độc lập không còn
 P0/P1. Full repository **1.264/1.264** test, Ruff, compileall, `pip check` và `git diff --check` đều pass.
-Runtime V29 chưa được chạy tại thời điểm ghi mục này.
+Runtime V29 chạy project sạch tới seq38: exact seq10 giữ `narration/afraid`, seq18 giữ đúng per-ID evidence và seq32 giữ
+`narration_before_thought_previous_only`; mọi hash/candidate/critic/commit envelope kiểm lại hợp lệ. Lượt chạy dừng fail-safe
+trước casting/TTS vì `hỗn loạn|thất thần` bị cue chung ép sai sang `afraid`, đồng thời source narration dẫn seq38 chưa có
+kind lock nên generator/critic từng có thể đồng thuận relabel thành thought. Không có audio/casting dở được commit.
+Hardening V30 tách đúng ba cue nhận thức mơ hồ thành lớp `disoriented`: vẫn chặn `happy` sai nhưng không từ chối `neutral`
+hoặc phát `allowed_emotions`; explicit fear cùng câu vẫn hoạt động độc lập. Narration dẫn ngay trước thought cùng
+chapter/paragraph trở thành kind-only source lock từ immutable original context ở cả generator và critic. Raw critic/delta
+được giữ nguyên, override chỉ phủ `kind`, còn related stable ID/hash được bind và SQLite tính lại hash từ text khi
+allocate/reopen/accept/commit; text-only tamper có stale hash bị chặn cho cả context mới và adjacent-wake semantic provenance.
+Regression exact seq38, controls, composition, accepted/rejected replay/commit và tamper pass **845/845** test trong ba file
+analysis/database/quality; auditor độc lập chạy 33 test và kết luận không còn P0/P1. Full repository **1.291/1.291** test,
+Ruff, compileall, `pip check` và `git diff --check` đều pass trước runtime V30.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -75,6 +86,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   đúng cụm từ đã khớp, retry có feedback theo đúng ID rồi chia đôi hữu hạn; batch vui thật, narration trung tính,
   mixed-affect và cue nằm trong phủ định/ngăn cấm cục bộ vẫn được chấp nhận; template neutral-zero vẫn bị chặn
   riêng sau khi batch đã chia dưới 8 segment và kết thúc bắt buộc ở singleton thay vì checkpoint dữ liệu suy biến;
+- cue `thất thần|bàng hoàng|hỗn loạn` được giữ ở lớp `disoriented` chống happy, không còn ép neutral thành afraid hay
+  phát allowed-emotion advisory; cue sợ hãi rõ ràng cùng câu vẫn được xét độc lập;
 - compound gate từ chối narration phẳng khi cùng một segment có cả tổn thương phổi/yết hầu và ý thức mơ hồ, nhưng giữ
   neutral cho suy kiệt thể chất hoặc quan sát lâm sàng đơn lẻ để không biến keyword gate thành đạo diễn cảm xúc rộng;
 - host affect nguồn hẹp được adjudicate trước semantic cue chung và mọi constraint typed đã xác minh được tích lũy trong
@@ -93,7 +106,8 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   lock bóng đè được compose riêng source-kind + emotion nhưng vẫn giữ raw verdict/delta, còn mọi delta delivery khác bị chặn.
   Agreement luôn được host suy từ sáu field; protocol-invalid ở bất kỳ row nào làm invalid toàn critic payload;
 - dialogue và thought boundary đã được source parser nhận diện là source-owned: model không được đổi chúng sang loại khác để
-  né speaker/semantic lock; narration chỉ có thể được nâng thành thought khi source không khớp một semantic lock narration bắt buộc;
+  né speaker/semantic lock. Narration dẫn ngay trước thought hoặc khớp semantic narration bắt buộc cũng source-owned;
+  narration thường vẫn có thể được nâng thành implicit thought để giữ compatibility;
 - `notes` và `personality_hint` tự do không còn thuộc output model hay acceptance envelope. Host tạo `delivery_note_v1`
   chỉ từ delivery đã kiểm; segment note không chứa marker điều khiển và marker repair tạm bị xóa trước candidate. Projection
   analysis đã chấp nhận nằm trong ledger+critic source-bound; bước casting chỉ reconcile speaker bằng transform source-derived,
@@ -115,9 +129,11 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   luôn có precedence vì critic cùng Qwen là correlated self-review chứ không phải model độc lập;
 - source thought được gửi riêng cho critic theo `previous_context_only`: giữ lời dẫn trước nhưng xóa `next_text`.
   Narration dẫn ngay trước thought cùng chapter/paragraph dùng `narration_before_thought_previous_only`, giữ previous nhưng
-  ẩn thought kế tiếp để critic không relabel lời dẫn hoặc mượn affect; narration/dialogue còn lại vẫn dùng adjacent context,
-  còn generator luôn giữ đủ adjacent context. Regression V21 seq13 và V27 seq31/32/33 khóa split singleton, hash/contract
-  resume source-bound và ngăn cue tương lai bị mượn sang target;
+  ẩn thought kế tiếp để critic không mượn affect. Kind narration được khóa từ immutable original context ngay trong generator
+  và critic; bất đồng critic chỉ override đúng kind, giữ raw delta, khóa related stable/hash và tính lại hash từ source text
+  trên mọi replay/commit. Narration/dialogue còn lại vẫn dùng adjacent context, generator vẫn giữ đủ adjacent context.
+  Regression V21 seq13, V27 seq31/32/33 và V29 seq37/38/39 khóa split singleton, hash/contract resume source-bound,
+  text-only tamper và ngăn cue tương lai bị mượn sang target;
 - host affect gate khóa hẹp hai beat tự-bảo-toàn: thought có cue tử vong trực tiếp và wake/self-rescue thought liền kề;
   feedback là JSON typed/whitelist không chứa source/rationale tự do, trường hợp third-party/meta/khác chapter-paragraph không
   bị lan cue. Context/group fingerprint bao gồm stable ID, source hash, chapter, paragraph, kind và hai hàng xóm;

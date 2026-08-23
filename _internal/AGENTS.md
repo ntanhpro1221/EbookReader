@@ -165,6 +165,9 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   `emotion=neutral` bị từ chối. Tập lựa chọn phải hợp deterministic từ cue trực tiếp không bị phủ định/meta/lịch sử và
   không có affect đối nghịch, không chứa source/cue/rationale trong payload. Đây không phải host whitelist, semantic lock
   hay exact-membership gate: model vẫn phải chọn delivery tốt nhất và candidate sửa xong vẫn qua đủ validation + critic.
+- Ba cue nhận thức mơ hồ `thất thần|bàng hoàng|hỗn loạn` thuộc lớp nội bộ `disoriented`: chúng là bằng chứng chống
+  `happy` sai nhưng không được coi là cue trực tiếp để từ chối `neutral`, không tạo `allowed_emotions` và không tự ép
+  thành `afraid`/`surprised`. Cue sợ hãi rõ ràng cùng xuất hiện vẫn được xét độc lập theo contract `afraid`.
 - Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Với lock một
   field, critic correction chỉ được host override khi có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host
   cho phép. Riêng rule bảo vệ cả source kind và emotion được phép compose hai override đúng hai field đó; mọi raw verdict/delta
@@ -180,8 +183,12 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   vào suy nghĩ hiện tại. Generator vẫn nhận adjacent context; narration/dialogue critic vẫn dùng `adjacent_context`.
 - Director critic cho narration là lời dẫn ngay trước source thought cùng chapter và paragraph phải dùng
   `narration_before_thought_previous_only`: giữ previous source nhưng xóa `next_text` từ immutable original context.
-  Không relabel narration thành thought, không mượn affect/pace/volume của thought bị ẩn và không tạo kind override;
-  generator vẫn nhận đủ adjacent context.
+  Source parser sở hữu bất biến `kind=narration`: generator vẫn nhận đủ adjacent context nhưng validation/feedback phải
+  dùng chính immutable original context để từ chối relabel thành thought trước khi cấp candidate. Critic row mang
+  kind-only host lock tách biệt semantic clearance; nếu critic vẫn đổi kind thì evidence phải giữ nguyên verdict/delta thô
+  và chỉ được override đúng field `kind`. Override bền phải khóa stable ID + SHA-256 của target và thought kế tiếp;
+  SQLite tính lại hash từ text related khi allocate/reopen/accept/commit. Mọi delta emotion/intensity/pace/speaker/volume
+  chưa có semantic lock riêng vẫn unresolved và fail-closed; kind-only context lock không làm tăng semantic-lock count.
 - Model không được sở hữu `notes` hoặc `personality_hint` được commit. Host phải tạo note canonical chỉ từ delivery cuối
   sau repair; personality model phải rỗng và segment note không được chứa marker điều khiển. Marker repair chỉ là state tạm
   trong một lượt validation và phải bị xóa trước candidate. Candidate ledger + critic khóa projection analysis đã chấp nhận;
