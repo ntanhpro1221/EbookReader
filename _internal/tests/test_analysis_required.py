@@ -71,12 +71,15 @@ from ebook_reader.config import build_settings
 from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
+    ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     CONTINUED_DIALOGUE_LOCK_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
     analysis_critic_anchor_set_sha256,
+    analysis_critic_per_id_anchor_map_sha256,
     canonical_analysis_critic_source_anchors,
+    canonical_analysis_critic_per_id_source_anchor_map,
     canonical_analysis_note,
 )
 from ebook_reader.io_utils import sha256_text
@@ -119,6 +122,12 @@ V26_SEQ18_TEXT = (
     "thật, và cậu được người ta đưa tới bệnh viện đi chăng nữa, thì nơi này cũng "
     "chẳng giống bệnh viện tí nào!"
 )
+V27_SEQ31_TEXT = "“Thiêu chết ả phù thủy tà ác khốn kiếp đó đi!”"
+V27_SEQ32_TEXT = (
+    "Sợ hãi và phấn khích, hai thứ xúc cảm đối lập, hiện rõ trong giọng nói xa lạ "
+    "đó. Nỗi lo sợ của Hạ Phong bị gián đoạn. Cảm thấy tò mò, cậu nghĩ thầm:"
+)
+V27_SEQ33_TEXT = "‘Phù thủy? Thế giới này là cái quái gì vậy?’"
 
 
 class FakeDB:
@@ -516,6 +525,47 @@ def analysis_group():
     ]
 
 
+def v27_seq31_33_rows():
+    return [
+        {
+            "id": 32,
+            "stable_id": "c00001_s0000031_d0ccba001031",
+            "chapter_id": 1,
+            "seq": 31,
+            "paragraph_index": 29,
+            "text": V27_SEQ31_TEXT,
+            "text_sha256": sha256_text(V27_SEQ31_TEXT),
+            "kind_hint": "dialogue",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 33,
+            "stable_id": "c00001_s0000032_ee14f5622d9a",
+            "chapter_id": 1,
+            "seq": 32,
+            "paragraph_index": 30,
+            "text": V27_SEQ32_TEXT,
+            "text_sha256": sha256_text(V27_SEQ32_TEXT),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        },
+        {
+            "id": 34,
+            "stable_id": "c00001_s0000033_d0ccba001033",
+            "chapter_id": 1,
+            "seq": 33,
+            "paragraph_index": 30,
+            "text": V27_SEQ33_TEXT,
+            "text_sha256": sha256_text(V27_SEQ33_TEXT),
+            "kind_hint": "thought",
+            "status": "pending",
+            "speaker": None,
+        },
+    ]
+
+
 def director_critic_payload(
     group,
     validated,
@@ -532,12 +582,7 @@ def director_critic_payload(
     for index, row in enumerate(candidate_rows):
         corrected = {**row["candidate"], **corrections.get(index, {})}
         source_text = str(row["text"])
-        evidence_quote = (
-            canonical_analysis_critic_source_anchors(source_text)[0]
-            if len(group) == 1
-            and len(source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
-            else source_text[:ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH]
-        )
+        evidence_quote = canonical_analysis_critic_source_anchors(source_text)[0]
         verdicts.append(
             {
                 "id": row["id"],
@@ -808,10 +853,20 @@ def test_director_transport_contract_is_immutable_but_candidate_bound() -> None:
     assert first == repeated
     assert first["temperature"] == settings["director_critic_temperature"]
     assert first["confidence_floor"] == settings["low_confidence_threshold"]
-    assert first["evidence_policy"] == "target_substring_v1"
+    anchor_map = canonical_analysis_critic_per_id_source_anchor_map(
+        [
+            {"id": f"S{index:03d}", "text": str(row["text"])}
+            for index, row in enumerate(group, 1)
+        ]
+    )
+    assert first["evidence_policy"] == "per_id_source_anchor_enum_v1"
     assert first["evidence_text_sha256"] == ""
-    assert first["evidence_anchor_set_sha256"] == ""
-    assert first["evidence_anchor_count"] == 0
+    assert first["evidence_anchor_set_sha256"] == (
+        analysis_critic_per_id_anchor_map_sha256(anchor_map)
+    )
+    assert first["evidence_anchor_count"] == sum(
+        len(item["anchors"]) for item in anchor_map
+    )
     assert first["seed"] != changed_candidate["seed"]
     assert first["group_fingerprint"] == changed_candidate["group_fingerprint"]
 
@@ -970,8 +1025,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v8"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v12"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v9"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v13"
 
 
 def test_free_form_analysis_metadata_is_ignored_before_canonicalization() -> None:
@@ -1361,9 +1416,20 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
     assert '"confidence"' not in request["prompt"]
     assert '"notes"' not in request["prompt"]
     assert '"accept"' not in request["prompt"]
-    assert "accept" not in request["format"]["properties"]["verdicts"]["items"][
-        "properties"
+    verdict_branches = request["format"]["properties"]["verdicts"]["items"][
+        "oneOf"
     ]
+    assert all("accept" not in branch["properties"] for branch in verdict_branches)
+    expected_anchor_map = canonical_analysis_critic_per_id_source_anchor_map(
+        candidate_rows
+    )
+    assert [
+        branch["properties"]["id"]["enum"] for branch in verdict_branches
+    ] == [[item["id"]] for item in expected_anchor_map]
+    assert [
+        branch["properties"]["evidence_quote"]["enum"]
+        for branch in verdict_branches
+    ] == [item["anchors"] for item in expected_anchor_map]
     assert request["format"]["properties"]["candidate_hash"]["enum"] == [candidate_hash]
     assert request["options"]["temperature"] == 0.2
     assert 1 <= request["options"]["seed"] <= (2 ** 31) - 1
@@ -1377,6 +1443,8 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
         "system"
     ]
     assert "thought/NARRATOR/afraid/2/fast/normal" in request["system"]
+    assert "evidence_policy=per_id_source_anchor_enum_v1" in request["prompt"]
+    assert "nhánh oneOf của chính ID đó" in request["prompt"]
 
 
 @pytest.mark.parametrize(
@@ -1527,7 +1595,7 @@ def test_v26_long_singleton_request_binds_exact_source_anchor_enum() -> None:
     assert "không được tự cắt, nối hoặc chuẩn hóa anchor" in session.request["json"][
         "system"
     ]
-    assert request_contract["policy_version"] == "second_pass_v8"
+    assert request_contract["policy_version"] == "second_pass_v9"
     assert request_contract["evidence_policy"] == "singleton_source_anchor_enum_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text(V26_SEQ18_TEXT)
     assert request_contract["evidence_anchor_set_sha256"] == (
@@ -1618,17 +1686,59 @@ def test_singleton_evidence_policy_boundary_switches_after_quote_limit() -> None
     assert above_limit["evidence_anchor_count"] == len(above_anchors)
 
 
-def test_multirow_director_schema_keeps_source_substring_quote_contract() -> None:
+def test_multirow_director_schema_locks_each_id_to_its_exact_source_anchor_enum() -> None:
+    source_rows = [
+        {"id": "S001", "text": "Nguồn riêng của ID một."},
+        {"id": "S002", "text": "Nguồn riêng của ID hai."},
+    ]
+    anchor_map = canonical_analysis_critic_per_id_source_anchor_map(source_rows)
     schema = _director_critic_schema(
         ["S001", "S002"],
         "candidate-hash",
         confidence_floor=0.65,
-        singleton_source_text="không được khóa cho multirow",
+        per_id_source_anchor_map=anchor_map,
     )
-    verdict_properties = schema["properties"]["verdicts"]["items"]["properties"]
+    verdict_items = schema["properties"]["verdicts"]["items"]
+    branches = verdict_items["oneOf"]
 
-    assert verdict_properties["critic_confidence"]["minimum"] == 0.65
-    assert "enum" not in verdict_properties["evidence_quote"]
+    assert "properties" not in verdict_items
+    assert len(branches) == 2
+    assert [branch["properties"]["id"]["enum"] for branch in branches] == [
+        ["S001"],
+        ["S002"],
+    ]
+    assert [branch["properties"]["evidence_quote"]["enum"] for branch in branches] == [
+        anchor_map[0]["anchors"],
+        anchor_map[1]["anchors"],
+    ]
+    assert all(
+        branch["properties"]["critic_confidence"]["minimum"] == 0.65
+        for branch in branches
+    )
+
+
+def test_multirow_adjudicator_rejects_exact_anchor_borrowed_from_another_id() -> None:
+    group = analysis_group()
+    validated = {
+        str(row["stable_id"]): analysis_item(str(row["stable_id"]))
+        for row in group
+    }
+    payload, candidate_hash = director_critic_payload(group, validated)
+    payload["verdicts"][0]["evidence_quote"] = str(group[1]["text"])
+
+    issues, evidence = _adjudicate_director_critic(
+        group,
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        confidence_floor=0.65,
+    )
+
+    assert issues == {
+        str(group[0]["stable_id"]): "DIRECTOR_INVALID_RESPONSE evidence_quote"
+    }
+    assert "critic" not in evidence["segments"][0]
+    assert evidence["segments"][1]["critic"]["evidence_quote"] == group[1]["text"]
 
 
 @pytest.mark.parametrize("request_kind", ["generator", "critic"])
@@ -3839,6 +3949,115 @@ def test_generator_thought_request_still_receives_both_adjacent_source_rows() ->
     assert V21_SEQ13_NEXT_TEXT in prompt
 
 
+def test_v27_narration_lead_in_masks_same_paragraph_thought_from_critic_request() -> None:
+    source_rows = v27_seq31_33_rows()
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    validated = {stable_id: analysis_item(stable_id)}
+    original_context = _original_neighbor_context(source_rows)
+    candidate_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+    session = FakeSession(payload)
+    settings = build_settings("high_quality")
+    analyzer = OllamaBookAnalyzer(settings, FakeDB(), lambda _message: None)
+    analyzer.session = session
+    request_contract = _director_critic_request_contract(
+        settings["analysis"],
+        model=analyzer.model,
+        model_digest="sha256:test-model-digest",
+        group=[row],
+        attempt=1,
+        candidate_hash=candidate_hash,
+        original_context=original_context,
+    )
+
+    returned, returned_hash = ORIGINAL_DIRECTOR_CRITIC_REQUEST(
+        analyzer,
+        [row],
+        validated,
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+        request_contract=request_contract,
+        original_context=original_context,
+    )
+
+    assert returned == payload
+    assert returned_hash == candidate_hash
+    critic_row = candidate_rows[0]
+    assert original_context[stable_id]["next_text"] == V27_SEQ33_TEXT
+    assert original_context[stable_id]["next_seq"] == 33
+    assert critic_row["context_policy"] == (
+        ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
+    )
+    assert critic_row["previous_text"] == V27_SEQ31_TEXT
+    assert critic_row["next_text"] == ""
+    assert critic_row["candidate"]["kind"] == "narration"
+    assert critic_row["host_locked_fields"] == {}
+    request = session.request["json"]
+    assert V27_SEQ32_TEXT in request["prompt"]
+    assert V27_SEQ31_TEXT in request["prompt"]
+    assert V27_SEQ33_TEXT not in request["prompt"]
+    assert "lời kể dẫn ngay trước" in request["system"]
+    assert "Không relabel lời dẫn narration thành thought" in request["system"]
+    assert "không mượn emotion, intensity, pace" in request["system"]
+
+
+def test_v27_narration_lead_in_generator_keeps_full_adjacent_context() -> None:
+    source_rows = v27_seq31_33_rows()
+    row = source_rows[1]
+    response = analysis_item("S001")
+    session = FakeSession({"segments": [response]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    payload = analyzer._request(
+        [row],
+        original_context=_original_neighbor_context(source_rows),
+    )
+
+    assert payload["segments"][0]["kind"] == "narration"
+    prompt = session.request["json"]["prompt"]
+    assert V27_SEQ31_TEXT in prompt
+    assert V27_SEQ32_TEXT in prompt
+    assert V27_SEQ33_TEXT in prompt
+
+
+@pytest.mark.parametrize(
+    ("next_kind_hint", "next_paragraph_index"),
+    [
+        ("thought", 31),
+        ("dialogue", 30),
+    ],
+)
+def test_narration_lead_in_mask_requires_same_paragraph_immediate_thought(
+    next_kind_hint: str,
+    next_paragraph_index: int,
+) -> None:
+    source_rows = v27_seq31_33_rows()
+    source_rows[2]["kind_hint"] = next_kind_hint
+    source_rows[2]["paragraph_index"] = next_paragraph_index
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    critic_row = _director_candidate_rows(
+        [row],
+        {stable_id: analysis_item(stable_id)},
+        original_context=_original_neighbor_context(source_rows),
+    )[0]
+
+    assert critic_row["context_policy"] == "adjacent_context"
+    assert critic_row["next_text"] == V27_SEQ33_TEXT
+
+
 @pytest.mark.parametrize("kind_hint", ["narration", "dialogue"])
 def test_director_non_thought_content_keeps_adjacent_context(kind_hint: str) -> None:
     row = {
@@ -3945,13 +4164,13 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v8"
+    assert first_contract["policy_version"] == "second_pass_v9"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
 
 
-def test_v24_heading_confidence_policy_fingerprint_does_not_match_stale_v23_ledger(
+def test_v28_policy_fingerprint_does_not_match_stale_v27_ledger(
     monkeypatch,
 ) -> None:
     settings = build_settings()["analysis"]
@@ -3959,11 +4178,11 @@ def test_v24_heading_confidence_policy_fingerprint_does_not_match_stale_v23_ledg
 
     monkeypatch.setattr(
         "ebook_reader.analysis.DIRECTOR_CRITIC_POLICY_VERSION",
-        "second_pass_v6",
+        "second_pass_v8",
     )
     monkeypatch.setattr(
         "ebook_reader.analysis.ANALYSIS_LEDGER_POLICY_VERSION",
-        "analysis_ledger_v9",
+        "analysis_ledger_v12",
     )
     stale = _analysis_policy_fingerprint(settings, "quality-policy")
 
@@ -7169,12 +7388,89 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v8"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v9"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",
     }
     assert db.analysis_model == ("qwen3:8b", "sha256:test-model-digest")
+
+
+def test_v27_narration_lead_in_mask_prevents_critic_leak_and_commits(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    db.rows = v27_seq31_33_rows()
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    critic_target_rows: list[dict[str, object]] = []
+
+    def generate(group, **_kwargs):
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            if int(row["seq"]) == 31:
+                item.update(
+                    {
+                        "kind": "dialogue",
+                        "speaker": "NPC_LOCAL:đám đông",
+                        "gender": "unknown",
+                        "emotion": "angry",
+                        "intensity": 2,
+                        "pace": "fast",
+                        "volume": "loud",
+                    }
+                )
+            elif int(row["seq"]) == 33:
+                item.update(
+                    {
+                        "kind": "thought",
+                        "speaker": "NARRATOR",
+                        "emotion": "afraid",
+                        "intensity": 1,
+                        "pace": "fast",
+                    }
+                )
+            items.append(item)
+        return {"segments": items}
+
+    def leak_sensitive_critic(group, validated, **kwargs):
+        candidate_rows = kwargs["candidate_rows"]
+        target = next(row for row in candidate_rows if row["text"] == V27_SEQ32_TEXT)
+        target_snapshot = dict(target)
+        critic_target_rows.append(target_snapshot)
+        corrections = {}
+        if V27_SEQ33_TEXT in str(target_snapshot["next_text"]):
+            target_index = candidate_rows.index(target)
+            corrections[target_index] = {
+                "kind": "thought",
+                "emotion": "afraid",
+                "intensity": 2,
+                "pace": "fast",
+            }
+        return director_critic_payload(
+            group,
+            validated,
+            corrections=corrections,
+            candidate_rows=candidate_rows,
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", leak_sensitive_critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert len(critic_target_rows) == 1
+    assert critic_target_rows[0]["context_policy"] == (
+        ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
+    )
+    assert critic_target_rows[0]["next_text"] == ""
+    target_update = next(data for segment_id, data, _floor in db.updated if segment_id == 33)
+    assert target_update["kind"] == "narration"
+    assert target_update["emotion"] == "neutral"
+    assert target_update["intensity"] == 0
+    assert any(event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED" for event in db.events)
 
 
 def test_director_accept_commits_validated_pronunciation_with_batch(monkeypatch) -> None:

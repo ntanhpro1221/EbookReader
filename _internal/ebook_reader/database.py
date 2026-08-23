@@ -8,7 +8,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator, Sequence
+from typing import Any, Iterator, Mapping, Sequence
 
 from .io_utils import sha256_file, sha256_text
 from .models import BookStatus, ChapterStatus, SegmentStatus
@@ -162,11 +162,14 @@ ANALYSIS_SOURCE_ROLE_CONTENT = "content"
 ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING = "chapter_heading"
 ANALYSIS_CONTEXT_POLICY_ADJACENT = "adjacent_context"
 ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY = "previous_context_only"
+ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT = (
+    "narration_before_thought_previous_only"
+)
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v7"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v3"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v8"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v9"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -175,7 +178,9 @@ ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR = (
     "singleton_source_anchor_enum_v1"
 )
-ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING = "target_substring_v1"
+ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR = (
+    "per_id_source_anchor_enum_v1"
+)
 
 
 def canonical_analysis_critic_source_anchors(source_text: str) -> tuple[str, ...]:
@@ -253,6 +258,118 @@ def analysis_critic_anchor_set_sha256(anchors: Sequence[str]) -> str:
         allow_nan=False,
     )
     return sha256_text(payload)
+
+
+def canonical_analysis_critic_per_id_source_anchor_map(
+    critic_rows: Sequence[Mapping[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    """Bind each multi-row critic ID to exact anchors from only its source text."""
+    if isinstance(critic_rows, (str, bytes)):
+        raise ValueError("Analysis critic rows must be an ordered sequence")
+    rows = tuple(critic_rows)
+    if len(rows) < 2:
+        raise ValueError("Per-ID analysis critic anchors require multiple source rows")
+    anchor_map: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise ValueError("Analysis critic source rows must be mappings")
+        critic_id = row.get("id")
+        source_text = row.get("text")
+        if (
+            not isinstance(critic_id, str)
+            or not critic_id
+            or critic_id in seen_ids
+            or not isinstance(source_text, str)
+        ):
+            raise ValueError("Analysis critic rows require unique IDs and source text")
+        seen_ids.add(critic_id)
+        anchor_map.append(
+            {
+                "id": critic_id,
+                "text_sha256": sha256_text(source_text),
+                "anchors": list(canonical_analysis_critic_source_anchors(source_text)),
+            }
+        )
+    return tuple(anchor_map)
+
+
+def analysis_critic_per_id_anchor_map_sha256(
+    anchor_map: Sequence[Mapping[str, Any]],
+) -> str:
+    """Hash a canonical ordered per-ID source-anchor map without reordering rows."""
+    if isinstance(anchor_map, (str, bytes)):
+        raise ValueError("Analysis critic per-ID anchor map must be a sequence")
+    items = tuple(anchor_map)
+    if len(items) < 2:
+        raise ValueError("Per-ID analysis critic anchor map requires multiple rows")
+    canonical_items: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    sha256_pattern = re.compile(r"[0-9a-f]{64}")
+    for item in items:
+        if not isinstance(item, Mapping) or set(item) != {
+            "id",
+            "text_sha256",
+            "anchors",
+        }:
+            raise ValueError("Analysis critic per-ID anchor map has invalid fields")
+        critic_id = item.get("id")
+        text_sha256 = item.get("text_sha256")
+        anchors = item.get("anchors")
+        if (
+            not isinstance(critic_id, str)
+            or not critic_id
+            or critic_id in seen_ids
+            or not isinstance(text_sha256, str)
+            or sha256_pattern.fullmatch(text_sha256) is None
+            or not isinstance(anchors, (list, tuple))
+        ):
+            raise ValueError("Analysis critic per-ID anchor map is invalid")
+        anchor_values = tuple(anchors)
+        analysis_critic_anchor_set_sha256(anchor_values)
+        seen_ids.add(critic_id)
+        canonical_items.append(
+            {
+                "id": critic_id,
+                "text_sha256": text_sha256,
+                "anchors": list(anchor_values),
+            }
+        )
+    payload = json.dumps(
+        canonical_items,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    return sha256_text(payload)
+
+
+def analysis_source_narration_precedes_thought(
+    *,
+    chapter_id: int | None,
+    seq: int | None,
+    paragraph_index: int | None,
+    kind_hint: str,
+    next_chapter_id: int | None,
+    next_seq: int | None,
+    next_paragraph_index: int | None,
+    next_kind_hint: str,
+) -> bool:
+    """Return whether immutable source metadata requires hiding a following thought."""
+    return bool(
+        type(chapter_id) is int
+        and type(seq) is int
+        and type(paragraph_index) is int
+        and kind_hint == "narration"
+        and type(next_chapter_id) is int
+        and next_chapter_id == chapter_id
+        and type(next_seq) is int
+        and next_seq == seq + 1
+        and type(next_paragraph_index) is int
+        and next_paragraph_index == paragraph_index
+        and next_kind_hint == "thought"
+    )
 
 
 ANALYSIS_CHAPTER_HEADING_CONFIDENCE = 0.95
@@ -1925,7 +2042,13 @@ class ProjectDB:
                     "",
                     0,
                 )
-        return ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING, "", "", 0
+        anchor_map = canonical_analysis_critic_per_id_source_anchor_map(critic_rows)
+        return (
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR,
+            "",
+            analysis_critic_per_id_anchor_map_sha256(anchor_map),
+            sum(len(item["anchors"]) for item in anchor_map),
+        )
 
     @classmethod
     def _analysis_critic_confidence_bounds(
@@ -1968,7 +2091,7 @@ class ProjectDB:
             not in {
                 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
                 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
-                ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
+                ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR,
             }
             or not isinstance(evidence_text_sha256, str)
             or not isinstance(evidence_anchor_set_sha256, str)
@@ -1992,12 +2115,17 @@ class ProjectDB:
                 and sha256_pattern.fullmatch(evidence_anchor_set_sha256) is not None
                 and evidence_anchor_count > 0
             )
-        else:
+        elif (
+            evidence_policy
+            == ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
+        ):
             evidence_fields_valid = (
                 evidence_text_sha256 == ""
-                and evidence_anchor_set_sha256 == ""
-                and evidence_anchor_count == 0
+                and sha256_pattern.fullmatch(evidence_anchor_set_sha256) is not None
+                and evidence_anchor_count > 0
             )
+        else:
+            evidence_fields_valid = False
         if not evidence_fields_valid:
             raise error_type("Analysis critic contract has invalid evidence policy fields")
         if candidate_json is not None:
@@ -2175,6 +2303,14 @@ class ProjectDB:
                 and critic_row.get("next_text") == ""
                 and content_host_lock_is_valid
             )
+            is_narration_before_thought_content_row = (
+                source_role == ANALYSIS_SOURCE_ROLE_CONTENT
+                and context_policy
+                == ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
+                and critic_row.get("hint") == "narration"
+                and critic_row.get("next_text") == ""
+                and content_host_lock_is_valid
+            )
             is_chapter_heading_row = (
                 source_role == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
                 and context_policy == ANALYSIS_CONTEXT_POLICY_TARGET_ONLY
@@ -2226,6 +2362,7 @@ class ProjectDB:
                 or not (
                     is_adjacent_content_row
                     or is_previous_only_content_row
+                    or is_narration_before_thought_content_row
                     or is_chapter_heading_row
                 )
             ):
@@ -2603,14 +2740,63 @@ class ProjectDB:
                     raise RuntimeError(
                         "Thought analysis context is not source-ledger-bound"
                     )
-            elif (
-                str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CONTENT
-                and str(critic_row["context_policy"])
-                != ANALYSIS_CONTEXT_POLICY_ADJACENT
-            ):
-                raise RuntimeError(
-                    "Content analysis context policy is not source-ledger-bound"
+            elif str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CONTENT:
+                next_source = conn.execute(
+                    "SELECT chapter_id,seq,paragraph_index,kind_hint FROM segments "
+                    "WHERE chapter_id=? AND seq=?",
+                    (int(stored["chapter_id"]), int(stored["seq"]) + 1),
+                ).fetchone()
+                masks_following_thought = analysis_source_narration_precedes_thought(
+                    chapter_id=int(stored["chapter_id"]),
+                    seq=int(stored["seq"]),
+                    paragraph_index=int(stored["paragraph_index"]),
+                    kind_hint=source_kind,
+                    next_chapter_id=(
+                        int(next_source["chapter_id"])
+                        if next_source is not None
+                        else None
+                    ),
+                    next_seq=(
+                        int(next_source["seq"])
+                        if next_source is not None
+                        else None
+                    ),
+                    next_paragraph_index=(
+                        int(next_source["paragraph_index"])
+                        if next_source is not None
+                        else None
+                    ),
+                    next_kind_hint=(
+                        str(next_source["kind_hint"])
+                        if next_source is not None
+                        else ""
+                    ),
                 )
+                if masks_following_thought:
+                    previous = conn.execute(
+                        "SELECT text FROM segments WHERE chapter_id=? AND seq=?",
+                        (int(stored["chapter_id"]), int(stored["seq"]) - 1),
+                    ).fetchone()
+                    expected_previous_text = (
+                        str(previous["text"])[-500:] if previous is not None else ""
+                    )
+                    if (
+                        str(critic_row["context_policy"])
+                        != ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
+                        or str(critic_row["previous_text"])
+                        != expected_previous_text
+                        or str(critic_row["next_text"]) != ""
+                    ):
+                        raise RuntimeError(
+                            "Narration-before-thought context is not source-ledger-bound"
+                        )
+                elif (
+                    str(critic_row["context_policy"])
+                    != ANALYSIS_CONTEXT_POLICY_ADJACENT
+                ):
+                    raise RuntimeError(
+                        "Content analysis context policy is not source-ledger-bound"
+                    )
             if str(critic_row["source_role"]) == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING:
                 if (
                     int(stored["seq"]) != 0
@@ -2749,6 +2935,15 @@ class ProjectDB:
             == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
             else ()
         )
+        per_id_source_anchors = {
+            str(item["id"]): frozenset(item["anchors"])
+            for item in (
+                canonical_analysis_critic_per_id_source_anchor_map(critic_rows)
+                if evidence_policy
+                == ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
+                else ()
+            )
+        }
         evidence_segments = evidence.get("segments")
         if not isinstance(evidence_segments, list):
             raise ValueError("Accepted critic evidence requires a segments array")
@@ -2913,8 +3108,9 @@ class ProjectDB:
                 )
                 or (
                     evidence_policy
-                    == ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
-                    and evidence_quote not in str(critic_row["text"])
+                    == ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
+                    and evidence_quote
+                    not in per_id_source_anchors.get(str(critic_row["id"]), frozenset())
                 )
                 or critic.get("accept") is not host_derived_accept
                 or item.get("field_deltas") != raw_deltas

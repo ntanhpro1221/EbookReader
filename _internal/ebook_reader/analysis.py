@@ -27,12 +27,13 @@ from .database import (
     ANALYSIS_CANDIDATE_CRITIC_REJECTED,
     ANALYSIS_CANDIDATE_TERMINAL,
     ANALYSIS_CONTEXT_POLICY_ADJACENT,
+    ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
     ANALYSIS_CRITIC_CONFIDENCE_MAX,
+    ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
-    ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
@@ -45,10 +46,13 @@ from .database import (
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
     analysis_critic_anchor_set_sha256,
+    analysis_critic_per_id_anchor_map_sha256,
+    analysis_source_narration_precedes_thought,
     analysis_source_has_recalled_persistent_fear,
     analysis_source_has_stunned_blank_mind,
     analysis_note_markers,
     canonical_analysis_critic_source_anchors,
+    canonical_analysis_critic_per_id_source_anchor_map,
     canonical_analysis_note,
 )
 from .io_utils import run_hidden, sha256_text
@@ -93,7 +97,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v12"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v13"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -754,10 +758,12 @@ Với từng ID, đọc text, hint, ngữ cảnh trước/sau, chức năng câu
 Luôn trả sáu trường kind, speaker, emotion, intensity, pace và volume đúng như lựa chọn bạn sẽ đưa ra. Không trả
 boolean đồng ý/từ chối; host tự suy ra đồng ý khi cả sáu trường trùng candidate và correction khi có field delta.
 Mỗi verdict phải có evidence_quote nguyên văn, không rỗng từ chính trường text cùng ID, tối đa
-{ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH} ký tự. Với request multi-row, chọn chuỗi con ngắn nhất đủ làm
-bằng chứng delivery và không sao chép nguyên một segment dài. Ngoại lệ singleton do prompt và
-schema quy định: text đủ ngắn phải sao chép nguyên văn toàn bộ trường text, còn text dài
-phải chọn chính xác một source anchor trong enum; không được tự cắt, nối hoặc chuẩn hóa anchor.
+{ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH} ký tự. Với request multi-row, schema khóa riêng từng ID
+vào đúng một nhánh cùng enum source anchor của chính ID đó; phải sao chép chính xác một
+anchor trong enum, không được lấy anchor của ID khác hay tự cắt, nối, chuẩn hóa.
+Ngoại lệ singleton do prompt và schema quy định: text đủ ngắn phải sao chép nguyên văn toàn bộ
+trường text, còn text dài phải chọn chính xác một source anchor trong enum.
+Trong mọi policy enum, không được tự cắt, nối hoặc chuẩn hóa anchor.
 Mọi field có trong host_locked_fields là constraint nguồn đã được host xác minh và là bất biến. Nếu không đồng ý với
 field khóa, vẫn trả correction thật của bạn trong sáu trường để host lưu audit và áp đúng structural/semantic override.
 source_role=chapter_heading và context_policy=target_only là tiêu đề chương độc lập: previous_text/next_text cố ý để
@@ -766,6 +772,10 @@ sáu trường ban đầu của riêng bạn để host có thể lưu audit n�
 source_role=content và context_policy=previous_context_only là suy nghĩ nội tâm: previous_text chỉ giúp xác định
 lời dẫn/chức năng đã xảy ra trước câu; next_text cố ý để trống. Không suy diễn emotion, intensity, pace hoặc volume
 của suy nghĩ từ sự kiện xảy ra sau câu.
+source_role=content và context_policy=narration_before_thought_previous_only là lời kể dẫn ngay trước
+một thought cùng paragraph: previous_text vẫn là ngữ cảnh đã xảy ra, còn thought kế tiếp đã bị ẩn
+khỏi next_text. Không relabel lời dẫn narration thành thought và không mượn emotion, intensity, pace
+hoặc volume từ thought bị ẩn đó.
 Mọi segment kind=thought bắt buộc dùng speaker=NARRATOR vì người kể đọc độc thoại nội tâm; không được từ chối
 candidate chỉ vì NARRATOR không phải danh tính của nhân vật đang nghĩ.
 Nếu bất kỳ trường nào chưa đúng, trả toàn bộ sáu trường với giá trị đã sửa; ít nhất một trường sẽ khác candidate.
@@ -3002,6 +3012,9 @@ def _director_candidate_rows(
             if str(row["kind_hint"]) == "thought":
                 next_text = ""
                 context_policy = ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY
+            elif _director_narration_precedes_thought(row, original_context):
+                next_text = ""
+                context_policy = ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
             else:
                 context_policy = ANALYSIS_CONTEXT_POLICY_ADJACENT
             host_locked_fields = (
@@ -3027,6 +3040,27 @@ def _director_candidate_rows(
             }
         )
     return rows
+
+
+def _director_narration_precedes_thought(
+    row: Any,
+    original_context: dict[str, dict[str, Any]] | None,
+) -> bool:
+    if original_context is None:
+        return False
+    context = original_context.get(str(row["stable_id"]))
+    if not isinstance(context, dict):
+        return False
+    return analysis_source_narration_precedes_thought(
+        chapter_id=_row_optional_int(row, "chapter_id"),
+        seq=_row_optional_int(row, "seq"),
+        paragraph_index=_row_optional_int(row, "paragraph_index"),
+        kind_hint=str(_row_optional_value(row, "kind_hint", "")),
+        next_chapter_id=context.get("next_chapter_id"),
+        next_seq=context.get("next_seq"),
+        next_paragraph_index=context.get("next_paragraph_index"),
+        next_kind_hint=str(context.get("next_kind_hint", "")),
+    )
 
 
 def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, Any]]:
@@ -3062,6 +3096,11 @@ def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, Any]]:
                 if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
                 else None
             ),
+            "previous_seq": (
+                _row_optional_int(previous_row, "seq")
+                if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
+                else None
+            ),
             "previous_paragraph_index": (
                 _row_optional_int(previous_row, "paragraph_index")
                 if previous_row is not None and int(previous_row["chapter_id"]) == chapter_id
@@ -3084,6 +3123,11 @@ def _original_neighbor_context(rows: list[Any]) -> dict[str, dict[str, Any]]:
             ),
             "next_chapter_id": (
                 int(next_row["chapter_id"])
+                if next_row is not None and int(next_row["chapter_id"]) == chapter_id
+                else None
+            ),
+            "next_seq": (
+                _row_optional_int(next_row, "seq")
                 if next_row is not None and int(next_row["chapter_id"]) == chapter_id
                 else None
             ),
@@ -3154,6 +3198,7 @@ def _analysis_context_hash(
                     source_context.get("previous_text_sha256", "")
                 ),
                 "previous_chapter_id": source_context.get("previous_chapter_id"),
+                "previous_seq": source_context.get("previous_seq"),
                 "previous_paragraph_index": source_context.get("previous_paragraph_index"),
                 "previous_kind_hint": str(source_context.get("previous_kind_hint", "")),
                 "next_stable_id": str(source_context.get("next_stable_id", "")),
@@ -3162,6 +3207,7 @@ def _analysis_context_hash(
                     source_context.get("next_text_sha256", "")
                 ),
                 "next_chapter_id": source_context.get("next_chapter_id"),
+                "next_seq": source_context.get("next_seq"),
                 "next_paragraph_index": source_context.get("next_paragraph_index"),
                 "next_kind_hint": str(source_context.get("next_kind_hint", "")),
             }
@@ -3518,6 +3564,8 @@ def _director_critic_request_contract(
     context_hash = _analysis_context_hash(group, original_context)
     group_fingerprint = _analysis_group_fingerprint(group, original_context)
     singleton_source_text = str(group[0]["text"]) if len(group) == 1 else ""
+    if len(group) == 1 and not singleton_source_text.strip():
+        raise ValueError("Director critic singleton source must contain visible text")
     singleton_full_target = (
         1
         <= len(singleton_source_text)
@@ -3528,13 +3576,30 @@ def _director_critic_request_contract(
         if len(singleton_source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
         else ()
     )
+    per_id_source_anchor_map = (
+        canonical_analysis_critic_per_id_source_anchor_map(
+            [
+                {
+                    "id": _batch_id(index),
+                    "text": str(row["text"]),
+                }
+                for index, row in enumerate(group, 1)
+            ]
+        )
+        if len(group) > 1
+        else ()
+    )
     evidence_policy = (
-        ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
-        if singleton_full_target
+        ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
+        if per_id_source_anchor_map
         else (
-            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
-            if singleton_source_anchors
-            else ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING
+            ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+            if singleton_full_target
+            else (
+                ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+                if singleton_source_anchors
+                else ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+            )
         )
     )
     evidence_text_sha256 = (
@@ -3559,11 +3624,19 @@ def _director_critic_request_contract(
         "evidence_policy": evidence_policy,
         "evidence_text_sha256": evidence_text_sha256,
         "evidence_anchor_set_sha256": (
-            analysis_critic_anchor_set_sha256(singleton_source_anchors)
-            if singleton_source_anchors
-            else ""
+            analysis_critic_per_id_anchor_map_sha256(per_id_source_anchor_map)
+            if per_id_source_anchor_map
+            else (
+                analysis_critic_anchor_set_sha256(singleton_source_anchors)
+                if singleton_source_anchors
+                else ""
+            )
         ),
-        "evidence_anchor_count": len(singleton_source_anchors),
+        "evidence_anchor_count": (
+            sum(len(item["anchors"]) for item in per_id_source_anchor_map)
+            if per_id_source_anchor_map
+            else len(singleton_source_anchors)
+        ),
         "model": model,
         "digest": model_digest,
         "attempt": attempt,
@@ -3590,6 +3663,7 @@ def _director_critic_schema(
     *,
     confidence_floor: float,
     singleton_source_text: str | None = None,
+    per_id_source_anchor_map: tuple[dict[str, Any], ...] = (),
 ) -> dict[str, Any]:
     if (
         type(confidence_floor) not in {int, float}
@@ -3602,10 +3676,37 @@ def _director_critic_schema(
     verdicts = schema["properties"]["verdicts"]
     verdicts["minItems"] = len(batch_ids)
     verdicts["maxItems"] = len(batch_ids)
-    verdicts["items"]["properties"]["id"]["enum"] = batch_ids
-    verdict_properties = verdicts["items"]["properties"]
+    verdict_item = verdicts["items"]
+    verdict_properties = verdict_item["properties"]
     verdict_properties["critic_confidence"]["minimum"] = float(confidence_floor)
-    if len(batch_ids) == 1 and isinstance(singleton_source_text, str):
+    if len(batch_ids) > 1:
+        if (
+            len(per_id_source_anchor_map) != len(batch_ids)
+            or [str(item.get("id", "")) for item in per_id_source_anchor_map]
+            != batch_ids
+        ):
+            raise ValueError("Director critic multi-row evidence map must match ordered IDs")
+        branches: list[dict[str, Any]] = []
+        for item in per_id_source_anchor_map:
+            anchors = item.get("anchors")
+            if (
+                not isinstance(anchors, list)
+                or not anchors
+                or any(
+                    not isinstance(anchor, str)
+                    or not anchor.strip()
+                    or len(anchor) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+                    for anchor in anchors
+                )
+            ):
+                raise ValueError("Director critic multi-row evidence anchors are invalid")
+            branch = copy.deepcopy(verdict_item)
+            branch["properties"]["id"]["enum"] = [str(item["id"])]
+            branch["properties"]["evidence_quote"]["enum"] = list(anchors)
+            branches.append(branch)
+        verdicts["items"] = {"oneOf": branches}
+    elif len(batch_ids) == 1 and isinstance(singleton_source_text, str):
+        verdict_properties["id"]["enum"] = batch_ids
         if 1 <= len(singleton_source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
             evidence_quotes = (singleton_source_text,)
         elif len(singleton_source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
@@ -3616,6 +3717,8 @@ def _director_critic_schema(
             evidence_quotes = ()
         if evidence_quotes:
             verdict_properties["evidence_quote"]["enum"] = list(evidence_quotes)
+    else:
+        verdict_properties["id"]["enum"] = batch_ids
     return schema
 
 
@@ -3642,6 +3745,12 @@ def _adjudicate_director_critic(
         for index, row in enumerate(group, 1)
     }
     rows_by_stable = {str(row["stable_id"]): row for row in group}
+    allowed_evidence_by_stable = {
+        str(row["stable_id"]): canonical_analysis_critic_source_anchors(
+            str(row["text"])
+        )
+        for row in group
+    }
     issues: dict[str, str] = {}
     evidence: dict[str, Any] = {
         "candidate_hash": candidate_hash,
@@ -3771,24 +3880,12 @@ def _adjudicate_director_critic(
         ):
             issues[stable_id] = DIRECTOR_INVALID_RATIONALE_REASON
             continue
-        singleton_allowed_quotes = (
-            (
-                (source_text,)
-                if len(source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
-                else canonical_analysis_critic_source_anchors(source_text)
-            )
-            if len(group) == 1 and source_text
-            else ()
-        )
         if (
             not isinstance(evidence_quote, str)
             or not evidence_quote.strip()
             or len(evidence_quote) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
             or evidence_quote not in source_text
-            or (
-                bool(singleton_allowed_quotes)
-                and evidence_quote not in singleton_allowed_quotes
-            )
+            or evidence_quote not in allowed_evidence_by_stable[stable_id]
         ):
             issues[stable_id] = DIRECTOR_INVALID_EVIDENCE_QUOTE_REASON
             continue
@@ -4393,7 +4490,25 @@ class OllamaBookAnalyzer:
             if len(candidate_rows) == 1
             else None
         )
-        if evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET:
+        per_id_source_anchor_map: tuple[dict[str, Any], ...] = ()
+        if evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR:
+            if candidate_singleton_text is not None or evidence_text_sha256:
+                raise RuntimeError("Director critic per-ID evidence target changed")
+            per_id_source_anchor_map = (
+                canonical_analysis_critic_per_id_source_anchor_map(candidate_rows)
+            )
+            if (
+                analysis_critic_per_id_anchor_map_sha256(per_id_source_anchor_map)
+                != evidence_anchor_set_sha256
+                or sum(
+                    len(item["anchors"])
+                    for item in per_id_source_anchor_map
+                )
+                != evidence_anchor_count
+            ):
+                raise RuntimeError("Director critic per-ID evidence map changed")
+            singleton_source_text = None
+        elif evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET:
             if (
                 candidate_singleton_text is None
                 or not 1
@@ -4426,20 +4541,16 @@ class OllamaBookAnalyzer:
             ):
                 raise RuntimeError("Director critic source-anchor set changed")
             singleton_source_text = candidate_singleton_text
-        elif evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_TARGET_SUBSTRING:
-            if (
-                evidence_text_sha256
-                or evidence_anchor_set_sha256
-                or evidence_anchor_count != 0
-            ):
-                raise RuntimeError(
-                    "Director critic substring evidence contract has bound singleton fields"
-                )
-            singleton_source_text = None
         else:
             raise RuntimeError("Director critic request has an unsupported evidence policy")
-        if evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET:
-            singleton_quote_instruction = (
+        if evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR:
+            evidence_quote_instruction = (
+                "\nĐây là request multi-row: mỗi verdict ID chỉ được sao chép nguyên văn "
+                "chính xác một source anchor trong enum thuộc nhánh oneOf của chính ID đó. "
+                "Không dùng anchor của ID khác và không tự cắt, nối hoặc chuẩn hóa anchor."
+            )
+        elif evidence_policy == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET:
+            evidence_quote_instruction = (
                 "\nĐây là request singleton có text đủ ngắn: evidence_quote phải sao chép "
                 "nguyên văn toàn bộ trường text, kể cả dấu ngoặc và dấu ba chấm; schema chỉ "
                 "chấp nhận đúng chuỗi nguồn đó."
@@ -4448,13 +4559,13 @@ class OllamaBookAnalyzer:
             evidence_policy
             == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
         ):
-            singleton_quote_instruction = (
+            evidence_quote_instruction = (
                 "\nĐây là request singleton có text dài: evidence_quote phải sao chép "
                 "nguyên văn chính xác một source anchor trong enum của schema. Không tự cắt, "
                 "nối hoặc chuẩn hóa anchor."
             )
         else:
-            singleton_quote_instruction = ""
+            evidence_quote_instruction = ""
         request = {
             "model": self.model,
             "system": DIRECTOR_CRITIC_SYSTEM_PROMPT,
@@ -4467,7 +4578,7 @@ class OllamaBookAnalyzer:
                 "được host giới hạn bởi generator, critic và cap; chapter heading đã khóa "
                 "cấu trúc luôn giữ confidence 0.95.\n"
                 f"evidence_policy={evidence_policy}.\n"
-                f"{singleton_quote_instruction}\n"
+                f"{evidence_quote_instruction}\n"
                 "Hãy phản biện từng candidate sau mà không suy đoán notes/confidence của lượt trước:\n"
                 + json.dumps(candidate_rows, ensure_ascii=False, indent=2)
             ),
@@ -4476,6 +4587,7 @@ class OllamaBookAnalyzer:
                 candidate_hash,
                 confidence_floor=confidence_floor,
                 singleton_source_text=singleton_source_text,
+                per_id_source_anchor_map=per_id_source_anchor_map,
             ),
             "keep_alive": "30m",
             "options": {

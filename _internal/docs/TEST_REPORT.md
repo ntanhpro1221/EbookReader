@@ -15,6 +15,13 @@ Hardening V27 sau failure thật tại seq18 dài 261 ký tự thay singleton su
 contract khóa source SHA + anchor-set SHA/count, schema dùng exact enum và host chỉ nhận đúng membership. Regression dùng nguyên
 text V26, biên 240/241 ký tự, short singleton và multi-row đều pass trong combined analysis + database + quality-policy suite;
 đợt sửa này không gọi model/GPU hoặc pipeline audiobook thật.
+Hardening V28 sau forensic V27 seq32 thay multi-row substring tự do bằng canonical ordered per-ID source-anchor map:
+schema `items.oneOf` khóa từng nhánh vào exact ID + enum riêng, contract khóa map SHA/tổng anchor và host từ chối anchor
+mượn từ ID khác. Narration dẫn ngay trước thought cùng chapter/paragraph giữ previous nhưng ẩn next thought khỏi critic
+bằng policy source-bound riêng; generator vẫn thấy adjacent context và không có kind override. Regression dùng nguyên
+seq31/32/33 V27, hai control khác paragraph/next dialogue và critic stub leak-sensitive đã pass trong combined
+analysis + database safety + quality-policy suite **723/723**; Ruff, compileall và `git diff --check` cũng pass.
+Đợt sửa không gọi model/GPU.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -87,15 +94,18 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   Contract critic khóa cả floor/cap và evidence policy. Singleton có target dài 1..240 ký tự dùng
   `singleton_full_target_v1`, exact source SHA và enum quote bằng toàn target; singleton dài hơn dùng
   `singleton_source_anchor_enum_v1`, exact source SHA + deterministic anchor-set SHA/count và enum chỉ gồm source anchor
-  nguyên văn không quá 240 ký tự; multi-row giữ `target_substring_v1`.
+  nguyên văn không quá 240 ký tự; multi-row dùng `per_id_source_anchor_enum_v1`, ordered map SHA/tổng anchor và
+  `items.oneOf` khóa exact ID + enum riêng, không còn union/substr tự do.
   Model không còn trả boolean accept: host suy agreement từ sáu field không delta, correction từ field delta, rồi chỉ lưu
   `critic.accept` compatibility bằng đúng kết quả host-derived. Root/item thừa, ID thiếu/trùng/lạ, string thay số, NaN/Inf,
   confidence dưới ngưỡng, rationale lỗi và quote lỗi có category durable riêng;
   candidate hash, exact field agreement và confidence cap được kiểm tra trước checkpoint, còn deterministic semantic gate
   luôn có precedence vì critic cùng Qwen là correlated self-review chứ không phải model độc lập;
-- source thought được gửi riêng cho critic theo `previous_context_only`: giữ lời dẫn trước nhưng xóa `next_text`, trong khi
-  generator và critic narration/dialogue vẫn dùng adjacent context. Regression V21 seq13 khóa cả split singleton, hash/contract
-  resume source-bound và ngăn cue sững người ở seq14 bị mượn để sửa emotion/intensity/pace của seq13;
+- source thought được gửi riêng cho critic theo `previous_context_only`: giữ lời dẫn trước nhưng xóa `next_text`.
+  Narration dẫn ngay trước thought cùng chapter/paragraph dùng `narration_before_thought_previous_only`, giữ previous nhưng
+  ẩn thought kế tiếp để critic không relabel lời dẫn hoặc mượn affect; narration/dialogue còn lại vẫn dùng adjacent context,
+  còn generator luôn giữ đủ adjacent context. Regression V21 seq13 và V27 seq31/32/33 khóa split singleton, hash/contract
+  resume source-bound và ngăn cue tương lai bị mượn sang target;
 - host affect gate khóa hẹp hai beat tự-bảo-toàn: thought có cue tử vong trực tiếp và wake/self-rescue thought liền kề;
   feedback là JSON typed/whitelist không chứa source/rationale tự do, trường hợp third-party/meta/khác chapter-paragraph không
   bị lan cue. Context/group fingerprint bao gồm stable ID, source hash, chapter, paragraph, kind và hai hàng xóm;
