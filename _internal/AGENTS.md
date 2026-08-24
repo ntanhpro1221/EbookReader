@@ -171,6 +171,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Khi một target group bị chia, toàn bộ feedback typed đã tích lũy của group cha phải được lọc theo `stable_id` rồi chuyển
   vào đúng group con trong cùng lượt phân tích. Không được để split làm mất constraint của câu đã sửa; source unit
   high-quality vẫn giữ nguyên tử theo invariant batching ở trên.
+- `DIRECTOR_FIELD_MISMATCH` phải gửi lại cho generator projection advisory canonical của critic, nhưng chỉ cho các field
+  delivery allowlist `emotion|intensity|pace|volume`; không chuyển kind, speaker, source text, quote hoặc rationale.
+  Projection này không phải host lock và không được thu hẹp schema. Retry sinh lại từ đầu nên giá trị đã sửa phải được giữ
+  qua các lượt/split; correction mới chỉ ghi đè đúng field nó thay đổi, còn field critic vừa đồng ý phải tiếp tục được nhắc.
 - Semantic cue chung chỉ được dùng `allowed_emotions` source-derived làm lựa chọn retry advisory khi chính candidate
   `emotion=neutral` bị từ chối. Tập lựa chọn phải hợp deterministic từ cue trực tiếp không bị phủ định/meta/lịch sử và
   không có affect đối nghịch, không chứa source/cue/rationale trong payload. Đây không phải host whitelist, semantic lock

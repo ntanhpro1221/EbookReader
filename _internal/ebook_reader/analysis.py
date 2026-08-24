@@ -103,11 +103,12 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v19"
-GENERATOR_RETRY_SCHEMA_POLICY_VERSION = "per_id_host_emotion_enum_v1"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v20"
+GENERATOR_RETRY_SCHEMA_POLICY_VERSION = "per_id_host_emotion_director_advisory_v2"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
+DIRECTOR_ADVISORY_FIELDS = ("emotion", "intensity", "pace", "volume")
 DIRECTOR_CRITIC_ROOT_FIELDS = frozenset({"candidate_hash", "verdicts"})
 DIRECTOR_CRITIC_VERDICT_FIELDS = frozenset(
     {
@@ -1641,6 +1642,18 @@ def _delivery_signature(data: dict[str, Any]) -> tuple[str, int, str, str]:
     )
 
 
+def _director_advisory_value_is_valid(field: str, value: Any) -> bool:
+    if field == "emotion":
+        return type(value) is str and value in ALLOWED_EMOTIONS
+    if field == "intensity":
+        return type(value) is int and 0 <= value <= 3
+    if field == "pace":
+        return type(value) is str and value in ALLOWED_PACES
+    if field == "volume":
+        return type(value) is str and value in ALLOWED_VOLUMES
+    return False
+
+
 @dataclass(frozen=True)
 class AnalysisFeedbackIssue:
     stable_id: str
@@ -1650,6 +1663,7 @@ class AnalysisFeedbackIssue:
     rule: str = ""
     observed_confidence: float | None = None
     minimum_confidence: float | None = None
+    suggested_values: tuple[tuple[str, str | int], ...] = ()
 
     def canonical_payload(self, identifier: str | None = None) -> dict[str, Any]:
         if type(self.code) is not str or self.code not in ANALYSIS_FEEDBACK_CODES:
@@ -1682,6 +1696,32 @@ class AnalysisFeedbackIssue:
             raise ValueError("Analysis feedback ID must be a non-empty string")
         fields = tuple(self.fields)
         allowed_emotions = tuple(self.allowed_emotions)
+        if type(self.suggested_values) is not tuple:
+            raise ValueError("Director advisory values must be a typed tuple")
+        suggested_values = tuple(self.suggested_values)
+        if any(
+            type(item) is not tuple
+            or len(item) != 2
+            or type(item[0]) is not str
+            for item in suggested_values
+        ):
+            raise ValueError("Director advisory values have an invalid structure")
+        suggested_fields = tuple(item[0] for item in suggested_values)
+        canonical_suggested_fields = tuple(
+            field for field in DIRECTOR_ADVISORY_FIELDS if field in suggested_fields
+        )
+        if (
+            suggested_fields != canonical_suggested_fields
+            or len(set(suggested_fields)) != len(suggested_fields)
+            or any(
+                field not in fields
+                or not _director_advisory_value_is_valid(field, value)
+                for field, value in suggested_values
+            )
+        ):
+            raise ValueError("Director advisory values are not canonical")
+        if suggested_values and self.code != "DIRECTOR_FIELD_MISMATCH":
+            raise ValueError("Only director field mismatch may carry advisory values")
         numeric_confidence = (
             self.observed_confidence,
             self.minimum_confidence,
@@ -1753,6 +1793,8 @@ class AnalysisFeedbackIssue:
         if self.code == LOW_CONFIDENCE_ISSUE_CODE:
             payload["observed_confidence"] = float(self.observed_confidence)
             payload["minimum_confidence"] = float(self.minimum_confidence)
+        if suggested_values:
+            payload["suggested_values"] = dict(suggested_values)
         return payload
 
 
@@ -3742,6 +3784,7 @@ def _structured_feedback_issues(
                 issue.rule,
                 issue.fields,
                 issue.allowed_emotions,
+                issue.suggested_values,
                 (
                     -1.0
                     if issue.observed_confidence is None
@@ -3755,6 +3798,47 @@ def _structured_feedback_issues(
             ),
         )
     )
+
+
+def _director_feedback_issues(
+    critic_issues: dict[str, str],
+    critic_evidence: dict[str, Any],
+) -> tuple[AnalysisFeedbackIssue, ...]:
+    """Attach only canonical critic delivery values as non-authoritative retry advice."""
+    segments = critic_evidence.get("segments", []) if isinstance(critic_evidence, dict) else []
+    evidence_by_stable_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    if isinstance(segments, list):
+        for segment in segments:
+            if isinstance(segment, dict) and type(segment.get("stable_id")) is str:
+                evidence_by_stable_id[str(segment["stable_id"])].append(segment)
+    enriched: list[AnalysisFeedbackIssue] = []
+    for issue in _structured_feedback_issues(critic_issues):
+        matches = evidence_by_stable_id.get(issue.stable_id, [])
+        if issue.code != "DIRECTOR_FIELD_MISMATCH" or len(matches) != 1:
+            enriched.append(issue)
+            continue
+        segment = matches[0]
+        candidate = segment.get("candidate")
+        critic = segment.get("critic")
+        suggestions: list[tuple[str, str | int]] = []
+        if isinstance(candidate, dict) and isinstance(critic, dict):
+            for field in DIRECTOR_ADVISORY_FIELDS:
+                value = critic.get(field)
+                if (
+                    field in issue.fields
+                    and candidate.get(field) != value
+                    and _director_advisory_value_is_valid(field, value)
+                ):
+                    suggestions.append((field, value))
+        enriched.append(
+            AnalysisFeedbackIssue(
+                stable_id=issue.stable_id,
+                code=issue.code,
+                fields=issue.fields,
+                suggested_values=tuple(suggestions),
+            )
+        )
+    return _structured_feedback_issues(tuple(enriched))
 
 
 def _generator_hard_emotion_constraints(
@@ -3795,9 +3879,38 @@ def _merge_feedback_issues(
     current: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
     incoming: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
 ) -> tuple[AnalysisFeedbackIssue, ...]:
-    """Retain every host-verified constraint for the lifetime of one target group."""
+    """Retain host constraints and the latest complete advisory delivery projection."""
+    current_issues = _structured_feedback_issues(current)
+    incoming_issues = _structured_feedback_issues(incoming)
+    retained: list[AnalysisFeedbackIssue] = []
+    director_by_stable_id: dict[str, AnalysisFeedbackIssue] = {}
+    for issue in (*current_issues, *incoming_issues):
+        if issue.code != "DIRECTOR_FIELD_MISMATCH":
+            retained.append(issue)
+            continue
+        existing = director_by_stable_id.get(issue.stable_id)
+        if existing is None:
+            director_by_stable_id[issue.stable_id] = issue
+            continue
+        merged_fields = tuple(
+            field
+            for field in DIRECTOR_DELIVERY_FIELDS
+            if field in {*existing.fields, *issue.fields}
+        )
+        merged_values = dict(existing.suggested_values)
+        merged_values.update(dict(issue.suggested_values))
+        director_by_stable_id[issue.stable_id] = AnalysisFeedbackIssue(
+            stable_id=issue.stable_id,
+            code=issue.code,
+            fields=merged_fields,
+            suggested_values=tuple(
+                (field, merged_values[field])
+                for field in DIRECTOR_ADVISORY_FIELDS
+                if field in merged_values
+            ),
+        )
     return _structured_feedback_issues(
-        (*_structured_feedback_issues(current), *_structured_feedback_issues(incoming))
+        (*retained, *director_by_stable_id.values())
     )
 
 
@@ -4845,8 +4958,10 @@ class OllamaBookAnalyzer:
                     "tạo và là ràng buộc cứng. Với mã SEMANTIC_DELIVERY_MISMATCH, allowed_emotions "
                     "nếu có chỉ là "
                     "các lựa chọn gợi ý được suy từ cue của chính source để sửa emotion=neutral; "
-                    "đó không phải whitelist cứng, hãy chọn cảm xúc phù hợp nhất. Không suy diễn "
-                    "thêm nội dung phản biện:\n"
+                    "đó không phải whitelist cứng, hãy chọn cảm xúc phù hợp nhất. Với mã "
+                    "DIRECTOR_FIELD_MISMATCH, suggested_values là đề xuất delivery canonical của "
+                    "critic cho đúng các field đã liệt kê: hãy dùng chúng để sửa candidate nhưng "
+                    "không coi chúng là host lock. Không suy diễn thêm nội dung phản biện:\n"
                     + json.dumps(
                         feedback_payload,
                         ensure_ascii=False,
@@ -5577,7 +5692,10 @@ class OllamaBookAnalyzer:
                     if durable_issues:
                         validation_feedback = _merge_feedback_issues(
                             validation_feedback,
-                            durable_issues,
+                            _director_feedback_issues(
+                                durable_issues,
+                                durable_evidence,
+                            ),
                         )
                         received_director_critic_issues = True
                         last_error = "durable director critic rejected the candidate"
@@ -5981,7 +6099,10 @@ class OllamaBookAnalyzer:
                                     received_director_critic_issues = True
                                     validation_feedback = _merge_feedback_issues(
                                         validation_feedback,
-                                        critic_issues,
+                                        _director_feedback_issues(
+                                            critic_issues,
+                                            critic_evidence,
+                                        ),
                                     )
                                     validated = {}
                                     issue_summary = "; ".join(
@@ -6081,7 +6202,10 @@ class OllamaBookAnalyzer:
                                     received_director_critic_issues = True
                                     validation_feedback = _merge_feedback_issues(
                                         validation_feedback,
-                                        critic_issues,
+                                        _director_feedback_issues(
+                                            critic_issues,
+                                            critic_evidence,
+                                        ),
                                     )
                                     validated = {}
                                     last_error = "director critic rejected candidate"

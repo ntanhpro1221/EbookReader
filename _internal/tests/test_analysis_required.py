@@ -60,6 +60,7 @@ from ebook_reader.analysis import (
     _is_explicit_chapter_heading,
     _local_scope_for_group,
     _low_confidence_feedback_issues,
+    _merge_feedback_issues,
     _local_name_fallback,
     _name_candidate_contexts,
     _record_host_note_marker,
@@ -967,7 +968,9 @@ def test_adaptive_retry_contract_is_deterministic_source_bound_and_text_free() -
     )
 
     assert first == repeated
-    assert first["schema_policy_version"] == "per_id_host_emotion_enum_v1"
+    assert first["schema_policy_version"] == (
+        "per_id_host_emotion_director_advisory_v2"
+    )
     assert [first["temperature"], second["temperature"]] == [0.1, 0.2]
     assert first["seed"] != second["seed"] != changed_digest["seed"]
     assert first["feedback_hash"] != second["feedback_hash"]
@@ -1180,8 +1183,10 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
     assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v14"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v19"
-    assert GENERATOR_RETRY_SCHEMA_POLICY_VERSION == "per_id_host_emotion_enum_v1"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v20"
+    assert GENERATOR_RETRY_SCHEMA_POLICY_VERSION == (
+        "per_id_host_emotion_director_advisory_v2"
+    )
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
     assert "cậu biết... muốn..." in DIRECTOR_CRITIC_SYSTEM_PROMPT
@@ -1534,6 +1539,115 @@ def test_v34_generator_schema_rejects_conflicting_host_constraints() -> None:
                 ),
             ),
         )
+
+
+def test_v35_director_suggestions_are_typed_advisory_and_do_not_lock_schema() -> None:
+    group = analysis_group()
+    session = FakeSession(
+        {"segments": [analysis_item("S001"), analysis_item("S002")]}
+    )
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    analyzer._request(
+        group,
+        validation_feedback=(
+            AnalysisFeedbackIssue(
+                stable_id=str(group[0]["stable_id"]),
+                code="DIRECTOR_FIELD_MISMATCH",
+                fields=("emotion", "intensity", "pace"),
+                suggested_values=(
+                    ("emotion", "afraid"),
+                    ("intensity", 2),
+                    ("pace", "fast"),
+                ),
+            ),
+        ),
+    )
+
+    prompt = session.request["json"]["prompt"]
+    assert "DIRECTOR_FIELD_MISMATCH" in prompt
+    assert "không coi chúng là host lock" in prompt
+    assert (
+        '"suggested_values":{"emotion":"afraid","intensity":2,"pace":"fast"}'
+        in prompt
+    )
+    segment_items = session.request["json"]["format"]["properties"]["segments"][
+        "items"
+    ]
+    assert "oneOf" not in segment_items
+    assert "neutral" in segment_items["properties"]["emotion"]["enum"]
+
+
+@pytest.mark.parametrize(
+    "suggested_values",
+    [
+        (("emotion", "panic<script>"),),
+        (("intensity", True),),
+        (("pace", "fast"), ("emotion", "afraid")),
+    ],
+)
+def test_v35_director_suggestions_reject_noncanonical_values(
+    suggested_values,
+) -> None:
+    issue = AnalysisFeedbackIssue(
+        stable_id="unsafe-director-suggestion",
+        code="DIRECTOR_FIELD_MISMATCH",
+        fields=("emotion", "intensity", "pace"),
+        suggested_values=suggested_values,
+    )
+
+    with pytest.raises(ValueError, match="Director advisory values"):
+        issue.canonical_payload()
+
+
+def test_v35_latest_director_advice_updates_fields_and_keeps_resolved_projection() -> None:
+    stable_id = str(analysis_group()[0]["stable_id"])
+    host_issue = AnalysisFeedbackIssue(
+        stable_id=stable_id,
+        code=HOST_AFFECT_ISSUE_CODE,
+        fields=("emotion",),
+        allowed_emotions=("afraid",),
+        rule=HOST_DESPERATE_EXERTION_RULE,
+    )
+    stale_director = AnalysisFeedbackIssue(
+        stable_id=stable_id,
+        code="DIRECTOR_FIELD_MISMATCH",
+        fields=("emotion", "intensity", "pace"),
+        suggested_values=(
+            ("emotion", "surprised"),
+            ("intensity", 1),
+            ("pace", "fast"),
+        ),
+    )
+    latest_director = AnalysisFeedbackIssue(
+        stable_id=stable_id,
+        code="DIRECTOR_FIELD_MISMATCH",
+        fields=("emotion", "intensity"),
+        suggested_values=(
+            ("emotion", "afraid"),
+            ("intensity", 2),
+        ),
+    )
+
+    merged = _merge_feedback_issues(
+        (host_issue, stale_director),
+        (latest_director,),
+    )
+
+    assert merged == (
+        AnalysisFeedbackIssue(
+            stable_id=stable_id,
+            code="DIRECTOR_FIELD_MISMATCH",
+            fields=("emotion", "intensity", "pace"),
+            suggested_values=(
+                ("emotion", "afraid"),
+                ("intensity", 2),
+                ("pace", "fast"),
+            ),
+        ),
+        host_issue,
+    )
 
 
 def test_physical_collapse_feedback_is_typed_and_does_not_forward_source_text() -> None:
@@ -9013,9 +9127,16 @@ def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeyp
             stable_id="c1s1",
             code="DIRECTOR_FIELD_MISMATCH",
             fields=("emotion",),
+            suggested_values=(("emotion", "surprised"),),
         ),
     )
-    assert "surprised" not in str(generator_feedback[1])
+    assert generator_feedback[1][0].canonical_payload() == {
+        "id": "c1s1",
+        "code": "DIRECTOR_FIELD_MISMATCH",
+        "fields": ["emotion"],
+        "suggested_values": {"emotion": "surprised"},
+    }
+    assert "rationale" not in str(generator_feedback[1])
     rejected_details = db.events[0][3]
     accepted_details = db.events[1][3]
     assert rejected_details["generator_contract"] == generator_contracts[0]
@@ -9328,8 +9449,95 @@ def test_v34_split_children_inherit_parent_feedback_by_stable_id(monkeypatch) ->
     assert [(issue.stable_id, issue.code, issue.fields) for issue in first_child_feedback] == [
         ("carry-1", "DIRECTOR_FIELD_MISMATCH", ("pace",)),
     ]
+    assert first_child_feedback[0].suggested_values == (("pace", "fast"),)
     assert feedback_calls[2][1] == ()
     assert len(db.updated) == 2
+
+
+def test_v35_exact_seq25_uses_latest_director_values_on_generator_retry(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    row = {
+        "id": 26,
+        "stable_id": "c00001_s0000025_1582edb61545",
+        "chapter_id": 1,
+        "seq": 25,
+        "paragraph_index": 22,
+        "text": V30_SEQ25_TEXT,
+        "text_sha256": sha256_text(V30_SEQ25_TEXT),
+        "kind_hint": "thought",
+        "status": "pending",
+        "speaker": None,
+    }
+    db.rows = [row]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 1, "max_retries": 3}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    feedback_calls: list[tuple[AnalysisFeedbackIssue, ...]] = []
+    critic_calls = 0
+
+    def generate(group, **kwargs):
+        feedback = tuple(kwargs.get("validation_feedback", ()))
+        feedback_calls.append(feedback)
+        item = analysis_item(str(group[0]["stable_id"]))
+        item["kind"] = "thought"
+        for issue in feedback:
+            for field, value in issue.suggested_values:
+                item[field] = value
+        return {"segments": [item]}
+
+    def correct_to_urgent_thought(group, validated, **kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        if critic_calls == 1:
+            correction = {
+                "emotion": "surprised",
+                "intensity": 1,
+                "pace": "fast",
+            }
+        else:
+            correction = {
+                "emotion": "afraid",
+                "intensity": 2,
+                "pace": "fast",
+            }
+        return director_critic_payload(
+            group,
+            validated,
+            corrections={0: correction},
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", correct_to_urgent_thought)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert feedback_calls[0] == ()
+    assert len(feedback_calls) == 3
+    assert [issue.canonical_payload() for issue in feedback_calls[2]] == [
+        {
+            "id": row["stable_id"],
+            "code": "DIRECTOR_FIELD_MISMATCH",
+            "fields": ["emotion", "intensity", "pace"],
+            "suggested_values": {
+                "emotion": "afraid",
+                "intensity": 2,
+                "pace": "fast",
+            },
+        }
+    ]
+    saved = db.updated[0][1]
+    assert (saved["kind"], saved["speaker"]) == ("thought", "NARRATOR")
+    assert (saved["emotion"], saved["intensity"], saved["pace"]) == (
+        "afraid",
+        2,
+        "fast",
+    )
 
 
 def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch) -> None:

@@ -85,6 +85,20 @@ là advisory và không thu hẹp enum. Mọi đường split dùng chung một 
 intersection/conflict, semantic non-lock và split carry pass trong analysis/database/quality **911/911**; full repository
 **1.357/1.357**; Ruff, compileall, `pip check`, `git diff --check` đều pass và `OpenWith.exe` giữ **0**. Runtime V34 chưa
 được tính vào các kết quả này.
+Runtime V34 dùng project sạch đã chứng minh hai sửa đổi trước hoạt động thật: child `[seq8,seq9,seq10]` nhận feedback cha,
+pass ngay lượt đầu sau split và giữ exact seq10 `narration/afraid`; exact seq24 giữ
+`narration/NARRATOR/neutral/0/normal`, raw critic vẫn ghi câu “câu hỏi bối rối” cùng delta `afraid/2/fast`, còn compatibility
+override V33 được dựng lại đúng. Lượt chạy sau đó dừng fail-safe ở 25/107, trước casting/TTS, tại exact thought seq25
+`‘Đây rốt cuộc là nơi nào?!`: generator chỉ nhận tên field mismatch nên qua nhiều batch/singleton vẫn trả neutral, trong khi
+critic lặp correction `afraid|surprised`, intensity `2|3`, pace `fast`. Project V34 không được resume sau khi policy đổi.
+Hardening V35 thêm `suggested_values` advisory typed cho `DIRECTOR_FIELD_MISMATCH`, chỉ cho phép enum/số canonical của
+`emotion|intensity|pace|volume`; không chuyển kind, speaker, source, quote hay rationale và không thu hẹp schema như HOST.
+Projection delivery đã sửa được giữ qua retry/split vì mỗi request sinh lại từ đầu; correction critic mới ghi đè đúng field
+nó thay đổi nhưng không làm field vừa được critic đồng ý quay về mặc định. Policy nâng lên `analysis_ledger_v20`,
+`per_id_host_emotion_director_advisory_v2`, casting stage v23/algorithm v24. Regression exact seq25, projection nhiều lượt,
+split carry, advisory non-lock và payload độc hại/sai kiểu pass trong analysis/database/quality **917/917**; full repository
+**1.363/1.363**; Ruff, compileall, `pip check`, `git diff --check` đều pass và `OpenWith.exe` giữ **0**. Runtime V35 chưa
+được tính vào các kết quả này.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
