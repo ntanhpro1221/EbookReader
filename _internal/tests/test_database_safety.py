@@ -17,6 +17,7 @@ from ebook_reader.database import (
     ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT,
     ANALYSIS_CONTEXT_POLICY_PREVIOUS_ONLY,
     ANALYSIS_CONTEXT_SOURCE_KIND_RULE,
+    ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
@@ -156,6 +157,11 @@ V30_SEQ24_NARRATION_TEXT = (
 V30_SEQ25_THOUGHT_TEXT = "‘Đây rốt cuộc là nơi nào?!"
 V30_SEQ24_STABLE_ID = "c00001_s0000024_3ab59bb4bd38"
 V30_SEQ25_STABLE_ID = "c00001_s0000025_1582edb61545"
+V32_SEQ43_DIALOGUE_TEXT = (
+    "“Mẹ vẫn không chịu tin em, nửa đêm cứ len lén khóc, mắt sưng vù lên hết cả. "
+    "Bà ấy lặp đi lặp lại ‘Evans bé nhỏ tội nghiệp’ hết lần này đến lần khác, "
+    "cứ như thể anh đã bị đem đi chôn ở nghĩa trang rồi ấy."
+)
 
 
 def _canonical_analysis_data(**overrides: object) -> dict:
@@ -410,6 +416,82 @@ def _thought_acceptance_envelope(
     return envelope
 
 
+def _dialogue_acceptance_envelope(source_rows: list[dict]) -> dict:
+    envelope = _analysis_acceptance_envelope(source_rows)
+    for index, source_row in enumerate(source_rows):
+        if str(source_row["kind_hint"]) != "dialogue":
+            raise ValueError("Dialogue envelope helper requires dialogue source rows")
+        data = envelope["segments"][index]["data"]
+        data.update(
+            {
+                "kind": "dialogue",
+                "speaker": "NPC_LOCAL::c00001::v32-source-unit::cậu bé",
+                "gender": "male",
+                "age": "child",
+                "emotion": "sad",
+                "intensity": 2,
+            }
+        )
+        _refresh_analysis_note(envelope, index)
+        critic_row = envelope["critic_rows"][index]
+        critic_row["candidate"].update(
+            {
+                "kind": "dialogue",
+                "speaker": data["speaker"],
+                "emotion": "sad",
+                "intensity": 2,
+            }
+        )
+        critic_row["host_locked_fields"] = {"kind": "dialogue"}
+    return envelope
+
+
+def _dialogue_kind_override_evidence(
+    envelope: dict,
+    *,
+    corrected_speaker: str | None = None,
+) -> dict:
+    evidence = _accepted_critic_evidence(envelope)
+    item = evidence["segments"][0]
+    candidate = item["candidate"]
+    item["critic"].update(
+        {
+            "accept": False,
+            "kind": "thought",
+            "rationale": "Critic nhầm lời thoại thành câu hỏi nội tâm.",
+        }
+    )
+    corrected_fields = {"kind": "thought"}
+    if corrected_speaker is not None:
+        item["critic"]["speaker"] = corrected_speaker
+        corrected_fields["speaker"] = corrected_speaker
+    raw_deltas = [
+        f"{field}:{candidate[field]}->{corrected_fields[field]}"
+        for field in ("kind", "speaker", "emotion", "intensity", "pace", "volume")
+        if field in corrected_fields and corrected_fields[field] != candidate[field]
+    ]
+    covered_deltas = [delta for delta in raw_deltas if delta.startswith("kind:")]
+    unresolved_deltas = [
+        delta for delta in raw_deltas if not delta.startswith("kind:")
+    ]
+    item["field_deltas"] = raw_deltas
+    item["effective_accept"] = not unresolved_deltas
+    item["host_source_kind_override"] = {
+        "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+        "stable_id": item["stable_id"],
+        "text_sha256": item["text_sha256"],
+        "rule": ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
+        "field": "kind",
+        "candidate_value": "dialogue",
+        "allowed_values": ["dialogue"],
+        "raw_accept": False,
+        "raw_field_deltas": raw_deltas,
+        "covered_field_deltas": covered_deltas,
+        "unresolved_field_deltas": unresolved_deltas,
+    }
+    return evidence
+
+
 def _v21_thought_context_db(
     tmp_path: Path,
 ) -> tuple[ProjectDB, list[dict], dict]:
@@ -533,6 +615,21 @@ def _v31_v30_seq24_next_paragraph_thought_db(
     with db.connect() as conn:
         context_hash = db._analysis_candidate_context_hash_conn(conn, envelope)
     return db, source_rows, envelope, context_hash
+
+
+def _v32_seq43_dialogue_db(
+    tmp_path: Path,
+) -> tuple[ProjectDB, list[dict], dict]:
+    db, _source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=(V32_SEQ43_DIALOGUE_TEXT,),
+        kind_hints=("dialogue",),
+    )
+    with db.connect() as conn:
+        conn.execute("UPDATE segments SET seq=43,paragraph_index=35 WHERE seq=0")
+    source_rows = [dict(row) for row in db.list_segments()]
+    envelope = _dialogue_acceptance_envelope(source_rows)
+    return db, source_rows, envelope
 
 
 def _v29_v28_seq10_sleep_paralysis_db(
@@ -2072,8 +2169,8 @@ def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     candidate_id = int(candidate["id"])
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v12"
-    assert contract["director_policy_version"] == "second_pass_v12"
+    assert contract["policy_version"] == "second_pass_v13"
+    assert contract["director_policy_version"] == "second_pass_v13"
     assert (
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
@@ -2224,8 +2321,8 @@ def test_v27_v26_seq18_anchor_evidence_survives_reserve_reopen_accept_and_commit
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
     )
-    assert contract["policy_version"] == "second_pass_v12"
-    assert contract["director_policy_version"] == "second_pass_v12"
+    assert contract["policy_version"] == "second_pass_v13"
+    assert contract["director_policy_version"] == "second_pass_v13"
     assert contract["evidence_text_sha256"] == V26_SEQ18_TEXT_SHA256
     assert contract["evidence_anchor_set_sha256"] == (
         analysis_critic_anchor_set_sha256(anchors)
@@ -2552,7 +2649,7 @@ def test_v28_per_id_anchor_map_binds_five_rows_through_reopen_and_commit(
     )
 
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v12"
+    assert contract["policy_version"] == "second_pass_v13"
     assert contract["evidence_policy"] == (
         ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
     )
@@ -4535,7 +4632,7 @@ def test_v24_heading_critic_confidence_preserves_lock_through_reopen_and_commit(
 ) -> None:
     assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
     assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
-    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v12"
+    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v13"
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
@@ -4858,7 +4955,7 @@ def test_analysis_candidate_rejects_mandatory_heading_lock_when_omitted(
 
 def test_direct_narration_affect_source_authority_accepts_exact_smoke_rows() -> None:
     assert ANALYSIS_HOST_AFFECT_POLICY_VERSION == "host_affect_v9"
-    assert ANALYSIS_HOST_SEMANTIC_POLICY_VERSION == "host_semantic_lock_v5"
+    assert ANALYSIS_HOST_SEMANTIC_POLICY_VERSION == "host_semantic_lock_v6"
     assert analysis_source_has_recalled_persistent_fear(
         RECALLED_PERSISTENT_FEAR_TEXT
     )
@@ -6330,6 +6427,174 @@ def test_analysis_candidate_semantic_override_rejects_invalid_critic_protocol(
     if remove_delta:
         item["field_deltas"] = []
         item["host_semantic_override"]["raw_field_deltas"] = []
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
+def test_v32_dialogue_kind_only_override_survives_reopen_and_commit(
+    tmp_path: Path,
+) -> None:
+    db, source_rows, envelope = _v32_seq43_dialogue_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+
+    ProjectDB(db.path).complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True, "dialogue_source_kind_override": True},
+        evidence=_dialogue_kind_override_evidence(envelope),
+        commit_envelope=envelope,
+    )
+
+    reopened = ProjectDB(db.path)
+    snapshot = reopened.analysis_candidate_acceptance_envelope(candidate_id)
+    item = snapshot["critic_evidence"]["segments"][0]
+    assert item["field_deltas"] == ["kind:dialogue->thought"]
+    assert item["effective_accept"] is True
+    assert item["host_source_kind_override"]["rule"] == (
+        ANALYSIS_SOURCE_DIALOGUE_KIND_RULE
+    )
+    assert item["host_source_kind_override"]["unresolved_field_deltas"] == []
+
+    batch = [
+        {
+            "segment_id": segment["segment_id"],
+            "stable_id": segment["stable_id"],
+            "text_sha256": segment["text_sha256"],
+            "expected_status": "pending",
+            "data": dict(segment["data"]),
+        }
+        for segment in snapshot["commit_envelope"]["segments"]
+    ]
+    reopened.update_analysis_batch_with_event(
+        batch,
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="source-locked explicit dialogue accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=ANALYSIS_CONTEXT_HASH,
+    )
+
+    committed = reopened.list_segments()[0]
+    assert committed["status"] == "analyzed"
+    assert committed["kind"] == "dialogue"
+    assert committed["speaker"].endswith("::cậu bé")
+    assert reopened.get_analysis_candidate(candidate_id)["state"] == "accepted"
+
+
+def test_v32_dialogue_kind_override_leaves_speaker_dissent_rejected(
+    tmp_path: Path,
+) -> None:
+    db, source_rows, envelope = _v32_seq43_dialogue_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _dialogue_kind_override_evidence(
+        envelope,
+        corrected_speaker="NARRATOR",
+    )
+    item = evidence["segments"][0]
+    assert item["host_source_kind_override"]["covered_field_deltas"] == [
+        "kind:dialogue->thought"
+    ]
+    assert item["host_source_kind_override"]["unresolved_field_deltas"] == [
+        "speaker:NPC_LOCAL::c00001::v32-source-unit::cậu bé->NARRATOR"
+    ]
+    assert item["effective_accept"] is False
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            candidate_id,
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_rejected",
+        outcome={"accepted": False, "unresolved_fields": ["speaker"]},
+        evidence=evidence,
+    )
+    reopened = ProjectDB(db.path).get_analysis_candidate(candidate_id)
+    assert reopened["state"] == "critic_rejected"
+
+
+def test_v32_dialogue_candidate_requires_mandatory_kind_lock(tmp_path: Path) -> None:
+    db, source_rows, envelope = _v32_seq43_dialogue_db(tmp_path)
+    envelope["critic_rows"][0]["host_locked_fields"] = {}
+
+    with pytest.raises(RuntimeError, match="dialogue source kind lock"):
+        _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "forged_rule", "forged_partition"),
+)
+def test_v32_dialogue_kind_override_rejects_forged_evidence(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    db, source_rows, envelope = _v32_seq43_dialogue_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _dialogue_kind_override_evidence(envelope)
+    item = evidence["segments"][0]
+    if mutation == "missing":
+        del item["host_source_kind_override"]
+    elif mutation == "forged_rule":
+        item["host_source_kind_override"]["rule"] = (
+            ANALYSIS_CONTEXT_SOURCE_KIND_RULE
+        )
+    else:
+        item["host_source_kind_override"]["unresolved_field_deltas"] = [
+            "speaker:forged->NARRATOR"
+        ]
 
     with pytest.raises(RuntimeError, match="exact delivery/confidence"):
         db.complete_analysis_critic_attempt(

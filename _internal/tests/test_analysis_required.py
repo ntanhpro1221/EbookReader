@@ -20,6 +20,7 @@ from ebook_reader.analysis import (
     EXPLICIT_ATTRIBUTION_NOTE,
     HOST_AFFECT_ISSUE_CODE,
     HOST_DESPERATE_EXERTION_RULE,
+    HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE,
     HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
     HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
     HOST_PHYSICAL_COLLAPSE_RULE,
@@ -68,6 +69,9 @@ from ebook_reader.analysis import (
     _valid_vietnamese_spoken_form,
     _validate,
     _original_neighbor_context,
+    _pack_source_cohesive_analysis_groups,
+    _source_cohesive_analysis_units,
+    _split_analysis_group,
     is_local_speaker,
     local_speaker_display,
 )
@@ -156,6 +160,20 @@ V30_SEQ24_TEXT = (
     "cảm giác yếu ớt cứ không ngừng lan ra càng khiến đầu óc cậu hỗn loạn."
 )
 V30_SEQ25_TEXT = "‘Đây rốt cuộc là nơi nào?!"
+V32_SEQ42_TEXT = (
+    "Thấy vẻ mặt thất thần của Hạ Phong, cậu bé có khuôn mặt lấm lem bụi bẩn cũng không lấy làm lạ:"
+)
+V32_SEQ43_TEXT = (
+    "“Mẹ vẫn không chịu tin em, nửa đêm cứ len lén khóc, mắt sưng vù lên hết cả. "
+    "Bà ấy lặp đi lặp lại ‘Evans bé nhỏ tội nghiệp’ hết lần này đến lần khác, "
+    "cứ như thể anh đã bị đem đi chôn ở nghĩa trang rồi ấy."
+)
+V32_SEQ44_TEXT = (
+    "Cha bị tiếng nheo nhéo của mẹ làm cho chịu không nổi, trời vừa sáng đã nhờ "
+    "thằng nhóc thối nhà Simon báo tin tới trang viên của ngài Tước sĩ Wayne để "
+    "gọi anh hai về. Bây giờ anh ấy đã là cận vệ hiệp sĩ rồi, mấy tên thầy thuốc "
+    "của nhà từ thiện đó không dám hét cái giá nực cười, thái quá trước mặt anh ấy đâu!”"
+)
 
 
 class FakeDB:
@@ -676,6 +694,30 @@ def v30_seq23_25_rows():
     ]
 
 
+def v32_seq42_44_rows():
+    rows = []
+    for seq, paragraph_index, text, kind_hint in (
+        (42, 35, V32_SEQ42_TEXT, "narration"),
+        (43, 35, V32_SEQ43_TEXT, "dialogue"),
+        (44, 36, V32_SEQ44_TEXT, "dialogue"),
+    ):
+        rows.append(
+            {
+                "id": seq + 1,
+                "stable_id": f"c00001_s{seq:07d}_{sha256_text(text)[:12]}",
+                "chapter_id": 1,
+                "seq": seq,
+                "paragraph_index": paragraph_index,
+                "text": text,
+                "text_sha256": sha256_text(text),
+                "kind_hint": kind_hint,
+                "status": "pending",
+                "speaker": None,
+            }
+        )
+    return rows
+
+
 def director_critic_payload(
     group,
     validated,
@@ -1135,8 +1177,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v12"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v16"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v13"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v17"
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
     assert "cậu biết... muốn..." in DIRECTOR_CRITIC_SYSTEM_PROMPT
@@ -1718,7 +1760,7 @@ def test_v26_long_singleton_request_binds_exact_source_anchor_enum() -> None:
     assert "không được tự cắt, nối hoặc chuẩn hóa anchor" in session.request["json"][
         "system"
     ]
-    assert request_contract["policy_version"] == "second_pass_v12"
+    assert request_contract["policy_version"] == "second_pass_v13"
     assert request_contract["evidence_policy"] == "singleton_source_anchor_enum_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text(V26_SEQ18_TEXT)
     assert request_contract["evidence_anchor_set_sha256"] == (
@@ -3315,6 +3357,99 @@ def test_multiline_dialogue_keeps_previous_speaker_and_normalizes_child_label() 
     assert local_speaker_display(validated["d1"]["speaker"]) == "NPC cậu bé"
 
 
+def test_v32_source_cohesive_batch_keeps_seq42_44_and_repairs_child_speaker() -> None:
+    prefix_rows = [
+        {
+            "id": seq + 1,
+            "stable_id": f"v32-prefix-{seq}",
+            "chapter_id": 1,
+            "seq": seq,
+            "paragraph_index": 33 if seq < 40 else 34,
+            "text": f"Lời kể chuẩn bị số {seq}.",
+            "text_sha256": sha256_text(f"Lời kể chuẩn bị số {seq}."),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for seq in range(38, 42)
+    ]
+    target_rows = v32_seq42_44_rows()
+
+    groups = _pack_source_cohesive_analysis_groups(
+        [*prefix_rows, *target_rows],
+        5,
+    )
+
+    assert [[int(row["seq"]) for row in group] for group in groups] == [
+        [38, 39, 40, 41],
+        [42, 43, 44],
+    ]
+    items = [analysis_item(str(row["stable_id"])) for row in target_rows]
+    items[1].update(
+        {
+            "kind": "dialogue",
+            "speaker": "Hạ Phong",
+            "gender": "male",
+            "age": "young",
+        }
+    )
+    items[2].update(
+        {
+            "kind": "dialogue",
+            "speaker": "Wayne",
+            "gender": "male",
+            "age": "adult",
+        }
+    )
+
+    validated = _validate(
+        target_rows,
+        {"segments": items},
+        local_scope="v32-source-unit",
+    )
+
+    seq43 = validated[str(target_rows[1]["stable_id"])]
+    seq44 = validated[str(target_rows[2]["stable_id"])]
+    assert seq43["speaker"] == seq44["speaker"]
+    assert local_speaker_display(seq43["speaker"]) == "NPC cậu bé"
+    assert seq43["gender"] == seq44["gender"] == "male"
+    assert seq43["age"] == seq44["age"] == "child"
+    assert _split_analysis_group(target_rows, preserve_source_units=True) is None
+
+
+def test_v32_closed_or_new_dialogue_is_not_one_atomic_source_unit() -> None:
+    rows = v32_seq42_44_rows()
+    rows[1]["text"] = "“Mẹ vẫn không chịu tin em.”"
+    rows[1]["text_sha256"] = sha256_text(str(rows[1]["text"]))
+    rows[2]["text"] = "“Đây là một lượt nói mới.”"
+    rows[2]["text_sha256"] = sha256_text(str(rows[2]["text"]))
+
+    units = _source_cohesive_analysis_units(rows)
+
+    assert [[int(row["seq"]) for row in unit] for unit in units] == [
+        [42, 43],
+        [44],
+    ]
+
+
+def test_v32_oversized_source_unit_is_hard_split_at_hq_cap() -> None:
+    rows = [
+        {
+            "stable_id": f"oversized-dialogue-{seq}",
+            "chapter_id": 1,
+            "seq": seq,
+            "paragraph_index": 9,
+            "text": f"“Câu thoại {seq}.”",
+            "kind_hint": "dialogue",
+        }
+        for seq in range(7)
+    ]
+
+    groups = _pack_source_cohesive_analysis_groups(rows, 5)
+
+    assert [len(group) for group in groups] == [5, 2]
+
+
 def test_onomatopoeia_remains_normal_narration() -> None:
     row = {
         **analysis_group()[0],
@@ -3562,7 +3697,7 @@ def test_v28_seq10_source_rule_locks_reported_cognition_to_afraid_narration() ->
         "kind": "narration",
         "emotion": "afraid",
     }
-    assert clearance["semantic_locks"][0]["policy_version"] == "host_semantic_lock_v5"
+    assert clearance["semantic_locks"][0]["policy_version"] == "host_semantic_lock_v6"
     assert clearance["semantic_locks"][0]["rule"] == (
         HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
     )
@@ -4840,7 +4975,9 @@ def test_next_paragraph_thought_mask_requires_exact_source_transition(
     )[0]
 
     assert critic_row["context_policy"] == "adjacent_context"
-    assert critic_row["host_locked_fields"] == {}
+    assert critic_row["host_locked_fields"] == (
+        {"kind": "dialogue"} if str(row["kind_hint"]) == "dialogue" else {}
+    )
 
 
 @pytest.mark.parametrize("kind_hint", ["narration", "dialogue"])
@@ -4949,7 +5086,7 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v12"
+    assert first_contract["policy_version"] == "second_pass_v13"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
@@ -5004,7 +5141,7 @@ def test_director_content_row_binds_source_verified_semantic_emotion_lock() -> N
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v5",
+            "policy_version": "host_semantic_lock_v6",
             "stable_id": "physical-collapse",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -5078,7 +5215,7 @@ def test_desperate_exertion_creates_source_bound_semantic_lock(emotion: str) -> 
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": emotion}
     assert clearance["semantic_locks"] == [
         {
-            "policy_version": "host_semantic_lock_v5",
+            "policy_version": "host_semantic_lock_v6",
             "stable_id": "desperate-exertion",
             "text_sha256": sha256_text(row["text"]),
             "source_role": "content",
@@ -5493,7 +5630,7 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
     assert item["field_deltas"] == ["emotion:afraid->neutral"]
     assert item["effective_accept"] is True
     assert item["host_semantic_override"] == {
-        "policy_version": "host_semantic_lock_v5",
+        "policy_version": "host_semantic_lock_v6",
         "stable_id": "physical-collapse",
         "text_sha256": sha256_text(row["text"]),
         "rule": "respiratory_injury_with_consciousness_loss",
@@ -5559,6 +5696,103 @@ def test_v30_seq24_mask_keeps_critic_kind_and_affect_deltas_live() -> None:
     assert "host_semantic_override" not in item
 
 
+def test_v32_dialogue_kind_only_critic_dissent_uses_source_bound_override() -> None:
+    row = v32_seq42_44_rows()[1]
+    stable_id = str(row["stable_id"])
+    candidate = analysis_item(stable_id)
+    candidate.update(
+        {
+            "kind": "dialogue",
+            "speaker": "NPC_LOCAL::c00001::v32-source-unit::cậu bé",
+            "gender": "male",
+            "age": "child",
+            "emotion": "sad",
+            "intensity": 2,
+            "confidence": 0.9,
+        }
+    )
+    validated = {stable_id: candidate}
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"kind": "thought"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert candidate_rows[0]["host_locked_fields"] == {"kind": "dialogue"}
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["field_deltas"] == ["kind:dialogue->thought"]
+    assert item["effective_accept"] is True
+    assert item["host_source_kind_override"] == {
+        "policy_version": "host_semantic_lock_v6",
+        "stable_id": stable_id,
+        "text_sha256": sha256_text(V32_SEQ43_TEXT),
+        "rule": HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE,
+        "field": "kind",
+        "candidate_value": "dialogue",
+        "allowed_values": ["dialogue"],
+        "raw_accept": False,
+        "raw_field_deltas": ["kind:dialogue->thought"],
+        "covered_field_deltas": ["kind:dialogue->thought"],
+        "unresolved_field_deltas": [],
+    }
+
+
+def test_v32_dialogue_kind_override_never_covers_speaker_dissent() -> None:
+    row = v32_seq42_44_rows()[1]
+    stable_id = str(row["stable_id"])
+    candidate = analysis_item(stable_id)
+    candidate.update(
+        {
+            "kind": "dialogue",
+            "speaker": "NPC_LOCAL::c00001::v32-source-unit::cậu bé",
+            "gender": "male",
+            "age": "child",
+            "emotion": "sad",
+            "intensity": 2,
+            "confidence": 0.9,
+        }
+    )
+    validated = {stable_id: candidate}
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"kind": "thought", "speaker": "NARRATOR"}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {stable_id: "DIRECTOR_FIELD_MISMATCH fields=speaker"}
+    item = evidence["segments"][0]
+    assert item["effective_accept"] is False
+    assert item["host_source_kind_override"]["covered_field_deltas"] == [
+        "kind:dialogue->thought"
+    ]
+    assert item["host_source_kind_override"]["unresolved_field_deltas"] == [
+        "speaker:NPC_LOCAL::c00001::v32-source-unit::cậu bé->NARRATOR"
+    ]
+
+
 def test_v29_seq38_kind_only_critic_dissent_uses_context_bound_override() -> None:
     source_rows = v29_seq37_39_rows()
     row = source_rows[1]
@@ -5595,7 +5829,7 @@ def test_v29_seq38_kind_only_critic_dissent_uses_context_bound_override() -> Non
     assert item["field_deltas"] == ["kind:narration->thought"]
     assert item["effective_accept"] is True
     assert item["host_source_kind_override"] == {
-        "policy_version": "host_semantic_lock_v5",
+        "policy_version": "host_semantic_lock_v6",
         "stable_id": stable_id,
         "text_sha256": sha256_text(V29_SEQ38_TEXT),
         "rule": HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
@@ -5784,7 +6018,7 @@ def test_sleep_paralysis_kind_only_critic_dissent_uses_source_bound_override() -
     assert item["field_deltas"] == ["kind:narration->thought"]
     assert item["effective_accept"] is True
     assert item["host_source_kind_override"] == {
-        "policy_version": "host_semantic_lock_v5",
+        "policy_version": "host_semantic_lock_v6",
         "stable_id": row["stable_id"],
         "text_sha256": sha256_text(V28_SEQ10_TEXT),
         "rule": HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE,
@@ -5860,7 +6094,7 @@ def test_sleep_paralysis_overrides_kind_and_emotion_but_leaves_delivery_deltas_l
     ]
     assert item["effective_accept"] is False
     assert item["host_semantic_override"] == {
-        "policy_version": "host_semantic_lock_v5",
+        "policy_version": "host_semantic_lock_v6",
         "stable_id": row["stable_id"],
         "text_sha256": sha256_text(V28_SEQ10_TEXT),
         "rule": HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE,
@@ -8845,7 +9079,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v12"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v13"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

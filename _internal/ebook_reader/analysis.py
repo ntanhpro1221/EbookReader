@@ -40,6 +40,7 @@ from .database import (
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+    ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
     ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
     ANALYSIS_SOURCE_ROLE_CONTENT,
     CONTINUED_DIALOGUE_LOCK_NOTE,
@@ -100,7 +101,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v16"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v17"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -135,6 +136,7 @@ HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE = "narration_sleep_paralysis_helplessness
 HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE = (
     "narration_precedes_immediate_thought"
 )
+HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE = ANALYSIS_SOURCE_DIALOGUE_KIND_RULE
 HOST_AFFECT_RULES = frozenset(
     {
         HOST_DIRECT_SELF_PRESERVATION_RULE,
@@ -147,7 +149,11 @@ HOST_AFFECT_RULES = frozenset(
     }
 )
 HOST_SOURCE_KIND_RULES = frozenset(
-    {*HOST_AFFECT_RULES, HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE}
+    {
+        *HOST_AFFECT_RULES,
+        HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE,
+        HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
+    }
 )
 ANALYSIS_FEEDBACK_CODES = frozenset(
     {
@@ -254,6 +260,7 @@ GENERIC_SPEAKER_TRAITS = {
 GENERIC_CHILD_LABELS = {"trẻ em", "đứa bé", "đứa trẻ", "trẻ nhỏ"}
 DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘"})
 DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’"})
+DIALOGUE_OUTER_QUOTE_PAIRS = {"“": "”", '"': '"'}
 SCOPED_AFFECT_NEGATION_PREFIX_PATTERN = re.compile(
     r"(?:\b(?:không|chẳng|chưa)"
     r"(?:\s+(?:còn|hề|bao\s+giờ|từng|hoàn\s+toàn)){0,2}"
@@ -793,6 +800,8 @@ trường text, còn text dài phải chọn chính xác một source anchor tro
 Trong mọi policy enum, không được tự cắt, nối hoặc chuẩn hóa anchor.
 Mọi field có trong host_locked_fields là constraint nguồn đã được host xác minh và là bất biến. Nếu không đồng ý với
 field khóa, vẫn trả correction thật của bạn trong sáu trường để host lưu audit và áp đúng structural/semantic override.
+Khóa kind=dialogue chỉ xác nhận ranh giới lời nói, không xác nhận danh tính người nói; vẫn phải kiểm speaker độc lập từ
+lời dẫn và mạch hội thoại. Không được đổi speaker thành NARRATOR chỉ vì bạn bất đồng với kind đã khóa.
 Câu kể ngôi ba có chủ thể cùng động từ nhận thức hoặc ý muốn, như “cậu biết... muốn...”, chỉ báo cáo trạng thái
 của nhân vật và vẫn là narration. Chỉ tiếng nói nội tâm trực tiếp như “Mình đang ở đâu thế này?” mới là thought.
 source_role=chapter_heading và context_policy=target_only là tiêu đề chương độc lập: previous_text/next_text cố ý để
@@ -960,13 +969,141 @@ def _local_scope_for_group(group: list[Any]) -> str:
     return f"r{digest}"
 
 
-def _split_analysis_group(group: list[Any]) -> tuple[list[Any], list[Any]]:
+def _dialogue_quote_state_after(text: str, closing_mark: str | None) -> str | None:
+    """Reconstruct only the outer spoken-quote state used by the source parser."""
+    remaining = text
+    if closing_mark is not None:
+        closing_index = remaining.find(closing_mark)
+        if closing_index < 0:
+            return closing_mark
+        remaining = remaining[closing_index + 1 :]
+
+    while remaining:
+        openings = [
+            (index, opener, closer)
+            for opener, closer in DIALOGUE_OUTER_QUOTE_PAIRS.items()
+            if (index := remaining.find(opener)) >= 0
+        ]
+        if not openings:
+            return None
+        opening_index, opener, closer = min(openings, key=lambda item: item[0])
+        closing_index = remaining.find(closer, opening_index + 1)
+        if closing_index < 0:
+            return closer
+        remaining = remaining[closing_index + 1 :]
+        if opener == closer and not remaining:
+            return None
+    return None
+
+
+def _source_rows_are_contiguous(left: Any, right: Any) -> bool:
+    left_seq = _row_optional_int(left, "seq")
+    right_seq = _row_optional_int(right, "seq")
+    try:
+        same_chapter = int(left["chapter_id"]) == int(right["chapter_id"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return bool(
+        same_chapter
+        and left_seq is not None
+        and right_seq is not None
+        and right_seq == left_seq + 1
+    )
+
+
+def _source_cohesive_analysis_units(rows: list[Any]) -> list[list[Any]]:
+    """Keep paragraph attribution and an outer multi-paragraph quote in one unit."""
+    units: list[list[Any]] = []
+    current: list[Any] = []
+    active_dialogue_closer: str | None = None
+    previous: Any | None = None
+    for row in rows:
+        contiguous = previous is not None and _source_rows_are_contiguous(previous, row)
+        continues_dialogue = bool(
+            previous is not None
+            and contiguous
+            and active_dialogue_closer is not None
+            and str(_row_optional_value(previous, "kind_hint", "")) == "dialogue"
+            and str(_row_optional_value(row, "kind_hint", "")) == "dialogue"
+            and not str(row["text"]).lstrip().startswith(
+                tuple(DIALOGUE_OUTER_QUOTE_PAIRS)
+            )
+        )
+        same_paragraph = previous is not None and _same_paragraph(previous, row)
+        if current and not (same_paragraph or continues_dialogue):
+            units.append(current)
+            current = []
+        current.append(row)
+
+        if str(_row_optional_value(row, "kind_hint", "")) == "dialogue":
+            active_dialogue_closer = _dialogue_quote_state_after(
+                str(row["text"]),
+                active_dialogue_closer if contiguous else None,
+            )
+        else:
+            active_dialogue_closer = None
+        previous = row
+    if current:
+        units.append(current)
+    return units
+
+
+def _pack_source_cohesive_analysis_groups(
+    rows: list[Any],
+    max_segments: int,
+) -> list[list[Any]]:
+    if max_segments < 1:
+        raise ValueError("Analysis batch segment cap must be positive")
+    packed: list[list[Any]] = []
+    current: list[Any] = []
+    for unit in _source_cohesive_analysis_units(rows):
+        if len(unit) > max_segments:
+            if current:
+                packed.append(current)
+                current = []
+            packed.extend(
+                unit[start : start + max_segments]
+                for start in range(0, len(unit), max_segments)
+            )
+            continue
+        if current and len(current) + len(unit) > max_segments:
+            packed.append(current)
+            current = []
+        current.extend(unit)
+    if current:
+        packed.append(current)
+    return packed
+
+
+def _split_analysis_group(
+    group: list[Any],
+    *,
+    preserve_source_units: bool = False,
+) -> tuple[list[Any], list[Any]] | None:
     midpoint = len(group) // 2
-    boundaries = [
-        index
-        for index in range(1, len(group))
-        if not _same_paragraph(group[index - 1], group[index])
-    ]
+    if preserve_source_units:
+        units = _source_cohesive_analysis_units(group)
+        boundaries: list[int] = []
+        offset = 0
+        for unit in units[:-1]:
+            offset += len(unit)
+            boundaries.append(offset)
+        contains_dialogue = any(
+            str(_row_optional_value(row, "kind_hint", "")) == "dialogue"
+            for row in group
+        )
+        if (
+            not boundaries
+            and contains_dialogue
+            and len(group) <= HIGH_QUALITY_ANALYSIS_BATCH_SEGMENTS
+        ):
+            return None
+    else:
+        boundaries = [
+            index
+            for index in range(1, len(group))
+            if not _same_paragraph(group[index - 1], group[index])
+        ]
     split_at = min(boundaries, key=lambda index: (abs(index - midpoint), index)) if boundaries else midpoint
     return group[:split_at], group[split_at:]
 
@@ -1921,7 +2058,11 @@ def _source_kind_transition_rule(
     """Return the host rule (possibly empty) when a candidate crosses a source boundary."""
     source_kind = str(_row_optional_value(row, "kind_hint", "narration"))
     if source_kind == "dialogue":
-        return "" if requested_kind != "dialogue" else None
+        return (
+            HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE
+            if requested_kind != "dialogue"
+            else None
+        )
     if requested_kind == "dialogue":
         return ""
     if source_kind == "thought":
@@ -3164,6 +3305,8 @@ def _director_candidate_rows(
             host_locked_fields = (
                 {"kind": "narration"} if narration_precedes_thought else {}
             )
+            if str(row["kind_hint"]) == "dialogue":
+                host_locked_fields["kind"] = "dialogue"
             semantic_lock = semantic_locks.get(stable_id)
             if semantic_lock is not None:
                 if semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE:
@@ -4075,6 +4218,10 @@ def _adjudicate_director_critic(
             (delta for delta in deltas if delta.split(":", 1)[0] == "kind"),
             "",
         )
+        dialogue_kind_locked = bool(
+            candidate["kind"] == "dialogue"
+            and str(rows_by_stable[stable_id]["kind_hint"]) == "dialogue"
+        )
         context_kind_locked = bool(
             candidate["kind"] == "narration"
             and _source_narration_precedes_immediate_thought(
@@ -4083,15 +4230,19 @@ def _adjudicate_director_critic(
             )
         )
         protected_kind_rule = (
-            HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE
-            if context_kind_locked
+            HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE
+            if dialogue_kind_locked
             else (
-                HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
-                if (
-                    semantic_lock is not None
-                    and semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+                HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE
+                if context_kind_locked
+                else (
+                    HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+                    if (
+                        semantic_lock is not None
+                        and semantic_lock.rule == HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE
+                    )
+                    else ""
                 )
-                else ""
             )
         )
         if (
@@ -4115,8 +4266,8 @@ def _adjudicate_director_critic(
                 "text_sha256": _source_text_sha256(rows_by_stable[stable_id]),
                 "rule": protected_kind_rule,
                 "field": "kind",
-                "candidate_value": "narration",
-                "allowed_values": ["narration"],
+                "candidate_value": candidate["kind"],
+                "allowed_values": [candidate["kind"]],
                 "raw_accept": False,
                 "raw_field_deltas": deltas,
                 "covered_field_deltas": [protected_kind_delta],
@@ -5171,17 +5322,18 @@ class OllamaBookAnalyzer:
         stable_groups: list[list[Any]] = []
         current: list[Any] = []
         chars = 0
-        for row in all_rows:
-            text_len = len(str(row["text"]))
+        for source_unit in _source_cohesive_analysis_units(all_rows):
+            unit_chars = sum(len(str(row["text"])) for row in source_unit)
             limit_reached = (
-                len(current) >= configured_max_segments or chars + text_len > max_chars
+                len(current) + len(source_unit) > configured_max_segments
+                or chars + unit_chars > max_chars
             )
-            if current and limit_reached and not _same_paragraph(current[-1], row):
+            if current and limit_reached:
                 stable_groups.append(current)
                 current = []
                 chars = 0
-            current.append(row)
-            chars += text_len
+            current.extend(source_unit)
+            chars += unit_chars
         if current:
             stable_groups.append(current)
         groups: list[tuple[list[Any], str]] = []
@@ -5201,8 +5353,13 @@ class OllamaBookAnalyzer:
                 if self.quality_profile != "high_quality":
                     groups.append((pending_group, local_scope))
                     continue
-                for start in range(0, len(pending_group), max_segments):
-                    groups.append((pending_group[start : start + max_segments], local_scope))
+                groups.extend(
+                    (packed_group, local_scope)
+                    for packed_group in _pack_source_cohesive_analysis_groups(
+                        pending_group,
+                        max_segments,
+                    )
+                )
 
         done = len(all_rows) - len(pending)
         total = len(all_rows)
@@ -5816,24 +5973,31 @@ class OllamaBookAnalyzer:
                                 f"Phân tích batch {group_index} lỗi lần {attempt_number}: "
                                 f"{last_error}"
                             )
-                            first_half, second_half = _split_analysis_group(group)
-                            groups[group_offset : group_offset + 1] = [
-                                (first_half, local_scope),
-                                (second_half, local_scope),
-                            ]
-                            if isinstance(exc, AnalysisWallTimeoutError):
-                                split_reason = "Batch vượt giới hạn thời gian"
-                            elif isinstance(exc, AnalysisOutputBudgetError):
-                                split_reason = "Batch chạm trần token đầu ra"
-                            else:
-                                split_reason = "Stream batch bị ngắt"
-                            self.log(
-                                f"{split_reason} {group_index}; tự chia thành "
-                                f"{len(first_half)} + {len(second_half)} segment. "
-                                f"Tổng số batch còn lại hiện là {len(groups)}."
+                            split_result = _split_analysis_group(
+                                group,
+                                preserve_source_units=(
+                                    self.quality_profile == "high_quality"
+                                ),
                             )
-                            split_scalable_failure = True
-                            break
+                            if split_result is not None:
+                                first_half, second_half = split_result
+                                groups[group_offset : group_offset + 1] = [
+                                    (first_half, local_scope),
+                                    (second_half, local_scope),
+                                ]
+                                if isinstance(exc, AnalysisWallTimeoutError):
+                                    split_reason = "Batch vượt giới hạn thời gian"
+                                elif isinstance(exc, AnalysisOutputBudgetError):
+                                    split_reason = "Batch chạm trần token đầu ra"
+                                else:
+                                    split_reason = "Stream batch bị ngắt"
+                                self.log(
+                                    f"{split_reason} {group_index}; tự chia thành "
+                                    f"{len(first_half)} + {len(second_half)} segment. "
+                                    f"Tổng số batch còn lại hiện là {len(groups)}."
+                                )
+                                split_scalable_failure = True
+                                break
                     except Exception as exc:  # noqa: BLE001
                         if critic_request_started and ledger_enabled:
                             raise
@@ -5843,8 +6007,20 @@ class OllamaBookAnalyzer:
                             received_director_critic_issues = True
                     self.log(f"Phân tích batch {group_index} lỗi lần {attempt_number}: {last_error}")
                     time.sleep(min(8, 2 ** attempt))
-            if repeated_director_candidate and len(validated) != len(group) and len(group) > 1:
-                first_half, second_half = _split_analysis_group(group)
+            split_result = (
+                _split_analysis_group(
+                    group,
+                    preserve_source_units=(self.quality_profile == "high_quality"),
+                )
+                if len(group) > 1
+                else None
+            )
+            if (
+                repeated_director_candidate
+                and len(validated) != len(group)
+                and split_result is not None
+            ):
+                first_half, second_half = split_result
                 groups[group_offset : group_offset + 1] = [
                     (first_half, local_scope),
                     (second_half, local_scope),
@@ -5854,8 +6030,12 @@ class OllamaBookAnalyzer:
                     f"split early into {len(first_half)} + {len(second_half)} segments."
                 )
                 continue
-            if repeated_host_candidate and len(validated) != len(group) and len(group) > 1:
-                first_half, second_half = _split_analysis_group(group)
+            if (
+                repeated_host_candidate
+                and len(validated) != len(group)
+                and split_result is not None
+            ):
+                first_half, second_half = split_result
                 groups[group_offset : group_offset + 1] = [
                     (first_half, local_scope),
                     (second_half, local_scope),
@@ -5867,8 +6047,12 @@ class OllamaBookAnalyzer:
                 continue
             if split_scalable_failure:
                 continue
-            if received_incomplete_ids and len(validated) != len(group) and len(group) > 1:
-                first_half, second_half = _split_analysis_group(group)
+            if (
+                received_incomplete_ids
+                and len(validated) != len(group)
+                and split_result is not None
+            ):
+                first_half, second_half = split_result
                 groups[group_offset : group_offset + 1] = [
                     (first_half, local_scope),
                     (second_half, local_scope),
@@ -5879,8 +6063,12 @@ class OllamaBookAnalyzer:
                     f"Tổng số batch còn lại hiện là {len(groups)}."
                 )
                 continue
-            if received_semantic_issues and len(validated) != len(group) and len(group) > 1:
-                first_half, second_half = _split_analysis_group(group)
+            if (
+                received_semantic_issues
+                and len(validated) != len(group)
+                and split_result is not None
+            ):
+                first_half, second_half = split_result
                 groups[group_offset : group_offset + 1] = [
                     (first_half, local_scope),
                     (second_half, local_scope),
@@ -5891,8 +6079,12 @@ class OllamaBookAnalyzer:
                     f"Tổng số batch còn lại hiện là {len(groups)}."
                 )
                 continue
-            if received_director_critic_issues and len(validated) != len(group) and len(group) > 1:
-                first_half, second_half = _split_analysis_group(group)
+            if (
+                received_director_critic_issues
+                and len(validated) != len(group)
+                and split_result is not None
+            ):
+                first_half, second_half = split_result
                 groups[group_offset : group_offset + 1] = [
                     (first_half, local_scope),
                     (second_half, local_scope),

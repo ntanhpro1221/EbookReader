@@ -170,10 +170,11 @@ ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_NEXT_PARAGRAPH_THOUGHT = (
 )
 ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_CONTEXT_SOURCE_KIND_RULE = "narration_precedes_immediate_thought"
+ANALYSIS_SOURCE_DIALOGUE_KIND_RULE = "explicit_dialogue_boundary"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v9"
-ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v5"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v12"
+ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v6"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v13"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -2670,6 +2671,12 @@ class ProjectDB:
             and critic_row["context_policy"]
             == ANALYSIS_CONTEXT_POLICY_NARRATION_BEFORE_THOUGHT
         }
+        dialogue_kind_row_ids = {
+            stable_id
+            for stable_id, critic_row in critic_row_by_stable.items()
+            if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CONTENT
+            and critic_row["hint"] == "dialogue"
+        }
         semantic_row_ids = {
             stable_id
             for stable_id, critic_row in critic_row_by_stable.items()
@@ -2682,7 +2689,7 @@ class ProjectDB:
             if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CONTENT
             and "kind" in critic_row["host_locked_fields"]
         }
-        context_kind_locks = {
+        source_kind_locks = {
             stable_id: {
                 "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
                 "rule": ANALYSIS_CONTEXT_SOURCE_KIND_RULE,
@@ -2690,6 +2697,16 @@ class ProjectDB:
             }
             for stable_id in context_kind_row_ids
         }
+        source_kind_locks.update(
+            {
+                stable_id: {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "rule": ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
+                    "source_kind": "dialogue",
+                }
+                for stable_id in dialogue_kind_row_ids
+            }
+        )
         if any(
             critic_row_by_stable[stable_id]["candidate"]["kind"] != "narration"
             or critic_row_by_stable[stable_id]["hint"] != "narration"
@@ -2699,17 +2716,28 @@ class ProjectDB:
             raise RuntimeError(
                 "Narration-before-thought context kind lock is not candidate-bound"
             )
+        if any(
+            critic_row_by_stable[stable_id]["candidate"]["kind"] != "dialogue"
+            or critic_row_by_stable[stable_id]["context_policy"]
+            != ANALYSIS_CONTEXT_POLICY_ADJACENT
+            or critic_row_by_stable[stable_id]["host_locked_fields"].get("kind")
+            != "dialogue"
+            for stable_id in dialogue_kind_row_ids
+        ):
+            raise RuntimeError(
+                "Explicit dialogue source kind lock is not candidate-bound"
+            )
         clearance = deterministic_issues.get("host_affect_clearance")
         if clearance is None:
             if heading_stable_ids or semantic_row_ids:
                 raise RuntimeError(
                     "Analysis host-locked rows require durable deterministic clearance"
                 )
-            if kind_locked_row_ids != context_kind_row_ids:
+            if kind_locked_row_ids != context_kind_row_ids | dialogue_kind_row_ids:
                 raise RuntimeError(
                     "Content source-kind lock is not source-ledger-bound"
                 )
-            return {}, {}, context_kind_locks
+            return {}, {}, source_kind_locks
         if (
             not isinstance(clearance, dict)
             or set(clearance) != ANALYSIS_HOST_CLEARANCE_FIELDS
@@ -2878,7 +2906,9 @@ class ProjectDB:
         }
         if not semantic_source_kind_ids <= kind_locked_row_ids:
             raise RuntimeError("Host semantic clearance is not source-bound")
-        if kind_locked_row_ids != context_kind_row_ids | semantic_source_kind_ids:
+        if kind_locked_row_ids != (
+            context_kind_row_ids | dialogue_kind_row_ids | semantic_source_kind_ids
+        ):
             raise RuntimeError(
                 "Content source-kind locks differ from source-derived protections"
             )
@@ -2886,7 +2916,9 @@ class ProjectDB:
             if critic_row["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT:
                 continue
             expected_host_locked_fields: dict[str, Any] = {}
-            if stable_id in context_kind_row_ids | semantic_source_kind_ids:
+            if stable_id in (
+                context_kind_row_ids | dialogue_kind_row_ids | semantic_source_kind_ids
+            ):
                 expected_host_locked_fields["kind"] = critic_row["candidate"]["kind"]
             if stable_id in semantic_locks:
                 expected_host_locked_fields["emotion"] = semantic_locks[stable_id][
@@ -2896,7 +2928,7 @@ class ProjectDB:
                 raise RuntimeError(
                     "Content host-locked fields differ from durable source locks"
                 )
-        return structural_locks, semantic_locks, context_kind_locks
+        return structural_locks, semantic_locks, source_kind_locks
 
     @staticmethod
     def _analysis_following_thought_source_conn(
@@ -3233,6 +3265,19 @@ class ProjectDB:
                 raise RuntimeError(
                     "Analysis candidate kind violates a source-owned boundary"
                 )
+            if source_kind == "dialogue":
+                expected_dialogue_lock = {
+                    "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
+                    "rule": ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
+                    "source_kind": "dialogue",
+                }
+                if (
+                    context_kind_locks.get(str(stored["stable_id"]))
+                    != expected_dialogue_lock
+                ):
+                    raise RuntimeError(
+                        "Explicit dialogue source kind is not durably host-locked"
+                    )
             if source_kind == "thought":
                 previous = conn.execute(
                     "SELECT text FROM segments WHERE chapter_id=? AND seq=?",
@@ -3402,36 +3447,60 @@ class ProjectDB:
         covered_kind_deltas = [
             delta for delta in raw_deltas if delta.startswith("kind:")
         ]
-        if (
-            len(covered_kind_deltas) != 1
-            or candidate_projection["kind"] != "narration"
-            or critic_delivery.get("kind") != "thought"
-        ):
+        if len(covered_kind_deltas) != 1:
             return None
         related_provenance: dict[str, str] = {}
         if context_kind_lock is not None:
             stored = conn.execute(
-                "SELECT stable_id,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
+                "SELECT stable_id,text,text_sha256,chapter_id,seq,paragraph_index,kind_hint "
                 "FROM segments WHERE id=?",
                 (int(candidate_segment["segment_id"]),),
             ).fetchone()
-            next_source = (
-                cls._analysis_following_thought_source_conn(conn, stored)
-                if stored is not None
-                and str(stored["stable_id"]) == str(candidate_segment["stable_id"])
-                and str(stored["text_sha256"])
-                == str(candidate_segment["text_sha256"])
-                else None
-            )
-            if next_source is None:
-                raise RuntimeError(
-                    "Narration-before-thought source-kind override lost related provenance"
-                )
+            if (
+                stored is None
+                or sha256_text(str(stored["text"])) != str(stored["text_sha256"])
+                or str(stored["stable_id"])
+                != str(candidate_segment["stable_id"])
+                or str(stored["text_sha256"])
+                != str(candidate_segment["text_sha256"])
+            ):
+                raise RuntimeError("Source-kind override target provenance is invalid")
             rule = str(context_kind_lock["rule"])
-            related_provenance = {
-                "related_stable_id": str(next_source["stable_id"]),
-                "related_text_sha256": str(next_source["text_sha256"]),
-            }
+            source_kind = str(context_kind_lock["source_kind"])
+            if rule == ANALYSIS_SOURCE_DIALOGUE_KIND_RULE:
+                if (
+                    source_kind != "dialogue"
+                    or str(stored["kind_hint"]) != "dialogue"
+                    or str(critic_row["hint"]) != "dialogue"
+                    or candidate_projection["kind"] != "dialogue"
+                    or critic_delivery.get("kind") == "dialogue"
+                ):
+                    raise RuntimeError(
+                        "Explicit dialogue source-kind override is not source-bound"
+                    )
+            elif rule == ANALYSIS_CONTEXT_SOURCE_KIND_RULE:
+                if (
+                    source_kind != "narration"
+                    or str(stored["kind_hint"]) != "narration"
+                    or candidate_projection["kind"] != "narration"
+                    or critic_delivery.get("kind") != "thought"
+                ):
+                    raise RuntimeError(
+                        "Narration-before-thought source-kind override is not source-bound"
+                    )
+                next_source = cls._analysis_following_thought_source_conn(conn, stored)
+                if next_source is None:
+                    raise RuntimeError(
+                        "Narration-before-thought source-kind override lost related provenance"
+                    )
+                related_provenance = {
+                    "related_stable_id": str(next_source["stable_id"]),
+                    "related_text_sha256": str(next_source["text_sha256"]),
+                }
+            else:
+                raise RuntimeError(
+                    "Source-kind override uses an unknown durable rule"
+                )
         else:
             semantic_rule_contract = (
                 ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS.get(str(semantic_lock["rule"]))
@@ -3443,7 +3512,13 @@ class ProjectDB:
                 and semantic_rule_contract.get("protects_source_kind", False)
             ):
                 return None
+            if (
+                candidate_projection["kind"] != "narration"
+                or critic_delivery.get("kind") != "thought"
+            ):
+                return None
             rule = str(semantic_lock["rule"])
+            source_kind = "narration"
         unresolved_kind_deltas = [
             delta for delta in raw_deltas if not delta.startswith("kind:")
         ]
@@ -3453,8 +3528,8 @@ class ProjectDB:
             "text_sha256": str(candidate_segment["text_sha256"]),
             "rule": rule,
             "field": "kind",
-            "candidate_value": "narration",
-            "allowed_values": ["narration"],
+            "candidate_value": candidate_projection["kind"],
+            "allowed_values": [candidate_projection["kind"]],
             "raw_accept": False,
             "raw_field_deltas": raw_deltas,
             "covered_field_deltas": covered_kind_deltas,

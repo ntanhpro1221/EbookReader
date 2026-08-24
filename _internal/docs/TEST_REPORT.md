@@ -1,6 +1,6 @@
 # Test report
 
-Ngày cập nhật: 2026-08-23
+Ngày cập nhật: 2026-08-24
 
 Đợt sửa confidence contract V22: **634/634 test trọng tâm pass** cho analysis bắt buộc,
 database safety và quality policy trên Python 3.11.9. Compileall cho source/test, `git diff --check`
@@ -53,6 +53,14 @@ neutral, intensity 0/1 và pace normal. SQLite tính lại context hash từ cur
 seq, paragraph và kind khi allocate/reopen/critic completion/commit; injected policy, lock, override và source tamper đều
 fail-closed, còn semantic lock độc lập vẫn compose. Regression analysis/database/quality pass **886/886**, full repository
 **1.332/1.332**; Ruff, compileall, `pip check`, `git diff --check` và hai audit độc lập đều sạch trước runtime V31.
+Hardening V32 sau failure thật ở seq43 giữ source unit nguyên tử qua ranh giới batch: lời dẫn seq42 cùng paragraph và phần
+ngoặc kép ngoài tiếp tục qua seq43–44 được đóng gói chung `[42,43,44]`, trong khi prefix thành `[38,39,40,41]`. Retry của
+profile high-quality không cắt một source unit hội thoại không quá cap 5; unit vượt cap vẫn hard-split hữu hạn. Source
+`kind_hint=dialogue` tạo kind-only lock bền; critic dissent trên kind được audit/override theo exact source, nhưng speaker
+không bao giờ được lock che và vẫn fail-closed nếu còn delta. SQLite dựng lại text/hash/kind/lock khi allocate, reopen,
+critic completion và commit, đồng thời từ chối evidence thiếu lock, giả rule hoặc giả covered/unresolved partition.
+Regression exact seq42–44 cùng database replay/tamper và quality policy pass **897/897**; full repository **1.343/1.343**,
+Ruff, compileall, `pip check`, `git diff --check` đều pass. Mọi test đều gọi interpreter rõ ràng; `OpenWith.exe` giữ **0**.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 

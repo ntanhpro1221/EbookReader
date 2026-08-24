@@ -129,6 +129,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
 - Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
   độc thoại nội tâm và mọi segment `thought` bắt buộc dùng `NARRATOR`, không gắn với character identity.
+- Với profile `high_quality`, batching phải giữ nguyên source unit gồm các segment cùng paragraph và phần tiếp nối của
+  cùng một ngoặc kép ngoài qua nhiều paragraph. Source unit không quá cap 5 segment không được chia lại khi retry; unit
+  vượt cap mới được hard-split hữu hạn. Lời dẫn narration cùng paragraph phải đi chung với lượt thoại để attribution không
+  bị cắt khỏi speaker.
 - Whisper phải nhận WAV đã đọc/resample trong process; không truyền đường dẫn cho API Whisper vì bản
   dependency hiện tại sẽ gọi FFmpeg subprocess cho từng segment và gây nháy console trên Windows.
 - Recovery xóa `.part`, reset stage dở và chỉ reuse artifact có checksum + validation hợp lệ.
@@ -189,6 +193,10 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   phải được lưu và mọi dissent chưa có authority độc lập vẫn fail-closed. Semantic lock nguồn khác vẫn được compose bình
   thường. SQLite phải tính lại context hash từ current + neighbor stable ID, text SHA, chapter, seq, paragraph và kind ở
   allocate/reopen/critic completion/commit; policy, neighbor hoặc lock/override bị chèn sửa phải bị từ chối.
+- Source `kind_hint=dialogue` phải tạo kind-only host lock `dialogue` trong generator/critic contract. Lock này chỉ bảo vệ
+  ranh giới lời nói, tuyệt đối không cấp authority cho speaker: critic dissent chỉ trên kind có thể được source-bound override,
+  nhưng mọi delta speaker vẫn unresolved và làm row fail-closed. SQLite phải tái dựng lock từ source text/hash/kind khi
+  allocate, reopen, critic completion và commit; evidence thiếu lock, giả rule hoặc giả partition đều bị từ chối.
 - Director critic cho narration là lời dẫn ngay trước source thought cùng chapter và paragraph phải dùng
   `narration_before_thought_previous_only`: giữ previous source nhưng xóa `next_text` từ immutable original context.
   Source parser sở hữu bất biến `kind=narration`: generator vẫn nhận đủ adjacent context nhưng validation/feedback phải
