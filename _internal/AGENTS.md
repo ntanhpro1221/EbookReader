@@ -165,6 +165,12 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   `kind=narration` và `emotion=afraid`; câu kể ngôi ba “cậu biết... muốn...” không phải thought trực tiếp.
 - Rule affect nguồn hẹp phải chạy trước semantic cue chung. Constraint deterministic đã phát hiện phải được tích lũy trong
   suốt retry của cùng target group, không được ghi đè bởi lỗi của lần sau hoặc chuyển thành feedback tự do.
+- Mọi `allowed_emotions` source-authoritative từ host affect/physical-collapse phải khóa schema generator ở lần retry theo
+  đúng ID bằng `segments.items.oneOf`; nhiều host constraint cùng ID phải lấy giao và giao rỗng phải fail-closed trước HTTP.
+  `allowed_emotions` của `SEMANTIC_DELIVERY_MISMATCH` chỉ là advisory và tuyệt đối không được thu hẹp schema emotion.
+- Khi một target group bị chia, toàn bộ feedback typed đã tích lũy của group cha phải được lọc theo `stable_id` rồi chuyển
+  vào đúng group con trong cùng lượt phân tích. Không được để split làm mất constraint của câu đã sửa; source unit
+  high-quality vẫn giữ nguyên tử theo invariant batching ở trên.
 - Semantic cue chung chỉ được dùng `allowed_emotions` source-derived làm lựa chọn retry advisory khi chính candidate
   `emotion=neutral` bị từ chối. Tập lựa chọn phải hợp deterministic từ cue trực tiếp không bị phủ định/meta/lịch sử và
   không có affect đối nghịch, không chứa source/cue/rationale trong payload. Đây không phải host whitelist, semantic lock

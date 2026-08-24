@@ -18,6 +18,7 @@ from ebook_reader.analysis import (
     DIRECTOR_CRITIC_POLICY_VERSION,
     DIRECTOR_CRITIC_SYSTEM_PROMPT,
     EXPLICIT_ATTRIBUTION_NOTE,
+    GENERATOR_RETRY_SCHEMA_POLICY_VERSION,
     HOST_AFFECT_ISSUE_CODE,
     HOST_DESPERATE_EXERTION_RULE,
     HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE,
@@ -966,6 +967,7 @@ def test_adaptive_retry_contract_is_deterministic_source_bound_and_text_free() -
     )
 
     assert first == repeated
+    assert first["schema_policy_version"] == "per_id_host_emotion_enum_v1"
     assert [first["temperature"], second["temperature"]] == [0.1, 0.2]
     assert first["seed"] != second["seed"] != changed_digest["seed"]
     assert first["feedback_hash"] != second["feedback_hash"]
@@ -1178,7 +1180,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
     assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v14"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v18"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v19"
+    assert GENERATOR_RETRY_SCHEMA_POLICY_VERSION == "per_id_host_emotion_enum_v1"
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
     assert "cậu biết... muốn..." in DIRECTOR_CRITIC_SYSTEM_PROMPT
@@ -1410,6 +1413,16 @@ def test_host_feedback_is_canonical_and_excludes_raw_injection() -> None:
     assert injection not in feedback
     assert "rationale" not in feedback
     assert "notes" not in feedback
+    segment_items = session.request["json"]["format"]["properties"]["segments"][
+        "items"
+    ]
+    branches = {
+        branch["properties"]["id"]["enum"][0]: branch
+        for branch in segment_items["oneOf"]
+    }
+    assert branches["S001"]["properties"]["emotion"]["enum"] == ["afraid"]
+    assert "neutral" in branches["S002"]["properties"]["emotion"]["enum"]
+    assert "sad" in branches["S002"]["properties"]["emotion"]["enum"]
 
 
 def test_generic_direct_cue_feedback_prompt_marks_choices_as_advisory() -> None:
@@ -1438,6 +1451,89 @@ def test_generic_direct_cue_feedback_prompt_marks_choices_as_advisory() -> None:
     assert "đó không phải whitelist cứng" in prompt
     assert "hãy chọn cảm xúc phù hợp nhất" in prompt
     assert '"allowed_emotions":["afraid","sad"]' in prompt
+    segment_items = session.request["json"]["format"]["properties"]["segments"][
+        "items"
+    ]
+    assert "oneOf" not in segment_items
+    assert "neutral" in segment_items["properties"]["emotion"]["enum"]
+
+
+def test_v34_generator_schema_intersects_host_constraints_per_id() -> None:
+    group = analysis_group()
+    session = FakeSession(
+        {"segments": [analysis_item("S001"), analysis_item("S002")]}
+    )
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+
+    analyzer._request(
+        group,
+        validation_feedback=(
+            AnalysisFeedbackIssue(
+                stable_id=str(group[0]["stable_id"]),
+                code="SEMANTIC_DELIVERY_MISMATCH",
+                fields=("emotion",),
+                allowed_emotions=("afraid", "sad"),
+            ),
+            AnalysisFeedbackIssue(
+                stable_id=str(group[1]["stable_id"]),
+                code=HOST_AFFECT_ISSUE_CODE,
+                fields=("emotion",),
+                allowed_emotions=("afraid", "sad", "tired"),
+                rule=HOST_DESPERATE_EXERTION_RULE,
+            ),
+            AnalysisFeedbackIssue(
+                stable_id=str(group[1]["stable_id"]),
+                code=HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
+                fields=("emotion",),
+                allowed_emotions=("afraid", "tired"),
+                rule=HOST_PHYSICAL_COLLAPSE_RULE,
+            ),
+        ),
+    )
+
+    segment_items = session.request["json"]["format"]["properties"]["segments"][
+        "items"
+    ]
+    branches = {
+        branch["properties"]["id"]["enum"][0]: branch
+        for branch in segment_items["oneOf"]
+    }
+    assert "neutral" in branches["S001"]["properties"]["emotion"]["enum"]
+    assert branches["S002"]["properties"]["emotion"]["enum"] == [
+        "afraid",
+        "tired",
+    ]
+    assert all(
+        branch["properties"]["confidence"]["minimum"] == 0.65
+        for branch in branches.values()
+    )
+
+
+def test_v34_generator_schema_rejects_conflicting_host_constraints() -> None:
+    group = analysis_group()
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+
+    with pytest.raises(ValueError, match="empty intersection"):
+        analyzer._request(
+            group,
+            validation_feedback=(
+                AnalysisFeedbackIssue(
+                    stable_id=str(group[0]["stable_id"]),
+                    code=HOST_AFFECT_ISSUE_CODE,
+                    fields=("emotion",),
+                    allowed_emotions=("afraid",),
+                    rule=HOST_DESPERATE_EXERTION_RULE,
+                ),
+                AnalysisFeedbackIssue(
+                    stable_id=str(group[0]["stable_id"]),
+                    code=HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
+                    fields=("emotion",),
+                    allowed_emotions=("tired",),
+                    rule=HOST_PHYSICAL_COLLAPSE_RULE,
+                ),
+            ),
+        )
 
 
 def test_physical_collapse_feedback_is_typed_and_does_not_forward_source_text() -> None:
@@ -9166,6 +9262,74 @@ def test_persistent_director_rejection_splits_then_fails_singleton(monkeypatch) 
     assert critic_sizes == [4, 2, 1]
     assert db.updated == []
     assert any(event[1] == "REQUIRED_ANALYSIS_BATCH_FAILED" for event in db.events)
+
+
+def test_v34_split_children_inherit_parent_feedback_by_stable_id(monkeypatch) -> None:
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"carry-{index}",
+            "chapter_id": 1,
+            "seq": index - 1,
+            "paragraph_index": index - 1,
+            "text": f"Câu kể số {index}.",
+            "text_sha256": f"carry-sha-{index}",
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index in range(1, 3)
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 2, "batch_chars": 10000, "max_retries": 1}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    feedback_calls: list[tuple[tuple[str, ...], tuple[AnalysisFeedbackIssue, ...]]] = []
+    critic_calls = 0
+
+    def generate(group, **kwargs):
+        feedback = tuple(kwargs.get("validation_feedback", ()))
+        group_ids = tuple(str(row["stable_id"]) for row in group)
+        feedback_calls.append((group_ids, feedback))
+        feedback_ids = {issue.stable_id for issue in feedback}
+        segments = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            if str(row["stable_id"]) in feedback_ids:
+                item["pace"] = "fast"
+            segments.append(item)
+        return {"segments": segments}
+
+    def reject_parent_once(group, validated, **kwargs):
+        nonlocal critic_calls
+        critic_calls += 1
+        corrections = {0: {"pace": "fast"}} if critic_calls == 1 else None
+        return director_critic_payload(
+            group,
+            validated,
+            corrections=corrections,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", reject_parent_once)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert [group_ids for group_ids, _feedback in feedback_calls] == [
+        ("carry-1", "carry-2"),
+        ("carry-1",),
+        ("carry-2",),
+    ]
+    first_child_feedback = feedback_calls[1][1]
+    assert [(issue.stable_id, issue.code, issue.fields) for issue in first_child_feedback] == [
+        ("carry-1", "DIRECTOR_FIELD_MISMATCH", ("pace",)),
+    ]
+    assert feedback_calls[2][1] == ()
+    assert len(db.updated) == 2
 
 
 def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch) -> None:

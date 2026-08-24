@@ -73,6 +73,18 @@ pace không thành fast đều giữ fail-closed. Verdict/delta thô vẫn đư�
 candidate, critic và partition khi completion/reopen/commit, đồng thời từ chối override thiếu/giả hoặc xuất hiện trong
 rejected evidence. Analysis/database/quality pass **908/908**; full repository **1.354/1.354**; Ruff, compileall,
 `pip check`, `git diff --check` đều pass và `OpenWith.exe` giữ **0** trước runtime V33.
+Runtime V33 dùng project sạch đã dừng fail-safe ở 8/107 segment, trước casting/TTS. Forensic exact batch seq8–11 cho thấy
+parent đã tích lũy đúng correction cho seq9 và host lock `afraid` cho seq10, nhưng sau khi tách `[8,9,10] + [11]`, child
+không nhận feedback của parent: ba lượt retry luân phiên sửa seq9 rồi làm seq10 quay về `sad`, nên host từ chối. Source unit
+seq8–10 vẫn được giữ nguyên tử; project V33 không được resume sau khi fingerprint analysis đổi.
+Hardening V34 khóa `allowed_emotions` source-authoritative của host theo từng request ID ngay trong schema generator
+`segments.items.oneOf`; nhiều constraint cùng ID lấy giao, giao rỗng fail-closed trước HTTP, còn semantic choices vẫn chỉ
+là advisory và không thu hẹp enum. Mọi đường split dùng chung một hàm lọc feedback typed theo `stable_id` và chuyển nó vào
+đúng child, nên correction của câu khác không rò sang child và host lock đã có không bị mất. Policy nâng lên
+`analysis_ledger_v19`, `per_id_host_emotion_enum_v1`, casting stage v22/algorithm v23. Regression schema per-ID,
+intersection/conflict, semantic non-lock và split carry pass trong analysis/database/quality **911/911**; full repository
+**1.357/1.357**; Ruff, compileall, `pip check`, `git diff --check` đều pass và `OpenWith.exe` giữ **0**. Runtime V34 chưa
+được tính vào các kết quả này.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 

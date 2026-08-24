@@ -103,7 +103,8 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v18"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v19"
+GENERATOR_RETRY_SCHEMA_POLICY_VERSION = "per_id_host_emotion_enum_v1"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -3148,6 +3149,7 @@ def _output_schema_for_batch(
     batch_ids: list[str],
     *,
     confidence_floor: float = 0.0,
+    hard_emotions_by_id: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, Any]:
     if (
         type(confidence_floor) not in {int, float}
@@ -3159,10 +3161,39 @@ def _output_schema_for_batch(
     segments = schema["properties"]["segments"]
     segments["minItems"] = len(batch_ids)
     segments["maxItems"] = len(batch_ids)
-    segments["items"]["properties"]["id"]["enum"] = batch_ids
     segments["items"]["properties"]["confidence"]["minimum"] = float(
         confidence_floor
     )
+    hard_constraints = (
+        {} if hard_emotions_by_id is None else hard_emotions_by_id
+    )
+    if (
+        not isinstance(hard_constraints, dict)
+        or not set(hard_constraints) <= set(batch_ids)
+        or any(
+            type(values) is not tuple
+            or not values
+            or values != tuple(sorted(set(values)))
+            or any(emotion not in ALLOWED_EMOTIONS for emotion in values)
+            for values in hard_constraints.values()
+        )
+    ):
+        raise ValueError("Generator hard emotion constraints are invalid")
+    if hard_constraints:
+        item_schema = segments["items"]
+        branches: list[dict[str, Any]] = []
+        for batch_id in batch_ids:
+            branch = copy.deepcopy(item_schema)
+            branch["properties"]["id"]["enum"] = [batch_id]
+            allowed_emotions = hard_constraints.get(batch_id)
+            if allowed_emotions is not None:
+                branch["properties"]["emotion"]["enum"] = list(
+                    allowed_emotions
+                )
+            branches.append(branch)
+        segments["items"] = {"oneOf": branches}
+    else:
+        segments["items"]["properties"]["id"]["enum"] = batch_ids
     pronunciations = schema["properties"]["pronunciations"]
     pronunciations["maxItems"] = min(
         MAX_PRONUNCIATIONS_PER_BATCH,
@@ -3517,6 +3548,9 @@ def _analysis_policy_fingerprint(
 ) -> str:
     material = {
         "version": ANALYSIS_LEDGER_POLICY_VERSION,
+        "generator_retry_schema_policy_version": (
+            GENERATOR_RETRY_SCHEMA_POLICY_VERSION
+        ),
         "quality_policy_hash": str(quality_policy_hash or "standalone").strip(),
         "retry_policy_version": str(settings["retry_policy_version"]),
         "host_policy_version": HOST_AFFECT_POLICY_VERSION,
@@ -3723,6 +3757,40 @@ def _structured_feedback_issues(
     )
 
 
+def _generator_hard_emotion_constraints(
+    validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+    *,
+    stable_to_batch: dict[str, str],
+) -> dict[str, tuple[str, ...]]:
+    """Intersect only source-authoritative HOST emotion constraints per request ID."""
+    constrained: dict[str, set[str]] = {}
+    for issue in _structured_feedback_issues(
+        validation_feedback,
+        allowed_stable_ids=set(stable_to_batch),
+    ):
+        if issue.code not in {
+            HOST_AFFECT_ISSUE_CODE,
+            HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
+        }:
+            continue
+        batch_id = stable_to_batch[issue.stable_id]
+        allowed = set(issue.allowed_emotions)
+        narrowed = (
+            constrained[batch_id] & allowed
+            if batch_id in constrained
+            else allowed
+        )
+        if not narrowed:
+            raise ValueError(
+                "Generator HOST emotion constraints have an empty intersection"
+            )
+        constrained[batch_id] = narrowed
+    return {
+        batch_id: tuple(sorted(allowed))
+        for batch_id, allowed in constrained.items()
+    }
+
+
 def _merge_feedback_issues(
     current: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
     incoming: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
@@ -3797,6 +3865,7 @@ def _generator_request_contract(
     )
     return {
         "role": "generator",
+        "schema_policy_version": GENERATOR_RETRY_SCHEMA_POLICY_VERSION,
         "retry_policy_version": retry_policy_version,
         "host_policy_version": HOST_AFFECT_POLICY_VERSION,
         "director_policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
@@ -4752,14 +4821,21 @@ class OllamaBookAnalyzer:
             if any(_is_explicit_chapter_heading(row) for row in group)
             else required_hq_confidence_floor
         )
-        if validation_feedback:
-            stable_to_batch = {stable: batch for batch, stable in batch_to_stable.items()}
+        stable_to_batch = {
+            stable: batch for batch, stable in batch_to_stable.items()
+        }
+        constrained_feedback = _structured_feedback_issues(
+            validation_feedback,
+            allowed_stable_ids=set(stable_to_batch),
+        )
+        hard_emotions_by_id = _generator_hard_emotion_constraints(
+            constrained_feedback,
+            stable_to_batch=stable_to_batch,
+        )
+        if constrained_feedback:
             feedback_payload = [
                 issue.canonical_payload(stable_to_batch[issue.stable_id])
-                for issue in _structured_feedback_issues(
-                    validation_feedback,
-                    allowed_stable_ids=set(stable_to_batch),
-                )
+                for issue in constrained_feedback
             ]
             if feedback_payload:
                 prompt += (
@@ -4797,6 +4873,7 @@ class OllamaBookAnalyzer:
             "format": _output_schema_for_batch(
                 list(batch_to_stable),
                 confidence_floor=schema_confidence_floor,
+                hard_emotions_by_id=hard_emotions_by_id,
             ),
             "keep_alive": "30m",
             "options": {
@@ -5392,6 +5469,37 @@ class OllamaBookAnalyzer:
                     )
                 )
 
+        carried_feedback_by_group: dict[
+            tuple[str, ...],
+            tuple[AnalysisFeedbackIssue, ...],
+        ] = {}
+
+        def group_feedback_key(rows: list[Any]) -> tuple[str, ...]:
+            return tuple(str(row["stable_id"]) for row in rows)
+
+        def queue_analysis_split(
+            offset: int,
+            scope: str,
+            first_half: list[Any],
+            second_half: list[Any],
+            feedback: tuple[AnalysisFeedbackIssue, ...],
+        ) -> None:
+            children = (first_half, second_half)
+            groups[offset : offset + 1] = [
+                (child, scope) for child in children
+            ]
+            for child in children:
+                child_feedback = _structured_feedback_issues(
+                    feedback,
+                    allowed_stable_ids={
+                        str(row["stable_id"]) for row in child
+                    },
+                )
+                if child_feedback:
+                    carried_feedback_by_group[group_feedback_key(child)] = (
+                        child_feedback
+                    )
+
         done = len(all_rows) - len(pending)
         total = len(all_rows)
         director_confidence_cap = float(
@@ -5426,7 +5534,10 @@ class OllamaBookAnalyzer:
             received_incomplete_ids = False
             received_semantic_issues = False
             received_director_critic_issues = False
-            validation_feedback: tuple[AnalysisFeedbackIssue, ...] = ()
+            validation_feedback = carried_feedback_by_group.pop(
+                group_feedback_key(group),
+                (),
+            )
             previous_host_rejection: tuple[str, str] | None = None
             accepted_director_evidence: dict[str, Any] | None = None
             accepted_generator_contract: dict[str, Any] | None = None
@@ -5464,7 +5575,10 @@ class OllamaBookAnalyzer:
                         confidence_floor=director_confidence_floor,
                     )
                     if durable_issues:
-                        validation_feedback = _structured_feedback_issues(durable_issues)
+                        validation_feedback = _merge_feedback_issues(
+                            validation_feedback,
+                            durable_issues,
+                        )
                         received_director_critic_issues = True
                         last_error = "durable director critic rejected the candidate"
                     elif str(resumable_candidate["state"]) == ANALYSIS_CANDIDATE_TERMINAL:
@@ -6012,10 +6126,13 @@ class OllamaBookAnalyzer:
                             )
                             if split_result is not None:
                                 first_half, second_half = split_result
-                                groups[group_offset : group_offset + 1] = [
-                                    (first_half, local_scope),
-                                    (second_half, local_scope),
-                                ]
+                                queue_analysis_split(
+                                    group_offset,
+                                    local_scope,
+                                    first_half,
+                                    second_half,
+                                    validation_feedback,
+                                )
                                 if isinstance(exc, AnalysisWallTimeoutError):
                                     split_reason = "Batch vượt giới hạn thời gian"
                                 elif isinstance(exc, AnalysisOutputBudgetError):
@@ -6052,10 +6169,13 @@ class OllamaBookAnalyzer:
                 and split_result is not None
             ):
                 first_half, second_half = split_result
-                groups[group_offset : group_offset + 1] = [
-                    (first_half, local_scope),
-                    (second_half, local_scope),
-                ]
+                queue_analysis_split(
+                    group_offset,
+                    local_scope,
+                    first_half,
+                    second_half,
+                    validation_feedback,
+                )
                 self.log(
                     f"Batch {group_index} repeated a critic-rejected candidate projection; "
                     f"split early into {len(first_half)} + {len(second_half)} segments."
@@ -6067,10 +6187,13 @@ class OllamaBookAnalyzer:
                 and split_result is not None
             ):
                 first_half, second_half = split_result
-                groups[group_offset : group_offset + 1] = [
-                    (first_half, local_scope),
-                    (second_half, local_scope),
-                ]
+                queue_analysis_split(
+                    group_offset,
+                    local_scope,
+                    first_half,
+                    second_half,
+                    validation_feedback,
+                )
                 self.log(
                     f"Batch {group_index} lặp nguyên candidate và lỗi host; tự chia sớm thành "
                     f"{len(first_half)} + {len(second_half)} segment."
@@ -6084,10 +6207,13 @@ class OllamaBookAnalyzer:
                 and split_result is not None
             ):
                 first_half, second_half = split_result
-                groups[group_offset : group_offset + 1] = [
-                    (first_half, local_scope),
-                    (second_half, local_scope),
-                ]
+                queue_analysis_split(
+                    group_offset,
+                    local_scope,
+                    first_half,
+                    second_half,
+                    validation_feedback,
+                )
                 self.log(
                     f"Batch {group_index} vẫn trả thiếu ID sau {retry_count} lần; tự chia thành "
                     f"{len(first_half)} + {len(second_half)} segment. "
@@ -6100,10 +6226,13 @@ class OllamaBookAnalyzer:
                 and split_result is not None
             ):
                 first_half, second_half = split_result
-                groups[group_offset : group_offset + 1] = [
-                    (first_half, local_scope),
-                    (second_half, local_scope),
-                ]
+                queue_analysis_split(
+                    group_offset,
+                    local_scope,
+                    first_half,
+                    second_half,
+                    validation_feedback,
+                )
                 self.log(
                     f"Batch {group_index} vẫn không qua semantic sau {retry_count} lần; tự chia thành "
                     f"{len(first_half)} + {len(second_half)} segment. "
@@ -6116,10 +6245,13 @@ class OllamaBookAnalyzer:
                 and split_result is not None
             ):
                 first_half, second_half = split_result
-                groups[group_offset : group_offset + 1] = [
-                    (first_half, local_scope),
-                    (second_half, local_scope),
-                ]
+                queue_analysis_split(
+                    group_offset,
+                    local_scope,
+                    first_half,
+                    second_half,
+                    validation_feedback,
+                )
                 self.log(
                     f"Batch {group_index} vẫn không qua phản biện đạo diễn sau {retry_count} lần; "
                     f"tự chia thành {len(first_half)} + {len(second_half)} segment. "
