@@ -1177,8 +1177,8 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v13"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v17"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v14"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v18"
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
     assert "cậu biết... muốn..." in DIRECTOR_CRITIC_SYSTEM_PROMPT
@@ -1760,7 +1760,7 @@ def test_v26_long_singleton_request_binds_exact_source_anchor_enum() -> None:
     assert "không được tự cắt, nối hoặc chuẩn hóa anchor" in session.request["json"][
         "system"
     ]
-    assert request_contract["policy_version"] == "second_pass_v13"
+    assert request_contract["policy_version"] == "second_pass_v14"
     assert request_contract["evidence_policy"] == "singleton_source_anchor_enum_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text(V26_SEQ18_TEXT)
     assert request_contract["evidence_anchor_set_sha256"] == (
@@ -5086,7 +5086,7 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v13"
+    assert first_contract["policy_version"] == "second_pass_v14"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
@@ -5694,6 +5694,144 @@ def test_v30_seq24_mask_keeps_critic_kind_and_affect_deltas_live() -> None:
     assert item["effective_accept"] is False
     assert "host_source_kind_override" not in item
     assert "host_semantic_override" not in item
+
+
+def test_v33_seq24_rejects_unsupported_critic_affect_escalation() -> None:
+    source_rows = v30_seq23_25_rows()
+    row = source_rows[1]
+    stable_id = str(row["stable_id"])
+    original_context = _original_neighbor_context(source_rows)
+    candidate = analysis_item(stable_id)
+    candidate["intensity"] = 1
+    validated = {stable_id: candidate}
+    candidate_rows = _director_candidate_rows(
+        [row],
+        validated,
+        original_context=original_context,
+    )
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={
+            0: {
+                "emotion": "afraid",
+                "intensity": 2,
+                "pace": "fast",
+            }
+        },
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        original_context=original_context,
+    )
+
+    assert issues == {}
+    item = evidence["segments"][0]
+    assert item["critic"]["accept"] is False
+    assert item["effective_accept"] is True
+    assert item["host_critic_compatibility_override"] == {
+        "policy_version": "host_critic_compatibility_v1",
+        "stable_id": stable_id,
+        "text_sha256": sha256_text(V30_SEQ24_TEXT),
+        "rule": "disoriented_low_arousal_candidate_compatibility",
+        "source_cue_class": "disoriented",
+        "source_cue_quote": "hỗn loạn",
+        "candidate_values": {
+            "emotion": "neutral",
+            "intensity": 1,
+            "pace": "normal",
+        },
+        "critic_values": {
+            "emotion": "afraid",
+            "intensity": 2,
+            "pace": "fast",
+        },
+        "raw_accept": False,
+        "raw_field_deltas": [
+            "emotion:neutral->afraid",
+            "intensity:1->2",
+            "pace:normal->fast",
+        ],
+        "covered_field_deltas": [
+            "emotion:neutral->afraid",
+            "intensity:1->2",
+            "pace:normal->fast",
+        ],
+        "unresolved_field_deltas": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("text", "correction"),
+    [
+        (
+            "Tâm trí cậu hỗn loạn vì hoảng sợ.",
+            {"emotion": "afraid", "intensity": 2, "pace": "fast"},
+        ),
+        (
+            "Đầu óc cậu hỗn loạn.",
+            {"emotion": "sad", "intensity": 2, "pace": "fast"},
+        ),
+        (
+            "Đầu óc cậu hỗn loạn.",
+            {"emotion": "angry", "intensity": 2, "pace": "fast"},
+        ),
+        (
+            "Đầu óc cậu hỗn loạn.",
+            {"emotion": "afraid", "intensity": 2, "pace": "slow"},
+        ),
+        (
+            "Đầu óc cậu hỗn loạn?",
+            {"emotion": "afraid", "intensity": 2, "pace": "fast"},
+        ),
+        (
+            "Đầu óc cậu hỗn loạn.",
+            {"emotion": "afraid"},
+        ),
+    ],
+)
+def test_v33_compatibility_override_does_not_cover_nonmatching_dissent(
+    text: str,
+    correction: dict[str, object],
+) -> None:
+    stable_id = "v33-nonmatching"
+    row = {
+        "stable_id": stable_id,
+        "text": text,
+        "kind_hint": "narration",
+    }
+    candidate = analysis_item(stable_id)
+    candidate["intensity"] = 1
+    validated = {stable_id: candidate}
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: correction},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    expected_fields = ",".join(correction)
+    assert issues == {
+        stable_id: f"DIRECTOR_FIELD_MISMATCH fields={expected_fields}",
+    }
+    assert "host_critic_compatibility_override" not in evidence["segments"][0]
 
 
 def test_v32_dialogue_kind_only_critic_dissent_uses_source_bound_override() -> None:
@@ -9079,7 +9217,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v13"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v14"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

@@ -38,6 +38,7 @@ from ebook_reader.database import (
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
+    analysis_expected_critic_compatibility_override,
     analysis_critic_anchor_set_sha256,
     analysis_critic_per_id_anchor_map_sha256,
     analysis_source_narration_precedes_next_paragraph_thought,
@@ -790,6 +791,40 @@ def _accepted_critic_evidence(envelope: dict) -> dict:
         "critic_contract": _accepted_critic_contract(envelope),
         "segments": rows,
     }
+
+
+def _critic_compatibility_override_evidence(envelope: dict) -> dict:
+    evidence = _accepted_critic_evidence(envelope)
+    item = evidence["segments"][0]
+    critic_row = envelope["critic_rows"][0]
+    candidate = item["candidate"]
+    item["critic"].update(
+        {
+            "accept": False,
+            "emotion": "afraid",
+            "intensity": 2,
+            "pace": "fast",
+            "rationale": "Critic suy diễn sợ hãi từ trạng thái hỗn loạn.",
+        }
+    )
+    raw_deltas = [
+        "emotion:neutral->afraid",
+        "intensity:1->2",
+        "pace:normal->fast",
+    ]
+    item["field_deltas"] = raw_deltas
+    override = analysis_expected_critic_compatibility_override(
+        stable_id=str(item["stable_id"]),
+        source_text=str(critic_row["text"]),
+        text_sha256=str(item["text_sha256"]),
+        source_kind=str(critic_row["hint"]),
+        candidate=candidate,
+        critic=item["critic"],
+        raw_deltas=raw_deltas,
+    )
+    assert override is not None
+    item["host_critic_compatibility_override"] = override
+    return evidence
 
 
 def _chapter_heading_envelope(source_rows: list[dict]) -> dict:
@@ -2055,8 +2090,6 @@ def test_v22_acceptance_rejects_critic_floor_or_cap_contract_tamper(
             evidence=evidence,
             commit_envelope=envelope,
         )
-
-
 def test_v24_reopen_rejects_rehashed_critic_floor_above_schema_maximum(
     tmp_path: Path,
 ) -> None:
@@ -2169,8 +2202,8 @@ def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     candidate_id = int(candidate["id"])
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v13"
-    assert contract["director_policy_version"] == "second_pass_v13"
+    assert contract["policy_version"] == "second_pass_v14"
+    assert contract["director_policy_version"] == "second_pass_v14"
     assert (
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
@@ -2321,8 +2354,8 @@ def test_v27_v26_seq18_anchor_evidence_survives_reserve_reopen_accept_and_commit
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
     )
-    assert contract["policy_version"] == "second_pass_v13"
-    assert contract["director_policy_version"] == "second_pass_v13"
+    assert contract["policy_version"] == "second_pass_v14"
+    assert contract["director_policy_version"] == "second_pass_v14"
     assert contract["evidence_text_sha256"] == V26_SEQ18_TEXT_SHA256
     assert contract["evidence_anchor_set_sha256"] == (
         analysis_critic_anchor_set_sha256(anchors)
@@ -2649,7 +2682,7 @@ def test_v28_per_id_anchor_map_binds_five_rows_through_reopen_and_commit(
     )
 
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v13"
+    assert contract["policy_version"] == "second_pass_v14"
     assert contract["evidence_policy"] == (
         ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
     )
@@ -3357,6 +3390,139 @@ def test_v31_seq24_mask_does_not_cover_critic_kind_dissent(tmp_path: Path) -> No
     assert ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))[
         "state"
     ] == "critic_rejected"
+
+
+def test_v33_seq24_compatibility_override_survives_reopen_and_commit(
+    tmp_path: Path,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    target_row = source_rows[1]
+    candidate = _allocate_analysis_candidate(
+        db,
+        [target_row],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _critic_compatibility_override_evidence(envelope)
+
+    ProjectDB(db.path).complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True, "critic_compatibility_override": True},
+        evidence=evidence,
+        commit_envelope=envelope,
+    )
+
+    reopened = ProjectDB(db.path)
+    snapshot = reopened.analysis_candidate_acceptance_envelope(candidate_id)
+    stored_item = snapshot["critic_evidence"]["segments"][0]
+    assert stored_item["critic"]["emotion"] == "afraid"
+    assert stored_item["effective_accept"] is True
+    assert stored_item["host_critic_compatibility_override"]["source_cue_quote"] == (
+        "hỗn loạn"
+    )
+    segment = snapshot["commit_envelope"]["segments"][0]
+    reopened.update_analysis_batch_with_event(
+        [
+            {
+                "segment_id": segment["segment_id"],
+                "stable_id": segment["stable_id"],
+                "text_sha256": segment["text_sha256"],
+                "expected_status": "pending",
+                "data": dict(segment["data"]),
+            }
+        ],
+        low_confidence_threshold=0.65,
+        event_level="info",
+        event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
+        event_message="V33 seq24 compatibility override accepted",
+        event_details={"candidate_hash": str(candidate["candidate_hash"])},
+        **ANALYSIS_MODEL_COMMIT,
+        analysis_candidate_id=candidate_id,
+        analysis_policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+        analysis_group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+        analysis_context_hash=context_hash,
+    )
+
+    committed = {
+        str(row["stable_id"]): row for row in reopened.list_segments()
+    }
+    assert committed[V30_SEQ24_STABLE_ID]["status"] == "analyzed"
+    assert committed[V30_SEQ24_STABLE_ID]["emotion"] == "neutral"
+    assert committed[V30_SEQ24_STABLE_ID]["intensity"] == 1
+    assert committed[V30_SEQ24_STABLE_ID]["pace"] == "normal"
+
+
+@pytest.mark.parametrize(
+    ("tamper_field", "tamper_value"),
+    (
+        ("policy_version", "host_critic_compatibility_v0"),
+        ("source_cue_quote", "xa lạ"),
+        ("covered_field_deltas", ["emotion:neutral->afraid"]),
+    ),
+)
+def test_v33_seq24_compatibility_override_rejects_forged_evidence(
+    tmp_path: Path,
+    tamper_field: str,
+    tamper_value: object,
+) -> None:
+    db, source_rows, envelope, context_hash = (
+        _v31_v30_seq24_next_paragraph_thought_db(tmp_path)
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        [source_rows[1]],
+        context_hash=context_hash,
+        candidate=envelope,
+        deterministic_issues=_clean_host_clearance(envelope),
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _critic_compatibility_override_evidence(envelope)
+    evidence["segments"][0]["host_critic_compatibility_override"][
+        tamper_field
+    ] = tamper_value
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+    with pytest.raises(RuntimeError, match="contains a compatibility override"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_rejected",
+            outcome={"accepted": False},
+            evidence=evidence,
+        )
 
 
 @pytest.mark.parametrize(
@@ -4632,7 +4798,7 @@ def test_v24_heading_critic_confidence_preserves_lock_through_reopen_and_commit(
 ) -> None:
     assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
     assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
-    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v13"
+    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v14"
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),

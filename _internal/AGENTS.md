@@ -172,6 +172,12 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Ba cue nhận thức mơ hồ `thất thần|bàng hoàng|hỗn loạn` thuộc lớp nội bộ `disoriented`: chúng là bằng chứng chống
   `happy` sai nhưng không được coi là cue trực tiếp để từ chối `neutral`, không tạo `allowed_emotions` và không tự ép
   thành `afraid`/`surprised`. Cue sợ hãi rõ ràng cùng xuất hiện vẫn được xét độc lập theo contract `afraid`.
+- Với narration/NARRATOR chỉ có đúng cue active `disoriented`, không có dấu hỏi/cảm thán và candidate tiết chế
+  `neutral`, intensity `0|1`, pace/volume `normal`, host được phép giữ candidate trước critic tự-review suy diễn
+  `afraid` kèm ít nhất một escalation intensity hoặc pace. Override compatibility chỉ được phủ tập con
+  `emotion,intensity,pace`; mọi cue affect khác, delta `kind/speaker/volume`, intensity không tăng, pace không thành
+  `fast` hoặc emotion khác `afraid` đều phải fail-closed. Raw verdict/delta vẫn lưu đầy đủ; SQLite phải dựng lại exact
+  rule từ source text/hash, source kind, candidate, critic và partition khi critic completion, reopen và commit.
 - Candidate qua rule affect nguồn hẹp phải mang semantic lock source-bound vào critic row và durable clearance. Với lock một
   field, critic correction chỉ được host override khi có delta duy nhất trên field khóa và giá trị đề xuất nằm ngoài tập host
   cho phép. Riêng rule bảo vệ cả source kind và emotion được phép compose hai override đúng hai field đó; mọi raw verdict/delta
@@ -181,7 +187,8 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Profile `high_quality` bắt buộc chạy một lượt director critic thứ hai trên candidate analysis bất biến. Critic không
   được thấy confidence, notes hoặc personality tự chấm của generator; response phải có đúng schema, đúng một verdict
   cho mọi ID và khớp chính xác candidate hash. Critic dùng cùng model chỉ là self-review có tương quan, không phải model
-  độc lập, nên không bao giờ được vượt qua semantic gate tất định hoặc biến một field khác candidate thành pass.
+  độc lập, nên không bao giờ được vượt qua semantic gate tất định. Field delta chỉ có thể thành pass qua structural lock,
+  semantic/source-kind lock hoặc compatibility override `disoriented` hẹp đã mô tả và được DB replay độc lập ở trên.
 - Director critic cho source `kind_hint=thought` chỉ nhận `previous_context_only`: giữ đúng source trước liền kề để hiểu
   lời dẫn/attribution nhưng bắt buộc để `next_text` rỗng, ngăn sự kiện tương lai cho mượn emotion/intensity/pace/volume
   vào suy nghĩ hiện tại. Generator vẫn nhận adjacent context; narration/dialogue critic thông thường vẫn dùng

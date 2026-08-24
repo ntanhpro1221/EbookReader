@@ -174,7 +174,8 @@ ANALYSIS_SOURCE_DIALOGUE_KIND_RULE = "explicit_dialogue_boundary"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
 ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v9"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v6"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v13"
+ANALYSIS_HOST_CRITIC_COMPATIBILITY_POLICY_VERSION = "host_critic_compatibility_v1"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v14"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -817,6 +818,11 @@ ANALYSIS_HOST_AFFECT_CUE_PATTERNS = {
     "sad": ANALYSIS_SAD_CUE_PATTERN,
     "surprised": ANALYSIS_SURPRISED_CUE_PATTERN,
 }
+ANALYSIS_HOST_CRITIC_COMPATIBILITY_RULE = (
+    "disoriented_low_arousal_candidate_compatibility"
+)
+ANALYSIS_HOST_CRITIC_COMPATIBILITY_FIELDS = ("emotion", "intensity", "pace")
+ANALYSIS_HOST_CRITIC_UNSUPPORTED_EMOTIONS = frozenset({"afraid"})
 
 
 def canonical_analysis_note(
@@ -943,6 +949,85 @@ def _analysis_source_active_affect_matches(
         last_suppressed_end = None
         active.setdefault(label, match)
     return active
+
+
+def analysis_expected_critic_compatibility_override(
+    *,
+    stable_id: str,
+    source_text: str,
+    text_sha256: str,
+    source_kind: str,
+    candidate: dict[str, Any],
+    critic: dict[str, Any],
+    raw_deltas: list[str],
+) -> dict[str, Any] | None:
+    """Return the one conservative source-bound override allowed for critic dissent."""
+    if (
+        not stable_id
+        or sha256_text(source_text) != text_sha256
+        or any(mark in source_text for mark in ("?", "？", "!", "！"))
+        or source_kind != "narration"
+        or candidate.get("kind") != "narration"
+        or candidate.get("speaker") != "NARRATOR"
+        or candidate.get("emotion") != "neutral"
+        or type(candidate.get("intensity")) is not int
+        or candidate["intensity"] not in {0, 1}
+        or candidate.get("pace") != "normal"
+        or candidate.get("volume") != "normal"
+    ):
+        return None
+    cue_matches = _analysis_source_active_affect_matches(source_text)
+    if set(cue_matches) != {"disoriented"}:
+        return None
+    raw_delta_fields = [
+        field
+        for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+        if critic.get(field) != candidate.get(field)
+    ]
+    if (
+        not raw_delta_fields
+        or "emotion" not in raw_delta_fields
+        or len(raw_delta_fields) < 2
+        or not set(raw_delta_fields) <= set(ANALYSIS_HOST_CRITIC_COMPATIBILITY_FIELDS)
+        or critic.get("emotion") not in ANALYSIS_HOST_CRITIC_UNSUPPORTED_EMOTIONS
+        or (
+            "intensity" in raw_delta_fields
+            and (
+                type(critic.get("intensity")) is not int
+                or critic["intensity"] <= candidate["intensity"]
+            )
+        )
+        or ("pace" in raw_delta_fields and critic.get("pace") != "fast")
+    ):
+        return None
+    expected_raw_deltas = [
+        f"{field}:{candidate[field]}->{critic[field]}"
+        for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+        if critic.get(field) != candidate.get(field)
+    ]
+    if raw_deltas != expected_raw_deltas:
+        return None
+    cue_match = cue_matches["disoriented"]
+    return {
+        "policy_version": ANALYSIS_HOST_CRITIC_COMPATIBILITY_POLICY_VERSION,
+        "stable_id": stable_id,
+        "text_sha256": text_sha256,
+        "rule": ANALYSIS_HOST_CRITIC_COMPATIBILITY_RULE,
+        "source_cue_class": "disoriented",
+        "source_cue_quote": cue_match.group(0),
+        "candidate_values": {
+            field: candidate[field]
+            for field in ANALYSIS_HOST_CRITIC_COMPATIBILITY_FIELDS
+        },
+        "critic_values": {
+            field: critic[field]
+            for field in ANALYSIS_HOST_CRITIC_COMPATIBILITY_FIELDS
+        },
+        "raw_accept": False,
+        "raw_field_deltas": raw_deltas,
+        "covered_field_deltas": raw_deltas,
+        "unresolved_field_deltas": [],
+    }
 
 
 def _analysis_source_has_narrow_direct_affect(
@@ -3801,9 +3886,33 @@ class ProjectDB:
                 expected_source_kind_override is not None
                 and source_kind_override == expected_source_kind_override
             )
+            critic_compatibility_override = item.get(
+                "host_critic_compatibility_override"
+            )
+            expected_critic_compatibility_override = (
+                analysis_expected_critic_compatibility_override(
+                    stable_id=stable_id,
+                    source_text=str(critic_row["text"]),
+                    text_sha256=str(candidate_segments[stable_id]["text_sha256"]),
+                    source_kind=str(critic_row["hint"]),
+                    candidate=candidate_projection,
+                    critic=raw_delivery,
+                    raw_deltas=raw_deltas,
+                )
+                if raw_accept_value is False
+                else None
+            )
+            critic_compatibility_override_valid = (
+                expected_critic_compatibility_override is not None
+                and critic_compatibility_override
+                == expected_critic_compatibility_override
+            )
             covered_override_fields = (
                 set(raw_delta_fields)
-                if structural_override_valid
+                if (
+                    structural_override_valid
+                    or critic_compatibility_override_valid
+                )
                 else {
                     field
                     for field, valid in (
@@ -3851,6 +3960,7 @@ class ProjectDB:
                         structural_override is not None
                         or semantic_override is not None
                         or source_kind_override is not None
+                        or critic_compatibility_override is not None
                     )
                 )
                 or (
@@ -3868,6 +3978,10 @@ class ProjectDB:
                 or (
                     source_kind_override is not None
                     and not source_kind_override_valid
+                )
+                or (
+                    critic_compatibility_override is not None
+                    and not critic_compatibility_override_valid
                 )
                 or any(type(value) not in {int, float} for value in numeric_confidences)
                 or any(not math.isfinite(float(value)) for value in numeric_confidences)
@@ -3906,6 +4020,15 @@ class ProjectDB:
         deterministic_issue_json: str,
     ) -> None:
         candidate = json.loads(candidate_json)
+        evidence_segments = evidence.get("segments")
+        if isinstance(evidence_segments, list) and any(
+            isinstance(item, dict)
+            and item.get("host_critic_compatibility_override") is not None
+            for item in evidence_segments
+        ):
+            raise RuntimeError(
+                "Rejected critic evidence contains a compatibility override"
+            )
         _structural_locks, semantic_locks, context_kind_locks = (
             cls._analysis_host_lock_contract(
                 candidate_json,
@@ -3923,7 +4046,6 @@ class ProjectDB:
             )
         }
         protected_ids = set(context_kind_locks) | semantic_source_kind_ids
-        evidence_segments = evidence.get("segments")
         if not protected_ids:
             if isinstance(evidence_segments, list) and any(
                 isinstance(item, dict)

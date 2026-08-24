@@ -61,6 +61,18 @@ không bao giờ được lock che và vẫn fail-closed nếu còn delta. SQLit
 critic completion và commit, đồng thời từ chối evidence thiếu lock, giả rule hoặc giả covered/unresolved partition.
 Regression exact seq42–44 cùng database replay/tamper và quality policy pass **897/897**; full repository **1.343/1.343**,
 Ruff, compileall, `pip check`, `git diff --check` đều pass. Mọi test đều gọi interpreter rõ ràng; `OpenWith.exe` giữ **0**.
+Runtime V32 dùng project sạch đã checkpoint 24/107 segment rồi dừng fail-safe trước casting/TTS ở exact seq24. Target
+chỉ có cue active `hỗn loạn`, không có câu hỏi; cùng delivery `neutral/0/normal` từng được critic đồng ý trong batch,
+nhưng các lượt singleton lại bịa “câu hỏi bối rối” và ép `afraid`, intensity `2|3`, pace `fast`. Project V32 không được
+resume sau khi policy đổi và không có audio/casting dở được commit.
+Hardening V33 thêm compatibility override source-bound duy nhất cho trường hợp này: source phải là narration/NARRATOR,
+chỉ có cue active `disoriented`, không có dấu hỏi/cảm thán; candidate phải `neutral`, intensity `0|1`, pace/volume
+`normal`; critic chỉ bị bác khi suy diễn đúng `afraid` kèm ít nhất một escalation intensity hoặc pace và toàn bộ delta
+nằm trong `emotion,intensity,pace`. Cue affect khác, emotion khác, delta kind/speaker/volume, intensity không tăng hoặc
+pace không thành fast đều giữ fail-closed. Verdict/delta thô vẫn được lưu; SQLite dựng lại exact rule từ source/hash,
+candidate, critic và partition khi completion/reopen/commit, đồng thời từ chối override thiếu/giả hoặc xuất hiện trong
+rejected evidence. Analysis/database/quality pass **908/908**; full repository **1.354/1.354**; Ruff, compileall,
+`pip check`, `git diff --check` đều pass và `OpenWith.exe` giữ **0** trước runtime V33.
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 
@@ -107,6 +119,9 @@ pytest/Ruff không được cài hoặc chạy trong luồng mở app của ngư
   riêng sau khi batch đã chia dưới 8 segment và kết thúc bắt buộc ở singleton thay vì checkpoint dữ liệu suy biến;
 - cue `thất thần|bàng hoàng|hỗn loạn` được giữ ở lớp `disoriented` chống happy, không còn ép neutral thành afraid hay
   phát allowed-emotion advisory; cue sợ hãi rõ ràng cùng câu vẫn được xét độc lập;
+- critic self-review chỉ có thể bị compatibility override ở đúng narration/NARRATOR `disoriented`-only, không có dấu
+  hỏi/cảm thán, candidate neutral low-arousal và correction `afraid` tăng intensity hoặc pace; exact evidence source/hash,
+  candidate/critic/delta được DB replay, mọi correction ngoài contract vẫn fail-closed;
 - compound gate từ chối narration phẳng khi cùng một segment có cả tổn thương phổi/yết hầu và ý thức mơ hồ, nhưng giữ
   neutral cho suy kiệt thể chất hoặc quan sát lâm sàng đơn lẻ để không biến keyword gate thành đạo diễn cảm xúc rộng;
 - host affect nguồn hẹp được adjudicate trước semantic cue chung và mọi constraint typed đã xác minh được tích lũy trong

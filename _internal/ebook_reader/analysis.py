@@ -38,6 +38,7 @@ from .database import (
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
+    ANALYSIS_HOST_CRITIC_COMPATIBILITY_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
     ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
@@ -47,6 +48,7 @@ from .database import (
     EXPLICIT_ATTRIBUTION_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
+    analysis_expected_critic_compatibility_override,
     analysis_critic_anchor_set_sha256,
     analysis_critic_per_id_anchor_map_sha256,
     analysis_source_narration_precedes_next_paragraph_thought,
@@ -101,7 +103,7 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v17"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v18"
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -4186,6 +4188,7 @@ def _adjudicate_director_critic(
         host_derived_agreement = not deltas
         accepted = host_derived_agreement
         structural_override: dict[str, Any] | None = None
+        critic_compatibility_override: dict[str, Any] | None = None
         semantic_override: dict[str, Any] | None = None
         source_kind_override: dict[str, Any] | None = None
         unresolved_deltas = list(deltas)
@@ -4245,6 +4248,30 @@ def _adjudicate_director_critic(
                 )
             )
         )
+        critic_compatibility_override = (
+            analysis_expected_critic_compatibility_override(
+                stable_id=stable_id,
+                source_text=str(rows_by_stable[stable_id]["text"]),
+                text_sha256=_source_text_sha256(rows_by_stable[stable_id]),
+                source_kind=str(
+                    _row_optional_value(
+                        rows_by_stable[stable_id],
+                        "kind_hint",
+                        "narration",
+                    )
+                ),
+                candidate=candidate,
+                critic=corrected,
+                raw_deltas=deltas,
+            )
+        )
+        if critic_compatibility_override is not None:
+            if (
+                critic_compatibility_override["policy_version"]
+                != ANALYSIS_HOST_CRITIC_COMPATIBILITY_POLICY_VERSION
+            ):
+                raise RuntimeError("Unsupported critic compatibility policy")
+            host_covered_fields.update(delta_fields)
         if (
             protected_kind_rule
             and protected_kind_delta
@@ -4349,6 +4376,10 @@ def _adjudicate_director_critic(
             evidence_by_stable[stable_id]["host_semantic_override"] = semantic_override
         if source_kind_override is not None:
             evidence_by_stable[stable_id]["host_source_kind_override"] = source_kind_override
+        if critic_compatibility_override is not None:
+            evidence_by_stable[stable_id]["host_critic_compatibility_override"] = (
+                critic_compatibility_override
+            )
         if accepted:
             accepted_confidence_updates[stable_id] = derived_confidence
     if (
