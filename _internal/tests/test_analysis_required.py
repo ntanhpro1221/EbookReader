@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import re
 import subprocess
@@ -51,6 +52,7 @@ from ebook_reader.analysis import (
     _director_candidate_hash,
     _director_candidate_rows,
     _director_critic_request_contract,
+    _director_critic_payload_is_retryable_invalid,
     _director_critic_schema,
     _direct_cue_feedback_issues,
     _generator_request_contract,
@@ -175,6 +177,10 @@ V32_SEQ44_TEXT = (
     "thằng nhóc thối nhà Simon báo tin tới trang viên của ngài Tước sĩ Wayne để "
     "gọi anh hai về. Bây giờ anh ấy đã là cận vệ hiệp sĩ rồi, mấy tên thầy thuốc "
     "của nhà từ thiện đó không dám hét cái giá nực cười, thái quá trước mặt anh ấy đâu!”"
+)
+V37_SEQ45_TEXT = (
+    "Nhắc đến người anh trai đang làm cận vệ hiệp sĩ của mình, cậu bé hơi hếch "
+    "cằm lên, ánh mắt tràn ngập vẻ tự hào."
 )
 
 
@@ -969,7 +975,7 @@ def test_adaptive_retry_contract_is_deterministic_source_bound_and_text_free() -
 
     assert first == repeated
     assert first["schema_policy_version"] == (
-        "per_id_host_emotion_director_advisory_v2"
+        "per_id_host_emotion_semantic_rejection_director_advisory_v4"
     )
     assert [first["temperature"], second["temperature"]] == [0.1, 0.2]
     assert first["seed"] != second["seed"] != changed_digest["seed"]
@@ -1182,10 +1188,10 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert "notes" not in segment_schema["required"]
     assert "Không trả personality_hint hoặc notes" in SYSTEM_PROMPT
     assert "không chèn giải thích tự do vào bất kỳ field nào" in SYSTEM_PROMPT
-    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v14"
-    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v20"
+    assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v18"
+    assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v26"
     assert GENERATOR_RETRY_SCHEMA_POLICY_VERSION == (
-        "per_id_host_emotion_director_advisory_v2"
+        "per_id_host_emotion_semantic_rejection_director_advisory_v4"
     )
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
@@ -1198,6 +1204,11 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
         DIRECTOR_CRITIC_SYSTEM_PROMPT
     )
     assert "neutral với intensity=0 hoặc 1 và pace=normal" in (
+        DIRECTOR_CRITIC_SYSTEM_PROMPT
+    )
+    assert "opaque host ID" in DIRECTOR_CRITIC_SYSTEM_PROMPT
+    assert "sao chép byte-for-byte" in DIRECTOR_CRITIC_SYSTEM_PROMPT
+    assert "chỉ được chọn đúng một giá trị trong allowed_speakers" in (
         DIRECTOR_CRITIC_SYSTEM_PROMPT
     )
 
@@ -1432,6 +1443,7 @@ def test_host_feedback_is_canonical_and_excludes_raw_injection() -> None:
 
 def test_generic_direct_cue_feedback_prompt_marks_choices_as_advisory() -> None:
     group = analysis_group()
+    group[0]["text"] = "Cậu hoảng sợ và khóc."
     session = FakeSession({"segments": [analysis_item("S001"), analysis_item("S002")]})
     analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
     analyzer.session = session
@@ -1454,17 +1466,26 @@ def test_generic_direct_cue_feedback_prompt_marks_choices_as_advisory() -> None:
     assert "SEMANTIC_DELIVERY_MISMATCH" in prompt
     assert "chỉ là các lựa chọn gợi ý" in prompt
     assert "đó không phải whitelist cứng" in prompt
+    assert "neutral vừa bị host bác bỏ sẽ bị loại khỏi schema đúng ID" in prompt
     assert "hãy chọn cảm xúc phù hợp nhất" in prompt
     assert '"allowed_emotions":["afraid","sad"]' in prompt
     segment_items = session.request["json"]["format"]["properties"]["segments"][
         "items"
     ]
-    assert "oneOf" not in segment_items
-    assert "neutral" in segment_items["properties"]["emotion"]["enum"]
+    branches = {
+        branch["properties"]["id"]["enum"][0]: branch
+        for branch in segment_items["oneOf"]
+    }
+    first_emotions = branches["S001"]["properties"]["emotion"]["enum"]
+    second_emotions = branches["S002"]["properties"]["emotion"]["enum"]
+    assert "neutral" not in first_emotions
+    assert {"afraid", "sad", "happy", "tender"} <= set(first_emotions)
+    assert "neutral" in second_emotions
 
 
-def test_v34_generator_schema_intersects_host_constraints_per_id() -> None:
+def test_v36_generator_schema_intersects_host_and_semantic_rejection_per_id() -> None:
     group = analysis_group()
+    group[0]["text"] = "Cậu hoảng sợ và khóc."
     session = FakeSession(
         {"segments": [analysis_item("S001"), analysis_item("S002")]}
     )
@@ -1504,7 +1525,8 @@ def test_v34_generator_schema_intersects_host_constraints_per_id() -> None:
         branch["properties"]["id"]["enum"][0]: branch
         for branch in segment_items["oneOf"]
     }
-    assert "neutral" in branches["S001"]["properties"]["emotion"]["enum"]
+    assert "neutral" not in branches["S001"]["properties"]["emotion"]["enum"]
+    assert "tender" in branches["S001"]["properties"]["emotion"]["enum"]
     assert branches["S002"]["properties"]["emotion"]["enum"] == [
         "afraid",
         "tired",
@@ -1647,6 +1669,37 @@ def test_v35_latest_director_advice_updates_fields_and_keeps_resolved_projection
             ),
         ),
         host_issue,
+    )
+
+
+def test_v36_semantic_rejection_removes_conflicting_director_neutral_advice() -> None:
+    stable_id = str(analysis_group()[0]["stable_id"])
+    semantic_issue = AnalysisFeedbackIssue(
+        stable_id=stable_id,
+        code="SEMANTIC_DELIVERY_MISMATCH",
+        fields=("emotion",),
+        allowed_emotions=("happy", "surprised"),
+    )
+    director_issue = AnalysisFeedbackIssue(
+        stable_id=stable_id,
+        code="DIRECTOR_FIELD_MISMATCH",
+        fields=("emotion", "intensity"),
+        suggested_values=(
+            ("emotion", "neutral"),
+            ("intensity", 1),
+        ),
+    )
+
+    merged = _merge_feedback_issues((semantic_issue,), (director_issue,))
+
+    assert merged == (
+        AnalysisFeedbackIssue(
+            stable_id=stable_id,
+            code="DIRECTOR_FIELD_MISMATCH",
+            fields=("emotion", "intensity"),
+            suggested_values=(("intensity", 1),),
+        ),
+        semantic_issue,
     )
 
 
@@ -1891,6 +1944,11 @@ def test_singleton_director_request_binds_confidence_and_exact_short_quote(
     ]
     assert verdict_properties["critic_confidence"]["minimum"] == expected_floor
     assert verdict_properties["evidence_quote"]["enum"] == ["“Ha…”"]
+    assert verdict_properties["speaker"]["enum"] == [
+        "Hạ Phong",
+        "NARRATOR",
+        "UNKNOWN",
+    ]
     assert f"confidence_floor={expected_floor}" in request["prompt"]
     assert "confidence_cap=0.95" in request["prompt"]
     assert "evidence_quote phải sao chép nguyên văn toàn bộ trường text" in request["prompt"]
@@ -1898,6 +1956,10 @@ def test_singleton_director_request_binds_confidence_and_exact_short_quote(
     assert "text đủ ngắn phải sao chép nguyên văn toàn bộ" in request["system"]
     assert "boolean đồng ý/từ chối" in request["system"]
     assert "evidence_policy=singleton_full_target_v1" in request["prompt"]
+    assert "speaker_policy=candidate_bound_enum_v1" in request["prompt"]
+    assert 'allowed_speakers=["Hạ Phong","NARRATOR","UNKNOWN"]' in request[
+        "prompt"
+    ]
     assert request_contract["evidence_policy"] == "singleton_full_target_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text("“Ha…”")
     assert request_contract["evidence_anchor_set_sha256"] == ""
@@ -1970,7 +2032,7 @@ def test_v26_long_singleton_request_binds_exact_source_anchor_enum() -> None:
     assert "không được tự cắt, nối hoặc chuẩn hóa anchor" in session.request["json"][
         "system"
     ]
-    assert request_contract["policy_version"] == "second_pass_v14"
+    assert request_contract["policy_version"] == "second_pass_v18"
     assert request_contract["evidence_policy"] == "singleton_source_anchor_enum_v1"
     assert request_contract["evidence_text_sha256"] == sha256_text(V26_SEQ18_TEXT)
     assert request_contract["evidence_anchor_set_sha256"] == (
@@ -2072,6 +2134,7 @@ def test_multirow_director_schema_locks_each_id_to_its_exact_source_anchor_enum(
         "candidate-hash",
         confidence_floor=0.65,
         per_id_source_anchor_map=anchor_map,
+        allowed_speakers=("NARRATOR", "UNKNOWN"),
     )
     verdict_items = schema["properties"]["verdicts"]["items"]
     branches = verdict_items["oneOf"]
@@ -2090,6 +2153,346 @@ def test_multirow_director_schema_locks_each_id_to_its_exact_source_anchor_enum(
         branch["properties"]["critic_confidence"]["minimum"] == 0.65
         for branch in branches
     )
+    assert all(
+        branch["properties"]["speaker"]["enum"] == ["NARRATOR", "UNKNOWN"]
+        for branch in branches
+    )
+
+
+def test_v36_direct_affect_contract_rejects_neutral_for_only_the_source_bound_id() -> None:
+    group = [
+        {
+            "id": 37,
+            "stable_id": "c00001_s0000036_899a660818f4",
+            "chapter_id": 1,
+            "seq": 36,
+            "paragraph_index": 32,
+            "text": (
+                "Một cậu bé tóc nâu ngắn, trên người mặc chiếc áo sơ mi vải thô "
+                "dài tới đầu gối, nhìn thấy Hạ Phong đang đứng bên giường thì vô "
+                "cùng kinh ngạc và mừng rỡ:"
+            ),
+            "kind_hint": "narration",
+        },
+        {
+            "id": 38,
+            "stable_id": "ordinary",
+            "chapter_id": 1,
+            "seq": 37,
+            "paragraph_index": 33,
+            "text": "Cậu bé bước tới bên giường.",
+            "kind_hint": "narration",
+        },
+    ]
+    semantic_feedback = (
+        AnalysisFeedbackIssue(
+            stable_id="c00001_s0000036_899a660818f4",
+            code="SEMANTIC_DELIVERY_MISMATCH",
+            fields=("emotion",),
+            allowed_emotions=("happy", "surprised"),
+        ),
+    )
+    generator_contract = _generator_request_contract(
+        build_settings()["analysis"],
+        model="qwen3:8b",
+        model_digest="sha256:locked",
+        group=group,
+        attempt=2,
+        validation_feedback=semantic_feedback,
+    )
+    contract = _director_critic_request_contract(
+        build_settings()["analysis"],
+        model="qwen3:8b",
+        model_digest="sha256:locked",
+        group=group,
+        attempt=1,
+        candidate_hash="candidate",
+        rejected_emotions_by_id=generator_contract["rejected_emotions_by_id"],
+    )
+    anchor_map = canonical_analysis_critic_per_id_source_anchor_map(
+        [
+            {"id": f"S{index:03d}", "text": str(row["text"])}
+            for index, row in enumerate(group, 1)
+        ]
+    )
+    rejected = {
+        str(item["id"]): tuple(item["emotions"])
+        for item in contract["rejected_emotions_by_id"]
+    }
+    schema = _director_critic_schema(
+        ["S001", "S002"],
+        "candidate",
+        confidence_floor=0.65,
+        per_id_source_anchor_map=anchor_map,
+        rejected_emotions_by_id=rejected,
+        allowed_speakers=("NARRATOR", "UNKNOWN"),
+    )
+    branches = {
+        branch["properties"]["id"]["enum"][0]: branch
+        for branch in schema["properties"]["verdicts"]["items"]["oneOf"]
+    }
+
+    assert contract["schema_policy_version"] == (
+        "per_id_direct_affect_candidate_speaker_enum_v4"
+    )
+    assert contract["rejected_emotions_by_id"] == [
+        {"id": "S001", "emotions": ["neutral"]}
+    ]
+    assert "neutral" not in branches["S001"]["properties"]["emotion"]["enum"]
+    assert "tender" in branches["S001"]["properties"]["emotion"]["enum"]
+    assert "neutral" in branches["S002"]["properties"]["emotion"]["enum"]
+
+
+def test_v36_adjudicator_rejects_director_neutral_semantic_regression() -> None:
+    row = {
+        "id": 37,
+        "stable_id": "c00001_s0000036_899a660818f4",
+        "chapter_id": 1,
+        "seq": 36,
+        "paragraph_index": 32,
+        "text": (
+            "Một cậu bé tóc nâu ngắn, trên người mặc chiếc áo sơ mi vải thô dài "
+            "tới đầu gối, nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+            "kinh ngạc và mừng rỡ:"
+        ),
+        "kind_hint": "narration",
+    }
+    stable_id = str(row["stable_id"])
+    validated = {
+        stable_id: {
+            **analysis_item(stable_id),
+            "emotion": "surprised",
+            "intensity": 2,
+        }
+    }
+    payload, candidate_hash = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"emotion": "neutral", "intensity": 1}},
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        rejected_emotions_by_id=[
+            {"id": "S001", "emotions": ["neutral"]}
+        ],
+    )
+
+    assert issues == {
+        stable_id: "DIRECTOR_INVALID_RESPONSE deterministic_emotion_regression"
+    }
+    assert "critic" not in evidence["segments"][0]
+
+
+def test_v37_adjudicator_rejects_unchanged_rejected_emotion() -> None:
+    row = {
+        "id": 37,
+        "stable_id": "c00001_s0000036_899a660818f4",
+        "chapter_id": 1,
+        "seq": 36,
+        "paragraph_index": 32,
+        "text": (
+            "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+            "kinh ngạc và mừng rỡ:"
+        ),
+        "kind_hint": "narration",
+    }
+    stable_id = str(row["stable_id"])
+    validated = {
+        stable_id: {
+            **analysis_item(stable_id),
+            "emotion": "neutral",
+            "intensity": 1,
+        }
+    }
+    payload, candidate_hash = director_critic_payload([row], validated)
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+        rejected_emotions_by_id=[
+            {"id": "S001", "emotions": ["neutral"]}
+        ],
+    )
+
+    assert issues == {
+        stable_id: "DIRECTOR_INVALID_RESPONSE deterministic_emotion_regression"
+    }
+    assert "critic" not in evidence["segments"][0]
+
+
+def test_v37_same_projection_is_recriticized_after_semantic_rejection(
+    monkeypatch,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    stable_id = "c00001_s0000036_899a660818f4"
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 37,
+            "stable_id": stable_id,
+            "chapter_id": 1,
+            "seq": 36,
+            "paragraph_index": 32,
+            "text": source_text,
+            "text_sha256": sha256_text(source_text),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+    ]
+    settings = build_settings(
+        overrides={
+            "analysis": {
+                "batch_segments": 1,
+                "batch_chars": 10000,
+                "max_retries": 3,
+            }
+        }
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    generator_calls = 0
+    critic_contracts = []
+
+    def generate(group, **_kwargs):
+        nonlocal generator_calls
+        generator_calls += 1
+        item = analysis_item(stable_id)
+        item.update(
+            {"emotion": "neutral", "intensity": 1}
+            if generator_calls == 2
+            else {"emotion": "surprised", "intensity": 2}
+        )
+        return {"segments": [item]}
+
+    def critic(group, validated, **kwargs):
+        critic_contracts.append(copy.deepcopy(kwargs["request_contract"]))
+        corrections = (
+            {0: {"emotion": "neutral", "intensity": 1}}
+            if len(critic_contracts) == 1
+            else None
+        )
+        return director_critic_payload(
+            group,
+            validated,
+            corrections=corrections,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert generator_calls == 3
+    assert [
+        contract["rejected_emotions_by_id"] for contract in critic_contracts
+    ] == [
+        [],
+        [{"id": "S001", "emotions": ["neutral"]}],
+    ]
+    assert len(db.analysis_candidates) == 2
+    assert len({candidate["candidate_hash"] for candidate in db.analysis_candidates}) == 2
+    assert len(db.analysis_critic_attempts) == 2
+    saved = db.updated[0][1]
+    assert (saved["emotion"], saved["intensity"]) == ("surprised", 2)
+
+
+def test_v38_nonledger_clearance_keeps_projection_hash_after_semantic_retry(
+    monkeypatch,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    stable_id = "c00001_s0000036_899a660818f4"
+    db = FakeDB()
+    db.record_analysis_candidate_generator_contract = None
+    db.rows = [
+        {
+            "id": 37,
+            "stable_id": stable_id,
+            "chapter_id": 1,
+            "seq": 36,
+            "paragraph_index": 32,
+            "text": source_text,
+            "text_sha256": sha256_text(source_text),
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+    ]
+    analyzer = OllamaBookAnalyzer(
+        build_settings(
+            "balanced",
+            overrides={
+                "analysis": {
+                    "batch_segments": 1,
+                    "batch_chars": 10000,
+                    "max_retries": 2,
+                    "director_critic_enabled": True,
+                    "director_critic_required": True,
+                }
+            }
+        ),
+        db,
+        lambda _message: None,
+    )
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    generator_calls = 0
+    critic_subjects: list[tuple[list[dict], list[dict]]] = []
+
+    def generate(_group, **_kwargs):
+        nonlocal generator_calls
+        generator_calls += 1
+        item = analysis_item(stable_id)
+        item.update(
+            {"emotion": "neutral", "intensity": 1}
+            if generator_calls == 1
+            else {"emotion": "surprised", "intensity": 2}
+        )
+        return {"segments": [item]}
+
+    def critic(group, validated, **kwargs):
+        rejection_map = copy.deepcopy(
+            kwargs["request_contract"]["rejected_emotions_by_id"]
+        )
+        critic_subjects.append((copy.deepcopy(kwargs["candidate_rows"]), rejection_map))
+        return director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert generator_calls == 2
+    assert len(critic_subjects) == 1
+    candidate_rows, rejection_map = critic_subjects[0]
+    assert rejection_map == [{"id": "S001", "emotions": ["neutral"]}]
+    projection_hash = _director_candidate_hash(candidate_rows)
+    subject_hash = _director_candidate_hash(candidate_rows, rejection_map)
+    accepted = next(
+        event for event in db.events if event[1] == "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
+    )
+    assert accepted[3]["host_affect_clearance"]["candidate_hash"] == projection_hash
+    assert projection_hash != subject_hash
 
 
 def test_multirow_adjudicator_rejects_exact_anchor_borrowed_from_another_id() -> None:
@@ -5296,7 +5699,7 @@ def test_thought_candidate_hash_masks_future_but_resume_contract_stays_source_bo
 
     assert first_hash == changed_future_hash
     assert first_hash != changed_previous_hash
-    assert first_contract["policy_version"] == "second_pass_v14"
+    assert first_contract["policy_version"] == "second_pass_v18"
     assert first_contract["context_hash"] != changed_future_contract["context_hash"]
     assert first_contract["group_fingerprint"] != changed_future_contract["group_fingerprint"]
     assert first_contract["seed"] != changed_future_contract["seed"]
@@ -6139,6 +6542,57 @@ def test_v32_dialogue_kind_override_never_covers_speaker_dissent() -> None:
     assert item["host_source_kind_override"]["unresolved_field_deltas"] == [
         "speaker:NPC_LOCAL::c00001::v32-source-unit::cậu bé->NARRATOR"
     ]
+
+
+@pytest.mark.parametrize(
+    "forged_speaker",
+    (
+        "NPC_LOCAL::c00001::v32-source-unit::cậu women áo đen",
+        "NPC_LOCAL::c00100::v32-source-unit::cậu bé",
+        "NPC_LOCAL:cậu bé",
+        "người phụ nữ áo đen",
+    ),
+)
+def test_v41_critic_rejects_unbound_speaker_identity(
+    forged_speaker: str,
+) -> None:
+    row = v32_seq42_44_rows()[1]
+    stable_id = str(row["stable_id"])
+    candidate = analysis_item(stable_id)
+    candidate.update(
+        {
+            "kind": "dialogue",
+            "speaker": "NPC_LOCAL::c00001::v32-source-unit::cậu bé",
+            "gender": "male",
+            "age": "child",
+            "emotion": "sad",
+            "intensity": 2,
+            "confidence": 0.9,
+        }
+    )
+    validated = {stable_id: candidate}
+    candidate_rows = _director_candidate_rows([row], validated)
+    candidate_hash = _director_candidate_hash(candidate_rows)
+    payload, _ = director_critic_payload(
+        [row],
+        validated,
+        corrections={0: {"speaker": forged_speaker}},
+        candidate_rows=candidate_rows,
+        candidate_hash=candidate_hash,
+    )
+
+    issues, evidence = _adjudicate_director_critic(
+        [row],
+        validated,
+        payload,
+        candidate_hash=candidate_hash,
+    )
+
+    assert issues == {
+        stable_id: "DIRECTOR_INVALID_RESPONSE speaker_provenance",
+    }
+    assert _director_critic_payload_is_retryable_invalid(issues) is True
+    assert "critic" not in evidence["segments"][0]
 
 
 def test_v29_seq38_kind_only_critic_dissent_uses_context_bound_override() -> None:
@@ -7936,6 +8390,82 @@ def test_v25_seq9_neutral_retry_gets_deterministic_source_derived_choices() -> N
     assert V25_SEQ9_TEXT not in json.dumps(payload, ensure_ascii=False)
 
 
+def test_v37_seq45_active_pride_rejects_neutral_and_persists_retry_schema() -> None:
+    stable_id = "c00001_s0000045_480f42e20f79"
+    group = [
+        {
+            "id": 46,
+            "stable_id": stable_id,
+            "chapter_id": 1,
+            "seq": 45,
+            "paragraph_index": 36,
+            "text": V37_SEQ45_TEXT,
+            "text_sha256": sha256_text(V37_SEQ45_TEXT),
+            "kind_hint": "narration",
+        }
+    ]
+    neutral = {
+        stable_id: {
+            **analysis_item(stable_id),
+            "emotion": "neutral",
+            "intensity": 0,
+        }
+    }
+
+    semantic_issues, batch_collapsed = _semantic_delivery_issues(group, neutral)
+    feedback = _direct_cue_feedback_issues(group, neutral, semantic_issues)
+    contract = _generator_request_contract(
+        build_settings()["analysis"],
+        model="qwen3:8b",
+        model_digest="sha256:locked",
+        group=group,
+        attempt=2,
+        validation_feedback=feedback,
+    )
+    happy = copy.deepcopy(neutral)
+    happy[stable_id].update({"emotion": "happy", "intensity": 1})
+
+    assert batch_collapsed is False
+    assert 'happy="tràn ngập vẻ tự hào"' in semantic_issues[stable_id]
+    assert feedback == (
+        AnalysisFeedbackIssue(
+            stable_id=stable_id,
+            code="SEMANTIC_DELIVERY_MISMATCH",
+            fields=("emotion",),
+            allowed_emotions=("happy",),
+        ),
+    )
+    assert contract["rejected_emotions_by_id"] == [
+        {"id": "S001", "emotions": ["neutral"]}
+    ]
+    assert _semantic_delivery_issues(group, happy) == ({}, False)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Ánh mắt không còn tràn ngập vẻ tự hào.",
+        "Ánh mắt từng tràn ngập vẻ tự hào.",
+        "Cụm từ “tràn ngập vẻ tự hào” là một danh từ.",
+        'Chương 797 - "Tự hào"',
+        "Khu vườn này là niềm tự hào của cả gia đình.",
+        "Cảm thấy tự hào, nhưng đồng thời buồn bã.",
+    ],
+)
+def test_v37_pride_guard_does_not_overreach(text: str) -> None:
+    stable_id = "guarded-pride"
+    group = [{"stable_id": stable_id, "text": text, "kind_hint": "narration"}]
+    validated = {
+        stable_id: {
+            **analysis_item(stable_id),
+            "emotion": "neutral",
+            "intensity": 0,
+        }
+    }
+
+    assert _semantic_delivery_issues(group, validated) == ({}, False)
+
+
 @pytest.mark.parametrize(
     "text",
     [
@@ -9589,7 +10119,7 @@ def test_clean_varied_director_batch_checkpoints_with_bound_evidence(monkeypatch
     details = accepted[3]
     assert details["candidate_hash"]
     assert details["critic_contract"]["model"] == "qwen3:8b"
-    assert details["critic_contract"]["policy_version"] == "second_pass_v14"
+    assert details["critic_contract"]["policy_version"] == "second_pass_v18"
     assert {row["text_sha256"] for row in details["segments"]} == {
         "neutral-sha",
         "question-sha",

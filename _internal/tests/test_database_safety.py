@@ -10,6 +10,11 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.analysis import _analysis_context_hash, _original_neighbor_context
+from ebook_reader.asr import (
+    ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+    LOCKED_NAME_ANCHOR_METRICS_KEY,
+    LOCKED_NAME_ANCHOR_METRICS_VERSION,
+)
 from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
@@ -23,6 +28,7 @@ from ebook_reader.database import (
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
+    ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
@@ -38,6 +44,8 @@ from ebook_reader.database import (
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
+    analysis_critic_candidate_hash,
+    analysis_critic_speaker_is_candidate_bound,
     analysis_expected_critic_compatibility_override,
     analysis_critic_anchor_set_sha256,
     analysis_critic_per_id_anchor_map_sha256,
@@ -47,6 +55,7 @@ from ebook_reader.database import (
     analysis_source_has_sleep_paralysis_helplessness,
     analysis_source_has_stunned_blank_mind,
     canonical_analysis_note,
+    canonical_analysis_critic_allowed_speakers,
     canonical_analysis_critic_per_id_source_anchor_map,
     canonical_analysis_critic_source_anchors,
 )
@@ -728,6 +737,8 @@ def _accepted_critic_contract(envelope: dict) -> dict:
     return {
         "policy_version": ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
         "director_policy_version": ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
+        "schema_policy_version": ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION,
+        "rejected_emotions_by_id": [],
         "confidence_floor": 0.65,
         "confidence_cap": 0.95,
         "evidence_policy": (
@@ -750,6 +761,7 @@ def _accepted_critic_contract(envelope: dict) -> dict:
             if anchors
             else sum(len(item["anchors"]) for item in per_id_anchor_map)
         ),
+        "candidate_hash": _canonical_hash(critic_rows),
         "seed": 11,
         "temperature": 0.0,
     }
@@ -791,6 +803,74 @@ def _accepted_critic_evidence(envelope: dict) -> dict:
         "critic_contract": _accepted_critic_contract(envelope),
         "segments": rows,
     }
+
+
+def _rejected_critic_outcome(evidence: dict) -> dict:
+    issues = {}
+    for item in evidence["segments"]:
+        if item.get("effective_accept") is not False:
+            continue
+        covered_fields = set()
+        structural_override = item.get("host_structural_override")
+        compatibility_override = item.get("host_critic_compatibility_override")
+        source_kind_override = item.get("host_source_kind_override")
+        semantic_override = item.get("host_semantic_override")
+        if structural_override is not None or compatibility_override is not None:
+            covered_fields.update(
+                delta.split(":", 1)[0] for delta in item["field_deltas"]
+            )
+        if isinstance(source_kind_override, dict):
+            covered_fields.update(
+                delta.split(":", 1)[0]
+                for delta in source_kind_override.get("covered_field_deltas", [])
+            )
+        if isinstance(semantic_override, dict):
+            covered_fields.add(str(semantic_override["field"]))
+        unresolved_fields = [
+            delta.split(":", 1)[0]
+            for delta in item["field_deltas"]
+            if delta.split(":", 1)[0] not in covered_fields
+        ]
+        if unresolved_fields:
+            issues[str(item["stable_id"])] = (
+                "DIRECTOR_FIELD_MISMATCH fields=" + ",".join(unresolved_fields)
+            )
+    return {"issues": issues, "retryable_invalid": False}
+
+
+def test_v41_critic_speaker_provenance_requires_exact_candidate_identity() -> None:
+    candidate_speakers = (
+        "NPC_LOCAL::c00001::source-a::áo đen",
+        "NPC_LOCAL::c00001::source-a::áo trắng",
+        "NARRATOR",
+    )
+
+    assert analysis_critic_speaker_is_candidate_bound(
+        "NPC_LOCAL::c00001::source-a::áo trắng",
+        candidate_speakers,
+    )
+    assert analysis_critic_speaker_is_candidate_bound("NARRATOR", candidate_speakers)
+    assert analysis_critic_speaker_is_candidate_bound("UNKNOWN", candidate_speakers)
+    assert not analysis_critic_speaker_is_candidate_bound("Lucien", candidate_speakers)
+    assert not analysis_critic_speaker_is_candidate_bound(
+        "NPC_LOCAL::c00001::source-a::áo women",
+        candidate_speakers,
+    )
+    assert not analysis_critic_speaker_is_candidate_bound(
+        "NPC_LOCAL:áo trắng",
+        candidate_speakers,
+    )
+    assert canonical_analysis_critic_allowed_speakers(
+        (
+            {"candidate": {"speaker": candidate_speakers[0]}},
+            {"candidate": {"speaker": "Lucien"}},
+        )
+    ) == (
+        "Lucien",
+        "NARRATOR",
+        "NPC_LOCAL::c00001::source-a::áo đen",
+        "UNKNOWN",
+    )
 
 
 def _critic_compatibility_override_evidence(envelope: dict) -> dict:
@@ -1226,17 +1306,26 @@ def _allocate_analysis_candidate(
     candidate: dict | None = None,
     deterministic_issues: dict | None = None,
     critic_max_attempts: int = 2,
+    generator_contract: dict | None = None,
 ):
     envelope = candidate or _analysis_acceptance_envelope(source_rows)
+    durable_generator_contract = (
+        generator_contract
+        if generator_contract is not None
+        else {"attempt": 1, "seed": 101}
+    )
     return db.allocate_or_resume_analysis_candidate(
         policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
         model_name=ANALYSIS_MODEL_NAME,
         model_digest=ANALYSIS_MODEL_DIGEST,
         group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
         context_hash=context_hash,
-        candidate_hash=_canonical_hash(envelope["critic_rows"]),
+        candidate_hash=analysis_critic_candidate_hash(
+            envelope["critic_rows"],
+            durable_generator_contract.get("rejected_emotions_by_id"),
+        ),
         candidate=envelope,
-        generator_contract={"attempt": 1, "seed": 101},
+        generator_contract=durable_generator_contract,
         deterministic_issues=(
             _deterministic_analysis_issues(source_rows)
             if deterministic_issues is None
@@ -1300,7 +1389,10 @@ def _checkpoint_candidate_signal(
         "duration": 1.25,
         "tts_delivery_mode": "clarity",
         "asr_clarity_repair_round": repair_round,
-        "spoken_text_sha256": "2" * 64,
+        "spoken_text_sha256": str(candidate["expected_spoken_text_sha256"]),
+        "pronunciation_delivery_variant": str(
+            candidate["pronunciation_delivery_variant"]
+        ),
         "voice_profile_id": int(candidate["expected_voice_profile_id"]),
         "pitch_semitones": 0,
         "effective_pitch_semitones": 0,
@@ -1329,8 +1421,17 @@ def _candidate_decode_check(
     verdict: str,
     reason: str,
     metrics_overrides: dict | None = None,
+    failure_codes: tuple[str, ...] = (),
 ) -> int:
     segment = db.get_segment(segment_id)
+    candidate = next(
+        row
+        for row in db.list_segment_candidates(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+        )
+        if int(row["repair_round"]) == int(repair_round)
+    )
     metrics_verdict = (
         "pass" if verdict == "pass" else "inconclusive" if verdict == "inconclusive" else "mismatch"
     )
@@ -1343,7 +1444,10 @@ def _candidate_decode_check(
         "delivery_mode": "clarity",
         "repair_round": repair_round,
         "generation_seed": generation_seed,
-        "spoken_text_sha256": "2" * 64,
+        "spoken_text_sha256": str(candidate["expected_spoken_text_sha256"]),
+        "pronunciation_delivery_variant": str(
+            candidate["pronunciation_delivery_variant"]
+        ),
         "voice_profile_id": int(segment["voice_profile_id"]),
         "pitch_semitones": 0,
         "effective_pitch_semitones": 0,
@@ -1353,6 +1457,8 @@ def _candidate_decode_check(
         "similarity": 1.0 if verdict == "pass" else 0.2,
         "wer": 0.0 if verdict == "pass" else 1.0,
     }
+    if failure_codes:
+        metrics["failure_codes"] = list(failure_codes)
     metrics.update(metrics_overrides or {})
     return db.record_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
@@ -1363,6 +1469,7 @@ def _candidate_decode_check(
         policy_version=1,
         verdict=verdict,
         metrics=metrics,
+        failure_codes=failure_codes,
     )
 
 
@@ -1450,6 +1557,175 @@ def _dual_pass_candidate(
             confirmation=confirmation,
         )
     return db.get_segment_candidate(candidate_id), candidate_sha256
+
+
+def _locked_name_dual_failed_candidate(
+    db: ProjectDB,
+    *,
+    segment_id: int,
+    incumbent_sha256: str,
+    candidate_path: Path,
+    generation_seed: int,
+) -> sqlite3.Row:
+    candidate_sha256 = _write_candidate_artifact(
+        candidate_path,
+        f"locked-name-{generation_seed}",
+    )
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        candidates_root=candidate_path.parent,
+    )
+    candidate_id = int(candidate["id"])
+    _checkpoint_candidate_signal(
+        db,
+        candidate_id,
+        repair_round=0,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+    )
+    failure_code = ASR_LOCKED_NAME_ANCHOR_MISMATCH
+    beam_check = _candidate_decode_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        repair_round=0,
+        generation_seed=generation_seed,
+        confirmation=False,
+        verdict="fail",
+        reason=failure_code,
+        failure_codes=(failure_code,),
+        metrics_overrides={
+            "repairable": True,
+            LOCKED_NAME_ANCHOR_METRICS_KEY: {
+                "version": LOCKED_NAME_ANCHOR_METRICS_VERSION,
+                "status": "fail",
+                "adjudicated": True,
+                "passed": False,
+                "failure_codes": [failure_code],
+                "repeat_count": 1,
+                "anchor_count": 1,
+                "required_occurrence_count": 1,
+                "matched_occurrence_count": 0,
+            },
+        },
+    )
+    db.checkpoint_segment_candidate_decode(
+        candidate_id,
+        quality_check_id=beam_check,
+        confirmation=False,
+    )
+    greedy_check = _candidate_decode_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        repair_round=0,
+        generation_seed=generation_seed,
+        confirmation=True,
+        verdict="pass",
+        reason="ok",
+    )
+    failed = db.checkpoint_segment_candidate_decode(
+        candidate_id,
+        quality_check_id=greedy_check,
+        confirmation=True,
+    )
+    assert failed["state"] == "dual_failed"
+    return failed
+
+
+def _downgrade_promoted_candidate_delivery_to_v8(
+    db: ProjectDB,
+    candidate_id: int,
+    *,
+    live_signal_damage: str | None = None,
+) -> None:
+    with sqlite3.connect(db.path) as conn:
+        conn.row_factory = sqlite3.Row
+        candidate = conn.execute(
+            "SELECT * FROM segment_candidates WHERE id=?",
+            (int(candidate_id),),
+        ).fetchone()
+        assert candidate is not None
+
+        def without_delivery_variant(value: str) -> str:
+            payload = json.loads(str(value))
+            payload.pop("pronunciation_delivery_variant", None)
+            payload.pop("expected_spoken_text_sha256", None)
+            decode_evidence = payload.get("decode_evidence")
+            if isinstance(decode_evidence, list):
+                for evidence in decode_evidence:
+                    if isinstance(evidence, dict):
+                        evidence.pop("pronunciation_delivery_variant", None)
+            return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+        for field in (
+            "signal_json",
+            "beam_result_json",
+            "greedy_result_json",
+        ):
+            conn.execute(
+                f"UPDATE segment_candidates SET {field}=? WHERE id=?",
+                (without_delivery_variant(str(candidate[field])), int(candidate_id)),
+            )
+        for check_id_field in (
+            "beam_check_id",
+            "greedy_check_id",
+            "final_check_id",
+        ):
+            check_id = candidate[check_id_field]
+            assert check_id is not None
+            metrics_json = conn.execute(
+                "SELECT metrics_json FROM quality_checks WHERE id=?",
+                (int(check_id),),
+            ).fetchone()[0]
+            conn.execute(
+                "UPDATE quality_checks SET metrics_json=? WHERE id=?",
+                (without_delivery_variant(str(metrics_json)), int(check_id)),
+            )
+        segment_signal = json.loads(
+            str(
+                conn.execute(
+                    "SELECT signal_json FROM segments WHERE id=?",
+                    (int(candidate["segment_id"]),),
+                ).fetchone()[0]
+            )
+        )
+        segment_signal.pop("pronunciation_delivery_variant", None)
+        if live_signal_damage == "spoken_sha":
+            segment_signal["spoken_text_sha256"] = "9" * 64
+            encoded_segment_signal = json.dumps(
+                segment_signal,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        elif live_signal_damage == "malformed":
+            encoded_segment_signal = "{broken"
+        else:
+            if live_signal_damage == "harmless_metric":
+                segment_signal["same_wav_recheckpoint_metric"] = 123
+            encoded_segment_signal = json.dumps(
+                segment_signal,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        conn.execute(
+            "UPDATE segments SET signal_json=? WHERE id=?",
+            (encoded_segment_signal, int(candidate["segment_id"])),
+        )
+        conn.execute(
+            "ALTER TABLE segment_candidates DROP COLUMN pronunciation_delivery_variant"
+        )
+        conn.execute(
+            "ALTER TABLE segment_candidates DROP COLUMN expected_spoken_text_sha256"
+        )
+        conn.execute("PRAGMA user_version=8")
 
 
 def test_segment_speaker_rewrite_rebuilds_marker_free_canonical_note(
@@ -1787,7 +2063,10 @@ def test_analysis_candidate_reservation_survives_reopen_and_consumes_crashed_int
             int(candidate["id"]),
             expected_state="critic_in_flight",
             max_attempts=2,
-            intent={"attempt": 3},
+            intent={
+                "candidate_hash": str(candidate["candidate_hash"]),
+                "attempt": 3,
+            },
             contract={
                 **_accepted_critic_contract(_analysis_acceptance_envelope(source_rows)),
                 "seed": 13,
@@ -2154,6 +2433,526 @@ def test_v23_critic_reserve_rejects_stale_v5_policy(
     assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
 
 
+def test_v36_critic_reserve_rejects_stale_retry_schema_policy(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract["schema_policy_version"] = "per_id_direct_affect_rejection_v0"
+
+    with pytest.raises(ValueError, match="invalid retry schema fields"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v36_critic_retry_schema_rejects_forged_direct_affect_id(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng kinh "
+        "ngạc và mừng rỡ:"
+    )
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract["rejected_emotions_by_id"] = [
+        {"id": "S001", "emotions": ["neutral"]}
+    ]
+
+    assert contract["rejected_emotions_by_id"] == [
+        {"id": "S001", "emotions": ["neutral"]}
+    ]
+    contract["rejected_emotions_by_id"] = [
+        {"id": "S002", "emotions": ["neutral"]}
+    ]
+
+    with pytest.raises(ValueError, match="retry schema is not source-bound"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v37_critic_reserve_cannot_omit_generator_rejection_map(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    rejection_map = [{"id": "S001", "emotions": ["neutral"]}]
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows, emotion="surprised")
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        generator_contract={
+            "attempt": 2,
+            "seed": 101,
+            "rejected_emotions_by_id": rejection_map,
+        },
+    )
+    critic_contract = _accepted_critic_contract(envelope)
+
+    with pytest.raises(ValueError, match="generator rejection contract"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=critic_contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v39_generator_rejection_map_cannot_override_physical_collapse(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Phổi và yết hầu đang bị thiêu đốt, ý thức dần trở nên mơ hồ, "
+        "nhưng ánh mắt cậu tràn ngập vẻ tự hào."
+    )
+    rejection_map = [{"id": "S001", "emotions": ["neutral"]}]
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows, emotion="happy")
+
+    with pytest.raises(ValueError, match="retry rejection schema is not source-bound"):
+        _allocate_analysis_candidate(
+            db,
+            source_rows,
+            candidate=envelope,
+            generator_contract={
+                "attempt": 2,
+                "seed": 101,
+                "rejected_emotions_by_id": rejection_map,
+            },
+        )
+
+    assert db.has_analysis_candidates() is False
+
+
+def test_v37_candidate_history_cannot_change_critic_rejection_schema(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    candidate = _allocate_analysis_candidate(db, source_rows)
+
+    with pytest.raises(RuntimeError, match="changed its critic rejection schema"):
+        db.record_analysis_candidate_generator_contract(
+            int(candidate["id"]),
+            {
+                "attempt": 2,
+                "seed": 202,
+                "rejected_emotions_by_id": [
+                    {"id": "S001", "emotions": ["neutral"]}
+                ],
+            },
+        )
+
+    assert len(db.list_analysis_candidate_generator_contracts(int(candidate["id"]))) == 1
+
+
+def test_v38_rehashed_generator_history_cannot_change_rejection_schema(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    candidate_id = int(candidate["id"])
+    db.record_analysis_candidate_generator_contract(
+        candidate_id,
+        {"attempt": 2, "seed": 202},
+    )
+    tampered = {
+        "attempt": 2,
+        "seed": 202,
+        "rejected_emotions_by_id": [
+            {"id": "S001", "emotions": ["neutral"]}
+        ],
+    }
+    tampered_json = json.dumps(
+        tampered,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        history_id = int(
+            conn.execute(
+                "SELECT id FROM analysis_candidate_generator_contracts "
+                "WHERE analysis_candidate_id=? ORDER BY id DESC LIMIT 1",
+                (candidate_id,),
+            ).fetchone()["id"]
+        )
+        conn.execute(
+            "UPDATE analysis_candidate_generator_contracts "
+            "SET generator_contract_json=?,generator_contract_hash=? WHERE id=?",
+            (tampered_json, sha256_text(tampered_json), history_id),
+        )
+
+    with pytest.raises(RuntimeError, match="changed its critic rejection schema"):
+        ProjectDB(db.path).list_analysis_candidate_generator_contracts(candidate_id)
+
+
+def test_v38_critic_intent_must_bind_parent_candidate_hash(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+
+    with pytest.raises(ValueError, match="bind its parent candidate hash"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": "0" * 64},
+            contract=_accepted_critic_contract(envelope),
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v38_critic_contract_must_bind_parent_candidate_hash(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    contract = _accepted_critic_contract(envelope)
+    contract["candidate_hash"] = "0" * 64
+
+    with pytest.raises(ValueError, match="contract must bind its parent candidate hash"):
+        db.reserve_analysis_critic_attempt(
+            int(candidate["id"]),
+            expected_state="allocated",
+            max_attempts=2,
+            intent={"candidate_hash": str(candidate["candidate_hash"])},
+            contract=contract,
+        )
+
+    assert db.list_analysis_critic_attempts(int(candidate["id"])) == []
+
+
+def test_v38_rehashed_critic_contract_cannot_change_parent_candidate_hash(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    forged_contract = _accepted_critic_contract(envelope)
+    forged_contract["candidate_hash"] = "0" * 64
+    forged_json = json.dumps(
+        forged_contract,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_critic_attempts SET contract_json=?,contract_hash=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (forged_json, sha256_text(forged_json), int(candidate["id"])),
+        )
+
+    with pytest.raises(RuntimeError, match="contract is not bound"):
+        ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))
+
+
+def test_v38_rejected_completion_binds_candidate_contract_outcome_and_segments(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    rejection_map = [{"id": "S001", "emotions": ["neutral"]}]
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows, emotion="surprised")
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        generator_contract={
+            "attempt": 2,
+            "seed": 101,
+            "rejected_emotions_by_id": rejection_map,
+        },
+    )
+    candidate_id = int(candidate["id"])
+    contract = _accepted_critic_contract(envelope)
+    contract["rejected_emotions_by_id"] = copy.deepcopy(rejection_map)
+    contract["candidate_hash"] = str(candidate["candidate_hash"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+
+    with pytest.raises(RuntimeError, match="Rejected critic evidence"):
+        db.complete_analysis_critic_attempt(
+            candidate_id,
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_rejected",
+            outcome={
+                "issues": {
+                    str(source_rows[0]["stable_id"]): (
+                        "DIRECTOR_FIELD_MISMATCH fields=pace"
+                    )
+                },
+                "retryable_invalid": False,
+            },
+            evidence={
+                "candidate_hash": "0" * 64,
+                "critic_contract": copy.deepcopy(contract),
+                "segments": [],
+            },
+        )
+
+    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_in_flight"
+
+
+def test_v38_accepted_completion_rejects_contradictory_outcome(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+
+    with pytest.raises(RuntimeError, match="outcome contradicts"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={
+                "issues": {
+                    str(source_rows[0]["stable_id"]): (
+                        "DIRECTOR_FIELD_MISMATCH fields=emotion"
+                    )
+                },
+                "retryable_invalid": True,
+            },
+            evidence=_accepted_critic_evidence(envelope),
+            commit_envelope=envelope,
+        )
+
+    with pytest.raises(RuntimeError, match="outcome contradicts"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": False},
+            evidence=_accepted_critic_evidence(envelope),
+            commit_envelope=envelope,
+        )
+
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == (
+        "critic_in_flight"
+    )
+
+
+def test_v38_invalid_completion_rejects_acceptance_outcome(tmp_path: Path) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+
+    with pytest.raises(RuntimeError, match="outcome contradicts"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_invalid",
+            outcome={"accepted": True},
+            evidence={"reason": "schema"},
+        )
+
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == (
+        "critic_in_flight"
+    )
+
+
+def test_v38_terminal_candidate_rejects_rehashed_unknown_final_outcome(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        critic_max_attempts=1,
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=1,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    db.finalize_exhausted_analysis_critic_candidate(
+        candidate_id,
+        reason="director_critic_attempt_budget_exhausted",
+    )
+    with db.connect() as conn:
+        stored = conn.execute(
+            "SELECT * FROM analysis_critic_attempts "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (candidate_id,),
+        ).fetchone()
+        forged_outcome = {
+            "candidate_state": "forged_unknown_state",
+            "payload": {"accepted": False},
+        }
+        forged_outcome_json = json.dumps(
+            forged_outcome,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        forged_outcome_hash = sha256_text(forged_outcome_json)
+        completion_hash = _canonical_hash(
+            {
+                "commit_envelope_hash": None,
+                "contract_hash": str(stored["contract_hash"]),
+                "evidence_hash": str(stored["evidence_hash"]),
+                "intent_hash": str(stored["intent_hash"]),
+                "outcome_hash": forged_outcome_hash,
+            }
+        )
+        conn.execute(
+            "UPDATE analysis_critic_attempts "
+            "SET outcome_json=?,outcome_hash=?,completion_hash=? "
+            "WHERE analysis_candidate_id=? AND attempt_number=1",
+            (
+                forged_outcome_json,
+                forged_outcome_hash,
+                completion_hash,
+                candidate_id,
+            ),
+        )
+
+    with pytest.raises(RuntimeError, match="invalid candidate state"):
+        ProjectDB(db.path).get_analysis_candidate(candidate_id)
+
+
+def test_v37_accepted_evidence_rejects_neutral_schema_violation(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
+        "kinh ngạc và mừng rỡ:"
+    )
+    rejection_map = [{"id": "S001", "emotions": ["neutral"]}]
+    db, source_rows = _analysis_batch_db(tmp_path, texts=(source_text,))
+    envelope = _analysis_acceptance_envelope(source_rows, emotion="surprised")
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        generator_contract={
+            "attempt": 2,
+            "seed": 101,
+            "rejected_emotions_by_id": rejection_map,
+        },
+    )
+    contract = _accepted_critic_contract(envelope)
+    contract["rejected_emotions_by_id"] = copy.deepcopy(rejection_map)
+    contract["candidate_hash"] = str(candidate["candidate_hash"])
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    evidence["candidate_hash"] = str(candidate["candidate_hash"])
+    evidence["critic_contract"] = copy.deepcopy(contract)
+    evidence["segments"][0]["critic"]["emotion"] = "neutral"
+
+    with pytest.raises(RuntimeError, match="violates its retry emotion schema"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+    assert db.get_analysis_candidate(int(candidate["id"]))["state"] == (
+        "critic_in_flight"
+    )
+    assert db.list_analysis_critic_attempts(int(candidate["id"]))[0]["state"] == (
+        "reserved"
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "error"),
     (
@@ -2202,8 +3001,8 @@ def test_v23_singleton_full_target_evidence_survives_crash_reopen_and_commit(
     candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
     candidate_id = int(candidate["id"])
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v14"
-    assert contract["director_policy_version"] == "second_pass_v14"
+    assert contract["policy_version"] == "second_pass_v18"
+    assert contract["director_policy_version"] == "second_pass_v18"
     assert (
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
@@ -2354,8 +3153,8 @@ def test_v27_v26_seq18_anchor_evidence_survives_reserve_reopen_accept_and_commit
         contract["evidence_policy"]
         == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
     )
-    assert contract["policy_version"] == "second_pass_v14"
-    assert contract["director_policy_version"] == "second_pass_v14"
+    assert contract["policy_version"] == "second_pass_v18"
+    assert contract["director_policy_version"] == "second_pass_v18"
     assert contract["evidence_text_sha256"] == V26_SEQ18_TEXT_SHA256
     assert contract["evidence_anchor_set_sha256"] == (
         analysis_critic_anchor_set_sha256(anchors)
@@ -2682,7 +3481,7 @@ def test_v28_per_id_anchor_map_binds_five_rows_through_reopen_and_commit(
     )
 
     contract = _accepted_critic_contract(envelope)
-    assert contract["policy_version"] == "second_pass_v14"
+    assert contract["policy_version"] == "second_pass_v18"
     assert contract["evidence_policy"] == (
         ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
     )
@@ -3374,7 +4173,7 @@ def test_v31_seq24_mask_does_not_cover_critic_kind_dissent(tmp_path: Path) -> No
             expected_intent_hash=str(attempt["intent_hash"]),
             expected_contract_hash=str(attempt["contract_hash"]),
             result_state="critic_rejected",
-            outcome={"accepted": False, "unresolved_fields": ["kind"]},
+            outcome=_rejected_critic_outcome(evidence),
             evidence=evidence,
         )
     del item["host_source_kind_override"]
@@ -3384,7 +4183,7 @@ def test_v31_seq24_mask_does_not_cover_critic_kind_dissent(tmp_path: Path) -> No
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_rejected",
-        outcome={"accepted": False, "unresolved_fields": ["kind"]},
+        outcome=_rejected_critic_outcome(evidence),
         evidence=evidence,
     )
     assert ProjectDB(db.path).get_analysis_candidate(int(candidate["id"]))[
@@ -3520,9 +4319,151 @@ def test_v33_seq24_compatibility_override_rejects_forged_evidence(
             expected_intent_hash=str(attempt["intent_hash"]),
             expected_contract_hash=str(attempt["contract_hash"]),
             result_state="critic_rejected",
-            outcome={"accepted": False},
+            outcome=_rejected_critic_outcome(evidence),
             evidence=evidence,
         )
+
+
+def test_v38_source_bound_compatibility_row_can_share_rejected_batch(
+    tmp_path: Path,
+) -> None:
+    texts = (
+        "Đầu óc hắn hỗn loạn, hắn thậm chí không thể phân biệt được "
+        "mình đang nằm mơ hay đã tỉnh.",
+        "Cậu bước tới bên giường.",
+    )
+    db, source_rows = _analysis_batch_db(tmp_path, texts=texts)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    contract = _accepted_critic_contract(envelope)
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=contract,
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    compatible = evidence["segments"][0]
+    compatible["critic"].update(
+        {
+            "accept": False,
+            "emotion": "afraid",
+            "intensity": 2,
+            "pace": "fast",
+            "rationale": "Critic thấy dấu hiệu hỗn loạn cần delivery mạnh hơn.",
+        }
+    )
+    compatible_deltas = [
+        "emotion:neutral->afraid",
+        "intensity:1->2",
+        "pace:normal->fast",
+    ]
+    compatible["field_deltas"] = compatible_deltas
+    compatible["effective_accept"] = True
+    critic_row = envelope["critic_rows"][0]
+    compatible["host_critic_compatibility_override"] = (
+        analysis_expected_critic_compatibility_override(
+            stable_id=str(compatible["stable_id"]),
+            source_text=str(critic_row["text"]),
+            text_sha256=str(compatible["text_sha256"]),
+            source_kind=str(critic_row["hint"]),
+            candidate=compatible["candidate"],
+            critic=compatible["critic"],
+            raw_deltas=compatible_deltas,
+        )
+    )
+    assert compatible["host_critic_compatibility_override"] is not None
+
+    unresolved = evidence["segments"][1]
+    unresolved["critic"].update(
+        {
+            "accept": False,
+            "pace": "slow",
+            "rationale": "Critic không đồng ý về nhịp đọc hiện tại.",
+        }
+    )
+    unresolved["field_deltas"] = ["pace:normal->slow"]
+    unresolved["effective_accept"] = False
+
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_rejected",
+        outcome=_rejected_critic_outcome(evidence),
+        evidence=evidence,
+    )
+
+    reopened = ProjectDB(db.path).get_analysis_candidate(candidate_id)
+    assert reopened["state"] == "critic_rejected"
+
+
+def test_v38_rejected_multi_field_direct_affect_does_not_require_semantic_override(
+    tmp_path: Path,
+) -> None:
+    texts = (
+        "Được ánh sáng đó chiếu rọi, Hạ Phong cảm thấy sức lực của mình "
+        "dần hồi phục, vì vậy cậu tuyệt vọng gắng gượng đến gần ánh sáng đó.",
+        "Cậu bước tiếp về phía trước.",
+    )
+    db, source_rows = _analysis_batch_db(tmp_path, texts=texts)
+    envelope = _semantic_lock_envelope(
+        source_rows,
+        candidate_emotion="tired",
+    )
+    clearance = _host_semantic_clearance(
+        envelope,
+        rule="narration_desperate_exertion",
+        cue_class="desperate_exertion",
+        allowed_emotions=["afraid", "sad", "tired"],
+    )
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _accepted_critic_evidence(envelope)
+    item = evidence["segments"][0]
+    item["critic"].update(
+        {
+            "accept": False,
+            "emotion": "neutral",
+            "pace": "slow",
+            "rationale": "Critic không đồng ý cả cảm xúc lẫn nhịp đọc.",
+        }
+    )
+    item["field_deltas"] = [
+        "emotion:tired->neutral",
+        "pace:normal->slow",
+    ]
+    item["effective_accept"] = False
+    assert "host_semantic_override" not in item
+
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_rejected",
+        outcome=_rejected_critic_outcome(evidence),
+        evidence=evidence,
+    )
+
+    assert ProjectDB(db.path).get_analysis_candidate(candidate_id)["state"] == (
+        "critic_rejected"
+    )
 
 
 @pytest.mark.parametrize(
@@ -4066,7 +5007,7 @@ def test_v30_seq38_context_kind_override_preserves_other_rejected_deltas(
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_rejected",
-        outcome={"accepted": False, "unresolved_fields": ["intensity", "pace"]},
+        outcome=_rejected_critic_outcome(evidence),
         evidence=evidence,
     )
     assert ProjectDB(db.path).get_analysis_candidate(candidate_id)["state"] == (
@@ -4793,12 +5734,59 @@ def test_analysis_candidate_accepts_source_bound_chapter_heading_override(
     assert snapshot["commit_envelope"]["segments"][0]["data"]["emotion"] == "neutral"
 
 
+def test_v39_heading_override_rejects_unbound_local_speaker_evidence(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(
+        tmp_path,
+        texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
+    )
+    envelope = _chapter_heading_envelope(source_rows)
+    clearance = _chapter_heading_clearance(envelope)
+    candidate = _allocate_analysis_candidate(
+        db,
+        source_rows,
+        candidate=envelope,
+        deterministic_issues=clearance,
+    )
+    attempt = db.reserve_analysis_critic_attempt(
+        int(candidate["id"]),
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _heading_override_evidence(envelope)
+    item = evidence["segments"][0]
+    forged_speaker = "NPC_LOCAL::c00100::forged::phụ nữ áo đen"
+    item["critic"]["speaker"] = forged_speaker
+    item["field_deltas"] = [
+        f"speaker:NARRATOR->{forged_speaker}",
+        *item["field_deltas"],
+    ]
+    item["host_structural_override"]["raw_field_deltas"] = list(
+        item["field_deltas"]
+    )
+
+    with pytest.raises(RuntimeError, match="exact delivery/confidence"):
+        db.complete_analysis_critic_attempt(
+            int(candidate["id"]),
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_accepted",
+            outcome={"accepted": True, "host_structural_override": True},
+            evidence=evidence,
+            commit_envelope=envelope,
+        )
+
+
 def test_v24_heading_critic_confidence_preserves_lock_through_reopen_and_commit(
     tmp_path: Path,
 ) -> None:
     assert ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION == "chapter_heading_lock_v2"
     assert ANALYSIS_CHAPTER_HEADING_CONFIDENCE == 0.95
-    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v14"
+    assert ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v18"
     db, source_rows = _analysis_batch_db(
         tmp_path,
         texts=("Chương 01 - Giàn hỏa thiêu rực cháy", "Khói dày ngùn ngụt."),
@@ -5120,7 +6108,7 @@ def test_analysis_candidate_rejects_mandatory_heading_lock_when_omitted(
 
 
 def test_direct_narration_affect_source_authority_accepts_exact_smoke_rows() -> None:
-    assert ANALYSIS_HOST_AFFECT_POLICY_VERSION == "host_affect_v9"
+    assert ANALYSIS_HOST_AFFECT_POLICY_VERSION == "host_affect_v10"
     assert ANALYSIS_HOST_SEMANTIC_POLICY_VERSION == "host_semantic_lock_v6"
     assert analysis_source_has_recalled_persistent_fear(
         RECALLED_PERSISTENT_FEAR_TEXT
@@ -5661,7 +6649,7 @@ def test_analysis_candidate_accepts_source_bound_direct_narration_affect_lock(
         "host_affect_clearance"
     ]
     assert candidate["state"] == "allocated"
-    assert durable_clearance["policy_version"] == "host_affect_v9"
+    assert durable_clearance["policy_version"] == "host_affect_v10"
     assert durable_clearance["semantic_locks"] == clearance[
         "host_affect_clearance"
     ]["semantic_locks"]
@@ -6717,11 +7705,41 @@ def test_v32_dialogue_kind_override_leaves_speaker_dissent_rejected(
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_rejected",
-        outcome={"accepted": False, "unresolved_fields": ["speaker"]},
+        outcome=_rejected_critic_outcome(evidence),
         evidence=evidence,
     )
     reopened = ProjectDB(db.path).get_analysis_candidate(candidate_id)
     assert reopened["state"] == "critic_rejected"
+
+
+def test_v39_rejected_evidence_refuses_unbound_local_speaker_id(
+    tmp_path: Path,
+) -> None:
+    db, source_rows, envelope = _v32_seq43_dialogue_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    evidence = _dialogue_kind_override_evidence(
+        envelope,
+        corrected_speaker="NPC_LOCAL::c00100::forged::phụ nữ áo đen",
+    )
+
+    with pytest.raises(RuntimeError, match="invalid speaker provenance"):
+        db.complete_analysis_critic_attempt(
+            candidate_id,
+            1,
+            expected_intent_hash=str(attempt["intent_hash"]),
+            expected_contract_hash=str(attempt["contract_hash"]),
+            result_state="critic_rejected",
+            outcome=_rejected_critic_outcome(evidence),
+            evidence=evidence,
+        )
 
 
 def test_v32_dialogue_candidate_requires_mandatory_kind_lock(tmp_path: Path) -> None:
@@ -6970,7 +7988,7 @@ def test_sleep_paralysis_composed_overrides_leave_delivery_deltas_unresolved(
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_rejected",
-        outcome={"accepted": False, "unresolved_fields": ["intensity", "pace"]},
+        outcome=_rejected_critic_outcome(evidence),
         evidence=evidence,
     )
 
@@ -7117,7 +8135,7 @@ def test_sleep_paralysis_resolved_row_can_share_rejected_multirow_batch(
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_rejected",
-        outcome={"accepted": False, "unresolved_ids": [rejected_item["stable_id"]]},
+        outcome=_rejected_critic_outcome(evidence),
         evidence=evidence,
     )
 
@@ -7171,7 +8189,7 @@ def test_sleep_paralysis_kind_override_cannot_cross_dialogue_boundary(
         expected_intent_hash=str(attempt["intent_hash"]),
         expected_contract_hash=str(attempt["contract_hash"]),
         result_state="critic_rejected",
-        outcome={"accepted": False, "unresolved_fields": ["kind"]},
+        outcome=_rejected_critic_outcome(evidence),
         evidence=evidence,
     )
 
@@ -8164,10 +9182,17 @@ def test_analysis_candidate_identity_is_strict_and_terminal_candidates_do_not_re
         expected_state="allocated",
         reason="deterministic mismatch repeated",
     )
+    terminal_replay = db.mark_analysis_candidate_terminal(
+        int(first["id"]),
+        expected_state="allocated",
+        reason="deterministic mismatch repeated",
+    )
     replay = _allocate_analysis_candidate(db, source_rows)
 
     assert int(isolated["id"]) != int(first["id"])
-    assert terminal["state"] == replay["state"] == "terminal"
+    assert terminal["state"] == terminal_replay["state"] == replay["state"] == (
+        "terminal"
+    )
     assert db.find_resumable_analysis_candidate(
         policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
         model_name=ANALYSIS_MODEL_NAME,
@@ -8193,13 +9218,285 @@ def test_analysis_candidate_scope_allows_only_one_actionable_candidate(tmp_path:
     with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
         _allocate_analysis_candidate(db, source_rows, candidate=changed)
 
-    db.mark_analysis_candidate_superseded(
+    superseded = db.mark_analysis_candidate_superseded(
+        int(first["id"]),
+        expected_state="allocated",
+        reason="generator produced a different critic-visible candidate",
+    )
+    superseded_replay = db.mark_analysis_candidate_superseded(
         int(first["id"]),
         expected_state="allocated",
         reason="generator produced a different critic-visible candidate",
     )
     second = _allocate_analysis_candidate(db, source_rows, candidate=changed)
+    assert superseded["state"] == superseded_replay["state"] == "superseded"
     assert int(second["id"]) != int(first["id"])
+
+
+@pytest.mark.parametrize(
+    ("first_state", "second_state"),
+    (("terminal", "superseded"), ("superseded", "terminal")),
+)
+def test_v43_analysis_candidate_final_states_are_absorbing(
+    tmp_path: Path,
+    first_state: str,
+    second_state: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    candidate = _allocate_analysis_candidate(db, source_rows)
+    candidate_id = int(candidate["id"])
+    first_reason = f"fixed as {first_state}"
+    if first_state == "terminal":
+        db.mark_analysis_candidate_terminal(
+            candidate_id,
+            expected_state="allocated",
+            reason=first_reason,
+        )
+    else:
+        db.mark_analysis_candidate_superseded(
+            candidate_id,
+            expected_state="allocated",
+            reason=first_reason,
+        )
+
+    with pytest.raises(RuntimeError, match="final states are absorbing"):
+        if second_state == "terminal":
+            db.mark_analysis_candidate_terminal(
+                candidate_id,
+                expected_state=first_state,
+                reason="must not replace the final state",
+            )
+        else:
+            db.mark_analysis_candidate_superseded(
+                candidate_id,
+                expected_state=first_state,
+                reason="must not replace the final state",
+            )
+
+    stored = db.get_analysis_candidate(candidate_id)
+    assert stored["state"] == first_state
+    assert stored["terminal_reason"] == first_reason
+
+
+def test_v39_terminal_transition_rejects_accepted_critic_history(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+
+    with pytest.raises(RuntimeError, match="invalid final critic outcome"):
+        db.mark_analysis_candidate_terminal(
+            candidate_id,
+            expected_state="critic_accepted",
+            reason="must not discard accepted evidence",
+        )
+
+    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_accepted"
+
+
+def test_v41_superseded_transition_rejects_accepted_critic_history(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_accepted",
+        outcome={"accepted": True},
+        evidence=_accepted_critic_evidence(envelope),
+        commit_envelope=envelope,
+    )
+
+    with pytest.raises(RuntimeError, match="invalid final critic outcome"):
+        db.mark_analysis_candidate_superseded(
+            candidate_id,
+            expected_state="critic_accepted",
+            reason="must not discard accepted evidence",
+        )
+
+    assert db.get_analysis_candidate(candidate_id)["state"] == "critic_accepted"
+
+
+def test_v41_allocated_candidate_rejects_existing_critic_history(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET state='allocated' WHERE id=?",
+            (candidate_id,),
+        )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Allocated analysis candidate has critic attempt history",
+    ):
+        db.get_analysis_candidate(candidate_id)
+
+
+def test_v41_accepted_candidate_requires_critic_acceptance_history(
+    tmp_path: Path,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    commit_envelope_json = json.dumps(
+        envelope,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE analysis_candidates SET state='accepted',accepted_at=1.0,"
+            "commit_envelope_json=?,commit_envelope_hash=? WHERE id=?",
+            (commit_envelope_json, _canonical_hash(envelope), candidate_id),
+        )
+
+    with pytest.raises(
+        RuntimeError,
+        match="lacks matching completed critic acceptance",
+    ):
+        db.get_analysis_candidate(candidate_id)
+
+
+@pytest.mark.parametrize(
+    "surface",
+    ("get_exact", "record_generator", "allocate_replay"),
+)
+def test_v43_exact_replay_surfaces_reject_missing_critic_history_before_mutation(
+    tmp_path: Path,
+    surface: str,
+) -> None:
+    db, source_rows = _analysis_batch_db(tmp_path)
+    envelope = _analysis_acceptance_envelope(source_rows)
+    candidate = _allocate_analysis_candidate(db, source_rows, candidate=envelope)
+    candidate_id = int(candidate["id"])
+    attempt = db.reserve_analysis_critic_attempt(
+        candidate_id,
+        expected_state="allocated",
+        max_attempts=2,
+        intent={"candidate_hash": str(candidate["candidate_hash"])},
+        contract=_accepted_critic_contract(envelope),
+    )
+    db.complete_analysis_critic_attempt(
+        candidate_id,
+        1,
+        expected_intent_hash=str(attempt["intent_hash"]),
+        expected_contract_hash=str(attempt["contract_hash"]),
+        result_state="critic_invalid",
+        outcome={"accepted": False},
+        evidence={"reason": "schema"},
+    )
+    with db.connect() as conn:
+        generator_history_count = int(
+            conn.execute(
+                "SELECT COUNT(*) FROM analysis_candidate_generator_contracts "
+                "WHERE analysis_candidate_id=?",
+                (candidate_id,),
+            ).fetchone()[0]
+        )
+        conn.execute(
+            "DELETE FROM analysis_critic_attempts WHERE analysis_candidate_id=?",
+            (candidate_id,),
+        )
+
+    replay_generator_contract = {"attempt": 2, "seed": 202}
+    with pytest.raises(RuntimeError, match="history is not contiguous"):
+        if surface == "get_exact":
+            db.get_analysis_candidate_exact(
+                policy_fingerprint=ANALYSIS_POLICY_FINGERPRINT,
+                model_name=ANALYSIS_MODEL_NAME,
+                model_digest=ANALYSIS_MODEL_DIGEST,
+                group_fingerprint=ANALYSIS_GROUP_FINGERPRINT,
+                context_hash=ANALYSIS_CONTEXT_HASH,
+                candidate_hash=str(candidate["candidate_hash"]),
+            )
+        elif surface == "record_generator":
+            db.record_analysis_candidate_generator_contract(
+                candidate_id,
+                replay_generator_contract,
+            )
+        else:
+            _allocate_analysis_candidate(
+                db,
+                source_rows,
+                candidate=envelope,
+                generator_contract=replay_generator_contract,
+            )
+
+    with db.connect() as conn:
+        stored = conn.execute(
+            "SELECT state FROM analysis_candidates WHERE id=?",
+            (candidate_id,),
+        ).fetchone()
+        assert stored["state"] == "critic_invalid"
+        assert int(
+            conn.execute(
+                "SELECT COUNT(*) FROM analysis_candidate_generator_contracts "
+                "WHERE analysis_candidate_id=?",
+                (candidate_id,),
+            ).fetchone()[0]
+        ) == generator_history_count
 
 
 def test_analysis_candidate_read_rehashes_durable_json(tmp_path: Path) -> None:
@@ -9311,6 +10608,223 @@ def test_schema_v5_migrates_existing_candidate_perceptual_ledger(tmp_path: Path)
     assert migrated.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")["action"] == "generate"
 
 
+def test_schema_v8_binds_legacy_candidate_delivery_for_resume_and_report(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    failed_path = tmp_path / "candidates" / "legacy-r0.wav"
+    failed_candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=80,
+        wav_path=failed_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    db.mark_segment_candidate_tts_failed(
+        int(failed_candidate["id"]),
+        expected_generation_seed=80,
+        error="legacy round zero failed",
+    )
+    candidate_path = tmp_path / "candidates" / "legacy-r1.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "legacy-candidate")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=1,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=81,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=1,
+        generation_seed=81,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+    )
+    path = db.path
+    with sqlite3.connect(path) as conn:
+        signal = json.loads(
+            str(
+                conn.execute(
+                    "SELECT signal_json FROM segment_candidates WHERE id=?",
+                    (int(candidate["id"]),),
+                ).fetchone()[0]
+            )
+        )
+        signal.pop("pronunciation_delivery_variant")
+        conn.execute(
+            "UPDATE segment_candidates SET signal_json=? WHERE id=?",
+            (
+                json.dumps(signal, ensure_ascii=False, sort_keys=True),
+                int(candidate["id"]),
+            ),
+        )
+        conn.execute(
+            "ALTER TABLE segment_candidates DROP COLUMN pronunciation_delivery_variant"
+        )
+        conn.execute(
+            "ALTER TABLE segment_candidates DROP COLUMN expected_spoken_text_sha256"
+        )
+        conn.execute("PRAGMA user_version=8")
+
+    migrated = ProjectDB(path)
+    backup = path.with_name(f"{path.name}.pre-v8-to-v{SCHEMA_VERSION}.bak")
+    migrated_candidate = migrated.get_segment_candidate(int(candidate["id"]))
+    migrated_signal = json.loads(str(migrated_candidate["signal_json"]))
+    plan = migrated.segment_candidate_resume_plan(
+        segment_id,
+        "candidate-policy-v1",
+    )
+    report_attempts = migrated.segment_candidate_attempt_summary(
+        segment_id,
+        "candidate-policy-v1",
+    )
+    report_attempt = report_attempts[1]
+
+    assert backup.is_file()
+    with sqlite3.connect(backup) as conn:
+        backup_columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(segment_candidates)")
+        }
+        assert int(conn.execute("PRAGMA user_version").fetchone()[0]) == 8
+    assert "pronunciation_delivery_variant" not in backup_columns
+    assert "expected_spoken_text_sha256" not in backup_columns
+    assert migrated_candidate["pronunciation_delivery_variant"] == (
+        "locked_spoken_v1"
+    )
+    assert migrated_candidate["expected_spoken_text_sha256"] == "1" * 64
+    assert migrated_signal["pronunciation_delivery_variant"] == "locked_spoken_v1"
+    assert plan["action"] == "decode_beam"
+    assert plan["repair_round"] == 1
+    assert plan["pronunciation_delivery_variant"] == "locked_spoken_v1"
+    assert plan["expected_spoken_text_sha256"] == "1" * 64
+    assert report_attempt["pronunciation_delivery_variant"] == "locked_spoken_v1"
+    assert report_attempt["expected_spoken_text_sha256"] == "1" * 64
+    assert report_attempt["signal"]["pronunciation_delivery_variant"] == (
+        "locked_spoken_v1"
+    )
+    assert [attempt["state"] for attempt in report_attempts] == [
+        "tts_failed",
+        "signal_passed",
+    ]
+
+
+def test_schema_v8_promoted_candidate_migrates_nested_decode_provenance_and_replays(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "legacy-promoted.wav",
+        generation_seed=82,
+        perceptual_required=False,
+    )
+    promoted = db.promote_segment_candidate(
+        int(candidate["id"]),
+        validated_wav_sha256=candidate_sha256,
+        repair_action="clarity_repair",
+        attempt=1,
+        warning_code="ASR_CLARITY_REPAIR",
+    )
+    _downgrade_promoted_candidate_delivery_to_v8(
+        db,
+        int(promoted["id"]),
+        live_signal_damage="harmless_metric",
+    )
+
+    migrated = ProjectDB(db.path)
+    replay = migrated.promote_segment_candidate(
+        int(promoted["id"]),
+        validated_wav_sha256=candidate_sha256,
+        repair_action="clarity_repair",
+        attempt=1,
+        warning_code="ASR_CLARITY_REPAIR",
+    )
+    final_check = migrated.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=segment_id,
+    )
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    report_attempt = migrated.segment_candidate_attempt_summary(
+        segment_id,
+        "candidate-policy-v1",
+    )[0]
+    migrated_live_signal = json.loads(
+        str(migrated.get_segment(segment_id)["signal_json"])
+    )
+
+    assert replay["state"] == "promoted"
+    assert final_metrics["pronunciation_delivery_variant"] == "locked_spoken_v1"
+    assert final_metrics["expected_spoken_text_sha256"] == "1" * 64
+    assert [
+        evidence["pronunciation_delivery_variant"]
+        for evidence in final_metrics["decode_evidence"]
+    ] == ["locked_spoken_v1", "locked_spoken_v1"]
+    assert report_attempt["pronunciation_delivery_variant"] == "locked_spoken_v1"
+    assert report_attempt["expected_spoken_text_sha256"] == "1" * 64
+    assert report_attempt["beam_result"]["pronunciation_delivery_variant"] == (
+        "locked_spoken_v1"
+    )
+    assert report_attempt["greedy_result"]["pronunciation_delivery_variant"] == (
+        "locked_spoken_v1"
+    )
+    assert migrated_live_signal["same_wav_recheckpoint_metric"] == 123
+    assert migrated_live_signal["pronunciation_delivery_variant"] == (
+        "locked_spoken_v1"
+    )
+
+
+@pytest.mark.parametrize("live_signal_damage", ["spoken_sha", "malformed"])
+def test_schema_v8_promoted_candidate_rejects_live_signal_damage_atomically(
+    tmp_path: Path,
+    live_signal_damage: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "legacy-damaged.wav",
+        generation_seed=83,
+        perceptual_required=False,
+    )
+    promoted = db.promote_segment_candidate(
+        int(candidate["id"]),
+        validated_wav_sha256=candidate_sha256,
+        repair_action="clarity_repair",
+        attempt=1,
+    )
+    _downgrade_promoted_candidate_delivery_to_v8(
+        db,
+        int(promoted["id"]),
+        live_signal_damage=live_signal_damage,
+    )
+
+    with pytest.raises(RuntimeError, match="differs from the live segment"):
+        ProjectDB(db.path)
+
+    with sqlite3.connect(db.path) as conn:
+        columns = {
+            str(row[1])
+            for row in conn.execute("PRAGMA table_info(segment_candidates)")
+        }
+        version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+    assert version == 8
+    assert "pronunciation_delivery_variant" not in columns
+    assert "expected_spoken_text_sha256" not in columns
+
+
 def test_candidate_allocation_is_idempotent_budgeted_and_policy_scoped(tmp_path: Path) -> None:
     db, segment_id, incumbent_sha256, incumbent_path = _candidate_db(tmp_path)
     candidate_path = tmp_path / "candidates" / "r0.wav"
@@ -9444,6 +10958,217 @@ def test_candidate_allocation_is_idempotent_budgeted_and_policy_scoped(tmp_path:
         )
 
 
+def test_previous_candidate_decode_evidence_is_durable_and_complete(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate = _locked_name_dual_failed_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "locked-r0.wav",
+        generation_seed=501,
+    )
+
+    evidence = db.previous_segment_candidate_decode_evidence(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=1,
+    )
+
+    assert len(evidence) == 2
+    assert evidence[0]["reason"] == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+    assert evidence[0]["failure_codes"] == [
+        ASR_LOCKED_NAME_ANCHOR_MISMATCH
+    ]
+    assert evidence[1]["verdict"] == "pass"
+    assert int(candidate["beam_check_id"]) > 0
+
+
+@pytest.mark.parametrize(
+    ("tamper_target", "error"),
+    [
+        ("candidate_result", "stored candidate ASR result differs"),
+        ("quality_failure_codes", "failure-code ledger contradicts"),
+    ],
+)
+def test_previous_candidate_decode_evidence_rejects_ledger_tamper(
+    tmp_path: Path,
+    tamper_target: str,
+    error: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate = _locked_name_dual_failed_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "tampered-r0.wav",
+        generation_seed=502,
+    )
+    with db.connect() as conn:
+        if tamper_target == "candidate_result":
+            stored = json.loads(str(candidate["beam_result_json"]))
+            stored["transcript"] = "forged transcript"
+            conn.execute(
+                "UPDATE segment_candidates SET beam_result_json=? WHERE id=?",
+                (
+                    json.dumps(stored, ensure_ascii=False, sort_keys=True),
+                    int(candidate["id"]),
+                ),
+            )
+        else:
+            conn.execute(
+                "UPDATE quality_checks SET failure_codes_json=? WHERE id=?",
+                (
+                    json.dumps(["ASR_MISMATCH"]),
+                    int(candidate["beam_check_id"]),
+                ),
+            )
+
+    with pytest.raises(RuntimeError, match=error):
+        db.previous_segment_candidate_decode_evidence(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+            repair_round=1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("tampered_field", "tampered_value"),
+    [
+        ("pronunciation_delivery_variant", "locked_spoken_v1"),
+        ("expected_spoken_text_sha256", "4" * 64),
+    ],
+)
+def test_candidate_delivery_variant_and_spoken_sha_are_replay_and_resume_bound(
+    tmp_path: Path,
+    tampered_field: str,
+    tampered_value: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate_path = tmp_path / "candidates" / "source-r0.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "source-delivery")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=91,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+        pronunciation_delivery_variant="source_spelling_v1",
+        expected_spoken_text_sha256="3" * 64,
+    )
+    with pytest.raises(RuntimeError, match="resume metadata differs"):
+        db.allocate_segment_candidate(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+            repair_round=0,
+            max_repair_rounds=2,
+            incumbent_sha256=incumbent_sha256,
+            generation_seed=91,
+            wav_path=candidate_path,
+            candidates_root=tmp_path / "candidates",
+            pronunciation_delivery_variant="locked_spoken_v1",
+            expected_spoken_text_sha256="3" * 64,
+        )
+    with pytest.raises(RuntimeError, match="differs from its allocation"):
+        _checkpoint_candidate_signal(
+            db,
+            int(candidate["id"]),
+            repair_round=0,
+            generation_seed=91,
+            wav_path=candidate_path,
+            wav_sha256=candidate_sha256,
+            signal_overrides={
+                "pronunciation_delivery_variant": "locked_spoken_v1",
+            },
+        )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=91,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+    )
+    with db.connect() as conn:
+        conn.execute(
+            f"UPDATE segment_candidates SET {tampered_field}=? WHERE id=?",
+            (tampered_value, int(candidate["id"])),
+        )
+
+    with pytest.raises(RuntimeError, match="differs from its allocation"):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+
+
+@pytest.mark.parametrize(
+    "tamper_kind",
+    ["expected_spoken_sha", "candidate_signal", "final_metrics"],
+)
+def test_promoted_candidate_resume_revalidates_the_entire_committed_ledger(
+    tmp_path: Path,
+    tamper_kind: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "promoted-tamper.wav",
+        generation_seed=92,
+        perceptual_required=False,
+    )
+    promoted = db.promote_segment_candidate(
+        int(candidate["id"]),
+        validated_wav_sha256=candidate_sha256,
+        repair_action="clarity_repair",
+        attempt=1,
+    )
+    with db.connect() as conn:
+        if tamper_kind == "expected_spoken_sha":
+            conn.execute(
+                """
+                UPDATE segment_candidates SET expected_spoken_text_sha256=?
+                WHERE id=?
+                """,
+                ("8" * 64, int(promoted["id"])),
+            )
+        elif tamper_kind == "candidate_signal":
+            signal = json.loads(str(promoted["signal_json"]))
+            signal["spoken_text_sha256"] = "8" * 64
+            conn.execute(
+                "UPDATE segment_candidates SET signal_json=? WHERE id=?",
+                (
+                    json.dumps(signal, ensure_ascii=False, sort_keys=True),
+                    int(promoted["id"]),
+                ),
+            )
+        else:
+            final_metrics = json.loads(
+                str(
+                    conn.execute(
+                        "SELECT metrics_json FROM quality_checks WHERE id=?",
+                        (int(promoted["final_check_id"]),),
+                    ).fetchone()[0]
+                )
+            )
+            final_metrics["transcript"] = "tampered final transcript"
+            conn.execute(
+                "UPDATE quality_checks SET metrics_json=? WHERE id=?",
+                (
+                    json.dumps(final_metrics, ensure_ascii=False, sort_keys=True),
+                    int(promoted["final_check_id"]),
+                ),
+            )
+
+    with pytest.raises(RuntimeError):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+    with pytest.raises(RuntimeError):
+        db.segment_candidate_attempt_summary(segment_id, "candidate-policy-v1")
+
+
 def test_candidate_requires_locked_casting_and_thought_uses_narrator(tmp_path: Path) -> None:
     db, segment_id = _segment_db(tmp_path)
     incumbent_sha256 = "a" * 64
@@ -9452,7 +11177,7 @@ def test_candidate_requires_locked_casting_and_thought_uses_narrator(tmp_path: P
         wav_path=tmp_path / "incumbent.wav",
         wav_sha256=incumbent_sha256,
         duration=1.0,
-        signal={"duration": 1.0},
+        signal={"duration": 1.0, "spoken_text_sha256": "1" * 64},
         generation_seed=1,
     )
     db.set_current_quality_policy(
@@ -9726,6 +11451,8 @@ def test_candidate_requires_current_perceptual_pass_before_atomic_promotion(
         "wav_path": str((tmp_path / "candidates" / "perceptual-pass.wav").resolve()),
         "wav_sha256": candidate_sha256,
         "perceptual_required": True,
+        "pronunciation_delivery_variant": "locked_spoken_v1",
+        "expected_spoken_text_sha256": "1" * 64,
     }
     with pytest.raises(RuntimeError, match="before perceptual QA passes"):
         db.promote_segment_candidate(
@@ -9910,6 +11637,7 @@ def test_candidate_decode_and_promotion_reject_tampered_locked_provenance(
             "repair_round": 0,
             "generation_seed": 301,
             "spoken_text_sha256": "2" * 64,
+            "pronunciation_delivery_variant": "locked_spoken_v1",
             "voice_profile_id": 99,
             "pitch_semitones": 0,
             "effective_pitch_semitones": 0,

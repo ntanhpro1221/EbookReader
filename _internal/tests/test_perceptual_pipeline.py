@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -227,9 +226,10 @@ def _install_fake_repair_synthesis(
             "duration": 1.0,
             "tts_delivery_mode": "clarity",
             "asr_clarity_repair_round": repair_round,
-            "spoken_text_sha256": hashlib.sha256(
-                pipeline.tts.spoken_text(row).encode("utf-8")
-            ).hexdigest(),
+            "spoken_text_sha256": str(candidate["expected_spoken_text_sha256"]),
+            "pronunciation_delivery_variant": str(
+                candidate["pronunciation_delivery_variant"]
+            ),
             "voice_profile_id": int(profile["id"]),
             "pitch_semitones": pitch_semitones,
             "effective_pitch_semitones": pitch_semitones,

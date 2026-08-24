@@ -8,7 +8,10 @@ from ebook_reader.models import (
     CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE,
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
 )
-from ebook_reader.tts import TTSCoordinator
+from ebook_reader.tts import (
+    PRONUNCIATION_DELIVERY_SOURCE,
+    TTSCoordinator,
+)
 
 
 def _coordinator(tmp_path: Path) -> tuple[ProjectDB, TTSCoordinator]:
@@ -122,6 +125,59 @@ def test_spoken_text_anchor_trace_does_not_mutate_source_or_infer_absent_names(
     assert [anchor["matched_surface"] for anchor in anchors] == ["Michael"]
     assert anchors[0]["source_start"] == row["text"].index("Michael")
     assert anchors[0]["source_end"] == anchors[0]["source_start"] + len("Michael")
+
+
+def test_source_spelling_variant_preserves_every_locked_name_occurrence_and_anchor(
+    tmp_path: Path,
+) -> None:
+    db, coordinator = _coordinator(tmp_path)
+    db.upsert_pronunciation(
+        surface="Tracy",
+        normalized_surface="tracy",
+        spoken_form="Trây-si",
+        confidence=0.98,
+        source=ENGLISH_NAME_PRONUNCIATION_SOURCE,
+        locked=True,
+    )
+    db.upsert_pronunciation(
+        surface="Gary",
+        normalized_surface="gary",
+        spoken_form="Ga-ri",
+        confidence=0.98,
+        source=ENGLISH_NAME_PRONUNCIATION_SOURCE,
+        locked=False,
+    )
+    db.upsert_pronunciation(
+        surface="Edelweiss",
+        normalized_surface="edelweiss",
+        spoken_form="Ê đen vai",
+        confidence=0.98,
+        source="analysis",
+        locked=True,
+    )
+    row = {"text": "Tracy gọi Tracy, Gary và Edelweiss."}
+
+    spoken_text, anchors = coordinator.spoken_text_with_anchors(
+        row,
+        pronunciation_delivery_variant=PRONUNCIATION_DELIVERY_SOURCE,
+    )
+
+    assert spoken_text == "Tracy gọi Tracy, Ga-ri và Ê đen vai."
+    assert [anchor["matched_surface"] for anchor in anchors] == ["Tracy", "Tracy"]
+    assert [anchor["spoken_form"] for anchor in anchors] == ["Tracy", "Tracy"]
+    assert [anchor["canonical_spoken_form"] for anchor in anchors] == [
+        "Trây-si",
+        "Trây-si",
+    ]
+    assert [anchor["occurrence"] for anchor in anchors] == [1, 2]
+    assert all(
+        anchor["pronunciation_delivery_variant"] == PRONUNCIATION_DELIVERY_SOURCE
+        for anchor in anchors
+    )
+    assert [
+        spoken_text[anchor["spoken_start"] : anchor["spoken_end"]]
+        for anchor in anchors
+    ] == ["Tracy", "Tracy"]
 
 
 def test_unchanged_locked_pronunciation_is_not_reported_as_an_applied_anchor(

@@ -19,6 +19,7 @@ import requests
 from .config import ANALYSIS_RETRY_POLICY_VERSION
 from .database import (
     ADDRESSEE_REPAIR_NOTE,
+    ANALYSIS_ACTIVE_PRIDE_CUE_FRAGMENT,
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_PATTERN,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
@@ -37,10 +38,12 @@ from .database import (
     ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR,
     ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH,
     ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION,
+    ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION,
     ANALYSIS_HOST_AFFECT_POLICY_VERSION,
     ANALYSIS_HOST_CRITIC_COMPATIBILITY_POLICY_VERSION,
     ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
     ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+    ANALYSIS_SEMANTIC_REJECTED_EMOTIONS,
     ANALYSIS_SOURCE_DIALOGUE_KIND_RULE,
     ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
     ANALYSIS_SOURCE_ROLE_CONTENT,
@@ -48,7 +51,10 @@ from .database import (
     EXPLICIT_ATTRIBUTION_NOTE,
     PARAGRAPH_SPEAKER_LOCK_NOTE,
     ProjectDB,
+    analysis_critic_candidate_hash,
+    analysis_critic_speaker_is_candidate_bound,
     analysis_expected_critic_compatibility_override,
+    analysis_direct_affect_rejected_emotions,
     analysis_critic_anchor_set_sha256,
     analysis_critic_per_id_anchor_map_sha256,
     analysis_source_narration_precedes_next_paragraph_thought,
@@ -59,6 +65,7 @@ from .database import (
     analysis_note_markers,
     canonical_analysis_critic_source_anchors,
     canonical_analysis_critic_per_id_source_anchor_map,
+    canonical_analysis_critic_allowed_speakers,
     canonical_analysis_note,
 )
 from .io_utils import run_hidden, sha256_text
@@ -103,8 +110,10 @@ DIRECTOR_CONFIDENCE_MAX = 0.95
 DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
-ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v20"
-GENERATOR_RETRY_SCHEMA_POLICY_VERSION = "per_id_host_emotion_director_advisory_v2"
+ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v26"
+GENERATOR_RETRY_SCHEMA_POLICY_VERSION = (
+    "per_id_host_emotion_semantic_rejection_director_advisory_v4"
+)
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
 DIRECTOR_DELIVERY_FIELDS = ("kind", "speaker", "emotion", "intensity", "pace", "volume")
@@ -315,7 +324,8 @@ MIXED_AFFECT_BRIDGE_PATTERN = re.compile(
 HAPPY_EVIDENCE_PATTERN = re.compile(
     r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
     r"hạnh\s+phúc|hân\s+hoan|"
-    r"nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
+    r"nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí|"
+    rf"{ANALYSIS_ACTIVE_PRIDE_CUE_FRAGMENT})\b",
     flags=re.IGNORECASE,
 )
 EXCITED_EVIDENCE_PATTERN = re.compile(
@@ -806,6 +816,11 @@ Mọi field có trong host_locked_fields là constraint nguồn đã được ho
 field khóa, vẫn trả correction thật của bạn trong sáu trường để host lưu audit và áp đúng structural/semantic override.
 Khóa kind=dialogue chỉ xác nhận ranh giới lời nói, không xác nhận danh tính người nói; vẫn phải kiểm speaker độc lập từ
 lời dẫn và mạch hội thoại. Không được đổi speaker thành NARRATOR chỉ vì bạn bất đồng với kind đã khóa.
+Speaker là identity source-bound: chỉ được chọn đúng một giá trị trong allowed_speakers do host gửi cho request.
+Danh sách đó gồm các identity đã xuất hiện trong candidate của batch cùng NARRATOR và UNKNOWN. Mọi NPC_LOCAL:: là
+opaque host ID, phải sao chép byte-for-byte; không sửa scope, hash hay nhãn, không trả dạng NPC_LOCAL:<nhãn> và không
+tự tạo local ID hoặc tên riêng mới. Nếu candidate dùng sai một identity chưa có trong allowed_speakers, trả UNKNOWN
+để generator phân tích lại từ nguồn; không bịa chuỗi speaker ngoài enum.
 Câu kể ngôi ba có chủ thể cùng động từ nhận thức hoặc ý muốn, như “cậu biết... muốn...”, chỉ báo cáo trạng thái
 của nhân vật và vẫn là narration. Chỉ tiếng nói nội tâm trực tiếp như “Mình đang ở đâu thế này?” mới là thought.
 source_role=chapter_heading và context_policy=target_only là tiêu đề chương độc lập: previous_text/next_text cố ý để
@@ -2551,6 +2566,25 @@ def _semantic_delivery_issues(
     return issues, semantic_batch_collapsed
 
 
+def _direct_cue_allowed_emotions(text: str) -> tuple[str, ...]:
+    cue_matches = _semantic_cue_matches(text)
+    if (
+        "physical_collapse" in cue_matches
+        or _has_explicit_opposing_affect(text, cue_matches)
+    ):
+        return ()
+    direct_labels = sorted(set(cue_matches) & DIRECT_NEUTRAL_AFFECT_CUES)
+    if not direct_labels:
+        return ()
+    return tuple(
+        sorted(
+            set().union(
+                *(CUE_COMPATIBLE_EMOTIONS[label] for label in direct_labels)
+            )
+        )
+    )
+
+
 def _direct_cue_feedback_issues(
     group: list[Any],
     validated: dict[str, dict[str, Any]],
@@ -2571,25 +2605,7 @@ def _direct_cue_feedback_issues(
             or str(data.get("emotion", "neutral")) != "neutral"
         ):
             continue
-        text = str(row["text"])
-        cue_matches = _semantic_cue_matches(text)
-        if (
-            "physical_collapse" in cue_matches
-            or _has_explicit_opposing_affect(text, cue_matches)
-        ):
-            continue
-        direct_labels = sorted(
-            set(cue_matches) & DIRECT_NEUTRAL_AFFECT_CUES
-        )
-        if not direct_labels:
-            continue
-        allowed_emotions = tuple(
-            sorted(
-                set().union(
-                    *(CUE_COMPATIBLE_EMOTIONS[label] for label in direct_labels)
-                )
-            )
-        )
+        allowed_emotions = _direct_cue_allowed_emotions(str(row["text"]))
         if allowed_emotions:
             issues.append(
                 AnalysisFeedbackIssue(
@@ -3504,9 +3520,13 @@ def _neighbor_texts(
     )
 
 
-def _director_candidate_hash(candidate_rows: list[dict[str, Any]]) -> str:
-    return sha256_text(
-        json.dumps(candidate_rows, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+def _director_candidate_hash(
+    candidate_rows: list[dict[str, Any]],
+    rejected_emotions_by_id: list[dict[str, Any]] | None = None,
+) -> str:
+    return analysis_critic_candidate_hash(
+        candidate_rows,
+        rejected_emotions_by_id,
     )
 
 
@@ -3846,19 +3866,27 @@ def _generator_hard_emotion_constraints(
     *,
     stable_to_batch: dict[str, str],
 ) -> dict[str, tuple[str, ...]]:
-    """Intersect only source-authoritative HOST emotion constraints per request ID."""
+    """Apply HOST whitelists and exclude only semantic values already rejected per ID."""
     constrained: dict[str, set[str]] = {}
     for issue in _structured_feedback_issues(
         validation_feedback,
         allowed_stable_ids=set(stable_to_batch),
     ):
-        if issue.code not in {
+        batch_id = stable_to_batch[issue.stable_id]
+        if issue.code in {
             HOST_AFFECT_ISSUE_CODE,
             HOST_PHYSICAL_COLLAPSE_ISSUE_CODE,
         }:
+            allowed = set(issue.allowed_emotions)
+        elif (
+            issue.code == "SEMANTIC_DELIVERY_MISMATCH"
+            and issue.allowed_emotions
+        ):
+            allowed = set(ALLOWED_EMOTIONS) - set(
+                ANALYSIS_SEMANTIC_REJECTED_EMOTIONS
+            )
+        else:
             continue
-        batch_id = stable_to_batch[issue.stable_id]
-        allowed = set(issue.allowed_emotions)
         narrowed = (
             constrained[batch_id] & allowed
             if batch_id in constrained
@@ -3866,7 +3894,7 @@ def _generator_hard_emotion_constraints(
         )
         if not narrowed:
             raise ValueError(
-                "Generator HOST emotion constraints have an empty intersection"
+                "Generator emotion constraints have an empty intersection"
             )
         constrained[batch_id] = narrowed
     return {
@@ -3909,6 +3937,31 @@ def _merge_feedback_issues(
                 if field in merged_values
             ),
         )
+    semantic_rejection_ids = {
+        issue.stable_id
+        for issue in retained
+        if (
+            issue.code == "SEMANTIC_DELIVERY_MISMATCH"
+            and issue.allowed_emotions
+        )
+    }
+    for stable_id in semantic_rejection_ids & set(director_by_stable_id):
+        issue = director_by_stable_id[stable_id]
+        safe_suggestions = tuple(
+            (field, value)
+            for field, value in issue.suggested_values
+            if not (
+                field == "emotion"
+                and value in ANALYSIS_SEMANTIC_REJECTED_EMOTIONS
+            )
+        )
+        if safe_suggestions != issue.suggested_values:
+            director_by_stable_id[stable_id] = AnalysisFeedbackIssue(
+                stable_id=issue.stable_id,
+                code=issue.code,
+                fields=issue.fields,
+                suggested_values=safe_suggestions,
+            )
     return _structured_feedback_issues(
         (*retained, *director_by_stable_id.values())
     )
@@ -3951,6 +4004,67 @@ def _analysis_retry_seed(
         json.dumps(material, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     )
     return int(digest[:16], 16) % ANALYSIS_RETRY_SEED_MAX + 1
+
+
+def _validate_rejected_emotion_contract(
+    group: list[Any],
+    rejected_emotions_by_id: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    raw_items = [] if rejected_emotions_by_id is None else rejected_emotions_by_id
+    if not isinstance(raw_items, list):
+        raise ValueError("Analysis retry rejected-emotion contract must be a list")
+    source_by_batch = {
+        _batch_id(index): str(row["text"])
+        for index, row in enumerate(group, 1)
+    }
+    validated: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, dict) or set(item) != {"id", "emotions"}:
+            raise ValueError("Analysis retry rejected-emotion item is invalid")
+        batch_id = item.get("id")
+        emotions = item.get("emotions")
+        if (
+            not isinstance(batch_id, str)
+            or batch_id not in source_by_batch
+            or batch_id in seen
+            or not isinstance(emotions, list)
+            or tuple(emotions) != ANALYSIS_SEMANTIC_REJECTED_EMOTIONS
+            or tuple(emotions)
+            != analysis_direct_affect_rejected_emotions(source_by_batch[batch_id])
+        ):
+            raise ValueError("Analysis retry rejected-emotion item is not source-bound")
+        seen.add(batch_id)
+        validated.append({"id": batch_id, "emotions": list(emotions)})
+    if [item["id"] for item in validated] != sorted(seen):
+        raise ValueError("Analysis retry rejected-emotion IDs are not canonical")
+    return validated
+
+
+def _semantic_rejected_emotion_contract(
+    group: list[Any],
+    validation_feedback: tuple[AnalysisFeedbackIssue, ...] | dict[str, str] | None,
+) -> list[dict[str, Any]]:
+    stable_to_batch = {
+        str(row["stable_id"]): _batch_id(index)
+        for index, row in enumerate(group, 1)
+    }
+    constrained_feedback = _structured_feedback_issues(
+        validation_feedback,
+        allowed_stable_ids=set(stable_to_batch),
+    )
+    raw_items = [
+        {
+            "id": stable_to_batch[issue.stable_id],
+            "emotions": list(ANALYSIS_SEMANTIC_REJECTED_EMOTIONS),
+        }
+        for issue in constrained_feedback
+        if (
+            issue.code == "SEMANTIC_DELIVERY_MISMATCH"
+            and issue.allowed_emotions
+        )
+    ]
+    return _validate_rejected_emotion_contract(group, raw_items)
 
 
 def _generator_request_contract(
@@ -3998,6 +4112,10 @@ def _generator_request_contract(
         "group_fingerprint": group_fingerprint,
         "context_hash": context_hash,
         "feedback_hash": _analysis_feedback_hash(constrained_feedback),
+        "rejected_emotions_by_id": _semantic_rejected_emotion_contract(
+            group,
+            constrained_feedback,
+        ),
     }
 
 
@@ -4009,6 +4127,7 @@ def _director_critic_request_contract(
     group: list[Any],
     attempt: int,
     candidate_hash: str,
+    rejected_emotions_by_id: list[dict[str, Any]] | None = None,
     original_context: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     retry_policy_version = str(settings["retry_policy_version"])
@@ -4060,8 +4179,14 @@ def _director_critic_request_contract(
         if singleton_full_target or singleton_source_anchors
         else ""
     )
+    rejected_emotions_by_id = _validate_rejected_emotion_contract(
+        group,
+        rejected_emotions_by_id,
+    )
     return {
         "role": "director_critic",
+        "schema_policy_version": ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION,
+        "rejected_emotions_by_id": rejected_emotions_by_id,
         "retry_policy_version": retry_policy_version,
         "host_policy_version": HOST_AFFECT_POLICY_VERSION,
         "director_policy_version": DIRECTOR_CRITIC_POLICY_VERSION,
@@ -4117,6 +4242,8 @@ def _director_critic_schema(
     confidence_floor: float,
     singleton_source_text: str | None = None,
     per_id_source_anchor_map: tuple[dict[str, Any], ...] = (),
+    rejected_emotions_by_id: dict[str, tuple[str, ...]] | None = None,
+    allowed_speakers: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if (
         type(confidence_floor) not in {int, float}
@@ -4132,6 +4259,46 @@ def _director_critic_schema(
     verdict_item = verdicts["items"]
     verdict_properties = verdict_item["properties"]
     verdict_properties["critic_confidence"]["minimum"] = float(confidence_floor)
+    if (
+        not allowed_speakers
+        or allowed_speakers != tuple(sorted(set(allowed_speakers)))
+        or any(
+            not isinstance(speaker, str)
+            or not speaker.strip()
+            or len(speaker) > 120
+            for speaker in allowed_speakers
+        )
+    ):
+        raise ValueError("Director critic allowed speakers are invalid")
+    verdict_properties["speaker"]["enum"] = list(allowed_speakers)
+    rejected_constraints = (
+        {} if rejected_emotions_by_id is None else rejected_emotions_by_id
+    )
+    if (
+        not isinstance(rejected_constraints, dict)
+        or not set(rejected_constraints) <= set(batch_ids)
+        or any(
+            type(values) is not tuple
+            or not values
+            or values != tuple(sorted(set(values)))
+            or any(emotion not in ALLOWED_EMOTIONS for emotion in values)
+            or set(values) == set(ALLOWED_EMOTIONS)
+            for values in rejected_constraints.values()
+        )
+    ):
+        raise ValueError("Director critic rejected emotion constraints are invalid")
+    base_emotions = tuple(verdict_properties["emotion"]["enum"])
+
+    def apply_emotion_rejections(
+        branch: dict[str, Any],
+        batch_id: str,
+    ) -> None:
+        rejected = set(rejected_constraints.get(batch_id, ()))
+        if rejected:
+            branch["properties"]["emotion"]["enum"] = [
+                emotion for emotion in base_emotions if emotion not in rejected
+            ]
+
     if len(batch_ids) > 1:
         if (
             len(per_id_source_anchor_map) != len(batch_ids)
@@ -4156,10 +4323,12 @@ def _director_critic_schema(
             branch = copy.deepcopy(verdict_item)
             branch["properties"]["id"]["enum"] = [str(item["id"])]
             branch["properties"]["evidence_quote"]["enum"] = list(anchors)
+            apply_emotion_rejections(branch, str(item["id"]))
             branches.append(branch)
         verdicts["items"] = {"oneOf": branches}
     elif len(batch_ids) == 1 and isinstance(singleton_source_text, str):
         verdict_properties["id"]["enum"] = batch_ids
+        apply_emotion_rejections(verdict_item, batch_ids[0])
         if 1 <= len(singleton_source_text) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
             evidence_quotes = (singleton_source_text,)
         elif len(singleton_source_text) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH:
@@ -4172,6 +4341,8 @@ def _director_critic_schema(
             verdict_properties["evidence_quote"]["enum"] = list(evidence_quotes)
     else:
         verdict_properties["id"]["enum"] = batch_ids
+        if len(batch_ids) == 1:
+            apply_emotion_rejections(verdict_item, batch_ids[0])
     return schema
 
 
@@ -4183,6 +4354,7 @@ def _adjudicate_director_critic(
     candidate_hash: str,
     confidence_cap: float = DIRECTOR_CONFIDENCE_MAX,
     confidence_floor: float = 0.0,
+    rejected_emotions_by_id: list[dict[str, Any]] | None = None,
     original_context: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     if (
@@ -4196,6 +4368,13 @@ def _adjudicate_director_critic(
     stable_by_batch = {
         _batch_id(index): str(row["stable_id"])
         for index, row in enumerate(group, 1)
+    }
+    rejected_emotions_by_stable = {
+        stable_by_batch[str(item["id"])]: tuple(item["emotions"])
+        for item in _validate_rejected_emotion_contract(
+            group,
+            rejected_emotions_by_id,
+        )
     }
     rows_by_stable = {str(row["stable_id"]): row for row in group}
     allowed_evidence_by_stable = {
@@ -4294,6 +4473,9 @@ def _adjudicate_director_critic(
         stable_by_batch[str(item["id"])]: item
         for item in verdict_items
     }
+    candidate_speakers = tuple(
+        candidate["speaker"] for candidate in validated.values()
+    )
     critic_confidences: list[float] = []
     accepted_confidence_updates: dict[str, float] = {}
     for stable_id, candidate in validated.items():
@@ -4357,6 +4539,18 @@ def _adjudicate_director_critic(
             or verdict["volume"] not in ALLOWED_VOLUMES
         ):
             issues[stable_id] = "DIRECTOR_INVALID_RESPONSE verdict schema"
+            continue
+        if not analysis_critic_speaker_is_candidate_bound(
+            verdict["speaker"],
+            candidate_speakers,
+        ):
+            issues[stable_id] = "DIRECTOR_INVALID_RESPONSE speaker_provenance"
+            continue
+        rejected_emotions = rejected_emotions_by_stable.get(stable_id, ())
+        if verdict["emotion"] in rejected_emotions:
+            issues[stable_id] = (
+                "DIRECTOR_INVALID_RESPONSE deterministic_emotion_regression"
+            )
             continue
         critic_confidences.append(critic_confidence)
         corrected = {
@@ -4958,7 +5152,8 @@ class OllamaBookAnalyzer:
                     "tạo và là ràng buộc cứng. Với mã SEMANTIC_DELIVERY_MISMATCH, allowed_emotions "
                     "nếu có chỉ là "
                     "các lựa chọn gợi ý được suy từ cue của chính source để sửa emotion=neutral; "
-                    "đó không phải whitelist cứng, hãy chọn cảm xúc phù hợp nhất. Với mã "
+                    "đó không phải whitelist cứng, nhưng neutral vừa bị host bác bỏ sẽ bị loại "
+                    "khỏi schema đúng ID; hãy chọn cảm xúc phù hợp nhất. Với mã "
                     "DIRECTOR_FIELD_MISMATCH, suggested_values là đề xuất delivery canonical của "
                     "critic cho đúng các field đã liệt kê: hãy dùng chúng để sửa candidate nhưng "
                     "không coi chúng là host lock. Không suy diễn thêm nội dung phản biện:\n"
@@ -5029,6 +5224,7 @@ class OllamaBookAnalyzer:
         candidate_rows: list[dict[str, Any]] | None = None,
         candidate_hash: str | None = None,
         request_contract: dict[str, Any] | None = None,
+        rejected_emotions_by_id: list[dict[str, Any]] | None = None,
         original_context: dict[str, dict[str, Any]] | None = None,
         preflight_checked: bool = False,
     ) -> tuple[dict[str, Any], str]:
@@ -5045,7 +5241,10 @@ class OllamaBookAnalyzer:
             validated,
             original_context=original_context,
         )
-        computed_hash = _director_candidate_hash(candidate_rows)
+        computed_hash = _director_candidate_hash(
+            candidate_rows,
+            rejected_emotions_by_id,
+        )
         if candidate_hash is not None and candidate_hash != computed_hash:
             raise RuntimeError("Director critic candidate changed before transport retry")
         candidate_hash = computed_hash
@@ -5056,6 +5255,7 @@ class OllamaBookAnalyzer:
             group=group,
             attempt=int((request_contract or {}).get("attempt", 1)),
             candidate_hash=candidate_hash,
+            rejected_emotions_by_id=rejected_emotions_by_id,
             original_context=original_context,
         )
         if request_contract is not None and request_contract != expected_contract:
@@ -5066,6 +5266,29 @@ class OllamaBookAnalyzer:
         if not 0.0 <= confidence_floor <= confidence_cap <= 1.0:
             raise RuntimeError("Director critic request confidence bounds are invalid")
         batch_ids = [str(row["id"]) for row in candidate_rows]
+        allowed_speakers = canonical_analysis_critic_allowed_speakers(
+            candidate_rows
+        )
+        if (
+            request_contract.get("schema_policy_version")
+            != ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION
+        ):
+            raise RuntimeError("Director critic request uses an unsupported retry schema")
+        raw_rejected_emotions = request_contract.get("rejected_emotions_by_id")
+        if not isinstance(raw_rejected_emotions, list):
+            raise RuntimeError("Director critic retry schema constraints are invalid")
+        rejected_emotions_by_id = {
+            str(item["id"]): tuple(item["emotions"])
+            for item in raw_rejected_emotions
+            if (
+                isinstance(item, dict)
+                and set(item) == {"id", "emotions"}
+                and isinstance(item.get("id"), str)
+                and isinstance(item.get("emotions"), list)
+            )
+        }
+        if len(rejected_emotions_by_id) != len(raw_rejected_emotions):
+            raise RuntimeError("Director critic retry schema constraints are invalid")
         evidence_policy = str(request_contract["evidence_policy"])
         evidence_text_sha256 = str(request_contract["evidence_text_sha256"])
         evidence_anchor_set_sha256 = str(
@@ -5155,6 +5378,19 @@ class OllamaBookAnalyzer:
             )
         else:
             evidence_quote_instruction = ""
+        rejected_emotion_instruction = (
+            "\nRàng buộc semantic deterministic theo ID: các emotion trong "
+            "rejected_emotions_by_id đã bị host bác bỏ từ source và schema không cho phép "
+            "critic đề xuất lại. Nếu candidate chưa tối ưu, hãy chọn một emotion hợp lệ khác: "
+            + json.dumps(
+                raw_rejected_emotions,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            if raw_rejected_emotions
+            else ""
+        )
         request = {
             "model": self.model,
             "system": DIRECTOR_CRITIC_SYSTEM_PROMPT,
@@ -5168,6 +5404,14 @@ class OllamaBookAnalyzer:
                 "cấu trúc luôn giữ confidence 0.95.\n"
                 f"evidence_policy={evidence_policy}.\n"
                 f"{evidence_quote_instruction}\n"
+                f"{rejected_emotion_instruction}\n"
+                "speaker_policy=candidate_bound_enum_v1; allowed_speakers="
+                + json.dumps(
+                    list(allowed_speakers),
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+                + ".\n"
                 "Hãy phản biện từng candidate sau mà không suy đoán notes/confidence của lượt trước:\n"
                 + json.dumps(candidate_rows, ensure_ascii=False, indent=2)
             ),
@@ -5177,6 +5421,8 @@ class OllamaBookAnalyzer:
                 confidence_floor=confidence_floor,
                 singleton_source_text=singleton_source_text,
                 per_id_source_anchor_map=per_id_source_anchor_map,
+                rejected_emotions_by_id=rejected_emotions_by_id,
+                allowed_speakers=allowed_speakers,
             ),
             "keep_alive": "30m",
             "options": {
@@ -5287,12 +5533,17 @@ class OllamaBookAnalyzer:
     @staticmethod
     def _durable_host_clearance(candidate_row: Any) -> dict[str, Any]:
         deterministic = json.loads(str(candidate_row["deterministic_issue_json"]))
+        candidate = json.loads(str(candidate_row["candidate_json"]))
+        critic_rows = candidate.get("critic_rows") if isinstance(candidate, dict) else None
+        if not isinstance(critic_rows, list):
+            raise RuntimeError("Durable analysis candidate critic rows are invalid")
+        projection_hash = _director_candidate_hash(critic_rows)
         clearance = deterministic.get("host_affect_clearance")
         if (
             not isinstance(clearance, dict)
             or clearance.get("status") != "cleared"
             or clearance.get("policy_version") != HOST_AFFECT_POLICY_VERSION
-            or clearance.get("candidate_hash") != str(candidate_row["candidate_hash"])
+            or clearance.get("candidate_hash") != projection_hash
         ):
             raise RuntimeError("Durable analysis candidate lacks exact host affect clearance")
         return clearance
@@ -5338,6 +5589,13 @@ class OllamaBookAnalyzer:
         candidate_hash = str(candidate_row["candidate_hash"])
         max_attempts = int(candidate_row["critic_max_attempts"])
         generator_contract = self._durable_generator_contract(candidate_row)
+        rejected_emotions_by_id = generator_contract.get(
+            "rejected_emotions_by_id"
+        )
+        if not isinstance(rejected_emotions_by_id, list):
+            raise RuntimeError(
+                "Durable generator contract lacks rejected-emotion constraints"
+            )
         while True:
             candidate_row = self.db.get_analysis_candidate(candidate_id)
             state = str(candidate_row["state"])
@@ -5367,6 +5625,7 @@ class OllamaBookAnalyzer:
                 group=group,
                 attempt=attempt_number,
                 candidate_hash=candidate_hash,
+                rejected_emotions_by_id=rejected_emotions_by_id,
                 original_context=original_context,
             )
             intent = {
@@ -5404,6 +5663,7 @@ class OllamaBookAnalyzer:
                     candidate_rows=copy.deepcopy(candidate["critic_rows"]),
                     candidate_hash=candidate_hash,
                     request_contract=request_contract,
+                    rejected_emotions_by_id=rejected_emotions_by_id,
                     original_context=original_context,
                     preflight_checked=True,
                 )
@@ -5419,6 +5679,7 @@ class OllamaBookAnalyzer:
                     candidate_hash=candidate_hash,
                     confidence_cap=confidence_cap,
                     confidence_floor=confidence_floor,
+                    rejected_emotions_by_id=rejected_emotions_by_id,
                     original_context=original_context,
                 )
             except (AnalysisRequestStopped, AnalysisModelDigestError):
@@ -5963,7 +6224,18 @@ class OllamaBookAnalyzer:
                                 validated,
                                 original_context=original_context,
                             )
-                            candidate_hash = _director_candidate_hash(candidate_rows)
+                            rejected_emotions_by_id = generator_contract.get(
+                                "rejected_emotions_by_id"
+                            )
+                            if not isinstance(rejected_emotions_by_id, list):
+                                raise RuntimeError(
+                                    "Generator contract lacks rejected-emotion constraints"
+                                )
+                            projection_hash = _director_candidate_hash(candidate_rows)
+                            candidate_hash = _director_candidate_hash(
+                                candidate_rows,
+                                rejected_emotions_by_id,
+                            )
                             critic_retry_count = int(
                                 self.settings.get("director_critic_max_retries", 2)
                             )
@@ -5973,7 +6245,7 @@ class OllamaBookAnalyzer:
                                     payload,
                                 )
                                 host_clearance = host_adjudication.clearance_payload(
-                                    candidate_hash,
+                                    projection_hash,
                                     structural_locks=host_structural_locks,
                                 )
                                 candidate_envelope = _analysis_candidate_envelope(
@@ -6149,6 +6421,9 @@ class OllamaBookAnalyzer:
                                             group=group,
                                             attempt=critic_attempt + 1,
                                             candidate_hash=candidate_hash,
+                                            rejected_emotions_by_id=(
+                                                rejected_emotions_by_id
+                                            ),
                                             original_context=original_context,
                                         )
                                     )
@@ -6163,6 +6438,9 @@ class OllamaBookAnalyzer:
                                             candidate_rows=candidate_rows,
                                             candidate_hash=candidate_hash,
                                             request_contract=critic_request_contract,
+                                            rejected_emotions_by_id=(
+                                                rejected_emotions_by_id
+                                            ),
                                             original_context=original_context,
                                         )
                                     )
@@ -6179,6 +6457,9 @@ class OllamaBookAnalyzer:
                                             candidate_hash=candidate_hash,
                                             confidence_cap=director_confidence_cap,
                                             confidence_floor=director_confidence_floor,
+                                            rejected_emotions_by_id=(
+                                                rejected_emotions_by_id
+                                            ),
                                             original_context=original_context,
                                         )
                                     )
@@ -6214,7 +6495,7 @@ class OllamaBookAnalyzer:
                                     accepted_generator_contract = generator_contract
                                     accepted_host_clearance = (
                                         host_adjudication.clearance_payload(
-                                            candidate_hash,
+                                            projection_hash,
                                             structural_locks=host_structural_locks,
                                         )
                                     )

@@ -31,7 +31,7 @@ def test_quality_policy_hash_is_stable_and_changes_with_content_thresholds() -> 
     changed = build_settings(overrides={"asr": {"min_similarity": 0.91}})
     assert quality_policy_hash(first) != quality_policy_hash(build_quality_policy(changed))
     assert first["algorithms"]["asr_content"] == (
-        "locked_name_anchor_semantic_metrics_clarity_double_decode_v5"
+        "evidence_gated_name_pronunciation_delivery_v8"
     )
 
 
@@ -59,9 +59,9 @@ def test_quality_policy_locks_installed_dependency_versions_and_direct_urls() ->
 def test_quality_policy_has_separate_parser_and_casting_fingerprints() -> None:
     policy = build_quality_policy(build_settings())
 
-    assert ANALYSIS_CASTING_STAGE == "analysis_casting_v23"
+    assert ANALYSIS_CASTING_STAGE == "analysis_casting_v27"
     assert policy["algorithms"]["casting"] == (
-        "canonical_identity_host_semantic_lock_director_ledger_v24"
+        "canonical_identity_host_semantic_lock_director_ledger_v28"
     )
     assert TEXT_SEGMENTATION_IMPLEMENTATION_FILES == ("text_processing.py",)
     assert "analysis.py" in ANALYSIS_CASTING_IMPLEMENTATION_FILES
@@ -79,3 +79,4 @@ def test_quality_policy_has_separate_parser_and_casting_fingerprints() -> None:
         TIMM_CACHE_REVISION
     )
     assert policy["settings"]["perceptual_qa"]["repair_rounds"] == 2
+    assert policy["settings"]["asr"]["repair_rounds"] == 5

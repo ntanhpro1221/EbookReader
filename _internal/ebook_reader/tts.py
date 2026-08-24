@@ -22,6 +22,9 @@ from .database import (
     GENERATION_DELIVERY_CLARITY as DELIVERY_CLARITY,
     GENERATION_DELIVERY_MODES as DELIVERY_MODES,
     GENERATION_DELIVERY_PRIMARY as DELIVERY_PRIMARY,
+    PRONUNCIATION_DELIVERY_LOCKED,
+    PRONUNCIATION_DELIVERY_SOURCE,
+    PRONUNCIATION_DELIVERY_VARIANTS,
     ProjectDB,
 )
 from .io_utils import stable_int
@@ -414,6 +417,7 @@ class TTSCoordinator:
         case_sensitive: bool,
         source_text: str,
         anchors: list[dict[str, Any]],
+        pronunciation_delivery_variant: str,
     ) -> tuple[str, list[tuple[int, int]], list[frozenset[int]]]:
         output_parts: list[str] = []
         output_origins: list[tuple[int, int]] = []
@@ -429,22 +433,33 @@ class TTSCoordinator:
                 if case_sensitive
                 else " ".join(matched_text.casefold().split())
             )
-            replacement = pronunciation_map.get(key, matched_text)
+            canonical_replacement = pronunciation_map.get(key, matched_text)
+            metadata = metadata_map.get(key)
+            locked_english_pronunciation = bool(
+                metadata is not None
+                and int(_row_value(metadata, "locked", 0)) == 1
+                and str(_row_value(metadata, "source", ""))
+                in LOCKED_ENGLISH_NAME_PRONUNCIATION_SOURCES
+            )
+            replacement = (
+                matched_text
+                if pronunciation_delivery_variant == PRONUNCIATION_DELIVERY_SOURCE
+                and locked_english_pronunciation
+                else canonical_replacement
+            )
             source_start, source_end = self._source_span(
                 origins,
                 match.start(),
                 match.end(),
             )
-            metadata = metadata_map.get(key)
-            replacement_anchor_tags = set().union(
-                *anchor_tags[match.start() : match.end()]
-            )
+            replacement_anchor_tags = set().union(*anchor_tags[match.start() : match.end()])
             if (
-                replacement != matched_text
-                and metadata is not None
-                and int(_row_value(metadata, "locked", 0)) == 1
-                and str(_row_value(metadata, "source", ""))
-                in LOCKED_ENGLISH_NAME_PRONUNCIATION_SOURCES
+                not replacement_anchor_tags
+                and locked_english_pronunciation
+                and (
+                    canonical_replacement != matched_text
+                    or pronunciation_delivery_variant == PRONUNCIATION_DELIVERY_SOURCE
+                )
             ):
                 anchor_index = len(anchors)
                 replacement_anchor_tags.add(anchor_index)
@@ -454,7 +469,9 @@ class TTSCoordinator:
                         "surface": str(metadata["surface"]),
                         "normalized_surface": str(metadata["normalized_surface"]),
                         "matched_surface": source_text[source_start:source_end],
-                        "spoken_form": str(metadata["spoken_form"]),
+                        "spoken_form": replacement,
+                        "canonical_spoken_form": str(metadata["spoken_form"]),
+                        "pronunciation_delivery_variant": pronunciation_delivery_variant,
                         "source": str(metadata["source"]),
                         "source_start": source_start,
                         "source_end": source_end,
@@ -545,7 +562,12 @@ class TTSCoordinator:
     def spoken_text_with_anchors(
         self,
         row: Any,
+        *,
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
     ) -> tuple[str, list[dict[str, Any]]]:
+        normalized_variant = str(pronunciation_delivery_variant).strip().casefold()
+        if normalized_variant not in PRONUNCIATION_DELIVERY_VARIANTS:
+            raise ValueError("Unsupported pronunciation delivery variant")
         self._load_pronunciations()
         source_text = str(row["text"])
         origins = [(index, index + 1) for index in range(len(source_text))]
@@ -561,6 +583,7 @@ class TTSCoordinator:
             case_sensitive=True,
             source_text=source_text,
             anchors=anchors,
+            pronunciation_delivery_variant=normalized_variant,
         )
         text, _origins, anchor_tags = self._substitute_pronunciations(
             text,
@@ -572,6 +595,7 @@ class TTSCoordinator:
             case_sensitive=False,
             source_text=source_text,
             anchors=anchors,
+            pronunciation_delivery_variant=normalized_variant,
         )
         text = self._normalize_with_anchor_spans(text, anchor_tags, anchors)
         anchors.sort(
@@ -592,13 +616,29 @@ class TTSCoordinator:
             del anchor["_execution_order"]
         return text, anchors
 
-    def spoken_text(self, row: Any) -> str:
-        text, _anchors = self.spoken_text_with_anchors(row)
+    def spoken_text(
+        self,
+        row: Any,
+        *,
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
+    ) -> str:
+        text, _anchors = self.spoken_text_with_anchors(
+            row,
+            pronunciation_delivery_variant=pronunciation_delivery_variant,
+        )
         return text
 
-    def _spoken_row(self, row: Any) -> dict[str, Any]:
+    def _spoken_row(
+        self,
+        row: Any,
+        *,
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
+    ) -> dict[str, Any]:
         result = dict(row)
-        result["text"] = self.spoken_text(row)
+        result["text"] = self.spoken_text(
+            row,
+            pronunciation_delivery_variant=pronunciation_delivery_variant,
+        )
         if str(_row_value(row, "kind", "narration")) == "thought":
             narrator_profile = self.db.voice_profile_by_key("narrator")
             result["speaker"] = "NARRATOR"
@@ -620,11 +660,20 @@ class TTSCoordinator:
         *,
         repair_short_utterance: bool = False,
         delivery_mode: str = DELIVERY_PRIMARY,
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
     ) -> tuple[str, dict[str, Any], int]:
         try:
             profile = self._voice_profile_for_row(row)
             seed = self.generation_seed(row, seed_salt)
-            spoken_row = self._spoken_row(row)
+            normalized_pronunciation_variant = str(
+                pronunciation_delivery_variant
+            ).strip().casefold()
+            if normalized_pronunciation_variant not in PRONUNCIATION_DELIVERY_VARIANTS:
+                raise ValueError("Unsupported pronunciation delivery variant")
+            spoken_row = self._spoken_row(
+                row,
+                pronunciation_delivery_variant=normalized_pronunciation_variant,
+            )
             sampling = vieneu_sampling_for_segment(
                 spoken_row,
                 self.settings,
@@ -674,9 +723,10 @@ class TTSCoordinator:
                 self.settings,
                 segment=spoken_row,
             )
-            if pitch_variant_skipped:
-                metrics["pitch_variant_skipped"] = 1.0
+            metrics["pitch_variant_skipped"] = float(pitch_variant_skipped)
+            metrics["pitch_variant_mixed"] = 0.0
             metrics["tts_delivery_mode"] = str(delivery_mode).strip().casefold()
+            metrics["pronunciation_delivery_variant"] = normalized_pronunciation_variant
             metrics["spoken_text_sha256"] = hashlib.sha256(
                 str(spoken_row["text"]).encode("utf-8")
             ).hexdigest()

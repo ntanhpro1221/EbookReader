@@ -37,6 +37,7 @@ def test_unattended_safety_defaults() -> None:
     assert high_quality["analysis"]["batch_segments"] == 5
     assert high_quality["analysis"]["retry_policy_version"] == ANALYSIS_RETRY_POLICY_VERSION
     assert high_quality["analysis"]["retry_temperatures"] == [0.1, 0.2, 0.3]
+    assert high_quality["asr"]["repair_rounds"] == 5
     assert high_quality["perceptual_qa"]["enabled"] is True
     assert high_quality["perceptual_qa"]["failure_policy"] == "fail"
     assert high_quality["perceptual_qa"]["repair_rounds"] == 2

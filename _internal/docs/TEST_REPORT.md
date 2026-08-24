@@ -99,6 +99,49 @@ nó thay đổi nhưng không làm field vừa được critic đồng ý quay v
 split carry, advisory non-lock và payload độc hại/sai kiểu pass trong analysis/database/quality **917/917**; full repository
 **1.363/1.363**; Ruff, compileall, `pip check`, `git diff --check` đều pass và `OpenWith.exe` giữ **0**. Runtime V35 chưa
 được tính vào các kết quả này.
+
+## Tổng hợp hardening và runtime V36–V43 (2026-08-24)
+
+Hardening V36–V43 khóa retry khi `neutral` bị cue trực tiếp bác bỏ bằng rejection/advisory typed theo đúng ID, đồng thời
+khóa `speaker` trong schema director vào exact speaker của candidate thay vì cho model phát sinh identity mới. Ledger hiện
+ở `analysis_ledger_v26`/casting ledger v28; DB dùng aggregate validator chung cho state machine và mọi public read/mutation,
+kiểm lại generator-contract history, critic-attempt history liên tục, terminal/superseded state và replay payload trước/sau
+transition. High-quality ASR tăng immutable clarity repair budget từ **3 lên 5** và đưa giá trị này vào quality policy.
+
+Runtime sạch V40 kết thúc **101 verified / 1 warning / 5 failed**. Runtime sạch V43 cải thiện thành
+**102 verified / 1 warning / 4 failed**; exact `seq84` được cứu ở clarity round 3. Exact `seq99–101` cùng giữ provenance
+speaker `NPC_LOCAL::c00001::rf4306ee4f88ce933::người phụ nữ áo đen`. Ở exact `seq45`, candidate `neutral` cho cue
+“vẻ tự hào” bị rejection contract loại và lượt sau commit `happy/intensity=2/pace=normal`. V43 promotion đúng
+**8 clarity + 4 perceptual**, chạy **3039.802 giây**, giữ `OpenWith.exe=0`; bốn segment fail vẫn chặn chapter nên không
+xuất MP3, đúng fail-closed.
+
+Sau V43, repeated-short ASR đã đổi khoảng lặng giữa ba bản sao từ **0,24 lên 0,50 giây**; các probe phát âm standalone
+trên artifact đích cho kết quả tốt hơn mà không đổi content/timeline gate. Runtime sạch V44 sau thay đổi này kết thúc
+**100 verified / 2 warning / 5 failed** trong **3156,396 giây**. Exact seq17 được dual-pass ngay round 0, còn seq106
+chứng minh nhánh `source_spelling_v1` có thể sửa `Lucien` và promote an toàn. Tuy nhiên policy V44 vẫn luân phiên source
+ở mọi round lẻ chỉ vì segment có locked name; seq43 và seq64 là lỗi content nhưng vẫn mất round 1 cho source, và seq43
+kết thúc fail dù candidate canonical mới có thể cứu được.
+
+## Evidence-gated pronunciation repair và runtime V45 (2026-08-24)
+
+V45 chỉ cấp `source_spelling_v1` khi **candidate ngay trước đó** có đủ hai decode beam/greedy bền trong SQLite và ít nhất
+một decode đã adjudicate đúng `ASR_LOCKED_NAME_ANCHOR_MISMATCH`. Evidence phải khớp policy hiện hành, incumbent SHA,
+voice profile, selected decode, quality-check metrics/failure codes và locked-anchor metrics v2; evidence thiếu, stale,
+méo hoặc bị sửa đều fail-closed. Lỗi content thuần giữ `locked_spoken_v1` và seed canonical; policy ASR nâng thành
+`evidence_gated_name_pronunciation_delivery_v8`.
+
+Full repository **1.438/1.438**, Ruff, compileall, `pip check` và `git diff --check` đều pass. Runtime sạch V45 dùng cùng
+manifest `375bd57ab4ee8230d2ecb74da67bb526446f5a36f5a031ebfb40d5d6fceb1a6a`, kết thúc
+**101 verified / 2 warning / 4 failed** trong **3150,150 giây**. Exact seq43 giữ canonical ở round 1, dual-pass rồi
+được UTMOS xác minh/promote; seq64 giữ canonical ở round 1 và chỉ chuyển source ở round 3 sau khi greedy round 2 thật sự
+ghi locked-name mismatch; seq106 vẫn chuyển source ở round 1 và đạt beam/greedy `1,0 similarity / 0,0 WER` trước promote.
+Perceptual repair cũng cứu exact seq18 bằng candidate round 0 qua cả hai Whisper và UTMOS.
+
+Hai warning cuối là seq8 `PERCEPTUAL_NATURALNESS_REVIEW` và seq83 `TTS_GENERATION_CEILING_REACHED`; bốn failure là
+seq35/44/65 locked-name mismatch và seq64 content mismatch. SQLite schema v9 trả `integrity_check=ok`, không có lỗi khóa
+ngoại; quality report được xuất, `validate --require-complete` từ chối publish và **0 MP3** tồn tại đúng fail-closed.
+Sau khi worker thoát không còn Python/Ollama/FFmpeg con và `OpenWith.exe` giữ **0**.
+
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
 

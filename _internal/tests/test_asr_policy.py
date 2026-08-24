@@ -169,25 +169,41 @@ def test_whisper_padding_hallucination_does_not_fail_vocal_audio(tmp_path: Path)
 
 def test_repeated_short_context_can_confirm_a_short_utterance(tmp_path: Path) -> None:
     wav = tmp_path / "short.wav"
-    sf.write(wav, np.zeros(16_000, dtype=np.float32), 16_000)
+    source = np.full(16_000, 0.25, dtype=np.float32)
+    sf.write(wav, source, 16_000)
+    transcribe_inputs: list[np.ndarray] = []
 
     class FakeModel:
         def transcribe(self, audio, **_kwargs):
-            assert len(audio) > 3 * 16_000
+            transcribe_inputs.append(np.asarray(audio).copy())
+            if len(audio) == 16_000:
+                return {
+                    "text": "xin chao",
+                    "segments": [{"start": 0.0, "end": 0.8}],
+                }
             return {
                 "text": "xin chao xin chao xin chao",
-                "segments": [{"start": 0.0, "end": 3.2}],
+                "segments": [{"start": 0.0, "end": 3.8}],
             }
 
     verifier = WhisperVerifier(build_settings(), lambda _message: None)
     verifier.model = FakeModel()
     verifier.device = "cpu"
 
+    direct = verifier.verify("xin chao", wav)
     result = verifier.verify_repeated_short("xin chao", wav)
 
+    assert direct["passed"] is True
     assert result["passed"] is True
     assert result["verdict"] == ASR_PASS
     assert result["reason"] == "ASR_REPEATED_SHORT_PASS"
+    assert [len(audio) for audio in transcribe_inputs] == [16_000, 64_000]
+    repeated_audio = transcribe_inputs[1]
+    assert np.allclose(repeated_audio[:16_000], source, atol=1e-4)
+    assert np.count_nonzero(repeated_audio[16_000:24_000]) == 0
+    assert np.allclose(repeated_audio[24_000:40_000], source, atol=1e-4)
+    assert np.count_nonzero(repeated_audio[40_000:48_000]) == 0
+    assert np.allclose(repeated_audio[48_000:], source, atol=1e-4)
 
 
 @pytest.mark.parametrize(

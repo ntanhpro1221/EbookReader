@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -444,6 +445,13 @@ def test_recovery_preserves_incumbent_and_exposes_candidate_resume_plan(tmp_path
     wav = paths.chunks / "chapter_00001" / "0000000.wav"
     audio = np.sin(np.linspace(0, 30, 48_000, dtype=np.float32)) * 0.1
     wav_sha256, metrics = atomic_write_wav(wav, audio, 48_000, row["text"], settings)
+    spoken_text_sha256 = hashlib.sha256(str(row["text"]).encode("utf-8")).hexdigest()
+    metrics.update(
+        {
+            "spoken_text_sha256": spoken_text_sha256,
+            "pronunciation_delivery_variant": "locked_spoken_v1",
+        }
+    )
     db.mark_signal_passed(
         int(row["id"]),
         wav_path=wav,
@@ -495,6 +503,8 @@ def test_recovery_preserves_incumbent_and_exposes_candidate_resume_plan(tmp_path
             "wav_path": str((paths.work / "candidates" / "c1s1" / "r0.wav").resolve()),
             "wav_sha256": "",
             "perceptual_required": False,
+            "pronunciation_delivery_variant": "locked_spoken_v1",
+            "expected_spoken_text_sha256": spoken_text_sha256,
         }
     ]
 
@@ -525,6 +535,13 @@ def test_recovery_invalidates_corrupt_candidate_and_advances_round(tmp_path: Pat
         48_000,
         row["text"],
         settings,
+    )
+    spoken_text_sha256 = hashlib.sha256(str(row["text"]).encode("utf-8")).hexdigest()
+    incumbent_metrics.update(
+        {
+            "spoken_text_sha256": spoken_text_sha256,
+            "pronunciation_delivery_variant": "locked_spoken_v1",
+        }
     )
     db.mark_signal_passed(
         int(row["id"]),
@@ -563,7 +580,8 @@ def test_recovery_invalidates_corrupt_candidate_and_advances_round(tmp_path: Pat
             "duration": 1.0,
             "tts_delivery_mode": "clarity",
             "asr_clarity_repair_round": 0,
-            "spoken_text_sha256": "1" * 64,
+            "spoken_text_sha256": spoken_text_sha256,
+            "pronunciation_delivery_variant": "locked_spoken_v1",
             "voice_profile_id": profile_id,
             "pitch_semitones": 0,
             "effective_pitch_semitones": 0,

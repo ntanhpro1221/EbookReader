@@ -16,7 +16,7 @@ from .models import BookStatus, ChapterStatus, SegmentStatus
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -28,6 +28,11 @@ GENERATION_DELIVERY_PRIMARY = "primary"
 GENERATION_DELIVERY_CLARITY = "clarity"
 GENERATION_DELIVERY_MODES = frozenset(
     {GENERATION_DELIVERY_PRIMARY, GENERATION_DELIVERY_CLARITY}
+)
+PRONUNCIATION_DELIVERY_LOCKED = "locked_spoken_v1"
+PRONUNCIATION_DELIVERY_SOURCE = "source_spelling_v1"
+PRONUNCIATION_DELIVERY_VARIANTS = frozenset(
+    {PRONUNCIATION_DELIVERY_LOCKED, PRONUNCIATION_DELIVERY_SOURCE}
 )
 QUALITY_VERDICT_PASS = "pass"
 QUALITY_VERDICTS = {
@@ -127,6 +132,7 @@ ANALYSIS_CRITIC_DELIVERY_FIELDS = (
     "pace",
     "volume",
 )
+ANALYSIS_CRITIC_RESERVED_SPEAKERS = ("NARRATOR", "UNKNOWN")
 ANALYSIS_DELIVERY_NOTE_VERSION = "delivery_note_v1"
 ANALYSIS_DELIVERY_NOTE_PREFIX = f"{ANALYSIS_DELIVERY_NOTE_VERSION}="
 ANALYSIS_DELIVERY_NOTE_FIELDS = (
@@ -172,10 +178,14 @@ ANALYSIS_CONTEXT_POLICY_TARGET_ONLY = "target_only"
 ANALYSIS_CONTEXT_SOURCE_KIND_RULE = "narration_precedes_immediate_thought"
 ANALYSIS_SOURCE_DIALOGUE_KIND_RULE = "explicit_dialogue_boundary"
 ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION = "chapter_heading_lock_v2"
-ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v9"
+ANALYSIS_HOST_AFFECT_POLICY_VERSION = "host_affect_v10"
 ANALYSIS_HOST_SEMANTIC_POLICY_VERSION = "host_semantic_lock_v6"
 ANALYSIS_HOST_CRITIC_COMPATIBILITY_POLICY_VERSION = "host_critic_compatibility_v1"
-ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v14"
+ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION = "second_pass_v18"
+ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION = (
+    "per_id_direct_affect_candidate_speaker_enum_v4"
+)
+ANALYSIS_CRITIC_SUBJECT_HASH_VERSION = "critic_retry_schema_epoch_v1"
 ANALYSIS_CRITIC_CONFIDENCE_MAX = 0.99
 ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH = 240
 ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET = (
@@ -757,6 +767,15 @@ ANALYSIS_SCOPED_NEGATION_CONJUNCTION_PATTERN = re.compile(
     r"^\s*(?:và|hay|hoặc)\s*$",
     flags=re.IGNORECASE,
 )
+ANALYSIS_MIXED_AFFECT_BRIDGE_PATTERN = re.compile(
+    r"^\s*,?\s*(?:"
+    r"(?:và|nhưng|song)(?:\s+(?:vẫn|cũng|lại|rất|vô\s+cùng)){0,2}"
+    r"|(?:lại\s+)?vừa"
+    r"|(?:xen\s+lẫn|đan\s+xen)(?:\s+(?:với|niềm|nỗi))?"
+    r"|(?:và\s+)?cùng\s+lúc|đồng\s+thời"
+    r")\s*$",
+    flags=re.IGNORECASE,
+)
 ANALYSIS_AFRAID_CUE_PATTERN = re.compile(
     r"\b(?:sợ\s+hãi|lo\s+sợ|kinh\s+hãi|sợ\s+cực\s+độ|hoảng(?:\s+loạn|\s+sợ)?|"
     r"run\s+rẩy|trắng\s+bệch|dự\s+cảm\s+xấu|bất\s+an|hốt\s+hoảng|cuống\s+quýt|"
@@ -787,9 +806,14 @@ ANALYSIS_DISORIENTED_CUE_PATTERN = re.compile(
     r"\b(?:thất\s+thần|bàng\s+hoàng|hỗn\s+loạn)\b",
     flags=re.IGNORECASE,
 )
+ANALYSIS_ACTIVE_PRIDE_CUE_FRAGMENT = (
+    r"tràn\s+ngập\s+vẻ\s+(?:tự\s+hào|hãnh\s+diện|kiêu\s+hãnh)"
+    r"|lấp\s+lánh\s+niềm\s+(?:tự\s+hào|hãnh\s+diện|kiêu\s+hãnh)"
+)
 ANALYSIS_HAPPY_CUE_PATTERN = re.compile(
     r"\b(?:vui\s+mừng(?:\s+rỡ)?|vui(?:\s+vẻ|\s+sướng)?|mừng(?:\s+rỡ)?|"
-    r"hạnh\s+phúc|hân\s+hoan|nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí)\b",
+    r"hạnh\s+phúc|hân\s+hoan|nhẹ\s+nhõm|sung\s+sướng|khoái\s+chí|"
+    rf"{ANALYSIS_ACTIVE_PRIDE_CUE_FRAGMENT})\b",
     flags=re.IGNORECASE,
 )
 ANALYSIS_EXCITED_CUE_PATTERN = re.compile(
@@ -818,6 +842,14 @@ ANALYSIS_HOST_AFFECT_CUE_PATTERNS = {
     "sad": ANALYSIS_SAD_CUE_PATTERN,
     "surprised": ANALYSIS_SURPRISED_CUE_PATTERN,
 }
+ANALYSIS_DIRECT_NEUTRAL_AFFECT_CUES = frozenset(
+    {"afraid", "angry", "excited", "happy", "sad", "surprised"}
+)
+ANALYSIS_NEGATIVE_AFFECT_CUES = frozenset(
+    {"afraid", "angry", "disoriented", "distressed", "sad"}
+)
+ANALYSIS_POSITIVE_AFFECT_CUES = frozenset({"excited", "happy"})
+ANALYSIS_SEMANTIC_REJECTED_EMOTIONS = ("neutral",)
 ANALYSIS_HOST_CRITIC_COMPATIBILITY_RULE = (
     "disoriented_low_arousal_candidate_compatibility"
 )
@@ -949,6 +981,146 @@ def _analysis_source_active_affect_matches(
         last_suppressed_end = None
         active.setdefault(label, match)
     return active
+
+
+def analysis_direct_affect_rejected_emotions(source_text: str) -> tuple[str, ...]:
+    """Return only delivery values deterministically rejected by active direct cues."""
+    if not isinstance(source_text, str):
+        raise ValueError("Analysis direct-affect source text must be a string")
+    cue_matches = _analysis_source_active_affect_matches(source_text)
+    if (
+        _analysis_source_has_active_physical_pair(source_text)
+        or not (set(cue_matches) & ANALYSIS_DIRECT_NEUTRAL_AFFECT_CUES)
+    ):
+        return ()
+    negative_matches = [
+        cue_matches[label]
+        for label in ANALYSIS_NEGATIVE_AFFECT_CUES
+        if label in cue_matches
+    ]
+    positive_matches = [
+        cue_matches[label]
+        for label in ANALYSIS_POSITIVE_AFFECT_CUES
+        if label in cue_matches
+    ]
+    for negative_match in negative_matches:
+        for positive_match in positive_matches:
+            first, second = sorted(
+                (negative_match, positive_match),
+                key=lambda match: match.start(),
+            )
+            bridge = source_text[first.end() : second.start()]
+            if ANALYSIS_MIXED_AFFECT_BRIDGE_PATTERN.fullmatch(bridge) is not None:
+                return ()
+    return ANALYSIS_SEMANTIC_REJECTED_EMOTIONS
+
+
+def canonical_analysis_rejected_emotion_contract(
+    rejected_emotions_by_id: Sequence[Mapping[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Return the canonical per-ID emotion exclusions that define a critic epoch."""
+    raw_items = [] if rejected_emotions_by_id is None else rejected_emotions_by_id
+    if isinstance(raw_items, (str, bytes)) or not isinstance(raw_items, Sequence):
+        raise ValueError("Analysis rejected-emotion contract must be a sequence")
+    canonical: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, Mapping) or set(item) != {"id", "emotions"}:
+            raise ValueError("Analysis rejected-emotion contract item is invalid")
+        batch_id = item.get("id")
+        emotions = item.get("emotions")
+        if (
+            not isinstance(batch_id, str)
+            or re.fullmatch(r"S[0-9]+", batch_id) is None
+            or batch_id in seen
+            or isinstance(emotions, (str, bytes))
+            or not isinstance(emotions, Sequence)
+            or tuple(emotions) != ANALYSIS_SEMANTIC_REJECTED_EMOTIONS
+        ):
+            raise ValueError("Analysis rejected-emotion contract item is invalid")
+        seen.add(batch_id)
+        canonical.append(
+            {
+                "id": batch_id,
+                "emotions": list(ANALYSIS_SEMANTIC_REJECTED_EMOTIONS),
+            }
+        )
+    if [item["id"] for item in canonical] != sorted(seen):
+        raise ValueError("Analysis rejected-emotion contract IDs are not canonical")
+    return canonical
+
+
+def analysis_critic_speaker_is_candidate_bound(
+    critic_speaker: Any,
+    candidate_speakers: Sequence[Any],
+) -> bool:
+    """Require every critic speaker identity to originate in its visible batch."""
+    if not isinstance(critic_speaker, str):
+        return False
+    allowed = {
+        speaker
+        for speaker in candidate_speakers
+        if isinstance(speaker, str) and speaker.strip()
+    }
+    allowed.update(ANALYSIS_CRITIC_RESERVED_SPEAKERS)
+    return critic_speaker in allowed
+
+
+def canonical_analysis_critic_allowed_speakers(
+    critic_rows: Sequence[Mapping[str, Any]],
+) -> tuple[str, ...]:
+    """Return the exact candidate/reserved speaker enum for a critic request."""
+    if isinstance(critic_rows, (str, bytes)) or not isinstance(
+        critic_rows,
+        Sequence,
+    ) or not critic_rows:
+        raise ValueError("Analysis critic rows must be a non-empty sequence")
+    candidate_speakers: list[str] = []
+    for row in critic_rows:
+        candidate = row.get("candidate") if isinstance(row, Mapping) else None
+        speaker = candidate.get("speaker") if isinstance(candidate, Mapping) else None
+        if (
+            not isinstance(speaker, str)
+            or not speaker.strip()
+            or len(speaker) > 120
+        ):
+            raise ValueError("Analysis critic candidate speaker is invalid")
+        candidate_speakers.append(speaker)
+    allowed = {*candidate_speakers, *ANALYSIS_CRITIC_RESERVED_SPEAKERS}
+    return tuple(sorted(allowed))
+
+
+def analysis_critic_candidate_hash(
+    critic_rows: Sequence[Mapping[str, Any]],
+    rejected_emotions_by_id: Sequence[Mapping[str, Any]] | None = None,
+) -> str:
+    """Hash the critic-visible projection and any retry schema that changes its meaning."""
+    canonical_rejections = canonical_analysis_rejected_emotion_contract(
+        rejected_emotions_by_id
+    )
+    critic_rows_json = json.dumps(
+        list(critic_rows),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    if not canonical_rejections:
+        return sha256_text(critic_rows_json)
+    return sha256_text(
+        json.dumps(
+            {
+                "projection_hash": sha256_text(critic_rows_json),
+                "rejected_emotions_by_id": canonical_rejections,
+                "schema_policy_version": ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION,
+                "subject_hash_version": ANALYSIS_CRITIC_SUBJECT_HASH_VERSION,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    )
 
 
 def analysis_expected_critic_compatibility_override(
@@ -1518,6 +1690,8 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     incumbent_sha256 TEXT NOT NULL,
     expected_voice_profile_id INTEGER NOT NULL REFERENCES voice_profiles(id),
     expected_pitch_semitones INTEGER NOT NULL,
+    pronunciation_delivery_variant TEXT NOT NULL,
+    expected_spoken_text_sha256 TEXT NOT NULL,
     state TEXT NOT NULL CHECK (
         state IN (
             'generating','signal_passed','beam_recorded','dual_failed',
@@ -1830,6 +2004,8 @@ class ProjectDB:
         candidate_columns = {
             str(row[1]) for row in conn.execute("PRAGMA table_info(segment_candidates)")
         }
+        added_pronunciation_delivery_variant = False
+        added_expected_spoken_text_sha256 = False
         if "repair_budget" not in candidate_columns:
             conn.execute(
                 "ALTER TABLE segment_candidates ADD COLUMN repair_budget "
@@ -1852,6 +2028,198 @@ class ProjectDB:
                 "ALTER TABLE segment_candidates ADD COLUMN perceptual_check_id "
                 "INTEGER REFERENCES quality_checks(id)"
             )
+        if "pronunciation_delivery_variant" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN pronunciation_delivery_variant "
+                f"TEXT NOT NULL DEFAULT '{PRONUNCIATION_DELIVERY_LOCKED}'"
+            )
+            added_pronunciation_delivery_variant = True
+        if "expected_spoken_text_sha256" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN expected_spoken_text_sha256 "
+                "TEXT NOT NULL DEFAULT '0000000000000000000000000000000000000000000000000000000000000000'"
+            )
+            added_expected_spoken_text_sha256 = True
+        if (
+            added_pronunciation_delivery_variant
+            or added_expected_spoken_text_sha256
+        ):
+            empty_sha256 = "0" * 64
+
+            def decoded_object(value: Any) -> dict[str, Any] | None:
+                try:
+                    decoded = json.loads(str(value))
+                except (TypeError, json.JSONDecodeError):
+                    return None
+                return decoded if isinstance(decoded, dict) else None
+
+            def payload_spoken_sha256(payload: dict[str, Any] | None) -> str | None:
+                value = str((payload or {}).get("spoken_text_sha256") or "")
+                normalized = value.strip().casefold()
+                if re.fullmatch(r"[0-9a-f]{64}", normalized):
+                    return normalized
+                return None
+
+            legacy_rows = list(
+                conn.execute(
+                    """
+                    SELECT
+                        candidates.*,
+                        segments.signal_json AS incumbent_signal_json,
+                        segments.wav_sha256 AS current_segment_sha256
+                    FROM segment_candidates AS candidates
+                    JOIN segments ON segments.id=candidates.segment_id
+                    ORDER BY candidates.id
+                    """
+                )
+            )
+            for candidate in legacy_rows:
+                signal = decoded_object(candidate["signal_json"])
+                incumbent_signal = decoded_object(candidate["incumbent_signal_json"])
+                promoted_current_candidate = (
+                    str(candidate["state"]) == SEGMENT_CANDIDATE_PROMOTED
+                    and str(candidate["wav_sha256"] or "")
+                    == str(candidate["current_segment_sha256"] or "")
+                )
+                if promoted_current_candidate:
+                    candidate_spoken_sha256 = payload_spoken_sha256(signal)
+                    incumbent_spoken_sha256 = payload_spoken_sha256(
+                        incumbent_signal
+                    )
+                    if (
+                        signal is None
+                        or incumbent_signal is None
+                        or candidate_spoken_sha256 is None
+                        or incumbent_spoken_sha256 is None
+                        or candidate_spoken_sha256 != incumbent_spoken_sha256
+                        or ProjectDB._candidate_signal_immutable_projection(
+                            signal,
+                            default_pronunciation_variant=(
+                                PRONUNCIATION_DELIVERY_LOCKED
+                            ),
+                        )
+                        != ProjectDB._candidate_signal_immutable_projection(
+                            incumbent_signal,
+                            default_pronunciation_variant=(
+                                PRONUNCIATION_DELIVERY_LOCKED
+                            ),
+                        )
+                    ):
+                        raise RuntimeError(
+                            "promoted legacy candidate signal differs from the live segment"
+                        )
+                expected_spoken_sha256 = (
+                    payload_spoken_sha256(signal)
+                    or payload_spoken_sha256(incumbent_signal)
+                    or empty_sha256
+                )
+                stored_variant = str(
+                    candidate["pronunciation_delivery_variant"] or ""
+                ).strip().casefold()
+                pronunciation_variant = (
+                    stored_variant
+                    if stored_variant in PRONUNCIATION_DELIVERY_VARIANTS
+                    else PRONUNCIATION_DELIVERY_LOCKED
+                )
+                encoded_payloads: dict[str, str | None] = {}
+                for field in (
+                    "signal_json",
+                    "beam_result_json",
+                    "greedy_result_json",
+                ):
+                    payload = decoded_object(candidate[field])
+                    if payload is None:
+                        encoded_payloads[field] = candidate[field]
+                        continue
+                    payload.setdefault(
+                        "pronunciation_delivery_variant",
+                        pronunciation_variant,
+                    )
+                    encoded_payloads[field] = json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                conn.execute(
+                    """
+                    UPDATE segment_candidates SET
+                        pronunciation_delivery_variant=?,
+                        expected_spoken_text_sha256=?,
+                        signal_json=?,beam_result_json=?,greedy_result_json=?
+                    WHERE id=?
+                    """,
+                    (
+                        pronunciation_variant,
+                        expected_spoken_sha256,
+                        encoded_payloads["signal_json"],
+                        encoded_payloads["beam_result_json"],
+                        encoded_payloads["greedy_result_json"],
+                        int(candidate["id"]),
+                    ),
+                )
+                for check_id_field in (
+                    "beam_check_id",
+                    "greedy_check_id",
+                    "final_check_id",
+                ):
+                    check_id = candidate[check_id_field]
+                    if check_id is None:
+                        continue
+                    check = conn.execute(
+                        "SELECT metrics_json FROM quality_checks WHERE id=?",
+                        (int(check_id),),
+                    ).fetchone()
+                    metrics = (
+                        decoded_object(check["metrics_json"])
+                        if check is not None
+                        else None
+                    )
+                    if metrics is None:
+                        continue
+                    metrics.setdefault(
+                        "pronunciation_delivery_variant",
+                        pronunciation_variant,
+                    )
+                    if check_id_field == "final_check_id":
+                        metrics.setdefault(
+                            "expected_spoken_text_sha256",
+                            expected_spoken_sha256,
+                        )
+                        decode_evidence = metrics.get("decode_evidence")
+                        if isinstance(decode_evidence, list):
+                            for evidence in decode_evidence:
+                                if isinstance(evidence, dict):
+                                    evidence.setdefault(
+                                        "pronunciation_delivery_variant",
+                                        pronunciation_variant,
+                                    )
+                    conn.execute(
+                        "UPDATE quality_checks SET metrics_json=? WHERE id=?",
+                        (
+                            json.dumps(
+                                metrics,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            ),
+                            int(check_id),
+                        ),
+                    )
+                if promoted_current_candidate:
+                    incumbent_signal.setdefault(
+                        "pronunciation_delivery_variant",
+                        pronunciation_variant,
+                    )
+                    conn.execute(
+                        "UPDATE segments SET signal_json=? WHERE id=?",
+                        (
+                            json.dumps(
+                                incumbent_signal,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                            ),
+                            int(candidate["segment_id"]),
+                        ),
+                    )
         candidate_columns = {
             str(row[1]) for row in conn.execute("PRAGMA table_info(segment_candidates)")
         }
@@ -1864,6 +2232,8 @@ class ProjectDB:
             "incumbent_sha256",
             "expected_voice_profile_id",
             "expected_pitch_semitones",
+            "pronunciation_delivery_variant",
+            "expected_spoken_text_sha256",
             "state",
             "tts_attempt",
             "generation_seed",
@@ -2361,6 +2731,101 @@ class ProjectDB:
             sum(len(item["anchors"]) for item in anchor_map),
         )
 
+    @staticmethod
+    def _analysis_critic_rejected_emotion_contract(
+        candidate_json: str,
+    ) -> list[dict[str, Any]]:
+        try:
+            candidate = json.loads(candidate_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Analysis critic schema candidate JSON is invalid") from exc
+        critic_rows = candidate.get("critic_rows") if isinstance(candidate, dict) else None
+        if not isinstance(critic_rows, list) or not critic_rows:
+            raise RuntimeError("Analysis critic schema candidate rows are incomplete")
+        rejected: list[dict[str, Any]] = []
+        for row in critic_rows:
+            if not isinstance(row, dict):
+                raise RuntimeError("Analysis critic schema candidate row is invalid")
+            batch_id = row.get("id")
+            source_text = row.get("text")
+            if not isinstance(batch_id, str) or not isinstance(source_text, str):
+                raise RuntimeError("Analysis critic schema candidate binding is invalid")
+            emotions = analysis_direct_affect_rejected_emotions(source_text)
+            if emotions:
+                rejected.append(
+                    {
+                        "id": batch_id,
+                        "emotions": list(emotions),
+                    }
+                )
+        return rejected
+
+    @classmethod
+    def _analysis_generator_rejected_emotion_contract(
+        cls,
+        candidate_json: str,
+        generator_contract: dict[str, Any],
+        *,
+        durable: bool,
+    ) -> list[dict[str, Any]]:
+        error_type = RuntimeError if durable else ValueError
+        if not isinstance(generator_contract, dict):
+            raise error_type("Analysis generator contract must be an object")
+        try:
+            canonical = canonical_analysis_rejected_emotion_contract(
+                generator_contract.get("rejected_emotions_by_id")
+            )
+        except ValueError as exc:
+            raise error_type(
+                "Analysis generator contract has invalid retry rejection fields"
+            ) from exc
+        source_bound = {
+            str(item["id"]): list(item["emotions"])
+            for item in cls._analysis_critic_rejected_emotion_contract(candidate_json)
+        }
+        if any(
+            source_bound.get(str(item["id"])) != item["emotions"]
+            for item in canonical
+        ):
+            raise error_type(
+                "Analysis generator retry rejection schema is not source-bound"
+            )
+        return canonical
+
+    @classmethod
+    def _validate_analysis_critic_generator_rejections(
+        cls,
+        *,
+        candidate_json: str,
+        generator_contract_json: str,
+        critic_contract: dict[str, Any],
+        durable: bool,
+    ) -> None:
+        error_type = RuntimeError if durable else ValueError
+        try:
+            generator_contract = json.loads(generator_contract_json)
+        except json.JSONDecodeError as exc:
+            raise error_type("Analysis generator contract JSON is invalid") from exc
+        if not isinstance(generator_contract, dict):
+            raise error_type("Analysis generator contract must be an object")
+        generator_rejections = cls._analysis_generator_rejected_emotion_contract(
+            candidate_json,
+            generator_contract,
+            durable=durable,
+        )
+        try:
+            critic_rejections = canonical_analysis_rejected_emotion_contract(
+                critic_contract.get("rejected_emotions_by_id")
+            )
+        except ValueError as exc:
+            raise error_type(
+                "Analysis critic contract has invalid retry rejection fields"
+            ) from exc
+        if critic_rejections != generator_rejections:
+            raise error_type(
+                "Analysis critic retry schema differs from its generator rejection contract"
+            )
+
     @classmethod
     def _analysis_critic_confidence_bounds(
         cls,
@@ -2381,6 +2846,32 @@ class ProjectDB:
             raise error_type(
                 "Analysis critic contract does not use the current director policy"
             )
+        schema_policy_version = contract.get("schema_policy_version")
+        rejected_emotions_by_id = contract.get("rejected_emotions_by_id")
+        rejected_ids: list[str] = []
+        if isinstance(rejected_emotions_by_id, list):
+            for item in rejected_emotions_by_id:
+                if not isinstance(item, dict) or set(item) != {"id", "emotions"}:
+                    break
+                batch_id = item.get("id")
+                emotions = item.get("emotions")
+                if (
+                    not isinstance(batch_id, str)
+                    or re.fullmatch(r"S[0-9]+", batch_id) is None
+                    or not isinstance(emotions, list)
+                    or tuple(emotions) != ANALYSIS_SEMANTIC_REJECTED_EMOTIONS
+                ):
+                    break
+                rejected_ids.append(batch_id)
+        schema_contract_valid = bool(
+            schema_policy_version
+            == ANALYSIS_DIRECTOR_RETRY_SCHEMA_POLICY_VERSION
+            and isinstance(rejected_emotions_by_id, list)
+            and len(rejected_ids) == len(rejected_emotions_by_id)
+            and rejected_ids == sorted(set(rejected_ids))
+        )
+        if not schema_contract_valid:
+            raise error_type("Analysis critic contract has invalid retry schema fields")
         if (
             type(confidence_floor) not in {int, float}
             or type(confidence_cap) not in {int, float}
@@ -2455,6 +2946,20 @@ class ProjectDB:
             ):
                 raise error_type(
                     "Analysis critic evidence policy is not source-bound"
+                )
+            source_bound_rejections = {
+                str(item["id"]): list(item["emotions"])
+                for item in cls._analysis_critic_rejected_emotion_contract(
+                    candidate_json
+                )
+            }
+            if any(
+                source_bound_rejections.get(str(item["id"]))
+                != item["emotions"]
+                for item in rejected_emotions_by_id
+            ):
+                raise error_type(
+                    "Analysis critic retry schema is not source-bound"
                 )
         return float(confidence_floor), float(confidence_cap)
 
@@ -3641,6 +4146,9 @@ class ProjectDB:
             str(item["stable_id"]): item for item in commit["segments"]
         }
         critic_rows = candidate["critic_rows"]
+        candidate_speakers = tuple(
+            critic_row["candidate"]["speaker"] for critic_row in critic_rows
+        )
         critic_row_by_stable = {
             str(segment["stable_id"]): critic_row
             for segment, critic_row in zip(
@@ -3653,12 +4161,6 @@ class ProjectDB:
             stable_id: dict(critic_row["candidate"])
             for stable_id, critic_row in critic_row_by_stable.items()
         }
-        _critic_rows_json, candidate_hash = cls._canonical_analysis_json(
-            critic_rows,
-            "accepted evidence candidate critic rows",
-        )
-        if str(evidence.get("candidate_hash", "")) != candidate_hash:
-            raise RuntimeError("Accepted critic evidence candidate hash is invalid")
         _structural_locks, semantic_locks, context_kind_locks = (
             cls._analysis_host_lock_contract(
                 candidate_json,
@@ -3689,6 +4191,16 @@ class ProjectDB:
             durable=True,
             candidate_json=candidate_json,
         )
+        candidate_hash = analysis_critic_candidate_hash(
+            critic_rows,
+            critic_contract["rejected_emotions_by_id"],
+        )
+        if str(evidence.get("candidate_hash", "")) != candidate_hash:
+            raise RuntimeError("Accepted critic evidence candidate hash is invalid")
+        rejected_emotions_by_batch = {
+            str(item["id"]): frozenset(str(value) for value in item["emotions"])
+            for item in critic_contract["rejected_emotions_by_id"]
+        }
         evidence_policy = str(critic_contract["evidence_policy"])
         singleton_source_anchors = frozenset(
             canonical_analysis_critic_source_anchors(str(critic_rows[0]["text"]))
@@ -3769,6 +4281,14 @@ class ProjectDB:
                 and math.isfinite(float(critic["confidence"]))
                 and 0.0 <= float(critic["confidence"]) <= ANALYSIS_CRITIC_CONFIDENCE_MAX
             )
+            if (
+                critic_schema_valid
+                and critic["emotion"]
+                in rejected_emotions_by_batch.get(str(critic_row["id"]), frozenset())
+            ):
+                raise RuntimeError(
+                    "Accepted critic evidence violates its retry emotion schema"
+                )
             raw_deltas = [
                 f"{field}:{candidate_projection[field]}->{raw_delivery[field]}"
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
@@ -3932,6 +4452,10 @@ class ProjectDB:
                 != str(candidate_segments[stable_id]["text_sha256"])
                 or item.get("candidate") != candidate_projection
                 or not critic_schema_valid
+                or not analysis_critic_speaker_is_candidate_bound(
+                    critic.get("speaker") if isinstance(critic, dict) else None,
+                    candidate_speakers,
+                )
                 or not isinstance(evidence_quote, str)
                 or not evidence_quote.strip()
                 or len(evidence_quote) > ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
@@ -4012,24 +4536,229 @@ class ProjectDB:
                 )
 
     @classmethod
-    def _validate_analysis_rejected_source_kind_evidence(
+    def _validate_analysis_rejection_evidence(
         cls,
         conn: sqlite3.Connection,
         candidate_json: str,
         evidence: dict[str, Any],
+        outcome: dict[str, Any],
+        reserved_contract_json: str,
         deterministic_issue_json: str,
     ) -> None:
         candidate = json.loads(candidate_json)
         evidence_segments = evidence.get("segments")
-        if isinstance(evidence_segments, list) and any(
-            isinstance(item, dict)
-            and item.get("host_critic_compatibility_override") is not None
-            for item in evidence_segments
-        ):
+        try:
+            reserved_contract = json.loads(reserved_contract_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Reserved critic contract JSON is invalid") from exc
+        canonical_reserved_contract, _reserved_contract_hash = cls._canonical_analysis_json(
+            reserved_contract,
+            "reserved analysis critic contract",
+        )
+        critic_contract = evidence.get("critic_contract")
+        if not isinstance(critic_contract, dict):
             raise RuntimeError(
-                "Rejected critic evidence contains a compatibility override"
+                "Rejected critic evidence requires its durable critic contract"
             )
-        _structural_locks, semantic_locks, context_kind_locks = (
+        canonical_evidence_contract, _evidence_contract_hash = cls._canonical_analysis_json(
+            critic_contract,
+            "rejected critic evidence contract",
+        )
+        if canonical_evidence_contract != canonical_reserved_contract:
+            raise RuntimeError(
+                "Rejected critic evidence contract differs from the reserved request contract"
+            )
+        confidence_floor, confidence_cap = cls._analysis_critic_confidence_bounds(
+            critic_contract,
+            durable=True,
+            candidate_json=candidate_json,
+        )
+        critic_rows = candidate["critic_rows"]
+        candidate_speakers = tuple(
+            critic_row["candidate"]["speaker"] for critic_row in critic_rows
+        )
+        candidate_hash = analysis_critic_candidate_hash(
+            critic_rows,
+            critic_contract["rejected_emotions_by_id"],
+        )
+        if str(evidence.get("candidate_hash", "")) != candidate_hash:
+            raise RuntimeError("Rejected critic evidence candidate hash is invalid")
+        rejected_emotions_by_batch = {
+            str(item["id"]): frozenset(str(value) for value in item["emotions"])
+            for item in critic_contract["rejected_emotions_by_id"]
+        }
+        evidence_policy = str(critic_contract["evidence_policy"])
+        singleton_source_anchors = frozenset(
+            canonical_analysis_critic_source_anchors(str(critic_rows[0]["text"]))
+            if evidence_policy
+            == ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+            else ()
+        )
+        per_id_source_anchors = {
+            str(item["id"]): frozenset(item["anchors"])
+            for item in (
+                canonical_analysis_critic_per_id_source_anchor_map(critic_rows)
+                if evidence_policy
+                == ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
+                else ()
+            )
+        }
+        if not isinstance(evidence_segments, list):
+            raise RuntimeError("Rejected critic evidence requires a segments array")
+        evidence_by_stable: dict[str, dict[str, Any]] = {}
+        for item in evidence_segments:
+            if not isinstance(item, dict):
+                raise RuntimeError("Rejected critic segment evidence must be an object")
+            stable_id = str(item.get("stable_id", ""))
+            if not stable_id or stable_id in evidence_by_stable:
+                raise RuntimeError(
+                    "Rejected critic evidence contains invalid stable IDs"
+                )
+            evidence_by_stable[stable_id] = item
+        candidate_segments = {
+            str(item["stable_id"]): item for item in candidate["segments"]
+        }
+        critic_row_by_stable = {
+            str(segment["stable_id"]): critic_row
+            for segment, critic_row in zip(
+                candidate["segments"],
+                critic_rows,
+                strict=True,
+            )
+        }
+        if set(evidence_by_stable) != set(candidate_segments):
+            raise RuntimeError(
+                "Rejected critic evidence segment set differs from candidate"
+            )
+        critic_fields = {
+            *ANALYSIS_CRITIC_DELIVERY_FIELDS,
+            "accept",
+            "rationale",
+            "evidence_quote",
+            "confidence",
+        }
+        raw_deltas_by_stable: dict[str, list[str]] = {}
+        raw_delta_fields_by_stable: dict[str, set[str]] = {}
+        for stable_id, item in evidence_by_stable.items():
+            candidate_segment = candidate_segments[stable_id]
+            critic_row = critic_row_by_stable[stable_id]
+            candidate_projection = dict(critic_row["candidate"])
+            critic = item.get("critic")
+            evidence_quote = (
+                critic.get("evidence_quote") if isinstance(critic, dict) else None
+            )
+            critic_confidence = (
+                critic.get("confidence") if isinstance(critic, dict) else None
+            )
+            generator_confidence = candidate_segment["data"].get("confidence")
+            derived_confidence = item.get("derived_confidence")
+            numeric_confidences = (
+                generator_confidence,
+                critic_confidence,
+                derived_confidence,
+            )
+            critic_schema_valid = (
+                isinstance(critic, dict)
+                and set(critic) == critic_fields
+                and type(critic.get("accept")) is bool
+                and isinstance(critic.get("kind"), str)
+                and critic.get("kind") in ANALYSIS_CRITIC_KINDS
+                and isinstance(critic.get("speaker"), str)
+                and len(critic["speaker"]) <= 120
+                and isinstance(critic.get("emotion"), str)
+                and critic.get("emotion") in ANALYSIS_CRITIC_EMOTIONS
+                and type(critic.get("intensity")) is int
+                and 0 <= int(critic["intensity"]) <= 3
+                and isinstance(critic.get("pace"), str)
+                and critic.get("pace") in ANALYSIS_CRITIC_PACES
+                and isinstance(critic.get("volume"), str)
+                and critic.get("volume") in ANALYSIS_CRITIC_VOLUMES
+                and isinstance(critic.get("rationale"), str)
+                and sum(character.isalpha() for character in critic["rationale"]) >= 4
+                and len(critic["rationale"]) <= 200
+                and type(critic_confidence) in {int, float}
+                and math.isfinite(float(critic_confidence))
+                and confidence_floor
+                <= float(critic_confidence)
+                <= ANALYSIS_CRITIC_CONFIDENCE_MAX
+            )
+            if not critic_schema_valid:
+                raise RuntimeError(
+                    "Rejected critic evidence has invalid segment schema"
+                )
+            if not analysis_critic_speaker_is_candidate_bound(
+                critic["speaker"],
+                candidate_speakers,
+            ):
+                raise RuntimeError(
+                    "Rejected critic evidence has invalid speaker provenance"
+                )
+            if critic["emotion"] in rejected_emotions_by_batch.get(
+                str(critic_row["id"]),
+                frozenset(),
+            ):
+                raise RuntimeError(
+                    "Rejected critic evidence violates its retry emotion schema"
+                )
+            raw_delivery = {
+                field: critic[field] for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+            }
+            raw_deltas = [
+                f"{field}:{candidate_projection[field]}->{raw_delivery[field]}"
+                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+                if raw_delivery[field] != candidate_projection[field]
+            ]
+            expected_derived_confidence = (
+                ANALYSIS_CHAPTER_HEADING_CONFIDENCE
+                if critic_row["source_role"] == ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING
+                else min(
+                    float(generator_confidence),
+                    float(critic_confidence),
+                    float(confidence_cap),
+                )
+            )
+            quote_valid = (
+                isinstance(evidence_quote, str)
+                and bool(evidence_quote.strip())
+                and len(evidence_quote) <= ANALYSIS_CRITIC_EVIDENCE_QUOTE_MAX_LENGTH
+                and (
+                    evidence_policy
+                    != ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_FULL_TARGET
+                    or evidence_quote == str(critic_row["text"])
+                )
+                and (
+                    evidence_policy
+                    != ANALYSIS_CRITIC_EVIDENCE_POLICY_SINGLETON_SOURCE_ANCHOR
+                    or evidence_quote in singleton_source_anchors
+                )
+                and (
+                    evidence_policy
+                    != ANALYSIS_CRITIC_EVIDENCE_POLICY_PER_ID_SOURCE_ANCHOR
+                    or evidence_quote
+                    in per_id_source_anchors.get(str(critic_row["id"]), frozenset())
+                )
+            )
+            if (
+                str(item.get("text_sha256", ""))
+                != str(candidate_segment["text_sha256"])
+                or item.get("candidate") != candidate_projection
+                or item.get("field_deltas") != raw_deltas
+                or critic.get("accept") is not (not raw_deltas)
+                or type(item.get("effective_accept")) is not bool
+                or not quote_valid
+                or any(type(value) not in {int, float} for value in numeric_confidences)
+                or any(not math.isfinite(float(value)) for value in numeric_confidences)
+                or any(float(value) < confidence_floor for value in numeric_confidences)
+                or float(derived_confidence) != expected_derived_confidence
+            ):
+                raise RuntimeError(
+                    "Rejected critic evidence is not exactly candidate-bound"
+                )
+            raw_deltas_by_stable[stable_id] = raw_deltas
+            raw_delta_fields_by_stable[stable_id] = {
+                delta.split(":", 1)[0] for delta in raw_deltas
+            }
+        structural_locks, semantic_locks, context_kind_locks = (
             cls._analysis_host_lock_contract(
                 candidate_json,
                 deterministic_issue_json,
@@ -4046,71 +4775,86 @@ class ProjectDB:
             )
         }
         protected_ids = set(context_kind_locks) | semantic_source_kind_ids
-        if not protected_ids:
-            if isinstance(evidence_segments, list) and any(
-                isinstance(item, dict)
-                and item.get("host_source_kind_override") is not None
-                for item in evidence_segments
-            ):
-                raise RuntimeError(
-                    "Rejected source-kind critic evidence contains an unprotected override"
-                )
-            return
-        if not isinstance(evidence_segments, list):
-            raise RuntimeError(
-                "Rejected source-kind critic evidence requires a segments array"
-            )
-        evidence_by_stable = {
-            str(item.get("stable_id", "")): item
-            for item in evidence_segments
-            if isinstance(item, dict)
-        }
-        candidate_segments = {
-            str(item["stable_id"]): item for item in candidate["segments"]
-        }
-        critic_rows = {
-            str(segment["stable_id"]): critic_row
-            for segment, critic_row in zip(
-                candidate["segments"],
-                candidate["critic_rows"],
-                strict=True,
-            )
-        }
         if (
-            len(evidence_by_stable) != len(evidence_segments)
-            or set(evidence_by_stable) != set(candidate_segments)
-            or any(
+            any(
                 item.get("host_source_kind_override") is not None
                 for stable_id, item in evidence_by_stable.items()
                 if stable_id not in protected_ids
             )
+            or any(
+                item.get("host_semantic_override") is not None
+                for stable_id, item in evidence_by_stable.items()
+                if stable_id not in semantic_locks
+            )
+            or any(
+                item.get("host_structural_override") is not None
+                for stable_id, item in evidence_by_stable.items()
+                if stable_id not in structural_locks
+            )
         ):
             raise RuntimeError(
-                "Rejected source-kind critic evidence has invalid segment binding"
+                "Rejected source-kind critic evidence contains an unprotected override"
             )
-        for stable_id in protected_ids:
-            item = evidence_by_stable.get(stable_id)
-            if item is None:
-                raise RuntimeError(
-                    "Rejected source-kind critic evidence omits a protected row"
-                )
-            critic_row = critic_rows[stable_id]
+        unresolved_fields_by_stable: dict[str, list[str]] = {}
+        for stable_id, item in evidence_by_stable.items():
+            critic_row = critic_row_by_stable[stable_id]
             candidate_projection = critic_row["candidate"]
             critic = item.get("critic")
-            if not isinstance(critic, dict):
-                raise RuntimeError(
-                    "Rejected source-kind critic evidence lacks a critic verdict"
+            raw_deltas = raw_deltas_by_stable[stable_id]
+            raw_delta_fields = raw_delta_fields_by_stable[stable_id]
+            expected_critic_compatibility_override = (
+                analysis_expected_critic_compatibility_override(
+                    stable_id=stable_id,
+                    source_text=str(critic_row["text"]),
+                    text_sha256=str(candidate_segments[stable_id]["text_sha256"]),
+                    source_kind=str(critic_row["hint"]),
+                    candidate=candidate_projection,
+                    critic=critic,
+                    raw_deltas=raw_deltas,
                 )
-            raw_deltas = [
-                f"{field}:{candidate_projection[field]}->{critic.get(field)}"
-                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
-                if critic.get(field) != candidate_projection[field]
-            ]
-            raw_delta_fields = {
-                field
-                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
-                if critic.get(field) != candidate_projection[field]
-            }
+                if raw_deltas
+                else None
+            )
+            critic_compatibility_override = item.get(
+                "host_critic_compatibility_override"
+            )
+            if (
+                critic_compatibility_override
+                != expected_critic_compatibility_override
+            ):
+                raise RuntimeError(
+                    "Rejected critic evidence contains a compatibility override "
+                    "that is not source-bound"
+                )
+            structural_lock = structural_locks.get(stable_id)
+            if structural_lock is not None:
+                expected_structural_override = (
+                    {
+                        "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
+                        "stable_id": stable_id,
+                        "text_sha256": str(candidate_segments[stable_id]["text_sha256"]),
+                        "source_role": ANALYSIS_SOURCE_ROLE_CHAPTER_HEADING,
+                        "context_policy": ANALYSIS_CONTEXT_POLICY_TARGET_ONLY,
+                        "locked_fields": ANALYSIS_CHAPTER_HEADING_DELIVERY,
+                        "locked_confidence": ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
+                        "raw_accept": False,
+                        "raw_field_deltas": raw_deltas,
+                    }
+                    if raw_deltas
+                    else None
+                )
+                if (
+                    item.get("host_structural_override")
+                    != expected_structural_override
+                    or item.get("host_semantic_override") is not None
+                    or item.get("host_source_kind_override") is not None
+                    or item.get("effective_accept") is not True
+                ):
+                    raise RuntimeError(
+                        "Rejected structural critic override is not source-bound"
+                    )
+                unresolved_fields_by_stable[stable_id] = []
+                continue
             semantic_lock = semantic_locks.get(stable_id)
             context_kind_lock = context_kind_locks.get(stable_id)
             expected_source_kind_override = (
@@ -4129,6 +4873,20 @@ class ProjectDB:
                 if semantic_lock is not None
                 else []
             )
+            semantic_rule_contract = (
+                ANALYSIS_HOST_SEMANTIC_RULE_CONTRACTS.get(
+                    str(semantic_lock["rule"])
+                )
+                if semantic_lock is not None
+                else None
+            )
+            source_kind_is_protected = bool(
+                context_kind_lock is not None
+                or (
+                    semantic_rule_contract is not None
+                    and semantic_rule_contract.get("protects_source_kind", False)
+                )
+            )
             expected_semantic_override = (
                 {
                     "policy_version": ANALYSIS_HOST_SEMANTIC_POLICY_VERSION,
@@ -4144,6 +4902,10 @@ class ProjectDB:
                 if (
                     semantic_lock is not None
                     and "emotion" in raw_delta_fields
+                    and (
+                        raw_delta_fields <= {"emotion"}
+                        or source_kind_is_protected
+                    )
                     and candidate_projection["emotion"]
                     == semantic_lock["candidate_emotion"]
                     and critic.get("emotion") not in allowed_emotions
@@ -4169,28 +4931,52 @@ class ProjectDB:
                     or (field == "emotion" and expected_semantic_override is not None)
                 )
             }
-            unresolved_fields = raw_delta_fields - covered_fields
+            if expected_critic_compatibility_override is not None:
+                covered_fields.update(raw_delta_fields)
+            unresolved_fields = [
+                field
+                for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+                if field in raw_delta_fields and field not in covered_fields
+            ]
             expected_effective_accept = not unresolved_fields
             if (
-                str(item.get("text_sha256", ""))
-                != str(candidate_segments[stable_id]["text_sha256"])
-                or item.get("candidate") != candidate_projection
-                or item.get("field_deltas") != raw_deltas
-                or critic.get("accept") is not (not raw_deltas)
-                or not source_kind_override_valid
+                not source_kind_override_valid
                 or not semantic_override_valid
                 or item.get("effective_accept") is not expected_effective_accept
+                or item.get("host_structural_override") is not None
             ):
                 raise RuntimeError(
                     "Rejected source-kind critic override is not source-bound"
                 )
-        if not any(
-            isinstance(item, dict) and item.get("effective_accept") is False
-            for item in evidence_segments
-        ):
+            unresolved_fields_by_stable[stable_id] = unresolved_fields
+        unresolved_ids = {
+            stable_id
+            for stable_id, fields in unresolved_fields_by_stable.items()
+            if fields
+        }
+        if not unresolved_ids:
             raise RuntimeError(
                 "Rejected critic evidence has no unresolved segment"
             )
+        issues = outcome.get("issues")
+        if (
+            set(outcome) != {"issues", "retryable_invalid"}
+            or outcome.get("retryable_invalid") is not False
+            or not isinstance(issues, dict)
+            or not issues
+            or set(issues) != unresolved_ids
+        ):
+            raise RuntimeError(
+                "Rejected critic outcome does not match unresolved evidence"
+            )
+        for stable_id, fields in unresolved_fields_by_stable.items():
+            if not fields:
+                continue
+            expected_reason = "DIRECTOR_FIELD_MISMATCH fields=" + ",".join(fields)
+            if issues.get(stable_id) != expected_reason:
+                raise RuntimeError(
+                    "Rejected critic outcome is not a substantive field mismatch"
+                )
 
     @classmethod
     def _validated_analysis_commit_envelope(
@@ -4281,13 +5067,18 @@ class ProjectDB:
             "stored analysis candidate",
         )
         cls._analysis_candidate_commit_rows(candidate_json)
-        _critic_json, candidate_hash = cls._canonical_analysis_json(
-            candidate["critic_rows"],
-            "stored analysis critic rows",
-        )
         generator_json, generator_hash = cls._canonical_analysis_json(
             generator_contract,
             "stored analysis generator contract",
+        )
+        generator_rejections = cls._analysis_generator_rejected_emotion_contract(
+            candidate_json,
+            generator_contract,
+            durable=True,
+        )
+        candidate_hash = analysis_critic_candidate_hash(
+            candidate["critic_rows"],
+            generator_rejections,
         )
         issue_json, issue_hash = cls._canonical_analysis_json(
             deterministic_issues,
@@ -4333,12 +5124,22 @@ class ProjectDB:
                 raise RuntimeError(
                     "Accepted analysis candidate has no completed critic evidence"
                 )
-            cls._analysis_critic_attempt_row_conn(
+            final_attempt = cls._analysis_critic_attempt_row_conn(
                 conn,
                 analysis_candidate_id,
                 attempt_number,
                 candidate_row=row,
             )
+            final_outcome = json.loads(str(final_attempt["outcome_json"]))
+            if (
+                str(final_attempt["state"])
+                != ANALYSIS_CRITIC_ATTEMPT_COMPLETED
+                or str(final_outcome.get("candidate_state", ""))
+                != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+            ):
+                raise RuntimeError(
+                    "Accepted analysis candidate lacks matching completed critic acceptance"
+                )
         return row
 
     @classmethod
@@ -4366,7 +5167,8 @@ class ProjectDB:
         except json.JSONDecodeError as exc:
             raise RuntimeError("Analysis critic intent ledger contains invalid JSON") from exc
         contract_candidate = candidate_row or conn.execute(
-            "SELECT candidate_json FROM analysis_candidates WHERE id=?",
+            "SELECT candidate_hash,candidate_json,initial_generator_contract_json "
+            "FROM analysis_candidates WHERE id=?",
             (int(analysis_candidate_id),),
         ).fetchone()
         if contract_candidate is None:
@@ -4376,6 +5178,20 @@ class ProjectDB:
             durable=True,
             candidate_json=str(contract_candidate["candidate_json"]),
         )
+        cls._validate_analysis_critic_generator_rejections(
+            candidate_json=str(contract_candidate["candidate_json"]),
+            generator_contract_json=str(
+                contract_candidate["initial_generator_contract_json"]
+            ),
+            critic_contract=contract,
+            durable=True,
+        )
+        if str(contract.get("candidate_hash", "")) != str(
+            contract_candidate["candidate_hash"]
+        ):
+            raise RuntimeError(
+                "Analysis critic contract is not bound to its parent candidate hash"
+            )
         intent_json, intent_hash = cls._canonical_analysis_json(
             intent,
             "stored analysis critic intent",
@@ -4391,6 +5207,14 @@ class ProjectDB:
             or str(row["contract_hash"]) != contract_hash
         ):
             raise RuntimeError("Analysis critic intent hash verification failed")
+        if (
+            not isinstance(intent, dict)
+            or str(intent.get("candidate_hash", ""))
+            != str(contract_candidate["candidate_hash"])
+        ):
+            raise RuntimeError(
+                "Analysis critic intent is not bound to its parent candidate hash"
+            )
         if str(row["state"]) == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
             candidate = candidate_row or cls._analysis_candidate_row_conn(
                 conn,
@@ -4413,6 +5237,32 @@ class ProjectDB:
                 "stored analysis critic evidence",
             )
             completion_candidate_state = str(outcome.get("candidate_state", ""))
+            outcome_payload = outcome.get("payload")
+            if not isinstance(outcome_payload, dict):
+                raise RuntimeError("Stored analysis critic outcome payload is invalid")
+            if completion_candidate_state not in {
+                ANALYSIS_CANDIDATE_CRITIC_INVALID,
+                ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
+                ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+            }:
+                raise RuntimeError(
+                    "Stored analysis critic outcome has an invalid candidate state"
+                )
+            if completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED and (
+                outcome_payload.get("accepted") is False
+                or outcome_payload.get("retryable_invalid") is True
+                or bool(outcome_payload.get("issues"))
+            ):
+                raise RuntimeError(
+                    "Accepted analysis critic outcome contradicts its durable state"
+                )
+            if completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_INVALID and (
+                outcome_payload.get("accepted") is True
+                or outcome_payload.get("retryable_invalid") is False
+            ):
+                raise RuntimeError(
+                    "Invalid analysis critic outcome contradicts its durable state"
+                )
             completion_envelope_hash = (
                 candidate["commit_envelope_hash"]
                 if completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
@@ -4453,10 +5303,12 @@ class ProjectDB:
                     str(candidate["deterministic_issue_json"]),
                 )
             elif completion_candidate_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
-                cls._validate_analysis_rejected_source_kind_evidence(
+                cls._validate_analysis_rejection_evidence(
                     conn,
                     str(candidate["candidate_json"]),
                     evidence,
+                    outcome_payload,
+                    contract_json,
                     str(candidate["deterministic_issue_json"]),
                 )
         return row
@@ -4489,7 +5341,12 @@ class ProjectDB:
             for row in rows
         ]
         if not validated:
-            if parent_state not in {None, ANALYSIS_CANDIDATE_ALLOCATED}:
+            if parent_state not in {
+                None,
+                ANALYSIS_CANDIDATE_ALLOCATED,
+                ANALYSIS_CANDIDATE_TERMINAL,
+                ANALYSIS_CANDIDATE_SUPERSEDED,
+            }:
                 raise RuntimeError("Analysis candidate state has no critic attempt history")
             return validated
         last = validated[-1]
@@ -4507,6 +5364,49 @@ class ProjectDB:
             outcome = json.loads(str(last["outcome_json"]))
             if str(outcome.get("candidate_state", "")) != parent_state:
                 raise RuntimeError("Analysis candidate state differs from its final critic outcome")
+        elif parent_state == ANALYSIS_CANDIDATE_ACCEPTED:
+            if last_state != ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
+                raise RuntimeError(
+                    "Accepted analysis candidate final critic attempt is not completed"
+                )
+            outcome = json.loads(str(last["outcome_json"]))
+            if (
+                str(outcome.get("candidate_state", ""))
+                != ANALYSIS_CANDIDATE_CRITIC_ACCEPTED
+            ):
+                raise RuntimeError(
+                    "Accepted analysis candidate lacks matching completed critic acceptance"
+                )
+        elif parent_state in {
+            ANALYSIS_CANDIDATE_TERMINAL,
+            ANALYSIS_CANDIDATE_SUPERSEDED,
+        }:
+            final_state_label = (
+                "Terminal"
+                if parent_state == ANALYSIS_CANDIDATE_TERMINAL
+                else "Superseded"
+            )
+            if last_state == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
+                outcome = json.loads(str(last["outcome_json"]))
+                if str(outcome.get("candidate_state", "")) not in {
+                    ANALYSIS_CANDIDATE_CRITIC_INVALID,
+                    ANALYSIS_CANDIDATE_CRITIC_REJECTED,
+                }:
+                    raise RuntimeError(
+                        f"{final_state_label} analysis candidate has an invalid "
+                        "final critic outcome"
+                    )
+            elif last_state != ANALYSIS_CRITIC_ATTEMPT_ABANDONED:
+                raise RuntimeError(
+                    f"{final_state_label} analysis candidate has an invalid "
+                    "final critic attempt"
+                )
+        elif parent_state == ANALYSIS_CANDIDATE_ALLOCATED:
+            raise RuntimeError(
+                "Allocated analysis candidate has critic attempt history"
+            )
+        elif parent_state is not None:
+            raise RuntimeError("Unsupported analysis candidate parent state")
         for prior in validated[:-1]:
             if str(prior["state"]) == ANALYSIS_CRITIC_ATTEMPT_COMPLETED:
                 outcome = json.loads(str(prior["outcome_json"]))
@@ -4555,7 +5455,73 @@ class ProjectDB:
         )
         if require_nonempty and not rows:
             raise RuntimeError("Analysis candidate has no generator contract history")
-        return [cls._analysis_generator_contract_row(row) for row in rows]
+        candidate = conn.execute(
+            "SELECT candidate_json,initial_generator_contract_json,"
+            "initial_generator_contract_hash FROM analysis_candidates WHERE id=?",
+            (int(analysis_candidate_id),),
+        ).fetchone()
+        if candidate is None:
+            raise KeyError(f"Unknown analysis candidate id: {analysis_candidate_id}")
+        try:
+            initial_contract = json.loads(
+                str(candidate["initial_generator_contract_json"])
+            )
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Analysis generator contract JSON is invalid") from exc
+        initial_json, initial_hash = cls._canonical_analysis_json(
+            initial_contract,
+            "stored initial analysis generator contract",
+        )
+        if (
+            str(candidate["initial_generator_contract_json"]) != initial_json
+            or str(candidate["initial_generator_contract_hash"]) != initial_hash
+        ):
+            raise RuntimeError("Analysis generator contract hash verification failed")
+        initial_rejections = cls._analysis_generator_rejected_emotion_contract(
+            str(candidate["candidate_json"]),
+            initial_contract,
+            durable=True,
+        )
+        validated = [cls._analysis_generator_contract_row(row) for row in rows]
+        for row in validated:
+            contract = json.loads(str(row["generator_contract_json"]))
+            rejections = cls._analysis_generator_rejected_emotion_contract(
+                str(candidate["candidate_json"]),
+                contract,
+                durable=True,
+            )
+            if rejections != initial_rejections:
+                raise RuntimeError(
+                    "Analysis candidate generator history changed its critic rejection schema"
+                )
+        if validated and (
+            str(validated[0]["generator_contract_json"]) != initial_json
+            or str(validated[0]["generator_contract_hash"]) != initial_hash
+        ):
+            raise RuntimeError(
+                "Analysis candidate generator history does not begin with its initial contract"
+            )
+        return validated
+
+    @classmethod
+    def _validate_analysis_candidate_history_conn(
+        cls,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+    ) -> tuple[list[sqlite3.Row], list[sqlite3.Row]]:
+        """Validate both child ledgers against one already-validated parent row."""
+        analysis_candidate_id = int(candidate["id"])
+        generator_history = cls._validate_analysis_generator_contract_history_conn(
+            conn,
+            analysis_candidate_id,
+        )
+        critic_history = cls._validate_analysis_critic_attempt_history_conn(
+            conn,
+            analysis_candidate_id,
+            int(candidate["critic_attempt_count"]),
+            str(candidate["state"]),
+        )
+        return generator_history, critic_history
 
     @classmethod
     def _record_analysis_generator_contract_conn(
@@ -4566,6 +5532,36 @@ class ProjectDB:
         contract_hash: str,
         now: float,
     ) -> None:
+        candidate = conn.execute(
+            "SELECT candidate_json,initial_generator_contract_json "
+            "FROM analysis_candidates WHERE id=?",
+            (int(analysis_candidate_id),),
+        ).fetchone()
+        if candidate is None:
+            raise KeyError(f"Unknown analysis candidate id: {analysis_candidate_id}")
+        try:
+            initial_contract = json.loads(
+                str(candidate["initial_generator_contract_json"])
+            )
+            current_contract = json.loads(contract_json)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Analysis generator contract JSON is invalid") from exc
+        if not isinstance(initial_contract, dict) or not isinstance(current_contract, dict):
+            raise RuntimeError("Analysis generator contract must be an object")
+        initial_rejections = cls._analysis_generator_rejected_emotion_contract(
+            str(candidate["candidate_json"]),
+            initial_contract,
+            durable=True,
+        )
+        current_rejections = cls._analysis_generator_rejected_emotion_contract(
+            str(candidate["candidate_json"]),
+            current_contract,
+            durable=True,
+        )
+        if current_rejections != initial_rejections:
+            raise RuntimeError(
+                "Analysis candidate generator history changed its critic rejection schema"
+            )
         rows = cls._validate_analysis_generator_contract_history_conn(
             conn,
             analysis_candidate_id,
@@ -4629,13 +5625,18 @@ class ProjectDB:
             "analysis candidate",
         )
         self._analysis_candidate_commit_rows(candidate_json)
-        _critic_rows_json, computed_candidate_hash = self._canonical_analysis_json(
+        generator_rejections = self._analysis_generator_rejected_emotion_contract(
+            candidate_json,
+            generator_contract,
+            durable=False,
+        )
+        computed_candidate_hash = analysis_critic_candidate_hash(
             candidate["critic_rows"],
-            "analysis candidate critic rows",
+            generator_rejections,
         )
         if identity[-1] != computed_candidate_hash:
             raise ValueError(
-                "Analysis candidate hash does not match the critic-visible rows"
+                "Analysis candidate hash does not match its critic projection and retry schema"
             )
         generator_json, generator_hash = self._canonical_analysis_json(
             generator_contract,
@@ -4689,6 +5690,11 @@ class ProjectDB:
                 analysis_candidate_id = int(cursor.lastrowid)
             else:
                 analysis_candidate_id = int(existing["id"])
+                existing = self._analysis_candidate_row_conn(
+                    conn,
+                    analysis_candidate_id,
+                )
+                self._validate_analysis_candidate_history_conn(conn, existing)
                 if (
                     str(existing["candidate_json"]) != candidate_json
                     or str(existing["envelope_hash"]) != envelope_hash
@@ -4706,22 +5712,17 @@ class ProjectDB:
                 generator_hash,
                 now,
             )
-            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate_row = self._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
+            )
+            self._validate_analysis_candidate_history_conn(conn, candidate_row)
+            return candidate_row
 
     def get_analysis_candidate(self, analysis_candidate_id: int) -> sqlite3.Row:
         with self.connect() as conn:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
-            self._validate_analysis_generator_contract_history_conn(
-                conn,
-                int(candidate["id"]),
-            )
-            if int(candidate["critic_attempt_count"]) > 0:
-                self._validate_analysis_critic_attempt_history_conn(
-                    conn,
-                    int(candidate["id"]),
-                    int(candidate["critic_attempt_count"]),
-                    str(candidate["state"]),
-                )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             return candidate
 
     def has_analysis_candidates(self) -> bool:
@@ -4744,6 +5745,7 @@ class ProjectDB:
         now = time.time()
         with self.transaction() as conn:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             self._record_analysis_generator_contract_conn(
                 conn,
                 int(candidate["id"]),
@@ -4751,7 +5753,9 @@ class ProjectDB:
                 contract_hash,
                 now,
             )
-            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._validate_analysis_candidate_history_conn(conn, candidate)
+            return candidate
 
     def get_analysis_candidate_exact(
         self,
@@ -4780,11 +5784,11 @@ class ProjectDB:
                 """,
                 identity,
             ).fetchone()
-            return (
-                self._analysis_candidate_row_conn(conn, int(row["id"]))
-                if row is not None
-                else None
-            )
+            if row is None:
+                return None
+            candidate = self._analysis_candidate_row_conn(conn, int(row["id"]))
+            self._validate_analysis_candidate_history_conn(conn, candidate)
+            return candidate
 
     def find_resumable_analysis_candidate(
         self,
@@ -4834,16 +5838,7 @@ class ProjectDB:
             if not rows:
                 return None
             candidate = self._analysis_candidate_row_conn(conn, int(rows[0]["id"]))
-            self._validate_analysis_generator_contract_history_conn(
-                conn,
-                int(candidate["id"]),
-            )
-            self._validate_analysis_critic_attempt_history_conn(
-                conn,
-                int(candidate["id"]),
-                int(candidate["critic_attempt_count"]),
-                str(candidate["state"]),
-            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             return candidate
 
     def analysis_candidate_acceptance_envelope(
@@ -4852,16 +5847,7 @@ class ProjectDB:
     ) -> dict[str, Any]:
         with self.connect() as conn:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
-            self._validate_analysis_generator_contract_history_conn(
-                conn,
-                int(candidate["id"]),
-            )
-            self._validate_analysis_critic_attempt_history_conn(
-                conn,
-                int(candidate["id"]),
-                int(candidate["critic_attempt_count"]),
-                str(candidate["state"]),
-            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             if str(candidate["state"]) not in {
                 ANALYSIS_CANDIDATE_CRITIC_ACCEPTED,
                 ANALYSIS_CANDIDATE_ACCEPTED,
@@ -4909,33 +5895,28 @@ class ProjectDB:
         analysis_candidate_id: int,
     ) -> list[sqlite3.Row]:
         with self.connect() as conn:
-            self._analysis_candidate_row_conn(conn, analysis_candidate_id)
-            return self._validate_analysis_generator_contract_history_conn(
+            candidate = self._analysis_candidate_row_conn(
                 conn,
                 analysis_candidate_id,
             )
+            generator_history, _critic_history = (
+                self._validate_analysis_candidate_history_conn(conn, candidate)
+            )
+            return generator_history
 
     def list_analysis_critic_attempts(
         self,
         analysis_candidate_id: int,
     ) -> list[sqlite3.Row]:
         with self.connect() as conn:
-            self._analysis_candidate_row_conn(conn, analysis_candidate_id)
-            rows = list(
-                conn.execute(
-                    "SELECT * FROM analysis_critic_attempts "
-                    "WHERE analysis_candidate_id=? ORDER BY attempt_number",
-                    (int(analysis_candidate_id),),
-                )
+            candidate = self._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
             )
-            return [
-                self._analysis_critic_attempt_row_conn(
-                    conn,
-                    analysis_candidate_id,
-                    int(row["attempt_number"]),
-                )
-                for row in rows
-            ]
+            _generator_history, critic_history = (
+                self._validate_analysis_candidate_history_conn(conn, candidate)
+            )
+            return critic_history
 
     def reserve_analysis_critic_attempt(
         self,
@@ -4973,6 +5954,11 @@ class ProjectDB:
         now = time.time()
         with self.transaction() as conn:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            self._validate_analysis_candidate_history_conn(conn, candidate)
+            if str(intent.get("candidate_hash", "")) != str(candidate["candidate_hash"]):
+                raise ValueError(
+                    "Analysis critic intent must bind its parent candidate hash"
+                )
             confidence_floor, _confidence_cap = (
                 self._analysis_critic_confidence_bounds(
                     contract,
@@ -4980,6 +5966,20 @@ class ProjectDB:
                     candidate_json=str(candidate["candidate_json"]),
                 )
             )
+            self._validate_analysis_critic_generator_rejections(
+                candidate_json=str(candidate["candidate_json"]),
+                generator_contract_json=str(
+                    candidate["initial_generator_contract_json"]
+                ),
+                critic_contract=contract,
+                durable=False,
+            )
+            if str(contract.get("candidate_hash", "")) != str(
+                candidate["candidate_hash"]
+            ):
+                raise ValueError(
+                    "Analysis critic contract must bind its parent candidate hash"
+                )
             candidate_payload = json.loads(str(candidate["candidate_json"]))
             below_floor_ids = [
                 str(segment["stable_id"])
@@ -4999,12 +5999,6 @@ class ProjectDB:
                 )
             stored_budget = int(candidate["critic_max_attempts"])
             attempt_count = int(candidate["critic_attempt_count"])
-            self._validate_analysis_critic_attempt_history_conn(
-                conn,
-                int(candidate["id"]),
-                attempt_count,
-                state,
-            )
             if stored_budget != normalized_budget:
                 raise RuntimeError("Analysis critic attempt budget differs from its durable ledger")
             if attempt_count >= stored_budget:
@@ -5070,6 +6064,11 @@ class ProjectDB:
                     now,
                 ),
             )
+            candidate = self._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
+            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             return self._analysis_critic_attempt_row_conn(
                 conn,
                 analysis_candidate_id,
@@ -5126,17 +6125,16 @@ class ProjectDB:
                 raise RuntimeError("Analysis critic completion provenance hash CAS failed")
             attempt_state = str(attempt["state"])
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
-            self._validate_analysis_generator_contract_history_conn(
-                conn,
-                analysis_candidate_id,
-            )
-            self._validate_analysis_critic_attempt_history_conn(
-                conn,
-                analysis_candidate_id,
-                int(candidate["critic_attempt_count"]),
-                parent_state=str(candidate["state"]),
-            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             if normalized_result_state == ANALYSIS_CANDIDATE_CRITIC_ACCEPTED:
+                if (
+                    outcome.get("accepted") is False
+                    or outcome.get("retryable_invalid") is True
+                    or bool(outcome.get("issues"))
+                ):
+                    raise RuntimeError(
+                        "Accepted analysis critic outcome contradicts its requested state"
+                    )
                 if commit_envelope is None:
                     raise ValueError(
                         "Accepted analysis critic completion requires a commit envelope"
@@ -5156,6 +6154,13 @@ class ProjectDB:
                     str(candidate["deterministic_issue_json"]),
                 )
             else:
+                if normalized_result_state == ANALYSIS_CANDIDATE_CRITIC_INVALID and (
+                    outcome.get("accepted") is True
+                    or outcome.get("retryable_invalid") is False
+                ):
+                    raise RuntimeError(
+                        "Invalid analysis critic outcome contradicts its requested state"
+                    )
                 if commit_envelope is not None:
                     raise ValueError(
                         "Only an accepted analysis critic completion may store a commit envelope"
@@ -5163,10 +6168,12 @@ class ProjectDB:
                 commit_envelope_json = None
                 commit_envelope_hash = None
                 if normalized_result_state == ANALYSIS_CANDIDATE_CRITIC_REJECTED:
-                    self._validate_analysis_rejected_source_kind_evidence(
+                    self._validate_analysis_rejection_evidence(
                         conn,
                         str(candidate["candidate_json"]),
                         evidence,
+                        outcome,
+                        str(attempt["contract_json"]),
                         str(candidate["deterministic_issue_json"]),
                     )
             completion_json, completion_hash = self._canonical_analysis_json(
@@ -5248,6 +6255,11 @@ class ProjectDB:
             )
             if updated.rowcount != 1:
                 raise RuntimeError("Analysis critic completion state CAS failed")
+            candidate = self._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
+            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             return self._analysis_critic_attempt_row_conn(
                 conn,
                 analysis_candidate_id,
@@ -5278,16 +6290,18 @@ class ProjectDB:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
             state = str(candidate["state"])
             attempt_count = int(candidate["critic_attempt_count"])
-            self._validate_analysis_critic_attempt_history_conn(
-                conn,
-                analysis_candidate_id,
-                attempt_count,
-                state,
-            )
-            if state == final_state:
-                if str(candidate["terminal_reason"] or "") == normalized_reason:
-                    return candidate
-                raise RuntimeError("Analysis candidate final-state replay reason differs")
+            self._validate_analysis_candidate_history_conn(conn, candidate)
+            if state in {
+                ANALYSIS_CANDIDATE_TERMINAL,
+                ANALYSIS_CANDIDATE_SUPERSEDED,
+            }:
+                if state == final_state:
+                    if str(candidate["terminal_reason"] or "") == normalized_reason:
+                        return candidate
+                    raise RuntimeError(
+                        "Analysis candidate final-state replay reason differs"
+                    )
+                raise RuntimeError("Analysis candidate final states are absorbing")
             if state != normalized_expected_state:
                 raise RuntimeError(
                     "Analysis candidate final-state CAS failed: "
@@ -5311,6 +6325,16 @@ class ProjectDB:
                     raise RuntimeError(
                         "Analysis candidate has no reserved critic intent to terminate"
                     )
+            if final_state in {
+                ANALYSIS_CANDIDATE_TERMINAL,
+                ANALYSIS_CANDIDATE_SUPERSEDED,
+            }:
+                self._validate_analysis_critic_attempt_history_conn(
+                    conn,
+                    analysis_candidate_id,
+                    attempt_count,
+                    final_state,
+                )
             updated = conn.execute(
                 """
                 UPDATE analysis_candidates
@@ -5327,7 +6351,12 @@ class ProjectDB:
             )
             if updated.rowcount != 1:
                 raise RuntimeError("Analysis candidate final-state update CAS failed")
-            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate = self._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
+            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
+            return candidate
 
     def mark_analysis_candidate_terminal(
         self,
@@ -5371,12 +6400,7 @@ class ProjectDB:
             candidate = self._analysis_candidate_row_conn(conn, analysis_candidate_id)
             state = str(candidate["state"])
             attempt_count = int(candidate["critic_attempt_count"])
-            self._validate_analysis_critic_attempt_history_conn(
-                conn,
-                analysis_candidate_id,
-                attempt_count,
-                state,
-            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
             if state == ANALYSIS_CANDIDATE_TERMINAL:
                 if str(candidate["terminal_reason"] or "") == normalized_reason:
                     return candidate
@@ -5426,7 +6450,12 @@ class ProjectDB:
             )
             if updated.rowcount != 1:
                 raise RuntimeError("Analysis critic exhaustion terminal CAS failed")
-            return self._analysis_candidate_row_conn(conn, analysis_candidate_id)
+            candidate = self._analysis_candidate_row_conn(
+                conn,
+                analysis_candidate_id,
+            )
+            self._validate_analysis_candidate_history_conn(conn, candidate)
+            return candidate
 
     def update_analysis(
         self,
@@ -5603,15 +6632,9 @@ class ProjectDB:
                     conn,
                     analysis_candidate_id,
                 )
-                self._validate_analysis_generator_contract_history_conn(
+                self._validate_analysis_candidate_history_conn(
                     conn,
-                    analysis_candidate_id,
-                )
-                self._validate_analysis_critic_attempt_history_conn(
-                    conn,
-                    analysis_candidate_id,
-                    int(analysis_candidate["critic_attempt_count"]),
-                    parent_state=str(analysis_candidate["state"]),
+                    analysis_candidate,
                 )
                 if (
                     str(analysis_candidate["state"])
@@ -5757,6 +6780,14 @@ class ProjectDB:
                 )
                 if accepted.rowcount != 1:
                     raise RuntimeError("Analysis candidate acceptance CAS failed")
+                accepted_candidate = self._analysis_candidate_row_conn(
+                    conn,
+                    int(analysis_candidate["id"]),
+                )
+                self._validate_analysis_candidate_history_conn(
+                    conn,
+                    accepted_candidate,
+                )
             conn.execute(
                 """
                 INSERT INTO runtime_events(timestamp,level,code,message,details_json)
@@ -6594,6 +7625,13 @@ class ProjectDB:
         return normalized
 
     @staticmethod
+    def _normalized_pronunciation_delivery_variant(value: str) -> str:
+        normalized = str(value or "").strip().casefold()
+        if normalized not in PRONUNCIATION_DELIVERY_VARIANTS:
+            raise ValueError("unsupported pronunciation delivery variant")
+        return normalized
+
+    @staticmethod
     def _json_object(value: Any, label: str) -> dict[str, Any]:
         try:
             decoded = json.loads(str(value or "{}"))
@@ -6607,6 +7645,7 @@ class ProjectDB:
     def _candidate_signal_provenance(signal: dict[str, Any]) -> dict[str, Any]:
         required_fields = {
             "spoken_text_sha256",
+            "pronunciation_delivery_variant",
             "voice_profile_id",
             "pitch_semitones",
             "effective_pitch_semitones",
@@ -6619,9 +7658,14 @@ class ProjectDB:
                 "segment candidate signal lacks locked provenance: "
                 + ", ".join(sorted(missing))
             )
-        ProjectDB._normalized_sha256(
+        spoken_text_sha256 = ProjectDB._normalized_sha256(
             str(signal["spoken_text_sha256"]),
             "segment candidate spoken-text checksum",
+        )
+        pronunciation_delivery_variant = (
+            ProjectDB._normalized_pronunciation_delivery_variant(
+                str(signal["pronunciation_delivery_variant"])
+            )
         )
         try:
             voice_profile_id = int(signal["voice_profile_id"])
@@ -6648,13 +7692,61 @@ class ProjectDB:
         if pitch_skipped and effective_pitch != 0:
             raise ValueError("a skipped pitch transform must retain effective pitch zero")
         return {
-            "spoken_text_sha256": str(signal["spoken_text_sha256"]).casefold(),
+            "spoken_text_sha256": spoken_text_sha256,
+            "pronunciation_delivery_variant": pronunciation_delivery_variant,
             "voice_profile_id": voice_profile_id,
             "pitch_semitones": pitch_semitones,
             "effective_pitch_semitones": effective_pitch,
             "pitch_variant_skipped": pitch_skipped,
             "pitch_variant_mixed": pitch_mixed,
         }
+
+    @staticmethod
+    def _candidate_signal_immutable_projection(
+        signal: Mapping[str, Any],
+        *,
+        default_pronunciation_variant: str | None = None,
+    ) -> dict[str, Any]:
+        pronunciation_variant = signal.get("pronunciation_delivery_variant")
+        if pronunciation_variant is None:
+            pronunciation_variant = default_pronunciation_variant
+        return {
+            "tts_delivery_mode": signal.get("tts_delivery_mode"),
+            "asr_clarity_repair_round": signal.get(
+                "asr_clarity_repair_round"
+            ),
+            "spoken_text_sha256": signal.get("spoken_text_sha256"),
+            "pronunciation_delivery_variant": pronunciation_variant,
+            "voice_profile_id": signal.get("voice_profile_id"),
+            "pitch_semitones": signal.get("pitch_semitones"),
+            "effective_pitch_semitones": signal.get(
+                "effective_pitch_semitones"
+            ),
+            "pitch_variant_skipped": signal.get("pitch_variant_skipped"),
+            "pitch_variant_mixed": signal.get("pitch_variant_mixed"),
+            "generation_ceiling_hit": signal.get("generation_ceiling_hit"),
+            "generation_endpoint_active": signal.get(
+                "generation_endpoint_active"
+            ),
+            "split_checkpoint_seed": signal.get("split_checkpoint_seed"),
+            "split_seed_salt_prefix": signal.get("split_seed_salt_prefix"),
+            "split_parts": signal.get("split_parts"),
+        }
+
+    @staticmethod
+    def _require_candidate_delivery_provenance(
+        candidate: sqlite3.Row,
+        signal_provenance: dict[str, Any],
+    ) -> None:
+        if (
+            str(candidate["pronunciation_delivery_variant"])
+            != str(signal_provenance["pronunciation_delivery_variant"])
+            or str(candidate["expected_spoken_text_sha256"])
+            != str(signal_provenance["spoken_text_sha256"])
+        ):
+            raise RuntimeError(
+                "candidate pronunciation variant or spoken-text checksum differs from its allocation"
+            )
 
     @staticmethod
     def _candidate_blocking_signal_flags(signal: dict[str, Any]) -> tuple[str, ...]:
@@ -6692,6 +7784,12 @@ class ProjectDB:
                 "beam_quality_check_id": int(candidate["beam_check_id"]),
                 "greedy_quality_check_id": int(candidate["greedy_check_id"]),
                 "decode_evidence": [beam_metrics, greedy_metrics],
+                "pronunciation_delivery_variant": str(
+                    candidate["pronunciation_delivery_variant"]
+                ),
+                "expected_spoken_text_sha256": str(
+                    candidate["expected_spoken_text_sha256"]
+                ),
                 "perceptual_required": bool(candidate["perceptual_required"]),
                 "perceptual_quality_check_id": (
                     int(candidate["perceptual_check_id"])
@@ -6710,6 +7808,154 @@ class ProjectDB:
             }
         )
         return final_metrics
+
+    def _validated_promoted_candidate_conn(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+    ) -> sqlite3.Row:
+        if str(candidate["state"]) != SEGMENT_CANDIDATE_PROMOTED:
+            raise RuntimeError("promoted candidate validation requires promoted state")
+        segment = conn.execute(
+            "SELECT * FROM segments WHERE id=?",
+            (int(candidate["segment_id"]),),
+        ).fetchone()
+        if segment is None:
+            raise KeyError(f"Unknown segment id: {candidate['segment_id']}")
+        if (
+            str(segment["wav_path"] or "") != str(candidate["wav_path"])
+            or str(segment["wav_sha256"] or "").casefold()
+            != str(candidate["wav_sha256"] or "").casefold()
+        ):
+            raise RuntimeError(
+                "promoted candidate is not the current segment artifact"
+            )
+        file_error = self._candidate_file_error(candidate)
+        if file_error:
+            raise RuntimeError(file_error)
+        self._require_candidate_voice_profile_conn(conn, candidate, segment)
+        signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        signal_provenance = self._candidate_signal_provenance(signal)
+        self._require_candidate_delivery_provenance(candidate, signal_provenance)
+        live_signal = self._json_object(
+            segment["signal_json"],
+            "promoted live segment signal metrics",
+        )
+        live_signal_provenance = self._candidate_signal_provenance(live_signal)
+        if (
+            live_signal_provenance != signal_provenance
+            or self._candidate_signal_immutable_projection(live_signal)
+            != self._candidate_signal_immutable_projection(signal)
+        ):
+            raise RuntimeError(
+                "promoted candidate immutable signal differs from the live segment"
+            )
+        blocking_signal_flags = self._candidate_blocking_signal_flags(signal)
+        if blocking_signal_flags:
+            raise RuntimeError(
+                "promoted candidate signal retains blocking TTS flags: "
+                + ", ".join(blocking_signal_flags)
+            )
+        if candidate["beam_check_id"] is None or candidate["greedy_check_id"] is None:
+            raise RuntimeError("promoted candidate lacks dual-decode checkpoints")
+        beam_check, beam_metrics = self._validated_candidate_decode_check_conn(
+            conn,
+            candidate,
+            int(candidate["beam_check_id"]),
+            confirmation=False,
+        )
+        greedy_check, greedy_metrics = self._validated_candidate_decode_check_conn(
+            conn,
+            candidate,
+            int(candidate["greedy_check_id"]),
+            confirmation=True,
+        )
+        if (
+            str(beam_check["verdict"]) != QUALITY_VERDICT_PASS
+            or str(greedy_check["verdict"]) != QUALITY_VERDICT_PASS
+        ):
+            raise RuntimeError(
+                "promoted candidate dual-decode ledger is not passing"
+            )
+        if bool(candidate["perceptual_required"]):
+            if candidate["perceptual_check_id"] is None:
+                raise RuntimeError(
+                    "promoted candidate lacks mandatory perceptual evidence"
+                )
+            perceptual_check, _perceptual_metrics = (
+                self._validated_candidate_perceptual_check_conn(
+                    conn,
+                    candidate,
+                    int(candidate["perceptual_check_id"]),
+                )
+            )
+            if str(perceptual_check["verdict"]) != QUALITY_VERDICT_PASS:
+                raise RuntimeError(
+                    "promoted candidate perceptual ledger is not passing"
+                )
+        elif candidate["perceptual_check_id"] is not None:
+            raise RuntimeError(
+                "promoted candidate has unexpected perceptual evidence"
+            )
+        if candidate["final_check_id"] is None:
+            raise RuntimeError("promoted candidate lacks its final quality checkpoint")
+        final_check = conn.execute(
+            "SELECT * FROM quality_checks WHERE id=?",
+            (int(candidate["final_check_id"]),),
+        ).fetchone()
+        policy = conn.execute(
+            "SELECT * FROM quality_policies WHERE policy_hash=?",
+            (str(candidate["policy_hash"]),),
+        ).fetchone()
+        if final_check is None or policy is None:
+            raise RuntimeError("promoted candidate final policy evidence is missing")
+        if (
+            str(final_check["scope"]) != QUALITY_SCOPE_SEGMENT
+            or str(final_check["stage"]) != SEGMENT_AUDIO_QUALITY_STAGE
+            or int(final_check["segment_id"] or -1) != int(candidate["segment_id"])
+            or final_check["chapter_id"] is not None
+            or str(final_check["artifact_sha256"]).casefold()
+            != str(candidate["wav_sha256"]).casefold()
+            or str(final_check["policy_hash"]) != str(candidate["policy_hash"])
+            or int(final_check["policy_version"]) != int(policy["policy_version"])
+            or str(final_check["verdict"]) != QUALITY_VERDICT_PASS
+            or str(final_check["failure_codes_json"]) != "[]"
+            or int(final_check["attempt"]) < 1
+        ):
+            raise RuntimeError(
+                "promoted candidate final quality checkpoint is not exact"
+            )
+        final_metrics = self._json_object(
+            final_check["metrics_json"],
+            "promoted candidate final metrics",
+        )
+        warning_code = final_metrics.get("promotion_warning_code")
+        normalized_warning_code = (
+            str(warning_code).strip() if warning_code else None
+        )
+        if normalized_warning_code and normalized_warning_code not in {
+            code
+            for code in str(segment["warning_code"] or "").split("|")
+            if code
+        }:
+            raise RuntimeError(
+                "promoted candidate warning provenance differs from the live segment"
+            )
+        expected_final_metrics = self._candidate_final_metrics(
+            candidate,
+            beam_metrics,
+            greedy_metrics,
+            warning_code=normalized_warning_code,
+        )
+        if str(final_check["metrics_json"]) != json.dumps(
+            expected_final_metrics,
+            ensure_ascii=False,
+            sort_keys=True,
+        ):
+            raise RuntimeError(
+                "promoted candidate final metrics differ from rebuilt evidence"
+            )
+        return segment
 
     @staticmethod
     def _candidate_row_conn(conn: sqlite3.Connection, candidate_id: int) -> sqlite3.Row:
@@ -6853,6 +8099,10 @@ class ProjectDB:
             "incumbent_sha256": str(row["incumbent_sha256"]),
             "expected_voice_profile_id": int(row["expected_voice_profile_id"]),
             "expected_pitch_semitones": int(row["expected_pitch_semitones"]),
+            "pronunciation_delivery_variant": str(
+                row["pronunciation_delivery_variant"]
+            ),
+            "expected_spoken_text_sha256": str(row["expected_spoken_text_sha256"]),
             "wav_path": str(row["wav_path"]),
             "wav_sha256": str(row["wav_sha256"] or ""),
             "wav_duration": (
@@ -6894,6 +8144,8 @@ class ProjectDB:
         generation_seed: int,
         wav_path: Path,
         candidates_root: Path,
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
+        expected_spoken_text_sha256: str | None = None,
         tts_attempt: int = 0,
         perceptual_required: bool = False,
     ) -> sqlite3.Row:
@@ -6903,6 +8155,19 @@ class ProjectDB:
         normalized_incumbent = self._normalized_sha256(
             incumbent_sha256,
             "segment candidate incumbent checksum",
+        )
+        normalized_pronunciation_variant = (
+            self._normalized_pronunciation_delivery_variant(
+                pronunciation_delivery_variant
+            )
+        )
+        normalized_expected_spoken_sha256 = (
+            self._normalized_sha256(
+                expected_spoken_text_sha256,
+                "segment candidate expected spoken-text checksum",
+            )
+            if expected_spoken_text_sha256 is not None
+            else None
         )
         normalized_path = str(wav_path.resolve())
         normalized_candidates_root = str(candidates_root.resolve())
@@ -6928,6 +8193,15 @@ class ProjectDB:
                 raise KeyError(f"Unknown segment id: {segment_id}")
             if str(segment["wav_sha256"] or "").casefold() != normalized_incumbent:
                 raise RuntimeError("cannot allocate a candidate for a stale incumbent artifact")
+            if normalized_expected_spoken_sha256 is None:
+                incumbent_signal = self._json_object(
+                    segment["signal_json"],
+                    "segment candidate incumbent signal metrics",
+                )
+                normalized_expected_spoken_sha256 = self._normalized_sha256(
+                    str(incumbent_signal.get("spoken_text_sha256", "")),
+                    "segment candidate expected spoken-text checksum",
+                )
             expected_profile = self._expected_segment_voice_profile_conn(conn, segment)
             expected_voice_profile_id = int(expected_profile["id"])
             expected_pitch_semitones = int(expected_profile["pitch_semitones"] or 0)
@@ -6953,6 +8227,10 @@ class ProjectDB:
                     != expected_voice_profile_id
                     or int(existing["expected_pitch_semitones"])
                     != expected_pitch_semitones
+                    or str(existing["pronunciation_delivery_variant"])
+                    != normalized_pronunciation_variant
+                    or str(existing["expected_spoken_text_sha256"])
+                    != normalized_expected_spoken_sha256
                     or int(existing["repair_budget"]) != normalized_max
                     or bool(existing["perceptual_required"]) != bool(perceptual_required)
                     or int(existing["generation_seed"]) != int(generation_seed)
@@ -6996,10 +8274,11 @@ class ProjectDB:
                     """
                     INSERT INTO segment_candidates(
                         segment_id,policy_hash,repair_round,repair_budget,incumbent_sha256,
-                        expected_voice_profile_id,expected_pitch_semitones,state,
+                        expected_voice_profile_id,expected_pitch_semitones,
+                        pronunciation_delivery_variant,expected_spoken_text_sha256,state,
                         tts_attempt,generation_seed,wav_path,perceptual_required,
                         created_at,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         int(segment_id),
@@ -7009,6 +8288,8 @@ class ProjectDB:
                         normalized_incumbent,
                         expected_voice_profile_id,
                         expected_pitch_semitones,
+                        normalized_pronunciation_variant,
+                        normalized_expected_spoken_sha256,
                         SEGMENT_CANDIDATE_GENERATING,
                         normalized_attempt,
                         int(generation_seed),
@@ -7103,6 +8384,10 @@ class ProjectDB:
             self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
             segment = self._require_candidate_incumbent_conn(conn, candidate)
             self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            self._require_candidate_delivery_provenance(
+                candidate,
+                signal_provenance,
+            )
             if (
                 signal_provenance["voice_profile_id"]
                 != int(candidate["expected_voice_profile_id"])
@@ -7187,6 +8472,7 @@ class ProjectDB:
             raise RuntimeError("candidate ASR decode provenance differs from its generation checkpoint")
         signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
         signal_provenance = self._candidate_signal_provenance(signal)
+        self._require_candidate_delivery_provenance(candidate, signal_provenance)
         try:
             decode_provenance = self._candidate_signal_provenance(metrics)
         except ValueError as exc:
@@ -7388,6 +8674,7 @@ class ProjectDB:
             )
         signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
         signal_provenance = self._candidate_signal_provenance(signal)
+        self._require_candidate_delivery_provenance(candidate, signal_provenance)
         try:
             baseline_pitch = int(metrics["baseline_pitch_semitones"])
         except (KeyError, TypeError, ValueError) as exc:
@@ -7587,10 +8874,122 @@ class ProjectDB:
                 )
             )
 
+    def previous_segment_candidate_decode_evidence(
+        self,
+        *,
+        segment_id: int,
+        policy_hash: str,
+        repair_round: int,
+    ) -> list[dict[str, Any]]:
+        normalized_round = int(repair_round)
+        if normalized_round < 0:
+            raise ValueError("segment candidate repair round must be non-negative")
+        if normalized_round == 0:
+            return []
+
+        with self.connect() as conn:
+            self._require_candidate_policy_conn(conn, policy_hash)
+            candidate = conn.execute(
+                """
+                SELECT * FROM segment_candidates
+                WHERE segment_id=? AND policy_hash=? AND repair_round=?
+                """,
+                (
+                    int(segment_id),
+                    str(policy_hash).strip(),
+                    normalized_round - 1,
+                ),
+            ).fetchone()
+            if candidate is None:
+                raise RuntimeError(
+                    "previous segment candidate is missing before repair allocation"
+                )
+            state = str(candidate["state"])
+            if state in {
+                SEGMENT_CANDIDATE_TTS_FAILED,
+                SEGMENT_CANDIDATE_INVALID,
+            }:
+                return []
+            if state != SEGMENT_CANDIDATE_DUAL_FAILED:
+                raise RuntimeError(
+                    "previous segment candidate lacks a terminal dual-decode failure"
+                )
+            if (
+                candidate["beam_check_id"] is None
+                or candidate["greedy_check_id"] is None
+                or candidate["beam_result_json"] is None
+                or candidate["greedy_result_json"] is None
+            ):
+                raise RuntimeError(
+                    "previous segment candidate lacks complete dual-decode evidence"
+                )
+
+            segment = self._require_candidate_incumbent_conn(conn, candidate)
+            self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            evidence: list[dict[str, Any]] = []
+            for confirmation, check_field, result_field in (
+                (False, "beam_check_id", "beam_result_json"),
+                (True, "greedy_check_id", "greedy_result_json"),
+            ):
+                check, metrics = self._validated_candidate_decode_check_conn(
+                    conn,
+                    candidate,
+                    int(candidate[check_field]),
+                    confirmation=confirmation,
+                )
+                stored_metrics = self._json_object(
+                    candidate[result_field],
+                    "stored candidate ASR decode result",
+                )
+                if stored_metrics != metrics:
+                    raise RuntimeError(
+                        "stored candidate ASR result differs from its quality-check evidence"
+                    )
+                try:
+                    check_failure_codes = json.loads(
+                        str(check["failure_codes_json"] or "[]")
+                    )
+                except (TypeError, json.JSONDecodeError) as exc:
+                    raise RuntimeError(
+                        "candidate ASR quality-check failure codes are not valid JSON"
+                    ) from exc
+                metrics_failure_codes = metrics.get("failure_codes", [])
+                if (
+                    not isinstance(check_failure_codes, list)
+                    or not isinstance(metrics_failure_codes, list)
+                    or any(
+                        not isinstance(code, str) or not code.strip()
+                        for code in [*check_failure_codes, *metrics_failure_codes]
+                    )
+                    or len(set(check_failure_codes)) != len(check_failure_codes)
+                    or len(set(metrics_failure_codes)) != len(metrics_failure_codes)
+                    or check_failure_codes != metrics_failure_codes
+                ):
+                    raise RuntimeError(
+                        "candidate ASR failure-code ledger contradicts its decode metrics"
+                    )
+                evidence.append(dict(metrics))
+            return evidence
+
     def reconcile_segment_candidate_artifacts(self, policy_hash: str) -> int:
         invalidated = 0
         with self.transaction() as conn:
             self._require_candidate_policy_conn(conn, policy_hash)
+            promoted_candidates = list(
+                conn.execute(
+                    """
+                    SELECT * FROM segment_candidates
+                    WHERE policy_hash=? AND state='promoted'
+                    ORDER BY segment_id,repair_round
+                    """,
+                    (str(policy_hash).strip(),),
+                )
+            )
+            for promoted_candidate in promoted_candidates:
+                self._validated_promoted_candidate_conn(
+                    conn,
+                    promoted_candidate,
+                )
             candidates = list(
                 conn.execute(
                     """
@@ -7610,12 +9009,21 @@ class ProjectDB:
                     invalid_reason = str(exc)
                 if invalid_reason is None:
                     invalid_reason = self._candidate_file_error(candidate)
-                if invalid_reason is None and str(candidate["state"]) == SEGMENT_CANDIDATE_DUAL_PASSED:
+                if invalid_reason is None:
                     try:
                         signal = self._json_object(
                             candidate["signal_json"],
                             "candidate signal metrics",
                         )
+                        signal_provenance = self._candidate_signal_provenance(signal)
+                        self._require_candidate_delivery_provenance(
+                            candidate,
+                            signal_provenance,
+                        )
+                    except (RuntimeError, ValueError) as exc:
+                        invalid_reason = str(exc)
+                if invalid_reason is None and str(candidate["state"]) == SEGMENT_CANDIDATE_DUAL_PASSED:
+                    try:
                         blocking_flags = self._candidate_blocking_signal_flags(signal)
                         if blocking_flags:
                             invalid_reason = (
@@ -7659,13 +9067,21 @@ class ProjectDB:
         segment_id: int,
         policy_hash: str,
     ) -> list[dict[str, Any]]:
-        return [
-            self._candidate_summary(row)
-            for row in self.list_segment_candidates(
-                segment_id=segment_id,
-                policy_hash=policy_hash,
+        with self.connect() as conn:
+            rows = list(
+                conn.execute(
+                    """
+                    SELECT * FROM segment_candidates
+                    WHERE segment_id=? AND policy_hash=?
+                    ORDER BY repair_round
+                    """,
+                    (int(segment_id), str(policy_hash).strip()),
+                )
             )
-        ]
+            for row in rows:
+                if str(row["state"]) == SEGMENT_CANDIDATE_PROMOTED:
+                    self._validated_promoted_candidate_conn(conn, row)
+            return [self._candidate_summary(row) for row in rows]
 
     def segment_candidate_resume_plan(
         self,
@@ -7723,14 +9139,7 @@ class ProjectDB:
                     for row in rows
                 ):
                     raise RuntimeError("promoted candidate ledger has another actionable candidate")
-                segment = conn.execute(
-                    "SELECT wav_sha256 FROM segments WHERE id=?",
-                    (int(segment_id),),
-                ).fetchone()
-                if segment is None or str(segment["wav_sha256"] or "") != str(
-                    promoted[0]["wav_sha256"] or ""
-                ):
-                    raise RuntimeError("promoted candidate is not the current segment artifact")
+                self._validated_promoted_candidate_conn(conn, promoted[0])
                 return {
                     "segment_id": int(segment_id),
                     "policy_hash": str(policy_hash).strip(),
@@ -7775,6 +9184,16 @@ class ProjectDB:
                 segment = self._require_candidate_incumbent_conn(conn, candidate)
                 self._require_candidate_voice_profile_conn(conn, candidate, segment)
                 state = str(candidate["state"])
+                if state != SEGMENT_CANDIDATE_GENERATING:
+                    signal = self._json_object(
+                        candidate["signal_json"],
+                        "candidate signal metrics",
+                    )
+                    signal_provenance = self._candidate_signal_provenance(signal)
+                    self._require_candidate_delivery_provenance(
+                        candidate,
+                        signal_provenance,
+                    )
                 if state == SEGMENT_CANDIDATE_DUAL_PASSED:
                     action = (
                         "verify_perceptual"
@@ -7802,6 +9221,12 @@ class ProjectDB:
                     "wav_path": str(candidate["wav_path"]),
                     "wav_sha256": str(candidate["wav_sha256"] or ""),
                     "perceptual_required": bool(candidate["perceptual_required"]),
+                    "pronunciation_delivery_variant": str(
+                        candidate["pronunciation_delivery_variant"]
+                    ),
+                    "expected_spoken_text_sha256": str(
+                        candidate["expected_spoken_text_sha256"]
+                    ),
                 }
             if len(rows) < normalized_max:
                 return {
@@ -7953,7 +9378,8 @@ class ProjectDB:
             if file_error:
                 return self._invalidate_candidate_conn(conn, candidate, file_error)
             signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
-            self._candidate_signal_provenance(signal)
+            signal_provenance = self._candidate_signal_provenance(signal)
+            self._require_candidate_delivery_provenance(candidate, signal_provenance)
             blocking_signal_flags = self._candidate_blocking_signal_flags(signal)
             if blocking_signal_flags:
                 return self._invalidate_candidate_conn(

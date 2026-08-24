@@ -216,6 +216,8 @@ def test_clarity_delivery_preserves_locked_voice_pitch_and_spoken_text(
     assert primary_metrics["spoken_text_sha256"] == clarity_metrics["spoken_text_sha256"]
     assert primary_metrics["voice_profile_id"] == clarity_metrics["voice_profile_id"]
     assert primary_metrics["pitch_semitones"] == clarity_metrics["pitch_semitones"] == -1
+    assert clarity_metrics["pitch_variant_skipped"] == 0.0
+    assert clarity_metrics["pitch_variant_mixed"] == 0.0
     assert clarity_metrics["tts_delivery_mode"] == DELIVERY_CLARITY
 
 
@@ -430,6 +432,8 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
     ).hexdigest()
     assert primary_metrics["voice_profile_id"] == profile_id
     assert primary_metrics["pitch_semitones"] == 1
+    assert primary_metrics["pitch_variant_skipped"] == 0.0
+    assert primary_metrics["pitch_variant_mixed"] == 0.0
 
     monkeypatch.setattr(
         tts_module,
@@ -441,6 +445,7 @@ def test_coordinator_releases_inference_cache_after_success_and_failure(
         tmp_path / "segment.wav",
     )
     assert fallback_metrics["pitch_variant_skipped"] == 1.0
+    assert fallback_metrics["pitch_variant_mixed"] == 0.0
     assert any("Bỏ biến thể cao độ" in message for message in logs)
     assert release_calls == 2
 

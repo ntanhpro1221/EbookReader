@@ -190,7 +190,7 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
             "director_critic_enabled": True,
             "director_critic_required": True,
         },
-        "asr": {"min_words": 1, "min_similarity": 0.78, "max_wer": 0.30, "repair_rounds": 3},
+        "asr": {"min_words": 1, "min_similarity": 0.78, "max_wer": 0.30, "repair_rounds": 5},
         "perceptual_qa": {"enabled": True, "failure_policy": "fail"},
         "tts": {"max_retries": 4, "batch_size": 8},
     },

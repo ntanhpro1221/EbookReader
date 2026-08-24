@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import logging
 import time
@@ -14,6 +15,7 @@ from .asr import (
     ASR_MISMATCH,
     ASR_PASS,
     LOCKED_NAME_ANCHOR_METRICS_KEY,
+    LOCKED_NAME_ANCHOR_METRICS_VERSION,
     SHORT_CONTEXT_REPEAT_COUNT,
     WhisperVerifier,
     adjudicate_locked_name_anchors,
@@ -69,6 +71,8 @@ from .tts import (
     GENERATION_CEILING_METRIC,
     GENERATION_CEILING_WARNING,
     GENERATION_ENDPOINT_ACTIVE_METRIC,
+    PRONUNCIATION_DELIVERY_LOCKED,
+    PRONUNCIATION_DELIVERY_SOURCE,
     TTSCoordinator,
     is_fatal_tts_error,
     short_utterance_repair_frame_cap,
@@ -92,6 +96,7 @@ TTS_SIGNAL_PROVENANCE_FIELDS = (
     "tts_delivery_mode",
     ASR_CLARITY_REPAIR_ROUND_METRIC,
     "spoken_text_sha256",
+    "pronunciation_delivery_variant",
     "voice_profile_id",
     "pitch_semitones",
     "effective_pitch_semitones",
@@ -621,9 +626,17 @@ class BookPipeline:
             0 if pitch_variant_skipped else configured_pitch,
         )
         spoken_text_sha256 = str(signal.get("spoken_text_sha256") or "")
+        pronunciation_delivery_variant = str(
+            signal.get("pronunciation_delivery_variant")
+            or PRONUNCIATION_DELIVERY_LOCKED
+        )
         if not spoken_text_sha256:
+            spoken_text, _anchors = self._spoken_text_with_pronunciation_variant(
+                item,
+                pronunciation_delivery_variant,
+            )
             spoken_text_sha256 = hashlib.sha256(
-                self.tts.spoken_text(item).encode("utf-8")
+                spoken_text.encode("utf-8")
             ).hexdigest()
         decode_mode = (
             "greedy"
@@ -660,6 +673,7 @@ class BookPipeline:
                 else None
             ),
             "spoken_text_sha256": spoken_text_sha256,
+            "pronunciation_delivery_variant": pronunciation_delivery_variant,
             "voice_profile_id": signal.get(
                 "voice_profile_id",
                 locked_voice.get("voice_profile_id"),
@@ -717,6 +731,7 @@ class BookPipeline:
     ) -> int:
         segment_id = int(item["id"])
         _wav_path, artifact_sha256 = self._validated_segment_wav_identity(item)
+        signal = self._segment_signal_provenance(item)
         reason = str(result.get("reason", "ok"))
         anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
         result_failure_codes: list[str] = []
@@ -761,6 +776,11 @@ class BookPipeline:
                     result.get("decode_failure_reasons", [])
                 ),
                 "decode_evidence": list(decode_evidence or []),
+                "pronunciation_delivery_variant": str(
+                    signal.get("pronunciation_delivery_variant")
+                    or PRONUNCIATION_DELIVERY_LOCKED
+                ),
+                "spoken_text_sha256": str(signal.get("spoken_text_sha256") or ""),
                 LOCKED_NAME_ANCHOR_METRICS_KEY: anchor_metrics,
                 "repeated_short_context": (
                     str(result.get("selected_context_mode", "")) == "repeat3"
@@ -1441,9 +1461,10 @@ class BookPipeline:
         wav_sha256 = str(row["wav_sha256"] or "").strip()
         if not wav_sha256 or sha256_file(wav) != wav_sha256:
             return False, {}
+        expected_text, _anchors = self._spoken_text_and_anchors(dict(row))
         valid, metrics, _ = inspect_wav(
             wav,
-            self.tts.spoken_text(row),
+            expected_text,
             self.settings,
             segment=row,
         )
@@ -1763,8 +1784,305 @@ class BookPipeline:
         )
 
     @staticmethod
-    def _segment_candidate_seed_salt(repair_round: int, tts_attempt: int) -> str:
-        return f"asr_clarity_candidate_{int(repair_round)}_{int(tts_attempt)}"
+    def _supports_pronunciation_delivery_variant(provider: Callable[..., Any]) -> bool:
+        try:
+            parameters = inspect.signature(provider).parameters.values()
+        except (TypeError, ValueError):
+            return False
+        return any(
+            parameter.name == "pronunciation_delivery_variant"
+            or parameter.kind == inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters
+        )
+
+    def _spoken_text_with_pronunciation_variant(
+        self,
+        row: Any,
+        pronunciation_delivery_variant: str,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        provider = getattr(self.tts, "spoken_text_with_anchors", None)
+        if callable(provider):
+            if self._supports_pronunciation_delivery_variant(provider):
+                spoken_text, raw_anchors = provider(
+                    row,
+                    pronunciation_delivery_variant=pronunciation_delivery_variant,
+                )
+            elif pronunciation_delivery_variant == PRONUNCIATION_DELIVERY_LOCKED:
+                spoken_text, raw_anchors = provider(row)
+            else:
+                raise RuntimeError(
+                    "TTS provider cannot reconstruct the allocated pronunciation variant"
+                )
+            anchors = [dict(anchor) for anchor in raw_anchors if isinstance(anchor, dict)]
+            return str(spoken_text), anchors
+        if pronunciation_delivery_variant != PRONUNCIATION_DELIVERY_LOCKED:
+            raise RuntimeError(
+                "TTS provider cannot materialize a source-spelling pronunciation variant"
+            )
+        return str(self.tts.spoken_text(row)), []
+
+    def _synthesize_atomic_with_pronunciation_variant(
+        self,
+        row: Any,
+        output: Path,
+        *,
+        pronunciation_delivery_variant: str,
+        **kwargs: Any,
+    ) -> tuple[str, dict[str, Any], int]:
+        provider = self.tts.synthesize_atomic
+        if self._supports_pronunciation_delivery_variant(provider):
+            return provider(
+                row,
+                output,
+                pronunciation_delivery_variant=pronunciation_delivery_variant,
+                **kwargs,
+            )
+        if pronunciation_delivery_variant != PRONUNCIATION_DELIVERY_LOCKED:
+            raise RuntimeError(
+                "TTS provider cannot synthesize the allocated source-spelling variant"
+            )
+        checksum, metrics, seed = provider(row, output, **kwargs)
+        metrics["pronunciation_delivery_variant"] = PRONUNCIATION_DELIVERY_LOCKED
+        return checksum, metrics, seed
+
+    def _segment_candidate_pronunciation_delivery(
+        self,
+        row: Any,
+        repair_round: int,
+        *,
+        required_variant: str | None = None,
+        source_variant_requested: bool = False,
+    ) -> tuple[str, str, list[dict[str, Any]]]:
+        if required_variant not in {
+            None,
+            PRONUNCIATION_DELIVERY_LOCKED,
+            PRONUNCIATION_DELIVERY_SOURCE,
+        }:
+            raise RuntimeError("candidate has an unsupported pronunciation variant")
+        locked_text, locked_anchors = self._spoken_text_with_pronunciation_variant(
+            row,
+            PRONUNCIATION_DELIVERY_LOCKED,
+        )
+        if required_variant == PRONUNCIATION_DELIVERY_LOCKED:
+            return PRONUNCIATION_DELIVERY_LOCKED, locked_text, locked_anchors
+        variant = PRONUNCIATION_DELIVERY_LOCKED
+        spoken_text = locked_text
+        anchors = locked_anchors
+        provider = getattr(self.tts, "spoken_text_with_anchors", None)
+        should_materialize_source = (
+            required_variant == PRONUNCIATION_DELIVERY_SOURCE
+            or required_variant is None
+            and source_variant_requested
+        )
+        source_variant_available = (
+            should_materialize_source
+            and locked_anchors
+            and int(repair_round) % 2 == 1
+            and callable(provider)
+            and self._supports_pronunciation_delivery_variant(provider)
+            and self._supports_pronunciation_delivery_variant(
+                self.tts.synthesize_atomic
+            )
+        )
+        if source_variant_available:
+            source_text, source_anchors = self._spoken_text_with_pronunciation_variant(
+                row,
+                PRONUNCIATION_DELIVERY_SOURCE,
+            )
+            if source_text != locked_text:
+                locked_identity = [
+                    (
+                        int(anchor.get("order", -1)),
+                        int(anchor.get("pronunciation_id", -1)),
+                        int(anchor.get("occurrence", -1)),
+                        int(anchor.get("source_start", -1)),
+                        int(anchor.get("source_end", -1)),
+                        str(anchor.get("surface") or ""),
+                        str(anchor.get("normalized_surface") or ""),
+                        str(anchor.get("matched_surface") or ""),
+                        str(anchor.get("source") or ""),
+                        str(
+                            anchor.get("canonical_spoken_form")
+                            or anchor.get("spoken_form")
+                            or ""
+                        ),
+                    )
+                    for anchor in locked_anchors
+                ]
+                source_identity = [
+                    (
+                        int(anchor.get("order", -1)),
+                        int(anchor.get("pronunciation_id", -1)),
+                        int(anchor.get("occurrence", -1)),
+                        int(anchor.get("source_start", -1)),
+                        int(anchor.get("source_end", -1)),
+                        str(anchor.get("surface") or ""),
+                        str(anchor.get("normalized_surface") or ""),
+                        str(anchor.get("matched_surface") or ""),
+                        str(anchor.get("source") or ""),
+                        str(anchor.get("canonical_spoken_form") or ""),
+                    )
+                    for anchor in source_anchors
+                ]
+                source_anchors_are_bound = all(
+                    str(anchor.get("pronunciation_delivery_variant") or "")
+                    == PRONUNCIATION_DELIVERY_SOURCE
+                    and str(anchor.get("spoken_form") or "")
+                    == str(anchor.get("matched_surface") or "")
+                    for anchor in source_anchors
+                )
+                if (
+                    source_identity != locked_identity
+                    or not source_anchors_are_bound
+                ):
+                    raise RuntimeError(
+                        "source-spelling pronunciation anchors drifted from locked anchors"
+                    )
+                variant = PRONUNCIATION_DELIVERY_SOURCE
+                spoken_text = source_text
+                anchors = source_anchors
+        if required_variant == PRONUNCIATION_DELIVERY_SOURCE and (
+            variant != PRONUNCIATION_DELIVERY_SOURCE
+        ):
+            raise RuntimeError(
+                "stored source-spelling candidate cannot be reconstructed safely"
+            )
+        return variant, spoken_text, anchors
+
+    @staticmethod
+    def _decode_requests_source_pronunciation(
+        result: dict[str, Any],
+    ) -> bool:
+        failure_code = ASR_LOCKED_NAME_ANCHOR_MISMATCH
+        result_failure_codes = result.get("failure_codes", [])
+        if not isinstance(result_failure_codes, list) or any(
+            not isinstance(code, str) or not code.strip()
+            for code in result_failure_codes
+        ):
+            raise RuntimeError(
+                "candidate ASR result has malformed failure-code evidence"
+            )
+        anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
+        result_claims_failure = (
+            str(result.get("reason") or "") == failure_code
+            or failure_code in result_failure_codes
+        )
+        if anchor_metrics is None:
+            if result_claims_failure:
+                raise RuntimeError(
+                    "candidate ASR locked-name failure lacks structured anchor evidence"
+                )
+            return False
+        if not isinstance(anchor_metrics, dict):
+            raise RuntimeError(
+                "candidate ASR locked-name anchor evidence must be an object"
+            )
+        anchor_failure_codes = anchor_metrics.get("failure_codes", [])
+        if not isinstance(anchor_failure_codes, list) or any(
+            not isinstance(code, str) or not code.strip()
+            for code in anchor_failure_codes
+        ):
+            raise RuntimeError(
+                "candidate ASR locked-name anchor failure codes are malformed"
+            )
+        anchor_claims_failure = (
+            anchor_metrics.get("passed") is False
+            or str(anchor_metrics.get("status") or "") == "fail"
+            or failure_code in anchor_failure_codes
+        )
+        if not result_claims_failure and not anchor_claims_failure:
+            valid_nonfailure_state = (
+                anchor_metrics.get("adjudicated") is True
+                and anchor_metrics.get("passed") is True
+                and str(anchor_metrics.get("status") or "") == "pass"
+                and not anchor_failure_codes
+            ) or (
+                anchor_metrics.get("adjudicated") is False
+                and anchor_metrics.get("passed") is None
+                and str(anchor_metrics.get("status") or "")
+                == "skipped_inconclusive"
+                and not anchor_failure_codes
+            )
+            if not valid_nonfailure_state:
+                raise RuntimeError(
+                    "candidate ASR locked-name anchor evidence is internally inconsistent"
+                )
+            return False
+
+        count_fields = (
+            "repeat_count",
+            "anchor_count",
+            "required_occurrence_count",
+            "matched_occurrence_count",
+        )
+        if any(
+            isinstance(anchor_metrics.get(field), bool)
+            or not isinstance(anchor_metrics.get(field), int)
+            for field in count_fields
+        ):
+            raise RuntimeError(
+                "candidate ASR locked-name failure has malformed occurrence counts"
+            )
+        repeat_count = int(anchor_metrics["repeat_count"])
+        anchor_count = int(anchor_metrics["anchor_count"])
+        required_count = int(anchor_metrics["required_occurrence_count"])
+        matched_count = int(anchor_metrics["matched_occurrence_count"])
+        failure_is_consistent = (
+            str(result.get("verdict") or "") == ASR_MISMATCH
+            and result.get("passed") is False
+            and str(result.get("reason") or "") == failure_code
+            and result_failure_codes == [failure_code]
+            and result.get("repairable") is True
+            and anchor_metrics.get("version")
+            == LOCKED_NAME_ANCHOR_METRICS_VERSION
+            and anchor_metrics.get("adjudicated") is True
+            and anchor_metrics.get("passed") is False
+            and str(anchor_metrics.get("status") or "") == "fail"
+            and anchor_failure_codes == [failure_code]
+            and repeat_count >= 1
+            and anchor_count >= 1
+            and required_count == repeat_count * anchor_count
+            and 0 <= matched_count < required_count
+        )
+        if not failure_is_consistent:
+            raise RuntimeError(
+                "candidate ASR locked-name failure evidence is internally inconsistent"
+            )
+        return True
+
+    def _require_segment_candidate_pronunciation_delivery(
+        self,
+        row: Any,
+        candidate: Any,
+    ) -> tuple[str, str, list[dict[str, Any]]]:
+        stored_variant = str(candidate["pronunciation_delivery_variant"])
+        variant, spoken_text, anchors = (
+            self._segment_candidate_pronunciation_delivery(
+                row,
+                int(candidate["repair_round"]),
+                required_variant=stored_variant,
+            )
+        )
+        spoken_text_sha256 = hashlib.sha256(spoken_text.encode("utf-8")).hexdigest()
+        if (
+            str(candidate["pronunciation_delivery_variant"]) != variant
+            or str(candidate["expected_spoken_text_sha256"]) != spoken_text_sha256
+        ):
+            raise RuntimeError(
+                "segment candidate pronunciation variant or spoken-text checksum drifted"
+            )
+        return variant, spoken_text, anchors
+
+    @staticmethod
+    def _segment_candidate_seed_salt(
+        repair_round: int,
+        tts_attempt: int,
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
+    ) -> str:
+        prefix = f"asr_clarity_candidate_{int(repair_round)}"
+        if pronunciation_delivery_variant == PRONUNCIATION_DELIVERY_LOCKED:
+            return f"{prefix}_{int(tts_attempt)}"
+        return f"{prefix}_{pronunciation_delivery_variant}_{int(tts_attempt)}"
 
     def _allocate_segment_candidate(
         self,
@@ -1772,7 +2090,33 @@ class BookPipeline:
         repair_round: int,
         max_repair_rounds: int,
     ) -> Any:
-        seed_salt = self._segment_candidate_seed_salt(repair_round, 0)
+        source_variant_requested = False
+        if int(repair_round) % 2 == 1:
+            prior_decode_evidence = (
+                self.db.previous_segment_candidate_decode_evidence(
+                    segment_id=int(row["id"]),
+                    policy_hash=self.quality_policy_hash,
+                    repair_round=int(repair_round),
+                )
+            )
+            source_requests = [
+                self._decode_requests_source_pronunciation(result)
+                for result in prior_decode_evidence
+            ]
+            source_variant_requested = any(source_requests)
+        pronunciation_variant, spoken_text, _anchors = (
+            self._segment_candidate_pronunciation_delivery(
+                row,
+                repair_round,
+                source_variant_requested=source_variant_requested,
+            )
+        )
+        spoken_text_sha256 = hashlib.sha256(spoken_text.encode("utf-8")).hexdigest()
+        seed_salt = self._segment_candidate_seed_salt(
+            repair_round,
+            0,
+            pronunciation_variant,
+        )
         return self.db.allocate_segment_candidate(
             segment_id=int(row["id"]),
             policy_hash=self.quality_policy_hash,
@@ -1782,10 +2126,15 @@ class BookPipeline:
             generation_seed=self.tts.generation_seed(row, seed_salt),
             wav_path=self._segment_candidate_path(row, repair_round),
             candidates_root=self._segment_candidate_root(),
+            pronunciation_delivery_variant=pronunciation_variant,
+            expected_spoken_text_sha256=spoken_text_sha256,
             perceptual_required=self._perceptual_qa_enabled(),
         )
 
     def _segment_candidate_item(self, segment: Any, candidate: Any) -> dict[str, Any]:
+        variant, _spoken_text, _anchors = (
+            self._require_segment_candidate_pronunciation_delivery(segment, candidate)
+        )
         item = dict(segment)
         signal = self._segment_signal_provenance(dict(candidate))
         split_recovery = bool(signal.get("split_parts"))
@@ -1801,6 +2150,10 @@ class BookPipeline:
                 "generation_repair_round": int(candidate["repair_round"]),
                 "generation_policy_hash": str(candidate["policy_hash"]),
                 "segment_candidate_id": int(candidate["id"]),
+                "pronunciation_delivery_variant": variant,
+                "expected_spoken_text_sha256": str(
+                    candidate["expected_spoken_text_sha256"]
+                ),
                 "warning_code": "|".join(
                     self._signal_warning_codes(
                         signal,
@@ -1820,6 +2173,17 @@ class BookPipeline:
         generation_seed: int,
     ) -> Any:
         repair_round = int(candidate["repair_round"])
+        expected_variant = str(candidate["pronunciation_delivery_variant"])
+        expected_spoken_sha256 = str(candidate["expected_spoken_text_sha256"])
+        if (
+            str(metrics.get("pronunciation_delivery_variant") or "")
+            != expected_variant
+            or str(metrics.get("spoken_text_sha256") or "")
+            != expected_spoken_sha256
+        ):
+            raise RuntimeError(
+                "TTS candidate signal differs from its allocated pronunciation delivery"
+            )
         metrics["tts_delivery_mode"] = DELIVERY_CLARITY
         metrics[ASR_CLARITY_REPAIR_ROUND_METRIC] = repair_round
         return self.db.checkpoint_segment_candidate_signal(
@@ -1843,6 +2207,9 @@ class BookPipeline:
         if str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING:
             return candidate
         repair_round = int(candidate["repair_round"])
+        pronunciation_variant, spoken_text, _anchors = (
+            self._require_segment_candidate_pronunciation_delivery(row, candidate)
+        )
         output = Path(str(candidate["wav_path"]))
         retries = int(self.settings["tts"]["max_retries"])
         current_attempt = int(candidate["tts_attempt"])
@@ -1852,17 +2219,24 @@ class BookPipeline:
 
         for attempt in range(current_attempt, retries):
             self._wait_pause_or_stop()
-            seed_salt = self._segment_candidate_seed_salt(repair_round, attempt)
+            seed_salt = self._segment_candidate_seed_salt(
+                repair_round,
+                attempt,
+                pronunciation_variant,
+            )
             expected_seed = self.tts.generation_seed(row, seed_salt)
             if int(candidate["generation_seed"]) != expected_seed:
                 raise RuntimeError("segment candidate generation seed differs from its deterministic salt")
             try:
-                checksum, metrics, seed = self.tts.synthesize_atomic(
-                    row,
-                    output,
-                    seed_salt=seed_salt,
-                    repair_short_utterance=repair_short_utterance,
-                    delivery_mode=DELIVERY_CLARITY,
+                checksum, metrics, seed = (
+                    self._synthesize_atomic_with_pronunciation_variant(
+                        row,
+                        output,
+                        pronunciation_delivery_variant=pronunciation_variant,
+                        seed_salt=seed_salt,
+                        repair_short_utterance=repair_short_utterance,
+                        delivery_mode=DELIVERY_CLARITY,
+                    )
                 )
                 if int(seed) != expected_seed:
                     raise RuntimeError("TTS returned a seed that differs from the candidate ledger")
@@ -1896,6 +2270,7 @@ class BookPipeline:
                     next_salt = self._segment_candidate_seed_salt(
                         repair_round,
                         next_attempt,
+                        pronunciation_variant,
                     )
                     candidate = self.db.restart_segment_candidate_generation(
                         int(candidate["id"]),
@@ -1905,12 +2280,16 @@ class BookPipeline:
                     )
                     time.sleep(min(8, 2**attempt))
 
-        spoken_text = self.tts.spoken_text(row)
         if is_short_utterance(spoken_text):
             last_error = f"{last_error}; split=short utterance is not splittable"
         else:
             split_attempt = retries
             split_seed_salt = f"asr_clarity_candidate_{repair_round}_split"
+            if pronunciation_variant != PRONUNCIATION_DELIVERY_LOCKED:
+                split_seed_salt = (
+                    f"asr_clarity_candidate_{repair_round}_"
+                    f"{pronunciation_variant}_split"
+                )
             split_seed = self.tts.generation_seed(row, split_seed_salt)
             if int(candidate["tts_attempt"]) < split_attempt:
                 candidate = self.db.restart_segment_candidate_generation(
@@ -1931,6 +2310,7 @@ class BookPipeline:
                         output,
                         delivery_mode=DELIVERY_CLARITY,
                         seed_salt_prefix=split_seed_salt,
+                        pronunciation_delivery_variant=pronunciation_variant,
                     )
                     or []
                 )
@@ -1945,6 +2325,7 @@ class BookPipeline:
                 metrics["spoken_text_sha256"] = hashlib.sha256(
                     spoken_text.encode("utf-8")
                 ).hexdigest()
+                metrics["pronunciation_delivery_variant"] = pronunciation_variant
                 metrics["split_checkpoint_seed"] = split_seed
                 metrics["split_seed_salt_prefix"] = split_seed_salt
                 metrics["split_parts"] = split_provenance
@@ -2212,8 +2593,12 @@ class BookPipeline:
         *,
         delivery_mode: str = DELIVERY_PRIMARY,
         seed_salt_prefix: str = "split",
+        pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
     ) -> list[dict[str, Any]]:
-        text = self.tts.spoken_text(row)
+        text, _anchors = self._spoken_text_with_pronunciation_variant(
+            row,
+            pronunciation_delivery_variant,
+        )
         if len(text) < 100:
             raise AudioQualityError("segment too short to split safely")
         words = text.split()
@@ -2237,19 +2622,52 @@ class BookPipeline:
                 part_row = dict(row)
                 part_row["text"] = piece
                 part_row["stable_id"] = f"{row['stable_id']}_part{index:02d}"
+                expected_part_text, _part_anchors = (
+                    self._spoken_text_with_pronunciation_variant(
+                        part_row,
+                        pronunciation_delivery_variant,
+                    )
+                )
+                if expected_part_text != piece:
+                    raise RuntimeError(
+                        "split part pronunciation materialization changed its boundary text"
+                    )
+                expected_part_sha256 = hashlib.sha256(
+                    expected_part_text.encode("utf-8")
+                ).hexdigest()
                 part_path = output.with_name(output.stem + f".split{index:02d}.wav")
                 part_paths.append(part_path)
-                _checksum, part_metrics, part_seed = self.tts.synthesize_atomic(
-                    part_row,
-                    part_path,
-                    seed_salt=f"{seed_salt_prefix}_part_{index}",
-                    delivery_mode=delivery_mode,
+                _checksum, part_metrics, part_seed = (
+                    self._synthesize_atomic_with_pronunciation_variant(
+                        part_row,
+                        part_path,
+                        pronunciation_delivery_variant=(
+                            pronunciation_delivery_variant
+                        ),
+                        seed_salt=f"{seed_salt_prefix}_part_{index}",
+                        delivery_mode=delivery_mode,
+                    )
                 )
+                if (
+                    str(
+                        part_metrics.get("pronunciation_delivery_variant") or ""
+                    )
+                    != pronunciation_delivery_variant
+                    or str(part_metrics.get("spoken_text_sha256") or "")
+                    != expected_part_sha256
+                ):
+                    raise RuntimeError(
+                        "split part TTS provenance differs from its pronunciation materialization"
+                    )
                 part_provenance.append(
                     {
                         "index": index,
                         "generation_seed": part_seed,
                         "spoken_text_sha256": part_metrics.get("spoken_text_sha256"),
+                        "pronunciation_delivery_variant": part_metrics.get(
+                            "pronunciation_delivery_variant",
+                            pronunciation_delivery_variant,
+                        ),
                         "voice_profile_id": part_metrics.get("voice_profile_id"),
                         "pitch_semitones": part_metrics.get("pitch_semitones"),
                         "effective_pitch_semitones": part_metrics.get(
@@ -2283,12 +2701,27 @@ class BookPipeline:
         self,
         item: dict[str, Any],
     ) -> tuple[str, list[dict[str, Any]]]:
-        provider = getattr(self.tts, "spoken_text_with_anchors", None)
-        if not callable(provider):
-            return self.tts.spoken_text(item), []
-        spoken_text, raw_anchors = provider(item)
-        anchors = [dict(anchor) for anchor in raw_anchors if isinstance(anchor, dict)]
-        return str(spoken_text), anchors
+        signal = self._segment_signal_provenance(item)
+        variant = str(
+            item.get("pronunciation_delivery_variant")
+            or signal.get("pronunciation_delivery_variant")
+            or PRONUNCIATION_DELIVERY_LOCKED
+        )
+        spoken_text, anchors = self._spoken_text_with_pronunciation_variant(
+            item,
+            variant,
+        )
+        spoken_text_sha256 = hashlib.sha256(spoken_text.encode("utf-8")).hexdigest()
+        expected_sha256 = str(
+            item.get("expected_spoken_text_sha256")
+            or signal.get("spoken_text_sha256")
+            or ""
+        )
+        if expected_sha256 and spoken_text_sha256 != expected_sha256:
+            raise RuntimeError(
+                "spoken-text checksum drifted before candidate or final verification"
+            )
+        return spoken_text, anchors
 
     def _decode_audio_candidate(
         self,
@@ -3281,6 +3714,13 @@ class BookPipeline:
                         LOCKED_NAME_ANCHOR_METRICS_KEY
                     ),
                     "decode_evidence": metrics.get("decode_evidence", []),
+                    "pronunciation_delivery_variant": metrics.get(
+                        "pronunciation_delivery_variant"
+                    ),
+                    "spoken_text_sha256": metrics.get("spoken_text_sha256"),
+                    "expected_spoken_text_sha256": metrics.get(
+                        "expected_spoken_text_sha256"
+                    ),
                     "failure_codes": failure_codes,
                     "attempt": int(check["attempt"]) if check is not None else None,
                     "policy_hash": str(check["policy_hash"]) if check is not None else None,
