@@ -54,6 +54,53 @@ Quy tắc rút ra, cụ thể hơn cái đã ghi: sau khi khởi động một r
 thường — hãy ghi nó vào file này và để đó, đừng sửa ngay. Một phiên bản = một tập thay đổi mạch lạc + đúng
 một lần chạy chứng minh nó.
 
+### Điều tra: giọng địa phương có phải vấn đề không? — Không, biến thể pitch mới là
+
+Câu hỏi xuất phát từ việc Whisper mắc lỗi thanh điệu hệ thống. Đo trên 199 segment của alpha.9:
+
+| Vùng | n | WER trung vị | MOS trung vị | delta so với baseline của chính nó |
+|---|---|---|---|---|
+| Bắc | 178 | 0,046 | 2,995 | **−0,339** |
+| Nam | 17 | 0,250 | 2,487 | **−0,178** |
+| Trung | 4 | 0,309 | 2,949 | **+0,433** |
+
+Thoạt nhìn giọng Nam tệ hơn hẳn. Nhưng ba lần kiểm chéo lật lại kết luận đó:
+
+1. **Loại nhiễu narrator**: chỉ so thoại với thoại, giọng Nam vẫn có WER 0,250 so với 0,089 của Bắc.
+   Vậy chênh lệch WER là thật.
+2. **Nhưng MOS tuyệt đối thấp là do trần của preset, không do vùng.** Baseline preview:
+   `Phạm Tuyên 3,389 · Thục Đoan 2,959 · Đoan Trang 2,842 · Ngọc Linh 2,770 · Thanh Bình 2,534 ·
+   Quang Sơn 2,529 · Ngọc Trân 2,503 · Xuân Vĩnh 2,489 · Thái Sơn 2,427`.
+3. **So với baseline của chính nó, giọng Nam bám sát hơn giọng Bắc** (−0,178 so với −0,339). Pipeline
+   không làm hỏng giọng Nam.
+
+**Kết luận: WER cao của giọng Nam là thiên lệch của thước đo, không phải lỗi audio.** Whisper được
+huấn luyện chủ yếu trên giọng Bắc chuẩn. Bỏ giọng tốt để chiều một thước đo lệch là tối ưu nhầm đối tượng.
+
+### Thủ phạm thật: biến thể pitch, và giới hạn hiện tại đặt sai tiêu chí
+
+Tách baseline theo từng mức pitch mới lộ ra vấn đề:
+
+| Preset | pitch 0 | pitch −1 | mất |
+|---|---|---|---|
+| **Ngọc Linh** (Bắc) | 2,770 | **1,599** | **−1,17** |
+| Trúc Ly (Bắc) | 2,596 | 1,875 | −0,72 |
+| Đoan Trang (Bắc) | 2,842 | 2,124 | −0,72 |
+| Thanh Bình (Bắc) | 3,052 | 2,534 | −0,52 |
+| Thục Đoan (Nam) | 2,959 | 2,532 | −0,43 |
+| Xuân Vĩnh (Nam) | 2,821 | 2,489 | −0,33 |
+
+`PRESET_MIN_PITCH_SEMITONES` giới hạn pitch theo **khả năng dịch cao độ** đo trên preview, chứ không theo
+**cái giá phải trả về độ tự nhiên**. Ngọc Linh được phép xuống `-2` trong khi chỉ `-1` đã mất 1,17 MOS —
+lớn hơn cả ngưỡng review `-0,80` của pipeline.
+
+Cần thêm ràng buộc: loại tổ hợp (preset, pitch) có baseline tụt quá ngưỡng so với pitch 0 của chính preset
+đó. Số liệu này đáng tin vì baseline là thuộc tính của **chính file preview**, đo tất định, không phụ thuộc
+nội dung sách — nên tái lập được mà không cần chạy lại cả cuốn.
+
+Cảnh báo về cỡ mẫu: `Nam n=17`, `Trung n=4` là quá nhỏ để kết luận về vùng miền. Nhưng bảng pitch ở trên
+không chịu hạn chế đó, vì mỗi ô là một phép đo tất định trên một file preview cố định.
+
 ## v0.2.0-alpha.10 — gỡ hai lỗi chặn xuất bản
 
 Chốt sau khi đọc hết evidence của lần chạy alpha.9. Chi tiết bằng chứng nằm ở mục alpha.9 bên dưới.
