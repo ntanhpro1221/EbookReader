@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import sqlite3
 import statistics
@@ -29,6 +30,8 @@ import numpy as np
 import pyloudnorm as pyln
 import soundfile as sf
 
+from ebook_reader.audio_io import LOUDNESS_EMOTION_OFFSETS_DB, integrated_loudness_lufs
+from ebook_reader.config import build_settings
 from ebook_reader.text_processing import SPOKEN_WORD_PATTERN
 
 
@@ -388,6 +391,106 @@ def audit_joins(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return findings
 
 
+def _project_audio_settings(project_root: Path) -> dict[str, Any]:
+    """Use the settings the book locked, not today's defaults.
+
+    Settings are locked per book, so auditing an older project against current defaults
+    would report a "miss" that is really just a version difference.
+    """
+    locked = project_root / "book_settings.json"
+    if locked.is_file():
+        try:
+            return dict(json.loads(locked.read_text(encoding="utf-8"))["audio"])
+        except (json.JSONDecodeError, KeyError, TypeError):
+            pass
+    return dict(build_settings("high_quality")["audio"])
+
+
+def audit_loudness_intent(
+    connection: sqlite3.Connection,
+    chapter_filter: int | None,
+    audio_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    """Did each segment actually reach the level the director asked for?
+
+    Levelling is `min(loudness_gain, peak_safe_gain)`. When the anchors sit too close to
+    the peak ceiling for speech crest factor, the ceiling wins and the final level is
+    decided by the waveform instead of by the intent - which is how `loud` segments ended
+    up quieter than `normal` ones. This measures the miss directly.
+    """
+    targets = audio_cfg["segment_target_lufs"]
+    narrator_offset = float(audio_cfg["segment_narrator_offset_db"])
+    peak_ceiling = float(audio_cfg["segment_peak_dbfs"])
+    peak_limit = 10 ** (peak_ceiling / 20.0)
+
+    query = """
+        SELECT s.speaker, s.kind, s.emotion, s.intensity, s.volume, s.wav_path
+        FROM segments s JOIN chapters c ON c.id = s.chapter_id
+        WHERE s.wav_path IS NOT NULL
+    """
+    params: tuple[Any, ...] = ()
+    if chapter_filter is not None:
+        query += " AND c.chapter_index = ?"
+        params = (chapter_filter,)
+
+    misses: list[float] = []
+    crests: list[float] = []
+    peak_limited = 0
+    by_volume: dict[str, list[float]] = defaultdict(list)
+    for row in connection.execute(query, params):
+        path = Path(str(row["wav_path"]))
+        if not path.is_file():
+            continue
+        audio, sample_rate = _read_mono(path)
+        measured = integrated_loudness_lufs(audio, sample_rate)
+        peak = float(np.max(np.abs(audio))) if audio.size else 0.0
+        if measured is None or peak <= 0:
+            continue
+        volume = str(row["volume"])
+        target = float(targets.get(volume, targets["normal"]))
+        if str(row["speaker"]) == "NARRATOR":
+            target += narrator_offset
+        if volume == "normal":
+            intensity = max(0, min(3, int(row["intensity"])))
+            target += LOUDNESS_EMOTION_OFFSETS_DB.get(str(row["emotion"]), 0.0) * intensity / 3.0
+        misses.append(measured - target)
+        crests.append(20.0 * math.log10(peak) - measured)
+        peak_limited += peak >= peak_limit * 0.999
+        by_volume[volume].append(measured)
+
+    if not misses:
+        return {}
+    return {
+        "segments": len(misses),
+        "peak_limited": peak_limited,
+        "peak_limited_fraction": round(peak_limited / len(misses), 4),
+        "miss_mean_db": round(float(np.mean(misses)), 3),
+        "miss_median_db": round(float(np.median(misses)), 3),
+        "miss_worst_db": round(float(np.min(misses)), 3),
+        # "Reached" means landed on the anchor, in either direction. A segment 4 dB above
+        # its target has missed just as surely as one 4 dB below.
+        "reached_target": int(sum(1 for value in misses if abs(value) <= 0.15)),
+        "crest_median_db": round(float(np.median(crests)), 2),
+        "crest_max_db": round(float(np.max(crests)), 2),
+        "median_lufs_by_volume": {
+            key: round(float(np.median(values)), 2) for key, values in sorted(by_volume.items())
+        },
+    }
+
+
+def audit_warnings(connection: sqlite3.Connection) -> dict[str, int]:
+    """Count the review warnings a human is expected to act on."""
+    counts: dict[str, int] = defaultdict(int)
+    for row in connection.execute(
+        "SELECT warning_code, status FROM segments WHERE warning_code IS NOT NULL AND warning_code != ''"
+    ):
+        for code in str(row["warning_code"]).split("|"):
+            code = code.strip()
+            if code:
+                counts[f"{code} [{row['status']}]"] += 1
+    return dict(sorted(counts.items(), key=lambda item: -item[1]))
+
+
 def audit_chapter_mp3(connection: sqlite3.Connection, chapter_filter: int | None) -> list[dict[str, Any]]:
     query = "SELECT chapter_index, title, output_mp3, status FROM chapters WHERE output_mp3 IS NOT NULL"
     params: tuple[Any, ...] = ()
@@ -449,11 +552,16 @@ def main() -> int:
         findings.extend(chapter_findings(chapter_index, records))
         findings.extend(audit_joins(records))
     mp3_reports = audit_chapter_mp3(connection, args.chapter)
+    audio_cfg = _project_audio_settings(args.project_root)
+    loudness_intent = audit_loudness_intent(connection, args.chapter, audio_cfg)
+    warnings = audit_warnings(connection)
 
     report = {
         "project_root": str(args.project_root),
         "chapters": chapters_summary,
         "chapter_mp3": mp3_reports,
+        "loudness_intent": loudness_intent,
+        "warnings": warnings,
         "findings": findings,
         "finding_counts": {
             code: sum(1 for item in findings if item["code"] == code)
@@ -506,6 +614,29 @@ def main() -> int:
         )
         for item in entry["longest_silences"]:
             print(f"    long silence {item['seconds']}s at {item['at_seconds']}s")
+
+    if loudness_intent:
+        print("\n=== loudness intent ===")
+        print(
+            f"  reached target: {loudness_intent['reached_target']}/{loudness_intent['segments']}"
+            f"   peak-limited: {loudness_intent['peak_limited']}"
+            f" ({loudness_intent['peak_limited_fraction'] * 100:.0f}%)"
+        )
+        print(
+            f"  miss vs target: mean {loudness_intent['miss_mean_db']:+.2f} dB"
+            f"  median {loudness_intent['miss_median_db']:+.2f} dB"
+            f"  worst {loudness_intent['miss_worst_db']:+.2f} dB"
+        )
+        print(
+            f"  crest factor: median {loudness_intent['crest_median_db']:.2f} dB"
+            f"  max {loudness_intent['crest_max_db']:.2f} dB"
+        )
+        print(f"  median LUFS by volume: {loudness_intent['median_lufs_by_volume']}")
+
+    if warnings:
+        print("\n=== segment warnings ===")
+        for code, count in warnings.items():
+            print(f"  {count:4d}  {code}")
 
     print("\n=== findings ===")
     if not findings:
