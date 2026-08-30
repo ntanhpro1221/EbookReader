@@ -2682,6 +2682,38 @@ def _is_short_name(value: str) -> bool:
     return _latin_character_count(value) <= SHORT_NAME_MAX_CHARACTERS
 
 
+def _decomposed_name_pronunciation(
+    surface: str,
+    spoken_form: str,
+) -> list[tuple[str, str]]:
+    """Split a multi-word name into one entry per word, or drop it if it cannot split.
+
+    A locked entry is keyed by its own normalized surface, so "Lucien Evans" and
+    "Lucien" never collide - and a real run locked the same character as both
+    "Lu-si-en" and "Lư-xi-ên", which a listener hears as two different names. Storing
+    only per-word entries makes one reading per name structural rather than a rule that
+    has to be enforced. A combined form whose word counts do not line up cannot be split
+    safely, so it is dropped; the words still get their own entries from the same batch.
+    """
+    surface_words = surface.split()
+    if len(surface_words) <= 1:
+        return [(surface, spoken_form)]
+    spoken_words = spoken_form.split()
+    if len(spoken_words) != len(surface_words):
+        return []
+    return [
+        (word, spoken)
+        for word, spoken in zip(surface_words, spoken_words)
+        if word
+        and spoken
+        and word.casefold() != spoken.casefold()
+        # Each word must clear the same bar it would as a standalone proposal, so
+        # splitting cannot smuggle in a name that would have been rejected on its own.
+        and _is_proper_latin_name_surface(word)
+        and not _is_short_name(word)
+    ]
+
+
 def _is_proper_latin_name_surface(value: str) -> bool:
     surface = " ".join(value.strip().split())
     if LATIN_PROPER_NAME_SURFACE_PATTERN.fullmatch(surface) is None:
@@ -5535,17 +5567,24 @@ class OllamaBookAnalyzer:
                 if repaired is None:
                         continue
                 spoken_form = repaired
-            normalized_surfaces.add(normalized_surface)
-            validated.append(
-                {
-                    "surface": surface,
-                    "normalized_surface": normalized_surface,
-                    "spoken_form": spoken_form,
-                    "confidence": confidence,
-                    "source": "analysis",
-                    "locked": False,
-                }
-            )
+            for part_surface, part_spoken in _decomposed_name_pronunciation(
+                surface,
+                spoken_form,
+            ):
+                part_key = _name_candidate_key(part_surface)
+                if part_key in normalized_surfaces:
+                    continue
+                normalized_surfaces.add(part_key)
+                validated.append(
+                    {
+                        "surface": part_surface,
+                        "normalized_surface": part_key,
+                        "spoken_form": part_spoken,
+                        "confidence": confidence,
+                        "source": "analysis",
+                        "locked": False,
+                    }
+                )
         return validated
 
     def _checkpoint_pronunciations(self, group: list[Any], payload: dict[str, Any]) -> None:

@@ -35,6 +35,7 @@ from ebook_reader.analysis import (
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
     OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
+    _decomposed_name_pronunciation,
     AnalysisOutputBudgetError,
     AnalysisFeedbackIssue,
     AnalysisModelDigestError,
@@ -11463,3 +11464,34 @@ def test_critic_transport_fault_exhausts_its_budget_without_escaping(monkeypatch
         == 2
     )
     assert db.updated == []
+
+
+def test_multi_word_name_pronunciation_is_stored_per_word() -> None:
+    """One name must have exactly one reading, structurally rather than by rule.
+
+    A locked pronunciation is keyed by its own normalized surface, so "Lucien Evans"
+    and "Lucien" never collide. A real run locked the same character as both
+    "Lu-si-en" and "Lư-xi-ên", which a listener hears as two different names.
+    """
+    assert _decomposed_name_pronunciation("Lucien Evans", "Lư-xi-ên Ê-van") == [
+        ("Lucien", "Lư-xi-ên"),
+        ("Evans", "Ê-van"),
+    ]
+    assert _decomposed_name_pronunciation("Lucien", "Lu-si-en") == [
+        ("Lucien", "Lu-si-en"),
+    ]
+
+
+def test_multi_word_pronunciation_that_cannot_split_is_dropped() -> None:
+    """A combined form whose words do not line up cannot be split safely.
+
+    The words still get their own proposals from the same batch, so dropping the
+    combined form loses nothing and never invents an alignment.
+    """
+    assert _decomposed_name_pronunciation("Lucien Evans", "Lư-xi-ên") == []
+    assert _decomposed_name_pronunciation("Lucien Evans", "Lư xi ên Ê van") == []
+
+
+def test_split_words_face_the_same_bar_as_standalone_proposals() -> None:
+    """Splitting must not smuggle in a word that would be rejected on its own."""
+    assert _decomposed_name_pronunciation("Li Wayne", "Li Uên") == [("Wayne", "Uên")]

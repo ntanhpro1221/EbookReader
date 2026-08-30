@@ -112,6 +112,11 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Khi resume, settings hash và voice mapping phải giữ nguyên.
 - TXT phải được decode từ đúng byte đã hash; ưu tiên BOM/UTF-8/CP1258 và chỉ thử UTF-16 không BOM khi có NUL heuristic.
 - Pronunciation confidence được lưu trong SQLite; cùng một text đã chuyển cách đọc phải được dùng cho TTS và expected ASR.
+- Pronunciation chỉ được lưu theo **từng từ**. Entry nhiều từ phải được tách thành một entry cho mỗi từ;
+  không tách được (số từ hai vế lệch nhau) thì bỏ hẳn, vì các từ vẫn có đề xuất riêng trong cùng batch.
+  Mỗi từ tách ra phải qua đúng bộ lọc như khi đứng một mình. Lý do: entry đã khóa được khóa theo
+  `normalized_surface` của chính nó, nên `Lucien Evans` và `Lucien` không bao giờ đụng nhau — một lần chạy
+  thật đã khóa cùng một nhân vật thành cả `Lu-si-en` lẫn `Lư-xi-ên`, và người nghe nghe ra hai cái tên khác nhau.
 - Chuẩn hóa pronunciation phải validate và checkpoint theo từng tên. Kết quả hợp lệ không được bỏ chỉ vì tên khác
   trong batch lỗi; resume chỉ xử lý phần chưa khóa. Lỗi ranh giới âm tiết có thể sửa cơ học an toàn như
   `A-der-on → A-đe-ron`; nếu không sửa được, retry chỉ tên lỗi với feedback cụ thể, không gửi lại nguyên prompt/batch.
