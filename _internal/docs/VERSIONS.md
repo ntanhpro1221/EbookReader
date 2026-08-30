@@ -34,13 +34,49 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
-## v0.2.0-alpha.11 (đang phát triển) — một tên, một cách đọc
+### Kết quả chạy alpha.10: cả hai fix đều xác nhận có tác dụng
 
-`Lucien Evans` được khóa thành `Lư-xi-ên Ê-van` trong khi `Lucien` là `Lu-si-en` và `Evans` là `E-vân`.
-Entry đã khóa được khóa theo `normalized_surface` của chính nó, nên hai hàng này không bao giờ đụng nhau và
-cùng một nhân vật bị đọc thành hai cái tên khác nhau. Sửa: pronunciation chỉ lưu **theo từng từ**; entry
-nhiều từ bị tách ra, tách không được thì bỏ. Điều này biến "một tên một cách đọc" thành tính chất cấu trúc
-chứ không còn là quy tắc phải nhớ mà tuân thủ.
+| | alpha.9 | alpha.10 |
+|---|---|---|
+| Segment fail | **15** | **2** |
+| Publish kèm cảnh báo review | 0 | **12** |
+| Đạt đúng target loudness | 27/107 (25%) | **199/199 (100%)** |
+| Chạm trần peak | 75% | **0%** |
+| Lệch loudness trung bình | −1,22 dB | **+0,00 dB** |
+| Thứ tự theo `volume` | loud −17,8 **nhỏ hơn** normal −19,77 | loud −23,8 > normal −24,5 > soft −27,5 |
+
+Dự đoán trước khi chạy là 9/15 sẽ pass nhờ hạ anchor xuống review; thực tế 13/15 pass, phần thêm đến từ
+việc thôi tính lỗi tên hai lần trong metric canonical.
+
+**Chương vẫn chưa publish** vì còn 2 segment fail, mỗi chương một cái — nhưng cả hai đều **không thuộc lớp
+từ chối nhầm** mà alpha.10 nhắm tới:
+
+- `c00002_s0000041` `"Joel cười trừ:"` → `"Joanne cười chữ."`. Câu 3 từ; bỏ tên ra còn 2 token thường, dưới
+  ngưỡng miễn trừ nên anchor giữ hard-fail. Kể cả có miễn trừ, `trừ`→`chữ` vẫn cho WER 0,333 > 0,30.
+- `c00001_s0000044` — câu dài, rất nhiều từ thường sai. Audio tệ thật, gate chặn đúng.
+
+**Việc còn lại là "chặng cuối"**: với ~1 segment hỏng trên 100, không chương nào publish được. Đó là bài
+toán khác với bài toán alpha.10 đã giải, và cần bằng chứng riêng trước khi đụng vào. Đừng nới thêm gate chỉ
+để mọi thứ pass — đó chính là kiểu hỏng cần tránh.
+
+## v0.2.0-alpha.11 — bỏ giọng miền Trung, một tên một cách đọc
+
+**Bỏ giọng miền Trung khỏi phân vai** (quyết định của người dùng, người nghe được tiếng Việt). Bằng chứng
+gián tiếp tôi đo được: preset Trung sai thanh ở **từ thường** chứ không ở tên riêng — `khốn kiếp` → `khôn kiêp`,
+`thuần khiết` → `thuân khiệt`, `chân lý` → `trấn lý` — khác hẳn giọng Nam vốn chỉ sai ở tên và ở phụ âm s/x,
+d/gi. Thanh điệu mang nghĩa từ vựng nên đây là chi phí cho **người nghe**, không riêng ASR.
+
+Cách làm: preset vẫn nằm trong catalog (VieNeu có chúng, sách cũ có thể đã khóa chúng nên `preset_by_name`
+vẫn phải resolve), chỉ không bao giờ được cast. Gộp về **một allowlist vùng miền duy nhất** `CASTING_REGIONS`
+cho mọi vai — tham số `include_regional` trước đây chỉ có tác dụng duy nhất là thêm giọng Trung cho NPC.
+
+**Chỗ suýt hỏng:** nhánh fallback trong `choose()` cho trường hợp cạn preset đúng giới tính quét **cả
+catalog**, tức là sẽ đưa giọng Trung quay lại sách. Test mới phủ mọi đường dẫn tới preset chứ không chỉ
+đường thông thường.
+
+Giá phải trả: 45 giọng nhân vật phân biệt được giảm còn **36**.
+
+Kèm theo: fix pronunciation lưu **theo từng từ** (xem mục trước) để một tên chỉ có một cách đọc.
 
 ### Bài học quy trình: tôi đã tự vi phạm quy tắc của chính mình
 
