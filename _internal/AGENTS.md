@@ -338,13 +338,13 @@ Module chính:
 Dev **không** mở GUI để thử. Vòng lặp chuẩn là headless, tự đọc log và tự chấm output:
 
 ```text
-cli create --profile high_quality  →  runtime/run_book_job.py <project-root>
+cli create --profile high_quality  →  scripts/run_book_job.py <project-root>
 → đọc JSONL message stream + cli status/report
-→ chấm audio bằng runtime/audit_audiobook.py
+→ chấm audio bằng scripts/audit_audiobook.py
 → sửa code → tạo project sạch → chạy lại
 ```
 
-- `runtime/run_book_job.py` chạy `run_worker` trong process hiện tại và in mọi message dạng JSONL.
+- `scripts/run_book_job.py` chạy `run_worker` trong process hiện tại và in mọi message dạng JSONL.
   Trên Windows phải reconfigure stdout/stderr sang UTF-8 trước khi in, vì tên nhân vật và log tiếng Việt
   sẽ làm luồng cp1252 chết và giết luôn thread drain.
 - App **tự khởi động Ollama ẩn** bằng `ollama serve` + `CREATE_NO_WINDOW`, log vào `runtime/logs/ollama-server.log`.
@@ -358,7 +358,7 @@ cli create --profile high_quality  →  runtime/run_book_job.py <project-root>
 
 ## Đánh giá chất lượng audio
 
-`runtime/audit_audiobook.py` là công cụ chấm khách quan cho output đã commit. Nó đọc SQLite + MP3 chương
+`scripts/audit_audiobook.py` là công cụ chấm khách quan cho output đã commit. Nó đọc SQLite + MP3 chương
 và báo cáo các trục mà tai người nghe thật sự nhận ra, ngoài các gate đã có trong pipeline:
 
 - tốc độ đọc (âm tiết/giây) theo từng segment, và độ lệch giữa các segment trong cùng một chương;
