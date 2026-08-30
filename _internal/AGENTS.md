@@ -139,6 +139,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - Project `completed` được fast-path nếu toàn bộ chapter/full-book MP3 còn decode + checksum hợp lệ.
 - Dừng cưỡng bức phải kết thúc process con trước process worker để không bỏ lại FFmpeg/Ollama helper.
 - Ollama ẩn phải ghi stdout/stderr vào `runtime/logs/ollama-server.log`; không bỏ mất bằng `DEVNULL`.
+- Lỗi transport Ollama (`ConnectionError`, `Timeout`, `ChunkedEncodingError`) tuyệt đối không được kết thúc cả book.
+  Kết nối chết trước khi nhận được ký tự response nào là replay an toàn: request được gửi lại tối đa
+  `OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS` lần trong cùng attempt đã reserve, có backoff và vẫn tôn trọng wall timeout
+  cùng stop request. Khi đã nhận một phần response thì không được replay vì stream không còn tái lập được.
+  Transport fault thoát ra khỏi lớp replay trong lượt director critic bền phải tiêu đúng attempt đã reserve giống hệt
+  một lần crash sau reserve, ghi event `ANALYSIS_CRITIC_TRANSPORT_FAULT`, rồi để vòng lặp durable đọc lại candidate và
+  đi tiếp; hết ngân sách thì rơi vào nhánh terminal/split thông thường, không raise xuyên pipeline.
 - Stream Ollama kết thúc thiếu `done=true` phải chia đôi batch hiện tại và chạy batch con; không retry nguyên
   batch lớn nhiều lần. Segment chỉ còn một phần tử mới dùng retry thông thường.
 - Phản hồi Ollama đã kết thúc nhưng thiếu ID segment bắt buộc được retry theo policy; nếu batch nhiều phần tử
@@ -325,6 +332,42 @@ Module chính:
 - Không tuyên bố chất lượng/hiệu năng RTX 5060 nếu chưa test trên máy thật.
 - Khi throughput xung đột với toàn vẹn output, chọn toàn vẹn output.
 - Không đưa lại tên, lịch sử hoặc mô tả của các prototype/gói generate tạm vào source hay tài liệu.
+
+## Quy trình dev: chạy thật và tự đánh giá
+
+Dev **không** mở GUI để thử. Vòng lặp chuẩn là headless, tự đọc log và tự chấm output:
+
+```text
+cli create --profile high_quality  →  runtime/run_book_job.py <project-root>
+→ đọc JSONL message stream + cli status/report
+→ chấm audio bằng runtime/audit_audiobook.py
+→ sửa code → tạo project sạch → chạy lại
+```
+
+- `runtime/run_book_job.py` chạy `run_worker` trong process hiện tại và in mọi message dạng JSONL.
+  Trên Windows phải reconfigure stdout/stderr sang UTF-8 trước khi in, vì tên nhân vật và log tiếng Việt
+  sẽ làm luồng cp1252 chết và giết luôn thread drain.
+- App **tự khởi động Ollama ẩn** bằng `ollama serve` + `CREATE_NO_WINDOW`, log vào `runtime/logs/ollama-server.log`.
+  Không bao giờ mở Ollama desktop app. Nếu thấy icon Ollama ở system tray thì đó là do một lệnh `ollama`
+  thủ công (ví dụ `ollama list`) đã kích hoạt stub tự khởi động `ollama app.exe --hide --fast-startup` của Windows,
+  chứ không phải app này. Bằng chứng phân biệt: server do app khởi động luôn ghi dòng
+  `--- Ebook Reader started Ollama at <thời điểm> ---` vào `runtime/logs/ollama-server.log`.
+- Đổi bất kỳ file nào trong `QUALITY_IMPLEMENTATION_FILES` sẽ đổi quality-policy hash và làm project đang dở
+  không resume được. Đây là hành vi đúng: sửa code xong thì tạo project sạch, đừng cố resume.
+- Iterate bằng project nhỏ (2–3 chapter) để có audio nhanh, chỉ mở rộng phạm vi khi chất lượng đã ổn.
+
+## Đánh giá chất lượng audio
+
+`runtime/audit_audiobook.py` là công cụ chấm khách quan cho output đã commit. Nó đọc SQLite + MP3 chương
+và báo cáo các trục mà tai người nghe thật sự nhận ra, ngoài các gate đã có trong pipeline:
+
+- tốc độ đọc (âm tiết/giây) theo từng segment, và độ lệch giữa các segment trong cùng một chương;
+- khoảng lặng thực tế tại mối nối so với `break_ms` dự kiến, gồm cả phần câm mà TTS tự sinh ở đầu/cuối segment;
+- độ đồng đều loudness giữa các segment và giữa narration với dialogue;
+- phân bố pitch/preset theo nhân vật để phát hiện nhân vật bị trộn giọng.
+
+Ngưỡng review của công cụ này là *chẩn đoán*, không phải gate publish. Muốn biến một phát hiện thành gate thì
+phải thêm vào đúng module (`audio_io.py` cho tín hiệu chương, `pipeline.py` cho vòng repair) kèm test.
 
 ## Kiểm tra trước khi bàn giao
 

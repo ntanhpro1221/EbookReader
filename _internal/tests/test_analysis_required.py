@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import requests
 
 from ebook_reader.analysis import (
     ADDRESSEE_REPAIR_NOTE,
@@ -32,6 +33,7 @@ from ebook_reader.analysis import (
     HOST_STUNNED_BLANK_MIND_RULE,
     LOW_CONFIDENCE_ISSUE_CODE,
     NON_VIETNAMESE_SYLLABLE_CODA_PATTERN,
+    OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS,
     VIETNAMESE_SPOKEN_FORM_PATTERN,
     AnalysisOutputBudgetError,
     AnalysisFeedbackIssue,
@@ -11290,3 +11292,174 @@ def test_analyzer_pulls_an_allowed_missing_model_without_a_console(monkeypatch) 
     assert analyzer.ensure_available() is True
     assert analyzer._model_digest == "sha256:downloaded"
     assert calls == [(["ollama.exe", "pull", "qwen3:8b"], True)]
+
+
+class TransportFaultResponse:
+    """Stream `prefix_chunks` and then die the way a dropped connection does."""
+
+    def __init__(self, prefix_chunks):
+        self.prefix_chunks = list(prefix_chunks)
+        self.encoding = None
+        self.closed = False
+
+    def raise_for_status(self):
+        return None
+
+    def iter_lines(self, decode_unicode=False):
+        for chunk in self.prefix_chunks:
+            line = json.dumps({"response": chunk, "done": False}, ensure_ascii=False)
+            yield line if decode_unicode else line.encode("utf-8")
+        raise requests.exceptions.ChunkedEncodingError("Response ended prematurely")
+
+    def close(self):
+        self.closed = True
+
+
+class TransportFaultSession:
+    """Drop the first `failures` streaming connections, then answer normally."""
+
+    def __init__(self, payload, *, failures, prefix_chunks=()):
+        self.payload = payload
+        self.failures = int(failures)
+        self.prefix_chunks = list(prefix_chunks)
+        self.post_calls = 0
+        self.tags_calls = 0
+
+    def get(self, _url, timeout):
+        assert timeout == 10
+        self.tags_calls += 1
+
+        class TagsResponse:
+            @staticmethod
+            def raise_for_status():
+                return None
+
+            @staticmethod
+            def json():
+                return {
+                    "models": [
+                        {"name": "qwen3:8b", "digest": "sha256:test-model-digest"}
+                    ]
+                }
+
+        return TagsResponse()
+
+    def post(self, _url, **kwargs):
+        del kwargs
+        self.post_calls += 1
+        if self.post_calls <= self.failures:
+            return TransportFaultResponse(self.prefix_chunks)
+        return FakeResponse(self.payload)
+
+
+def test_stream_replays_a_connection_that_died_before_any_response_char(monkeypatch):
+    payload = {"segments": [analysis_item("S001")]}
+    session = TransportFaultSession(payload, failures=1)
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+
+    result = analyzer._stream_json_response({"prompt": "x"})
+
+    assert result == payload
+    assert session.post_calls == 2
+
+
+def test_stream_does_not_replay_after_a_partial_response(monkeypatch):
+    payload = {"segments": [analysis_item("S001")]}
+    session = TransportFaultSession(payload, failures=1, prefix_chunks=['{"seg'])
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(requests.exceptions.ChunkedEncodingError):
+        analyzer._stream_json_response({"prompt": "x"})
+
+    assert session.post_calls == 1
+
+
+def test_stream_stops_replaying_after_the_bounded_reconnect_budget(monkeypatch):
+    payload = {"segments": [analysis_item("S001")]}
+    session = TransportFaultSession(payload, failures=99)
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(requests.exceptions.ChunkedEncodingError):
+        analyzer._stream_json_response({"prompt": "x"})
+
+    assert session.post_calls == OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS + 1
+
+
+def test_critic_transport_fault_consumes_one_attempt_and_keeps_the_book_running(
+    monkeypatch,
+) -> None:
+    db = FakeDB()
+    settings = build_settings(
+        overrides={"analysis": {"max_retries": 1, "director_critic_max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+
+    def generate(group, **_kwargs):
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    critic_calls = {"count": 0}
+
+    def flaky_critic(group, validated, **kwargs):
+        critic_calls["count"] += 1
+        if critic_calls["count"] == 1:
+            raise requests.exceptions.ChunkedEncodingError("Response ended prematurely")
+        return director_critic_payload(
+            group,
+            validated,
+            candidate_rows=kwargs["candidate_rows"],
+            candidate_hash=kwargs["candidate_hash"],
+        )
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", flaky_critic)
+
+    analyzer.analyze_all(lambda: False)
+
+    assert critic_calls["count"] == 2
+    assert db.updated, "the book must still commit its analysis"
+    assert any(
+        event[1] == "ANALYSIS_CRITIC_TRANSPORT_FAULT" for event in db.events
+    )
+    candidate = db.analysis_candidates[0]
+    assert candidate["state"] == "accepted"
+    assert candidate["critic_attempt_count"] == 2
+
+
+def test_critic_transport_fault_exhausts_its_budget_without_escaping(monkeypatch) -> None:
+    db = FakeDB()
+    settings = build_settings(
+        overrides={"analysis": {"max_retries": 1, "director_critic_max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    _trust_locked_test_digest(analyzer, monkeypatch)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+
+    def generate(group, **_kwargs):
+        return {"segments": [analysis_item(str(row["stable_id"])) for row in group]}
+
+    def always_drops(_group, _validated, **_kwargs):
+        raise requests.exceptions.ChunkedEncodingError("Response ended prematurely")
+
+    monkeypatch.setattr(analyzer, "_request", generate)
+    monkeypatch.setattr(analyzer, "_request_director_critic", always_drops)
+
+    with pytest.raises(RuntimeError, match="Phân tích bắt buộc thất bại"):
+        analyzer.analyze_all(lambda: False)
+
+    assert db.analysis_candidates[0]["state"] == "terminal"
+    assert db.analysis_candidates[0]["critic_attempt_count"] == 2
+    assert (
+        sum(1 for event in db.events if event[1] == "ANALYSIS_CRITIC_TRANSPORT_FAULT")
+        == 2
+    )
+    assert db.updated == []

@@ -656,6 +656,20 @@ class AnalysisModelDigestError(RuntimeError):
     pass
 
 
+OLLAMA_TRANSPORT_EXCEPTIONS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
+OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS = 2
+OLLAMA_TRANSPORT_RECONNECT_BACKOFF_SECONDS = 2.0
+
+
+def is_ollama_transport_fault(exc: BaseException) -> bool:
+    """Report whether a request died in transport rather than in the model contract."""
+    return isinstance(exc, OLLAMA_TRANSPORT_EXCEPTIONS)
+
+
 OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -5002,54 +5016,86 @@ class OllamaBookAnalyzer:
         started = time.monotonic()
         last_activity = started
         parts: list[str] = []
-        response: requests.Response | None = None
         completed = False
         completion_reason = ""
         evaluation_count: int | None = None
         request["stream"] = True
-        try:
-            response = self.session.post(
-                f"{self.base_url}/api/generate",
-                json=request,
-                timeout=(10.0, min(ANALYSIS_STREAM_IDLE_SECONDS, wall_timeout)),
-                stream=True,
-            )
-            response.raise_for_status()
-            response.encoding = "utf-8"
-            for raw_line in response.iter_lines(decode_unicode=True):
-                if stop_requested is not None and stop_requested():
-                    raise AnalysisRequestStopped("Stop requested during Ollama request")
-                now = time.monotonic()
-                elapsed = now - started
-                if elapsed > wall_timeout:
-                    raise AnalysisWallTimeoutError(
-                        f"Ollama analysis exceeded {wall_timeout:.0f}s wall-time limit"
-                    )
-                if raw_line:
-                    line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
-                    envelope = json.loads(line)
-                    if envelope.get("error"):
-                        raise RuntimeError(str(envelope["error"]))
-                    parts.append(str(envelope.get("response", "")))
-                    completed = bool(envelope.get("done", False))
-                    if completed:
-                        completion_reason = str(envelope.get("done_reason", "")).casefold()
-                        try:
-                            evaluation_count = int(envelope["eval_count"])
-                        except (KeyError, TypeError, ValueError):
-                            evaluation_count = None
-                if activity is not None and now - last_activity >= ANALYSIS_ACTIVITY_SECONDS:
-                    activity(int(elapsed), sum(len(part) for part in parts))
-                    last_activity = now
-            if not completed:
-                response_chars = sum(len(part) for part in parts)
-                raise OllamaStreamIncompleteError(
-                    "Ollama stream ended before the JSON response was complete "
-                    f"({response_chars:,} response chars)"
+        # A connection that dies before delivering a single response character produced
+        # nothing the caller could have observed, so re-issuing it is idempotent for the
+        # durable ledger. Once any character has arrived the stream is no longer safe to
+        # replay and the transport fault is reported to the caller.
+        for connect_attempt in range(OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS + 1):
+            parts = []
+            completed = False
+            completion_reason = ""
+            evaluation_count = None
+            response: requests.Response | None = None
+            try:
+                response = self.session.post(
+                    f"{self.base_url}/api/generate",
+                    json=request,
+                    timeout=(10.0, min(ANALYSIS_STREAM_IDLE_SECONDS, wall_timeout)),
+                    stream=True,
                 )
-        finally:
-            if response is not None:
-                response.close()
+                response.raise_for_status()
+                response.encoding = "utf-8"
+                for raw_line in response.iter_lines(decode_unicode=True):
+                    if stop_requested is not None and stop_requested():
+                        raise AnalysisRequestStopped("Stop requested during Ollama request")
+                    now = time.monotonic()
+                    elapsed = now - started
+                    if elapsed > wall_timeout:
+                        raise AnalysisWallTimeoutError(
+                            f"Ollama analysis exceeded {wall_timeout:.0f}s wall-time limit"
+                        )
+                    if raw_line:
+                        line = (
+                            raw_line.decode("utf-8")
+                            if isinstance(raw_line, bytes)
+                            else raw_line
+                        )
+                        envelope = json.loads(line)
+                        if envelope.get("error"):
+                            raise RuntimeError(str(envelope["error"]))
+                        parts.append(str(envelope.get("response", "")))
+                        completed = bool(envelope.get("done", False))
+                        if completed:
+                            completion_reason = str(
+                                envelope.get("done_reason", "")
+                            ).casefold()
+                            try:
+                                evaluation_count = int(envelope["eval_count"])
+                            except (KeyError, TypeError, ValueError):
+                                evaluation_count = None
+                    if activity is not None and now - last_activity >= ANALYSIS_ACTIVITY_SECONDS:
+                        activity(int(elapsed), sum(len(part) for part in parts))
+                        last_activity = now
+                if not completed:
+                    response_chars = sum(len(part) for part in parts)
+                    raise OllamaStreamIncompleteError(
+                        "Ollama stream ended before the JSON response was complete "
+                        f"({response_chars:,} response chars)"
+                    )
+                break
+            except OLLAMA_TRANSPORT_EXCEPTIONS as exc:
+                replayable = (
+                    connect_attempt < OLLAMA_TRANSPORT_RECONNECT_ATTEMPTS
+                    and not any(parts)
+                    and (stop_requested is None or not stop_requested())
+                )
+                if not replayable:
+                    raise
+                delay = OLLAMA_TRANSPORT_RECONNECT_BACKOFF_SECONDS * (connect_attempt + 1)
+                if time.monotonic() - started + delay >= wall_timeout:
+                    raise
+                self.log(
+                    "Kết nối Ollama rớt trước khi nhận được dữ liệu "
+                    f"({exc.__class__.__name__}); thử kết nối lại sau {delay:.0f}s."
+                )
+                time.sleep(delay)
+            finally:
+                if response is not None:
+                    response.close()
         response_text = "".join(parts) or "{}"
         if completion_reason == "length":
             raise AnalysisOutputBudgetError(
@@ -5684,8 +5730,31 @@ class OllamaBookAnalyzer:
                 )
             except (AnalysisRequestStopped, AnalysisModelDigestError):
                 raise
-            except BaseException:
-                raise
+            except BaseException as exc:
+                if not is_ollama_transport_fault(exc):
+                    raise
+                # The reserved attempt is durably consumed exactly as a crash after
+                # reserve would consume it. Continuing re-reads the candidate and either
+                # reserves the next attempt or finalizes the exhausted budget through the
+                # ordinary terminal path, so a dropped connection cannot end the book.
+                self.log(
+                    f"Phản biện đạo diễn batch {group_index}/{group_count} mất kết nối "
+                    f"Ollama ở lần {attempt_number}/{max_attempts}: {exc}"
+                )
+                self.db.event(
+                    "warning",
+                    "ANALYSIS_CRITIC_TRANSPORT_FAULT",
+                    "Director critic attempt lost its Ollama connection",
+                    {
+                        "analysis_candidate_id": candidate_id,
+                        "batch_index": group_index,
+                        "attempt": attempt_number,
+                        "max_attempts": max_attempts,
+                        "candidate_hash": candidate_hash,
+                        "error": f"{exc.__class__.__name__}: {exc}",
+                    },
+                )
+                continue
             retryable_invalid = _director_critic_payload_is_retryable_invalid(
                 critic_issues
             )
