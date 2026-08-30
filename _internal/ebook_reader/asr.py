@@ -747,15 +747,16 @@ def adjudicate_locked_name_anchors(
     # evidence instead of failing it, because Whisper's spelling is not proof of
     # mispronunciation. `locked_name_review_eligible` carries that decision.
     result["locked_name_review_eligible"] = bool(canonical_threshold_passed)
+    # The reason stays the anchor mismatch in both cases so the failure evidence remains
+    # self-consistent for the candidate ledger, which requires reason, failure codes and
+    # anchor status to agree. Whether the sentence content was independently acceptable
+    # is carried by `locked_name_review_eligible`, and only the pipeline's exhaustion
+    # handling reads it.
     result.update(
         {
             "passed": False,
             "verdict": ASR_MISMATCH,
-            "reason": (
-                ASR_LOCKED_NAME_ANCHOR_MISMATCH
-                if canonical_threshold_passed
-                else "ASR_MISMATCH"
-            ),
+            "reason": ASR_LOCKED_NAME_ANCHOR_MISMATCH,
             "repairable": True,
             "severe": False,
         }

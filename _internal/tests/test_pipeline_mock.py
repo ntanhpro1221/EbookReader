@@ -11,6 +11,7 @@ import pytest
 import ebook_reader.pipeline as pipeline_module
 from ebook_reader.asr_contract import ASR_LOCKED_NAME_ANCHOR_REVIEW
 from ebook_reader.asr import (
+    adjudicate_locked_name_anchors,
     ASR_INCONCLUSIVE,
     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
     ASR_LOCKED_NAME_CANONICAL_PASS,
@@ -4199,3 +4200,53 @@ def test_critical_ram_stops_only_when_recovery_is_insufficient(
     assert db.book()["status"] == "stopped"
     assert db.book()["stage"] == "critical_stop"
     assert len(notifier.critical_calls) == 1
+
+
+@pytest.mark.parametrize("ordinary_content_is_clean", [True, False])
+def test_locked_name_failure_evidence_stays_self_consistent(
+    ordinary_content_is_clean: bool,
+) -> None:
+    """The candidate ledger rejects evidence whose parts disagree.
+
+    An earlier attempt at the review downgrade changed `reason` to ASR_MISMATCH when the
+    canonical thresholds failed while `failure_codes` still named the anchor, and a real
+    run died on `candidate ASR locked-name failure evidence is internally inconsistent`
+    halfway through a chapter. Both review-eligible and not-eligible results must satisfy
+    the same contract.
+    """
+    transcript = (
+        "Lúc chia tay, Lucian len lén hỏi bạn đầy tò mò."
+        if ordinary_content_is_clean
+        else "Lúc chia lìa, Lucian lên lén hỏi bận đây tò mò."
+    )
+    result = adjudicate_locked_name_anchors(
+        "Lúc chia tay, Lu-si-en len lén hỏi bạn đầy tò mò.",
+        {
+            "passed": False,
+            "verdict": ASR_MISMATCH,
+            "transcript": transcript,
+            "similarity": 0.96 if ordinary_content_is_clean else 0.70,
+            "wer": 0.10 if ordinary_content_is_clean else 0.60,
+            "reason": "ASR_MISMATCH",
+            "repairable": True,
+            "severe": False,
+        },
+        [_locked_lucien_anchor(spoken_start=14)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result["locked_name_review_eligible"] is ordinary_content_is_clean
+
+    # Compose the decode evidence exactly as _record_segment_asr_evidence does: the
+    # anchor's own failure codes, plus the result reason when the verdict is not a pass.
+    anchor_metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(anchor_metrics, dict)
+    evidence_failure_codes = list(anchor_metrics["failure_codes"])
+    if str(result["reason"]) not in evidence_failure_codes:
+        evidence_failure_codes.append(str(result["reason"]))
+    evidence = {**result, "failure_codes": evidence_failure_codes}
+
+    # Composition must collapse to exactly one code, or the ledger rejects the evidence.
+    assert evidence_failure_codes == [ASR_LOCKED_NAME_ANCHOR_MISMATCH]
+    assert BookPipeline._decode_requests_source_pronunciation(evidence) is True
