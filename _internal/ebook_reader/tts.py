@@ -33,7 +33,22 @@ from .models import (
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
 )
 from .resource_manager import trim_process_working_set
-from .text_processing import normalize_vocalizations_for_tts
+from .text_processing import is_standalone_ha_gasp, normalize_vocalizations_for_tts
+from .tts_contract import (
+    HA_VOCALIZATION_DELIVERY_PROFILE,
+    HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_MAX_NEW_FRAMES,
+    HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD,
+    HA_VOCALIZATION_MAX_TEMPERATURE,
+    HA_VOCALIZATION_MAX_TOP_P,
+    HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_PADDING_SAMPLES_FIELD,
+    HA_VOCALIZATION_PROFILE_FIELD,
+    HA_VOCALIZATION_SAMPLE_RATE_FIELD,
+    HA_VOCALIZATION_TARGET_SAMPLES_FIELD,
+    HA_VOCALIZATION_TEMPERATURE_FIELD,
+    HA_VOCALIZATION_TOP_P_FIELD,
+)
 
 
 FATAL_TTS_MARKERS = (
@@ -115,7 +130,13 @@ def _row_value(row: Any, key: str, default: Any) -> Any:
     return default if value is None else value
 
 
-def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> np.ndarray:
+def apply_pitch_variant(
+    audio: Any,
+    sample_rate: int,
+    pitch_semitones: int,
+    *,
+    allow_padding: bool = True,
+) -> np.ndarray:
     array = np.asarray(audio, dtype=np.float32).reshape(-1)
     steps = int(pitch_semitones)
     if steps == 0 or array.size == 0:
@@ -147,6 +168,10 @@ def apply_pitch_variant(audio: Any, sample_rate: int, pitch_semitones: int) -> n
     ).astype(np.float32, copy=False)
     if shifted.size >= array.size:
         return shifted[: array.size]
+    if not allow_padding:
+        raise ValueError(
+            "WORLD pitch shift shortened a strict no-padding waveform"
+        )
     return np.pad(shifted, (0, array.size - shifted.size)).astype(np.float32, copy=False)
 
 
@@ -177,10 +202,23 @@ def vieneu_sampling_for_segment(
     *,
     repair_short_utterance: bool = False,
     delivery_mode: str = DELIVERY_PRIMARY,
+    vocalization_delivery_profile: str | None = None,
 ) -> dict[str, float | int]:
     normalized_delivery = str(delivery_mode).strip().casefold()
     if normalized_delivery not in DELIVERY_MODES:
         raise ValueError(f"Unsupported TTS delivery mode: {delivery_mode}")
+    normalized_vocalization_profile = (
+        str(vocalization_delivery_profile).strip().casefold()
+        if vocalization_delivery_profile is not None
+        else None
+    )
+    if normalized_vocalization_profile not in {
+        None,
+        HA_VOCALIZATION_DELIVERY_PROFILE,
+    }:
+        raise ValueError(
+            f"Unsupported TTS vocalization delivery profile: {vocalization_delivery_profile}"
+        )
     text = str(_row_value(row, "text", ""))
     emotion = str(_row_value(row, "emotion", "neutral"))
     pace = str(_row_value(row, "pace", "normal"))
@@ -200,9 +238,18 @@ def vieneu_sampling_for_segment(
         top_p = min(top_p, SHORT_UTTERANCE_MAX_TOP_P)
         warning_codes = str(_row_value(row, "warning_code", "")).split("|")
         if repair_short_utterance and GENERATION_CEILING_WARNING in warning_codes:
-            repair_frames = short_utterance_repair_frame_cap(text)
+            repair_frames = (
+                HA_VOCALIZATION_MAX_NEW_FRAMES
+                if normalized_vocalization_profile
+                == HA_VOCALIZATION_DELIVERY_PROFILE
+                else short_utterance_repair_frame_cap(text)
+            )
             if repair_frames is not None:
                 max_new_frames = min(max_new_frames, repair_frames)
+    if normalized_vocalization_profile == HA_VOCALIZATION_DELIVERY_PROFILE:
+        temperature = min(temperature, HA_VOCALIZATION_MAX_TEMPERATURE)
+        top_p = min(top_p, HA_VOCALIZATION_MAX_TOP_P)
+        max_new_frames = min(max_new_frames, HA_VOCALIZATION_MAX_NEW_FRAMES)
     return {
         "temperature": temperature,
         "top_k": 25,
@@ -674,17 +721,29 @@ class TTSCoordinator:
                 row,
                 pronunciation_delivery_variant=normalized_pronunciation_variant,
             )
+            vocalization_delivery_profile = (
+                HA_VOCALIZATION_DELIVERY_PROFILE
+                if is_standalone_ha_gasp(str(row["text"]))
+                else None
+            )
             sampling = vieneu_sampling_for_segment(
                 spoken_row,
                 self.settings,
                 repair_short_utterance=repair_short_utterance,
                 delivery_mode=delivery_mode,
+                vocalization_delivery_profile=vocalization_delivery_profile,
             )
             audio = self.vieneu.generate_one(
                 spoken_row,
                 profile,
                 seed,
                 sampling=sampling,
+            )
+            raw_vocalization_samples = (
+                int(np.asarray(audio).reshape(-1).size)
+                if vocalization_delivery_profile
+                == HA_VOCALIZATION_DELIVERY_PROFILE
+                else None
             )
             duration_policy = segment_duration_policy(
                 str(spoken_row["text"]),
@@ -702,11 +761,30 @@ class TTSCoordinator:
             pitch_steps = int(_row_value(profile, "pitch_semitones", 0))
             pitch_variant_skipped = False
             try:
-                audio = apply_pitch_variant(
-                    audio,
-                    self.vieneu.sample_rate,
-                    pitch_steps,
-                )
+                if (
+                    vocalization_delivery_profile
+                    == HA_VOCALIZATION_DELIVERY_PROFILE
+                ):
+                    pitched_audio = apply_pitch_variant(
+                        audio,
+                        self.vieneu.sample_rate,
+                        pitch_steps,
+                        allow_padding=False,
+                    )
+                    if (
+                        int(np.asarray(pitched_audio).reshape(-1).size)
+                        != raw_vocalization_samples
+                    ):
+                        raise ValueError(
+                            "Ha vocalization pitch variant changed the raw sample count"
+                        )
+                else:
+                    pitched_audio = apply_pitch_variant(
+                        audio,
+                        self.vieneu.sample_rate,
+                        pitch_steps,
+                    )
+                audio = pitched_audio
             except Exception as exc:  # noqa: BLE001
                 # Pitch is optional voice diversification. The original waveform still contains
                 # every spoken word, so preserve it instead of failing or retrying the whole TTS.
@@ -714,6 +792,34 @@ class TTSCoordinator:
                 self.log(
                     f"Bỏ biến thể cao độ {pitch_steps:+d} cho segment {row['stable_id']} "
                     f"vì xử lý pitch lỗi: {exc}"
+                )
+            vocalization_provenance: dict[str, Any] = {}
+            if vocalization_delivery_profile == HA_VOCALIZATION_DELIVERY_PROFILE:
+                audio_array = np.asarray(audio, dtype=np.float32).reshape(-1)
+                audio = audio_array
+                sample_rate = int(self.vieneu.sample_rate)
+                original_samples = int(raw_vocalization_samples or 0)
+                final_samples = int(audio_array.size)
+                if original_samples <= 0 or final_samples != original_samples:
+                    raise AudioQualityError(
+                        "Ha vocalization must preserve its raw no-padding sample count"
+                    )
+                vocalization_provenance.update(
+                    {
+                        HA_VOCALIZATION_PROFILE_FIELD: HA_VOCALIZATION_DELIVERY_PROFILE,
+                        HA_VOCALIZATION_TEMPERATURE_FIELD: float(
+                            sampling["temperature"]
+                        ),
+                        HA_VOCALIZATION_TOP_P_FIELD: float(sampling["top_p"]),
+                        HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD: int(
+                            sampling["max_new_frames"]
+                        ),
+                        HA_VOCALIZATION_SAMPLE_RATE_FIELD: sample_rate,
+                        HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD: original_samples,
+                        HA_VOCALIZATION_TARGET_SAMPLES_FIELD: original_samples,
+                        HA_VOCALIZATION_PADDING_SAMPLES_FIELD: 0,
+                        HA_VOCALIZATION_FINAL_SAMPLES_FIELD: final_samples,
+                    }
                 )
             checksum, metrics = atomic_write_wav(
                 output,
@@ -735,7 +841,10 @@ class TTSCoordinator:
             metrics["effective_pitch_semitones"] = (
                 0 if pitch_variant_skipped else pitch_steps
             )
-            if generation_ceiling_hit:
+            metrics.update(vocalization_provenance)
+            if generation_ceiling_hit or (
+                vocalization_delivery_profile == HA_VOCALIZATION_DELIVERY_PROFILE
+            ):
                 endpoint_floor_dbfs = float(
                     self.settings.get("audio", {}).get(
                         "segment_active_floor_dbfs",
@@ -743,11 +852,13 @@ class TTSCoordinator:
                     )
                 )
                 endpoint_floor = 10.0 ** (endpoint_floor_dbfs / 20.0)
-                metrics[GENERATION_CEILING_METRIC] = 1.0
-                metrics[GENERATION_ENDPOINT_ACTIVE_METRIC] = float(
+                endpoint_active = float(
                     float(metrics.get("trailing_rms", 0.0)) > endpoint_floor
                 )
+                metrics[GENERATION_ENDPOINT_ACTIVE_METRIC] = endpoint_active
                 metrics["generation_endpoint_floor_dbfs"] = endpoint_floor_dbfs
+            if generation_ceiling_hit:
+                metrics[GENERATION_CEILING_METRIC] = 1.0
             return checksum, metrics, seed
         finally:
             # VieNeu's PyTorch backend may retain allocator cache after returning a NumPy waveform.

@@ -31,12 +31,18 @@ def test_quality_policy_hash_is_stable_and_changes_with_content_thresholds() -> 
     changed = build_settings(overrides={"asr": {"min_similarity": 0.91}})
     assert quality_policy_hash(first) != quality_policy_hash(build_quality_policy(changed))
     assert first["algorithms"]["asr_content"] == (
-        "evidence_gated_name_pronunciation_delivery_v8"
+        "evidence_gated_name_pronunciation_delivery_v10"
+    )
+    assert first["algorithms"]["segment_signal"] == (
+        "signal_gate_vocalization_delivery_v4"
     )
 
 
 def test_quality_policy_fingerprints_every_critical_implementation_file() -> None:
     assert "pipeline.py" in QUALITY_IMPLEMENTATION_FILES
+    assert "asr_contract.py" in QUALITY_IMPLEMENTATION_FILES
+    assert "perceptual_contract.py" in QUALITY_IMPLEMENTATION_FILES
+    assert "tts_contract.py" in QUALITY_IMPLEMENTATION_FILES
     assert "audio_io.py" in QUALITY_IMPLEMENTATION_FILES
     assert "database.py" in QUALITY_IMPLEMENTATION_FILES
     assert "recovery.py" in QUALITY_IMPLEMENTATION_FILES
@@ -80,3 +86,6 @@ def test_quality_policy_has_separate_parser_and_casting_fingerprints() -> None:
     )
     assert policy["settings"]["perceptual_qa"]["repair_rounds"] == 2
     assert policy["settings"]["asr"]["repair_rounds"] == 5
+    assert policy["algorithms"]["perceptual_naturalness"] == (
+        "utmosv2_relative_voice_baseline_candidate_requirement_v2"
+    )

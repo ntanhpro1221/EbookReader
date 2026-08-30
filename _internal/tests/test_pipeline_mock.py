@@ -18,9 +18,11 @@ from ebook_reader.asr import (
     LOCKED_NAME_ANCHOR_METRICS_KEY,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
 )
+from ebook_reader.asr_contract import COLLAPSED_SHORT_CONTEXT_MODE
 from ebook_reader.audio_io import AudioQualityError, ChapterQualityError, atomic_write_wav
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
+    GENERATION_STRATEGY_SPLIT,
     PRONUNCIATION_DELIVERY_LOCKED,
     PRONUNCIATION_DELIVERY_SOURCE,
     QUALITY_SCOPE_CHAPTER,
@@ -28,9 +30,15 @@ from ebook_reader.database import (
     SEGMENT_ASR_DECODE_QUALITY_STAGE,
     SEGMENT_AUDIO_QUALITY_STAGE,
 )
-from ebook_reader.io_utils import sha256_file
+from ebook_reader.io_utils import sha256_file, stable_int
 from ebook_reader.models import ResourceLevel
-from ebook_reader.pipeline import BookPipeline, CriticalResourceStop, unresolved_asr_is_fatal
+from ebook_reader.pipeline import (
+    BookPipeline,
+    CriticalResourceStop,
+    _candidate_budget_exhausted_on_perceptual_review,
+    unresolved_asr_is_fatal,
+)
+from ebook_reader.perceptual_contract import PERCEPTUAL_NATURALNESS_REVIEW_CODE
 from ebook_reader.project import create_or_open_project
 from ebook_reader.quality_policy import (
     ANALYSIS_CASTING_STAGE,
@@ -40,6 +48,77 @@ from ebook_reader.quality_policy import (
     quality_policy_hash,
 )
 from ebook_reader.resource_manager import ResourceSnapshot
+from ebook_reader.text_processing import (
+    CLAUSE_SPLIT_MAX_CHARS,
+    CLAUSE_SPLIT_STRATEGY,
+    SENTENCE_SPLIT_MAX_CHARS,
+    SENTENCE_SPLIT_STRATEGY,
+    SPLIT_MAX_CHARS_FIELD,
+    SPLIT_STRATEGY_FIELD,
+    split_text_for_strategy,
+)
+from ebook_reader.tts_contract import (
+    HA_VOCALIZATION_DELIVERY_PROFILE,
+    HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_MAX_NEW_FRAMES,
+    HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD,
+    HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_PADDING_SAMPLES_FIELD,
+    HA_VOCALIZATION_PROFILE_FIELD,
+    HA_VOCALIZATION_SAMPLE_RATE_FIELD,
+    HA_VOCALIZATION_TARGET_SAMPLES_FIELD,
+    HA_VOCALIZATION_TEMPERATURE_FIELD,
+    HA_VOCALIZATION_TOP_P_FIELD,
+)
+
+
+def test_candidate_item_validates_vocalization_against_source_segment() -> None:
+    pipeline = object.__new__(BookPipeline)
+    pipeline._require_segment_candidate_pronunciation_delivery = (
+        lambda _segment, _candidate: (
+            PRONUNCIATION_DELIVERY_LOCKED,
+            "“Ha ha.”",
+            [],
+        )
+    )
+    segment = {
+        "id": 9,
+        "seq": 8,
+        "stable_id": "gasp-segment",
+        "text": "“Ha…”",
+        "signal_json": None,
+    }
+    signal = {
+        "duration": 1.6,
+        HA_VOCALIZATION_PROFILE_FIELD: HA_VOCALIZATION_DELIVERY_PROFILE,
+        HA_VOCALIZATION_TEMPERATURE_FIELD: 0.55,
+        HA_VOCALIZATION_TOP_P_FIELD: 0.82,
+        HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD: HA_VOCALIZATION_MAX_NEW_FRAMES,
+        HA_VOCALIZATION_SAMPLE_RATE_FIELD: 48_000,
+        HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD: 76_800,
+        HA_VOCALIZATION_TARGET_SAMPLES_FIELD: 76_800,
+        HA_VOCALIZATION_PADDING_SAMPLES_FIELD: 0,
+        HA_VOCALIZATION_FINAL_SAMPLES_FIELD: 76_800,
+        "generation_endpoint_active": 0.0,
+    }
+    candidate = {
+        "id": 1,
+        "wav_path": "gasp.wav",
+        "wav_sha256": "a" * 64,
+        "wav_duration": 1.6,
+        "signal_json": json.dumps(signal),
+        "generation_seed": 123,
+        "repair_round": 0,
+        "policy_hash": "policy",
+        "pronunciation_delivery_variant": PRONUNCIATION_DELIVERY_LOCKED,
+        "expected_spoken_text_sha256": "b" * 64,
+    }
+
+    item = pipeline._segment_candidate_item(segment, candidate)
+
+    assert item["text"] == "“Ha…”"
+    assert item["signal_json"] == candidate["signal_json"]
+    assert item["segment_candidate_id"] == 1
 
 
 class FakeTTS:
@@ -62,9 +141,9 @@ class FakeTTS:
 
     def generation_seed(self, row, seed_salt=""):
         if str(seed_salt).startswith("asr_clarity_candidate_"):
-            return 1_000 + int.from_bytes(
-                hashlib.sha256(str(seed_salt).encode("utf-8")).digest()[:4],
-                "big",
+            profile = self.db.voice_profile(int(row["voice_profile_id"]))
+            return stable_int(
+                f"segment::{row['stable_id']}::{profile['voice_key']}::{seed_salt}"
             )
         return 1
 
@@ -417,9 +496,14 @@ def _assign_locked_test_narrator(db) -> int:
     return profile_id
 
 
-def _short_tts_pipeline(tmp_path: Path, *, repair_rounds: int = 2):
+def _short_tts_pipeline(
+    tmp_path: Path,
+    *,
+    repair_rounds: int = 2,
+    source_text: str = "“Điên rồi!”",
+):
     source = tmp_path / "001.txt"
-    source.write_text("“Điên rồi!”", encoding="utf-8")
+    source.write_text(source_text, encoding="utf-8")
     settings = build_settings(
         overrides={
             "tts": {"max_retries": 4},
@@ -766,8 +850,33 @@ def _locked_name_decode_failure() -> dict[str, object]:
     }
 
 
+def _locked_name_decode_pass(
+    *,
+    pronunciation_variant: str = PRONUNCIATION_DELIVERY_SOURCE,
+) -> dict[str, object]:
+    return {
+        "verdict": ASR_PASS,
+        "passed": True,
+        "reason": "ok",
+        "repairable": False,
+        "failure_codes": [],
+        "pronunciation_delivery_variant": pronunciation_variant,
+        LOCKED_NAME_ANCHOR_METRICS_KEY: {
+            "version": LOCKED_NAME_ANCHOR_METRICS_VERSION,
+            "status": "pass",
+            "adjudicated": True,
+            "passed": True,
+            "failure_codes": [],
+            "repeat_count": 1,
+            "anchor_count": 1,
+            "required_occurrence_count": 1,
+            "matched_occurrence_count": 1,
+        },
+    }
+
+
 @pytest.mark.parametrize("failure_index", [0, 1])
-def test_either_prior_decode_can_request_source_pronunciation(
+def test_mixed_prior_decodes_keep_locked_pronunciation(
     failure_index: int,
 ) -> None:
     evidence = [
@@ -795,10 +904,128 @@ def test_either_prior_decode_can_request_source_pronunciation(
     ]
     evidence[failure_index] = _locked_name_decode_failure()
 
-    assert any(
-        BookPipeline._decode_requests_source_pronunciation(result)
-        for result in evidence
+    assert (
+        BookPipeline._prior_decodes_request_source_pronunciation(evidence)
+        is False
     )
+
+
+def test_both_prior_decodes_must_request_source_pronunciation() -> None:
+    evidence = [_locked_name_decode_failure(), _locked_name_decode_failure()]
+
+    assert BookPipeline._prior_decodes_request_source_pronunciation(evidence) is True
+
+
+def test_prior_decode_consensus_validates_both_evidence_rows() -> None:
+    malformed = _locked_name_decode_failure()
+    malformed[LOCKED_NAME_ANCHOR_METRICS_KEY]["matched_occurrence_count"] = 2
+
+    with pytest.raises(RuntimeError, match="internally inconsistent"):
+        BookPipeline._prior_decodes_request_source_pronunciation(
+            [_locked_name_decode_failure(), malformed]
+        )
+
+
+def test_final_round_retries_source_after_one_complete_pass() -> None:
+    failure = _locked_name_decode_failure()
+    failure["pronunciation_delivery_variant"] = PRONUNCIATION_DELIVERY_SOURCE
+
+    assert (
+        BookPipeline._prior_source_candidate_requests_final_retry(
+            [_locked_name_decode_pass(), failure]
+        )
+        is True
+    )
+
+
+def test_final_round_does_not_retain_source_after_dual_anchor_failure() -> None:
+    failures = [_locked_name_decode_failure(), _locked_name_decode_failure()]
+    for failure in failures:
+        failure["pronunciation_delivery_variant"] = PRONUNCIATION_DELIVERY_SOURCE
+        metrics = failure[LOCKED_NAME_ANCHOR_METRICS_KEY]
+        metrics["anchor_count"] = 2
+        metrics["required_occurrence_count"] = 2
+        metrics["matched_occurrence_count"] = 1
+
+    assert (
+        BookPipeline._prior_source_candidate_requests_final_retry(failures)
+        is False
+    )
+
+
+def test_final_round_ignores_plain_locked_passes_without_anchor_evidence() -> None:
+    passing = {
+        "verdict": ASR_PASS,
+        "passed": True,
+        "reason": "VOCALIZATION_ASR_COMPATIBLE",
+        "repairable": False,
+        "failure_codes": [],
+        "pronunciation_delivery_variant": PRONUNCIATION_DELIVERY_LOCKED,
+        LOCKED_NAME_ANCHOR_METRICS_KEY: None,
+    }
+
+    assert (
+        BookPipeline._prior_source_candidate_requests_final_retry(
+            [dict(passing), dict(passing)]
+        )
+        is False
+    )
+
+
+@pytest.mark.parametrize("anchor_evidence", [None, "missing"])
+def test_source_pass_without_anchor_evidence_still_fails_closed(
+    anchor_evidence: object,
+) -> None:
+    passing = _locked_name_decode_pass()
+    if anchor_evidence == "missing":
+        passing.pop(LOCKED_NAME_ANCHOR_METRICS_KEY)
+    else:
+        passing[LOCKED_NAME_ANCHOR_METRICS_KEY] = anchor_evidence
+    failure = _locked_name_decode_failure()
+    failure["pronunciation_delivery_variant"] = PRONUNCIATION_DELIVERY_SOURCE
+
+    with pytest.raises(RuntimeError, match="lacks structured anchor evidence"):
+        BookPipeline._prior_source_candidate_requests_final_retry(
+            [passing, failure]
+        )
+
+
+def test_final_round_forces_split_after_dual_source_anchor_failure() -> None:
+    failures = [_locked_name_decode_failure(), _locked_name_decode_failure()]
+    for failure in failures:
+        failure["pronunciation_delivery_variant"] = (
+            PRONUNCIATION_DELIVERY_SOURCE
+        )
+
+    assert (
+        BookPipeline._prior_source_candidate_requests_final_split(failures)
+        is True
+    )
+
+
+def test_final_round_split_rejects_mixed_pronunciation_evidence() -> None:
+    failures = [_locked_name_decode_failure(), _locked_name_decode_failure()]
+    failures[0]["pronunciation_delivery_variant"] = (
+        PRONUNCIATION_DELIVERY_SOURCE
+    )
+    failures[1]["pronunciation_delivery_variant"] = (
+        PRONUNCIATION_DELIVERY_LOCKED
+    )
+
+    with pytest.raises(RuntimeError, match="mixes pronunciation variants"):
+        BookPipeline._prior_source_candidate_requests_final_split(failures)
+
+
+def test_final_round_source_retry_rejects_malformed_pass_evidence() -> None:
+    passing = _locked_name_decode_pass()
+    passing[LOCKED_NAME_ANCHOR_METRICS_KEY]["matched_occurrence_count"] = 0
+    failure = _locked_name_decode_failure()
+    failure["pronunciation_delivery_variant"] = PRONUNCIATION_DELIVERY_SOURCE
+
+    with pytest.raises(RuntimeError, match="internally inconsistent"):
+        BookPipeline._prior_source_candidate_requests_final_retry(
+            [passing, failure]
+        )
 
 
 def test_plain_content_mismatch_does_not_request_source_pronunciation() -> None:
@@ -853,6 +1080,42 @@ def test_migrated_odd_round_locked_candidate_reconstructs_stored_variant() -> No
     assert anchors[0]["pronunciation_delivery_variant"] == (
         PRONUNCIATION_DELIVERY_LOCKED
     )
+
+
+def test_even_final_round_source_candidate_reconstructs_stored_variant() -> None:
+    source_anchor = {
+        **_locked_lucien_anchor(spoken_start=0),
+        "spoken_form": "Lucien",
+        "canonical_spoken_form": "Lu-si-en",
+        "pronunciation_delivery_variant": PRONUNCIATION_DELIVERY_SOURCE,
+        "source_start": 0,
+        "source_end": 6,
+    }
+    pipeline = BookPipeline.__new__(BookPipeline)
+    pipeline.tts = _VariantAnchorProbeTTS([source_anchor])
+    row = {"text": "Lucien gọi."}
+    source_text, _anchors = pipeline.tts.spoken_text_with_anchors(
+        row,
+        pronunciation_delivery_variant=PRONUNCIATION_DELIVERY_SOURCE,
+    )
+    candidate = {
+        "repair_round": 4,
+        "pronunciation_delivery_variant": PRONUNCIATION_DELIVERY_SOURCE,
+        "expected_spoken_text_sha256": hashlib.sha256(
+            source_text.encode("utf-8")
+        ).hexdigest(),
+    }
+
+    variant, spoken_text, anchors = (
+        pipeline._require_segment_candidate_pronunciation_delivery(
+            row,
+            candidate,
+        )
+    )
+
+    assert variant == PRONUNCIATION_DELIVERY_SOURCE
+    assert spoken_text == "Lucien gọi."
+    assert anchors[0]["spoken_form"] == "Lucien"
 
 
 def test_repeated_short_decode_cannot_replace_better_direct_failure(
@@ -1027,6 +1290,71 @@ def test_locked_name_anchor_can_promote_exact_repeated_short_decode(
         False,
         True,
     ]
+
+
+def test_collapsed_repeated_short_locked_name_decode_is_auditable(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(
+        tmp_path,
+        repair_rounds=0,
+    )
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Anh Lu-si-en!",
+        [_locked_lucien_anchor(spoken_start=4)],
+    )
+
+    class CollapsedRepeatedVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return True
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return _asr_result(ASR_PASS, "Anh Lucy", similarity=0.80, wer=0.50)
+
+        def verify_repeated_short(
+            self,
+            _text: str,
+            _wav: Path,
+            *,
+            confirmation: bool = False,
+        ):
+            return _asr_result(
+                ASR_MISMATCH,
+                "Anh Lũ Sĩ En",
+                similarity=1 / 3,
+                wer=2 / 3,
+            )
+
+    pipeline._verify_chapter_audio(chapter, CollapsedRepeatedVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] == "verified"
+    final_check = pipeline.db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+    )
+    assert final_check is not None
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    assert final_metrics["selected_context_mode"] == COLLAPSED_SHORT_CONTEXT_MODE
+    assert final_metrics["requested_repeat_count"] == 3
+    assert final_metrics["effective_repeat_count"] == 1
+    assert final_metrics["repeated_short_context"] is True
+    assert [
+        item["context_mode"] for item in final_metrics["decode_evidence"]
+    ] == ["direct", "repeat3", COLLAPSED_SHORT_CONTEXT_MODE]
+    assert [item["selected"] for item in final_metrics["decode_evidence"]] == [
+        False,
+        False,
+        True,
+    ]
+    selected = final_metrics["decode_evidence"][-1]
+    assert selected["requested_repeat_count"] == 3
+    assert selected["effective_repeat_count"] == 1
+    assert selected[LOCKED_NAME_ANCHOR_METRICS_KEY]["repeat_count"] == 1
 
 
 def test_locked_name_canonical_metrics_preserve_the_v7_lucien_candidate(
@@ -1460,13 +1788,17 @@ def test_clarity_repair_requires_two_independent_asr_passes(
         assert str(fresh["wav_sha256"]) == incumbent_sha256
 
 
-def _locked_name_variant_pipeline(tmp_path: Path):
+def _locked_name_variant_pipeline(
+    tmp_path: Path,
+    *,
+    source_text: str = "Tracy gọi Tracy trong hành lang dài.",
+    repair_rounds: int = 2,
+):
     source = tmp_path / "001.txt"
-    source_text = "Tracy gọi Tracy trong hành lang dài."
     source.write_text(source_text, encoding="utf-8")
     settings = build_settings(
         overrides={
-            "asr": {"repair_rounds": 2},
+            "asr": {"repair_rounds": repair_rounds},
             "tts": {
                 "min_seconds_per_100_chars": 0.2,
                 "pace_chars_per_second": {"normal": [1.0, 100.0]},
@@ -1531,6 +1863,115 @@ def _locked_name_variant_pipeline(tmp_path: Path):
     pipeline._resource_gate = lambda *_args, **_kwargs: None
     pipeline._progress = lambda *_args, **_kwargs: None
     return pipeline, chapter, row, canonical_text, canonical_anchors, source_text
+
+
+def test_final_locked_name_round_uses_audited_clause_split_and_promotes(
+    tmp_path: Path,
+) -> None:
+    source_text = (
+        "Tracy bước qua hành lang rất dài và dừng lại trước cánh cửa bằng đồng, "
+        "nơi mọi người vẫn im lặng chờ một câu trả lời rõ ràng. "
+        "Sau đó Tracy quay về phía cửa sổ, bình tĩnh nhắc lại kế hoạch để tất cả "
+        "cùng nghe và hiểu chính xác điều phải làm tiếp theo."
+    )
+    pipeline, chapter, row, _canonical, _anchors, _source = (
+        _locked_name_variant_pipeline(
+            tmp_path,
+            source_text=source_text,
+            repair_rounds=5,
+        )
+    )
+
+    class FinalSplitVerifier:
+        calls = 0
+
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, expected: str, _wav: Path, *, confirmation: bool = False):
+            del confirmation
+            self.calls += 1
+            if self.calls <= 2:
+                return _asr_result(
+                    ASR_MISMATCH,
+                    "sai nội dung ban đầu",
+                    similarity=0.1,
+                    wer=1.0,
+                )
+            if self.calls <= 10:
+                transcript = expected.replace("Tracy", "Lucy").replace(
+                    "Trây-si",
+                    "Lucy",
+                )
+                return _asr_result(
+                    ASR_PASS,
+                    transcript,
+                    similarity=0.96,
+                    wer=0.1,
+                )
+            return _asr_result(
+                ASR_PASS,
+                expected,
+                similarity=1.0,
+                wer=0.0,
+            )
+
+    pipeline._verify_chapter_audio(chapter, FinalSplitVerifier())
+
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    final = attempts[-1]
+    signal = final["signal"]
+    split_prefix = "asr_clarity_candidate_4_source_spelling_v1_split"
+    assert [attempt["state"] for attempt in attempts] == [
+        "dual_failed",
+        "dual_failed",
+        "dual_failed",
+        "dual_failed",
+        "promoted",
+    ]
+    assert [
+        attempt["pronunciation_delivery_variant"] for attempt in attempts
+    ] == [
+        PRONUNCIATION_DELIVERY_LOCKED,
+        PRONUNCIATION_DELIVERY_SOURCE,
+        PRONUNCIATION_DELIVERY_LOCKED,
+        PRONUNCIATION_DELIVERY_SOURCE,
+        PRONUNCIATION_DELIVERY_SOURCE,
+    ]
+    assert final["tts_attempt"] == int(pipeline.settings["tts"]["max_retries"])
+    assert final["generation_strategy"] == GENERATION_STRATEGY_SPLIT
+    assert signal["split_checkpoint_seed"] == final["generation_seed"]
+    assert signal["split_seed_salt_prefix"] == split_prefix
+    expected_parts, expected_max_chars = split_text_for_strategy(
+        source_text,
+        CLAUSE_SPLIT_STRATEGY,
+    )
+    assert signal[SPLIT_STRATEGY_FIELD] == CLAUSE_SPLIT_STRATEGY
+    assert signal[SPLIT_MAX_CHARS_FIELD] == CLAUSE_SPLIT_MAX_CHARS
+    assert expected_max_chars == CLAUSE_SPLIT_MAX_CHARS
+    assert len(signal["split_parts"]) == len(expected_parts) == 3
+    assert [part["index"] for part in signal["split_parts"]] == [0, 1, 2]
+    assert all(
+        part["pronunciation_delivery_variant"]
+        == PRONUNCIATION_DELIVERY_SOURCE
+        for part in signal["split_parts"]
+    )
+    assert pipeline.tts.seed_salts[-len(expected_parts) :] == [
+        f"{split_prefix}_part_{index}"
+        for index in range(len(expected_parts))
+    ]
+
+
+def test_final_clause_split_falls_back_when_a_token_cannot_be_bounded() -> None:
+    text = "a" * (CLAUSE_SPLIT_MAX_CHARS + 1)
+
+    assert BookPipeline._clause_split_is_unavailable(text) is True
 
 
 def test_locked_name_repair_alternates_canonical_then_source_and_promotes(
@@ -1770,16 +2211,70 @@ def test_asr_candidate_with_perceptual_review_never_replaces_incumbent(
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
         segment_id=int(row["id"]),
     )
+    assert final_check is not None
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+    final_failure_codes = json.loads(str(final_check["failure_codes_json"]))
 
     assert pipeline.perceptual_qa.verify_calls == 1
     assert [attempt["state"] for attempt in attempts] == ["dual_failed"]
     assert attempts[0]["perceptual_result"]["verdict"] == "review"
     assert fresh["status"] == "failed"
+    assert fresh["warning_code"] == PERCEPTUAL_NATURALNESS_REVIEW_CODE
+    assert "Perceptual naturalness review remained" in str(fresh["error"])
     assert fresh["wav_path"] == row["wav_path"]
     assert fresh["wav_sha256"] == incumbent_sha256
     assert incumbent_path.read_bytes() == incumbent_bytes
     assert final_check["artifact_sha256"] == incumbent_sha256
     assert final_check["verdict"] == "fail"
+    assert final_metrics["reason"] == PERCEPTUAL_NATURALNESS_REVIEW_CODE
+    assert final_metrics["repair_trigger_reason"] == "ASR_MISMATCH"
+    assert PERCEPTUAL_NATURALNESS_REVIEW_CODE in final_failure_codes
+    assert "ASR_MISMATCH_UNRESOLVED" not in json.dumps(
+        final_metrics,
+        ensure_ascii=False,
+    )
+    with pytest.raises(RuntimeError, match="durable perceptual blocker"):
+        pipeline.db.finalize_segment_candidate_exhaustion(
+            segment_id=int(row["id"]),
+            policy_hash=pipeline.quality_policy_hash,
+            max_repair_rounds=1,
+            incumbent_sha256=incumbent_sha256,
+            trigger_quality_check_id=int(
+                final_metrics["repair_trigger_quality_check_id"]
+            ),
+            error="ASR mismatch remained",
+            warning_code="ASR_MISMATCH_UNRESOLVED",
+        )
+
+
+def test_perceptual_exhaustion_uses_durable_review_in_mixed_history() -> None:
+    mismatch = _asr_result(
+        ASR_MISMATCH,
+        "sai nội dung",
+        similarity=0.1,
+        wer=1.0,
+    )
+    passing = _asr_result(ASR_PASS, "Ha ha.", similarity=1.0, wer=0.0)
+
+    assert _candidate_budget_exhausted_on_perceptual_review(
+        [
+            {
+                "state": "dual_failed",
+                "beam_result": mismatch,
+                "greedy_result": mismatch,
+                "perceptual_result": None,
+            },
+            {
+                "state": "dual_failed",
+                "beam_result": passing,
+                "greedy_result": passing,
+                "perceptual_result": {
+                    "verdict": "review",
+                    "review_required": True,
+                },
+            },
+        ]
+    )
 
 
 def test_resume_of_clarity_candidate_still_requires_both_decodes(
@@ -2359,6 +2854,26 @@ def test_quiet_endpoint_evidence_overrides_the_durable_ceiling_warning() -> None
     )
 
 
+def test_standalone_ha_ceiling_repair_persists_calibrated_frame_cap(
+    tmp_path: Path,
+) -> None:
+    pipeline, _chapter, row = _short_tts_pipeline(
+        tmp_path,
+        source_text="“Ha…”",
+    )
+    pipeline.tts = ScriptedShortTTS([]).bind(pipeline.settings, pipeline.db)
+    with pipeline.db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET warning_code=? WHERE id=?",
+            ("TTS_GENERATION_CEILING_REACHED", int(row["id"])),
+        )
+    row = pipeline.db.get_segment(int(row["id"]))
+
+    repaired = pipeline._checkpoint_short_ceiling_repair(row)
+
+    assert repaired["generation_frame_cap"] == HA_VOCALIZATION_MAX_NEW_FRAMES
+
+
 @pytest.mark.parametrize("initial_verdict", [ASR_PASS, ASR_MISMATCH, ASR_INCONCLUSIVE])
 def test_active_ceiling_endpoint_repairs_after_any_whisper_verdict_and_clears_cap(
     tmp_path: Path,
@@ -2451,10 +2966,12 @@ def test_non_short_tts_failure_keeps_existing_split_recovery(
     scripted = ScriptedShortTTS(
         [AudioQualityError("generation failed") for _attempt in range(4)]
     )
-    split_calls: list[str] = []
+    split_calls: list[tuple[str, str]] = []
 
-    def fake_split(item, _output, **_kwargs):
-        split_calls.append(str(item["stable_id"]))
+    def fake_split(item, _output, **kwargs):
+        split_calls.append(
+            (str(item["stable_id"]), str(kwargs["split_strategy"]))
+        )
 
     pipeline.tts = scripted.bind(pipeline.settings, pipeline.db)
     pipeline._synthesize_split = fake_split
@@ -2469,9 +2986,14 @@ def test_non_short_tts_failure_keeps_existing_split_recovery(
     pipeline._process_single_segment(row, chapter)
 
     updated = pipeline.db.get_segment(int(row["id"]))
-    assert split_calls == [str(row["stable_id"])]
+    assert split_calls == [
+        (str(row["stable_id"]), SENTENCE_SPLIT_STRATEGY)
+    ]
     assert updated["status"] == "signal_passed"
     assert updated["warning_code"] == "TTS_SPLIT_RECOVERY"
+    signal = json.loads(str(updated["signal_json"]))
+    assert signal[SPLIT_STRATEGY_FIELD] == SENTENCE_SPLIT_STRATEGY
+    assert signal[SPLIT_MAX_CHARS_FIELD] == SENTENCE_SPLIT_MAX_CHARS
 
 
 def test_clarity_split_fallback_uses_distinct_round_seed_salts(
@@ -2530,6 +3052,9 @@ def test_source_split_rejects_part_provenance_from_canonical_delivery(
     tmp_path: Path,
 ) -> None:
     class SplitVariantDriftTTS:
+        def generation_seed(self, _row, _seed_salt=""):
+            return 1
+
         def spoken_text_with_anchors(
             self,
             row,
@@ -2572,6 +3097,50 @@ def test_source_split_rejects_part_provenance_from_canonical_delivery(
             row,
             tmp_path / "source-split.wav",
             pronunciation_delivery_variant=PRONUNCIATION_DELIVERY_SOURCE,
+        )
+
+
+def test_split_rejects_part_seed_that_drifts_from_its_deterministic_salt(
+    tmp_path: Path,
+) -> None:
+    class SplitSeedDriftTTS:
+        def generation_seed(self, _row, _seed_salt=""):
+            return 7
+
+        def spoken_text_with_anchors(
+            self,
+            row,
+            *args,
+            pronunciation_delivery_variant=PRONUNCIATION_DELIVERY_LOCKED,
+        ):
+            del args, pronunciation_delivery_variant
+            return str(row["text"]), []
+
+        def synthesize_atomic(self, row, _output, **_kwargs):
+            return (
+                "a" * 64,
+                {
+                    "pronunciation_delivery_variant": (
+                        PRONUNCIATION_DELIVERY_LOCKED
+                    ),
+                    "spoken_text_sha256": hashlib.sha256(
+                        str(row["text"]).encode("utf-8")
+                    ).hexdigest(),
+                },
+                8,
+            )
+
+    pipeline = BookPipeline.__new__(BookPipeline)
+    pipeline.tts = SplitSeedDriftTTS()
+    row = {
+        "stable_id": "seed-drift-split",
+        "text": " ".join(["Nội dung đủ dài để chia an toàn"] * 10),
+    }
+
+    with pytest.raises(RuntimeError, match="deterministic salt"):
+        pipeline._synthesize_split(
+            row,
+            tmp_path / "seed-drift-split.wav",
         )
 
 
@@ -2677,7 +3246,8 @@ def test_failed_clarity_tts_records_final_content_failure_for_retained_wav(
     assert final_check["verdict"] == "fail"
     assert final_check["artifact_sha256"] == row["wav_sha256"]
     metrics = json.loads(str(final_check["metrics_json"]))
-    assert metrics["reason"] == "ASR_MISMATCH"
+    assert metrics["reason"] == "ASR_MISMATCH_UNRESOLVED"
+    assert metrics["repair_trigger_reason"] == "ASR_MISMATCH"
     attempts = pipeline.db.segment_candidate_attempt_summary(
         int(row["id"]),
         pipeline.quality_policy_hash,

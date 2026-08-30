@@ -14,6 +14,7 @@ from ebook_reader.asr import (
     ASR_MISMATCH,
     ASR_PASS,
     LOCKED_NAME_ANCHOR_METRICS_KEY,
+    adjudicate_collapsed_repeated_short,
     adjudicate_locked_name_anchors,
 )
 
@@ -471,6 +472,171 @@ def test_canonical_anchor_metrics_promote_repeated_short_exact_forms() -> None:
     assert isinstance(metrics, dict)
     assert metrics["matched_occurrence_count"] == 3
     assert metrics["canonical_wer"] == 0.0
+
+
+def test_collapsed_repeated_short_promotes_one_exact_locked_name_copy() -> None:
+    original = _asr_result(
+        "Anh Lũ Sĩ En",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    result = adjudicate_collapsed_repeated_short(
+        "Anh Lu-si-en!",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+        requested_repeat_count=3,
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result is not None
+    assert result["verdict"] == ASR_PASS
+    assert result["reason"] == ASR_LOCKED_NAME_CANONICAL_PASS
+    assert result["requested_repeat_count"] == 3
+    assert result["effective_repeat_count"] == 1
+    assert result["similarity"] == pytest.approx(5 / 6)
+    assert result["wer"] == pytest.approx(0.5)
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["repeat_count"] == 1
+    assert metrics["requested_repeat_count"] == 3
+    assert metrics["effective_repeat_count"] == 1
+    assert metrics["matched_occurrence_count"] == 1
+    assert metrics["canonical_similarity"] == 1.0
+    assert metrics["canonical_wer"] == 0.0
+    assert metrics["raw_similarity"] == pytest.approx(5 / 6)
+    assert metrics["raw_wer"] == pytest.approx(0.5)
+
+
+def test_collapsed_repeated_short_does_not_accept_fuzzy_locked_name() -> None:
+    original = _asr_result(
+        "Anh Lucy",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    result = adjudicate_collapsed_repeated_short(
+        "Anh Lu-si-en!",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+        requested_repeat_count=3,
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result is not None
+    assert result["verdict"] == ASR_MISMATCH
+    assert result["reason"] == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["matched_occurrence_count"] == 0
+
+
+def test_collapsed_repeated_short_keeps_ordinary_content_threshold() -> None:
+    original = _asr_result(
+        "Một câu hoàn toàn khác Lu-si-en",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    result = adjudicate_collapsed_repeated_short(
+        "Anh Lu-si-en!",
+        original,
+        [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+        requested_repeat_count=3,
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    assert result is not None
+    assert result["verdict"] == ASR_MISMATCH
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["passed"] is True
+    assert metrics["canonical_threshold_passed"] is False
+
+
+def test_collapsed_repeated_short_skips_inconclusive_transcript() -> None:
+    original = _asr_result(
+        "",
+        verdict=ASR_INCONCLUSIVE,
+        reason="ASR_NOT_RUN",
+        repairable=False,
+    )
+
+    assert (
+        adjudicate_collapsed_repeated_short(
+            "Anh Lu-si-en!",
+            original,
+            [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+            requested_repeat_count=3,
+            min_similarity=0.78,
+            max_wer=0.30,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("verdict", "passed", "reason", "transcript"),
+    [
+        (ASR_PASS, True, "ok", "Anh Lũ Sĩ En"),
+        (ASR_INCONCLUSIVE, False, "ASR_NOT_RUN", "Anh Lũ Sĩ En"),
+        (ASR_MISMATCH, False, "CUSTOM_POLICY_MISMATCH", "Anh Lũ Sĩ En"),
+        (ASR_MISMATCH, False, "ASR_MISMATCH", ""),
+    ],
+)
+def test_collapsed_repeated_short_requires_eligible_raw_mismatch(
+    verdict: str,
+    passed: bool,
+    reason: str,
+    transcript: str,
+) -> None:
+    original = _asr_result(
+        transcript,
+        verdict=verdict,
+        reason=reason,
+        repairable=verdict == ASR_MISMATCH,
+    )
+    original["passed"] = passed
+
+    assert (
+        adjudicate_collapsed_repeated_short(
+            "Anh Lu-si-en!",
+            original,
+            [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+            requested_repeat_count=3,
+            min_similarity=0.78,
+            max_wer=0.30,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize("requested_repeat_count", [2, 4, True])
+def test_collapsed_repeated_short_requires_exact_repeat_contract(
+    requested_repeat_count: int,
+) -> None:
+    original = _asr_result(
+        "Anh Lũ Sĩ En",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    with pytest.raises(ValueError, match="repeat.*contract"):
+        adjudicate_collapsed_repeated_short(
+            "Anh Lu-si-en!",
+            original,
+            [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+            requested_repeat_count=requested_repeat_count,
+            min_similarity=0.78,
+            max_wer=0.30,
+        )
 
 
 @pytest.mark.parametrize(

@@ -30,6 +30,7 @@ ANALYSIS_CASTING_IMPLEMENTATION_FILES = (
 QUALITY_IMPLEMENTATION_FILES = (
     "analysis.py",
     "asr.py",
+    "asr_contract.py",
     "audio_io.py",
     "character_registry.py",
     "config.py",
@@ -37,11 +38,13 @@ QUALITY_IMPLEMENTATION_FILES = (
     "models.py",
     "pipeline.py",
     "perceptual_qa.py",
+    "perceptual_contract.py",
     "quality_policy.py",
     "recovery.py",
     "runtime_contract.py",
     "text_processing.py",
     "tts.py",
+    "tts_contract.py",
     "voice_catalog.py",
     "../pyproject.toml",
     "../uv.lock",
@@ -112,9 +115,11 @@ def build_quality_policy(settings: dict[str, Any]) -> dict[str, Any]:
         "algorithms": {
             "text_parser": "spoken_token_invariant_v2",
             "casting": "canonical_identity_host_semantic_lock_director_ledger_v28",
-            "segment_signal": "signal_gate_v2",
-            "asr_content": "evidence_gated_name_pronunciation_delivery_v8",
-            "perceptual_naturalness": "utmosv2_relative_voice_baseline_v1",
+            "segment_signal": "signal_gate_vocalization_delivery_v4",
+            "asr_content": "evidence_gated_name_pronunciation_delivery_v10",
+            "perceptual_naturalness": (
+                "utmosv2_relative_voice_baseline_candidate_requirement_v2"
+            ),
             "chapter_mastering": "two_pass_loudnorm_full_decode_v1",
         },
         "settings": {

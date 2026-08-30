@@ -55,6 +55,10 @@ mà không ghi dữ liệu. Các lệnh vận hành còn lại:
 giữ được project lock và xác minh settings/source; PID, thời điểm tạo process, project và instance token đều
 phải khớp trước khi stop cưỡng bức, tránh tác động nhầm một lượt chạy mới.
 
+CLI dành tối đa 120 giây mặc định cho lần cold-start nền vì worker phải nạp và xác minh model runtime trước khi
+phát tín hiệu `READY`. Không nên hạ `--startup-timeout` xuống 30 giây: trên máy đích, một lượt hợp lệ có thể cần
+khoảng 40 giây. Hết timeout chỉ hủy đúng cây process vừa khởi động; project/checkpoint vẫn an toàn và có thể `run` lại.
+
 ## Những gì nằm ở thư mục gốc
 
 ```text
@@ -161,12 +165,20 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   trần toàn cục của model. Ngân sách frame VieNeu và giới hạn kiểm tra dùng chung một chính sách thời lượng,
   nên app không thể vừa cho model sinh dài hơn rồi tự từ chối chính kết quả đó. Sai lệch tốc độ nhẹ được ghi
   warning và chuyển qua Whisper; chỉ sai lệch cực đoan mới retry.
-- Câu chỉ có một từ ngắn dùng tối đa 24 frame và sampling thận trọng hơn để VieNeu không có khoảng sinh dư
-  rồi nối thêm lời ngoài văn bản. Riêng tiếng thở `Ha...` đứng độc lập được gửi thành `Hà... hà...` để tạo
-  hai âm vị tiếng Việt rõ; tiếng kéo dài như `Aaaaah`/`Uuu` cũng được đổi thành hai âm tiết ổn định. Output dùng
-  hết `max_new_frames` được đánh dấu để kiểm tra tín hiệu và Whisper, không còn bị kết luận sai chỉ từ độ dài.
+- Câu chỉ có một từ ngắn dùng ngân sách frame và sampling thận trọng hơn để VieNeu không có khoảng sinh dư
+  rồi nối thêm lời ngoài văn bản. Riêng tiếng thở `Ha...` đứng độc lập được gửi thành `Hà... hà...`, dùng profile
+  vocalization tối đa 23 frame với sampling ổn định; audio thô được giữ nguyên, tuyệt đối không nối im lặng để tạo
+  cảm giác đã kết thúc. Nếu WORLD pitch trả waveform ngắn hơn, biến thể pitch bị bỏ và waveform thô được giữ lại;
+  app không zero-pad rồi khai provenance như audio nguyên bản. Tiếng kéo dài như `Aaaaah`/`Uuu` cũng được đổi thành
+  hai âm tiết ổn định. Trạng thái endpoint,
+  số sample trước/sau và việc chạm trần đều được checkpoint để signal gate và Whisper quyết định bằng bằng chứng thật.
 - Mọi segment narration/dialogue/thought đều dùng chung chính sách thời lượng, kiểm tra tốc độ khi đủ dài và đối chiếu
   Whisper bằng đúng `spoken_text`. App không cắt audio để lách validation; kết quả quá dài phải retry hoặc thất bại.
+- Nếu candidate cuối dùng chính spelling nguồn vẫn cần chia câu dài, app chỉ cắt ở ranh giới mệnh đề/dấu câu và
+  ghép lại phải khớp chính xác văn bản đầu vào. Ledger khóa riêng `generation_strategy=direct_v1|split_v1`, giới hạn
+  ký tự, seed và voice identity; strategy không còn được suy ra chỉ từ seed. Xóa đồng thời split provenance và đổi seed
+  rồi resume vẫn bị từ chối. Cờ UTMOS bắt buộc cũng bất biến và phải khớp quality policy đã khóa, nên không thể đổi từ
+  `true` sang `false` để bỏ qua perceptual gate trước promotion.
 - Transcript dài bất thường và gần như không liên quan tới câu nguồn chỉ được coi là mismatch nghiêm trọng khi số
   từ còn có thể tồn tại trong thời lượng WAV. Transcript có tốc độ vật lý bất khả thi được đánh dấu là Whisper
   hallucination, không dùng để kết luận TTS nói thêm lời.
@@ -195,6 +207,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   checkpoint nên dừng/chạy lại không bỏ qua xác nhận hoặc sửa vô hạn.
 - UTMOSv2 chỉ là bằng chứng bổ sung về độ tự nhiên, không thay thế Whisper và không tự chứng minh audio đạt. Baseline được khớp theo đúng giọng và mức pitch thực tế. Câu ngắn dưới `1,5` giây được miễn MOS sau khi smoke thật cho thấy model dễ phạt sai câu cảm xúc ngắn; nội dung của chúng vẫn bắt buộc qua Whisper.
 - Segment bị UTMOS yêu cầu review được tạo lại tối đa hai vòng bằng seed mới; mỗi vòng đều phải qua lại Whisper và UTMOS. Nếu vẫn không đạt, chapter bị giữ lại thay vì xuất bản hoặc lặp vô hạn cùng một WAV.
+- Khi beam và greedy đều đã xác nhận nội dung nhưng UTMOS vẫn yêu cầu nghe người, trạng thái cuối luôn là
+  `PERCEPTUAL_NATURALNESS_REVIEW`, không bị gắn nhầm thành `ASR_MISMATCH_UNRESOLVED`. Lý do ban đầu kích hoạt repair
+  vẫn được giữ riêng trong ledger để audit mà không làm sai nguyên nhân chặn cuối.
 - `audiobook_quality_report.json` ghi final transcript/CER-WER, từng decode evidence, verdict, MOS, baseline, độ lệch,
   checksum và policy cho từng segment. Một chapter chỉ được tính đạt khi toàn bộ segment có evidence hiện hành,
   không còn warning chặn và MP3 qua mastering/decode/checksum.

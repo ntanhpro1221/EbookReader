@@ -19,6 +19,10 @@ from ebook_reader.database import (
 from ebook_reader.io_utils import sha256_file
 from ebook_reader.models import ResourceDecision, ResourceLevel
 from ebook_reader.perceptual_qa import PerceptualQAUnavailable
+from ebook_reader.perceptual_contract import (
+    NATURALNESS_IMPROVEMENT_REQUIREMENT,
+    NATURALNESS_REPAIR_ACTION,
+)
 from ebook_reader.pipeline import BookPipeline
 from ebook_reader.project import create_or_open_project
 from ebook_reader.quality_policy import CHAPTER_QUALITY_STAGE, QUALITY_POLICY_VERSION
@@ -207,6 +211,8 @@ def _register_current_chapter_artifact(pipeline: BookPipeline, chapter) -> None:
 def _install_fake_repair_synthesis(
     pipeline: BookPipeline,
     monkeypatch,
+    *,
+    candidate_audio_bytes: bytes | None = None,
 ) -> tuple[list[str], list[str]]:
     seed_salts: list[str] = []
     statuses_before_synthesis: list[str] = []
@@ -218,8 +224,11 @@ def _install_fake_repair_synthesis(
         seed_salts.append(pipeline._segment_candidate_seed_salt(repair_round, 0))
         wav = Path(str(candidate["wav_path"]))
         wav.parent.mkdir(parents=True, exist_ok=True)
-        amplitude = 0.02 + (0.01 * len(seed_salts))
-        sf.write(wav, np.full(16_000, amplitude, dtype=np.float32), 16_000)
+        if candidate_audio_bytes is None:
+            amplitude = 0.02 + (0.01 * len(seed_salts))
+            sf.write(wav, np.full(16_000, amplitude, dtype=np.float32), 16_000)
+        else:
+            wav.write_bytes(candidate_audio_bytes)
         profile = pipeline.db.voice_profile(int(row["voice_profile_id"]))
         pitch_semitones = int(profile["pitch_semitones"] or 0)
         metrics = {
@@ -485,7 +494,92 @@ def test_perceptual_review_regenerates_then_passes_in_same_chapter_cycle(
         pipeline.quality_policy_hash,
     )
     assert [attempt["state"] for attempt in attempts] == ["promoted"]
+    assert attempts[0]["candidate_repair_requirement"] == (
+        NATURALNESS_IMPROVEMENT_REQUIREMENT
+    )
+    assert attempts[0]["repair_trigger_check_id"] is not None
     assert attempts[0]["perceptual_result"]["verdict"] == "ok"
+
+
+def test_identical_naturalness_candidate_resumes_promotion_after_restart(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline, chapter, row = _pipeline_with_asr_evidence(tmp_path)
+    pipeline.perceptual_qa = SequencePerceptualVerifier(
+        [
+            {
+                "verdict": "review",
+                "reason": "PERCEPTUAL_BASELINE_DROP",
+                "score": 1.9,
+                "baseline_score": 3.0,
+                "baseline_delta": -1.1,
+                "review_required": True,
+                "duration_seconds": 1.0,
+            },
+            {
+                "verdict": "ok",
+                "reason": "PERCEPTUAL_WITHIN_VOICE_BASELINE",
+                "score": 3.1,
+                "baseline_score": 3.0,
+                "baseline_delta": 0.1,
+                "review_required": False,
+                "duration_seconds": 1.0,
+            },
+        ]
+    )
+    verifier = PassingWhisperVerifier()
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    _install_fake_repair_synthesis(
+        pipeline,
+        monkeypatch,
+        candidate_audio_bytes=incumbent_path.read_bytes(),
+    )
+    reviews = pipeline._verify_chapter_perceptual_audio(chapter)
+    original_promote = pipeline.db.promote_segment_candidate
+
+    def interrupt_before_promotion(*_args, **_kwargs):
+        raise RuntimeError("simulated worker interruption before promotion")
+
+    monkeypatch.setattr(
+        pipeline.db,
+        "promote_segment_candidate",
+        interrupt_before_promotion,
+    )
+    with pytest.raises(RuntimeError, match="simulated worker interruption"):
+        pipeline._repair_chapter_perceptual_candidates(
+            chapter,
+            verifier,  # type: ignore[arg-type]
+            reviews,
+        )
+
+    interrupted = pipeline.db.list_segment_candidates(
+        segment_id=int(row["id"]),
+        policy_hash=pipeline.quality_policy_hash,
+    )[0]
+    assert interrupted["state"] == "dual_passed"
+    assert interrupted["wav_sha256"] == incumbent_sha256
+    assert pipeline._verify_chapter_perceptual_audio(chapter) == []
+
+    monkeypatch.setattr(
+        pipeline.db,
+        "promote_segment_candidate",
+        original_promote,
+    )
+    unresolved = pipeline._repair_chapter_perceptual_candidates(
+        chapter,
+        verifier,  # type: ignore[arg-type]
+        [],
+    )
+
+    resumed = pipeline.db.get_segment_candidate(int(interrupted["id"]))
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert unresolved == []
+    assert resumed["state"] == "promoted"
+    assert fresh["status"] == "verified"
+    assert fresh["warning_code"] is None
+    assert pipeline.perceptual_qa.verify_calls == 2
 
 
 def test_persistent_perceptual_review_uses_bounded_repairs_then_blocks(
@@ -558,6 +652,92 @@ def test_persistent_perceptual_review_uses_bounded_repairs_then_blocks(
             pipeline.quality_policy_hash,
         )
     ] == ["dual_failed", "dual_failed"]
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert {
+        attempt["candidate_repair_requirement"] for attempt in attempts
+    } == {NATURALNESS_IMPROVEMENT_REQUIREMENT}
+    assert len({attempt["repair_trigger_check_id"] for attempt in attempts}) == 1
+
+
+def test_naturalness_repair_short_audio_exemption_is_terminal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pipeline, chapter, row = _pipeline_with_asr_evidence(tmp_path)
+    pipeline.settings["perceptual_qa"]["repair_rounds"] = 1
+    pipeline.perceptual_qa = SequencePerceptualVerifier(
+        [
+            {
+                "verdict": "review",
+                "reason": "PERCEPTUAL_BASELINE_DROP",
+                "score": 1.9,
+                "baseline_score": 3.0,
+                "baseline_delta": -1.1,
+                "review_required": True,
+                "duration_seconds": 1.0,
+            },
+            {
+                "verdict": "inconclusive",
+                "reason": "PERCEPTUAL_SHORT_AUDIO",
+                "score": None,
+                "baseline_score": None,
+                "baseline_delta": None,
+                "review_required": False,
+                "duration_seconds": 0.5,
+            },
+        ]
+    )
+    verifier = PassingWhisperVerifier()
+    incumbent_path = Path(str(row["wav_path"]))
+    incumbent_sha256 = str(row["wav_sha256"])
+    incumbent_bytes = incumbent_path.read_bytes()
+    seed_salts, _statuses = _install_fake_repair_synthesis(pipeline, monkeypatch)
+
+    with pytest.raises(ChapterQualityError, match="requires repair or review"):
+        pipeline._process_chapter(chapter, verifier)  # type: ignore[arg-type]
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    with pipeline.db.connect() as conn:
+        trigger = conn.execute(
+            """
+            SELECT * FROM quality_checks
+            WHERE scope=? AND stage=? AND segment_id=? AND artifact_sha256=?
+            ORDER BY id DESC LIMIT 1
+            """,
+            (
+                QUALITY_SCOPE_SEGMENT,
+                SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+                int(row["id"]),
+                incumbent_sha256,
+            ),
+        ).fetchone()
+    assert seed_salts == ["asr_clarity_candidate_0_0"]
+    assert verifier.verify_calls == 2
+    assert pipeline.perceptual_qa.verify_calls == 2
+    assert fresh["status"] == "warning"
+    assert fresh["wav_sha256"] == incumbent_sha256
+    assert Path(str(fresh["wav_path"])) == incumbent_path
+    assert incumbent_path.read_bytes() == incumbent_bytes
+    assert trigger is not None
+    assert trigger["repair_action"] == NATURALNESS_REPAIR_ACTION
+    assert [attempt["state"] for attempt in attempts] == ["dual_failed"]
+    assert attempts[0]["candidate_repair_requirement"] == (
+        NATURALNESS_IMPROVEMENT_REQUIREMENT
+    )
+    assert attempts[0]["repair_trigger_check_id"] == int(trigger["id"])
+    evidence = attempts[0]["perceptual_result"]
+    assert evidence["verdict"] == "inconclusive"
+    assert evidence["policy_exemption"] == "short_audio"
+    assert evidence["candidate_repair_requirement"] == (
+        NATURALNESS_IMPROVEMENT_REQUIREMENT
+    )
 
 
 def test_perceptual_inconclusive_does_not_trigger_regeneration(

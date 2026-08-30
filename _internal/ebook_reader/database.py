@@ -10,13 +10,51 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
 
-from .io_utils import sha256_file, sha256_text
+from .asr_contract import (
+    COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+    COLLAPSED_SHORT_CONTEXT_MODE,
+    LOCKED_NAME_ANCHOR_METRICS_VERSION,
+    SHORT_CONTEXT_REPEAT_COUNT,
+)
+from .io_utils import sha256_file, sha256_text, stable_int
 from .models import BookStatus, ChapterStatus, SegmentStatus
+from .perceptual_contract import (
+    NATURALNESS_IMPROVEMENT_REQUIREMENT,
+    NATURALNESS_REPAIR_ACTION,
+    PERCEPTUAL_NATURALNESS_REVIEW_CODE,
+    STANDARD_CANDIDATE_GATE_REQUIREMENT,
+)
+from .text_processing import (
+    CLAUSE_SPLIT_STRATEGY,
+    SENTENCE_SPLIT_STRATEGY,
+    SPLIT_MAX_CHARS_BY_STRATEGY,
+    SPLIT_MAX_CHARS_FIELD,
+    SPLIT_STRATEGY_FIELD,
+    is_standalone_ha_gasp,
+)
+from .tts_contract import (
+    HA_VOCALIZATION_DELIVERY_PROFILE,
+    HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_MAX_NEW_FRAMES,
+    HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD,
+    HA_VOCALIZATION_MAX_TEMPERATURE,
+    HA_VOCALIZATION_MAX_TOP_P,
+    HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_PADDING_PROVENANCE_FIELDS,
+    HA_VOCALIZATION_PADDING_SAMPLES_FIELD,
+    HA_VOCALIZATION_PROFILE_FIELD,
+    HA_VOCALIZATION_PROVENANCE_FIELDS,
+    HA_VOCALIZATION_SAMPLE_RATE_FIELD,
+    HA_VOCALIZATION_SAMPLING_PROVENANCE_FIELDS,
+    HA_VOCALIZATION_TARGET_SAMPLES_FIELD,
+    HA_VOCALIZATION_TEMPERATURE_FIELD,
+    HA_VOCALIZATION_TOP_P_FIELD,
+)
 
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 11
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -28,6 +66,11 @@ GENERATION_DELIVERY_PRIMARY = "primary"
 GENERATION_DELIVERY_CLARITY = "clarity"
 GENERATION_DELIVERY_MODES = frozenset(
     {GENERATION_DELIVERY_PRIMARY, GENERATION_DELIVERY_CLARITY}
+)
+GENERATION_STRATEGY_DIRECT = "direct_v1"
+GENERATION_STRATEGY_SPLIT = "split_v1"
+GENERATION_STRATEGIES = frozenset(
+    {GENERATION_STRATEGY_DIRECT, GENERATION_STRATEGY_SPLIT}
 )
 PRONUNCIATION_DELIVERY_LOCKED = "locked_spoken_v1"
 PRONUNCIATION_DELIVERY_SOURCE = "source_spelling_v1"
@@ -61,6 +104,22 @@ SEGMENT_CANDIDATE_STATES = frozenset(
         SEGMENT_CANDIDATE_PROMOTED,
     }
 )
+
+
+def segment_candidate_split_seed_salt(
+    repair_round: int,
+    pronunciation_delivery_variant: str,
+) -> str:
+    normalized_round = int(repair_round)
+    normalized_variant = str(pronunciation_delivery_variant).strip().casefold()
+    if normalized_round < 0:
+        raise ValueError("segment candidate repair round must be non-negative")
+    if normalized_variant not in PRONUNCIATION_DELIVERY_VARIANTS:
+        raise ValueError("unsupported pronunciation delivery variant")
+    prefix = f"asr_clarity_candidate_{normalized_round}"
+    if normalized_variant == PRONUNCIATION_DELIVERY_LOCKED:
+        return f"{prefix}_split"
+    return f"{prefix}_{normalized_variant}_split"
 SEGMENT_CANDIDATE_FAILURE_STATES = frozenset(
     {
         SEGMENT_CANDIDATE_DUAL_FAILED,
@@ -1698,6 +1757,9 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
             'dual_passed','tts_failed','invalid','promoted'
         )
     ),
+    generation_strategy TEXT NOT NULL DEFAULT 'direct_v1' CHECK(
+        generation_strategy IN ('direct_v1','split_v1')
+    ),
     tts_attempt INTEGER NOT NULL DEFAULT 0 CHECK (tts_attempt >= 0),
     generation_seed INTEGER NOT NULL,
     wav_path TEXT NOT NULL UNIQUE,
@@ -1709,6 +1771,13 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     beam_check_id INTEGER REFERENCES quality_checks(id),
     greedy_check_id INTEGER REFERENCES quality_checks(id),
     perceptual_required INTEGER NOT NULL DEFAULT 0 CHECK (perceptual_required IN (0,1)),
+    candidate_repair_requirement TEXT NOT NULL DEFAULT 'standard_candidate_gate_v1'
+        CHECK (
+            candidate_repair_requirement IN (
+                'standard_candidate_gate_v1','naturalness_improvement_v1'
+            )
+        ),
+    repair_trigger_check_id INTEGER REFERENCES quality_checks(id),
     perceptual_result_json TEXT,
     perceptual_check_id INTEGER REFERENCES quality_checks(id),
     final_check_id INTEGER REFERENCES quality_checks(id),
@@ -1736,6 +1805,17 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     CHECK (
         (perceptual_check_id IS NULL AND perceptual_result_json IS NULL)
         OR (perceptual_check_id IS NOT NULL AND perceptual_result_json IS NOT NULL)
+    ),
+    CHECK (
+        (
+            candidate_repair_requirement = 'standard_candidate_gate_v1'
+            AND repair_trigger_check_id IS NULL
+        )
+        OR (
+            candidate_repair_requirement = 'naturalness_improvement_v1'
+            AND repair_trigger_check_id IS NOT NULL
+            AND perceptual_required = 1
+        )
     ),
     CHECK (
         state NOT IN ('beam_recorded','dual_failed','dual_passed','promoted')
@@ -2006,6 +2086,7 @@ class ProjectDB:
         }
         added_pronunciation_delivery_variant = False
         added_expected_spoken_text_sha256 = False
+        added_generation_strategy = False
         if "repair_budget" not in candidate_columns:
             conn.execute(
                 "ALTER TABLE segment_candidates ADD COLUMN repair_budget "
@@ -2019,6 +2100,162 @@ class ProjectDB:
                 "ALTER TABLE segment_candidates ADD COLUMN perceptual_required "
                 "INTEGER NOT NULL DEFAULT 0 CHECK(perceptual_required IN (0,1))"
             )
+        if "generation_strategy" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN generation_strategy "
+                f"TEXT NOT NULL DEFAULT '{GENERATION_STRATEGY_DIRECT}' "
+                "CHECK(generation_strategy IN "
+                f"('{GENERATION_STRATEGY_DIRECT}','{GENERATION_STRATEGY_SPLIT}'))"
+            )
+            added_generation_strategy = True
+        if added_generation_strategy:
+            pronunciation_projection = (
+                "candidates.pronunciation_delivery_variant"
+                if "pronunciation_delivery_variant" in candidate_columns
+                else (
+                    f"'{PRONUNCIATION_DELIVERY_LOCKED}' "
+                    "AS pronunciation_delivery_variant"
+                )
+            )
+            legacy_generation_rows = list(
+                conn.execute(
+                    f"""
+                    SELECT
+                        candidates.id,candidates.repair_round,
+                        {pronunciation_projection},
+                        candidates.generation_seed,candidates.signal_json,
+                        segments.stable_id,profiles.voice_key
+                    FROM segment_candidates AS candidates
+                    JOIN segments ON segments.id=candidates.segment_id
+                    JOIN voice_profiles AS profiles
+                      ON profiles.id=candidates.expected_voice_profile_id
+                    ORDER BY candidates.id
+                    """
+                )
+            )
+            for candidate in legacy_generation_rows:
+                try:
+                    signal = json.loads(str(candidate["signal_json"] or "{}"))
+                except (TypeError, json.JSONDecodeError):
+                    signal = {}
+                split_fields_present = isinstance(signal, dict) and any(
+                    signal.get(field) not in (None, [])
+                    for field in (
+                        "split_checkpoint_seed",
+                        "split_seed_salt_prefix",
+                        SPLIT_STRATEGY_FIELD,
+                        SPLIT_MAX_CHARS_FIELD,
+                        "split_parts",
+                    )
+                )
+                split_seed_salt = segment_candidate_split_seed_salt(
+                    int(candidate["repair_round"]),
+                    str(candidate["pronunciation_delivery_variant"]),
+                )
+                expected_split_seed = stable_int(
+                    "segment::"
+                    f"{candidate['stable_id']}::{candidate['voice_key']}::"
+                    f"{split_seed_salt}"
+                )
+                generation_strategy = (
+                    GENERATION_STRATEGY_SPLIT
+                    if split_fields_present
+                    or int(candidate["generation_seed"]) == expected_split_seed
+                    else GENERATION_STRATEGY_DIRECT
+                )
+                conn.execute(
+                    "UPDATE segment_candidates SET generation_strategy=? WHERE id=?",
+                    (generation_strategy, int(candidate["id"])),
+                )
+        if "candidate_repair_requirement" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN candidate_repair_requirement "
+                f"TEXT NOT NULL DEFAULT '{STANDARD_CANDIDATE_GATE_REQUIREMENT}' "
+                "CHECK(candidate_repair_requirement IN "
+                f"('{STANDARD_CANDIDATE_GATE_REQUIREMENT}',"
+                f"'{NATURALNESS_IMPROVEMENT_REQUIREMENT}'))"
+            )
+        if "repair_trigger_check_id" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN repair_trigger_check_id "
+                "INTEGER REFERENCES quality_checks(id)"
+            )
+        conn.execute(
+            f"""
+            CREATE TRIGGER IF NOT EXISTS segment_candidates_repair_binding_insert
+            BEFORE INSERT ON segment_candidates
+            WHEN NOT (
+                (
+                    NEW.candidate_repair_requirement =
+                        '{STANDARD_CANDIDATE_GATE_REQUIREMENT}'
+                    AND NEW.repair_trigger_check_id IS NULL
+                )
+                OR (
+                    NEW.candidate_repair_requirement =
+                        '{NATURALNESS_IMPROVEMENT_REQUIREMENT}'
+                    AND NEW.repair_trigger_check_id IS NOT NULL
+                    AND NEW.perceptual_required = 1
+                )
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid segment candidate repair binding');
+            END
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE TRIGGER IF NOT EXISTS segment_candidates_repair_binding_update
+            BEFORE UPDATE ON segment_candidates
+            WHEN
+                NEW.candidate_repair_requirement IS NOT
+                    OLD.candidate_repair_requirement
+                OR NEW.repair_trigger_check_id IS NOT OLD.repair_trigger_check_id
+                OR NOT (
+                    (
+                        NEW.candidate_repair_requirement =
+                            '{STANDARD_CANDIDATE_GATE_REQUIREMENT}'
+                        AND NEW.repair_trigger_check_id IS NULL
+                    )
+                    OR (
+                        NEW.candidate_repair_requirement =
+                            '{NATURALNESS_IMPROVEMENT_REQUIREMENT}'
+                        AND NEW.repair_trigger_check_id IS NOT NULL
+                        AND NEW.perceptual_required = 1
+                    )
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'immutable segment candidate repair binding');
+            END
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS segment_candidates_perceptual_required_update
+            BEFORE UPDATE OF perceptual_required ON segment_candidates
+            WHEN NEW.perceptual_required IS NOT OLD.perceptual_required
+            BEGIN
+                SELECT RAISE(ABORT, 'immutable segment candidate perceptual requirement');
+            END
+            """
+        )
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS segment_candidates_generation_strategy_update
+            BEFORE UPDATE OF generation_strategy ON segment_candidates
+            WHEN
+                NEW.generation_strategy IS NOT OLD.generation_strategy
+                AND NOT (
+                    OLD.state = 'generating'
+                    AND NEW.state = 'generating'
+                    AND OLD.generation_strategy = 'direct_v1'
+                    AND NEW.generation_strategy = 'split_v1'
+                    AND NEW.tts_attempt = OLD.tts_attempt + 1
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid segment candidate generation strategy transition');
+            END
+            """
+        )
         if "perceptual_result_json" not in candidate_columns:
             conn.execute(
                 "ALTER TABLE segment_candidates ADD COLUMN perceptual_result_json TEXT"
@@ -2235,6 +2472,7 @@ class ProjectDB:
             "pronunciation_delivery_variant",
             "expected_spoken_text_sha256",
             "state",
+            "generation_strategy",
             "tts_attempt",
             "generation_seed",
             "wav_path",
@@ -2246,6 +2484,8 @@ class ProjectDB:
             "beam_check_id",
             "greedy_check_id",
             "perceptual_required",
+            "candidate_repair_requirement",
+            "repair_trigger_check_id",
             "perceptual_result_json",
             "perceptual_check_id",
             "final_check_id",
@@ -6887,13 +7127,19 @@ class ProjectDB:
         generation_seed: int | None = None,
         warning_codes: Sequence[str] = (),
     ) -> None:
+        if not isinstance(signal, dict):
+            raise ValueError("segment signal checkpoint must be a dictionary")
         with self.transaction() as conn:
             row = conn.execute(
-                "SELECT warning_code FROM segments WHERE id=?",
+                "SELECT warning_code,text FROM segments WHERE id=?",
                 (segment_id,),
             ).fetchone()
             if row is None:
                 raise KeyError(f"Unknown segment id: {segment_id}")
+            self._require_vocalization_provenance(
+                signal,
+                required=is_standalone_ha_gasp(str(row["text"])),
+            )
             merged_warning = (
                 str(row["warning_code"])
                 if row["warning_code"]
@@ -7632,6 +7878,23 @@ class ProjectDB:
         return normalized
 
     @staticmethod
+    def _normalized_generation_strategy(value: str) -> str:
+        normalized = str(value or "").strip().casefold()
+        if normalized not in GENERATION_STRATEGIES:
+            raise ValueError("unsupported segment candidate generation strategy")
+        return normalized
+
+    @staticmethod
+    def _normalized_candidate_repair_requirement(value: str) -> str:
+        normalized = str(value or "").strip().casefold()
+        if normalized not in {
+            STANDARD_CANDIDATE_GATE_REQUIREMENT,
+            NATURALNESS_IMPROVEMENT_REQUIREMENT,
+        }:
+            raise ValueError("unsupported segment candidate repair requirement")
+        return normalized
+
+    @staticmethod
     def _json_object(value: Any, label: str) -> dict[str, Any]:
         try:
             decoded = json.loads(str(value or "{}"))
@@ -7640,6 +7903,43 @@ class ProjectDB:
         if not isinstance(decoded, dict):
             raise RuntimeError(f"{label} must be a JSON object")
         return decoded
+
+    @classmethod
+    def _policy_perceptual_required_conn(
+        cls,
+        conn: sqlite3.Connection,
+        policy_hash: str,
+    ) -> bool | None:
+        policy = conn.execute(
+            "SELECT policy_json FROM quality_policies WHERE policy_hash=?",
+            (str(policy_hash).strip(),),
+        ).fetchone()
+        if policy is None:
+            raise RuntimeError("segment candidate quality policy is missing")
+        payload = cls._json_object(
+            policy["policy_json"],
+            "segment candidate quality policy",
+        )
+        settings = payload.get("settings")
+        if settings is None:
+            return None
+        if not isinstance(settings, dict):
+            raise RuntimeError("segment candidate quality policy settings are malformed")
+        perceptual = settings.get("perceptual_qa")
+        if perceptual is None:
+            return None
+        if not isinstance(perceptual, dict):
+            raise RuntimeError(
+                "segment candidate perceptual quality policy is malformed"
+            )
+        enabled = perceptual.get("enabled")
+        if enabled is None:
+            return None
+        if not isinstance(enabled, bool):
+            raise RuntimeError(
+                "segment candidate perceptual quality policy enabled flag is malformed"
+            )
+        return enabled
 
     @staticmethod
     def _candidate_signal_provenance(signal: dict[str, Any]) -> dict[str, Any]:
@@ -7711,9 +8011,13 @@ class ProjectDB:
         if pronunciation_variant is None:
             pronunciation_variant = default_pronunciation_variant
         return {
-            "tts_delivery_mode": signal.get("tts_delivery_mode"),
+            "tts_delivery_mode": signal.get(
+                "tts_delivery_mode",
+                signal.get("delivery_mode"),
+            ),
             "asr_clarity_repair_round": signal.get(
-                "asr_clarity_repair_round"
+                "asr_clarity_repair_round",
+                signal.get("repair_round"),
             ),
             "spoken_text_sha256": signal.get("spoken_text_sha256"),
             "pronunciation_delivery_variant": pronunciation_variant,
@@ -7730,8 +8034,329 @@ class ProjectDB:
             ),
             "split_checkpoint_seed": signal.get("split_checkpoint_seed"),
             "split_seed_salt_prefix": signal.get("split_seed_salt_prefix"),
-            "split_parts": signal.get("split_parts"),
+            SPLIT_STRATEGY_FIELD: signal.get(SPLIT_STRATEGY_FIELD),
+            SPLIT_MAX_CHARS_FIELD: signal.get(SPLIT_MAX_CHARS_FIELD),
+            "split_parts": signal.get("split_parts") or [],
+            **{
+                field: signal.get(field)
+                for field in HA_VOCALIZATION_PROVENANCE_FIELDS
+            },
         }
+
+    @staticmethod
+    def _require_vocalization_provenance(
+        signal: Mapping[str, Any],
+        *,
+        required: bool,
+    ) -> None:
+        sampling_fields_present = {
+            field
+            for field in HA_VOCALIZATION_SAMPLING_PROVENANCE_FIELDS
+            if signal.get(field) is not None
+        }
+        padding_fields_present = {
+            field
+            for field in HA_VOCALIZATION_PADDING_PROVENANCE_FIELDS
+            if signal.get(field) is not None
+        }
+        if not sampling_fields_present and not padding_fields_present:
+            if required:
+                raise RuntimeError(
+                    "standalone Ha gasp signal lacks its vocalization delivery provenance"
+                )
+            return
+        if sampling_fields_present != set(
+            HA_VOCALIZATION_SAMPLING_PROVENANCE_FIELDS
+        ):
+            raise RuntimeError(
+                "vocalization sampling provenance must be complete"
+            )
+        if signal.get(HA_VOCALIZATION_PROFILE_FIELD) != (
+            HA_VOCALIZATION_DELIVERY_PROFILE
+        ):
+            raise RuntimeError("vocalization delivery profile is unsupported")
+        for field, expected in (
+            (
+                HA_VOCALIZATION_TEMPERATURE_FIELD,
+                HA_VOCALIZATION_MAX_TEMPERATURE,
+            ),
+            (HA_VOCALIZATION_TOP_P_FIELD, HA_VOCALIZATION_MAX_TOP_P),
+        ):
+            value = signal.get(field)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or not math.isclose(float(value), expected, abs_tol=1e-9)
+            ):
+                raise RuntimeError(
+                    f"vocalization sampling provenance field {field} drifted"
+                )
+        max_new_frames = signal.get(HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD)
+        if (
+            isinstance(max_new_frames, bool)
+            or not isinstance(max_new_frames, int)
+            or max_new_frames != HA_VOCALIZATION_MAX_NEW_FRAMES
+        ):
+            raise RuntimeError(
+                "vocalization generation frame cap differs from its locked profile"
+            )
+        if not required:
+            raise RuntimeError(
+                "vocalization delivery provenance is attached to a non-gasp segment"
+            )
+        if padding_fields_present != set(
+            HA_VOCALIZATION_PADDING_PROVENANCE_FIELDS
+        ):
+            raise RuntimeError("vocalization raw-audio provenance must be complete")
+        count_fields = (
+            HA_VOCALIZATION_SAMPLE_RATE_FIELD,
+            HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD,
+            HA_VOCALIZATION_TARGET_SAMPLES_FIELD,
+            HA_VOCALIZATION_PADDING_SAMPLES_FIELD,
+            HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
+        )
+        if any(
+            isinstance(signal.get(field), bool)
+            or not isinstance(signal.get(field), int)
+            for field in count_fields
+        ):
+            raise RuntimeError("vocalization padding sample counts are malformed")
+        sample_rate = int(signal[HA_VOCALIZATION_SAMPLE_RATE_FIELD])
+        original_samples = int(signal[HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD])
+        target_samples = int(signal[HA_VOCALIZATION_TARGET_SAMPLES_FIELD])
+        padding_samples = int(signal[HA_VOCALIZATION_PADDING_SAMPLES_FIELD])
+        final_samples = int(signal[HA_VOCALIZATION_FINAL_SAMPLES_FIELD])
+        if (
+            sample_rate <= 0
+            or original_samples <= 0
+            or target_samples <= 0
+            or padding_samples < 0
+            or final_samples <= 0
+        ):
+            raise RuntimeError("vocalization padding sample counts are outside their domain")
+        if (
+            target_samples != original_samples
+            or padding_samples != 0
+            or final_samples != original_samples
+        ):
+            raise RuntimeError(
+                "vocalization profile must attest that no silence padding was added"
+            )
+        duration = signal.get("duration")
+        if (
+            isinstance(duration, bool)
+            or not isinstance(duration, (int, float))
+            or not math.isfinite(float(duration))
+            or not math.isclose(
+                float(duration),
+                final_samples / sample_rate,
+                abs_tol=1.0 / sample_rate,
+            )
+        ):
+            raise RuntimeError("vocalization raw-audio duration differs from its samples")
+        endpoint_active = signal.get("generation_endpoint_active")
+        if endpoint_active not in (False, True, 0, 1, 0.0, 1.0):
+            raise RuntimeError(
+                "vocalization raw endpoint provenance must be boolean"
+            )
+
+    def _require_candidate_vocalization_provenance_conn(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        signal: Mapping[str, Any],
+    ) -> None:
+        segment = conn.execute(
+            "SELECT text FROM segments WHERE id=?",
+            (int(candidate["segment_id"]),),
+        ).fetchone()
+        if segment is None:
+            raise KeyError(f"Unknown segment id: {candidate['segment_id']}")
+        self._require_vocalization_provenance(
+            signal,
+            required=is_standalone_ha_gasp(str(segment["text"])),
+        )
+
+    @staticmethod
+    def _candidate_split_generation_expected_conn(
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+    ) -> bool:
+        segment = conn.execute(
+            "SELECT stable_id FROM segments WHERE id=?",
+            (int(candidate["segment_id"]),),
+        ).fetchone()
+        profile = conn.execute(
+            "SELECT voice_key FROM voice_profiles WHERE id=?",
+            (int(candidate["expected_voice_profile_id"]),),
+        ).fetchone()
+        if segment is None or profile is None:
+            raise RuntimeError(
+                "candidate split schedule cannot resolve its stable voice identity"
+            )
+        seed_salt = segment_candidate_split_seed_salt(
+            int(candidate["repair_round"]),
+            str(candidate["pronunciation_delivery_variant"]),
+        )
+        expected_seed = stable_int(
+            f"segment::{segment['stable_id']}::{profile['voice_key']}::{seed_salt}"
+        )
+        return int(candidate["generation_seed"]) == expected_seed
+
+    @staticmethod
+    def _candidate_split_part_expected_seed_conn(
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        *,
+        seed_salt_prefix: str,
+        index: int,
+    ) -> int:
+        segment = conn.execute(
+            "SELECT stable_id FROM segments WHERE id=?",
+            (int(candidate["segment_id"]),),
+        ).fetchone()
+        profile = conn.execute(
+            "SELECT voice_key FROM voice_profiles WHERE id=?",
+            (int(candidate["expected_voice_profile_id"]),),
+        ).fetchone()
+        if segment is None or profile is None:
+            raise RuntimeError(
+                "candidate split part cannot resolve its stable voice identity"
+            )
+        part_stable_id = f"{segment['stable_id']}_part{index:02d}"
+        part_seed_salt = f"{seed_salt_prefix}_part_{index}"
+        return stable_int(
+            f"segment::{part_stable_id}::{profile['voice_key']}::{part_seed_salt}"
+        )
+
+    @staticmethod
+    def _require_candidate_split_provenance(
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        signal: Mapping[str, Any],
+    ) -> None:
+        checkpoint_seed = signal.get("split_checkpoint_seed")
+        seed_salt_prefix = signal.get("split_seed_salt_prefix")
+        split_strategy = signal.get(SPLIT_STRATEGY_FIELD)
+        split_max_chars = signal.get(SPLIT_MAX_CHARS_FIELD)
+        split_parts = signal.get("split_parts")
+        split_fields_present = (
+            checkpoint_seed is not None
+            or seed_salt_prefix is not None
+            or split_strategy is not None
+            or split_max_chars is not None
+            or split_parts not in (None, [])
+        )
+        try:
+            generation_strategy = ProjectDB._normalized_generation_strategy(
+                str(candidate["generation_strategy"])
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "segment candidate generation strategy is invalid"
+            ) from exc
+        if generation_strategy == GENERATION_STRATEGY_DIRECT:
+            if split_fields_present:
+                raise RuntimeError(
+                    "direct candidate cannot carry split generation provenance"
+                )
+            return
+        if not split_fields_present:
+            raise RuntimeError(
+                "candidate split generation lacks its immutable split provenance"
+            )
+        if not ProjectDB._candidate_split_generation_expected_conn(
+            conn,
+            candidate,
+        ):
+            raise RuntimeError(
+                "candidate split generation seed differs from its deterministic schedule"
+            )
+        if (
+            isinstance(checkpoint_seed, bool)
+            or not isinstance(checkpoint_seed, int)
+            or checkpoint_seed != int(candidate["generation_seed"])
+        ):
+            raise RuntimeError(
+                "candidate split checkpoint seed differs from its generation ledger"
+            )
+        if not isinstance(seed_salt_prefix, str) or not seed_salt_prefix.strip():
+            raise RuntimeError("candidate split seed-salt prefix is missing")
+        expected_seed_salt_prefix = segment_candidate_split_seed_salt(
+            int(candidate["repair_round"]),
+            str(candidate["pronunciation_delivery_variant"]),
+        )
+        if seed_salt_prefix != expected_seed_salt_prefix:
+            raise RuntimeError(
+                "candidate split seed-salt prefix differs from its deterministic schedule"
+            )
+        expected_split_strategy = (
+            CLAUSE_SPLIT_STRATEGY
+            if (
+                int(candidate["repair_round"]) + 1
+                == int(candidate["repair_budget"])
+                and str(candidate["pronunciation_delivery_variant"])
+                == PRONUNCIATION_DELIVERY_SOURCE
+            )
+            else SENTENCE_SPLIT_STRATEGY
+        )
+        if split_strategy != expected_split_strategy:
+            raise RuntimeError(
+                "candidate split strategy differs from its deterministic schedule"
+            )
+        expected_split_max_chars = SPLIT_MAX_CHARS_BY_STRATEGY[
+            expected_split_strategy
+        ]
+        if (
+            isinstance(split_max_chars, bool)
+            or not isinstance(split_max_chars, int)
+            or split_max_chars != expected_split_max_chars
+        ):
+            raise RuntimeError(
+                "candidate split max chars differs from its deterministic strategy"
+            )
+        if not isinstance(split_parts, list) or not split_parts:
+            raise RuntimeError("candidate split provenance requires non-empty parts")
+        for index, part in enumerate(split_parts):
+            if (
+                not isinstance(part, dict)
+                or isinstance(part.get("index"), bool)
+                or not isinstance(part.get("index"), int)
+                or part.get("index") != index
+            ):
+                raise RuntimeError(
+                    "candidate split provenance requires contiguous ordered parts"
+                )
+            if (
+                isinstance(part.get("generation_seed"), bool)
+                or not isinstance(part.get("generation_seed"), int)
+            ):
+                raise RuntimeError("candidate split part generation seed is malformed")
+            expected_part_seed = (
+                ProjectDB._candidate_split_part_expected_seed_conn(
+                    conn,
+                    candidate,
+                    seed_salt_prefix=seed_salt_prefix,
+                    index=index,
+                )
+            )
+            if int(part["generation_seed"]) != expected_part_seed:
+                raise RuntimeError(
+                    "candidate split part generation seed differs from its "
+                    "deterministic schedule"
+                )
+            if (
+                str(part.get("pronunciation_delivery_variant") or "")
+                != str(candidate["pronunciation_delivery_variant"])
+            ):
+                raise RuntimeError(
+                    "candidate split part pronunciation variant differs from its allocation"
+                )
+            ProjectDB._normalized_sha256(
+                str(part.get("spoken_text_sha256") or ""),
+                "candidate split part spoken-text checksum",
+            )
 
     @staticmethod
     def _require_candidate_delivery_provenance(
@@ -7791,6 +8416,14 @@ class ProjectDB:
                     candidate["expected_spoken_text_sha256"]
                 ),
                 "perceptual_required": bool(candidate["perceptual_required"]),
+                "candidate_repair_requirement": str(
+                    candidate["candidate_repair_requirement"]
+                ),
+                "repair_trigger_check_id": (
+                    int(candidate["repair_trigger_check_id"])
+                    if candidate["repair_trigger_check_id"] is not None
+                    else None
+                ),
                 "perceptual_quality_check_id": (
                     int(candidate["perceptual_check_id"])
                     if candidate["perceptual_check_id"] is not None
@@ -7816,6 +8449,7 @@ class ProjectDB:
     ) -> sqlite3.Row:
         if str(candidate["state"]) != SEGMENT_CANDIDATE_PROMOTED:
             raise RuntimeError("promoted candidate validation requires promoted state")
+        self._candidate_perceptual_requirement_conn(conn, candidate)
         segment = conn.execute(
             "SELECT * FROM segments WHERE id=?",
             (int(candidate["segment_id"]),),
@@ -7835,11 +8469,21 @@ class ProjectDB:
             raise RuntimeError(file_error)
         self._require_candidate_voice_profile_conn(conn, candidate, segment)
         signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        self._require_candidate_split_provenance(conn, candidate, signal)
+        self._require_candidate_vocalization_provenance_conn(
+            conn,
+            candidate,
+            signal,
+        )
         signal_provenance = self._candidate_signal_provenance(signal)
         self._require_candidate_delivery_provenance(candidate, signal_provenance)
         live_signal = self._json_object(
             segment["signal_json"],
             "promoted live segment signal metrics",
+        )
+        self._require_vocalization_provenance(
+            live_signal,
+            required=is_standalone_ha_gasp(str(segment["text"])),
         )
         live_signal_provenance = self._candidate_signal_provenance(live_signal)
         if (
@@ -8096,6 +8740,7 @@ class ProjectDB:
             "repair_round": int(row["repair_round"]),
             "repair_budget": int(row["repair_budget"]),
             "state": str(row["state"]),
+            "generation_strategy": str(row["generation_strategy"]),
             "incumbent_sha256": str(row["incumbent_sha256"]),
             "expected_voice_profile_id": int(row["expected_voice_profile_id"]),
             "expected_pitch_semitones": int(row["expected_pitch_semitones"]),
@@ -8115,6 +8760,14 @@ class ProjectDB:
                 int(row["greedy_check_id"]) if row["greedy_check_id"] is not None else None
             ),
             "perceptual_required": bool(row["perceptual_required"]),
+            "candidate_repair_requirement": str(
+                row["candidate_repair_requirement"]
+            ),
+            "repair_trigger_check_id": (
+                int(row["repair_trigger_check_id"])
+                if row["repair_trigger_check_id"] is not None
+                else None
+            ),
             "perceptual_check_id": (
                 int(row["perceptual_check_id"])
                 if row["perceptual_check_id"] is not None
@@ -8147,11 +8800,18 @@ class ProjectDB:
         pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
         expected_spoken_text_sha256: str | None = None,
         tts_attempt: int = 0,
+        generation_strategy: str = GENERATION_STRATEGY_DIRECT,
         perceptual_required: bool = False,
+        candidate_repair_requirement: str = STANDARD_CANDIDATE_GATE_REQUIREMENT,
+        repair_trigger_check_id: int | None = None,
     ) -> sqlite3.Row:
         normalized_round = int(repair_round)
         normalized_max = int(max_repair_rounds)
         normalized_attempt = int(tts_attempt)
+        normalized_generation_strategy = self._normalized_generation_strategy(
+            generation_strategy
+        )
+        normalized_perceptual_required = bool(perceptual_required)
         normalized_incumbent = self._normalized_sha256(
             incumbent_sha256,
             "segment candidate incumbent checksum",
@@ -8160,6 +8820,16 @@ class ProjectDB:
             self._normalized_pronunciation_delivery_variant(
                 pronunciation_delivery_variant
             )
+        )
+        normalized_repair_requirement = (
+            self._normalized_candidate_repair_requirement(
+                candidate_repair_requirement
+            )
+        )
+        normalized_repair_trigger_check_id = (
+            int(repair_trigger_check_id)
+            if repair_trigger_check_id is not None
+            else None
         )
         normalized_expected_spoken_sha256 = (
             self._normalized_sha256(
@@ -8181,10 +8851,43 @@ class ProjectDB:
             raise ValueError("segment candidate repair round exceeds the same-policy budget")
         if normalized_attempt < 0:
             raise ValueError("segment candidate TTS attempt must be non-negative")
+        if (
+            normalized_repair_trigger_check_id is not None
+            and normalized_repair_trigger_check_id < 1
+        ):
+            raise ValueError("segment candidate repair trigger check id must be positive")
+        if normalized_repair_requirement == STANDARD_CANDIDATE_GATE_REQUIREMENT:
+            if normalized_repair_trigger_check_id is not None:
+                raise ValueError(
+                    "standard segment candidates cannot bind a naturalness trigger"
+                )
+        elif normalized_repair_trigger_check_id is None:
+            raise ValueError(
+                "naturalness-repair candidates require an exact trigger check id"
+            )
+        if (
+            normalized_repair_requirement == NATURALNESS_IMPROVEMENT_REQUIREMENT
+            and not normalized_perceptual_required
+        ):
+            raise ValueError(
+                "naturalness-repair candidates require mandatory perceptual QA"
+            )
 
         now = time.time()
         with self.transaction() as conn:
             self._require_candidate_policy_conn(conn, policy_hash)
+            policy_perceptual_required = self._policy_perceptual_required_conn(
+                conn,
+                policy_hash,
+            )
+            if (
+                policy_perceptual_required is not None
+                and normalized_perceptual_required != policy_perceptual_required
+            ):
+                raise RuntimeError(
+                    "segment candidate perceptual requirement differs from its "
+                    "locked quality policy"
+                )
             segment = conn.execute(
                 "SELECT * FROM segments WHERE id=?",
                 (int(segment_id),),
@@ -8216,6 +8919,21 @@ class ProjectDB:
                     (int(segment_id), str(policy_hash).strip()),
                 )
             )
+            if normalized_repair_requirement == NATURALNESS_IMPROVEMENT_REQUIREMENT:
+                self._validated_naturalness_repair_trigger_conn(
+                    conn,
+                    segment_id=int(segment_id),
+                    incumbent_sha256=normalized_incumbent,
+                    policy_hash=str(policy_hash).strip(),
+                    quality_check_id=int(normalized_repair_trigger_check_id),
+                )
+            else:
+                self._require_no_unbound_naturalness_trigger_conn(
+                    conn,
+                    segment_id=int(segment_id),
+                    incumbent_sha256=normalized_incumbent,
+                    policy_hash=str(policy_hash).strip(),
+                )
             existing = next(
                 (row for row in rows if int(row["repair_round"]) == normalized_round),
                 None,
@@ -8232,7 +8950,18 @@ class ProjectDB:
                     or str(existing["expected_spoken_text_sha256"])
                     != normalized_expected_spoken_sha256
                     or int(existing["repair_budget"]) != normalized_max
-                    or bool(existing["perceptual_required"]) != bool(perceptual_required)
+                    or str(existing["generation_strategy"])
+                    != normalized_generation_strategy
+                    or bool(existing["perceptual_required"])
+                    != normalized_perceptual_required
+                    or str(existing["candidate_repair_requirement"])
+                    != normalized_repair_requirement
+                    or (
+                        int(existing["repair_trigger_check_id"])
+                        if existing["repair_trigger_check_id"] is not None
+                        else None
+                    )
+                    != normalized_repair_trigger_check_id
                     or int(existing["generation_seed"]) != int(generation_seed)
                     or int(existing["tts_attempt"]) != normalized_attempt
                     or str(existing["wav_path"]) != normalized_path
@@ -8250,10 +8979,25 @@ class ProjectDB:
             if any(int(row["repair_budget"]) != normalized_max for row in rows):
                 raise RuntimeError("same-policy candidate rounds cannot mix repair budgets")
             if any(
-                bool(row["perceptual_required"]) != bool(perceptual_required)
+                bool(row["perceptual_required"])
+                != normalized_perceptual_required
                 for row in rows
             ):
                 raise RuntimeError("same-policy candidate rounds cannot mix perceptual requirements")
+            if any(
+                str(row["candidate_repair_requirement"])
+                != normalized_repair_requirement
+                or (
+                    int(row["repair_trigger_check_id"])
+                    if row["repair_trigger_check_id"] is not None
+                    else None
+                )
+                != normalized_repair_trigger_check_id
+                for row in rows
+            ):
+                raise RuntimeError(
+                    "same-policy candidate rounds cannot mix repair trigger bindings"
+                )
             if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in rows):
                 raise RuntimeError("the previous candidate round is not a terminal failure")
             occupied_paths = [
@@ -8276,9 +9020,11 @@ class ProjectDB:
                         segment_id,policy_hash,repair_round,repair_budget,incumbent_sha256,
                         expected_voice_profile_id,expected_pitch_semitones,
                         pronunciation_delivery_variant,expected_spoken_text_sha256,state,
-                        tts_attempt,generation_seed,wav_path,perceptual_required,
+                        generation_strategy,tts_attempt,generation_seed,wav_path,
+                        perceptual_required,
+                        candidate_repair_requirement,repair_trigger_check_id,
                         created_at,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         int(segment_id),
@@ -8291,10 +9037,13 @@ class ProjectDB:
                         normalized_pronunciation_variant,
                         normalized_expected_spoken_sha256,
                         SEGMENT_CANDIDATE_GENERATING,
+                        normalized_generation_strategy,
                         normalized_attempt,
                         int(generation_seed),
                         normalized_path,
-                        int(bool(perceptual_required)),
+                        int(normalized_perceptual_required),
+                        normalized_repair_requirement,
+                        normalized_repair_trigger_check_id,
                         now,
                         now,
                     ),
@@ -8310,6 +9059,7 @@ class ProjectDB:
         expected_generation_seed: int,
         generation_seed: int,
         tts_attempt: int,
+        generation_strategy: str | None = None,
     ) -> sqlite3.Row:
         normalized_attempt = int(tts_attempt)
         with self.transaction() as conn:
@@ -8320,27 +9070,49 @@ class ProjectDB:
             if str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING:
                 raise RuntimeError("only an uncommitted generating candidate can restart TTS")
             current_attempt = int(candidate["tts_attempt"])
-            if normalized_attempt == current_attempt and int(generation_seed) == int(
-                candidate["generation_seed"]
+            current_generation_strategy = self._normalized_generation_strategy(
+                str(candidate["generation_strategy"])
+            )
+            normalized_generation_strategy = (
+                current_generation_strategy
+                if generation_strategy is None
+                else self._normalized_generation_strategy(generation_strategy)
+            )
+            if (
+                normalized_attempt == current_attempt
+                and int(generation_seed) == int(candidate["generation_seed"])
+                and normalized_generation_strategy == current_generation_strategy
             ):
                 return candidate
             if int(candidate["generation_seed"]) != int(expected_generation_seed):
                 raise RuntimeError("segment candidate generation seed CAS failed")
             if normalized_attempt != current_attempt + 1:
                 raise RuntimeError("segment candidate TTS attempts must advance exactly once")
+            if (
+                normalized_generation_strategy != current_generation_strategy
+                and not (
+                    current_generation_strategy == GENERATION_STRATEGY_DIRECT
+                    and normalized_generation_strategy == GENERATION_STRATEGY_SPLIT
+                )
+            ):
+                raise RuntimeError(
+                    "segment candidate generation strategy can only advance from direct to split"
+                )
             conn.execute(
                 """
                 UPDATE segment_candidates
-                SET tts_attempt=?,generation_seed=?,updated_at=?
-                WHERE id=? AND state=? AND generation_seed=?
+                SET generation_strategy=?,tts_attempt=?,generation_seed=?,updated_at=?
+                WHERE id=? AND state=? AND generation_seed=? AND generation_strategy=?
                 """,
                 (
+                    normalized_generation_strategy,
                     normalized_attempt,
                     int(generation_seed),
                     time.time(),
                     int(candidate_id),
                     SEGMENT_CANDIDATE_GENERATING,
                     int(expected_generation_seed),
+                    current_generation_strategy,
                 ),
             )
             return self._candidate_row_conn(conn, candidate_id)
@@ -8387,6 +9159,12 @@ class ProjectDB:
             self._require_candidate_delivery_provenance(
                 candidate,
                 signal_provenance,
+            )
+            self._require_candidate_split_provenance(conn, candidate, signal)
+            self._require_candidate_vocalization_provenance_conn(
+                conn,
+                candidate,
+                signal,
             )
             if (
                 signal_provenance["voice_profile_id"]
@@ -8471,6 +9249,12 @@ class ProjectDB:
         ):
             raise RuntimeError("candidate ASR decode provenance differs from its generation checkpoint")
         signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        self._require_candidate_split_provenance(conn, candidate, signal)
+        self._require_candidate_vocalization_provenance_conn(
+            conn,
+            candidate,
+            signal,
+        )
         signal_provenance = self._candidate_signal_provenance(signal)
         self._require_candidate_delivery_provenance(candidate, signal_provenance)
         try:
@@ -8479,6 +9263,12 @@ class ProjectDB:
             raise RuntimeError("candidate ASR decode lacks locked voice or pitch provenance") from exc
         if decode_provenance != signal_provenance:
             raise RuntimeError("candidate ASR locked provenance differs from its signal checkpoint")
+        if self._candidate_signal_immutable_projection(
+            metrics
+        ) != self._candidate_signal_immutable_projection(signal):
+            raise RuntimeError(
+                "candidate ASR immutable signal provenance differs from its checkpoint"
+            )
         if check["verdict"] not in {QUALITY_VERDICT_PASS, "fail", "inconclusive"}:
             raise RuntimeError("candidate ASR decode evidence has an unsupported verdict")
         evidence_verdict = str(check["verdict"])
@@ -8499,6 +9289,72 @@ class ProjectDB:
         )
         if not verdict_consistent:
             raise RuntimeError("candidate ASR quality-check verdict contradicts its metrics")
+        context_mode = str(metrics.get("context_mode") or "")
+        requested_repeat_count = metrics.get("requested_repeat_count")
+        effective_repeat_count = metrics.get("effective_repeat_count")
+        collapsed_count_fields_present = (
+            requested_repeat_count is not None or effective_repeat_count is not None
+        )
+        if context_mode == COLLAPSED_SHORT_CONTEXT_MODE:
+            anchor_metrics = metrics.get("locked_name_anchor_metrics")
+            if (
+                evidence_verdict != QUALITY_VERDICT_PASS
+                or isinstance(requested_repeat_count, bool)
+                or requested_repeat_count != SHORT_CONTEXT_REPEAT_COUNT
+                or isinstance(effective_repeat_count, bool)
+                or effective_repeat_count
+                != COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT
+                or not isinstance(anchor_metrics, dict)
+            ):
+                raise RuntimeError(
+                    "collapsed repeated-short candidate evidence violates its context contract"
+                )
+            count_fields = (
+                "repeat_count",
+                "anchor_count",
+                "required_occurrence_count",
+                "matched_occurrence_count",
+                "requested_repeat_count",
+                "effective_repeat_count",
+            )
+            if any(
+                isinstance(anchor_metrics.get(field), bool)
+                or not isinstance(anchor_metrics.get(field), int)
+                for field in count_fields
+            ):
+                raise RuntimeError(
+                    "collapsed repeated-short anchor counts are malformed"
+                )
+            anchor_count = int(anchor_metrics["anchor_count"])
+            required_count = int(anchor_metrics["required_occurrence_count"])
+            collapsed_anchor_evidence_is_valid = (
+                anchor_metrics.get("version")
+                == LOCKED_NAME_ANCHOR_METRICS_VERSION
+                and anchor_metrics.get("adjudicated") is True
+                and anchor_metrics.get("passed") is True
+                and str(anchor_metrics.get("status") or "") == "pass"
+                and anchor_metrics.get("failure_codes") == []
+                and int(anchor_metrics["repeat_count"])
+                == COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT
+                and int(anchor_metrics["requested_repeat_count"])
+                == SHORT_CONTEXT_REPEAT_COUNT
+                and int(anchor_metrics["effective_repeat_count"])
+                == COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT
+                and anchor_count >= 1
+                and required_count == anchor_count
+                and int(anchor_metrics["matched_occurrence_count"])
+                == required_count
+                and anchor_metrics.get("canonical_threshold_passed") is True
+                and metrics.get("failure_codes", []) == []
+            )
+            if not collapsed_anchor_evidence_is_valid:
+                raise RuntimeError(
+                    "collapsed repeated-short anchor evidence is internally inconsistent"
+                )
+        elif collapsed_count_fields_present:
+            raise RuntimeError(
+                "repeated-short collapse counts require the collapsed context mode"
+            )
         if evidence_verdict == QUALITY_VERDICT_PASS:
             transcript = metrics.get("transcript")
             if not isinstance(transcript, str) or not transcript.strip():
@@ -8625,6 +9481,213 @@ class ProjectDB:
             )
             return self._candidate_row_conn(conn, candidate_id)
 
+    def _perceptual_repair_trigger_payload(
+        self,
+        trigger: sqlite3.Row,
+    ) -> tuple[dict[str, Any], list[str], bool]:
+        metrics = self._json_object(
+            trigger["metrics_json"],
+            "incumbent perceptual trigger metrics",
+        )
+        try:
+            failure_codes = json.loads(str(trigger["failure_codes_json"] or "[]"))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                "incumbent perceptual trigger failure codes are invalid"
+            ) from exc
+        if not isinstance(failure_codes, list) or any(
+            not isinstance(code, str) or not code.strip()
+            for code in failure_codes
+        ):
+            raise RuntimeError(
+                "incumbent perceptual trigger failure codes are malformed"
+            )
+        perceptual_verdict = str(metrics.get("verdict") or "").strip().casefold()
+        review_shaped = (
+            perceptual_verdict == "review"
+            or PERCEPTUAL_NATURALNESS_REVIEW_CODE in failure_codes
+            or str(trigger["repair_action"] or "") == NATURALNESS_REPAIR_ACTION
+        )
+        return metrics, failure_codes, review_shaped
+
+    def _validated_naturalness_repair_trigger_conn(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        segment_id: int,
+        incumbent_sha256: str,
+        policy_hash: str,
+        quality_check_id: int,
+    ) -> sqlite3.Row:
+        trigger = conn.execute(
+            "SELECT * FROM quality_checks WHERE id=?",
+            (int(quality_check_id),),
+        ).fetchone()
+        if trigger is None:
+            raise KeyError(f"Unknown quality check id: {quality_check_id}")
+        if (
+            str(trigger["scope"]) != QUALITY_SCOPE_SEGMENT
+            or str(trigger["stage"]) != SEGMENT_PERCEPTUAL_QUALITY_STAGE
+            or int(trigger["segment_id"] or -1) != int(segment_id)
+            or trigger["chapter_id"] is not None
+            or str(trigger["artifact_sha256"]).casefold()
+            != str(incumbent_sha256).casefold()
+            or str(trigger["policy_hash"]) != str(policy_hash).strip()
+        ):
+            raise RuntimeError(
+                "naturalness-repair trigger does not belong to this candidate incumbent"
+            )
+        metrics, failure_codes, review_shaped = (
+            self._perceptual_repair_trigger_payload(trigger)
+        )
+        if str(trigger["repair_action"] or "") != NATURALNESS_REPAIR_ACTION:
+            if review_shaped:
+                raise RuntimeError(
+                    "incumbent perceptual review lacks its naturalness-repair action"
+                )
+            raise RuntimeError(
+                "bound quality check does not authorize naturalness repair"
+            )
+        trigger_is_valid = (
+            str(trigger["verdict"]) == "inconclusive"
+            and str(metrics.get("verdict") or "").strip().casefold() == "review"
+            and metrics.get("review_required") is True
+            and failure_codes == [PERCEPTUAL_NATURALNESS_REVIEW_CODE]
+        )
+        if not trigger_is_valid:
+            raise RuntimeError(
+                "incumbent naturalness-repair trigger is internally inconsistent"
+            )
+        return trigger
+
+    def _require_no_unbound_naturalness_trigger_conn(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        segment_id: int,
+        incumbent_sha256: str,
+        policy_hash: str,
+    ) -> None:
+        triggers = list(
+            conn.execute(
+                """
+                SELECT * FROM quality_checks
+                WHERE scope=? AND stage=? AND segment_id=?
+                  AND artifact_sha256=? AND policy_hash=?
+                ORDER BY attempt DESC,id DESC
+                """,
+                (
+                    QUALITY_SCOPE_SEGMENT,
+                    SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+                    int(segment_id),
+                    str(incumbent_sha256).casefold(),
+                    str(policy_hash).strip(),
+                ),
+            )
+        )
+        for trigger in triggers:
+            metrics, _failure_codes, review_shaped = (
+                self._perceptual_repair_trigger_payload(trigger)
+            )
+            if not review_shaped:
+                continue
+            candidate_evidence = False
+            if "candidate_repair_requirement" in metrics:
+                try:
+                    self._normalized_candidate_repair_requirement(
+                        str(metrics["candidate_repair_requirement"])
+                    )
+                except ValueError:
+                    candidate_evidence = False
+                else:
+                    candidate_evidence = (
+                        conn.execute(
+                            """
+                            SELECT 1 FROM segment_candidates
+                            WHERE segment_id=? AND policy_hash=? AND wav_sha256=?
+                            LIMIT 1
+                            """,
+                            (
+                                int(segment_id),
+                                str(policy_hash).strip(),
+                                str(trigger["artifact_sha256"]).casefold(),
+                            ),
+                        ).fetchone()
+                        is not None
+                    )
+            if candidate_evidence:
+                continue
+            self._validated_naturalness_repair_trigger_conn(
+                conn,
+                segment_id=int(segment_id),
+                incumbent_sha256=str(incumbent_sha256),
+                policy_hash=str(policy_hash),
+                quality_check_id=int(trigger["id"]),
+            )
+            raise RuntimeError(
+                "naturalness-repair candidate allocation must bind its exact trigger check id"
+            )
+
+    def _candidate_perceptual_requirement_conn(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+    ) -> str:
+        policy_perceptual_required = self._policy_perceptual_required_conn(
+            conn,
+            str(candidate["policy_hash"]),
+        )
+        if (
+            policy_perceptual_required is not None
+            and bool(candidate["perceptual_required"])
+            != policy_perceptual_required
+        ):
+            raise RuntimeError(
+                "segment candidate perceptual requirement differs from its "
+                "locked quality policy"
+            )
+        try:
+            requirement = self._normalized_candidate_repair_requirement(
+                str(candidate["candidate_repair_requirement"] or "")
+            )
+        except ValueError as exc:
+            raise RuntimeError(
+                "segment candidate repair requirement is invalid"
+            ) from exc
+        trigger_check_id = (
+            int(candidate["repair_trigger_check_id"])
+            if candidate["repair_trigger_check_id"] is not None
+            else None
+        )
+        if requirement == STANDARD_CANDIDATE_GATE_REQUIREMENT:
+            if trigger_check_id is not None:
+                raise RuntimeError(
+                    "standard segment candidate has an unexpected repair trigger"
+                )
+            self._require_no_unbound_naturalness_trigger_conn(
+                conn,
+                segment_id=int(candidate["segment_id"]),
+                incumbent_sha256=str(candidate["incumbent_sha256"]),
+                policy_hash=str(candidate["policy_hash"]),
+            )
+            return requirement
+        if trigger_check_id is None:
+            raise RuntimeError(
+                "naturalness-repair candidate lacks its exact trigger check id"
+            )
+        if not bool(candidate["perceptual_required"]):
+            raise RuntimeError(
+                "naturalness-repair candidate lacks mandatory perceptual QA"
+            )
+        self._validated_naturalness_repair_trigger_conn(
+            conn,
+            segment_id=int(candidate["segment_id"]),
+            incumbent_sha256=str(candidate["incumbent_sha256"]),
+            policy_hash=str(candidate["policy_hash"]),
+            quality_check_id=trigger_check_id,
+        )
+        return requirement
+
     def _validated_candidate_perceptual_check_conn(
         self,
         conn: sqlite3.Connection,
@@ -8647,6 +9710,10 @@ class ProjectDB:
             raise RuntimeError(
                 "perceptual evidence does not belong to this segment candidate"
             )
+        candidate_requirement = self._candidate_perceptual_requirement_conn(
+            conn,
+            candidate,
+        )
         evidence_verdict = str(check["verdict"])
         if evidence_verdict not in {QUALITY_VERDICT_PASS, "inconclusive", "fail"}:
             raise RuntimeError("candidate perceptual evidence has an unsupported verdict")
@@ -8659,8 +9726,18 @@ class ProjectDB:
             str(metrics.get("policy_exemption", "")).strip().casefold()
             == "short_audio"
         )
+        if str(metrics.get("candidate_repair_requirement") or "") != (
+            candidate_requirement
+        ):
+            raise RuntimeError(
+                "candidate perceptual requirement differs from its incumbent trigger"
+            )
         if evidence_verdict == QUALITY_VERDICT_PASS:
-            if perceptual_verdict != "ok" and not short_audio_exemption:
+            pass_is_supported = perceptual_verdict == "ok" or (
+                candidate_requirement == STANDARD_CANDIDATE_GATE_REQUIREMENT
+                and short_audio_exemption
+            )
+            if not pass_is_supported:
                 raise RuntimeError(
                     "passing candidate perceptual evidence contradicts its metrics"
                 )
@@ -8668,11 +9745,19 @@ class ProjectDB:
                 raise RuntimeError(
                     "passing candidate perceptual evidence cannot require review"
                 )
-        elif perceptual_verdict == "ok" or short_audio_exemption:
+        elif perceptual_verdict == "ok" or (
+            short_audio_exemption
+            and candidate_requirement == STANDARD_CANDIDATE_GATE_REQUIREMENT
+        ):
             raise RuntimeError(
                 "failed candidate perceptual evidence contradicts its metrics"
             )
         signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        self._require_candidate_vocalization_provenance_conn(
+            conn,
+            candidate,
+            signal,
+        )
         signal_provenance = self._candidate_signal_provenance(signal)
         self._require_candidate_delivery_provenance(candidate, signal_provenance)
         try:
@@ -8686,6 +9771,81 @@ class ProjectDB:
                 "candidate perceptual baseline pitch differs from its signal checkpoint"
             )
         return check, metrics
+
+    def _validated_dual_failed_candidate_conn(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+    ) -> bool:
+        if str(candidate["state"]) != SEGMENT_CANDIDATE_DUAL_FAILED:
+            raise RuntimeError("dual-failed validation requires dual-failed state")
+        if candidate["beam_check_id"] is None or candidate["greedy_check_id"] is None:
+            raise RuntimeError("dual-failed candidate lacks complete ASR checkpoints")
+
+        decoded_checks: list[sqlite3.Row] = []
+        for confirmation, check_field, result_field in (
+            (False, "beam_check_id", "beam_result_json"),
+            (True, "greedy_check_id", "greedy_result_json"),
+        ):
+            check, metrics = self._validated_candidate_decode_check_conn(
+                conn,
+                candidate,
+                int(candidate[check_field]),
+                confirmation=confirmation,
+            )
+            stored_metrics = self._json_object(
+                candidate[result_field],
+                "stored candidate ASR decode result",
+            )
+            if stored_metrics != metrics:
+                raise RuntimeError(
+                    "stored candidate ASR result differs from its quality-check evidence"
+                )
+            decoded_checks.append(check)
+
+        dual_asr_passed = all(
+            str(check["verdict"]) == QUALITY_VERDICT_PASS
+            for check in decoded_checks
+        )
+        if candidate["perceptual_check_id"] is None:
+            signal = self._json_object(
+                candidate["signal_json"],
+                "candidate signal metrics",
+            )
+            if dual_asr_passed and not self._candidate_blocking_signal_flags(signal):
+                raise RuntimeError(
+                    "dual-failed candidate has neither an ASR nor signal blocker"
+                )
+            return False
+
+        if not dual_asr_passed:
+            raise RuntimeError(
+                "candidate perceptual evidence cannot follow a failed ASR decode"
+            )
+        perceptual_check, perceptual_metrics = (
+            self._validated_candidate_perceptual_check_conn(
+                conn,
+                candidate,
+                int(candidate["perceptual_check_id"]),
+            )
+        )
+        stored_perceptual_metrics = self._json_object(
+            candidate["perceptual_result_json"],
+            "stored candidate perceptual result",
+        )
+        if stored_perceptual_metrics != perceptual_metrics:
+            raise RuntimeError(
+                "stored candidate perceptual result differs from its quality-check evidence"
+            )
+        if str(perceptual_check["verdict"]) == QUALITY_VERDICT_PASS:
+            raise RuntimeError(
+                "dual-failed candidate has passing perceptual evidence"
+            )
+        return (
+            str(perceptual_metrics.get("verdict") or "").strip().casefold()
+            == "review"
+            and perceptual_metrics.get("review_required") is True
+        )
 
     def checkpoint_segment_candidate_perceptual(
         self,
@@ -8986,6 +10146,10 @@ class ProjectDB:
                 )
             )
             for promoted_candidate in promoted_candidates:
+                self._candidate_perceptual_requirement_conn(
+                    conn,
+                    promoted_candidate,
+                )
                 self._validated_promoted_candidate_conn(
                     conn,
                     promoted_candidate,
@@ -9003,8 +10167,17 @@ class ProjectDB:
             for candidate in candidates:
                 invalid_reason: str | None = None
                 try:
-                    segment = self._require_candidate_incumbent_conn(conn, candidate)
-                    self._require_candidate_voice_profile_conn(conn, candidate, segment)
+                    self._candidate_perceptual_requirement_conn(conn, candidate)
+                except (KeyError, RuntimeError) as exc:
+                    invalid_reason = str(exc)
+                try:
+                    if invalid_reason is None:
+                        segment = self._require_candidate_incumbent_conn(conn, candidate)
+                        self._require_candidate_voice_profile_conn(
+                            conn,
+                            candidate,
+                            segment,
+                        )
                 except (KeyError, RuntimeError) as exc:
                     invalid_reason = str(exc)
                 if invalid_reason is None:
@@ -9081,6 +10254,8 @@ class ProjectDB:
             for row in rows:
                 if str(row["state"]) == SEGMENT_CANDIDATE_PROMOTED:
                     self._validated_promoted_candidate_conn(conn, row)
+                elif str(row["state"]) == SEGMENT_CANDIDATE_DUAL_FAILED:
+                    self._validated_dual_failed_candidate_conn(conn, row)
             return [self._candidate_summary(row) for row in rows]
 
     def segment_candidate_resume_plan(
@@ -9114,7 +10289,24 @@ class ProjectDB:
                     "candidate_id": None,
                     "repair_round": None,
                 }
+            for row in rows:
+                self._candidate_perceptual_requirement_conn(conn, row)
             if rows:
+                repair_bindings = {
+                    (
+                        str(row["candidate_repair_requirement"]),
+                        (
+                            int(row["repair_trigger_check_id"])
+                            if row["repair_trigger_check_id"] is not None
+                            else None
+                        ),
+                    )
+                    for row in rows
+                }
+                if len(repair_bindings) != 1:
+                    raise RuntimeError(
+                        "same-policy candidate rounds contain mixed repair trigger bindings"
+                    )
                 stored_budgets = {int(row["repair_budget"]) for row in rows}
                 if len(stored_budgets) != 1:
                     raise RuntimeError(
@@ -9189,6 +10381,12 @@ class ProjectDB:
                         candidate["signal_json"],
                         "candidate signal metrics",
                     )
+                    self._require_candidate_split_provenance(conn, candidate, signal)
+                    self._require_candidate_vocalization_provenance_conn(
+                        conn,
+                        candidate,
+                        signal,
+                    )
                     signal_provenance = self._candidate_signal_provenance(signal)
                     self._require_candidate_delivery_provenance(
                         candidate,
@@ -9216,6 +10414,7 @@ class ProjectDB:
                     "candidate_id": int(candidate["id"]),
                     "repair_round": int(candidate["repair_round"]),
                     "state": state,
+                    "generation_strategy": str(candidate["generation_strategy"]),
                     "generation_seed": int(candidate["generation_seed"]),
                     "tts_attempt": int(candidate["tts_attempt"]),
                     "wav_path": str(candidate["wav_path"]),
@@ -9229,13 +10428,27 @@ class ProjectDB:
                     ),
                 }
             if len(rows) < normalized_max:
-                return {
+                allocation_plan = {
                     "segment_id": int(segment_id),
                     "policy_hash": str(policy_hash).strip(),
                     "action": "allocate",
                     "candidate_id": None,
                     "repair_round": len(rows),
                 }
+                if rows:
+                    allocation_plan.update(
+                        {
+                            "candidate_repair_requirement": str(
+                                rows[0]["candidate_repair_requirement"]
+                            ),
+                            "repair_trigger_check_id": (
+                                int(rows[0]["repair_trigger_check_id"])
+                                if rows[0]["repair_trigger_check_id"] is not None
+                                else None
+                            ),
+                        }
+                    )
+                return allocation_plan
             return {
                 "segment_id": int(segment_id),
                 "policy_hash": str(policy_hash).strip(),
@@ -9294,6 +10507,7 @@ class ProjectDB:
         with self.transaction() as conn:
             candidate = self._candidate_row_conn(conn, candidate_id)
             policy = self._require_candidate_policy_conn(conn, str(candidate["policy_hash"]))
+            self._candidate_perceptual_requirement_conn(conn, candidate)
             segment = conn.execute(
                 "SELECT * FROM segments WHERE id=?",
                 (int(candidate["segment_id"]),),
@@ -9309,6 +10523,21 @@ class ProjectDB:
             }:
                 raise RuntimeError("segment candidate cannot be promoted before both ASR decodes pass")
             self._require_candidate_voice_profile_conn(conn, candidate, segment)
+            signal = self._json_object(
+                candidate["signal_json"],
+                "candidate signal metrics",
+            )
+            self._require_candidate_split_provenance(conn, candidate, signal)
+            self._require_candidate_vocalization_provenance_conn(
+                conn,
+                candidate,
+                signal,
+            )
+            signal_provenance = self._candidate_signal_provenance(signal)
+            self._require_candidate_delivery_provenance(
+                candidate,
+                signal_provenance,
+            )
             beam_check, beam_metrics = self._validated_candidate_decode_check_conn(
                 conn,
                 candidate,
@@ -9377,9 +10606,6 @@ class ProjectDB:
             file_error = self._candidate_file_error(candidate)
             if file_error:
                 return self._invalidate_candidate_conn(conn, candidate, file_error)
-            signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
-            signal_provenance = self._candidate_signal_provenance(signal)
-            self._require_candidate_delivery_provenance(candidate, signal_provenance)
             blocking_signal_flags = self._candidate_blocking_signal_flags(signal)
             if blocking_signal_flags:
                 return self._invalidate_candidate_conn(
@@ -9528,6 +10754,31 @@ class ProjectDB:
             if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in candidates):
                 raise RuntimeError("repair exhaustion candidates do not share the current incumbent")
 
+            perceptual_review_blocked = False
+            for candidate in candidates:
+                if str(candidate["state"]) == SEGMENT_CANDIDATE_DUAL_FAILED:
+                    perceptual_review_blocked = (
+                        self._validated_dual_failed_candidate_conn(
+                            conn,
+                            candidate,
+                        )
+                        or perceptual_review_blocked
+                    )
+            if (
+                normalized_warning_code == PERCEPTUAL_NATURALNESS_REVIEW_CODE
+                and not perceptual_review_blocked
+            ):
+                raise RuntimeError(
+                    "perceptual exhaustion label lacks a durable reviewed candidate"
+                )
+            if (
+                normalized_warning_code == "ASR_MISMATCH_UNRESOLVED"
+                and perceptual_review_blocked
+            ):
+                raise RuntimeError(
+                    "ASR exhaustion label contradicts the durable perceptual blocker"
+                )
+
             trigger = conn.execute(
                 "SELECT * FROM quality_checks WHERE id=?",
                 (int(trigger_quality_check_id),),
@@ -9556,6 +10807,8 @@ class ProjectDB:
             summaries = [self._candidate_summary(row) for row in candidates]
             final_metrics = {
                 **trigger_metrics,
+                "repair_trigger_reason": trigger_metrics.get("reason"),
+                "reason": normalized_warning_code,
                 "repair_exhausted": True,
                 "repair_trigger_quality_check_id": int(trigger_quality_check_id),
                 "candidate_rounds_configured": normalized_max,

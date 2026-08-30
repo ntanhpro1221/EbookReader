@@ -17,6 +17,18 @@ CURLY_QUOTE_SPECS = (
 QUOTE_CLOSING_MARKS = {"”", "’", '"'}
 INLINE_REFERENCE_MARKER_PATTERN = re.compile(r"\[\s*note\d+\s*\]", re.IGNORECASE)
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+")
+CLAUSE_BOUNDARY = re.compile(r"(?<=[.!?…;:,])\s+")
+SENTENCE_SPLIT_STRATEGY = "sentence_v1"
+SENTENCE_SPLIT_MAX_CHARS = 170
+CLAUSE_SPLIT_STRATEGY = "clause_v1"
+CLAUSE_SPLIT_MAX_CHARS = 120
+CLAUSE_SPLIT_MIN_TAIL_CHARS = 32
+SPLIT_STRATEGY_FIELD = "split_strategy"
+SPLIT_MAX_CHARS_FIELD = "split_max_chars"
+SPLIT_MAX_CHARS_BY_STRATEGY = {
+    SENTENCE_SPLIT_STRATEGY: SENTENCE_SPLIT_MAX_CHARS,
+    CLAUSE_SPLIT_STRATEGY: CLAUSE_SPLIT_MAX_CHARS,
+}
 SPEECH_VERB_PATTERN = re.compile(
     r"\b(?:nói|hỏi|đáp|trả lời|quát|hét|gào|thì thầm|lẩm bẩm|kêu|bảo|ra lệnh|cười)\b",
     re.IGNORECASE,
@@ -71,7 +83,7 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
-def _split_long(text: str, max_chars: int) -> list[str]:
+def split_long_text(text: str, max_chars: int) -> list[str]:
     text = text.strip()
     if not text:
         return []
@@ -102,6 +114,100 @@ def _split_long(text: str, max_chars: int) -> list[str]:
     return result
 
 
+def _split_unit_at_word_boundaries(text: str, max_chars: int) -> list[str]:
+    words = text.split()
+    if not words:
+        return []
+    chunks: list[str] = []
+    current = ""
+    for word in words:
+        if len(word) > max_chars:
+            raise ValueError(
+                "clause split cannot preserve an unbroken token within max_chars"
+            )
+        candidate = f"{current} {word}".strip()
+        if not current or len(candidate) <= max_chars:
+            current = candidate
+            continue
+        chunks.append(current)
+        current = word
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _rebalance_short_clause_tail(
+    part_units: list[list[str]],
+    max_chars: int,
+) -> list[list[str]]:
+    if len(part_units) < 2:
+        return part_units
+    minimum_tail = min(CLAUSE_SPLIT_MIN_TAIL_CHARS, max_chars // 3)
+    while len(" ".join(part_units[-1])) < minimum_tail:
+        if len(part_units[-2]) < 2:
+            break
+        moved_unit = part_units[-2][-1]
+        next_tail = " ".join([moved_unit, *part_units[-1]])
+        next_previous = " ".join(part_units[-2][:-1])
+        if len(next_tail) > max_chars or len(next_previous) < minimum_tail:
+            break
+        part_units[-2].pop()
+        part_units[-1].insert(0, moved_unit)
+    return part_units
+
+
+def split_text_by_clauses(text: str, max_chars: int) -> list[str]:
+    text = text.strip()
+    if not text:
+        return []
+    if max_chars <= 0:
+        raise ValueError("clause split max_chars must be positive")
+    if len(text) <= max_chars:
+        return [text]
+
+    clauses = [clause.strip() for clause in CLAUSE_BOUNDARY.split(text) if clause.strip()]
+    units: list[str] = []
+    for clause in clauses:
+        if len(clause) <= max_chars:
+            units.append(clause)
+        else:
+            units.extend(_split_unit_at_word_boundaries(clause, max_chars))
+
+    part_units: list[list[str]] = []
+    current_units: list[str] = []
+    for unit in units:
+        candidate = " ".join([*current_units, unit])
+        if not current_units or len(candidate) <= max_chars:
+            current_units.append(unit)
+            continue
+        part_units.append(current_units)
+        current_units = [unit]
+    if current_units:
+        part_units.append(current_units)
+    part_units = _rebalance_short_clause_tail(part_units, max_chars)
+    parts = [" ".join(part) for part in part_units]
+    if " ".join(parts) != text:
+        raise RuntimeError("clause-aware split changed the source text")
+    return parts
+
+
+def split_text_for_strategy(text: str, strategy: str) -> tuple[list[str], int]:
+    try:
+        max_chars = SPLIT_MAX_CHARS_BY_STRATEGY[strategy]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported split strategy: {strategy}") from exc
+    parts = (
+        split_text_by_clauses(text, max_chars)
+        if strategy == CLAUSE_SPLIT_STRATEGY
+        else split_long_text(text, max_chars)
+    )
+    return parts, max_chars
+
+
+def _split_long(text: str, max_chars: int) -> list[str]:
+    return split_long_text(text, max_chars)
+
+
 def has_spoken_content(text: str) -> bool:
     return any(char.isalnum() for char in text)
 
@@ -115,12 +221,21 @@ def _fold_vocalization_token(token: str) -> str:
     return "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
 
 
+def _is_vocalization_token(token: str) -> bool:
+    folded = _fold_vocalization_token(token)
+    return (
+        FOLDED_VOCALIZATION_PATTERN.fullmatch(folded) is not None
+        or COMPACT_VOCALIZATION_PATTERN.fullmatch(folded) is not None
+    )
+
+
 def is_vocalization_only(text: str) -> bool:
     tokens = SPOKEN_WORD_PATTERN.findall(text)
-    return bool(tokens) and all(
-        FOLDED_VOCALIZATION_PATTERN.fullmatch(_fold_vocalization_token(token)) is not None
-        for token in tokens
-    )
+    return bool(tokens) and all(_is_vocalization_token(token) for token in tokens)
+
+
+def is_standalone_ha_gasp(text: str) -> bool:
+    return STANDALONE_GASP_PATTERN.fullmatch(text) is not None
 
 
 def normalize_vocalizations_for_tts(text: str) -> str:
@@ -149,7 +264,7 @@ def normalize_vocalizations_for_tts(text: str) -> str:
 
     gasp = STANDALONE_GASP_PATTERN.fullmatch(text)
     if gasp is not None:
-        return f"{gasp.group('prefix')}Hà... hà...{gasp.group('suffix')}"
+        return f"{gasp.group('prefix')}Ha ha.{gasp.group('suffix')}"
 
     result = VOCAL_CUE_PATTERN.sub(replace_cue, text)
     result = STRETCHED_SIGH_PATTERN.sub("Hầy", result)

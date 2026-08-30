@@ -498,6 +498,7 @@ def test_recovery_preserves_incumbent_and_exposes_candidate_resume_plan(tmp_path
             "candidate_id": int(candidate["id"]),
             "repair_round": 0,
             "state": "generating",
+            "generation_strategy": "direct_v1",
             "generation_seed": 21,
             "tts_attempt": 0,
             "wav_path": str((paths.work / "candidates" / "c1s1" / "r0.wav").resolve()),
@@ -603,5 +604,7 @@ def test_recovery_invalidates_corrupt_candidate_and_advances_round(tmp_path: Pat
             "action": "allocate",
             "candidate_id": None,
             "repair_round": 1,
+            "candidate_repair_requirement": "standard_candidate_gate_v1",
+            "repair_trigger_check_id": None,
         }
     ]

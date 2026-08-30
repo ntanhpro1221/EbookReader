@@ -15,6 +15,11 @@ from ebook_reader.asr import (
     LOCKED_NAME_ANCHOR_METRICS_KEY,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
 )
+from ebook_reader.asr_contract import (
+    COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+    COLLAPSED_SHORT_CONTEXT_MODE,
+    SHORT_CONTEXT_REPEAT_COUNT,
+)
 from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
@@ -36,6 +41,8 @@ from ebook_reader.database import (
     CONTINUED_DIALOGUE_LOCK_NOTE,
     GENERATION_DELIVERY_CLARITY,
     GENERATION_DELIVERY_PRIMARY,
+    GENERATION_STRATEGY_DIRECT,
+    GENERATION_STRATEGY_SPLIT,
     QUALITY_SCOPE_CHAPTER,
     QUALITY_SCOPE_SEGMENT,
     QUALITY_VERDICT_PASS,
@@ -59,10 +66,39 @@ from ebook_reader.database import (
     canonical_analysis_critic_per_id_source_anchor_map,
     canonical_analysis_critic_source_anchors,
 )
-from ebook_reader.io_utils import sha256_file, sha256_text
+from ebook_reader.io_utils import sha256_file, sha256_text, stable_int
 from ebook_reader.models import CONTEXTUAL_ENGLISH_NAME_PRONUNCIATION_SOURCE
+from ebook_reader.text_processing import (
+    SENTENCE_SPLIT_MAX_CHARS,
+    SENTENCE_SPLIT_STRATEGY,
+    SPLIT_MAX_CHARS_FIELD,
+    SPLIT_STRATEGY_FIELD,
+)
+from ebook_reader.perceptual_contract import (
+    NATURALNESS_IMPROVEMENT_REQUIREMENT,
+    NATURALNESS_REPAIR_ACTION,
+    PERCEPTUAL_NATURALNESS_REVIEW_CODE,
+    PERCEPTUAL_SHORT_AUDIO_REASON,
+    STANDARD_CANDIDATE_GATE_REQUIREMENT,
+)
 from ebook_reader.config import build_settings
 from ebook_reader.tts import TTSCoordinator
+from ebook_reader.tts_contract import (
+    HA_VOCALIZATION_DELIVERY_PROFILE,
+    HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_MAX_NEW_FRAMES,
+    HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD,
+    HA_VOCALIZATION_MAX_TEMPERATURE,
+    HA_VOCALIZATION_MAX_TOP_P,
+    HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD,
+    HA_VOCALIZATION_PADDING_SAMPLES_FIELD,
+    HA_VOCALIZATION_PROFILE_FIELD,
+    HA_VOCALIZATION_PROVENANCE_FIELDS,
+    HA_VOCALIZATION_SAMPLE_RATE_FIELD,
+    HA_VOCALIZATION_TARGET_SAMPLES_FIELD,
+    HA_VOCALIZATION_TEMPERATURE_FIELD,
+    HA_VOCALIZATION_TOP_P_FIELD,
+)
 
 
 ANALYSIS_MODEL_NAME = "qwen3:8b"
@@ -1338,7 +1374,11 @@ def _allocate_analysis_candidate(
     )
 
 
-def _candidate_db(tmp_path: Path) -> tuple[ProjectDB, int, str, Path]:
+def _candidate_db(
+    tmp_path: Path,
+    *,
+    source_text: str | None = None,
+) -> tuple[ProjectDB, int, str, Path]:
     db, segment_id = _segment_db(tmp_path)
     profile_id = db.upsert_voice_profile(
         {
@@ -1366,6 +1406,12 @@ def _candidate_db(tmp_path: Path) -> tuple[ProjectDB, int, str, Path]:
         signal={"duration": 1.0, "spoken_text_sha256": "1" * 64},
         generation_seed=11,
     )
+    if source_text is not None:
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE segments SET text=?,text_sha256=? WHERE id=?",
+                (source_text, sha256_text(source_text), segment_id),
+            )
     db.set_current_quality_policy(
         policy_hash="candidate-policy-v1",
         policy_version=1,
@@ -1382,11 +1428,12 @@ def _checkpoint_candidate_signal(
     generation_seed: int,
     wav_path: Path,
     wav_sha256: str,
+    duration: float = 1.25,
     signal_overrides: dict | None = None,
 ) -> None:
     candidate = db.get_segment_candidate(candidate_id)
     signal = {
-        "duration": 1.25,
+        "duration": duration,
         "tts_delivery_mode": "clarity",
         "asr_clarity_repair_round": repair_round,
         "spoken_text_sha256": str(candidate["expected_spoken_text_sha256"]),
@@ -1405,9 +1452,93 @@ def _checkpoint_candidate_signal(
         expected_generation_seed=generation_seed,
         wav_path=wav_path,
         wav_sha256=wav_sha256,
-        duration=1.25,
+        duration=duration,
         signal=signal,
     )
+
+
+def _ha_vocalization_signal_overrides(
+    *,
+    original_samples: int = 76_800,
+    sample_rate: int = 48_000,
+) -> dict[str, object]:
+    return {
+        HA_VOCALIZATION_PROFILE_FIELD: HA_VOCALIZATION_DELIVERY_PROFILE,
+        HA_VOCALIZATION_TEMPERATURE_FIELD: HA_VOCALIZATION_MAX_TEMPERATURE,
+        HA_VOCALIZATION_TOP_P_FIELD: HA_VOCALIZATION_MAX_TOP_P,
+        HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD: HA_VOCALIZATION_MAX_NEW_FRAMES,
+        HA_VOCALIZATION_SAMPLE_RATE_FIELD: sample_rate,
+        HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD: original_samples,
+        HA_VOCALIZATION_TARGET_SAMPLES_FIELD: original_samples,
+        HA_VOCALIZATION_PADDING_SAMPLES_FIELD: 0,
+        HA_VOCALIZATION_FINAL_SAMPLES_FIELD: original_samples,
+        "generation_endpoint_active": 0.0,
+    }
+
+
+def _candidate_split_generation_seed(
+    db: ProjectDB,
+    segment_id: int,
+    *,
+    repair_round: int = 0,
+    pronunciation_variant: str = "locked_spoken_v1",
+) -> int:
+    segment = db.get_segment(segment_id)
+    profile = db.voice_profile(int(segment["voice_profile_id"]))
+    prefix = f"asr_clarity_candidate_{repair_round}"
+    split_prefix = (
+        f"{prefix}_split"
+        if pronunciation_variant == "locked_spoken_v1"
+        else f"{prefix}_{pronunciation_variant}_split"
+    )
+    return stable_int(
+        f"segment::{segment['stable_id']}::{profile['voice_key']}::{split_prefix}"
+    )
+
+
+def _split_candidate_signal_overrides(
+    db: ProjectDB,
+    segment_id: int,
+    generation_seed: int,
+    *,
+    repair_round: int = 0,
+    pronunciation_variant: str = "locked_spoken_v1",
+    seed_salt_prefix: str | None = None,
+) -> dict[str, object]:
+    segment = db.get_segment(segment_id)
+    profile = db.voice_profile(int(segment["voice_profile_id"]))
+    prefix = f"asr_clarity_candidate_{repair_round}"
+    expected_prefix = (
+        f"{prefix}_split"
+        if pronunciation_variant == "locked_spoken_v1"
+        else f"{prefix}_{pronunciation_variant}_split"
+    )
+    return {
+        "split_checkpoint_seed": generation_seed,
+        "split_seed_salt_prefix": seed_salt_prefix or expected_prefix,
+        SPLIT_STRATEGY_FIELD: SENTENCE_SPLIT_STRATEGY,
+        SPLIT_MAX_CHARS_FIELD: SENTENCE_SPLIT_MAX_CHARS,
+        "split_parts": [
+            {
+                "index": 0,
+                "generation_seed": stable_int(
+                    f"segment::{segment['stable_id']}_part00::"
+                    f"{profile['voice_key']}::{expected_prefix}_part_0"
+                ),
+                "pronunciation_delivery_variant": pronunciation_variant,
+                "spoken_text_sha256": "a" * 64,
+            },
+            {
+                "index": 1,
+                "generation_seed": stable_int(
+                    f"segment::{segment['stable_id']}_part01::"
+                    f"{profile['voice_key']}::{expected_prefix}_part_1"
+                ),
+                "pronunciation_delivery_variant": pronunciation_variant,
+                "spoken_text_sha256": "b" * 64,
+            },
+        ],
+    }
 
 
 def _candidate_decode_check(
@@ -1457,6 +1588,18 @@ def _candidate_decode_check(
         "similarity": 1.0 if verdict == "pass" else 0.2,
         "wer": 0.0 if verdict == "pass" else 1.0,
     }
+    signal = json.loads(str(candidate["signal_json"]))
+    for field in (
+        "generation_ceiling_hit",
+        "generation_endpoint_active",
+        "split_checkpoint_seed",
+        "split_seed_salt_prefix",
+        SPLIT_STRATEGY_FIELD,
+        SPLIT_MAX_CHARS_FIELD,
+        "split_parts",
+        *HA_VOCALIZATION_PROVENANCE_FIELDS,
+    ):
+        metrics[field] = signal.get(field, [] if field == "split_parts" else None)
     if failure_codes:
         metrics["failure_codes"] = list(failure_codes)
     metrics.update(metrics_overrides or {})
@@ -1483,7 +1626,21 @@ def _candidate_perceptual_check(
     reason: str,
     review_required: bool,
     baseline_pitch_semitones: int = 0,
+    candidate_repair_requirement: str = STANDARD_CANDIDATE_GATE_REQUIREMENT,
+    metrics_overrides: dict | None = None,
+    failure_codes: tuple[str, ...] = (),
 ) -> int:
+    metrics = {
+        "verdict": perceptual_verdict,
+        "reason": reason,
+        "review_required": review_required,
+        "score": 3.8,
+        "baseline_score": 4.0,
+        "baseline_delta": -0.2,
+        "baseline_pitch_semitones": baseline_pitch_semitones,
+        "candidate_repair_requirement": candidate_repair_requirement,
+    }
+    metrics.update(metrics_overrides or {})
     return db.record_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
@@ -1492,15 +1649,33 @@ def _candidate_perceptual_check(
         policy_hash="candidate-policy-v1",
         policy_version=1,
         verdict=verdict,
+        metrics=metrics,
+        failure_codes=failure_codes,
+    )
+
+
+def _record_naturalness_repair_trigger(
+    db: ProjectDB,
+    *,
+    segment_id: int,
+    incumbent_sha256: str,
+    repair_action: str | None = NATURALNESS_REPAIR_ACTION,
+) -> int:
+    return db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+        segment_id=segment_id,
+        artifact_sha256=incumbent_sha256,
+        policy_hash="candidate-policy-v1",
+        policy_version=1,
+        verdict="inconclusive",
         metrics={
-            "verdict": perceptual_verdict,
-            "reason": reason,
-            "review_required": review_required,
-            "score": 3.8,
-            "baseline_score": 4.0,
-            "baseline_delta": -0.2,
-            "baseline_pitch_semitones": baseline_pitch_semitones,
+            "verdict": "review",
+            "reason": "PERCEPTUAL_BASELINE_DROP",
+            "review_required": True,
         },
+        failure_codes=(PERCEPTUAL_NATURALNESS_REVIEW_CODE,),
+        repair_action=repair_action,
     )
 
 
@@ -1518,6 +1693,8 @@ def _dual_pass_candidate(
     candidate_path: Path,
     generation_seed: int,
     perceptual_required: bool,
+    candidate_repair_requirement: str = STANDARD_CANDIDATE_GATE_REQUIREMENT,
+    repair_trigger_check_id: int | None = None,
 ) -> tuple[sqlite3.Row, str]:
     candidate_sha256 = _write_candidate_artifact(candidate_path, str(generation_seed))
     candidate = db.allocate_segment_candidate(
@@ -1530,6 +1707,8 @@ def _dual_pass_candidate(
         wav_path=candidate_path,
         candidates_root=candidate_path.parent,
         perceptual_required=perceptual_required,
+        candidate_repair_requirement=candidate_repair_requirement,
+        repair_trigger_check_id=repair_trigger_check_id,
     )
     candidate_id = int(candidate["id"])
     _checkpoint_candidate_signal(
@@ -10601,10 +10780,28 @@ def test_schema_v5_migrates_existing_candidate_perceptual_ledger(tmp_path: Path)
 
     assert version == SCHEMA_VERSION
     assert backup_version == 5
-    assert {"repair_budget", "perceptual_required", "perceptual_result_json", "perceptual_check_id"} <= columns
+    assert {
+        "repair_budget",
+        "perceptual_required",
+        "generation_strategy",
+        "perceptual_result_json",
+        "perceptual_check_id",
+        "candidate_repair_requirement",
+        "repair_trigger_check_id",
+    } <= columns
     assert "repair_budget" not in backup_columns
+    assert "candidate_repair_requirement" not in backup_columns
+    assert "repair_trigger_check_id" not in backup_columns
     assert int(migrated_candidate["repair_budget"]) == 1
     assert int(migrated_candidate["perceptual_required"]) == 0
+    assert str(migrated_candidate["generation_strategy"]) == (
+        GENERATION_STRATEGY_DIRECT
+    )
+    assert (
+        str(migrated_candidate["candidate_repair_requirement"])
+        == STANDARD_CANDIDATE_GATE_REQUIREMENT
+    )
+    assert migrated_candidate["repair_trigger_check_id"] is None
     assert migrated.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")["action"] == "generate"
 
 
@@ -10922,6 +11119,8 @@ def test_candidate_allocation_is_idempotent_budgeted_and_policy_scoped(tmp_path:
         "action": "allocate",
         "candidate_id": None,
         "repair_round": 1,
+        "candidate_repair_requirement": STANDARD_CANDIDATE_GATE_REQUIREMENT,
+        "repair_trigger_check_id": None,
     }
     with db.connect() as conn:
         conn.execute("UPDATE segments SET wav_sha256=? WHERE id=?", ("d" * 64, segment_id))
@@ -11446,6 +11645,7 @@ def test_candidate_requires_current_perceptual_pass_before_atomic_promotion(
         "candidate_id": candidate_id,
         "repair_round": 0,
         "state": "dual_passed",
+        "generation_strategy": GENERATION_STRATEGY_DIRECT,
         "generation_seed": 211,
         "tts_attempt": 0,
         "wav_path": str((tmp_path / "candidates" / "perceptual-pass.wav").resolve()),
@@ -11510,6 +11710,75 @@ def test_candidate_requires_current_perceptual_pass_before_atomic_promotion(
     assert final_metrics["perceptual_evidence"]["verdict"] == "ok"
 
 
+def test_candidate_perceptual_requirement_is_immutable_and_policy_bound(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE quality_policies SET policy_json=? WHERE policy_hash=?",
+            (
+                json.dumps(
+                    {"settings": {"perceptual_qa": {"enabled": True}}},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+                "candidate-policy-v1",
+            ),
+        )
+
+    with pytest.raises(RuntimeError, match="locked quality policy"):
+        db.allocate_segment_candidate(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+            repair_round=0,
+            max_repair_rounds=2,
+            incumbent_sha256=incumbent_sha256,
+            generation_seed=212,
+            wav_path=tmp_path / "candidates" / "perceptual-bypass.wav",
+            candidates_root=tmp_path / "candidates",
+            perceptual_required=False,
+        )
+
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "perceptual-required.wav",
+        generation_seed=213,
+        perceptual_required=True,
+    )
+    candidate_id = int(candidate["id"])
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE segment_candidates SET perceptual_required=0 WHERE id=?",
+                (candidate_id,),
+            )
+    assert db.segment_candidate_resume_plan(
+        segment_id,
+        "candidate-policy-v1",
+    )["action"] == "verify_perceptual"
+
+    with db.connect() as conn:
+        conn.execute("DROP TRIGGER segment_candidates_perceptual_required_update")
+        conn.execute(
+            "UPDATE segment_candidates SET perceptual_required=0 WHERE id=?",
+            (candidate_id,),
+        )
+    with pytest.raises(RuntimeError, match="locked quality policy"):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+    with pytest.raises(RuntimeError, match="locked quality policy"):
+        db.promote_segment_candidate(
+            candidate_id,
+            validated_wav_sha256=candidate_sha256,
+            repair_action="clarity_repair",
+            attempt=1,
+        )
+    assert db.get_segment(segment_id)["wav_sha256"] == incumbent_sha256
+    assert db.get_segment_candidate(candidate_id)["state"] == "dual_passed"
+
+
 def test_candidate_perceptual_review_is_terminal_and_advances_same_budget(
     tmp_path: Path,
 ) -> None:
@@ -11561,6 +11830,8 @@ def test_candidate_perceptual_review_is_terminal_and_advances_same_budget(
         "action": "allocate",
         "candidate_id": None,
         "repair_round": 1,
+        "candidate_repair_requirement": STANDARD_CANDIDATE_GATE_REQUIREMENT,
+        "repair_trigger_check_id": None,
     }
     with pytest.raises(RuntimeError, match="repair budget differs"):
         db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", 1)
@@ -11576,6 +11847,890 @@ def test_candidate_perceptual_review_is_terminal_and_advances_same_budget(
             candidates_root=tmp_path / "candidates",
             perceptual_required=False,
         )
+
+
+def test_naturalness_candidate_rejects_short_audio_as_a_passing_exemption(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    trigger_check_id = _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+    )
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "naturalness-short-pass.wav",
+        generation_seed=231,
+        perceptual_required=True,
+        candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+        repair_trigger_check_id=trigger_check_id,
+    )
+    check_id = _candidate_perceptual_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        verdict="pass",
+        perceptual_verdict="inconclusive",
+        reason=PERCEPTUAL_SHORT_AUDIO_REASON,
+        review_required=False,
+        candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+        metrics_overrides={"policy_exemption": "short_audio"},
+    )
+
+    with pytest.raises(RuntimeError, match="contradicts"):
+        db.checkpoint_segment_candidate_perceptual(
+            int(candidate["id"]),
+            quality_check_id=check_id,
+        )
+
+
+def test_standard_candidate_allows_bound_short_audio_exemption(tmp_path: Path) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "standard-short-pass.wav",
+        generation_seed=230,
+        perceptual_required=True,
+    )
+    check_id = _candidate_perceptual_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        verdict="pass",
+        perceptual_verdict="inconclusive",
+        reason=PERCEPTUAL_SHORT_AUDIO_REASON,
+        review_required=False,
+        metrics_overrides={"policy_exemption": "short_audio"},
+    )
+
+    checkpoint = db.checkpoint_segment_candidate_perceptual(
+        int(candidate["id"]),
+        quality_check_id=check_id,
+    )
+
+    assert checkpoint["state"] == "dual_passed"
+
+
+def test_naturalness_candidate_checkpoints_short_audio_as_terminal_failure(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    trigger_check_id = _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+    )
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "naturalness-short-fail.wav",
+        generation_seed=232,
+        perceptual_required=True,
+        candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+        repair_trigger_check_id=trigger_check_id,
+    )
+    check_id = _candidate_perceptual_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        verdict="inconclusive",
+        perceptual_verdict="inconclusive",
+        reason=PERCEPTUAL_SHORT_AUDIO_REASON,
+        review_required=False,
+        candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+        metrics_overrides={"policy_exemption": "short_audio"},
+        failure_codes=(PERCEPTUAL_SHORT_AUDIO_REASON,),
+    )
+
+    checkpoint = db.checkpoint_segment_candidate_perceptual(
+        int(candidate["id"]),
+        quality_check_id=check_id,
+    )
+
+    assert checkpoint["state"] == "dual_failed"
+    assert PERCEPTUAL_SHORT_AUDIO_REASON in str(checkpoint["failure_reason"])
+
+
+def test_candidate_rejects_review_trigger_without_naturalness_action(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    trigger_check_id = _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        repair_action=None,
+    )
+    with pytest.raises(RuntimeError, match="lacks.*action"):
+        _dual_pass_candidate(
+            db,
+            segment_id=segment_id,
+            incumbent_sha256=incumbent_sha256,
+            candidate_path=(
+                tmp_path / "candidates" / "missing-naturalness-action.wav"
+            ),
+            generation_seed=233,
+            perceptual_required=True,
+            candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+            repair_trigger_check_id=trigger_check_id,
+        )
+
+
+def test_standard_candidate_rejects_an_unbound_naturalness_trigger(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+    )
+
+    with pytest.raises(RuntimeError, match="bind its exact trigger"):
+        db.allocate_segment_candidate(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+            repair_round=0,
+            max_repair_rounds=2,
+            incumbent_sha256=incumbent_sha256,
+            generation_seed=235,
+            wav_path=tmp_path / "candidates" / "unbound-naturalness.wav",
+            candidates_root=tmp_path / "candidates",
+            perceptual_required=True,
+        )
+
+
+def test_standard_candidate_resume_rejects_a_later_naturalness_trigger(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=236,
+        wav_path=tmp_path / "candidates" / "standard-before-review.wav",
+        candidates_root=tmp_path / "candidates",
+        perceptual_required=True,
+    )
+    _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+    )
+
+    with pytest.raises(RuntimeError, match="bind its exact trigger"):
+        db.segment_candidate_resume_plan(
+            segment_id,
+            "candidate-policy-v1",
+            2,
+        )
+
+
+def test_naturalness_candidate_binds_exact_trigger_when_candidate_sha_matches_incumbent(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, _incumbent_sha256, incumbent_path = _candidate_db(tmp_path)
+    generation_seed = 234
+    incumbent_path.write_bytes(f"candidate-audio:{generation_seed}".encode("utf-8"))
+    incumbent_sha256 = sha256_file(incumbent_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET wav_sha256=? WHERE id=?",
+            (incumbent_sha256, segment_id),
+        )
+    trigger_check_id = _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+    )
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "same-as-incumbent.wav",
+        generation_seed=generation_seed,
+        perceptual_required=True,
+        candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+        repair_trigger_check_id=trigger_check_id,
+    )
+    candidate_check_id = _candidate_perceptual_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        verdict="pass",
+        perceptual_verdict="ok",
+        reason="PERCEPTUAL_OK",
+        review_required=False,
+        candidate_repair_requirement=NATURALNESS_IMPROVEMENT_REQUIREMENT,
+    )
+
+    checkpoint = db.checkpoint_segment_candidate_perceptual(
+        int(candidate["id"]),
+        quality_check_id=candidate_check_id,
+    )
+
+    assert candidate_sha256 == incumbent_sha256
+    assert candidate_check_id > trigger_check_id
+    assert checkpoint["state"] == "dual_passed"
+    assert int(checkpoint["repair_trigger_check_id"]) == trigger_check_id
+
+    with pytest.raises(sqlite3.IntegrityError, match="immutable"):
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE segment_candidates SET repair_trigger_check_id=? WHERE id=?",
+                (candidate_check_id, int(candidate["id"])),
+            )
+    with db.connect() as conn:
+        conn.execute("DROP TRIGGER segment_candidates_repair_binding_update")
+        conn.execute(
+            "UPDATE segment_candidates SET repair_trigger_check_id=? WHERE id=?",
+            (candidate_check_id, int(candidate["id"])),
+        )
+    with pytest.raises(RuntimeError, match="does not authorize naturalness repair"):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+
+
+@pytest.mark.parametrize(
+    ("tamper", "error"),
+    [
+        ("wrong_prefix", "deterministic schedule"),
+        ("blank_prefix", "seed-salt prefix is missing"),
+        ("wrong_root_seed", "generation ledger"),
+        ("wrong_deterministic_root_seed", "deterministic schedule"),
+        ("boolean_root_seed", "generation ledger"),
+        ("missing_strategy", "strategy differs"),
+        ("wrong_strategy", "strategy differs"),
+        ("missing_max_chars", "max chars differs"),
+        ("wrong_max_chars", "max chars differs"),
+        ("boolean_max_chars", "max chars differs"),
+        ("empty_parts", "non-empty parts"),
+        ("noncontiguous_parts", "contiguous ordered parts"),
+        ("boolean_part_index", "contiguous ordered parts"),
+        ("boolean_part_seed", "part generation seed is malformed"),
+        ("wrong_integer_part_seed", "deterministic schedule"),
+        ("wrong_part_variant", "pronunciation variant differs"),
+        ("malformed_part_sha", "64-character hexadecimal"),
+    ],
+)
+def test_candidate_split_signal_rejects_malformed_root_or_part_provenance(
+    tmp_path: Path,
+    tamper: str,
+    error: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    generation_seed = _candidate_split_generation_seed(db, segment_id)
+    allocated_generation_seed = (
+        generation_seed + 1
+        if tamper == "wrong_deterministic_root_seed"
+        else generation_seed
+    )
+    candidate_path = tmp_path / "candidates" / f"split-{tamper}.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, tamper)
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=allocated_generation_seed,
+        generation_strategy=GENERATION_STRATEGY_SPLIT,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    overrides = _split_candidate_signal_overrides(
+        db,
+        segment_id,
+        allocated_generation_seed,
+    )
+    if tamper == "wrong_deterministic_root_seed":
+        pass
+    elif tamper == "wrong_prefix":
+        overrides["split_seed_salt_prefix"] = "asr_clarity_candidate_1_split"
+    elif tamper == "blank_prefix":
+        overrides["split_seed_salt_prefix"] = " "
+    elif tamper == "wrong_root_seed":
+        overrides["split_checkpoint_seed"] = generation_seed + 1
+    elif tamper == "boolean_root_seed":
+        overrides["split_checkpoint_seed"] = True
+    elif tamper == "missing_strategy":
+        overrides.pop(SPLIT_STRATEGY_FIELD)
+    elif tamper == "wrong_strategy":
+        overrides[SPLIT_STRATEGY_FIELD] = "unknown_v1"
+    elif tamper == "missing_max_chars":
+        overrides.pop(SPLIT_MAX_CHARS_FIELD)
+    elif tamper == "wrong_max_chars":
+        overrides[SPLIT_MAX_CHARS_FIELD] = SENTENCE_SPLIT_MAX_CHARS + 1
+    elif tamper == "boolean_max_chars":
+        overrides[SPLIT_MAX_CHARS_FIELD] = True
+    elif tamper == "empty_parts":
+        overrides["split_parts"] = []
+    else:
+        parts = overrides["split_parts"]
+        assert isinstance(parts, list)
+        if tamper == "noncontiguous_parts":
+            parts[1]["index"] = 2
+        elif tamper == "boolean_part_index":
+            parts[1]["index"] = True
+        elif tamper == "boolean_part_seed":
+            parts[0]["generation_seed"] = True
+        elif tamper == "wrong_integer_part_seed":
+            parts[0]["generation_seed"] = int(parts[0]["generation_seed"]) + 1
+        elif tamper == "wrong_part_variant":
+            parts[0]["pronunciation_delivery_variant"] = "source_spelling_v1"
+        else:
+            parts[0]["spoken_text_sha256"] = "not-a-sha"
+
+    with pytest.raises((RuntimeError, ValueError), match=error):
+        _checkpoint_candidate_signal(
+            db,
+            int(candidate["id"]),
+            repair_round=0,
+            generation_seed=allocated_generation_seed,
+            wav_path=candidate_path,
+            wav_sha256=candidate_sha256,
+            signal_overrides=overrides,
+        )
+    assert db.get_segment_candidate(int(candidate["id"]))["state"] == "generating"
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "root_seed",
+        "root_schedule",
+        "prefix",
+        "strategy",
+        "max_chars",
+        "part_index",
+        "part_seed",
+        "part_variant",
+        "part_sha",
+    ],
+)
+def test_candidate_split_resume_revalidates_stored_signal_provenance(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    generation_seed = _candidate_split_generation_seed(db, segment_id)
+    candidate_path = tmp_path / "candidates" / f"split-resume-{tamper}.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, tamper)
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=generation_seed,
+        generation_strategy=GENERATION_STRATEGY_SPLIT,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        signal_overrides=_split_candidate_signal_overrides(
+            db,
+            segment_id,
+            generation_seed,
+        ),
+    )
+    assert db.segment_candidate_resume_plan(
+        segment_id,
+        "candidate-policy-v1",
+    )["action"] == "decode_beam"
+
+    with db.connect() as conn:
+        signal = json.loads(
+            str(
+                conn.execute(
+                    "SELECT signal_json FROM segment_candidates WHERE id=?",
+                    (int(candidate["id"]),),
+                ).fetchone()[0]
+            )
+        )
+        tampered_generation_seed = generation_seed
+        if tamper == "root_seed":
+            signal["split_checkpoint_seed"] = generation_seed + 1
+        elif tamper == "root_schedule":
+            tampered_generation_seed = generation_seed + 1
+            signal["split_checkpoint_seed"] = tampered_generation_seed
+        elif tamper == "prefix":
+            signal["split_seed_salt_prefix"] = "asr_clarity_candidate_1_split"
+        elif tamper == "strategy":
+            signal[SPLIT_STRATEGY_FIELD] = "unknown_v1"
+        elif tamper == "max_chars":
+            signal[SPLIT_MAX_CHARS_FIELD] = SENTENCE_SPLIT_MAX_CHARS + 1
+        elif tamper == "part_index":
+            signal["split_parts"][1]["index"] = 3
+        elif tamper == "part_seed":
+            signal["split_parts"][0]["generation_seed"] += 1
+        elif tamper == "part_variant":
+            signal["split_parts"][0]["pronunciation_delivery_variant"] = (
+                "source_spelling_v1"
+            )
+        else:
+            signal["split_parts"][0]["spoken_text_sha256"] = "broken"
+        conn.execute(
+            "UPDATE segment_candidates SET generation_seed=?,signal_json=? WHERE id=?",
+            (
+                tampered_generation_seed,
+                json.dumps(signal, ensure_ascii=False, sort_keys=True),
+                int(candidate["id"]),
+            ),
+        )
+
+    with pytest.raises((RuntimeError, ValueError)):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+
+
+def test_candidate_split_resume_rejects_correlated_provenance_and_seed_rewrite(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    segment = db.get_segment(segment_id)
+    profile = db.voice_profile(int(segment["voice_profile_id"]))
+    split_prefix = "asr_clarity_candidate_0_split"
+    generation_seed = stable_int(
+        f"segment::{segment['stable_id']}::{profile['voice_key']}::{split_prefix}"
+    )
+    candidate_path = tmp_path / "candidates" / "split-remove-all.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "split-remove-all")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=generation_seed,
+        generation_strategy=GENERATION_STRATEGY_SPLIT,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        signal_overrides=_split_candidate_signal_overrides(
+            db,
+            segment_id,
+            generation_seed,
+        ),
+    )
+    for confirmation in (False, True):
+        check_id = _candidate_decode_check(
+            db,
+            segment_id=segment_id,
+            artifact_sha256=candidate_sha256,
+            repair_round=0,
+            generation_seed=generation_seed,
+            confirmation=confirmation,
+            verdict="pass",
+            reason="ok",
+        )
+        db.checkpoint_segment_candidate_decode(
+            int(candidate["id"]),
+            quality_check_id=check_id,
+            confirmation=confirmation,
+        )
+
+    with pytest.raises(sqlite3.IntegrityError, match="generation strategy"):
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE segment_candidates SET generation_strategy=? WHERE id=?",
+                (GENERATION_STRATEGY_DIRECT, int(candidate["id"])),
+            )
+
+    with db.connect() as conn:
+        signal = json.loads(
+            str(
+                conn.execute(
+                    "SELECT signal_json FROM segment_candidates WHERE id=?",
+                    (int(candidate["id"]),),
+                ).fetchone()[0]
+            )
+        )
+        for field in (
+            "split_checkpoint_seed",
+            "split_seed_salt_prefix",
+            SPLIT_STRATEGY_FIELD,
+            SPLIT_MAX_CHARS_FIELD,
+            "split_parts",
+        ):
+            signal.pop(field)
+        direct_generation_seed = stable_int(
+            f"segment::{segment['stable_id']}::{profile['voice_key']}::"
+            "asr_clarity_candidate_0"
+        )
+        conn.execute(
+            "UPDATE segment_candidates SET generation_seed=?,signal_json=? WHERE id=?",
+            (
+                direct_generation_seed,
+                json.dumps(signal, ensure_ascii=False, sort_keys=True),
+                int(candidate["id"]),
+            ),
+        )
+
+    with pytest.raises(RuntimeError, match="lacks its immutable split provenance"):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+    with pytest.raises(RuntimeError, match="lacks its immutable split provenance"):
+        db.promote_segment_candidate(
+            int(candidate["id"]),
+            validated_wav_sha256=candidate_sha256,
+            repair_action="clarity_repair",
+            attempt=1,
+        )
+
+
+def test_candidate_decode_binds_the_exact_split_signal_projection(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    generation_seed = _candidate_split_generation_seed(db, segment_id)
+    candidate_path = tmp_path / "candidates" / "split-decode-binding.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "split-decode")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=generation_seed,
+        generation_strategy=GENERATION_STRATEGY_SPLIT,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    split_signal = _split_candidate_signal_overrides(
+        db,
+        segment_id,
+        generation_seed,
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        signal_overrides=split_signal,
+    )
+    drifted_parts = json.loads(json.dumps(split_signal["split_parts"]))
+    drifted_parts[0]["spoken_text_sha256"] = "c" * 64
+    check_id = _candidate_decode_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        repair_round=0,
+        generation_seed=generation_seed,
+        confirmation=False,
+        verdict="pass",
+        reason="ok",
+        metrics_overrides={"split_parts": drifted_parts},
+    )
+
+    with pytest.raises(RuntimeError, match="immutable signal provenance"):
+        db.checkpoint_segment_candidate_decode(
+            int(candidate["id"]),
+            quality_check_id=check_id,
+            confirmation=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("tamper", "error"),
+    [
+        ("omitted", "lacks its vocalization delivery provenance"),
+        ("missing_profile", "sampling provenance must be complete"),
+        ("wrong_profile", "delivery profile is unsupported"),
+        ("boolean_temperature", "sampling provenance field"),
+        ("nonfinite_top_p", "sampling provenance field"),
+        ("missing_frame_cap", "sampling provenance must be complete"),
+        ("boolean_frame_cap", "generation frame cap differs"),
+        ("partial_raw_audio", "raw-audio provenance must be complete"),
+        ("boolean_sample_rate", "sample counts are malformed"),
+        ("added_padding", "no silence padding"),
+        ("wrong_arithmetic", "no silence padding"),
+        ("wrong_duration", "raw-audio duration differs"),
+        ("invalid_endpoint", "raw endpoint provenance must be boolean"),
+    ],
+)
+def test_candidate_vocalization_signal_rejects_malformed_provenance(
+    tmp_path: Path,
+    tamper: str,
+    error: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(
+        tmp_path,
+        source_text="“Ha…”",
+    )
+    candidate_path = tmp_path / "candidates" / f"gasp-{tamper}.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, tamper)
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=631,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    overrides = _ha_vocalization_signal_overrides()
+    if tamper == "omitted":
+        overrides = {}
+    elif tamper == "missing_profile":
+        del overrides[HA_VOCALIZATION_PROFILE_FIELD]
+    elif tamper == "wrong_profile":
+        overrides[HA_VOCALIZATION_PROFILE_FIELD] = "other_profile"
+    elif tamper == "boolean_temperature":
+        overrides[HA_VOCALIZATION_TEMPERATURE_FIELD] = True
+    elif tamper == "nonfinite_top_p":
+        overrides[HA_VOCALIZATION_TOP_P_FIELD] = float("nan")
+    elif tamper == "missing_frame_cap":
+        del overrides[HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD]
+    elif tamper == "boolean_frame_cap":
+        overrides[HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD] = True
+    elif tamper == "partial_raw_audio":
+        del overrides[HA_VOCALIZATION_FINAL_SAMPLES_FIELD]
+    elif tamper == "boolean_sample_rate":
+        overrides[HA_VOCALIZATION_SAMPLE_RATE_FIELD] = True
+    elif tamper == "added_padding":
+        overrides[HA_VOCALIZATION_PADDING_SAMPLES_FIELD] = 1
+        overrides[HA_VOCALIZATION_FINAL_SAMPLES_FIELD] = 76_801
+    elif tamper == "wrong_arithmetic":
+        overrides[HA_VOCALIZATION_FINAL_SAMPLES_FIELD] = 76_799
+    elif tamper == "wrong_duration":
+        overrides["duration"] = 1.5
+    else:
+        overrides["generation_endpoint_active"] = None
+
+    with pytest.raises(RuntimeError, match=error):
+        _checkpoint_candidate_signal(
+            db,
+            int(candidate["id"]),
+            repair_round=0,
+            generation_seed=631,
+            wav_path=candidate_path,
+            wav_sha256=candidate_sha256,
+            duration=1.6,
+            signal_overrides=overrides,
+        )
+    assert db.get_segment_candidate(int(candidate["id"]))["state"] == "generating"
+
+
+@pytest.mark.parametrize("tamper", ["omit_profile", "added_padding"])
+def test_candidate_vocalization_resume_revalidates_stored_provenance(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(
+        tmp_path,
+        source_text="“Ha…”",
+    )
+    candidate_path = tmp_path / "candidates" / f"gasp-resume-{tamper}.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, tamper)
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=641,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=641,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        duration=1.6,
+        signal_overrides=_ha_vocalization_signal_overrides(),
+    )
+    assert db.segment_candidate_resume_plan(
+        segment_id,
+        "candidate-policy-v1",
+    )["action"] == "decode_beam"
+
+    with db.connect() as conn:
+        signal = json.loads(
+            str(
+                conn.execute(
+                    "SELECT signal_json FROM segment_candidates WHERE id=?",
+                    (int(candidate["id"]),),
+                ).fetchone()[0]
+            )
+        )
+        if tamper == "omit_profile":
+            del signal[HA_VOCALIZATION_PROFILE_FIELD]
+        else:
+            signal[HA_VOCALIZATION_PADDING_SAMPLES_FIELD] += 1
+        conn.execute(
+            "UPDATE segment_candidates SET signal_json=? WHERE id=?",
+            (
+                json.dumps(signal, ensure_ascii=False, sort_keys=True),
+                int(candidate["id"]),
+            ),
+        )
+
+    with pytest.raises(RuntimeError):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1")
+
+
+def test_candidate_decode_binds_exact_vocalization_delivery_provenance(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(
+        tmp_path,
+        source_text="“Ha…”",
+    )
+    candidate_path = tmp_path / "candidates" / "gasp-decode-binding.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "gasp-decode")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=651,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=651,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        duration=1.6,
+        signal_overrides=_ha_vocalization_signal_overrides(),
+    )
+    check_id = _candidate_decode_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        repair_round=0,
+        generation_seed=651,
+        confirmation=False,
+        verdict="pass",
+        reason="ok",
+        metrics_overrides={HA_VOCALIZATION_TOP_P_FIELD: 0.83},
+    )
+
+    with pytest.raises(RuntimeError, match="immutable signal provenance"):
+        db.checkpoint_segment_candidate_decode(
+            int(candidate["id"]),
+            quality_check_id=check_id,
+            confirmation=False,
+        )
+
+
+def test_vocalization_candidate_promotes_with_bound_profile_provenance(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(
+        tmp_path,
+        source_text="“Ha…”",
+    )
+    candidate_path = tmp_path / "candidates" / "gasp-promote.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "gasp-promote")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=661,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+        perceptual_required=True,
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=661,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+        duration=1.6,
+        signal_overrides=_ha_vocalization_signal_overrides(),
+    )
+    for confirmation in (False, True):
+        check_id = _candidate_decode_check(
+            db,
+            segment_id=segment_id,
+            artifact_sha256=candidate_sha256,
+            repair_round=0,
+            generation_seed=661,
+            confirmation=confirmation,
+            verdict="pass",
+            reason="ok",
+        )
+        db.checkpoint_segment_candidate_decode(
+            int(candidate["id"]),
+            quality_check_id=check_id,
+            confirmation=confirmation,
+        )
+    perceptual_check_id = _candidate_perceptual_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        verdict="pass",
+        perceptual_verdict="ok",
+        reason="PERCEPTUAL_OK",
+        review_required=False,
+    )
+    db.checkpoint_segment_candidate_perceptual(
+        int(candidate["id"]),
+        quality_check_id=perceptual_check_id,
+    )
+
+    promoted = db.promote_segment_candidate(
+        int(candidate["id"]),
+        validated_wav_sha256=candidate_sha256,
+        repair_action="clarity_repair",
+        attempt=1,
+    )
+    live_signal = json.loads(str(db.get_segment(segment_id)["signal_json"]))
+    final_check = db.latest_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=segment_id,
+    )
+    final_metrics = json.loads(str(final_check["metrics_json"]))
+
+    assert promoted["state"] == "promoted"
+    assert live_signal[HA_VOCALIZATION_PROFILE_FIELD] == (
+        HA_VOCALIZATION_DELIVERY_PROFILE
+    )
+    assert live_signal[HA_VOCALIZATION_PADDING_SAMPLES_FIELD] == 0
+    assert final_metrics[HA_VOCALIZATION_PROFILE_FIELD] == (
+        HA_VOCALIZATION_DELIVERY_PROFILE
+    )
+    assert all(
+        evidence[HA_VOCALIZATION_PROFILE_FIELD]
+        == HA_VOCALIZATION_DELIVERY_PROFILE
+        for evidence in final_metrics["decode_evidence"]
+    )
 
 
 def test_candidate_decode_and_promotion_reject_tampered_locked_provenance(
@@ -11669,6 +12824,146 @@ def test_candidate_decode_and_promotion_reject_tampered_locked_provenance(
             confirmation=False,
         )
     assert db.get_segment_candidate(candidate_id)["state"] == "signal_passed"
+
+
+def _collapsed_short_context_metrics() -> dict[str, object]:
+    return {
+        "context_mode": COLLAPSED_SHORT_CONTEXT_MODE,
+        "requested_repeat_count": SHORT_CONTEXT_REPEAT_COUNT,
+        "effective_repeat_count": COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+        "failure_codes": [],
+        LOCKED_NAME_ANCHOR_METRICS_KEY: {
+            "version": LOCKED_NAME_ANCHOR_METRICS_VERSION,
+            "status": "pass",
+            "adjudicated": True,
+            "passed": True,
+            "failure_codes": [],
+            "repeat_count": COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+            "anchor_count": 1,
+            "required_occurrence_count": 1,
+            "matched_occurrence_count": 1,
+            "requested_repeat_count": SHORT_CONTEXT_REPEAT_COUNT,
+            "effective_repeat_count": (
+                COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT
+            ),
+            "canonical_threshold_passed": True,
+        },
+    }
+
+
+def test_candidate_accepts_bound_collapsed_short_context_evidence(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate_path = tmp_path / "candidates" / "collapsed-valid.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, "collapsed-valid")
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=311,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=311,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+    )
+    check_id = _candidate_decode_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        repair_round=0,
+        generation_seed=311,
+        confirmation=False,
+        verdict="pass",
+        reason="ASR_LOCKED_NAME_CANONICAL_PASS",
+        metrics_overrides=_collapsed_short_context_metrics(),
+    )
+
+    checkpoint = db.checkpoint_segment_candidate_decode(
+        int(candidate["id"]),
+        quality_check_id=check_id,
+        confirmation=False,
+    )
+
+    assert checkpoint["state"] == "beam_recorded"
+
+
+@pytest.mark.parametrize(
+    "tamper_target",
+    [
+        "context_mode",
+        "requested_repeat_count",
+        "effective_repeat_count",
+        "anchor_repeat_count",
+        "anchor_requested_repeat_count",
+        "canonical_threshold_passed",
+    ],
+)
+def test_candidate_rejects_tampered_collapsed_short_context_evidence(
+    tmp_path: Path,
+    tamper_target: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate_path = tmp_path / "candidates" / f"collapsed-{tamper_target}.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, tamper_target)
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=312,
+        wav_path=candidate_path,
+        candidates_root=tmp_path / "candidates",
+    )
+    _checkpoint_candidate_signal(
+        db,
+        int(candidate["id"]),
+        repair_round=0,
+        generation_seed=312,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+    )
+    metrics = _collapsed_short_context_metrics()
+    anchor_metrics = metrics[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    if tamper_target == "context_mode":
+        metrics["context_mode"] = "direct"
+    elif tamper_target == "requested_repeat_count":
+        metrics["requested_repeat_count"] = 2
+    elif tamper_target == "effective_repeat_count":
+        metrics["effective_repeat_count"] = 2
+    elif tamper_target == "anchor_repeat_count":
+        anchor_metrics["repeat_count"] = 3
+    elif tamper_target == "anchor_requested_repeat_count":
+        anchor_metrics["requested_repeat_count"] = 2
+    else:
+        anchor_metrics["canonical_threshold_passed"] = False
+    check_id = _candidate_decode_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        repair_round=0,
+        generation_seed=312,
+        confirmation=False,
+        verdict="pass",
+        reason="ASR_LOCKED_NAME_CANONICAL_PASS",
+        metrics_overrides=metrics,
+    )
+
+    with pytest.raises(RuntimeError, match="collapse|collapsed"):
+        db.checkpoint_segment_candidate_decode(
+            int(candidate["id"]),
+            quality_check_id=check_id,
+            confirmation=False,
+        )
 
 
 @pytest.mark.parametrize("damage", ["missing", "tampered"])
@@ -11937,3 +13232,133 @@ def test_candidate_exhaustion_keeps_incumbent_and_uses_incumbent_evidence(
         }
         with pytest.raises(RuntimeError, match="replay payload"):
             db.finalize_segment_candidate_exhaustion(**replay_payload)
+
+
+@pytest.mark.parametrize("decode_field", ["beam_result_json", "greedy_result_json"])
+def test_candidate_exhaustion_revalidates_final_dual_failed_asr_evidence(
+    tmp_path: Path,
+    decode_field: str,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    trigger_check_id = db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=segment_id,
+        artifact_sha256=incumbent_sha256,
+        policy_hash="candidate-policy-v1",
+        policy_version=1,
+        verdict="repair",
+        metrics={"reason": "ASR_MISMATCH"},
+        failure_codes=("ASR_MISMATCH",),
+    )
+    candidate_path = tmp_path / "candidates" / f"final-{decode_field}.wav"
+    candidate_sha256 = _write_candidate_artifact(candidate_path, decode_field)
+    generation_seed = 701
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=1,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        candidates_root=candidate_path.parent,
+    )
+    candidate_id = int(candidate["id"])
+    _checkpoint_candidate_signal(
+        db,
+        candidate_id,
+        repair_round=0,
+        generation_seed=generation_seed,
+        wav_path=candidate_path,
+        wav_sha256=candidate_sha256,
+    )
+    for confirmation in (False, True):
+        check_id = _candidate_decode_check(
+            db,
+            segment_id=segment_id,
+            artifact_sha256=candidate_sha256,
+            repair_round=0,
+            generation_seed=generation_seed,
+            confirmation=confirmation,
+            verdict="fail",
+            reason="ASR_MISMATCH",
+        )
+        db.checkpoint_segment_candidate_decode(
+            candidate_id,
+            quality_check_id=check_id,
+            confirmation=confirmation,
+        )
+
+    with db.connect() as conn:
+        stored = json.loads(
+            str(
+                conn.execute(
+                    f"SELECT {decode_field} FROM segment_candidates WHERE id=?",
+                    (candidate_id,),
+                ).fetchone()[0]
+            )
+        )
+        stored["reason"] = "tampered terminal reason"
+        conn.execute(
+            f"UPDATE segment_candidates SET {decode_field}=? WHERE id=?",
+            (json.dumps(stored, ensure_ascii=False, sort_keys=True), candidate_id),
+        )
+
+    with pytest.raises(RuntimeError, match="stored candidate ASR result differs"):
+        db.finalize_segment_candidate_exhaustion(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+            max_repair_rounds=1,
+            incumbent_sha256=incumbent_sha256,
+            trigger_quality_check_id=trigger_check_id,
+            error="repair exhausted",
+            warning_code="ASR_MISMATCH_UNRESOLVED",
+        )
+    assert db.get_segment(segment_id)["status"] != "failed"
+
+
+def test_candidate_attempt_summary_revalidates_terminal_perceptual_evidence(
+    tmp_path: Path,
+) -> None:
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "terminal-perceptual.wav",
+        generation_seed=702,
+        perceptual_required=True,
+    )
+    candidate_id = int(candidate["id"])
+    review_check_id = _candidate_perceptual_check(
+        db,
+        segment_id=segment_id,
+        artifact_sha256=candidate_sha256,
+        verdict="inconclusive",
+        perceptual_verdict="review",
+        reason="PERCEPTUAL_BASELINE_DROP",
+        review_required=True,
+        failure_codes=(PERCEPTUAL_NATURALNESS_REVIEW_CODE,),
+    )
+    db.checkpoint_segment_candidate_perceptual(
+        candidate_id,
+        quality_check_id=review_check_id,
+    )
+    with db.connect() as conn:
+        stored = json.loads(
+            str(
+                conn.execute(
+                    "SELECT perceptual_result_json FROM segment_candidates WHERE id=?",
+                    (candidate_id,),
+                ).fetchone()[0]
+            )
+        )
+        stored["review_required"] = False
+        conn.execute(
+            "UPDATE segment_candidates SET perceptual_result_json=? WHERE id=?",
+            (json.dumps(stored, ensure_ascii=False, sort_keys=True), candidate_id),
+        )
+
+    with pytest.raises(RuntimeError, match="stored candidate perceptual result differs"):
+        db.segment_candidate_attempt_summary(segment_id, "candidate-policy-v1")

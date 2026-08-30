@@ -12,6 +12,11 @@ import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
 
+from .asr_contract import (
+    COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+    LOCKED_NAME_ANCHOR_METRICS_VERSION,
+    SHORT_CONTEXT_REPEAT_COUNT,
+)
 from .resource_manager import trim_process_working_set
 from .text_processing import is_vocalization_only
 
@@ -27,7 +32,6 @@ MIN_PLAUSIBLE_TRANSCRIPT_WORDS = 4
 WHISPER_TIMELINE_ABSOLUTE_MARGIN_SECONDS = 1.0
 WHISPER_TIMELINE_DURATION_FACTOR = 2.0
 SHORT_CONTEXT_MAX_WORDS = 5
-SHORT_CONTEXT_REPEAT_COUNT = 3
 SHORT_CONTEXT_GAP_SECONDS = 0.50
 ASR_PASS = "pass"
 ASR_MISMATCH = "mismatch"
@@ -35,7 +39,6 @@ ASR_INCONCLUSIVE = "inconclusive"
 ASR_LOCKED_NAME_ANCHOR_MISMATCH = "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
 ASR_LOCKED_NAME_CANONICAL_PASS = "ASR_LOCKED_NAME_CANONICAL_PASS"
 LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"
-LOCKED_NAME_ANCHOR_METRICS_VERSION = 2
 ASR_WER_SIMILARITY_MARGIN = 0.12
 ANCHOR_COMPARISON_NORMALIZED_EXACT = "normalized_exact"
 ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT = "diacritic_folded_exact"
@@ -642,6 +645,89 @@ def adjudicate_locked_name_anchors(
             "reason": ASR_LOCKED_NAME_ANCHOR_MISMATCH,
             "repairable": True,
         }
+    )
+    return result
+
+
+def adjudicate_collapsed_repeated_short(
+    expected_spoken_text: str,
+    asr_result: dict[str, Any],
+    anchors: Sequence[Mapping[str, Any]],
+    *,
+    requested_repeat_count: int,
+    min_similarity: float,
+    max_wer: float,
+) -> dict[str, Any] | None:
+    """Re-adjudicate a decoder-collapsed repeat as one exact spoken copy.
+
+    Whisper can collapse identical short-context repetitions into one transcript.
+    This path remains limited to locked-name evidence and preserves both the
+    requested and effective repeat counts in the durable adjudication metrics.
+    """
+
+    if requested_repeat_count != SHORT_CONTEXT_REPEAT_COUNT or isinstance(
+        requested_repeat_count,
+        bool,
+    ):
+        raise ValueError(
+            "requested_repeat_count must match the repeated-short decode contract"
+        )
+    if not anchors:
+        return None
+    if LOCKED_NAME_ANCHOR_METRICS_KEY in asr_result:
+        raise RuntimeError("collapsed repeated-short adjudication requires raw ASR evidence")
+    transcript = asr_result.get("transcript")
+    raw_evidence_is_eligible = (
+        asr_result.get("verdict") == ASR_MISMATCH
+        and asr_result.get("passed") is False
+        and asr_result.get("reason") == "ASR_MISMATCH"
+        and isinstance(transcript, str)
+        and bool(transcript.strip())
+    )
+    if not raw_evidence_is_eligible:
+        return None
+
+    similarity, wer = transcript_metrics(expected_spoken_text, transcript)
+    content_passed = _passes_asr_content_thresholds(
+        True,
+        similarity,
+        wer,
+        min_similarity=min_similarity,
+        max_wer=max_wer,
+    )
+    rescored_result = {
+        "passed": content_passed,
+        "verdict": ASR_PASS if content_passed else ASR_MISMATCH,
+        "transcript": transcript,
+        "similarity": similarity,
+        "wer": wer,
+        "reason": "ok" if content_passed else "ASR_MISMATCH",
+        "repairable": is_asr_repair_candidate(expected_spoken_text),
+        "severe": not content_passed
+        and is_severe_asr_mismatch(expected_spoken_text, transcript, similarity),
+    }
+
+    collapsed = adjudicate_locked_name_anchors(
+        expected_spoken_text,
+        rescored_result,
+        anchors,
+        repeat_count=1,
+        min_similarity=min_similarity,
+        max_wer=max_wer,
+    )
+    anchor_metrics = collapsed.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
+    if not isinstance(anchor_metrics, dict) or anchor_metrics.get("adjudicated") is not True:
+        raise RuntimeError("collapsed repeated-short anchor evidence is incomplete")
+
+    result = dict(collapsed)
+    result[LOCKED_NAME_ANCHOR_METRICS_KEY] = {
+        **anchor_metrics,
+        "requested_repeat_count": requested_repeat_count,
+        "effective_repeat_count": COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+    }
+    result["requested_repeat_count"] = requested_repeat_count
+    result["effective_repeat_count"] = (
+        COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT
     )
     return result
 

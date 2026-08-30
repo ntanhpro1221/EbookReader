@@ -1,6 +1,6 @@
 # Test report
 
-Ngày cập nhật: 2026-08-24
+Ngày cập nhật: 2026-08-30
 
 Đợt sửa confidence contract V22: **634/634 test trọng tâm pass** cho analysis bắt buộc,
 database safety và quality policy trên Python 3.11.9. Compileall cho source/test, `git diff --check`
@@ -144,6 +144,56 @@ Sau khi worker thoát không còn Python/Ollama/FFmpeg con và `OpenWith.exe` gi
 
 Setup chỉ cài runtime dependency/model và chạy system check trên máy đích trước khi ghi marker hoàn tất;
 pytest/Ruff không được cài hoặc chạy trong luồng mở app của người dùng.
+
+## Immutable repair hardening và runtime V48 (2026-08-29)
+
+Hardening sau V45 tách contract ASR/perceptual/TTS thành module độc lập, khóa lại provenance của mọi candidate và
+checkpoint repair. Clause recovery có hai strategy bất biến: `sentence_v1` tối đa 170 ký tự và `clause_v1` tối đa
+120 ký tự; final source-spelling candidate chỉ dùng clause split khi evidence trước thật sự yêu cầu. Root seed được
+tính lại từ stable ID + voice key + salt canonical, từng part seed được tính lại từ stable ID part + exact prefix;
+SQLite từ chối root/part seed, strategy, max chars, thứ tự, checksum text, voice, pitch hoặc pronunciation variant bị
+sửa. Token đơn dài hơn giới hạn không còn làm worker crash: allocator nhận biết split không khả dụng và giữ finite
+fallback, còn checkpoint đã cấp phát vẫn fail-closed bằng candidate TTS failure có thể resume.
+
+Mọi candidate `dual_failed` và exhaustion summary giờ được dựng lại từ quality-check gốc thay vì tin JSON tổng hợp đã
+lưu. Beam/greedy, failure code, selected result, ASR/signal blocker, UTMOS result và terminal reason đều được kiểm lại;
+tamper một check, kết quả perceptual hoặc lý do exhaustion bị từ chối trước resume/finalize. Trường hợp ASR đã pass nhưng
+UTMOS vẫn review hết budget kết thúc bằng `PERCEPTUAL_NATURALNESS_REVIEW`, không bị ghi nhầm thành ASR failure.
+
+Delivery `ha_vocalization_v2` giới hạn 23 frame, temperature/top-p thận trọng và không còn chèn silence giả để đạt độ dài.
+Raw/target/final sample count, padding bằng 0, sample rate, cap và endpoint-active được lưu, kiểm lại và xuất report.
+Exact seq8 V48 bắt đầu bằng waveform 1,84 giây chạm trần; candidate round 1 tạo waveform 1,44 giây, không chạm endpoint,
+beam/greedy cùng pass rồi được promote với transcript `Ha ha, ha!`.
+
+Audit tiếp ngày 2026-08-30 nâng schema lên v11 và tách `generation_strategy=direct_v1|split_v1` thành ledger field bền,
+không còn suy ra split chỉ từ seed. Strategy chỉ được chuyển một chiều direct -> split trong checkpoint generating và
+bất biến sau khi signal đã commit; xóa toàn bộ split provenance đồng thời đổi root seed sang lịch direct vẫn bị từ chối.
+`perceptual_required` có trigger bất biến và được đối chiếu lại với `settings.perceptual_qa.enabled` của quality policy
+đã khóa khi allocate/resume/promote, kể cả caller gọi thẳng promotion API mà bỏ qua resume plan; sửa `true -> false`
+không thể bỏ qua UTMOS. Direct promotion cũng kiểm lại split/vocalization/delivery provenance ngay trong cùng transaction.
+Với profile `ha_vocalization_v2`,
+WORLD pitch không được phép zero-pad: output pitch ngắn hơn bị bỏ, waveform thô được giữ, và coordinator hậu kiểm exact
+sample count trước khi ghi provenance.
+
+Runtime sạch V48 dùng lại manifest
+`375bd57ab4ee8230d2ecb74da67bb526446f5a36f5a031ebfb40d5d6fceb1a6a`, cold bootstrap được đợi tối đa 120 giây.
+Worker bị dừng sau checkpoint **59/107** rồi resume thế hệ kế tiếp mà không làm lại phần đã commit. Kết quả cuối là
+**104 verified / 1 warning / 2 failed**, tốt hơn V45 **+3 verified / -1 warning / -2 failed**. Exact seq44 đi đủ năm
+candidate, final source + `clause_v1` giữ nguyên văn bản thành bốn part dài **53/111/40/102** ký tự nhưng `Wayne` vẫn bị
+nhận sai nên kết thúc `ASR_LOCKED_NAME_ANCHOR_MISMATCH`. Exact seq64 giữ đúng locked `A-đe-ron`; candidate cuối có beam
+canonical pass nhưng greedy vẫn content mismatch nên kết thúc `ASR_MISMATCH_UNRESOLVED`. Exact seq83 là warning duy nhất
+`TTS_GENERATION_CEILING_REACHED` với ASR đúng `Điên rồi!`.
+
+Các probe đối chứng sau runtime không được đưa vào policy: hạ clarity temperature/top-p làm seq64 kém hơn, chia câu sau
+`Aderon` làm nửa đầu kém hơn, và seed repair thứ sáu làm cả seq44/64 kém hơn. Vì vậy budget vẫn hữu hạn 5 round, dual gate
+vẫn giữ nguyên, không đổi voice, không hạ threshold và không promote artifact chỉ có một decoder pass.
+
+SQLite V48 thật được kiểm raw read-only, vẫn ở schema 10 và không bị migrate: `integrity_check=ok`, `foreign_key_check`
+rỗng, worker lease rỗng sau exit; quality report đã xuất nhưng chapter bị hai failure chặn nên **0 MP3**, đúng fail-closed.
+Bản sao calibration migrate lên schema 11 thành công, dựng lại đủ **34 candidate summary / 14 segment**, backfill
+**33 direct / 1 split**, `integrity_check=ok` và foreign key bằng 0. Full repository **1.552/1.552** test pass; Ruff toàn
+source/test, compileall, `pip check`, `git diff --check` đều pass. Tất cả Python trong runtime và validation đều được gọi
+bằng interpreter `.venv` rõ ràng; sau toàn bộ run/probe `OpenWith.exe` giữ **0**.
 
 ## Phạm vi tự động
 

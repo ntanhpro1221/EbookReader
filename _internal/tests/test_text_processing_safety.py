@@ -6,11 +6,15 @@ import pytest
 
 from ebook_reader.io_utils import decode_text_bytes, sha256_file
 from ebook_reader.text_processing import (
+    CLAUSE_SPLIT_MAX_CHARS,
     build_chapter_manifest,
+    is_standalone_ha_gasp,
     is_vocalization_only,
     load_and_segment_chapter,
     normalize_vocalizations_for_tts,
     segment_chapter_text,
+    split_long_text,
+    split_text_by_clauses,
 )
 
 
@@ -64,6 +68,44 @@ def test_direct_speech_is_separated_from_narration() -> None:
 
     assert [row["text"] for row in rows] == ["Cô hỏi:", "“Anh có khỏe không?”"]
     assert [row["kind_hint"] for row in rows] == ["narration", "dialogue"]
+
+
+def test_long_text_split_prefers_sentence_boundaries_without_rewriting() -> None:
+    text = (
+        "Câu đầu tiên đủ dài để tạo thành phần thứ nhất mà không cần cắt giữa từ. "
+        "Câu thứ hai cũng giữ nguyên dấu câu và trở thành phần tiếp theo an toàn."
+    )
+
+    parts = split_long_text(text, 90)
+
+    assert parts == [
+        "Câu đầu tiên đủ dài để tạo thành phần thứ nhất mà không cần cắt giữa từ.",
+        "Câu thứ hai cũng giữ nguyên dấu câu và trở thành phần tiếp theo an toàn.",
+    ]
+    assert " ".join(parts) == text
+
+
+def test_clause_split_keeps_seq44_boundaries_bounded_without_rewriting() -> None:
+    text = (
+        "Cha bị tiếng nheo nhéo của mẹ làm cho chịu không nổi, trời vừa sáng đã "
+        "nhờ thằng nhóc thối nhà Simon báo tin tới trang viên của ngài Tước sĩ "
+        "Wayne để gọi anh hai về. Bây giờ anh ấy đã là cận vệ hiệp sĩ rồi, mấy "
+        "tên thầy thuốc của nhà từ thiện đó không dám hét cái giá nực cười, thái "
+        "quá trước mặt anh ấy đâu!”"
+    )
+
+    parts = split_text_by_clauses(text, CLAUSE_SPLIT_MAX_CHARS)
+
+    assert [len(part) for part in parts] == [53, 111, 40, 102]
+    assert all(len(part) <= CLAUSE_SPLIT_MAX_CHARS for part in parts)
+    assert " ".join(parts) == text
+
+
+def test_clause_split_rejects_an_unbroken_token_over_max_chars() -> None:
+    text = "a" * (CLAUSE_SPLIT_MAX_CHARS + 1)
+
+    with pytest.raises(ValueError, match="unbroken token"):
+        split_text_by_clauses(text, CLAUSE_SPLIT_MAX_CHARS)
 
 
 def test_multiline_dialogue_and_inner_thought_keep_their_kind() -> None:
@@ -263,7 +305,7 @@ def test_vocal_cues_and_onomatopoeia_stay_in_their_spoken_sentences() -> None:
 @pytest.mark.parametrize(
     ("source", "spoken"),
     [
-        ('“Ha…”', '“Hà... hà...”'),
+        ('“Ha…”', '“Ha ha.”'),
         ('“Haiz…”', '“Hầy…”'),
         ('“Haizzzzz....”', '“Hầy...”'),
         ('“Hừmmmm...”', '“Hừm...”'),
@@ -281,12 +323,39 @@ def test_vocalizations_are_normalized_only_for_tts(source: str, spoken: str) -> 
 
 @pytest.mark.parametrize(
     "text",
-    ["Hức hức hức…", "“S… Hự!”", "“Aaaaah!”", "“Uuu…”", "Ha, ha, ho."],
+    [
+        "Hức hức hức…",
+        "“S… Hự!”",
+        "“Aaaaah!”",
+        "“Uuu…”",
+        "Ha, ha, ho.",
+        "Haha,",
+        "Hahaha!",
+    ],
 )
 def test_non_lexical_vocalizations_are_recognized(text: str) -> None:
     assert is_vocalization_only(text)
 
 
-@pytest.mark.parametrize("text", ["Paso.", "Gaya.", "Cảm ơn.", "Anh Lucien!"])
+@pytest.mark.parametrize(
+    "text",
+    ["Paso.", "Gaya.", "Cảm ơn.", "Anh Lucien!", "Haha, tốt cả."],
+)
 def test_lexical_text_is_not_a_vocalization(text: str) -> None:
     assert not is_vocalization_only(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ['“Ha…”', '"ha..."', "— Ha…", "  'HA..'  "],
+)
+def test_standalone_ha_gasp_is_narrowly_recognized(text: str) -> None:
+    assert is_standalone_ha_gasp(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Ha?", "Ha ha.", "Hà Hà.", "“Ha…” Hạ Phong bật dậy.", "Ah…”"],
+)
+def test_non_standalone_ha_text_does_not_activate_gasp_delivery(text: str) -> None:
+    assert not is_standalone_ha_gasp(text)

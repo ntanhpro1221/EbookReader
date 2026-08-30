@@ -222,6 +222,7 @@ def test_repeated_short_context_can_confirm_a_short_utterance(tmp_path: Path) ->
             "VOCALIZATION_ASR_COMPATIBLE",
         ),
         ("“A... a!”", "", 1.20, "VOCALIZATION_ASR_COMPATIBLE"),
+        ("“Ha ha.”", "Haha,", 1.84, "VOCALIZATION_ASR_COMPATIBLE"),
     ],
 )
 def test_vocalization_verification_does_not_blame_tts_for_whisper_hallucination(

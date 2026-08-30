@@ -18,7 +18,12 @@ from .asr import (
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
     SHORT_CONTEXT_REPEAT_COUNT,
     WhisperVerifier,
+    adjudicate_collapsed_repeated_short,
     adjudicate_locked_name_anchors,
+)
+from .asr_contract import (
+    COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+    COLLAPSED_SHORT_CONTEXT_MODE,
 )
 from .audio_io import (
     AudioQualityError,
@@ -33,16 +38,20 @@ from .audio_io import (
 )
 from .character_registry import build_registry_and_cast
 from .database import (
+    GENERATION_STRATEGY_DIRECT,
+    GENERATION_STRATEGY_SPLIT,
     QUALITY_SCOPE_CHAPTER,
     QUALITY_SCOPE_SEGMENT,
     QUALITY_VERDICT_PASS,
     SEGMENT_ASR_DECODE_QUALITY_STAGE,
     SEGMENT_AUDIO_QUALITY_STAGE,
+    SEGMENT_CANDIDATE_DUAL_FAILED,
     SEGMENT_CANDIDATE_DUAL_PASSED,
     SEGMENT_CANDIDATE_GENERATING,
     SEGMENT_CANDIDATE_PROMOTED,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
+    segment_candidate_split_seed_salt,
 )
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
@@ -54,7 +63,23 @@ from .perceptual_qa import (
     PerceptualQAUnavailable,
     UTMOSNaturalnessVerifier,
 )
-from .text_processing import has_spoken_content, load_and_segment_chapter
+from .perceptual_contract import (
+    NATURALNESS_IMPROVEMENT_REQUIREMENT,
+    NATURALNESS_REPAIR_ACTION,
+    PERCEPTUAL_NATURALNESS_REVIEW_CODE,
+    PERCEPTUAL_SHORT_AUDIO_REASON,
+    STANDARD_CANDIDATE_GATE_REQUIREMENT,
+)
+from .text_processing import (
+    CLAUSE_SPLIT_STRATEGY,
+    SENTENCE_SPLIT_STRATEGY,
+    SPLIT_MAX_CHARS_FIELD,
+    SPLIT_STRATEGY_FIELD,
+    has_spoken_content,
+    is_standalone_ha_gasp,
+    load_and_segment_chapter,
+    split_text_for_strategy,
+)
 from .recovery import recover_project
 from .resource_manager import AdaptiveResourceManager
 from .quality_policy import (
@@ -76,6 +101,10 @@ from .tts import (
     TTSCoordinator,
     is_fatal_tts_error,
     short_utterance_repair_frame_cap,
+)
+from .tts_contract import (
+    HA_VOCALIZATION_MAX_NEW_FRAMES,
+    HA_VOCALIZATION_PROVENANCE_FIELDS,
 )
 
 
@@ -106,7 +135,10 @@ TTS_SIGNAL_PROVENANCE_FIELDS = (
     GENERATION_ENDPOINT_ACTIVE_METRIC,
     "split_checkpoint_seed",
     "split_seed_salt_prefix",
+    SPLIT_STRATEGY_FIELD,
+    SPLIT_MAX_CHARS_FIELD,
     "split_parts",
+    *HA_VOCALIZATION_PROVENANCE_FIELDS,
 )
 
 
@@ -124,6 +156,27 @@ def _asr_verdict(result: dict[str, Any]) -> str:
     if bool(result.get("passed", False)):
         return ASR_PASS
     return ASR_MISMATCH if str(result.get("reason", "")) == "ASR_MISMATCH" else ASR_INCONCLUSIVE
+
+
+def _candidate_budget_exhausted_on_perceptual_review(
+    attempts: list[dict[str, Any]],
+) -> bool:
+    for attempt in attempts:
+        beam_result = attempt.get("beam_result")
+        greedy_result = attempt.get("greedy_result")
+        perceptual_result = attempt.get("perceptual_result")
+        if (
+            str(attempt.get("state") or "") == SEGMENT_CANDIDATE_DUAL_FAILED
+            and isinstance(beam_result, dict)
+            and isinstance(greedy_result, dict)
+            and _asr_verdict(beam_result) == ASR_PASS
+            and _asr_verdict(greedy_result) == ASR_PASS
+            and isinstance(perceptual_result, dict)
+            and str(perceptual_result.get("verdict") or "") == PERCEPTUAL_REVIEW
+            and perceptual_result.get("review_required") is True
+        ):
+            return True
+    return False
 
 
 class PipelineStopped(RuntimeError):
@@ -562,7 +615,13 @@ class BookPipeline:
             decoded = json.loads(str(item.get("signal_json") or "{}"))
         except (TypeError, json.JSONDecodeError):
             return {}
-        return decoded if isinstance(decoded, dict) else {}
+        if not isinstance(decoded, dict):
+            return {}
+        ProjectDB._require_vocalization_provenance(
+            decoded,
+            required=is_standalone_ha_gasp(str(item.get("text") or "")),
+        )
+        return decoded
 
     @staticmethod
     def _signal_warning_codes(
@@ -580,6 +639,34 @@ class BookPipeline:
         if signal.get(GENERATION_CEILING_METRIC):
             warnings.append(GENERATION_CEILING_WARNING)
         return tuple(warnings)
+
+    @staticmethod
+    def _context_repeat_count_provenance(
+        result: dict[str, Any],
+        context_mode: str,
+    ) -> tuple[int | None, int | None]:
+        requested_repeat_count = result.get("requested_repeat_count")
+        effective_repeat_count = result.get("effective_repeat_count")
+        if context_mode == COLLAPSED_SHORT_CONTEXT_MODE:
+            if (
+                isinstance(requested_repeat_count, bool)
+                or requested_repeat_count != SHORT_CONTEXT_REPEAT_COUNT
+                or isinstance(effective_repeat_count, bool)
+                or effective_repeat_count
+                != COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT
+            ):
+                raise RuntimeError(
+                    "collapsed repeated-short result violates its repeat-count contract"
+                )
+            return (
+                SHORT_CONTEXT_REPEAT_COUNT,
+                COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
+            )
+        if requested_repeat_count is not None or effective_repeat_count is not None:
+            raise RuntimeError(
+                "repeated-short collapse counts require the collapsed context mode"
+            )
+        return None, None
 
     def _record_segment_asr_decode_evidence(
         self,
@@ -643,6 +730,13 @@ class BookPipeline:
             if confirmation
             else f"beam{int(self.settings.get('asr', {}).get('beam_size', 5))}"
         )
+        normalized_context_mode = str(context_mode)
+        requested_repeat_count, effective_repeat_count = (
+            self._context_repeat_count_provenance(
+                result,
+                normalized_context_mode,
+            )
+        )
         anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
         anchor_failure_codes = (
             [
@@ -663,7 +757,9 @@ class BookPipeline:
             "repairable": bool(result.get("repairable", False)),
             "severe": bool(result.get("severe", False)),
             "decode_mode": decode_mode,
-            "context_mode": str(context_mode),
+            "context_mode": normalized_context_mode,
+            "requested_repeat_count": requested_repeat_count,
+            "effective_repeat_count": effective_repeat_count,
             "selected": bool(selected),
             "repair_round": repair_round,
             "delivery_mode": str(delivery_mode),
@@ -682,16 +778,24 @@ class BookPipeline:
             "effective_pitch_semitones": effective_pitch,
             "pitch_variant_skipped": pitch_variant_skipped,
             "pitch_variant_mixed": bool(signal.get("pitch_variant_mixed", False)),
+            GENERATION_CEILING_METRIC: signal.get(GENERATION_CEILING_METRIC),
+            GENERATION_ENDPOINT_ACTIVE_METRIC: signal.get(
+                GENERATION_ENDPOINT_ACTIVE_METRIC
+            ),
             "segment_candidate_id": item.get("segment_candidate_id"),
             "generation_kind": (
                 "split" if signal.get("split_parts") else "direct"
             ),
             "split_checkpoint_seed": signal.get("split_checkpoint_seed"),
             "split_seed_salt_prefix": signal.get("split_seed_salt_prefix"),
+            SPLIT_STRATEGY_FIELD: signal.get(SPLIT_STRATEGY_FIELD),
+            SPLIT_MAX_CHARS_FIELD: signal.get(SPLIT_MAX_CHARS_FIELD),
             "split_parts": signal.get("split_parts", []),
             LOCKED_NAME_ANCHOR_METRICS_KEY: anchor_metrics,
             "failure_codes": anchor_failure_codes,
         }
+        for field in HA_VOCALIZATION_PROVENANCE_FIELDS:
+            metrics[field] = signal.get(field)
         evidence_failure_codes = list(anchor_failure_codes)
         if evidence_verdict != QUALITY_VERDICT_PASS:
             reason = str(metrics["reason"])
@@ -733,6 +837,13 @@ class BookPipeline:
         _wav_path, artifact_sha256 = self._validated_segment_wav_identity(item)
         signal = self._segment_signal_provenance(item)
         reason = str(result.get("reason", "ok"))
+        selected_context_mode = str(result.get("selected_context_mode", "direct"))
+        requested_repeat_count, effective_repeat_count = (
+            self._context_repeat_count_provenance(
+                result,
+                selected_context_mode,
+            )
+        )
         anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
         result_failure_codes: list[str] = []
         for code in result.get("failure_codes", []):
@@ -763,9 +874,9 @@ class BookPipeline:
                 "similarity": float(result.get("similarity", 0.0)),
                 "wer": float(result.get("wer", 0.0)),
                 "confirmation_decode": bool(confirmation),
-                "selected_context_mode": str(
-                    result.get("selected_context_mode", "direct")
-                ),
+                "selected_context_mode": selected_context_mode,
+                "requested_repeat_count": requested_repeat_count,
+                "effective_repeat_count": effective_repeat_count,
                 "dual_decode_required": bool(result.get("dual_decode_required", False)),
                 "dual_decode_passed": bool(result.get("dual_decode_passed", False)),
                 "confirmation_verdicts": list(
@@ -783,7 +894,8 @@ class BookPipeline:
                 "spoken_text_sha256": str(signal.get("spoken_text_sha256") or ""),
                 LOCKED_NAME_ANCHOR_METRICS_KEY: anchor_metrics,
                 "repeated_short_context": (
-                    str(result.get("selected_context_mode", "")) == "repeat3"
+                    selected_context_mode
+                    in {"repeat3", COLLAPSED_SHORT_CONTEXT_MODE}
                     or str(result.get("reason", "")) == "ASR_REPEATED_SHORT_PASS"
                 ),
             },
@@ -850,6 +962,7 @@ class BookPipeline:
         *,
         verdict: str,
         failure_codes: tuple[str, ...] = (),
+        repair_action: str | None = None,
     ) -> int:
         segment_id = int(item["id"])
         artifact_sha256 = str(item["wav_sha256"] or "").strip()
@@ -872,6 +985,7 @@ class BookPipeline:
             verdict=verdict,
             metrics=result,
             failure_codes=failure_codes,
+            repair_action=repair_action,
             attempt=self._next_segment_quality_attempt(
                 segment_id,
                 SEGMENT_PERCEPTUAL_QUALITY_STAGE,
@@ -917,7 +1031,7 @@ class BookPipeline:
         reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
         short_audio_exemption = (
             perceptual_verdict == PERCEPTUAL_INCONCLUSIVE
-            and reason == "PERCEPTUAL_SHORT_AUDIO"
+            and reason == PERCEPTUAL_SHORT_AUDIO_REASON
         )
         return {
             **result,
@@ -928,13 +1042,18 @@ class BookPipeline:
     @staticmethod
     def _classify_perceptual_result(
         result: dict[str, Any],
+        *,
+        allow_short_audio_exemption: bool = True,
     ) -> tuple[str, tuple[str, ...]]:
         perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
-        if perceptual_verdict == PERCEPTUAL_OK or result.get("policy_exemption") == "short_audio":
+        if perceptual_verdict == PERCEPTUAL_OK or (
+            allow_short_audio_exemption
+            and result.get("policy_exemption") == "short_audio"
+        ):
             return QUALITY_VERDICT_PASS, ()
         reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
         warning_code = (
-            "PERCEPTUAL_NATURALNESS_REVIEW"
+            PERCEPTUAL_NATURALNESS_REVIEW_CODE
             if perceptual_verdict == PERCEPTUAL_REVIEW
             else reason
         )
@@ -947,6 +1066,12 @@ class BookPipeline:
         chapter: Any,
     ) -> Any:
         candidate_item = self._segment_candidate_item(segment, candidate)
+        candidate_repair_requirement = str(
+            candidate["candidate_repair_requirement"]
+        )
+        require_naturalness_improvement = (
+            candidate_repair_requirement == NATURALNESS_IMPROVEMENT_REQUIREMENT
+        )
         baseline_pitch_semitones = 0
         try:
             result = self._evaluate_perceptual_audio_item(
@@ -956,6 +1081,10 @@ class BookPipeline:
                     f"segment {segment['seq']}"
                 ),
             )
+            result = {
+                **result,
+                "candidate_repair_requirement": candidate_repair_requirement,
+            }
         except (PerceptualQAUnavailable, KeyError, TypeError, ValueError) as exc:
             reason = (
                 exc.reason
@@ -973,6 +1102,7 @@ class BookPipeline:
                 "reason": reason,
                 "review_required": True,
                 "baseline_pitch_semitones": baseline_pitch_semitones,
+                "candidate_repair_requirement": candidate_repair_requirement,
                 "error": str(exc),
             }
             self._record_segment_perceptual_evidence(
@@ -992,7 +1122,10 @@ class BookPipeline:
                 review_required=True,
             ) from exc
 
-        evidence_verdict, failure_codes = self._classify_perceptual_result(result)
+        evidence_verdict, failure_codes = self._classify_perceptual_result(
+            result,
+            allow_short_audio_exemption=not require_naturalness_improvement,
+        )
         quality_check_id = self._record_segment_perceptual_evidence(
             candidate_item,
             result,
@@ -1000,7 +1133,15 @@ class BookPipeline:
             failure_codes=failure_codes,
         )
         perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
-        if evidence_verdict != QUALITY_VERDICT_PASS and perceptual_verdict != PERCEPTUAL_REVIEW:
+        strict_short_audio = (
+            require_naturalness_improvement
+            and str(result.get("reason") or "") == PERCEPTUAL_SHORT_AUDIO_REASON
+        )
+        if (
+            evidence_verdict != QUALITY_VERDICT_PASS
+            and perceptual_verdict != PERCEPTUAL_REVIEW
+            and not strict_short_audio
+        ):
             reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
             raise ChapterQualityError(
                 f"Perceptual QA is inconclusive for {segment['stable_id']}: {reason}",
@@ -1096,18 +1237,27 @@ class BookPipeline:
                 self.db.mark_perceptual_result(int(row["id"]))
             else:
                 warning_code = failure_codes[0]
-                self._record_segment_perceptual_evidence(
+                quality_check_id = self._record_segment_perceptual_evidence(
                     row,
                     result,
                     verdict=evidence_verdict,
                     failure_codes=failure_codes,
+                    repair_action=(
+                        NATURALNESS_REPAIR_ACTION
+                        if perceptual_verdict == PERCEPTUAL_REVIEW
+                        else None
+                    ),
                 )
                 self.db.mark_perceptual_result(
                     int(row["id"]),
                     warning_code=warning_code,
                 )
                 if perceptual_verdict == PERCEPTUAL_REVIEW:
-                    review_candidates.append(dict(row))
+                    review_item = dict(row)
+                    review_item["perceptual_repair_trigger_check_id"] = (
+                        quality_check_id
+                    )
+                    review_candidates.append(review_item)
             self._progress(label, index, len(pending))
         return review_candidates
 
@@ -1120,12 +1270,54 @@ class BookPipeline:
         repair_rounds = int(
             self.settings.get("perceptual_qa", {}).get("repair_rounds", 0)
         )
-        if not review_candidates or repair_rounds <= 0:
+        if repair_rounds <= 0:
             return review_candidates
         repair_targets = {
             int(item["id"]): dict(item)
             for item in review_candidates
         }
+        chapter_segments = {
+            int(item["id"]): dict(item)
+            for item in self.db.list_segments(chapter_id=int(chapter["id"]))
+        }
+        durable_candidates: dict[int, list[Any]] = {}
+        for candidate in self.db.list_segment_candidates(
+            policy_hash=self.quality_policy_hash
+        ):
+            segment_id = int(candidate["segment_id"])
+            if segment_id in chapter_segments:
+                durable_candidates.setdefault(segment_id, []).append(candidate)
+        for segment_id, candidates in durable_candidates.items():
+            naturalness_candidates = [
+                candidate
+                for candidate in candidates
+                if str(candidate["candidate_repair_requirement"])
+                == NATURALNESS_IMPROVEMENT_REQUIREMENT
+            ]
+            if not naturalness_candidates:
+                continue
+            trigger_check_ids = {
+                int(candidate["repair_trigger_check_id"])
+                for candidate in naturalness_candidates
+                if candidate["repair_trigger_check_id"] is not None
+            }
+            if (
+                len(naturalness_candidates) != len(candidates)
+                or len(trigger_check_ids) != 1
+            ):
+                raise RuntimeError(
+                    "durable perceptual candidate ledger has mixed repair bindings"
+                )
+            repair_item = repair_targets.get(
+                segment_id,
+                dict(chapter_segments[segment_id]),
+            )
+            repair_item["perceptual_repair_trigger_check_id"] = next(
+                iter(trigger_check_ids)
+            )
+            repair_targets[segment_id] = repair_item
+        if not repair_targets:
+            return review_candidates
         unresolved: list[dict[str, Any]] = []
         maximum_state_iterations = max(8, repair_rounds * 6 + 8)
         for _state_iteration in range(maximum_state_iterations):
@@ -1140,7 +1332,7 @@ class BookPipeline:
             completed_ids: list[int] = []
             progressed = False
 
-            for segment_id in list(repair_targets):
+            for segment_id, repair_context in list(repair_targets.items()):
                 segment = dict(self.db.get_segment(segment_id))
                 plan = self.db.segment_candidate_resume_plan(
                     segment_id,
@@ -1149,10 +1341,36 @@ class BookPipeline:
                 )
                 action = str(plan["action"])
                 if action == "allocate":
+                    candidate_repair_requirement = str(
+                        plan.get(
+                            "candidate_repair_requirement",
+                            NATURALNESS_IMPROVEMENT_REQUIREMENT,
+                        )
+                    )
+                    repair_trigger_check_id = plan.get(
+                        "repair_trigger_check_id",
+                        repair_context.get(
+                            "perceptual_repair_trigger_check_id"
+                        ),
+                    )
+                    if (
+                        candidate_repair_requirement
+                        != NATURALNESS_IMPROVEMENT_REQUIREMENT
+                        or repair_trigger_check_id is None
+                    ):
+                        raise RuntimeError(
+                            "perceptual candidate resume lacks its durable naturalness trigger"
+                        )
                     candidate = self._allocate_segment_candidate(
                         segment,
                         int(plan["repair_round"]),
                         repair_rounds,
+                        candidate_repair_requirement=(
+                            candidate_repair_requirement
+                        ),
+                        repair_trigger_check_id=int(
+                            repair_trigger_check_id
+                        ),
                     )
                     generation_jobs.append((segment, candidate))
                     progressed = True
@@ -1763,7 +1981,11 @@ class BookPipeline:
         persisted_cap = int(row["generation_frame_cap"] or 0)
         if GENERATION_CEILING_WARNING not in warning_codes and persisted_cap <= 0:
             return dict(row)
-        frame_cap = short_utterance_repair_frame_cap(self.tts.spoken_text(row))
+        frame_cap = (
+            HA_VOCALIZATION_MAX_NEW_FRAMES
+            if is_standalone_ha_gasp(str(row["text"]))
+            else short_utterance_repair_frame_cap(self.tts.spoken_text(row))
+        )
         if frame_cap is None:
             return dict(row)
         if persisted_cap != frame_cap:
@@ -1877,7 +2099,6 @@ class BookPipeline:
         source_variant_available = (
             should_materialize_source
             and locked_anchors
-            and int(repair_round) % 2 == 1
             and callable(provider)
             and self._supports_pronunciation_delivery_variant(provider)
             and self._supports_pronunciation_delivery_variant(
@@ -2050,6 +2271,145 @@ class BookPipeline:
             )
         return True
 
+    @classmethod
+    def _prior_decodes_request_source_pronunciation(
+        cls,
+        evidence: list[dict[str, Any]],
+    ) -> bool:
+        requests = [
+            cls._decode_requests_source_pronunciation(result)
+            for result in evidence
+        ]
+        return len(requests) == 2 and all(requests)
+
+    @staticmethod
+    def _decode_is_complete_locked_name_pass(result: dict[str, Any]) -> bool:
+        if str(result.get("verdict") or "") != ASR_PASS:
+            return False
+        anchor_metrics = result.get(LOCKED_NAME_ANCHOR_METRICS_KEY)
+        result_failure_codes = result.get("failure_codes", [])
+        if not isinstance(anchor_metrics, dict) or not isinstance(
+            result_failure_codes,
+            list,
+        ):
+            raise RuntimeError("candidate ASR pass lacks structured anchor evidence")
+        count_fields = (
+            "repeat_count",
+            "anchor_count",
+            "required_occurrence_count",
+            "matched_occurrence_count",
+        )
+        if any(
+            isinstance(anchor_metrics.get(field), bool)
+            or not isinstance(anchor_metrics.get(field), int)
+            for field in count_fields
+        ):
+            raise RuntimeError("candidate ASR pass has malformed anchor occurrence counts")
+        repeat_count = int(anchor_metrics["repeat_count"])
+        anchor_count = int(anchor_metrics["anchor_count"])
+        required_count = int(anchor_metrics["required_occurrence_count"])
+        matched_count = int(anchor_metrics["matched_occurrence_count"])
+        pass_is_consistent = (
+            result.get("passed") is True
+            and isinstance(result.get("repairable"), bool)
+            and not result_failure_codes
+            and anchor_metrics.get("version") == LOCKED_NAME_ANCHOR_METRICS_VERSION
+            and anchor_metrics.get("adjudicated") is True
+            and anchor_metrics.get("passed") is True
+            and str(anchor_metrics.get("status") or "") == "pass"
+            and anchor_metrics.get("failure_codes") == []
+            and repeat_count >= 1
+            and anchor_count >= 1
+            and required_count == repeat_count * anchor_count
+            and matched_count == required_count
+        )
+        if not pass_is_consistent:
+            raise RuntimeError("candidate ASR pass anchor evidence is internally inconsistent")
+        return True
+
+    @classmethod
+    def _prior_source_candidate_requests_final_retry(
+        cls,
+        evidence: list[dict[str, Any]],
+    ) -> bool:
+        if len(evidence) != 2:
+            return False
+        variants = [
+            str(result.get("pronunciation_delivery_variant") or "")
+            for result in evidence
+        ]
+        if any(
+            variant not in {
+                PRONUNCIATION_DELIVERY_LOCKED,
+                PRONUNCIATION_DELIVERY_SOURCE,
+            }
+            for variant in variants
+        ):
+            raise RuntimeError(
+                "candidate ASR evidence has an unsupported pronunciation variant"
+            )
+        if any(variant != variants[0] for variant in variants):
+            raise RuntimeError("candidate ASR evidence mixes pronunciation variants")
+        if variants[0] != PRONUNCIATION_DELIVERY_SOURCE:
+            return False
+        requests = [
+            cls._decode_requests_source_pronunciation(result)
+            for result in evidence
+        ]
+        complete_passes = [
+            cls._decode_is_complete_locked_name_pass(result)
+            for result in evidence
+        ]
+        return (
+            requests.count(True) == 1
+            and complete_passes.count(True) == 1
+            and all(
+                request != complete_pass
+                for request, complete_pass in zip(requests, complete_passes)
+            )
+        )
+
+    @classmethod
+    def _prior_source_candidate_requests_final_split(
+        cls,
+        evidence: list[dict[str, Any]],
+    ) -> bool:
+        if len(evidence) != 2:
+            return False
+        variants = [
+            str(result.get("pronunciation_delivery_variant") or "")
+            for result in evidence
+        ]
+        if any(
+            variant not in {
+                PRONUNCIATION_DELIVERY_LOCKED,
+                PRONUNCIATION_DELIVERY_SOURCE,
+            }
+            for variant in variants
+        ):
+            raise RuntimeError(
+                "candidate ASR evidence has an unsupported pronunciation variant"
+            )
+        if any(variant != variants[0] for variant in variants):
+            raise RuntimeError("candidate ASR evidence mixes pronunciation variants")
+        return (
+            variants[0] == PRONUNCIATION_DELIVERY_SOURCE
+            and all(
+                cls._decode_requests_source_pronunciation(result)
+                for result in evidence
+            )
+        )
+
+    @staticmethod
+    def _segment_candidate_split_seed_salt(
+        repair_round: int,
+        pronunciation_delivery_variant: str,
+    ) -> str:
+        return segment_candidate_split_seed_salt(
+            repair_round,
+            pronunciation_delivery_variant,
+        )
+
     def _require_segment_candidate_pronunciation_delivery(
         self,
         row: Any,
@@ -2084,14 +2444,36 @@ class BookPipeline:
             return f"{prefix}_{int(tts_attempt)}"
         return f"{prefix}_{pronunciation_delivery_variant}_{int(tts_attempt)}"
 
+    @staticmethod
+    def _segment_candidate_split_strategy(candidate: Any) -> str:
+        is_final_source_candidate = (
+            int(candidate["repair_round"]) + 1 == int(candidate["repair_budget"])
+            and str(candidate["pronunciation_delivery_variant"])
+            == PRONUNCIATION_DELIVERY_SOURCE
+        )
+        return (
+            CLAUSE_SPLIT_STRATEGY
+            if is_final_source_candidate
+            else SENTENCE_SPLIT_STRATEGY
+        )
+
     def _allocate_segment_candidate(
         self,
         row: Any,
         repair_round: int,
         max_repair_rounds: int,
+        *,
+        candidate_repair_requirement: str = STANDARD_CANDIDATE_GATE_REQUIREMENT,
+        repair_trigger_check_id: int | None = None,
     ) -> Any:
         source_variant_requested = False
-        if int(repair_round) % 2 == 1:
+        force_clause_split = False
+        prior_decode_evidence: list[dict[str, Any]] = []
+        should_inspect_prior_evidence = int(repair_round) > 0 and (
+            int(repair_round) % 2 == 1
+            or int(repair_round) + 1 == int(max_repair_rounds)
+        )
+        if should_inspect_prior_evidence:
             prior_decode_evidence = (
                 self.db.previous_segment_candidate_decode_evidence(
                     segment_id=int(row["id"]),
@@ -2099,11 +2481,27 @@ class BookPipeline:
                     repair_round=int(repair_round),
                 )
             )
-            source_requests = [
-                self._decode_requests_source_pronunciation(result)
-                for result in prior_decode_evidence
-            ]
-            source_variant_requested = any(source_requests)
+            if int(repair_round) % 2 == 1:
+                source_variant_requested = (
+                    self._prior_decodes_request_source_pronunciation(
+                        prior_decode_evidence
+                    )
+                )
+            else:
+                source_variant_requested = (
+                    self._prior_source_candidate_requests_final_retry(
+                        prior_decode_evidence
+                    )
+                )
+                force_clause_split = (
+                    not source_variant_requested
+                    and self._prior_source_candidate_requests_final_split(
+                        prior_decode_evidence
+                    )
+                )
+                source_variant_requested = (
+                    source_variant_requested or force_clause_split
+                )
         pronunciation_variant, spoken_text, _anchors = (
             self._segment_candidate_pronunciation_delivery(
                 row,
@@ -2111,11 +2509,34 @@ class BookPipeline:
                 source_variant_requested=source_variant_requested,
             )
         )
+        if (
+            force_clause_split
+            and self._clause_split_is_unavailable(spoken_text)
+        ):
+            force_clause_split = False
+            pronunciation_variant, spoken_text, _anchors = (
+                self._segment_candidate_pronunciation_delivery(
+                    row,
+                    repair_round,
+                )
+            )
         spoken_text_sha256 = hashlib.sha256(spoken_text.encode("utf-8")).hexdigest()
-        seed_salt = self._segment_candidate_seed_salt(
-            repair_round,
-            0,
-            pronunciation_variant,
+        tts_attempt = (
+            int(self.settings["tts"]["max_retries"])
+            if force_clause_split
+            else 0
+        )
+        seed_salt = (
+            self._segment_candidate_split_seed_salt(
+                repair_round,
+                pronunciation_variant,
+            )
+            if force_clause_split
+            else self._segment_candidate_seed_salt(
+                repair_round,
+                tts_attempt,
+                pronunciation_variant,
+            )
         )
         return self.db.allocate_segment_candidate(
             segment_id=int(row["id"]),
@@ -2128,15 +2549,36 @@ class BookPipeline:
             candidates_root=self._segment_candidate_root(),
             pronunciation_delivery_variant=pronunciation_variant,
             expected_spoken_text_sha256=spoken_text_sha256,
+            tts_attempt=tts_attempt,
+            generation_strategy=(
+                GENERATION_STRATEGY_SPLIT
+                if force_clause_split
+                else GENERATION_STRATEGY_DIRECT
+            ),
             perceptual_required=self._perceptual_qa_enabled(),
+            candidate_repair_requirement=candidate_repair_requirement,
+            repair_trigger_check_id=repair_trigger_check_id,
         )
+
+    @staticmethod
+    def _clause_split_is_unavailable(spoken_text: str) -> bool:
+        try:
+            parts, _max_chars = split_text_for_strategy(
+                spoken_text,
+                CLAUSE_SPLIT_STRATEGY,
+            )
+        except ValueError:
+            return True
+        return len(parts) < 2
 
     def _segment_candidate_item(self, segment: Any, candidate: Any) -> dict[str, Any]:
         variant, _spoken_text, _anchors = (
             self._require_segment_candidate_pronunciation_delivery(segment, candidate)
         )
         item = dict(segment)
-        signal = self._segment_signal_provenance(dict(candidate))
+        candidate_signal_item = dict(segment)
+        candidate_signal_item["signal_json"] = candidate["signal_json"]
+        signal = self._segment_signal_provenance(candidate_signal_item)
         split_recovery = bool(signal.get("split_parts"))
         item.update(
             {
@@ -2284,12 +2726,22 @@ class BookPipeline:
             last_error = f"{last_error}; split=short utterance is not splittable"
         else:
             split_attempt = retries
-            split_seed_salt = f"asr_clarity_candidate_{repair_round}_split"
-            if pronunciation_variant != PRONUNCIATION_DELIVERY_LOCKED:
-                split_seed_salt = (
-                    f"asr_clarity_candidate_{repair_round}_"
-                    f"{pronunciation_variant}_split"
+            split_strategy = self._segment_candidate_split_strategy(candidate)
+            try:
+                _split_parts, split_max_chars = split_text_for_strategy(
+                    spoken_text,
+                    split_strategy,
                 )
+            except ValueError:
+                split_strategy = SENTENCE_SPLIT_STRATEGY
+                _split_parts, split_max_chars = split_text_for_strategy(
+                    spoken_text,
+                    split_strategy,
+                )
+            split_seed_salt = self._segment_candidate_split_seed_salt(
+                repair_round,
+                pronunciation_variant,
+            )
             split_seed = self.tts.generation_seed(row, split_seed_salt)
             if int(candidate["tts_attempt"]) < split_attempt:
                 candidate = self.db.restart_segment_candidate_generation(
@@ -2297,6 +2749,7 @@ class BookPipeline:
                     expected_generation_seed=int(candidate["generation_seed"]),
                     generation_seed=split_seed,
                     tts_attempt=split_attempt,
+                    generation_strategy=GENERATION_STRATEGY_SPLIT,
                 )
             elif (
                 int(candidate["tts_attempt"]) != split_attempt
@@ -2311,6 +2764,7 @@ class BookPipeline:
                         delivery_mode=DELIVERY_CLARITY,
                         seed_salt_prefix=split_seed_salt,
                         pronunciation_delivery_variant=pronunciation_variant,
+                        split_strategy=split_strategy,
                     )
                     or []
                 )
@@ -2328,6 +2782,8 @@ class BookPipeline:
                 metrics["pronunciation_delivery_variant"] = pronunciation_variant
                 metrics["split_checkpoint_seed"] = split_seed
                 metrics["split_seed_salt_prefix"] = split_seed_salt
+                metrics[SPLIT_STRATEGY_FIELD] = split_strategy
+                metrics[SPLIT_MAX_CHARS_FIELD] = split_max_chars
                 metrics["split_parts"] = split_provenance
                 if split_provenance:
                     first_part = split_provenance[0]
@@ -2494,6 +2950,11 @@ class BookPipeline:
                 "đang thử chia nhỏ để cứu."
             )
             try:
+                split_strategy = SENTENCE_SPLIT_STRATEGY
+                _split_parts, split_max_chars = split_text_for_strategy(
+                    spoken_text,
+                    split_strategy,
+                )
                 split_seed_salt = f"{seed_salt_prefix}_split"
                 split_seed = self.tts.generation_seed(row, split_seed_salt)
                 self.db.mark_generating(
@@ -2509,6 +2970,7 @@ class BookPipeline:
                         output,
                         delivery_mode=delivery_mode,
                         seed_salt_prefix=split_seed_salt,
+                        split_strategy=split_strategy,
                     )
                     or []
                 )
@@ -2528,6 +2990,8 @@ class BookPipeline:
                 ).hexdigest()
                 metrics["split_checkpoint_seed"] = split_seed
                 metrics["split_seed_salt_prefix"] = split_seed_salt
+                metrics[SPLIT_STRATEGY_FIELD] = split_strategy
+                metrics[SPLIT_MAX_CHARS_FIELD] = split_max_chars
                 metrics["split_parts"] = split_provenance
                 if split_provenance:
                     first_part = split_provenance[0]
@@ -2594,6 +3058,7 @@ class BookPipeline:
         delivery_mode: str = DELIVERY_PRIMARY,
         seed_salt_prefix: str = "split",
         pronunciation_delivery_variant: str = PRONUNCIATION_DELIVERY_LOCKED,
+        split_strategy: str = SENTENCE_SPLIT_STRATEGY,
     ) -> list[dict[str, Any]]:
         text, _anchors = self._spoken_text_with_pronunciation_variant(
             row,
@@ -2601,20 +3066,11 @@ class BookPipeline:
         )
         if len(text) < 100:
             raise AudioQualityError("segment too short to split safely")
-        words = text.split()
-        pieces: list[str] = []
-        current = ""
-        for word in words:
-            candidate = f"{current} {word}".strip()
-            if current and len(candidate) > 170:
-                pieces.append(current)
-                current = word
-            else:
-                current = candidate
-        if current:
-            pieces.append(current)
+        pieces, _split_max_chars = split_text_for_strategy(text, split_strategy)
         if len(pieces) < 2:
             raise AudioQualityError("split produced fewer than two pieces")
+        if " ".join(pieces) != text:
+            raise RuntimeError("configured split changed the spoken text")
         part_paths: list[Path] = []
         part_provenance: list[dict[str, Any]] = []
         try:
@@ -2637,6 +3093,11 @@ class BookPipeline:
                 ).hexdigest()
                 part_path = output.with_name(output.stem + f".split{index:02d}.wav")
                 part_paths.append(part_path)
+                part_seed_salt = f"{seed_salt_prefix}_part_{index}"
+                expected_part_seed = self.tts.generation_seed(
+                    part_row,
+                    part_seed_salt,
+                )
                 _checksum, part_metrics, part_seed = (
                     self._synthesize_atomic_with_pronunciation_variant(
                         part_row,
@@ -2644,10 +3105,18 @@ class BookPipeline:
                         pronunciation_delivery_variant=(
                             pronunciation_delivery_variant
                         ),
-                        seed_salt=f"{seed_salt_prefix}_part_{index}",
+                        seed_salt=part_seed_salt,
                         delivery_mode=delivery_mode,
                     )
                 )
+                if (
+                    isinstance(part_seed, bool)
+                    or not isinstance(part_seed, int)
+                    or part_seed != expected_part_seed
+                ):
+                    raise RuntimeError(
+                        "split part generation seed differs from its deterministic salt"
+                    )
                 if (
                     str(
                         part_metrics.get("pronunciation_delivery_variant") or ""
@@ -2748,19 +3217,20 @@ class BookPipeline:
             max_wer=float(self.settings["asr"]["max_wer"]),
         )
         repeated: dict[str, Any] | None = None
+        collapsed_repeated: dict[str, Any] | None = None
         selected = direct
         selected_context = "direct"
         if _asr_verdict(direct) != ASR_PASS and verifier.can_verify_repeated_short(
             expected_text
         ):
-            repeated = verifier.verify_repeated_short(
+            repeated_raw = verifier.verify_repeated_short(
                 expected_text,
                 wav_path,
                 confirmation=confirmation,
             )
             repeated = adjudicate_locked_name_anchors(
                 expected_text,
-                repeated,
+                repeated_raw,
                 locked_name_anchors,
                 repeat_count=SHORT_CONTEXT_REPEAT_COUNT,
                 min_similarity=float(self.settings["asr"]["min_similarity"]),
@@ -2769,10 +3239,27 @@ class BookPipeline:
             if _asr_verdict(repeated) == ASR_PASS:
                 selected = repeated
                 selected_context = "repeat3"
+            else:
+                collapsed_repeated = adjudicate_collapsed_repeated_short(
+                    expected_text,
+                    repeated_raw,
+                    locked_name_anchors,
+                    requested_repeat_count=SHORT_CONTEXT_REPEAT_COUNT,
+                    min_similarity=float(self.settings["asr"]["min_similarity"]),
+                    max_wer=float(self.settings["asr"]["max_wer"]),
+                )
+                if (
+                    collapsed_repeated is not None
+                    and _asr_verdict(collapsed_repeated) == ASR_PASS
+                ):
+                    selected = collapsed_repeated
+                    selected_context = COLLAPSED_SHORT_CONTEXT_MODE
 
         candidates = [("direct", direct)]
         if repeated is not None:
             candidates.append(("repeat3", repeated))
+        if collapsed_repeated is not None:
+            candidates.append((COLLAPSED_SHORT_CONTEXT_MODE, collapsed_repeated))
         selected_evidence: dict[str, Any] | None = None
         for context_mode, candidate in candidates:
             evidence = self._record_segment_asr_decode_evidence(
@@ -3234,41 +3721,62 @@ class BookPipeline:
                         (item, self.db.get_segment_candidate(int(plan["candidate_id"])))
                     )
                 elif action == "exhausted":
+                    candidate_attempts = self.db.segment_candidate_attempt_summary(
+                        segment_id,
+                        self.quality_policy_hash,
+                    )
                     result = last_results.get(segment_id, {})
                     verdict = _asr_verdict(result)
                     reason = str(result.get("reason", "ASR_MISMATCH"))
-                    warning = (
-                        reason
-                        if verdict == ASR_INCONCLUSIVE
-                        or reason
-                        in {
-                            ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
-                            ASR_LOCKED_NAME_ANCHOR_MISMATCH,
-                        }
-                        else "ASR_MISMATCH_UNRESOLVED"
+                    perceptual_review_exhausted = (
+                        _candidate_budget_exhausted_on_perceptual_review(
+                            candidate_attempts
+                        )
                     )
-                    failure_codes = tuple(
-                        str(code)
-                        for code in result.get("failure_codes", [])
-                        if str(code).strip()
-                    )
+                    if perceptual_review_exhausted:
+                        warning = PERCEPTUAL_NATURALNESS_REVIEW_CODE
+                        error = (
+                            "Perceptual naturalness review remained after all "
+                            "immutable repair candidates"
+                        )
+                        final_verdict = QUALITY_VERDICT_FAIL
+                        failure_codes = (PERCEPTUAL_NATURALNESS_REVIEW_CODE,)
+                    else:
+                        warning = (
+                            reason
+                            if verdict == ASR_INCONCLUSIVE
+                            or reason
+                            in {
+                                ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
+                                ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+                            }
+                            else "ASR_MISMATCH_UNRESOLVED"
+                        )
+                        error = (
+                            "ASR could not produce a trustworthy verdict after "
+                            "immutable repairs"
+                            if verdict == ASR_INCONCLUSIVE
+                            else "ASR mismatch remained after all immutable repair candidates"
+                        )
+                        final_verdict = (
+                            ASR_INCONCLUSIVE
+                            if verdict == ASR_INCONCLUSIVE
+                            else QUALITY_VERDICT_FAIL
+                        )
+                        failure_codes = tuple(
+                            str(code)
+                            for code in result.get("failure_codes", [])
+                            if str(code).strip()
+                        )
                     self.db.finalize_segment_candidate_exhaustion(
                         segment_id=segment_id,
                         policy_hash=self.quality_policy_hash,
                         max_repair_rounds=repair_rounds,
                         incumbent_sha256=str(item["wav_sha256"]),
                         trigger_quality_check_id=int(context["trigger_quality_check_id"]),
-                        error=(
-                            "ASR could not produce a trustworthy verdict after immutable repairs"
-                            if verdict == ASR_INCONCLUSIVE
-                            else "ASR mismatch remained after all immutable repair candidates"
-                        ),
+                        error=error,
                         warning_code=warning,
-                        final_verdict=(
-                            ASR_INCONCLUSIVE
-                            if verdict == ASR_INCONCLUSIVE
-                            else QUALITY_VERDICT_FAIL
-                        ),
+                        final_verdict=final_verdict,
                         failure_codes=failure_codes,
                     )
                     self.db.event(
@@ -3279,10 +3787,7 @@ class BookPipeline:
                             "chapter": str(chapter["title"]),
                             "segment_id": segment_id,
                             "incumbent_sha256": str(item["wav_sha256"]),
-                            "candidate_attempts": self.db.segment_candidate_attempt_summary(
-                                segment_id,
-                                self.quality_policy_hash,
-                            ),
+                            "candidate_attempts": candidate_attempts,
                         },
                     )
                     completed_ids.append(segment_id)
