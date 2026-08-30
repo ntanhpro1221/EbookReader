@@ -144,4 +144,57 @@ Phân bố các quyết định delivery khác trong cùng lần chạy, để t
 `volume` 177 normal / 20 loud / 2 soft; `emotion` 143 neutral / 19 angry / 16 afraid / 9 sad / 6 surprised /
 4 tired / 2 happy; `intensity` 106 số 0 / 42 số 1 / 39 số 2 / 12 số 3.
 
+### Kết quả cuối lần chạy alpha.9: 15/199 segment fail, 0/2 chapter publish
+
+| | |
+|---|---|
+| Segment đạt | 184 / 199 |
+| Segment fail | 15 — **tất cả** đều `ASR_LOCKED_NAME_ANCHOR_MISMATCH` |
+| Chapter publish | **0 / 2** |
+
+#### Anchor tên riêng đang từ chối chính cách đọc đúng
+
+Đọc evidence của cả 15 segment (bản `locked_spoken_v1` cuối cùng), 23 anchor trượt:
+
+| surface | đọc là | Whisper nghe | đánh giá |
+|---|---|---|---|
+| Joel | Giô-en | `joanne` ×5 | TTS đúng, Whisper viết bằng chữ Latinh |
+| Lucien | Lu-si-en | `lucienne`, `lucianne` | TTS đúng |
+| Iven | Ai-vân | `ivan` ×3 | TTS đúng |
+| Alisa | A-li-sa | `alyssa` ×2 | TTS đúng |
+| John | Giôn | `dôn`, `dốn` | TTS đúng — `gi` và `d` **đồng âm** /z/ trong tiếng Việt |
+| Wayne | Uên | `nè`, `warner` | lỗi thật |
+| Lucien | Lu-si-en | `rusien` | lỗi thật |
+| Alisa | A-li-sa | `xá` | lỗi thật |
+
+Khoảng **13/23 là từ chối nhầm**. Nguyên nhân gốc là **sai lệch dụng cụ đo**: gate so *chính tả*
+mà Whisper chọn cho một cái tên ngoại quốc đọc theo âm Việt, trong khi Whisper là model đa ngữ có
+thiên lệch tiếng Anh nên viết lại thành tên tiếng Anh. Chính tả của Whisper **không phải bằng chứng
+về cách phát âm**.
+
+Hệ quả với sản phẩm: 7,5% segment fail, và chỉ cần một segment fail là cả chapter bị giữ lại. Với
+915 chapter thì **không chapter nào từng được publish**. Đây là blocker số 1, trên cả lỗi loudness.
+
+Bằng chứng cho thấy `Aalto`, `Alisa` khớp ổn định ở `locked_spoken_v1`; chuyển sang variant
+`source_spelling_v1` thì chính chúng lại trượt (`An-tô` bị đòi phải nghe ra `aalto`). Nghĩa là nhánh
+repair đổi variant đang làm tình hình xấu đi chứ không cứu được.
+
+#### Lỗi rõ ràng, không cần bàn: cùng một tên có hai cách đọc đã khóa
+
+| surface | spoken_form |
+|---|---|
+| `Lucien` | `Lu-si-en` |
+| `Evans` | `E-vân` |
+| `Lucien Evans` | `Lư-xi-ên Ê-van` |
+
+Entry nhiều từ tạo ra cách đọc khác hẳn cho chính hai tên đó (`u`→`ư`, `si`→`xi`, `en`→`ên`).
+Đã xác nhận nó thực sự được áp dụng vào `spoken_text`. Người nghe sẽ nghe cùng một nhân vật được gọi
+là "Lu-si-en" ở chương này và "Lư-xi-ên" ở chương khác. Vi phạm thẳng invariant *"cùng một tên không
+đổi cách đọc theo giọng, chapter, confidence threshold hoặc lần resume"*.
+
+#### Bài học quy trình
+
+**Không di chuyển thư mục project.** SQLite lưu đường dẫn WAV tuyệt đối; chuyển đi là mọi công cụ
+audit mất dấu file. Từ alpha.10, tạo project thẳng trong `_versions/<tag>/` bằng `--output-root`.
+
 **Output:** `D:\Novels\Audiobooks\texttmp_iter1_cbde22ef6b` (chapter 000–001).
