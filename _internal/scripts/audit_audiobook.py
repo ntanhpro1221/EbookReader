@@ -110,6 +110,20 @@ def _silence_runs(audio: np.ndarray, sample_rate: int) -> list[tuple[float, floa
     return runs
 
 
+def _voiced_seconds(audio: np.ndarray, sample_rate: int) -> float:
+    """Seconds above the silence floor, i.e. time actually spent articulating.
+
+    Gross rate (syllables over the whole span) moves when `silence_p` changes the
+    pause proportion inside a segment. Articulation rate does not, so comparing the
+    two separates "the director's pace changed the pauses" from "it changed how fast
+    the voice actually speaks".
+    """
+    levels, frame = _frame_db(audio, sample_rate)
+    if levels.size == 0:
+        return 0.0
+    return float(np.count_nonzero(levels > SILENCE_FLOOR_DBFS) * frame / sample_rate)
+
+
 def _percentile(values: list[float], q: float) -> float:
     return float(np.percentile(np.asarray(values, dtype=np.float64), q)) if values else 0.0
 
@@ -149,6 +163,7 @@ def audit_segments(connection: sqlite3.Connection, chapter_filter: int | None) -
         duration = audio.size / sample_rate if sample_rate else 0.0
         lead, tail = _edge_silence(audio, sample_rate)
         speech = max(duration - lead - tail, 1e-6)
+        voiced = _voiced_seconds(audio, sample_rate)
         syllables = spoken_syllable_count(str(row["text"]))
         try:
             signal = json.loads(str(row["signal_json"] or "{}"))
@@ -172,6 +187,10 @@ def audit_segments(connection: sqlite3.Connection, chapter_filter: int | None) -
             "tail_silence": tail,
             "syllables": syllables,
             "rate": syllables / speech if syllables else 0.0,
+            "articulation_rate": (
+                syllables / voiced if syllables and voiced > 0.05 else 0.0
+            ),
+            "voiced_seconds": voiced,
             "lufs": _loudness(audio, sample_rate),
             "postprocess": str(signal.get("postprocess_profile") or "none"),
             "asr_similarity": row["asr_similarity"],
@@ -254,18 +273,32 @@ def summarise_chapter(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _grouped_rate(records: list[dict[str, Any]], field: str) -> dict[str, dict[str, float]]:
-    buckets: dict[str, list[float]] = defaultdict(list)
+    gross: dict[str, list[float]] = defaultdict(list)
+    articulation: dict[str, list[float]] = defaultdict(list)
+    pause: dict[str, list[float]] = defaultdict(list)
     for item in records:
-        if item["syllables"] >= 3 and item["rate"] > 0:
-            buckets[str(item[field])].append(item["rate"])
+        if item["syllables"] < 3 or item["rate"] <= 0:
+            continue
+        key = str(item[field])
+        gross[key].append(item["rate"])
+        if item["articulation_rate"] > 0:
+            articulation[key].append(item["articulation_rate"])
+        if item["duration"] > 0:
+            pause[key].append(1.0 - item["voiced_seconds"] / item["duration"])
     return {
         key: {
             "count": len(values),
             "median": round(statistics.median(values), 3),
             "p05": round(_percentile(values, 5), 3),
             "p95": round(_percentile(values, 95), 3),
+            "articulation_median": (
+                round(statistics.median(articulation[key]), 3) if articulation[key] else 0.0
+            ),
+            "silence_fraction_median": (
+                round(statistics.median(pause[key]), 3) if pause[key] else 0.0
+            ),
         }
-        for key, values in sorted(buckets.items())
+        for key, values in sorted(gross.items())
     }
 
 
@@ -458,10 +491,12 @@ def main() -> int:
             if len(grouped) < 2:
                 continue
             rendered = "  ".join(
-                f"{key}(n={stats['count']})={stats['median']:.2f}"
+                f"{key}(n={stats['count']}) gross={stats['median']:.2f} "
+                f"artic={stats['articulation_median']:.2f} "
+                f"sil={stats['silence_fraction_median'] * 100:.0f}%"
                 for key, stats in grouped.items()
             )
-            print(f"  {field.replace('rate_by_', 'rate/'):14s} {rendered}")
+            print(f"  {field.replace('rate_by_', 'by '):12s} {rendered}")
 
     for entry in mp3_reports:
         print(
