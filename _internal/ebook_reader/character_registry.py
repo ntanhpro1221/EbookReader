@@ -19,6 +19,7 @@ from .database import (
 )
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
+    CASTING_REGIONS,
     STYLE_NEWS,
     VIENEU_PRESETS,
     casting_preset_priority,
@@ -230,14 +231,19 @@ class PresetAllocator:
     def choose(self, gender: str, *, npc: bool) -> tuple[dict[str, str], int]:
         candidates = [
             preset
-            for preset in casting_presets(gender, include_regional=npc)
+            for preset in casting_presets(gender)
             if preset["name"] != self.narrator_voice
         ]
         if not candidates:
+            # Nothing of this gender is left, so widen across gender - but never across
+            # the region allowlist. A fallback that reached the whole catalog would put
+            # the excluded Central presets straight back into the book.
             candidates = [
                 preset
                 for preset in VIENEU_PRESETS
-                if preset["name"] != self.narrator_voice and preset["style"] != STYLE_NEWS
+                if preset["name"] != self.narrator_voice
+                and preset["style"] != STYLE_NEWS
+                and preset["region"] in CASTING_REGIONS
             ]
         pool = "npc" if npc else "named"
         usage = self.pool_usage[pool]

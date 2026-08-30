@@ -130,6 +130,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   của VieNeu và không thay identity giọng để giả lập cảm xúc.
 - Chuẩn hóa các cách viết như `haizzzzz`, `hừmmmm` hoặc `[thở dài]` chỉ được áp dụng lên `spoken_text` dùng chung cho
   TTS và expected ASR; văn bản nguồn, hash và segment đã checkpoint không được sửa.
+- Giọng miền Trung **không bao giờ được phân vai**, kể cả cho NPC, kể cả qua nhánh fallback khi pool cạn.
+  Tiếng Trung là phương ngữ khó hiểu nhất với người nghe hai miền còn lại, và hệ thanh điệu của nó lệch xa
+  nhất so với chính tả chuẩn miền Bắc mà audiobook đọc từ đó; đo trên audio đã commit, preset Trung sai thanh
+  ở **từ thường** chứ không phải ở tên riêng (`khốn kiếp` → `khôn kiêp`), mà thanh điệu mang nghĩa từ vựng.
+  Preset vẫn nằm trong catalog vì VieNeu có chúng và sách cũ có thể đã khóa chúng — chỉ là không được cast.
+  Mọi đường dẫn tới preset đều phải tôn trọng `CASTING_REGIONS`; một fallback quét cả catalog sẽ đưa chúng
+  quay lại sách.
 - Preset được phân bổ theo giới tính và ưu tiên dùng hết pool phù hợp trước khi tái sử dụng. Trong cùng mức sử dụng,
   giọng tự nhiên miền Bắc đứng đầu, tiếp theo là giọng tự nhiên miền Nam; các giọng còn lại giữ thứ tự cũ.
 - Pitch âm phải theo giới hạn từng preset đo trên preview: Phạm Tuyên không hạ; Xuân Vĩnh, Thái Sơn,

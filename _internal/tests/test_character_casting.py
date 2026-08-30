@@ -241,7 +241,7 @@ def _reconciliation_db(tmp_path: Path) -> ProjectDB:
     return db
 
 
-def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_regional_to_npcs(
+def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_never_casts_central(
     tmp_path: Path,
 ) -> None:
     db = _casting_db(tmp_path)
@@ -277,8 +277,11 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_region
         preset_by_name(str(profile_by_id[int(row["voice_profile_id"])]["preset_name"]))
         for row in local_rows
     ]
-    assert any(preset["region"] == REGION_CENTRAL for preset in local_presets)
-    assert any(preset["region"] != REGION_CENTRAL for preset in local_presets)
+    # NPCs used to reach a wider pool that added the Central presets. Those voices are
+    # excluded from casting entirely now, so the wider pool has to be gone for NPCs too -
+    # including through the "nothing left of this gender" fallback.
+    assert {preset["region"] for preset in local_presets} <= {REGION_NORTH, REGION_SOUTH}
+    assert local_presets
 
     named_male_profiles = [
         profile_by_id[int(row["voice_profile_id"])]
@@ -308,11 +311,11 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_limits_region
 def test_casting_prioritizes_natural_north_then_natural_south() -> None:
     male_order = [
         (preset["region"], preset["style"])
-        for preset in casting_presets(GENDER_MALE, include_regional=True)
+        for preset in casting_presets(GENDER_MALE)
     ]
     female_order = [
         (preset["region"], preset["style"])
-        for preset in casting_presets(GENDER_FEMALE, include_regional=True)
+        for preset in casting_presets(GENDER_FEMALE)
     ]
 
     assert male_order == [
@@ -320,15 +323,14 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
         (REGION_SOUTH, STYLE_NATURAL),
         (REGION_NORTH, STYLE_STORY),
         (REGION_SOUTH, STYLE_STORY),
-        (REGION_CENTRAL, STYLE_NATURAL),
     ]
     assert female_order == [
         (REGION_NORTH, STYLE_NATURAL),
         (REGION_NORTH, STYLE_NATURAL),
         (REGION_NORTH, STYLE_STORY),
         (REGION_SOUTH, STYLE_STORY),
-        (REGION_CENTRAL, STYLE_NATURAL),
     ]
+    assert REGION_CENTRAL not in {region for region, _style in male_order + female_order}
 
 
 def test_clear_named_aliases_lock_to_one_character_and_voice(tmp_path: Path) -> None:
@@ -964,3 +966,22 @@ def test_pitch_ranges_follow_measured_preset_depth() -> None:
     assert pitch_variants_for_preset("Thái Sơn", 2) == (0, -1, 1, 2)
     assert pitch_variants_for_preset("Thanh Bình", 2) == (0, -1, 1, -2, 2)
     assert pitch_variants_for_preset("Ngọc Trân", 2) == (0, -1, 1, 2)
+
+
+def test_central_presets_are_never_cast_through_any_path() -> None:
+    """Removing a region is only real if every path that reaches presets respects it.
+
+    `choose` has a fallback for when nothing of the requested gender is left, and that
+    fallback used to scan the whole catalogue - which would have put the excluded Central
+    presets straight back into the book.
+    """
+    for gender in (GENDER_MALE, GENDER_FEMALE):
+        assert all(
+            preset["region"] != REGION_CENTRAL for preset in casting_presets(gender)
+        )
+
+    central = [preset for preset in VIENEU_PRESETS if preset["region"] == REGION_CENTRAL]
+    assert central, "the catalogue should still describe the presets VieNeu offers"
+    for preset in central:
+        # Still resolvable, so a book that locked one before the change keeps working.
+        assert preset_by_name(str(preset["name"]))["region"] == REGION_CENTRAL

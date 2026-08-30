@@ -21,7 +21,14 @@ STYLE_PRIORITY = {
     STYLE_NATURAL: 0,
     STYLE_STORY: 1,
 }
-PRIMARY_CASTING_REGIONS = {REGION_NORTH, REGION_SOUTH}
+# Central Vietnamese is the least mutually intelligible of the three dialects, and its
+# tone system diverges most from the written Northern-standard orthography an audiobook
+# reads from. Measured on committed audio, the Central presets missed tones on ordinary
+# vocabulary rather than on names - "khốn kiếp" heard as "khôn kiêp", "thuần khiết" as
+# "thuân khiệt" - and tone carries lexical meaning, so that is a comprehension cost for
+# listeners, not only for ASR. The presets stay in the catalog because VieNeu offers them
+# and older books may have locked them; they are simply never cast.
+CASTING_REGIONS = frozenset({REGION_NORTH, REGION_SOUTH})
 CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 DEFAULT_NARRATOR_BY_GENDER = {
     GENDER_MALE: "Phạm Tuyên",
@@ -144,9 +151,8 @@ def preset_priority(preset: dict[str, Any]) -> tuple[int, int, str]:
 def casting_preset_priority(preset: dict[str, Any]) -> tuple[int, int, int, str]:
     region = str(preset.get("region", ""))
     style = str(preset.get("style", ""))
-    is_primary_natural_voice = style == STYLE_NATURAL and region in PRIMARY_CASTING_REGIONS
     return (
-        0 if is_primary_natural_voice else 1,
+        0 if style == STYLE_NATURAL else 1,
         REGION_PRIORITY.get(region, len(REGION_PRIORITY)),
         STYLE_PRIORITY.get(style, len(STYLE_PRIORITY)),
         str(preset.get("name", "")).casefold(),
@@ -188,12 +194,18 @@ def narrator_presets(
     )
 
 
-def casting_presets(gender: str, *, include_regional: bool) -> list[dict[str, str]]:
+def casting_presets(gender: str) -> list[dict[str, str]]:
+    """Every preset eligible for casting, best first.
+
+    There is one region allowlist for every role. NPCs used to reach a wider pool that
+    added the Central presets; that pool is gone with them, so the distinction would now
+    only be a parameter that never changes anything.
+    """
     candidates = [
         preset
         for preset in VIENEU_PRESETS
         if preset["gender"] == gender
         and preset["style"] != STYLE_NEWS
-        and (include_regional or preset["region"] in {REGION_NORTH, REGION_SOUTH})
+        and preset["region"] in CASTING_REGIONS
     ]
     return sorted(candidates, key=casting_preset_priority)
