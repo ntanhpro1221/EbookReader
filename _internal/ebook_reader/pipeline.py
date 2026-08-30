@@ -123,7 +123,16 @@ from .tts_contract import (
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
 HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
-    {"TTS_SPLIT_RECOVERY", GENERATION_CEILING_WARNING}
+    {
+        "TTS_SPLIT_RECOVERY",
+        GENERATION_CEILING_WARNING,
+        # A locked-name anchor reports review evidence, not proof of a bad take: Whisper
+        # writes a correctly pronounced Vietnamese name back in Latin spelling. Letting
+        # that block the chapter would undo the segment-level decision entirely - the
+        # segment publishes and the chapter still refuses it. The name is listed in the
+        # quality report for a human to listen to.
+        ASR_LOCKED_NAME_ANCHOR_REVIEW,
+    }
 )
 CHAPTER_REVIEW_STATUS = "warning"
 QUALITY_VERDICT_FAIL = "fail"

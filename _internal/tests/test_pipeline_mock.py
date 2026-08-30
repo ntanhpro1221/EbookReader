@@ -35,6 +35,7 @@ from ebook_reader.database import (
 from ebook_reader.io_utils import sha256_file, stable_int
 from ebook_reader.models import ResourceLevel
 from ebook_reader.pipeline import (
+    HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS,
     BookPipeline,
     CriticalResourceStop,
     _candidate_budget_exhausted_on_perceptual_review,
@@ -4250,3 +4251,16 @@ def test_locked_name_failure_evidence_stays_self_consistent(
     # Composition must collapse to exactly one code, or the ledger rejects the evidence.
     assert evidence_failure_codes == [ASR_LOCKED_NAME_ANCHOR_MISMATCH]
     assert BookPipeline._decode_requests_source_pronunciation(evidence) is True
+
+
+def test_locked_name_review_does_not_block_its_chapter() -> None:
+    """Publishing the segment is pointless if the chapter still refuses it.
+
+    The first attempt at the review downgrade changed only the segment outcome, and a
+    real run then held both chapters on exactly the warning that was supposed to let them
+    through. The two decisions have to agree.
+    """
+    assert ASR_LOCKED_NAME_ANCHOR_REVIEW in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
+    # A genuine mismatch still fails the segment, so it must not be waived here as well.
+    assert ASR_LOCKED_NAME_ANCHOR_MISMATCH not in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
+    assert PERCEPTUAL_NATURALNESS_REVIEW_CODE not in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
