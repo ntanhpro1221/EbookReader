@@ -4,6 +4,13 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from .audio_transform_contract import (
+    POSTPROCESS_ALGORITHM,
+    POSTPROCESS_OUTPUT_CODEC,
+    POSTPROCESS_PROFILE_TEMPO,
+    POSTPROCESS_TEMPO_DENOMINATOR,
+    POSTPROCESS_TEMPO_NUMERATOR,
+)
 from .config import canonical_json, settings_hash
 from .runtime_contract import (
     TIMM_CACHE_REVISION,
@@ -12,7 +19,7 @@ from .runtime_contract import (
 )
 
 
-QUALITY_POLICY_VERSION = 1
+QUALITY_POLICY_VERSION = 2
 HASH_CHUNK_BYTES = 1024 * 1024
 CHAPTER_QUALITY_STAGE = "chapter_post_encode_v1"
 SEGMENT_CONTENT_STAGE = "segment_asr_content_v1"
@@ -32,6 +39,7 @@ QUALITY_IMPLEMENTATION_FILES = (
     "asr.py",
     "asr_contract.py",
     "audio_io.py",
+    "audio_transform_contract.py",
     "character_registry.py",
     "config.py",
     "database.py",
@@ -116,6 +124,7 @@ def build_quality_policy(settings: dict[str, Any]) -> dict[str, Any]:
             "text_parser": "spoken_token_invariant_v2",
             "casting": "canonical_identity_host_semantic_lock_director_ledger_v28",
             "segment_signal": "signal_gate_vocalization_delivery_v4",
+            "candidate_postprocess": POSTPROCESS_ALGORITHM,
             "asr_content": "evidence_gated_name_pronunciation_delivery_v10",
             "perceptual_naturalness": (
                 "utmosv2_relative_voice_baseline_candidate_requirement_v2"
@@ -124,6 +133,12 @@ def build_quality_policy(settings: dict[str, Any]) -> dict[str, Any]:
         },
         "settings": {
             "quality_profile": settings["quality_profile"],
+            "candidate_postprocess": {
+                "profile": POSTPROCESS_PROFILE_TEMPO,
+                "tempo_numerator": POSTPROCESS_TEMPO_NUMERATOR,
+                "tempo_denominator": POSTPROCESS_TEMPO_DENOMINATOR,
+                "codec": POSTPROCESS_OUTPUT_CODEC,
+            },
             "tts": {
                 "sample_rate": settings["tts"]["sample_rate"],
                 "min_rms": settings["tts"]["min_rms"],

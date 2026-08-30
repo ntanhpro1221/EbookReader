@@ -1788,6 +1788,68 @@ def test_clarity_repair_requires_two_independent_asr_passes(
         assert str(fresh["wav_sha256"]) == incumbent_sha256
 
 
+def test_final_direct_candidate_uses_one_immutable_tempo_rescue(
+    tmp_path: Path,
+) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    spoken_text = "Anh Lu-si-en đã đến."
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        spoken_text,
+        [_locked_lucien_anchor()],
+    )
+    scripted_results = [
+        _asr_result(ASR_MISMATCH, "Anh sai rồi.", similarity=0.2, wer=0.8),
+        _asr_result(ASR_MISMATCH, "Anh vẫn sai.", similarity=0.2, wer=0.8),
+        _asr_result(ASR_PASS, spoken_text, similarity=1.0, wer=0.0),
+        _asr_result(
+            ASR_MISMATCH,
+            "Anh Lu-si-en sai rồi.",
+            similarity=0.7,
+            wer=0.5,
+        ),
+        _asr_result(ASR_PASS, spoken_text, similarity=1.0, wer=0.0),
+        _asr_result(ASR_PASS, spoken_text, similarity=1.0, wer=0.0),
+    ]
+
+    class TempoRescueVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            del confirmation
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, TempoRescueVerifier())
+
+    attempts = pipeline.db.segment_candidate_attempt_summary(
+        int(row["id"]),
+        pipeline.quality_policy_hash,
+    )
+    assert [attempt["state"] for attempt in attempts] == ["dual_failed", "promoted"]
+    source, rescued = attempts
+    assert source["postprocess_profile"] == "none"
+    assert rescued["postprocess_profile"] == "ffmpeg_atempo_0_94_pcm_s16le_v1"
+    assert rescued["postprocess_source_candidate_id"] == source["candidate_id"]
+    assert rescued["postprocess_source_sha256"] == source["wav_sha256"]
+    assert rescued["wav_sha256"] != source["wav_sha256"]
+    assert rescued["wav_duration"] > source["wav_duration"]
+    assert rescued["signal"]["postprocess_source_samples"] < rescued["signal"][
+        "postprocess_output_samples"
+    ]
+    assert rescued["perceptual_result"]["postprocess_profile"] == (
+        "ffmpeg_atempo_0_94_pcm_s16le_v1"
+    )
+    assert pipeline.tts.synthesize_calls == 1
+    assert scripted_results == []
+
+    final = pipeline.db.get_segment(int(row["id"]))
+    assert final["status"] == "verified"
+    assert final["wav_sha256"] == rescued["wav_sha256"]
+
+
 def _locked_name_variant_pipeline(
     tmp_path: Path,
     *,
@@ -3764,7 +3826,9 @@ def test_completed_with_errors_notifies_and_emits_error_state(tmp_path: Path) ->
     )
 
 
-def test_resume_rejects_segments_from_a_different_parser_fingerprint(tmp_path: Path) -> None:
+def test_resume_accepts_identical_segments_from_a_different_parser_fingerprint(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "001.txt"
     source.write_text("Nội dung đủ dài để kiểm tra fingerprint parser.", encoding="utf-8")
     settings = build_settings()
@@ -3796,7 +3860,51 @@ def test_resume_rejects_segments_from_a_different_parser_fingerprint(tmp_path: P
     changed.quality_policy["stage_fingerprints"][TEXT_SEGMENTATION_STAGE] = "changed"
     changed.quality_policy_hash = quality_policy_hash(changed.quality_policy)
 
-    with pytest.raises(RuntimeError, match="Text segmentation implementation changed"):
+    changed._recover()
+    assert str(db.current_quality_policy()["policy_hash"]) == changed.quality_policy_hash
+
+
+def test_resume_rejects_different_segments_from_a_different_parser_fingerprint(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "001.txt"
+    source.write_text("Nội dung đủ dài để kiểm tra fingerprint parser.", encoding="utf-8")
+    settings = build_settings()
+    paths, db, settings = create_or_open_project(
+        [source],
+        tmp_path / "out",
+        settings,
+        "Parser fingerprint mismatch",
+    )
+    original = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    original._recover()
+    original._ensure_segments()
+    segment = db.list_segments()[0]
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET break_ms=? WHERE id=?",
+            (int(segment["break_ms"]) + 1, int(segment["id"])),
+        )
+
+    changed = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    changed.quality_policy["stage_fingerprints"][TEXT_SEGMENTATION_STAGE] = "changed"
+    changed.quality_policy_hash = quality_policy_hash(changed.quality_policy)
+
+    with pytest.raises(RuntimeError, match="does not reproduce the checkpoint exactly"):
         changed._recover()
 
 

@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 import time
+import wave
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator, Mapping, Sequence
@@ -15,6 +16,23 @@ from .asr_contract import (
     COLLAPSED_SHORT_CONTEXT_MODE,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
     SHORT_CONTEXT_REPEAT_COUNT,
+)
+from .audio_transform_contract import (
+    POSTPROCESS_ALGORITHM,
+    POSTPROCESS_OUTPUT_CODEC,
+    POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+    POSTPROCESS_PROFILE_FIELD,
+    POSTPROCESS_PROFILE_NONE,
+    POSTPROCESS_PROFILE_TEMPO,
+    POSTPROCESS_PROFILES,
+    POSTPROCESS_SAMPLE_COUNT_RELATIVE_TOLERANCE,
+    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
+    POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+    POSTPROCESS_SOURCE_SAMPLES_FIELD,
+    POSTPROCESS_SOURCE_SHA256_FIELD,
+    POSTPROCESS_TEMPO_DENOMINATOR,
+    POSTPROCESS_TEMPO_FACTOR,
+    POSTPROCESS_TEMPO_NUMERATOR,
 )
 from .io_utils import sha256_file, sha256_text, stable_int
 from .models import BookStatus, ChapterStatus, SegmentStatus
@@ -54,7 +72,7 @@ from .tts_contract import (
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -128,6 +146,7 @@ SEGMENT_CANDIDATE_FAILURE_STATES = frozenset(
     }
 )
 SEGMENT_CANDIDATE_EXHAUSTION_ACTION = "candidate_repair_exhausted"
+TEMPO_RESCUE_ASR_FAILURE_REASON = "ASR_MISMATCH"
 ANALYSIS_CANDIDATE_ALLOCATED = "allocated"
 ANALYSIS_CANDIDATE_CRITIC_IN_FLIGHT = "critic_in_flight"
 ANALYSIS_CANDIDATE_CRITIC_INVALID = "critic_invalid"
@@ -1760,6 +1779,11 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     generation_strategy TEXT NOT NULL DEFAULT 'direct_v1' CHECK(
         generation_strategy IN ('direct_v1','split_v1')
     ),
+    postprocess_profile TEXT NOT NULL DEFAULT 'none' CHECK(
+        postprocess_profile IN ('none','ffmpeg_atempo_0_94_pcm_s16le_v1')
+    ),
+    postprocess_source_candidate_id INTEGER REFERENCES segment_candidates(id),
+    postprocess_source_sha256 TEXT,
     tts_attempt INTEGER NOT NULL DEFAULT 0 CHECK (tts_attempt >= 0),
     generation_seed INTEGER NOT NULL,
     wav_path TEXT NOT NULL UNIQUE,
@@ -1805,6 +1829,18 @@ CREATE TABLE IF NOT EXISTS segment_candidates (
     CHECK (
         (perceptual_check_id IS NULL AND perceptual_result_json IS NULL)
         OR (perceptual_check_id IS NOT NULL AND perceptual_result_json IS NOT NULL)
+    ),
+    CHECK (
+        (
+            postprocess_profile = 'none'
+            AND postprocess_source_candidate_id IS NULL
+            AND postprocess_source_sha256 IS NULL
+        )
+        OR (
+            postprocess_profile = 'ffmpeg_atempo_0_94_pcm_s16le_v1'
+            AND postprocess_source_candidate_id IS NOT NULL
+            AND postprocess_source_sha256 IS NOT NULL
+        )
     ),
     CHECK (
         (
@@ -2108,6 +2144,24 @@ class ProjectDB:
                 f"('{GENERATION_STRATEGY_DIRECT}','{GENERATION_STRATEGY_SPLIT}'))"
             )
             added_generation_strategy = True
+        if "postprocess_profile" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN postprocess_profile "
+                f"TEXT NOT NULL DEFAULT '{POSTPROCESS_PROFILE_NONE}' "
+                "CHECK(postprocess_profile IN "
+                f"('{POSTPROCESS_PROFILE_NONE}','{POSTPROCESS_PROFILE_TEMPO}'))"
+            )
+        if "postprocess_source_candidate_id" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN "
+                "postprocess_source_candidate_id INTEGER "
+                "REFERENCES segment_candidates(id)"
+            )
+        if "postprocess_source_sha256" not in candidate_columns:
+            conn.execute(
+                "ALTER TABLE segment_candidates ADD COLUMN "
+                "postprocess_source_sha256 TEXT"
+            )
         if added_generation_strategy:
             pronunciation_projection = (
                 "candidates.pronunciation_delivery_variant"
@@ -2253,6 +2307,54 @@ class ProjectDB:
                 )
             BEGIN
                 SELECT RAISE(ABORT, 'invalid segment candidate generation strategy transition');
+            END
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE TRIGGER IF NOT EXISTS segment_candidates_postprocess_binding_insert
+            BEFORE INSERT ON segment_candidates
+            WHEN NOT (
+                (
+                    NEW.postprocess_profile = '{POSTPROCESS_PROFILE_NONE}'
+                    AND NEW.postprocess_source_candidate_id IS NULL
+                    AND NEW.postprocess_source_sha256 IS NULL
+                )
+                OR (
+                    NEW.postprocess_profile = '{POSTPROCESS_PROFILE_TEMPO}'
+                    AND NEW.postprocess_source_candidate_id IS NOT NULL
+                    AND NEW.postprocess_source_sha256 IS NOT NULL
+                )
+            )
+            BEGIN
+                SELECT RAISE(ABORT, 'invalid segment candidate postprocess binding');
+            END
+            """
+        )
+        conn.execute(
+            f"""
+            CREATE TRIGGER IF NOT EXISTS segment_candidates_postprocess_binding_update
+            BEFORE UPDATE ON segment_candidates
+            WHEN
+                NEW.postprocess_profile IS NOT OLD.postprocess_profile
+                OR NEW.postprocess_source_candidate_id IS NOT
+                    OLD.postprocess_source_candidate_id
+                OR NEW.postprocess_source_sha256 IS NOT
+                    OLD.postprocess_source_sha256
+                OR NOT (
+                    (
+                        NEW.postprocess_profile = '{POSTPROCESS_PROFILE_NONE}'
+                        AND NEW.postprocess_source_candidate_id IS NULL
+                        AND NEW.postprocess_source_sha256 IS NULL
+                    )
+                    OR (
+                        NEW.postprocess_profile = '{POSTPROCESS_PROFILE_TEMPO}'
+                        AND NEW.postprocess_source_candidate_id IS NOT NULL
+                        AND NEW.postprocess_source_sha256 IS NOT NULL
+                    )
+                )
+            BEGIN
+                SELECT RAISE(ABORT, 'immutable segment candidate postprocess binding');
             END
             """
         )
@@ -2473,6 +2575,9 @@ class ProjectDB:
             "expected_spoken_text_sha256",
             "state",
             "generation_strategy",
+            "postprocess_profile",
+            "postprocess_source_candidate_id",
+            "postprocess_source_sha256",
             "tts_attempt",
             "generation_seed",
             "wav_path",
@@ -8037,6 +8142,22 @@ class ProjectDB:
             SPLIT_STRATEGY_FIELD: signal.get(SPLIT_STRATEGY_FIELD),
             SPLIT_MAX_CHARS_FIELD: signal.get(SPLIT_MAX_CHARS_FIELD),
             "split_parts": signal.get("split_parts") or [],
+            POSTPROCESS_PROFILE_FIELD: signal.get(POSTPROCESS_PROFILE_FIELD),
+            POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD: signal.get(
+                POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD
+            ),
+            POSTPROCESS_SOURCE_SHA256_FIELD: signal.get(
+                POSTPROCESS_SOURCE_SHA256_FIELD
+            ),
+            POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD: signal.get(
+                POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD
+            ),
+            POSTPROCESS_SOURCE_SAMPLES_FIELD: signal.get(
+                POSTPROCESS_SOURCE_SAMPLES_FIELD
+            ),
+            POSTPROCESS_OUTPUT_SAMPLES_FIELD: signal.get(
+                POSTPROCESS_OUTPUT_SAMPLES_FIELD
+            ),
             **{
                 field: signal.get(field)
                 for field in HA_VOCALIZATION_PROVENANCE_FIELDS
@@ -8161,8 +8282,9 @@ class ProjectDB:
                 "vocalization raw endpoint provenance must be boolean"
             )
 
+    @classmethod
     def _require_candidate_vocalization_provenance_conn(
-        self,
+        cls,
         conn: sqlite3.Connection,
         candidate: sqlite3.Row,
         signal: Mapping[str, Any],
@@ -8173,7 +8295,7 @@ class ProjectDB:
         ).fetchone()
         if segment is None:
             raise KeyError(f"Unknown segment id: {candidate['segment_id']}")
-        self._require_vocalization_provenance(
+        cls._require_vocalization_provenance(
             signal,
             required=is_standalone_ha_gasp(str(segment["text"])),
         )
@@ -8359,6 +8481,339 @@ class ProjectDB:
             )
 
     @staticmethod
+    def _normalized_postprocess_profile(value: str) -> str:
+        normalized = str(value or "").strip()
+        if normalized not in POSTPROCESS_PROFILES:
+            raise ValueError("unsupported segment candidate postprocess profile")
+        return normalized
+
+    @classmethod
+    def _policy_tempo_rescue_minimum_duration_conn(
+        cls,
+        conn: sqlite3.Connection,
+        policy_hash: str,
+    ) -> float | None:
+        policy = cls._require_candidate_policy_conn(
+            conn,
+            policy_hash,
+            active=False,
+        )
+        payload = cls._json_object(
+            policy["policy_json"],
+            "segment candidate quality policy",
+        )
+        algorithms = payload.get("algorithms")
+        settings = payload.get("settings")
+        if algorithms is None and settings is None:
+            return None
+        if not isinstance(algorithms, dict) or not isinstance(settings, dict):
+            raise RuntimeError("segment candidate quality policy is malformed")
+        algorithm = algorithms.get("candidate_postprocess")
+        contract = settings.get("candidate_postprocess")
+        if algorithm is None and contract is None:
+            return None
+        expected_contract = {
+            "profile": POSTPROCESS_PROFILE_TEMPO,
+            "tempo_numerator": POSTPROCESS_TEMPO_NUMERATOR,
+            "tempo_denominator": POSTPROCESS_TEMPO_DENOMINATOR,
+            "codec": POSTPROCESS_OUTPUT_CODEC,
+        }
+        if algorithm != POSTPROCESS_ALGORITHM or contract != expected_contract:
+            raise RuntimeError("segment candidate tempo-rescue policy contract is malformed")
+        perceptual = settings.get("perceptual_qa")
+        if not isinstance(perceptual, dict):
+            raise RuntimeError(
+                "segment candidate tempo-rescue policy lacks perceptual settings"
+            )
+        if perceptual.get("enabled") is not True:
+            return None
+        try:
+            minimum_duration = float(perceptual["minimum_duration_seconds"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                "segment candidate tempo-rescue perceptual duration is malformed"
+            ) from exc
+        if not math.isfinite(minimum_duration) or minimum_duration <= 0.0:
+            raise RuntimeError(
+                "segment candidate tempo-rescue perceptual duration is invalid"
+            )
+        return minimum_duration
+
+    @staticmethod
+    def _pcm16_mono_wav_shape(path: Path, label: str) -> tuple[int, int]:
+        try:
+            with wave.open(str(path), "rb") as reader:
+                channels = int(reader.getnchannels())
+                sample_width = int(reader.getsampwidth())
+                sample_rate = int(reader.getframerate())
+                sample_count = int(reader.getnframes())
+                compression = str(reader.getcomptype())
+        except (OSError, wave.Error) as exc:
+            raise RuntimeError(f"{label} is not a readable PCM WAV: {exc}") from exc
+        if (
+            channels != 1
+            or sample_width != 2
+            or sample_rate <= 0
+            or sample_count <= 0
+            or compression != "NONE"
+        ):
+            raise RuntimeError(f"{label} is not mono PCM16 audio")
+        return sample_rate, sample_count
+
+    @classmethod
+    def _tempo_source_eligibility_reason_conn(
+        cls,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        *,
+        require_current_incumbent: bool = True,
+    ) -> str | None:
+        minimum_duration = cls._policy_tempo_rescue_minimum_duration_conn(
+            conn,
+            str(candidate["policy_hash"]),
+        )
+        if minimum_duration is None:
+            return "the quality policy does not enable immutable tempo rescue"
+        if str(candidate["postprocess_profile"]) != POSTPROCESS_PROFILE_NONE:
+            return "tempo rescue cannot chain a postprocessed candidate"
+        if int(candidate["repair_round"]) + 1 != int(candidate["repair_budget"]):
+            return "tempo rescue requires the final ordinary repair candidate"
+        if str(candidate["state"]) != SEGMENT_CANDIDATE_DUAL_FAILED:
+            return "tempo rescue requires a terminal dual-decode failure"
+        if str(candidate["generation_strategy"]) != GENERATION_STRATEGY_DIRECT:
+            return "tempo rescue requires direct waveform provenance"
+        if (
+            str(candidate["pronunciation_delivery_variant"])
+            != PRONUNCIATION_DELIVERY_LOCKED
+        ):
+            return "tempo rescue requires the locked pronunciation delivery"
+        if (
+            str(candidate["candidate_repair_requirement"])
+            != STANDARD_CANDIDATE_GATE_REQUIREMENT
+            or not bool(candidate["perceptual_required"])
+            or candidate["perceptual_check_id"] is not None
+        ):
+            return "tempo rescue requires the standard mandatory perceptual gate"
+        if float(candidate["wav_duration"] or 0.0) < minimum_duration:
+            return "tempo rescue excludes short audio"
+        if require_current_incumbent:
+            segment = cls._require_candidate_incumbent_conn(conn, candidate)
+        else:
+            segment = conn.execute(
+                "SELECT * FROM segments WHERE id=?",
+                (int(candidate["segment_id"]),),
+            ).fetchone()
+            if segment is None:
+                raise KeyError(f"Unknown segment id: {candidate['segment_id']}")
+        if is_standalone_ha_gasp(str(segment["text"])):
+            return "tempo rescue excludes standalone vocalizations"
+        file_error = cls._candidate_file_error(candidate)
+        if file_error:
+            raise RuntimeError(file_error)
+        signal = cls._json_object(candidate["signal_json"], "candidate signal metrics")
+        cls._require_candidate_split_provenance(conn, candidate, signal)
+        cls._require_candidate_vocalization_provenance_conn(conn, candidate, signal)
+        signal_provenance = cls._candidate_signal_provenance(signal)
+        cls._require_candidate_delivery_provenance(candidate, signal_provenance)
+        if cls._candidate_blocking_signal_flags(signal):
+            return "tempo rescue excludes a candidate with blocking signal flags"
+        if candidate["beam_check_id"] is None or candidate["greedy_check_id"] is None:
+            raise RuntimeError("tempo rescue source lacks complete dual-decode evidence")
+        decoded: list[tuple[sqlite3.Row, dict[str, Any]]] = []
+        for confirmation, check_field in ((False, "beam_check_id"), (True, "greedy_check_id")):
+            decoded.append(
+                cls._validated_candidate_decode_check_conn(
+                    conn,
+                    candidate,
+                    int(candidate[check_field]),
+                    confirmation=confirmation,
+                )
+            )
+        passed = [item for item in decoded if str(item[0]["verdict"]) == QUALITY_VERDICT_PASS]
+        failed = [item for item in decoded if str(item[0]["verdict"]) == "fail"]
+        if len(passed) != 1 or len(failed) != 1:
+            return "tempo rescue requires exactly one passing and one content-mismatch decode"
+
+        def anchors_are_passing(metrics: Mapping[str, Any]) -> bool:
+            anchors = metrics.get("locked_name_anchor_metrics")
+            if not isinstance(anchors, dict):
+                return False
+            try:
+                anchor_count = int(anchors["anchor_count"])
+                required_count = int(anchors["required_occurrence_count"])
+                matched_count = int(anchors["matched_occurrence_count"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            return (
+                anchors.get("adjudicated") is True
+                and anchors.get("passed") is True
+                and anchors.get("status") == "pass"
+                and anchors.get("failure_codes") == []
+                and anchor_count >= 1
+                and required_count == anchor_count
+                and matched_count == required_count
+            )
+
+        if not all(anchors_are_passing(metrics) for _check, metrics in decoded):
+            return "tempo rescue requires every locked-name anchor to pass"
+        failed_metrics = failed[0][1]
+        if (
+            failed_metrics.get("verdict") != "mismatch"
+            or failed_metrics.get("passed") is not False
+            or failed_metrics.get("reason") != TEMPO_RESCUE_ASR_FAILURE_REASON
+            or failed_metrics.get("repairable") is not True
+            or failed_metrics.get("severe") is not False
+            or failed_metrics.get("context_mode") != "direct"
+            or failed_metrics.get("failure_codes")
+            != [TEMPO_RESCUE_ASR_FAILURE_REASON]
+        ):
+            return "tempo rescue requires one ordinary repairable ASR content mismatch"
+        return None
+
+    @classmethod
+    def _require_candidate_postprocess_provenance_conn(
+        cls,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        signal: Mapping[str, Any],
+    ) -> None:
+        profile = cls._normalized_postprocess_profile(
+            str(candidate["postprocess_profile"])
+        )
+        source_candidate_id = candidate["postprocess_source_candidate_id"]
+        source_sha256 = candidate["postprocess_source_sha256"]
+        if profile == POSTPROCESS_PROFILE_NONE:
+            if source_candidate_id is not None or source_sha256 is not None:
+                raise RuntimeError(
+                    "identity candidate cannot bind a postprocess source artifact"
+                )
+            if signal.get(POSTPROCESS_PROFILE_FIELD) not in (
+                None,
+                POSTPROCESS_PROFILE_NONE,
+            ) or any(
+                signal.get(field) is not None
+                for field in (
+                    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
+                    POSTPROCESS_SOURCE_SHA256_FIELD,
+                    POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+                    POSTPROCESS_SOURCE_SAMPLES_FIELD,
+                    POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+                )
+            ):
+                raise RuntimeError(
+                    "identity candidate carries unexpected postprocess provenance"
+                )
+            return
+
+        if source_candidate_id is None:
+            raise RuntimeError("tempo candidate has no source candidate binding")
+        normalized_source_sha256 = cls._normalized_sha256(
+            str(source_sha256 or ""),
+            "tempo candidate source checksum",
+        )
+        if (
+            signal.get(POSTPROCESS_PROFILE_FIELD) != POSTPROCESS_PROFILE_TEMPO
+            or signal.get(POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD)
+            != int(source_candidate_id)
+            or str(signal.get(POSTPROCESS_SOURCE_SHA256_FIELD) or "").casefold()
+            != normalized_source_sha256
+        ):
+            raise RuntimeError(
+                "tempo candidate signal differs from its immutable source binding"
+            )
+        sample_fields = (
+            POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+            POSTPROCESS_SOURCE_SAMPLES_FIELD,
+            POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+        )
+        if any(
+            isinstance(signal.get(field), bool)
+            or not isinstance(signal.get(field), int)
+            or int(signal[field]) <= 0
+            for field in sample_fields
+        ):
+            raise RuntimeError("tempo candidate sample provenance is malformed")
+        source_sample_rate = int(signal[POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD])
+        source_samples = int(signal[POSTPROCESS_SOURCE_SAMPLES_FIELD])
+        output_samples = int(signal[POSTPROCESS_OUTPUT_SAMPLES_FIELD])
+        if output_samples <= source_samples:
+            raise RuntimeError("tempo candidate did not lengthen its source waveform")
+        expected_output_samples = source_samples / POSTPROCESS_TEMPO_FACTOR
+        if (
+            abs(output_samples - expected_output_samples) / expected_output_samples
+            > POSTPROCESS_SAMPLE_COUNT_RELATIVE_TOLERANCE
+        ):
+            raise RuntimeError("tempo candidate sample count differs from its locked factor")
+        source = cls._candidate_row_conn(conn, int(source_candidate_id))
+        if int(source["id"]) == int(candidate["id"]):
+            raise RuntimeError("tempo candidate cannot use itself as its source")
+        if (
+            str(source["postprocess_profile"]) != POSTPROCESS_PROFILE_NONE
+            or str(source["wav_sha256"] or "").casefold()
+            != normalized_source_sha256
+            or int(source["segment_id"]) != int(candidate["segment_id"])
+            or str(source["policy_hash"]) != str(candidate["policy_hash"])
+            or str(source["incumbent_sha256"]) != str(candidate["incumbent_sha256"])
+            or int(source["repair_budget"]) != int(candidate["repair_budget"])
+            or int(source["repair_round"]) + 1 != int(candidate["repair_round"])
+            or int(candidate["repair_round"]) != int(candidate["repair_budget"])
+            or str(source["generation_strategy"]) != GENERATION_STRATEGY_DIRECT
+        ):
+            raise RuntimeError("tempo candidate source binding is not a final direct candidate")
+        for field in (
+            "expected_voice_profile_id",
+            "expected_pitch_semitones",
+            "pronunciation_delivery_variant",
+            "expected_spoken_text_sha256",
+            "generation_strategy",
+            "tts_attempt",
+            "generation_seed",
+            "perceptual_required",
+            "candidate_repair_requirement",
+            "repair_trigger_check_id",
+        ):
+            if candidate[field] != source[field]:
+                raise RuntimeError(
+                    "tempo candidate allocation provenance differs from its source"
+                )
+        eligibility_reason = cls._tempo_source_eligibility_reason_conn(
+            conn,
+            source,
+            require_current_incumbent=False,
+        )
+        if eligibility_reason is not None:
+            raise RuntimeError(
+                "tempo candidate source is not eligible: " + eligibility_reason
+            )
+        source_rate, actual_source_samples = cls._pcm16_mono_wav_shape(
+            Path(str(source["wav_path"])),
+            "tempo candidate source WAV",
+        )
+        output_rate, actual_output_samples = cls._pcm16_mono_wav_shape(
+            Path(str(candidate["wav_path"])),
+            "tempo candidate output WAV",
+        )
+        if (
+            source_rate != source_sample_rate
+            or output_rate != source_sample_rate
+            or actual_source_samples != source_samples
+            or actual_output_samples != output_samples
+        ):
+            raise RuntimeError("tempo candidate WAV samples differ from its signal provenance")
+        if not math.isclose(
+            float(source["wav_duration"]),
+            source_samples / source_sample_rate,
+            rel_tol=0.0,
+            abs_tol=2.0 / source_sample_rate,
+        ) or not math.isclose(
+            float(candidate["wav_duration"]),
+            output_samples / source_sample_rate,
+            rel_tol=0.0,
+            abs_tol=2.0 / source_sample_rate,
+        ):
+            raise RuntimeError("tempo candidate WAV duration differs from its samples")
+
+    @staticmethod
     def _require_candidate_delivery_provenance(
         candidate: sqlite3.Row,
         signal_provenance: dict[str, Any],
@@ -8440,6 +8895,18 @@ class ProjectDB:
                 "promotion_warning_code": str(warning_code).strip() if warning_code else None,
             }
         )
+        if str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO:
+            final_metrics.update(
+                {
+                    POSTPROCESS_PROFILE_FIELD: POSTPROCESS_PROFILE_TEMPO,
+                    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD: int(
+                        candidate["postprocess_source_candidate_id"]
+                    ),
+                    POSTPROCESS_SOURCE_SHA256_FIELD: str(
+                        candidate["postprocess_source_sha256"]
+                    ),
+                }
+            )
         return final_metrics
 
     def _validated_promoted_candidate_conn(
@@ -8477,6 +8944,11 @@ class ProjectDB:
         )
         signal_provenance = self._candidate_signal_provenance(signal)
         self._require_candidate_delivery_provenance(candidate, signal_provenance)
+        self._require_candidate_postprocess_provenance_conn(
+            conn,
+            candidate,
+            signal,
+        )
         live_signal = self._json_object(
             segment["signal_json"],
             "promoted live segment signal metrics",
@@ -8741,6 +9213,17 @@ class ProjectDB:
             "repair_budget": int(row["repair_budget"]),
             "state": str(row["state"]),
             "generation_strategy": str(row["generation_strategy"]),
+            POSTPROCESS_PROFILE_FIELD: str(row["postprocess_profile"]),
+            POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD: (
+                int(row["postprocess_source_candidate_id"])
+                if row["postprocess_source_candidate_id"] is not None
+                else None
+            ),
+            POSTPROCESS_SOURCE_SHA256_FIELD: (
+                str(row["postprocess_source_sha256"])
+                if row["postprocess_source_sha256"] is not None
+                else None
+            ),
             "incumbent_sha256": str(row["incumbent_sha256"]),
             "expected_voice_profile_id": int(row["expected_voice_profile_id"]),
             "expected_pitch_semitones": int(row["expected_pitch_semitones"]),
@@ -8801,6 +9284,9 @@ class ProjectDB:
         expected_spoken_text_sha256: str | None = None,
         tts_attempt: int = 0,
         generation_strategy: str = GENERATION_STRATEGY_DIRECT,
+        postprocess_profile: str = POSTPROCESS_PROFILE_NONE,
+        postprocess_source_candidate_id: int | None = None,
+        postprocess_source_sha256: str | None = None,
         perceptual_required: bool = False,
         candidate_repair_requirement: str = STANDARD_CANDIDATE_GATE_REQUIREMENT,
         repair_trigger_check_id: int | None = None,
@@ -8810,6 +9296,22 @@ class ProjectDB:
         normalized_attempt = int(tts_attempt)
         normalized_generation_strategy = self._normalized_generation_strategy(
             generation_strategy
+        )
+        normalized_postprocess_profile = self._normalized_postprocess_profile(
+            postprocess_profile
+        )
+        normalized_postprocess_source_candidate_id = (
+            int(postprocess_source_candidate_id)
+            if postprocess_source_candidate_id is not None
+            else None
+        )
+        normalized_postprocess_source_sha256 = (
+            self._normalized_sha256(
+                postprocess_source_sha256,
+                "segment candidate postprocess source checksum",
+            )
+            if postprocess_source_sha256 is not None
+            else None
         )
         normalized_perceptual_required = bool(perceptual_required)
         normalized_incumbent = self._normalized_sha256(
@@ -8847,8 +9349,30 @@ class ProjectDB:
             raise ValueError("segment candidate WAV path must be under the dedicated candidates root")
         if normalized_max < 0:
             raise ValueError("ASR repair budget must be non-negative")
-        if normalized_round < 0 or normalized_round >= normalized_max:
-            raise ValueError("segment candidate repair round exceeds the same-policy budget")
+        if normalized_round < 0:
+            raise ValueError("segment candidate repair round must be non-negative")
+        if normalized_postprocess_profile == POSTPROCESS_PROFILE_NONE:
+            if (
+                normalized_postprocess_source_candidate_id is not None
+                or normalized_postprocess_source_sha256 is not None
+            ):
+                raise ValueError(
+                    "identity segment candidates cannot bind a postprocess source"
+                )
+            if normalized_round >= normalized_max:
+                raise ValueError(
+                    "segment candidate repair round exceeds the same-policy budget"
+                )
+        else:
+            if (
+                normalized_postprocess_source_candidate_id is None
+                or normalized_postprocess_source_sha256 is None
+            ):
+                raise ValueError("tempo segment candidates require a source binding")
+            if normalized_round != normalized_max:
+                raise ValueError(
+                    "tempo segment candidate must follow the exhausted ordinary budget"
+                )
         if normalized_attempt < 0:
             raise ValueError("segment candidate TTS attempt must be non-negative")
         if (
@@ -8952,6 +9476,20 @@ class ProjectDB:
                     or int(existing["repair_budget"]) != normalized_max
                     or str(existing["generation_strategy"])
                     != normalized_generation_strategy
+                    or str(existing["postprocess_profile"])
+                    != normalized_postprocess_profile
+                    or (
+                        int(existing["postprocess_source_candidate_id"])
+                        if existing["postprocess_source_candidate_id"] is not None
+                        else None
+                    )
+                    != normalized_postprocess_source_candidate_id
+                    or (
+                        str(existing["postprocess_source_sha256"])
+                        if existing["postprocess_source_sha256"] is not None
+                        else None
+                    )
+                    != normalized_postprocess_source_sha256
                     or bool(existing["perceptual_required"])
                     != normalized_perceptual_required
                     or str(existing["candidate_repair_requirement"])
@@ -8969,11 +9507,27 @@ class ProjectDB:
                     raise RuntimeError("candidate resume metadata differs from its durable checkpoint")
                 return existing
 
-            rounds = [int(row["repair_round"]) for row in rows]
-            if any(round_index >= normalized_max for round_index in rounds):
-                raise RuntimeError("stored candidate rounds exceed the supplied same-policy budget")
-            if rounds != list(range(normalized_round)):
-                raise RuntimeError("candidate rounds must be contiguous and allocated in order")
+            ordinary_rows = [
+                row
+                for row in rows
+                if str(row["postprocess_profile"]) == POSTPROCESS_PROFILE_NONE
+            ]
+            tempo_rows = [
+                row
+                for row in rows
+                if str(row["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO
+            ]
+            if len(ordinary_rows) + len(tempo_rows) != len(rows):
+                raise RuntimeError("stored candidate has an unsupported postprocess profile")
+            ordinary_rounds = [int(row["repair_round"]) for row in ordinary_rows]
+            if any(round_index >= normalized_max for round_index in ordinary_rounds):
+                raise RuntimeError("stored ordinary candidate rounds exceed the supplied budget")
+            if ordinary_rounds != list(range(len(ordinary_rows))):
+                raise RuntimeError("stored ordinary candidate rounds are not contiguous")
+            if len(tempo_rows) > 1 or any(
+                int(row["repair_round"]) != normalized_max for row in tempo_rows
+            ):
+                raise RuntimeError("stored tempo candidate round is invalid")
             if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in rows):
                 raise RuntimeError("same-policy candidate rounds cannot mix incumbent artifacts")
             if any(int(row["repair_budget"]) != normalized_max for row in rows):
@@ -8998,8 +9552,88 @@ class ProjectDB:
                 raise RuntimeError(
                     "same-policy candidate rounds cannot mix repair trigger bindings"
                 )
-            if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in rows):
-                raise RuntimeError("the previous candidate round is not a terminal failure")
+            if normalized_postprocess_profile == POSTPROCESS_PROFILE_NONE:
+                if tempo_rows:
+                    raise RuntimeError(
+                        "ordinary candidate allocation cannot follow a tempo candidate"
+                    )
+                if ordinary_rounds != list(range(normalized_round)):
+                    raise RuntimeError(
+                        "candidate rounds must be contiguous and allocated in order"
+                    )
+                if any(
+                    str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES
+                    for row in ordinary_rows
+                ):
+                    raise RuntimeError(
+                        "the previous candidate round is not a terminal failure"
+                    )
+            else:
+                if tempo_rows:
+                    raise RuntimeError("tempo candidate allocation is already checkpointed")
+                if ordinary_rounds != list(range(normalized_max)):
+                    raise RuntimeError(
+                        "tempo candidate requires every ordinary repair round"
+                    )
+                if any(
+                    str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES
+                    for row in ordinary_rows
+                ):
+                    raise RuntimeError(
+                        "tempo candidate requires terminal ordinary repair rounds"
+                    )
+                source = self._candidate_row_conn(
+                    conn,
+                    int(normalized_postprocess_source_candidate_id),
+                )
+                if not any(
+                    int(row["id"]) == int(source["id"]) for row in ordinary_rows
+                ):
+                    raise RuntimeError(
+                        "tempo candidate source is not in the ordinary repair ledger"
+                    )
+                if (
+                    str(source["wav_sha256"] or "").casefold()
+                    != normalized_postprocess_source_sha256
+                ):
+                    raise RuntimeError(
+                        "tempo candidate source checksum differs from its durable artifact"
+                    )
+                if (
+                    int(source["expected_voice_profile_id"])
+                    != expected_voice_profile_id
+                    or int(source["expected_pitch_semitones"])
+                    != expected_pitch_semitones
+                    or str(source["pronunciation_delivery_variant"])
+                    != normalized_pronunciation_variant
+                    or str(source["expected_spoken_text_sha256"])
+                    != normalized_expected_spoken_sha256
+                    or str(source["generation_strategy"])
+                    != normalized_generation_strategy
+                    or int(source["generation_seed"]) != int(generation_seed)
+                    or int(source["tts_attempt"]) != normalized_attempt
+                    or bool(source["perceptual_required"])
+                    != normalized_perceptual_required
+                    or str(source["candidate_repair_requirement"])
+                    != normalized_repair_requirement
+                    or (
+                        int(source["repair_trigger_check_id"])
+                        if source["repair_trigger_check_id"] is not None
+                        else None
+                    )
+                    != normalized_repair_trigger_check_id
+                ):
+                    raise RuntimeError(
+                        "tempo candidate allocation differs from its source provenance"
+                    )
+                eligibility_reason = self._tempo_source_eligibility_reason_conn(
+                    conn,
+                    source,
+                )
+                if eligibility_reason is not None:
+                    raise RuntimeError(
+                        "tempo candidate source is not eligible: " + eligibility_reason
+                    )
             occupied_paths = [
                 str(row[0])
                 for row in conn.execute(
@@ -9020,11 +9654,13 @@ class ProjectDB:
                         segment_id,policy_hash,repair_round,repair_budget,incumbent_sha256,
                         expected_voice_profile_id,expected_pitch_semitones,
                         pronunciation_delivery_variant,expected_spoken_text_sha256,state,
-                        generation_strategy,tts_attempt,generation_seed,wav_path,
+                        generation_strategy,postprocess_profile,
+                        postprocess_source_candidate_id,postprocess_source_sha256,
+                        tts_attempt,generation_seed,wav_path,
                         perceptual_required,
                         candidate_repair_requirement,repair_trigger_check_id,
                         created_at,updated_at
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         int(segment_id),
@@ -9038,6 +9674,9 @@ class ProjectDB:
                         normalized_expected_spoken_sha256,
                         SEGMENT_CANDIDATE_GENERATING,
                         normalized_generation_strategy,
+                        normalized_postprocess_profile,
+                        normalized_postprocess_source_candidate_id,
+                        normalized_postprocess_source_sha256,
                         normalized_attempt,
                         int(generation_seed),
                         normalized_path,
@@ -9069,6 +9708,8 @@ class ProjectDB:
             self._require_candidate_voice_profile_conn(conn, candidate, segment)
             if str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING:
                 raise RuntimeError("only an uncommitted generating candidate can restart TTS")
+            if str(candidate["postprocess_profile"]) != POSTPROCESS_PROFILE_NONE:
+                raise RuntimeError("tempo candidate generation cannot restart TTS")
             current_attempt = int(candidate["tts_attempt"])
             current_generation_strategy = self._normalized_generation_strategy(
                 str(candidate["generation_strategy"])
@@ -9194,6 +9835,11 @@ class ProjectDB:
                     and float(candidate["wav_duration"] or 0.0) == normalized_duration
                     and str(candidate["signal_json"] or "") == signal_json
                 ):
+                    self._require_candidate_postprocess_provenance_conn(
+                        conn,
+                        candidate,
+                        signal,
+                    )
                     return candidate
                 raise RuntimeError("segment candidate signal checkpoint transition CAS failed")
             conn.execute(
@@ -9213,10 +9859,17 @@ class ProjectDB:
                     int(expected_generation_seed),
                 ),
             )
-            return self._candidate_row_conn(conn, candidate_id)
+            checkpointed = self._candidate_row_conn(conn, candidate_id)
+            self._require_candidate_postprocess_provenance_conn(
+                conn,
+                checkpointed,
+                signal,
+            )
+            return checkpointed
 
+    @classmethod
     def _validated_candidate_decode_check_conn(
-        self,
+        cls,
         conn: sqlite3.Connection,
         candidate: sqlite3.Row,
         quality_check_id: int,
@@ -9237,7 +9890,7 @@ class ProjectDB:
             or str(check["policy_hash"]) != str(candidate["policy_hash"])
         ):
             raise RuntimeError("ASR decode evidence does not belong to this segment candidate")
-        metrics = self._json_object(check["metrics_json"], "candidate ASR decode metrics")
+        metrics = cls._json_object(check["metrics_json"], "candidate ASR decode metrics")
         decode_mode = str(metrics.get("decode_mode", "")).strip().casefold()
         expected_mode = decode_mode == "greedy" if confirmation else decode_mode.startswith("beam")
         if not expected_mode or not bool(metrics.get("selected", False)):
@@ -9248,24 +9901,29 @@ class ProjectDB:
             or int(metrics.get("generation_seed", -1)) != int(candidate["generation_seed"])
         ):
             raise RuntimeError("candidate ASR decode provenance differs from its generation checkpoint")
-        signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
-        self._require_candidate_split_provenance(conn, candidate, signal)
-        self._require_candidate_vocalization_provenance_conn(
+        signal = cls._json_object(candidate["signal_json"], "candidate signal metrics")
+        cls._require_candidate_split_provenance(conn, candidate, signal)
+        cls._require_candidate_vocalization_provenance_conn(
             conn,
             candidate,
             signal,
         )
-        signal_provenance = self._candidate_signal_provenance(signal)
-        self._require_candidate_delivery_provenance(candidate, signal_provenance)
+        signal_provenance = cls._candidate_signal_provenance(signal)
+        cls._require_candidate_delivery_provenance(candidate, signal_provenance)
+        cls._require_candidate_postprocess_provenance_conn(
+            conn,
+            candidate,
+            signal,
+        )
         try:
-            decode_provenance = self._candidate_signal_provenance(metrics)
+            decode_provenance = cls._candidate_signal_provenance(metrics)
         except ValueError as exc:
             raise RuntimeError("candidate ASR decode lacks locked voice or pitch provenance") from exc
         if decode_provenance != signal_provenance:
             raise RuntimeError("candidate ASR locked provenance differs from its signal checkpoint")
-        if self._candidate_signal_immutable_projection(
+        if cls._candidate_signal_immutable_projection(
             metrics
-        ) != self._candidate_signal_immutable_projection(signal):
+        ) != cls._candidate_signal_immutable_projection(signal):
             raise RuntimeError(
                 "candidate ASR immutable signal provenance differs from its checkpoint"
             )
@@ -9726,6 +10384,10 @@ class ProjectDB:
             str(metrics.get("policy_exemption", "")).strip().casefold()
             == "short_audio"
         )
+        strict_short_audio_gate = (
+            candidate_requirement == NATURALNESS_IMPROVEMENT_REQUIREMENT
+            or str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO
+        )
         if str(metrics.get("candidate_repair_requirement") or "") != (
             candidate_requirement
         ):
@@ -9735,6 +10397,7 @@ class ProjectDB:
         if evidence_verdict == QUALITY_VERDICT_PASS:
             pass_is_supported = perceptual_verdict == "ok" or (
                 candidate_requirement == STANDARD_CANDIDATE_GATE_REQUIREMENT
+                and not strict_short_audio_gate
                 and short_audio_exemption
             )
             if not pass_is_supported:
@@ -9748,6 +10411,7 @@ class ProjectDB:
         elif perceptual_verdict == "ok" or (
             short_audio_exemption
             and candidate_requirement == STANDARD_CANDIDATE_GATE_REQUIREMENT
+            and not strict_short_audio_gate
         ):
             raise RuntimeError(
                 "failed candidate perceptual evidence contradicts its metrics"
@@ -9760,6 +10424,26 @@ class ProjectDB:
         )
         signal_provenance = self._candidate_signal_provenance(signal)
         self._require_candidate_delivery_provenance(candidate, signal_provenance)
+        self._require_candidate_postprocess_provenance_conn(
+            conn,
+            candidate,
+            signal,
+        )
+        if str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO:
+            if any(
+                metrics.get(field) != signal.get(field)
+                for field in (
+                    POSTPROCESS_PROFILE_FIELD,
+                    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
+                    POSTPROCESS_SOURCE_SHA256_FIELD,
+                    POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+                    POSTPROCESS_SOURCE_SAMPLES_FIELD,
+                    POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+                )
+            ):
+                raise RuntimeError(
+                    "tempo candidate perceptual provenance differs from its signal checkpoint"
+                )
         try:
             baseline_pitch = int(metrics["baseline_pitch_semitones"])
         except (KeyError, TypeError, ValueError) as exc:
@@ -10188,10 +10872,25 @@ class ProjectDB:
                             candidate["signal_json"],
                             "candidate signal metrics",
                         )
+                        self._require_candidate_split_provenance(
+                            conn,
+                            candidate,
+                            signal,
+                        )
+                        self._require_candidate_vocalization_provenance_conn(
+                            conn,
+                            candidate,
+                            signal,
+                        )
                         signal_provenance = self._candidate_signal_provenance(signal)
                         self._require_candidate_delivery_provenance(
                             candidate,
                             signal_provenance,
+                        )
+                        self._require_candidate_postprocess_provenance_conn(
+                            conn,
+                            candidate,
+                            signal,
                         )
                     except (RuntimeError, ValueError) as exc:
                         invalid_reason = str(exc)
@@ -10358,10 +11057,26 @@ class ProjectDB:
                         "candidate_id": None,
                         "repair_round": None,
                     }
-            if any(int(row["repair_round"]) >= normalized_max for row in rows):
-                raise RuntimeError("stored candidate rounds exceed the supplied same-policy budget")
-            if [int(row["repair_round"]) for row in rows] != list(range(len(rows))):
-                raise RuntimeError("stored candidate rounds are not contiguous")
+            ordinary_rows = [
+                row
+                for row in rows
+                if str(row["postprocess_profile"]) == POSTPROCESS_PROFILE_NONE
+            ]
+            tempo_rows = [
+                row
+                for row in rows
+                if str(row["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO
+            ]
+            if len(ordinary_rows) + len(tempo_rows) != len(rows):
+                raise RuntimeError("stored candidate has an unsupported postprocess profile")
+            if [int(row["repair_round"]) for row in ordinary_rows] != list(
+                range(len(ordinary_rows))
+            ) or any(int(row["repair_round"]) >= normalized_max for row in ordinary_rows):
+                raise RuntimeError("stored ordinary candidate rounds are not contiguous")
+            if len(tempo_rows) > 1 or any(
+                int(row["repair_round"]) != normalized_max for row in tempo_rows
+            ):
+                raise RuntimeError("stored tempo candidate round is invalid")
 
             actionable = [
                 row
@@ -10376,6 +11091,27 @@ class ProjectDB:
                 segment = self._require_candidate_incumbent_conn(conn, candidate)
                 self._require_candidate_voice_profile_conn(conn, candidate, segment)
                 state = str(candidate["state"])
+                if str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO:
+                    source = self._candidate_row_conn(
+                        conn,
+                        int(candidate["postprocess_source_candidate_id"]),
+                    )
+                    if (
+                        str(source["wav_sha256"] or "").casefold()
+                        != str(candidate["postprocess_source_sha256"] or "").casefold()
+                    ):
+                        raise RuntimeError(
+                            "tempo candidate source checksum differs from its ledger"
+                        )
+                    eligibility_reason = self._tempo_source_eligibility_reason_conn(
+                        conn,
+                        source,
+                    )
+                    if eligibility_reason is not None:
+                        raise RuntimeError(
+                            "tempo candidate source is no longer eligible: "
+                            + eligibility_reason
+                        )
                 if state != SEGMENT_CANDIDATE_GENERATING:
                     signal = self._json_object(
                         candidate["signal_json"],
@@ -10392,6 +11128,11 @@ class ProjectDB:
                         candidate,
                         signal_provenance,
                     )
+                    self._require_candidate_postprocess_provenance_conn(
+                        conn,
+                        candidate,
+                        signal,
+                    )
                 if state == SEGMENT_CANDIDATE_DUAL_PASSED:
                     action = (
                         "verify_perceptual"
@@ -10407,7 +11148,7 @@ class ProjectDB:
                     }.get(state)
                 if action is None:
                     raise RuntimeError(f"unsupported actionable candidate state: {state}")
-                return {
+                plan = {
                     "segment_id": int(segment_id),
                     "policy_hash": str(policy_hash).strip(),
                     "action": action,
@@ -10427,7 +11168,20 @@ class ProjectDB:
                         candidate["expected_spoken_text_sha256"]
                     ),
                 }
-            if len(rows) < normalized_max:
+                if str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO:
+                    plan.update(
+                        {
+                            POSTPROCESS_PROFILE_FIELD: POSTPROCESS_PROFILE_TEMPO,
+                            POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD: int(
+                                candidate["postprocess_source_candidate_id"]
+                            ),
+                            POSTPROCESS_SOURCE_SHA256_FIELD: str(
+                                candidate["postprocess_source_sha256"]
+                            ),
+                        }
+                    )
+                return plan
+            if len(ordinary_rows) < normalized_max:
                 allocation_plan = {
                     "segment_id": int(segment_id),
                     "policy_hash": str(policy_hash).strip(),
@@ -10435,20 +11189,45 @@ class ProjectDB:
                     "candidate_id": None,
                     "repair_round": len(rows),
                 }
-                if rows:
+                if ordinary_rows:
                     allocation_plan.update(
                         {
                             "candidate_repair_requirement": str(
-                                rows[0]["candidate_repair_requirement"]
+                                ordinary_rows[0]["candidate_repair_requirement"]
                             ),
                             "repair_trigger_check_id": (
-                                int(rows[0]["repair_trigger_check_id"])
-                                if rows[0]["repair_trigger_check_id"] is not None
+                                int(ordinary_rows[0]["repair_trigger_check_id"])
+                                if ordinary_rows[0]["repair_trigger_check_id"] is not None
                                 else None
                             ),
                         }
                     )
                 return allocation_plan
+            if not tempo_rows:
+                if any(
+                    str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES
+                    for row in ordinary_rows
+                ):
+                    raise RuntimeError(
+                        "ordinary candidate ledger has an unresolved nonterminal row"
+                    )
+                source = ordinary_rows[-1] if ordinary_rows else None
+                if source is not None:
+                    eligibility_reason = self._tempo_source_eligibility_reason_conn(
+                        conn,
+                        source,
+                    )
+                    if eligibility_reason is None:
+                        return {
+                            "segment_id": int(segment_id),
+                            "policy_hash": str(policy_hash).strip(),
+                            "action": "allocate_postprocess",
+                            "candidate_id": None,
+                            "repair_round": normalized_max,
+                            POSTPROCESS_PROFILE_FIELD: POSTPROCESS_PROFILE_TEMPO,
+                            POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD: int(source["id"]),
+                            POSTPROCESS_SOURCE_SHA256_FIELD: str(source["wav_sha256"]),
+                        }
             return {
                 "segment_id": int(segment_id),
                 "policy_hash": str(policy_hash).strip(),
@@ -10537,6 +11316,11 @@ class ProjectDB:
             self._require_candidate_delivery_provenance(
                 candidate,
                 signal_provenance,
+            )
+            self._require_candidate_postprocess_provenance_conn(
+                conn,
+                candidate,
+                signal,
             )
             beam_check, beam_metrics = self._validated_candidate_decode_check_conn(
                 conn,
@@ -10745,14 +11529,48 @@ class ProjectDB:
                     (int(segment_id), str(policy_hash).strip()),
                 )
             )
-            if [int(row["repair_round"]) for row in candidates] != list(range(normalized_max)):
-                raise RuntimeError("repair exhaustion requires every configured candidate round")
+            ordinary_candidates = [
+                candidate
+                for candidate in candidates
+                if str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_NONE
+            ]
+            tempo_candidates = [
+                candidate
+                for candidate in candidates
+                if str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO
+            ]
+            if len(ordinary_candidates) + len(tempo_candidates) != len(candidates):
+                raise RuntimeError("repair exhaustion found an unsupported postprocess profile")
+            if [int(row["repair_round"]) for row in ordinary_candidates] != list(
+                range(normalized_max)
+            ):
+                raise RuntimeError(
+                    "repair exhaustion requires every configured ordinary candidate round"
+                )
+            if len(tempo_candidates) > 1 or any(
+                int(row["repair_round"]) != normalized_max
+                for row in tempo_candidates
+            ):
+                raise RuntimeError("repair exhaustion tempo candidate round is invalid")
             if any(int(row["repair_budget"]) != normalized_max for row in candidates):
                 raise RuntimeError("repair exhaustion candidate budget differs from its ledger")
             if any(str(row["state"]) not in SEGMENT_CANDIDATE_FAILURE_STATES for row in candidates):
                 raise RuntimeError("repair exhaustion cannot finalize while a candidate remains actionable")
             if any(str(row["incumbent_sha256"]) != normalized_incumbent for row in candidates):
                 raise RuntimeError("repair exhaustion candidates do not share the current incumbent")
+            if ordinary_candidates:
+                eligibility_reason = self._tempo_source_eligibility_reason_conn(
+                    conn,
+                    ordinary_candidates[-1],
+                )
+                if eligibility_reason is None and not tempo_candidates:
+                    raise RuntimeError(
+                        "repair exhaustion requires the eligible tempo-rescue candidate"
+                    )
+                if eligibility_reason is not None and tempo_candidates:
+                    raise RuntimeError(
+                        "repair exhaustion found a tempo candidate for an ineligible source"
+                    )
 
             perceptual_review_blocked = False
             for candidate in candidates:

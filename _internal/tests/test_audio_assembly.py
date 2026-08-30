@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -18,11 +19,31 @@ from ebook_reader.audio_io import (
     integrated_loudness_lufs,
     normalize_segment_level,
     segment_duration_policy,
+    tempo_stretch_wav_atomic,
     vieneu_generation_reached_frame_ceiling,
     verify_mp3,
     validate_audio_array,
 )
+from ebook_reader.audio_transform_contract import (
+    POSTPROCESS_ALGORITHM,
+    POSTPROCESS_OUTPUT_CODEC,
+    POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+    POSTPROCESS_PROFILE_FIELD,
+    POSTPROCESS_PROFILE_NONE,
+    POSTPROCESS_PROFILE_TEMPO,
+    POSTPROCESS_PROFILES,
+    POSTPROCESS_PROVENANCE_FIELDS,
+    POSTPROCESS_SAMPLE_COUNT_RELATIVE_TOLERANCE,
+    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
+    POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+    POSTPROCESS_SOURCE_SAMPLES_FIELD,
+    POSTPROCESS_SOURCE_SHA256_FIELD,
+    POSTPROCESS_TEMPO_DENOMINATOR,
+    POSTPROCESS_TEMPO_FACTOR,
+    POSTPROCESS_TEMPO_NUMERATOR,
+)
 from ebook_reader.config import build_settings
+from ebook_reader.io_utils import sha256_file
 
 
 def _write_test_tone(
@@ -41,6 +62,113 @@ def _write_test_tone(
         "A sufficiently long sentence for deterministic audio QA.",
         settings,
     )
+
+
+def test_audio_transform_contract_is_immutable_and_versioned() -> None:
+    assert POSTPROCESS_ALGORITHM == "immutable_dual_decode_tempo_rescue_v1"
+    assert POSTPROCESS_PROFILE_NONE == "none"
+    assert POSTPROCESS_PROFILE_TEMPO == "ffmpeg_atempo_0_94_pcm_s16le_v1"
+    assert POSTPROCESS_PROFILES == (
+        POSTPROCESS_PROFILE_NONE,
+        POSTPROCESS_PROFILE_TEMPO,
+    )
+    assert POSTPROCESS_TEMPO_NUMERATOR == 94
+    assert POSTPROCESS_TEMPO_DENOMINATOR == 100
+    assert POSTPROCESS_TEMPO_FACTOR == 0.94
+    assert POSTPROCESS_SAMPLE_COUNT_RELATIVE_TOLERANCE == 0.01
+    assert POSTPROCESS_OUTPUT_CODEC == "pcm_s16le"
+    assert POSTPROCESS_PROFILE_FIELD == "postprocess_profile"
+    assert POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD == "postprocess_source_candidate_id"
+    assert POSTPROCESS_SOURCE_SHA256_FIELD == "postprocess_source_sha256"
+    assert POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD == "postprocess_source_sample_rate"
+    assert POSTPROCESS_SOURCE_SAMPLES_FIELD == "postprocess_source_samples"
+    assert POSTPROCESS_OUTPUT_SAMPLES_FIELD == "postprocess_output_samples"
+    assert POSTPROCESS_PROVENANCE_FIELDS == (
+        POSTPROCESS_PROFILE_FIELD,
+        POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
+        POSTPROCESS_SOURCE_SHA256_FIELD,
+        POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+        POSTPROCESS_SOURCE_SAMPLES_FIELD,
+        POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+    )
+
+
+def test_real_ffmpeg_tempo_transform_is_atomic_pcm16_mono_and_preserves_source(
+    tmp_path: Path,
+) -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    source = tmp_path / "source.wav"
+    _write_test_tone(source, settings, 220, seconds=2.0)
+    source_bytes = source.read_bytes()
+    destination = tmp_path / "stretched.wav"
+
+    checksum, metrics = tempo_stretch_wav_atomic(source, destination)
+
+    info = audio_io.sf.info(destination)
+    assert source.read_bytes() == source_bytes
+    assert checksum == sha256_file(destination)
+    assert info.format == "WAV"
+    assert info.subtype == "PCM_16"
+    assert info.channels == 1
+    assert info.samplerate == 48_000
+    assert metrics[POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD] == info.samplerate
+    assert metrics[POSTPROCESS_SOURCE_SAMPLES_FIELD] == 96_000
+    assert metrics[POSTPROCESS_OUTPUT_SAMPLES_FIELD] == pytest.approx(
+        96_000 / POSTPROCESS_TEMPO_FACTOR,
+        rel=0.01,
+    )
+    assert metrics["rms"] > 0
+    assert metrics["peak"] <= 1.0
+    assert not list(tmp_path.glob("*.part.*"))
+
+
+@pytest.mark.parametrize("invalid_output", ["stereo", "silent"])
+def test_tempo_transform_rejects_invalid_signal_preserves_output_and_cleans_part(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_output: str,
+) -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    source = tmp_path / "source.wav"
+    _write_test_tone(source, settings, 220, seconds=2.0)
+    source_bytes = source.read_bytes()
+    destination = tmp_path / "stretched.wav"
+    incumbent = b"previous verified audio"
+    destination.write_bytes(incumbent)
+
+    def write_invalid_output(
+        command: list[str],
+        **_: Any,
+    ) -> subprocess.CompletedProcess[str]:
+        output = Path(command[-1])
+        channels = 2 if invalid_output == "stereo" else 1
+        audio = np.zeros((102_128, channels), dtype=np.float32)
+        if channels == 1:
+            audio = audio.reshape(-1)
+        audio_io.sf.write(output, audio, 48_000, subtype="PCM_16")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(audio_io, "run_hidden", write_invalid_output)
+
+    with pytest.raises(AudioQualityError, match="mono input|no audible signal"):
+        tempo_stretch_wav_atomic(source, destination)
+
+    assert source.read_bytes() == source_bytes
+    assert destination.read_bytes() == incumbent
+    assert not list(tmp_path.glob("*.part.*"))
+
+
+def test_tempo_transform_rejects_in_place_overwrite(tmp_path: Path) -> None:
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    source = tmp_path / "source.wav"
+    _write_test_tone(source, settings, 220, seconds=2.0)
+    source_bytes = source.read_bytes()
+
+    with pytest.raises(AudioQualityError, match="source and destination must differ"):
+        tempo_stretch_wav_atomic(source, source)
+
+    assert source.read_bytes() == source_bytes
+    assert not list(tmp_path.glob("*.part.*"))
 
 
 def test_real_ffmpeg_chapter_assembly_is_atomic_and_decodable(tmp_path: Path) -> None:

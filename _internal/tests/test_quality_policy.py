@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from ebook_reader.audio_transform_contract import (
+    POSTPROCESS_ALGORITHM,
+    POSTPROCESS_OUTPUT_CODEC,
+    POSTPROCESS_PROFILE_TEMPO,
+    POSTPROCESS_TEMPO_DENOMINATOR,
+    POSTPROCESS_TEMPO_NUMERATOR,
+)
 from ebook_reader.config import build_settings
 from ebook_reader.quality_policy import (
     ANALYSIS_CASTING_IMPLEMENTATION_FILES,
     ANALYSIS_CASTING_STAGE,
     QUALITY_IMPLEMENTATION_FILES,
+    QUALITY_POLICY_VERSION,
     TEXT_SEGMENTATION_IMPLEMENTATION_FILES,
     TEXT_SEGMENTATION_STAGE,
     analysis_casting_implementation_hash,
@@ -30,6 +38,14 @@ def test_quality_policy_hash_is_stable_and_changes_with_content_thresholds() -> 
 
     changed = build_settings(overrides={"asr": {"min_similarity": 0.91}})
     assert quality_policy_hash(first) != quality_policy_hash(build_quality_policy(changed))
+    assert first["policy_version"] == QUALITY_POLICY_VERSION == 2
+    assert first["algorithms"]["candidate_postprocess"] == POSTPROCESS_ALGORITHM
+    assert first["settings"]["candidate_postprocess"] == {
+        "profile": POSTPROCESS_PROFILE_TEMPO,
+        "tempo_numerator": POSTPROCESS_TEMPO_NUMERATOR,
+        "tempo_denominator": POSTPROCESS_TEMPO_DENOMINATOR,
+        "codec": POSTPROCESS_OUTPUT_CODEC,
+    }
     assert first["algorithms"]["asr_content"] == (
         "evidence_gated_name_pronunciation_delivery_v10"
     )
@@ -44,6 +60,7 @@ def test_quality_policy_fingerprints_every_critical_implementation_file() -> Non
     assert "perceptual_contract.py" in QUALITY_IMPLEMENTATION_FILES
     assert "tts_contract.py" in QUALITY_IMPLEMENTATION_FILES
     assert "audio_io.py" in QUALITY_IMPLEMENTATION_FILES
+    assert "audio_transform_contract.py" in QUALITY_IMPLEMENTATION_FILES
     assert "database.py" in QUALITY_IMPLEMENTATION_FILES
     assert "recovery.py" in QUALITY_IMPLEMENTATION_FILES
     assert "runtime_contract.py" in QUALITY_IMPLEMENTATION_FILES

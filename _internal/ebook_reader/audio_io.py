@@ -13,6 +13,14 @@ import numpy as np
 import pyloudnorm as pyln
 import soundfile as sf
 
+from .audio_transform_contract import (
+    POSTPROCESS_OUTPUT_CODEC,
+    POSTPROCESS_OUTPUT_SAMPLES_FIELD,
+    POSTPROCESS_SAMPLE_COUNT_RELATIVE_TOLERANCE,
+    POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD,
+    POSTPROCESS_SOURCE_SAMPLES_FIELD,
+    POSTPROCESS_TEMPO_FACTOR,
+)
 from .io_utils import atomic_write_text, ffmpeg_executable, run_hidden, sha256_file
 
 
@@ -419,6 +427,109 @@ def atomic_write_wav(
     checksum = sha256_file(temp)
     os.replace(temp, path)
     return checksum, metrics
+
+
+def _inspect_pcm16_mono_wav(path: Path) -> tuple[np.ndarray, int, dict[str, float]]:
+    try:
+        info = sf.info(path)
+        audio, sample_rate = sf.read(path, dtype="float32", always_2d=False)
+    except (OSError, RuntimeError, sf.LibsndfileError) as exc:
+        raise AudioQualityError(f"cannot decode WAV: {path}") from exc
+    if info.format != "WAV":
+        raise AudioQualityError(f"audio transform requires WAV input, got {info.format or 'unknown'}")
+    if info.subtype != "PCM_16":
+        raise AudioQualityError(
+            f"audio transform requires PCM_16 input, got {info.subtype or 'unknown'}"
+        )
+    if info.channels != 1:
+        raise AudioQualityError(f"audio transform requires mono input, got {info.channels} channels")
+    if sample_rate <= 0:
+        raise AudioQualityError(f"audio transform has invalid sample rate: {sample_rate}")
+    array = np.asarray(audio, dtype=np.float32)
+    if array.ndim != 1:
+        raise AudioQualityError(f"audio transform requires mono input, got shape {array.shape}")
+    if array.size == 0:
+        raise AudioQualityError("audio transform input is empty")
+    if not np.isfinite(array).all():
+        raise AudioQualityError("audio transform input contains NaN or infinity")
+    metrics = signal_metrics(array, int(sample_rate))
+    if metrics["rms"] <= 0:
+        raise AudioQualityError("audio transform input has no audible signal")
+    return array, int(sample_rate), metrics
+
+
+def tempo_stretch_wav_atomic(
+    source: Path,
+    destination: Path,
+) -> tuple[str, dict[str, float | int]]:
+    """Apply the locked 0.94 atempo profile without modifying the source WAV."""
+    source = source.resolve()
+    destination = destination.resolve()
+    if source == destination:
+        raise AudioQualityError("audio transform source and destination must differ")
+    if destination.suffix.casefold() != ".wav":
+        raise AudioQualityError("audio transform destination must use the .wav extension")
+    source_audio, source_sample_rate, _ = _inspect_pcm16_mono_wav(source)
+    source_samples = int(source_audio.size)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp = destination.with_name(destination.stem + ".part" + destination.suffix)
+    temp.unlink(missing_ok=True)
+    ffmpeg = ffmpeg_executable()
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-nostats",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(source),
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-af",
+        f"atempo={_ffmpeg_number(POSTPROCESS_TEMPO_FACTOR)}",
+        "-ac",
+        "1",
+        "-ar",
+        str(source_sample_rate),
+        "-c:a",
+        POSTPROCESS_OUTPUT_CODEC,
+        str(temp),
+    ]
+    try:
+        result = run_hidden(command, timeout=3600, check=False)
+        if result.returncode != 0:
+            raise AudioQualityError(f"FFmpeg tempo transform failed: {result.stderr[-3000:]}")
+        if not temp.exists():
+            raise AudioQualityError("FFmpeg tempo transform did not produce a WAV")
+        output_audio, output_sample_rate, output_metrics = _inspect_pcm16_mono_wav(temp)
+        if output_sample_rate != source_sample_rate:
+            raise AudioQualityError(
+                "FFmpeg tempo transform changed the sample rate: "
+                f"{output_sample_rate} Hz != {source_sample_rate} Hz"
+            )
+        output_samples = int(output_audio.size)
+        expected_samples = source_samples / POSTPROCESS_TEMPO_FACTOR
+        relative_error = abs(output_samples - expected_samples) / expected_samples
+        if relative_error > POSTPROCESS_SAMPLE_COUNT_RELATIVE_TOLERANCE:
+            raise AudioQualityError(
+                "FFmpeg tempo transform returned an unexpected sample count: "
+                f"{output_samples} != approximately {expected_samples:.0f}"
+            )
+        with temp.open("rb+") as handle:
+            os.fsync(handle.fileno())
+        checksum = sha256_file(temp)
+        os.replace(temp, destination)
+        return checksum, {
+            POSTPROCESS_SOURCE_SAMPLE_RATE_FIELD: source_sample_rate,
+            POSTPROCESS_SOURCE_SAMPLES_FIELD: source_samples,
+            POSTPROCESS_OUTPUT_SAMPLES_FIELD: output_samples,
+            **output_metrics,
+        }
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def merge_wav_parts_atomic(

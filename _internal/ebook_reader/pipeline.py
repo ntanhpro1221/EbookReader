@@ -33,8 +33,17 @@ from .audio_io import (
     inspect_wav,
     is_short_utterance,
     merge_wav_parts_atomic,
+    tempo_stretch_wav_atomic,
     verify_mp3,
     write_playlist_atomic,
+)
+from .audio_transform_contract import (
+    POSTPROCESS_PROFILE_FIELD,
+    POSTPROCESS_PROFILE_NONE,
+    POSTPROCESS_PROFILE_TEMPO,
+    POSTPROCESS_PROVENANCE_FIELDS,
+    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
+    POSTPROCESS_SOURCE_SHA256_FIELD,
 )
 from .character_registry import build_registry_and_cast
 from .database import (
@@ -139,6 +148,15 @@ TTS_SIGNAL_PROVENANCE_FIELDS = (
     SPLIT_MAX_CHARS_FIELD,
     "split_parts",
     *HA_VOCALIZATION_PROVENANCE_FIELDS,
+)
+SEGMENTATION_CHECKPOINT_FIELDS = (
+    "stable_id",
+    "seq",
+    "paragraph_index",
+    "break_ms",
+    "text",
+    "text_sha256",
+    "kind_hint",
 )
 
 
@@ -446,9 +464,16 @@ class BookPipeline:
         if previous_stages.get(TEXT_SEGMENTATION_STAGE) != current_stages.get(
             TEXT_SEGMENTATION_STAGE
         ):
-            raise RuntimeError(
-                "Text segmentation implementation changed after segments were checkpointed; "
-                "create a clean project so stale text cannot be republished"
+            mismatch = self._segmentation_checkpoint_mismatch()
+            if mismatch is not None:
+                raise RuntimeError(
+                    "Text segmentation implementation changed after segments were "
+                    "checkpointed and the current parser does not reproduce the "
+                    f"checkpoint exactly: {mismatch}"
+                )
+            self.log(
+                "Text segmentation fingerprint changed, but the current parser "
+                "reproduced every checkpointed segment exactly; safe resume allowed."
             )
         analysis_candidates_exist = getattr(self.db, "has_analysis_candidates", None)
         analysis_started = (
@@ -466,6 +491,29 @@ class BookPipeline:
                 "Analysis/casting implementation changed after analysis started; create a clean project "
                 "so stale speaker and voice assignments cannot be republished"
             )
+
+    def _segmentation_checkpoint_mismatch(self) -> str | None:
+        max_chars = int(self.settings["tts"]["max_segment_chars"])
+        for chapter in self.db.list_chapters():
+            expected_rows = load_and_segment_chapter(
+                dict(chapter),
+                max_chars=max_chars,
+            )
+            checkpoint_rows = self.db.list_segments(chapter_id=int(chapter["id"]))
+            if len(expected_rows) != len(checkpoint_rows):
+                return (
+                    f"chapter {int(chapter['chapter_index'])} has "
+                    f"{len(checkpoint_rows)} checkpointed segments instead of "
+                    f"{len(expected_rows)}"
+                )
+            for expected, checkpoint in zip(expected_rows, checkpoint_rows):
+                for field in SEGMENTATION_CHECKPOINT_FIELDS:
+                    if expected[field] != checkpoint[field]:
+                        return (
+                            f"chapter {int(chapter['chapter_index'])} segment "
+                            f"{int(checkpoint['seq'])} field {field} differs"
+                        )
+        return None
 
     def prepare_recovery(self) -> bool:
         self._recover()
@@ -796,6 +844,8 @@ class BookPipeline:
         }
         for field in HA_VOCALIZATION_PROVENANCE_FIELDS:
             metrics[field] = signal.get(field)
+        for field in POSTPROCESS_PROVENANCE_FIELDS:
+            metrics[field] = signal.get(field)
         evidence_failure_codes = list(anchor_failure_codes)
         if evidence_verdict != QUALITY_VERDICT_PASS:
             reason = str(metrics["reason"])
@@ -1072,6 +1122,13 @@ class BookPipeline:
         require_naturalness_improvement = (
             candidate_repair_requirement == NATURALNESS_IMPROVEMENT_REQUIREMENT
         )
+        require_strict_short_audio_gate = (
+            require_naturalness_improvement
+            or str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_TEMPO
+        )
+        candidate_signal = json.loads(str(candidate["signal_json"] or "{}"))
+        if not isinstance(candidate_signal, dict):
+            raise RuntimeError("candidate perceptual signal provenance is invalid")
         baseline_pitch_semitones = 0
         try:
             result = self._evaluate_perceptual_audio_item(
@@ -1085,6 +1142,8 @@ class BookPipeline:
                 **result,
                 "candidate_repair_requirement": candidate_repair_requirement,
             }
+            for field in POSTPROCESS_PROVENANCE_FIELDS:
+                result[field] = candidate_signal.get(field)
         except (PerceptualQAUnavailable, KeyError, TypeError, ValueError) as exc:
             reason = (
                 exc.reason
@@ -1105,6 +1164,8 @@ class BookPipeline:
                 "candidate_repair_requirement": candidate_repair_requirement,
                 "error": str(exc),
             }
+            for field in POSTPROCESS_PROVENANCE_FIELDS:
+                result[field] = candidate_signal.get(field)
             self._record_segment_perceptual_evidence(
                 candidate_item,
                 result,
@@ -1124,7 +1185,7 @@ class BookPipeline:
 
         evidence_verdict, failure_codes = self._classify_perceptual_result(
             result,
-            allow_short_audio_exemption=not require_naturalness_improvement,
+            allow_short_audio_exemption=not require_strict_short_audio_gate,
         )
         quality_check_id = self._record_segment_perceptual_evidence(
             candidate_item,
@@ -1134,7 +1195,7 @@ class BookPipeline:
         )
         perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
         strict_short_audio = (
-            require_naturalness_improvement
+            require_strict_short_audio_gate
             and str(result.get("reason") or "") == PERCEPTUAL_SHORT_AUDIO_REASON
         )
         if (
@@ -2560,6 +2621,49 @@ class BookPipeline:
             repair_trigger_check_id=repair_trigger_check_id,
         )
 
+    def _allocate_tempo_rescue_candidate(
+        self,
+        row: Any,
+        source_candidate: Any,
+        max_repair_rounds: int,
+    ) -> Any:
+        source = self.db.get_segment_candidate(int(source_candidate["id"]))
+        if (
+            str(source["postprocess_profile"]) != POSTPROCESS_PROFILE_NONE
+            or int(source["repair_round"]) + 1 != int(source["repair_budget"])
+        ):
+            raise RuntimeError("tempo rescue source is not the final ordinary candidate")
+        return self.db.allocate_segment_candidate(
+            segment_id=int(row["id"]),
+            policy_hash=self.quality_policy_hash,
+            repair_round=int(max_repair_rounds),
+            max_repair_rounds=int(max_repair_rounds),
+            incumbent_sha256=str(row["wav_sha256"] or ""),
+            generation_seed=int(source["generation_seed"]),
+            wav_path=self._segment_candidate_path(row, max_repair_rounds),
+            candidates_root=self._segment_candidate_root(),
+            pronunciation_delivery_variant=str(
+                source["pronunciation_delivery_variant"]
+            ),
+            expected_spoken_text_sha256=str(
+                source["expected_spoken_text_sha256"]
+            ),
+            tts_attempt=int(source["tts_attempt"]),
+            generation_strategy=str(source["generation_strategy"]),
+            postprocess_profile=POSTPROCESS_PROFILE_TEMPO,
+            postprocess_source_candidate_id=int(source["id"]),
+            postprocess_source_sha256=str(source["wav_sha256"]),
+            perceptual_required=bool(source["perceptual_required"]),
+            candidate_repair_requirement=str(
+                source["candidate_repair_requirement"]
+            ),
+            repair_trigger_check_id=(
+                int(source["repair_trigger_check_id"])
+                if source["repair_trigger_check_id"] is not None
+                else None
+            ),
+        )
+
     @staticmethod
     def _clause_split_is_unavailable(spoken_text: str) -> bool:
         try:
@@ -2637,6 +2741,101 @@ class BookPipeline:
             signal=metrics,
         )
 
+    def _process_tempo_rescue_candidate(
+        self,
+        row: Any,
+        candidate: Any,
+        chapter: Any,
+    ) -> Any:
+        source_candidate_id = candidate["postprocess_source_candidate_id"]
+        source_sha256 = str(candidate["postprocess_source_sha256"] or "")
+        if source_candidate_id is None or not source_sha256:
+            raise RuntimeError("tempo rescue candidate lacks a locked source binding")
+        source = self.db.get_segment_candidate(int(source_candidate_id))
+        source_path = Path(str(source["wav_path"]))
+        if (
+            str(source["wav_sha256"] or "").casefold() != source_sha256.casefold()
+            or not source_path.is_file()
+            or sha256_file(source_path).casefold() != source_sha256.casefold()
+        ):
+            raise RuntimeError("tempo rescue source WAV no longer matches its checkpoint")
+        try:
+            source_signal = json.loads(str(source["signal_json"] or "{}"))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("tempo rescue source signal metrics are invalid") from exc
+        if not isinstance(source_signal, dict):
+            raise RuntimeError("tempo rescue source signal metrics must be an object")
+        _variant, spoken_text, _anchors = (
+            self._require_segment_candidate_pronunciation_delivery(row, candidate)
+        )
+        output = Path(str(candidate["wav_path"]))
+        try:
+            checksum, transform_metrics = tempo_stretch_wav_atomic(source_path, output)
+            valid, metrics, reason = inspect_wav(
+                output,
+                spoken_text,
+                self.settings,
+                segment=row,
+            )
+            if not valid:
+                raise AudioQualityError(reason)
+            for field in (
+                "spoken_text_sha256",
+                "pronunciation_delivery_variant",
+                "voice_profile_id",
+                "pitch_semitones",
+                "effective_pitch_semitones",
+                "pitch_variant_skipped",
+                "pitch_variant_mixed",
+            ):
+                if field not in source_signal:
+                    raise RuntimeError(
+                        "tempo rescue source lacks locked signal provenance: " + field
+                    )
+                metrics[field] = source_signal[field]
+            for field in (
+                GENERATION_CEILING_METRIC,
+                GENERATION_ENDPOINT_ACTIVE_METRIC,
+            ):
+                metrics[field] = source_signal.get(field, 0.0)
+            metrics.update(transform_metrics)
+            metrics.update(
+                {
+                    POSTPROCESS_PROFILE_FIELD: POSTPROCESS_PROFILE_TEMPO,
+                    POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD: int(source["id"]),
+                    POSTPROCESS_SOURCE_SHA256_FIELD: source_sha256,
+                }
+            )
+            return self._checkpoint_segment_candidate_signal(
+                candidate,
+                output,
+                checksum,
+                metrics,
+                int(candidate["generation_seed"]),
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed = self.db.mark_segment_candidate_tts_failed(
+                int(candidate["id"]),
+                expected_generation_seed=int(candidate["generation_seed"]),
+                error=f"tempo rescue failed: {exc}",
+            )
+            self.log(
+                f"Tempo rescue candidate {row['stable_id']} failed: {exc}"
+            )
+            self.db.event(
+                "error",
+                "SEGMENT_CANDIDATE_TEMPO_RESCUE_FAILED",
+                f"Immutable tempo rescue failed for {row['stable_id']}",
+                {
+                    "candidate_id": int(candidate["id"]),
+                    "source_candidate_id": int(source["id"]),
+                    "repair_round": int(candidate["repair_round"]),
+                    "error": str(exc),
+                    "chapter": str(chapter["title"]),
+                },
+            )
+            return failed
+
     def _process_segment_candidate(
         self,
         row: Any,
@@ -2648,6 +2847,11 @@ class BookPipeline:
         candidate = self.db.get_segment_candidate(int(candidate["id"]))
         if str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING:
             return candidate
+        postprocess_profile = str(candidate["postprocess_profile"])
+        if postprocess_profile == POSTPROCESS_PROFILE_TEMPO:
+            return self._process_tempo_rescue_candidate(row, candidate, chapter)
+        if postprocess_profile != POSTPROCESS_PROFILE_NONE:
+            raise RuntimeError("segment candidate has an unsupported postprocess profile")
         repair_round = int(candidate["repair_round"])
         pronunciation_variant, spoken_text, _anchors = (
             self._require_segment_candidate_pronunciation_delivery(row, candidate)
@@ -3695,6 +3899,17 @@ class BookPipeline:
                         repair_rounds,
                     )
                     generation_jobs.append((repair_item, candidate))
+                    progressed = True
+                elif action == "allocate_postprocess":
+                    source_candidate = self.db.get_segment_candidate(
+                        int(plan[POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD])
+                    )
+                    candidate = self._allocate_tempo_rescue_candidate(
+                        item,
+                        source_candidate,
+                        repair_rounds,
+                    )
+                    generation_jobs.append((item, candidate))
                     progressed = True
                 elif action == "generate":
                     repair_item = self._checkpoint_short_ceiling_repair(item)
