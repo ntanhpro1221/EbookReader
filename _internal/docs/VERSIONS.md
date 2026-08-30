@@ -61,4 +61,22 @@ durable của chúng giống hệt transport fault (attempt đã bị tiêu), n�
 tiếp thay vì kết thúc book. Chưa sửa vì chưa quan sát được trường hợp thật; đừng sửa mù, hãy đợi bằng chứng
 từ một lần chạy.
 
+### Số liệu đo được trong lần chạy alpha.9
+
+Trên 29 batch đầu của chapter 000–001:
+
+- **72% batch phải retry ít nhất một lần** (8 batch qua ngay, 14 batch cần 2 lượt, 7 batch cần cả 3 lượt).
+- 46/53 lần từ chối đến từ `semantic delivery validation` — model đề xuất `emotion=neutral` cho câu có
+  cue cảm xúc trực tiếp; 4 lần từ host affect adjudication, 3 lần từ director critic.
+- Nghĩa là phân tích đang tốn khoảng **2,1× số lời gọi model** so với trường hợp lý tưởng.
+
+**Đây là chi phí có chủ đích, đừng "tối ưu" nó đi.** Cách rẻ nhất để giảm retry là gửi sẵn cue mà host đã
+phát hiện được vào prompt lần đầu. Nhưng làm vậy thì semantic gate không còn là một phép kiểm độc lập —
+nó biến thành "model có làm theo gợi ý của host không". Giá trị của gate nằm ở chỗ model tự quyết rồi host
+đối chiếu. `AGENTS.md` đã quy định: khi throughput xung đột với toàn vẹn output thì chọn toàn vẹn output.
+Advisory `allowed_emotions` vì thế chỉ được gửi **sau** khi một candidate `neutral` bị từ chối.
+
+Con số cần nhớ khi ước lượng thời gian: ở profile `high_quality`, phân tích chạy khoảng **4 segment/phút**
+trên RTX 5060 Laptop với `qwen3:8b` (~24 token/s, GPU ~47%, VRAM 6,5/8 GB).
+
 **Output:** `D:\Novels\Audiobooks\texttmp_iter1_cbde22ef6b` (chapter 000–001).
