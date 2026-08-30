@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 import ebook_reader.pipeline as pipeline_module
+from ebook_reader.asr_contract import ASR_LOCKED_NAME_ANCHOR_REVIEW
 from ebook_reader.asr import (
     ASR_INCONCLUSIVE,
     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
@@ -1579,6 +1580,47 @@ def test_clarity_locked_name_mismatch_blocks_publication(
     assert evidence["decode_evidence"][-1]["reason"] == (
         "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
     )
+
+
+def test_locked_name_review_publishes_when_ordinary_content_stays_clean(
+    tmp_path: Path,
+) -> None:
+    """A name Whisper keeps Latinising must not block the chapter forever.
+
+    Every ordinary word here is transcribed correctly across every repair round; only
+    the name comes back in English spelling, which is what real audio does. The segment
+    publishes carrying review evidence instead of failing, while
+    `test_clarity_locked_name_mismatch_blocks_publication` proves a short utterance -
+    where waiving the name would leave nothing to check - still blocks.
+    """
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.tts.spoken_text_with_anchors = lambda _row: (
+        "Lúc chia tay, Lu-si-en len lén hỏi bạn đầy tò mò.",
+        [_locked_lucien_anchor(spoken_start=14)],
+    )
+    latinised = "Lúc chia tay, Lucian len lén hỏi bạn đầy tò mò."
+    scripted_results = [
+        _asr_result(ASR_PASS, latinised, similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, latinised, similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, latinised, similarity=0.96, wer=0.1),
+        _asr_result(ASR_PASS, latinised, similarity=0.96, wer=0.1),
+    ]
+
+    class AnchorVerifier:
+        def unload(self) -> None:
+            return None
+
+        def can_verify_repeated_short(self, _text: str) -> bool:
+            return False
+
+        def verify(self, _text: str, _wav: Path, *, confirmation: bool = False):
+            return scripted_results.pop(0)
+
+    pipeline._verify_chapter_audio(chapter, AnchorVerifier())
+
+    fresh = pipeline.db.get_segment(int(row["id"]))
+    assert fresh["status"] != "failed"
+    assert ASR_LOCKED_NAME_ANCHOR_REVIEW in str(fresh["warning_code"])
 
 
 def test_clarity_final_gate_preserves_anchor_failure_from_either_decode(

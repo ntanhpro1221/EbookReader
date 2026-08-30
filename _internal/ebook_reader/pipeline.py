@@ -45,6 +45,10 @@ from .audio_transform_contract import (
     POSTPROCESS_SOURCE_CANDIDATE_ID_FIELD,
     POSTPROCESS_SOURCE_SHA256_FIELD,
 )
+from .asr_contract import (
+    ASR_LOCKED_NAME_ANCHOR_REVIEW,
+    LOCKED_NAME_ANCHOR_UNMATCHED_STATUSES,
+)
 from .character_registry import build_registry_and_cast
 from .database import (
     GENERATION_STRATEGY_DIRECT,
@@ -2319,7 +2323,8 @@ class BookPipeline:
             == LOCKED_NAME_ANCHOR_METRICS_VERSION
             and anchor_metrics.get("adjudicated") is True
             and anchor_metrics.get("passed") is False
-            and str(anchor_metrics.get("status") or "") == "fail"
+            and str(anchor_metrics.get("status") or "")
+            in LOCKED_NAME_ANCHOR_UNMATCHED_STATUSES
             and anchor_failure_codes == [failure_code]
             and repeat_count >= 1
             and anchor_count >= 1
@@ -3948,7 +3953,22 @@ class BookPipeline:
                             candidate_attempts
                         )
                     )
-                    if perceptual_review_exhausted:
+                    locked_name_review = bool(
+                        result.get("locked_name_review_eligible")
+                    ) and reason == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+                    if locked_name_review:
+                        # Whisper kept spelling a correctly pronounced foreign name in
+                        # Latin script. That is review evidence, not proof of a bad
+                        # take, so the segment publishes carrying the warning instead
+                        # of blocking its chapter forever.
+                        warning = ASR_LOCKED_NAME_ANCHOR_REVIEW
+                        error = (
+                            "Locked-name pronunciation needs a listen; ordinary "
+                            "content passed its canonical thresholds"
+                        )
+                        final_verdict = QUALITY_VERDICT_PASS
+                        failure_codes = ()
+                    elif perceptual_review_exhausted:
                         warning = PERCEPTUAL_NATURALNESS_REVIEW_CODE
                         error = (
                             "Perceptual naturalness review remained after all "
@@ -3993,9 +4013,10 @@ class BookPipeline:
                         warning_code=warning,
                         final_verdict=final_verdict,
                         failure_codes=failure_codes,
+                        publish_with_review=locked_name_review,
                     )
                     self.db.event(
-                        "error",
+                        "warning" if locked_name_review else "error",
                         warning,
                         f"Immutable clarity repair budget exhausted for {item['stable_id']}",
                         {
@@ -4156,6 +4177,59 @@ class BookPipeline:
             result = last_results.get(int(item["id"]), {})
             verdict = _asr_verdict(result)
             reason = str(result.get("reason", "ASR_INCONCLUSIVE"))
+            if (
+                reason == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+                and bool(result.get("locked_name_review_eligible"))
+            ):
+                # The repair budget is spent and the name still does not match the
+                # transcript's spelling, but the canonical sentence metrics - measured
+                # with the name spans removed - are inside their thresholds. Whisper's
+                # choice of spelling for a foreign name read with Vietnamese phonemes
+                # is not proof of mispronunciation, so this publishes with review
+                # evidence rather than blocking the chapter forever.
+                segment_id = int(item["id"])
+                self.db.mark_asr_result(
+                    segment_id,
+                    passed=True,
+                    transcript=str(result.get("transcript", "")),
+                    similarity=float(result.get("similarity", 0.0)),
+                    wer=float(result.get("wer", 1.0)),
+                    warning_code=ASR_LOCKED_NAME_ANCHOR_REVIEW,
+                )
+                self._record_segment_audio_gate(
+                    item,
+                    result,
+                    verdict=QUALITY_VERDICT_PASS,
+                    confirmation=bool(result.get("confirmation_decode", False)),
+                    decode_evidence=artifact_history(item),
+                )
+                self.db.mark_verified(
+                    segment_id,
+                    warning_code=ASR_LOCKED_NAME_ANCHOR_REVIEW,
+                )
+                self.db.event(
+                    "warning",
+                    ASR_LOCKED_NAME_ANCHOR_REVIEW,
+                    f"Locked-name pronunciation needs a listen for {item['stable_id']}",
+                    {
+                        "segment_id": segment_id,
+                        "similarity": float(result.get("similarity", 0.0)),
+                        "wer": float(result.get("wer", 1.0)),
+                        "transcript": str(result.get("transcript", ""))[:400],
+                        "anchors": [
+                            {
+                                "surface": anchor.get("matched_surface"),
+                                "spoken_form": anchor.get("canonical_spoken_form"),
+                                "heard": anchor.get("aligned_tokens"),
+                            }
+                            for anchor in (
+                                result.get(LOCKED_NAME_ANCHOR_METRICS_KEY) or {}
+                            ).get("anchors", [])
+                            if not anchor.get("matched")
+                        ],
+                    },
+                )
+                continue
             warning = (
                 reason
                 if verdict == ASR_INCONCLUSIVE

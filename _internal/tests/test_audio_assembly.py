@@ -392,10 +392,20 @@ def test_segment_leveling_matches_neutral_voices_and_preserves_loud_intent() -> 
     narrator_lufs = integrated_loudness_lufs(narrator_normalized, sample_rate)
     loud_lufs = integrated_loudness_lufs(loud_normalized, sample_rate)
 
+    # Read the anchors from settings rather than repeating them: what matters is that
+    # levelling reaches each anchor exactly and preserves the intended ordering, not
+    # the absolute numbers, which move whenever the peak-ceiling headroom is retuned.
+    targets = settings["audio"]["segment_target_lufs"]
+    narrator_offset = float(settings["audio"]["segment_narrator_offset_db"])
+
     assert quiet_lufs == pytest.approx(strong_lufs, abs=0.15)
-    assert quiet_lufs == pytest.approx(-19.0, abs=0.15)
-    assert narrator_lufs == pytest.approx(-18.5, abs=0.15)
-    assert loud_lufs == pytest.approx(-17.8, abs=0.15)
+    assert quiet_lufs == pytest.approx(float(targets["normal"]), abs=0.15)
+    assert narrator_lufs == pytest.approx(
+        float(targets["normal"]) + narrator_offset, abs=0.15
+    )
+    assert loud_lufs == pytest.approx(float(targets["loud"]), abs=0.15)
+    # The whole point of the anchors: the director's intent has to survive levelling.
+    assert loud_lufs > narrator_lufs > quiet_lufs
 
 
 def test_lufs_leveling_matches_low_and_bright_voice_spectra() -> None:
@@ -415,8 +425,13 @@ def test_lufs_leveling_matches_low_and_bright_voice_spectra() -> None:
     low_normalized = normalize_segment_level(low_voice, sample_rate, segment, settings)
     bright_normalized = normalize_segment_level(bright_voice, sample_rate, segment, settings)
 
-    assert integrated_loudness_lufs(low_normalized, sample_rate) == pytest.approx(-19.0, abs=0.15)
-    assert integrated_loudness_lufs(bright_normalized, sample_rate) == pytest.approx(-19.0, abs=0.15)
+    normal_target = float(settings["audio"]["segment_target_lufs"]["normal"])
+    assert integrated_loudness_lufs(low_normalized, sample_rate) == pytest.approx(
+        normal_target, abs=0.15
+    )
+    assert integrated_loudness_lufs(bright_normalized, sample_rate) == pytest.approx(
+        normal_target, abs=0.15
+    )
 
 
 def test_segment_rate_validation_warns_for_mild_outlier_and_rejects_extreme() -> None:
@@ -539,3 +554,46 @@ def test_spoken_audio_is_never_trimmed_to_hide_an_overlong_result() -> None:
             48_000,
             segment={"kind": "dialogue", "pace": "normal"},
         )
+
+
+def test_loudness_targets_stay_inside_the_peak_ceiling_speech_allows() -> None:
+    """Loudness targets must be reachable, not aspirational.
+
+    Levelling is `min(loudness_gain, peak_safe_gain)` and mastering cannot exceed its
+    true-peak ceiling either, so a target above `ceiling - crest_factor` can only be
+    missed. Measured Vietnamese TTS speech runs at a 17.6 dB median crest factor, 20.6 dB
+    at the worst segment, and 17.9 dB across a whole assembled chapter. A -18.0 LUFS
+    chapter target against a -2 dBTP ceiling was 1.9 dB beyond what the content allows,
+    and segment anchers near -19 LUFS put 77% of segments on the peak ceiling instead of
+    their anchor - which inverted the intent, making `loud` quieter than `normal`.
+    """
+    settings = build_settings()
+    audio = settings["audio"]
+    segment_ceiling = float(audio["segment_peak_dbfs"])
+    chapter_ceiling = float(audio["true_peak_db"])
+    narrator_offset = float(audio["segment_narrator_offset_db"])
+    targets = audio["segment_target_lufs"]
+    measured_worst_segment_crest_db = 20.6
+    measured_chapter_crest_db = 17.9
+
+    highest_segment_target = max(float(value) for value in targets.values()) + narrator_offset
+    assert highest_segment_target <= segment_ceiling - measured_worst_segment_crest_db
+
+    assert float(audio["loudness_lufs"]) <= chapter_ceiling - measured_chapter_crest_db
+
+
+def test_endpoint_floor_tracks_the_loudness_anchors() -> None:
+    """The endpoint gate measures levelled audio, so it must move with the anchors.
+
+    `generation_endpoint_active` compares the trailing RMS of the written WAV against an
+    absolute dBFS floor. Lowering the loudness anchors without lowering this floor would
+    silently make the gate less sensitive to VieNeu still speaking at the frame ceiling.
+    """
+    audio = build_settings()["audio"]
+    endpoint_floor = float(audio["segment_endpoint_floor_dbfs"])
+    normal_target = float(audio["segment_target_lufs"]["normal"])
+
+    assert endpoint_floor < normal_target
+    assert normal_target - endpoint_floor == pytest.approx(26.0, abs=1.0)
+    # The active floor is measured before any gain, so it must not move with them.
+    assert float(audio["segment_active_floor_dbfs"]) == pytest.approx(-45.0)

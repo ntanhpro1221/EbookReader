@@ -13,6 +13,7 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 from .asr_contract import (
+    ASR_LOCKED_NAME_ANCHOR_REVIEW,
     COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
     SHORT_CONTEXT_REPEAT_COUNT,
@@ -42,6 +43,46 @@ LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"
 ASR_WER_SIMILARITY_MARGIN = 0.12
 ANCHOR_COMPARISON_NORMALIZED_EXACT = "normalized_exact"
 ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT = "diacritic_folded_exact"
+ANCHOR_COMPARISON_VIETNAMESE_PHONEME_EXACT = "vietnamese_phoneme_exact"
+# Canonicalising an unmatched anchor removes it from the sentence metrics so the same
+# disagreement is not punished twice. That is only sound while enough ordinary content
+# remains to carry an independent verdict: in "Anh Lucy" the name is half the utterance,
+# so waiving it would leave nothing to check. Below this many ordinary expected tokens
+# the anchor keeps its hard-fail authority.
+CANONICAL_ANCHOR_WAIVER_MIN_ORDINARY_TOKENS = 4
+_PHONEME_CACHE: dict[str, str] = {}
+_PHONEMIZER: list[Any] = []
+
+
+def _vietnamese_phonemes(token: str) -> str:
+    """Deterministic phonemes for one token, or "" when phonemisation is unavailable.
+
+    Vietnamese orthography spells the same sound more than one way - `gi` and `d` are
+    both /z/, so a correct "Giôn" and Whisper's "dôn" are the same utterance. Comparing
+    phonemes recognises exactly those spellings and nothing looser: this stays an
+    equality test, so "Lucy" still cannot satisfy an anchor locked to "Lucien".
+    """
+    if not token:
+        return ""
+    cached = _PHONEME_CACHE.get(token)
+    if cached is not None:
+        return cached
+    if not _PHONEMIZER:
+        try:
+            from sea_g2p import G2P
+
+            _PHONEMIZER.append(G2P(lang="vi"))
+        except Exception:  # noqa: BLE001
+            _PHONEMIZER.append(None)
+    engine = _PHONEMIZER[0]
+    if engine is None:
+        return ""
+    try:
+        phonemes = str(engine.convert(token)).strip()
+    except Exception:  # noqa: BLE001
+        phonemes = ""
+    _PHONEME_CACHE[token] = phonemes
+    return phonemes
 
 
 def normalize_transcript(text: str) -> str:
@@ -82,6 +123,9 @@ def _locked_name_anchor_forms(
         _diacritic_folded_token(token)
         for token in spoken_tokens
     )
+    phoneme_spoken_tokens = tuple(_vietnamese_phonemes(token) for token in spoken_tokens)
+    if not all(phoneme_spoken_tokens):
+        phoneme_spoken_tokens = ()
     candidates = [
         ("spoken_form", spoken_tokens, ANCHOR_COMPARISON_NORMALIZED_EXACT),
         ("source_spelling", surface_tokens, ANCHOR_COMPARISON_NORMALIZED_EXACT),
@@ -99,6 +143,11 @@ def _locked_name_anchor_forms(
             "joined_spoken_form",
             ("".join(folded_spoken_tokens),) if folded_spoken_tokens else (),
             ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT,
+        ),
+        (
+            "spoken_form",
+            phoneme_spoken_tokens,
+            ANCHOR_COMPARISON_VIETNAMESE_PHONEME_EXACT,
         ),
     ]
     forms: list[tuple[str, tuple[str, ...], str]] = []
@@ -302,11 +351,18 @@ def _minimum_cost_locked_name_alignment(
             for form_kind, form_tokens, comparison_mode in unit["forms"]:
                 form_end = transcript_index + len(form_tokens)
                 matched_tokens = tuple(transcript_tokens[transcript_index:form_end])
-                comparison_tokens = (
-                    tuple(_diacritic_folded_token(token) for token in matched_tokens)
-                    if comparison_mode == ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT
-                    else matched_tokens
-                )
+                if comparison_mode == ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT:
+                    comparison_tokens = tuple(
+                        _diacritic_folded_token(token) for token in matched_tokens
+                    )
+                elif comparison_mode == ANCHOR_COMPARISON_VIETNAMESE_PHONEME_EXACT:
+                    comparison_tokens = tuple(
+                        _vietnamese_phonemes(token) for token in matched_tokens
+                    )
+                    if not all(comparison_tokens):
+                        continue
+                else:
+                    comparison_tokens = matched_tokens
                 if comparison_tokens != form_tokens:
                     continue
                 update(
@@ -380,7 +436,18 @@ def _canonical_locked_name_metrics(
             )
             transcript_cursor += len(operation["matched_tokens"])
         elif kind == "substitute_anchor":
-            actual_tokens.append(transcript_tokens[transcript_cursor])
+            # A name the transcript rendered differently is adjudicated by the anchor
+            # evidence, which reports it for review. Letting it also count as an
+            # ordinary substitution here would punish the same disagreement twice and
+            # push short sentences past the WER gate on their names alone. A name the
+            # transcript dropped entirely stays a `delete_anchor` and still counts.
+            actual_tokens.append(
+                _semantic_anchor_token(
+                    int(operation["repeat_index"]),
+                    int(operation["anchor_index"]),
+                    anchor_count,
+                )
+            )
             transcript_cursor += 1
     if transcript_cursor != len(transcript_tokens):
         raise RuntimeError("Locked-name canonical alignment did not consume transcript")
@@ -562,23 +629,27 @@ def adjudicate_locked_name_anchors(
     canonical_threshold_passed: bool | None = None
     canonical_promoted = False
     canonical_demoted = False
-    if anchors_passed:
-        canonical_similarity, canonical_cer, canonical_wer = (
-            _canonical_locked_name_metrics(
-                units,
-                operations,
-                transcript_tokens,
-                len(safe_anchors),
-            )
+    canonical_similarity, canonical_cer, canonical_wer = _canonical_locked_name_metrics(
+        units,
+        operations,
+        transcript_tokens,
+        len(safe_anchors),
+    )
+    ordinary_expected_tokens = sum(1 for unit in units if unit["kind"] != "anchor")
+    canonical_waiver_available = (
+        ordinary_expected_tokens >= CANONICAL_ANCHOR_WAIVER_MIN_ORDINARY_TOKENS
+    )
+    if min_similarity is not None and max_wer is not None and (
+        anchors_passed or canonical_waiver_available
+    ):
+        canonical_threshold_passed = _passes_asr_content_thresholds(
+            bool(transcript_tokens),
+            canonical_similarity,
+            canonical_wer,
+            min_similarity=float(min_similarity),
+            max_wer=float(max_wer),
         )
-        if min_similarity is not None and max_wer is not None:
-            canonical_threshold_passed = _passes_asr_content_thresholds(
-                bool(transcript_tokens),
-                canonical_similarity,
-                canonical_wer,
-                min_similarity=float(min_similarity),
-                max_wer=float(max_wer),
-            )
+        if anchors_passed:
             canonical_promoted = bool(
                 canonical_threshold_passed
                 and result.get("verdict") == ASR_MISMATCH
@@ -591,10 +662,19 @@ def adjudicate_locked_name_anchors(
 
     result[LOCKED_NAME_ANCHOR_METRICS_KEY] = {
         "version": LOCKED_NAME_ANCHOR_METRICS_VERSION,
-        "status": "pass" if anchors_passed else "fail",
+        "status": (
+            "pass"
+            if anchors_passed
+            else ("review_eligible" if canonical_threshold_passed else "fail")
+        ),
         "adjudicated": True,
         "passed": anchors_passed,
         "failure_codes": [] if anchors_passed else [ASR_LOCKED_NAME_ANCHOR_MISMATCH],
+        "review_codes": (
+            [ASR_LOCKED_NAME_ANCHOR_REVIEW]
+            if not anchors_passed and canonical_threshold_passed
+            else []
+        ),
         "repeat_count": repeat_count,
         "anchor_count": len(safe_anchors),
         "required_occurrence_count": required_occurrence_count,
@@ -611,6 +691,8 @@ def adjudicate_locked_name_anchors(
         "canonical_min_similarity": min_similarity,
         "canonical_max_wer": max_wer,
         "canonical_threshold_passed": canonical_threshold_passed,
+        "ordinary_expected_token_count": ordinary_expected_tokens,
+        "canonical_waiver_available": canonical_waiver_available,
         "canonical_promoted": canonical_promoted,
         "canonical_demoted": canonical_demoted,
         "anchors": evidence,
@@ -638,12 +720,44 @@ def adjudicate_locked_name_anchors(
             )
         return result
 
+    # Anchors failed. Whisper's spelling for a foreign name read with Vietnamese
+    # phonemes is not evidence about pronunciation, so the anchor reports review
+    # evidence rather than failing the segment; the canonical sentence metrics, which
+    # exclude the name spans, keep the hard-fail authority. Repair is not offered for
+    # an anchor-only disagreement: the cause is the transcript's orthography, not the
+    # audio, and re-generating cannot change it.
+    if canonical_threshold_passed is None:
+        # Either the caller did not opt into canonical gating, or the utterance is too
+        # short for waiving the name to leave anything worth checking. Keep the strict
+        # historical behaviour rather than letting an unmatched anchor through.
+        result.update(
+            {
+                "locked_name_review_eligible": False,
+                "passed": False,
+                "verdict": ASR_MISMATCH,
+                "reason": ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+                "repairable": True,
+            }
+        )
+        return result
+    # Repair still runs: a regenerated take may genuinely pronounce the name better,
+    # and that chance is worth the attempts. What changes is the terminal state. When
+    # the budget is exhausted and the canonical sentence metrics - which exclude the
+    # name spans - are acceptable, the pipeline publishes the segment with review
+    # evidence instead of failing it, because Whisper's spelling is not proof of
+    # mispronunciation. `locked_name_review_eligible` carries that decision.
+    result["locked_name_review_eligible"] = bool(canonical_threshold_passed)
     result.update(
         {
             "passed": False,
             "verdict": ASR_MISMATCH,
-            "reason": ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+            "reason": (
+                ASR_LOCKED_NAME_ANCHOR_MISMATCH
+                if canonical_threshold_passed
+                else "ASR_MISMATCH"
+            ),
             "repairable": True,
+            "severe": False,
         }
     )
     return result

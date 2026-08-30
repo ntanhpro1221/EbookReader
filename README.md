@@ -157,6 +157,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   mới kết thúc app và cả cây process con; transaction SQLite, file `.part`, atomic replace và recovery
   bảo vệ dữ liệu đã commit.
 - Không chèn im lặng để che đoạn TTS bị lỗi.
+- Mọi mức âm lượng mục tiêu đều nằm trong khả năng vật lý của trần đỉnh. Giọng nói có crest factor 17–20 dB, nên
+  target cao hơn `trần đỉnh − crest factor` là không thể đạt và chỉ làm mức cuối phụ thuộc vào dạng sóng thay vì
+  vào ý đồ. Vì cả chương được cân lại về một mức chung ở cuối nên chỉ tương quan giữa các câu mới quan trọng.
 - Mức âm lượng được cân bằng theo K-weighted LUFS của từng segment trước khi ghép chapter;
   giọng kể chuyện có anchor nhỉnh hơn hội thoại trung tính, còn khoảng cách của `loud` được giữ nhỏ. Chỉ các
   chỉ dẫn như thì thầm, quát hoặc cao trào mới chủ động lệch khỏi mức chuẩn.
@@ -202,9 +205,15 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Mỗi WAV phải qua kiểm tra tín hiệu và đối chiếu nội dung bằng Whisper; WAV đủ dài còn được UTMOSv2 so với preview đã khóa của đúng giọng đọc trước khi chapter được xuất bản.
 - Mỗi lượt nghe Whisper (direct/repeated, beam/greedy) có evidence riêng gắn với checksum WAV. Lặp câu ngắn chỉ được
   dùng để nâng một verdict thành đạt; nếu lượt lặp vẫn lỗi, tool giữ transcript và metric direct tốt hơn thay vì che lỗi.
-- Tên tiếng Anh đã khóa phát âm được kiểm tra như anchor riêng ở từng lượt giải mã. Tool chỉ chấp nhận đúng spelling
-  nguồn, đúng chuỗi âm tiết đã khóa hoặc dạng ghép âm tiết xác định; các alias gần giống như `Lucy/Lucian` không thể
-  lọt qua chỉ vì metric của cả câu vẫn cao.
+- Tên tiếng Anh đã khóa phát âm được kiểm tra như anchor riêng ở từng lượt giải mã. Tool chấp nhận đúng spelling
+  nguồn, đúng chuỗi âm tiết đã khóa, dạng ghép âm tiết xác định, hoặc cách viết khác đọc **giống hệt** trong tiếng Việt
+  (`gi` và `d` cùng là một âm, nên `Giôn` và `dôn` là một). Đây vẫn là phép so bằng: các alias gần giống như
+  `Lucy/Lucian` không thể lọt qua chỉ vì metric của cả câu vẫn cao.
+- Anchor tên riêng báo cáo để nghe lại, chứ không tự chặn xuất bản. Whisper là model đa ngữ thiên lệch tiếng Anh nên
+  viết lại tên đọc đúng theo âm Việt thành chính tả tiếng Anh (`Giô-en` → "joanne"); chính tả nó chọn không phải bằng
+  chứng về cách phát âm. Quyền chặn thuộc về độ tương đồng/WER của cả câu, đo sau khi đã bỏ phần tên ra để một bất đồng
+  về tên không bị tính lỗi hai lần. Câu quá ngắn — nơi bỏ tên ra thì không còn gì để kiểm — vẫn bị chặn như cũ.
+  Segment xuất bản theo diện này mang cảnh báo `ASR_LOCKED_NAME_ANCHOR_REVIEW` trong report để người nghe rà lại.
 - Khi hai lượt Whisper xác nhận mismatch, tool tạo lại bằng delivery `clarity`: giữ nguyên nhân vật, giọng, pitch và
   câu đọc, chỉ giảm độ ngẫu nhiên của sampling. WAV sửa chỉ được duyệt khi cả beam và greedy đều đạt; số vòng được
   checkpoint nên dừng/chạy lại không bỏ qua xác nhận hoặc sửa vô hạn.

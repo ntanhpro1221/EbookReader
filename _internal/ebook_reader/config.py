@@ -105,20 +105,39 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "audio": {
         "mp3_bitrate": "192k",
-        "loudness_lufs": -18.0,
+        # Speech has a 17-20 dB crest factor, so a true-peak ceiling of -2 dBFS caps
+        # integrated loudness near -20 LUFS. A measured chapter came out at -19.91 LUFS
+        # with its peak already on the ceiling: the old -18.0 target was 1.91 dB beyond
+        # what the content physically allows, which loudnorm can only miss. -20.0 is
+        # reachable and sits squarely inside audiobook norms.
+        "loudness_lufs": -20.0,
         "true_peak_db": -2.0,
         "lra": 11.0,
         "segment_active_floor_dbfs": -45.0,
         "segment_peak_dbfs": -2.0,
+        # Detecting that VieNeu was still speaking at the frame ceiling compares the
+        # trailing RMS of the *levelled* WAV against an absolute floor, so this floor
+        # has to track the loudness anchors below. Keep the two 26.5 dB apart, as they
+        # were when the anchors sat 6 dB higher, or the gate quietly loses sensitivity.
+        "segment_endpoint_floor_dbfs": -51.0,
         "segment_target_dbfs": {
             "soft": -22.0,
             "normal": -19.0,
             "loud": -16.5,
         },
+        # Levelling is `min(loudness_gain, peak_safe_gain)`, so anchors close to the
+        # -2 dBFS peak ceiling are simply unreachable for speech: 77% of a measured
+        # chapter's segments hit the ceiling instead of their target, missing by 1.22 dB
+        # on average and 4.09 dB at worst. That inverted the intent - `loud` segments
+        # came out quieter than `normal` ones and the narrator anchor vanished. Only the
+        # relative levels matter, because the chapter is mastered to one target
+        # afterwards, so the whole set sits 6 dB lower and every segment now reaches its
+        # anchor exactly. UTMOSv2 is level-invariant (mean MOS delta -0.006 at -6 dB),
+        # so this costs nothing perceptually and needs no compression.
         "segment_target_lufs": {
-            "soft": -22.0,
-            "normal": -19.0,
-            "loud": -17.8,
+            "soft": -28.0,
+            "normal": -25.0,
+            "loud": -23.8,
         },
         "segment_narrator_offset_db": 0.5,
         "create_m3u8": True,

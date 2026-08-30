@@ -845,10 +845,17 @@ class TTSCoordinator:
             if generation_ceiling_hit or (
                 vocalization_delivery_profile == HA_VOCALIZATION_DELIVERY_PROFILE
             ):
+                # This compares the trailing RMS of the levelled WAV, so it must use
+                # the endpoint floor that tracks the loudness anchors, not the active
+                # floor, which is measured on the raw waveform before any gain.
+                audio_settings = self.settings.get("audio", {})
                 endpoint_floor_dbfs = float(
-                    self.settings.get("audio", {}).get(
-                        "segment_active_floor_dbfs",
-                        DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS,
+                    audio_settings.get(
+                        "segment_endpoint_floor_dbfs",
+                        audio_settings.get(
+                            "segment_active_floor_dbfs",
+                            DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS,
+                        ),
                     )
                 )
                 endpoint_floor = 10.0 ** (endpoint_floor_dbfs / 20.0)

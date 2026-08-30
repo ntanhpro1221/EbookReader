@@ -11490,6 +11490,7 @@ class ProjectDB:
         error: str,
         warning_code: str,
         final_verdict: str = "fail",
+        publish_with_review: bool = False,
         failure_codes: Sequence[str] = (),
     ) -> int:
         normalized_max = int(max_repair_rounds)
@@ -11505,7 +11506,16 @@ class ProjectDB:
         ]
         if normalized_max < 0:
             raise ValueError("ASR repair budget must be non-negative")
-        if normalized_verdict not in {"fail", "inconclusive"}:
+        if publish_with_review:
+            # The repair budget is spent, but the evidence that triggered it does not
+            # have the authority to block publication - a locked-name anchor reports
+            # review evidence, not proof of a bad take. The candidate ledger is closed
+            # exactly as it is for a failure; only the segment's terminal status differs.
+            if normalized_verdict != QUALITY_VERDICT_PASS:
+                raise ValueError("repair exhaustion review must record a pass verdict")
+            if requested_failure_codes:
+                raise ValueError("repair exhaustion review cannot carry failure codes")
+        elif normalized_verdict not in {"fail", "inconclusive"}:
             raise ValueError("repair exhaustion verdict must be fail or inconclusive")
         if not normalized_error or not normalized_warning_code:
             raise ValueError("repair exhaustion requires an error and warning code")
@@ -11720,12 +11730,16 @@ class ProjectDB:
                 WHERE id=? AND wav_sha256=?
                 """,
                 (
-                    SegmentStatus.FAILED.value,
+                    (
+                        SegmentStatus.VERIFIED.value
+                        if publish_with_review
+                        else SegmentStatus.FAILED.value
+                    ),
                     str(trigger_metrics.get("transcript", "")),
                     float(trigger_metrics.get("similarity", 0.0)),
                     float(trigger_metrics.get("wer", 1.0)),
                     merged_warning,
-                    normalized_error,
+                    "" if publish_with_review else normalized_error,
                     time.time(),
                     int(segment_id),
                     normalized_incumbent,

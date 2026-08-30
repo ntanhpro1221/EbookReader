@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from ebook_reader.asr_contract import ASR_LOCKED_NAME_ANCHOR_REVIEW
 from ebook_reader.asr import (
     ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT,
     ANCHOR_COMPARISON_NORMALIZED_EXACT,
@@ -176,7 +177,6 @@ def test_diacritic_folded_anchor_forms_do_not_become_fuzzy_aliases(
         "Lucy",
         "Lucian",
         "Lusienne",
-        "Lu-xi-en",
     ],
 )
 def test_locked_lucien_anchor_rejects_fuzzy_or_different_names(wrong_name: str) -> None:
@@ -201,6 +201,28 @@ def test_locked_lucien_anchor_rejects_fuzzy_or_different_names(wrong_name: str) 
     assert metrics["failure_codes"] == [ASR_LOCKED_NAME_ANCHOR_MISMATCH]
     assert metrics["matched_occurrence_count"] == 0
     assert metrics["anchors"][0]["status"] == "missing_or_wrong"
+
+
+@pytest.mark.parametrize("homophone", ["Lu-xi-en", "Lu-si-en"])
+def test_locked_anchor_accepts_a_vietnamese_homophone_spelling(homophone: str) -> None:
+    """`si` and `xi` are the same Vietnamese sound, so both spell the same utterance.
+
+    Whisper picks one spelling or the other for the identical audio, and its choice is
+    not evidence about pronunciation. Phoneme comparison recognises exactly that, and
+    only that - `test_locked_lucien_anchor_rejects_fuzzy_or_different_names` still
+    proves Lucy, Lucian and Lusienne cannot satisfy the same anchor.
+    """
+    result = adjudicate_locked_name_anchors(
+        "Anh Lu-si-en đã đến.",
+        _asr_result(f"Anh {homophone} đã đến."),
+        [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+    )
+
+    assert result["passed"] is True
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["matched_occurrence_count"] == 1
+    assert metrics["failure_codes"] == []
 
 
 def test_anchor_alignment_does_not_hijack_a_later_ordinary_homograph() -> None:
@@ -779,3 +801,123 @@ def test_anchor_adjudication_rejects_invalid_repeat_count(repeat_count: object) 
             [_anchor("Lucien", "Lu-si-en")],
             repeat_count=repeat_count,  # type: ignore[arg-type]
         )
+
+
+def test_unmatched_anchor_becomes_review_eligible_when_ordinary_content_is_clean() -> None:
+    """Whisper's Latin spelling of a Vietnamese-read name is not proof of a bad take.
+
+    Every ordinary word here is transcribed correctly and only the two names come back
+    in English spelling, exactly as observed on real audio ("Ai-vân" -> "Ivan").
+    """
+    original = _asr_result(
+        "Lúc chia tay, Ivan len lén hỏi Lucian đầy tò mò.",
+        verdict=ASR_MISMATCH,
+        reason="ASR_MISMATCH",
+        repairable=True,
+    )
+
+    result = adjudicate_locked_name_anchors(
+        "Lúc chia tay, Ai-vân len lén hỏi Lu-si-en đầy tò mò.",
+        original,
+        [
+            _anchor("Iven", "Ai-vân", pronunciation_id=3, spoken_start=14),
+            _anchor("Lucien", "Lu-si-en", pronunciation_id=4, spoken_start=33),
+        ],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["matched_occurrence_count"] == 0
+    assert metrics["status"] == "review_eligible"
+    assert metrics["review_codes"] == [ASR_LOCKED_NAME_ANCHOR_REVIEW]
+    assert metrics["canonical_waiver_available"] is True
+    assert metrics["canonical_threshold_passed"] is True
+    assert result["locked_name_review_eligible"] is True
+    # Repair still runs; only the terminal state changes, and that is the pipeline's call.
+    assert result["verdict"] == ASR_MISMATCH
+    assert result["reason"] == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+    assert result["repairable"] is True
+
+
+def test_canonical_metrics_do_not_count_an_unmatched_name_twice() -> None:
+    """A name disagreement is adjudicated by the anchor, not by the sentence metric.
+
+    Counting it in both places pushed short sentences past the WER gate on their names
+    alone, which is what blocked every chapter in the alpha.9 run.
+    """
+    clean = adjudicate_locked_name_anchors(
+        "Lúc chia tay, Ai-vân len lén hỏi bạn đầy tò mò.",
+        _asr_result("Lúc chia tay, Ai-vân len lén hỏi bạn đầy tò mò."),
+        [_anchor("Iven", "Ai-vân", spoken_start=14)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+    latinised = adjudicate_locked_name_anchors(
+        "Lúc chia tay, Ai-vân len lén hỏi bạn đầy tò mò.",
+        _asr_result("Lúc chia tay, Ivan len lén hỏi bạn đầy tò mò."),
+        [_anchor("Iven", "Ai-vân", spoken_start=14)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    clean_metrics = clean[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    latinised_metrics = latinised[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(clean_metrics, dict)
+    assert isinstance(latinised_metrics, dict)
+    assert clean_metrics["matched_occurrence_count"] == 1
+    assert latinised_metrics["matched_occurrence_count"] == 0
+    assert latinised_metrics["canonical_wer"] == pytest.approx(
+        clean_metrics["canonical_wer"]
+    )
+
+
+def test_short_utterance_keeps_the_anchor_hard_gate() -> None:
+    """Waiving the name in "Anh Lucy" would leave nothing left to verify."""
+    result = adjudicate_locked_name_anchors(
+        "Anh Lu-si-en.",
+        _asr_result(
+            "Anh Lucy.",
+            verdict=ASR_MISMATCH,
+            reason="ASR_MISMATCH",
+            repairable=True,
+        ),
+        [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["ordinary_expected_token_count"] < 4
+    assert metrics["canonical_waiver_available"] is False
+    assert metrics["status"] == "fail"
+    assert metrics["review_codes"] == []
+    assert result["locked_name_review_eligible"] is False
+    assert result["reason"] == ASR_LOCKED_NAME_ANCHOR_MISMATCH
+    assert result["passed"] is False
+
+
+def test_review_eligibility_still_requires_clean_ordinary_content() -> None:
+    """Ordinary words that are genuinely wrong keep their hard-fail authority."""
+    result = adjudicate_locked_name_anchors(
+        "Cha nhờ thằng nhóc nhà Sai-mân báo tin tới trang viên.",
+        _asr_result(
+            "Cha nhớ thằng nhóc nhà sái mưu bảo tiếng tự trắng viếng.",
+            verdict=ASR_MISMATCH,
+            reason="ASR_MISMATCH",
+            repairable=True,
+        ),
+        [_anchor("Simon", "Sai-mân", spoken_start=25)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    metrics = result[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(metrics, dict)
+    assert metrics["canonical_waiver_available"] is True
+    assert metrics["canonical_threshold_passed"] is False
+    assert result["locked_name_review_eligible"] is False
+    assert result["passed"] is False
+    assert result["verdict"] == ASR_MISMATCH

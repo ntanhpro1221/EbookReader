@@ -127,6 +127,7 @@ def test_one_click_startup_contract() -> None:
             "cc2700db57bb83ee13dc31ebe1b868c254e15d09"
         ),
         "vieneu==3.2.3",
+        "sea-g2p==0.7.20",
     ]
     assert 'VieNeuEngine' in setup
     assert 'required-set(e.voices)' in setup

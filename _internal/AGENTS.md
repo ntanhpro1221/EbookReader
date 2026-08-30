@@ -69,9 +69,21 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   Lặp-ngắn chỉ được thay kết quả trực tiếp khi nó chuyển verdict thành `pass`; một kết quả lặp vẫn lỗi không được
   ghi đè transcript/similarity/WER trực tiếp tốt hơn. Evidence decode không được dùng thay final segment gate.
 - Mỗi pronunciation tiếng Anh đã khóa và thực sự được thay trong `spoken_text` phải tạo anchor theo đúng ID/occurrence.
-  ASR chỉ được chấp nhận spelling nguồn, spoken-form token hoặc dạng ghép token xác định; không fuzzy-alias tên khác.
+  ASR chỉ được chấp nhận spelling nguồn, spoken-form token, dạng ghép token xác định, hoặc token có **chuỗi phoneme
+  tiếng Việt bằng đúng** spoken form (`gi` và `d` cùng là /z/ nên `Giôn` và `dôn` là một âm). Đây vẫn là phép so bằng,
+  không phải ngưỡng khoảng cách: `Lucy` vẫn không thể thỏa anchor của `Lucien`. Tuyệt đối không fuzzy-alias tên khác.
   Tất cả occurrence phải gắn đúng vị trí bằng alignment toàn câu ở từng direct/repeat/beam/greedy decode; không được
   lấy một homograph ở vị trí khác để lấp tên bị sai. `ASR_INCONCLUSIVE` vẫn giữ precedence.
+- Anchor tên riêng **không có quyền chặn publish**. Whisper là model đa ngữ thiên lệch tiếng Anh: nó viết `Giô-en`
+  đọc đúng thành "joanne" và `Ai-vân` thành "ivan", nên chính tả nó chọn **không phải bằng chứng về cách phát âm**.
+  Anchor không khớp sinh evidence review; quyền fail thuộc về similarity/WER cấp câu, đo trên text canonical.
+  Trong metric canonical, anchor không khớp phải được canonical hóa ở **cả hai vế** để một bất đồng về tên không bị
+  tính lỗi hai lần — trước đây nó vừa bị anchor bắt vừa làm phồng WER, đẩy câu ngắn vượt ngưỡng chỉ vì cái tên.
+  Anchor bị bỏ hẳn khỏi transcript (`delete_anchor`) vẫn tính là lỗi. Miễn trừ này chỉ hợp lệ khi còn đủ nội dung
+  thường để tự đứng vững: dưới `CANONICAL_ANCHOR_WAIVER_MIN_ORDINARY_TOKENS` token thường thì anchor giữ nguyên
+  quyền hard-fail, vì bỏ tên khỏi "Anh Lucy" là không còn gì để kiểm. Repair vẫn chạy đủ vòng; chỉ trạng thái cuối
+  đổi từ `failed` thành publish kèm `ASR_LOCKED_NAME_ANCHOR_REVIEW`. Caller không truyền ngưỡng canonical thì giữ
+  nguyên hành vi hard-fail cũ.
 - ASR repair phải giữ nguyên speaker, voice profile, pitch và `spoken_text`; chế độ `clarity` chỉ hạ sampling variance.
   WAV clarity chỉ được commit `verified` khi beam và greedy đều `pass`. Repair round phải nằm trong signal checkpoint
   để crash/resume không bỏ qua lượt xác nhận kép hoặc vượt quá `asr.repair_rounds`.
@@ -127,6 +139,16 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   đã sửa mới là dữ liệu được candidate ledger và critic khóa.
 - Segment mới được cân theo K-weighted LUFS; giọng kể có anchor nhỉnh hơn hội thoại trung tính và
   chênh lệch `loud` phải tiết chế. Sample peak cap vẫn bắt buộc sau khi áp gain.
+- **Mọi target loudness phải nằm trong khả năng vật lý của trần peak.** Cân mức là
+  `min(loudness_gain, peak_safe_gain)` và master chương cũng không vượt được trần true-peak, nên target cao hơn
+  `trần − crest factor` chỉ có thể trượt. Giọng nói TTS tiếng Việt đo được crest median 17,6 dB, xấu nhất 20,6 dB
+  ở segment và 17,9 dB trên cả chương. Vì chương được master về một target chung ở cuối nên **chỉ tương quan giữa
+  các segment mới quan trọng**: hạ đều anchor cho tới khi peak cap không còn chạm là cách sửa đúng, không dùng
+  nén động hay limiter. UTMOSv2 bất biến với mức âm lượng (lệch MOS trung bình `-0,006` ở `-6 dB`) nên hạ anchor
+  không mất điểm tự nhiên. `test_loudness_targets_stay_inside_the_peak_ceiling_speech_allows` khóa ràng buộc này.
+- `segment_endpoint_floor_dbfs` đo trên WAV **đã cân mức** nên phải dịch theo anchor loudness; còn
+  `segment_active_floor_dbfs` đo trên waveform **trước gain** nên phải giữ nguyên. Trộn hai cái này lại sẽ âm thầm
+  làm gate "endpoint còn hoạt động ở trần frame" mất độ nhạy.
 - Ngoặc kép kéo dài qua nhiều paragraph phải giữ state hội thoại; ngoặc đơn cong `‘…’` là hint
   độc thoại nội tâm và mọi segment `thought` bắt buộc dùng `NARRATOR`, không gắn với character identity.
 - Với profile `high_quality`, batching phải giữ nguyên source unit gồm các segment cùng paragraph và phần tiếp nối của
