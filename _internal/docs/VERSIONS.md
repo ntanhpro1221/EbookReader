@@ -115,4 +115,33 @@ limiter hay nén động (vốn sẽ làm méo waveform).
 `-18 LUFS` với true peak `-2 dBTP` đòi crest factor ≤ 16 dB, thấp hơn crest thực tế của giọng nói.
 Phải đo MP3 chương thật rồi mới chốt.
 
+### `pace` không tới được audio — nhưng đo xong thì thấy chưa đáng sửa
+
+`vieneu_sampling_for_segment` ánh xạ `pace` thành đúng hai thứ: lệch temperature `±0,03/0,04` và
+`silence_p` (`slow 0,20 / normal 0,15 / fast 0,08`). Không có tham số tốc độ đọc nào cả — thư viện Python
+của VieNeu không có (xem `DEPENDENCIES.md`). Đo trên 104 segment có audio:
+
+| pace | n | articulation (âm tiết/s) | tỉ lệ lặng |
+|---|---|---|---|
+| fast | 4 | 5,41 | 20% |
+| normal | 98 | 5,29 | 19% |
+| slow | 2 | **5,60** | 23% |
+
+`slow` đọc **nhanh hơn** `normal`. Quyết định `pace` của đạo diễn bị vứt đi.
+
+**Nhưng chưa sửa, vì phân bố nói khác.** Trên toàn bộ 199 segment đã phân tích: `pace` là
+**193 normal / 4 fast / 2 slow — 97% normal**. Hiện thực hóa `pace` bằng hậu xử lý tempo sẽ chạm tới
+**3% segment**, trong khi lỗi loudness ở trên chạm tới **77%**. Xây hạ tầng tempo bất biến (candidate riêng,
+provenance, dual-decode, test) cho một ca 3% là đặt sai chỗ công sức.
+
+Ghi lại để người sau cân nhắc: khác với `emotion`, **`pace` và `volume` không có host gate tất định**.
+Prompt có dặn "không mặc định mọi câu là normal", nhưng không có gì kiểm chứng. `emotion=neutral` bị từ chối
+46 lần trong lần chạy này; `pace=normal` thì chưa bao giờ bị chất vấn. 97% có thể đúng với văn xuôi kể chuyện —
+người đọc audiobook thật cũng không đổi nhịp liên tục — nên đừng ép nó đa dạng khi chưa có bằng chứng là nó sai.
+Muốn kết luận thì phải nghe đối chiếu, không phải nhìn phân bố.
+
+Phân bố các quyết định delivery khác trong cùng lần chạy, để tham chiếu:
+`volume` 177 normal / 20 loud / 2 soft; `emotion` 143 neutral / 19 angry / 16 afraid / 9 sad / 6 surprised /
+4 tired / 2 happy; `intensity` 106 số 0 / 42 số 1 / 39 số 2 / 12 số 3.
+
 **Output:** `D:\Novels\Audiobooks\texttmp_iter1_cbde22ef6b` (chapter 000–001).
