@@ -79,4 +79,40 @@ Advisory `allowed_emotions` vì thế chỉ được gửi **sau** khi một can
 Con số cần nhớ khi ước lượng thời gian: ở profile `high_quality`, phân tích chạy khoảng **4 segment/phút**
 trên RTX 5060 Laptop với `qwen3:8b` (~24 token/s, GPU ~47%, VRAM 6,5/8 GB).
 
+### Phát hiện chất lượng: peak cap đang vô hiệu hóa toàn bộ ý đồ loudness
+
+Đo 107 segment đã commit của chapter 000–001:
+
+| | |
+|---|---|
+| Segment chạm trần peak `-2 dBFS` | **82/107 = 77%** |
+| Lệch trung bình so với target LUFS | **-1,22 dB** |
+| Lệch xấu nhất | **-4,09 dB** |
+| Crest factor (peak − LUFS) | median 17,6 dB · p95 19,7 dB · max 20,6 dB |
+
+`normalize_segment_level` tính `gain = min(desired_gain, peak_safe_gain)`. Target segment hiện tại
+(`normal -19,0`, `loud -17,8`, narrator `+0,5`) nằm quá sát trần peak `-2 dBFS`, trong khi crest factor
+tự nhiên của giọng nói là 17–20 dB. Hệ quả: **peak cap thắng, và mức cuối của mỗi segment do crest factor
+quyết định chứ không do quyết định của đạo diễn.**
+
+Hậu quả nghe được, không chỉ là sai số:
+
+- Hai segment `volume=loud` (target `-17,30`) ra `-19,41` và `-20,21` — **nhỏ hơn** narration `volume=normal`
+  ở `-19,14`. Quyết định "đọc to hơn" tạo ra audio nhỏ hơn.
+- Anchor `segment_narrator_offset_db = 0,5` bị xoá sạch.
+- Loudness giữa các segment tản `3,04 LU` vì lý do không liên quan gì tới nội dung.
+
+Vì chương được master lại về `-18 LUFS` ở cuối, **chỉ tương quan giữa các segment mới quan trọng**. Nên cách
+sửa đúng là hạ đều toàn bộ anchor cho tới khi peak cap không còn chạm: mô phỏng cho thấy `-4 dB` đưa
+99,1% segment về đúng target, `-5 dB` đưa 100%.
+
+**Đã kiểm chứng trước khi chọn cách sửa:** UTMOSv2 gần như bất biến với mức âm lượng tuyệt đối. Hạ
+`-2/-4/-6 dB` trên 8 segment cho lệch MOS trung bình `-0,008/-0,009/-0,006`, xấu nhất `-0,032` — so với
+ngưỡng review `-0,8`. Nghĩa là hạ anchor **không** phải trả giá bằng điểm tự nhiên, nên không cần đụng tới
+limiter hay nén động (vốn sẽ làm méo waveform).
+
+**Cần đo tiếp trước khi sửa:** cùng ràng buộc vật lý đó có thể tái xuất hiện ở tầng master chương —
+`-18 LUFS` với true peak `-2 dBTP` đòi crest factor ≤ 16 dB, thấp hơn crest thực tế của giọng nói.
+Phải đo MP3 chương thật rồi mới chốt.
+
 **Output:** `D:\Novels\Audiobooks\texttmp_iter1_cbde22ef6b` (chapter 000–001).
