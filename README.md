@@ -147,6 +147,9 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
   pronunciation proposal và toàn bộ segment trong batch chỉ chuyển trạng thái cùng một transaction có CAS/hash;
   không có trạng thái nửa batch hoặc evidence gắn nhầm candidate sau crash.
 - Mỗi project chỉ cho phép một worker; settings trong SQLite và source hash được kiểm tra lại khi resume.
+- Kết nối tới Ollama nền bị rớt giữa chừng không làm hỏng cả job. Request chết trước khi nhận được dữ liệu
+  sẽ tự kết nối lại trong giới hạn, còn lỗi vượt qua lớp đó chỉ tiêu đúng một lượt phản biện đã checkpoint
+  rồi đi tiếp, thay vì kết thúc book vì một sự cố mạng tạm thời.
 - Byte TXT dùng để segment phải khớp đúng hash đã khóa; source đổi ngay trong lúc đọc cũng làm job dừng.
 - Có thể đóng hoặc kill app bất kỳ lúc nào; phần đang dở được tạo lại, phần đã commit được giữ.
 - Giao diện chỉ có một nút **Dừng**; worker kết thúc ở ranh giới gần nhất và lần sau có thể tiếp tục.
