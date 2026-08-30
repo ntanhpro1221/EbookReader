@@ -81,6 +81,47 @@ tăng theo. Đây là cách duy nhất đạt được hiệu ứng batching mà
 3. **Single writer**: process con không mở được database.
 4. **Thích ứng tài nguyên**: pool co lại khi có foreground pressure và giãn ra khi hết.
 
+## Toàn cảnh: chỗ nào đang bỏ phí
+
+Không chỉ TTS. Bảng dưới là mọi giai đoạn và mức dùng tài nguyên hiện tại:
+
+| Giai đoạn | Chạy ở đâu | Hiện tại | Bỏ phí |
+|---|---|---|---|
+| Analysis (Ollama qwen3:8b) | GPU | 47% GPU, **1 request một lúc** | GPU + 32 core |
+| TTS (VieNeu) | GPU | 15% GPU, **1 segment một lúc** | GPU + 32 core |
+| ASR (Whisper turbo) | GPU | **1 segment một lúc** | GPU + 32 core |
+| Perceptual QA (UTMOSv2) | **CPU** | **1 segment một lúc**, 3 lượt mỗi segment | **31/32 core** |
+| Pitch WORLD, LUFS, checksum | CPU | inline, tuần tự | 31/32 core |
+| Ghép chương (FFmpeg) | CPU | `-threads 1` | — |
+
+`-threads 1` của FFmpeg là **cố ý** đi cùng `-fflags +bitexact` để chương ghép ra byte giống hệt nhau.
+Đừng đổi nó để lấy tốc độ; nó không phải nút thắt.
+
+## Thứ tự triển khai, mỗi bước phải đo trước và sau
+
+Xếp theo **giá trị chia cho rủi ro**, không phải theo mức hấp dẫn:
+
+1. **Perceptual QA song song trên CPU.** An toàn nhất trong tất cả: chấm UTMOSv2 là hàm **thuần đọc file**
+   — không ghi artifact, không ghi SQLite, không quyết định trạng thái. 31 core đang rảnh hoàn toàn.
+   (Lưu ý vẫn phải dùng **process** chứ không phải thread: `_preserved_inference_rng` cũng seed global.)
+2. **TTS song song theo process.** Con ghi WAV atomic vào đường dẫn candidate riêng của nó rồi trả metrics;
+   cha giữ độc quyền ghi SQLite.
+3. **Whisper song song theo process.** Cùng khuôn mẫu; decode ở `temperature=0` nên tất định theo audio.
+4. **Chồng lấn giai đoạn**: xác minh chương N-1 trong khi TTS sinh chương N. Cần cả hai model thường trú,
+   mà VRAM thì thừa chỗ.
+5. **Analysis nhiều request đồng thời.** Để cuối vì nó chạm vào candidate ledger bền và nhánh chia batch —
+   rủi ro cao nhất, lợi ích không rõ bằng.
+
+`scripts/benchmark_parallelism.py` đo trần thật cho từng bước trước khi sửa pipeline: bao nhiêu worker thì
+vừa VRAM (**gồm cả CUDA context riêng của từng process**, không rẻ trên Windows), throughput dừng cải thiện
+ở đâu, và quan trọng nhất — **kết quả có còn giống hệt bản một worker không**. Không đạt điều kiện cuối thì
+số throughput vô nghĩa.
+
+## Vẫn phải nhường foreground
+
+Invariant "tự nhường foreground và tự tăng lại" không được đánh đổi lấy throughput. Kích thước pool phải
+**thích ứng** theo VRAM trống và theo `resource_manager`, chứ không hard-code theo một máy.
+
 ## Việc nhỏ, an toàn, làm kèm
 
 - Một lần chạy 2 chương tốn **16 lượt nạp VieNeu + 13 lượt nạp Whisper**. Trong vòng repair hai model thay
