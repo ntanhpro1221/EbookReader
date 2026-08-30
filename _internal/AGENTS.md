@@ -388,6 +388,24 @@ cli create --profile high_quality  →  scripts/run_book_job.py <project-root>
   không resume được. Đây là hành vi đúng: sửa code xong thì tạo project sạch, đừng cố resume.
 - Iterate bằng project nhỏ (2–3 chapter) để có audio nhanh, chỉ mở rộng phạm vi khi chất lượng đã ổn.
 
+## Throughput
+
+Đo ngày 2026-08-31 trong lúc chạy thật: GPU **14–18%**, VRAM **1,30/8,15 GB**, CPU **0,8/32 core**, đĩa
+**99% idle**. Không tài nguyên nào bão hoà, mà vẫn mất ~6,7s cho ~7,4s audio. Nguyên nhân là VieNeu decode
+**tự hồi quy từng frame**, tức latency-bound — thêm CPU hay đĩa không giúp gì.
+
+- Nâng utilization của decode tự hồi quy **chỉ có thể** bằng cách cho nhiều câu chạy đồng thời.
+- Nhưng `_set_generation_seed` seed **global cho cả process**, nên batching trong cùng process hoặc chạy
+  nhiều luồng sẽ làm audio của một câu phụ thuộc vào hàng xóm trong batch, phá tính tất định khi resume và
+  phá mô hình immutable candidate. **Không được nới lỏng chỗ này để lấy tốc độ.**
+- Hướng hợp lệ duy nhất là song song theo **tiến trình**: mỗi process con có global RNG riêng và xử lý đúng
+  một segment tại một thời điểm, nên audio giống hệt bản đơn luồng. Chỉ process cha được ghi SQLite;
+  process con chỉ làm phần thuần hàm rồi trả metrics.
+- Đĩa và CPU đang rảnh, nên **đừng** tối ưu fsync, checksum hay số lần ghi `.part` — chúng không phải nút
+  thắt và chúng là thứ giữ artifact an toàn khi crash.
+
+Chi tiết số đo, ranh giới thiết kế và test bắt buộc: `docs/THROUGHPUT.md`.
+
 ## Dependency, model và tool
 
 Người dev project chịu trách nhiệm luôn cả stack: pin thư viện, revision model và tool ngoài.
