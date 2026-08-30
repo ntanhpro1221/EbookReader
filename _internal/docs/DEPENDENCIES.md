@@ -80,6 +80,26 @@ lớp ứng dụng Rust, không nằm trong thư viện. Kết luận: nâng `vi
 tốc độ, và cách đúng để hiện thực hóa `pace` vẫn là hậu xử lý giữ cao độ (FFmpeg `atempo`) — đúng
 kỹ thuật mà tempo rescue đang dùng.
 
+### "Emotion cue" của VieNeu chính là thứ invariant đang từ chối — đã xác minh
+
+Config của engine v3 có `emotion_0..7_token_id` và prompt builder nói "inline `<|emotion_N|>` tags".
+Thoạt nhìn giống một API điều khiển cảm xúc gốc mà project chưa dùng. **Không phải.** README upstream ghi rõ:
+
+> **Emotion / non-verbal cues** *(experimental)*: drop `[cười]`, `[thở dài]`, `[hắng giọng]` straight into the text.
+
+Tức là các emotion token đó chính là hiện thực của mấy tag phi ngôn ngữ thử nghiệm mà `AGENTS.md` đã cấm và
+`text_processing.py` đã thay bằng âm tiết tiếng Việt (`[cười] → ha ha`, `[thở dài] → hầy`). Không có kênh
+conditioning cảm xúc tổng quát nào khác trong model.
+
+**Kết luận: invariant hiện tại là đúng, đừng đào lại.** Cảm xúc chỉ còn các lever hợp lệ là sampling
+(temperature/top_p), preset + pitch, mức loudness mục tiêu, và — chưa dùng — tốc độ đọc qua hậu xử lý
+giữ nguyên cao độ.
+
+`style` trong 3.2.3 thì vẫn thật: `style_labels = {"tu_nhien": 16, "tin_tuc": 17, "doc_truyen": 18}` ánh xạ
+thành style head token, nên `doc_truyen` cho NARRATOR đang có tác dụng thật. Upstream đã deprecate nó
+("the style argument is deprecated and ignored"), nên khi nâng vieneu thì khác biệt giọng kể/nhân vật phải
+chuyển hẳn sang preset và pitch.
+
 ## Lỗ hổng đã phát hiện, chưa sửa
 
 `CRITICAL_RUNTIME_DISTRIBUTIONS` trong `runtime_contract.py` chỉ khóa 8 distribution quanh
