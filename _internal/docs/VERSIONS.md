@@ -34,6 +34,57 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
+## v0.2.0-alpha.10 — gỡ hai lỗi chặn xuất bản
+
+Chốt sau khi đọc hết evidence của lần chạy alpha.9. Chi tiết bằng chứng nằm ở mục alpha.9 bên dưới.
+
+**1. Anchor tên riêng thôi giữ quyền chặn publish.** Whisper viết lại tên đọc đúng theo âm Việt thành chính
+tả tiếng Anh, nên chính tả nó chọn không phải bằng chứng về phát âm. Bốn thay đổi đi cùng nhau:
+
+- So khớp **chuỗi phoneme tiếng Việt**: `Giôn` và `dôn` cùng ra `zˈon` nên khớp. Vẫn là phép so bằng —
+  `Lucy` (`lˈuːsi`) vẫn không thỏa anchor của `Lucien` (`lˈuːʃən`).
+- Metric canonical canonical hóa anchor **không khớp** ở cả hai vế, để bất đồng về tên thôi bị tính lỗi hai
+  lần. Trước đây nó vừa bị anchor bắt vừa làm phồng WER — chính điều này làm câu như
+  *"Lúc chia tay, Iven len lén hỏi Lucien đầy tò mò"* fail ở WER 0,357 dù **mọi từ thường đều đúng**.
+- Miễn trừ chỉ áp dụng khi còn ≥ 4 token thường. Bỏ tên khỏi *"Anh Lucy"* thì không còn gì để kiểm, nên câu
+  ngắn giữ nguyên quyền hard-fail.
+- Repair vẫn chạy đủ vòng; chỉ trạng thái cuối đổi từ `failed` sang publish kèm
+  `ASR_LOCKED_NAME_ANCHOR_REVIEW`.
+
+Dự đoán trên chính dữ liệu alpha.9: 9/15 segment fail sẽ pass nhờ hạ anchor xuống review, và phần lớn 6 ca
+còn lại sẽ pass nhờ thôi tính lỗi tên hai lần — chỉ ca hỏng thật (`Simon` → "sái mưu", cùng
+*"báo tin tới trang viên"* → *"bảo tiếng tự trắng viếng"*) là vẫn fail, đúng như mong muốn.
+
+**Rủi ro đã biết và chấp nhận:** một tên bị TTS đọc sai thật, mà mọi từ còn lại vẫn đúng, giờ sẽ publish kèm
+cảnh báo thay vì bị chặn. Không có cách nào phân biệt nó với ca từ chối nhầm chỉ từ transcript. Đổi lại là
+sản phẩm xuất bản được chương; trước đó tỉ lệ fail 7,5%/segment nghĩa là **không chương nào từng publish**.
+
+**2. Target loudness vượt quá khả năng vật lý của trần peak.** Cân mức là
+`min(loudness_gain, peak_safe_gain)`, mà giọng nói có crest factor 17–20 dB:
+
+| | đo được | target cũ | kết quả |
+|---|---|---|---|
+| Segment | crest median 17,6 dB, xấu nhất 20,6 dB | `normal -19,0` @ trần `-2 dBFS` | 77% chạm trần, lệch tới `-4,09 dB` |
+| Chương | `-19,91 LUFS`, crest 17,91 dB | `-18,0 LUFS` @ TP `-2 dBFS` | cao hơn khả năng **1,91 dB** |
+
+Chương ghép thử từ chính WAV của alpha.9 cho thấy lỗi thứ hai này tồn tại độc lập — chương sẽ fail loudness
+ngay cả khi mọi segment đều đạt ASR. alpha.9 không lộ ra vì chương chết vì ASR trước.
+
+Sửa: hạ đều anchor segment 6 dB (`soft -28,0 / normal -25,0 / loud -23,8`) và hạ target chương về `-20,0 LUFS`.
+Vì chương được master về một mức chung ở cuối nên chỉ tương quan giữa các segment mới quan trọng; hạ đều thì
+tương quan giữ nguyên nguyên vẹn và mọi segment đạt đúng anchor. **Không dùng nén động hay limiter** — thí
+nghiệm cho thấy UTMOSv2 bất biến với mức âm lượng (lệch MOS trung bình `-0,006` ở `-6 dB`), nên không có lý do
+gì phải làm méo waveform.
+
+Tách `segment_endpoint_floor_dbfs` (`-51,0`, đo **sau** gain) khỏi `segment_active_floor_dbfs` (`-45,0`, đo
+**trước** gain). Gộp chung sẽ âm thầm làm gate "endpoint còn hoạt động ở trần frame" mất độ nhạy đúng 6 dB —
+mà log alpha.9 cho thấy gate này bắt lỗi thật.
+
+`test_loudness_targets_stay_inside_the_peak_ceiling_speech_allows` khóa ràng buộc vật lý này lại bằng chính
+crest factor đo được, để không ai đặt lại một target bất khả thi.
+
+**Dependency:** `sea-g2p==0.7.20` thành pin trực tiếp vì `asr.py` giờ import thẳng.
+
 ## v0.2.0-alpha.9 — chịu được lỗi mạng Ollama, có công cụ chấm audio
 
 **Bằng chứng dẫn tới thay đổi.** Lần chạy đầu tiên trên `Text_Tmp/000..007` chết ở
