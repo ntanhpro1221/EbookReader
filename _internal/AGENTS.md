@@ -335,6 +335,11 @@ Module chính:
 
 ## Quy trình dev: chạy thật và tự đánh giá
 
+Mỗi phiên bản là một tag Git kèm một lần chạy thật; lịch sử lý do nằm ở `docs/VERSIONS.md`, không phải ở
+commit message. Output audio của từng phiên bản được giữ lại ngoài repo tại
+`D:\Novels\Audiobooks\_versions\<tag>\` để nghe đối chiếu và **không bao giờ được commit**.
+
+
 Dev **không** mở GUI để thử. Vòng lặp chuẩn là headless, tự đọc log và tự chấm output:
 
 ```text
