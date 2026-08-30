@@ -244,7 +244,29 @@ def summarise_chapter(records: list[dict[str, Any]]) -> dict[str, Any]:
         "tail_silence_p95": _percentile([item["tail_silence"] for item in records], 95),
         "postprocessed": sum(1 for item in records if item["postprocess"] != "none"),
     }
+    # Does the director's pace decision actually reach the audio? If the medians for
+    # slow/normal/fast sit on top of each other, pace is decorative and the listener
+    # never hears the intent the analysis committed.
+    summary["rate_by_pace"] = _grouped_rate(records, "pace")
+    summary["rate_by_kind"] = _grouped_rate(records, "kind")
+    summary["rate_by_emotion"] = _grouped_rate(records, "emotion")
     return summary
+
+
+def _grouped_rate(records: list[dict[str, Any]], field: str) -> dict[str, dict[str, float]]:
+    buckets: dict[str, list[float]] = defaultdict(list)
+    for item in records:
+        if item["syllables"] >= 3 and item["rate"] > 0:
+            buckets[str(item[field])].append(item["rate"])
+    return {
+        key: {
+            "count": len(values),
+            "median": round(statistics.median(values), 3),
+            "p05": round(_percentile(values, 5), 3),
+            "p95": round(_percentile(values, 95), 3),
+        }
+        for key, values in sorted(buckets.items())
+    }
 
 
 def chapter_findings(chapter_index: int, records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -431,6 +453,15 @@ def main() -> int:
         )
         if summary["postprocessed"]:
             print(f"  tempo rescue applied to {summary['postprocessed']} segment(s)")
+        for field in ("rate_by_pace", "rate_by_kind", "rate_by_emotion"):
+            grouped = summary[field]
+            if len(grouped) < 2:
+                continue
+            rendered = "  ".join(
+                f"{key}(n={stats['count']})={stats['median']:.2f}"
+                for key, stats in grouped.items()
+            )
+            print(f"  {field.replace('rate_by_', 'rate/'):14s} {rendered}")
 
     for entry in mp3_reports:
         print(
