@@ -361,6 +361,26 @@ cli create --profile high_quality  →  scripts/run_book_job.py <project-root>
   không resume được. Đây là hành vi đúng: sửa code xong thì tạo project sạch, đừng cố resume.
 - Iterate bằng project nhỏ (2–3 chapter) để có audio nhanh, chỉ mở rộng phạm vi khi chất lượng đã ổn.
 
+## Dependency, model và tool
+
+Người dev project chịu trách nhiệm luôn cả stack: pin thư viện, revision model và tool ngoài.
+`docs/DEPENDENCIES.md` giữ đánh giá rủi ro từng package; `scripts/check_dependency_updates.py`
+là bước kiểm read-only chạy mỗi phiên bản (nó không bao giờ tự khởi động Ollama).
+
+- `QUALITY_IMPLEMENTATION_FILES` bao gồm `../pyproject.toml` và `../uv.lock`, nên **mọi thay đổi
+  dependency đều đổi quality-policy hash**. Nâng cấp luôn là một sự kiện phiên bản: nâng → project sạch
+  → chạy lại → so audio → tag.
+- **Không sửa bất kỳ file nào trong `QUALITY_IMPLEMENTATION_FILES` khi đang có job chạy**, kể cả chỉ đổi
+  dòng `version` của `pyproject.toml`. Pipeline tính hash một lần lúc khởi tạo nên job đang chạy không chết
+  ngay, nhưng lần resume kế tiếp sẽ bị từ chối.
+- Chỉ nâng khi có lý do. `numpy`, `librosa`, `transformers`, `huggingface-hub`, `torch*` và `timm` ràng buộc
+  với UTMOSv2/Whisper và với cache revision đã khóa; `pyworld` quyết định pitch; `vieneu` quyết định audio.
+- `vieneu` 3.3.0 chuyển engine mặc định sang ONNX Runtime và đẩy torch xuống extra `legacy`; tham số `style`
+  cũng đã bị deprecate. Mọi ngân sách frame hiện tại được đo trên engine torch cũ, nên đây là migration
+  thật sự chứ không phải bump pin.
+- Thư viện Python của VieNeu **không có** tham số tốc độ đọc (tính năng 0.5–3.0 chỉ có trong desktop app).
+  Cách đúng để hiện thực hóa `pace` là hậu xử lý giữ nguyên cao độ bằng FFmpeg `atempo`.
+
 ## Đánh giá chất lượng audio
 
 `scripts/audit_audiobook.py` là công cụ chấm khách quan cho output đã commit. Nó đọc SQLite + MP3 chương
