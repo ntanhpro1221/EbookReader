@@ -59,6 +59,37 @@ từ chối nhầm** mà alpha.10 nhắm tới:
 toán khác với bài toán alpha.10 đã giải, và cần bằng chứng riêng trước khi đụng vào. Đừng nới thêm gate chỉ
 để mọi thứ pass — đó chính là kiểu hỏng cần tránh.
 
+### Điều tra: vì sao dịch cao độ lại làm hỏng giọng? — Không phải do dịch, mà do vocoder
+
+Người dùng chất vấn đúng chỗ: dịch cao độ giữ nguyên formant thì về nguyên tắc **không được** đổi nhận diện
+giọng. Đọc lại `apply_pitch_variant`: code làm đúng thiết kế — `harvest`+`stonemask` lấy F0, `cheaptrick`
+lấy spectral envelope, `d4c` lấy aperiodicity, chỉ nhân F0 với `2^(steps/12)` rồi tổng hợp lại với envelope
+**gốc**. Formant được bảo toàn.
+
+Nhưng `steps == 0` **return sớm**, không đi qua WORLD. Nghĩa là khác biệt giữa `pitch 0` và `pitch ≠ 0`
+không phải chỉ là cao độ — mà là **cả một vòng phân tích–tổng hợp lại**. Đo tách bạch hai thứ đó trên 8
+segment, bằng cách ép chạy WORLD với `steps=0`:
+
+| | MOS delta so với file gốc |
+|---|---|
+| WORLD round-trip, dịch **0** bán âm | **−0,268** |
+| WORLD dịch **−1** | −0,201 |
+| WORLD dịch **+1** | −0,367 |
+
+**Dịch 0 bán âm đã mất 0,268 MOS.** Bản thân phép dịch gần như không thêm chi phí. Thủ phạm là vòng vocoder,
+không phải cao độ.
+
+**Hệ quả cho ý tưởng dùng bước 0,5 bán âm:** không giải quyết được gì. Mỗi biến thể vẫn trả **nguyên** cái
+giá `−0,27` MOS vì giá nằm ở vòng vocoder chứ không ở độ lớn bước dịch — gấp đôi số biến thể là gấp đôi số
+giọng phải trả giá. Thêm nữa, 0,5 bán âm ≈ 3% thay đổi F0, nằm ngay ngưỡng phân biệt của tai người với giọng
+nói liên tục, nên hai nhân vật lệch nhau 0,5 bán âm sẽ nghe gần như giống hệt — không tạo ra được sự đa dạng
+mà nó nhắm tới.
+
+**Hướng đúng để có thêm giọng mà không trả giá:** catalog có 14 preset, đang cast 8. Bốn preset bị loại vì
+style `tin_tuc` (`Minh Đức`, `Minh Triết`, `Mai Anh`, `Thùy Dung`) chạy ở `pitch 0` nên **không trả giá
+vocoder nào**. Rào cản thật: chúng **không có file preview**, nên UTMOSv2 không có baseline để chấm tương
+đối. Muốn dùng thì phải sinh và khóa preview cho chúng trước.
+
 ## v0.2.0-alpha.11 — bỏ giọng miền Trung, một tên một cách đọc
 
 **Bỏ giọng miền Trung khỏi phân vai** (quyết định của người dùng, người nghe được tiếng Việt). Bằng chứng
