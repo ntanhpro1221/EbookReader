@@ -73,7 +73,11 @@ def test_critical_dependency_checks_import_modules_and_lock_utmos_source(monkeyp
     def fake_import(name: str):
         imported.append(name)
         if name == "torch":
-            return SimpleNamespace(__file__="torch.py", version=SimpleNamespace(cuda="12.8"))
+            return SimpleNamespace(
+                __file__="torch.py",
+                version=SimpleNamespace(cuda="12.8"),
+                cuda=SimpleNamespace(is_available=lambda: True),
+            )
         return SimpleNamespace(__file__=f"{name}.py")
 
     monkeypatch.setattr(runtime_contract.importlib.metadata, "distribution", fake_distribution)
@@ -81,7 +85,10 @@ def test_critical_dependency_checks_import_modules_and_lock_utmos_source(monkeyp
     monkeypatch.setitem(
         sys.modules,
         "torch",
-        SimpleNamespace(version=SimpleNamespace(cuda="12.8")),
+        SimpleNamespace(
+            version=SimpleNamespace(cuda="12.8"),
+            cuda=SimpleNamespace(is_available=lambda: True),
+        ),
     )
 
     checks = runtime_contract.critical_dependency_checks()
@@ -304,3 +311,33 @@ def test_setup_marker_rejects_legacy_schema(tmp_path) -> None:
 
     assert result["ok"] is False
     assert "schema_version=1" in result["detail"]
+
+
+def test_the_contract_table_agrees_with_the_pinned_versions() -> None:
+    """One fact, written in two places, must not drift.
+
+    `CRITICAL_RUNTIME_DISTRIBUTIONS` and the pins in pyproject.toml say the same thing,
+    and during an upgrade only one of them was updated - every runtime check then reported
+    a failure that was really just the table being stale. The `+cuXXX` suffix is exempt
+    because pyproject cannot express it: PyPI serves a CPU torch on Windows and the CUDA
+    wheel has to come from the PyTorch index.
+    """
+    import re
+    import tomllib
+
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    pinned: dict[str, str] = {}
+    for requirement in data["project"]["dependencies"]:
+        match = re.match(r"^([A-Za-z0-9._-]+)==([^\s;]+)", str(requirement))
+        if match:
+            pinned[match.group(1).casefold()] = match.group(2)
+
+    drift = {}
+    for name, (_module, expected) in runtime_contract.CRITICAL_RUNTIME_DISTRIBUTIONS.items():
+        pin = pinned.get(name.casefold())
+        if pin is None:
+            continue  # installed from a URL rather than a version pin
+        if expected.split("+", 1)[0] != pin:
+            drift[name] = (expected, pin)
+    assert not drift, f"contract table and pyproject disagree: {drift}"

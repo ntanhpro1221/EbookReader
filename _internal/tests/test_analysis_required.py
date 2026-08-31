@@ -2791,7 +2791,13 @@ def test_v23_singleton_invalid_reason_is_checkpointed_in_durable_outcome(
     assert db.updated == []
 
 
-def test_director_adjudicator_rejects_template_corrections_by_field_only() -> None:
+def test_director_adjudicator_rejects_template_corrections_by_field_only(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     texts = [
         "Chương 01 - Giàn hỏa thiêu rực cháy",
         "Khói dày khiến phổi và yết hầu như bị thiêu đốt.",
@@ -6072,7 +6078,14 @@ def test_desperate_exertion_lock_preserves_coordinated_negation_scope(
 )
 def test_mortality_semantic_lock_is_not_created_for_resolved_cognition(
     text: str,
+    monkeypatch,
 ) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "resolved-mortality",
@@ -6146,7 +6159,13 @@ def test_mortality_semantic_lock_keeps_active_first_person_cognition() -> None:
     assert candidate_rows[0]["host_locked_fields"] == {"emotion": "afraid"}
 
 
-def test_director_adjacent_wake_lock_uses_original_context_for_override() -> None:
+def test_director_adjacent_wake_lock_uses_original_context_for_override(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     mortality_text = "‘Không được… Không được ngủ… sẽ chết mất.’"
     wake_text = "‘Tỉnh dậy, phải tỉnh dậy!’"
     row = {
@@ -6211,6 +6230,12 @@ def test_director_adjacent_wake_lock_uses_original_context_for_override() -> Non
 def test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic(
     monkeypatch,
 ) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     mortality_text = "‘Không được… Không được ngủ… sẽ chết mất.’"
     wake_text = "‘Tỉnh dậy, phải tỉnh dậy!’"
     db = FakeDB()
@@ -6271,7 +6296,13 @@ def test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic(
     )
 
 
-def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
+def test_director_valid_semantic_lock_dissent_is_audited_without_veto(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "physical-collapse",
@@ -6331,7 +6362,13 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto() -> None:
     assert validated["physical-collapse"]["confidence"] == pytest.approx(0.86)
 
 
-def test_v30_seq24_mask_keeps_critic_kind_and_affect_deltas_live() -> None:
+def test_v30_seq24_mask_keeps_critic_kind_and_affect_deltas_live(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_rows = v30_seq23_25_rows()
     row = source_rows[1]
     stable_id = str(row["stable_id"])
@@ -6384,7 +6421,13 @@ def test_v30_seq24_mask_keeps_critic_kind_and_affect_deltas_live() -> None:
     assert "host_semantic_override" not in item
 
 
-def test_v33_seq24_rejects_unsupported_critic_affect_escalation() -> None:
+def test_v33_seq24_rejects_unsupported_critic_affect_escalation(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_rows = v30_seq23_25_rows()
     row = source_rows[1]
     stable_id = str(row["stable_id"])
@@ -6488,7 +6531,14 @@ def test_v33_seq24_rejects_unsupported_critic_affect_escalation() -> None:
 def test_v33_compatibility_override_does_not_cover_nonmatching_dissent(
     text: str,
     correction: dict[str, object],
+    monkeypatch,
 ) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     stable_id = "v33-nonmatching"
     row = {
         "stable_id": stable_id,
@@ -6722,7 +6772,13 @@ def test_v29_seq38_kind_only_critic_dissent_uses_context_bound_override() -> Non
     }
 
 
-def test_v29_seq38_context_override_covers_only_kind_delta() -> None:
+def test_v29_seq38_context_override_covers_only_kind_delta(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_rows = v29_seq37_39_rows()
     row = source_rows[1]
     stable_id = str(row["stable_id"])
@@ -6779,7 +6835,13 @@ def test_v29_seq38_context_override_covers_only_kind_delta() -> None:
     assert "host_semantic_override" not in item
 
 
-def test_context_kind_and_sleep_emotion_overrides_compose_with_context_rule_priority() -> None:
+def test_context_kind_and_sleep_emotion_overrides_compose_with_context_rule_priority(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     next_text = "‘Mình phải tỉnh dậy.’"
     row = {
         "id": 11,
@@ -6912,7 +6974,13 @@ def test_sleep_paralysis_kind_only_critic_dissent_uses_source_bound_override() -
     assert validated[row["stable_id"]]["confidence"] == pytest.approx(0.86)
 
 
-def test_sleep_paralysis_overrides_kind_and_emotion_but_leaves_delivery_deltas_live() -> None:
+def test_sleep_paralysis_overrides_kind_and_emotion_but_leaves_delivery_deltas_live(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 11,
         "stable_id": "v28-seq10-composed",
@@ -6995,7 +7063,13 @@ def test_sleep_paralysis_overrides_kind_and_emotion_but_leaves_delivery_deltas_l
     assert validated[row["stable_id"]]["confidence"] == pytest.approx(0.92)
 
 
-def test_sleep_paralysis_kind_and_emotion_overrides_compose_to_acceptance() -> None:
+def test_sleep_paralysis_kind_and_emotion_overrides_compose_to_acceptance(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 11,
         "stable_id": "v28-seq10-kind-emotion",
@@ -7204,7 +7278,14 @@ def test_source_kind_override_is_not_available_to_unprotected_semantic_rules() -
 def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
     correction: dict[str, object],
     expected_issue: str,
+    monkeypatch,
 ) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "physical-collapse",
@@ -7258,7 +7339,14 @@ def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
 def test_desperate_exertion_lock_never_overrides_invalid_or_allowed_dissent(
     correction: dict[str, object],
     expected_issue: str,
+    monkeypatch,
 ) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "desperate-exertion",
@@ -7296,7 +7384,13 @@ def test_desperate_exertion_lock_never_overrides_invalid_or_allowed_dissent(
     assert "host_semantic_override" not in evidence["segments"][0]
 
 
-def test_director_heading_locked_field_dissent_is_audited_without_veto() -> None:
+def test_director_heading_locked_field_dissent_is_audited_without_veto(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     group = [
         {
             "id": 1,
@@ -7497,7 +7591,13 @@ def test_director_mixed_batch_keeps_heading_lock_and_caps_content_confidence() -
     assert validated["content"]["confidence"] == pytest.approx(0.75)
 
 
-def test_director_cannot_override_critic_before_heading_delivery_is_host_locked() -> None:
+def test_director_cannot_override_critic_before_heading_delivery_is_host_locked(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     group = [
         {
             "id": 1,
@@ -7536,7 +7636,13 @@ def test_director_cannot_override_critic_before_heading_delivery_is_host_locked(
     assert evidence["segments"][0]["effective_accept"] is False
 
 
-def test_director_mixed_batch_still_rejects_invalid_content_evidence_quote() -> None:
+def test_director_mixed_batch_still_rejects_invalid_content_evidence_quote(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     group = [
         {
             "id": 1,
@@ -9732,6 +9838,12 @@ def test_critic_exhaustion_does_not_clear_prior_deterministic_feedback(
 
 
 def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeypatch) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     settings = build_settings(overrides={"analysis": {"max_retries": 2}})
     analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
@@ -10102,6 +10214,12 @@ def test_v34_split_children_inherit_parent_feedback_by_stable_id(monkeypatch) ->
 def test_v35_exact_seq25_uses_latest_director_values_on_generator_retry(
     monkeypatch,
 ) -> None:
+    # Exercises the director adjudicator using an affect delta as its trigger.
+    # Production no longer counts an emotion or intensity difference as a mismatch -
+    # a real run died when one line's `intensity` exhausted a singleton batch - but
+    # the adjudicator is still live for kind, speaker, pace and volume, so the
+    # coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     row = {
         "id": 26,

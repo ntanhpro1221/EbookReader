@@ -60,15 +60,21 @@ PERCEPTUAL_BASE_MODEL_FILES: tuple[tuple[str, str, str, int, str], ...] = (
     ),
 )
 
+# The version half of each entry must match the pin in pyproject.toml, and a test holds
+# the two together - they are one fact written in two places, and they drifted once
+# already during an upgrade, which made every check here read as a failure. The `+cu128`
+# suffix is the part pyproject genuinely cannot express: PyPI serves a CPU torch on
+# Windows, so the CUDA wheel has to come from the PyTorch index and only the installed
+# metadata proves which one landed.
 CRITICAL_RUNTIME_DISTRIBUTIONS: dict[str, tuple[str, str]] = {
-    "torch": ("torch", "2.8.0+cu128"),
-    "torchaudio": ("torchaudio", "2.8.0+cu128"),
+    "torch": ("torch", "2.11.0+cu128"),
+    "torchaudio": ("torchaudio", "2.11.0+cu128"),
     # UTMOS runs on CPU, so the ABI-compatible CPU or CUDA torchvision wheel is valid.
-    "torchvision": ("torchvision", "0.23.0"),
-    "huggingface-hub": ("huggingface_hub", "1.7.1"),
+    "torchvision": ("torchvision", "0.26.0"),
+    "huggingface-hub": ("huggingface_hub", "1.29.0"),
     "librosa": ("librosa", "0.11.0"),
-    "timm": ("timm", "1.0.28"),
-    "transformers": ("transformers", "5.7.0"),
+    "timm": ("timm", "1.0.29"),
+    "transformers": ("transformers", "5.16.1"),
     "utmosv2": ("utmosv2", "1.3.1.dev0"),
 }
 
@@ -137,9 +143,25 @@ def critical_dependency_checks() -> dict[str, dict[str, Any]]:
     if torch_check["ok"]:
         import torch
 
+        # What matters is that this torch can reach the GPU, not which CUDA minor it was
+        # built against. Pinning the minor made this check fail on every torch upgrade
+        # for a reason that was never the real risk. The real risk is the opposite and it
+        # is silent: `uv pip install -e .` takes torch from PyPI, PyPI serves the CPU
+        # build on Windows, and nothing raises - the pipeline simply runs tens of times
+        # slower. Reinstall from https://download.pytorch.org/whl/cu128 when this fails,
+        # and pass --reinstall, because uv treats 2.13.0+cpu as satisfying torch==2.13.0.
         cuda_build = str(torch.version.cuda or "")
-        torch_check["ok"] = cuda_build == "12.8"
-        torch_check["detail"] += f"; CUDA build {cuda_build or 'none'}"
+        # A torch missing the accessor entirely is as unable to reach a GPU as one that
+        # answers False, and this must report that rather than raise: the whole point is
+        # to turn a silent CPU fallback into a visible failure.
+        cuda_module = getattr(torch, "cuda", None)
+        is_available = getattr(cuda_module, "is_available", None)
+        cuda_reachable = bool(cuda_build) and bool(callable(is_available) and is_available())
+        torch_check["ok"] = cuda_reachable
+        torch_check["detail"] += (
+            f"; CUDA build {cuda_build or 'none'}"
+            f"; device {'reachable' if cuda_reachable else 'UNREACHABLE'}"
+        )
 
     utmos = provenance.get("utmosv2", {})
     direct_url = utmos.get("direct_url")

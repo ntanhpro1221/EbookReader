@@ -88,7 +88,7 @@ def test_one_click_startup_contract() -> None:
     assert 'Ensure-WingetPackage "ollama"' in setup
     assert 'Ensure-WingetPackage "ffmpeg"' in setup
     assert "--silent --disable-interactivity" in setup
-    assert "--force-reinstall torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0" in setup
+    assert "--force-reinstall torch==2.11.0 torchaudio==2.11.0 torchvision==0.26.0" in setup
     assert "--index-url https://download.pytorch.org/whl/cu128" in setup
     assert 'ollama pull qwen3:8b' in setup
     assert "snapshot_download" in setup
@@ -105,35 +105,32 @@ def test_one_click_startup_contract() -> None:
     assert "$Shortcut.IconLocation = $IconLocation" in shortcut
     project = tomllib.loads((INTERNAL_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["dependencies"] == [
-        "PySide6==6.8.0",
-        "requests==2.32.3",
-        "psutil==6.0.0",
-        "numpy==1.26.4",
+        "PySide6==6.11.2",
+        "requests==2.34.2",
+        "psutil==7.2.2",
+        "numpy==2.4.6",
         "scipy==1.17.1",
-        "soundfile==0.13.1",
-        "pyloudnorm==0.1.1",
+        "soundfile==0.14.0",
+        "pyloudnorm==0.2.0",
         "pyworld==0.3.5",
         "imageio-ffmpeg==0.6.0",
         "openai-whisper==20250625",
-        "torch==2.8.0",
-        "torchaudio==2.8.0",
-        "torchvision==0.23.0",
-        "huggingface-hub==1.7.1",
+        "torch==2.11.0",
+        "torchaudio==2.11.0",
+        "torchvision==0.26.0",
+        "huggingface-hub==1.29.0",
         "librosa==0.11.0",
-        "timm==1.0.28",
-        "transformers==5.7.0",
-        (
-            "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@"
-            "cc2700db57bb83ee13dc31ebe1b868c254e15d09"
-        ),
-        "vieneu==3.2.3",
-        "sea-g2p==0.7.20",
+        "timm==1.0.29",
+        "transformers==5.16.1",
+        "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@cc2700db57bb83ee13dc31ebe1b868c254e15d09",
+        "vieneu==3.3.0",
+        "sea-g2p==0.9.1",
         "praat-parselmouth==0.4.7",
     ]
     assert 'VieNeuEngine' in setup
     assert 'required-set(e.voices)' in setup
     assert "whisper.load_model('turbo'" in setup
-    assert "torchvision==0.23.0" in setup
+    assert "torchvision==0.26.0" in setup
     assert "fold0_s42_best_model.pth" in setup
     assert "506474f2b33dc77c234d668cc419be1861899cad" in setup
     assert "C8149D988E4BBF3F347E6966B5D769DE347A5F8C59FFCA1DC4BD4BF5B8585E57" in setup
