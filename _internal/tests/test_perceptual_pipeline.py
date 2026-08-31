@@ -328,7 +328,14 @@ def test_ok_perceptual_result_records_separate_passing_evidence(tmp_path: Path) 
     assert pipeline._chapter_has_current_segment_audio_qa(int(chapter["id"])) is True
 
 
-def test_perceptual_qa_uses_narrator_profile_for_thought_segments(tmp_path: Path) -> None:
+def test_perceptual_qa_grades_a_thought_against_the_thinker(tmp_path: Path) -> None:
+    """Inner monologue is read in the thinking character's voice, so it is graded there.
+
+    Every thought used to be reassigned to the narrator, in the analysis, in the database
+    and here - a character's inner voice came out as someone else entirely. It now keeps
+    the thinker, which means the baseline must be the thinker's preview: grading against
+    the narrator would compare a character to a reference that never spoke the line.
+    """
     pipeline, chapter, row = _pipeline_with_asr_evidence(tmp_path)
     presets = list(VOICE_PREVIEW_FILENAMES)
     narrator_preset = presets[1]
@@ -367,7 +374,10 @@ def test_perceptual_qa_uses_narrator_profile_for_thought_segments(tmp_path: Path
     # assembly, after every gate - so the baseline is the preset's untouched preview.
     # Matching it to the profile's register would compare raw audio against a transformed
     # reference and manufacture a difference that is not in the audio.
-    assert verifier.calls == [(narrator_preset, 0)]
+    segment_profile = pipeline.db.voice_profile(int(row["voice_profile_id"]))
+    assert verifier.calls == [(str(segment_profile["preset_name"]), 0)]
+    # And that is the segment's own voice, not the narrator's.
+    assert str(segment_profile["preset_name"]) != narrator_preset
 
 
 def test_perceptual_qa_uses_unshifted_baseline_when_pitch_variant_was_skipped(

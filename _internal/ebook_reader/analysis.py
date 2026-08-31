@@ -804,8 +804,10 @@ Quy tắc:
    “anh Lucien”, “chị Alisa”, hoặc tên ở đầu câu theo sau bởi dấu phẩy như “Iven, ...” thường là người
    nghe. Tuyệt đối không lấy tên đó làm speaker nếu lời kể lân cận cho thấy một người khác đang nói;
    nếu người nói chưa có tên, dùng NPC_LOCAL với nhãn mô tả người nói.
-3. Độc thoại nội tâm dùng kind=thought và luôn dùng speaker=NARRATOR. Không xác định hoặc lưu danh tính
-   nhân vật đang nghĩ; toàn bộ nội tâm trong mọi chapter đều do người kể đọc.
+3. Độc thoại nội tâm dùng kind=thought và speaker là **chính nhân vật đang nghĩ**, theo đúng quy tắc đặt tên
+   như hội thoại. Nội tâm là tiếng nói bên trong của người đó, không phải lời người kể, nên phải đọc bằng
+   giọng của người đó. Xác định người nghĩ từ ngữ cảnh: đại từ ngôi thứ nhất trong câu, và điểm nhìn của
+   đoạn văn xung quanh. Chỉ dùng speaker=NARRATOR khi thật sự không xác định được ai đang nghĩ.
 4. Chỉ dùng kind=narration, dialogue hoặc thought. Từ tượng thanh như rầm/uỳnh vẫn là một phần của câu
    người kể hoặc nhân vật đang đọc. Cụm cảm thán như ha/haiz/hừm và chỉ dẫn [cười]/[thở dài]/[hắng giọng]
    cũng là lời đọc bình thường của đúng speaker; không tạo kind hiệu ứng riêng và không tách chúng khỏi câu.
@@ -877,12 +879,12 @@ source_role=content và context_policy=narration_precedes_next_paragraph_thought
 thought ở paragraph kế tiếp: next_text chỉ bị ẩn để ngăn nội dung tương lai làm lệch đánh giá target. Policy này
 không khóa field nào; chỉ đánh giá candidate từ chính text và previous_text, không mượn kind, emotion, intensity,
 pace hoặc volume từ thought đã bị ẩn.
-Mọi segment kind=thought bắt buộc dùng speaker=NARRATOR vì người kể đọc độc thoại nội tâm; không được từ chối
-candidate chỉ vì NARRATOR không phải danh tính của nhân vật đang nghĩ.
+Segment kind=thought dùng speaker là chính nhân vật đang nghĩ, vì nội tâm được đọc bằng giọng người đó.
+Chỉ chấp nhận NARRATOR khi text và previous_text không cho biết ai đang nghĩ.
 Nếu bất kỳ trường nào chưa đúng, trả toàn bộ sáu trường với giá trị đã sửa; ít nhất một trường sẽ khác candidate.
 Nếu cả sáu trường đã đúng, chép đúng cả sáu giá trị candidate. Ví dụ: candidate
-thought/NARRATOR/neutral/0/normal/normal cho câu “Mình sẽ chết mất!” có thể được sửa thành
-thought/NARRATOR/afraid/2/fast/normal. Rationale không thay thế được field delta. Không ép đa dạng
+thought/Hạ Phong/neutral/0/normal/normal cho câu “Mình sẽ chết mất!” có thể được sửa thành
+thought/Hạ Phong/afraid/2/fast/normal. Rationale không thay thế được field delta. Không ép đa dạng
 tùy tiện: signature lặp lại vẫn hợp lệ khi các câu thực sự có cùng chức năng. Ngược lại, không được sao chép
 một template chỉ vì có cùng một từ khóa; tiếng thở, câu hỏi bối rối, mệnh lệnh tự trấn tĩnh, hồi tưởng và mô tả
 nguy hiểm có chức năng biểu diễn khác nhau. confidence phải được hiệu chỉnh theo độ mơ hồ, không bao giờ là 1.0.
@@ -1503,7 +1505,10 @@ def _heuristic(row: Any) -> dict[str, Any]:
     text = str(row["text"])
     lowered = text.casefold()
     kind = str(row["kind_hint"])
-    speaker = "NARRATOR" if kind in {"narration", "thought"} else "UNKNOWN"
+    # Narration is the narrator's by definition. A thought belongs to whoever is thinking
+    # it, and the heuristic has no way to know who that is, so it defers rather than
+    # asserting the narrator - which used to hand every inner voice to the wrong speaker.
+    speaker = "NARRATOR" if kind == "narration" else "UNKNOWN"
     emotion, intensity, pace, volume = "neutral", 1, "normal", "normal"
     if any(word in lowered for word in ("khóc", "nước mắt", "đau lòng", "buồn", "tuyệt vọng")):
         emotion, pace, volume = "sad", "slow", "soft"

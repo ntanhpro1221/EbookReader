@@ -1115,11 +1115,10 @@ class BookPipeline:
         )
 
     def _effective_perceptual_profile(self, row: Any) -> tuple[Any, int]:
-        profile = (
-            self.db.voice_profile_by_key("narrator")
-            if str(row["kind"] or "narration") == "thought"
-            else self.db.voice_profile(int(row["voice_profile_id"]))
-        )
+        # A thought is read in the thinker's own voice now, so its baseline is that
+        # voice's preview - taking the narrator's would compare a character against a
+        # reference that never spoke the line.
+        profile = self.db.voice_profile(int(row["voice_profile_id"]))
         # The graded artifact is always the raw take: the voice variant is applied on the
         # way into the chapter, after every gate. So the baseline must be the preset's own
         # untouched preview - matching it to the profile's register would compare raw

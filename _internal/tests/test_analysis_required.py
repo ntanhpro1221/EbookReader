@@ -1875,12 +1875,12 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
     assert "context_policy=previous_context_only là suy nghĩ nội tâm" in request["system"]
     assert "next_text cố ý để trống" in request["system"]
     assert "Không suy diễn emotion, intensity, pace hoặc volume" in request["system"]
-    assert "kind=thought bắt buộc dùng speaker=NARRATOR" in request["system"]
+    assert "kind=thought dùng speaker là chính nhân vật đang nghĩ" in request["system"]
     assert "host tự suy ra đồng ý khi cả sáu trường trùng candidate" in request["system"]
     assert "Nếu cả sáu trường đã đúng, chép đúng cả sáu giá trị candidate" in request[
         "system"
     ]
-    assert "thought/NARRATOR/afraid/2/fast/normal" in request["system"]
+    assert "thought/Hạ Phong/afraid/2/fast/normal" in request["system"]
     assert "evidence_policy=per_id_source_anchor_enum_v1" in request["prompt"]
     assert "nhánh oneOf của chính ID đó" in request["prompt"]
 

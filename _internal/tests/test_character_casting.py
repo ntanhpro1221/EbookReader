@@ -953,12 +953,18 @@ def test_same_lucien_name_locks_one_voice_across_chapters_without_identity_mergi
     ha_phong_rows = [row for row in rows if str(row["speaker"]) == "Hạ Phong"]
     thought_rows = [row for row in rows if str(row["kind"]) == "thought"]
 
-    assert len(lucien_rows) == 2
+    # Lucien's spoken lines and his inner monologue are all his: a thought is read in the
+    # voice of whoever is thinking it, so it no longer gets handed to the narrator.
+    assert len(lucien_rows) == 3
     assert len({int(row["canonical_character_id"]) for row in lucien_rows}) == 1
     assert len({int(row["voice_profile_id"]) for row in lucien_rows}) == 1
     assert ha_phong_rows[0]["canonical_character_id"] != lucien_rows[0]["canonical_character_id"]
-    assert {str(row["speaker"]) for row in thought_rows} == {"NARRATOR"}
-    assert len({int(row["voice_profile_id"]) for row in thought_rows}) == 1
+    # The thought keeps its thinker rather than being rewritten to NARRATOR, and it is
+    # read in exactly the voice that speaker uses elsewhere.
+    assert {str(row["speaker"]) for row in thought_rows} == {"Lucien"}
+    assert {int(row["voice_profile_id"]) for row in thought_rows} == {
+        int(lucien_rows[0]["voice_profile_id"])
+    }
 
 
 def test_pitch_ranges_follow_measured_preset_depth() -> None:

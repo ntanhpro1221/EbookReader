@@ -12101,15 +12101,20 @@ class ProjectDB:
             return rewritten
 
     def normalize_thought_speakers(self) -> int:
+        """Inner monologue keeps the thinker's identity; only the unattributed is reset.
+
+        This used to rewrite every kind='thought' row to the narrator and clear its voice,
+        so a character's inner voice was read by someone else entirely. A thought belongs
+        to whoever is thinking it and is read in their voice. Rows the analysis could not
+        attribute still fall back to the narrator, because an unidentified thinker has no
+        voice to use.
+        """
         with self.connect() as conn:
             cursor = conn.execute(
                 """
                 UPDATE segments SET speaker='NARRATOR',gender='unknown',age='unknown',
                     canonical_character_id=NULL,voice_profile_id=NULL,updated_at=?
-                WHERE kind='thought' AND (
-                    speaker!='NARRATOR' OR gender!='unknown' OR age!='unknown'
-                    OR canonical_character_id IS NOT NULL OR voice_profile_id IS NOT NULL
-                )
+                WHERE kind='thought' AND speaker IN ('UNKNOWN','')
                 """,
                 (time.time(),),
             )
