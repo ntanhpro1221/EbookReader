@@ -223,6 +223,14 @@ class FakeDB:
     def list_chapters(self):
         return self.chapters
 
+    def rewrite_speaker(self, old_speaker, new_speaker):
+        changed = 0
+        for row in self.rows:
+            if str(row.get("speaker")) == old_speaker:
+                row["speaker"] = new_speaker
+                changed += 1
+        return changed
+
     def event(self, level, code, message, details=None):
         self.events.append((level, code, message, details))
 
@@ -1875,12 +1883,12 @@ def test_director_critic_request_is_blind_to_generator_self_assessment() -> None
     assert "context_policy=previous_context_only là suy nghĩ nội tâm" in request["system"]
     assert "next_text cố ý để trống" in request["system"]
     assert "Không suy diễn emotion, intensity, pace hoặc volume" in request["system"]
-    assert "kind=thought bắt buộc dùng speaker=NARRATOR" in request["system"]
+    assert "kind=thought dùng speaker là chính nhân vật đang nghĩ" in request["system"]
     assert "host tự suy ra đồng ý khi cả sáu trường trùng candidate" in request["system"]
     assert "Nếu cả sáu trường đã đúng, chép đúng cả sáu giá trị candidate" in request[
         "system"
     ]
-    assert "thought/NARRATOR/afraid/2/fast/normal" in request["system"]
+    assert "thought/Hạ Phong/afraid/2/fast/normal" in request["system"]
     assert "evidence_policy=per_id_source_anchor_enum_v1" in request["prompt"]
     assert "nhánh oneOf của chính ID đó" in request["prompt"]
 
@@ -11913,3 +11921,86 @@ def test_affect_disagreement_is_recorded_but_does_not_retry(monkeypatch) -> None
     assert any(
         event[1] == "ANALYSIS_AFFECT_DISAGREEMENT_NOT_ENFORCED" for event in db.events
     )
+
+
+def test_a_described_speaker_is_merged_with_the_name_revealed_later(monkeypatch) -> None:
+    """A speaker labelled by description is resolved to the character they turn out to be.
+
+    A batch that has not met a name yet can only describe the speaker, which is correct at
+    the time and wrong by the end of the book. In a real run a boy spoke as a local "cậu
+    bé" in one place and as "Iven" thirty segments later, and the two were cast as
+    different people with voices three semitones apart. The existing label merge cannot
+    close this: it joins a local label to a named speaker *of the same name*, so "cậu bé"
+    would only ever find someone called "cậu bé".
+    """
+    db = FakeDB()
+    local = "NPC_LOCAL::c00001::rabc::cậu bé"
+    db.rows = [
+        {
+            "id": 1, "stable_id": "c1s1", "chapter_id": 1, "status": "analyzed",
+            "text": "“Anh tỉnh rồi?”", "kind": "dialogue", "kind_hint": "dialogue",
+            "speaker": local, "gender": "male", "age": "child",
+        },
+        {
+            "id": 2, "stable_id": "c1s2", "chapter_id": 1, "status": "analyzed",
+            "text": "“Anh Lucien, anh muốn trở thành nhạc sĩ từ khi nào thế?”",
+            "kind": "dialogue", "kind_hint": "dialogue",
+            "speaker": "Iven", "gender": "male", "age": "child",
+        },
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    asked: list[dict] = []
+
+    def response(request, **_kwargs):
+        asked.append(request)
+        prompt = str(request["prompt"])
+        # The question must carry the described speaker and offer the named one.
+        assert "cậu bé" in prompt
+        assert "Iven" in prompt
+        identity_id = str(request["format"]["properties"]["identities"]["items"]
+                          ["properties"]["id"]["enum"][0])
+        return {"identities": [{"id": identity_id, "name": "Iven"}]}
+
+    monkeypatch.setattr(analyzer, "_stream_json_response", response)
+
+    assert analyzer.reconcile_local_speaker_identities() == 1
+    assert len(asked) == 1
+    assert {str(row["speaker"]) for row in db.rows} == {"Iven"}
+
+
+def test_contradicting_gender_or_age_is_never_offered_as_the_same_person(monkeypatch) -> None:
+    """A merge that is wrong should at least join two people who sound alike.
+
+    Gender and age are the one thing checkable without reading, so a candidate that
+    contradicts them is filtered out before the model is asked, and a speaker left with no
+    candidate is not asked about at all.
+    """
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": 1, "stable_id": "c1s1", "chapter_id": 1, "status": "analyzed",
+            "text": "“Anh tỉnh rồi?”", "kind": "dialogue", "kind_hint": "dialogue",
+            "speaker": "NPC_LOCAL::c00001::rabc::cậu bé",
+            "gender": "male", "age": "child",
+        },
+        {
+            "id": 2, "stable_id": "c1s2", "chapter_id": 1, "status": "analyzed",
+            "text": "“Con ngoan, lại đây với dì.”", "kind": "dialogue",
+            "kind_hint": "dialogue", "speaker": "Alisa",
+            "gender": "female", "age": "adult",
+        },
+    ]
+    analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    calls: list[object] = []
+    monkeypatch.setattr(
+        analyzer, "_stream_json_response", lambda *a, **k: calls.append(a) or {"identities": []}
+    )
+
+    assert analyzer.reconcile_local_speaker_identities() == 0
+    assert calls == []
+    assert {str(row["speaker"]) for row in db.rows} == {
+        "NPC_LOCAL::c00001::rabc::cậu bé",
+        "Alisa",
+    }

@@ -43,6 +43,7 @@ QUALITY_IMPLEMENTATION_FILES = (
     "character_registry.py",
     "config.py",
     "database.py",
+    "expression.py",
     "models.py",
     "pipeline.py",
     "perceptual_qa.py",

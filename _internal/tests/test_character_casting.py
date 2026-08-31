@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from ebook_reader.character_registry import build_registry_and_cast
+from ebook_reader.character_registry import (
+    assert_voice_stability,
+    build_registry_and_cast,
+)
 from ebook_reader.analysis import local_speaker_label
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
@@ -953,12 +956,18 @@ def test_same_lucien_name_locks_one_voice_across_chapters_without_identity_mergi
     ha_phong_rows = [row for row in rows if str(row["speaker"]) == "Hạ Phong"]
     thought_rows = [row for row in rows if str(row["kind"]) == "thought"]
 
-    assert len(lucien_rows) == 2
+    # Lucien's spoken lines and his inner monologue are all his: a thought is read in the
+    # voice of whoever is thinking it, so it no longer gets handed to the narrator.
+    assert len(lucien_rows) == 3
     assert len({int(row["canonical_character_id"]) for row in lucien_rows}) == 1
     assert len({int(row["voice_profile_id"]) for row in lucien_rows}) == 1
     assert ha_phong_rows[0]["canonical_character_id"] != lucien_rows[0]["canonical_character_id"]
-    assert {str(row["speaker"]) for row in thought_rows} == {"NARRATOR"}
-    assert len({int(row["voice_profile_id"]) for row in thought_rows}) == 1
+    # The thought keeps its thinker rather than being rewritten to NARRATOR, and it is
+    # read in exactly the voice that speaker uses elsewhere.
+    assert {str(row["speaker"]) for row in thought_rows} == {"Lucien"}
+    assert {int(row["voice_profile_id"]) for row in thought_rows} == {
+        int(lucien_rows[0]["voice_profile_id"])
+    }
 
 
 def test_pitch_ranges_follow_measured_preset_depth() -> None:
@@ -1093,3 +1102,41 @@ def test_a_lowered_register_spends_part_of_the_formant_range() -> None:
         anatomical = PRESET_VOCAL_TRACT_CM[name] / VOCAL_TRACT_MAX_CM
         algorithmic = 1.0 - voice_variant_deviation(name)[0]
         assert native_low == pytest.approx(max(anatomical, algorithmic), abs=1e-6)
+
+
+def test_one_character_cannot_hold_two_voices_through_different_labels(tmp_path: Path) -> None:
+    """The stability check must follow the character, not the label on each line.
+
+    A boy in a real run appeared as a named character in one place and as a local NPC in
+    another, and held two voices three semitones apart. Every label had exactly one voice,
+    so a per-label check reported success - and local labels were skipped outright, which
+    widened the hole rather than narrowing it. The guarantee is about people, not strings.
+    """
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def list_segments(self):
+            return self._rows
+
+    same_person = 7
+    rows = [
+        {
+            "speaker": "NPC_LOCAL::c00001::rabc::cậu bé",
+            "canonical_character_id": same_person,
+            "voice_profile_id": 11,
+        },
+        {
+            "speaker": "Iven",
+            "canonical_character_id": same_person,
+            "voice_profile_id": 12,
+        },
+    ]
+
+    with pytest.raises(RuntimeError, match="character resolved to multiple voice profiles"):
+        assert_voice_stability(_Rows(rows))
+
+    # The same two lines with one voice between them are accepted.
+    rows[1]["voice_profile_id"] = 11
+    assert_voice_stability(_Rows(rows)) is None

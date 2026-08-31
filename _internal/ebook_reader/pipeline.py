@@ -73,6 +73,7 @@ from .database import (
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
+from .expression import shape_segment
 from .perceptual_qa import (
     DEFAULT_PERCEPTUAL_WORKER_THREADS,
     PERCEPTUAL_INCONCLUSIVE,
@@ -444,7 +445,15 @@ class BookPipeline:
             formant_ratio = (
                 float(profile["formant_ratio"]) if profile is not None else 1.0
             )
-            if pitch_steps == 0 and abs(formant_ratio - 1.0) <= 1e-6:
+            emotion = str(row["emotion"] or "neutral")
+            intensity = int(row["intensity"] or 0)
+            kind = str(row["kind"] or "narration")
+            expressive = emotion != "neutral" and intensity > 0
+            if (
+                pitch_steps == 0
+                and abs(formant_ratio - 1.0) <= 1e-6
+                and not expressive
+            ):
                 rendered.append((source, break_ms))
                 continue
             delivery_root.mkdir(parents=True, exist_ok=True)
@@ -455,6 +464,12 @@ class BookPipeline:
                 int(sample_rate),
                 pitch_steps,
                 formant_ratio,
+            )
+            # Expression rides the same last step as identity: after every gate, on a copy,
+            # never on the verified take. It cannot change a word, and a segment the
+            # director left neutral is passed through untouched rather than resynthesised.
+            shifted, _target = shape_segment(
+                shifted, int(sample_rate), emotion, intensity, kind
             )
             temp = destination.with_suffix(".part.wav")
             sf.write(temp, shifted, int(sample_rate), subtype="PCM_16")
@@ -625,6 +640,16 @@ class BookPipeline:
             else:
                 self._state("running", "Đang khóa nhân vật theo tên và phân vai.")
                 self._state("running", "Đang chuẩn hóa cách đọc tên tiếng Anh.")
+                # Before names are locked: a speaker the analysis could only describe may
+                # turn out to be a character the text names later in the same chapter.
+                self._state("running", "Đang phân giải danh tính nhân vật chỉ được mô tả.")
+                analyzer.reconcile_local_speaker_identities(
+                    before_batch=lambda index: self._resource_gate(
+                        f"local identity batch {index}",
+                        release_active=analyzer.release_model,
+                    ),
+                    stop_requested=self.stop_requested,
+                )
                 analyzer.reconcile_name_pronunciations(
                     before_batch=lambda index: self._resource_gate(
                         f"name pronunciation batch {index}",
@@ -1115,11 +1140,10 @@ class BookPipeline:
         )
 
     def _effective_perceptual_profile(self, row: Any) -> tuple[Any, int]:
-        profile = (
-            self.db.voice_profile_by_key("narrator")
-            if str(row["kind"] or "narration") == "thought"
-            else self.db.voice_profile(int(row["voice_profile_id"]))
-        )
+        # A thought is read in the thinker's own voice now, so its baseline is that
+        # voice's preview - taking the narrator's would compare a character against a
+        # reference that never spoke the line.
+        profile = self.db.voice_profile(int(row["voice_profile_id"]))
         # The graded artifact is always the raw take: the voice variant is applied on the
         # way into the chapter, after every gate. So the baseline must be the preset's own
         # untouched preview - matching it to the profile's register would compare raw

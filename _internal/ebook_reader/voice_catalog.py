@@ -5,6 +5,7 @@ from typing import Any
 
 GENDER_MALE = "male"
 GENDER_FEMALE = "female"
+GENDER_UNKNOWN = "unknown"
 REGION_NORTH = "Bắc"
 REGION_SOUTH = "Nam"
 REGION_CENTRAL = "Trung"
@@ -238,6 +239,96 @@ def base_pitch_for_preset(preset_name: str) -> int:
 # is worth 0.01 of formant ratio. The whole perceptual window moves; the algorithmic limit
 # still caps it.
 REGISTER_FORMANT_TRADE_PER_SEMITONE = 0.01
+
+
+# --- age ---------------------------------------------------------------------------
+#
+# A character's age was analysed, stored, and then thrown away at casting time, so a
+# child was read by whichever adult preset came next in the rotation. A listener put it
+# plainly: the boy sounded like an old uncle.
+#
+# Age is two separate acoustic facts and they need different machinery.
+#
+# Vocal tract length, which sets the formants and therefore the apparent size of the
+# speaker. From an anatomic MRI-based age model (Vorperian et al., PMC5966313): 12.3 cm
+# at six years, 13.0 at eight, 13.8 at ten, 14.5 at twelve, against 17.6 for an adult man
+# and 15.6 for an adult woman. Two things follow. Before puberty the sexes barely differ,
+# so a boy must be cast from the *shortest* presets - the female ones at 13.9-15.5 cm -
+# rather than from a male preset that would need a 1.29 warp to reach a child and would
+# sound ruined long before it got there. And adult ageing does almost nothing here:
+# "formant frequencies change little if at all across several decades of adult life"
+# (PMC5832520), so an elderly character is not a formant problem at all.
+VOCAL_TRACT_CM_BY_AGE: dict[str, dict[str, float]] = {
+    # roughly eight years old, where a child speaking role usually sits
+    "child": {GENDER_MALE: 13.0, GENDER_FEMALE: 12.7, GENDER_UNKNOWN: 12.9},
+    # roughly fourteen: the male pharynx has begun its growth, the female has nearly
+    # finished, which is where the sexes start to separate
+    "teen": {GENDER_MALE: 15.5, GENDER_FEMALE: 14.5, GENDER_UNKNOWN: 15.0},
+}
+
+# Speaking F0 relative to an adult of the same sex, in semitones, and this is where age
+# actually lives for older characters.
+#
+# Children speak around 245-262 Hz between six and ten with no significant difference
+# between boys and girls, against an adult woman's 205 Hz - about three semitones up.
+#
+# Ageing is not symmetric, and the common intuition that old voices are deep is only
+# half right. Measured across age cohorts (PMC5832520), women fall from 205 Hz to about
+# 170 Hz while men *rise* from 108 Hz to about 125 Hz. So an elderly man reads higher
+# than his younger self, not lower.
+AGE_PITCH_SEMITONES: dict[str, dict[str, int]] = {
+    "child": {GENDER_MALE: 3, GENDER_FEMALE: 3, GENDER_UNKNOWN: 3},
+    "teen": {GENDER_MALE: 1, GENDER_FEMALE: 1, GENDER_UNKNOWN: 1},
+    "elderly": {GENDER_MALE: 2, GENDER_FEMALE: -3, GENDER_UNKNOWN: 0},
+}
+
+
+# Presets a Vietnamese listener reported as hard to follow, quite apart from whether they
+# suit a role. Availability is not the only thing that should decide a casting: a voice
+# that tires the ear is worth skipping before it is worth reusing, and a character with
+# many lines should pay this penalty twice over.
+PRESET_LISTENING_PENALTY: dict[str, int] = {
+    "Xuân Vĩnh": 1,
+}
+
+
+def vocal_tract_target_cm(age: str, gender: str) -> float | None:
+    """The tract length a character of this age should read as, or None for an adult."""
+    by_gender = VOCAL_TRACT_CM_BY_AGE.get(str(age))
+    if by_gender is None:
+        return None
+    return by_gender.get(str(gender), by_gender[GENDER_UNKNOWN])
+
+
+def age_pitch_semitones(age: str, gender: str) -> int:
+    """The F0 offset in semitones this age implies, on top of any preset register."""
+    by_gender = AGE_PITCH_SEMITONES.get(str(age))
+    if by_gender is None:
+        return 0
+    return int(by_gender.get(str(gender), by_gender[GENDER_UNKNOWN]))
+
+
+def formant_ratio_for_age(preset_name: str, age: str, gender: str) -> float:
+    """The warp that brings this preset to the target length, within what it can do.
+
+    Clamped to the preset's own usable range rather than reaching for the target at any
+    cost: a warp that lands the arithmetic but wrecks the voice is not an improvement.
+    """
+    target = vocal_tract_target_cm(age, gender)
+    length = PRESET_VOCAL_TRACT_CM.get(preset_name)
+    if target is None or length is None:
+        return 1.0
+    lower, upper = formant_ratio_bounds_for_preset(preset_name)
+    return max(lower, min(upper, length / target))
+
+
+def preset_age_reach(preset_name: str, age: str, gender: str) -> float:
+    """How far this preset falls short of the target length, in cm. Lower is better."""
+    target = vocal_tract_target_cm(age, gender)
+    length = PRESET_VOCAL_TRACT_CM.get(preset_name)
+    if target is None or length is None:
+        return 0.0
+    return abs(length / formant_ratio_for_age(preset_name, age, gender) - target)
 
 
 def formant_ratio_bounds_for_preset(preset_name: str) -> tuple[float, float]:

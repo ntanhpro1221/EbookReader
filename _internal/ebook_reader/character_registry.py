@@ -20,13 +20,17 @@ from .database import (
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
     CASTING_REGIONS,
+    PRESET_LISTENING_PENALTY,
     STYLE_NEWS,
     VIENEU_PRESETS,
     casting_preset_priority,
     casting_presets,
     preset_by_name,
     base_pitch_for_preset,
+    formant_ratio_for_age,
     formant_variants_for_preset,
+    age_pitch_semitones,
+    preset_age_reach,
 )
 
 
@@ -229,12 +233,44 @@ class PresetAllocator:
         }
         self.variant_usage: Counter[str] = Counter()
 
-    def choose(self, gender: str, *, npc: bool) -> tuple[dict[str, str], int]:
+    def choose(
+        self,
+        gender: str,
+        *,
+        npc: bool,
+        age: str = "unknown",
+        prominent: bool = False,
+    ) -> tuple[dict[str, str], float, int]:
+        """Pick a preset, the formant warp it needs, and the F0 offset its age implies.
+
+        `age` used to be analysed, stored and then ignored here, so a child was read by
+        whichever adult voice came next in the rotation and a listener described the boy
+        as sounding like an old uncle. Age enters twice, because it is two different
+        acoustic facts: a shorter vocal tract, which the formant warp reaches, and a
+        higher or lower F0, which the register does.
+        """
+        # A character never shares the narrator's preset. Excluding it by name excludes
+        # every variant of it too, which is the point: a pitch-shifted or formant-warped
+        # narrator is still the narrator's voice to a listener, not a second character.
         candidates = [
             preset
             for preset in casting_presets(gender)
             if preset["name"] != self.narrator_voice
         ]
+        if str(age) == "child":
+            # Before puberty the sexes barely differ: an eight-year-old boy and girl are
+            # about 13.0 and 12.7 cm of vocal tract. Restricting a boy to the male presets
+            # therefore restricts him to the *longest* tracts in the catalog, which cannot
+            # reach a child even warped to their limit - they stop 0.8 cm short and sound
+            # strained getting there. The short presets land on the target exactly, so the
+            # pool widens across gender here and only here.
+            candidates = [
+                preset
+                for preset in VIENEU_PRESETS
+                if preset["name"] != self.narrator_voice
+                and preset["style"] != STYLE_NEWS
+                and preset["region"] in CASTING_REGIONS
+            ]
         if not candidates:
             # Nothing of this gender is left, so widen across gender - but never across
             # the region allowlist. A fallback that reached the whole catalog would put
@@ -248,18 +284,39 @@ class PresetAllocator:
             ]
         pool = "npc" if npc else "named"
         usage = self.pool_usage[pool]
-        selected = min(
-            candidates,
-            key=lambda preset: (usage[preset["name"]], *casting_preset_priority(preset)),
-        )
-        usage[selected["name"]] += 1
+
+        def rank(preset: dict[str, Any]) -> tuple[Any, ...]:
+            name = str(preset["name"])
+            return (
+                usage[name],
+                # A preset that cannot reach this age is a worse fit however available it
+                # is: an adult male tract stops 0.8 cm short of an eight-year-old even
+                # warped to its limit, while the shortest presets land exactly on it.
+                # Bucketed to half a centimetre: two presets that both land near the
+                # target are the same fit to a listener, and a 0.1 cm edge must not
+                # outrank a voice being hard to follow.
+                round(preset_age_reach(name, age, gender) * 2.0) / 2.0,
+                # A voice the listener finds hard to follow is worth avoiding before it is
+                # worth reusing, and doubly so for a character with many lines.
+                PRESET_LISTENING_PENALTY.get(name, 0) * (2 if prominent else 1),
+                *casting_preset_priority(preset),
+            )
+
+        selected = min(candidates, key=rank)
+        name = str(selected["name"])
+        usage[name] += 1
         # Formant, not pitch, is what makes a reused preset sound like a different
         # person. The ladder starts at 1.00 so a preset's first casting is the untouched
-        # voice and pays no vocoder cost at all.
-        variants = formant_variants_for_preset(selected["name"])
-        formant_ratio = variants[self.variant_usage[selected["name"]] % len(variants)]
-        self.variant_usage[selected["name"]] += 1
-        return selected, formant_ratio
+        # voice and pays no vocoder cost at all - but an age target overrides the ladder,
+        # because reading a child at an adult tract length is not a variation, it is wrong.
+        age_ratio = formant_ratio_for_age(name, age, gender)
+        if abs(age_ratio - 1.0) > 1e-6:
+            formant_ratio = age_ratio
+        else:
+            variants = formant_variants_for_preset(name)
+            formant_ratio = variants[self.variant_usage[name] % len(variants)]
+        self.variant_usage[name] += 1
+        return selected, formant_ratio, age_pitch_semitones(age, gender)
 
 
 def _profile_for_preset(
@@ -267,11 +324,17 @@ def _profile_for_preset(
     preset: dict[str, str],
     formant_ratio: float,
     cache: dict[str, int],
+    *,
+    age_pitch: int = 0,
 ) -> int:
     name = preset["name"]
-    base_pitch = base_pitch_for_preset(name)
+    # The preset's calibrated reading register, plus whatever the character's age asks
+    # for: children speak about three semitones above an adult, and ageing moves men up
+    # while it moves women down.
+    base_pitch = base_pitch_for_preset(name) + int(age_pitch)
     formant_key = f"f{int(round(float(formant_ratio) * 100)):03d}"
-    profile_key = f"{name}::{formant_key}"
+    pitch_key = f"p{int(base_pitch):+03d}"
+    profile_key = f"{name}::{formant_key}::{pitch_key}"
     if profile_key not in cache:
         if abs(float(formant_ratio) - 1.0) <= 1e-6:
             description = "âm sắc gốc"
@@ -281,11 +344,11 @@ def _profile_for_preset(
             description = f"âm sắc sáng hơn ({formant_ratio:.2f})"
         cache[profile_key] = db.upsert_voice_profile(
             {
-                "voice_key": f"preset_{slugify(name)}_{formant_key}",
+                "voice_key": f"preset_{slugify(name)}_{formant_key}_{pitch_key}",
                 "engine": "vieneu",
                 "preset_name": name,
                 "description": f"{preset['description']} · {description}",
-                "seed": stable_int(f"voice::vieneu::{name}::{formant_key}"),
+                "seed": stable_int(f"voice::vieneu::{name}::{formant_key}::{pitch_key}"),
                 "pitch_semitones": base_pitch,
                 "formant_ratio": float(formant_ratio),
                 "status": "ready",
@@ -583,6 +646,44 @@ def _merge_adjacent_local_speakers(
             )
 
 
+def assert_voice_stability(db: ProjectDB) -> None:
+    """Refuse a casting where one person would be read by two different voices."""
+    # One character, one voice - checked on the resolved character rather than on the
+    # speaker label. Checking labels was a blind spot with real consequences: a boy who
+    # appeared as a named character in one chapter and as a local NPC in another held two
+    # voices three semitones apart, and every label individually had exactly one voice, so
+    # this reported success. Local labels were skipped outright, which made the gap worse.
+    profiles_by_character: dict[int, set[int]] = defaultdict(set)
+    profiles_by_speaker: dict[str, set[int]] = defaultdict(set)
+    for row in db.list_segments():
+        speaker = str(row["speaker"])
+        normalized = normalize_name(speaker)
+        profile_id = row["voice_profile_id"]
+        character_id = row["canonical_character_id"]
+        if speaker != "UNKNOWN" and not is_local_speaker(speaker) and normalized not in PRONOUNS:
+            if profile_id is None:
+                raise RuntimeError(f"Speaker {speaker!r} has no locked voice profile")
+            profiles_by_speaker[normalized].add(int(profile_id))
+        if character_id is not None and profile_id is not None:
+            profiles_by_character[int(character_id)].add(int(profile_id))
+    unstable = {
+        speaker: sorted(profile_ids)
+        for speaker, profile_ids in profiles_by_speaker.items()
+        if len(profile_ids) != 1
+    }
+    if unstable:
+        raise RuntimeError(f"A speaker name resolved to multiple voice profiles: {unstable}")
+    split_characters = {
+        character_id: sorted(profile_ids)
+        for character_id, profile_ids in profiles_by_character.items()
+        if len(profile_ids) != 1
+    }
+    if split_characters:
+        raise RuntimeError(
+            f"A character resolved to multiple voice profiles: {split_characters}"
+        )
+
+
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
@@ -590,7 +691,10 @@ def build_registry_and_cast(
 ) -> None:
     normalized_thoughts = db.normalize_thought_speakers()
     if normalized_thoughts:
-        log(f"Đã chuyển {normalized_thoughts} đoạn nội tâm sang giọng người kể.")
+        log(
+            f"{normalized_thoughts} đoạn nội tâm không xác định được người nghĩ; "
+            "giao cho người kể."
+        )
 
     for speaker in {str(row["speaker"]) for row in db.list_segments()}:
         reserved = RESERVED_SPEAKERS.get(speaker.casefold())
@@ -678,8 +782,15 @@ def build_registry_and_cast(
         for alias in sorted(aliases_by_speaker.get(speaker, {speaker}), key=str.casefold):
             db.add_alias(character_id, alias, normalize_name(alias), confidence, "analysis")
         db.set_character_for_speaker(speaker, character_id)
-        preset, formant_ratio = allocator.choose(gender, npc=local)
-        profile_id = _profile_for_preset(db, preset, formant_ratio, profile_cache)
+        preset, formant_ratio, age_pitch = allocator.choose(
+            gender,
+            npc=local,
+            age=age,
+            prominent=importance == "main",
+        )
+        profile_id = _profile_for_preset(
+            db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
+        )
         db.set_voice_for_character_segments(character_id, profile_id)
         local_count += int(local)
 
@@ -705,8 +816,12 @@ def build_registry_and_cast(
             importance="minor",
             confidence=confidence,
         )
-        preset, formant_ratio = allocator.choose(gender, npc=True)
-        profile_id = _profile_for_preset(db, preset, formant_ratio, profile_cache)
+        preset, formant_ratio, age_pitch = allocator.choose(
+            gender, npc=True, age=_majority(anonymous_rows, "age")
+        )
+        profile_id = _profile_for_preset(
+            db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
+        )
         db.set_character_and_voice_for_segments(
             [int(row["id"]) for row in anonymous_rows],
             character_id,
@@ -716,23 +831,7 @@ def build_registry_and_cast(
 
     used_voices = len({str(profile["preset_name"]) for profile in db.list_voice_profiles()})
     voice_variants = len(profile_cache)
-    profiles_by_speaker: dict[str, set[int]] = defaultdict(set)
-    for row in db.list_segments():
-        speaker = str(row["speaker"])
-        normalized = normalize_name(speaker)
-        if speaker == "UNKNOWN" or is_local_speaker(speaker) or normalized in PRONOUNS:
-            continue
-        profile_id = row["voice_profile_id"]
-        if profile_id is None:
-            raise RuntimeError(f"Speaker {speaker!r} has no locked voice profile")
-        profiles_by_speaker[normalized].add(int(profile_id))
-    unstable = {
-        speaker: sorted(profile_ids)
-        for speaker, profile_ids in profiles_by_speaker.items()
-        if len(profile_ids) != 1
-    }
-    if unstable:
-        raise RuntimeError(f"A speaker name resolved to multiple voice profiles: {unstable}")
+    assert_voice_stability(db)
     log(
         f"Đã khóa voice casting VieNeu: dùng {used_voices}/{len(VIENEU_PRESETS)} preset; "
         f"{voice_variants} biến thể giọng; "
