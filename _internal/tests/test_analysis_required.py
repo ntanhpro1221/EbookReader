@@ -29,6 +29,8 @@ from ebook_reader.analysis import (
     HOST_PHYSICAL_COLLAPSE_RULE,
     HOST_RECALLED_PERSISTENT_FEAR_RULE,
     HOST_SLEEP_PARALYSIS_HELPLESSNESS_RULE,
+    HOST_ABSENT_DIALOGUE_BOUNDARY_RULE,
+    HOST_EXPLICIT_THOUGHT_BOUNDARY_RULE,
     HOST_SOURCE_KIND_ISSUE_CODE,
     HOST_STUNNED_BLANK_MIND_RULE,
     LOW_CONFIDENCE_ISSUE_CODE,
@@ -72,6 +74,7 @@ from ebook_reader.analysis import (
     _repair_vietnamese_syllable_boundaries,
     _semantic_delivery_issues,
     _source_kind_feedback_issues,
+    _source_kind_transition_rule,
     _structured_feedback_issues,
     _valid_vietnamese_spoken_form,
     _validate,
@@ -4116,14 +4119,22 @@ def test_analysis_retries_when_model_shifts_a_valid_kind_to_the_wrong_id() -> No
     assert validated == {}
 
 
-def test_analysis_rejects_explicit_thought_relabelled_as_narration() -> None:
+@pytest.mark.parametrize("requested_kind", ["narration", "dialogue"])
+def test_analysis_names_the_thought_boundary_it_rejects(requested_kind: str) -> None:
+    """A rejected explicit thought must say which boundary was crossed.
+
+    This exact line, with this exact hint, burned all three attempts of a live batch and
+    forced it to split: the payload said only that `kind` was wrong, so the model had
+    nothing to correct against and repeated its answer. The dialogue direction had carried
+    a named rule all along; this direction carried none.
+    """
     row = {
         **analysis_group()[0],
         "kind_hint": "thought",
         "text": "‘Tỉnh dậy, phải tỉnh dậy!’",
     }
     item = analysis_item(row["stable_id"])
-    item.update({"kind": "narration", "speaker": "NARRATOR"})
+    item.update({"kind": requested_kind, "speaker": "NARRATOR"})
 
     payload = {"segments": [item]}
 
@@ -4133,8 +4144,55 @@ def test_analysis_rejects_explicit_thought_relabelled_as_narration() -> None:
             "id": row["stable_id"],
             "code": HOST_SOURCE_KIND_ISSUE_CODE,
             "fields": ["kind"],
+            "rule": HOST_EXPLICIT_THOUGHT_BOUNDARY_RULE,
         }
     ]
+
+
+def test_analysis_names_a_dialogue_kind_the_source_never_marked() -> None:
+    """Narration the model wants to call dialogue is the other case that carried no rule."""
+    row = {
+        **analysis_group()[0],
+        "kind_hint": "narration",
+        "text": "Ngoài cửa sổ, trời đã sáng từ lúc nào.",
+    }
+    item = analysis_item(row["stable_id"])
+    item.update({"kind": "dialogue", "speaker": "Hạ Phong"})
+
+    payload = {"segments": [item]}
+
+    assert _validate([row], payload) == {}
+    assert [issue.canonical_payload() for issue in _source_kind_feedback_issues([row], payload)] == [
+        {
+            "id": row["stable_id"],
+            "code": HOST_SOURCE_KIND_ISSUE_CODE,
+            "fields": ["kind"],
+            "rule": HOST_ABSENT_DIALOGUE_BOUNDARY_RULE,
+        }
+    ]
+
+
+def test_naming_the_boundary_does_not_arm_the_source_kind_override() -> None:
+    """The transition rule must keep returning "" for the two newly named boundaries.
+
+    The override path at the critic stage fires on a non-empty rule and its stored
+    provenance only accepts the two rules that own a lock. Naming these in feedback must
+    not leak into that decision.
+    """
+    thought_row = {
+        **analysis_group()[0],
+        "kind_hint": "thought",
+        "text": "‘Tỉnh dậy, phải tỉnh dậy!’",
+    }
+    narration_row = {
+        **analysis_group()[0],
+        "kind_hint": "narration",
+        "text": "Ngoài cửa sổ, trời đã sáng từ lúc nào.",
+    }
+    assert _source_kind_transition_rule(thought_row, "narration") == ""
+    assert _source_kind_transition_rule(narration_row, "dialogue") == ""
+    # And the rule still says "no issue" when the kind matches the source.
+    assert _source_kind_transition_rule(thought_row, "thought") is None
 
 
 @pytest.mark.parametrize(

@@ -150,6 +150,15 @@ HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE = (
     "narration_precedes_immediate_thought"
 )
 HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE = ANALYSIS_SOURCE_DIALOGUE_KIND_RULE
+# Retry feedback names the boundary the model crossed. Only the dialogue direction had a
+# name, so a model that mislabelled an explicit thought was told "kind is wrong" and
+# nothing else - it then repeated the same answer until the batch ran out of attempts and
+# had to be split. These two names close that gap. They are feedback vocabulary only: the
+# transition rule itself still returns "" for these cases, because a non-empty rule there
+# would arm the source-kind override path, whose provenance is built for the two rules
+# that own a stored lock.
+HOST_EXPLICIT_THOUGHT_BOUNDARY_RULE = "explicit_thought_boundary"
+HOST_ABSENT_DIALOGUE_BOUNDARY_RULE = "source_has_no_dialogue_boundary"
 HOST_AFFECT_RULES = frozenset(
     {
         HOST_DIRECT_SELF_PRESERVATION_RULE,
@@ -165,6 +174,8 @@ HOST_SOURCE_KIND_RULES = frozenset(
     {
         *HOST_AFFECT_RULES,
         HOST_EXPLICIT_DIALOGUE_BOUNDARY_RULE,
+        HOST_EXPLICIT_THOUGHT_BOUNDARY_RULE,
+        HOST_ABSENT_DIALOGUE_BOUNDARY_RULE,
         HOST_NARRATION_PRECEDES_IMMEDIATE_THOUGHT_RULE,
     }
 )
@@ -2172,8 +2183,9 @@ def _source_kind_feedback_issues(
         ):
             continue
         seen.add(stable_id)
+        row = rows_by_id[stable_id]
         rule = _source_kind_transition_rule(
-            rows_by_id[stable_id],
+            row,
             requested_kind,
             original_context=original_context,
         )
@@ -2184,10 +2196,26 @@ def _source_kind_feedback_issues(
                 stable_id=stable_id,
                 code=HOST_SOURCE_KIND_ISSUE_CODE,
                 fields=("kind",),
-                rule=rule,
+                rule=rule or _unnamed_boundary_feedback_rule(row, requested_kind),
             )
         )
     return tuple(issues)
+
+
+def _unnamed_boundary_feedback_rule(row: Any, requested_kind: str) -> str:
+    """Name the boundary a rejected kind crossed, for cases the rule itself leaves blank.
+
+    The transition rule returns "" for these two, and an empty rule is dropped from the
+    retry payload entirely, so the model saw a bare rejection with no way to work out what
+    the source says. Naming them here keeps the rule's own return value untouched, which
+    matters: a non-empty rule there would arm the source-kind override path.
+    """
+    source_kind = str(_row_optional_value(row, "kind_hint", "narration"))
+    if source_kind == "thought" and requested_kind != "thought":
+        return HOST_EXPLICIT_THOUGHT_BOUNDARY_RULE
+    if requested_kind == "dialogue" and source_kind != "dialogue":
+        return HOST_ABSENT_DIALOGUE_BOUNDARY_RULE
+    return ""
 
 
 def _host_previous_source(

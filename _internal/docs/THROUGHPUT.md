@@ -1,5 +1,25 @@
 # Throughput: tại sao máy đang rảnh và làm gì với nó
 
+## Nút thắt đổi theo giai đoạn - đừng đọc một con số rồi kết luận
+
+Đo lần đầu chỉ bắt giai đoạn `chapter_synthesis` và kết luận "không gì bão hoà". Đo lại trong
+giai đoạn `analysis` cho ra hình dạng **khác hẳn**:
+
+| Tài nguyên | Analysis (Ollama qwen3:8b) | Synthesis (VieNeu) | Tổng |
+|---|---|---|---|
+| GPU compute | 30-48% | 14-18% | 100% |
+| **VRAM** | **6,66 GB (82%)** | 1,30 GB (16%) | 8,15 GB |
+| CPU | 42% ≈ 13 core | 0,8 core | 32 core |
+| RAM | 13,1 GB | 12 GB | 31,3 GB |
+
+**Analysis nghẽn VRAM, synthesis thì rảnh mọi thứ.** Hệ quả trực tiếp: số worker song song
+**không được** là hằng số. Trong analysis, VRAM chỉ còn ~1,5 GB - thêm một process VieNeu hay
+Whisper vào đó là OOM. Trong synthesis còn ~6,8 GB, thoải mái vài process.
+
+Vì thế bước "chồng lấn giai đoạn" ở mục kế hoạch bên dưới **không miễn phí như tôi từng viết**:
+nó đòi Ollama, VieNeu và Whisper cùng thường trú, mà riêng Ollama đã chiếm 82%. Phải đo lại
+trước khi làm, hoặc phải cho Ollama nhả model giữa chừng.
+
 ## Số đo, ngày 2026-08-31
 
 Đo trong lúc chạy thật giai đoạn `chapter_synthesis`, máy Ryzen 9845HX + RTX 5060 Laptop 8 GB + 32 GB RAM:
@@ -87,7 +107,7 @@ Không chỉ TTS. Bảng dưới là mọi giai đoạn và mức dùng tài ngu
 
 | Giai đoạn | Chạy ở đâu | Hiện tại | Bỏ phí |
 |---|---|---|---|
-| Analysis (Ollama qwen3:8b) | GPU | 47% GPU, **1 request một lúc** | GPU + 32 core |
+| Analysis (Ollama qwen3:8b) | GPU | 30-48% GPU, **1 request một lúc**, `OLLAMA_NUM_PARALLEL=1` | GPU + 19 core |
 | TTS (VieNeu) | GPU | 15% GPU, **1 segment một lúc** | GPU + 32 core |
 | ASR (Whisper turbo) | GPU | **1 segment một lúc** | GPU + 32 core |
 | Perceptual QA (UTMOSv2) | **CPU** | **1 segment một lúc**, 3 lượt mỗi segment | **31/32 core** |
@@ -96,6 +116,29 @@ Không chỉ TTS. Bảng dưới là mọi giai đoạn và mức dùng tài ngu
 
 `-threads 1` của FFmpeg là **cố ý** đi cùng `-fflags +bitexact` để chương ghép ra byte giống hệt nhau.
 Đừng đổi nó để lấy tốc độ; nó không phải nút thắt.
+
+## Đã đo: perceptual QA song song (bước 1)
+
+`scripts/benchmark_parallelism.py --stage perceptual`, 24 segment đã commit, đo **trong lúc**
+một run analysis khác đang dùng GPU và ~13 core - tức là điều kiện thực tế, không phải máy trống:
+
+| worker | giây | job/phút | speedup | đầu ra |
+|---|---|---|---|---|
+| 1 | 186,1 | 7,7 | 1,00x | - |
+| **4** | **112,3** | **12,8** | **1,66x** | **giống hệt** |
+| 8 | 139,3 | 10,3 | 1,34x | giống hệt |
+| 12 | 132,8 | 10,8 | 1,40x | giống hệt |
+| 16 | 180,7 | 8,0 | 1,03x | giống hệt |
+
+Hai kết luận:
+
+1. **Tất định giữ nguyên ở mọi cỡ pool.** Điểm UTMOSv2 giống hệt bản một worker. Đây là điều
+   kiện bắt buộc; không đạt thì con số throughput vô nghĩa.
+2. **Quá 4 worker thì tệ đi**, và lý do không phải thiếu core. Torch mặc định lấy một luồng mỗi
+   core, nên 8 process đòi 8 x 32 = 256 luồng trên 32 core. Cỡ pool chỉ có nghĩa khi **từng
+   thành viên bị ghim số luồng** - `--worker-threads` của script làm việc đó.
+
+Vì thế đừng đọc "4 là tối ưu" thành một hằng số. Nó là tối ưu **khi chưa ghim luồng**.
 
 ## Thứ tự triển khai, mỗi bước phải đo trước và sau
 
