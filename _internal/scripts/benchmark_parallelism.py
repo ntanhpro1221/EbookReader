@@ -75,10 +75,16 @@ def _select_wavs(project_root: Path, wanted: int) -> list[dict[str, Any]]:
     connection.row_factory = sqlite3.Row
     rows = connection.execute(
         """
-        SELECT stable_id, text, wav_path, wav_duration, voice_profile_id, generation_seed
-        FROM segments
-        WHERE wav_path IS NOT NULL AND wav_duration >= 2.0
-        ORDER BY seq
+        SELECT
+            s.stable_id, s.text, s.wav_path, s.wav_duration, s.voice_profile_id,
+            s.generation_seed, s.kind, s.speaker, s.emotion, s.intensity, s.pace,
+            s.volume, s.warning_code,
+            v.preset_name, v.engine, v.voice_key, v.pitch_semitones
+        FROM segments AS s
+        LEFT JOIN voice_profiles AS v ON v.id = s.voice_profile_id
+        WHERE s.wav_path IS NOT NULL AND s.wav_duration >= 2.0
+          AND v.preset_name IS NOT NULL AND s.generation_seed IS NOT NULL
+        ORDER BY s.seq
         """
     ).fetchall()
     picked = []
@@ -153,9 +159,73 @@ def _asr_job(payload: tuple[str, str]) -> tuple[str, float]:
     return wav_path, float(result.get("similarity", 0.0))
 
 
+# --- TTS stage --------------------------------------------------------------------
+
+_ENGINE: list[Any] = []
+
+
+def _tts_init() -> None:
+    from ebook_reader.config import build_settings
+    from ebook_reader.tts import VieNeuEngine
+
+    _pin_worker_threads()
+
+    engine = VieNeuEngine(build_settings("high_quality"), lambda _message: None)
+    engine.load()
+    _ENGINE.append(engine)
+
+
+def _tts_job(payload: dict[str, Any]) -> tuple[str, float]:
+    """Regenerate one segment and return a checksum of the waveform.
+
+    The seed and voice come from the committed row, so a correct pool reproduces the
+    audio the single-worker run produced. The checksum is the first 48 bits of the
+    SHA-256 as a float: 48 bits is exact in float64, so the comparison stays lossless
+    while fitting the (name, number) shape every stage reports.
+    """
+    import hashlib
+
+    import numpy as np
+
+    row = dict(payload)
+    audio = _ENGINE[0].generate_one(
+        {
+            "kind": row["kind"],
+            "speaker": row["speaker"],
+            "text": row["text"],
+            "emotion": row["emotion"],
+            "intensity": row["intensity"],
+            "pace": row["pace"],
+            "volume": row["volume"],
+            "warning_code": row["warning_code"],
+        },
+        {
+            "engine": row["engine"],
+            "preset_name": row["preset_name"],
+            "voice_key": row["voice_key"],
+            "id": row["voice_profile_id"],
+            "pitch_semitones": row["pitch_semitones"],
+        },
+        int(row["generation_seed"]),
+    )
+    array = np.asarray(audio, dtype=np.float32).reshape(-1)
+    digest = hashlib.sha256(array.tobytes()).hexdigest()
+    return str(row["stable_id"]), float(int(digest[:12], 16))
+
+
+def _tts_payload(row: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "stable_id", "text", "kind", "speaker", "emotion", "intensity", "pace",
+        "volume", "warning_code", "engine", "preset_name", "voice_key",
+        "voice_profile_id", "pitch_semitones", "generation_seed",
+    )
+    return {key: row[key] for key in keys}
+
+
 STAGES = {
     "perceptual": (_perceptual_init, _perceptual_job, lambda row: str(row["wav_path"])),
     "asr": (_asr_init, _asr_job, lambda row: (str(row["wav_path"]), str(row["text"]))),
+    "tts": (_tts_init, _tts_job, _tts_payload),
 }
 
 

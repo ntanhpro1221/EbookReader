@@ -175,6 +175,38 @@ Và unit test cũng không bắt được: chúng dùng model giả trả về s
 UTMOSv2 thật trên WAV thật mới lộ. **Việc gì đụng tới số học dấu phẩy động thì phải kiểm chứng bằng
 dữ liệu thật.**
 
+## Đã đo: TTS song song (bước 2) — 3 process, 2,16×
+
+`scripts/benchmark_parallelism.py --stage tts` sinh lại segment đã commit bằng đúng seed và
+voice profile của nó, rồi so checksum waveform. **Đầu ra giống hệt ở mọi cỡ pool** — điều
+kiện tất định đạt, nên các con số dưới mới có nghĩa.
+
+48 segment, 1 luồng torch mỗi worker:
+
+| worker | giây | job/phút | speedup | GPU đỉnh | VRAM đỉnh | đầu ra |
+|---|---|---|---|---|---|---|
+| 1 | 228,8 | 12,6 | 1,00× | 23% | 1834 MiB | — |
+| **3** | **105,9** | **27,2** | **2,16×** | **90%** | 5484 MiB | giống hệt |
+| 5 | 104,6 | 27,5 | 2,19× | 88% | 7318 MiB | giống hệt |
+
+**Chốt 3 worker.** 5 worker chỉ hơn 0,03× nhưng chiếm 7318/8151 MiB — không còn chỗ cho
+foreground lẫn cho Whisper thường trú, đổi lấy một khoản gần bằng sai số.
+
+### Cẩn thận khi đọc lại số này: số job ít làm hỏng kết luận
+
+Cùng bộ đo, **12** segment thay vì 48 cho ra 3 worker = **1,42×**. Không phải nhiễu: mỗi
+process phải tự nạp VieNeu, và với 4 job mỗi worker thì chi phí nạp chưa kịp khấu hao. Nếu
+chỉ chạy bản 12 job rồi kết luận thì đã bỏ đi một nửa phần lợi có thật.
+
+Quy tắc rút ra: **số job mỗi worker phải đủ lớn để chi phí khởi động nhỏ so với công việc**,
+nếu không benchmark đang đo tốc độ nạp model chứ không đo throughput.
+
+### GPU đã thực sự bão hoà
+
+23% → 90%. Đây là lần đầu một giai đoạn trên máy này chạm trần GPU. Nghĩa là sau bước này,
+TTS **không còn** là chỗ để vắt thêm bằng cách tăng song song — muốn nhanh nữa phải giảm
+số lần sinh (bớt retry, bớt candidate) chứ không phải thêm worker.
+
 ## Thứ tự triển khai, mỗi bước phải đo trước và sau
 
 Xếp theo **giá trị chia cho rủi ro**, không phải theo mức hấp dẫn:
