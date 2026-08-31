@@ -2483,6 +2483,39 @@ def _host_affect_adjudication(
     )
 
 
+# Whether one segment's affect disagreement may send its whole batch back to the model.
+#
+# It may not. Affect no longer reaches the audio: VieNeu has no emotion input, the label
+# used to pick a sampling temperature, and generation now runs at one fixed temperature,
+# so `emotion` is metadata that changes nothing a listener can hear. Spending a second
+# model call to argue about it is pure cost - and the host loses some of those arguments,
+# having forced `surprised` onto a line that says the astonishment had just been put away.
+#
+# The batch-level collapse guard below is deliberately still enforced. It fires when the
+# model stamps one delivery on an entire batch, which is a sign the pass was lazy about
+# every field at once - including `volume`, which does still reach the audio through its
+# LUFS target. That is a different claim from "this one segment's emotion is wrong", and
+# it keeps its authority.
+AFFECT_CUE_DISAGREEMENT_BLOCKS = False
+# Fields whose value never reaches the audio. `emotion` and `intensity` used to select a
+# sampling temperature and no longer select anything; `pace` still shapes silence and
+# `volume` still sets a LUFS target, so neither of those belongs here.
+INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
+
+
+def _feedback_is_inaudible_only(
+    issues: tuple[AnalysisFeedbackIssue, ...] | tuple[Any, ...],
+) -> bool:
+    """Whether every outstanding objection is about a field a listener cannot hear."""
+    fields: set[str] = set()
+    for issue in issues:
+        issue_fields = getattr(issue, "fields", ())
+        if not issue_fields:
+            return False
+        fields.update(str(field) for field in issue_fields)
+    return bool(fields) and fields <= INAUDIBLE_DELIVERY_FIELDS
+
+
 def _semantic_delivery_issues(
     group: list[Any],
     validated: dict[str, dict[str, Any]],
@@ -6241,6 +6274,26 @@ class OllamaBookAnalyzer:
                             semantic_issues, semantic_batch_collapsed = (
                                 _semantic_delivery_issues(group, validated)
                             )
+                        if (
+                            semantic_issues
+                            and not semantic_batch_collapsed
+                            and not AFFECT_CUE_DISAGREEMENT_BLOCKS
+                        ):
+                            # Recorded, not enforced. A single segment's affect is not
+                            # worth a model call; a whole batch stamped with one delivery
+                            # still is, and that case keeps semantic_batch_collapsed set.
+                            self.db.event(
+                                "info",
+                                "ANALYSIS_AFFECT_DISAGREEMENT_NOT_ENFORCED",
+                                f"affect disagreement on {len(semantic_issues)}/"
+                                f"{len(group)} segment, accepted as analysed",
+                                {
+                                    "batch_index": group_index,
+                                    "attempt": attempt_number,
+                                    "issues": semantic_issues,
+                                },
+                            )
+                            semantic_issues = {}
                         if semantic_issues:
                             semantic_feedback = _semantic_retry_feedback_issues(
                                 group,
@@ -6827,7 +6880,43 @@ class OllamaBookAnalyzer:
                     f"Tổng số batch còn lại hiện là {len(groups)}."
                 )
                 continue
-            if len(validated) != len(group) and required:
+            if (
+                len(validated) != len(group)
+                and required
+                and split_result is None
+                and not AFFECT_CUE_DISAGREEMENT_BLOCKS
+                and _feedback_is_inaudible_only(validation_feedback)
+            ):
+                # A batch of one that cannot be split again used to end the book here. It
+                # ended a real 95-batch run at batch 30, because the host and the model
+                # could not agree on the `intensity` of a single line - a field that
+                # selects nothing in the audio. Losing 915 chapters to that is not a
+                # trade any invariant is worth. The segment goes through on the model's
+                # own schema-valid answer, loudly recorded, and the heuristic fallback
+                # below fills anything still missing.
+                self.db.event(
+                    "warning",
+                    "ANALYSIS_INAUDIBLE_DISAGREEMENT_ACCEPTED",
+                    f"batch {group_index} kept its unresolved delivery disagreement: "
+                    f"{last_error}",
+                    {
+                        "batch_index": group_index,
+                        "expected_segments": len(group),
+                        "validated_segments": len(validated),
+                        "fields": sorted(
+                            {
+                                str(field)
+                                for issue in validation_feedback
+                                for field in getattr(issue, "fields", ())
+                            }
+                        ),
+                    },
+                )
+                self.log(
+                    f"Batch {group_index} không chốt được delivery sau {retry_count} lần; "
+                    "bất đồng chỉ ở trường không ảnh hưởng âm thanh nên vẫn đi tiếp."
+                )
+            elif len(validated) != len(group) and required:
                 message = (
                     f"Phân tích bắt buộc thất bại ở batch {group_index}: "
                     f"nhận {len(validated)}/{len(group)} segment; lỗi cuối: {last_error}"

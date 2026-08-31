@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import requests
 
+from ebook_reader import analysis as analysis_module
 from ebook_reader.analysis import (
     ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_LEDGER_POLICY_VERSION,
@@ -2338,6 +2339,11 @@ def test_v37_adjudicator_rejects_unchanged_rejected_emotion() -> None:
 def test_v37_same_projection_is_recriticized_after_semantic_rejection(
     monkeypatch,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_text = (
         "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
         "kinh ngạc và mừng rỡ:"
@@ -2421,6 +2427,11 @@ def test_v37_same_projection_is_recriticized_after_semantic_rejection(
 def test_v38_nonledger_clearance_keeps_projection_hash_after_semantic_retry(
     monkeypatch,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_text = (
         "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
         "kinh ngạc và mừng rỡ:"
@@ -8091,6 +8102,11 @@ def test_host_affect_adjacent_rule_does_not_cross_source_boundaries(
 def test_repeated_host_candidate_splits_before_third_generator_or_critic(
     monkeypatch,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -8279,6 +8295,11 @@ def test_v20_host_rules_split_then_reject_wrong_nonneutral_before_critic(
 
 
 def test_repeated_host_candidate_fails_singleton_without_critic(monkeypatch) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows[0].update(
         {
@@ -8948,6 +8969,11 @@ def test_semantic_delivery_rejects_happy_crowd_condemnation_individually() -> No
 
 
 def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9029,6 +9055,11 @@ def test_v25_seq9_advisory_retry_reaches_critic_without_exact_membership_gate(
     monkeypatch,
     repaired_emotion: str,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9106,6 +9137,16 @@ def test_v25_seq9_advisory_retry_reaches_critic_without_exact_membership_gate(
 
 
 def test_v25_seq9_repeated_neutral_still_fails_before_critic(monkeypatch) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9464,6 +9505,11 @@ def test_retry_merges_source_kind_and_host_affect_failures_in_one_attempt(
 def test_retry_retains_host_pass_constraint_while_fixing_other_semantic_issue(
     monkeypatch,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9624,6 +9670,11 @@ def test_desperate_exertion_retry_receives_typed_allowed_emotions(
 def test_critic_exhaustion_does_not_clear_prior_deterministic_feedback(
     monkeypatch,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows[0].update(
         {
@@ -10629,6 +10680,11 @@ def test_durable_director_digest_preflight_does_not_consume_attempt(
 
 
 def test_persistent_semantic_delivery_failure_splits_until_singletons(monkeypatch) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -10729,6 +10785,11 @@ def test_persistent_neutral_zero_template_never_checkpoints_after_split(monkeypa
 def test_five_row_neutral_one_template_cannot_reach_blanket_accepting_critic(
     monkeypatch,
 ) -> None:
+    # Exercises the retry mechanism with an affect disagreement as its trigger.
+    # Production no longer lets affect pull that trigger, because the field does not
+    # reach the audio, but the mechanism stays live for confidence and source-kind
+    # issues - so the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     texts = [
         "Cậu sợ hãi trước bóng tối.",
@@ -11669,3 +11730,68 @@ def test_no_affect_pattern_contains_a_control_character() -> None:
         pattern = getattr(module, name)
         assert chr(8) not in getattr(pattern, "pattern", ""), name
 
+
+
+def test_affect_disagreement_is_recorded_but_does_not_retry(monkeypatch) -> None:
+    """Production default: one segment's affect never costs a second model call.
+
+    Affect does not reach the audio - VieNeu has no emotion input and generation runs at
+    one fixed temperature - so a disagreement about it cannot change what a listener
+    hears. It used to send the batch back anyway, and that was the single largest source
+    of wasted analysis work in a measured run. The disagreement is still recorded,
+    because it is real data and an engine that could act on affect would want it.
+    """
+    db = FakeDB()
+    db.rows = [
+        {
+            "id": index,
+            "stable_id": f"affect{index}",
+            "chapter_id": 1,
+            "text": text,
+            "kind_hint": "narration",
+            "status": "pending",
+            "speaker": None,
+        }
+        for index, text in enumerate(
+            (
+                "Sắc mặt cậu trắng bệch vì kinh hãi.",
+                "Cảm giác lo sợ cực độ dâng lên.",
+                "Trời hôm nay quang đãng, gió nhẹ thổi qua sân.",
+                "Cậu bước chậm rãi dọc theo hành lang dài.",
+            ),
+            1,
+        )
+    ]
+    settings = build_settings(
+        overrides={"analysis": {"batch_segments": 4, "batch_chars": 10000, "max_retries": 2}}
+    )
+    analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
+    monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
+    monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
+    assert analysis_module.AFFECT_CUE_DISAGREEMENT_BLOCKS is False
+    requests_made: list[object] = []
+
+    def request(group, **kwargs):
+        requests_made.append(kwargs.get("validation_feedback"))
+        # Neutral everywhere, contradicting the fear cues in the first two rows.
+        return {
+            "segments": [
+                {
+                    **analysis_item(str(row["stable_id"])),
+                    "emotion": "neutral",
+                    "intensity": 0,
+                }
+                for row in group
+            ]
+        }
+
+    monkeypatch.setattr(analyzer, "_request", request)
+    analyzer.analyze_all(lambda: False)
+
+    # One call, not two: the batch was accepted as analysed.
+    assert len(requests_made) == 1
+    assert requests_made[0] is None
+    # And the disagreement is on the record rather than thrown away.
+    assert any(
+        event[1] == "ANALYSIS_AFFECT_DISAGREEMENT_NOT_ENFORCED" for event in db.events
+    )
