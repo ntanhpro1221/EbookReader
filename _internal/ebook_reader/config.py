@@ -68,10 +68,21 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "max_seconds_per_100_chars": 13.0,
         "min_rms": 0.002,
         "max_clipping_fraction": 0.003,
+        # Bounds on speech rate with the pauses subtracted (see PAUSE_GROUP_SECONDS), so
+        # they had to move with the metric. Compensation shifts the corpus median from 14.50
+        # to 16.90 chars/s and the 99th percentile from 17.50 to 22.43 - keeping the old
+        # numbers would have swapped a false positive at the bottom for a fresh one at the
+        # top, where 22.0 previously never fired at all.
+        #
+        # These are no more permissive than before, only better aimed: 10.5 sat at the 2nd
+        # percentile of the uncompensated distribution and 12.5 sits at the 2nd percentile
+        # of the compensated one. Slow and fast are scaled by the same ratios, having too
+        # few samples of their own to fit. Like the old numbers these are outlier bounds
+        # drawn from what the system produces, not perceptual limits a listener set.
         "pace_chars_per_second": {
-            "slow": [6.0, 17.0],
-            "normal": [10.5, 22.0],
-            "fast": [12.0, 27.0],
+            "slow": [7.0, 19.0],
+            "normal": [12.5, 24.5],
+            "fast": [14.0, 30.0],
         },
         "rate_check_min_chars": 24,
         "failure_policy": "retry_split_fail",

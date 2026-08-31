@@ -139,6 +139,36 @@ SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
 SHORT_UTTERANCE_MAX_GENERATION_FRAMES = 24
 SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 
+# What one pause costs, fitted on 3781 committed segments rather than chosen. Regressing
+# duration on (speakable characters, pause groups) gives 0.060 s per character - a pure
+# speech rate of 16.7 chars/s - and 0.281 s per pause.
+#
+# Groups, not marks. Three models were fitted and the flat per-mark one left the corrected
+# rate still correlated with punctuation density at +0.32, over-crediting dense text; a
+# three-class model weighting sentence ends above clause breaks fitted marginally better by
+# R-squared and was worse still at +0.38. Counting a run of adjacent punctuation as one
+# pause left +0.12, because ") :" or " - " is one silence however many characters spell it.
+# R-squared was not the objective: removing the confound was, and the best-fitting model was
+# the second worst at it.
+PAUSE_GROUP_SECONDS = 0.281
+PAUSE_GROUP_PATTERN = re.compile(r"[.!?…,;:()\[\]{}\-–—/\"'“”‘’]+")
+MIN_SPEECH_SECONDS = 0.05
+
+# The pause budget may never claim more of a segment than this. Across the 3803 committed
+# segments long enough for the rate check, the budget reached 52% of duration at the 99.9th
+# percentile and 58.5% at most, so this cap is above anything real speech produced.
+#
+# It exists for the audio that is not real speech. Without it a segment that is mostly
+# silence gets almost its whole duration subtracted, and the tiny remainder turns a slow
+# reading into an enormous rate - the check would then report "far too fast" for a segment
+# whose actual fault is that it is barely speaking at all.
+MAX_PAUSE_FRACTION = 0.60
+
+
+def pause_group_count(text: str) -> int:
+    """How many separate silences the punctuation in this text asks for."""
+    return len(PAUSE_GROUP_PATTERN.findall(str(text)))
+
 # An isolated click at the start of an utterance - a listener described it as "a drop of
 # water hitting a steel bowl" - loud enough that the first syllable is lost behind it. It is
 # a generation lottery, not a property of the voice: the same preset reading the same
@@ -442,7 +472,18 @@ def validate_audio_array(
             pace,
             settings["tts"]["pace_chars_per_second"]["normal"],
         )
-        rate = speakable_chars / metrics["duration"]
+        # Charge the pauses punctuation forces to the pauses, not to the speaker. Dividing
+        # characters by wall-clock time measures punctuation density as much as speed: over
+        # 3781 real segments the two correlate at -0.62, and a segment in the densest tenth
+        # was 260 times likelier to be called too slow than one in the lightest - 26.1%
+        # against 0.1% - for reading its punctuation properly.
+        pause_seconds = min(
+            PAUSE_GROUP_SECONDS * pause_group_count(text),
+            metrics["duration"] * MAX_PAUSE_FRACTION,
+        )
+        speech_seconds = max(metrics["duration"] - pause_seconds, MIN_SPEECH_SECONDS)
+        rate = speakable_chars / speech_seconds
+        metrics["pause_group_count"] = float(pause_group_count(text))
         lower_bound = float(bounds[0])
         upper_bound = float(bounds[1])
         hard_lower = lower_bound * RATE_HARD_MIN_FACTOR

@@ -402,7 +402,10 @@ class ScriptedShortTTS:
             raise outcome
         if self.settings is None or self.db is None:
             return "a" * 64, dict(outcome), seed
-        duration = float(outcome.get("duration", 1.0))
+        # Default to a duration this text could actually take to say. A flat 1.0 s stood in
+        # for every length, so a 191-character sentence came out six times faster than human
+        # speech; tests that care about duration still pass their own.
+        duration = float(outcome.get("duration", _plausible_duration(str(row["text"]))))
         sample_rate = int(self.settings["tts"]["sample_rate"])
         sample_count = max(1, round(duration * sample_rate))
         audio = np.sin(np.linspace(0, 50, sample_count, dtype=np.float32)) * 0.12
@@ -537,13 +540,30 @@ def _short_tts_pipeline(
     return pipeline, chapter, row
 
 
+def _plausible_duration(text: str) -> float:
+    """How long this text would actually take to read.
+
+    A fixed 1.92 s used to stand in for any length of text, which made a 191-character
+    sentence 5.9 times faster than human speech. Nothing checked, so nothing complained -
+    until the rate check started subtracting pauses and the fake audio finally crossed the
+    "impossibly fast" line it had always been on the wrong side of. Deriving the duration
+    keeps the stand-in inside physics.
+    """
+    from ebook_reader.audio_io import PAUSE_GROUP_SECONDS, pause_group_count
+
+    speakable = sum(char.isalnum() for char in str(text))
+    return speakable / 16.9 + PAUSE_GROUP_SECONDS * pause_group_count(str(text))
+
+
 def _checkpoint_short_ceiling_incumbent(
     pipeline: BookPipeline,
     row,
     *,
-    duration: float = 1.92,
+    duration: float | None = None,
 ) -> None:
     output = pipeline._chunk_path(row)
+    if duration is None:
+        duration = _plausible_duration(str(row["text"]))
     sample_rate = int(pipeline.settings["tts"]["sample_rate"])
     audio = np.sin(
         np.linspace(0, 50, round(duration * sample_rate), dtype=np.float32)
@@ -1927,7 +1947,9 @@ def _locked_name_variant_pipeline(
     row = dict(db.list_segments(chapter_id=int(chapter["id"]))[0])
     canonical_text, canonical_anchors = pipeline.tts.spoken_text_with_anchors(row)
     incumbent_path = pipeline._chunk_path(row)
-    audio = np.sin(np.linspace(0, 50, 96_000, dtype=np.float32)) * 0.12
+    audio = np.sin(
+        np.linspace(0, 50, round(_plausible_duration(canonical_text) * 48_000), dtype=np.float32)
+    ) * 0.12
     incumbent_sha256, incumbent_metrics = atomic_write_wav(
         incumbent_path,
         audio,
