@@ -135,6 +135,138 @@ cuối cùng, ghi file rồi thôi. Cao độ không thể làm sai chữ, nên 
 chính là thứ đang làm segment bị dịch fail gấp 3,4 lần một cách vô cớ. Phần giữ lại duy nhất là ghi file an
 toàn (`.part` + checksum + atomic replace) — đó là I/O đúng cách, không phải chấm điểm.
 
+## v0.2.0-alpha.13 — cảm xúc chưa bao giờ tới được audio
+
+### Phát hiện gốc: `emotion` chỉ là một phép tra bảng ra nhiệt độ
+
+`VieNeu.infer()` nhận `text`, `voice`, `style` và tham số lấy mẫu. **Không có tham số cảm xúc
+nào.** Trước đây `emotion` được tra vào `EMOTION_TEMPERATURE` để ra một con số `temperature`,
+`intensity` cộng thêm `0.015` mỗi bậc vào cả `temperature` lẫn `top_p`, `pace` cộng một offset nữa.
+
+Bằng chứng quyết định — cùng câu, cùng giọng, cùng seed, chỉ đổi nhãn cảm xúc:
+
+| emotion | temperature | sha256 audio |
+|---|---|---|
+| `sad` | 0.700 | `12365d2da85b4cc2` |
+| `tender` | 0.700 | `12365d2da85b4cc2` |
+| `happy` | 0.840 | `5628ca7e863cb50c` |
+| `afraid` | 0.840 | `5628ca7e863cb50c` |
+| `angry` | 0.860 | `ca8824b37b634ebf` |
+| `surprised` | 0.860 | `ca8824b37b634ebf` |
+
+Câu đánh dấu `angry` và câu đánh dấu `surprised` là **cùng một file, giống hệt từng bit**.
+Nhãn cảm xúc chọn một trong 8 mức ngẫu nhiên, không chọn một cách diễn đạt.
+
+### Nó không chỉ vô dụng mà còn có hại
+
+Người nghe tiếng Việt chấm mù 4 cặp `neutral` vs cảm xúc-đã-phân-tích: **2 cặp neutral tốt hơn**,
+1 cặp như nhau, 1 cặp thua. Khi tách riêng `intensity`, nhận xét là *"C nghe như lỗi"* — và đúng
+file đó dài 1.60s trong khi cùng câu ở các mức khác chỉ 1.12s. Đó là sinh hỏng do nhiệt độ cao,
+không phải nhấn mạnh.
+
+Vì thế mọi segment giờ sinh ở **một nhiệt độ cố định 0.74** — đúng giá trị `neutral` vốn dùng cho
+phần lớn sách. Các trần hạ nhiệt có chủ đích vẫn giữ: clarity repair, câu ngắn, vocalization.
+
+**`pace` giữ ảnh hưởng lên `silence_p`** và **`volume` giữ mức LUFS** — hai thứ đó là hiệu ứng thật,
+không phải ngẫu nhiên đội lốt.
+
+### Lỗi ngủ đông lộ ra khi sửa: clarity repair chưa từng chạy
+
+`CLARITY_MAX_TEMPERATURE = 0.78`, cao hơn nhiệt độ `neutral` là `0.74`. Mà `neutral` chiếm 71% số
+đoạn. Nghĩa là chế độ giảm nhiễu khi ASR không xác nhận được **chưa bao giờ có tác dụng** với phần
+lớn sách, và sau khi cố định nhiệt độ thì sẽ vô tác dụng hoàn toàn. Đã hạ xuống `0.66`.
+
+Test giờ khoá **quan hệ** (`clarity < generation`) chứ không khoá con số, để không tái diễn.
+
+### Lỗi chí mạng: một dòng thoại giết cả cuốn sách
+
+Run thật 95 batch chết ở batch 30:
+
+    Phân tích bắt buộc thất bại ở batch 30: nhận 0/1 segment
+    lỗi cuối: DIRECTOR_FIELD_MISMATCH fields=intensity
+
+Batch còn **1 segment**, cạn 3 lượt vì host và model không thống nhất `intensity` của một dòng —
+trường không hề tới audio. Batch một segment không chia nhỏ được nữa → **sập cả run**.
+
+Với 915 chương ≈ 18.000 batch, bất kỳ dòng nào cũng có thể giết nhiều ngày chạy.
+
+Đã sửa: batch không chia nhỏ được nữa **và** mọi bất đồng còn lại chỉ nằm trong
+`INAUDIBLE_DELIVERY_FIELDS = {emotion, intensity}` thì đi tiếp kèm cảnh báo. Đường dự phòng
+`_heuristic(row)` vốn đã nằm ngay dưới nhánh raise — máy móc có sẵn, chỉ là `required` từ chối dùng.
+
+### Chi phí thật của việc kiểm duyệt cảm xúc
+
+Đo trên run thật: **~2,3 lượt gọi LLM mỗi batch**, tức hơn nửa công việc của Ollama là làm lại.
+Lý do áp đảo là `emotion=neutral mâu thuẫn với cue trực tiếp`.
+
+Host quét regex ra cue **trước khi gửi batch** nhưng giữ im tới lượt retry. Đưa tập cảm xúc cho
+phép vào **request đầu tiên** (cùng hàm mà bộ adjudicate dùng):
+
+| | trước | sau |
+|---|---|---|
+| lượt gọi LLM / batch | 2,31 | **1,71** |
+| batch phải làm lại | 15/16 (94%) | **8/17 (47%)** |
+| trượt `semantic delivery` | 21 | **7** |
+
+**Giảm 26% số lượt gọi LLM.**
+
+### Host từng áp cảm xúc ngược với văn bản
+
+Bộ triệt tiêu cue phủ phủ định, cấm đoán, quá khứ, siêu ngôn ngữ — nhưng **thiếu nhóm chấm dứt**.
+Nên *"Thu lại vẻ kinh ngạc"* (thôi kinh ngạc) bị đọc thành **đang** kinh ngạc, và model trả lời
+đúng thì bị bắt làm lại.
+
+Cố ý **không** gộp `nén`/`giấu`/`kìm`: cảm xúc bị nén thì vẫn còn đó, chỉ bị ghìm lại.
+
+Mọi động từ chấm dứt đều phải được thêm vào **bộ chặn phủ định kép**, nếu không *"không thôi kinh
+ngạc"* sẽ bị hiểu ngược. Có test cho từng động từ theo cả hai chiều.
+
+### Bẫy escape đã mất hai vòng debug
+
+Viết `\b` qua thiếu một tầng escape thì nó thành **ký tự backspace `\x08`**. Pattern trông đúng
+trong source nhưng đòi khớp một ký tự điều khiển không văn bản nào có → **luật chết âm thầm**.
+Đã thêm test quét mọi `SCOPED_AFFECT_*` để không tái diễn.
+
+### Perceptual QA song song: 3,08x, giống hệt từng bit
+
+Chấm WAV là **hàm thuần đọc file**. Chỉ `_score` ra process con; mọi ngưỡng, baseline và phán
+quyết ở lại process cha, đúng thứ tự cũ.
+
+Nhưng phát hiện kèm theo quan trọng hơn: **số luồng torch làm đổi điểm UTMOSv2** (~5e-07), vì torch
+cộng các mảnh matmul theo thứ tự luồng nào xong trước. Điều này **đã đúng từ trước khi có pool** —
+điểm UTMOSv2 vốn phụ thuộc số core của máy.
+
+Nó thành lỗi khi take được chấm ở con còn baseline chấm ở cha: phán quyết là **hiệu** của hai số
+đến từ hai chế độ số học khác nhau. Lần chạy đầu lệch 11/16 file. Sửa bằng cách ghim luồng **bên
+trong verifier** (`_pin_threads`), để cha và con giống nhau **theo thiết kế**.
+
+**Bài học về công cụ đo:** benchmark khi đó so kết quả đã `round(..., 4)` nên báo "identical" ở mọi
+cỡ pool — và tôi đã tin. Một phép so không nhìn thấy được sai khác thì tệ hơn không so. Unit test
+cũng không bắt được vì chúng dùng model giả trả số cố định. **Việc gì đụng số học dấu phẩy động thì
+phải kiểm chứng bằng dữ liệu thật.**
+
+### Chính sách vs cơ chế
+
+`AFFECT_CUE_DISAGREEMENT_BLOCKS = False` là **chính sách**. Cơ chế retry vẫn sống và vẫn dùng cho
+confidence và source-kind. 12 test hồi quy cũ bật cờ này lên để giữ nguyên giá trị, thay vì bị viết
+lại hay xoá đi.
+
+Nếu sau này có engine đọc được cảm xúc thật thì bật cờ lên, và trường `emotion` vẫn được phân tích
+và lưu sẵn — nó không tốn thêm lượt gọi LLM nào, vì cùng lượt đó còn phải gán **người nói**, thứ
+không regex nào làm được.
+
+### Hướng duy nhất để có diễn xuất cảm xúc thật
+
+Mỗi preset giọng VieNeu là một `ref_audio` đã nạp sẵn, gồm `speaker_emb` (192 chiều, **danh tính**)
+và `codes` (**token âm thanh của đoạn mẫu — cách nói**). `voice=` và `ref_audio=` đi chung một
+đường.
+
+Nên cảm xúc thật phải đi qua `ref_codes`. `infer()` nhận `voice` dạng dict, nên về lý thuyết ghép
+được `speaker_emb` của giọng này với `codes` của mẫu khác. Chưa thử, và khó ở chỗ **không có sẵn
+bản thu cảm xúc** của các preset này.
+
+**Output:** `D:\Novels\Audiobooks\_versions\v0.2.0-alpha.13b\alpha13b_59fc17e60a` (chương 000–003).
+
 ## v0.2.0-alpha.12 — dải formant tính theo register, đặt tên ranh giới nguồn
 
 ### Dải formant phải tính lại sau khi đã chỉnh F0
