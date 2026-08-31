@@ -323,12 +323,18 @@ AGE_PITCH_RANK_BUCKET = 4
 # voices, which is exactly backwards.
 #
 # Only what was actually judged goes in. A preset absent from a list is unheard rather
-# than rejected, and sorts after every ranked one but ahead of nothing else, so the
-# theory still decides among the unheard. There is no male list: the same listener asked
-# for boys to be cast from the whole catalogue by theory alone, and the female presets
-# reach a boy's tract exactly while the male ones fall 0.8 cm short.
+# than rejected, and sorts after every ranked one, so the theory still decides among the
+# unheard.
+#
+# The boy list is the sharper example of why the verdict has to come first. By theory
+# Phạm Tuyên is the worst boy voice available - it falls 0.8 cm short of a child's tract
+# and needs +15 semitones, against female presets that land on the target exactly and
+# need +1 - and the listener put it first anyway, with the female presets keeping their
+# girl order behind it. Casting is cross-gender either way; what changed is that being
+# closest on paper stopped deciding.
 CHILD_VOICE_PREFERENCE: dict[str, tuple[str, ...]] = {
     "female": ("Ngọc Linh", "Đoan Trang", "Trúc Ly"),
+    "male": ("Phạm Tuyên", "Ngọc Linh", "Đoan Trang", "Trúc Ly"),
 }
 
 

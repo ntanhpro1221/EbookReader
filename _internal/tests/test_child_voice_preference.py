@@ -12,8 +12,10 @@ import inspect
 from ebook_reader import character_registry
 from ebook_reader.voice_catalog import (
     CHILD_VOICE_PREFERENCE,
+    age_pitch_semitones,
     LAST_RESORT_PRESETS,
     child_voice_preference,
+    preset_age_reach,
 )
 
 
@@ -32,11 +34,34 @@ def test_an_unheard_preset_sorts_after_every_ranked_one() -> None:
     assert child_voice_preference("Thục Đoan", "child", "female") == len(ranked)
 
 
-def test_boys_are_ranked_by_theory_alone() -> None:
-    """No male list: the listener asked for boys to be cast from the whole catalogue."""
-    assert "male" not in CHILD_VOICE_PREFERENCE
-    for name in ("Phạm Tuyên", "Ngọc Linh", "Trúc Ly"):
-        assert child_voice_preference(name, "child", "male") == 0
+def test_the_boy_ranking_is_the_one_that_was_given() -> None:
+    assert CHILD_VOICE_PREFERENCE["male"] == (
+        "Phạm Tuyên",
+        "Ngọc Linh",
+        "Đoan Trang",
+        "Trúc Ly",
+    )
+
+
+def test_the_boy_ranking_overrides_the_theory_not_merely_agrees_with_it() -> None:
+    """Phạm Tuyên is the worst boy voice on paper and the listener's first choice."""
+    best = CHILD_VOICE_PREFERENCE["male"][0]
+    rivals = CHILD_VOICE_PREFERENCE["male"][1:]
+    assert all(
+        preset_age_reach(best, "child", "male") > preset_age_reach(name, "child", "male")
+        for name in rivals
+    )
+    assert all(
+        abs(age_pitch_semitones("child", "male", best))
+        > abs(age_pitch_semitones("child", "male", name))
+        for name in rivals
+    )
+
+
+def test_the_female_presets_keep_their_girl_order_as_boys() -> None:
+    girls = CHILD_VOICE_PREFERENCE["female"]
+    boys = [name for name in CHILD_VOICE_PREFERENCE["male"] if name in girls]
+    assert boys == list(girls)
 
 
 def test_adults_are_untouched_by_it() -> None:
