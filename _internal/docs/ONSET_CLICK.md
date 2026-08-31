@@ -64,18 +64,27 @@ trên nửa đỉnh **9–14 ms**; tiếng tóp xong trong **5 ms**.
 Ngưỡng hiện tại: `ratio > 4.0` **và** `width < 6.0 ms`, chỉ xét trong 450 ms đầu (vì chính
 người nghe xác nhận cùng chữ đó ở giữa câu thì tốt).
 
-## Trạng thái: NGƯỠNG CÒN TẠM
+## Trạng thái: ĐÃ BỊ BÁC BỎ — chỉ ghi số, KHÔNG chặn
 
-Ngưỡng 4,0×/6 ms bắt đúng cả hai seed lỗi và tha cả ba seed sạch, **nhưng** nó cũng đánh
-dấu **8,2%** số đoạn trong một run cũ đã được chấp nhận. Chưa xác định được 8,2% đó là:
+Nghe A/B đã bác bỏ bộ dò này. 12 đoạn nó chấm nặng nhất (9,8–11,7×) được người nghe trả
+lời: **"a, b có tiếng gì đâu?"** — không phân biệt được với nhóm đối chứng sạch. Trên giọng
+kể người lớn nó chỉ đang bắt phụ âm bật bình thường.
 
-- bắt nhầm audio tốt → phải nâng ngưỡng, hoặc
-- bắt đúng chỗ người nghe từng mô tả là *"vài câu nghe hơi sai sai, như sóng nhiễu đi một
-  tý"* → giữ nguyên ngưỡng
+`onset_click_metrics()` vẫn còn và vẫn ghi số vào metrics, nhưng **không được phép làm hỏng
+một đoạn nào**. Có test `test_the_measurement_never_fails_a_segment` khoá điều đó lại.
 
-Đang chờ kết quả nghe A/B (`_versions/v0.2.0-alpha.15/kiem-chung-bo-do-tieng-top/`) để chốt.
-**Chưa merge vào main cho tới khi có kết quả** — không đưa một cổng chất lượng chưa kiểm
-chứng vào đường chạy thật.
+## UTMOSv2 cũng không bắt được lỗi này
+
+Đã thử dùng UTMOSv2 làm trọng tài thay cho phép đo tự chế. Nó **xếp hạng ngược với tai
+người nghe**:
+
+| seed | UTMOS (sau biến đổi) | tai người nghe |
+|---|---|---|
+| 424242 | 1,942 (hạng 2) | **có tiếng tóp** |
+| 333333 | 1,549 (hạng cuối) | **sạch tóp** |
+
+Kết luận: với lớp khuyết tật này, **chưa có phép đo tự động nào đáng tin**. Mọi thay đổi
+nhắm vào nó phải được tai người xác nhận trước khi vào đường chạy thật.
 
 ## Bài học phương pháp
 

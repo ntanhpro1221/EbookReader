@@ -158,6 +158,11 @@ SEGMENT_ONSET_CLICK_SHORT_SECONDS = 0.005
 SEGMENT_ONSET_CLICK_LONG_SECONDS = 0.060
 SEGMENT_ONSET_CLICK_ACTIVE_FRACTION = 0.02
 SEGMENT_ONSET_CLICK_MIN_SECONDS = 0.120
+# NOT a gate. An A/B listening test rejected it: the twelve segments this scored worst
+# (9.8-11.7x) were judged to have no audible defect at all. The numbers are still
+# recorded because they cost real measurement to obtain and may yet correlate with
+# something, but nothing may fail a segment on them until a listener confirms they hear
+# what it marks. See docs/ONSET_CLICK.md.
 SEGMENT_ONSET_CLICK_RATIO = 4.0
 SEGMENT_ONSET_CLICK_MAX_WIDTH_MS = 6.0
 
@@ -427,17 +432,6 @@ def validate_audio_array(
         raise AudioQualityError(f"audio RMS too low: {metrics['rms']:.6f}")
     if metrics["clipping_fraction"] > float(settings["tts"]["max_clipping_fraction"]):
         raise AudioQualityError(f"audio clipping: {metrics['clipping_fraction']:.4%}")
-    if (
-        metrics["onset_click_ratio"] > SEGMENT_ONSET_CLICK_RATIO
-        and 0.0 < metrics["onset_click_width_ms"] < SEGMENT_ONSET_CLICK_MAX_WIDTH_MS
-    ):
-        # Raising here rather than flagging for review is the whole point: the caller's
-        # retry draws a fresh generation seed, and a fresh seed is the one thing shown to
-        # remove this defect. Post-processing cannot - the click is in the model output.
-        raise AudioQualityError(
-            f"onset click: {metrics['onset_click_ratio']:.2f}x spike "
-            f"{metrics['onset_click_width_ms']:.1f}ms wide at the start of speech"
-        )
     speakable_chars = sum(char.isalnum() for char in text)
     if (
         segment is not None

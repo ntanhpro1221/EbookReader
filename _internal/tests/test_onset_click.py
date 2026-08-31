@@ -1,8 +1,10 @@
-"""The onset click detector: a tall narrow spike at the start of speech.
+"""The onset spike measurement - recorded, but deliberately not a gate.
 
 A listener reported that one preset made the word "Mẹ" unintelligible behind a sound like a
-water drop hitting steel, while the same word mid-sentence was fine. These pin the two
-halves of the test, because either half alone matches ordinary speech.
+water drop hitting steel. This measurement was built to find it and then failed its own A/B
+test: the twelve segments it scored worst were judged to have no audible defect. These tests
+pin what it measures so the numbers stay meaningful, and one of them pins that it does not
+fail anything.
 """
 
 from __future__ import annotations
@@ -69,3 +71,13 @@ def test_signal_metrics_always_carries_the_keys(audio: np.ndarray) -> None:
     metrics = signal_metrics(audio, RATE)
     assert "onset_click_ratio" in metrics
     assert "onset_click_width_ms" in metrics
+
+
+def test_the_measurement_never_fails_a_segment() -> None:
+    """The A/B test rejected it as a gate; nothing may fail audio on it until that changes."""
+    import inspect
+
+    from ebook_reader import audio_io
+
+    source = inspect.getsource(audio_io.validate_audio_array)
+    assert "onset_click" not in source
