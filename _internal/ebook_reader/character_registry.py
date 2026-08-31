@@ -646,6 +646,44 @@ def _merge_adjacent_local_speakers(
             )
 
 
+def assert_voice_stability(db: ProjectDB) -> None:
+    """Refuse a casting where one person would be read by two different voices."""
+    # One character, one voice - checked on the resolved character rather than on the
+    # speaker label. Checking labels was a blind spot with real consequences: a boy who
+    # appeared as a named character in one chapter and as a local NPC in another held two
+    # voices three semitones apart, and every label individually had exactly one voice, so
+    # this reported success. Local labels were skipped outright, which made the gap worse.
+    profiles_by_character: dict[int, set[int]] = defaultdict(set)
+    profiles_by_speaker: dict[str, set[int]] = defaultdict(set)
+    for row in db.list_segments():
+        speaker = str(row["speaker"])
+        normalized = normalize_name(speaker)
+        profile_id = row["voice_profile_id"]
+        character_id = row["canonical_character_id"]
+        if speaker != "UNKNOWN" and not is_local_speaker(speaker) and normalized not in PRONOUNS:
+            if profile_id is None:
+                raise RuntimeError(f"Speaker {speaker!r} has no locked voice profile")
+            profiles_by_speaker[normalized].add(int(profile_id))
+        if character_id is not None and profile_id is not None:
+            profiles_by_character[int(character_id)].add(int(profile_id))
+    unstable = {
+        speaker: sorted(profile_ids)
+        for speaker, profile_ids in profiles_by_speaker.items()
+        if len(profile_ids) != 1
+    }
+    if unstable:
+        raise RuntimeError(f"A speaker name resolved to multiple voice profiles: {unstable}")
+    split_characters = {
+        character_id: sorted(profile_ids)
+        for character_id, profile_ids in profiles_by_character.items()
+        if len(profile_ids) != 1
+    }
+    if split_characters:
+        raise RuntimeError(
+            f"A character resolved to multiple voice profiles: {split_characters}"
+        )
+
+
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
@@ -793,23 +831,7 @@ def build_registry_and_cast(
 
     used_voices = len({str(profile["preset_name"]) for profile in db.list_voice_profiles()})
     voice_variants = len(profile_cache)
-    profiles_by_speaker: dict[str, set[int]] = defaultdict(set)
-    for row in db.list_segments():
-        speaker = str(row["speaker"])
-        normalized = normalize_name(speaker)
-        if speaker == "UNKNOWN" or is_local_speaker(speaker) or normalized in PRONOUNS:
-            continue
-        profile_id = row["voice_profile_id"]
-        if profile_id is None:
-            raise RuntimeError(f"Speaker {speaker!r} has no locked voice profile")
-        profiles_by_speaker[normalized].add(int(profile_id))
-    unstable = {
-        speaker: sorted(profile_ids)
-        for speaker, profile_ids in profiles_by_speaker.items()
-        if len(profile_ids) != 1
-    }
-    if unstable:
-        raise RuntimeError(f"A speaker name resolved to multiple voice profiles: {unstable}")
+    assert_voice_stability(db)
     log(
         f"Đã khóa voice casting VieNeu: dùng {used_voices}/{len(VIENEU_PRESETS)} preset; "
         f"{voice_variants} biến thể giọng; "

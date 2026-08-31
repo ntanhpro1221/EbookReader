@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from ebook_reader.character_registry import build_registry_and_cast
+from ebook_reader.character_registry import (
+    assert_voice_stability,
+    build_registry_and_cast,
+)
 from ebook_reader.analysis import local_speaker_label
 from ebook_reader.config import build_settings
 from ebook_reader.database import (
@@ -1099,3 +1102,41 @@ def test_a_lowered_register_spends_part_of_the_formant_range() -> None:
         anatomical = PRESET_VOCAL_TRACT_CM[name] / VOCAL_TRACT_MAX_CM
         algorithmic = 1.0 - voice_variant_deviation(name)[0]
         assert native_low == pytest.approx(max(anatomical, algorithmic), abs=1e-6)
+
+
+def test_one_character_cannot_hold_two_voices_through_different_labels(tmp_path: Path) -> None:
+    """The stability check must follow the character, not the label on each line.
+
+    A boy in a real run appeared as a named character in one place and as a local NPC in
+    another, and held two voices three semitones apart. Every label had exactly one voice,
+    so a per-label check reported success - and local labels were skipped outright, which
+    widened the hole rather than narrowing it. The guarantee is about people, not strings.
+    """
+
+    class _Rows:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def list_segments(self):
+            return self._rows
+
+    same_person = 7
+    rows = [
+        {
+            "speaker": "NPC_LOCAL::c00001::rabc::cậu bé",
+            "canonical_character_id": same_person,
+            "voice_profile_id": 11,
+        },
+        {
+            "speaker": "Iven",
+            "canonical_character_id": same_person,
+            "voice_profile_id": 12,
+        },
+    ]
+
+    with pytest.raises(RuntimeError, match="character resolved to multiple voice profiles"):
+        assert_voice_stability(_Rows(rows))
+
+    # The same two lines with one voice between them are accepted.
+    rows[1]["voice_profile_id"] = 11
+    assert_voice_stability(_Rows(rows)) is None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import os
@@ -4950,6 +4951,56 @@ def _analysis_output_token_limit(segment_count: int, num_ctx: int) -> int:
     return min(requested, context_limit, ANALYSIS_OUTPUT_MAX_TOKENS)
 
 
+def _speaker_question_id(speaker: str) -> str:
+    """A short stable handle for a local speaker, so the schema can pin the ids."""
+    return "L" + hashlib.sha256(speaker.encode("utf-8")).hexdigest()[:8]
+
+
+def _majority_value(rows: list[Any], field: str) -> str:
+    values = [str(row[field]) for row in rows if str(row[field]) != "unknown"]
+    return Counter(values).most_common(1)[0][0] if values else "unknown"
+
+
+def _traits_compatible(left: list[Any], right: list[Any]) -> bool:
+    """Whether two speakers could be one person as far as gender and age allow.
+
+    A merge that is wrong should at least join two people who sound alike. Contradicting
+    traits are the one thing that can be checked without reading, so they are checked
+    before the model is asked anything.
+    """
+    for field in ("gender", "age"):
+        first = _majority_value(left, field)
+        second = _majority_value(right, field)
+        if first != "unknown" and second != "unknown" and first != second:
+            return False
+    return True
+
+
+def _local_identity_schema(question_ids: list[str], names: list[str]) -> dict[str, Any]:
+    """Constrain the answer to the ids asked and the names offered, or an empty string."""
+    return {
+        "type": "object",
+        "properties": {
+            "identities": {
+                "type": "array",
+                "minItems": len(question_ids),
+                "maxItems": len(question_ids),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "enum": list(question_ids)},
+                        "name": {"type": "string", "enum": ["", *names]},
+                    },
+                    "required": ["id", "name"],
+                    "additionalProperties": False,
+                },
+            }
+        },
+        "required": ["identities"],
+        "additionalProperties": False,
+    }
+
+
 class OllamaBookAnalyzer:
     def __init__(
         self,
@@ -7048,6 +7099,174 @@ class OllamaBookAnalyzer:
                 self._checkpoint_pronunciations(group, payload)
             self.log(f"Đã checkpoint phân tích {done:,}/{total:,} segment.")
             group_offset += 1
+
+    def reconcile_local_speaker_identities(
+        self,
+        before_batch: Callable[[int], None] | None = None,
+        stop_requested: Callable[[], bool] | None = None,
+    ) -> int:
+        """Resolve a locally-labelled speaker to the character they turn out to be.
+
+        A speaker gets a local label when the batch that analysed them had not been told
+        their name yet - which is correct at the time and wrong by the end of the book. In
+        a real run a boy spoke as `NPC_LOCAL::...::cậu bé` in one place and as `Iven` in
+        another, thirty segments later where the text finally names him, and the two were
+        cast as different people with voices three semitones apart. The label-based merge
+        already here cannot close that gap: it matches a local label to a *named speaker
+        with the same name*, so "cậu bé" would only ever merge with someone called "cậu
+        bé", never with Iven.
+
+        Deciding whether a description and a name refer to one person is a reading task,
+        so it is asked of the model, once, after the whole book is analysed - which is
+        exactly when the later name is finally available. Only same-chapter candidates are
+        offered, and only when gender and age do not contradict, so a wrong answer can
+        merge two people who at least sound alike rather than two who do not.
+        """
+        if not self.settings.get("enabled", True):
+            return 0
+        rows = [row for row in self.db.list_segments() if str(row["status"]) != "pending"]
+        by_chapter: dict[int, list[Any]] = defaultdict(list)
+        for row in rows:
+            by_chapter[int(row["chapter_id"])].append(row)
+
+        merged = 0
+        for batch_index, (chapter_id, chapter_rows) in enumerate(sorted(by_chapter.items()), 1):
+            local_rows: dict[str, list[Any]] = defaultdict(list)
+            named_rows: dict[str, list[Any]] = defaultdict(list)
+            for row in chapter_rows:
+                speaker = str(row["speaker"])
+                if is_local_speaker(speaker):
+                    local_rows[speaker].append(row)
+                elif (
+                    speaker
+                    and speaker != "UNKNOWN"
+                    and speaker.casefold() not in RESERVED_SPEAKERS
+                ):
+                    named_rows[speaker].append(row)
+            if not local_rows or not named_rows:
+                continue
+
+            questions = []
+            for speaker, speaker_rows in sorted(local_rows.items(), key=lambda kv: kv[0]):
+                gender = _majority_value(speaker_rows, "gender")
+                age = _majority_value(speaker_rows, "age")
+                options = [
+                    name
+                    for name, candidate_rows in sorted(named_rows.items())
+                    if _traits_compatible(speaker_rows, candidate_rows)
+                ]
+                if not options:
+                    continue
+                questions.append(
+                    {
+                        "id": _speaker_question_id(speaker),
+                        "label": local_speaker_display(speaker),
+                        "gender": gender,
+                        "age": age,
+                        "lines": [str(row["text"])[:160] for row in speaker_rows[:4]],
+                        "candidates": [
+                            {
+                                "name": name,
+                                "lines": [
+                                    str(row["text"])[:160] for row in named_rows[name][:2]
+                                ],
+                            }
+                            for name in options
+                        ],
+                    }
+                )
+            if not questions:
+                continue
+            if before_batch is not None:
+                before_batch(batch_index)
+            if not self.ensure_available():
+                return merged
+
+            prompt = (
+                "Mỗi mục dưới đây là một nhân vật chỉ được mô tả (chưa biết tên) trong một "
+                "chương, kèm vài câu thoại của họ, và danh sách các nhân vật CÓ TÊN xuất hiện "
+                "trong cùng chương đó.\n\n"
+                "Với từng mục, quyết định nhân vật được mô tả ấy có đúng là một trong các nhân "
+                "vật có tên hay không. Chỉ trả về tên khi văn bản cho thấy rõ đó là cùng một "
+                "người - cùng quan hệ, cùng hoàn cảnh, cùng cách xưng hô. Nếu không chắc, trả "
+                "về chuỗi rỗng. Gộp nhầm hai người khác nhau tệ hơn là bỏ sót.\n\n"
+                + json.dumps(questions, ensure_ascii=False, indent=2)
+            )
+            num_ctx = int(self.settings.get("num_ctx", 16384))
+            request = {
+                "model": self.model,
+                "system": (
+                    "Bạn là biên tập viên nhận diện nhân vật cho audiobook tiếng Việt. "
+                    "Chỉ hợp nhất khi văn bản chứng minh là cùng một người. "
+                    "Trả JSON đúng schema."
+                ),
+                "prompt": prompt,
+                "format": _local_identity_schema(
+                    [str(item["id"]) for item in questions],
+                    sorted(named_rows),
+                ),
+                "keep_alive": "10m",
+                "options": {
+                    "temperature": 0.0,
+                    "num_ctx": num_ctx,
+                    "num_predict": _analysis_output_token_limit(len(questions), num_ctx),
+                },
+            }
+            self.log(
+                f"Đang phân giải danh tính nhân vật cục bộ ở chương {chapter_id}: "
+                f"{len(questions)} nhân vật."
+            )
+            if stop_requested is not None and stop_requested():
+                raise AnalysisRequestStopped("Stop requested before identity request")
+            try:
+                payload = self._stream_json_response(request, stop_requested=stop_requested)
+            except Exception as exc:  # noqa: BLE001
+                # Identity resolution is an improvement, never a gate: a book that cannot
+                # reach the model keeps the local labels it already had.
+                self.db.event(
+                    "warning",
+                    "LOCAL_IDENTITY_RECONCILE_FAILED",
+                    f"Không phân giải được danh tính cục bộ ở chương {chapter_id}: {exc!r}",
+                    {"chapter_id": chapter_id},
+                )
+                continue
+
+            by_id = {str(item["id"]): item for item in questions}
+            speaker_by_id = {
+                _speaker_question_id(speaker): speaker for speaker in local_rows
+            }
+            for item in payload.get("identities", []):
+                if not isinstance(item, dict):
+                    continue
+                question_id = str(item.get("id", ""))
+                resolved = str(item.get("name", "")).strip()
+                question = by_id.get(question_id)
+                speaker = speaker_by_id.get(question_id)
+                if question is None or speaker is None or not resolved:
+                    continue
+                if resolved not in {str(c["name"]) for c in question["candidates"]}:
+                    continue
+                rewritten = self.db.rewrite_speaker(speaker, resolved)
+                if not rewritten:
+                    continue
+                merged += rewritten
+                message = (
+                    f"Hợp nhất {local_speaker_display(speaker)} → {resolved} "
+                    f"({rewritten} segment) ở chương {chapter_id}."
+                )
+                self.log(message)
+                self.db.event(
+                    "info",
+                    "LOCAL_IDENTITY_RECONCILED",
+                    message,
+                    {
+                        "chapter_id": chapter_id,
+                        "local_speaker": speaker,
+                        "named_speaker": resolved,
+                        "segments": rewritten,
+                    },
+                )
+        return merged
 
     def reconcile_name_pronunciations(
         self,
