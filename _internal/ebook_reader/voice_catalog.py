@@ -302,6 +302,12 @@ AGE_TARGET_PITCH_HZ: dict[str, dict[str, float]] = {
 # character in a chapter, and that is not what "bottom of the list" means.
 LAST_RESORT_PRESETS = frozenset({"Thái Sơn", "Thục Đoan"})
 
+# Casting prefers the preset needing the smallest age pitch shift, bucketed this wide.
+# Four semitones is roughly 0.2 MOS by the measurements in docs/CHILD_VOICE_TRANSFORM.md -
+# wide enough that a one-semitone edge cannot outrank voice diversity or tract fit, narrow
+# enough that the gap between a +2 preset and a +11 one still decides.
+AGE_PITCH_RANK_BUCKET = 4
+
 # How far a preset's own F0 may be carried toward an age target.
 #
 # This was 6, invented rather than measured, and it was wrong: it barred all three male
