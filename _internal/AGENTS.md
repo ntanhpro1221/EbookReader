@@ -55,9 +55,22 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - MP3 phải được FFmpeg decode toàn bộ trước khi commit.
 - TTS retry theo thứ tự: seed VieNeu khác → chia nhỏ an toàn nếu câu đủ dài → `failed`; câu cảm thán
   ngắn không được split vì sẽ làm sai nội dung.
-- Biến thể pitch chỉ là lớp trang trí sau inference: dùng WORLD vocoder để chỉ scale F0, giữ nguyên
-  spectral envelope và aperiodicity; không dùng phase-vocoder hay `torchaudio.functional.pitch_shift`.
-  Lỗi pitch hoặc không đủ voiced frame phải giữ waveform gốc, ghi warning và không retry TTS.
+- **Ba tầng biến đổi giọng, đừng trộn lẫn.** Người nghe tiếng Việt so cùng một câu từ `-6` đến `+6` bán âm
+  (F0 từ 106 Hz lên 206 Hz) và nghe ra **cùng một người**, chỉ khác trạng thái — điềm tĩnh, gấp gáp. Dịch F0
+  là **cách thể hiện**, không phải danh tính. Nhận diện người nói nằm ở **formant**.
+  - *Danh tính nhân vật* ← `formant_ratio`, khoá theo nhân vật cả sách, dải `0,86`–`1,20` chốt bằng tai.
+  - *Cách thể hiện* ← F0 và sampling, theo từng câu, do đạo diễn quyết.
+  - *Chất giọng nền của preset* ← `PRESET_BASE_PITCH_SEMITONES`, hiệu chỉnh một lần bằng tai cho mỗi preset.
+    Giá trị này **không** bị chặn bởi `PRESET_MIN_PITCH_SEMITONES` — giới hạn đó suy từ baseline UTMOSv2,
+    mà UTMOSv2 đã hai lần mâu thuẫn với tai người nghe ở đúng vùng này.
+- Biến đổi giọng là lớp trang trí **sau inference và sau toàn bộ thẩm định**: áp ở bước ghép chương, không
+  áp lúc sinh audio. Segment WAV đã verify là bất biến; mọi gate chấm bản gốc. Vòng WORLD tính thuế phẳng
+  `~0,27` MOS và `~0,06` WER bất kể dịch nhiều hay ít — chấm bản đã dịch chỉ là đo chính phép biến đổi, và
+  đó là thứ từng làm segment bị dịch fail gấp 3,4 lần một cách vô cớ.
+- Dùng WORLD vocoder: scale F0 và warp spectral envelope theo trục tần số; không dùng phase-vocoder hay
+  `torchaudio.functional.pitch_shift`. Đo thực tế: rubberband (có sẵn trong FFmpeg của project, chế độ giữ
+  formant) tệ hơn WORLD `0,2`–`0,3` MOS ở cả hai chiều. Lỗi pitch hoặc không đủ voiced frame phải giữ
+  waveform gốc, ghi warning và không retry TTS.
 - Ngân sách frame VieNeu và giới hạn validation phải lấy từ cùng `segment_duration_policy`; codec VieNeu v3
   dùng 3.840 sample/frame ở 48 kHz. Mọi tổ hợp kind/pace/độ dài phải có headroom validation được test.
 - Chỉ có `narration`/`dialogue`/`thought`; từ tượng thanh và cụm cảm thán giữ nguyên trong câu đọc bình thường.

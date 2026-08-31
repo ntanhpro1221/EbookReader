@@ -13,6 +13,7 @@ from ebook_reader.database import (
     canonical_analysis_note,
 )
 from ebook_reader.voice_catalog import (
+    base_pitch_for_preset,
     GENDER_FEMALE,
     GENDER_MALE,
     PRESET_PREVIEW_MEDIAN_PITCH_HZ,
@@ -241,7 +242,7 @@ def _reconciliation_db(tmp_path: Path) -> ProjectDB:
     return db
 
 
-def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_never_casts_central(
+def test_casting_reuses_presets_with_formant_variants_and_never_casts_central(
     tmp_path: Path,
 ) -> None:
     db = _casting_db(tmp_path)
@@ -250,10 +251,14 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_never_casts_c
 
     profiles = db.list_voice_profiles()
     assert all(preset_by_name(str(profile["preset_name"]))["style"] != STYLE_NEWS for profile in profiles)
-    assert all(abs(int(profile["pitch_semitones"])) <= 2 for profile in profiles)
+    # Pitch is no longer a diversity axis - it reads as the same person in a different
+    # state, not as a different person - so every profile of a preset carries exactly that
+    # preset's calibrated reading register. That register comes from listening, and is
+    # deliberately not bounded by PRESET_MIN_PITCH_SEMITONES, which bounded the old
+    # variant ladder using a UTMOSv2 baseline that disagreed with the listener twice.
     assert all(
         int(profile["pitch_semitones"])
-        >= PRESET_MIN_PITCH_SEMITONES.get(str(profile["preset_name"]), -2)
+        == base_pitch_for_preset(str(profile["preset_name"]))
         for profile in profiles
     )
     rows = db.list_segments()
@@ -288,12 +293,19 @@ def test_casting_prioritizes_standard_voices_reuses_with_pitch_and_never_casts_c
         for row in named_rows
         if str(row["gender"]) == "male"
     ]
-    pitches_by_preset: dict[str, set[int]] = {}
+    # A reused preset must come back as a different-sounding person. Formant is the axis
+    # that achieves that; pitch alone does not, because speaker identity lives in the
+    # formants - a listener comparing -6 to +6 semitones heard the same person throughout.
+    formants_by_preset: dict[str, set[float]] = {}
     for profile in named_male_profiles:
-        pitches_by_preset.setdefault(str(profile["preset_name"]), set()).add(
-            int(profile["pitch_semitones"])
+        formants_by_preset.setdefault(str(profile["preset_name"]), set()).add(
+            round(float(profile["formant_ratio"]), 4)
         )
-    assert any(len(pitches) > 1 for pitches in pitches_by_preset.values())
+    assert any(len(formants) > 1 for formants in formants_by_preset.values())
+    # The first casting of a preset must be its untouched voice, so it pays no vocoder cost.
+    assert any(
+        1.0 in formants for formants in formants_by_preset.values()
+    )
 
     anonymous = [row for row in rows if str(row["speaker"]) == "UNKNOWN"]
     assert len({int(row["canonical_character_id"]) for row in anonymous}) == 2

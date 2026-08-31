@@ -30,6 +30,23 @@ STYLE_PRIORITY = {
 # and older books may have locked them; they are simply never cast.
 CASTING_REGIONS = frozenset({REGION_NORTH, REGION_SOUTH})
 CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
+# Formant warping is the axis that actually makes two characters sound like different
+# people. Pitch does not: a listener compared the same sentence from -6 to +6 semitones,
+# F0 from 106 Hz to 206 Hz, and heard the same person throughout. Both limits were set by
+# ear - 0.82 sounds muffled, 1.30 starts to strain - and 1.00 comes first so a preset's
+# first casting needs no transform at all, and therefore pays no vocoder cost.
+# Base register per preset, applied to every casting of that voice. This is not a
+# diversity mechanism - it is calibration. Shifting F0 reads as the same person in a
+# different state (calm, hurried), not as a different person, so it belongs here rather
+# than in the variant ladder. A Vietnamese listener went through every preset and found
+# only Thanh Bình wanted correcting: at -4 semitones it reads calmer and more suited to
+# storytelling. The other presets are already right at their natural register.
+PRESET_BASE_PITCH_SEMITONES = {
+    "Thanh Bình": -4,
+}
+FORMANT_RATIO_MIN = 0.86
+FORMANT_RATIO_MAX = 1.20
+CHARACTER_FORMANT_VARIANTS = (1.00, 0.92, 1.10, 0.86, 1.20, 0.96, 1.05)
 DEFAULT_NARRATOR_BY_GENDER = {
     GENDER_MALE: "Phạm Tuyên",
     GENDER_FEMALE: "Ngọc Linh",
@@ -157,6 +174,21 @@ def casting_preset_priority(preset: dict[str, Any]) -> tuple[int, int, int, str]
         STYLE_PRIORITY.get(style, len(STYLE_PRIORITY)),
         str(preset.get("name", "")).casefold(),
     )
+
+
+def base_pitch_for_preset(preset_name: str) -> int:
+    """The calibrated reading register for this preset, in semitones."""
+    return int(PRESET_BASE_PITCH_SEMITONES.get(preset_name, 0))
+
+
+def formant_variants_for_preset(preset_name: str) -> tuple[float, ...]:
+    """Formant ratios this preset may be cast with, natural first.
+
+    Every preset gets the same ladder: the warp acts on the envelope the preset already
+    has, so a ratio means the same relative change whatever the voice.
+    """
+    del preset_name
+    return CHARACTER_FORMANT_VARIANTS
 
 
 def pitch_variants_for_preset(preset_name: str, max_abs_semitones: int) -> tuple[int, ...]:

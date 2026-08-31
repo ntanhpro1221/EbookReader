@@ -25,7 +25,8 @@ from .voice_catalog import (
     casting_preset_priority,
     casting_presets,
     preset_by_name,
-    pitch_variants_for_preset,
+    base_pitch_for_preset,
+    formant_variants_for_preset,
 )
 
 
@@ -252,31 +253,41 @@ class PresetAllocator:
             key=lambda preset: (usage[preset["name"]], *casting_preset_priority(preset)),
         )
         usage[selected["name"]] += 1
-        variants = pitch_variants_for_preset(selected["name"], self.max_pitch_shift)
-        pitch_steps = variants[self.variant_usage[selected["name"]] % len(variants)]
+        # Formant, not pitch, is what makes a reused preset sound like a different
+        # person. The ladder starts at 1.00 so a preset's first casting is the untouched
+        # voice and pays no vocoder cost at all.
+        variants = formant_variants_for_preset(selected["name"])
+        formant_ratio = variants[self.variant_usage[selected["name"]] % len(variants)]
         self.variant_usage[selected["name"]] += 1
-        return selected, pitch_steps
+        return selected, formant_ratio
 
 
 def _profile_for_preset(
     db: ProjectDB,
     preset: dict[str, str],
-    pitch_steps: int,
+    formant_ratio: float,
     cache: dict[str, int],
 ) -> int:
     name = preset["name"]
-    pitch_key = f"m{abs(pitch_steps)}" if pitch_steps < 0 else f"p{pitch_steps}"
-    profile_key = f"{name}::{pitch_key}"
+    base_pitch = base_pitch_for_preset(name)
+    formant_key = f"f{int(round(float(formant_ratio) * 100)):03d}"
+    profile_key = f"{name}::{formant_key}"
     if profile_key not in cache:
-        pitch_description = "cao độ gốc" if pitch_steps == 0 else f"cao độ {pitch_steps:+d} bán âm"
+        if abs(float(formant_ratio) - 1.0) <= 1e-6:
+            description = "âm sắc gốc"
+        elif float(formant_ratio) < 1.0:
+            description = f"âm sắc trầm hơn ({formant_ratio:.2f})"
+        else:
+            description = f"âm sắc sáng hơn ({formant_ratio:.2f})"
         cache[profile_key] = db.upsert_voice_profile(
             {
-                "voice_key": f"preset_{slugify(name)}_{pitch_key}",
+                "voice_key": f"preset_{slugify(name)}_{formant_key}",
                 "engine": "vieneu",
                 "preset_name": name,
-                "description": f"{preset['description']} · {pitch_description}",
-                "seed": stable_int(f"voice::vieneu::{name}::{pitch_steps}"),
-                "pitch_semitones": pitch_steps,
+                "description": f"{preset['description']} · {description}",
+                "seed": stable_int(f"voice::vieneu::{name}::{formant_key}"),
+                "pitch_semitones": base_pitch,
+                "formant_ratio": float(formant_ratio),
                 "status": "ready",
             }
         )
@@ -667,8 +678,8 @@ def build_registry_and_cast(
         for alias in sorted(aliases_by_speaker.get(speaker, {speaker}), key=str.casefold):
             db.add_alias(character_id, alias, normalize_name(alias), confidence, "analysis")
         db.set_character_for_speaker(speaker, character_id)
-        preset, pitch_steps = allocator.choose(gender, npc=local)
-        profile_id = _profile_for_preset(db, preset, pitch_steps, profile_cache)
+        preset, formant_ratio = allocator.choose(gender, npc=local)
+        profile_id = _profile_for_preset(db, preset, formant_ratio, profile_cache)
         db.set_voice_for_character_segments(character_id, profile_id)
         local_count += int(local)
 
@@ -694,8 +705,8 @@ def build_registry_and_cast(
             importance="minor",
             confidence=confidence,
         )
-        preset, pitch_steps = allocator.choose(gender, npc=True)
-        profile_id = _profile_for_preset(db, preset, pitch_steps, profile_cache)
+        preset, formant_ratio = allocator.choose(gender, npc=True)
+        profile_id = _profile_for_preset(db, preset, formant_ratio, profile_cache)
         db.set_character_and_voice_for_segments(
             [int(row["id"]) for row in anonymous_rows],
             character_id,

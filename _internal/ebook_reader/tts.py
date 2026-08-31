@@ -34,6 +34,7 @@ from .models import (
 )
 from .resource_manager import trim_process_working_set
 from .text_processing import is_standalone_ha_gasp, normalize_vocalizations_for_tts
+from .voice_catalog import FORMANT_RATIO_MAX, FORMANT_RATIO_MIN
 from .tts_contract import (
     HA_VOCALIZATION_DELIVERY_PROFILE,
     HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
@@ -135,12 +136,30 @@ def apply_pitch_variant(
     sample_rate: int,
     pitch_semitones: int,
     *,
+    formant_ratio: float = 1.0,
     allow_padding: bool = True,
 ) -> np.ndarray:
+    """Scale F0 by semitones and optionally warp the spectral envelope.
+
+    Pitch alone cannot make two characters sound like different people: speaker identity
+    lives in the formants, so scaling F0 while holding the envelope fixed only ever
+    produces the same voice higher or lower. A listener comparing the same sentence from
+    -6 to +6 semitones - F0 from 106 Hz to 206 Hz - heard no change of person at all.
+
+    Warping the envelope along the frequency axis is what changes the perceived speaker:
+    below 1 the vocal tract reads larger and the voice deeper, above 1 smaller and
+    brighter. The usable range was found by ear; 0.82 already sounds muffled.
+    """
     array = np.asarray(audio, dtype=np.float32).reshape(-1)
     steps = int(pitch_semitones)
-    if steps == 0 or array.size == 0:
+    ratio = float(formant_ratio)
+    if (steps == 0 and abs(ratio - 1.0) <= 1e-6) or array.size == 0:
         return array
+    if not FORMANT_RATIO_MIN <= ratio <= FORMANT_RATIO_MAX:
+        raise ValueError(
+            f"formant ratio {ratio} is outside the audible range "
+            f"[{FORMANT_RATIO_MIN}, {FORMANT_RATIO_MAX}]"
+        )
     if sample_rate < 8_000:
         raise ValueError(f"WORLD pitch shifting requires at least 8000 Hz, got {sample_rate}")
     waveform = np.asarray(array, dtype=np.float64)
@@ -157,8 +176,25 @@ def apply_pitch_variant(
         raise ValueError("WORLD could not find enough voiced frames for formant-preserving pitch shift")
     spectral_envelope = pyworld.cheaptrick(waveform, f0, time_axis, sample_rate)
     aperiodicity = pyworld.d4c(waveform, f0, time_axis, sample_rate)
+    if abs(ratio - 1.0) > 1e-6:
+        bins = spectral_envelope.shape[1]
+        source_bins = np.arange(bins, dtype=np.float64)
+        query_bins = source_bins / ratio
+        spectral_envelope = np.stack(
+            [
+                np.interp(
+                    query_bins,
+                    source_bins,
+                    frame,
+                    left=frame[0],
+                    right=frame[-1],
+                )
+                for frame in spectral_envelope
+            ]
+        )
     shifted_f0 = f0.copy()
-    shifted_f0[voiced] *= 2.0 ** (float(steps) / 12.0)
+    if steps:
+        shifted_f0[voiced] *= 2.0 ** (float(steps) / 12.0)
     shifted = pyworld.synthesize(
         shifted_f0,
         spectral_envelope,

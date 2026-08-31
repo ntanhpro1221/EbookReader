@@ -1710,6 +1710,11 @@ CREATE TABLE IF NOT EXISTS voice_profiles (
     description TEXT NOT NULL DEFAULT '',
     seed INTEGER NOT NULL,
     pitch_semitones INTEGER NOT NULL DEFAULT 0,
+    -- Frequency-axis scale for the spectral envelope. Below 1 enlarges the apparent
+    -- vocal tract and reads deeper; above 1 shrinks it and reads brighter. This is what
+    -- makes two characters sound like different people - pitch alone does not, because
+    -- speaker identity lives in the formants.
+    formant_ratio REAL NOT NULL DEFAULT 1.0,
     status TEXT NOT NULL DEFAULT 'planned',
     locked INTEGER NOT NULL DEFAULT 1,
     created_at REAL NOT NULL,
@@ -2097,6 +2102,13 @@ class ProjectDB:
         if "generation_policy_hash" not in segment_columns:
             conn.execute("ALTER TABLE segments ADD COLUMN generation_policy_hash TEXT")
 
+        voice_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(voice_profiles)")
+        }
+        if "formant_ratio" not in voice_columns:
+            conn.execute(
+                "ALTER TABLE voice_profiles ADD COLUMN formant_ratio REAL NOT NULL DEFAULT 1.0"
+            )
         book_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
         if "casting_finalized" not in book_columns:
             conn.execute("ALTER TABLE book ADD COLUMN casting_finalized INTEGER NOT NULL DEFAULT 0")
@@ -7666,6 +7678,7 @@ class ProjectDB:
                 data.get("description", ""),
                 int(data.get("seed", 1)),
                 int(data.get("pitch_semitones", 0)),
+                float(data.get("formant_ratio", 1.0)),
                 data.get("status", "planned"),
             )
             if row:
@@ -7679,6 +7692,11 @@ class ProjectDB:
                     or existing["description"] != data.get("description", "")
                     or int(existing["seed"]) != int(data.get("seed", 1))
                     or int(existing["pitch_semitones"]) != int(data.get("pitch_semitones", 0))
+                    or abs(
+                        float(existing["formant_ratio"])
+                        - float(data.get("formant_ratio", 1.0))
+                    )
+                    > 1e-6
                 )
                 requested_preset = data.get("preset_name")
                 preset_changed = bool(
@@ -7693,8 +7711,9 @@ class ProjectDB:
             cursor = conn.execute(
                 """
                 INSERT INTO voice_profiles(
-                    voice_key,engine,preset_name,description,seed,pitch_semitones,status,created_at,updated_at
-                ) VALUES(?,?,?,?,?,?,?,?,?)
+                    voice_key,engine,preset_name,description,seed,pitch_semitones,formant_ratio,
+                    status,created_at,updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,?)
                 """,
                 (data["voice_key"], *values, now, now),
             )
