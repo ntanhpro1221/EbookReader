@@ -13,6 +13,7 @@ from ebook_reader.database import (
     canonical_analysis_note,
 )
 from ebook_reader.voice_catalog import (
+    EXCLUDED_CASTING_PRESETS,
     GENDER_FEMALE,
     GENDER_MALE,
     PRESET_PREVIEW_MEDIAN_PITCH_HZ,
@@ -318,9 +319,10 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
         for preset in casting_presets(GENDER_FEMALE)
     ]
 
+    # Xuân Vĩnh was the natural-south male voice; it is excluded by name, so the male
+    # order now runs natural-north then the two story voices.
     assert male_order == [
         (REGION_NORTH, STYLE_NATURAL),
-        (REGION_SOUTH, STYLE_NATURAL),
         (REGION_NORTH, STYLE_STORY),
         (REGION_SOUTH, STYLE_STORY),
     ]
@@ -966,6 +968,24 @@ def test_pitch_ranges_follow_measured_preset_depth() -> None:
     assert pitch_variants_for_preset("Thái Sơn", 2) == (0, -1, 1, 2)
     assert pitch_variants_for_preset("Thanh Bình", 2) == (0, -1, 1, -2, 2)
     assert pitch_variants_for_preset("Ngọc Trân", 2) == (0, -1, 1, 2)
+
+
+def test_excluded_presets_are_never_cast_through_any_path() -> None:
+    """A preset excluded by name must be unreachable everywhere, like an excluded region.
+
+    Xuân Vĩnh is labelled Nam but does not behave like its label: across two full runs it
+    produced 4 of the 6 failed segments from 22 attempts, while the other two Nam presets
+    failed nothing. Excluding it by name rather than by region is what the evidence
+    supports.
+    """
+    for gender in (GENDER_MALE, GENDER_FEMALE):
+        assert all(
+            preset["name"] not in EXCLUDED_CASTING_PRESETS
+            for preset in casting_presets(gender)
+        )
+    for name in EXCLUDED_CASTING_PRESETS:
+        # Still resolvable, so a book that locked it before the change keeps working.
+        assert preset_by_name(name)["name"] == name
 
 
 def test_central_presets_are_never_cast_through_any_path() -> None:

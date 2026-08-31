@@ -7,6 +7,7 @@ import pytest
 
 from ebook_reader.asr_contract import ASR_LOCKED_NAME_ANCHOR_REVIEW
 from ebook_reader.asr import (
+    tone_folded_transcript_metrics,
     ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT,
     ANCHOR_COMPARISON_NORMALIZED_EXACT,
     ASR_INCONCLUSIVE,
@@ -921,3 +922,72 @@ def test_review_eligibility_still_requires_clean_ordinary_content() -> None:
     assert result["locked_name_review_eligible"] is False
     assert result["passed"] is False
     assert result["verdict"] == ASR_MISMATCH
+
+
+def test_tone_differences_are_folded_out_of_content_metrics() -> None:
+    """Whisper's Vietnamese tone output is noise, so it must not decide the verdict.
+
+    Measured over a whole book, tone-only differences appear across passing and failing
+    segments alike - median 0.000 but p99 0.362 among verified segments against a median
+    of 0.296 among failed ones - so they carry no signal about the take.
+    """
+    similarity, wer, evidence = tone_folded_transcript_metrics(
+        "cha bị tiếng nheo nhéo của mẹ",
+        "cha bị tiếng nhéo nhéo của mè",
+    )
+
+    assert evidence["raw_wer"] > 0.2
+    assert wer == pytest.approx(0.0)
+    assert similarity == pytest.approx(1.0)
+    assert evidence["tone_only_difference_rate"] > 0.0
+
+
+def test_tone_folding_never_scores_worse_than_plain_comparison() -> None:
+    """A token sea-g2p misreads must not make the comparison worse than the letters did.
+
+    It reads anything it does not recognise as Vietnamese - "thuan", "khiet" - as English
+    or spells it out, so folding is only ever allowed to help.
+    """
+    for expected, actual in (
+        ("xin chào bạn hiền", "xin chào bạn hiền"),
+        ("Joel cười trừ", "Joanne cười chữ"),
+        ("thuan khiet hoan toan", "Simon Wayne Aalto"),
+        ("một hai ba bốn năm", "mốt hài bà bổn nắm"),
+    ):
+        similarity, wer, evidence = tone_folded_transcript_metrics(expected, actual)
+        assert wer <= evidence["raw_wer"] + 1e-9
+        assert similarity >= evidence["raw_similarity"] - 1e-9
+
+
+def test_anchor_waiver_needs_the_name_to_be_a_minority_of_the_utterance() -> None:
+    """The waiver may not make the sentence check vacuous.
+
+    An absolute token count got this wrong both ways, so the rule is proportional.
+    """
+    checkable = adjudicate_locked_name_anchors(
+        "Giô-en cười trừ.",
+        _asr_result("Joanne cười chữ.", verdict=ASR_MISMATCH, reason="ASR_MISMATCH"),
+        [_anchor("Joel", "Giô-en", spoken_start=0)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+    vacuous = adjudicate_locked_name_anchors(
+        "Anh Lu-si-en.",
+        _asr_result("Anh Lucy.", verdict=ASR_MISMATCH, reason="ASR_MISMATCH"),
+        [_anchor("Lucien", "Lu-si-en", spoken_start=4)],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+    checkable_metrics = checkable[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    vacuous_metrics = vacuous[LOCKED_NAME_ANCHOR_METRICS_KEY]
+    assert isinstance(checkable_metrics, dict)
+    assert isinstance(vacuous_metrics, dict)
+    # Two ordinary words against a two-token name: still checkable.
+    assert checkable_metrics["anchor_expected_token_count"] == 2
+    assert checkable_metrics["canonical_waiver_available"] is True
+    assert checkable["locked_name_review_eligible"] is True
+    # One ordinary word against a three-token name: nothing left to check.
+    assert vacuous_metrics["anchor_expected_token_count"] == 3
+    assert vacuous_metrics["canonical_waiver_available"] is False
+    assert vacuous["locked_name_review_eligible"] is False

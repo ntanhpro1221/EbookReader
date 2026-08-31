@@ -29,6 +29,13 @@ STYLE_PRIORITY = {
 # listeners, not only for ASR. The presets stay in the catalog because VieNeu offers them
 # and older books may have locked them; they are simply never cast.
 CASTING_REGIONS = frozenset({REGION_NORTH, REGION_SOUTH})
+# Xuân Vĩnh is labelled Nam in the catalogue but a Vietnamese listener hears it as
+# Central, and the measurements agree that it does not behave like its label. Across two
+# full runs it produced 4 of the 6 failed segments from 22 attempts - an 18.2% failure
+# rate with a median WER of 0.333 - while the other two Nam presets, Thái Sơn and Thục
+# Đoan, sat at 0% and 0.114/0.086, and every remaining preset failed nothing at all. The
+# problem is this voice, not its region, so it is excluded by name.
+EXCLUDED_CASTING_PRESETS = frozenset({"Xuân Vĩnh"})
 CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 DEFAULT_NARRATOR_BY_GENDER = {
     GENDER_MALE: "Phạm Tuyên",
@@ -207,5 +214,6 @@ def casting_presets(gender: str) -> list[dict[str, str]]:
         if preset["gender"] == gender
         and preset["style"] != STYLE_NEWS
         and preset["region"] in CASTING_REGIONS
+        and preset["name"] not in EXCLUDED_CASTING_PRESETS
     ]
     return sorted(candidates, key=casting_preset_priority)

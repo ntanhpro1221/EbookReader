@@ -1525,9 +1525,19 @@ def test_locked_name_anchor_forces_clarity_after_two_aggregate_asr_passes(
     assert len(report_evidence["decode_evidence"]) == 2
 
 
-def test_clarity_locked_name_mismatch_blocks_publication(
+def test_clarity_locked_name_mismatch_publishes_for_review(
     tmp_path: Path,
 ) -> None:
+    """A name the transcript never matches publishes with review evidence.
+
+    This is the accepted trade-off, not an oversight: nothing in a transcript
+    distinguishes "Whisper wrote a correctly pronounced name in Latin script" from "the
+    TTS said the wrong name", and holding every chapter on the first reading meant no
+    chapter ever published. What the sentence metrics still guarantee is that the
+    ordinary words around the name were read correctly;
+    `test_short_utterance_keeps_the_anchor_hard_gate` keeps the case where waiving the
+    name would leave nothing to check.
+    """
     pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
     pipeline.tts.spoken_text_with_anchors = lambda _row: (
         "Anh Lu-si-en đã đến.",
@@ -1553,35 +1563,18 @@ def test_clarity_locked_name_mismatch_blocks_publication(
     pipeline._verify_chapter_audio(chapter, AnchorVerifier())
 
     fresh = pipeline.db.get_segment(int(row["id"]))
-    assert fresh["status"] == "failed"
-    assert "ASR_LOCKED_NAME_ANCHOR_MISMATCH" in str(fresh["warning_code"])
+    assert fresh["status"] != "failed"
+    assert ASR_LOCKED_NAME_ANCHOR_REVIEW in str(fresh["warning_code"])
+    # The anchor evidence still records that the name never matched, so the report can
+    # put it in front of a person.
     final_check = pipeline.db.latest_quality_check(
         scope=QUALITY_SCOPE_SEGMENT,
         stage=SEGMENT_AUDIO_QUALITY_STAGE,
         segment_id=int(row["id"]),
     )
     assert final_check is not None
-    assert final_check["verdict"] == "fail"
-    assert json.loads(str(final_check["failure_codes_json"])) == [
-        "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
-    ]
     final_metrics = json.loads(str(final_check["metrics_json"]))
     assert final_metrics["locked_name_anchor_metrics"]["passed"] is False
-    assert final_metrics["dual_decode_passed"] is False
-
-    pipeline._export_reports(incremental=True)
-    report = json.loads(
-        (pipeline.paths.reports / "audiobook_quality_report.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    evidence = report["segment_content_evidence"][0]
-    assert evidence["verdict"] == "fail"
-    assert evidence["failure_codes"] == ["ASR_LOCKED_NAME_ANCHOR_MISMATCH"]
-    assert evidence["locked_name_anchor_metrics"]["passed"] is False
-    assert evidence["decode_evidence"][-1]["reason"] == (
-        "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
-    )
 
 
 def test_locked_name_review_publishes_when_ordinary_content_stays_clean(
@@ -4218,7 +4211,10 @@ def test_locked_name_failure_evidence_stays_self_consistent(
     transcript = (
         "Lúc chia tay, Lucian len lén hỏi bạn đầy tò mò."
         if ordinary_content_is_clean
-        else "Lúc chia lìa, Lucian lên lén hỏi bận đây tò mò."
+        # Segmental errors, not tone slips: tone differences are folded out of the
+        # metrics because they carry no signal about the take, so a "dirty" example
+        # built from them would now read as clean.
+        else "Mây chia lìa, Lucian ben khén hỏi vàng đầu mù mò."
     )
     result = adjudicate_locked_name_anchors(
         "Lúc chia tay, Lu-si-en len lén hỏi bạn đầy tò mò.",

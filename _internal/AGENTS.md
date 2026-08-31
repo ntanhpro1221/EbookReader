@@ -130,6 +130,21 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   của VieNeu và không thay identity giọng để giả lập cảm xúc.
 - Chuẩn hóa các cách viết như `haizzzzz`, `hừmmmm` hoặc `[thở dài]` chỉ được áp dụng lên `spoken_text` dùng chung cho
   TTS và expected ASR; văn bản nguồn, hash và segment đã checkpoint không được sửa.
+- Preset trong `EXCLUDED_CASTING_PRESETS` **không bao giờ được phân vai**, và mọi đường dẫn tới preset đều
+  phải tôn trọng nó — kể cả nhánh fallback khi cạn pool. Loại theo **tên preset**, không theo vùng, khi
+  bằng chứng chỉ vào một giọng cụ thể: `Xuân Vĩnh` được dán nhãn `Nam` nhưng người nghe tiếng Việt nghe ra
+  giọng Trung, và đo qua hai lần chạy đầy đủ nó gây **4/6 ca fail trên 22 lượt (18,2%)** với WER trung vị
+  `0,333`, trong khi hai preset `Nam` còn lại fail 0% và WER `0,114`/`0,086`. Nhãn vùng miền trong catalog
+  không đáng tin bằng số đo theo từng preset.
+- Whisper sai **thanh điệu** tiếng Việt ở mọi segment, cả đạt lẫn fail — verified median `0,000` nhưng p99
+  `0,362`, so với median `0,296` của segment fail, và có segment đạt với tỉ lệ `1,000`. Hai phân bố không
+  tách nhau, nên chênh lệch thanh **không mang tín hiệu** về chất lượng take. Content gate vì thế gấp thanh
+  ra khỏi phép đo và lấy kết quả tốt hơn giữa hai cách đọc, để phép gấp **không bao giờ** làm fail thứ mà
+  so chữ đã cho qua. Hệ quả phải nói rõ: ASR gate không còn phát hiện lỗi thanh của TTS — nhưng nó vốn cũng
+  chưa từng phát hiện được, vì không phân biệt nổi lỗi thanh của TTS với lỗi thanh của ASR.
+- Miễn trừ anchor tên riêng phải **theo tỉ lệ**, không theo số token tuyệt đối: tên không được chiếm đa số
+  những gì đang kiểm, và phải còn ít nhất hai token thường. `Giô-en cười trừ` còn 2 token thường trên tên
+  2 token nên vẫn kiểm được; `Anh Lu-si-en` chỉ còn `anh` trên tên 3 token nên anchor giữ quyền hard-fail.
 - Giọng miền Trung **không bao giờ được phân vai**, kể cả cho NPC, kể cả qua nhánh fallback khi pool cạn.
   Tiếng Trung là phương ngữ khó hiểu nhất với người nghe hai miền còn lại, và hệ thanh điệu của nó lệch xa
   nhất so với chính tả chuẩn miền Bắc mà audiobook đọc từ đó; đo trên audio đã commit, preset Trung sai thanh

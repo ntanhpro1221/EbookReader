@@ -49,7 +49,12 @@ ANCHOR_COMPARISON_VIETNAMESE_PHONEME_EXACT = "vietnamese_phoneme_exact"
 # remains to carry an independent verdict: in "Anh Lucy" the name is half the utterance,
 # so waiving it would leave nothing to check. Below this many ordinary expected tokens
 # the anchor keeps its hard-fail authority.
-CANONICAL_ANCHOR_WAIVER_MIN_ORDINARY_TOKENS = 4
+# Waiving an unmatched name is only sound while the rest of the utterance can carry a
+# verdict on its own. An absolute token count got that wrong in both directions, so the
+# rule is proportional: the name may not be the majority of what is being checked, and
+# something has to be left. "Giô-en cười trừ" keeps two ordinary words against a two-token
+# name and stays checkable; "Anh Lu-si-en" keeps one against three and does not.
+CANONICAL_ANCHOR_WAIVER_MIN_ORDINARY_TOKENS = 2
 _PHONEME_CACHE: dict[str, str] = {}
 _PHONEMIZER: list[Any] = []
 
@@ -452,18 +457,41 @@ def _canonical_locked_name_metrics(
     if transcript_cursor != len(transcript_tokens):
         raise RuntimeError("Locked-name canonical alignment did not consume transcript")
 
+    # Fold tone here too, for the same reason the ordinary metrics do: a tone difference
+    # on the words around a name says nothing about whether the take was good. Taking the
+    # better of the two readings keeps the fold from ever failing something plain
+    # comparison passed. The anchor placeholders are not Vietnamese words, so they fold
+    # to themselves and keep aligning.
+    similarity, character_error_rate, word_error_rate = _sequence_metrics(
+        expected_tokens,
+        actual_tokens,
+    )
+    folded_similarity, folded_cer, folded_wer = _sequence_metrics(
+        _tone_folded_words(expected_tokens),
+        _tone_folded_words(actual_tokens),
+    )
+    return (
+        float(max(similarity, folded_similarity)),
+        float(min(character_error_rate, folded_cer)),
+        float(min(word_error_rate, folded_wer)),
+    )
+
+
+def _sequence_metrics(
+    expected_tokens: list[str],
+    actual_tokens: list[str],
+) -> tuple[float, float, float]:
     expected_characters = list(" ".join(expected_tokens))
     actual_characters = list(" ".join(actual_tokens))
     character_error_rate = _edit_distance(
         expected_characters,
         actual_characters,
     ) / max(1, len(expected_characters))
-    similarity = max(0.0, 1.0 - character_error_rate)
     word_error_rate = _edit_distance(
         expected_tokens,
         actual_tokens,
     ) / max(1, len(expected_tokens))
-    return float(similarity), float(character_error_rate), float(word_error_rate)
+    return max(0.0, 1.0 - character_error_rate), character_error_rate, word_error_rate
 
 
 def _passes_asr_content_thresholds(
@@ -636,8 +664,20 @@ def adjudicate_locked_name_anchors(
         len(safe_anchors),
     )
     ordinary_expected_tokens = sum(1 for unit in units if unit["kind"] != "anchor")
+    # An anchor unit stands in for however many written tokens its spoken form has, so
+    # count those rather than counting one per anchor - a three-syllable name occupies
+    # three of the tokens the sentence metric would otherwise have to work with.
+    anchor_expected_tokens = sum(
+        max(
+            (len(form_tokens) for _kind, form_tokens, _mode in unit["forms"]),
+            default=1,
+        )
+        for unit in units
+        if unit["kind"] == "anchor"
+    )
     canonical_waiver_available = (
         ordinary_expected_tokens >= CANONICAL_ANCHOR_WAIVER_MIN_ORDINARY_TOKENS
+        and ordinary_expected_tokens >= anchor_expected_tokens
     )
     if min_similarity is not None and max_wer is not None and (
         anchors_passed or canonical_waiver_available
@@ -692,6 +732,7 @@ def adjudicate_locked_name_anchors(
         "canonical_max_wer": max_wer,
         "canonical_threshold_passed": canonical_threshold_passed,
         "ordinary_expected_token_count": ordinary_expected_tokens,
+        "anchor_expected_token_count": anchor_expected_tokens,
         "canonical_waiver_available": canonical_waiver_available,
         "canonical_promoted": canonical_promoted,
         "canonical_demoted": canonical_demoted,
@@ -863,6 +904,94 @@ def _edit_distance(left: list[str], right: list[str]) -> int:
             )
         previous = current
     return previous[-1]
+
+
+# Whisper's Vietnamese tone output is not reliable evidence about the audio. Measured
+# over a whole book, tone-only differences appear across the segments that pass as well
+# as the ones that fail - median 0.000 but p99 0.362 among verified segments, against a
+# median of 0.296 among failed ones, with a verified segment reaching 1.000. The two
+# populations do not separate, so a tone difference carries no signal about whether the
+# take was good. Consonants and vowels, which Whisper does get right, carry that signal.
+#
+# Folding tone out of the comparison therefore removes noise, not evidence - and it also
+# means the ASR gate no longer detects a TTS tone error. It did not reliably detect one
+# before either, because it could not tell a TTS tone error from an ASR tone error;
+# it simply failed segments when the noise happened to cross the threshold. UTMOSv2 and
+# a human listening to the review queue are what cover that now.
+VIETNAMESE_TONE_MARKERS = frozenset("2ɜ456")
+PHONEME_STRESS_MARKERS = frozenset("ˈˌ")
+
+
+def _segmental_phonemes(word: str) -> str | None:
+    """The word's phonemes with tone and stress removed, or None when unavailable.
+
+    sea-g2p detects language per token, so a token it does not read as Vietnamese comes
+    back as English or spelled out. That makes the segmental form unusable for those
+    tokens, which is why callers must treat None as "no opinion" rather than "different".
+    """
+    phonemes = _vietnamese_phonemes(word)
+    if not phonemes:
+        return None
+    return "".join(
+        character
+        for character in phonemes
+        if character not in VIETNAMESE_TONE_MARKERS
+        and character not in PHONEME_STRESS_MARKERS
+    )
+
+
+def _tone_folded_words(words: list[str]) -> list[str]:
+    folded = []
+    for word in words:
+        segmental = _segmental_phonemes(word)
+        folded.append(segmental if segmental else word)
+    return folded
+
+
+def tone_folded_transcript_metrics(
+    expected: str,
+    actual: str,
+) -> tuple[float, float, dict[str, float]]:
+    """Content metrics that ignore tone, never scored worse than the plain comparison.
+
+    A token sea-g2p cannot read as Vietnamese keeps its written form, so folding could in
+    principle align two tokens worse than the letters did. Taking the better of the two
+    readings makes the fold provably unable to fail anything the plain comparison passed.
+    """
+    raw_similarity, raw_wer = transcript_metrics(expected, actual)
+    expected_words = normalize_transcript(expected).split()
+    actual_words = normalize_transcript(actual).split()
+    folded_expected = _tone_folded_words(expected_words)
+    folded_actual = _tone_folded_words(actual_words)
+    folded_wer = _edit_distance(folded_expected, folded_actual) / max(1, len(folded_expected))
+    expected_characters = list(" ".join(folded_expected))
+    actual_characters = list(" ".join(folded_actual))
+    folded_similarity = max(
+        0.0,
+        1.0 - _edit_distance(expected_characters, actual_characters)
+        / max(1, len(expected_characters)),
+    )
+    compared = min(len(expected_words), len(actual_words))
+    tone_only = sum(
+        1
+        for index in range(compared)
+        if expected_words[index] != actual_words[index]
+        and folded_expected[index] == folded_actual[index]
+        and _segmental_phonemes(expected_words[index]) is not None
+    )
+    similarity = max(raw_similarity, folded_similarity)
+    wer = min(raw_wer, folded_wer)
+    return (
+        float(similarity),
+        float(wer),
+        {
+            "raw_similarity": float(raw_similarity),
+            "raw_wer": float(raw_wer),
+            "tone_folded_similarity": float(folded_similarity),
+            "tone_folded_wer": float(folded_wer),
+            "tone_only_difference_rate": float(tone_only / compared) if compared else 0.0,
+        },
+    )
 
 
 def transcript_metrics(expected: str, actual: str) -> tuple[float, float]:
@@ -1059,7 +1188,26 @@ class WhisperVerifier:
         transcript: str,
         duration_seconds: float,
     ) -> dict[str, Any]:
-        similarity, wer = transcript_metrics(expected, transcript)
+        """Evaluate a transcript, keeping the plain metrics alongside the graded ones."""
+        _similarity, _wer, tone_evidence = tone_folded_transcript_metrics(
+            expected,
+            transcript,
+        )
+        result = self._evaluate_transcript_core(expected, transcript, duration_seconds)
+        for key, value in tone_evidence.items():
+            result.setdefault(key, value)
+        return result
+
+    def _evaluate_transcript_core(
+        self,
+        expected: str,
+        transcript: str,
+        duration_seconds: float,
+    ) -> dict[str, Any]:
+        similarity, wer, _tone_evidence = tone_folded_transcript_metrics(
+            expected,
+            transcript,
+        )
         if self._last_transcription_timeline_impossible:
             return {
                 "passed": False,
