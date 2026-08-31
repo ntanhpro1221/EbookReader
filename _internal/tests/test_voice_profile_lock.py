@@ -18,8 +18,13 @@ from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.tts import (
     CLARITY_MAX_TEMPERATURE,
+    CLARITY_MAX_TOP_P,
     DELIVERY_CLARITY,
     GENERATION_TEMPERATURE,
+    GENERATION_TOP_P,
+    HA_VOCALIZATION_MAX_TEMPERATURE,
+    SHORT_UTTERANCE_MAX_TEMPERATURE,
+    SHORT_UTTERANCE_MAX_TOP_P,
     TTSCoordinator,
     VieNeuEngine,
     apply_pitch_variant,
@@ -31,6 +36,7 @@ from ebook_reader.tts_contract import (
     HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
     HA_VOCALIZATION_MAX_NEW_FRAMES,
     HA_VOCALIZATION_MAX_NEW_FRAMES_FIELD,
+    HA_VOCALIZATION_MAX_TOP_P,
     HA_VOCALIZATION_ORIGINAL_SAMPLES_FIELD,
     HA_VOCALIZATION_PADDING_SAMPLES_FIELD,
     HA_VOCALIZATION_PROFILE_FIELD,
@@ -882,3 +888,33 @@ def test_thought_always_uses_narrator_profile_even_if_row_contains_character_cas
     assert spoken_row["speaker"] == "NARRATOR"
     assert int(spoken_row["voice_profile_id"]) == narrator_profile_id
     assert str(profile["voice_key"]) == "narrator"
+
+
+def test_every_sampling_cap_can_actually_bind() -> None:
+    """A cap above the value it clamps is a rule that silently does nothing.
+
+    Clarity repair sat at 0.78 while neutral generated at 0.74, so the mode meant to cut
+    variance after an ASR failure was inert for most of the book and nobody noticed. The
+    fix for one cap is worth little if the next one drifts the same way, so this pins the
+    property for all of them: a cap exists to lower something, and must be able to.
+    """
+    caps = {
+        "CLARITY_MAX_TEMPERATURE": (CLARITY_MAX_TEMPERATURE, GENERATION_TEMPERATURE),
+        "CLARITY_MAX_TOP_P": (CLARITY_MAX_TOP_P, GENERATION_TOP_P),
+        "SHORT_UTTERANCE_MAX_TEMPERATURE": (
+            SHORT_UTTERANCE_MAX_TEMPERATURE,
+            GENERATION_TEMPERATURE,
+        ),
+        "SHORT_UTTERANCE_MAX_TOP_P": (SHORT_UTTERANCE_MAX_TOP_P, GENERATION_TOP_P),
+        "HA_VOCALIZATION_MAX_TEMPERATURE": (
+            HA_VOCALIZATION_MAX_TEMPERATURE,
+            GENERATION_TEMPERATURE,
+        ),
+        "HA_VOCALIZATION_MAX_TOP_P": (HA_VOCALIZATION_MAX_TOP_P, GENERATION_TOP_P),
+    }
+    inert = {
+        name: (cap, generated)
+        for name, (cap, generated) in caps.items()
+        if cap >= generated
+    }
+    assert not inert, f"caps that can never lower anything: {inert}"
