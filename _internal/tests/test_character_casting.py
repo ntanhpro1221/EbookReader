@@ -13,7 +13,7 @@ from ebook_reader.database import (
     canonical_analysis_note,
 )
 from ebook_reader.voice_catalog import (
-    VOICE_VARIANT_MAX_DEVIATION,
+    voice_variant_deviation,
     formant_variants_for_preset,
     formant_ratio_bounds_for_preset,
     VOCAL_TRACT_MIN_CM,
@@ -1019,11 +1019,13 @@ def test_formant_range_follows_each_preset_vocal_tract() -> None:
         # Anatomy: the warped tract stays inside the adult range.
         assert VOCAL_TRACT_MIN_CM - 0.05 <= length / upper
         assert length / lower <= VOCAL_TRACT_MAX_CM + 0.05
-        # The algorithm has its own limit regardless of anatomy: PSOLA resampling degrades
-        # once the ratio moves far from unity, whatever the voice started as. The usable
-        # range is the intersection, so neither constraint alone may be exceeded.
-        assert lower >= 1.0 - VOICE_VARIANT_MAX_DEVIATION - 1e-6
-        assert upper <= 1.0 + VOICE_VARIANT_MAX_DEVIATION + 1e-6
+        # The algorithm has its own limit regardless of anatomy, and it is asymmetric and
+        # mirrored between the genders: a male voice tolerates being brightened further
+        # than deepened, a female voice the reverse. The usable range is the intersection,
+        # so neither constraint alone may be exceeded.
+        down, up = voice_variant_deviation(name)
+        assert lower >= 1.0 - down - 1e-6
+        assert upper <= 1.0 + up + 1e-6
         for ratio in formant_variants_for_preset(name):
             assert lower - 1e-6 <= ratio <= upper + 1e-6
 
@@ -1033,10 +1035,10 @@ def test_formant_range_follows_each_preset_vocal_tract() -> None:
     male_length = PRESET_VOCAL_TRACT_CM["Thanh Bình"]
     male_low, male_high = formant_ratio_bounds_for_preset("Thanh Bình")
     assert male_low == pytest.approx(male_length / VOCAL_TRACT_MAX_CM, abs=0.005)
-    assert male_high == pytest.approx(1.0 + VOICE_VARIANT_MAX_DEVIATION, abs=0.005)
+    assert male_high == pytest.approx(1.0 + voice_variant_deviation("Thanh Bình")[1], abs=0.005)
     female_length = PRESET_VOCAL_TRACT_CM["Ngọc Linh"]
     female_low, female_high = formant_ratio_bounds_for_preset("Ngọc Linh")
-    assert female_low == pytest.approx(1.0 - VOICE_VARIANT_MAX_DEVIATION, abs=0.005)
+    assert female_low == pytest.approx(1.0 - voice_variant_deviation("Ngọc Linh")[0], abs=0.005)
     assert female_high == pytest.approx(female_length / VOCAL_TRACT_MIN_CM, abs=0.005)
 
     # A long male tract cannot go as deep as a short female one, and vice versa.
@@ -1044,6 +1046,10 @@ def test_formant_range_follows_each_preset_vocal_tract() -> None:
     female_low, female_high = formant_ratio_bounds_for_preset("Ngọc Linh")
     assert male_low > female_low
     assert male_high > female_high
+
+    # The two genders get mirrored allowances, which is the whole point of splitting them.
+    assert voice_variant_deviation("Thanh Bình") == (0.15, 0.20)
+    assert voice_variant_deviation("Ngọc Linh") == (0.20, 0.15)
 
     # Every preset keeps its untouched voice as the first casting.
     for name in PRESET_VOCAL_TRACT_CM:

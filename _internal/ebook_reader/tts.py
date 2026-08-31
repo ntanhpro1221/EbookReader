@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import gc
 import hashlib
-import math
 import random
 import re
 from pathlib import Path
@@ -221,66 +220,75 @@ def apply_voice_variant(
     pitch_semitones: int,
     formant_ratio: float,
 ) -> np.ndarray:
-    """Move the speaker's formants with Praat's Change gender, keeping the waveform.
+    """Apply a preset's reading register and a character's formant, independently.
 
-    Formant position is what makes two characters sound like different people; pitch does
-    not, and a listener comparing the same sentence from -6 to +6 semitones heard the same
-    person throughout. Praat resamples to move the formants - an exact operation
-    corresponding to a uniformly scaled vocal tract - and then restores pitch and duration
-    with PSOLA, so no spectral envelope is ever estimated or resynthesised. WORLD's warp
-    and a PARCOR area-function reshape were both compared against it by ear; the listener
-    ranked PARCOR clearly worst and could not separate WORLD from Praat, so Praat wins on
-    the axis that is left: it is the only one that never rebuilds the spectrum.
+    These are two different jobs and they use two different engines, each the one that
+    was judged better for that job by ear:
+
+    - Register is an F0 change. WORLD scales F0 while holding the spectral envelope, which
+      keeps the result a configuration a real vocal tract can produce, and the listener
+      preferred it. Its analysis-resynthesis round trip measured -0.015 MOS.
+    - Identity is a formant change. Praat resamples to move the formants and restores
+      pitch with PSOLA, never estimating or resynthesising a spectrum. A PARCOR
+      area-function reshape was clearly worst by ear, and WORLD's envelope warp was
+      indistinguishable from Praat, so Praat wins on not rebuilding the spectrum at all.
+
+    Doing both in a single Praat call would make the register change PSOLA-based too,
+    which is not what was approved for it.
     """
     array = np.asarray(audio, dtype=np.float32).reshape(-1)
     steps = int(pitch_semitones)
     ratio = float(formant_ratio)
-    if (steps == 0 and abs(ratio - 1.0) <= 1e-6) or array.size == 0:
+    if array.size == 0:
         return array
+    if steps:
+        array = apply_pitch_variant(array, int(sample_rate), steps)
+    if abs(ratio - 1.0) <= 1e-6:
+        return np.asarray(array, dtype=np.float32).reshape(-1)
     if not FORMANT_RATIO_MIN <= ratio <= FORMANT_RATIO_MAX:
         raise ValueError(
             f"formant ratio {ratio} is outside the audible range "
             f"[{FORMANT_RATIO_MIN}, {FORMANT_RATIO_MAX}]"
         )
+    return _praat_formant_shift(array, int(sample_rate), ratio)
+
+
+def _praat_formant_shift(
+    array: np.ndarray,
+    sample_rate: int,
+    formant_ratio: float,
+) -> np.ndarray:
     import parselmouth
     from parselmouth.praat import call
 
-    sound = parselmouth.Sound(array.astype(np.float64), sampling_frequency=int(sample_rate))
-    new_median = 0.0
-    if steps:
-        measured = call(
-            sound,
-            "To Pitch",
-            0.0,
-            VOICE_VARIANT_PITCH_FLOOR_HZ,
-            VOICE_VARIANT_PITCH_CEILING_HZ,
-        )
-        median = float(call(measured, "Get quantile", 0.0, 0.0, 0.5, "Hertz"))
-        if math.isfinite(median) and median > 0.0:
-            new_median = median * (2.0 ** (float(steps) / 12.0))
+    source = np.asarray(array, dtype=np.float32).reshape(-1)
+    sound = parselmouth.Sound(
+        source.astype(np.float64),
+        sampling_frequency=int(sample_rate),
+    )
     shifted = call(
         sound,
         "Change gender",
         VOICE_VARIANT_PITCH_FLOOR_HZ,
         VOICE_VARIANT_PITCH_CEILING_HZ,
-        ratio,
-        new_median,
+        float(formant_ratio),
+        0.0,  # keep the pitch median exactly as the register step left it
         1.0,
         1.0,
     )
     result = np.asarray(shifted.values, dtype=np.float32).reshape(-1)
     if result.size == 0:
-        raise ValueError("Praat voice variant produced no samples")
+        raise ValueError("Praat formant shift produced no samples")
     if not np.isfinite(result).all():
-        raise ValueError("Praat voice variant produced non-finite samples")
+        raise ValueError("Praat formant shift produced non-finite samples")
     # PSOLA can overshoot the input peak. The chapter is mastered afterwards, so a small
     # uniform trim costs nothing and keeps the delivery WAV inside PCM range.
     peak = float(np.max(np.abs(result)))
     if peak > VOICE_VARIANT_PEAK_CEILING:
         result = result * (VOICE_VARIANT_PEAK_CEILING / peak)
-    if result.size >= array.size:
-        return result[: array.size].astype(np.float32, copy=False)
-    return np.pad(result, (0, array.size - result.size)).astype(np.float32, copy=False)
+    if result.size >= source.size:
+        return result[: source.size].astype(np.float32, copy=False)
+    return np.pad(result, (0, source.size - result.size)).astype(np.float32, copy=False)
 
 
 def short_utterance_repair_frame_cap(text: str) -> int | None:

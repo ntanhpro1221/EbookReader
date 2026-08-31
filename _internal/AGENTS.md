@@ -65,12 +65,18 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
     trầm, nhiều chỗ đi sáng**, nữ thì ngược lại. Một dải chung là sai theo hai hướng ngược nhau. Cận trên
     tái lập đúng giới hạn người nghe tìm ra bằng tai: Thanh Bình `0,82` nghe tù bí (khoang `20,6` cm),
     `0,86` chấp nhận được (`19,7` cm). **Phải giao với ràng buộc thứ hai, độc lập với giải phẫu:** phép
-    biến đổi tự nó xuống cấp khi hệ số rời xa `1,0`, bất kể giọng gốc là gì — người nghe đặt mốc đó ở
-    `±0,20`. Hai ràng buộc chặn **hai đầu ngược nhau** tuỳ giọng: giọng nam khoang dài bị giải phẫu chặn
+    biến đổi tự nó xuống cấp khi hệ số rời xa `1,0`, bất kể giọng gốc là gì. Mốc này **bất đối xứng và
+    đảo chiều theo giới**: giọng nam chịu được sáng hơn nhiều hơn là trầm đi (`-0,15 / +0,20`), giọng nữ
+    ngược lại (`-0,20 / +0,15`). Hai ràng buộc chặn **hai đầu ngược nhau** tuỳ giọng: giọng nam khoang dài bị giải phẫu chặn
     phía trầm và thuật toán chặn phía sáng, giọng nữ khoang ngắn thì đảo lại. Kiểm chứng: giao của hai
     ràng buộc cho Thanh Bình ra đúng `[0,86, 1,20]` — chính là dải người nghe chốt bằng tai trước khi đo
     bất cứ thứ gì.
-  - Phép biến đổi dùng **Praat "Change gender"** qua parselmouth, không dùng WORLD warp hay PARCOR. Praat
+  - **Hai tác vụ độc lập, hai engine khác nhau, mỗi cái là cái được duyệt bằng tai cho đúng việc đó.**
+    Chất giọng nền là đổi **F0** → dùng **WORLD** (`apply_pitch_variant`), vì nó giữ nguyên envelope nên
+    kết quả luôn là cấu hình khoang miệng có thật, và vòng round-trip của nó chỉ tốn `-0,015` MOS.
+    Danh tính nhân vật là đổi **formant** → dùng **Praat**. Gộp cả hai vào một lệnh Praat sẽ biến phần
+    chỉnh F0 thành PSOLA — không phải thứ đã được duyệt cho nó.
+  - Phép biến đổi formant dùng **Praat "Change gender"** qua parselmouth, không dùng WORLD warp hay PARCOR. Praat
     resample để dời formant rồi PSOLA khôi phục cao độ — **không bao giờ ước lượng hay dựng lại phổ**.
     So bằng tai: PARCOR tệ rõ rệt, WORLD không phân biệt được với Praat. UTMOSv2 xếp ngược lại nhưng nó đã
     ba lần mâu thuẫn với người nghe ở đúng vùng này, nên không dùng nó để chọn.

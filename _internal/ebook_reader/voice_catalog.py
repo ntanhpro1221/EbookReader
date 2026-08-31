@@ -68,13 +68,31 @@ PRESET_VOCAL_TRACT_CM = {
 VOCAL_TRACT_MIN_CM = 12.8
 VOCAL_TRACT_MAX_CM = 19.7
 # The transform has its own limit, independent of anatomy: PSOLA resampling degrades once
-# the ratio moves far from unity, whatever the voice started as. A Vietnamese listener put
-# that at about 0.2 either way. The usable range is the intersection of the two - anatomy
-# says how far this particular voice may be stretched, the algorithm says how far anything
-# may be stretched at all.
-VOICE_VARIANT_MAX_DEVIATION = 0.20
-FORMANT_RATIO_MIN = 1.0 - VOICE_VARIANT_MAX_DEVIATION
-FORMANT_RATIO_MAX = 1.0 + VOICE_VARIANT_MAX_DEVIATION
+# the ratio moves far from unity, whatever the voice started as. The listener found that
+# limit asymmetric, and mirrored between the genders - a male voice tolerates being
+# brightened further than it tolerates being deepened, and a female voice the reverse.
+# The usable range is the intersection of the two constraints: anatomy says how far this
+# particular voice may be stretched, the algorithm says how far anything may be.
+VOICE_VARIANT_DEVIATION_BY_GENDER = {
+    GENDER_MALE: (0.15, 0.20),
+    GENDER_FEMALE: (0.20, 0.15),
+}
+FORMANT_RATIO_MIN = 1.0 - 0.20
+FORMANT_RATIO_MAX = 1.0 + 0.20
+
+
+def voice_variant_deviation(preset_name: str) -> tuple[float, float]:
+    """How far down and up the transform may take this preset, before anatomy applies."""
+    for preset in VIENEU_PRESETS:
+        if preset["name"] == preset_name:
+            gender = str(preset["gender"])
+            break
+    else:
+        gender = GENDER_MALE
+    return VOICE_VARIANT_DEVIATION_BY_GENDER.get(
+        gender,
+        VOICE_VARIANT_DEVIATION_BY_GENDER[GENDER_MALE],
+    )
 # Ladder of relative steps, natural first so a preset's first casting is untouched and
 # pays no processing at all. Each step is clamped into the preset's own usable range.
 CHARACTER_FORMANT_STEPS = (1.00, 0.93, 1.08, 0.87, 1.16, 0.97, 1.04)
@@ -214,11 +232,13 @@ def base_pitch_for_preset(preset_name: str) -> int:
 
 def formant_ratio_bounds_for_preset(preset_name: str) -> tuple[float, float]:
     """The warp range that keeps this preset inside a plausible adult vocal tract."""
+    down, up = voice_variant_deviation(preset_name)
+    algorithmic_low, algorithmic_high = 1.0 - down, 1.0 + up
     length = PRESET_VOCAL_TRACT_CM.get(preset_name)
     if length is None:
-        return FORMANT_RATIO_MIN, FORMANT_RATIO_MAX
-    lower = max(FORMANT_RATIO_MIN, length / VOCAL_TRACT_MAX_CM)
-    upper = min(FORMANT_RATIO_MAX, length / VOCAL_TRACT_MIN_CM)
+        return algorithmic_low, algorithmic_high
+    lower = max(algorithmic_low, length / VOCAL_TRACT_MAX_CM)
+    upper = min(algorithmic_high, length / VOCAL_TRACT_MIN_CM)
     return (lower, upper) if lower < upper else (1.0, 1.0)
 
 
