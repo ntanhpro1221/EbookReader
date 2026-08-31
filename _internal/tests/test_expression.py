@@ -10,7 +10,9 @@ from ebook_reader.expression import (
     PAD,
     PAUSE_CEILING_MS,
     narrative_break_ms,
+    apply_gain,
     prosody_targets,
+    shape_f0,
     shape_segment,
 )
 
@@ -78,24 +80,33 @@ def test_a_short_exclamation_may_move_further_than_a_paragraph() -> None:
     assert abs(short_line["gain_db"]) > abs(long_line["gain_db"])
 
 
-def test_shaping_preserves_length_unless_tempo_was_asked_for() -> None:
-    """Chapters are assembled from these end to end, so a segment that was not
-    time-scaled must come back at exactly the length it went in."""
+def test_shaping_never_changes_a_segment_length() -> None:
+    """Chapters are assembled from these end to end, so length must survive exactly."""
     audio = _speechlike(2.5)
 
-    out, target = shape_segment(audio, 48_000, "sad", 1, "narration")
-
-    assert target is not None
-    expected = round(len(audio) / target["tempo"])
-    # Frame quantisation: WORLD works in 5 ms frames, so the result lands on a frame
-    # boundary rather than on the exact sample the ratio asks for.
-    assert abs(len(out) - expected) <= 48_000 * 0.010
-
-    # A segment nobody asked to time-scale comes back at exactly its own length, because
-    # chapters are assembled from these end to end.
+    shaped, target = shape_segment(audio, 48_000, "sad", 1, "narration")
     unshaped, no_target = shape_segment(audio, 48_000, "neutral", 0, "narration")
-    assert no_target is None
+
+    assert target is not None and no_target is None
+    assert len(shaped) == len(audio)
     assert len(unshaped) == len(audio)
+
+
+def test_shaping_is_deterministic() -> None:
+    """The same take shaped twice must be the same file, or resume stops reproducing.
+
+    This is why the rate rule is computed and not applied: Praat's overlap-add
+    time-stretch is the one step in the chain that is not reproducible - the same input
+    twice differed by up to 0.08 - and a listener could not tell tempo variants apart
+    anyway. Pitch and pitch range carry the expression and are deterministic.
+    """
+    audio = _speechlike(2.0)
+
+    first, target = shape_segment(audio, 48_000, "angry", 3, "dialogue", -4)
+    second, _ = shape_segment(audio, 48_000, "angry", 3, "dialogue", -4)
+
+    assert np.array_equal(first, second)
+    assert target is not None and target["tempo_applied"] is False
 
 
 def _seg(kind: str, emotion: str = "neutral", intensity: int = 0, text: str = "") -> dict:
@@ -146,3 +157,33 @@ def test_no_pause_runs_away_however_the_story_stacks_up() -> None:
         _seg("dialogue", "afraid", 3),
     )
     assert worst == PAUSE_CEILING_MS
+
+
+def test_a_register_alone_still_goes_through_one_pass() -> None:
+    """A voice with a calibrated register and no affect is shifted, not passed through."""
+    audio = _speechlike(2.0)
+
+    shifted, target = shape_segment(audio, 48_000, "neutral", 0, "narration", -4)
+
+    assert target is None
+    assert len(shifted) == len(audio)
+    assert not np.array_equal(shifted, audio)
+
+
+def test_register_and_affect_share_a_single_resynthesis() -> None:
+    """Two passes over one contour cost twice and buy nothing.
+
+    Applying the register separately from the expression meant a line carrying both went
+    through two resyntheses on top of the formant warp. They are the same operation on the
+    same pitch contour, so they are applied together.
+    """
+    audio = _speechlike(3.0)
+    target = prosody_targets("angry", 3, seconds=3.0)
+
+    combined, _ = shape_segment(audio, 48_000, "angry", 3, "dialogue", -4)
+    direct = apply_gain(
+        shape_f0(audio, 48_000, target["pitch_semitones"] - 4, target["range_ratio"]),
+        target["gain_db"],
+    )
+
+    assert np.array_equal(combined, direct)
