@@ -21,6 +21,7 @@ from .io_utils import slugify, stable_int
 from .voice_catalog import (
     CASTING_REGIONS,
     EXCLUDED_PRESETS,
+    LAST_RESORT_PRESETS,
     STYLE_NEWS,
     VIENEU_PRESETS,
     casting_preset_priority,
@@ -302,6 +303,11 @@ class PresetAllocator:
         def rank(preset: dict[str, Any]) -> tuple[Any, ...]:
             name = str(preset["name"])
             return (
+                # Demoted voices sort below every clean one, ahead of usage count rather
+                # than blended into it: a gentler weighting would let them win as soon as
+                # each clean preset had been used once, which is the second character in
+                # the chapter.
+                name in LAST_RESORT_PRESETS,
                 usage[name],
                 # A preset that cannot reach this age is a worse fit however available it
                 # is: an adult male tract stops 0.8 cm short of an eight-year-old even

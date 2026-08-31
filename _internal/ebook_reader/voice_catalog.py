@@ -282,16 +282,34 @@ VOCAL_TRACT_CM_BY_AGE: dict[str, dict[str, float]] = {
 # and girls. Ageing is not symmetric and the common intuition is half wrong: measured
 # across cohorts (PMC5832520), women fall from about 205 Hz to 170 while men *rise* from
 # 108 to about 125, so an elderly man reads higher than his younger self.
+# Boys sit below girls even before puberty - a study of six-to-ten-year-olds measured
+# about 262 Hz for boys against 281 for girls - and a listener heard the same thing from
+# the other direction: a male preset carried to a single shared target read as a child but
+# not as a *boy*, and asked for it slightly deeper. Both agree, so the target splits.
 AGE_TARGET_PITCH_HZ: dict[str, dict[str, float]] = {
-    "child": {GENDER_MALE: 250.0, GENDER_FEMALE: 250.0, GENDER_UNKNOWN: 250.0},
+    "child": {GENDER_MALE: 240.0, GENDER_FEMALE: 258.0, GENDER_UNKNOWN: 248.0},
     "teen": {GENDER_MALE: 190.0, GENDER_FEMALE: 220.0, GENDER_UNKNOWN: 205.0},
     "elderly": {GENDER_MALE: 125.0, GENDER_FEMALE: 170.0, GENDER_UNKNOWN: 145.0},
 }
 
-# How far a preset's own F0 may be moved before the shift is audible as a shift rather
-# than as a different speaker. Beyond this the voice stops sounding like a person of that
-# age and starts sounding like a recording being played wrong.
-AGE_PITCH_MAX_SEMITONES = 6.0
+# Usable, but only once everything else is taken. A listener judged these good enough to
+# keep and not good enough to reach for: a slight crackle in one, a maturity the age warp
+# cannot undo in the other. Unlike EXCLUDED_PRESETS this is a demotion, not a bar - a book
+# with more characters than clean voices should still cast them rather than run out.
+#
+# It sorts ahead of usage count deliberately. A gentler weighting would let a demoted
+# preset win as soon as the clean ones had each been used once, which is the second
+# character in a chapter, and that is not what "bottom of the list" means.
+LAST_RESORT_PRESETS = frozenset({"Thái Sơn", "Thục Đoan"})
+
+# How far a preset's own F0 may be carried toward an age target.
+#
+# This was 6, invented rather than measured, and it was wrong: it barred all three male
+# presets from the child pool, one of them by 2.3 semitones. Asked to judge them carried
+# the whole way instead - +8.3, +12.6 and +15.8 - a listener called every one of them
+# childlike, the deepest shift among the best. So the limit is set where the presets
+# actually stop working rather than where a round number sat.
+AGE_PITCH_MAX_SEMITONES = 16.0
 
 
 # Presets barred from every role, for the same kind of reason the Central region is barred:
@@ -324,7 +342,14 @@ def age_pitch_semitones(age: str, gender: str, preset_name: str = "") -> int:
     if not source:
         return 0
     steps = 12.0 * math.log2(target / float(source))
-    return int(round(max(-AGE_PITCH_MAX_SEMITONES, min(AGE_PITCH_MAX_SEMITONES, steps))))
+    steps = max(-AGE_PITCH_MAX_SEMITONES, min(AGE_PITCH_MAX_SEMITONES, steps))
+    # Rounded toward the preset's own pitch, never past the target. The shift is stored in
+    # whole semitones, and rounding to the nearest one overshot: Thái Sơn needed 11.9 to
+    # reach a boy's 240 Hz, took 12, and landed at 252 - the highest of the three male
+    # presets, which a listener heard at once as "thanh mảnh hơn cả mấy giọng nam khác".
+    # Falling short leaves a voice a little closer to its own register, which is the safer
+    # side of a target that is itself a range.
+    return int(math.floor(steps) if steps > 0 else math.ceil(steps))
 
 
 def preset_reaches_age_pitch(preset_name: str, age: str, gender: str) -> bool:

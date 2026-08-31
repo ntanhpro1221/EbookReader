@@ -166,9 +166,16 @@ def shape_f0(
     waveform = np.asarray(audio, dtype=np.float64).reshape(-1)
     if waveform.size < int(rate * 0.05):
         return np.asarray(audio, dtype=np.float32).reshape(-1)
+    from .tts import praat_pitch_window
+
     sound = parselmouth.Sound(waveform, sampling_frequency=float(rate))
+    # Same reason as the formant warp: a search window far wider than the voice invites an
+    # octave error, and every pulse placed from that error is audible on the low words.
+    floor_hz, ceiling_hz = praat_pitch_window(
+        waveform, int(rate), PITCH_FLOOR_HZ, PITCH_CEILING_HZ
+    )
     manipulation = call(
-        sound, "To Manipulation", MANIPULATION_TIME_STEP, PITCH_FLOOR_HZ, PITCH_CEILING_HZ
+        sound, "To Manipulation", MANIPULATION_TIME_STEP, floor_hz, ceiling_hz
     )
     tier = call(manipulation, "Extract pitch tier")
     count = int(call(tier, "Get number of points"))
@@ -198,6 +205,10 @@ def shape_f0(
                     tier,
                     "Add point",
                     time,
+                            # Clamped to what a voice can be, never to the analysis window: that
+                    # window describes the pitch going *in*, and a shift of fifteen
+                    # semitones deliberately lands far above it. Clamping the result to it
+                    # flattened the contour and a word stopped being a word.
                     float(np.clip(2.0**shaped, PITCH_FLOOR_HZ, PITCH_CEILING_HZ)),
                 )
             call([tier, manipulation], "Replace pitch tier")

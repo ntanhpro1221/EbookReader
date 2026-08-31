@@ -281,6 +281,45 @@ def apply_voice_variant(
     return _praat_formant_shift(array, int(sample_rate), ratio)
 
 
+def praat_pitch_window(
+    audio: "np.ndarray",
+    sample_rate: int,
+    floor_hz: float,
+    ceiling_hz: float,
+) -> tuple[float, float]:
+    """Narrow the pitch search to the range this recording actually uses.
+
+    Praat's pitch tracker is given a floor and a ceiling, and a window far wider than the
+    voice invites the classic halving error: a frame is scored as an octave below where it
+    belongs, and every PSOLA operation downstream then places its pulses wrong. It shows up
+    on low-pitched words, because those sit closest to the floor - which is exactly where a
+    listener located it, on "mẹ" in one voice and on "những từ trầm trong câu" in another.
+    A fixed 60-600 Hz window is ten times wider than a female preset needs.
+
+    The range is measured from the audio rather than configured, so it follows whatever the
+    register and age shifts have already done to the voice. Praat's own guidance is a floor
+    somewhat below the lowest real pitch and a ceiling somewhat above the highest; the
+    margins here are that, and they fall back to the wide window when a clip is too short
+    or too unvoiced to measure.
+    """
+    import parselmouth
+
+    try:
+        pitch = parselmouth.Sound(
+            np.asarray(audio, dtype=np.float64).reshape(-1),
+            sampling_frequency=int(sample_rate),
+        ).to_pitch(pitch_floor=floor_hz, pitch_ceiling=ceiling_hz)
+        values = np.asarray(pitch.selected_array["frequency"])
+        voiced = values[values > 0.0]
+    except Exception:  # noqa: BLE001
+        return floor_hz, ceiling_hz
+    if voiced.size < 20:
+        return floor_hz, ceiling_hz
+    low = float(np.percentile(voiced, 2)) * 0.75
+    high = float(np.percentile(voiced, 98)) * 1.35
+    return max(floor_hz, low), min(ceiling_hz, max(high, low * 2.0))
+
+
 def _praat_formant_shift(
     array: np.ndarray,
     sample_rate: int,
@@ -294,11 +333,14 @@ def _praat_formant_shift(
         source.astype(np.float64),
         sampling_frequency=int(sample_rate),
     )
+    floor_hz, ceiling_hz = praat_pitch_window(
+        source, int(sample_rate), VOICE_VARIANT_PITCH_FLOOR_HZ, VOICE_VARIANT_PITCH_CEILING_HZ
+    )
     shifted = call(
         sound,
         "Change gender",
-        VOICE_VARIANT_PITCH_FLOOR_HZ,
-        VOICE_VARIANT_PITCH_CEILING_HZ,
+        floor_hz,
+        ceiling_hz,
         float(formant_ratio),
         0.0,  # keep the pitch median exactly as the register step left it
         1.0,
