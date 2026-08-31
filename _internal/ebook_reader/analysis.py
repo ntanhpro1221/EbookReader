@@ -294,7 +294,8 @@ SCOPED_AFFECT_NEGATION_PREFIX_PATTERN = re.compile(
 SCOPED_AFFECT_ASSERTION_PREFIX_PATTERN = re.compile(
     r"(?:\b(?:không|chẳng)\s+"
     r"(?:(?:thể|phải|được(?:\s+phép)?)\s+)?(?:không|chẳng)"
-    r"|\b(?:không|chẳng|chưa)\s+(?:hết|khỏi|ngừng))\s*$",
+    r"|\b(?:không|chẳng|chưa)\s+"
+    r"(?:hết|khỏi|ngừng|thôi|dứt|nguôi|rũ\s+bỏ|gạt\s+(?:bỏ|đi)|thu\s+lại))\s*$",
     flags=re.IGNORECASE,
 )
 SCOPED_AFFECT_PROHIBITION_PREFIX_PATTERN = re.compile(
@@ -305,6 +306,17 @@ SCOPED_AFFECT_PROHIBITION_PREFIX_PATTERN = re.compile(
 SCOPED_AFFECT_NEGATION_SUFFIX_PATTERN = re.compile(
     r"^\s+(?:(?:đã|hoàn\s+toàn)\s+){0,2}"
     r"(?:hết|tan\s+biến|biến\s+mất|không\s+còn(?:\s+nữa)?|chẳng\s+còn(?:\s+nữa)?)\b",
+    flags=re.IGNORECASE,
+)
+# An affect the sentence says is over. "Thu lại vẻ kinh ngạc" means the astonishment has
+# just been put away, so reading the line as surprised states the opposite of the text -
+# the host was overriding the model with an emotion the prose had explicitly ended.
+# Concealment verbs are deliberately absent: someone who "nén giận" is still angry and
+# should still be read that way, only more tightly.
+SCOPED_AFFECT_CESSATION_PREFIX_PATTERN = re.compile(
+    r"\b(?:thu\s+lại|gạt\s+(?:bỏ|đi)|xua\s+tan|dẹp\s+(?:bỏ|đi)|rũ\s+bỏ"
+    r"|thôi|ngừng|dứt|nguôi|tan)"
+    r"(?:\s+(?:vẻ|nét|sự|dáng\s+vẻ|cơn|nỗi))?\s*$",
     flags=re.IGNORECASE,
 )
 SCOPED_AFFECT_HISTORICAL_PREFIX_PATTERN = re.compile(
@@ -1599,6 +1611,10 @@ def _affect_match_is_suppressed(
     return bool(
         (
             SCOPED_AFFECT_NEGATION_PREFIX_PATTERN.search(prefix) is not None
+            and not asserted_double_negative
+        )
+        or (
+            SCOPED_AFFECT_CESSATION_PREFIX_PATTERN.search(prefix) is not None
             and not asserted_double_negative
         )
         or SCOPED_AFFECT_PROHIBITION_PREFIX_PATTERN.search(prefix) is not None

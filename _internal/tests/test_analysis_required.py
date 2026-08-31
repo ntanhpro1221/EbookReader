@@ -62,6 +62,7 @@ from ebook_reader.analysis import (
     _batch_id,
     _direct_cue_allowed_emotions,
     _direct_cue_feedback_issues,
+    _semantic_cue_matches,
     _generator_request_contract,
     _canonicalize_analysis_notes,
     _apply_host_structural_locks,
@@ -11623,3 +11624,48 @@ def test_the_advertised_set_is_the_one_the_host_enforces_on_retry() -> None:
     )
 
     assert [issue.canonical_payload()["allowed_emotions"] for issue in issues] == [advertised]
+
+
+@pytest.mark.parametrize(
+    ("text", "keeps_cue"),
+    [
+        # An affect the prose says is over. The host used to read the keyword and force
+        # the emotion anyway, so a line about composure regained was read as astonished -
+        # it overrode the model with the opposite of what the sentence says, and spent a
+        # retry doing it. Both of these came out of a real run.
+        ("Thế là cậu đổi ý. Thu lại vẻ kinh ngạc, cậu để mặc cho cậu bé kéo tay.", False),
+        ("Cậu gạt bỏ nỗi sợ hãi rồi bước tới.", False),
+        ("Cậu xua tan nỗi sợ hãi trong lòng.", False),
+        ("Nỗi sợ hãi đã tan biến, cậu bước tới.", False),
+        # Negated cessation is the affect continuing, so the cue must survive. Every verb
+        # added to the cessation list has to be answered here or the reading inverts.
+        ("Cậu không thôi kinh ngạc trước cảnh tượng đó.", True),
+        ("Cậu không ngừng kinh ngạc trước cảnh tượng đó.", True),
+        ("Cậu chưa thôi kinh ngạc.", True),
+        ("Cậu kinh ngạc không thôi trước cảnh tượng đó.", True),
+        ("Cậu chẳng gạt bỏ được nỗi sợ hãi.", True),
+        # Ordinary affect keeps working; the cue is not weakened for everyone else.
+        ("Tim thắt lại, cậu nhìn ngọn lửa kinh hoàng.", True),
+        ("Khói dày đặc, cậu tuyệt vọng chờ ngọn lửa lan tới.", True),
+        ("Hắn nhìn cậu bằng ánh mắt tàn nhẫn kinh hoàng.", True),
+    ],
+)
+def test_an_affect_the_prose_ends_stops_being_a_cue(text: str, keeps_cue: bool) -> None:
+    assert bool(_semantic_cue_matches(text)) is keeps_cue
+
+
+def test_no_affect_pattern_contains_a_control_character() -> None:
+    """A backslash-b that survives one escaping layer too few becomes a backspace.
+
+    The pattern then silently demands a control character that no prose contains, so it
+    matches nothing and the suppression it implements is dead while still looking right
+    in the source. This cost two debugging rounds; the check is one line.
+    """
+    from ebook_reader import analysis as module
+
+    for name in dir(module):
+        if not name.startswith("SCOPED_AFFECT"):
+            continue
+        pattern = getattr(module, name)
+        assert chr(8) not in getattr(pattern, "pattern", ""), name
+
