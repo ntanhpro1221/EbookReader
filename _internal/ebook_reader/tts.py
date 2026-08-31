@@ -66,20 +66,30 @@ FATAL_TTS_MARKERS = (
     "only vieneu profiles",
 )
 
-EMOTION_TEMPERATURE = {
-    "neutral": 0.74,
-    "happy": 0.84,
-    "sad": 0.70,
-    "angry": 0.86,
-    "afraid": 0.84,
-    "surprised": 0.86,
-    "tender": 0.70,
-    "sarcastic": 0.80,
-    "excited": 0.88,
-    "tired": 0.68,
-    "whispering": 0.66,
-}
-PACE_TEMPERATURE_OFFSETS = {"slow": -0.03, "normal": 0.0, "fast": 0.04}
+# Delivery metadata no longer touches sampling, and this is why.
+#
+# VieNeu's infer() takes text, voice, style and sampling parameters. It has no emotion
+# input at all. Emotion used to be looked up in a table of temperatures, so a line marked
+# angry and the same line marked surprised shared a temperature and came out as literally
+# the same file - verified by hash: angry and surprised, sad and tender, happy and afraid
+# each produced byte-identical audio. The label carried no meaning; it selected one of
+# eight randomness levels.
+#
+# That was not merely useless, it was harmful. intensity added 0.015 per step to both
+# temperature and top_p, and a Vietnamese listener identified the higher settings as
+# sounding broken rather than intense - one take at intensity 1 ran 1.60s against 1.12s
+# for the same line, which is degenerate sampling, not emphasis. Neutral, the lowest
+# common setting, was repeatedly preferred.
+#
+# So generation now uses one stable temperature for every segment. 0.74 is what neutral
+# already used, which is most of the book and the setting the listener has approved by
+# ear. The purposeful caps below it stay: clarity repair, short utterances and
+# vocalisations still lower it further, because those lower it for a reason that exists.
+#
+# The emotion field is still analysed and stored. It costs no extra model call, and an
+# engine that can genuinely act on it would need the data already there.
+GENERATION_TEMPERATURE = 0.74
+GENERATION_TOP_P = 0.92
 PACE_SILENCE_PROPORTIONS = {"slow": 0.20, "normal": 0.15, "fast": 0.08}
 WORLD_FRAME_PERIOD_MS = 5.0
 WORLD_F0_FLOOR_HZ = 55.0
@@ -98,7 +108,12 @@ GENERATION_CEILING_METRIC = "generation_ceiling_hit"
 GENERATION_ENDPOINT_ACTIVE_METRIC = "generation_endpoint_active"
 GENERATION_FRAME_CAP_FIELD = "generation_frame_cap"
 DEFAULT_SEGMENT_ACTIVE_FLOOR_DBFS = -45.0
-CLARITY_MAX_TEMPERATURE = 0.78
+# Clarity repair regenerates a segment ASR could not confirm, and its whole purpose is
+# less sampling variance. The cap used to sit at 0.78, above the old neutral temperature
+# of 0.74, so it already did nothing for the 71% of segments that were neutral - and once
+# every segment generates at 0.74 it would have done nothing at all. It has to sit below
+# the generation temperature to mean anything, so it now does.
+CLARITY_MAX_TEMPERATURE = 0.66
 CLARITY_MAX_TOP_P = 0.90
 LOCKED_ENGLISH_NAME_PRONUNCIATION_SOURCES = frozenset(
     {
@@ -336,15 +351,9 @@ def vieneu_sampling_for_segment(
             f"Unsupported TTS vocalization delivery profile: {vocalization_delivery_profile}"
         )
     text = str(_row_value(row, "text", ""))
-    emotion = str(_row_value(row, "emotion", "neutral"))
     pace = str(_row_value(row, "pace", "normal"))
-    intensity = max(0, min(3, int(_row_value(row, "intensity", 0))))
-    base_temperature = EMOTION_TEMPERATURE.get(emotion, EMOTION_TEMPERATURE["neutral"])
-    temperature = min(
-        0.92,
-        base_temperature + PACE_TEMPERATURE_OFFSETS.get(pace, 0.0) + 0.015 * intensity,
-    )
-    top_p = min(0.98, 0.92 + 0.015 * intensity)
+    temperature = GENERATION_TEMPERATURE
+    top_p = GENERATION_TOP_P
     if normalized_delivery == DELIVERY_CLARITY:
         temperature = min(temperature, CLARITY_MAX_TEMPERATURE)
         top_p = min(top_p, CLARITY_MAX_TOP_P)

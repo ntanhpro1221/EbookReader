@@ -17,7 +17,9 @@ from ebook_reader.audio_io import (
 from ebook_reader.config import build_settings
 from ebook_reader.database import ProjectDB
 from ebook_reader.tts import (
+    CLARITY_MAX_TEMPERATURE,
     DELIVERY_CLARITY,
+    GENERATION_TEMPERATURE,
     TTSCoordinator,
     VieNeuEngine,
     apply_pitch_variant,
@@ -92,7 +94,15 @@ def test_vieneu_uses_voice_id_instead_of_display_label(monkeypatch) -> None:
     ) == "Phạm Tuyên"
 
 
-def test_emotion_changes_delivery_but_not_locked_voice(monkeypatch) -> None:
+def test_emotion_and_intensity_no_longer_reach_sampling(monkeypatch) -> None:
+    """Delivery metadata must not move the sampler, because it never meant anything there.
+
+    VieNeu has no emotion input. Emotion used to index a table of temperatures, so angry
+    and surprised shared 0.86 and produced byte-identical audio for the same line - the
+    label selected a randomness level, not a delivery. intensity added 0.015 per step to
+    temperature and top_p, and a listener identified the higher settings as sounding
+    broken rather than emphatic. Every segment now generates at one stable temperature.
+    """
     runtime = FakeVieNeuRuntime()
     vieneu_module = ModuleType("vieneu")
     vieneu_module.Vieneu = lambda **_kwargs: runtime
@@ -117,8 +127,19 @@ def test_emotion_changes_delivery_but_not_locked_voice(monkeypatch) -> None:
     assert [call[1]["voice"] for call in runtime.calls] == ["Thái Sơn", "Thái Sơn"]
     assert runtime.calls[0][0] == neutral["text"]
     assert runtime.calls[1][0] == neutral["text"]
-    assert runtime.calls[1][1]["temperature"] > runtime.calls[0][1]["temperature"]
-    assert vieneu_sampling_for_segment(excited)["top_p"] > vieneu_sampling_for_segment(neutral)["top_p"]
+    # The locked voice is unchanged, and so now is everything the sampler sees.
+    assert runtime.calls[1][1]["temperature"] == runtime.calls[0][1]["temperature"]
+    assert (
+        vieneu_sampling_for_segment(excited)["top_p"]
+        == vieneu_sampling_for_segment(neutral)["top_p"]
+    )
+    assert (
+        vieneu_sampling_for_segment(excited)["temperature"]
+        == vieneu_sampling_for_segment(neutral)["temperature"]
+        == pytest.approx(GENERATION_TEMPERATURE)
+    )
+    # pace still shapes silence, which is a real effect on the audio rather than a
+    # relabelling of randomness, so it keeps its influence.
     assert vieneu_sampling_for_segment({**neutral, "pace": "slow"})["silence_p"] > (
         vieneu_sampling_for_segment({**neutral, "pace": "fast"})["silence_p"]
     )
@@ -187,9 +208,12 @@ def test_clarity_delivery_only_lowers_sampling_variance() -> None:
     primary = vieneu_sampling_for_segment(row)
     clarity = vieneu_sampling_for_segment(row, delivery_mode=DELIVERY_CLARITY)
 
+    # The cap has to sit below the generation temperature or clarity repair does nothing.
+    # It used to sit above it for every neutral segment, which was most of the book.
     assert primary["temperature"] > clarity["temperature"]
     assert primary["top_p"] > clarity["top_p"]
-    assert clarity["temperature"] == pytest.approx(0.78)
+    assert clarity["temperature"] < GENERATION_TEMPERATURE
+    assert clarity["temperature"] == pytest.approx(CLARITY_MAX_TEMPERATURE)
     assert clarity["top_p"] == pytest.approx(0.90)
     assert clarity["top_k"] == primary["top_k"]
     assert clarity["repetition_penalty"] == primary["repetition_penalty"]
