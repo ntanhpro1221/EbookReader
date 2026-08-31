@@ -683,10 +683,21 @@ class TTSCoordinator:
             if (
                 not replacement_anchor_tags
                 and locked_english_pronunciation
-                and (
-                    canonical_replacement != matched_text
-                    or pronunciation_delivery_variant == PRONUNCIATION_DELIVERY_SOURCE
-                )
+                # Both delivery variants must anchor the same occurrences, because the
+                # candidate allocator refuses a source-spelling take whose anchors do not
+                # match the locked ones - and rightly so, since that comparison is what
+                # stops one name being read two ways.
+                #
+                # This used to anchor every occurrence in the source variant as well, which
+                # broke that comparison for any entry whose spoken form IS its spelling: the
+                # locked variant anchored nothing there and the source variant anchored one,
+                # so the two drifted by construction. On a book of English game terms that
+                # was 18 of 43 entries and killed 17 of 79 segments, deterministically.
+                #
+                # Nothing is lost by dropping it. When the canonical form equals the
+                # spelling, both variants read the text identically, so an anchor saying
+                # "read as spelled here" records no decision - there was none to make.
+                and canonical_replacement != matched_text
             ):
                 anchor_index = len(anchors)
                 replacement_anchor_tags.add(anchor_index)
