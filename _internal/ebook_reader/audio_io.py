@@ -139,6 +139,33 @@ SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
 SHORT_UTTERANCE_MAX_GENERATION_FRAMES = 24
 SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 
+# An isolated click at the start of an utterance - a listener described it as "a drop of
+# water hitting a steel bowl" - loud enough that the first syllable is lost behind it. It is
+# a generation lottery, not a property of the voice: the same preset reading the same
+# sentence produced a spike of 4.0x on one seed and none at all on two others, so the cure
+# is to notice it and let the existing retry draw a different seed.
+#
+# Magnitude alone cannot find it. Across 2500 accepted segments the median onset spike is
+# already 2.7x and the 90th percentile 4.1x, because a plosive (t, k, p) IS a burst of
+# energy and a legitimate one. What separates them is width: a plosive carries its burst
+# into aspiration and a formant transition and stays above half height for 9-14 ms, while a
+# click is over in 5. So the test is tall AND narrow, and neither half is sufficient.
+#
+# The window is limited to the beginning of the utterance because that is where the defect
+# was heard and where it does the most damage - the same word mid-sentence was judged fine.
+SEGMENT_ONSET_CLICK_WINDOW_SECONDS = 0.45
+SEGMENT_ONSET_CLICK_SHORT_SECONDS = 0.005
+SEGMENT_ONSET_CLICK_LONG_SECONDS = 0.060
+SEGMENT_ONSET_CLICK_ACTIVE_FRACTION = 0.02
+SEGMENT_ONSET_CLICK_MIN_SECONDS = 0.120
+# NOT a gate. An A/B listening test rejected it: the twelve segments this scored worst
+# (9.8-11.7x) were judged to have no audible defect at all. The numbers are still
+# recorded because they cost real measurement to obtain and may yet correlate with
+# something, but nothing may fail a segment on them until a listener confirms they hear
+# what it marks. See docs/ONSET_CLICK.md.
+SEGMENT_ONSET_CLICK_RATIO = 4.0
+SEGMENT_ONSET_CLICK_MAX_WIDTH_MS = 6.0
+
 
 @dataclass(frozen=True, slots=True)
 class SegmentDurationPolicy:
@@ -221,6 +248,44 @@ def vieneu_generation_reached_frame_ceiling(
     return generated_samples >= ceiling_samples
 
 
+def onset_click_metrics(audio: np.ndarray, sample_rate: int) -> tuple[float, float]:
+    """Measure the sharpest energy spike near the start of speech.
+
+    Returns (ratio, width_ms) for the strongest candidate: how far a 5 ms window rises above
+    its 60 ms surroundings, and how long it stays above half that height. See
+    SEGMENT_ONSET_CLICK_RATIO for why both numbers are needed.
+    """
+    array = np.asarray(audio, dtype=np.float64).reshape(-1)
+    if array.size < int(sample_rate * SEGMENT_ONSET_CLICK_MIN_SECONDS):
+        return (0.0, 0.0)
+    short_size = max(1, int(sample_rate * SEGMENT_ONSET_CLICK_SHORT_SECONDS))
+    long_size = max(1, int(sample_rate * SEGMENT_ONSET_CLICK_LONG_SECONDS))
+    power = np.square(array)
+    short = np.convolve(power, np.ones(short_size) / short_size, mode="same")
+    long = np.convolve(power, np.ones(long_size) / long_size, mode="same")
+    peak = float(long.max())
+    if peak <= 0.0:
+        return (0.0, 0.0)
+    voiced = np.flatnonzero(long > SEGMENT_ONSET_CLICK_ACTIVE_FRACTION * peak)
+    if voiced.size == 0:
+        return (0.0, 0.0)
+    onset = int(voiced[0])
+    end = min(array.size, onset + int(sample_rate * SEGMENT_ONSET_CLICK_WINDOW_SECONDS))
+    ratios = short[onset:end] / np.maximum(long[onset:end], 1e-12)
+    if ratios.size == 0:
+        return (0.0, 0.0)
+    index = int(np.argmax(ratios))
+    ratio = float(ratios[index])
+    half = ratio * 0.5
+    left = index
+    while left > 0 and ratios[left] > half:
+        left -= 1
+    right = index
+    while right < ratios.size - 1 and ratios[right] > half:
+        right += 1
+    return (ratio, 1000.0 * float(right - left) / sample_rate)
+
+
 def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
     array = np.asarray(audio, dtype=np.float32)
     if array.ndim == 2 and 1 in array.shape:
@@ -234,18 +299,23 @@ def signal_metrics(audio: np.ndarray, sample_rate: int) -> dict[str, float]:
             "peak": 0.0,
             "clipping_fraction": 0.0,
             "trailing_rms": 0.0,
+            "onset_click_ratio": 0.0,
+            "onset_click_width_ms": 0.0,
         }
     endpoint_samples = min(
         array.size,
         max(1, int(round(sample_rate * SEGMENT_ENDPOINT_WINDOW_SECONDS))),
     )
     trailing = array[-endpoint_samples:].astype(np.float64)
+    onset_ratio, onset_width = onset_click_metrics(array, sample_rate)
     return {
         "duration": float(array.size / sample_rate),
         "rms": float(math.sqrt(float(np.mean(np.square(array.astype(np.float64)))))) if array.size else 0.0,
         "peak": float(np.max(np.abs(array))),
         "clipping_fraction": float(np.mean(np.abs(array) >= 0.999)),
         "trailing_rms": float(math.sqrt(float(np.mean(np.square(trailing))))),
+        "onset_click_ratio": onset_ratio,
+        "onset_click_width_ms": onset_width,
     }
 
 

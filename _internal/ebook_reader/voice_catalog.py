@@ -292,15 +292,29 @@ AGE_TARGET_PITCH_HZ: dict[str, dict[str, float]] = {
     "elderly": {GENDER_MALE: 125.0, GENDER_FEMALE: 170.0, GENDER_UNKNOWN: 145.0},
 }
 
-# Usable, but only once everything else is taken. A listener judged these good enough to
-# keep and not good enough to reach for: a slight crackle in one, a maturity the age warp
-# cannot undo in the other. Unlike EXCLUDED_PRESETS this is a demotion, not a bar - a book
+# Usable, but only once everything else is taken. A listener judged each good enough to
+# keep and not good enough to reach for: a crackle in two of them, a maturity the age warp
+# cannot undo in the third. Unlike EXCLUDED_PRESETS this is a demotion, not a bar - a book
 # with more characters than clean voices should still cast them rather than run out.
+#
+# Thanh Bình joined the set after a click swallowed a word in its child register and every
+# attempt to cure that failed: a detector built for it was rejected by ear, UTMOSv2 ranked
+# the takes backwards, and folding the two resynthesis passes into one made the audio
+# worse. Nothing here fixes the voice - it stops the casting from reaching for it while the
+# defect stands. See docs/ONSET_CLICK.md.
 #
 # It sorts ahead of usage count deliberately. A gentler weighting would let a demoted
 # preset win as soon as the clean ones had each been used once, which is the second
-# character in a chapter, and that is not what "bottom of the list" means.
-LAST_RESORT_PRESETS = frozenset({"Thái Sơn", "Thục Đoan"})
+# character in a chapter, and that is not what "bottom of the list" means. The members are
+# joint last: nothing ranks one demoted preset above another, and the terms below only
+# break ties so the choice stays deterministic.
+LAST_RESORT_PRESETS = frozenset({"Thái Sơn", "Thanh Bình", "Thục Đoan"})
+
+# Casting prefers the preset needing the smallest age pitch shift, bucketed this wide.
+# Four semitones is roughly 0.2 MOS by the measurements in docs/CHILD_VOICE_TRANSFORM.md -
+# wide enough that a one-semitone edge cannot outrank voice diversity or tract fit, narrow
+# enough that the gap between a +2 preset and a +11 one still decides.
+AGE_PITCH_RANK_BUCKET = 4
 
 # How far a preset's own F0 may be carried toward an age target.
 #

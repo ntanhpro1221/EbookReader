@@ -20,6 +20,7 @@ from .database import (
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
     CASTING_REGIONS,
+    AGE_PITCH_RANK_BUCKET,
     EXCLUDED_PRESETS,
     LAST_RESORT_PRESETS,
     STYLE_NEWS,
@@ -316,6 +317,20 @@ class PresetAllocator:
                 # target are the same fit to a listener, and a 0.1 cm edge must not
                 # outrank a voice being hard to follow.
                 round(preset_age_reach(name, age, gender) * 2.0) / 2.0,
+                # Then the dearer of the two warps. Measured on four presets reading the
+                # same line, the age pitch shift costs about 0.85 MOS against the formant
+                # shift's 0.50, and the damage tracks the size of the shift: +2 semitones
+                # lost 0.69 MOS, +11 lost 1.24. Ranking on tract reach alone was
+                # optimising the cheaper axis and ignoring the dearer one.
+                #
+                # It still sorts below reach. Reach decides whether the result is a child
+                # at all - a listener rejected an otherwise clean take with "giọng của
+                # cậu bé nghe vẫn ra giọng của một ông chú" - and a clean voice that
+                # sounds like the wrong person is not the cheaper option.
+                #
+                # Bucketed at four semitones so a one-semitone edge cannot outweigh
+                # anything ranked above it.
+                abs(age_pitch_semitones(age, gender, name)) // AGE_PITCH_RANK_BUCKET,
                 *casting_preset_priority(preset),
             )
 
