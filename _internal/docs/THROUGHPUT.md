@@ -132,13 +132,48 @@ một run analysis khác đang dùng GPU và ~13 core - tức là điều kiện
 
 Hai kết luận:
 
-1. **Tất định giữ nguyên ở mọi cỡ pool.** Điểm UTMOSv2 giống hệt bản một worker. Đây là điều
-   kiện bắt buộc; không đạt thì con số throughput vô nghĩa.
+1. ~~**Tất định giữ nguyên ở mọi cỡ pool.**~~ **Sai — và sai vì chính công cụ đo.** Script khi đó
+   so kết quả sau khi `round(..., 4)`, nên nó báo "identical" trong khi điểm thật lệch khoảng
+   **5e-07**. Chỉ khi chấm lại bằng pool thật, so từng bit, mới lộ ra. Xem mục dưới.
 2. **Quá 4 worker thì tệ đi**, và lý do không phải thiếu core. Torch mặc định lấy một luồng mỗi
    core, nên 8 process đòi 8 x 32 = 256 luồng trên 32 core. Cỡ pool chỉ có nghĩa khi **từng
    thành viên bị ghim số luồng** - `--worker-threads` của script làm việc đó.
 
 Vì thế đừng đọc "4 là tối ưu" thành một hằng số. Nó là tối ưu **khi chưa ghim luồng**.
+
+## Số luồng torch làm đổi điểm UTMOSv2 — và điều đó đã đúng từ trước khi có pool
+
+Đo trực tiếp, cùng một file, cùng một checkpoint, chỉ đổi `torch.set_num_threads`:
+
+| file | 16 luồng | 2 luồng | 1 luồng |
+|---|---|---|---|
+| round_000 | 2.888798236846924 | 2.888798236846924 | 2.888798713684082 |
+| round_001 | 2.445344924926758 | 2.445345401763916 | 2.4453461170196533 |
+| round_004 | 2.4776558876037598 | 2.477656126022339 | 2.477656364440918 |
+
+Torch chia matmul cho các luồng rồi cộng lại **theo thứ tự luồng nào xong trước**, nên số luồng đổi
+thì mấy bit cuối đổi. Đây **không phải** hệ quả của việc song song hoá: điểm UTMOSv2 vốn đã phụ thuộc
+vào số core của máy, chỉ là chưa ai nhìn ra.
+
+Nó chỉ trở thành lỗi đúng nghĩa khi **một take được chấm ở process con còn baseline của preset đó
+được chấm ở process cha**: phán quyết là hiệu của hai số, mà hai số lại đến từ hai chế độ số học
+khác nhau. Lần chạy thử đầu tiên lệch đúng như vậy — 11/16 file.
+
+Cách sửa: ghim số luồng **bên trong chính verifier** (`_pin_threads`, gọi từ `load()`), nên cha và
+con dùng cùng một con số qua cùng một đường code. Không phải nới lỏng bằng dung sai, mà là làm cho
+hai bên giống nhau **theo thiết kế**.
+
+Sau khi sửa, chấm lại 24 file thật: **0 lệch, 3,08x nhanh hơn**.
+
+### Bài học về công cụ đo
+
+Script benchmark khi đó so kết quả đã `round(..., 4)`. Nó báo "identical" ở mọi cỡ pool và **tôi đã
+tin**. Một phép so không nhìn thấy được sai khác thì tệ hơn là không so, vì nó được tin tưởng. Giờ
+script so số thực đầy đủ, không làm tròn.
+
+Và unit test cũng không bắt được: chúng dùng model giả trả về số cố định. Chỉ có chạy thật với
+UTMOSv2 thật trên WAV thật mới lộ. **Việc gì đụng tới số học dấu phẩy động thì phải kiểm chứng bằng
+dữ liệu thật.**
 
 ## Thứ tự triển khai, mỗi bước phải đo trước và sau
 

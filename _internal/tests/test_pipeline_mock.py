@@ -327,7 +327,7 @@ class PassPerceptualVerifier:
         self.verify_calls = 0
         self.unload_calls = 0
 
-    def verify(self, _wav, _preset, *, pitch_semitones=0):
+    def verify(self, _wav, _preset, *, pitch_semitones=0, prefetched_score=None):
         self.verify_calls += 1
         return {
             "verdict": "ok",
@@ -2281,7 +2281,7 @@ def test_asr_candidate_with_perceptual_review_never_replaces_incumbent(
     class ReviewPerceptualVerifier:
         verify_calls = 0
 
-        def verify(self, _wav, _preset, *, pitch_semitones=0):
+        def verify(self, _wav, _preset, *, pitch_semitones=0, prefetched_score=None):
             self.verify_calls += 1
             return {
                 "verdict": "review",

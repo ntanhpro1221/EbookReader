@@ -189,7 +189,12 @@ def run_stage(stage: str, workers: int, jobs: list[Any]) -> dict[str, Any]:
         "jobs_per_minute": round(len(jobs) / elapsed * 60.0, 2) if elapsed > 0 else 0.0,
         "peak_gpu_percent": peak["gpu_percent"],
         "peak_vram_mib": peak["vram_used_mib"],
-        "results": sorted((str(key), round(float(value), 4)) for key, value in results),
+        # Full precision, never rounded. An earlier version rounded to four decimals and
+        # therefore reported "identical" across pool sizes while the scores actually
+        # differed at 5e-07 - torch sums a matmul's pieces in thread completion order, so
+        # the thread count changes the last bits. A comparison that cannot see that is
+        # worse than no comparison, because it is believed.
+        "results": sorted((str(key), float(value)) for key, value in results),
     }
 
 

@@ -39,6 +39,7 @@ class StaticPerceptualVerifier:
         _preset_name: str,
         *,
         pitch_semitones: int = 0,
+        prefetched_score: float | None = None,
     ) -> dict:
         if isinstance(self.result, Exception):
             raise self.result
@@ -59,6 +60,7 @@ class SequencePerceptualVerifier:
         _preset_name: str,
         *,
         pitch_semitones: int = 0,
+        prefetched_score: float | None = None,
     ) -> dict:
         result = self.results[min(self.verify_calls, len(self.results) - 1)]
         self.verify_calls += 1
@@ -79,6 +81,7 @@ class RecordingPerceptualVerifier(StaticPerceptualVerifier):
         preset_name: str,
         *,
         pitch_semitones: int = 0,
+        prefetched_score: float | None = None,
     ) -> dict:
         self.calls.append((preset_name, pitch_semitones))
         return super().verify(

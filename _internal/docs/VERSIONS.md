@@ -135,6 +135,85 @@ cuối cùng, ghi file rồi thôi. Cao độ không thể làm sai chữ, nên 
 chính là thứ đang làm segment bị dịch fail gấp 3,4 lần một cách vô cớ. Phần giữ lại duy nhất là ghi file an
 toàn (`.part` + checksum + atomic replace) — đó là I/O đúng cách, không phải chấm điểm.
 
+## v0.2.0-alpha.12 — dải formant tính theo register, đặt tên ranh giới nguồn
+
+### Dải formant phải tính lại sau khi đã chỉnh F0
+
+Người nghe: *"sau khi đã -4 f0 thì giọng thanh bình là một giọng trầm rồi, lúc này range paraat
+phải tính lại. .86 tôi nghe hơi trầm quá"*.
+
+Đây là lỗ hổng thật trong mô hình cũ. Dải formant được tính **chỉ từ giải phẫu** — chiều dài khoang
+miệng suy ra từ F3. Nhưng cảm giác "người nói to/trầm" đến từ **cả F0 lẫn formant**, và hai thứ đó
+rút từ cùng một ngân sách. Một preset đã bị hạ register thì đã tiêu mất một phần ngân sách ấy.
+
+Giải phẫu **không thể tự thấy điều này**: hạ F0 bằng WORLD giữ nguyên spectral envelope, nên khoang
+miệng ước lượng sau khi hạ đúng bằng trước khi hạ. Đo lại trên audio bao nhiêu lần cũng ra con số cũ.
+Hệ số quy đổi bắt buộc phải lấy từ tai người nghe.
+
+Đo được: Thanh Bình sàn `0.86` trên bản gốc, sàn `0.90` sau khi hạ `-4`. Vậy **1 bán âm ≈ 0.01
+formant** (`REGISTER_FORMANT_TRADE_PER_SEMITONE`). Cả cửa sổ dịch chuyển lên, và giới hạn của phép
+biến đổi vẫn chặn trên.
+
+Ba ràng buộc độc lập giao nhau, mỗi cái đến từ một nguồn khác nhau:
+
+| Ràng buộc | Nguồn | Đo bằng |
+|---|---|---|
+| Giải phẫu | khoang miệng phải nằm trong khoảng người lớn (12,8–19,7 cm) | Praat đo F3 |
+| Thuật toán | PSOLA xuống cấp khi rời xa 1.0 | tai — `−0.15/+0.20` nam, đảo lại cho nữ |
+| Ngân sách trầm | F0 và formant cùng tạo cảm giác trầm | tai — 0.01/bán âm |
+
+Kết quả: Thanh Bình `[0.90, 1.20]`. Preset ở register gốc không đổi. Tổng 55 giọng phân biệt được.
+
+### Retry của analysis phải nói rõ ranh giới nào bị vượt
+
+Một batch thật tiêu hết cả 3 lượt vào **một** segment rồi buộc phải chia đôi:
+
+    ‘Tỉnh dậy, phải tỉnh dậy!’     kind_hint=thought
+
+`_source_kind_transition_rule` trả `""` cho hai trường hợp — nguồn là `thought` mà model muốn đổi, và
+nguồn là narration mà model muốn gọi là `dialogue`. Mà `if self.rule:` nghĩa là rule rỗng **bị bỏ hẳn
+khỏi payload**. Model chỉ nhận được "kind sai", không có gì để sửa theo, nên nó lặp lại đúng câu trả
+lời cũ cho tới khi hết lượt. Chiều `dialogue` thì có rule tên hẳn hoi từ đầu.
+
+Đặt tên chỉ ở **nhánh feedback**. Hàm rule vẫn trả `""`, vì rule khác rỗng ở đó sẽ **kích hoạt nhánh
+source-kind override** ở tầng critic, mà provenance lưu trong `database.py` chỉ chấp nhận đúng hai
+rule đang sở hữu một lock. Có test khoá riêng điều này lại.
+
+### Quy trình: worktree để vừa chạy vừa sửa
+
+Sửa file trong `QUALITY_IMPLEMENTATION_FILES` giữa lúc đang chạy làm đổi `quality_policy_hash`, khiến
+candidate đã commit thành lạc hậu. Trước đây điều đó buộc phải chọn: hoặc chạy, hoặc sửa.
+
+Nay có `D:\Novels\Ebook Reader_dev` (git worktree, branch `dev/alpha13`), dùng chung venv và model qua
+junction `_internal/runtime`. Cây chính chạy, cây dev sửa.
+
+**Giới hạn cần biết:** junction dùng chung venv, nên **nâng cấp package thì cả hai cây cùng đổi**.
+Code thì cô lập, dependency thì không. Muốn thử nâng package trong lúc đang chạy thì phải tạo venv riêng.
+
+### Vòng lặp phát triển đang dài 9 tiếng — và tại sao
+
+App phân tích **trọn cuốn** rồi mới tổng hợp audio. Đo trên run 20 chương: 398 batch, 0,72 batch/phút
+→ **8,8 giờ analysis trước khi có một giây audio nào**.
+
+Nghĩa là một run 20 chương không dùng được để lặp chất lượng. Run phát triển nên lấy **4 chương**
+(≈80 batch, ≈1,8 giờ) để còn nghe được đầu ra trong ngày.
+
+### Nút thắt đổi theo giai đoạn
+
+| Tài nguyên | Analysis | Synthesis | Tổng |
+|---|---|---|---|
+| GPU | 30–48% | 14–18% | 100% |
+| VRAM | **6,66 GB (82%)** | 1,30 GB (16%) | 8,15 GB |
+| CPU | 13 core | 0,8 core | 32 core |
+
+Analysis nghẽn VRAM, synthesis rảnh mọi thứ. Số worker song song **không được** là hằng số.
+
+Và analysis chạy với `OLLAMA_NUM_PARALLEL=1` — trần cứng, mọi request xếp hàng dù pipeline gửi bao
+nhiêu. Project tự khởi động `ollama serve` với env kế thừa nên biến này đặt được.
+
+**Output:** `D:\Novels\Audiobooks\_versions\v0.2.0-alpha.12\alpha12_beafd838b2` (chương 000–019,
+dừng giữa chừng ở analysis batch 15/398 — cố ý, để đo Ollama khi GPU rảnh).
+
 ## v0.2.0-alpha.11 — bỏ giọng miền Trung, một tên một cách đọc
 
 **Bỏ giọng miền Trung khỏi phân vai** (quyết định của người dùng, người nghe được tiếng Việt). Bằng chứng

@@ -24,6 +24,13 @@ DEFAULT_REVIEW_DELTA = -0.8
 DEFAULT_MINIMUM_DURATION_SECONDS = 1.5
 DEFAULT_INFERENCE_REPETITIONS = 3
 DEFAULT_INFERENCE_SEED = 42
+# Measured resident size of one scoring worker, used to keep a pool from crowding RAM.
+PERCEPTUAL_WORKER_RAM_GB = 1.0
+# Torch takes one thread per core by default, so N workers ask for N x cores threads and
+# spend the difference context switching. Measured on 32 cores over 24 segments: unpinned,
+# 4 workers reached 1.66x and 8 fell back to 1.34x; pinned to 2 threads, 8 workers reached
+# 3.68x. The pool size only means anything once each member is bounded.
+DEFAULT_PERCEPTUAL_WORKER_THREADS = 2
 
 
 class PerceptualQAUnavailable(RuntimeError):
@@ -162,6 +169,11 @@ class UTMOSNaturalnessVerifier:
         if self.num_repetitions < 1:
             raise ValueError("perceptual_qa.num_repetitions must be positive")
         self.inference_seed = int(self.settings.get("inference_seed", DEFAULT_INFERENCE_SEED))
+        self.worker_threads = int(
+            self.settings.get("worker_threads", DEFAULT_PERCEPTUAL_WORKER_THREADS)
+        )
+        if self.worker_threads < 1:
+            raise ValueError("perceptual_qa.worker_threads must be positive")
         self.device = str(self.settings.get("device", "cuda"))
         self.predict_dataset = str(self.settings.get("predict_dataset", "sarulab"))
         self.remove_silent_section = bool(self.settings.get("remove_silent_section", True))
@@ -196,6 +208,29 @@ class UTMOSNaturalnessVerifier:
             raise error
         return False
 
+    def _pin_threads(self) -> None:
+        """Score at a fixed thread count, wherever the scoring happens.
+
+        Torch splits a matmul across its threads and sums the pieces in whatever order
+        they finish, so the same WAV scores differently at 1, 2 and 16 threads - measured
+        here at around 5e-07. That was already true before any pool existed: the score
+        quietly depended on how many cores the machine had. It only becomes a correctness
+        problem once a take is scored in a worker while its preset baseline is scored in
+        the parent, because the verdict is their difference and the two would then come
+        from different arithmetic. Pinning both to one number removes the mismatch by
+        construction rather than by tolerance.
+        """
+        if not self.device.startswith("cpu"):
+            return
+        try:
+            import torch
+
+            torch.set_num_threads(self.worker_threads)
+        except Exception:  # noqa: BLE001
+            # A torch that will not take a thread count still scores; it just scores at
+            # whatever default it chose, which is exactly the old behaviour.
+            return
+
     def load(self) -> bool:
         if not self.enabled:
             self._unavailable_reason = "PERCEPTUAL_QA_DISABLED"
@@ -203,6 +238,7 @@ class UTMOSNaturalnessVerifier:
             return False
         if self.model is not None:
             return True
+        self._pin_threads()
         if self._unavailable_latched:
             if self.failure_policy == "fail":
                 raise PerceptualQAUnavailable(
@@ -367,7 +403,12 @@ class UTMOSNaturalnessVerifier:
         preset_name: str,
         *,
         pitch_semitones: int = 0,
+        prefetched_score: float | None = None,
     ) -> dict[str, Any]:
+        """Judge one take. `prefetched_score` is this file's UTMOSv2 score if a worker
+        already computed it - the number only, never a verdict. Every gate below still
+        runs here: a prefetched score changes who did the arithmetic, not what it means.
+        """
         pitch_steps = int(pitch_semitones)
         if not self.enabled:
             return self._inconclusive_result(
@@ -409,7 +450,13 @@ class UTMOSNaturalnessVerifier:
                 baseline_pitch_semitones=pitch_steps,
             )
         try:
-            score = self._score(wav_path)
+            score = (
+                self._score(wav_path)
+                if prefetched_score is None
+                else float(prefetched_score)
+            )
+            if not math.isfinite(score):
+                raise ValueError(f"UTMOSv2 score is not finite for {wav_path.name}")
         except Exception as exc:  # noqa: BLE001
             if self._unavailable(
                 "PERCEPTUAL_SCORE_ERROR",
@@ -444,3 +491,106 @@ class UTMOSNaturalnessVerifier:
             "review_required": review_required,
             "duration_seconds": duration_seconds,
         }
+
+
+# --- parallel scoring ---------------------------------------------------------------
+#
+# Scoring a WAV is the whole cost of perceptual QA and it is a pure read: it takes a file
+# and returns a number, touching no database row, no artifact and no pipeline state. That
+# makes it the one stage that can be spread across the idle cores without renegotiating
+# any invariant - every threshold, baseline and verdict stays in the parent, exactly where
+# it is today, and only the number arrives from somewhere else.
+#
+# Processes, not threads. `_preserved_inference_rng` seeds process-global RNGs, so threads
+# inside one process would make a segment's score depend on which segments happened to be
+# scored beside it. Separate processes each own their RNG, which is why the measured
+# scores are identical at every pool size.
+
+_WORKER: dict[str, Any] = {}
+
+
+def _score_worker_init(settings: dict[str, Any], threads: int) -> None:
+    # The thread count travels inside the settings so a worker and the parent pin the
+    # same number through the same code path; passing it separately invited them to drift.
+    worker_settings = dict(settings)
+    worker_settings["perceptual_qa"] = {
+        **worker_settings.get("perceptual_qa", {}),
+        "worker_threads": max(1, int(threads)),
+    }
+    verifier = UTMOSNaturalnessVerifier(worker_settings, lambda _message: None)
+    if not verifier.load():
+        raise RuntimeError("UTMOSv2 is unavailable in a scoring worker")
+    _WORKER["verifier"] = verifier
+
+
+def _score_worker_job(wav_path: str) -> tuple[str, float | None]:
+    """Score one file, or report failure so the parent can re-run it itself.
+
+    A worker never decides anything. Returning None for a file it could not score leaves
+    the parent to call its own scorer, which raises and classifies the failure through the
+    same path it would have taken had no pool existed.
+    """
+    verifier = _WORKER.get("verifier")
+    if verifier is None:
+        return wav_path, None
+    try:
+        return wav_path, float(verifier._score(Path(wav_path)))
+    except Exception:  # noqa: BLE001
+        return wav_path, None
+
+
+class PerceptualScorePool:
+    """Score many WAVs across processes, falling back to nothing at all on any trouble."""
+
+    def __init__(
+        self,
+        settings: dict[str, Any],
+        log: Callable[[str], None],
+        *,
+        workers: int,
+        threads: int = DEFAULT_PERCEPTUAL_WORKER_THREADS,
+    ) -> None:
+        self.settings = settings
+        self.log = log
+        self.workers = max(0, int(workers))
+        self.threads = max(1, int(threads))
+
+    def usable_for(self, job_count: int, free_ram_gb: float) -> int:
+        """How many workers this batch may actually have, or 0 to score in the parent."""
+        if self.workers < 2 or job_count < 2:
+            return 0
+        if str(self.settings.get("perceptual_qa", {}).get("device", "cpu")) != "cpu":
+            # A GPU pool would multiply VRAM against the engines the pipeline still needs.
+            return 0
+        affordable = int(max(0.0, free_ram_gb - 2.0) / PERCEPTUAL_WORKER_RAM_GB)
+        return max(0, min(self.workers, job_count, affordable, (os.cpu_count() or 1) // 2))
+
+    def score_many(
+        self,
+        wav_paths: list[str],
+        *,
+        free_ram_gb: float,
+    ) -> dict[str, float]:
+        """Return the scores that succeeded. Anything missing is the parent's to compute."""
+        workers = self.usable_for(len(wav_paths), free_ram_gb)
+        if workers < 2:
+            return {}
+        import multiprocessing as mp
+
+        scores: dict[str, float] = {}
+        try:
+            context = mp.get_context("spawn")
+            with context.Pool(
+                processes=workers,
+                initializer=_score_worker_init,
+                initargs=(self.settings, self.threads),
+            ) as pool:
+                for wav_path, score in pool.imap_unordered(_score_worker_job, wav_paths):
+                    if score is not None:
+                        scores[wav_path] = float(score)
+        except Exception as exc:  # noqa: BLE001
+            # A pool that cannot start is a throughput problem, never a quality one: the
+            # parent scores everything itself and the run is exactly what it always was.
+            self.log(f"Không dựng được pool chấm perceptual ({exc}); chấm tuần tự.")
+            return {}
+        return scores

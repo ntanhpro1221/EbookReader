@@ -74,10 +74,12 @@ from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
 from .perceptual_qa import (
+    DEFAULT_PERCEPTUAL_WORKER_THREADS,
     PERCEPTUAL_INCONCLUSIVE,
     PERCEPTUAL_OK,
     PERCEPTUAL_REVIEW,
     PerceptualQAUnavailable,
+    PerceptualScorePool,
     UTMOSNaturalnessVerifier,
 )
 from .perceptual_contract import (
@@ -1129,6 +1131,7 @@ class BookPipeline:
         row: Any,
         *,
         gate_label: str,
+        prefetched_score: float | None = None,
     ) -> dict[str, Any]:
         perceptual_uses_gpu = self._perceptual_qa_uses_gpu()
         self._resource_gate(
@@ -1143,6 +1146,7 @@ class BookPipeline:
             Path(str(row["wav_path"])),
             preset_name,
             pitch_semitones=baseline_pitch_semitones,
+            prefetched_score=prefetched_score,
         )
         perceptual_verdict = str(result.get("verdict", PERCEPTUAL_INCONCLUSIVE))
         reason = str(result.get("reason", "PERCEPTUAL_EVIDENCE_ERROR"))
@@ -1286,6 +1290,57 @@ class BookPipeline:
             quality_check_id=quality_check_id,
         )
 
+    def _prefetch_perceptual_scores(
+        self,
+        pending: list[Any],
+        gate_label: str,
+    ) -> dict[str, float]:
+        """Score this chapter's pending takes across processes before judging any of them.
+
+        Scoring is a pure read - a file in, a number out - so spreading it over the idle
+        cores costs nothing the gates depend on. The verdicts below are untouched: they run
+        in this process, in the same order, against the same thresholds. A file the pool
+        did not return simply is not in the map, and the parent scores it itself.
+        """
+        if not pending or self._perceptual_qa_uses_gpu():
+            return {}
+        pool = PerceptualScorePool(
+            self.settings,
+            self.log,
+            workers=self._perceptual_pool_workers(),
+            threads=self._perceptual_worker_threads(),
+        )
+        wav_paths = [str(row["wav_path"]) for row in pending]
+        snapshot = self.resources.snapshot()
+        workers = pool.usable_for(len(wav_paths), float(snapshot.free_ram_gb))
+        if workers < 2:
+            return {}
+        # The gate runs once for the batch rather than once per file: the pool holds the
+        # CPU for its whole duration, so a mid-batch yield would have nothing to release.
+        self._resource_gate(
+            f"{gate_label} ({workers} tiến trình)",
+            release_active=self.perceptual_qa.unload,
+            require_gpu=False,
+            require_cpu_io=True,
+        )
+        scores = pool.score_many(wav_paths, free_ram_gb=float(snapshot.free_ram_gb))
+        if scores:
+            self.log(
+                f"{gate_label}: chấm sẵn {len(scores)}/{len(wav_paths)} đoạn "
+                f"trên {workers} tiến trình."
+            )
+        return scores
+
+    def _perceptual_pool_workers(self) -> int:
+        return int(self.settings.get("perceptual_qa", {}).get("parallel_workers", 0))
+
+    def _perceptual_worker_threads(self) -> int:
+        return int(
+            self.settings.get("perceptual_qa", {}).get(
+                "worker_threads", DEFAULT_PERCEPTUAL_WORKER_THREADS
+            )
+        )
+
     def _verify_chapter_perceptual_audio(self, chapter: Any) -> list[dict[str, Any]]:
         if not self._perceptual_qa_enabled():
             return []
@@ -1304,6 +1359,7 @@ class BookPipeline:
         label = f"Perceptual QA chapter {chapter['chapter_index']}"
         review_candidates: list[dict[str, Any]] = []
         self._progress(label, 0, len(pending))
+        prefetched_scores = self._prefetch_perceptual_scores(pending, label)
         for index, row in enumerate(pending, 1):
             if not self.db.segment_audio_is_current_qa_verified(
                 int(row["id"]),
@@ -1323,6 +1379,7 @@ class BookPipeline:
                     gate_label=(
                         f"UTMOSv2 chapter {chapter['chapter_index']} segment {row['seq']}"
                     ),
+                    prefetched_score=prefetched_scores.get(str(row["wav_path"])),
                 )
                 baseline_pitch_semitones = int(
                     result.get("baseline_pitch_semitones", 0)

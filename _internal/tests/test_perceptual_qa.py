@@ -14,6 +14,7 @@ from ebook_reader.perceptual_qa import (
     PERCEPTUAL_OK,
     PERCEPTUAL_REVIEW,
     PerceptualQAUnavailable,
+    PerceptualScorePool,
     UTMOSNaturalnessVerifier,
 )
 from ebook_reader.voice_catalog import VOICE_PREVIEW_FILENAMES
@@ -460,3 +461,147 @@ def test_unload_preserves_voice_baselines_and_trims_working_set(tmp_path: Path, 
     assert verifier.model is None
     assert verifier._baseline_scores == {(PRESET_NAME, 0): pytest.approx(3.0)}
     assert trims == [True]
+
+
+# --- parallel scoring ---------------------------------------------------------------
+
+
+def _pool_settings(**overrides) -> dict:
+    settings = {
+        "perceptual_qa": {"enabled": True, "device": "cpu", **overrides},
+    }
+    return settings
+
+
+def test_a_prefetched_score_reaches_the_same_verdict_as_scoring_here(
+    tmp_path: Path,
+) -> None:
+    """A worker supplies the number and nothing else; every gate still runs in-process.
+
+    This is the whole safety argument for the pool. If a prefetched score could reach a
+    different verdict than the same score computed here, the pool would be moving
+    judgement out of the pipeline rather than moving arithmetic off its critical path.
+    """
+    preview_name = VOICE_PREVIEW_FILENAMES[PRESET_NAME]
+    scores = {preview_name: 3.0, "generated.wav": 2.5}
+
+    verifier, model, generated = _configured_verifier(tmp_path, scores)
+    local = verifier.verify(generated, PRESET_NAME)
+    local_predict_calls = [name for name, _kwargs in model.calls]
+
+    verifier, model, generated = _configured_verifier(tmp_path, scores)
+    prefetched = verifier.verify(generated, PRESET_NAME, prefetched_score=2.5)
+
+    assert prefetched == local
+    assert local_predict_calls == [preview_name, "generated.wav"]
+    # The take itself was never scored twice; only the preset baseline was still needed.
+    assert [name for name, _kwargs in model.calls] == [preview_name]
+
+
+def test_a_take_the_pool_skipped_is_scored_by_the_parent(tmp_path: Path) -> None:
+    """A worker that fails returns nothing, and the parent takes its normal path.
+
+    Worker trouble must never become a quality signal: scoring it here reproduces exactly
+    the verdict the run would have reached with no pool at all.
+    """
+    preview_name = VOICE_PREVIEW_FILENAMES[PRESET_NAME]
+    verifier, model, generated = _configured_verifier(
+        tmp_path, {preview_name: 3.0, "generated.wav": 2.5}
+    )
+
+    result = verifier.verify(generated, PRESET_NAME, prefetched_score=None)
+
+    assert "generated.wav" in [name for name, _kwargs in model.calls]
+    assert result["score"] == pytest.approx(2.5)
+
+
+def test_a_non_finite_prefetched_score_is_refused(tmp_path: Path) -> None:
+    """A number from a worker is checked as strictly as one computed here.
+
+    `_score` rejects a non-finite result. A prefetched score crossed a process boundary to
+    get here, so it earns the same suspicion rather than less.
+    """
+    preview_name = VOICE_PREVIEW_FILENAMES[PRESET_NAME]
+    checkpoint = tmp_path / "utmos.pth"
+    checkpoint.touch()
+    _write_wav(tmp_path / preview_name, 2.0)
+    generated = tmp_path / "generated.wav"
+    _write_wav(generated, 1.0)
+    model = FakeModel({preview_name: 3.0, "generated.wav": 2.5})
+    verifier = UTMOSNaturalnessVerifier(
+        _settings(checkpoint, failure_policy="inconclusive"),
+        lambda _message: None,
+        model_factory=lambda **_kwargs: model,
+        preview_root=tmp_path,
+    )
+
+    result = verifier.verify(generated, PRESET_NAME, prefetched_score=float("nan"))
+
+    assert result["verdict"] == PERCEPTUAL_INCONCLUSIVE
+    assert result["reason"] == "PERCEPTUAL_SCORE_ERROR"
+
+
+@pytest.mark.parametrize(
+    ("workers", "jobs", "free_ram_gb", "device", "expected"),
+    [
+        (8, 24, 32.0, "cpu", True),
+        # One worker is the sequential loop with extra machinery attached.
+        (1, 24, 32.0, "cpu", False),
+        (0, 24, 32.0, "cpu", False),
+        # A pool for a single file pays startup for nothing.
+        (8, 1, 32.0, "cpu", False),
+        # Each worker holds about a gigabyte, so RAM decides before the setting does.
+        (8, 24, 2.5, "cpu", False),
+        # A GPU pool would multiply VRAM against engines the pipeline still needs.
+        (8, 24, 32.0, "cuda", False),
+    ],
+)
+def test_the_pool_declines_itself_when_it_would_not_pay(
+    workers: int,
+    jobs: int,
+    free_ram_gb: float,
+    device: str,
+    expected: bool,
+) -> None:
+    pool = PerceptualScorePool(
+        _pool_settings(device=device), lambda _message: None, workers=workers
+    )
+    assert (pool.usable_for(jobs, free_ram_gb) >= 2) is expected
+
+
+def test_worker_count_never_exceeds_what_the_moment_affords() -> None:
+    """The configured number is a ceiling, never a demand.
+
+    A run must be able to shrink when the machine is busy, so the pool sizes itself from
+    free RAM at the moment the batch starts rather than from a number fixed at startup.
+    """
+    pool = PerceptualScorePool(_pool_settings(), lambda _message: None, workers=8)
+
+    generous = pool.usable_for(24, 32.0)
+    frugal = pool.usable_for(24, 6.0)
+
+    assert generous > frugal >= 2
+    assert generous <= 8
+    # Never more workers than files, however much RAM is free.
+    assert pool.usable_for(3, 64.0) <= 3
+
+
+def test_a_pool_that_cannot_start_scores_nothing_rather_than_guessing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A broken pool degrades to the sequential path, never to an invented score."""
+    messages: list[str] = []
+    pool = PerceptualScorePool(_pool_settings(), messages.append, workers=8)
+
+    def _explode(_name: str):
+        raise OSError("no process handles left")
+
+    import multiprocessing
+
+    monkeypatch.setattr(multiprocessing, "get_context", _explode)
+
+    scores = pool.score_many([str(tmp_path / f"{i}.wav") for i in range(8)], free_ram_gb=32.0)
+
+    assert scores == {}
+    assert messages and "tuần tự" in messages[0]
