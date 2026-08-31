@@ -90,6 +90,19 @@ FATAL_TTS_MARKERS = (
 # engine that can genuinely act on it would need the data already there.
 GENERATION_TEMPERATURE = 0.74
 GENERATION_TOP_P = 0.92
+# Measured, not assumed: this parameter does nothing. The same line generated at
+# silence_p 0.05, 0.15, 0.30 and 0.50 - a tenfold range - came back identical in duration
+# and in every internal gap. VieNeu accepts the argument and ignores it.
+#
+# It is left in place because the engine's signature takes it and a future version may
+# honour it, but nothing may be built on the belief that it works. Pause length between
+# segments is controlled where it can be: at chapter assembly, in expression.py. Pause
+# length *inside* a segment is currently not controllable at all.
+#
+# This is the fourth parameter this project set carefully while it did nothing - after
+# emotion, which only chose a sampling temperature; pace, which nudged that temperature;
+# and the clarity cap, which sat above the value it was meant to clamp. A number that is
+# read and discarded looks exactly like a number that works.
 PACE_SILENCE_PROPORTIONS = {"slow": 0.20, "normal": 0.15, "fast": 0.08}
 WORLD_FRAME_PERIOD_MS = 5.0
 WORLD_F0_FLOOR_HZ = 55.0

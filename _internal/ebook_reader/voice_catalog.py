@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from typing import Any
 
 
@@ -266,30 +268,38 @@ VOCAL_TRACT_CM_BY_AGE: dict[str, dict[str, float]] = {
     "teen": {GENDER_MALE: 15.5, GENDER_FEMALE: 14.5, GENDER_UNKNOWN: 15.0},
 }
 
-# Speaking F0 relative to an adult of the same sex, in semitones, and this is where age
-# actually lives for older characters.
+# Speaking F0 for an age, as an absolute target in hertz rather than an offset.
 #
-# Children speak around 245-262 Hz between six and ten with no significant difference
-# between boys and girls, against an adult woman's 205 Hz - about three semitones up.
+# It was an offset first - "+3 semitones, because a child speaks around 250 Hz against an
+# adult woman's 205" - and that was wrong in a way a listener heard immediately. Applied to
+# a male preset sitting at 120 Hz, +3 semitones lands at 143 Hz, nowhere near a child. The
+# result was a 13.8 cm vocal tract speaking at 143 Hz: a combination no human throat can
+# produce, and the ear rejects it as a fault rather than as a young voice. The listener
+# described exactly that - the male presets "rè", crackly, "nghe như lỗi" - while the two
+# presets that already sit at 246 Hz were called simply good.
 #
-# Ageing is not symmetric, and the common intuition that old voices are deep is only
-# half right. Measured across age cohorts (PMC5832520), women fall from 205 Hz to about
-# 170 Hz while men *rise* from 108 Hz to about 125 Hz. So an elderly man reads higher
-# than his younger self, not lower.
-AGE_PITCH_SEMITONES: dict[str, dict[str, int]] = {
-    "child": {GENDER_MALE: 3, GENDER_FEMALE: 3, GENDER_UNKNOWN: 3},
-    "teen": {GENDER_MALE: 1, GENDER_FEMALE: 1, GENDER_UNKNOWN: 1},
-    "elderly": {GENDER_MALE: 2, GENDER_FEMALE: -3, GENDER_UNKNOWN: 0},
+# Children aged six to ten speak at 245-262 Hz with no significant difference between boys
+# and girls. Ageing is not symmetric and the common intuition is half wrong: measured
+# across cohorts (PMC5832520), women fall from about 205 Hz to 170 while men *rise* from
+# 108 to about 125, so an elderly man reads higher than his younger self.
+AGE_TARGET_PITCH_HZ: dict[str, dict[str, float]] = {
+    "child": {GENDER_MALE: 250.0, GENDER_FEMALE: 250.0, GENDER_UNKNOWN: 250.0},
+    "teen": {GENDER_MALE: 190.0, GENDER_FEMALE: 220.0, GENDER_UNKNOWN: 205.0},
+    "elderly": {GENDER_MALE: 125.0, GENDER_FEMALE: 170.0, GENDER_UNKNOWN: 145.0},
 }
 
+# How far a preset's own F0 may be moved before the shift is audible as a shift rather
+# than as a different speaker. Beyond this the voice stops sounding like a person of that
+# age and starts sounding like a recording being played wrong.
+AGE_PITCH_MAX_SEMITONES = 6.0
 
-# Presets a Vietnamese listener reported as hard to follow, quite apart from whether they
-# suit a role. Availability is not the only thing that should decide a casting: a voice
-# that tires the ear is worth skipping before it is worth reusing, and a character with
-# many lines should pay this penalty twice over.
-PRESET_LISTENING_PENALTY: dict[str, int] = {
-    "Xuân Vĩnh": 1,
-}
+
+# Presets barred from every role, for the same kind of reason the Central region is barred:
+# a Vietnamese listener judged them, and that judgement is not something the code can
+# second-guess. Xuân Vĩnh was first given a ranking penalty, which only made it a last
+# resort rather than never - the listener's answer was that it should not be reachable at
+# all, in any role, at any warp.
+EXCLUDED_PRESETS = frozenset({"Xuân Vĩnh"})
 
 
 def vocal_tract_target_cm(age: str, gender: str) -> float | None:
@@ -300,12 +310,36 @@ def vocal_tract_target_cm(age: str, gender: str) -> float | None:
     return by_gender.get(str(gender), by_gender[GENDER_UNKNOWN])
 
 
-def age_pitch_semitones(age: str, gender: str) -> int:
-    """The F0 offset in semitones this age implies, on top of any preset register."""
-    by_gender = AGE_PITCH_SEMITONES.get(str(age))
+def age_pitch_semitones(age: str, gender: str, preset_name: str = "") -> int:
+    """The shift that carries this preset's own F0 to the target for this age.
+
+    Computed per preset rather than fixed, because presets start 150 Hz apart: the same
+    offset that lands one voice in a child's range leaves another at half of it.
+    """
+    by_gender = AGE_TARGET_PITCH_HZ.get(str(age))
     if by_gender is None:
         return 0
-    return int(by_gender.get(str(gender), by_gender[GENDER_UNKNOWN]))
+    target = float(by_gender.get(str(gender), by_gender[GENDER_UNKNOWN]))
+    source = PRESET_PREVIEW_MEDIAN_PITCH_HZ.get(preset_name)
+    if not source:
+        return 0
+    steps = 12.0 * math.log2(target / float(source))
+    return int(round(max(-AGE_PITCH_MAX_SEMITONES, min(AGE_PITCH_MAX_SEMITONES, steps))))
+
+
+def preset_reaches_age_pitch(preset_name: str, age: str, gender: str) -> bool:
+    """Whether this preset can reach the age's F0 without an implausible shift.
+
+    A voice that cannot is not a candidate for the age at all. Warping its vocal tract to
+    a child's size while its pitch stays adult produces a combination no throat can make,
+    and it is heard as a defect rather than as a child.
+    """
+    by_gender = AGE_TARGET_PITCH_HZ.get(str(age))
+    source = PRESET_PREVIEW_MEDIAN_PITCH_HZ.get(preset_name)
+    if by_gender is None or not source:
+        return True
+    target = float(by_gender.get(str(gender), by_gender[GENDER_UNKNOWN]))
+    return abs(12.0 * math.log2(target / float(source))) <= AGE_PITCH_MAX_SEMITONES
 
 
 def formant_ratio_for_age(preset_name: str, age: str, gender: str) -> float:
@@ -418,5 +452,6 @@ def casting_presets(gender: str) -> list[dict[str, str]]:
         if preset["gender"] == gender
         and preset["style"] != STYLE_NEWS
         and preset["region"] in CASTING_REGIONS
+        and preset["name"] not in EXCLUDED_PRESETS
     ]
     return sorted(candidates, key=casting_preset_priority)
