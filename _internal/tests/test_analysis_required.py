@@ -59,6 +59,8 @@ from ebook_reader.analysis import (
     _director_critic_request_contract,
     _director_critic_payload_is_retryable_invalid,
     _director_critic_schema,
+    _batch_id,
+    _direct_cue_allowed_emotions,
     _direct_cue_feedback_issues,
     _generator_request_contract,
     _canonicalize_analysis_notes,
@@ -11553,3 +11555,71 @@ def test_multi_word_pronunciation_that_cannot_split_is_dropped() -> None:
 def test_split_words_face_the_same_bar_as_standalone_proposals() -> None:
     """Splitting must not smuggle in a word that would be rejected on its own."""
     assert _decomposed_name_pronunciation("Li Wayne", "Li Uên") == [("Wayne", "Uên")]
+
+
+def _sent_rows(group) -> list[dict]:
+    """Post one analysis request and return the segment rows the model actually saw."""
+    session = FakeSession({"segments": [analysis_item(_batch_id(i + 1)) for i in range(len(group))]})
+    analyzer = OllamaBookAnalyzer(build_settings(), FakeDB(), lambda _message: None)
+    analyzer.session = session
+    analyzer._request(group)
+    prompt = str(session.request["json"]["prompt"])
+    marker = "Các đoạn liên tiếp:" + chr(10)
+    # The prompt appends constraint prose after the JSON, so decode only the array.
+    rows, _end = json.JSONDecoder().raw_decode(prompt.split(marker, 1)[1])
+    return rows
+
+
+def test_the_first_request_carries_the_cue_constraint_the_host_will_enforce() -> None:
+    """Say the constraint before the answer, not after it.
+
+    The host reads affect cues out of the text with its own patterns and refuses a
+    neutral answer that contradicts them. It used to withhold that until the retry, and
+    "emotion=neutral mâu thuẫn với cue trực tiếp" was then the commonest rejection in a
+    real run, where more than half of all analysis calls were second attempts. The
+    constraint is unchanged and comes from the same function; only its timing moved.
+    """
+    text = "Tim thắt lại, cậu nhìn ngọn lửa kinh hoàng đang lan tới."
+    allowed = _direct_cue_allowed_emotions(text)
+    assert allowed, "this fixture must carry a direct cue or it tests nothing"
+    assert "neutral" not in allowed
+
+    row = {**analysis_group()[0], "text": text}
+    sent = _sent_rows([row])
+
+    assert sent[0]["allowed_emotions"] == list(allowed)
+    # The text still travels: the cue list narrows the choice, it does not replace it.
+    assert sent[0]["text"] == text
+
+
+def test_a_segment_without_a_cue_carries_no_constraint() -> None:
+    """Only the segments the host would actually reject are told anything.
+
+    Attaching an empty list to every row would grow each prompt for nothing and invite
+    the model to read the absence as permission to stay neutral where it should not.
+    """
+    text = "Ngoài cửa sổ, trời đã sáng từ lúc nào."
+    assert _direct_cue_allowed_emotions(text) == ()
+
+    row = {**analysis_group()[0], "text": text}
+    sent = _sent_rows([row])
+
+    assert "allowed_emotions" not in sent[0]
+
+
+def test_the_advertised_set_is_the_one_the_host_enforces_on_retry() -> None:
+    """The two paths must never drift apart.
+
+    If the prompt advertised one set and the adjudicator enforced another, the model
+    would be sent back for obeying exactly what it was told.
+    """
+    text = "Tim thắt lại, cậu nhìn ngọn lửa kinh hoàng đang lan tới."
+    row = {**analysis_group()[0], "text": text}
+    validated = {str(row["stable_id"]): {"emotion": "neutral"}}
+
+    advertised = _sent_rows([row])[0]["allowed_emotions"]
+    issues = _direct_cue_feedback_issues(
+        [row], validated, {str(row["stable_id"]): "direct cue"}
+    )
+
+    assert [issue.canonical_payload()["allowed_emotions"] for issue in issues] == [advertised]
