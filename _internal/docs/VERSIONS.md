@@ -90,6 +90,51 @@ style `tin_tuc` (`Minh Đức`, `Minh Triết`, `Mai Anh`, `Thùy Dung`) chạy 
 vocoder nào**. Rào cản thật: chúng **không có file preview**, nên UTMOSv2 không có baseline để chấm tương
 đối. Muốn dùng thì phải sinh và khóa preview cho chúng trước.
 
+### Cơ chế đa dạng giọng: dịch cao độ không làm được, dịch formant mới làm được
+
+Người nghe tiếng Việt nghe thử cùng một câu ở `-6, -4, -2, 0, +2, +4, +6` bán âm — F0 đi từ 106 Hz lên
+206 Hz, **gần gấp đôi** — và kết luận: **"không thấy sự thay đổi đáng kể về âm sắc"**, mong đợi là giọng
+phải trầm hơn hoặc chóe hơn.
+
+Đó không phải lỗi. Đó là **hệ quả tất yếu của thiết kế**: nhận diện người nói nằm chủ yếu ở **formant**
+(hình dạng khoang miệng), không ở cao độ. `apply_pitch_variant` **cố tình giữ nguyên** spectral envelope
+theo đúng invariant, nên kết quả chỉ có thể là *cùng một người nói cao/thấp hơn*, không bao giờ là người khác.
+
+**Cơ chế pitch-only tự mâu thuẫn với mục đích của chính nó.** Nó tốn 0,2–0,8 MOS mỗi biến thể, làm segment
+fail ASR gấp 3,4 lần, và đổi lại những giọng mà người nghe không phân biệt được. "23 voice profile từ 10
+preset" thực chất chỉ là ~10 giọng phân biệt được.
+
+**Dịch formant thì làm được.** WORLD đã tách sẵn spectral envelope; co giãn nó theo trục tần số cho ra giọng
+trầm hơn (`formant < 1`, khoang miệng lớn hơn) hoặc chóe hơn (`formant > 1`). Người nghe xác nhận hướng này
+đúng ngay lần thử đầu. Giới hạn dưới đã chạm: `0,82` nghe **tù bí**, méo quá độ.
+
+### So sánh các cách dịch cao độ, và vì sao WORLD là lựa chọn đúng
+
+| Cách | Cao độ | Formant | Thời lượng | Nhiễu |
+|---|---|---|---|---|
+| Đổi tốc độ phát (resample) | đổi | **đổi theo** | đổi | không có |
+| Phase vocoder (STFT) | đổi | đổi theo | giữ | phasiness, nhoè transient |
+| PSOLA / WSOLA | đổi | **giữ cứng** | giữ | rè khi dịch mạnh |
+| **Source–filter vocoder (WORLD)** | đổi | **điều khiển riêng** | giữ | mất mát khi dựng lại (~0,27 MOS) |
+
+Chỉ WORLD cho phép điều khiển cao độ và formant **độc lập** — bốn cách kia buộc chúng đi cùng nhau hoặc khoá
+cứng formant. Đo thực tế cũng xác nhận: rubberband (có sẵn trong FFmpeg của project, chế độ giữ formant) **tệ
+hơn WORLD 0,2–0,3 MOS** ở cả hai chiều dịch. Đừng đổi sang nó.
+
+### UTMOSv2 không đủ tin cậy để xếp hạng biến thể giọng
+
+Hai lần nó mâu thuẫn với tai người nghe: chấm bản gốc `3,231` cao hơn `-4` `3,118` trong khi người nghe thấy
+`-4` hay hơn hẳn; và MOS không giảm đều theo mức dịch (`-4` cao hơn `-2`, `+6` cao hơn `+2`). Nó vẫn dùng
+được để phát hiện audio hỏng, nhưng **không được dùng để chọn giữa các biến thể pitch/formant** — việc đó
+phải do tai người quyết.
+
+### Quyết định: bản đã dịch không bao giờ bị chấm
+
+Mọi gate — Whisper, UTMOSv2, tín hiệu — chạy trên **bản gốc** do VieNeu sinh ra. Dịch cao độ/formant là bước
+cuối cùng, ghi file rồi thôi. Cao độ không thể làm sai chữ, nên kiểm nội dung trên bản gốc là hợp lệ; và đây
+chính là thứ đang làm segment bị dịch fail gấp 3,4 lần một cách vô cớ. Phần giữ lại duy nhất là ghi file an
+toàn (`.part` + checksum + atomic replace) — đó là I/O đúng cách, không phải chấm điểm.
+
 ## v0.2.0-alpha.11 — bỏ giọng miền Trung, một tên một cách đọc
 
 **Bỏ giọng miền Trung khỏi phân vai** (quyết định của người dùng, người nghe được tiếng Việt). Bằng chứng
