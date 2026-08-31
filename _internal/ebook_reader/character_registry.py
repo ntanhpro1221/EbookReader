@@ -27,6 +27,7 @@ from .voice_catalog import (
     VIENEU_PRESETS,
     casting_preset_priority,
     casting_presets,
+    child_voice_preference,
     preset_by_name,
     base_pitch_for_preset,
     formant_ratio_for_age,
@@ -316,6 +317,11 @@ class PresetAllocator:
                 # Bucketed to half a centimetre: two presets that both land near the
                 # target are the same fit to a listener, and a 0.1 cm edge must not
                 # outrank a voice being hard to follow.
+                # A listener's own ranking of the voices they have heard as children
+                # comes before either computed proxy. Reach and shift only estimate how
+                # good the result will sound; this is a verdict on the result, and the
+                # estimates have already been caught disagreeing with it.
+                child_voice_preference(name, age, gender),
                 round(preset_age_reach(name, age, gender) * 2.0) / 2.0,
                 # Then the dearer of the two warps. Measured on four presets reading the
                 # same line, the age pitch shift costs about 0.85 MOS against the formant

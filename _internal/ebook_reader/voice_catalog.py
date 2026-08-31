@@ -316,6 +316,30 @@ LAST_RESORT_PRESETS = frozenset({"Thái Sơn", "Thanh Bình", "Thục Đoan"})
 # enough that the gap between a +2 preset and a +11 one still decides.
 AGE_PITCH_RANK_BUCKET = 4
 
+# A listener's ranking of the presets they have actually heard in a child register,
+# best first. This outranks tract reach and pitch distance because those are proxies for
+# how good the result sounds and this is the thing itself - and the proxies have been
+# wrong here before: reach and shift between them put Ngọc Linh last of the three girl
+# voices, which is exactly backwards.
+#
+# Only what was actually judged goes in. A preset absent from a list is unheard rather
+# than rejected, and sorts after every ranked one but ahead of nothing else, so the
+# theory still decides among the unheard. There is no male list: the same listener asked
+# for boys to be cast from the whole catalogue by theory alone, and the female presets
+# reach a boy's tract exactly while the male ones fall 0.8 cm short.
+CHILD_VOICE_PREFERENCE: dict[str, tuple[str, ...]] = {
+    "female": ("Ngọc Linh", "Đoan Trang", "Trúc Ly"),
+}
+
+
+def child_voice_preference(preset_name: str, age: str, gender: str) -> int:
+    """Rank a preset by a listener's verdict on it as a child voice; unheard sorts last."""
+    if str(age) != "child":
+        return 0
+    order = CHILD_VOICE_PREFERENCE.get(str(gender), ())
+    name = str(preset_name)
+    return order.index(name) if name in order else len(order)
+
 # How far a preset's own F0 may be carried toward an age target.
 #
 # This was 6, invented rather than measured, and it was wrong: it barred all three male
