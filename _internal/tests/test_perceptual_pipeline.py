@@ -360,7 +360,11 @@ def test_perceptual_qa_uses_narrator_profile_for_thought_segments(tmp_path: Path
 
     pipeline._verify_chapter_perceptual_audio(chapter)
 
-    assert verifier.calls == [(narrator_preset, -1)]
+    # The graded artifact is always the raw take - the voice variant goes on at chapter
+    # assembly, after every gate - so the baseline is the preset's untouched preview.
+    # Matching it to the profile's register would compare raw audio against a transformed
+    # reference and manufacture a difference that is not in the audio.
+    assert verifier.calls == [(narrator_preset, 0)]
 
 
 def test_perceptual_qa_uses_unshifted_baseline_when_pitch_variant_was_skipped(

@@ -13,6 +13,11 @@ from ebook_reader.database import (
     canonical_analysis_note,
 )
 from ebook_reader.voice_catalog import (
+    formant_variants_for_preset,
+    formant_ratio_bounds_for_preset,
+    VOCAL_TRACT_MIN_CM,
+    VOCAL_TRACT_MAX_CM,
+    PRESET_VOCAL_TRACT_CM,
     base_pitch_for_preset,
     GENDER_FEMALE,
     GENDER_MALE,
@@ -997,3 +1002,30 @@ def test_central_presets_are_never_cast_through_any_path() -> None:
     for preset in central:
         # Still resolvable, so a book that locked one before the change keeps working.
         assert preset_by_name(str(preset["name"]))["region"] == REGION_CENTRAL
+
+
+def test_formant_range_follows_each_preset_vocal_tract() -> None:
+    """One shared warp range is wrong, and wrong in opposite directions per voice.
+
+    A warp by ratio r reads as a vocal tract of length L/r. The male presets measure
+    16.4-16.9 cm and the female ones 13.9-15.5 cm, so a male voice has little room left to
+    go deeper while a female voice has little room to go brighter. The upper bound
+    reproduces what a Vietnamese listener found by ear: Thanh Bình sounded muffled at 0.82,
+    which is a 20.6 cm tract, and acceptable at 0.86, which is 19.7 cm.
+    """
+    for name, length in PRESET_VOCAL_TRACT_CM.items():
+        lower, upper = formant_ratio_bounds_for_preset(name)
+        assert VOCAL_TRACT_MIN_CM - 0.05 <= length / upper
+        assert length / lower <= VOCAL_TRACT_MAX_CM + 0.05
+        for ratio in formant_variants_for_preset(name):
+            assert lower - 1e-6 <= ratio <= upper + 1e-6
+
+    # A long male tract cannot go as deep as a short female one, and vice versa.
+    male_low, male_high = formant_ratio_bounds_for_preset("Thanh Bình")
+    female_low, female_high = formant_ratio_bounds_for_preset("Ngọc Linh")
+    assert male_low > female_low
+    assert male_high > female_high
+
+    # Every preset keeps its untouched voice as the first casting.
+    for name in PRESET_VOCAL_TRACT_CM:
+        assert formant_variants_for_preset(name)[0] == 1.0

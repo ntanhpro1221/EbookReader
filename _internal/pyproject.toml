@@ -30,6 +30,10 @@ dependencies = [
   # Vietnamese phoneme comparison for locked-name ASR anchors. Arrives with vieneu,
   # but asr.py imports it directly, so it is pinned directly.
   "sea-g2p==0.7.20",
+  # Praat, via parselmouth, moves a character's formants without ever rebuilding the
+  # spectrum: it resamples and restores pitch with PSOLA. Compared by ear against a
+  # WORLD envelope warp and a PARCOR area-function reshape, it was the one kept.
+  "praat-parselmouth==0.4.7",
 ]
 
 [project.scripts]

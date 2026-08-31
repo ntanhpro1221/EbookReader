@@ -109,7 +109,7 @@ from .quality_policy import (
 )
 from .tts import (
     DELIVERY_CLARITY,
-    apply_pitch_variant,
+    apply_voice_variant,
     DELIVERY_PRIMARY,
     GENERATION_CEILING_METRIC,
     GENERATION_CEILING_WARNING,
@@ -448,11 +448,11 @@ class BookPipeline:
             delivery_root.mkdir(parents=True, exist_ok=True)
             destination = delivery_root / f"{int(row['seq']):07d}.wav"
             audio, sample_rate = sf.read(source, dtype="float32", always_2d=False)
-            shifted = apply_pitch_variant(
+            shifted = apply_voice_variant(
                 np.asarray(audio, dtype=np.float32).reshape(-1),
                 int(sample_rate),
                 pitch_steps,
-                formant_ratio=formant_ratio,
+                formant_ratio,
             )
             temp = destination.with_suffix(".part.wav")
             sf.write(temp, shifted, int(sample_rate), subtype="PCM_16")
@@ -1118,14 +1118,11 @@ class BookPipeline:
             if str(row["kind"] or "narration") == "thought"
             else self.db.voice_profile(int(row["voice_profile_id"]))
         )
-        pitch_semitones = int(profile["pitch_semitones"] or 0)
-        try:
-            signal = json.loads(str(row["signal_json"] or "{}"))
-        except (TypeError, json.JSONDecodeError):
-            signal = {}
-        if isinstance(signal, dict) and signal.get("pitch_variant_skipped"):
-            pitch_semitones = 0
-        return profile, pitch_semitones
+        # The graded artifact is always the raw take: the voice variant is applied on the
+        # way into the chapter, after every gate. So the baseline must be the preset's own
+        # untouched preview - matching it to the profile's register would compare raw
+        # audio against a transformed reference and manufacture a difference.
+        return profile, 0
 
     def _evaluate_perceptual_audio_item(
         self,

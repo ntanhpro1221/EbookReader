@@ -44,9 +44,34 @@ CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 PRESET_BASE_PITCH_SEMITONES = {
     "Thanh Bình": -4,
 }
-FORMANT_RATIO_MIN = 0.86
-FORMANT_RATIO_MAX = 1.20
-CHARACTER_FORMANT_VARIANTS = (1.00, 0.92, 1.10, 0.86, 1.20, 0.96, 1.05)
+# Vocal tract length per preset, in centimetres, estimated from the third formant of its
+# own preview clip with the odd-quarter-wavelength tube model L = 5c / (4*F3). Measured
+# with Praat: the male presets cluster tightly at 16.4-16.9 cm and the female ones at
+# 13.9-15.5 cm, which is why one shared warp range is wrong in both directions - a male
+# voice has little room left to go deeper and a female voice little room to go brighter.
+PRESET_VOCAL_TRACT_CM = {
+    "Phạm Tuyên": 16.5,
+    "Thanh Bình": 16.9,
+    "Xuân Vĩnh": 16.6,
+    "Thái Sơn": 16.7,
+    "Quang Sơn": 16.4,
+    "Trúc Ly": 14.7,
+    "Đoan Trang": 14.7,
+    "Ngọc Linh": 13.9,
+    "Thục Đoan": 15.0,
+    "Ngọc Trân": 15.5,
+}
+# A warp by ratio r reads as a vocal tract of length L/r, so the usable range is whatever
+# keeps that inside a plausible adult tract. The upper bound reproduces the limit a
+# Vietnamese listener found by ear: Thanh Bình at 16.9 cm sounded muffled at 0.82, which
+# is a 20.6 cm tract, and acceptable at 0.86, which is 19.7 cm.
+VOCAL_TRACT_MIN_CM = 12.8
+VOCAL_TRACT_MAX_CM = 19.7
+FORMANT_RATIO_MIN = 0.70
+FORMANT_RATIO_MAX = 1.35
+# Ladder of relative steps, natural first so a preset's first casting is untouched and
+# pays no processing at all. Each step is clamped into the preset's own usable range.
+CHARACTER_FORMANT_STEPS = (1.00, 0.93, 1.08, 0.87, 1.16, 0.97, 1.04)
 DEFAULT_NARRATOR_BY_GENDER = {
     GENDER_MALE: "Phạm Tuyên",
     GENDER_FEMALE: "Ngọc Linh",
@@ -181,14 +206,31 @@ def base_pitch_for_preset(preset_name: str) -> int:
     return int(PRESET_BASE_PITCH_SEMITONES.get(preset_name, 0))
 
 
-def formant_variants_for_preset(preset_name: str) -> tuple[float, ...]:
-    """Formant ratios this preset may be cast with, natural first.
+def formant_ratio_bounds_for_preset(preset_name: str) -> tuple[float, float]:
+    """The warp range that keeps this preset inside a plausible adult vocal tract."""
+    length = PRESET_VOCAL_TRACT_CM.get(preset_name)
+    if length is None:
+        return FORMANT_RATIO_MIN, FORMANT_RATIO_MAX
+    lower = max(FORMANT_RATIO_MIN, length / VOCAL_TRACT_MAX_CM)
+    upper = min(FORMANT_RATIO_MAX, length / VOCAL_TRACT_MIN_CM)
+    return (lower, upper) if lower < upper else (1.0, 1.0)
 
-    Every preset gets the same ladder: the warp acts on the envelope the preset already
-    has, so a ratio means the same relative change whatever the voice.
+
+def formant_variants_for_preset(preset_name: str) -> tuple[float, ...]:
+    """Formant ratios this preset may be cast with, natural first, no duplicates.
+
+    The ladder is relative, but the bounds are not: a preset already at the long end of
+    the human range has little room left to go deeper, and one at the short end little
+    room to go brighter. Clamping rather than sharing one range is the difference between
+    a voice that sounds like a different person and one that sounds like no person at all.
     """
-    del preset_name
-    return CHARACTER_FORMANT_VARIANTS
+    lower, upper = formant_ratio_bounds_for_preset(preset_name)
+    variants: list[float] = []
+    for step in CHARACTER_FORMANT_STEPS:
+        ratio = round(min(max(step, lower), upper), 3)
+        if all(abs(ratio - existing) > 0.01 for existing in variants):
+            variants.append(ratio)
+    return tuple(variants) or (1.0,)
 
 
 def pitch_variants_for_preset(preset_name: str, max_abs_semitones: int) -> tuple[int, ...]:

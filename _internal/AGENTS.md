@@ -58,7 +58,17 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 - **Ba tầng biến đổi giọng, đừng trộn lẫn.** Người nghe tiếng Việt so cùng một câu từ `-6` đến `+6` bán âm
   (F0 từ 106 Hz lên 206 Hz) và nghe ra **cùng một người**, chỉ khác trạng thái — điềm tĩnh, gấp gáp. Dịch F0
   là **cách thể hiện**, không phải danh tính. Nhận diện người nói nằm ở **formant**.
-  - *Danh tính nhân vật* ← `formant_ratio`, khoá theo nhân vật cả sách, dải `0,86`–`1,20` chốt bằng tai.
+  - *Danh tính nhân vật* ← `formant_ratio`, khoá theo nhân vật cả sách. Dải **riêng cho từng preset**,
+    suy từ chiều dài khoang miệng đo bằng Praat trên chính preview của nó (`L = 5c / 4F3`). Warp hệ số `r`
+    đọc ra thành khoang miệng dài `L/r`, nên dải hợp lệ là phần giữ `L/r` trong khoảng người lớn
+    `12,8`–`19,7` cm. Preset nam đo được `16,4`–`16,9` cm, nữ `13,9`–`15,5` cm — nên nam **còn ít chỗ đi
+    trầm, nhiều chỗ đi sáng**, nữ thì ngược lại. Một dải chung là sai theo hai hướng ngược nhau. Cận trên
+    tái lập đúng giới hạn người nghe tìm ra bằng tai: Thanh Bình `0,82` nghe tù bí (khoang `20,6` cm),
+    `0,86` chấp nhận được (`19,7` cm).
+  - Phép biến đổi dùng **Praat "Change gender"** qua parselmouth, không dùng WORLD warp hay PARCOR. Praat
+    resample để dời formant rồi PSOLA khôi phục cao độ — **không bao giờ ước lượng hay dựng lại phổ**.
+    So bằng tai: PARCOR tệ rõ rệt, WORLD không phân biệt được với Praat. UTMOSv2 xếp ngược lại nhưng nó đã
+    ba lần mâu thuẫn với người nghe ở đúng vùng này, nên không dùng nó để chọn.
   - *Cách thể hiện* ← F0 và sampling, theo từng câu, do đạo diễn quyết.
   - *Chất giọng nền của preset* ← `PRESET_BASE_PITCH_SEMITONES`, hiệu chỉnh một lần bằng tai cho mỗi preset.
     Giá trị này **không** bị chặn bởi `PRESET_MIN_PITCH_SEMITONES` — giới hạn đó suy từ baseline UTMOSv2,
