@@ -130,12 +130,14 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
   của VieNeu và không thay identity giọng để giả lập cảm xúc.
 - Chuẩn hóa các cách viết như `haizzzzz`, `hừmmmm` hoặc `[thở dài]` chỉ được áp dụng lên `spoken_text` dùng chung cho
   TTS và expected ASR; văn bản nguồn, hash và segment đã checkpoint không được sửa.
-- Preset trong `EXCLUDED_CASTING_PRESETS` **không bao giờ được phân vai**, và mọi đường dẫn tới preset đều
-  phải tôn trọng nó — kể cả nhánh fallback khi cạn pool. Loại theo **tên preset**, không theo vùng, khi
-  bằng chứng chỉ vào một giọng cụ thể: `Xuân Vĩnh` được dán nhãn `Nam` nhưng người nghe tiếng Việt nghe ra
-  giọng Trung, và đo qua hai lần chạy đầy đủ nó gây **4/6 ca fail trên 22 lượt (18,2%)** với WER trung vị
-  `0,333`, trong khi hai preset `Nam` còn lại fail 0% và WER `0,114`/`0,086`. Nhãn vùng miền trong catalog
-  không đáng tin bằng số đo theo từng preset.
+- **Biến thể pitch là nguyên nhân hỏng chất lượng lớn nhất đo được, không phải preset hay vùng miền.**
+  Trên 597 segment của ba lần chạy: `pitch = 0` fail **2,8%** với WER trung vị `0,050`; `pitch ≠ 0` fail
+  **9,4%** với WER trung vị `0,154` — tệ hơn 3,4× và 3×. UTMOSv2 nói cùng một điều một cách độc lập: dịch
+  `-1` bán âm làm mất `0,33`–`1,17` MOS tuỳ preset. Người nghe tiếng Việt còn **không nhận ra đó là giọng
+  của preset gốc nữa**, nên pitch không chỉ hạ độ tự nhiên mà đổi luôn nhận diện giọng.
+  `PRESET_MIN_PITCH_SEMITONES` hiện giới hạn theo **khả năng dịch cao độ** đo trên preview, chứ không theo
+  **cái giá phải trả**. Đừng đổ lỗi cho một preset khi số liệu chỉ vào biến thể pitch của nó: `Xuân Vĩnh`
+  ở `pitch 0` fail **0/13**, còn các biến thể `-1/+1/+2` của chính nó fail 25–33%.
 - Whisper sai **thanh điệu** tiếng Việt ở mọi segment, cả đạt lẫn fail — verified median `0,000` nhưng p99
   `0,362`, so với median `0,296` của segment fail, và có segment đạt với tỉ lệ `1,000`. Hai phân bố không
   tách nhau, nên chênh lệch thanh **không mang tín hiệu** về chất lượng take. Content gate vì thế gấp thanh

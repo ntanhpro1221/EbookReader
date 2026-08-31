@@ -20,7 +20,6 @@ from .database import (
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
     CASTING_REGIONS,
-    EXCLUDED_CASTING_PRESETS,
     STYLE_NEWS,
     VIENEU_PRESETS,
     casting_preset_priority,
@@ -245,7 +244,6 @@ class PresetAllocator:
                 if preset["name"] != self.narrator_voice
                 and preset["style"] != STYLE_NEWS
                 and preset["region"] in CASTING_REGIONS
-                and preset["name"] not in EXCLUDED_CASTING_PRESETS
             ]
         pool = "npc" if npc else "named"
         usage = self.pool_usage[pool]
