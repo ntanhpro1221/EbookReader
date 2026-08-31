@@ -73,6 +73,7 @@ from .database import (
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
+from .expression import shape_segment
 from .perceptual_qa import (
     DEFAULT_PERCEPTUAL_WORKER_THREADS,
     PERCEPTUAL_INCONCLUSIVE,
@@ -444,7 +445,15 @@ class BookPipeline:
             formant_ratio = (
                 float(profile["formant_ratio"]) if profile is not None else 1.0
             )
-            if pitch_steps == 0 and abs(formant_ratio - 1.0) <= 1e-6:
+            emotion = str(row["emotion"] or "neutral")
+            intensity = int(row["intensity"] or 0)
+            kind = str(row["kind"] or "narration")
+            expressive = emotion != "neutral" and intensity > 0
+            if (
+                pitch_steps == 0
+                and abs(formant_ratio - 1.0) <= 1e-6
+                and not expressive
+            ):
                 rendered.append((source, break_ms))
                 continue
             delivery_root.mkdir(parents=True, exist_ok=True)
@@ -455,6 +464,12 @@ class BookPipeline:
                 int(sample_rate),
                 pitch_steps,
                 formant_ratio,
+            )
+            # Expression rides the same last step as identity: after every gate, on a copy,
+            # never on the verified take. It cannot change a word, and a segment the
+            # director left neutral is passed through untouched rather than resynthesised.
+            shifted, _target = shape_segment(
+                shifted, int(sample_rate), emotion, intensity, kind
             )
             temp = destination.with_suffix(".part.wav")
             sf.write(temp, shifted, int(sample_rate), subtype="PCM_16")
