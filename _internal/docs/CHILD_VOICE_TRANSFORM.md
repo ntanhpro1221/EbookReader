@@ -43,14 +43,19 @@ Mỗi lần đều trả giá. Praat có lệnh **"Change gender"** làm cả ha
 B thắng 3/4, kể cả trên Thanh Bình là giọng đang có lỗi nặng nhất; thua ở Phạm Tuyên là ca
 dịch nhiều nhất (+15).
 
-## CHƯA CHỐT — và tại sao không được chốt bằng UTMOS
+## ĐÃ CHỐT: giữ cách hiện tại (A, hai lần)
 
-**Không được dùng bảng trên để tự quyết.** UTMOSv2 đã bị chứng minh là xếp hạng ngược với
-tai người nghe trên chính lớp khuyết tật này (xem `ONSET_CLICK.md`). Bảng này chỉ dùng để
-*chọn ra ứng viên đáng đem đi nghe*, không phải để kết luận.
+Người nghe đã phán trên ba cách: **A tốt nhất**, nhưng *"nó chả giải quyết được vấn đề"*.
+Nghĩa là gộp hai lần tái tổng hợp thành một **không** phải cải thiện — B và C đều nghe tệ
+hơn A dù UTMOSv2 chấm B cao hơn ở 3/4 giọng. Đây là **lần thứ hai** UTMOSv2 đi ngược tai
+người trong cùng một vấn đề; xem `ONSET_CLICK.md`.
 
-Đang chờ kết quả nghe A/B/C ở
-`_versions/v0.2.0-alpha.15/mot-lan-vs-hai-lan/{A,B,C}_*.wav`.
+Không đổi đường xử lý. Thanh Bình và Thái Sơn được đưa xuống **đồng hạng đáy** bảng ưu
+tiên thay vì tiếp tục sửa: khuyết tật còn đó, nhưng việc chọn giọng thôi không với tới
+chúng nữa. Bé trai giờ do Phạm Tuyên dẫn.
+
+Bảng đo MOS ở trên vẫn đúng và vẫn có giá trị — nó giải thích vì sao mọi giọng trẻ em đều
+rè — nhưng **không được dùng nó để tự quyết** thay cho tai người.
 
 ## Hướng chưa thử
 
