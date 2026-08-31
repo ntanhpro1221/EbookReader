@@ -4915,9 +4915,46 @@ class ProjectDB:
                 )
                 or float(commit_confidence) != float(derived_confidence)
             ):
+                # Name the clause that failed. The bare message cost a debugging round:
+                # a dozen conditions share it, so it says a binding broke without saying
+                # which, and the evidence that failed is in memory rather than on disk.
+                reasons = [
+                    name
+                    for name, failed in (
+                        ("text_sha256", str(item.get("text_sha256", ""))
+                         != str(candidate_segments[stable_id]["text_sha256"])),
+                        ("candidate_projection", item.get("candidate") != candidate_projection),
+                        ("critic_schema", not critic_schema_valid),
+                        ("accept_flag", critic.get("accept") is not host_derived_accept),
+                        ("field_deltas", item.get("field_deltas") != raw_deltas),
+                        ("effective_accept", item.get("effective_accept") is not True),
+                        ("agreement_with_override", bool(
+                            raw_agreement
+                            and (
+                                structural_override is not None
+                                or semantic_override is not None
+                                or source_kind_override is not None
+                                or critic_compatibility_override is not None
+                            )
+                        )),
+                        ("unresolved_disagreement", bool(
+                            not raw_agreement and not override_resolution_valid
+                        )),
+                        ("structural_override", structural_override is not None
+                         and not structural_override_valid),
+                        ("semantic_override", semantic_override is not None
+                         and not semantic_override_valid),
+                        ("source_kind_override", source_kind_override is not None
+                         and not source_kind_override_valid),
+                        ("compatibility_override", critic_compatibility_override is not None
+                         and not critic_compatibility_override_valid),
+                    )
+                    if failed
+                ]
                 raise RuntimeError(
                     "Accepted critic evidence does not bind exact delivery/confidence for "
-                    f"{stable_id}"
+                    f"{stable_id}: {', '.join(reasons) or 'confidence'}; "
+                    f"deltas={item.get('field_deltas')!r} expected={raw_deltas!r}"
                 )
 
     @classmethod
