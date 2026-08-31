@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ebook_reader.character_registry import (
+    PresetAllocator,
     assert_voice_stability,
     build_registry_and_cast,
 )
@@ -16,6 +17,7 @@ from ebook_reader.database import (
     canonical_analysis_note,
 )
 from ebook_reader.voice_catalog import (
+    EXCLUDED_PRESETS,
     voice_variant_deviation,
     formant_variants_for_preset,
     formant_ratio_bounds_for_preset,
@@ -340,9 +342,10 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
         for preset in casting_presets(GENDER_FEMALE)
     ]
 
+    # The Southern natural male voice is Xuân Vĩnh, which a listener excluded outright,
+    # so that rank is simply absent rather than filled by someone else.
     assert male_order == [
         (REGION_NORTH, STYLE_NATURAL),
-        (REGION_SOUTH, STYLE_NATURAL),
         (REGION_NORTH, STYLE_STORY),
         (REGION_SOUTH, STYLE_STORY),
     ]
@@ -1140,3 +1143,32 @@ def test_one_character_cannot_hold_two_voices_through_different_labels(tmp_path:
     # The same two lines with one voice between them are accepted.
     rows[1]["voice_profile_id"] = 11
     assert_voice_stability(_Rows(rows)) is None
+
+
+def test_an_excluded_preset_is_unreachable_through_every_path() -> None:
+    """A voice the listener rejected must not come back through a fallback.
+
+    This exact shape of hole let the Central presets back in once: the main catalogue
+    filtered them and two fallback pools iterated the raw preset list instead. A ranking
+    penalty was tried first and was not enough either - it made the voice a last resort
+    rather than never, and a last resort is still reached once the pool runs thin.
+    """
+    for gender in ("male", "female"):
+        assert not {
+            str(preset["name"]) for preset in casting_presets(gender)
+        } & EXCLUDED_PRESETS
+
+    chosen: set[str] = set()
+    for narrator in ("Phạm Tuyên", "Thanh Bình"):
+        allocator = PresetAllocator(narrator, 2)
+        # Deep enough to exhaust every pool and force both fallback branches.
+        for round_index in range(30):
+            for gender in ("male", "female", "unknown"):
+                for age in ("child", "teen", "adult", "elderly", "unknown"):
+                    preset, _ratio, _pitch = allocator.choose(
+                        gender, npc=round_index % 2 == 0, age=age
+                    )
+                    chosen.add(str(preset["name"]))
+
+    assert chosen, "the sweep must actually cast something"
+    assert not chosen & EXCLUDED_PRESETS

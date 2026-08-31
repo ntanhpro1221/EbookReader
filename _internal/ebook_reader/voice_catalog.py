@@ -283,13 +283,12 @@ AGE_PITCH_SEMITONES: dict[str, dict[str, int]] = {
 }
 
 
-# Presets a Vietnamese listener reported as hard to follow, quite apart from whether they
-# suit a role. Availability is not the only thing that should decide a casting: a voice
-# that tires the ear is worth skipping before it is worth reusing, and a character with
-# many lines should pay this penalty twice over.
-PRESET_LISTENING_PENALTY: dict[str, int] = {
-    "Xuân Vĩnh": 1,
-}
+# Presets barred from every role, for the same kind of reason the Central region is barred:
+# a Vietnamese listener judged them, and that judgement is not something the code can
+# second-guess. Xuân Vĩnh was first given a ranking penalty, which only made it a last
+# resort rather than never - the listener's answer was that it should not be reachable at
+# all, in any role, at any warp.
+EXCLUDED_PRESETS = frozenset({"Xuân Vĩnh"})
 
 
 def vocal_tract_target_cm(age: str, gender: str) -> float | None:
@@ -418,5 +417,6 @@ def casting_presets(gender: str) -> list[dict[str, str]]:
         if preset["gender"] == gender
         and preset["style"] != STYLE_NEWS
         and preset["region"] in CASTING_REGIONS
+        and preset["name"] not in EXCLUDED_PRESETS
     ]
     return sorted(candidates, key=casting_preset_priority)

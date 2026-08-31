@@ -20,7 +20,7 @@ from .database import (
 from .io_utils import slugify, stable_int
 from .voice_catalog import (
     CASTING_REGIONS,
-    PRESET_LISTENING_PENALTY,
+    EXCLUDED_PRESETS,
     STYLE_NEWS,
     VIENEU_PRESETS,
     casting_preset_priority,
@@ -270,6 +270,7 @@ class PresetAllocator:
                 if preset["name"] != self.narrator_voice
                 and preset["style"] != STYLE_NEWS
                 and preset["region"] in CASTING_REGIONS
+                and preset["name"] not in EXCLUDED_PRESETS
             ]
         if not candidates:
             # Nothing of this gender is left, so widen across gender - but never across
@@ -281,6 +282,7 @@ class PresetAllocator:
                 if preset["name"] != self.narrator_voice
                 and preset["style"] != STYLE_NEWS
                 and preset["region"] in CASTING_REGIONS
+                and preset["name"] not in EXCLUDED_PRESETS
             ]
         pool = "npc" if npc else "named"
         usage = self.pool_usage[pool]
@@ -296,9 +298,6 @@ class PresetAllocator:
                 # target are the same fit to a listener, and a 0.1 cm edge must not
                 # outrank a voice being hard to follow.
                 round(preset_age_reach(name, age, gender) * 2.0) / 2.0,
-                # A voice the listener finds hard to follow is worth avoiding before it is
-                # worth reusing, and doubly so for a character with many lines.
-                PRESET_LISTENING_PENALTY.get(name, 0) * (2 if prominent else 1),
                 *casting_preset_priority(preset),
             )
 
