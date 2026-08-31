@@ -37,6 +37,33 @@ SHORT_CONTEXT_GAP_SECONDS = 0.50
 ASR_PASS = "pass"
 ASR_MISMATCH = "mismatch"
 ASR_INCONCLUSIVE = "inconclusive"
+
+# Below this much reference text, Whisper cannot be asked the question at all.
+#
+# Measured over 4528 committed segments, by speakable characters in the reference:
+#
+#     chars    median similarity    below 0.5    transcript >3x too long
+#      0-3            0.273            75.0%              30.0%
+#      3-6            0.697            44.2%              32.7%
+#     6-10            0.826            13.9%              15.6%
+#    10-16            0.867             3.8%               2.4%
+#    24-40            0.943             0.2%               0.0%
+#      80+            0.974             0.3%               0.0%
+#
+# The cliff is at ten characters and it is steep. The same engine produced every one of
+# those segments, so a 75% failure rate at three characters against 0.2% at thirty is the
+# verifier failing, not the reading: there is not enough audio to transcribe, and Whisper
+# fills the gap from its training data - a rank label "SSS" came back as a request to
+# subscribe to a YouTube channel.
+#
+# This does not excuse the audio. It marks the ASR verdict as evidence nobody can collect,
+# so it cannot block a chapter; every other check still applies.
+ASR_MIN_VERIFIABLE_CHARS = 10
+
+
+def asr_verdict_is_unverifiable(text: str) -> bool:
+    """Whether this reference is too short for an ASR verdict to mean anything."""
+    return sum(char.isalnum() for char in str(text)) < ASR_MIN_VERIFIABLE_CHARS
 ASR_LOCKED_NAME_ANCHOR_MISMATCH = "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
 ASR_LOCKED_NAME_CANONICAL_PASS = "ASR_LOCKED_NAME_CANONICAL_PASS"
 LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"

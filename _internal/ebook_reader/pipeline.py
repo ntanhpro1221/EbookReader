@@ -24,6 +24,7 @@ from .asr import (
     WhisperVerifier,
     adjudicate_collapsed_repeated_short,
     adjudicate_locked_name_anchors,
+    asr_verdict_is_unverifiable,
 )
 from .asr_contract import (
     COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
@@ -1796,6 +1797,34 @@ class BookPipeline:
                 if value
             }
             blocked_codes = sorted(warning_codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
+            try:
+                segment_text = str(row["text"])
+            except (KeyError, IndexError, TypeError):
+                # No text to judge by, so no grounds to forgive anything. Failing closed
+                # keeps a missing field from quietly widening what publishes.
+                segment_text = ""
+                forgivable = False
+            else:
+                forgivable = asr_verdict_is_unverifiable(segment_text)
+            if blocked_codes and forgivable:
+                # A verdict the verifier cannot give must not read as a verdict against the
+                # audio. Whisper needs something to transcribe: measured over 4528 segments,
+                # a reference under 10 speakable characters gets a median similarity of 0.27
+                # against 0.94 for a normal sentence, fails the 0.5 threshold 75% of the
+                # time against 0.2%, and hallucinates a transcript more than three times too
+                # long in 30% of cases - a rank label "SSS" came back as a request to
+                # subscribe to a YouTube channel, which is what Whisper was trained on.
+                #
+                # The same engine made both sets of audio, so this is the measurement
+                # failing, not the reading. Blocking on it means a chapter cannot publish
+                # because a question was unanswerable.
+                #
+                # Only ASR codes are forgiven. Every check that can still give a trustworthy
+                # answer on two syllables - duration, RMS, clipping, pace, perceptual - keeps
+                # its power to block, and the warning stays recorded on the segment.
+                blocked_codes = [
+                    code for code in blocked_codes if not code.startswith("ASR_")
+                ]
             if blocked_codes:
                 blocking.append(
                     {
