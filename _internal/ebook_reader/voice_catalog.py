@@ -67,8 +67,14 @@ PRESET_VOCAL_TRACT_CM = {
 # is a 20.6 cm tract, and acceptable at 0.86, which is 19.7 cm.
 VOCAL_TRACT_MIN_CM = 12.8
 VOCAL_TRACT_MAX_CM = 19.7
-FORMANT_RATIO_MIN = 0.70
-FORMANT_RATIO_MAX = 1.35
+# The transform has its own limit, independent of anatomy: PSOLA resampling degrades once
+# the ratio moves far from unity, whatever the voice started as. A Vietnamese listener put
+# that at about 0.2 either way. The usable range is the intersection of the two - anatomy
+# says how far this particular voice may be stretched, the algorithm says how far anything
+# may be stretched at all.
+VOICE_VARIANT_MAX_DEVIATION = 0.20
+FORMANT_RATIO_MIN = 1.0 - VOICE_VARIANT_MAX_DEVIATION
+FORMANT_RATIO_MAX = 1.0 + VOICE_VARIANT_MAX_DEVIATION
 # Ladder of relative steps, natural first so a preset's first casting is untouched and
 # pays no processing at all. Each step is clamped into the preset's own usable range.
 CHARACTER_FORMANT_STEPS = (1.00, 0.93, 1.08, 0.87, 1.16, 0.97, 1.04)

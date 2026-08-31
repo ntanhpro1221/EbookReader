@@ -13,6 +13,7 @@ from ebook_reader.database import (
     canonical_analysis_note,
 )
 from ebook_reader.voice_catalog import (
+    VOICE_VARIANT_MAX_DEVIATION,
     formant_variants_for_preset,
     formant_ratio_bounds_for_preset,
     VOCAL_TRACT_MIN_CM,
@@ -1015,10 +1016,28 @@ def test_formant_range_follows_each_preset_vocal_tract() -> None:
     """
     for name, length in PRESET_VOCAL_TRACT_CM.items():
         lower, upper = formant_ratio_bounds_for_preset(name)
+        # Anatomy: the warped tract stays inside the adult range.
         assert VOCAL_TRACT_MIN_CM - 0.05 <= length / upper
         assert length / lower <= VOCAL_TRACT_MAX_CM + 0.05
+        # The algorithm has its own limit regardless of anatomy: PSOLA resampling degrades
+        # once the ratio moves far from unity, whatever the voice started as. The usable
+        # range is the intersection, so neither constraint alone may be exceeded.
+        assert lower >= 1.0 - VOICE_VARIANT_MAX_DEVIATION - 1e-6
+        assert upper <= 1.0 + VOICE_VARIANT_MAX_DEVIATION + 1e-6
         for ratio in formant_variants_for_preset(name):
             assert lower - 1e-6 <= ratio <= upper + 1e-6
+
+    # The two constraints bind opposite ends for the two genders: a long male tract is
+    # held back by anatomy going deeper and by the algorithm going brighter, and a short
+    # female tract the other way round.
+    male_length = PRESET_VOCAL_TRACT_CM["Thanh Bình"]
+    male_low, male_high = formant_ratio_bounds_for_preset("Thanh Bình")
+    assert male_low == pytest.approx(male_length / VOCAL_TRACT_MAX_CM, abs=0.005)
+    assert male_high == pytest.approx(1.0 + VOICE_VARIANT_MAX_DEVIATION, abs=0.005)
+    female_length = PRESET_VOCAL_TRACT_CM["Ngọc Linh"]
+    female_low, female_high = formant_ratio_bounds_for_preset("Ngọc Linh")
+    assert female_low == pytest.approx(1.0 - VOICE_VARIANT_MAX_DEVIATION, abs=0.005)
+    assert female_high == pytest.approx(female_length / VOCAL_TRACT_MIN_CM, abs=0.005)
 
     # A long male tract cannot go as deep as a short female one, and vice versa.
     male_low, male_high = formant_ratio_bounds_for_preset("Thanh Bình")
