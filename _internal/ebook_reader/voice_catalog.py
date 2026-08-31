@@ -230,15 +230,35 @@ def base_pitch_for_preset(preset_name: str) -> int:
     return int(PRESET_BASE_PITCH_SEMITONES.get(preset_name, 0))
 
 
+# F0 and formants both feed the impression of a large speaker, so a preset whose register
+# was lowered has already spent part of that budget and has less room left to be deepened
+# further. Anatomy alone cannot see this: lowering F0 leaves the formants, and therefore
+# the estimated vocal tract, exactly where they were. The rate comes from listening -
+# Thanh Bình dropped 4 semitones needed its floor raised from 0.86 to 0.90, so a semitone
+# is worth 0.01 of formant ratio. The whole perceptual window moves; the algorithmic limit
+# still caps it.
+REGISTER_FORMANT_TRADE_PER_SEMITONE = 0.01
+
+
 def formant_ratio_bounds_for_preset(preset_name: str) -> tuple[float, float]:
-    """The warp range that keeps this preset inside a plausible adult vocal tract."""
+    """The warp range that keeps this preset inside a plausible adult vocal tract.
+
+    Three independent constraints intersect: anatomy bounds how far this particular tract
+    may be stretched, the register shift moves that window because F0 already changed the
+    perceived size, and the transform's own limit caps how far anything may be warped.
+    """
     down, up = voice_variant_deviation(preset_name)
     algorithmic_low, algorithmic_high = 1.0 - down, 1.0 + up
     length = PRESET_VOCAL_TRACT_CM.get(preset_name)
     if length is None:
         return algorithmic_low, algorithmic_high
-    lower = max(algorithmic_low, length / VOCAL_TRACT_MAX_CM)
-    upper = min(algorithmic_high, length / VOCAL_TRACT_MIN_CM)
+    register_offset = (
+        -base_pitch_for_preset(preset_name) * REGISTER_FORMANT_TRADE_PER_SEMITONE
+    )
+    anatomical_low = length / VOCAL_TRACT_MAX_CM + register_offset
+    anatomical_high = length / VOCAL_TRACT_MIN_CM + register_offset
+    lower = max(algorithmic_low, anatomical_low)
+    upper = min(algorithmic_high, anatomical_high)
     return (lower, upper) if lower < upper else (1.0, 1.0)
 
 

@@ -19,6 +19,7 @@ from ebook_reader.voice_catalog import (
     VOCAL_TRACT_MIN_CM,
     VOCAL_TRACT_MAX_CM,
     PRESET_VOCAL_TRACT_CM,
+    REGISTER_FORMANT_TRADE_PER_SEMITONE,
     base_pitch_for_preset,
     GENDER_FEMALE,
     GENDER_MALE,
@@ -1016,7 +1017,8 @@ def test_formant_range_follows_each_preset_vocal_tract() -> None:
     """
     for name, length in PRESET_VOCAL_TRACT_CM.items():
         lower, upper = formant_ratio_bounds_for_preset(name)
-        # Anatomy: the warped tract stays inside the adult range.
+        # Anatomy: the warped tract stays inside the adult range. A preset whose register
+        # was lowered stops short of the anatomical floor, never past it.
         assert VOCAL_TRACT_MIN_CM - 0.05 <= length / upper
         assert length / lower <= VOCAL_TRACT_MAX_CM + 0.05
         # The algorithm has its own limit regardless of anatomy, and it is asymmetric and
@@ -1031,26 +1033,63 @@ def test_formant_range_follows_each_preset_vocal_tract() -> None:
 
     # The two constraints bind opposite ends for the two genders: a long male tract is
     # held back by anatomy going deeper and by the algorithm going brighter, and a short
-    # female tract the other way round.
-    male_length = PRESET_VOCAL_TRACT_CM["Thanh Bình"]
-    male_low, male_high = formant_ratio_bounds_for_preset("Thanh Bình")
+    # female tract the other way round. Read on a preset with no register shift, so the
+    # anatomical bound is the only thing setting the floor.
+    assert base_pitch_for_preset("Thái Sơn") == 0
+    male_length = PRESET_VOCAL_TRACT_CM["Thái Sơn"]
+    male_low, male_high = formant_ratio_bounds_for_preset("Thái Sơn")
     assert male_low == pytest.approx(male_length / VOCAL_TRACT_MAX_CM, abs=0.005)
-    assert male_high == pytest.approx(1.0 + voice_variant_deviation("Thanh Bình")[1], abs=0.005)
+    assert male_high == pytest.approx(1.0 + voice_variant_deviation("Thái Sơn")[1], abs=0.005)
     female_length = PRESET_VOCAL_TRACT_CM["Ngọc Linh"]
     female_low, female_high = formant_ratio_bounds_for_preset("Ngọc Linh")
     assert female_low == pytest.approx(1.0 - voice_variant_deviation("Ngọc Linh")[0], abs=0.005)
     assert female_high == pytest.approx(female_length / VOCAL_TRACT_MIN_CM, abs=0.005)
 
     # A long male tract cannot go as deep as a short female one, and vice versa.
-    male_low, male_high = formant_ratio_bounds_for_preset("Thanh Bình")
+    male_low, male_high = formant_ratio_bounds_for_preset("Thái Sơn")
     female_low, female_high = formant_ratio_bounds_for_preset("Ngọc Linh")
     assert male_low > female_low
     assert male_high > female_high
 
     # The two genders get mirrored allowances, which is the whole point of splitting them.
-    assert voice_variant_deviation("Thanh Bình") == (0.15, 0.20)
+    assert voice_variant_deviation("Thái Sơn") == (0.15, 0.20)
     assert voice_variant_deviation("Ngọc Linh") == (0.20, 0.15)
 
     # Every preset keeps its untouched voice as the first casting.
     for name in PRESET_VOCAL_TRACT_CM:
         assert formant_variants_for_preset(name)[0] == 1.0
+
+
+def test_a_lowered_register_spends_part_of_the_formant_range() -> None:
+    """F0 and formants both make a speaker sound large, so they draw on one budget.
+
+    Anatomy cannot see this. Lowering F0 leaves the spectral envelope alone, so the
+    estimated vocal tract after a register shift is exactly what it was before - yet the
+    voice is heard as deeper and has less room left to be deepened further. A Vietnamese
+    listener put Thanh Bình's floor at 0.86 on the raw preview and at 0.90 once the -4
+    semitone register was applied, which is the rate this encodes.
+    """
+    shifted = "Thanh Bình"
+    assert base_pitch_for_preset(shifted) == -4
+    lower, upper = formant_ratio_bounds_for_preset(shifted)
+    length = PRESET_VOCAL_TRACT_CM[shifted]
+    spent = 4 * REGISTER_FORMANT_TRADE_PER_SEMITONE
+
+    # The floor sits above the anatomical one by exactly what the register spent.
+    assert lower == pytest.approx(length / VOCAL_TRACT_MAX_CM + spent, abs=1e-6)
+    assert lower == pytest.approx(0.90, abs=0.005)
+    # The window moved, so the deepest reachable tract is shorter than anatomy alone allows.
+    assert length / lower < VOCAL_TRACT_MAX_CM
+    # The transform's own limit still caps the top; a moved window may not exceed it.
+    assert upper == pytest.approx(1.0 + voice_variant_deviation(shifted)[1], abs=1e-6)
+    for ratio in formant_variants_for_preset(shifted):
+        assert lower - 1e-6 <= ratio <= upper + 1e-6
+
+    # A preset at its native register is untouched by the rule.
+    for name in PRESET_VOCAL_TRACT_CM:
+        if base_pitch_for_preset(name):
+            continue
+        native_low, _ = formant_ratio_bounds_for_preset(name)
+        anatomical = PRESET_VOCAL_TRACT_CM[name] / VOCAL_TRACT_MAX_CM
+        algorithmic = 1.0 - voice_variant_deviation(name)[0]
+        assert native_low == pytest.approx(max(anatomical, algorithmic), abs=1e-6)
