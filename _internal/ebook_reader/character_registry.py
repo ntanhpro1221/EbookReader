@@ -30,6 +30,7 @@ from .voice_catalog import (
     formant_ratio_for_age,
     formant_variants_for_preset,
     age_pitch_semitones,
+    preset_reaches_age_pitch,
     preset_age_reach,
 )
 
@@ -257,6 +258,16 @@ class PresetAllocator:
             for preset in casting_presets(gender)
             if preset["name"] != self.narrator_voice
         ]
+        # A preset whose pitch cannot reach the age is not a candidate for it. Warping the
+        # tract to a child's size while the pitch stays adult makes a combination no throat
+        # can produce, and a listener hears it as a defect rather than as a child.
+        reachable = [
+            preset
+            for preset in candidates
+            if preset_reaches_age_pitch(str(preset["name"]), age, gender)
+        ]
+        if reachable:
+            candidates = reachable
         if str(age) == "child":
             # Before puberty the sexes barely differ: an eight-year-old boy and girl are
             # about 13.0 and 12.7 cm of vocal tract. Restricting a boy to the male presets
@@ -271,6 +282,7 @@ class PresetAllocator:
                 and preset["style"] != STYLE_NEWS
                 and preset["region"] in CASTING_REGIONS
                 and preset["name"] not in EXCLUDED_PRESETS
+                and preset_reaches_age_pitch(str(preset["name"]), age, gender)
             ]
         if not candidates:
             # Nothing of this gender is left, so widen across gender - but never across
@@ -315,7 +327,7 @@ class PresetAllocator:
             variants = formant_variants_for_preset(name)
             formant_ratio = variants[self.variant_usage[name] % len(variants)]
         self.variant_usage[name] += 1
-        return selected, formant_ratio, age_pitch_semitones(age, gender)
+        return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
 
 def _profile_for_preset(
