@@ -18,7 +18,10 @@ from typing import Any, Callable
 import requests
 
 from .config import ANALYSIS_RETRY_POLICY_VERSION
+from . import database as _database
 from .database import (
+    INAUDIBLE_DELIVERY_FIELDS,
+    critic_delta_fields,
     ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_ACTIVE_PRIDE_CUE_FRAGMENT,
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
@@ -2502,20 +2505,9 @@ def _host_affect_adjudication(
 # every field at once - including `volume`, which does still reach the audio through its
 # LUFS target. That is a different claim from "this one segment's emotion is wrong", and
 # it keeps its authority.
-AFFECT_CUE_DISAGREEMENT_BLOCKS = False
-# Fields whose value cannot move the audio enough to be worth a second model call.
-#
-# `emotion` and `intensity` no longer reach generation at all - they used to select a
-# sampling temperature and now select nothing. They do still reach loudness, through a
-# per-emotion dB offset scaled by intensity, so "inaudible" is a claim about magnitude
-# rather than about the code path. Measured over a real chapter set: 11 of 199 segments
-# take any offset at all, the largest actual shift is 0.80 dB and the rest sit between
-# 0.23 and 0.53 dB. `volume`, which stays authoritative, spans about 3 dB by itself.
-#
-# So an unresolved argument about these two is worth at most a fraction of a decibel on a
-# twentieth of the book, and is not worth losing a 915-chapter run over. `pace` shapes
-# silence and `volume` sets the LUFS target outright, so neither belongs here.
-INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
+# Both live in database.py, beside the field list they filter, so the code that records
+# a delta and the code that verifies it cannot drift apart. They did once, and the run
+# died on "Accepted critic evidence does not bind exact delivery".
 
 
 def _feedback_is_inaudible_only(
@@ -4706,12 +4698,18 @@ def _adjudicate_director_critic(
             f"{field}:{candidate[field]}->{corrected[field]}"
             for field in DIRECTOR_DELIVERY_FIELDS
             if corrected[field] != candidate[field]
-            and (
-                AFFECT_CUE_DISAGREEMENT_BLOCKS
-                or field not in INAUDIBLE_DELIVERY_FIELDS
-            )
         ]
-        host_derived_agreement = not deltas
+        # The record keeps every difference; only the decision is filtered. Rewriting what
+        # a delta *is* broke the evidence the database verifies against and ended a run on
+        # "Accepted critic evidence does not bind exact delivery". A difference confined to
+        # a field nobody can hear is simply not a reason to ask the model again.
+        blocking_fields = set(
+            critic_delta_fields(_database.AFFECT_CUE_DISAGREEMENT_BLOCKS)
+        )
+        blocking_deltas = [
+            delta for delta in deltas if delta.split(":", 1)[0] in blocking_fields
+        ]
+        host_derived_agreement = not blocking_deltas
         accepted = host_derived_agreement
         structural_override: dict[str, Any] | None = None
         critic_compatibility_override: dict[str, Any] | None = None
@@ -6351,7 +6349,7 @@ class OllamaBookAnalyzer:
                         if (
                             semantic_issues
                             and not semantic_batch_collapsed
-                            and not AFFECT_CUE_DISAGREEMENT_BLOCKS
+                            and not _database.AFFECT_CUE_DISAGREEMENT_BLOCKS
                         ):
                             # Recorded, not enforced. A single segment's affect is not
                             # worth a model call; a whole batch stamped with one delivery
@@ -6958,7 +6956,7 @@ class OllamaBookAnalyzer:
                 len(validated) != len(group)
                 and required
                 and split_result is None
-                and not AFFECT_CUE_DISAGREEMENT_BLOCKS
+                and not _database.AFFECT_CUE_DISAGREEMENT_BLOCKS
                 and _feedback_is_inaudible_only(validation_feedback)
             ):
                 # A batch of one that cannot be split again used to end the book here. It

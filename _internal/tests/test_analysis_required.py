@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 import requests
 
-from ebook_reader import analysis as analysis_module
+from ebook_reader import database as database_module
 from ebook_reader.analysis import (
     ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_LEDGER_POLICY_VERSION,
@@ -2351,7 +2351,7 @@ def test_v37_same_projection_is_recriticized_after_semantic_rejection(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_text = (
         "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
         "kinh ngạc và mừng rỡ:"
@@ -2439,7 +2439,7 @@ def test_v38_nonledger_clearance_keeps_projection_hash_after_semantic_retry(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_text = (
         "Một cậu bé nhìn thấy Hạ Phong đang đứng bên giường thì vô cùng "
         "kinh ngạc và mừng rỡ:"
@@ -2805,7 +2805,7 @@ def test_director_adjudicator_rejects_template_corrections_by_field_only(monkeyp
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     texts = [
         "Chương 01 - Giàn hỏa thiêu rực cháy",
         "Khói dày khiến phổi và yết hầu như bị thiêu đốt.",
@@ -6093,7 +6093,7 @@ def test_mortality_semantic_lock_is_not_created_for_resolved_cognition(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "resolved-mortality",
@@ -6173,7 +6173,7 @@ def test_director_adjacent_wake_lock_uses_original_context_for_override(monkeypa
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     mortality_text = "‘Không được… Không được ngủ… sẽ chết mất.’"
     wake_text = "‘Tỉnh dậy, phải tỉnh dậy!’"
     row = {
@@ -6243,7 +6243,7 @@ def test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     mortality_text = "‘Không được… Không được ngủ… sẽ chết mất.’"
     wake_text = "‘Tỉnh dậy, phải tỉnh dậy!’"
     db = FakeDB()
@@ -6310,7 +6310,7 @@ def test_director_valid_semantic_lock_dissent_is_audited_without_veto(monkeypatc
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "physical-collapse",
@@ -6376,7 +6376,7 @@ def test_v30_seq24_mask_keeps_critic_kind_and_affect_deltas_live(monkeypatch) ->
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_rows = v30_seq23_25_rows()
     row = source_rows[1]
     stable_id = str(row["stable_id"])
@@ -6435,7 +6435,7 @@ def test_v33_seq24_rejects_unsupported_critic_affect_escalation(monkeypatch) -> 
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_rows = v30_seq23_25_rows()
     row = source_rows[1]
     stable_id = str(row["stable_id"])
@@ -6546,7 +6546,7 @@ def test_v33_compatibility_override_does_not_cover_nonmatching_dissent(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     stable_id = "v33-nonmatching"
     row = {
         "stable_id": stable_id,
@@ -6786,7 +6786,7 @@ def test_v29_seq38_context_override_covers_only_kind_delta(monkeypatch) -> None:
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     source_rows = v29_seq37_39_rows()
     row = source_rows[1]
     stable_id = str(row["stable_id"])
@@ -6849,7 +6849,7 @@ def test_context_kind_and_sleep_emotion_overrides_compose_with_context_rule_prio
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     next_text = "‘Mình phải tỉnh dậy.’"
     row = {
         "id": 11,
@@ -6988,7 +6988,7 @@ def test_sleep_paralysis_overrides_kind_and_emotion_but_leaves_delivery_deltas_l
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 11,
         "stable_id": "v28-seq10-composed",
@@ -7077,7 +7077,7 @@ def test_sleep_paralysis_kind_and_emotion_overrides_compose_to_acceptance(monkey
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 11,
         "stable_id": "v28-seq10-kind-emotion",
@@ -7293,7 +7293,7 @@ def test_director_semantic_lock_never_overrides_invalid_or_allowed_dissent(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "physical-collapse",
@@ -7354,7 +7354,7 @@ def test_desperate_exertion_lock_never_overrides_invalid_or_allowed_dissent(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     row = {
         "id": 1,
         "stable_id": "desperate-exertion",
@@ -7398,7 +7398,7 @@ def test_director_heading_locked_field_dissent_is_audited_without_veto(monkeypat
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     group = [
         {
             "id": 1,
@@ -7605,7 +7605,7 @@ def test_director_cannot_override_critic_before_heading_delivery_is_host_locked(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     group = [
         {
             "id": 1,
@@ -7650,7 +7650,7 @@ def test_director_mixed_batch_still_rejects_invalid_content_evidence_quote(monke
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     group = [
         {
             "id": 1,
@@ -8220,7 +8220,7 @@ def test_repeated_host_candidate_splits_before_third_generator_or_critic(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -8413,7 +8413,7 @@ def test_repeated_host_candidate_fails_singleton_without_critic(monkeypatch) -> 
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows[0].update(
         {
@@ -9087,7 +9087,7 @@ def test_semantic_delivery_feedback_retries_before_checkpoint(monkeypatch) -> No
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9173,7 +9173,7 @@ def test_v25_seq9_advisory_retry_reaches_critic_without_exact_membership_gate(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9255,12 +9255,12 @@ def test_v25_seq9_repeated_neutral_still_fails_before_critic(monkeypatch) -> Non
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     # Exercises the retry mechanism with an affect disagreement as its trigger.
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9623,7 +9623,7 @@ def test_retry_retains_host_pass_constraint_while_fixing_other_semantic_issue(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -9788,7 +9788,7 @@ def test_critic_exhaustion_does_not_clear_prior_deterministic_feedback(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows[0].update(
         {
@@ -9851,7 +9851,7 @@ def test_director_field_mismatch_retries_generator_with_bounded_feedback(monkeyp
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     settings = build_settings(overrides={"analysis": {"max_retries": 2}})
     analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
@@ -10227,7 +10227,7 @@ def test_v35_exact_seq25_uses_latest_director_values_on_generator_retry(
     # a real run died when one line's `intensity` exhausted a singleton batch - but
     # the adjudicator is still live for kind, speaker, pace and volume, so the
     # coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     row = {
         "id": 26,
@@ -10810,7 +10810,7 @@ def test_persistent_semantic_delivery_failure_splits_until_singletons(monkeypatc
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     db.rows = [
         {
@@ -10915,7 +10915,7 @@ def test_five_row_neutral_one_template_cannot_reach_blanket_accepting_critic(
     # Production no longer lets affect pull that trigger, because the field does not
     # reach the audio, but the mechanism stays live for confidence and source-kind
     # issues - so the coverage is kept by enabling the trigger explicitly here.
-    monkeypatch.setattr(analysis_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db = FakeDB()
     texts = [
         "Cậu sợ hãi trước bóng tối.",
@@ -11894,7 +11894,7 @@ def test_affect_disagreement_is_recorded_but_does_not_retry(monkeypatch) -> None
     analyzer = OllamaBookAnalyzer(settings, db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
     monkeypatch.setattr("ebook_reader.analysis.time.sleep", lambda _seconds: None)
-    assert analysis_module.AFFECT_CUE_DISAGREEMENT_BLOCKS is False
+    assert database_module.AFFECT_CUE_DISAGREEMENT_BLOCKS is False
     requests_made: list[object] = []
 
     def request(group, **kwargs):

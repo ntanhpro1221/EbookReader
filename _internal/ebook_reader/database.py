@@ -210,6 +210,29 @@ ANALYSIS_CRITIC_DELIVERY_FIELDS = (
     "pace",
     "volume",
 )
+# Fields whose value cannot move the audio enough to be worth a retry. `emotion` and
+# `intensity` reach loudness only, through an offset measured at 0.80 dB on 5.5% of a real
+# chapter set; `pace` shapes silence and `volume` sets the LUFS target outright, so neither
+# of those belongs here. A disagreement confined to these is recorded and accepted rather
+# than sent back to the model - it once ended a whole run on a single line's intensity.
+#
+# This lives beside the field list, not beside the code that first needed it. Analysis
+# computes the deltas and the database recomputes them to verify what was stored; when the
+# rule existed in only one of those two places they disagreed, and the run died on
+# "Accepted critic evidence does not bind exact delivery".
+AFFECT_CUE_DISAGREEMENT_BLOCKS = False
+INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
+
+
+def critic_delta_fields(blocking: bool) -> tuple[str, ...]:
+    """The fields a critic disagreement is counted over."""
+    if blocking:
+        return ANALYSIS_CRITIC_DELIVERY_FIELDS
+    return tuple(
+        field
+        for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
+        if field not in INAUDIBLE_DELIVERY_FIELDS
+    )
 ANALYSIS_CRITIC_RESERVED_SPEAKERS = ("NARRATOR", "UNKNOWN")
 ANALYSIS_DELIVERY_NOTE_VERSION = "delivery_note_v1"
 ANALYSIS_DELIVERY_NOTE_PREFIX = f"{ANALYSIS_DELIVERY_NOTE_VERSION}="
@@ -1229,6 +1252,11 @@ def analysis_expected_critic_compatibility_override(
     cue_matches = _analysis_source_active_affect_matches(source_text)
     if set(cue_matches) != {"disoriented"}:
         return None
+    # The full field list on purpose. This builds a compatibility override, which exists
+    # precisely to resolve an affect delta and rejects itself below if "emotion" is
+    # absent - filtering affect out here would make every override impossible to create
+    # and impossible to re-validate, including those already committed in a project from
+    # before the policy changed.
     raw_delta_fields = [
         field
         for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
