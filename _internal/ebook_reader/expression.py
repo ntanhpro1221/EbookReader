@@ -41,6 +41,8 @@ that would transfer to this voice and this language.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pyworld
 
@@ -239,3 +241,75 @@ def shape_segment(
         target["tempo"],
     )
     return apply_gain(shaped, target["gain_db"]), target
+
+
+# --- pauses -------------------------------------------------------------------------
+#
+# The structural pause is already decided from punctuation and paragraph shape: roughly
+# 170-230 ms inside a paragraph, 380 at its end, 600 after strong punctuation. That is the
+# grammar of the text and it is not touched here.
+#
+# What it cannot see is the shape of the story. Work on storytelling pause modelling
+# (Sharma et al., "Analysis and modeling pauses for synthesis of storytelling speech based
+# on discourse modes") classifies a storyteller's pauses into short, medium and long, and
+# finds they are placed to emphasise emotion-salient material and to build suspense and
+# climax. So a line that carries feeling earns a moment after it to land, and a moment
+# before it to be arrived at.
+#
+# The adjustments are deliberately small. A book is listened to for hours and silence that
+# keeps stretching and shrinking is its own kind of fatigue, so this nudges a pause into
+# the next tier rather than inventing a new one.
+NARRATIVE_PAUSE_AFTER_MS = 120
+NARRATIVE_PAUSE_BEFORE_MS = 80
+SPEECH_TAG_PAUSE_MS = -60
+NARRATIVE_PAUSE_MIN_INTENSITY = 2
+PAUSE_CEILING_MS = 900
+SPEECH_TAG_MAX_CHARS = 48
+
+
+def _carries_feeling(segment: dict[str, Any] | None) -> bool:
+    if segment is None:
+        return False
+    return (
+        str(segment.get("emotion") or "neutral") != "neutral"
+        and int(segment.get("intensity") or 0) >= NARRATIVE_PAUSE_MIN_INTENSITY
+    )
+
+
+def _is_speech_tag(segment: dict[str, Any] | None, previous: dict[str, Any] | None) -> bool:
+    """A short narration line right after dialogue - "Joel cười trừ:" and its kin.
+
+    The literature calls this the post-character situation and finds it reduced rather than
+    expanded: it is bookkeeping attached to the line it reports, and letting it sit behind
+    a full pause detaches it from the speech it belongs to.
+    """
+    if segment is None or previous is None:
+        return False
+    if str(segment.get("kind") or "") != "narration":
+        return False
+    if str(previous.get("kind") or "") != "dialogue":
+        return False
+    text = str(segment.get("text") or "").strip()
+    return 0 < len(text) <= SPEECH_TAG_MAX_CHARS
+
+
+def narrative_break_ms(
+    break_ms: int,
+    segment: dict[str, Any],
+    previous: dict[str, Any] | None = None,
+    following: dict[str, Any] | None = None,
+) -> int:
+    """Adjust a structural pause for the shape of the story around it."""
+    base = max(0, int(break_ms))
+    if base == 0:
+        # A zero break is a deliberate join - a clause split mid-sentence - and opening a
+        # gap there would break the sentence rather than shape it.
+        return 0
+    adjusted = base
+    if _carries_feeling(segment):
+        adjusted += NARRATIVE_PAUSE_AFTER_MS
+    if _carries_feeling(following):
+        adjusted += NARRATIVE_PAUSE_BEFORE_MS
+    if _is_speech_tag(segment, previous):
+        adjusted += SPEECH_TAG_PAUSE_MS
+    return max(0, min(PAUSE_CEILING_MS, adjusted))

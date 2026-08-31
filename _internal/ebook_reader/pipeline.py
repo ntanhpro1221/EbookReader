@@ -73,7 +73,7 @@ from .database import (
 from .io_utils import sha256_file
 from .models import BookStatus, ChapterStatus, ProjectPaths, ResourceLevel, SegmentStatus
 from .notifier import WindowsNotifier
-from .expression import shape_segment
+from .expression import narrative_break_ms, shape_segment
 from .perceptual_qa import (
     DEFAULT_PERCEPTUAL_WORKER_THREADS,
     PERCEPTUAL_INCONCLUSIVE,
@@ -417,6 +417,16 @@ class BookPipeline:
             self.log(f"Đã chia {chapter['title']} thành {len(rows):,} segment và checkpoint vào SQLite.")
             self._progress("Chuẩn bị và chia văn bản", index, len(chapters))
 
+    @staticmethod
+    def _delivery_context(row: Any) -> dict[str, Any]:
+        """The few fields the pause rules read, lifted out of a database row."""
+        return {
+            "kind": str(row["kind"] or "narration"),
+            "emotion": str(row["emotion"] or "neutral"),
+            "intensity": int(row["intensity"] or 0),
+            "text": str(row["text"] or ""),
+        }
+
     def _chapter_delivery_wavs(
         self,
         chapter: Any,
@@ -437,9 +447,19 @@ class BookPipeline:
         delivery_root = self.paths.work / "delivery" / f"chapter_{int(chapter['chapter_index']):05d}"
         rendered: list[tuple[Path, int]] = []
         transformed = 0
-        for row in rows:
+        ordered = list(rows)
+        for index, row in enumerate(ordered):
             source = Path(str(row["wav_path"]))
-            break_ms = int(row["break_ms"])
+            # The structural pause comes from punctuation; this layers the story's shape
+            # over it, so a line that carries feeling is arrived at and allowed to land.
+            break_ms = narrative_break_ms(
+                int(row["break_ms"]),
+                self._delivery_context(row),
+                self._delivery_context(ordered[index - 1]) if index else None,
+                self._delivery_context(ordered[index + 1])
+                if index + 1 < len(ordered)
+                else None,
+            )
             profile = profiles.get(int(row["voice_profile_id"] or 0))
             pitch_steps = int(profile["pitch_semitones"]) if profile is not None else 0
             formant_ratio = (

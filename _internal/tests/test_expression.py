@@ -8,6 +8,8 @@ from ebook_reader.expression import (
     EXPRESSION_TEMPO_LIMIT,
     NARRATION_AFFECT_WEIGHT,
     PAD,
+    PAUSE_CEILING_MS,
+    narrative_break_ms,
     prosody_targets,
     shape_segment,
 )
@@ -94,3 +96,53 @@ def test_shaping_preserves_length_unless_tempo_was_asked_for() -> None:
     unshaped, no_target = shape_segment(audio, 48_000, "neutral", 0, "narration")
     assert no_target is None
     assert len(unshaped) == len(audio)
+
+
+def _seg(kind: str, emotion: str = "neutral", intensity: int = 0, text: str = "") -> dict:
+    return {"kind": kind, "emotion": emotion, "intensity": intensity, "text": text}
+
+
+def test_a_line_that_carries_feeling_is_given_room_around_it() -> None:
+    """Storytelling pauses mark emotion-salient material, not only grammar.
+
+    The structural pause already comes from punctuation and paragraph shape. What it
+    cannot see is the story: a shout wants a moment afterwards to land, and a moment
+    beforehand to be arrived at.
+    """
+    plain = narrative_break_ms(380, _seg("narration"), None, _seg("narration"))
+    after = narrative_break_ms(380, _seg("dialogue", "angry", 3), None, _seg("narration"))
+    before = narrative_break_ms(380, _seg("narration"), None, _seg("dialogue", "angry", 3))
+    between = narrative_break_ms(
+        380, _seg("dialogue", "angry", 3), None, _seg("dialogue", "angry", 3)
+    )
+
+    assert plain == 380
+    assert after > plain
+    assert before > plain
+    assert between > after > before
+
+
+def test_a_speech_tag_stays_attached_to_the_line_it_reports() -> None:
+    """"Joel cười trừ:" is bookkeeping for the speech beside it, not a beat of its own."""
+    tag = narrative_break_ms(
+        230, _seg("narration", text="Joel cười trừ:"), _seg("dialogue"), None
+    )
+    ordinary = narrative_break_ms(230, _seg("narration", text="Joel cười trừ:"), None, None)
+
+    assert tag < ordinary == 230
+
+
+def test_a_deliberate_join_is_never_opened_into_a_pause() -> None:
+    """A zero break splits one sentence across segments; a gap there breaks the sentence."""
+    assert narrative_break_ms(0, _seg("narration", "afraid", 3), None, None) == 0
+
+
+def test_no_pause_runs_away_however_the_story_stacks_up() -> None:
+    """Silence that keeps stretching is its own fatigue over hours of listening."""
+    worst = narrative_break_ms(
+        PAUSE_CEILING_MS,
+        _seg("dialogue", "angry", 3),
+        None,
+        _seg("dialogue", "afraid", 3),
+    )
+    assert worst == PAUSE_CEILING_MS
