@@ -19,6 +19,49 @@ Hệ quả thực tế cho quy trình dev:
 Nâng cấp dependency vì vậy luôn là một **sự kiện phiên bản**: nâng cấp → chạy lại từ project sạch →
 so sánh audio với phiên bản trước → tag.
 
+## Hai cái bẫy đã cắn thật, ngày 2026-09-01
+
+### 1. `pyproject.toml` không nói được torch phải là bản CUDA
+
+Bản đang chạy là `torch==2.8.0+cu128`, nhưng file chỉ ghi `torch==2.8.0`. Hậu tố `+cu128` đến từ
+**cách cài**, không từ file. Chạy `uv pip install -e .` sẽ lấy torch từ PyPI, mà trên Windows PyPI
+phục vụ **bản CPU**. Kết quả:
+
+    torch 2.13.0+cpu   cuda None   available False
+
+Và **không có lỗi nào được ném ra**. Pipeline vẫn chạy, chỉ là mọi thứ chuyển sang CPU và chậm hàng
+chục lần. Đây là kiểu hỏng tệ nhất: im lặng.
+
+**Luật:** sau mọi lần đụng tới torch, chạy
+
+```
+runtime/.venv/Scripts/python.exe -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+và phải thấy hậu tố `+cuXXX` cùng `True`. Cài lại bằng
+`uv pip install --reinstall torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu128`.
+
+Lưu ý `uv` coi `2.13.0+cpu` là đã thoả `torch==2.13.0` nên **bỏ qua** lệnh cài lại nếu không có
+`--reinstall`. Phải gỡ hoặc ép `--reinstall`.
+
+### 2. "Latest" trên PyPI không có nghĩa là cài được
+
+`check_dependency_updates.py` từng đọc `info.version` của PyPI và gọi đó là bản mới nhất. Nó báo
+`numpy 2.5.2`, `librosa 1.0.0`, `scipy 1.18.1` — cả ba đều **đòi Python ≥3.12** trong khi project chạy
+**3.11.9**. Tôi đã ghi những số đó vào `pyproject.toml` và chỉ phát hiện khi resolver báo lỗi.
+
+Script giờ duyệt từng release, lọc theo `requires_python` của interpreter đang chạy, và báo **bản cao
+nhất cài được**, kèm ghi chú khi PyPI có bản mới hơn nhưng cần Python mới hơn.
+
+Bộ thực tế nâng được trên Python 3.11:
+
+| nâng | giữ nguyên vì cần Python ≥3.12 |
+|---|---|
+| torch 2.13.0, transformers 5.16.1, numpy **2.4.6**, vieneu 3.3.0, sea-g2p 0.9.1, huggingface-hub 1.29.0, PySide6 6.11.2, psutil 7.2.2, soundfile 0.14.0, pyloudnorm 0.2.0, timm 1.0.29, requests 2.34.2, pytest 9.1.1, ruff 0.16.5 | numpy 2.5.2, librosa 1.0.0, scipy 1.18.1, pyworld 0.3.6 |
+
+Muốn lấy nhóm bên phải thì phải nâng Python trước — đó là một quyết định riêng, không phải hệ quả
+tự động của việc nâng package.
+
 ## Kiểm tra nhanh
 
 ```bash

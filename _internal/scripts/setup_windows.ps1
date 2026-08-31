@@ -89,7 +89,7 @@ function Install-PytorchCudaStack {
     }
     Write-Host "Cài/repair PyTorch CUDA 12.8 cho RTX 50 Laptop..."
     Invoke-NativeChecked {
-        & $Python -m pip install --upgrade --force-reinstall torch==2.8.0 torchaudio==2.8.0 torchvision==0.23.0 --index-url https://download.pytorch.org/whl/cu128
+        & $Python -m pip install --upgrade --force-reinstall torch==2.11.0 torchaudio==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
     } "Cài PyTorch CUDA 12.8"
     if (-not (Test-PytorchCudaStack)) {
         throw "PyTorch/torchaudio không phải CUDA 12.8 hoặc torchvision không tương thích."

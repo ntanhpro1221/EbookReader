@@ -2497,9 +2497,18 @@ def _host_affect_adjudication(
 # LUFS target. That is a different claim from "this one segment's emotion is wrong", and
 # it keeps its authority.
 AFFECT_CUE_DISAGREEMENT_BLOCKS = False
-# Fields whose value never reaches the audio. `emotion` and `intensity` used to select a
-# sampling temperature and no longer select anything; `pace` still shapes silence and
-# `volume` still sets a LUFS target, so neither of those belongs here.
+# Fields whose value cannot move the audio enough to be worth a second model call.
+#
+# `emotion` and `intensity` no longer reach generation at all - they used to select a
+# sampling temperature and now select nothing. They do still reach loudness, through a
+# per-emotion dB offset scaled by intensity, so "inaudible" is a claim about magnitude
+# rather than about the code path. Measured over a real chapter set: 11 of 199 segments
+# take any offset at all, the largest actual shift is 0.80 dB and the rest sit between
+# 0.23 and 0.53 dB. `volume`, which stays authoritative, spans about 3 dB by itself.
+#
+# So an unresolved argument about these two is worth at most a fraction of a decibel on a
+# twentieth of the book, and is not worth losing a 915-chapter run over. `pace` shapes
+# silence and `volume` sets the LUFS target outright, so neither belongs here.
 INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
 
 
@@ -4682,10 +4691,19 @@ def _adjudicate_director_critic(
         corrected = {
             field: verdict[field] for field in DIRECTOR_DELIVERY_FIELDS
         }
+        # The critic's opinion on a field that moves the audio by at most a fraction of a
+        # decibel is taken and not argued with. Treating it as a mismatch is what ended a
+        # real run: a singleton batch spent all three attempts on one line's `intensity`
+        # and there was nothing left to split. The critic's value still wins - it simply
+        # stops being a reason to ask the model again.
         deltas = [
             f"{field}:{candidate[field]}->{corrected[field]}"
             for field in DIRECTOR_DELIVERY_FIELDS
             if corrected[field] != candidate[field]
+            and (
+                AFFECT_CUE_DISAGREEMENT_BLOCKS
+                or field not in INAUDIBLE_DELIVERY_FIELDS
+            )
         ]
         host_derived_agreement = not deltas
         accepted = host_derived_agreement

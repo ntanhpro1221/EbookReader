@@ -57,21 +57,78 @@ def local_version(name: str) -> str:
         return "not installed"
 
 
+def _supports_running_python(release_files: list[dict[str, Any]]) -> bool:
+    """Whether any file in a release accepts the interpreter this project runs on."""
+    from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
+    running = f"{sys.version_info.major}.{sys.version_info.minor}"
+    saw_constraint = False
+    for item in release_files:
+        if item.get("yanked"):
+            continue
+        requires = item.get("requires_python") or ""
+        if not requires:
+            return True
+        saw_constraint = True
+        try:
+            if SpecifierSet(requires).contains(running, prereleases=True):
+                return True
+        except InvalidSpecifier:
+            return True
+    return not saw_constraint
+
+
+def _latest_installable(name: str) -> tuple[str, str]:
+    """Return the newest release this interpreter can install, and the newest overall.
+
+    Reporting only the newest overall is how this tool told me numpy 2.5.2 was available
+    when it requires Python 3.12 and the project runs 3.11 - the upgrade then failed at
+    resolution after the version had already been written into pyproject.toml. A version
+    that cannot be installed is not an update.
+    """
+    from packaging.version import InvalidVersion, Version
+
+    data = _get_json(f"https://pypi.org/pypi/{name}/json")
+    newest_overall = str(data["info"]["version"])
+    candidates = []
+    for raw, files in (data.get("releases") or {}).items():
+        if not files or not _supports_running_python(list(files)):
+            continue
+        try:
+            parsed = Version(raw)
+        except InvalidVersion:
+            continue
+        if parsed.is_prerelease:
+            continue
+        candidates.append((parsed, raw))
+    if not candidates:
+        return newest_overall, newest_overall
+    return max(candidates)[1], newest_overall
+
+
 def check_pypi(pins: list[tuple[str, str]], *, offline: bool) -> list[dict[str, Any]]:
     rows = []
     for name, pinned in pins:
         latest = "skipped" if offline else ""
+        newest_overall = latest
         if not offline:
             try:
-                latest = str(_get_json(f"https://pypi.org/pypi/{name}/json")["info"]["version"])
+                latest, newest_overall = _latest_installable(name)
             except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as exc:
                 latest = f"unavailable ({exc.__class__.__name__})"
+                newest_overall = latest
         rows.append(
             {
                 "name": name,
                 "pinned": pinned,
                 "installed": local_version(name),
                 "latest": latest,
+                "newest_overall": newest_overall,
+                "blocked_by_python": (
+                    bool(latest)
+                    and " " not in latest
+                    and newest_overall != latest
+                ),
                 "outdated": bool(latest) and latest != pinned and " " not in latest,
             }
         )
@@ -132,14 +189,23 @@ def main() -> int:
     github = check_github(offline=args.offline)
     ollama = check_ollama()
 
-    print(f"{'package':22s} {'pinned':16s} {'installed':16s} {'latest':16s}")
-    print("-" * 74)
+    running = f"{sys.version_info.major}.{sys.version_info.minor}"
+    print(
+        f"{'package':22s} {'pinned':16s} {'installed':16s} "
+        f"{'installable':16s} (newest that runs on Python {running})"
+    )
+    print("-" * 86)
     for row in pypi:
         marker = " OUTDATED" if row["outdated"] else ""
         drift = " DRIFT" if row["installed"] not in {row["pinned"], f"{row['pinned']}+cu128"} else ""
+        held = (
+            f"  [PyPI has {row['newest_overall']}, needs a newer Python]"
+            if row.get("blocked_by_python")
+            else ""
+        )
         print(
             f"{row['name']:22s} {row['pinned']:16s} {row['installed']:16s} "
-            f"{row['latest']:16s}{marker}{drift}"
+            f"{row['latest']:16s}{marker}{drift}{held}"
         )
 
     print("\nUpstream projects")
