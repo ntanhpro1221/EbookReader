@@ -20,6 +20,7 @@ from ebook_reader.asr_contract import (
     COLLAPSED_SHORT_CONTEXT_MODE,
     SHORT_CONTEXT_REPEAT_COUNT,
 )
+from ebook_reader import database as database_module
 from ebook_reader.database import (
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_DELIVERY,
@@ -6998,7 +6999,13 @@ def test_direct_narration_affect_critic_dissent_cannot_override_commit(
     allowed_emotions: tuple[str, ...],
     candidate_emotion: str,
     wrong_emotion: str,
+    monkeypatch,
 ) -> None:
+    # A semantic override exists to resolve an affect disagreement, which only has
+    # something to resolve while affect can still block a candidate. Production no
+    # longer lets it, but the machinery stays live for the fields that do block, so
+    # the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     db, source_rows = _analysis_batch_db(tmp_path, texts=(text,))
     envelope = _semantic_lock_envelope(
         source_rows,
@@ -7553,7 +7560,13 @@ def test_analysis_candidate_without_semantic_source_needs_no_host_clearance(
 
 def test_analysis_candidate_accepts_source_bound_host_semantic_override(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    # A semantic override exists to resolve an affect disagreement, which only has
+    # something to resolve while affect can still block a candidate. Production no
+    # longer lets it, but the machinery stays live for the fields that do block, so
+    # the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     physical_text = (
         "Phổi và yết hầu đang bị thiêu đốt. "
         "Ý thức của Hạ Phong rất nhanh liền trở nên mơ hồ."
@@ -7605,7 +7618,13 @@ def test_analysis_candidate_accepts_source_bound_host_semantic_override(
 
 def test_analysis_candidate_revalidates_semantic_override_protocol_after_reopen(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    # A semantic override exists to resolve an affect disagreement, which only has
+    # something to resolve while affect can still block a candidate. Production no
+    # longer lets it, but the machinery stays live for the fields that do block, so
+    # the coverage is kept by enabling the trigger explicitly here.
+    monkeypatch.setattr(database_module, "AFFECT_CUE_DISAGREEMENT_BLOCKS", True)
     physical_text = (
         "Phổi và yết hầu đang bị thiêu đốt. "
         "Ý thức của anh nhanh chóng trở nên mơ hồ."

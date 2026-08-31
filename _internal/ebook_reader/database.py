@@ -4684,7 +4684,20 @@ class ProjectDB:
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 if raw_delivery.get(field) != candidate_projection[field]
             }
-            host_derived_accept = not raw_deltas
+            # Acceptance is decided on the same subset analysis decided it on. `raw_deltas`
+            # stays the complete record - that is evidence and it is verified in full -
+            # but a difference confined to a field nobody can hear was never a reason to
+            # reject the candidate, and recomputing acceptance from the full list is what
+            # made the two halves disagree and ended a run twice at the same segment.
+            blocking_delta_fields = set(
+                critic_delta_fields(AFFECT_CUE_DISAGREEMENT_BLOCKS)
+            )
+            blocking_raw_deltas = [
+                delta
+                for delta in raw_deltas
+                if delta.split(":", 1)[0] in blocking_delta_fields
+            ]
+            host_derived_accept = not blocking_raw_deltas
             raw_agreement = (
                 isinstance(critic, dict)
                 and critic.get("accept") is host_derived_accept
@@ -4865,12 +4878,13 @@ class ProjectDB:
                 or item.get("effective_accept") is not True
                 or (
                     raw_agreement
-                    and (
-                        structural_override is not None
-                        or semantic_override is not None
-                        or source_kind_override is not None
-                        or critic_compatibility_override is not None
-                    )
+                    # An override that resolves only inaudible fields is redundant once
+                    # those stop blocking, not contradictory: the evidence was recorded
+                    # under a policy where they did block, and rejecting it would refuse
+                    # every project committed before the policy changed. An override that
+                    # claims a field still capable of blocking is a different matter and
+                    # cannot coexist with agreement.
+                    and bool(covered_override_fields & blocking_delta_fields)
                 )
                 or (
                     not raw_agreement
