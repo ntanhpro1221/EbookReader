@@ -54,6 +54,16 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "fatal_failure_streak": 3,
         "max_segment_chars": 340,
         "batch_size": 12,
+        # Worker processes that synthesize ahead of the committing loop. Three measured
+        # 2.16x and took the GPU from 23% to 90%; five bought 1.3% more for 7318 of 8151
+        # MiB, leaving nothing for the foreground. 0 or 1 keeps synthesis inline.
+        # See docs/THROUGHPUT.md.
+        "parallel_workers": 3,
+        # How many segments to hand the pool at once. Pausing, stopping and the resource
+        # gate are checked between batches rather than between segments, so this is the
+        # granularity at which the run can yield - small multiples of the worker count keep
+        # every worker fed without making a stop request wait on a long queue.
+        "parallel_batch_size": 9,
         "min_seconds_per_100_chars": 2.1,
         "max_seconds_per_100_chars": 13.0,
         "min_rms": 0.002,

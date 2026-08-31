@@ -248,6 +248,10 @@ class BookPipeline:
         self.resources = AdaptiveResourceManager(settings, paths.root)
         self.notifier = WindowsNotifier()
         self.tts = TTSCoordinator(settings, db, self.log)
+        # Built on first use and dropped for good if it ever fails, so a machine that
+        # cannot spawn workers still finishes the book on the sequential path.
+        self._tts_pool: Any = None
+        self._tts_pool_failed = False
         self.perceptual_qa = UTMOSNaturalnessVerifier(settings, self.log)
         self._last_resource_level: ResourceLevel | None = None
         self._completed_noop = False
@@ -1989,6 +1993,7 @@ class BookPipeline:
         current_rows = self.db.list_segments(chapter_id=chapter_id)
         tts_label = f"Tạo audio chapter {chapter['chapter_index']}: {chapter['title']}"
         self._progress(tts_label, 0, len(current_rows))
+        prefetched_takes: dict[str, dict[str, Any]] = {}
         for index, row in enumerate(current_rows, 1):
             self._progress(tts_label, index - 1, len(current_rows))
             status = str(row["status"])
@@ -2027,18 +2032,7 @@ class BookPipeline:
             if row["voice_profile_id"] is None:
                 self.db.mark_failed(int(row["id"]), "No locked voice profile")
                 continue
-            interrupted_clarity = (
-                str(row["generation_delivery_mode"] or "") == DELIVERY_CLARITY
-                and str(row["generation_policy_hash"] or "") == self.quality_policy_hash
-                and row["generation_repair_round"] is not None
-                and status
-                in {
-                    SegmentStatus.PENDING.value,
-                    SegmentStatus.ANALYZED.value,
-                    SegmentStatus.GENERATING.value,
-                    SegmentStatus.FAILED.value,
-                }
-            )
+            interrupted_clarity = self._is_interrupted_clarity_repair(row, status)
             if interrupted_clarity:
                 stored_round = int(row["generation_repair_round"])
                 next_round = (
@@ -2072,10 +2066,28 @@ class BookPipeline:
                 f"chapter {chapter['chapter_index']} segment {row['seq']}",
                 keep_engine="vieneu",
             )
-            self._process_single_segment(row, chapter)
+            stable_id = str(row["stable_id"])
+            if stable_id not in prefetched_takes:
+                # Refill only when the current segment is not already covered, so the
+                # resource gate above still runs between batches and a stop request waits
+                # for one batch rather than for the rest of the chapter.
+                prefetched_takes = self._prefetch_segment_batch(
+                    self._next_plain_tts_rows(current_rows, index - 1),
+                    seed_salt_prefix="primary",
+                    repair_short_utterance=False,
+                    delivery_mode=DELIVERY_PRIMARY,
+                )
+            self._process_single_segment(
+                row,
+                chapter,
+                prefetched=prefetched_takes.pop(stable_id, None),
+            )
         self._progress(tts_label, len(current_rows), len(current_rows))
 
         # Stage 2: release TTS VRAM before loading Whisper, then verify the whole chapter.
+        # The pool holds a VieNeu copy per worker, so it must go too - otherwise Whisper
+        # would be loading alongside three models this stage has finished with.
+        self._close_synthesis_pool()
         self.tts.unload_all()
         self.db.update_chapter_status(chapter_id, ChapterStatus.VERIFYING.value)
         self._verify_chapter_audio(chapter, verifier)
@@ -3227,6 +3239,183 @@ class BookPipeline:
             )
         return failed
 
+    def _is_interrupted_clarity_repair(self, row: Any, status: str) -> bool:
+        """A clarity repair that was cut off mid-generation and must resume as a repair.
+
+        Extracted so the committing loop and the prefetch predicate cannot drift apart.
+        Three separate bugs in this project have been one fact written in two places, and a
+        prefetch that disagreed with the loop about this would synthesize a primary take for
+        a segment the loop then repairs, wasting the work and leaving a stray WAV.
+        """
+        return (
+            str(row["generation_delivery_mode"] or "") == DELIVERY_CLARITY
+            and str(row["generation_policy_hash"] or "") == self.quality_policy_hash
+            and row["generation_repair_round"] is not None
+            and status
+            in {
+                SegmentStatus.PENDING.value,
+                SegmentStatus.ANALYZED.value,
+                SegmentStatus.GENERATING.value,
+                SegmentStatus.FAILED.value,
+            }
+        )
+
+    def _segment_takes_plain_tts_path(self, row: Any) -> bool:
+        """Whether this segment will reach the ordinary single-take branch of the loop.
+
+        Deliberately conservative. Every branch that skips or repairs a segment first
+        requires valid existing audio, so a segment with none can only be skipped for having
+        no speakable text, no voice profile, or an interrupted clarity repair. Being wrong
+        in the cautious direction costs a prefetch that goes unused; being wrong the other
+        way would leave a stray WAV beside a segment the loop decided to treat differently.
+        """
+        signal_valid, _metrics = self._inspect_existing_segment(row)
+        if signal_valid:
+            return False
+        if not has_spoken_content(str(row["text"])):
+            return False
+        if row["voice_profile_id"] is None:
+            return False
+        return not self._is_interrupted_clarity_repair(row, str(row["status"]))
+
+    def _next_plain_tts_rows(self, rows: list[Any], start: int) -> list[Any]:
+        """The next batch of segments that will each need one ordinary take.
+
+        Scanning stops at the first segment that will not - a repair, a skip, a failure -
+        rather than stepping over it. Past that point the loop may change what a later
+        segment needs, and a batch built on the far side of such a decision would be
+        speculating rather than reading ahead.
+        """
+        limit = max(2, int(self.settings["tts"].get("parallel_batch_size", 9)))
+        batch: list[Any] = []
+        for row in rows[start:]:
+            if not self._segment_takes_plain_tts_path(row):
+                break
+            batch.append(row)
+            if len(batch) >= limit:
+                break
+        return batch
+
+    def _synthesis_pool(self) -> Any:
+        """The synthesis pool, built on first use and reused for the rest of the run.
+
+        Returns None when parallel synthesis is off or unavailable, and the caller then
+        synthesizes inline. Failing to build a pool must never fail a book: it is a speed
+        feature, and the sequential path it replaces is the one everything else was proven
+        against.
+        """
+        workers = int(self.settings["tts"].get("parallel_workers", 0))
+        if workers < 2:
+            return None
+        if self._tts_pool is not None:
+            return self._tts_pool
+        if self._tts_pool_failed:
+            return None
+        try:
+            from .tts_pool import SynthesisPool
+
+            pool = SynthesisPool(self.settings, self.db.path, workers=workers)
+            pool.start()
+        except Exception as exc:  # noqa: BLE001
+            self._tts_pool_failed = True
+            self.log(f"Không dựng được pool TTS song song, chuyển sang tuần tự: {exc!r}")
+            self.db.event(
+                "warning",
+                "TTS_POOL_UNAVAILABLE",
+                f"Không dựng được pool TTS song song: {exc!r}",
+                {"workers": workers},
+            )
+            return None
+        self._tts_pool = pool
+        self.log(f"Pool TTS song song: {workers} tiến trình.")
+        return pool
+
+    def _close_synthesis_pool(self) -> None:
+        pool, self._tts_pool = self._tts_pool, None
+        if pool is not None:
+            pool.close()
+
+    def _prefetch_segment_batch(
+        self,
+        rows: list[Any],
+        *,
+        seed_salt_prefix: str,
+        repair_short_utterance: bool,
+        delivery_mode: str,
+    ) -> dict[str, dict[str, Any]]:
+        """Synthesize a batch of first attempts in parallel, keyed by segment.
+
+        Only attempt 0 is prefetched. A later attempt exists because something was wrong
+        with the audio, and deciding what to do about that is the committing loop's job -
+        speculating on it here would mean generating audio for a repair strategy nobody has
+        chosen yet.
+        """
+        pool = self._synthesis_pool()
+        if pool is None or len(rows) < 2:
+            return {}
+        jobs = [
+            {
+                "row": {key: row[key] for key in row.keys()},
+                "output": str(self._chunk_path(row)),
+                "seed_salt": f"{seed_salt_prefix}_0",
+                "kwargs": {
+                    "repair_short_utterance": repair_short_utterance,
+                    "delivery_mode": delivery_mode,
+                },
+            }
+            for row in rows
+        ]
+        try:
+            results = pool.synthesize_many(jobs)
+        except Exception as exc:  # noqa: BLE001
+            # A broken pool must not break the book. Drop it, record why, and let the
+            # committing loop synthesize this batch inline as it always could.
+            self._tts_pool_failed = True
+            self._close_synthesis_pool()
+            self.log(f"Pool TTS song song hỏng, chuyển sang tuần tự: {exc!r}")
+            self.db.event(
+                "warning",
+                "TTS_POOL_FAILED",
+                f"Pool TTS song song hỏng giữa chừng: {exc!r}",
+                {"segments": len(jobs)},
+            )
+            return {}
+        return {
+            str(item["stable_id"]): item
+            for item in results
+            if item.get("stable_id") and not item.get("error")
+        }
+
+    def _claim_prefetched_segment(
+        self,
+        prefetched: dict[str, Any] | None,
+        row: Any,
+        output: Path,
+        seed_salt: str,
+    ) -> tuple[str, dict[str, Any], int] | None:
+        """Accept a worker's synthesis for this attempt, or decline and let it be redone.
+
+        Every reason to decline is a silent-corruption risk rather than a slow path, so each
+        is checked instead of assumed: a result belonging to a different segment, a seed that
+        is not the one this attempt would have used, a missing file, or a file whose contents
+        do not match the checksum the worker reported. Declining costs one regeneration;
+        accepting a mismatched result would commit audio the ledger describes wrongly.
+        """
+        if not prefetched or prefetched.get("error"):
+            return None
+        if str(prefetched.get("stable_id") or "") != str(row["stable_id"]):
+            return None
+        seed = int(prefetched.get("seed", -1))
+        if seed != int(self.tts.generation_seed(row, seed_salt)):
+            return None
+        checksum = str(prefetched.get("checksum") or "")
+        metrics = prefetched.get("metrics")
+        if not checksum or not isinstance(metrics, dict):
+            return None
+        if not output.is_file() or sha256_file(output) != checksum:
+            return None
+        return checksum, dict(metrics), seed
+
     def _process_single_segment(
         self,
         row: Any,
@@ -3236,6 +3425,7 @@ class BookPipeline:
         repair_short_utterance: bool = False,
         delivery_mode: str = DELIVERY_PRIMARY,
         asr_repair_round: int | None = None,
+        prefetched: dict[str, Any] | None = None,
     ) -> None:
         output = self._chunk_path(row)
         last_error = ""
@@ -3251,13 +3441,22 @@ class BookPipeline:
                     repair_round=asr_repair_round,
                     policy_hash=self.quality_policy_hash,
                 )
-                checksum, metrics, seed = self.tts.synthesize_atomic(
+                claimed = self._claim_prefetched_segment(
+                    prefetched if attempt == 0 else None,
                     row,
                     output,
-                    seed_salt=seed_salt,
-                    repair_short_utterance=repair_short_utterance,
-                    delivery_mode=delivery_mode,
+                    seed_salt,
                 )
+                if claimed is not None:
+                    checksum, metrics, seed = claimed
+                else:
+                    checksum, metrics, seed = self.tts.synthesize_atomic(
+                        row,
+                        output,
+                        seed_salt=seed_salt,
+                        repair_short_utterance=repair_short_utterance,
+                        delivery_mode=delivery_mode,
+                    )
                 metrics["tts_delivery_mode"] = delivery_mode
                 if asr_repair_round is not None:
                     metrics[ASR_CLARITY_REPAIR_ROUND_METRIC] = int(asr_repair_round)
