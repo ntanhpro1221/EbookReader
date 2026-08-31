@@ -479,17 +479,20 @@ class BookPipeline:
             delivery_root.mkdir(parents=True, exist_ok=True)
             destination = delivery_root / f"{int(row['seq']):07d}.wav"
             audio, sample_rate = sf.read(source, dtype="float32", always_2d=False)
+            # Formant only here: the register goes through the same PSOLA pass as the
+            # expression below, because two resyntheses of one contour cost twice and
+            # buy nothing.
             shifted = apply_voice_variant(
                 np.asarray(audio, dtype=np.float32).reshape(-1),
                 int(sample_rate),
-                pitch_steps,
+                0,
                 formant_ratio,
             )
             # Expression rides the same last step as identity: after every gate, on a copy,
-            # never on the verified take. It cannot change a word, and a segment the
-            # director left neutral is passed through untouched rather than resynthesised.
+            # never on the verified take. It cannot change a word, and a segment with
+            # neither a register nor an affect is passed through untouched.
             shifted, _target = shape_segment(
-                shifted, int(sample_rate), emotion, intensity, kind
+                shifted, int(sample_rate), emotion, intensity, kind, pitch_steps
             )
             temp = destination.with_suffix(".part.wav")
             sf.write(temp, shifted, int(sample_rate), subtype="PCM_16")
