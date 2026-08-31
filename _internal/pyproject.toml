@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ebook_reader"
-version = "0.2.0a11"
+version = "0.2.0a13"
 description = "Offline Vietnamese expressive audiobook workstation with crash-safe checkpoints"
 requires-python = ">=3.11,<3.13"
 dependencies = [
