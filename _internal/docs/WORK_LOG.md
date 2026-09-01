@@ -70,11 +70,22 @@ Kết luận đúng chỉ lộ ra sau hai lần sai: cờ chấp nhận **không
 nó phải được *kiểm tính nhất quán* với hai hình dạng hợp lệ. Giờ `accept_flag_is_coherent`
 phục vụ cả hai cờ.
 
-## Việc còn tồn, theo thứ tự sẽ làm
+## Đã đóng bằng kết quả âm — đừng làm lại
 
-1. Thiên lệch dư trong phép đo tốc độ: câu dày dấu vẫn dễ bị chặn hơn ~22 lần. Chưa thử mô
-   hình 3 lớp trên **nhóm** (mới thử trên từng dấu).
-2. Whisper song song theo process (bước 3 trong `THROUGHPUT.md`).
-3. Chồng lấn giai đoạn: xác minh chương N-1 trong khi sinh chương N.
-4. `OLLAMA_NUM_PARALLEL` cho giai đoạn phân tích.
-5. HiFi-Glot — tồn đọng lâu, chưa khởi động.
+| việc | kết luận |
+|---|---|
+| Thiên lệch dư phép đo tốc độ | **5 mô hình đều thất bại**; mô hình 3 lớp thử cả trên dấu lẫn trên nhóm, cả hai lần R² cao hơn mà lệch tệ hơn. Chi phí cố định mỗi phát ngôn khớp ra hệ số **âm**. Phần dư +0,12 không phải số hạng nghỉ còn thiếu. `PACE_METRIC.md` |
+| Song song hoá Ollama phía client | **1,00×**. Server tuần tự hoá; `OLLAMA_NUM_PARALLEL` là biến môi trường của server, không sửa trong mã được. `THROUGHPUT.md` |
+| Bộ dò tiếng "tóp" đầu câu | Bị tai người nghe bác bỏ; UTMOSv2 xếp hạng ngược. `ONSET_CLICK.md` |
+| Gộp hai lần tái tổng hợp giọng trẻ em | Người nghe chọn cách hiện tại. `CHILD_VOICE_TRANSFORM.md` |
+
+## Việc còn tồn
+
+1. **Chuỗi lỗi validator** ở trên — đang chạy, mỗi vòng một lỗi.
+2. **Whisper song song**: đo được 0,70× nhưng **phép đo không dùng được** vì GPU đang bị run
+   chiếm 6,2/8,15 GB. Dấu hiệu mạnh là Whisper ở 1 worker đã đẩy GPU lên 100% (TTS chỉ 23%),
+   tức không còn chỗ rảnh để thu lại. Đo lại khi GPU trống.
+3. **Chồng lấn giai đoạn**: đã có `scripts/phase_timings.py`, nhưng cần một run **mới tinh**
+   để có số liệu thật (`--require-fresh` sẽ từ chối run resume).
+4. **`OLLAMA_NUM_PARALLEL` phía server**: phải khởi động lại Ollama, chờ lúc không có run.
+5. **HiFi-Glot** — tồn đọng lâu, chưa khởi động.
