@@ -139,9 +139,9 @@ SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
 SHORT_UTTERANCE_MAX_GENERATION_FRAMES = 24
 SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 
-# What one pause costs, fitted on 3781 committed segments rather than chosen. Regressing
-# duration on (speakable characters, pause groups) gives 0.060 s per character - a pure
-# speech rate of 16.7 chars/s - and 0.281 s per pause.
+# What one pause costs, fitted on committed segments rather than chosen. Regressing
+# duration on (speakable characters, pause groups) over 4095 of them gives 0.060 s per
+# character - a pure speech rate of 16.6 chars/s - and 0.276 s per pause.
 #
 # Groups, not marks. Three models were fitted and the flat per-mark one left the corrected
 # rate still correlated with punctuation density at +0.32, over-crediting dense text; a
@@ -150,11 +150,11 @@ SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 # pause left +0.12, because ") :" or " - " is one silence however many characters spell it.
 # R-squared was not the objective: removing the confound was, and the best-fitting model was
 # the second worst at it.
-# Refitted after syllable hyphens stopped counting as pauses: 0.2764 s across 4095
-# segments, against 0.281 before. The correction barely moves the price of a pause
-# because in-word hyphens are rare in the corpus overall - they are concentrated in
-# the few segments that carry a transliterated term, which is exactly why those
-# segments and only those were failing.
+#
+# The figure was 0.281 while syllable hyphens still counted as pauses. Excluding them moved
+# it only to 0.276, because in-word hyphens are rare across the corpus - they are
+# concentrated in the few segments carrying a transliterated term, which is exactly why
+# those segments and only those were failing.
 PAUSE_GROUP_SECONDS = 0.276
 PAUSE_GROUP_PATTERN = re.compile(r"[.!?…,;:()\[\]{}\-–—/\"'“”‘’]+")
 # A hyphen joining two letters marks a syllable inside a transliterated word, not a silence.
