@@ -207,6 +207,35 @@ nếu không benchmark đang đo tốc độ nạp model chứ không đo throug
 TTS **không còn** là chỗ để vắt thêm bằng cách tăng song song — muốn nhanh nữa phải giảm
 số lần sinh (bớt retry, bớt candidate) chứ không phải thêm worker.
 
+## Đã đo: song song hoá phía client cho Ollama — **không cho gì cả**
+
+Giai đoạn phân tích để GPU rảnh 57–82% (đo được 18–43% khi đang chạy) và còn ~2 GB VRAM,
+nên nhìn thì rất giống chỗ có dư địa. Đo thật thì không.
+
+Gửi 1, 2, 3 request đồng thời tới `/api/generate`, **xen kẽ các mức và lặp 4 vòng** để tải
+nền trôi thì triệt tiêu:
+
+| đồng thời | trung vị | dao động | speedup |
+|---|---|---|---|
+| 1 | 60,7 tok/s | 59,9–61,1 | 1,00× |
+| 2 | 60,9 tok/s | 60,8–61,1 | 1,00× |
+| 3 | 61,0 tok/s | 60,9–61,0 | 1,01× |
+
+Server đang **tuần tự hoá** request; request thứ hai chỉ xếp hàng. `OLLAMA_NUM_PARALLEL`
+mặc định là 1, và nó là biến môi trường của **server**, không phải thứ sửa trong mã ứng
+dụng được. Muốn thử phải khởi động lại Ollama, nên việc này bị chặn cho tới khi không còn
+run nào đang dùng nó.
+
+### Cảnh báo về cách đo: lần đầu tôi đo ra 20,69×
+
+Lần chạy đầu, tuần tự từ c=1 lên c=4, cho ra `1,00× / 6,27× / 20,69× / 20,67×`. Con số vô
+lý, và nguyên nhân là **một run đang dùng chung Ollama**: mức c=1 hứng trọn lúc nghẽn
+(3,0 tok/s) còn các mức sau chạy lúc rảnh (61 tok/s). Đo tăng dần trong khi tải nền giảm
+dần thì **kết quả là hình dạng của tải nền**, không phải của thứ đang đo.
+
+Cách chữa: **xen kẽ các mức và lặp lại**. Sau khi xen kẽ, dao động rơi xuống ±1 tok/s và
+câu trả lời thật lộ ra là 1,00×.
+
 ## Thứ tự triển khai, mỗi bước phải đo trước và sau
 
 Xếp theo **giá trị chia cho rủi ro**, không phải theo mức hấp dẫn:
