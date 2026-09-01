@@ -254,6 +254,32 @@ def host_derived_accept(raw_deltas: Sequence[str]) -> bool:
     ]
 
 
+def accept_flag_is_coherent(accept: Any, fields: Sequence[str]) -> bool:
+    """Whether an accept flag can be true of the disagreements recorded beside it.
+
+    `fields` are the field names still in dispute - the deltas themselves, or the fields
+    left unresolved after overrides. Two shapes are legal and any rule that derives the
+    flag allows only one of them:
+
+    - Accepted. Legal exactly when nothing in dispute blocks, which is the same subset
+      acceptance is decided on everywhere else.
+    - Refused. Legal whenever there was something to refuse over, and that something may
+      be a field nobody can hear - refusing on emotion alone is a real case with a test.
+
+    Both halves were learned the hard way, one run each: demanding the flag equal the
+    host's verdict killed a run on a candidate differing only in emotion and intensity,
+    and the obvious repair - deriving it from the blocking subset - then broke the row
+    that refuses on emotion alone.
+    """
+    blocking = set(critic_delta_fields(AFFECT_CUE_DISAGREEMENT_BLOCKS))
+    names = [str(field).split(":", 1)[0] for field in fields]
+    if accept is True:
+        return not [name for name in names if name in blocking]
+    if accept is False:
+        return bool(names)
+    return False
+
+
 def rejected_accept_flag_is_coherent(accept: Any, raw_deltas: Sequence[str]) -> bool:
     """Whether a rejection record's accept flag can be true of the deltas beside it.
 
@@ -268,11 +294,7 @@ def rejected_accept_flag_is_coherent(accept: Any, raw_deltas: Sequence[str]) -> 
     Demanding `accept == (not raw_deltas)` conflated the two and killed a ten-chapter run
     on a candidate whose only differences were emotion and intensity.
     """
-    if accept is True:
-        return host_derived_accept(raw_deltas)
-    if accept is False:
-        return bool(raw_deltas)
-    return False
+    return accept_flag_is_coherent(accept, raw_deltas)
 
 
 ANALYSIS_CRITIC_RESERVED_SPEAKERS = ("NARRATOR", "UNKNOWN")
@@ -5455,11 +5477,21 @@ class ProjectDB:
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
                 if field in raw_delta_fields and field not in covered_fields
             ]
-            expected_effective_accept = not unresolved_fields
+            # Bookkeeping and verdict are different questions over the same list.
+            # `unresolved_fields` records every field the critic disagreed on that no
+            # override explains, affect included, because four tests exist to keep those
+            # visible. Acceptance is decided only on the fields a disagreement can block
+            # on - the same subset host_derived_accept uses - because a difference nobody
+            # can hear was never grounds to refuse a candidate.
+            #
+            # Narrowing the list itself was tried first and broke the bookkeeping. The two
+            # have to stay separate.
             if (
                 not source_kind_override_valid
                 or not semantic_override_valid
-                or item.get("effective_accept") is not expected_effective_accept
+                or not accept_flag_is_coherent(
+                    item.get("effective_accept"), unresolved_fields
+                )
                 or item.get("host_structural_override") is not None
             ):
                 # Name the clause, for the same reason as everywhere else in this file:
@@ -5469,8 +5501,9 @@ class ProjectDB:
                     for name, failed in (
                         ("source_kind_override", not source_kind_override_valid),
                         ("semantic_override", not semantic_override_valid),
-                        ("effective_accept",
-                         item.get("effective_accept") is not expected_effective_accept),
+                        ("effective_accept", not accept_flag_is_coherent(
+                            item.get("effective_accept"), unresolved_fields
+                        )),
                         ("unexpected_structural_override",
                          item.get("host_structural_override") is not None),
                     )
@@ -5482,7 +5515,7 @@ class ProjectDB:
                     f"unresolved={unresolved_fields!r} covered={sorted(covered_fields)!r} "
                     f"delta_fields={sorted(raw_delta_fields)!r} "
                     f"effective_accept={item.get('effective_accept')!r} "
-                    f"expected={expected_effective_accept!r}"
+                    f"blocking={sorted(set(critic_delta_fields(AFFECT_CUE_DISAGREEMENT_BLOCKS)))!r}"
                 )
             unresolved_fields_by_stable[stable_id] = unresolved_fields
         unresolved_ids = {

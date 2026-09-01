@@ -67,3 +67,30 @@ def test_neither_validator_recomputes_acceptance_for_itself() -> None:
     ):
         source = inspect.getsource(method)
         assert "not raw_deltas" not in source, method.__name__
+
+
+def test_the_same_rule_governs_both_flags() -> None:
+    """`accept` and `effective_accept` ask the same question of different lists."""
+    from ebook_reader.database import accept_flag_is_coherent
+
+    assert accept_flag_is_coherent(True, ["emotion", "intensity"])
+    assert not accept_flag_is_coherent(True, ["kind"])
+    assert accept_flag_is_coherent(False, ["emotion"])
+    assert not accept_flag_is_coherent(False, [])
+
+
+def test_it_accepts_bare_field_names_and_full_deltas_alike() -> None:
+    """Deltas arrive as "field:from->to"; unresolved fields arrive as bare names."""
+    from ebook_reader.database import accept_flag_is_coherent
+
+    assert accept_flag_is_coherent(True, ["emotion:surprised->neutral"])
+    assert accept_flag_is_coherent(True, ["emotion"])
+    assert not accept_flag_is_coherent(True, ["kind:narration->dialogue"])
+    assert not accept_flag_is_coherent(True, ["kind"])
+
+
+def test_effective_accept_is_never_derived_from_the_full_list() -> None:
+    """Deriving it refused a candidate differing only in emotion and intensity."""
+    source = inspect.getsource(ProjectDB._validate_analysis_rejection_evidence)
+    assert "expected_effective_accept" not in source
+    assert "accept_flag_is_coherent" in source
