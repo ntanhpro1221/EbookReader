@@ -147,20 +147,25 @@ cách đọc do người chọn không bị mất lặng lẽ.
 | Blade | Bơ-lất | | Street | Xơ-trít |
 | Gate | Gất | | Void | Vót |
 | Soul | Xôn | | Golf | Gan |
-| Noah | Nô-a | | Juli | Giu-li |
-| Incredible | In-cơ-re-đa-ben | | Sound | Xan |
+| Wolf | Uôn | | Noah | Nô-ơ |
+| Table | Tây-bồ | | Little | Li-tồ |
+| Michael | Mai-cồ | | Incredible | In-cơ-re-đơ-bồ |
 
-**Không từ nào cần ngoại lệ.** Hai ví dụ người nghe đưa ra — `seed` → "xít" và `king` →
-"kinh" — **rơi ra từ chính bộ luật**, không phải được nhét vào bảng tra.
+Hai ví dụ người nghe đưa ra — `seed` → **"xít"** và `king` → **"kinh"** — **rơi ra từ
+chính bộ luật**, không phải được nhét vào bảng tra. `Michael` → "Mai-cồ" trước đây phải
+nằm trong bảng ngoại lệ thì giờ cũng tự rơi ra.
 
 ## Còn hở
 
-1. **Phụ âm đầu /w/**: `Wolf` ra "Uun" vì /w/ ánh xạ thành "u". Người nghe gợi ý "gốp" —
-   tức /w/ → "g". Chưa sửa vì chưa tìm được nguồn cho luật này.
-2. **Nguyên âm chưa khớp hoàn toàn**: `incredible` ra "In-cơ-re-đa-ben" chứ không phải
-   "in-cờ-ri-đi-bồ". Khung âm tiết đúng, nhưng bảng nguyên âm và /əl/ cuối chưa chuẩn — /əl/
-   nên thành "ồ" (như `Michael` → "Mai-cồ" đã có sẵn trong bảng ngoại lệ).
-3. **Thanh điệu ngoài âm tiết đóng**: các âm tiết mở đều mang thanh ngang. Tiếng Việt thật
-   phân bố đa dạng hơn, nhưng chưa có luật nào để suy ra.
-4. **Vần vẫn có thể lạ**: bộ kiểm chỉ xét phụ âm đầu và ký tự cuối, chưa có danh sách vần
-   hợp lệ, nên một vần hiếm vẫn lọt được.
+1. **Nguyên âm không nhấn vẫn lệch một chút với tai người nghe.** `incredible` ra
+   "In-cơ-re-đơ-bồ", người nghe nói "in-cờ-ri-đi-bồ". Khung âm tiết và đuôi giống hệt; chỗ
+   khác là hai nguyên âm không nhấn: tôi đọc theo **âm** (schwa → "ơ"), người nghe đọc theo
+   **chữ viết** ("cre-di" → "ri-đi"). Cả hai đều có lý; chưa có cách phân xử ngoài tai.
+2. **Thanh điệu ngoài âm tiết đóng.** Âm tiết mở đều mang thanh ngang. Tiếng Việt thật phân
+   bố đa dạng hơn — người nghe viết "cờ" (huyền) chỗ tôi ra "cơ" (ngang) — nhưng chưa tìm
+   được luật nào suy ra thanh từ âm tiếng Anh.
+3. **Chưa có danh sách vần hợp lệ.** Bộ kiểm chỉ xét phụ âm đầu và ký tự cuối, nên một vần
+   hiếm vẫn lọt. Luật 6 chặn được lớp lỗi lớn nhất ("ấyt", "oít") nhưng không phải tất cả.
+4. **Nguyên âm đôi mất khi có phụ âm cuối.** `Light` ra "Lát", `House` ra "Hát" — luật 6 bỏ
+   bán nguyên âm để giữ phụ âm cuối. Hướng ngược lại (giữ nguyên âm đôi, bỏ phụ âm cuối:
+   "Lai", "Hao") cũng là cách người Việt hay đọc. Chưa có cơ sở để chọn bên nào.
