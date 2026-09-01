@@ -75,3 +75,29 @@ def test_a_pause_budget_can_never_consume_the_whole_duration() -> None:
     """Punctuation-only text must not divide by zero or go negative."""
     assert _rate("... --- ,,,", 0.4) >= 0.0
     assert _rate("Xong.", 0.05) > 0.0
+
+
+def test_a_syllable_hyphen_is_not_a_pause() -> None:
+    """Transliterations are written with hyphens between syllables, not between words.
+
+    Counting them charged one name four silences it never takes and pushed the segment past
+    the "impossibly fast" bound. Five segments failed that way in one run, every one a
+    Vietnamese sentence with an English term transliterated in brackets.
+    """
+    assert pause_group_count("Đê-phi-lê-ô-nêt") == 0
+    assert pause_group_count("Kẻ Ô Uế (Đê-phi-lê-ô-nêt).") == 2
+
+
+def test_a_spaced_dash_is_still_a_pause() -> None:
+    """Only the in-word hyphen is exempt; a dash between words is a real silence."""
+    assert pause_group_count("anh ta - người kia - đã đi") == 2
+    assert pause_group_count("Rare (Hiếm - B): Mạnh hơn / khó tìm hơn.") == 5
+
+
+def test_the_transliterated_segment_that_failed_now_passes() -> None:
+    text = "Kẻ hùng mạnh nhất trong hàng ngũ những Kẻ Ô Uế (Đê-phi-lê-ô-nêt)."
+    speakable = sum(character.isalnum() for character in text)
+    bounds = build_settings("high_quality")["tts"]["pace_chars_per_second"]["normal"]
+    # Four seconds is a plausible reading of this sentence; it measured 26.80 before.
+    assert float(bounds[0]) <= _rate(text, 4.0) <= float(bounds[1])
+    assert speakable > 24, "short enough to skip the rate check would prove nothing"

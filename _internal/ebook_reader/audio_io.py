@@ -150,8 +150,15 @@ SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 # pause left +0.12, because ") :" or " - " is one silence however many characters spell it.
 # R-squared was not the objective: removing the confound was, and the best-fitting model was
 # the second worst at it.
-PAUSE_GROUP_SECONDS = 0.281
+# Refitted after syllable hyphens stopped counting as pauses: 0.2764 s across 4095
+# segments, against 0.281 before. The correction barely moves the price of a pause
+# because in-word hyphens are rare in the corpus overall - they are concentrated in
+# the few segments that carry a transliterated term, which is exactly why those
+# segments and only those were failing.
+PAUSE_GROUP_SECONDS = 0.276
 PAUSE_GROUP_PATTERN = re.compile(r"[.!?…,;:()\[\]{}\-–—/\"'“”‘’]+")
+# A hyphen joining two letters marks a syllable inside a transliterated word, not a silence.
+SYLLABLE_HYPHEN_PATTERN = re.compile(r"(?<=[^\W\d_])[-–—](?=[^\W\d_])", re.UNICODE)
 MIN_SPEECH_SECONDS = 0.05
 
 # The pause budget may never claim more of a segment than this. Across the 3803 committed
@@ -166,8 +173,19 @@ MAX_PAUSE_FRACTION = 0.60
 
 
 def pause_group_count(text: str) -> int:
-    """How many separate silences the punctuation in this text asks for."""
-    return len(PAUSE_GROUP_PATTERN.findall(str(text)))
+    """How many separate silences the punctuation in this text asks for.
+
+    A hyphen between two letters is not one of them. Transliterations are written with
+    syllable hyphens - "Đê-phi-lê-ô-nêt" - and counting those as pauses charged this one
+    name four silences it never takes: the budget for a single segment went from 0.56 s to
+    1.69 s, the speech time left over collapsed, and the apparent rate rose past the
+    "impossibly fast" bound. Five segments failed that way in one run, every one of them a
+    Vietnamese sentence with an English term transliterated in brackets.
+
+    A dash with space around it - like this one - is still a pause; only the in-word
+    hyphen is exempt.
+    """
+    return len(PAUSE_GROUP_PATTERN.findall(SYLLABLE_HYPHEN_PATTERN.sub("", str(text))))
 
 # An isolated click at the start of an utterance - a listener described it as "a drop of
 # water hitting a steel bowl" - loud enough that the first syllable is lost behind it. It is
