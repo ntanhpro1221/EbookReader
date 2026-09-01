@@ -224,6 +224,36 @@ AFFECT_CUE_DISAGREEMENT_BLOCKS = False
 INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
 
 
+def require_all(message: str, *clauses: tuple[str, bool], **context: Any) -> None:
+    """Raise naming the clauses that failed, instead of only that something did.
+
+    This file has 70 checks that combine three or more conditions into one `if` and one
+    message, several of them sixteen conditions long. Four fired in a single ten-chapter
+    run and each cost a full analysis pass to diagnose: the message says a binding broke
+    without saying which, and the evidence is in memory rather than on disk, so the only
+    way to look is to run it again.
+
+    Written as (name, failed) pairs rather than as an expression so the names cannot drift
+    from the conditions - there is one list, and it is both the check and the explanation.
+
+        require_all(
+            "Rejected critic evidence is not exactly candidate-bound",
+            ("text_sha256", item["text_sha256"] != segment["text_sha256"]),
+            ("accept_flag", not accept_flag_is_coherent(accept, deltas)),
+            deltas=deltas,
+        )
+
+    `context` is appended verbatim, for the values a reader needs and cannot recover.
+    """
+    failed = [name for name, did_fail in clauses if did_fail]
+    if not failed:
+        return
+    detail = "; ".join(f"{key}={value!r}" for key, value in sorted(context.items()))
+    raise RuntimeError(
+        f"{message}: {', '.join(failed)}" + (f"; {detail}" if detail else "")
+    )
+
+
 def critic_delta_fields(blocking: bool) -> tuple[str, ...]:
     """The fields a critic disagreement is counted over."""
     if blocking:
@@ -9661,48 +9691,48 @@ class ProjectDB:
                 None,
             )
             if existing is not None:
-                if (
-                    str(existing["incumbent_sha256"]) != normalized_incumbent
-                    or int(existing["expected_voice_profile_id"])
-                    != expected_voice_profile_id
-                    or int(existing["expected_pitch_semitones"])
-                    != expected_pitch_semitones
-                    or str(existing["pronunciation_delivery_variant"])
-                    != normalized_pronunciation_variant
-                    or str(existing["expected_spoken_text_sha256"])
-                    != normalized_expected_spoken_sha256
-                    or int(existing["repair_budget"]) != normalized_max
-                    or str(existing["generation_strategy"])
-                    != normalized_generation_strategy
-                    or str(existing["postprocess_profile"])
-                    != normalized_postprocess_profile
-                    or (
-                        int(existing["postprocess_source_candidate_id"])
-                        if existing["postprocess_source_candidate_id"] is not None
-                        else None
-                    )
-                    != normalized_postprocess_source_candidate_id
-                    or (
-                        str(existing["postprocess_source_sha256"])
-                        if existing["postprocess_source_sha256"] is not None
-                        else None
-                    )
-                    != normalized_postprocess_source_sha256
-                    or bool(existing["perceptual_required"])
-                    != normalized_perceptual_required
-                    or str(existing["candidate_repair_requirement"])
-                    != normalized_repair_requirement
-                    or (
-                        int(existing["repair_trigger_check_id"])
-                        if existing["repair_trigger_check_id"] is not None
-                        else None
-                    )
-                    != normalized_repair_trigger_check_id
-                    or int(existing["generation_seed"]) != int(generation_seed)
-                    or int(existing["tts_attempt"]) != normalized_attempt
-                    or str(existing["wav_path"]) != normalized_path
-                ):
-                    raise RuntimeError("candidate resume metadata differs from its durable checkpoint")
+                # Sixteen conditions used to share one message and the row is not written
+                # anywhere a reader can inspect, so a mismatch here meant rerunning to learn
+                # which field moved. See require_all.
+                require_all(
+                    "candidate resume metadata differs from its durable checkpoint",
+                    ("incumbent_sha256", str(existing["incumbent_sha256"]) != normalized_incumbent),
+                    ("voice_profile_id", int(existing["expected_voice_profile_id"]) != expected_voice_profile_id),
+                    ("pitch_semitones", int(existing["expected_pitch_semitones"]) != expected_pitch_semitones),
+                    ("pronunciation_variant", str(existing["pronunciation_delivery_variant"])
+                     != normalized_pronunciation_variant),
+                    ("spoken_text_sha256", str(existing["expected_spoken_text_sha256"])
+                     != normalized_expected_spoken_sha256),
+                    ("repair_budget", int(existing["repair_budget"]) != normalized_max),
+                    ("generation_strategy", str(existing["generation_strategy"]) != normalized_generation_strategy),
+                    ("postprocess_profile", str(existing["postprocess_profile"]) != normalized_postprocess_profile),
+                    ("postprocess_source_candidate_id", (
+                         int(existing["postprocess_source_candidate_id"])
+                         if existing["postprocess_source_candidate_id"] is not None
+                         else None
+                     )
+                     != normalized_postprocess_source_candidate_id),
+                    ("postprocess_source_sha256", (
+                         str(existing["postprocess_source_sha256"])
+                         if existing["postprocess_source_sha256"] is not None
+                         else None
+                     )
+                     != normalized_postprocess_source_sha256),
+                    ("perceptual_required", bool(existing["perceptual_required"]) != normalized_perceptual_required),
+                    ("repair_requirement", str(existing["candidate_repair_requirement"])
+                     != normalized_repair_requirement),
+                    ("repair_trigger_check_id", (
+                         int(existing["repair_trigger_check_id"])
+                         if existing["repair_trigger_check_id"] is not None
+                         else None
+                     )
+                     != normalized_repair_trigger_check_id),
+                    ("generation_seed", int(existing["generation_seed"]) != int(generation_seed)),
+                    ("tts_attempt", int(existing["tts_attempt"]) != normalized_attempt),
+                    ("wav_path", str(existing["wav_path"]) != normalized_path),
+                    candidate_id=int(existing["id"]),
+                    repair_round=normalized_round,
+                )
                 return existing
 
             ordinary_rows = [
