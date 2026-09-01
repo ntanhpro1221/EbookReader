@@ -43,27 +43,29 @@ lặp lại suốt cuốn sách tệ hơn để TTS đọc nguyên chữ Latin. 
 Và bộ chuyển CMU cũng yếu ở đúng lớp từ này: `Card` → `'Ca'`, mất hẳn phụ âm cuối. Mở cửa
 thứ ba là để thứ đó lọt vào sách.
 
-## Cách xử lý đã dùng
+## Cách xử lý: một cái van cho người nghe
 
-Người nghe chọn: **đọc nguyên văn**. Chốt bằng một dòng khoá cứng:
-
-```sql
-INSERT INTO pronunciations
-  (surface, normalized_surface, spoken_form, confidence, source, locked, created_at, updated_at)
-VALUES ('Deck', 'deck', 'Deck', 1.0, 'listener_choice', 1, ...);
+```bash
+ebook-reader-headless pronounce <project> --surface Deck --spoken Deck
 ```
 
-`locked=1` nên các pha sau không hỏi lại, và `source='listener_choice'` phân biệt rõ với
-`english_name_transliteration` do máy sinh.
+Ghi một mục `locked=1`, `confidence=1.0`, `source='listener_choice'`. Khoá nên các pha sau
+không hỏi lại; nguồn riêng nên **quyết định của người không bao giờ bị nhầm với phiên âm do
+máy sinh** (`english_name_transliteration`).
 
-## Việc còn mở
+Nó cũng cho phép đúng thứ bộ kiểm tự động cấm: **đọc y như viết**. Với thuật ngữ game tiếng
+Anh đó thường là đáp án đúng, và là đáp án người nghe đã chọn cho `Deck`.
 
-Chưa có **đường chính thức để người nghe chốt cách đọc**. Lần này phải ghi thẳng vào SQLite,
-mà đó là thứ tôi vốn tránh. Một lệnh CLI kiểu
-`ebook-reader-headless pronounce <project> --surface Deck --spoken Deck` sẽ:
+## Vì sao cho người một cái van thay vì nới lỏng máy
 
-- biến việc chặn-cả-sách-vì-một-từ thành một thao tác một dòng
-- ghi lại rằng lựa chọn đến từ người, không phải từ model
-- tránh việc mở rộng chính sách đoán tự động, thứ mà bộ test đang cố ý ngăn
+Nếu mở cửa thứ ba, mọi tên ngắn có trong CMUdict sẽ được máy tự quyết — kể cả tên nhân vật,
+thứ người nghe sẽ nghe hàng trăm lần. Và bộ chuyển CMU yếu ở đúng lớp đó (`Card` → `'Ca'`).
 
-Đó là hướng đúng: giữ nguyên sự thận trọng của máy, và cho người một cái van.
+Cho người một cái van thì: máy giữ nguyên sự thận trọng, người chỉ phải trả lời khi máy
+thực sự bí, và mỗi câu trả lời được ghi lại là của người.
+
+## Điều đã kiểm chứng: sẽ còn vấp tiếp
+
+Ngay sau khi chốt `Deck`, run vấp tiếp **`Epic`, `Juli`, `Lily`** — trong đó hai cái là tên
+nhân vật. Đây không phải sự cố một lần; nó là hình dạng thường trực của một cuốn sách nhiều
+tên riêng nước ngoài, và là lý do cái van phải tồn tại chứ không phải một bản vá tạm.
