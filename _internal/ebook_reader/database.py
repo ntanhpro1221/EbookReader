@@ -5187,8 +5187,43 @@ class ProjectDB:
                 or any(float(value) < confidence_floor for value in numeric_confidences)
                 or float(derived_confidence) != expected_derived_confidence
             ):
+                # Name the clause that failed, exactly as the accepted branch already does.
+                # Eleven conditions share this message, so on its own it says a binding
+                # broke without saying which - and the evidence is in memory, not on disk,
+                # so a rerun is the only way to look. That cost a debugging round once
+                # already on the sibling check.
+                reasons = [
+                    name
+                    for name, failed in (
+                        ("text_sha256", str(item.get("text_sha256", ""))
+                         != str(candidate_segment["text_sha256"])),
+                        ("candidate_projection", item.get("candidate") != candidate_projection),
+                        ("field_deltas", item.get("field_deltas") != raw_deltas),
+                        ("accept_flag", critic.get("accept") is not (not raw_deltas)),
+                        ("effective_accept_type",
+                         type(item.get("effective_accept")) is not bool),
+                        ("evidence_quote", not quote_valid),
+                        ("confidence_type", any(
+                            type(value) not in {int, float} for value in numeric_confidences
+                        )),
+                        ("confidence_finite", any(
+                            not math.isfinite(float(value)) for value in numeric_confidences
+                        )),
+                        ("confidence_floor", any(
+                            float(value) < confidence_floor for value in numeric_confidences
+                        )),
+                        ("derived_confidence",
+                         float(derived_confidence) != expected_derived_confidence),
+                    )
+                    if failed
+                ]
                 raise RuntimeError(
-                    "Rejected critic evidence is not exactly candidate-bound"
+                    "Rejected critic evidence is not exactly candidate-bound for "
+                    f"{stable_id}: {', '.join(reasons) or 'unknown'}; "
+                    f"deltas={item.get('field_deltas')!r} expected={raw_deltas!r}; "
+                    f"accept={critic.get('accept')!r} confidences={numeric_confidences!r} "
+                    f"derived={derived_confidence!r} expected_derived="
+                    f"{expected_derived_confidence!r}"
                 )
             raw_deltas_by_stable[stable_id] = raw_deltas
             raw_delta_fields_by_stable[stable_id] = {
