@@ -9072,19 +9072,30 @@ class ProjectDB:
         source = cls._candidate_row_conn(conn, int(source_candidate_id))
         if int(source["id"]) == int(candidate["id"]):
             raise RuntimeError("tempo candidate cannot use itself as its source")
-        if (
-            str(source["postprocess_profile"]) != POSTPROCESS_PROFILE_NONE
-            or str(source["wav_sha256"] or "").casefold()
-            != normalized_source_sha256
-            or int(source["segment_id"]) != int(candidate["segment_id"])
-            or str(source["policy_hash"]) != str(candidate["policy_hash"])
-            or str(source["incumbent_sha256"]) != str(candidate["incumbent_sha256"])
-            or int(source["repair_budget"]) != int(candidate["repair_budget"])
-            or int(source["repair_round"]) + 1 != int(candidate["repair_round"])
-            or int(candidate["repair_round"]) != int(candidate["repair_budget"])
-            or str(source["generation_strategy"]) != GENERATION_STRATEGY_DIRECT
-        ):
-            raise RuntimeError("tempo candidate source binding is not a final direct candidate")
+        require_all(
+            "tempo candidate source binding is not a final direct candidate",
+            ("postprocess_profile",
+             str(source["postprocess_profile"]) != POSTPROCESS_PROFILE_NONE),
+            ("source_sha256", str(source["wav_sha256"] or "").casefold()
+             != normalized_source_sha256),
+            ("segment_id", int(source["segment_id"]) != int(candidate["segment_id"])),
+            ("policy_hash",
+             str(source["policy_hash"]) != str(candidate["policy_hash"])),
+            ("incumbent_sha256",
+             str(source["incumbent_sha256"]) != str(candidate["incumbent_sha256"])),
+            ("repair_budget",
+             int(source["repair_budget"]) != int(candidate["repair_budget"])),
+            ("repair_round_follows",
+             int(source["repair_round"]) + 1 != int(candidate["repair_round"])),
+            ("budget_exhausted",
+             int(candidate["repair_round"]) != int(candidate["repair_budget"])),
+            ("generation_strategy",
+             str(source["generation_strategy"]) != GENERATION_STRATEGY_DIRECT),
+            source_candidate_id=int(source["id"]),
+            candidate_id=int(candidate["id"]),
+            source_round=int(source["repair_round"]),
+            candidate_round=int(candidate["repair_round"]),
+        )
         for field in (
             "expected_voice_profile_id",
             "expected_pitch_semitones",

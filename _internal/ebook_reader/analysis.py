@@ -547,15 +547,40 @@ ARPABET_VOWEL_READINGS = {
     "UH": "u",
     "UW": "u",
 }
+# Vietnamese allows only -c, -ch, -m, -n, -ng, -nh, -p, -t at the end of a syllable, so
+# every English coda has to land on one of those or be dropped. Only seven phones were
+# mapped and the rest fell silent, which is why "Card" came out "Ca", "Soul" as "Xô" and
+# "Seed" as "Xi" - the word ended a syllable early and stopped being the word.
+#
+# The additions follow what 289 accepted transliterations in this project already did:
+# final s became t eight times against four dropped, l became n seven times against four,
+# th became t, c stayed c. The rest are the standard loanword substitutions those imply -
+# a voiced stop takes its voiceless partner, a fricative takes the nearest stop.
 ARPABET_CODAS = {
+    "B": "p",
     "CH": "ch",
+    "D": "t",
+    "DH": "t",
+    "F": "p",
+    "G": "c",
+    "JH": "ch",
     "K": "c",
+    "L": "n",
     "M": "m",
     "N": "n",
     "NG": "ng",
     "P": "p",
+    "S": "t",
+    "SH": "t",
     "T": "t",
+    "TH": "t",
+    "V": "p",
+    "Z": "t",
+    "ZH": "t",
 }
+# After an r-coloured vowel a final d backs to -c: "card" is read "cạc", not "cát". This is
+# the one place the r survives at all - elsewhere it is dropped, as the data shows.
+ARPABET_CODA_AFTER_R = {"D": "c", "T": "c"}
 LATIN_NAME_VOWELS = frozenset("aeiouy")
 LATIN_NAME_VOWEL_READINGS = {
     "a": "a",
@@ -3083,6 +3108,13 @@ def _arpabet_coda_reading(
 ) -> str:
     if vowel == "AH" and coda[:1] == ("L",):
         return "" if onset == ("K",) else "n"
+    if coda[:1] == ("R",) and len(coda) > 1:
+        after_r = next(
+            (ARPABET_CODA_AFTER_R[phone] for phone in coda[1:] if phone in ARPABET_CODA_AFTER_R),
+            None,
+        )
+        if after_r is not None:
+            return after_r
     return next((ARPABET_CODAS[phone] for phone in coda if phone in ARPABET_CODAS), "")
 
 
