@@ -195,6 +195,25 @@ V37_SEQ45_TEXT = (
 )
 
 
+def _segment_item_schema(segment_schema: dict) -> dict:
+    """The per-item schema, whether or not it was split into per-id branches.
+
+    The schema constrains kind per segment when the source boundary allows only some of
+    them, which turns `items` into a `oneOf` of identical branches differing in id. Reading
+    through that keeps these checks about what they were about - the id enum, the
+    confidence floor - rather than about which shape the schema happens to take.
+    """
+    items = segment_schema["items"]
+    return items["oneOf"][0] if "oneOf" in items else items
+
+
+def _segment_id_enum(segment_schema: dict) -> list[str]:
+    items = segment_schema["items"]
+    if "oneOf" in items:
+        return [branch["properties"]["id"]["enum"][0] for branch in items["oneOf"]]
+    return list(items["properties"]["id"]["enum"])
+
+
 class FakeDB:
     def __init__(self):
         self.events = []
@@ -872,8 +891,8 @@ def test_request_uses_constrained_batch_ids_and_restores_stable_ids() -> None:
     segment_schema = request["format"]["properties"]["segments"]
     assert segment_schema["minItems"] == len(group)
     assert segment_schema["maxItems"] == len(group)
-    assert segment_schema["items"]["properties"]["id"]["enum"] == ["S001", "S002"]
-    assert segment_schema["items"]["properties"]["confidence"]["minimum"] == 0.65
+    assert _segment_id_enum(segment_schema) == ["S001", "S002"]
+    assert _segment_item_schema(segment_schema)["properties"]["confidence"]["minimum"] == 0.65
     assert request["format"]["properties"]["pronunciations"]["maxItems"] >= len(group)
     assert request["options"]["num_predict"] <= ANALYSIS_OUTPUT_MAX_TOKENS
     assert request["options"]["temperature"] == 0.1
@@ -898,9 +917,9 @@ def test_non_hq_generator_keeps_the_legacy_zero_confidence_schema_floor() -> Non
     analyzer._request(group)
 
     request = session.request["json"]
-    confidence_schema = request["format"]["properties"]["segments"]["items"][
-        "properties"
-    ]["confidence"]
+    confidence_schema = _segment_item_schema(
+        request["format"]["properties"]["segments"]
+    )["properties"]["confidence"]
     assert confidence_schema["minimum"] == 0.0
     assert "confidence tối thiểu" not in request["prompt"]
 
@@ -937,9 +956,9 @@ def test_mixed_heading_batch_keeps_raw_heading_confidence_for_host_normalization
     locks = _apply_host_structural_locks(group, validated)
     confidence_issues = _low_confidence_feedback_issues(group, validated, 0.65)
 
-    confidence_schema = session.request["json"]["format"]["properties"]["segments"][
-        "items"
-    ]["properties"]["confidence"]
+    confidence_schema = _segment_item_schema(
+        session.request["json"]["format"]["properties"]["segments"]
+    )["properties"]["confidence"]
     assert confidence_schema["minimum"] == 0.0
     assert "confidence tối thiểu 0.65" in session.request["json"]["prompt"]
     assert locks[0]["generator_confidence"] == 1e-16
@@ -994,7 +1013,7 @@ def test_adaptive_retry_contract_is_deterministic_source_bound_and_text_free() -
 
     assert first == repeated
     assert first["schema_policy_version"] == (
-        "per_id_host_emotion_semantic_rejection_director_advisory_v4"
+        "per_id_host_emotion_semantic_rejection_director_advisory_source_kind_v5"
     )
     assert [first["temperature"], second["temperature"]] == [0.1, 0.2]
     assert first["seed"] != second["seed"] != changed_digest["seed"]
@@ -1210,7 +1229,7 @@ def test_generator_schema_forbids_free_form_analysis_metadata() -> None:
     assert DIRECTOR_CRITIC_POLICY_VERSION == "second_pass_v18"
     assert ANALYSIS_LEDGER_POLICY_VERSION == "analysis_ledger_v26"
     assert GENERATOR_RETRY_SCHEMA_POLICY_VERSION == (
-        "per_id_host_emotion_semantic_rejection_director_advisory_v4"
+        "per_id_host_emotion_semantic_rejection_director_advisory_source_kind_v5"
     )
     assert "cậu biết rõ mình đang" in SYSTEM_PROMPT
     assert "vẫn là narration chứ không phải thought" in SYSTEM_PROMPT
@@ -1616,8 +1635,10 @@ def test_v35_director_suggestions_are_typed_advisory_and_do_not_lock_schema() ->
     segment_items = session.request["json"]["format"]["properties"]["segments"][
         "items"
     ]
-    assert "oneOf" not in segment_items
-    assert "neutral" in segment_items["properties"]["emotion"]["enum"]
+    # The schema may split into per-id branches to constrain kind at the source
+    # boundary; what this test is about is that emotion stays unconstrained.
+    branch = segment_items["oneOf"][0] if "oneOf" in segment_items else segment_items
+    assert "neutral" in branch["properties"]["emotion"]["enum"]
 
 
 @pytest.mark.parametrize(

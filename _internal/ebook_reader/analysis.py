@@ -115,8 +115,11 @@ DIRECTOR_CRITIC_SCHEMA_CONFIDENCE_MAX = ANALYSIS_CRITIC_CONFIDENCE_MAX
 DIRECTOR_CRITIC_POLICY_VERSION = ANALYSIS_DIRECTOR_CRITIC_POLICY_VERSION
 HOST_AFFECT_POLICY_VERSION = ANALYSIS_HOST_AFFECT_POLICY_VERSION
 ANALYSIS_LEDGER_POLICY_VERSION = "analysis_ledger_v26"
+# Bumped when the schema began constraining kind per segment. A request built under the
+# old policy lets the model cross a source boundary that the checks downstream assume it
+# cannot, so the two versions must not be mistaken for each other.
 GENERATOR_RETRY_SCHEMA_POLICY_VERSION = (
-    "per_id_host_emotion_semantic_rejection_director_advisory_v4"
+    "per_id_host_emotion_semantic_rejection_director_advisory_source_kind_v5"
 )
 ANALYSIS_RETRY_SEED_MAX = (2 ** 31) - 1
 DIRECTOR_RATIONALE_MIN_LETTERS = 4
@@ -3587,11 +3590,47 @@ def _short_name_local_fallback_is_safe(candidate: dict[str, Any]) -> bool:
     return len(onset) <= 1 or onset in LATIN_NAME_ONSET_READINGS
 
 
+def _allowed_kinds_by_id(
+    group: list[Any],
+    original_context: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, tuple[str, ...]]:
+    """Which kinds each segment's source actually permits.
+
+    Read from `_source_kind_transition_rule`, the same function that rejects a crossing
+    afterwards, so the schema and the check cannot disagree about where the boundary is.
+
+    Told after the fact, this costs a whole batch: HOST_SOURCE_KIND_MISMATCH is 75% of all
+    analysis rejections, around 32 per ten-chapter run, and each one sends five segments
+    back to be regenerated so that one can be corrected. Naming the rule in the retry - the
+    previous attempt at this - did not stop it; the model needs the boundary before it
+    answers, not after.
+
+    A segment whose source permits nothing is left unconstrained rather than given an empty
+    enum: an impossible schema would fail the request outright, which is worse than the
+    retry it replaces.
+    """
+    allowed: dict[str, tuple[str, ...]] = {}
+    for row in group:
+        stable_id = str(row["stable_id"])
+        kinds = tuple(
+            kind
+            for kind in sorted(ALLOWED_KINDS)
+            if _source_kind_transition_rule(
+                row, kind, original_context=original_context
+            )
+            is None
+        )
+        if kinds and len(kinds) < len(ALLOWED_KINDS):
+            allowed[stable_id] = kinds
+    return allowed
+
+
 def _output_schema_for_batch(
     batch_ids: list[str],
     *,
     confidence_floor: float = 0.0,
     hard_emotions_by_id: dict[str, tuple[str, ...]] | None = None,
+    hard_kinds_by_id: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, Any]:
     if (
         type(confidence_floor) not in {int, float}
@@ -3621,7 +3660,20 @@ def _output_schema_for_batch(
         )
     ):
         raise ValueError("Generator hard emotion constraints are invalid")
-    if hard_constraints:
+    kind_constraints = {} if hard_kinds_by_id is None else hard_kinds_by_id
+    if (
+        not isinstance(kind_constraints, dict)
+        or not set(kind_constraints) <= set(batch_ids)
+        or any(
+            type(values) is not tuple
+            or not values
+            or values != tuple(sorted(set(values)))
+            or any(kind not in ALLOWED_KINDS for kind in values)
+            for values in kind_constraints.values()
+        )
+    ):
+        raise ValueError("Generator hard kind constraints are invalid")
+    if hard_constraints or kind_constraints:
         item_schema = segments["items"]
         branches: list[dict[str, Any]] = []
         for batch_id in batch_ids:
@@ -3632,6 +3684,9 @@ def _output_schema_for_batch(
                 branch["properties"]["emotion"]["enum"] = list(
                     allowed_emotions
                 )
+            allowed_kinds = kind_constraints.get(batch_id)
+            if allowed_kinds is not None:
+                branch["properties"]["kind"]["enum"] = list(allowed_kinds)
             branches.append(branch)
         segments["items"] = {"oneOf": branches}
     else:
@@ -5629,6 +5684,13 @@ class OllamaBookAnalyzer:
             constrained_feedback,
             stable_to_batch=stable_to_batch,
         )
+        # The source boundary is known before the model answers, so say it in the schema
+        # rather than rejecting a crossing afterwards and sending the whole batch back.
+        hard_kinds_by_id = {
+            stable_to_batch[stable_id]: kinds
+            for stable_id, kinds in _allowed_kinds_by_id(group, original_context).items()
+            if stable_id in stable_to_batch
+        }
         if constrained_feedback:
             feedback_payload = [
                 issue.canonical_payload(stable_to_batch[issue.stable_id])
@@ -5674,6 +5736,7 @@ class OllamaBookAnalyzer:
                 list(batch_to_stable),
                 confidence_floor=schema_confidence_floor,
                 hard_emotions_by_id=hard_emotions_by_id,
+                hard_kinds_by_id=hard_kinds_by_id,
             ),
             "keep_alive": "30m",
             "options": {
