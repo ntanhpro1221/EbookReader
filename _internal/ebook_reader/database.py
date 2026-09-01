@@ -233,6 +233,48 @@ def critic_delta_fields(blocking: bool) -> tuple[str, ...]:
         for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
         if field not in INAUDIBLE_DELIVERY_FIELDS
     )
+
+
+def host_derived_accept(raw_deltas: Sequence[str]) -> bool:
+    """Whether the host would accept a candidate, given the full list of deltas.
+
+    Acceptance is decided on the blocking subset while `raw_deltas` stays the complete
+    record: a difference confined to a field nobody can hear was never a reason to reject a
+    candidate. The two validators must agree about that, and twice they have not - the
+    accepted branch derived it this way while the rejected branch recomputed it from the
+    full list, so a candidate differing only in emotion and intensity was accepted by one
+    and refused by the other. That killed a run at the same segment three times across two
+    sittings.
+
+    It lives here, once, so there is nothing left to copy.
+    """
+    blocking = set(critic_delta_fields(AFFECT_CUE_DISAGREEMENT_BLOCKS))
+    return not [
+        delta for delta in raw_deltas if str(delta).split(":", 1)[0] in blocking
+    ]
+
+
+def rejected_accept_flag_is_coherent(accept: Any, raw_deltas: Sequence[str]) -> bool:
+    """Whether a rejection record's accept flag can be true of the deltas beside it.
+
+    Two different things are legal here and the previous rule allowed only one:
+
+    - The critic rejected. It must have recorded something to reject over, but that
+      something may be a field nobody can hear - a rejection on emotion alone is a real
+      case with a test of its own.
+    - The critic accepted while recording differences. Legal exactly when none of them
+      blocks, which is the same subset acceptance is decided on everywhere else.
+
+    Demanding `accept == (not raw_deltas)` conflated the two and killed a ten-chapter run
+    on a candidate whose only differences were emotion and intensity.
+    """
+    if accept is True:
+        return host_derived_accept(raw_deltas)
+    if accept is False:
+        return bool(raw_deltas)
+    return False
+
+
 ANALYSIS_CRITIC_RESERVED_SPEAKERS = ("NARRATOR", "UNKNOWN")
 ANALYSIS_DELIVERY_NOTE_VERSION = "delivery_note_v1"
 ANALYSIS_DELIVERY_NOTE_PREFIX = f"{ANALYSIS_DELIVERY_NOTE_VERSION}="
@@ -4692,16 +4734,11 @@ class ProjectDB:
             blocking_delta_fields = set(
                 critic_delta_fields(AFFECT_CUE_DISAGREEMENT_BLOCKS)
             )
-            blocking_raw_deltas = [
-                delta
-                for delta in raw_deltas
-                if delta.split(":", 1)[0] in blocking_delta_fields
-            ]
-            host_derived_accept = not blocking_raw_deltas
+            derived_accept = host_derived_accept(raw_deltas)
             raw_agreement = (
                 isinstance(critic, dict)
-                and critic.get("accept") is host_derived_accept
-                and host_derived_accept
+                and critic.get("accept") is derived_accept
+                and derived_accept
             )
             raw_accept_value = critic.get("accept") if isinstance(critic, dict) else None
             is_heading = (
@@ -4873,7 +4910,7 @@ class ProjectDB:
                     and evidence_quote
                     not in per_id_source_anchors.get(str(critic_row["id"]), frozenset())
                 )
-                or critic.get("accept") is not host_derived_accept
+                or critic.get("accept") is not derived_accept
                 or item.get("field_deltas") != raw_deltas
                 or item.get("effective_accept") is not True
                 or (
@@ -4939,7 +4976,7 @@ class ProjectDB:
                          != str(candidate_segments[stable_id]["text_sha256"])),
                         ("candidate_projection", item.get("candidate") != candidate_projection),
                         ("critic_schema", not critic_schema_valid),
-                        ("accept_flag", critic.get("accept") is not host_derived_accept),
+                        ("accept_flag", critic.get("accept") is not derived_accept),
                         ("field_deltas", item.get("field_deltas") != raw_deltas),
                         ("effective_accept", item.get("effective_accept") is not True),
                         ("agreement_with_override", bool(
@@ -5179,7 +5216,9 @@ class ProjectDB:
                 != str(candidate_segment["text_sha256"])
                 or item.get("candidate") != candidate_projection
                 or item.get("field_deltas") != raw_deltas
-                or critic.get("accept") is not (not raw_deltas)
+                or not rejected_accept_flag_is_coherent(
+                    critic.get("accept"), raw_deltas
+                )
                 or type(item.get("effective_accept")) is not bool
                 or not quote_valid
                 or any(type(value) not in {int, float} for value in numeric_confidences)
@@ -5187,8 +5226,45 @@ class ProjectDB:
                 or any(float(value) < confidence_floor for value in numeric_confidences)
                 or float(derived_confidence) != expected_derived_confidence
             ):
+                # Name the clause that failed, exactly as the accepted branch already does.
+                # Eleven conditions share this message, so on its own it says a binding
+                # broke without saying which - and the evidence is in memory, not on disk,
+                # so a rerun is the only way to look. That cost a debugging round once
+                # already on the sibling check.
+                reasons = [
+                    name
+                    for name, failed in (
+                        ("text_sha256", str(item.get("text_sha256", ""))
+                         != str(candidate_segment["text_sha256"])),
+                        ("candidate_projection", item.get("candidate") != candidate_projection),
+                        ("field_deltas", item.get("field_deltas") != raw_deltas),
+                        ("accept_flag", not rejected_accept_flag_is_coherent(
+                            critic.get("accept"), raw_deltas
+                        )),
+                        ("effective_accept_type",
+                         type(item.get("effective_accept")) is not bool),
+                        ("evidence_quote", not quote_valid),
+                        ("confidence_type", any(
+                            type(value) not in {int, float} for value in numeric_confidences
+                        )),
+                        ("confidence_finite", any(
+                            not math.isfinite(float(value)) for value in numeric_confidences
+                        )),
+                        ("confidence_floor", any(
+                            float(value) < confidence_floor for value in numeric_confidences
+                        )),
+                        ("derived_confidence",
+                         float(derived_confidence) != expected_derived_confidence),
+                    )
+                    if failed
+                ]
                 raise RuntimeError(
-                    "Rejected critic evidence is not exactly candidate-bound"
+                    "Rejected critic evidence is not exactly candidate-bound for "
+                    f"{stable_id}: {', '.join(reasons) or 'unknown'}; "
+                    f"deltas={item.get('field_deltas')!r} expected={raw_deltas!r}; "
+                    f"accept={critic.get('accept')!r} confidences={numeric_confidences!r} "
+                    f"derived={derived_confidence!r} expected_derived="
+                    f"{expected_derived_confidence!r}"
                 )
             raw_deltas_by_stable[stable_id] = raw_deltas
             raw_delta_fields_by_stable[stable_id] = {
@@ -5369,6 +5445,11 @@ class ProjectDB:
             }
             if expected_critic_compatibility_override is not None:
                 covered_fields.update(raw_delta_fields)
+            # Deliberately every delivery field, not the blocking subset. This is
+            # evidence bookkeeping - "the critic disagreed here and no override explains
+            # it" - and an inaudible field can be unresolved without being a reason to
+            # refuse anything. Narrowing it to the blocking subset broke four tests that
+            # exist precisely to keep affect deltas visible as unresolved.
             unresolved_fields = [
                 field
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
@@ -5381,8 +5462,27 @@ class ProjectDB:
                 or item.get("effective_accept") is not expected_effective_accept
                 or item.get("host_structural_override") is not None
             ):
+                # Name the clause, for the same reason as everywhere else in this file:
+                # four conditions share the message and the evidence is not on disk.
+                reasons = [
+                    name
+                    for name, failed in (
+                        ("source_kind_override", not source_kind_override_valid),
+                        ("semantic_override", not semantic_override_valid),
+                        ("effective_accept",
+                         item.get("effective_accept") is not expected_effective_accept),
+                        ("unexpected_structural_override",
+                         item.get("host_structural_override") is not None),
+                    )
+                    if failed
+                ]
                 raise RuntimeError(
-                    "Rejected source-kind critic override is not source-bound"
+                    "Rejected source-kind critic override is not source-bound for "
+                    f"{stable_id}: {', '.join(reasons) or 'unknown'}; "
+                    f"unresolved={unresolved_fields!r} covered={sorted(covered_fields)!r} "
+                    f"delta_fields={sorted(raw_delta_fields)!r} "
+                    f"effective_accept={item.get('effective_accept')!r} "
+                    f"expected={expected_effective_accept!r}"
                 )
             unresolved_fields_by_stable[stable_id] = unresolved_fields
         unresolved_ids = {
