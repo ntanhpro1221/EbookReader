@@ -5445,6 +5445,11 @@ class ProjectDB:
             }
             if expected_critic_compatibility_override is not None:
                 covered_fields.update(raw_delta_fields)
+            # Deliberately every delivery field, not the blocking subset. This is
+            # evidence bookkeeping - "the critic disagreed here and no override explains
+            # it" - and an inaudible field can be unresolved without being a reason to
+            # refuse anything. Narrowing it to the blocking subset broke four tests that
+            # exist precisely to keep affect deltas visible as unresolved.
             unresolved_fields = [
                 field
                 for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
@@ -5457,8 +5462,27 @@ class ProjectDB:
                 or item.get("effective_accept") is not expected_effective_accept
                 or item.get("host_structural_override") is not None
             ):
+                # Name the clause, for the same reason as everywhere else in this file:
+                # four conditions share the message and the evidence is not on disk.
+                reasons = [
+                    name
+                    for name, failed in (
+                        ("source_kind_override", not source_kind_override_valid),
+                        ("semantic_override", not semantic_override_valid),
+                        ("effective_accept",
+                         item.get("effective_accept") is not expected_effective_accept),
+                        ("unexpected_structural_override",
+                         item.get("host_structural_override") is not None),
+                    )
+                    if failed
+                ]
                 raise RuntimeError(
-                    "Rejected source-kind critic override is not source-bound"
+                    "Rejected source-kind critic override is not source-bound for "
+                    f"{stable_id}: {', '.join(reasons) or 'unknown'}; "
+                    f"unresolved={unresolved_fields!r} covered={sorted(covered_fields)!r} "
+                    f"delta_fields={sorted(raw_delta_fields)!r} "
+                    f"effective_accept={item.get('effective_accept')!r} "
+                    f"expected={expected_effective_accept!r}"
                 )
             unresolved_fields_by_stable[stable_id] = unresolved_fields
         unresolved_ids = {
