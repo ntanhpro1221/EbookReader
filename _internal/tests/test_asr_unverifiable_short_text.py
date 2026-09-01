@@ -10,6 +10,7 @@ both sets of audio, so that is the verifier failing rather than the reading.
 from __future__ import annotations
 
 import inspect
+import json
 
 from ebook_reader.asr import (
     ASR_MIN_VERIFIABLE_CHARS,
@@ -44,14 +45,27 @@ def test_the_threshold_sits_at_the_measured_cliff() -> None:
     assert ASR_MIN_VERIFIABLE_CHARS == 10
 
 
-def test_the_segment_is_verified_with_a_warning_not_failed() -> None:
-    """A failed segment blocks its chapter on status alone, whatever the warning says."""
-    source = inspect.getsource(BookPipeline._verify_chapter_audio)
-    branch = source[source.index("asr_verdict_is_unverifiable") :]
-    branch = branch[: branch.index("warning = (")]
-    assert "mark_verified" in branch
-    assert "mark_failed" not in branch
-    assert "QUALITY_VERDICT_PASS" in branch
+def test_a_frame_ceiling_is_evidence_short_text_cannot_excuse() -> None:
+    """The generator reporting it ran out of frames means the take may be cut off, which is
+    visible without transcribing a word."""
+    check = BookPipeline._segment_has_non_asr_failure_evidence
+    assert check(None, {"signal_json": json.dumps({"generation_ceiling_hit": 1.0})})
+    assert check(None, {"signal_json": json.dumps({"generation_endpoint_active": 1.0})})
+
+
+def test_a_clean_signal_leaves_only_the_asr_verdict() -> None:
+    check = BookPipeline._segment_has_non_asr_failure_evidence
+    clean = json.dumps({"duration": 1.04, "rms": 0.09, "generation_ceiling_hit": 0.0})
+    assert not check(None, {"signal_json": clean})
+    assert not check(None, {"signal_json": "{}"})
+
+
+def test_unreadable_evidence_is_not_an_excuse() -> None:
+    """A missing or corrupt signal must fail closed, not forgive."""
+    check = BookPipeline._segment_has_non_asr_failure_evidence
+    assert check(None, {"signal_json": "not json at all"})
+    assert check(None, {"signal_json": json.dumps([1, 2, 3])})
+    assert not check(None, {})  # no field at all decodes as an empty signal
 
 
 def test_the_warning_does_not_block_a_high_quality_chapter() -> None:
@@ -83,3 +97,27 @@ def test_a_long_segment_is_never_forgiven() -> None:
 def test_empty_text_is_unverifiable_rather_than_crashing() -> None:
     assert asr_verdict_is_unverifiable("")
     assert asr_verdict_is_unverifiable(None)
+
+
+def test_both_asr_failure_paths_know_the_rule() -> None:
+    """The first-pass gate and the repair-exhaustion branch are separate code."""
+    source = inspect.getsource(BookPipeline._verify_chapter_audio)
+    assert source.count("asr_verdict_is_unverifiable") == 2, (
+        "a segment ASR cannot judge must be forgiven wherever it is judged"
+    )
+
+
+def test_publishing_with_review_is_derived_from_the_verdict() -> None:
+    """Naming branches instead means the next one added fails silently."""
+    source = inspect.getsource(BookPipeline._verify_chapter_audio)
+    assert "publish_with_review=(final_verdict == QUALITY_VERDICT_PASS)" in source
+    assert "publish_with_review=locked_name_review" not in source
+
+
+def test_perceptual_failure_still_outranks_unverifiable_text() -> None:
+    """Naturalness scoring works fine on two syllables, so it keeps its say."""
+    source = inspect.getsource(BookPipeline._verify_chapter_audio)
+    assert "elif perceptual_review_exhausted:" in source
+    assert source.index("elif perceptual_review_exhausted:") < source.index(
+        "elif asr_only_failure"
+    )

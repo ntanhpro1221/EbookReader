@@ -1789,6 +1789,28 @@ class BookPipeline:
             )
         return digest.hexdigest()
 
+    def _segment_has_non_asr_failure_evidence(self, item: Any) -> bool:
+        """Whether anything other than ASR already says this take is wrong.
+
+        Short text excuses only the transcriber. If the generator itself reported that it
+        ran out of frames or ended while still speaking, the audio may simply be cut off -
+        which is visible without transcribing a word, so a short reference is no defence.
+        """
+        try:
+            raw = item["signal_json"]
+        except (KeyError, IndexError, TypeError):
+            raw = None
+        try:
+            signal = json.loads(str(raw or "{}"))
+        except (TypeError, json.JSONDecodeError):
+            return True  # unreadable evidence is not an excuse
+        if not isinstance(signal, dict):
+            return True
+        return bool(
+            float(signal.get(GENERATION_CEILING_METRIC, 0.0) or 0.0)
+            or float(signal.get(GENERATION_ENDPOINT_ACTIVE_METRIC, 0.0) or 0.0)
+        )
+
     def _high_quality_blocking_segment_warnings(
         self,
         rows: list[Any],
@@ -4326,6 +4348,14 @@ class BookPipeline:
                             candidate_attempts
                         )
                     )
+                    # Only an ASR verdict can be forgiven for being unobtainable. A
+                    # frame-ceiling endpoint is evidence from the generator itself -
+                    # the take may simply be cut off - and short text says nothing
+                    # about that.
+                    asr_only_failure = reason not in {
+                        ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
+                        ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+                    } and not self._segment_has_non_asr_failure_evidence(item)
                     locked_name_review = bool(
                         result.get("locked_name_review_eligible")
                     ) and reason == ASR_LOCKED_NAME_ANCHOR_MISMATCH
@@ -4349,6 +4379,22 @@ class BookPipeline:
                         )
                         final_verdict = QUALITY_VERDICT_FAIL
                         failure_codes = (PERCEPTUAL_NATURALNESS_REVIEW_CODE,)
+                    elif asr_only_failure and asr_verdict_is_unverifiable(
+                        str(item["text"])
+                    ):
+                        # Same reasoning as in the first-pass gate: below
+                        # ASR_MIN_VERIFIABLE_CHARS there is not enough audio for Whisper to
+                        # transcribe, so repeating the repair rounds cannot rescue a verdict
+                        # that was never available. Ranked after the perceptual branch on
+                        # purpose - naturalness scoring works fine on two syllables, so a
+                        # real perceptual failure still wins.
+                        warning = ASR_UNVERIFIABLE_SHORT_TEXT
+                        error = (
+                            "Too little text for ASR to judge; needs a listen rather "
+                            "than another repair round"
+                        )
+                        final_verdict = QUALITY_VERDICT_PASS
+                        failure_codes = ()
                     else:
                         warning = (
                             reason
@@ -4386,10 +4432,14 @@ class BookPipeline:
                         warning_code=warning,
                         final_verdict=final_verdict,
                         failure_codes=failure_codes,
-                        publish_with_review=locked_name_review,
+                        # Derived from the verdict rather than named again per branch. Any
+                        # branch that judged the take acceptable publishes it for review;
+                        # naming the branches instead means every new one has to remember
+                        # to be added here, and the first that forgets fails silently.
+                        publish_with_review=(final_verdict == QUALITY_VERDICT_PASS),
                     )
                     self.db.event(
-                        "warning" if locked_name_review else "error",
+                        "warning" if final_verdict == QUALITY_VERDICT_PASS else "error",
                         warning,
                         f"Immutable clarity repair budget exhausted for {item['stable_id']}",
                         {
@@ -4603,7 +4653,15 @@ class BookPipeline:
                     },
                 )
                 continue
-            if asr_verdict_is_unverifiable(str(item["text"])):
+            if (
+                reason
+                not in {
+                    ACTIVE_CEILING_ENDPOINT_REPAIR_REASON,
+                    ASR_LOCKED_NAME_ANCHOR_MISMATCH,
+                }
+                and not self._segment_has_non_asr_failure_evidence(item)
+                and asr_verdict_is_unverifiable(str(item["text"]))
+            ):
                 # Whisper was asked a question it has no way to answer. Measured over 4528
                 # committed segments, a reference under ASR_MIN_VERIFIABLE_CHARS gets a
                 # median similarity of 0.27 against 0.94 for a normal sentence, fails the
