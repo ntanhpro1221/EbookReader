@@ -129,6 +129,7 @@ from .tts_contract import (
     HA_VOCALIZATION_MAX_NEW_FRAMES,
     HA_VOCALIZATION_PROVENANCE_FIELDS,
 )
+from .tts_pool import TTS_POOL_MIN_BATCH
 
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
@@ -3315,7 +3316,10 @@ class BookPipeline:
         segment needs, and a batch built on the far side of such a decision would be
         speculating rather than reading ahead.
         """
-        limit = max(2, int(self.settings["tts"].get("parallel_batch_size", 9)))
+        limit = max(
+            TTS_POOL_MIN_BATCH,
+            int(self.settings["tts"].get("parallel_batch_size", 9)),
+        )
         batch: list[Any] = []
         for row in rows[start:]:
             if not self._segment_takes_plain_tts_path(row):
@@ -3379,8 +3383,12 @@ class BookPipeline:
         speculating on it here would mean generating audio for a repair strategy nobody has
         chosen yet.
         """
+        if len(rows) < TTS_POOL_MIN_BATCH:
+            # Spawning three workers to share two segments buys nothing and holds
+            # three times the VRAM; see TTS_POOL_MIN_BATCH.
+            return {}
         pool = self._synthesis_pool()
-        if pool is None or len(rows) < 2:
+        if pool is None:
             return {}
         jobs = [
             {

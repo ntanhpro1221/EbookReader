@@ -34,6 +34,16 @@ Five workers were 1.3% faster and held 7318 of 8151 MiB, leaving no room for the
 or for keeping Whisper resident; three hold 5484 MiB at 90% GPU. See docs/THROUGHPUT.md.
 """
 
+TTS_POOL_MIN_BATCH = 3
+"""Below this many segments the pool is pure cost, measured warm and twice.
+
+Two segments came out at 1.03x and 1.00x - no gain at all - while holding 3291 MiB
+against the single worker's 1059. Three reproduces 1.12x, four 1.22x, nine 1.29x. The
+first measurement of two segments said 2.54x and was the benchmark's own cold start:
+two jobs appeared to take 35.4 s while four took 18.7 s, which is the model file
+reaching the OS cache, not the pool being fast.
+"""
+
 TTS_POOL_WORKER_THREADS = 1
 """Torch claims one thread per core by default, so N workers ask for N x cores and spend the
 difference context switching. The perceptual pool measured 4 workers at 1.66x unpinned and

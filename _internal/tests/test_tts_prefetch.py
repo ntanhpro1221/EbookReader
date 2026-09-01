@@ -125,10 +125,13 @@ def test_scanning_starts_where_the_loop_is() -> None:
     assert [row["stable_id"] for row in scanner.scan(rows, 1)] == ["b", "c"]
 
 
-def test_a_batch_is_never_smaller_than_two_however_it_is_configured() -> None:
-    """A one-segment batch would run a pool to do one job and pay every worker's load."""
-    rows = _rows("a", "b", "c")
-    assert len(Scanner({"a", "b", "c"}, limit=1).scan(rows, 0)) == 2
+def test_a_batch_is_never_smaller_than_the_measured_minimum() -> None:
+    """Two segments measured 1.00x warm while holding three times the VRAM, so a batch
+    configured below TTS_POOL_MIN_BATCH would run a pool for no gain at all."""
+    from ebook_reader.tts_pool import TTS_POOL_MIN_BATCH
+
+    rows = _rows("a", "b", "c", "d")
+    assert len(Scanner({"a", "b", "c", "d"}, limit=1).scan(rows, 0)) == TTS_POOL_MIN_BATCH
 
 
 def test_nothing_to_do_yields_an_empty_batch() -> None:
