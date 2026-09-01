@@ -5535,8 +5535,29 @@ class ProjectDB:
             or not issues
             or set(issues) != unresolved_ids
         ):
+            # Name the clause. Five conditions share this message and the outcome is not
+            # on disk, so without this the only way to learn which broke is another full
+            # analysis pass - which has cost three already in this validator alone.
+            reasons = [
+                name
+                for name, failed in (
+                    ("outcome_keys", set(outcome) != {"issues", "retryable_invalid"}),
+                    ("retryable_invalid",
+                     outcome.get("retryable_invalid") is not False),
+                    ("issues_type", not isinstance(issues, dict)),
+                    ("issues_empty", isinstance(issues, dict) and not issues),
+                    ("issue_ids", isinstance(issues, dict)
+                     and set(issues) != unresolved_ids),
+                )
+                if failed
+            ]
+            issue_ids = sorted(issues) if isinstance(issues, dict) else issues
             raise RuntimeError(
-                "Rejected critic outcome does not match unresolved evidence"
+                "Rejected critic outcome does not match unresolved evidence: "
+                f"{', '.join(reasons) or 'unknown'}; "
+                f"outcome_keys={sorted(outcome)!r} issues={issue_ids!r} "
+                f"unresolved={sorted(unresolved_ids)!r} "
+                f"unresolved_fields={ {k: v for k, v in unresolved_fields_by_stable.items() if v} !r}"
             )
         for stable_id, fields in unresolved_fields_by_stable.items():
             if not fields:
