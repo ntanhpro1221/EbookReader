@@ -9282,22 +9282,27 @@ class ProjectDB:
         ).fetchone()
         if final_check is None or policy is None:
             raise RuntimeError("promoted candidate final policy evidence is missing")
-        if (
-            str(final_check["scope"]) != QUALITY_SCOPE_SEGMENT
-            or str(final_check["stage"]) != SEGMENT_AUDIO_QUALITY_STAGE
-            or int(final_check["segment_id"] or -1) != int(candidate["segment_id"])
-            or final_check["chapter_id"] is not None
-            or str(final_check["artifact_sha256"]).casefold()
-            != str(candidate["wav_sha256"]).casefold()
-            or str(final_check["policy_hash"]) != str(candidate["policy_hash"])
-            or int(final_check["policy_version"]) != int(policy["policy_version"])
-            or str(final_check["verdict"]) != QUALITY_VERDICT_PASS
-            or str(final_check["failure_codes_json"]) != "[]"
-            or int(final_check["attempt"]) < 1
-        ):
-            raise RuntimeError(
-                "promoted candidate final quality checkpoint is not exact"
-            )
+        require_all(
+            "promoted candidate final quality checkpoint is not exact",
+            ("scope", str(final_check["scope"]) != QUALITY_SCOPE_SEGMENT),
+            ("stage", str(final_check["stage"]) != SEGMENT_AUDIO_QUALITY_STAGE),
+            ("segment_id",
+             int(final_check["segment_id"] or -1) != int(candidate["segment_id"])),
+            ("chapter_id", final_check["chapter_id"] is not None),
+            ("artifact_sha256", str(final_check["artifact_sha256"]).casefold()
+             != str(candidate["wav_sha256"]).casefold()),
+            ("policy_hash",
+             str(final_check["policy_hash"]) != str(candidate["policy_hash"])),
+            ("policy_version",
+             int(final_check["policy_version"]) != int(policy["policy_version"])),
+            ("verdict", str(final_check["verdict"]) != QUALITY_VERDICT_PASS),
+            ("failure_codes", str(final_check["failure_codes_json"]) != "[]"),
+            ("attempt", int(final_check["attempt"]) < 1),
+            candidate_id=int(candidate["id"]),
+            quality_check_id=int(final_check["id"]),
+            verdict=str(final_check["verdict"]),
+            failure_codes=str(final_check["failure_codes_json"]),
+        )
         final_metrics = self._json_object(
             final_check["metrics_json"],
             "promoted candidate final metrics",
