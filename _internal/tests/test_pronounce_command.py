@@ -86,3 +86,49 @@ def test_the_decision_is_recorded_as_an_event(project: Path) -> None:
             for row in conn.execute("SELECT code FROM runtime_events ORDER BY id")
         ]
     assert "PRONUNCIATION_SET_BY_LISTENER" in codes
+
+
+def test_a_listener_can_correct_their_own_earlier_choice(project: Path) -> None:
+    """A lock protects a human decision from the machine, not from the human.
+
+    The first version could not do this: upsert refuses to touch a locked row, so the
+    command reported success and changed nothing.
+    """
+    _run(project, "Deck", "Deck")
+    result = _run(project, "Deck", "Đéc")
+    assert result.exit_code == 0
+    row = next(row for row in _rows(project) if str(row["surface"]) == "Deck")
+    assert str(row["spoken_form"]) == "Đéc"
+    assert int(row["locked"]) == 1
+
+
+def test_it_overrides_a_lock_the_machine_wrote(project: Path) -> None:
+    database = ProjectDB(project / "project.sqlite3")
+    database.upsert_pronunciation(
+        surface="Noah",
+        normalized_surface="noah",
+        spoken_form="Nô-ah",
+        confidence=0.98,
+        source="english_name_transliteration",
+        locked=True,
+    )
+    assert _run(project, "Noah", "Nô-ơ").exit_code == 0
+    row = next(row for row in _rows(project) if str(row["surface"]) == "Noah")
+    assert str(row["spoken_form"]) == "Nô-ơ"
+    assert str(row["source"]) == LISTENER_PRONUNCIATION_SOURCE
+
+
+def test_it_reports_failure_rather_than_a_write_that_did_not_happen(
+    project: Path, monkeypatch
+) -> None:
+    """Saying "ok" while discarding the input is the bug this command shipped with."""
+    from ebook_reader import cli
+
+    monkeypatch.setattr(
+        ProjectDB, "set_listener_pronunciation", lambda self, **kwargs: None
+    )
+    result = cli._command_pronounce(
+        argparse.Namespace(project_root=project, surface="Deck", spoken="Đéc", json=False)
+    )
+    assert result.exit_code != 0
+    assert "did not take" in (result.error or "")

@@ -868,14 +868,28 @@ def _command_pronounce(args: argparse.Namespace) -> CommandResult:
         for row in database.list_pronunciations(0.0)
         if str(row["surface"]) == surface
     }
-    database.upsert_pronunciation(
+    database.set_listener_pronunciation(
         surface=surface,
         normalized_surface=normalize_name(surface),
         spoken_form=spoken,
-        confidence=1.0,
         source=LISTENER_PRONUNCIATION_SOURCE,
-        locked=True,
     )
+    stored = next(
+        (
+            str(row["spoken_form"])
+            for row in database.list_pronunciations(0.0)
+            if str(row["surface"]) == surface
+        ),
+        None,
+    )
+    if stored != spoken:
+        # Reporting a write that did not happen is worse than failing: the first version
+        # of this command said "ok" while a lock silently discarded every word of it.
+        return CommandResult(
+            data={"surface": surface, "requested": spoken, "stored": stored},
+            exit_code=EXIT_VALIDATION_FAILED,
+            error=f"Pronunciation for {surface!r} did not take: stored {stored!r}",
+        )
     database.event(
         "info",
         "PRONUNCIATION_SET_BY_LISTENER",

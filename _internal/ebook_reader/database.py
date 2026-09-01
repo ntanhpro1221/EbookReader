@@ -7890,6 +7890,41 @@ class ProjectDB:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM characters ORDER BY importance,mention_count DESC"))
 
+    def set_listener_pronunciation(
+        self,
+        *,
+        surface: str,
+        normalized_surface: str,
+        spoken_form: str,
+        source: str,
+    ) -> None:
+        """Write a reading a person chose, over any lock already there.
+
+        upsert_pronunciation refuses to touch a locked row, which is right when the
+        machine is the one asking: a lock is what protects a human decision from being
+        overwritten by a transliteration. It is wrong when the human is the one asking, and
+        it made a person unable to correct their own earlier answer - the command reported
+        success and changed nothing.
+        """
+        now = time.time()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO pronunciations(
+                    surface,normalized_surface,spoken_form,confidence,source,locked,
+                    created_at,updated_at
+                ) VALUES(?,?,?,1.0,?,1,?,?)
+                ON CONFLICT(normalized_surface) DO UPDATE SET
+                    surface=excluded.surface,
+                    spoken_form=excluded.spoken_form,
+                    confidence=1.0,
+                    source=excluded.source,
+                    locked=1,
+                    updated_at=excluded.updated_at
+                """,
+                (surface, normalized_surface, spoken_form, source, now, now),
+            )
+
     def upsert_pronunciation(
         self,
         *,
