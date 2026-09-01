@@ -5330,6 +5330,7 @@ class ProjectDB:
                 "Rejected source-kind critic evidence contains an unprotected override"
             )
         unresolved_fields_by_stable: dict[str, list[str]] = {}
+        refused_ids: set[str] = set()
         for stable_id, item in evidence_by_stable.items():
             critic_row = critic_row_by_stable[stable_id]
             candidate_projection = critic_row["candidate"]
@@ -5518,11 +5519,19 @@ class ProjectDB:
                     f"blocking={sorted(set(critic_delta_fields(AFFECT_CUE_DISAGREEMENT_BLOCKS)))!r}"
                 )
             unresolved_fields_by_stable[stable_id] = unresolved_fields
-        unresolved_ids = {
-            stable_id
-            for stable_id, fields in unresolved_fields_by_stable.items()
-            if fields
-        }
+            if item.get("effective_accept") is False:
+                refused_ids.add(stable_id)
+        # An issue belongs to a segment the host did not effectively accept - not to
+        # every segment with something unresolved, which is what this compared against and
+        # what killed the run. In the failing batch four segments had unresolved fields and
+        # exactly one issue was raised: the only one whose unresolved set held a blocking
+        # field ("pace"), the others differing on emotion and intensity alone.
+        #
+        # Reading it off effective_accept rather than re-deriving it from the fields also
+        # covers the legal case a blocking-subset rule got wrong: a host may refuse over an
+        # inaudible difference, and then the issue is real however quiet the field.
+        # `unresolved_fields_by_stable` stays the complete record; that is evidence.
+        unresolved_ids = set(refused_ids)
         if not unresolved_ids:
             raise RuntimeError(
                 "Rejected critic evidence has no unresolved segment"
@@ -5560,12 +5569,17 @@ class ProjectDB:
                 f"unresolved_fields={ {k: v for k, v in unresolved_fields_by_stable.items() if v} !r}"
             )
         for stable_id, fields in unresolved_fields_by_stable.items():
-            if not fields:
+            # Same set as above: a segment with nothing blocking has no issue to match.
+            # The reason string still names every unresolved field, blocking or not - the
+            # evidence showed which segments carry an issue, not what the text says.
+            if stable_id not in unresolved_ids:
                 continue
             expected_reason = "DIRECTOR_FIELD_MISMATCH fields=" + ",".join(fields)
             if issues.get(stable_id) != expected_reason:
                 raise RuntimeError(
-                    "Rejected critic outcome is not a substantive field mismatch"
+                    "Rejected critic outcome is not a substantive field mismatch for "
+                    f"{stable_id}: got {issues.get(stable_id)!r} "
+                    f"expected {expected_reason!r}"
                 )
 
     @classmethod

@@ -94,3 +94,30 @@ def test_effective_accept_is_never_derived_from_the_full_list() -> None:
     source = inspect.getsource(ProjectDB._validate_analysis_rejection_evidence)
     assert "expected_effective_accept" not in source
     assert "accept_flag_is_coherent" in source
+
+
+def test_an_issue_belongs_to_a_segment_the_host_refused() -> None:
+    """Not to every segment with something unresolved.
+
+    In the batch that killed a ten-chapter run, four segments had unresolved fields and one
+    issue was raised - for the only one whose unresolved set held a blocking field. The
+    other three differed on emotion and intensity, which the host accepts.
+    """
+    source = inspect.getsource(ProjectDB._validate_analysis_rejection_evidence)
+    assert "unresolved_ids = set(refused_ids)" in source
+    assert 'item.get("effective_accept") is False' in source
+
+
+def test_issues_are_not_re_derived_from_the_unresolved_fields() -> None:
+    """Deriving them from the blocking subset breaks a host that refused over emotion."""
+    source = inspect.getsource(ProjectDB._validate_analysis_rejection_evidence)
+    issue_set = source[source.index("unresolved_ids = ") : source.index("if not unresolved_ids")]
+    assert "blocking_fields" not in issue_set
+    assert "unresolved_fields_by_stable.items()" not in issue_set
+
+
+def test_the_full_unresolved_record_survives() -> None:
+    """It is evidence, and four tests exist to keep affect deltas visible in it."""
+    source = inspect.getsource(ProjectDB._validate_analysis_rejection_evidence)
+    assert "unresolved_fields_by_stable[stable_id] = unresolved_fields" in source
+    assert "for field in ANALYSIS_CRITIC_DELIVERY_FIELDS" in source
