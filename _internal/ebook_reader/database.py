@@ -9929,33 +9929,37 @@ class ProjectDB:
                     raise RuntimeError(
                         "tempo candidate source checksum differs from its durable artifact"
                     )
-                if (
-                    int(source["expected_voice_profile_id"])
-                    != expected_voice_profile_id
-                    or int(source["expected_pitch_semitones"])
-                    != expected_pitch_semitones
-                    or str(source["pronunciation_delivery_variant"])
-                    != normalized_pronunciation_variant
-                    or str(source["expected_spoken_text_sha256"])
-                    != normalized_expected_spoken_sha256
-                    or str(source["generation_strategy"])
-                    != normalized_generation_strategy
-                    or int(source["generation_seed"]) != int(generation_seed)
-                    or int(source["tts_attempt"]) != normalized_attempt
-                    or bool(source["perceptual_required"])
-                    != normalized_perceptual_required
-                    or str(source["candidate_repair_requirement"])
-                    != normalized_repair_requirement
-                    or (
+                require_all(
+                    "tempo candidate allocation differs from its source provenance",
+                    ("voice_profile_id", int(source["expected_voice_profile_id"])
+                     != expected_voice_profile_id),
+                    ("pitch_semitones", int(source["expected_pitch_semitones"])
+                     != expected_pitch_semitones),
+                    ("pronunciation_variant",
+                     str(source["pronunciation_delivery_variant"])
+                     != normalized_pronunciation_variant),
+                    ("spoken_text_sha256",
+                     str(source["expected_spoken_text_sha256"])
+                     != normalized_expected_spoken_sha256),
+                    ("generation_strategy", str(source["generation_strategy"])
+                     != normalized_generation_strategy),
+                    ("generation_seed",
+                     int(source["generation_seed"]) != int(generation_seed)),
+                    ("tts_attempt", int(source["tts_attempt"]) != normalized_attempt),
+                    ("perceptual_required", bool(source["perceptual_required"])
+                     != normalized_perceptual_required),
+                    ("repair_requirement",
+                     str(source["candidate_repair_requirement"])
+                     != normalized_repair_requirement),
+                    ("repair_trigger_check_id", (
                         int(source["repair_trigger_check_id"])
                         if source["repair_trigger_check_id"] is not None
                         else None
-                    )
-                    != normalized_repair_trigger_check_id
-                ):
-                    raise RuntimeError(
-                        "tempo candidate allocation differs from its source provenance"
-                    )
+                    ) != normalized_repair_trigger_check_id),
+                    source_candidate_id=int(source["id"]),
+                    generation_seed=int(generation_seed),
+                    tts_attempt=normalized_attempt,
+                )
                 eligibility_reason = self._tempo_source_eligibility_reason_conn(
                     conn,
                     source,

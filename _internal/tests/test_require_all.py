@@ -64,7 +64,7 @@ def test_no_new_blind_compound_check_is_added() -> None:
             continue
         if len(node.body) == 1 and isinstance(node.body[0], ast.Raise):
             blind += 1
-    assert blind <= 67, (
+    assert blind <= 65, (
         f"{blind} checks combine three or more conditions behind one message; "
         "use require_all so the failing clause is named"
     )
