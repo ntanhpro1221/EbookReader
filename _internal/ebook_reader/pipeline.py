@@ -18,6 +18,7 @@ from .asr import (
     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
     ASR_MISMATCH,
     ASR_PASS,
+    ASR_UNVERIFIABLE_SHORT_TEXT,
     LOCKED_NAME_ANCHOR_METRICS_KEY,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
     SHORT_CONTEXT_REPEAT_COUNT,
@@ -141,6 +142,11 @@ HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
         # segment publishes and the chapter still refuses it. The name is listed in the
         # quality report for a human to listen to.
         ASR_LOCKED_NAME_ANCHOR_REVIEW,
+        # Same shape of decision, different reason nobody can answer: below
+        # ASR_MIN_VERIFIABLE_CHARS there is not enough audio for Whisper to transcribe at
+        # all, so its verdict carries no information about the take. Listed for a human in
+        # the quality report rather than treated as proof of a bad reading.
+        ASR_UNVERIFIABLE_SHORT_TEXT,
     }
 )
 CHAPTER_REVIEW_STATUS = "warning"
@@ -1797,34 +1803,6 @@ class BookPipeline:
                 if value
             }
             blocked_codes = sorted(warning_codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
-            try:
-                segment_text = str(row["text"])
-            except (KeyError, IndexError, TypeError):
-                # No text to judge by, so no grounds to forgive anything. Failing closed
-                # keeps a missing field from quietly widening what publishes.
-                segment_text = ""
-                forgivable = False
-            else:
-                forgivable = asr_verdict_is_unverifiable(segment_text)
-            if blocked_codes and forgivable:
-                # A verdict the verifier cannot give must not read as a verdict against the
-                # audio. Whisper needs something to transcribe: measured over 4528 segments,
-                # a reference under 10 speakable characters gets a median similarity of 0.27
-                # against 0.94 for a normal sentence, fails the 0.5 threshold 75% of the
-                # time against 0.2%, and hallucinates a transcript more than three times too
-                # long in 30% of cases - a rank label "SSS" came back as a request to
-                # subscribe to a YouTube channel, which is what Whisper was trained on.
-                #
-                # The same engine made both sets of audio, so this is the measurement
-                # failing, not the reading. Blocking on it means a chapter cannot publish
-                # because a question was unanswerable.
-                #
-                # Only ASR codes are forgiven. Every check that can still give a trustworthy
-                # answer on two syllables - duration, RMS, clipping, pace, perceptual - keeps
-                # its power to block, and the warning stays recorded on the segment.
-                blocked_codes = [
-                    code for code in blocked_codes if not code.startswith("ASR_")
-                ]
             if blocked_codes:
                 blocking.append(
                     {
@@ -4622,6 +4600,52 @@ class BookPipeline:
                             ).get("anchors", [])
                             if not anchor.get("matched")
                         ],
+                    },
+                )
+                continue
+            if asr_verdict_is_unverifiable(str(item["text"])):
+                # Whisper was asked a question it has no way to answer. Measured over 4528
+                # committed segments, a reference under ASR_MIN_VERIFIABLE_CHARS gets a
+                # median similarity of 0.27 against 0.94 for a normal sentence, fails the
+                # threshold 75% of the time against 0.2%, and returns a transcript more than
+                # three times too long in 30% of cases - the rank label "SSS" came back as a
+                # request to subscribe to a YouTube channel, which is what Whisper was
+                # trained on. One engine produced every one of those segments, so that gap
+                # is the verifier failing, not the reading.
+                #
+                # Treated exactly like a locked-name anchor: the gate records a pass, the
+                # segment carries a warning, and the quality report asks a human to listen.
+                # Failing instead would keep a chapter unpublished because a question was
+                # unanswerable - and would do it to every rank label, heading and gasp in
+                # the book.
+                self._record_segment_audio_gate(
+                    item,
+                    result,
+                    verdict=QUALITY_VERDICT_PASS,
+                    confirmation=bool(result.get("confirmation_decode", False)),
+                    decode_evidence=artifact_history(item),
+                )
+                self.db.mark_asr_result(
+                    int(item["id"]),
+                    passed=True,
+                    transcript=str(result.get("transcript", "")),
+                    similarity=float(result.get("similarity", 0.0)),
+                    wer=float(result.get("wer", 1.0)),
+                    warning_code=ASR_UNVERIFIABLE_SHORT_TEXT,
+                )
+                self.db.mark_verified(
+                    int(item["id"]),
+                    warning_code=ASR_UNVERIFIABLE_SHORT_TEXT,
+                )
+                self.db.event(
+                    "warning",
+                    ASR_UNVERIFIABLE_SHORT_TEXT,
+                    f"Too little text for ASR to judge {item['stable_id']}; needs a listen",
+                    {
+                        "segment_id": int(item["id"]),
+                        "text": str(item["text"]),
+                        "transcript": str(result.get("transcript", ""))[:400],
+                        "similarity": float(result.get("similarity", 0.0)),
                     },
                 )
                 continue

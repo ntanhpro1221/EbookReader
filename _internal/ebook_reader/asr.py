@@ -59,6 +59,7 @@ ASR_INCONCLUSIVE = "inconclusive"
 # This does not excuse the audio. It marks the ASR verdict as evidence nobody can collect,
 # so it cannot block a chapter; every other check still applies.
 ASR_MIN_VERIFIABLE_CHARS = 10
+ASR_UNVERIFIABLE_SHORT_TEXT = "ASR_UNVERIFIABLE_SHORT_TEXT"
 
 
 def asr_verdict_is_unverifiable(text: str) -> bool:

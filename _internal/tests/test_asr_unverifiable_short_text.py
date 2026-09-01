@@ -11,7 +11,11 @@ from __future__ import annotations
 
 import inspect
 
-from ebook_reader.asr import ASR_MIN_VERIFIABLE_CHARS, asr_verdict_is_unverifiable
+from ebook_reader.asr import (
+    ASR_MIN_VERIFIABLE_CHARS,
+    ASR_UNVERIFIABLE_SHORT_TEXT,
+    asr_verdict_is_unverifiable,
+)
 from ebook_reader.pipeline import BookPipeline
 
 
@@ -40,11 +44,34 @@ def test_the_threshold_sits_at_the_measured_cliff() -> None:
     assert ASR_MIN_VERIFIABLE_CHARS == 10
 
 
-def test_only_asr_warnings_are_forgiven() -> None:
-    """Everything that can still answer on two syllables keeps its power to block."""
+def test_the_segment_is_verified_with_a_warning_not_failed() -> None:
+    """A failed segment blocks its chapter on status alone, whatever the warning says."""
+    source = inspect.getsource(BookPipeline._verify_chapter_audio)
+    branch = source[source.index("asr_verdict_is_unverifiable") :]
+    branch = branch[: branch.index("warning = (")]
+    assert "mark_verified" in branch
+    assert "mark_failed" not in branch
+    assert "QUALITY_VERDICT_PASS" in branch
+
+
+def test_the_warning_does_not_block_a_high_quality_chapter() -> None:
+    """Otherwise the segment publishes and the chapter still refuses it."""
+    from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
+
+    assert ASR_UNVERIFIABLE_SHORT_TEXT in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
+
+
+def test_the_decision_lives_in_exactly_one_place() -> None:
+    """The chapter-level gate must not re-implement the same judgement."""
     source = inspect.getsource(BookPipeline._high_quality_blocking_segment_warnings)
-    assert 'code.startswith("ASR_")' in source
-    assert "asr_verdict_is_unverifiable" in source
+    assert "asr_verdict_is_unverifiable" not in source
+
+
+def test_other_warnings_still_block() -> None:
+    from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
+
+    for code in ("ASR_SEVERE_MISMATCH", "ASR_MISMATCH_UNRESOLVED", "SEGMENT_FAILED"):
+        assert code not in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
 
 
 def test_a_long_segment_is_never_forgiven() -> None:
