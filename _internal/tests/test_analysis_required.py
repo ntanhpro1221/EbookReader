@@ -14,6 +14,7 @@ import requests
 
 from ebook_reader import database as database_module
 from ebook_reader.analysis import (
+    LOCAL_NAME_FALLBACK_CONFIDENCE,
     ADDRESSEE_REPAIR_NOTE,
     ANALYSIS_LEDGER_POLICY_VERSION,
     ANALYSIS_OUTPUT_MAX_TOKENS,
@@ -3372,10 +3373,15 @@ def test_name_pronunciation_rejects_invalid_confidence_without_locking(
         },
     )
 
-    with pytest.raises(RuntimeError, match="could not resolve"):
-        analyzer.reconcile_name_pronunciations()
+    analyzer.reconcile_name_pronunciations()
 
-    assert not any(row["surface"] == "Wolf" for row in db.pronunciations)
+    # The invalid confidence is refused. What gets stored comes from CMUdict after every
+    # other route failed, at fallback confidence - so the guard is on the number, not on
+    # the string: the dictionary happens to render Wolf as "Uôn" too, which is what the
+    # model claimed, and asserting on the text would have proved nothing either way.
+    stored = [row for row in db.pronunciations if row["surface"] == "Wolf"]
+    assert stored, "a short name with a dictionary entry should not block the book"
+    assert float(stored[-1]["confidence"]) == LOCAL_NAME_FALLBACK_CONFIDENCE
 
 
 def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> None:
@@ -3540,16 +3546,28 @@ def test_uncertain_short_names_are_left_verbatim_when_reconciliation_fails(
 
     monkeypatch.setattr(analyzer, "_stream_json_response", response)
 
-    assert analyzer.reconcile_name_pronunciations() == 1
+    analyzer.reconcile_name_pronunciations()
     assert attempts == 3
-    assert {
-        row["surface"]: row["spoken_form"]
-        for row in db.pronunciations
-    } == {"Vaelorian": "Ve-lô-rian"}
+
+    # A short name is only left unread when nothing can read it. When the model fails, a
+    # dictionary entry is used rather than the book being blocked - Wolf, Mag and Sol are
+    # in CMUdict and come out "Uôn", "Méc", "Xan"; Twal is not in it and stays unresolved.
+    #
+    # This used to skip all four. The caution was right while the converter dropped any
+    # coda it did not know - it turned "Card" into "Ca" - and stopped being right once the
+    # converter was rebuilt from the phonology.
+    stored = {row["surface"]: row["spoken_form"] for row in db.pronunciations}
+    assert stored["Wolf"] == "Uôn"
+    assert stored["Mag"] == "Méc"
+    assert stored["Sol"] == "Xan"
+    assert "Twal" not in stored
     skipped = next(
         event for event in db.events if event[1] == "NAME_PRONUNCIATION_UNCERTAIN_SKIPPED"
     )
-    assert set(skipped[3]["surfaces"]) == {"Wolf", "Mag", "Twal", "Sol"}
+    assert set(skipped[3]["surfaces"]) == {"Twal"}
+    assert any(
+        event[1] == "NAME_PRONUNCIATION_FROM_DICTIONARY" for event in db.events
+    ), "a dictionary reading is weaker evidence and has to be reported for review"
 
 
 def test_high_quality_blocks_unresolved_short_name_pronunciation(monkeypatch) -> None:
@@ -3559,11 +3577,11 @@ def test_high_quality_blocks_unresolved_short_name_pronunciation(monkeypatch) ->
             "id": 1,
             "stable_id": "c1s1",
             "chapter_id": 1,
-            "text": "Wolf gặp Mag trong đại sảnh.",
+            "text": "Twal gặp Zyrk trong đại sảnh.",
             "kind_hint": "dialogue",
             "kind": "dialogue",
             "status": "analyzed",
-            "speaker": "Wolf",
+            "speaker": "Twal",
         }
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
@@ -3578,6 +3596,9 @@ def test_high_quality_blocks_unresolved_short_name_pronunciation(monkeypatch) ->
         ),
     )
 
+    # Names invented for the book, so CMUdict has nothing for them and no route is left.
+    # A name the dictionary does know is resolved instead of blocking, which is what the
+    # sibling test covers; what must still block is a name nothing at all can read.
     with pytest.raises(RuntimeError, match="High-quality pronunciation QA could not resolve"):
         analyzer.reconcile_name_pronunciations()
 

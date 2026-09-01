@@ -3537,6 +3537,34 @@ def _short_name_cmu_is_safe(pronunciation: str) -> bool:
     return _arpabet_phones(pronunciation) in ARPABET_PRONUNCIATION_OVERRIDES
 
 
+def _short_name_cmu_reading(candidate: dict[str, Any]) -> str | None:
+    """A dictionary reading for a short name, when the dictionary has one that holds up.
+
+    A short name is kept out of the CMUdict path upstream because it needs contextual
+    review - "May" the name is not "may" the verb - and that caution is right when choosing
+    a reading outright. It is wrong once every other route has failed, because the
+    alternative there is not a better reading but refusing to read the book: a four-letter
+    word, "Deck", stopped a ten-chapter run while CMUdict held D EH1 K and the converter
+    was ready to render "Đéc".
+
+    This was tried once and reverted, because the converter of the day turned "Card" into
+    "Ca" - it dropped any coda it had no entry for. That is fixed: readings now come out
+    "Cát", "Đéc", "Kinh". The objection was to the converter, not to the idea.
+
+    CMUDICT_CONTEXT_ONLY still excludes the homographs where the dictionary word actively
+    misleads.
+    """
+    surface = str(candidate["surface"])
+    pronunciation = str(candidate.get("cmu_pronunciation", ""))
+    if not pronunciation or _name_candidate_key(surface) in CMUDICT_CONTEXT_ONLY:
+        return None
+    try:
+        spoken_form = _cmu_pronunciation_to_vietnamese(surface, pronunciation)
+    except ValueError:
+        return None
+    return spoken_form if _valid_vietnamese_spoken_form(surface, spoken_form) else None
+
+
 def _short_name_local_fallback_is_safe(candidate: dict[str, Any]) -> bool:
     surface = str(candidate["surface"])
     if (
@@ -7796,15 +7824,20 @@ class OllamaBookAnalyzer:
                 remaining = [str(candidate["surface"]) for candidate in pending.values()]
                 fallback_readings: dict[str, str] = {}
                 skipped_surfaces: list[str] = []
+                dictionary_readings: dict[str, str] = {}
                 for candidate in pending.values():
                     surface = str(candidate["surface"])
+                    dictionary_reading = _short_name_cmu_reading(candidate)
                     if (
                         bool(candidate.get("requires_contextual_review"))
+                        and dictionary_reading is None
                         and not _short_name_local_fallback_is_safe(candidate)
                     ):
                         skipped_surfaces.append(surface)
                         continue
-                    spoken_form = _local_name_fallback(surface)
+                    spoken_form = dictionary_reading or _local_name_fallback(surface)
+                    if dictionary_reading is not None:
+                        dictionary_readings[surface] = spoken_form
                     checkpoint_pronunciation(
                         candidate,
                         spoken_form,
@@ -7832,6 +7865,18 @@ class OllamaBookAnalyzer:
                             "High-quality pronunciation QA could not resolve: "
                             + ", ".join(skipped_surfaces)
                         )
+                if dictionary_readings:
+                    dictionary_message = (
+                        "Tên ngắn dùng cách đọc suy từ từ điển CMU vì Qwen thất bại: "
+                        f"{dictionary_readings}. Nên nghe lại."
+                    )
+                    self.log(dictionary_message)
+                    self.db.event(
+                        "warning",
+                        "NAME_PRONUNCIATION_FROM_DICTIONARY",
+                        dictionary_message,
+                        {"batch_index": batch_index, "readings": dictionary_readings},
+                    )
                 if fallback_readings:
                     message = (
                         f"Qwen không tạo được cách đọc hợp lệ ở batch {batch_index} cho {remaining}: "
