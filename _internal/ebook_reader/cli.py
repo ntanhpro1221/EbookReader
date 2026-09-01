@@ -34,6 +34,7 @@ from .database import (
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
 )
+from .character_registry import normalize_name
 from .io_utils import natural_key, sha256_file, slugify
 from .models import BookStatus, ChapterStatus, ProjectPaths
 from .project import create_or_open_project, infer_book_title
@@ -836,6 +837,66 @@ def _command_log(args: argparse.Namespace) -> CommandResult:
     return CommandResult(data={"project_root": str(paths.root), "lines": int(args.lines), "log": content})
 
 
+LISTENER_PRONUNCIATION_SOURCE = "listener_choice"
+
+
+def _command_pronounce(args: argparse.Namespace) -> CommandResult:
+    """Pin how a name is read, on a listener's say-so rather than a model's.
+
+    A four-letter word once stopped a ten-chapter book: "Deck" was refused by the CMUdict
+    path for needing contextual review and by the local fallback for having a CMUdict
+    entry, and high-quality analysis will not publish a name it could not resolve. The
+    caution is right - a character's name mispronounced through a whole book is worse than
+    the reader saying the Latin letters - but there was no way for a person to settle it
+    except editing SQLite by hand.
+
+    Locked, so nothing downstream asks again, and recorded under its own source so a human
+    decision is never mistaken for a transliteration the machine produced.
+    """
+    paths = _existing_project_paths(args.project_root)
+    surface = str(args.surface).strip()
+    spoken = str(args.spoken).strip()
+    if not surface or not spoken:
+        return CommandResult(
+            data={},
+            exit_code=EXIT_USAGE,
+            error="--surface and --spoken must both be non-empty",
+        )
+    database = ProjectDB(paths.db)
+    before = {
+        str(row["surface"]): dict(row)
+        for row in database.list_pronunciations(0.0)
+        if str(row["surface"]) == surface
+    }
+    database.upsert_pronunciation(
+        surface=surface,
+        normalized_surface=normalize_name(surface),
+        spoken_form=spoken,
+        confidence=1.0,
+        source=LISTENER_PRONUNCIATION_SOURCE,
+        locked=True,
+    )
+    database.event(
+        "info",
+        "PRONUNCIATION_SET_BY_LISTENER",
+        f"Người nghe chốt cách đọc {surface!r} là {spoken!r}.",
+        {"surface": surface, "spoken_form": spoken},
+    )
+    return CommandResult(
+        data={
+            "project_root": str(paths.root),
+            "surface": surface,
+            "spoken_form": spoken,
+            "locked": True,
+            "source": LISTENER_PRONUNCIATION_SOURCE,
+            "replaced": bool(before),
+            "previous_spoken_form": (
+                str(next(iter(before.values()))["spoken_form"]) if before else None
+            ),
+        }
+    )
+
+
 def _command_validate(args: argparse.Namespace) -> CommandResult:
     result = validate_project(args.project_root, require_complete=bool(args.require_complete))
     if result["ok"]:
@@ -1079,6 +1140,16 @@ def build_parser() -> argparse.ArgumentParser:
     log.add_argument("--lines", type=int, default=100)
     _add_json_argument(log)
     log.set_defaults(handler=_command_log)
+
+    pronounce = subparsers.add_parser(
+        "pronounce",
+        help="Pin how a name is read, as a listener decision rather than a model guess",
+    )
+    pronounce.add_argument("project_root", type=Path)
+    pronounce.add_argument("--surface", required=True, help="The name as written")
+    pronounce.add_argument("--spoken", required=True, help="How it should be read aloud")
+    _add_json_argument(pronounce)
+    pronounce.set_defaults(handler=_command_pronounce)
 
     validate = subparsers.add_parser("validate", help="Validate locked inputs, SQLite, and committed output QA")
     validate.add_argument("project_root", type=Path)
