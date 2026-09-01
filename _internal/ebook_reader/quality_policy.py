@@ -21,7 +21,12 @@ from .runtime_contract import (
 
 QUALITY_POLICY_VERSION = 2
 HASH_CHUNK_BYTES = 1024 * 1024
-CHAPTER_QUALITY_STAGE = "chapter_post_encode_v1"
+# One name for the stage, defined where the rows are written. Two spellings of the same
+# string means the writer and the reader can be bumped apart, and a chapter would then
+# be checked against evidence recorded under a stage nobody looks up.
+from .database import (  # noqa: E402,F401 - re-exported under this module's name
+    CHAPTER_POST_ENCODE_QUALITY_STAGE as CHAPTER_QUALITY_STAGE,
+)
 SEGMENT_CONTENT_STAGE = "segment_asr_content_v1"
 TEXT_SEGMENTATION_STAGE = "text_segmentation_v1"
 ANALYSIS_CASTING_STAGE = "analysis_casting_v27"
