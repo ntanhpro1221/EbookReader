@@ -42,6 +42,34 @@ Bố cục hai thư mục làm việc này khả thi:
 | 10:35 | Ngưỡng lô tối thiểu = 3, đo ấm và lặp lại | `42edce1` |
 | 10:47 | Khởi động run 10 chương làm vừa công việc thật vừa đồng hồ đánh thức | — |
 
+### Chuỗi lỗi trong `_validate_analysis_rejection_evidence` (run 10 chương)
+
+Run 10 chương chạm vào những nhánh mà run 2 chương chưa từng chạm. Bốn lỗi liên tiếp, tất
+cả cùng một gốc: **quyết định chấp nhận được tính từ danh sách trường đầy đủ thay vì tập
+con nghe ra được**.
+
+| lỗi | mệnh đề hỏng | commit |
+|---|---|---|
+| `Rejected critic evidence is not exactly candidate-bound` | `accept_flag` | `7c36caa` |
+| `Rejected source-kind critic override is not source-bound` | `effective_accept` | `75f4cbe` |
+| `Rejected critic outcome does not match unresolved evidence` | đang chờ khai | — |
+
+**Cách rút ngắn chuỗi:** mỗi thông báo lỗi gộp 4–11 mệnh đề vào một câu mù, và bằng chứng
+nằm trong bộ nhớ chứ không trên đĩa — nên muốn biết mệnh đề nào hỏng phải chạy lại cả pha
+phân tích. Thêm phần khai tên mệnh đề biến mỗi lỗi từ *nhiều vòng đoán* thành *một vòng
+đọc*. Đây là thứ đáng làm trước tiên cho bất kỳ phép kiểm gộp nào còn lại.
+
+**Hai lần tôi đoán sai và bị test chặn**, ghi lại để không lặp:
+
+1. Bóp `unresolved_fields` về tập con chặn được → **4 test hỏng**. Đó là *sổ ghi bằng
+   chứng*, phải giữ đủ mọi trường; bóp nó là phá sổ ghi để chữa phán quyết.
+2. Suy `effective_accept` từ tập con chặn được → **test thứ 5 hỏng**, một dòng cố ý từ chối
+   chỉ vì `emotion`.
+
+Kết luận đúng chỉ lộ ra sau hai lần sai: cờ chấp nhận **không suy ra được theo chiều nào**;
+nó phải được *kiểm tính nhất quán* với hai hình dạng hợp lệ. Giờ `accept_flag_is_coherent`
+phục vụ cả hai cờ.
+
 ## Việc còn tồn, theo thứ tự sẽ làm
 
 1. Thiên lệch dư trong phép đo tốc độ: câu dày dấu vẫn dễ bị chặn hơn ~22 lần. Chưa thử mô
