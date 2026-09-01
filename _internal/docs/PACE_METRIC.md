@@ -77,10 +77,32 @@ không đủ mẫu để khớp riêng (chỉ 10 và 12 mẫu).
 
 Segment làm hỏng chương: 9,77 (**chặn**) → 21,67 (**đạt**).
 
-**Chưa sạch hẳn.** Câu dày dấu vẫn dễ bị chặn hơn câu thưa dấu khoảng **22 lần**, thay vì
-260 lần. Đó chính là phần tương quan dư +0,12. Ai muốn đi tiếp có thể thử khớp chi phí nghỉ
-riêng cho từng **lớp nhóm** (mô hình 3 lớp mới chỉ được thử trên từng dấu, chưa thử trên
-nhóm).
+**Chưa sạch hẳn**, và đã tìm hết cách rồi. Câu dày dấu vẫn dễ bị chặn hơn câu thưa dấu
+khoảng **22 lần**, thay vì 260 lần. Phần tương quan dư là +0,12.
+
+### Đã thử năm cấu trúc mô hình để khử nốt phần dư — đều thất bại
+
+| mô hình | R² | còn lệch |
+|---|---|---|
+| phẳng, mỗi dấu câu | 0,976 | +0,32 |
+| 3 lớp, mỗi dấu câu | 0,977 | +0,38 |
+| 3 lớp, theo **nhóm** | 0,976 | +0,28 |
+| **nhóm, một giá (đang dùng)** | 0,974 | **+0,119** |
+| nhóm + căn bậc hai độ dài | 0,974 | +0,102 |
+| nhóm + hằng số mỗi phát ngôn | 0,974 | +0,097 |
+
+Hai kết luận:
+
+1. **Mô hình 3 lớp bị bác hai lần** — trên từng dấu và trên nhóm. Cả hai lần nó khớp tốt
+   hơn theo R² và lệch tệ hơn. Nếu ai đó định thử lại vì "chắc phải phân biệt dấu chấm với
+   dấu phẩy chứ", thì đã thử rồi, hai lần, và sai cả hai.
+2. **Không có chi phí cố định mỗi phát ngôn.** Giả thuyết "câu dày dấu thường ngắn nên bị
+   im lặng đầu/cuối thổi phồng" nghe rất hợp lý, nhưng khớp ra hệ số **âm** (−0,052 s),
+   tức vô nghĩa về vật lý, và chỉ đổi được +0,119 thành +0,097.
+
+Phần dư +0,12 **không phải một số hạng nghỉ còn thiếu**. Nhiều khả năng văn bản dày dấu
+câu — danh sách, tiêu đề, thoại bị ngắt — thật sự được đọc hơi khác, chứ không chỉ nghỉ
+khác. Muốn đi tiếp thì phải có tai người nghe phân xử, không phải hồi quy thêm.
 
 ## Trần tỉ lệ nghỉ
 

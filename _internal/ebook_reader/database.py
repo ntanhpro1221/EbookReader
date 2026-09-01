@@ -224,6 +224,43 @@ AFFECT_CUE_DISAGREEMENT_BLOCKS = False
 INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
 
 
+def require_all(
+    message: str,
+    *clauses: tuple[str, bool],
+    _error: type[Exception] = RuntimeError,
+    **context: Any,
+) -> None:
+    """Raise naming the clauses that failed, instead of only that something did.
+
+    This file has 70 checks that combine three or more conditions into one `if` and one
+    message, several of them sixteen conditions long. Four fired in a single ten-chapter
+    run and each cost a full analysis pass to diagnose: the message says a binding broke
+    without saying which, and the evidence is in memory rather than on disk, so the only
+    way to look is to run it again.
+
+    Written as (name, failed) pairs rather than as an expression so the names cannot drift
+    from the conditions - there is one list, and it is both the check and the explanation.
+
+        require_all(
+            "Rejected critic evidence is not exactly candidate-bound",
+            ("text_sha256", item["text_sha256"] != segment["text_sha256"]),
+            ("accept_flag", not accept_flag_is_coherent(accept, deltas)),
+            deltas=deltas,
+        )
+
+    `context` is appended verbatim, for the values a reader needs and cannot recover.
+    """
+    failed = [name for name, did_fail in clauses if did_fail]
+    if not failed:
+        return
+    detail = "; ".join(f"{key}={value!r}" for key, value in sorted(context.items()))
+    # `_error` keeps the exception type each caller already raised. Converting a check
+    # must not quietly turn a ValueError into a RuntimeError - callers catch these.
+    raise _error(
+        f"{message}: {', '.join(failed)}" + (f"; {detail}" if detail else "")
+    )
+
+
 def critic_delta_fields(blocking: bool) -> tuple[str, ...]:
     """The fields a critic disagreement is counted over."""
     if blocking:
@@ -3617,8 +3654,11 @@ class ProjectDB:
                 raise ValueError(
                     "Analysis chapter heading candidate confidence must equal its host lock"
                 )
-            if (
-                set(critic_row) != {
+            # Fifteen conditions behind one message, on the row shape the whole critic
+            # contract rests on. See require_all.
+            require_all(
+                "Analysis critic rows do not map exactly to source IDs/hashes/delivery",
+                ("row_keys", set(critic_row) != {
                     "id",
                     "paragraph",
                     "hint",
@@ -3630,35 +3670,41 @@ class ProjectDB:
                     "next_text",
                     "candidate",
                     "batch_signature_count",
-                }
-                or str(critic_row.get("id", "")) != f"S{index:03d}"
-                or type(critic_row.get("paragraph")) is not int
-                or int(critic_row["paragraph"]) < 0
-                or not isinstance(critic_row.get("hint"), str)
-                or not isinstance(critic_row.get("previous_text"), str)
-                or not isinstance(critic_row.get("text"), str)
-                or not isinstance(critic_row.get("next_text"), str)
-                or type(critic_row.get("batch_signature_count")) is not int
-                or int(critic_row["batch_signature_count"]) < 1
-                or sha256_text(str(critic_row["text"]))
-                != str(segment["text_sha256"])
-                or not isinstance(candidate_delivery, dict)
-                or set(candidate_delivery) != set(ANALYSIS_CRITIC_DELIVERY_FIELDS)
-                or any(
+                }),
+                ("row_id", str(critic_row.get("id", "")) != f"S{index:03d}"),
+                ("paragraph_type", type(critic_row.get("paragraph")) is not int),
+                ("paragraph_range", int(critic_row["paragraph"]) < 0),
+                ("hint_type", not isinstance(critic_row.get("hint"), str)),
+                ("previous_text_type",
+                 not isinstance(critic_row.get("previous_text"), str)),
+                ("text_type", not isinstance(critic_row.get("text"), str)),
+                ("next_text_type", not isinstance(critic_row.get("next_text"), str)),
+                ("signature_count_type",
+                 type(critic_row.get("batch_signature_count")) is not int),
+                ("signature_count_range",
+                 int(critic_row["batch_signature_count"]) < 1),
+                ("text_sha256",
+                 sha256_text(str(critic_row["text"])) != str(segment["text_sha256"])),
+                ("candidate_type", not isinstance(candidate_delivery, dict)),
+                ("candidate_fields",
+                 set(candidate_delivery) != set(ANALYSIS_CRITIC_DELIVERY_FIELDS)),
+                ("candidate_values", any(
                     candidate_delivery[field] != segment["data"][field]
                     for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
-                )
-                or not (
+                )),
+                ("no_matching_row_shape", not (
                     is_adjacent_content_row
                     or is_previous_only_content_row
                     or is_narration_before_thought_content_row
                     or is_narration_before_next_paragraph_thought_content_row
                     or is_chapter_heading_row
-                )
-            ):
-                raise ValueError(
-                    "Analysis critic rows do not map exactly to source IDs/hashes/delivery"
-                )
+                )),
+                _error=ValueError,
+                row_id=critic_row.get("id"),
+                index=index,
+                source_role=source_role,
+                context_policy=context_policy,
+            )
         return commit_rows
 
     @classmethod
@@ -3914,25 +3960,38 @@ class ProjectDB:
                 source_text,
                 rule,
             )
-            if (
-                lock["policy_version"] != ANALYSIS_HOST_SEMANTIC_POLICY_VERSION
-                or lock["text_sha256"] != str(segment["text_sha256"])
-                or lock["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT
-                or lock["field"] != "emotion"
-                or lock["cue_class"] != rule_contract["cue_class"]
-                or allowed_emotions != expected_allowed_emotions
-                or candidate_emotion not in expected_allowed_emotions
-                or critic_row["candidate"]["emotion"] != candidate_emotion
-                or critic_row["candidate"]["kind"] != rule_contract["source_kind"]
-                or critic_row["hint"] != rule_contract["source_kind"]
-                or not isinstance(related_stable_id, str)
-                or not isinstance(related_text_sha256, str)
-                or requires_related
-                != bool(related_stable_id and related_text_sha256)
-                or bool(related_stable_id) != bool(related_text_sha256)
-                or not source_semantics_valid
-            ):
-                raise RuntimeError("Host semantic clearance is not source-bound")
+            # Fifteen conditions shared one message. The lock is derived here and not
+            # written anywhere a reader can inspect, so a mismatch meant another full
+            # analysis pass to learn which field moved.
+            require_all(
+                "Host semantic clearance is not source-bound",
+                ("policy_version",
+                 lock["policy_version"] != ANALYSIS_HOST_SEMANTIC_POLICY_VERSION),
+                ("text_sha256", lock["text_sha256"] != str(segment["text_sha256"])),
+                ("source_role", lock["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT),
+                ("field", lock["field"] != "emotion"),
+                ("cue_class", lock["cue_class"] != rule_contract["cue_class"]),
+                ("allowed_emotions", allowed_emotions != expected_allowed_emotions),
+                ("candidate_emotion_allowed",
+                 candidate_emotion not in expected_allowed_emotions),
+                ("candidate_emotion",
+                 critic_row["candidate"]["emotion"] != candidate_emotion),
+                ("candidate_kind",
+                 critic_row["candidate"]["kind"] != rule_contract["source_kind"]),
+                ("hint", critic_row["hint"] != rule_contract["source_kind"]),
+                ("related_stable_id_type", not isinstance(related_stable_id, str)),
+                ("related_sha256_type", not isinstance(related_text_sha256, str)),
+                ("requires_related",
+                 requires_related != bool(related_stable_id and related_text_sha256)),
+                ("related_pair",
+                 bool(related_stable_id) != bool(related_text_sha256)),
+                ("source_semantics", not source_semantics_valid),
+                stable_id=stable_id,
+                rule=str(lock["rule"]),
+                candidate_emotion=candidate_emotion,
+                allowed=sorted(allowed_emotions or []),
+                expected_allowed=sorted(expected_allowed_emotions or []),
+            )
         semantic_source_kind_ids = {
             stable_id
             for stable_id, lock in semantic_locks.items()
@@ -9291,22 +9350,27 @@ class ProjectDB:
         ).fetchone()
         if final_check is None or policy is None:
             raise RuntimeError("promoted candidate final policy evidence is missing")
-        if (
-            str(final_check["scope"]) != QUALITY_SCOPE_SEGMENT
-            or str(final_check["stage"]) != SEGMENT_AUDIO_QUALITY_STAGE
-            or int(final_check["segment_id"] or -1) != int(candidate["segment_id"])
-            or final_check["chapter_id"] is not None
-            or str(final_check["artifact_sha256"]).casefold()
-            != str(candidate["wav_sha256"]).casefold()
-            or str(final_check["policy_hash"]) != str(candidate["policy_hash"])
-            or int(final_check["policy_version"]) != int(policy["policy_version"])
-            or str(final_check["verdict"]) != QUALITY_VERDICT_PASS
-            or str(final_check["failure_codes_json"]) != "[]"
-            or int(final_check["attempt"]) < 1
-        ):
-            raise RuntimeError(
-                "promoted candidate final quality checkpoint is not exact"
-            )
+        require_all(
+            "promoted candidate final quality checkpoint is not exact",
+            ("scope", str(final_check["scope"]) != QUALITY_SCOPE_SEGMENT),
+            ("stage", str(final_check["stage"]) != SEGMENT_AUDIO_QUALITY_STAGE),
+            ("segment_id",
+             int(final_check["segment_id"] or -1) != int(candidate["segment_id"])),
+            ("chapter_id", final_check["chapter_id"] is not None),
+            ("artifact_sha256", str(final_check["artifact_sha256"]).casefold()
+             != str(candidate["wav_sha256"]).casefold()),
+            ("policy_hash",
+             str(final_check["policy_hash"]) != str(candidate["policy_hash"])),
+            ("policy_version",
+             int(final_check["policy_version"]) != int(policy["policy_version"])),
+            ("verdict", str(final_check["verdict"]) != QUALITY_VERDICT_PASS),
+            ("failure_codes", str(final_check["failure_codes_json"]) != "[]"),
+            ("attempt", int(final_check["attempt"]) < 1),
+            candidate_id=int(candidate["id"]),
+            quality_check_id=int(final_check["id"]),
+            verdict=str(final_check["verdict"]),
+            failure_codes=str(final_check["failure_codes_json"]),
+        )
         final_metrics = self._json_object(
             final_check["metrics_json"],
             "promoted candidate final metrics",
@@ -9729,48 +9793,48 @@ class ProjectDB:
                 None,
             )
             if existing is not None:
-                if (
-                    str(existing["incumbent_sha256"]) != normalized_incumbent
-                    or int(existing["expected_voice_profile_id"])
-                    != expected_voice_profile_id
-                    or int(existing["expected_pitch_semitones"])
-                    != expected_pitch_semitones
-                    or str(existing["pronunciation_delivery_variant"])
-                    != normalized_pronunciation_variant
-                    or str(existing["expected_spoken_text_sha256"])
-                    != normalized_expected_spoken_sha256
-                    or int(existing["repair_budget"]) != normalized_max
-                    or str(existing["generation_strategy"])
-                    != normalized_generation_strategy
-                    or str(existing["postprocess_profile"])
-                    != normalized_postprocess_profile
-                    or (
-                        int(existing["postprocess_source_candidate_id"])
-                        if existing["postprocess_source_candidate_id"] is not None
-                        else None
-                    )
-                    != normalized_postprocess_source_candidate_id
-                    or (
-                        str(existing["postprocess_source_sha256"])
-                        if existing["postprocess_source_sha256"] is not None
-                        else None
-                    )
-                    != normalized_postprocess_source_sha256
-                    or bool(existing["perceptual_required"])
-                    != normalized_perceptual_required
-                    or str(existing["candidate_repair_requirement"])
-                    != normalized_repair_requirement
-                    or (
-                        int(existing["repair_trigger_check_id"])
-                        if existing["repair_trigger_check_id"] is not None
-                        else None
-                    )
-                    != normalized_repair_trigger_check_id
-                    or int(existing["generation_seed"]) != int(generation_seed)
-                    or int(existing["tts_attempt"]) != normalized_attempt
-                    or str(existing["wav_path"]) != normalized_path
-                ):
-                    raise RuntimeError("candidate resume metadata differs from its durable checkpoint")
+                # Sixteen conditions used to share one message and the row is not written
+                # anywhere a reader can inspect, so a mismatch here meant rerunning to learn
+                # which field moved. See require_all.
+                require_all(
+                    "candidate resume metadata differs from its durable checkpoint",
+                    ("incumbent_sha256", str(existing["incumbent_sha256"]) != normalized_incumbent),
+                    ("voice_profile_id", int(existing["expected_voice_profile_id"]) != expected_voice_profile_id),
+                    ("pitch_semitones", int(existing["expected_pitch_semitones"]) != expected_pitch_semitones),
+                    ("pronunciation_variant", str(existing["pronunciation_delivery_variant"])
+                     != normalized_pronunciation_variant),
+                    ("spoken_text_sha256", str(existing["expected_spoken_text_sha256"])
+                     != normalized_expected_spoken_sha256),
+                    ("repair_budget", int(existing["repair_budget"]) != normalized_max),
+                    ("generation_strategy", str(existing["generation_strategy"]) != normalized_generation_strategy),
+                    ("postprocess_profile", str(existing["postprocess_profile"]) != normalized_postprocess_profile),
+                    ("postprocess_source_candidate_id", (
+                         int(existing["postprocess_source_candidate_id"])
+                         if existing["postprocess_source_candidate_id"] is not None
+                         else None
+                     )
+                     != normalized_postprocess_source_candidate_id),
+                    ("postprocess_source_sha256", (
+                         str(existing["postprocess_source_sha256"])
+                         if existing["postprocess_source_sha256"] is not None
+                         else None
+                     )
+                     != normalized_postprocess_source_sha256),
+                    ("perceptual_required", bool(existing["perceptual_required"]) != normalized_perceptual_required),
+                    ("repair_requirement", str(existing["candidate_repair_requirement"])
+                     != normalized_repair_requirement),
+                    ("repair_trigger_check_id", (
+                         int(existing["repair_trigger_check_id"])
+                         if existing["repair_trigger_check_id"] is not None
+                         else None
+                     )
+                     != normalized_repair_trigger_check_id),
+                    ("generation_seed", int(existing["generation_seed"]) != int(generation_seed)),
+                    ("tts_attempt", int(existing["tts_attempt"]) != normalized_attempt),
+                    ("wav_path", str(existing["wav_path"]) != normalized_path),
+                    candidate_id=int(existing["id"]),
+                    repair_round=normalized_round,
+                )
                 return existing
 
             ordinary_rows = [

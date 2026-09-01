@@ -133,8 +133,14 @@ def prosody_targets(
 # from the median rather than the mean so a handful of bad frames cannot drag the centre.
 OCTAVE_ERROR_SEMITONES = 8.0
 MAX_DEVIATION_SEMITONES = 12.0
-PITCH_FLOOR_HZ = 60.0
-PITCH_CEILING_HZ = 600.0
+# The range a human voice can occupy, and the only thing a shifted pitch may be clamped
+# to. Imported rather than restated: tts.py clamps the formant warp against the same
+# fact, and the one time these two disagreed a word stopped being a word. A second copy
+# is not a second opinion, it is a chance to drift.
+from .tts import (  # noqa: E402 - deferred to the bottom of the import graph
+    VOICE_VARIANT_PITCH_CEILING_HZ as PITCH_CEILING_HZ,
+    VOICE_VARIANT_PITCH_FLOOR_HZ as PITCH_FLOOR_HZ,
+)
 MANIPULATION_TIME_STEP = 0.01
 
 
