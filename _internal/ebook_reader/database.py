@@ -224,7 +224,12 @@ AFFECT_CUE_DISAGREEMENT_BLOCKS = False
 INAUDIBLE_DELIVERY_FIELDS = frozenset({"emotion", "intensity"})
 
 
-def require_all(message: str, *clauses: tuple[str, bool], **context: Any) -> None:
+def require_all(
+    message: str,
+    *clauses: tuple[str, bool],
+    _error: type[Exception] = RuntimeError,
+    **context: Any,
+) -> None:
     """Raise naming the clauses that failed, instead of only that something did.
 
     This file has 70 checks that combine three or more conditions into one `if` and one
@@ -249,7 +254,9 @@ def require_all(message: str, *clauses: tuple[str, bool], **context: Any) -> Non
     if not failed:
         return
     detail = "; ".join(f"{key}={value!r}" for key, value in sorted(context.items()))
-    raise RuntimeError(
+    # `_error` keeps the exception type each caller already raised. Converting a check
+    # must not quietly turn a ValueError into a RuntimeError - callers catch these.
+    raise _error(
         f"{message}: {', '.join(failed)}" + (f"; {detail}" if detail else "")
     )
 
@@ -3625,8 +3632,11 @@ class ProjectDB:
                 raise ValueError(
                     "Analysis chapter heading candidate confidence must equal its host lock"
                 )
-            if (
-                set(critic_row) != {
+            # Fifteen conditions behind one message, on the row shape the whole critic
+            # contract rests on. See require_all.
+            require_all(
+                "Analysis critic rows do not map exactly to source IDs/hashes/delivery",
+                ("row_keys", set(critic_row) != {
                     "id",
                     "paragraph",
                     "hint",
@@ -3638,35 +3648,41 @@ class ProjectDB:
                     "next_text",
                     "candidate",
                     "batch_signature_count",
-                }
-                or str(critic_row.get("id", "")) != f"S{index:03d}"
-                or type(critic_row.get("paragraph")) is not int
-                or int(critic_row["paragraph"]) < 0
-                or not isinstance(critic_row.get("hint"), str)
-                or not isinstance(critic_row.get("previous_text"), str)
-                or not isinstance(critic_row.get("text"), str)
-                or not isinstance(critic_row.get("next_text"), str)
-                or type(critic_row.get("batch_signature_count")) is not int
-                or int(critic_row["batch_signature_count"]) < 1
-                or sha256_text(str(critic_row["text"]))
-                != str(segment["text_sha256"])
-                or not isinstance(candidate_delivery, dict)
-                or set(candidate_delivery) != set(ANALYSIS_CRITIC_DELIVERY_FIELDS)
-                or any(
+                }),
+                ("row_id", str(critic_row.get("id", "")) != f"S{index:03d}"),
+                ("paragraph_type", type(critic_row.get("paragraph")) is not int),
+                ("paragraph_range", int(critic_row["paragraph"]) < 0),
+                ("hint_type", not isinstance(critic_row.get("hint"), str)),
+                ("previous_text_type",
+                 not isinstance(critic_row.get("previous_text"), str)),
+                ("text_type", not isinstance(critic_row.get("text"), str)),
+                ("next_text_type", not isinstance(critic_row.get("next_text"), str)),
+                ("signature_count_type",
+                 type(critic_row.get("batch_signature_count")) is not int),
+                ("signature_count_range",
+                 int(critic_row["batch_signature_count"]) < 1),
+                ("text_sha256",
+                 sha256_text(str(critic_row["text"])) != str(segment["text_sha256"])),
+                ("candidate_type", not isinstance(candidate_delivery, dict)),
+                ("candidate_fields",
+                 set(candidate_delivery) != set(ANALYSIS_CRITIC_DELIVERY_FIELDS)),
+                ("candidate_values", any(
                     candidate_delivery[field] != segment["data"][field]
                     for field in ANALYSIS_CRITIC_DELIVERY_FIELDS
-                )
-                or not (
+                )),
+                ("no_matching_row_shape", not (
                     is_adjacent_content_row
                     or is_previous_only_content_row
                     or is_narration_before_thought_content_row
                     or is_narration_before_next_paragraph_thought_content_row
                     or is_chapter_heading_row
-                )
-            ):
-                raise ValueError(
-                    "Analysis critic rows do not map exactly to source IDs/hashes/delivery"
-                )
+                )),
+                _error=ValueError,
+                row_id=critic_row.get("id"),
+                index=index,
+                source_role=source_role,
+                context_policy=context_policy,
+            )
         return commit_rows
 
     @classmethod
@@ -3922,25 +3938,38 @@ class ProjectDB:
                 source_text,
                 rule,
             )
-            if (
-                lock["policy_version"] != ANALYSIS_HOST_SEMANTIC_POLICY_VERSION
-                or lock["text_sha256"] != str(segment["text_sha256"])
-                or lock["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT
-                or lock["field"] != "emotion"
-                or lock["cue_class"] != rule_contract["cue_class"]
-                or allowed_emotions != expected_allowed_emotions
-                or candidate_emotion not in expected_allowed_emotions
-                or critic_row["candidate"]["emotion"] != candidate_emotion
-                or critic_row["candidate"]["kind"] != rule_contract["source_kind"]
-                or critic_row["hint"] != rule_contract["source_kind"]
-                or not isinstance(related_stable_id, str)
-                or not isinstance(related_text_sha256, str)
-                or requires_related
-                != bool(related_stable_id and related_text_sha256)
-                or bool(related_stable_id) != bool(related_text_sha256)
-                or not source_semantics_valid
-            ):
-                raise RuntimeError("Host semantic clearance is not source-bound")
+            # Fifteen conditions shared one message. The lock is derived here and not
+            # written anywhere a reader can inspect, so a mismatch meant another full
+            # analysis pass to learn which field moved.
+            require_all(
+                "Host semantic clearance is not source-bound",
+                ("policy_version",
+                 lock["policy_version"] != ANALYSIS_HOST_SEMANTIC_POLICY_VERSION),
+                ("text_sha256", lock["text_sha256"] != str(segment["text_sha256"])),
+                ("source_role", lock["source_role"] != ANALYSIS_SOURCE_ROLE_CONTENT),
+                ("field", lock["field"] != "emotion"),
+                ("cue_class", lock["cue_class"] != rule_contract["cue_class"]),
+                ("allowed_emotions", allowed_emotions != expected_allowed_emotions),
+                ("candidate_emotion_allowed",
+                 candidate_emotion not in expected_allowed_emotions),
+                ("candidate_emotion",
+                 critic_row["candidate"]["emotion"] != candidate_emotion),
+                ("candidate_kind",
+                 critic_row["candidate"]["kind"] != rule_contract["source_kind"]),
+                ("hint", critic_row["hint"] != rule_contract["source_kind"]),
+                ("related_stable_id_type", not isinstance(related_stable_id, str)),
+                ("related_sha256_type", not isinstance(related_text_sha256, str)),
+                ("requires_related",
+                 requires_related != bool(related_stable_id and related_text_sha256)),
+                ("related_pair",
+                 bool(related_stable_id) != bool(related_text_sha256)),
+                ("source_semantics", not source_semantics_valid),
+                stable_id=stable_id,
+                rule=str(lock["rule"]),
+                candidate_emotion=candidate_emotion,
+                allowed=sorted(allowed_emotions or []),
+                expected_allowed=sorted(expected_allowed_emotions or []),
+            )
         semantic_source_kind_ids = {
             stable_id
             for stable_id, lock in semantic_locks.items()

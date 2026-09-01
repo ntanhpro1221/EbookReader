@@ -64,7 +64,22 @@ def test_no_new_blind_compound_check_is_added() -> None:
             continue
         if len(node.body) == 1 and isinstance(node.body[0], ast.Raise):
             blind += 1
-    assert blind <= 69, (
+    assert blind <= 67, (
         f"{blind} checks combine three or more conditions behind one message; "
         "use require_all so the failing clause is named"
     )
+
+
+def test_it_keeps_the_callers_exception_type() -> None:
+    """Converting a check must not turn a ValueError into a RuntimeError."""
+    with pytest.raises(ValueError):
+        require_all("schema broke", ("a", True), _error=ValueError)
+    with pytest.raises(RuntimeError):
+        require_all("binding broke", ("a", True))
+
+
+def test_the_type_keyword_is_not_mistaken_for_context() -> None:
+    with pytest.raises(ValueError) as caught:
+        require_all("x", ("a", True), _error=ValueError, seed=7)
+    assert "_error" not in str(caught.value)
+    assert "seed=7" in str(caught.value)
