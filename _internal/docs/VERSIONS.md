@@ -639,3 +639,51 @@ là "Lu-si-en" ở chương này và "Lư-xi-ên" ở chương khác. Vi phạm 
 audit mất dấu file. Từ alpha.10, tạo project thẳng trong `_versions/<tag>/` bằng `--output-root`.
 
 **Output:** `D:\Novels\Audiobooks\texttmp_iter1_cbde22ef6b` (chapter 000–001).
+
+## v0.2.0-alpha.16 — 2026-09-01
+
+**Lần đầu một run đi trọn vẹn tới cùng.** 2/2 chương xuất MP3, exit 0, 76 verified + 3
+cảnh báo cần nghe lại. Trước đó `VERSIONS.md` ghi "với 915 chapter thì không chapter nào
+từng được publish".
+
+### Bốn lỗi chặn xuất bản, tất cả đều có sẵn từ trước
+
+Không lỗi nào do TTS song song gây ra — đã chứng minh bằng một run đối chứng chạy hoàn toàn
+tuần tự (`parallel_workers: 1`) thất bại với **đúng cùng một lỗi đầu tiên**.
+
+1. **Anchor phát âm lệch giữa hai biến thể** (`PRONUNCIATION_VARIANT_DRIFT.md`) — một cặp
+   tự mâu thuẫn ship cùng commit `f5c8dd2`. 17/79 segment chết tất định.
+2. **Cổng tốc độ đọc đo nhầm đại lượng** (`PACE_METRIC.md`) — nó đo mật độ dấu câu chứ không
+   đo tốc độ. Câu ngắt nghỉ đúng bị phạt nặng gấp 260 lần.
+3. **Cổng ASR chặn trên câu trả lời không ai lấy được** — Whisper không phiên âm nổi nhãn
+   2–3 ký tự và bịa ra câu kêu gọi đăng ký kênh YouTube. Ngưỡng 10 ký tự đo từ 4528 segment.
+4. **Cùng lỗi ASR đó ở nhánh thứ hai của cùng một hàm** — bản vá đầu chỉ chạm một trong hai.
+
+### Hiệu năng: TTS song song
+
+3 tiến trình, **2,16×**, GPU **23% → 76–90%** đo trong run thật. Đầu ra byte giống hệt bản
+tuần tự, chứng minh trên 9 segment thật qua đúng đường `synthesize_atomic`. Bất biến "chỉ
+tiến trình cha ghi SQLite" được bảo đảm bằng cấu trúc (`ReadOnlyVoiceDB`), không bằng quy ước.
+
+### Giọng
+
+Bé gái Ngọc Linh → Đoan Trang → Trúc Ly; bé trai Phạm Tuyên dẫn đầu. Đúc giọng trẻ em không
+phân biệt giới. Thanh Bình, Thái Sơn, Thục Đoan đồng hạng đáy. Cơ chế mới: **phán quyết của
+người nghe xếp trên mọi phép đo tính toán** — cần thiết vì các phép đo đã sai hai lần theo
+hai hướng ngược nhau trong cùng một phiên.
+
+### Bài học lặp đi lặp lại trong phiên này
+
+- **Một sự thật viết ở hai nơi** gây thêm hai lỗi nữa (nâng tổng lên năm trong lịch sử dự án):
+  bản vá ASR đầu tiên đặt cùng phán quyết ở hai lớp, và `publish_with_review` gọi tên nhánh
+  thay vì suy từ phán quyết nên nhánh mới âm thầm không xuất bản.
+- **Đo trên tập con sai thì kết luận ngược**: segment đầu tiên thử để chẩn lỗi phát âm lại
+  PASS vì tình cờ không chứa lớp dữ liệu gây lỗi.
+- **Benchmark quá ít việc thì đo tốc độ nạp model, không đo throughput**: 12 job báo 1,42×,
+  48 job báo 2,16×.
+- **Test soi văn bản mã nguồn là test dễ vỡ**: hỏng ba lần liên tiếp trong khi hành vi vẫn
+  đúng. Đã thay bằng unit test cho chính hàm quyết định.
+- **Một stand-in vi phạm vật lý là quả bom hẹn giờ**: audio giả trong test nhanh gấp 6 lần
+  người thật, im lặng suốt cho tới khi có người siết phép đo.
+
+**Output:** `D:\Novels\Audiobooks\_versions\v0.2.0-alpha.16\alpha16-pool_c05e09eb67`
