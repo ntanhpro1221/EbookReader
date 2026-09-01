@@ -155,6 +155,37 @@ Hai ví dụ người nghe đưa ra — `seed` → **"xít"** và `king` → **"
 chính bộ luật**, không phải được nhét vào bảng tra. `Michael` → "Mai-cồ" trước đây phải
 nằm trong bảng ngoại lệ thì giờ cũng tự rơi ra.
 
+## Bảng nguyên âm: đã kiểm, không cần sửa
+
+Nguồn thứ hai ([Sejong J. Univ. Lang. 22-2](https://www.sejongjul.org/archive/view_article?pid=jul-22-2-105))
+cho thứ tự ưu tiên khi chọn nguyên âm gần nhất:
+
+> IDENT-[±HIGH] >> IDENT-[±BACK] >> IDENT-[±ROUND]
+
+tức **giữ độ cao lưỡi trước, rồi vị trí trước/sau, tròn môi bỏ sau cùng**.
+
+Áp thứ tự đó vào bảng hiện tại thì thấy `AE → e` và `AH → a` "lệch". **Nhưng đó là lỗi của
+tôi, không phải của bảng**: để tính được chi phí tôi phải tự gán đặc trưng cao/thấp cho
+từng nguyên âm, và chính mấy giá trị tự gán đó sai.
+
+Kiểm lại bằng bằng chứng — **31 từ một âm tiết** đã được chấp nhận trong dự án:
+
+| âm Anh | dữ liệu | bảng đang dùng |
+|---|---|---|
+| AA | a ×6 | a ✓ |
+| EY | ây ×4 | ây ✓ |
+| AE | **e ×4** | e ✓ |
+| AO | o ×3 | o ✓ |
+| AY | ai ×3 | ai ✓ |
+| OW | ô ×2 | ô ✓ |
+| EH | e ×2 | e ✓ |
+
+**Không một ánh xạ nào lệch.** Nếu tôi sửa bảng theo phép tính đặc trưng ở trên thì đã đổi
+`AE` từ "e" sang "a" và làm hỏng bốn từ đang đúng.
+
+Bài học: một khung lý thuyết đúng vẫn cho kết luận sai nếu dữ liệu nạp vào nó là do mình
+tự nghĩ ra. Chỉ dùng nó khi có bảng đặc trưng từ nguồn, không phải từ trí nhớ.
+
 ## Còn hở
 
 1. **Nguyên âm không nhấn vẫn lệch một chút với tai người nghe.** `incredible` ra
