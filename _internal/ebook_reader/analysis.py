@@ -469,7 +469,7 @@ CMUDICT_PATH = Path(__file__).resolve().parent / "assets" / "cmudict.dict"
 ARPABET_VOWELS = frozenset(
     {
         "AA", "AE", "AH", "AO", "AW", "AY", "EH", "ER",
-        "EY", "IH", "IY", "OW", "OY", "UH", "UW",
+        "EY", "IH", "IY", "OW", "OY", "UH", "UW", "AX",
     }
 )
 ARPABET_PRONUNCIATION_OVERRIDES = {
@@ -534,6 +534,8 @@ ARPABET_VOWEL_READINGS = {
     "AA": "a",
     "AE": "e",
     "AH": "a",
+    # The schwa: mid-central, which is exactly what Vietnamese "ơ" is.
+    "AX": "ơ",
     "AO": "o",
     "AW": "ao",
     "AY": "ai",
@@ -580,7 +582,16 @@ ARPABET_CODAS = {
 }
 # After an r-coloured vowel a final d backs to -c: "card" is read "cạc", not "cát". This is
 # the one place the r survives at all - elsewhere it is dropped, as the data shows.
-ARPABET_CODA_AFTER_R = {"D": "c", "T": "c"}
+# Sonorants, for deciding which consonant of a final cluster survives.
+ARPABET_SONORANTS = frozenset({"L", "M", "N", "NG", "R", "W", "Y"})
+# Vietnamese writes final /k/ as -ch and final /ŋ/ as -nh, but only after i and ê. After
+# e the velar spellings are the correct ones - "éc" and "reng" are Vietnamese words while
+# "ếc" and "rênh" are not - so this covers /iː/ and /ɪ/ and stops there. Including /ɛ/ and
+# /æ/ turned "Deck" into "Đech" and "Rank" into "Renh".
+ARPABET_FRONT_VOWELS = frozenset({"IY", "IH"})
+# The vowel inserted to break an onset cluster Vietnamese cannot say: /ɤ/, written "ơ".
+# "Incredible" becomes "in-cờ-ri-đi-bồ", not "in-cre-di-bồ".
+ONSET_EPENTHESIS_VOWEL = "ơ"
 LATIN_NAME_VOWELS = frozenset("aeiouy")
 LATIN_NAME_VOWEL_READINGS = {
     "a": "a",
@@ -3038,11 +3049,27 @@ def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
 
 
 def _arpabet_phones(pronunciation: str) -> tuple[str, ...]:
-    return tuple(
-        re.sub(r"\d+$", "", phone.strip().upper())
-        for phone in pronunciation.split()
-        if phone.strip()
-    )
+    """ARPAbet phones with stress removed - except that unstressed AH becomes AX.
+
+    CMUdict writes both /ʌ/ (stressed, as in "cup") and /ə/ (the schwa of every unstressed
+    syllable) as AH, telling them apart only by the stress digit. Stripping the digit threw
+    that away and read both as "a", so *incredible* came out "in-cơ-re-đa-bồ" where the
+    schwa wants "ơ" - it is the mid-central vowel Vietnamese actually has.
+
+    Renaming it rather than threading stress through everything keeps every existing
+    comparison working: only the schwa needed distinguishing.
+    """
+    phones = []
+    for raw in pronunciation.split():
+        phone = raw.strip().upper()
+        if not phone:
+            continue
+        stress = re.search(r"(\d+)$", phone)
+        base = re.sub(r"\d+$", "", phone)
+        if base == "AH" and stress is not None and stress.group(1) == "0":
+            base = "AX"
+        phones.append(base)
+    return tuple(phones)
 
 
 def _arpabet_syllables(
@@ -3094,11 +3121,159 @@ def _arpabet_vowel_reading(
 ) -> str:
     if vowel == "AA" and coda[:1] == ("N",):
         return "ô"
-    if vowel == "AH" and coda[:1] == ("N",):
+    if vowel in {"AH", "AX"} and coda[:1] == ("N",):
         return "â"
-    if vowel == "AH" and coda[:1] == ("L",):
-        return "ồ" if onset == ("K",) else "e"
+    if vowel in {"AH", "AX"} and coda[:1] == ("L",):
+        # Syllabic /l/, as in the last syllable of "Michael" or "incredible". It carries
+        # the syllable by itself in English and Vietnamese has no such consonant, so it
+        # becomes the vowel: "Mai-cồ", "in-cờ-ri-đi-bồ". This used to apply only after K,
+        # which made it a special case for one name rather than a rule.
+        return "ồ"
     return ARPABET_VOWEL_READINGS[vowel]
+
+
+def _surviving_coda_phone(coda: tuple[str, ...]) -> str | None:
+    """Which consonant of a final cluster survives.
+
+    Vietnamese ends a syllable with one consonant, so a cluster loses all but one, and
+    which one is not arbitrary. Following the Optimality-Theory account of cluster
+    adaptation in Vietnamese (Sejong J. Univ. Lang. 18-1): an illicit segment goes first;
+    between a sonorant and an obstruent the sonorant survives (/valv/ becomes "van", and
+    English *golf* is "gôn" in Vietnamese for the same reason); an obstruent followed by a
+    sonorant keeps the obstruent (/kabl/ becomes "cáp"); and two obstruents keep the second
+    (/kɔʁd/ becomes "cót").
+
+    R is dropped throughout, which is also what non-rhotic English does - "card" is /kɑːd/
+    before it is anything Vietnamese.
+    """
+    usable = [phone for phone in coda if phone != "R" and phone in ARPABET_CODAS]
+    if not usable:
+        return None
+    if len(usable) == 1:
+        return usable[0]
+    first, second = usable[0], usable[1]
+    if first in ARPABET_SONORANTS and second not in ARPABET_SONORANTS:
+        return first
+    if first not in ARPABET_SONORANTS and second in ARPABET_SONORANTS:
+        return first
+    return second
+
+
+VIETNAMESE_ONSET_DIGRAPHS = ("ngh", "ng", "nh", "ch", "gh", "gi", "kh", "ph", "qu", "th", "tr")
+
+
+STOP_CODAS = ("ch", "c", "p", "t")
+
+
+GLIDE_LETTERS = "iouy"
+
+
+GLIDE_ONSET_READINGS = {"u", "o"}
+GLIDE_VOWEL_AFTER_W = {"u": "ô", "o": "oa"}
+
+
+def _resolve_glide_onset(onset_reading: str, vowel_reading: str) -> tuple[str, str]:
+    """Keep a /w/ onset from colliding with the vowel behind it.
+
+    Vietnamese has no syllable-initial /w/ consonant; [w] is the medial glide written o or
+    u between an onset and the rime - toán, huệ - and English loans follow that:
+    *Washington* is "Oa-sinh-tơn", *William* is "Uy-li-am".
+
+    Writing the glide "u" in front of a vowel that is also "u" produced "uu", which is not
+    a Vietnamese nucleus - *wolf* came out "Uun" instead of "uôn". The vowel moves to the
+    partner Vietnamese actually writes after a glide.
+    """
+    if onset_reading not in GLIDE_ONSET_READINGS:
+        return onset_reading, vowel_reading
+    if vowel_reading[:1] != onset_reading:
+        return onset_reading, vowel_reading
+    replacement = GLIDE_VOWEL_AFTER_W.get(vowel_reading)
+    if replacement is None:
+        return onset_reading, vowel_reading
+    return onset_reading, replacement
+
+
+def _reduce_glide_before_coda(nucleus: str, coda: str) -> str:
+    """Drop an off-glide that cannot stand before a final consonant.
+
+    A Vietnamese rime is a nucleus plus at most one consonant, and a nucleus that already
+    ends in an off-glide cannot take one: "ất" and "ót" are syllables, "ấyt" and "oít" are
+    not. English diphthongs routinely land in exactly that shape - *gate* renders "gây"
+    before the /t/ arrives - so the glide gives way to the consonant.
+
+    Only before a coda. Left alone, the same diphthong is perfectly good on its own: "gây",
+    "voi", "cây" are all words.
+    """
+    if not coda or len(nucleus) < 2:
+        return nucleus
+    base = unicodedata.normalize("NFD", nucleus[-1])[0].casefold()
+    if base not in GLIDE_LETTERS:
+        return nucleus
+    head = unicodedata.normalize("NFD", nucleus[-2])[0].casefold()
+    if head not in "aeiouy":
+        return nucleus
+    return nucleus[:-1]
+
+
+def _add_sac_tone(syllable: str) -> str:
+    """Give a stop-final syllable the tone Vietnamese orthography requires.
+
+    A syllable ending in p, t, c or ch can carry only sắc or nặng - never the unmarked
+    level tone - so "xit", "cat" and "đec" are not Vietnamese words at all. This is why a
+    listener writes *seed* as "xít" rather than "xit".
+
+    Sắc is chosen as the shorter of the two and the one these borrowings take. The mark
+    lands on a vowel that already carries a quality diacritic when there is one - "ây"
+    becomes "ấy", not "âý" - and otherwise on the last vowel of the nucleus.
+    """
+    coda = next((coda for coda in STOP_CODAS if syllable.endswith(coda)), None)
+    if coda is None:
+        return syllable
+    nucleus = syllable[: -len(coda)]
+    decomposed = unicodedata.normalize("NFD", nucleus)
+    if any(character in "̣́̀̃̉" for character in decomposed):
+        return syllable
+    quality = [index for index, character in enumerate(nucleus) if character in "âêôơưă"]
+    vowels = [
+        index
+        for index, character in enumerate(nucleus)
+        if unicodedata.normalize("NFD", character)[0].casefold() in "aeiouy"
+    ]
+    target = quality[0] if quality else (vowels[-1] if vowels else None)
+    if target is None:
+        return syllable
+    accented = unicodedata.normalize(
+        "NFC", unicodedata.normalize("NFD", nucleus[target]) + "́"
+    )
+    return nucleus[:target] + accented + nucleus[target + 1 :] + coda
+
+
+def _split_illegal_onset(reading: str) -> tuple[list[str], str]:
+    """Break an onset Vietnamese cannot pronounce into syllables it can.
+
+    Vietnamese allows no onset cluster at all beyond /Cw/, so "cr" and "bl" are not
+    pronounceable as written. The repair, per the OT account of cluster adaptation, is
+    epenthesis or deletion; a listener asked for epenthesis, and gave the shape of it:
+    "incredible" is read "in-cờ-ri-đi-bồ", the /k/ carried off into its own syllable on an
+    inserted /ɤ/ rather than deleted.
+
+    Returns the syllables peeled off the front, and what remains as a real onset.
+    """
+    peeled: list[str] = []
+    remaining = reading
+    while remaining and remaining not in VIETNAMESE_SYLLABLE_ONSETS:
+        head = next(
+            (digraph for digraph in VIETNAMESE_ONSET_DIGRAPHS if remaining.startswith(digraph)),
+            remaining[0],
+        )
+        rest = remaining[len(head) :]
+        if not rest or head not in VIETNAMESE_SYLLABLE_ONSETS:
+            # Nothing legal to peel; leave it for the validator to reject rather than
+            # inventing a syllable that is not in the word.
+            return peeled, remaining
+        peeled.append(head + ONSET_EPENTHESIS_VOWEL)
+        remaining = rest
+    return peeled, remaining
 
 
 def _arpabet_coda_reading(
@@ -3106,16 +3281,23 @@ def _arpabet_coda_reading(
     vowel: str,
     coda: tuple[str, ...],
 ) -> str:
-    if vowel == "AH" and coda[:1] == ("L",):
-        return "" if onset == ("K",) else "n"
-    if coda[:1] == ("R",) and len(coda) > 1:
-        after_r = next(
-            (ARPABET_CODA_AFTER_R[phone] for phone in coda[1:] if phone in ARPABET_CODA_AFTER_R),
-            None,
-        )
-        if after_r is not None:
-            return after_r
-    return next((ARPABET_CODAS[phone] for phone in coda if phone in ARPABET_CODAS), "")
+    if vowel in {"AH", "AX"} and coda[:1] == ("L",):
+        # A syllabic /l/ has no vowel of its own to lean on, so Vietnamese takes it as one:
+        # the project already reads Michael as "Mai-cồ", not "Mai-cơn". Handled in the
+        # vowel, so nothing is left for the coda.
+        return ""
+    phone = _surviving_coda_phone(coda)
+    if phone is None:
+        return ""
+    reading = ARPABET_CODAS[phone]
+    # After a front vowel Vietnamese writes final /k/ as -ch and final /ŋ/ as -nh; the
+    # velar spellings simply do not occur there. This is why "King" has to be "Kinh".
+    if vowel in ARPABET_FRONT_VOWELS:
+        if reading == "c":
+            return "ch"
+        if reading == "ng":
+            return "nh"
+    return reading
 
 
 def _latin_name_vowel_groups(value: str) -> list[tuple[int, int]]:
@@ -3238,7 +3420,7 @@ def _local_name_fallback(surface: str) -> str:
             + _latin_name_coda_reading(coda)
             for onset, vowel, coda in syllables
         )
-    spoken_form = "-".join(part for part in rendered if part)
+    spoken_form = "-".join(_add_sac_tone(part) for part in rendered if part)
     if not spoken_form:
         raise ValueError(f"Tên không chứa ký tự Latin có thể đọc: {surface!r}")
     spoken_form = spoken_form[0].upper() + spoken_form[1:]
@@ -3253,21 +3435,30 @@ def _local_name_fallback(surface: str) -> str:
 def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
     """Convert CMU ARPAbet locally so known English names never depend on an LLM retry."""
     phones = _arpabet_phones(pronunciation)
-    override = ARPABET_PRONUNCIATION_OVERRIDES.get(phones)
+    # The override table was written before the schwa had its own name, so it is keyed on
+    # AH. Look it up with the schwa folded back, or every hand-chosen reading in it - the
+    # ones a listener approved - silently stops matching.
+    override = ARPABET_PRONUNCIATION_OVERRIDES.get(
+        tuple("AH" if phone == "AX" else phone for phone in phones)
+    )
     if override is not None:
         return override
     rendered: list[str] = []
     for onset, vowel, coda in _arpabet_syllables(phones):
         onset_reading = _arpabet_onset_reading(onset, vowel)
+        peeled, onset_reading = _split_illegal_onset(onset_reading)
+        rendered.extend(peeled)
         vowel_reading = _arpabet_vowel_reading(onset, vowel, coda)
+        onset_reading, vowel_reading = _resolve_glide_onset(onset_reading, vowel_reading)
         if onset_reading == "gi" and vowel_reading == "i":
             vowel_reading = ""
+        coda_reading = _arpabet_coda_reading(onset, vowel, coda)
         rendered.append(
             onset_reading
-            + vowel_reading
-            + _arpabet_coda_reading(onset, vowel, coda)
+            + _reduce_glide_before_coda(vowel_reading, coda_reading)
+            + coda_reading
         )
-    spoken_form = "-".join(part for part in rendered if part)
+    spoken_form = "-".join(_add_sac_tone(part) for part in rendered if part)
     if not spoken_form:
         return _local_name_fallback(surface)
     spoken_form = spoken_form[0].upper() + spoken_form[1:]
