@@ -559,3 +559,34 @@ def test_the_spelling_route_never_leaves_a_rime_the_language_lacks() -> None:
     for name in ("Zytherion", "Theosbane", "Brawler", "Hollowveil", "Aglaea", "Snownia"):
         reading = _local_name_fallback(name)
         assert _valid_vietnamese_spoken_form(name, reading), (name, reading)
+
+
+def test_a_plural_s_yields_to_the_consonant_it_follows() -> None:
+    """*gates* is "G\u1ebft", not "G\u00e2y": taking the s left a fricative for the diphthong rule to
+    drop and the word lost its consonant. Where the s comes first the other one still goes,
+    so *oldest* stays "\u00d4n-\u0111\u00edt"."""
+    assert _read("Gates") == "G\u1ebft"
+    assert _read("Cards") == "C\u1ea1c"
+    assert _read("Oldest") == "\u00d4n-\u0111\u00edt"
+
+
+def test_the_spelling_route_reads_a_phrase_one_word_at_a_time() -> None:
+    """It used to run a phrase through as a single stream of syllables joined by hyphens:
+    "Xa-men-cai-d\u00ean-th\u00ea-\u00f4-x\u1edd-ban" - one long word, with the -er ending never seen because it
+    was not at the end of anything. A listener writes "sa-men cai-d\u01a1 theo-b\u00ean"."""
+    reading = _local_name_fallback("Samael Kaizer Theosbane")
+    assert reading == "Xa-men cai-d\u1edd th\u00ea-\u00f4-x\u1edd-ban"
+    assert len(reading.split(" ")) == 3
+
+
+def test_a_single_letter_is_a_grade_not_a_hundred() -> None:
+    """This book ranks things "C \u00bb B \u00bb A \u00bb S", and C was being read as a Roman hundred -
+    which then crashed the number words, because they stopped at ninety-nine."""
+    from ebook_reader.text_processing import roman_numeral_value
+
+    assert roman_numeral_value("C") is None
+    assert roman_numeral_value("D") is None
+    assert roman_numeral_value("I") == 1
+    assert roman_numeral_value("XIV") == 14
+    assert vietnamese_number_words(105) == "m\u1ed9t tr\u0103m l\u1ebb n\u0103m"
+    assert vietnamese_number_words(120) == "m\u1ed9t tr\u0103m hai m\u01b0\u01a1i"

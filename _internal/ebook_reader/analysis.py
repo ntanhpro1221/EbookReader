@@ -3554,6 +3554,12 @@ def _surviving_coda_phone(coda: tuple[str, ...]) -> str | None:
         return first
     if first not in ARPABET_SONORANTS and second in ARPABET_SONORANTS:
         return first
+    if second in ("S", "Z") and len(usable) == 2:
+        # A plural or third-person s is the last thing in the cluster and the least of it:
+        # *gates* is "Gết", not "Gây", where taking the s left a fricative for the diphthong
+        # rule to drop. Where the s comes first it is the other one that goes - *oldest* is
+        # "ôn-đít".
+        return first
     if first in ARPABET_VELAR_STOPS:
         # A velar outranks the obstruent behind it, which is what a listener writes every
         # time one comes up: *box* is "bóc", *vox* "vóc", *benedict* "đích". The general
@@ -4046,13 +4052,28 @@ def _silent_e_removed(value: str) -> str:
     return value
 
 
+def _join_name_syllables(word: str, rendered: list[str]) -> str:
+    """One word of a name, with its own ending settled.
+
+    A phrase used to be run through as a single stream of syllables joined by hyphens, so
+    "Samael Kaizer Theosbane" came out "Xa-men-cai-dên-thê-ô-xờ-ban" - one long word, and
+    the -er ending never seen because it was not at the end of anything. Words are joined by
+    spaces and syllables by hyphens, which is the shape a listener writes: "sa-men cai-dơ
+    theo-bên".
+    """
+    joined = "-".join(_add_sac_tone(part) for part in rendered if part)
+    return _final_er_schwa(word, joined) if joined else ""
+
+
 def _local_name_fallback(surface: str) -> str:
     """Produce a safe Vietnamese-readable form for any Latin name accepted by the scanner."""
-    rendered: list[str] = []
+    words: list[str] = []
     for part in re.findall(r"[A-Za-z]+", surface):
+        rendered: list[str] = []
         syllables = _latin_name_syllables(_silent_e_removed(part.casefold()))
         if not syllables:
             rendered.append(_vowelless_name_reading(part))
+            words.append(_join_name_syllables(part, rendered))
             continue
         # Vietnamese begins no syllable with a cluster, and this route works from the
         # spelling, where clusters are everywhere. Without the same repair the phoneme path
@@ -4077,10 +4098,10 @@ def _local_name_fallback(surface: str) -> str:
                     )
                 )
             )
-    spoken_form = "-".join(_add_sac_tone(part) for part in rendered if part)
+        words.append(_join_name_syllables(part, rendered))
+    spoken_form = " ".join(word for word in words if word)
     if not spoken_form:
         raise ValueError(f"Tên không chứa ký tự Latin có thể đọc: {surface!r}")
-    spoken_form = _final_er_schwa(surface, spoken_form)
     spoken_form = spoken_form[0].upper() + spoken_form[1:]
     if VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is None:
         raise ValueError(f"Fallback cục bộ tạo cách đọc không hợp lệ: {surface!r} → {spoken_form!r}")
