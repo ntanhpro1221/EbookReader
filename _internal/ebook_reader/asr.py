@@ -118,10 +118,42 @@ def _vietnamese_phonemes(token: str) -> str:
     return phonemes
 
 
+# Whisper writes a number as a digit; the book writes it as a word. "thứ mười" against
+# "thứ 10" is one reading spelled two ways, and comparing them as text costs similarity for
+# nothing: 111 of 6019 transcribed segments carry a number word matched by the same digit
+# in the transcript, every one scored below 0.95.
+#
+# The direction decides whether this helps or hurts, and only measurement said which.
+# Folding words to digits improved 371 segments and damaged 1976: Vietnamese number words
+# are ordinary words with other meanings - "năm" is also a year, "ba" also a father - so
+# replacing them with a digit destroys the partial character overlap the metric lives on.
+# "Ai đó?!" heard as "Hai đỏ." fell from 0.833 to 0.500 that way.
+#
+# Folding digits to words improved 318 and damaged 1. A digit is only ever a number, and
+# only the transcript produces one, so the substitution touches one side and cannot destroy
+# a partial match.
+# Spelt as the book spells them, diacritics and all, so the substitution matches at this
+# level and not only after a later tone fold.
+DIGIT_NUMBER_WORDS = {
+    "0": "không", "1": "một", "2": "hai", "3": "ba", "4": "bốn", "5": "năm",
+    "6": "sáu", "7": "bảy", "8": "tám", "9": "chín", "10": "mười",
+}
+
+
+def _fold_number_digits(text: str) -> str:
+    """Spell a bare digit the way the book would, so the two can be compared.
+
+    Only a token that is entirely a digit changes; "10" becomes "muoi" but "2026" and "3a"
+    are left alone, having no single-word reading to fold to.
+    """
+    return " ".join(DIGIT_NUMBER_WORDS.get(token, token) for token in text.split())
+
+
 def normalize_transcript(text: str) -> str:
     text = text.casefold().replace("đ", "d")
     text = re.sub(r"[^0-9a-zà-ỹ\s]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    return _fold_number_digits(text)
 
 
 def _json_safe_anchor_value(value: Any) -> Any:
