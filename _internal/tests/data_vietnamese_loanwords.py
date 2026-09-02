@@ -20,7 +20,7 @@ LOANS = {
     "google": "gu-gồ",
     "email": "i-meo",
     "website": "goép-sai",
-    "server": "sơ-vơ",
+    "server": "xe-vờ",
     "download": "đao-lôt",
     "click": "cờ-líc",
     "clip": "cờ-líp",

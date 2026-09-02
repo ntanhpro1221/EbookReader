@@ -3411,6 +3411,7 @@ def _arpabet_vowel_reading(
     letter: str = "",
     following: tuple[str, ...] = (),
     stressed: bool = False,
+    final: bool = False,
 ) -> str:
     if vowel == "AX" and coda[:1] == ("L",):
         # Syllabic /l/, as in the last syllable of "Michael" or "incredible". It carries
@@ -3441,11 +3442,18 @@ def _arpabet_vowel_reading(
         # The nasal has to close this syllable: ă never stands alone in Vietnamese, so
         # *summon*, whose /m/ opens the next one, is "xa-mon" and not "xă-mon".
         return "ă"
-    if vowel == "ER" and not stressed:
-        # A weak syllable whose vowel is ơ carries huyền. A listener put it that way -
+    if vowel == "ER" and stressed and letter == "e":
+        # Stressed, the letter is heard: *server* is "xe-vờ". Unstressed it is the schwa,
+        # level in the middle of a word ("in-tơ-nét") and huyền at the end ("năm-bờ").
+        return "e"
+    if vowel == "ER" and not stressed and final:
+        # A weak ơ at the end of a word carries huyền. A listener put it down to the stress -
         # "mon tờ có thanh huyền bởi vì trọng âm trong từ nữa" - and it is the same tone the
-        # inserted syllable of a broken cluster takes: "đờ-ra-gon", "in-cờ-ri-đi-bồ",
-        # "xờ-kiu". Stressed, the vowel is level, as in *service* "xơ-vít".
+        # inserted syllable of a broken cluster takes: "đờ-ra-gon", "xờ-kiu".
+        #
+        # Only at the end. In the middle of a word it stays level, which is what the loan
+        # Vietnamese already has shows: *internet* is "in-tơ-nét", not "in-tờ-nét". Stressed
+        # it is level wherever it stands, as in *service* "xơ-vít".
         return "ờ"
     if vowel == "AW":
         # English shortens a vowel before a voiceless consonant and holds it before a voiced
@@ -3961,6 +3969,7 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
             letters[index] if index < len(letters) else "",
             following,
             stresses[index] if index < len(stresses) else False,
+            index == len(syllables_out) - 1,
         )
         onset_reading, vowel_reading = _resolve_w_onset(onset, onset_reading, vowel_reading)
         onset_reading, vowel_reading = _resolve_glide_onset(onset_reading, vowel_reading)

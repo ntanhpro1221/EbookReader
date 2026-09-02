@@ -693,3 +693,73 @@ Kiểm định hợp lệ không đổi: **0 cách đọc không hợp lệ** tr
 - `incredible` in-cờ-**ri**-đi-bồ — `e`+/ɛ/ ra "i", ngược với death/benedict/herald ra "e" (3–1).
 - `sound` "**s**ao" và `sky` "xờ-**k**ai" — chỉ khác chính tả, "s"/"x" và "c"/"k" đọc như nhau.
 - `samael`, `kaizer`, `theosbane` — không có trong CMUdict, đi đường mặt chữ, chưa động tới.
+
+---
+
+# Bộ đối chiếu thứ hai: từ mượn tiếng Việt đã có sẵn
+
+Người nghe chỉ ra điều lẽ ra phải làm từ đầu: *"bạn thực sự biết cách người việt đọc các từ
+tiếng anh? đó chính là mục tiêu của tôi, sao bạn không tự áp dụng mục tiêu đó cho thuật toán
+mà cứ phải hỏi tôi cách đọc hả?"*
+
+Đúng. Tiếng Việt đã mượn hàng loạt từ tiếng Anh và có cách đọc quen thuộc — `mác-két`,
+`in-tơ-nét`, `láp-tóp`, `phây-búc`, `ten-nít`. Đó là bộ đối chiếu tự có, không cần hỏi ai.
+
+Nằm ở `tests/data_vietnamese_loanwords.py`.
+
+## Lọc mới là phần quan trọng
+
+Rất nhiều "từ tiếng Anh" trong tiếng Việt thực ra vào qua **tiếng Pháp hoặc Latin khoa học**,
+và chúng theo phát âm nguồn đó chứ không theo tiếng Anh. Để lẫn vào là kéo bộ luật đi sai:
+
+`ga-ra` (garage) · `cà phê` (café) · `vắc-xin` (vaccin) · `xà phòng` (savon) · `sâm banh`
+(champagne) · `cà vạt` (cravate) · `xăng` (essence) · `bơ` (beurre) · `ga` (gare) · `pin`
+(pile) · `sếp` (chef) · `xì gà` (cigare) · `vi-ta-min` · `vi-rút` · `vi-đi-ô` · `sa-lát` ·
+`me-nu` · `mo-đen` · `pi-da` (Ý) · `tua` (tour) · `ba` (bar)
+
+Còn lại **41 từ vào thẳng từ tiếng Anh**.
+
+Cũng cho **"s" và "x" là tương đương** khi chấm: giọng Bắc đọc hai chữ này như nhau, nên
+chênh lệch đó không đổi âm thanh nào người nghe nghe được.
+
+## Bộ này tự bắt được lỗi mà 138 ví dụ của người nghe không bắt được
+
+`style` ra **`Xờ-taiu`**. "aiu" không phải vần tiếng Việt: luật /l/ tối hoá bán nguyên âm
+đang áp lên một nguyên âm **đã có** bán nguyên âm. Và bộ kiểm tra vẫn cho qua — nó xét âm
+đầu và ký tự cuối, **chưa bao giờ xét vần**. Đây là lỗ hổng đã ghi trong mục "còn hở" từ
+trước, và phải có bộ đối chiếu mới lộ ra.
+
+## Ba luật rút từ bộ này
+
+1. **Âm tắc-xát cuối từ đọc -t**: `match`→mát, `research`→ri-xớt, `scourge`→xờ-cớt. Có R
+   đứng trước thì giữ -ch, đúng bằng `george`→gióch.
+2. **Từ viết kết thúc bằng "w" giữ trọn nguyên âm đôi**: `show`→sâu, `shadow`→sa-đâu. Kết
+   thúc bằng "o" thì không: `antonio`→an-to-ni-ô. Lại là mặt chữ phân biệt.
+3. **Schwa /ər/ có ba nhánh**, và chính từ mượn cho biết nhánh nào:
+   - có trọng âm → đọc theo chữ: `server`→**xe**-vờ
+   - không trọng âm, **giữa từ** → "ơ" ngang: `internet`→in-**tơ**-nét
+   - không trọng âm, **cuối từ** → "ờ" huyền: `number`→năm-**bờ**
+
+   Nhánh thứ ba là của người nghe, và họ giải thích bằng trọng âm: *"mon tờ có thanh huyền
+   bởi vì trọng âm trong từ nữa"*. Hoá ra nó **cùng một luật** với thanh huyền của âm tiết
+   chèn (`đờ-ra-gon`, `xờ-kiu`), không phải hai luật riêng.
+
+## Kết quả âm: không nhân đôi phụ âm giữa hai nguyên âm
+
+Từ mượn thật hay nhân đôi phụ âm: `mác-két`, `cóp-pi`, `ten-nít`, `tắc-xi` — phụ âm vừa
+đóng âm tiết trước vừa mở âm tiết sau. Thử tìm luật cho nó (nguyên âm ngắn + âm tiết mở +
+phụ âm đơn phía sau), nhưng **chính ví dụ của người nghe bác bỏ**: `natasha`→"na-ta-sa" và
+`business`→"bi-xì-nít" đều rơi đúng vào khuôn đó mà không nhân đôi. Không làm.
+
+## Một chỗ hai nguồn nói ngược nhau, và đã chọn
+
+Từ mượn có sẵn dùng thanh **ngang** cho đuôi -er cuối từ (`pốt-tơ`), người nghe viết
+**huyền** (`năm-bờ`, `mon-tờ`, `com-piu-tờ`, `cai-dờ`, `goa-ri-ờ`, `pích-trờ`, `đóc-tờ`,
+`goa-tờ`, `bờ-ro-dờ` — chín từ). Theo người nghe: họ là người nghe cuốn sách này. Họ cũng
+nói `pốt-tơ` "cũng đúng và hay hơn", nên đây là biến thể chấp nhận được chứ không phải lỗi.
+
+| | trước vòng này | sau |
+|---|---|---|
+| khớp 138 cách đọc của người nghe | 73 | **84** |
+| khớp 41 từ mượn có sẵn | 23 | **28** |
+| cách đọc không hợp lệ | 0 | **0** |
