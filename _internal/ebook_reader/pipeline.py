@@ -18,6 +18,7 @@ from .asr import (
     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
     ASR_MISMATCH,
     ASR_PASS,
+    ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
     ASR_UNVERIFIABLE_SHORT_TEXT,
     LOCKED_NAME_ANCHOR_METRICS_KEY,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
@@ -25,6 +26,7 @@ from .asr import (
     WhisperVerifier,
     adjudicate_collapsed_repeated_short,
     adjudicate_locked_name_anchors,
+    asr_answer_is_about_other_audio,
     asr_verdict_is_unverifiable,
 )
 from .asr_contract import (
@@ -149,6 +151,12 @@ HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
         # all, so its verdict carries no information about the take. Listed for a human in
         # the quality report rather than treated as proof of a bad reading.
         ASR_UNVERIFIABLE_SHORT_TEXT,
+        # And a third: the transcript's own timestamps run past the end of the file, so
+        # the decoder has wandered off the audio into something it was trained on. "Mẹ
+        # kiếp! A a a! Khốn nạn!" came back as "Cảm ơn các bạn đã theo dõi và hẹn gặp
+        # lại" from two separately generated takes. That is evidence about Whisper, not
+        # about the reading.
+        ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
     }
 )
 CHAPTER_REVIEW_STATUS = "warning"
@@ -4404,6 +4412,20 @@ class BookPipeline:
                         )
                         final_verdict = QUALITY_VERDICT_FAIL
                         failure_codes = (PERCEPTUAL_NATURALNESS_REVIEW_CODE,)
+                    elif asr_only_failure and asr_answer_is_about_other_audio(
+                        str(reason)
+                    ):
+                        # Whisper's own timestamps ran past the end of the file, so its
+                        # answer is not about this audio and carries no verdict either way.
+                        # Another repair round cannot help: the same transcript came back
+                        # from two separately generated takes with different seeds.
+                        warning = ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
+                        error = (
+                            "ASR transcribed something other than this audio; needs a "
+                            "listen rather than another repair round"
+                        )
+                        final_verdict = QUALITY_VERDICT_PASS
+                        failure_codes = ()
                     elif asr_only_failure and asr_verdict_is_unverifiable(
                         str(item["text"])
                     ):
@@ -4685,8 +4707,16 @@ class BookPipeline:
                     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
                 }
                 and not self._segment_has_non_asr_failure_evidence(item)
-                and asr_verdict_is_unverifiable(str(item["text"]))
+                and (
+                    asr_verdict_is_unverifiable(str(item["text"]))
+                    or asr_answer_is_about_other_audio(str(reason))
+                )
             ):
+                unanswerable_warning = (
+                    ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
+                    if asr_answer_is_about_other_audio(str(reason))
+                    else ASR_UNVERIFIABLE_SHORT_TEXT
+                )
                 # Whisper was asked a question it has no way to answer. Measured over 4528
                 # committed segments, a reference under ASR_MIN_VERIFIABLE_CHARS gets a
                 # median similarity of 0.27 against 0.94 for a normal sentence, fails the
@@ -4714,11 +4744,11 @@ class BookPipeline:
                     transcript=str(result.get("transcript", "")),
                     similarity=float(result.get("similarity", 0.0)),
                     wer=float(result.get("wer", 1.0)),
-                    warning_code=ASR_UNVERIFIABLE_SHORT_TEXT,
+                    warning_code=unanswerable_warning,
                 )
                 self.db.mark_verified(
                     int(item["id"]),
-                    warning_code=ASR_UNVERIFIABLE_SHORT_TEXT,
+                    warning_code=unanswerable_warning,
                 )
                 self.db.event(
                     "warning",
