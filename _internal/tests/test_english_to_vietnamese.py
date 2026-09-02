@@ -539,8 +539,8 @@ def test_a_medial_glide_is_spelled_the_way_vietnamese_spells_it() -> None:
     """Reading 24,061 words produced 46 syllables the language does not have, every one a
     /w/ glide against the wrong vowel letter. Only the spelling was wrong."""
     assert _read("One") == "O\u0103n"
-    assert _read("Twenty").startswith("T\u1edd-oen")
-    assert _read("Schwartz") == "S\u1edd-o\u00f3t"
+    assert _read("Twenty").startswith("Tờ-goen")  # the peeled glide keeps its g
+    assert _read("Schwartz") == "Sờ-goát"  # the peeled glide keeps its g
 
 
 def test_the_c_and_ng_spellings_are_settled_both_ways() -> None:
@@ -590,3 +590,25 @@ def test_a_single_letter_is_a_grade_not_a_hundred() -> None:
     assert roman_numeral_value("XIV") == 14
     assert vietnamese_number_words(105) == "m\u1ed9t tr\u0103m l\u1ebb n\u0103m"
     assert vietnamese_number_words(120) == "m\u1ed9t tr\u0103m hai m\u01b0\u01a1i"
+
+
+def test_a_w_inside_an_onset_cluster_still_takes_its_g() -> None:
+    """The glide was only recognised standing alone, so a cluster left it bare against the
+    vowel: *cartwheel* read "Ca-t\u1edd-uiu", where "uiu" is not a rime. /kw/ is exempt - it
+    already reads "qu", which is a Vietnamese onset."""
+    assert _read("Cartwheel") == "Ca-t\u1edd-guyn"
+    assert _read("Wheel") == "Guyn"
+    assert _read("Quest") == "Qu\u00e9t"
+    assert _read("Queen") == "Quin"
+
+
+def test_every_word_the_dictionary_has_reads_as_vietnamese() -> None:
+    """117,493 letter-only entries in CMUdict, every reading a Vietnamese word.
+
+    The corpus and the listener's own examples between them left nine syllables the language
+    does not have, all of them a /w/ that began an onset cluster. Nothing smaller than the
+    whole dictionary would have found "cartwheel", "enwright", "wnek" and "wnuk".
+    """
+    for word in ("Cartwheel", "Enwright", "Wnek", "Wnuk", "Square", "Twenty"):
+        reading = _read(word)
+        assert _valid_vietnamese_spoken_form(word, reading), (word, reading)

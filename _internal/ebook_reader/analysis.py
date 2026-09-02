@@ -3594,14 +3594,24 @@ def _resolve_w_onset(
     onset_reading: str,
     vowel_reading: str,
 ) -> tuple[str, str]:
-    """Write an initial /w/ as g plus the medial glide.
+    """Write a /w/ next to the vowel as g plus the medial glide.
+
+    It applies wherever the glide ends up bare against the vowel - alone, or at the end of
+    a cluster the splitter has already peeled. Left bare it ran into the vowel behind it:
+    *cartwheel* read "Ca-tờ-uiu", where "uiu" is not a rime.
 
     Standard Vietnamese spells [w] as a bare medial - "Oa-sinh-tơn", "Uy-li-am" - and this
     is what the code did. A listener asked for the g: *water* is "goát-tờ", *west* "goét",
     *wind* "guyn", *william* "guy-li-am". A glide with nothing in front of it invites the
     voice to read it as a syllable of its own, and the g keeps it inside one.
     """
-    if onset != ("W",) or not vowel_reading:
+    if (
+        onset[-1:] != ("W",)
+        or not vowel_reading
+        or onset_reading not in GLIDE_ONSET_READINGS
+    ):
+        # Only when the glide is left bare. /kw/ already reads "qu", which is a Vietnamese
+        # onset and needs no help: *quest* is "Quét".
         return onset_reading, vowel_reading
     glide = W_ONSET_GLIDES.get(_without_tone(vowel_reading)[:1])
     if glide is None:
@@ -4196,14 +4206,14 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
             and surviving in ARPABET_VOICED
             and coda_reading in NANG_CODA_LETTERS
         )
-        rendered.append(
-            (
-                _repair_medial_glide_spelling(
-                    onset_reading + vowel_reading + coda_reading
-                ),
-                heavy,
-            )
-        )
+        # A syllable can still come out as a rime the language does not have - a /w/ that
+        # began an onset cluster, as in the Polish "wnek", leaves a bare glide in front of
+        # the vowel. Splitting it is what the spelling route already does.
+        for piece in _split_illegal_rime(
+            _repair_medial_glide_spelling(onset_reading + vowel_reading + coda_reading)
+        ):
+            rendered.append((piece, heavy))
+            heavy = False
     spoken_form = "-".join(
         _add_sac_tone(part, heavy) for part, heavy in rendered if part
     )
