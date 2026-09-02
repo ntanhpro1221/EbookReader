@@ -37,6 +37,7 @@ from .audio_transform_contract import (
 from .io_utils import sha256_file, sha256_text, stable_int
 from .models import BookStatus, ChapterStatus, SegmentStatus
 from .perceptual_contract import (
+    PERCEPTUAL_BASELINE_PITCH_SEMITONES,
     NATURALNESS_IMPROVEMENT_REQUIREMENT,
     NATURALNESS_REPAIR_ACTION,
     PERCEPTUAL_NATURALNESS_REVIEW_CODE,
@@ -10830,9 +10831,18 @@ class ProjectDB:
             raise RuntimeError(
                 "candidate perceptual evidence lacks baseline pitch provenance"
             ) from exc
-        if baseline_pitch != int(signal_provenance["effective_pitch_semitones"]):
+        # Against the grading policy, not against the take. The perceptual score is
+        # measured on the raw audio and compared to the preset's untouched preview, so the
+        # baseline is that preview's register whatever pitch this particular take carries.
+        #
+        # Comparing it to the take's own effective pitch made the two impossible to satisfy
+        # together for any voice with a register shift: seven candidates read at -1 semitone
+        # stopped a ten-chapter run twice at the same line, while the pipeline was
+        # deliberately setting the baseline to 0 four files away.
+        if baseline_pitch != PERCEPTUAL_BASELINE_PITCH_SEMITONES:
             raise RuntimeError(
-                "candidate perceptual baseline pitch differs from its signal checkpoint"
+                "candidate perceptual baseline pitch is not the graded reference: "
+                f"{baseline_pitch} != {PERCEPTUAL_BASELINE_PITCH_SEMITONES}"
             )
         return check, metrics
 

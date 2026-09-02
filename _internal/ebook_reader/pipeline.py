@@ -86,6 +86,7 @@ from .perceptual_qa import (
     UTMOSNaturalnessVerifier,
 )
 from .perceptual_contract import (
+    PERCEPTUAL_BASELINE_PITCH_SEMITONES,
     NATURALNESS_IMPROVEMENT_REQUIREMENT,
     NATURALNESS_REPAIR_ACTION,
     PERCEPTUAL_NATURALNESS_REVIEW_CODE,
@@ -1179,11 +1180,10 @@ class BookPipeline:
         # voice's preview - taking the narrator's would compare a character against a
         # reference that never spoke the line.
         profile = self.db.voice_profile(int(row["voice_profile_id"]))
-        # The graded artifact is always the raw take: the voice variant is applied on the
-        # way into the chapter, after every gate. So the baseline must be the preset's own
-        # untouched preview - matching it to the profile's register would compare raw
-        # audio against a transformed reference and manufacture a difference.
-        return profile, 0
+        # The graded artifact is always the raw take, so the baseline is the preset's own
+        # untouched preview. Named in perceptual_contract because the database validator
+        # has to agree with this choice and used to contradict it.
+        return profile, PERCEPTUAL_BASELINE_PITCH_SEMITONES
 
     def _evaluate_perceptual_audio_item(
         self,
