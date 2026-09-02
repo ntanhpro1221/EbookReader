@@ -66,8 +66,18 @@ STRETCHED_OPEN_VOWEL_PATTERN = re.compile(
 )
 SPOKEN_WORD_PATTERN = re.compile(r"[A-Za-zÀ-ỹĐđ]+")
 SPEAKABLE_TOKEN_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
+# The r/g cries of pain and effort - argh, aargh, ugh - which the vowel-and-h forms above
+# cannot reach. Left out, they were taken for English names and locked as transliterations:
+# "Argh" was read "A-rag", Whisper naturally failed to hear that in a scream, and the
+# resulting anchor mismatch blocked a chapter. Twenty-four segments across the corpus.
+#
+# No Vietnamese word ends in -gh, so this cannot swallow one: ghe and nghe carry a vowel
+# after the digraph and the token must end at the h.
+PAIN_CRY_PATTERN = r"a+r*g+h*|u+r*g+h*|g+r+h*"
 FOLDED_VOCALIZATION_PATTERN = re.compile(
-    r"^(?:a+h*|u+h*|o+h*|you|ha+|he+|hi+|hu+|huc|hac|hay|hum|hm+|khu+|ho+|[a-z])$",
+    r"^(?:a+h*|u+h*|o+h*|you|ha+|he+|hi+|hu+|huc|hac|hay|hum|hm+|khu+|ho+|"
+    + PAIN_CRY_PATTERN
+    + r"|[a-z])$",
     re.IGNORECASE,
 )
 MAX_VOCALIZATION_REPETITIONS = 4
