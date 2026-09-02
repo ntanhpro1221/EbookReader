@@ -125,3 +125,59 @@ lượng từ văn bản (`_plausible_duration`); test nào cần thời lượn
 
 Bài học: **một stand-in vi phạm vật lý là một quả bom hẹn giờ.** Nó không tố cáo gì cho tới
 khi có ai đó siết phép đo, rồi hỏng ở một chỗ chẳng liên quan gì đến thay đổi đó.
+
+---
+
+## Kiểm hằng số ngắt bằng khoảng lặng đo thật (2026-09-03)
+
+`PAUSE_GROUP_SECONDS = 0.276` chưa bao giờ được đối chiếu với **khoảng lặng thật trong bản
+thu**. Đo trên **1.289 bản thu khác nhau** (bỏ trùng theo `wav_sha256`), lặng đo bằng năng
+lượng khung 20ms dưới -45 dB so với đỉnh:
+
+| nhóm ngắt | n | lặng đo | mỗi nhóm | mô hình |
+|---|---|---|---|---|
+| 1 | 167 | 0,36s | 0,360 | 0,28 |
+| 2 | 349 | 0,56s | 0,280 | 0,55 |
+| 3 | 230 | 1,00s | 0,333 | 0,83 |
+| 4 | 229 | 1,42s | 0,355 | 1,10 |
+| 5 | 153 | 1,62s | 0,324 | 1,38 |
+| 6 | 80 | 2,17s | 0,362 | 1,66 |
+| 8 | 22 | 2,52s | 0,315 | 2,21 |
+
+**Mô hình tuyến tính là đúng** — chi phí mỗi nhóm gần như hằng số trong vùng có dữ liệu dày.
+(Ca "lệch 3×" thấy lúc đầu là một segment 25 nhóm với **n=1**; nhiễu, không phải quy luật.)
+
+Hằng số thì hơi **nhỏ**: đo được 0,315–0,36s so với 0,276.
+
+### Nhưng nâng nó lên làm mọi thứ tệ hơn
+
+| hằng số | quá chậm | quá nhanh | tổng |
+|---|---|---|---|
+| **0,276** | 5 | 2 | **7** |
+| 0,315 | 3 | 11 | 14 |
+| 0,330 | 0 | 13 | 13 |
+
+Trừ nhiều hơn thì "thời gian nói" còn lại của segment ngắn nhiều dấu câu bé đi, và nhịp vọt
+lên: `Rare (Hiếm - B)` nhảy 21,19 → 25,38, từ đạt thành **quá nhanh**.
+
+Hằng số và ngưỡng `pace_chars_per_second` là **một cặp đã khớp cùng nhau** khi bù ngắt được
+đưa vào (tài liệu ở trên: trung vị dịch từ 14,50 lên 16,90 và ngưỡng trên phải nâng theo).
+Đổi một nửa của cặp thì hỏng. **Giữ 0,276.**
+
+## Chương không trôi đều — nhưng không phải do dấu câu
+
+Công cụ `audit_audiobook.py` báo `CHAPTER_RATE_SPREAD` p05=3,30 p95=5,22 âm tiết/giây. Câu
+hỏi là: chậm vì **đọc chậm** hay vì **ngắt nhiều**?
+
+Đo bằng khoảng lặng thật, trên 64 segment của một chương:
+
+| | p05 | trung vị | p95 | tản |
+|---|---|---|---|---|
+| nhịp thô (gồm ngắt) | 10,83 | 13,02 | 14,87 | 1,37× |
+| nhịp nói (bỏ lặng đo) | 12,96 | 15,75 | 18,18 | **1,40×** |
+
+Gần như không đổi. **Dấu câu không phải nguồn của độ tản** — chính giọng đọc nhanh chậm khác
+nhau giữa các câu. `Rare (Hiếm - B)` ngắt 15% và nhịp nói 10,50 (chậm thật), trong khi mô
+hình dự đoán nó ngắt 49,3%.
+
+Lặng đo thật: trung vị **17,3%** mỗi segment, cao nhất 26,7% — thấp hơn nhiều so với mô hình.
