@@ -437,10 +437,76 @@ VIETNAMESE_SPOKEN_FORM_PATTERN = re.compile(
     r"^[A-Za-zÀ-ỹĐđ]+(?:[ -][A-Za-zÀ-ỹĐđ]+)*$"
 )
 NON_VIETNAMESE_SYLLABLE_CODA_PATTERN = re.compile(r"[fjlrsvwz]$", re.IGNORECASE)
+# "d" and "đ" are different onsets in Vietnamese, and both are real. The set is read
+# twice: once against a reading that still spells "đ", and once against one folded to
+# "d". Leaving "đ" out made the two disagree - the cluster splitter gave up on
+# "đr" because it could not find a legal head to peel, so "Dragon" kept an onset
+# cluster no Vietnamese syllable has, and the validator then rejected the very reading the
+# splitter had refused to repair.
 VIETNAMESE_SYLLABLE_ONSETS = {
-    "", "b", "c", "ch", "d", "g", "gh", "gi", "h", "k", "kh", "l", "m", "n",
+    "", "b", "c", "ch", "d", "đ", "g", "gh", "gi", "h", "k", "kh", "l", "m", "n",
     "ng", "ngh", "nh", "p", "ph", "q", "qu", "r", "s", "t", "th", "tr", "v", "x",
 }
+# The five tone marks. The other three Vietnamese diacritics - breve, circumflex, horn -
+# are not tones: they spell a different vowel (a/ă/â, e/ê, o/ô/ơ, u/ư) and have to survive
+# the fold, or "nhiên" comes out "nhien" and stops looking like a syllable at all.
+VIETNAMESE_TONE_MARKS = "̣̀́̃̉"
+
+VIETNAMESE_SYLLABLE_NUCLEI = (
+    "uyê", "uya", "uyu", "oai", "oay", "oeo", "uôi", "ươi", "ươu", "iêu", "yêu", "uây",
+    "iê", "yê", "uô", "ươ", "uơ", "uâ", "uê", "uy", "ua", "ưa", "ia", "ya", "oa", "oă", "oe", "oo",
+    "ai", "ao", "au", "ay", "âu", "ây", "eo", "êu", "iu", "oi", "ôi", "ơi", "ui", "ưi", "ưu", "ôô",
+    "a", "ă", "â", "e", "ê", "i", "o", "ô", "ơ", "u", "ư", "y",
+)
+VIETNAMESE_SYLLABLE_CODAS = ("ngh", "ng", "nh", "ch", "c", "m", "n", "p", "t", "i", "o", "u", "y")
+VIETNAMESE_SYLLABLE_PATTERN = re.compile(
+    "^(?:{})?(?:{})(?:{})?$".format(
+        "|".join(sorted((onset for onset in VIETNAMESE_SYLLABLE_ONSETS if onset), key=len, reverse=True)),
+        "|".join(sorted(VIETNAMESE_SYLLABLE_NUCLEI, key=len, reverse=True)),
+        "|".join(sorted(VIETNAMESE_SYLLABLE_CODAS, key=len, reverse=True)),
+    )
+)
+VIETNAMESE_FRONT_SIMPLE_VOWELS = ("i", "ê")
+
+
+def _without_tone(value: str) -> str:
+    decomposed = unicodedata.normalize("NFD", value.casefold())
+    return unicodedata.normalize(
+        "NFC", "".join(char for char in decomposed if char not in VIETNAMESE_TONE_MARKS)
+    )
+
+
+def is_vietnamese_syllable(word: str) -> bool:
+    """Whether a word is already spelled as a Vietnamese syllable.
+
+    An English word shaped like one needs no reading invented for it - a listener asked for
+    exactly this, naming "may" - and the hand-written exclusion list covered 28 of the 366
+    such words among the ten thousand commonest English words. It also keeps Vietnamese out
+    of the English name path: "Con Hoang" and "SAU KHI" had both been locked as English
+    names, which is two of the 129 names the corpus has ever produced.
+
+    Checked against the book: of 6,282 distinct tone-bearing tokens - certainly Vietnamese -
+    this accepts 99.6%, and the words it turns down are not single syllables ("urê", "nitơ")
+    or carry foreign diacritics ("Dvořák").
+    """
+    bare = _without_tone(word)
+    if VIETNAMESE_SYLLABLE_PATTERN.fullmatch(bare) is None:
+        return False
+    # Vietnamese writes final /k/ as -ch and final /ŋ/ as -nh after a simple i or ê, which is
+    # why "kinh" is a syllable and "king" is not. The diphthong iê keeps the velar spelling,
+    # so "tiếng" and "chiếc" are syllables too.
+    for coda in ("ng", "c"):
+        if bare.endswith(coda):
+            stem = bare[: -len(coda)]
+            if (
+                stem
+                and stem[-1] in VIETNAMESE_FRONT_SIMPLE_VOWELS
+                and stem[-2:-1] not in ("i", "y")
+            ):
+                return False
+    return True
+
+
 NAME_CANDIDATE_EXCLUSIONS = {
     "a", "ai", "an", "anh", "ba", "ban", "binh", "book", "cha", "chapter", "chau", "chi",
     "chu", "co", "con", "cung", "dao", "day", "dinh", "do", "dong", "duc", "giang", "ha", "hai",
@@ -2911,6 +2977,13 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
         if (
             len(value) < 2
             or key in NAME_CANDIDATE_EXCLUSIONS
+            # A drawn-out sound is not a name. "Uuuuu" and "Aaaaa" pass the Latin-name
+            # scanner - they are capitalised runs of letters - and the book has dozens of
+            # them, so each was being sent off for an English reading. The same mistake on
+            # the other side of the pipeline locked "Argh" as a foreign name and read it
+            # "A-rag", which no ASR check could then match.
+            or is_vocalization_only(value)
+            or all(is_vietnamese_syllable(word) for word in _name_phrase_words(value))
             or not _is_proper_latin_name_surface(value)
         ):
             return
@@ -3091,7 +3164,14 @@ def _arpabet_syllables(
         else:
             next_vowel_index = vowel_indexes[vowel_offset + 1]
             between = phones[vowel_index + 1 : next_vowel_index]
-            if len(between) >= 2 and between[0] in ARPABET_CODAS:
+            # An r before another consonant closes the syllable it follows; it does not
+            # open the next one. English "Arthur" is AR-thur, and the coda rule then drops
+            # the r exactly as non-rhotic English does. Left in the onset it formed the
+            # cluster "rth", which no Vietnamese syllable can begin, so the repair spelled
+            # out a syllable the word never had: "A-ro-tho" for a two-syllable name, and
+            # the same for Portals, Guardians and Supporter. An r before a vowel is a real
+            # onset and is untouched here - Herald stays "he-ro".
+            if len(between) >= 2 and (between[0] in ARPABET_CODAS or between[0] == "R"):
                 coda = between[:1]
                 next_onset_start = vowel_index + 2
             else:
@@ -3122,16 +3202,27 @@ def _arpabet_vowel_reading(
     vowel: str,
     coda: tuple[str, ...],
 ) -> str:
-    if vowel == "AA" and coda[:1] == ("N",):
-        return "ô"
-    if vowel in {"AH", "AX"} and coda[:1] == ("N",):
-        return "â"
-    if vowel in {"AH", "AX"} and coda[:1] == ("L",):
+    if vowel == "AX" and coda[:1] == ("L",):
         # Syllabic /l/, as in the last syllable of "Michael" or "incredible". It carries
         # the syllable by itself in English and Vietnamese has no such consonant, so it
         # becomes the vowel: "Mai-cồ", "in-cờ-ri-đi-bồ". This used to apply only after K,
         # which made it a special case for one name rather than a rule.
+        #
+        # Only after the schwa. A stressed AH is a full /ʌ/ carrying an ordinary /l/
+        # behind it, not a syllabic one, and treating the two alike swallowed the last
+        # consonant of every such word: Gulf read "Gồ" while Golf, the same rime, read
+        # "Gan"; Bulk read "Bồ", Result "Ri-dồ", Adult "Ơ-đồ".
         return "ồ"
+    # The vowel reacts to the consonant that actually gets written, not to the phone it
+    # came from. Both rules below were keyed on the phone N, so a coda that reads "n"
+    # because an /l/ survived the cluster missed them: "Golf" came out "Gan" while the
+    # documented reading, and the ordinary Vietnamese word for the game, is "gôn". Ten
+    # words in the book corpus were affected, "Rudolf" and "Waldo" among them.
+    if _arpabet_coda_reading(onset, vowel, coda) == "n":
+        if vowel == "AA":
+            return "ô"
+        if vowel in {"AH", "AX"}:
+            return "â"
     return ARPABET_VOWEL_READINGS[vowel]
 
 
@@ -3284,7 +3375,7 @@ def _arpabet_coda_reading(
     vowel: str,
     coda: tuple[str, ...],
 ) -> str:
-    if vowel in {"AH", "AX"} and coda[:1] == ("L",):
+    if vowel == "AX" and coda[:1] == ("L",):
         # A syllabic /l/ has no vowel of its own to lean on, so Vietnamese takes it as one:
         # the project already reads Michael as "Mai-cồ", not "Mai-cơn". Handled in the
         # vowel, so nothing is left for the coda.
@@ -3293,6 +3384,13 @@ def _arpabet_coda_reading(
     if phone is None:
         return ""
     reading = ARPABET_CODAS[phone]
+    if phone == "D" and "R" in coda:
+        # The r before a final d is the one place the r leaves a mark instead of vanishing:
+        # it backs the stop, so "card" is "cac" and "guard" is "gac" - both of which are
+        # real Vietnamese loans, and the second is the ordinary word for a landing. The
+        # table said so in a comment and nothing carried it out, so the reading came back
+        # "cat" with the wrong final consonant.
+        reading = "c"
     # After a front vowel Vietnamese writes final /k/ as -ch and final /ŋ/ as -nh; the
     # velar spellings simply do not occur there. This is why "King" has to be "Kinh".
     if vowel in ARPABET_FRONT_VOWELS:
@@ -3417,12 +3515,19 @@ def _local_name_fallback(surface: str) -> str:
         if not syllables:
             rendered.append(_vowelless_name_reading(part))
             continue
-        rendered.extend(
-            _latin_name_onset_reading(onset, vowel)
-            + _latin_name_vowel_reading(vowel)
-            + _latin_name_coda_reading(coda)
-            for onset, vowel, coda in syllables
-        )
+        # Vietnamese begins no syllable with a cluster, and this route works from the
+        # spelling, where clusters are everywhere. Without the same repair the phoneme path
+        # does, it emitted "Bla-de", "Xao-lbaon", "The-o-xba-ne" - and locked them, because
+        # nothing downstream checked an onset.
+        for onset, vowel, coda in syllables:
+            onset_reading = _latin_name_onset_reading(onset, vowel)
+            peeled, onset_reading = _split_illegal_onset(onset_reading)
+            rendered.extend(peeled)
+            rendered.append(
+                onset_reading
+                + _latin_name_vowel_reading(vowel)
+                + _latin_name_coda_reading(coda)
+            )
     spoken_form = "-".join(_add_sac_tone(part) for part in rendered if part)
     if not spoken_form:
         raise ValueError(f"Tên không chứa ký tự Latin có thể đọc: {surface!r}")
@@ -3475,6 +3580,68 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
             f"CMU pronunciation produced an invalid Vietnamese coda for {surface!r}: {spoken_form!r}"
         )
     return spoken_form
+
+
+NAME_PHRASE_WORD_PATTERN = re.compile(r"[A-Za-z]+(?:['’][A-Za-z]+)?")
+
+
+def _name_phrase_words(surface: str) -> list[str]:
+    """The words of a name, with any possessive clipped off.
+
+    A possessive 's is not spoken in a Vietnamese rendering of an English name - the book
+    reads "Dawn's Scourge" as two names, not three - so it is dropped here rather than
+    given a syllable of its own.
+    """
+    words: list[str] = []
+    for word in NAME_PHRASE_WORD_PATTERN.findall(surface):
+        if word.casefold().endswith(("'s", "’s")):
+            word = word[:-2]
+        if word:
+            words.append(word)
+    return words
+
+
+def _cmu_phrase_to_vietnamese(surface: str) -> str | None:
+    """Read a multi-word name one word at a time, because that is how a dictionary has it.
+
+    CMUdict is keyed on words. Looking up the whole surface meant every name of more than
+    one word missed - "Eagle Eyes", "Oldest Death", "Juliana Vox Blade" - and fell through
+    to a route that works from the spelling, which has no notion of a silent e or of a
+    cluster Vietnamese cannot begin a syllable with. That route produced "I-gle-eiet",
+    "O-ldet-dit" and "Giu-lia-na-voc-bla-de": 35 of 189 locked readings in the corpus broke
+    the project's own syllable rule, and four of them were character names a listener hears
+    on every page.
+
+    Each word is converted through the phoneme path instead, and the words are joined with
+    spaces so the reading keeps the shape of the name - hyphens stay between syllables, as
+    in "he-ro op au-dit det".
+
+    Returns None when the dictionary lacks a word, leaving the name to the routes that
+    handle invented spellings.
+    """
+    words = _name_phrase_words(surface)
+    if not words:
+        return None
+    keys = [_name_candidate_key(word) for word in words]
+    if any(key in CMUDICT_CONTEXT_ONLY for key in keys):
+        # A homograph needs the sentence around it, which this path does not have.
+        return None
+    pronunciations = _cmu_pronunciations(words)
+    if len(words) < 2 and pronunciations.get(keys[0]):
+        # A single dictionary word is already handled upstream, where a short name still
+        # gets the contextual review this path cannot give it.
+        return None
+    readings: list[str] = []
+    for word, key in zip(words, keys):
+        pronunciation = pronunciations.get(key, "")
+        if not pronunciation:
+            return None
+        try:
+            readings.append(_cmu_pronunciation_to_vietnamese(word, pronunciation))
+        except ValueError:
+            return None
+    spoken_form = " ".join(readings)
+    return spoken_form if _valid_vietnamese_spoken_form(surface, spoken_form) else None
 
 
 def _valid_vietnamese_spoken_form(surface: str, spoken_form: str) -> bool:
@@ -7661,6 +7828,19 @@ class OllamaBookAnalyzer:
                         f"pronunciation confidence is below {minimum_confidence:.2f}: "
                         f"{surface!r}={confidence:.2f}"
                     )
+            # The last thing before a reading becomes immutable. The LLM route checked
+            # itself and the local one did not, so 35 of 189 locked readings in the corpus
+            # broke the syllable rule - clusters like "xb" and "lđ" that no Vietnamese
+            # syllable has - and stayed broken across every run because a locked row cannot
+            # be rewritten. A name kept in English is a decision, not a reading, so it is
+            # not judged here.
+            if _name_candidate_key(spoken_form) != _name_candidate_key(
+                surface
+            ) and not _valid_vietnamese_spoken_form(surface, spoken_form):
+                raise ValueError(
+                    f"refusing to lock an unpronounceable reading for {surface!r}: "
+                    f"{spoken_form!r}"
+                )
             self.db.upsert_pronunciation(
                 surface=surface,
                 normalized_surface=_name_candidate_key(surface),
@@ -7679,11 +7859,18 @@ class OllamaBookAnalyzer:
         cmu_count = 0
         for candidate in candidates:
             pronunciation = str(candidate.get("cmu_pronunciation", ""))
-            if not pronunciation or bool(candidate.get("requires_contextual_review")):
+            surface = str(candidate["surface"])
+            phrase_reading = (
+                None if pronunciation else _cmu_phrase_to_vietnamese(surface)
+            )
+            if phrase_reading is None and (
+                not pronunciation or bool(candidate.get("requires_contextual_review"))
+            ):
                 qwen_candidates.append(candidate)
                 continue
-            surface = str(candidate["surface"])
-            spoken_form = _cmu_pronunciation_to_vietnamese(surface, pronunciation)
+            spoken_form = phrase_reading or _cmu_pronunciation_to_vietnamese(
+                surface, pronunciation
+            )
             checkpoint_pronunciation(
                 candidate,
                 spoken_form,

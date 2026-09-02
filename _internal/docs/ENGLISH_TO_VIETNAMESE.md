@@ -200,3 +200,296 @@ tự nghĩ ra. Chỉ dùng nó khi có bảng đặc trưng từ nguồn, không
 4. **Nguyên âm đôi mất khi có phụ âm cuối.** `Light` ra "Lát", `House` ra "Hát" — luật 6 bỏ
    bán nguyên âm để giữ phụ âm cuối. Hướng ngược lại (giữ nguyên âm đôi, bỏ phụ âm cuối:
    "Lai", "Hao") cũng là cách người Việt hay đọc. Chưa có cơ sở để chọn bên nào.
+
+---
+
+# Tên riêng đi nhầm đường: 35/189 cách đọc đã khoá vi phạm chính luật của project
+
+Ngày 2026-09-02. Phát hiện khi truy 9 segment fail của alpha.22, không phải khi đọc code.
+
+## Triệu chứng
+
+Bốn segment bị chặn vì ASR không khớp tên riêng, dù nội dung câu khớp 72–83%. Câu hỏi ban
+đầu là "cổng ASR có quá nghiêm không". Câu trả lời hoá ra ngược lại: **tên bị đọc sai
+thật**.
+
+| tên | đang đọc | cụm phụ âm không tồn tại trong tiếng Việt |
+|---|---|---|
+| `Samael Kaizer Theosbane` | `Xa-men-cai-dên-thêô-xba-nê` | **xb** |
+| `Juliana Vox Blade` | `Giu-lia-na-vốc-bla-đê` | **bl** |
+| `Oldest Death` | `Ô-lđết-đít` | **lđ** |
+| `Dawn's Scourge` | `Đau-ét-xcao-rgê` | **xc**, **rg** |
+
+Đo trên toàn bộ DB của mọi phiên bản: **189 mục phiên âm khác mặt chữ, 35 mục (18,5%)
+không qua nổi `_valid_vietnamese_spoken_form` — chính hàm kiểm tra của project.** Tất cả
+đều `locked=1`, tức bất biến, tồn tại xuyên các run.
+
+## Nguyên nhân gốc: CMUdict tra theo **từ**, project tra theo **cả cụm**
+
+`_cmu_pronunciations()` nhận cả `"Eagle Eyes"` làm khoá. Từ điển không bao giờ có cụm, nên
+**mọi tên nhiều từ đều trượt** khỏi đường âm vị và rơi xuống đường mặt chữ
+(`_local_name_fallback`) — đường này làm việc từ **chữ viết**, nên:
+
+- không biết 'e' câm: `Zone` → `Dô-nê`, `Safe` → `Xa-phê`
+- không tách cụm phụ âm đầu: `Blade` → `Bla-đê`
+
+Trong khi đường âm vị **đã có sẵn** toàn bộ máy móc cần thiết và cho kết quả trùng khít
+ví dụ người nghe đưa: `Herald` → `He-rồ`, `Death` → `Đét`, `Seed` → `Xít`, `King` → `Kinh`.
+
+## Bốn lỗi tìm được, mỗi lỗi một cơ chế riêng
+
+### 1. `_local_name_fallback` khoá thẳng, không qua cổng kiểm tra
+
+Đường LLM có kiểm `_valid_vietnamese_spoken_form` rồi mới khoá, và có bước sửa ranh giới
+âm tiết nếu trượt. Đường fallback cục bộ **không có gì cả** — nó chỉ kiểm mẫu chính tả và
+ký tự cuối, **không kiểm phụ âm đầu**. Toàn bộ 35 mục hỏng đi qua đây.
+
+### 2. `VIETNAMESE_SYLLABLE_ONSETS` thiếu chữ "đ"
+
+Bảng có "d" nhưng không có "đ". Hai hàm đọc bảng này theo hai cách khác nhau:
+
+- `_valid_vietnamese_spoken_form` chuẩn hoá đ→d **trước** khi so → nó thấy "dr", từ chối đúng
+- `_split_illegal_onset` so chuỗi thô → nó thấy "đr", không tìm được đầu hợp lệ để tách,
+  **bỏ cuộc và trả về nguyên cụm**
+
+Nên `Dragon` giữ nguyên "đr", rồi bị chính bộ kiểm tra từ chối — bộ tách từ chối sửa đúng
+thứ mà bộ kiểm tra từ chối nhận.
+
+### 3. R trước phụ âm bị coi là âm đầu
+
+`_arpabet_syllables` chỉ đẩy phụ âm giữa hai nguyên âm xuống âm cuối nếu nó nằm trong
+`ARPABET_CODAS`. R **không** nằm trong bảng đó (vì luật là bỏ R), nên R bị để lại làm âm
+đầu của âm tiết sau, tạo cụm "rth", "rt", "rd". Bộ tách cụm khi đó chèn "ơ" và **đẻ ra một
+âm tiết mà từ gốc không có**:
+
+| từ | trước | sau |
+|---|---|---|
+| Arthur | `A-rơ-thơ` | `A-thơ` |
+| Portals | `Po-rơ-tồ` | `Po-tồ` |
+| Guardians | `Ga-rơ-đi-ân` | `Ga-đi-ân` |
+| Supporter | `Xơ-po-rơ-tơ` | `Xơ-po-tơ` |
+| Market | `Ma-rơ-cớt` | `Ma-cớt` |
+
+Luật đúng hẹp: R **trước phụ âm** là âm cuối; R **trước nguyên âm** vẫn là âm đầu, nên
+`Herald` giữ nguyên `He-rồ` đúng như người nghe đọc.
+
+### 4. Luật "r + d cuối → -c" được viết trong comment nhưng không có code
+
+Bảng `ARPABET_CODAS` có comment: *"After an r-coloured vowel a final d backs to -c: card is
+read cạc, not cát."* Không hàm nào thực hiện. Kết quả `Card` → `Cát` — sai phụ âm cuối, và
+người nghe đã nói rõ "card đọc là **cạc**". Bằng chứng ủng hộ luật rất chắc: hai từ mượn có
+thật trong tiếng Việt đều đúng khuôn AA/AO + R + D — *card* → "cạc", *guard* → "gác".
+
+Luật chỉ bắn khi R **thật sự nằm trong âm cuối**, nên `Bird`, `Third`, `Word` (dùng nguyên
+âm ER, không có âm R riêng) không bị đụng.
+
+## Kết quả đo
+
+Tra theo từng từ + ba sửa lỗi trên: **22/28 tên hỏng được chữa dứt điểm**, tất cả hợp lệ.
+
+| tên | trước | sau |
+|---|---|---|
+| Eagle Eyes | `I-glê-ếiêt` | `I-gồ Át` |
+| Oldest Death | `Ô-lđết-đít` | `Ôn-đớt Đét` |
+| Juliana Vox Blade | `Giu-lia-na-vốc-bla-đê` | `Giu-li-e-nơ Vát Bơ-lất` |
+| Dawn's Scourge | `Đau-ét-xcao-rgê` | `Đon Xớch` |
+| Western Safe-Zone | `Uê-xtên-xa-phê-dô-nê` | `Uét-tơn Xấp Dôn` |
+| Crippling Hex | `Crip-pling-hêc` | `Cơ-ri-pơ-linh Hét` |
+
+Định dạng theo đúng cách người nghe viết: **gạch nối giữa âm tiết, dấu cách giữa từ** —
+`he-rồ ọp âu-đít đét`.
+
+Sáu tên còn lại thiếu từ trong CMUdict: `Samael`, `Kaizer`, `Theosbane`, `Soulbound`,
+`Elderwing`, `Godswill`. Bốn trong sáu là **từ ghép của các từ có trong từ điển**
+(Soul+bound, Elder+wing, God+will, và `bane` → "Bên" đúng bằng mục tiêu `theo-bên`).
+
+## Còn hở sau lần này
+
+1. **35 mục đã khoá vẫn hỏng.** Sửa bộ sinh không sửa được dữ liệu đã khoá; cần một lượt
+   sửa lại có đọc-lại kiểm chứng, giống `set_listener_pronunciation()`.
+2. **Fallback vẫn đọc theo chữ viết, và luật 'e' câm đã thử — chưa dùng được.**
+   Đo trước khi làm, và may là có đo. Bỏ 'e' cuối từ sau phụ âm cải thiện `Zone` → `Dôn`,
+   `Safe` → `Xáp`, `Gate` → `Gát`, `Theosbane` → `Thêô-xơ-ban` (gần `theo-bên` hơn hẳn),
+   nhưng **làm hỏng nặng** những từ khác vì nó làm lộ ra phụ âm cuối mà bảng âm cuối của
+   đường mặt chữ không ánh xạ được, và phụ âm đó bị **ném đi im lặng**:
+
+   | từ | chỉ vá onset | + bỏ 'e' câm |
+   |---|---|---|
+   | Blade | `Bơ-la-đê` | `Bơ-la` — mất /d/ |
+   | Cable | `Ca-bơ-lê` | `Ca` — mất cả hai |
+   | Eagle | `I-gơ-lê` | `Íc` |
+   | Incredible | `In-cơ-rê-đi-bơ-lê` | `In-cơ-rê-đi` |
+
+   Đây chính là lớp lỗi mà test `test_the_final_consonant_is_never_simply_lost` canh cho
+   đường âm vị. Phải làm đầy `_latin_name_coda_reading` **trước**, rồi mới bỏ 'e' câm.
+3. **Tách từ ghép chưa làm.** Chỉ nên tách khi có **đúng một** cách tách mà cả hai nửa đều
+   có trong từ điển — `Godswill` có hai cách (god+swill, gods+will) nên phải để LLM lo.
+
+---
+
+# Kiểm định trên toàn corpus: 915 chương, 1.495 từ tiếng Anh
+
+Trước lần này bộ luật chỉ được thử trên vài chục ví dụ chọn tay. Người nghe yêu cầu thử
+trên chính văn bản sách. Kết quả đổi hai quyết định và huỷ một tính năng.
+
+## Cách tách từ tiếng Anh ra khỏi văn bản tiếng Việt
+
+Không thể chỉ dựa vào "có trong CMUdict" — `ra`, `cho`, `sao`, `tay`, `theo`, `tin`, `gian`
+đều là từ tiếng Việt **và** có trong CMUdict. Phép thử đúng là ngược lại: **một token có
+phải âm tiết tiếng Việt hợp lệ không**.
+
+Viết bộ nhận dạng âm tiết tiếng Việt (âm đầu + vần + âm cuối, có luật -nh/-ch sau i/ê).
+Kiểm trên 38 từ: **38/38 đúng**. Từ duy nhất từng lọt là `King` — vì tiếng Việt viết /ŋ/ sau
+i là **-nh**, nên "king" không phải chính tả tiếng Việt hợp lệ, "kinh" mới là.
+
+Kết quả trên 11 triệu ký tự: **1.495 từ tiếng Anh khác nhau, 80.663 lượt xuất hiện**;
+882 từ có trong CMUdict, 613 không.
+
+## Kết quả: 882/882 hợp lệ, 0 lỗi
+
+Không một từ nào trong sách làm bộ chuyển đổi sinh ra âm tiết tiếng Việt không hợp lệ, và
+không từ nào làm nó ném lỗi. Đường âm vị vững.
+
+Nhưng danh sách "mất phụ âm cuối" lộ ra hai lỗi thật.
+
+### Lỗi 1: luật /l/ tự thành âm tiết không phân biệt trọng âm
+
+`Gulf` → `Gồ`, trong khi `Golf` — **cùng vần** — → `Gôn`.
+
+Luật "âm /l/ tự thành âm tiết" (Michael → "Mai-cồ") kiểm `vowel in {"AH","AX"}`. Nhưng
+`_arpabet_phones` chỉ đổi tên **AH không nhấn** thành AX; **AH có nhấn là /ʌ/ đầy đủ**, mang
+một /l/ bình thường phía sau, không phải /l/ tự thành âm tiết. Gộp hai thứ làm một thì
+**nuốt mất phụ âm cuối** của cả lớp từ:
+
+| từ | trước | sau |
+|---|---|---|
+| Gulf | `Gồ` | `Gân` |
+| Bulk | `Bồ` | `Ban` → `Bân` |
+| Result | `Ri-dồ` | `Ri-dân` |
+| Adult | `Ơ-đồ` | `Ơ-đân` |
+| Hull | `Hồ` | `Hân` |
+
+Nhóm đối chứng (schwa thật) không đổi: `Michael`→`Mai-cồ`, `Cable`→`Cây-bồ`,
+`Incredible`→`In-cơ-re-đơ-bồ`, `Herald`→`He-rồ`.
+
+### Lỗi 2: nguyên âm phản ứng với **âm vị**, đáng lẽ với **chữ được viết ra**
+
+Có luật `AA + N → ô` (nên `John`→`Giôn`, `Dawn`→`Đon`). `Golf` trượt luật đó vì âm cuối của
+nó là **L**; chỉ *sau này* L mới được viết thành "n" theo luật "âm vang thắng âm cản". Nên
+`Golf` ra `Gan`, dù tài liệu và tiếng Việt đời thường đều đọc là **"gôn"**.
+
+Sửa: xét **chữ cái thực sự sẽ được viết**, không xét âm vị nguồn. 10/882 từ đổi, tất cả tốt lên:
+
+| từ | trước | sau |
+|---|---|---|
+| Golf | `Gan` | `Gôn` |
+| Rudolf | `Ru-đan` | `Ru-đôn` |
+| Waldo | `Uan-đô` | `Uôn-đô` |
+| Sol | `Xan` | `Xôn` |
+| Ulrich | `An-rích` | `Ân-rích` |
+
+## Kết quả âm: tách từ ghép — đã làm, đã đo, đã gỡ
+
+Ý tưởng: tên từ điển không có vẫn có thể là **hai từ nó có** — `Soulbound` = Soul+bound,
+`Elderwing` = Elder+wing. Chạy thử: đúng đẹp trên 7/7 từ ghép thật (`Nightfall`→`Nát-phon`,
+`Shadowbane`→`Se-đô-bân`, `Ironheart`→`Ai-ơn-hát`), và tự từ chối khi mơ hồ (`Godswill` tách
+được hai kiểu).
+
+**Nhưng corpus thật giết nó.** Sách đầy tên bịa kiểu Latinh, và chúng cũng có "đúng một cách
+tách":
+
+| tên | bị tách thành | ra |
+|---|---|---|
+| `Carina` | car + ina | `Ca-i-nơ` |
+| `Alterna` | alter + na | `Ôn-ơ-nơ` |
+| `Iristine` | iris + tine | `Ai-rớt-tan` |
+| `Maltimus` | malt + imus | `Mon-ai-mớt` |
+| `Florencia` | flor + encia | `Phơ-lo-rân-xi-ai-ây` |
+
+Nâng ngưỡng độ dài mỗi nửa lên 4 giảm từ 144 xuống 35 ca bắn nhầm nhưng vẫn còn
+`Iristine`, `Maltimus`; ngưỡng 5 thì giết luôn cả 7 từ ghép thật.
+
+**Lợi 2 tên, hại 35 tên. Gỡ.** Không có tín hiệu nào phân biệt được từ ghép tiếng Anh thật
+với tên bịa gốc Latinh, và fallback vốn đã cho kết quả hợp lệ cho tất cả chúng.
+
+Đây chính là lý do phải thử trên corpus: bộ 7 ví dụ tự chọn nói tính năng này hoàn hảo.
+
+## Hở mới tìm được, chưa sửa
+
+1. **Số La Mã chỉ ngôi thứ.** `Benedict III` xuất hiện **164 lần**, `Henry VIII` cũng có.
+   Project **không có xử lý số La Mã nào**. Phải đọc "Bê-nê-đích **Đệ Tam**", hiện tại rơi
+   vào đường phiên âm tên tiếng Anh và ra `Iii`.
+2. **Bộ quét tên nhận cả tiếng kêu.** `_is_proper_latin_name_surface("Uuuuu")` trả về True,
+   trong khi `is_vocalization_only("Uuuuu")` trả về True — **bộ quét tên không hỏi bộ nhận
+   diện tiếng kêu**. Cùng họ lỗi với "Argh" bị khoá thành phiên âm tên ở đường ASR.
+
+---
+
+# Kiểm định trên nguồn ngoài: 37.000 từ tải từ mạng
+
+Người nghe yêu cầu thử với từ và tên tiếng Anh phổ biến lấy từ mạng, không chỉ từ trong sách.
+
+| nguồn | số từ | hợp lệ | không hợp lệ | ném lỗi |
+|---|---|---|---|---|
+| 10.000 từ tiếng Anh thông dụng nhất | 10.000 | 9.096 | **0** | **0** |
+| 4.945 tên riêng | 4.921 | 2.709 | **0** | **0** |
+| 21.985 họ | 21.933 | 12.263 | **0** | **0** |
+| 157 thuật ngữ LitRPG (`dungeon`, `mana`, `buff`…) | 157 | 157 | **0** | **0** |
+
+**24.225 từ, không một cách đọc nào không hợp lệ, không một lần ném lỗi.** Phần còn lại là
+từ CMUdict không có (12.039), rơi xuống đường mặt chữ — đường này sau khi vá cũng không còn
+sinh ra kết quả không hợp lệ.
+
+Vài cách đọc thuật ngữ: `dungeon`→`Đân-giân`, `dragon`→`Đơ-re-gân`, `zombie`→`Dam-bi`,
+`vampire`→`Vem-pai`, `blade`→`Bơ-lất`, `gold`→`Gôn`, `portal`→`Po-tồ`.
+
+## "Từ tiếng Anh nào đã có dạng một từ tiếng Việt rồi thì thôi"
+
+Yêu cầu trực tiếp của người nghe, ví dụ họ đưa là **may**. Cơ chế cũ cho việc này là
+`CMUDICT_CONTEXT_ONLY`, chứa **đúng một từ**: `"may"`. Cộng thêm `NAME_CANDIDATE_EXCLUSIONS`
+viết tay thì phủ được **28 trong 366** từ như vậy trong 10.000 từ thông dụng nhất.
+
+Thay bằng luật: **một token đã là âm tiết tiếng Việt hợp lệ thì không phải tên tiếng Anh.**
+
+### Bộ nhận dạng âm tiết tiếng Việt
+
+Âm đầu (dùng lại `VIETNAMESE_SYLLABLE_ONSETS`) + vần + âm cuối, cộng luật chính tả -nh/-ch.
+Hai chi tiết quyết định độ chính xác, cả hai đều tìm ra bằng đo:
+
+1. **Chỉ bỏ 5 dấu thanh, giữ 3 dấu chất lượng nguyên âm.** Bản đầu bỏ cả breve/circumflex/horn,
+   nên `nhiên`→`nhien` và không còn giống âm tiết nào. Sai 4,14%.
+2. **Luật -nh/-ch chỉ áp dụng sau i, ê ĐƠN.** Nguyên âm đôi `iê` giữ cách viết -ng/-c: vừa
+   `kinh` vừa `tiếng` đều đúng, còn `king` thì không. Sai 1,18% → **0,40%**.
+
+Kiểm trên **6.282 token có dấu** (chắc chắn là tiếng Việt, 2.064.345 lượt) trong sách:
+**nhận đúng 99,6%**. 25 ca từ chối còn lại đều **không phải âm tiết đơn** (`urê`, `nitơ`) hoặc
+mang dấu nước ngoài (`Dvořák`, `Schrödinger`) — từ chối đúng.
+
+### Tác động: chỉ loại nhầm lẫn, không mất gì
+
+Trên **129 tên từng được khoá** qua mọi phiên bản, luật mới loại **đúng 2** — và cả hai đều là
+**tiếng Việt bị nhận nhầm thành tên tiếng Anh**: `'Con Hoang'` và `'SAU KHI'`.
+
+## Câu hỏi chưa trả lời được: tên quốc tế không phải tên tiếng Anh
+
+Chấm đường mặt chữ bằng đường âm vị làm đáp án trên 882 từ: **chỉ khớp 8,8%**. Nhìn kỹ thì
+không phải đường nào cũng sai — chúng đúng cho **hai lớp từ khác nhau**:
+
+| từ | đường âm vị (đang dùng) | đường mặt chữ |
+|---|---|---|
+| `Natasha` | `Nơ-ta-sơ` | `Na-ta-sa` |
+| `Sophia` | `Xô-phi-ơ` | `Xô-phia` |
+| `Katrina` | `Cớt-ri-nơ` | `Cát-ri-na` |
+| `Fernando` | `Phơ-nen-đô` | `Phê-rơ-nan-đô` |
+| `arcana` | `A-ce-nơ` | `A-rơ-ca-na` |
+
+Đây **không phải từ tiếng Anh**. Tiếng Việt mượn tên quốc tế theo **mặt chữ Latinh**, không
+qua phát âm tiếng Anh — "Na-ta-sa", "Xô-phi-a". CMUdict có chúng, nhưng nó ghi *người Anh đọc
+thế nào*, không phải *người Việt viết thế nào*.
+
+Ngược lại, với từ và tên **tiếng Anh thật** (`Herald`, `Death`, `Seed`, `King`, `Blade`),
+đường âm vị đúng và khớp đúng ví dụ người nghe đưa.
+
+Quy mô: trong 832 từ tiếng Anh của sách, **655 luôn viết hoa** (tên riêng, 57.536 lượt) và
+177 có xuất hiện chữ thường (từ thường, 6.028 lượt). Chưa có cách tự động phân biệt "tên
+tiếng Anh" với "tên quốc tế viết bằng chữ Latinh" — **cần tai người nghe quyết định.**

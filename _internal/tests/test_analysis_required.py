@@ -2994,14 +2994,14 @@ def test_name_at_sentence_start_is_kept_when_other_evidence_exists() -> None:
     rows = [
         {
             "speaker": "NARRATOR",
-            "text": "Xen bước vào phòng. Tôi gọi Xen quay lại.",
+            "text": "Xenlor bước vào phòng. Tôi gọi Xenlor quay lại.",
         }
     ]
 
     candidates = _name_candidate_contexts(rows)
 
     assert len(candidates) == 1
-    assert candidates[0]["surface"] == "Xen"
+    assert candidates[0]["surface"] == "Xenlor"
     assert candidates[0]["sentence_initial_occurrences"] == 1
     assert candidates[0]["mid_sentence_occurrences"] == 1
 
@@ -3412,7 +3412,7 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
             "id": 1,
             "stable_id": "c1s1",
             "chapter_id": 1,
-            "text": "Tôi biết May là một từ cần xét theo đúng ngữ cảnh.",
+            "text": "Tôi biết Cooldown là một từ cần xét theo đúng ngữ cảnh.",
             "kind_hint": "narration",
             "status": "analyzed",
             "speaker": "NARRATOR",
@@ -3431,7 +3431,7 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
                 {
                     "id": "N001",
                     "convert": False,
-                    "spoken_form": "May",
+                    "spoken_form": "Cooldown",
                     "confidence": 0.94,
                     "reason": "Từ trong ngữ cảnh tiếng Việt",
                 }
@@ -3443,8 +3443,33 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
     assert analyzer.reconcile_name_pronunciations() == 1
     assert analyzer.reconcile_name_pronunciations() == 0
     assert attempts == 1
-    assert db.pronunciations[0]["spoken_form"] == "May"
-    assert db.pronunciations[0]["source"] == "english_name_transliteration_case_sensitive"
+    assert db.pronunciations[0]["spoken_form"] == "Cooldown"
+    assert db.pronunciations[0]["source"] == "english_name_transliteration"
+
+
+def test_an_english_word_shaped_like_a_vietnamese_one_never_reaches_the_model() -> None:
+    """A listener asked for exactly this, naming "may".
+
+    "May" used to be the single entry of CMUDICT_CONTEXT_ONLY, sent to the model so it
+    could decide the word was Vietnamese here. There is nothing to decide: the word is
+    already spelled as a Vietnamese syllable, and the voice reads it as one. Two of the
+    129 names the corpus has ever locked were Vietnamese caught this way - "Con Hoang"
+    and "SAU KHI" - and the hand-written exclusion list covered 28 of the 366 such words
+    among the ten thousand commonest English words.
+    """
+    rows = [
+        {
+            "id": 1,
+            "stable_id": "c1s1",
+            "chapter_id": 1,
+            "text": "Tôi biết May là một từ cần xét theo đúng ngữ cảnh.",
+            "kind_hint": "narration",
+            "status": "analyzed",
+            "speaker": "NARRATOR",
+        }
+    ]
+    surfaces = {str(candidate["surface"]) for candidate in _name_candidate_contexts(rows)}
+    assert "May" not in surfaces
 
 
 def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
@@ -3456,7 +3481,7 @@ def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
             "id": 1,
             "stable_id": "c1s1",
             "chapter_id": 1,
-            "text": "Gary gặp Xen trong hành lang.",
+            "text": "Gary gặp Xenlor trong hành lang.",
             "kind_hint": "dialogue",
             "status": "analyzed",
             "speaker": "Gary",
@@ -3477,7 +3502,7 @@ def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
                 {
                     "id": "N001",
                     "convert": True,
-                    "spoken_form": "Xen",
+                    "spoken_form": "Xenlor",
                     "confidence": 0.9,
                     "reason": "Cố ý không hợp lệ",
                 }
@@ -3492,7 +3517,7 @@ def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
     assert {
         row["surface"]: row["spoken_form"]
         for row in db.pronunciations
-    } == {"Gary": "Ga-ri", "Xen": "Xên"}
+    } == {"Gary": "Ga-ri", "Xenlor": "Xên-lôn"}
     assert any(event[1] == "NAME_PRONUNCIATION_LOCAL_FALLBACK" for event in db.events)
 
 
@@ -3503,10 +3528,10 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
             "id": 1,
             "stable_id": "c1s1",
             "chapter_id": 1,
-            "text": "Xen gặp Zytherion và Vaelorian.",
+            "text": "Xenlor gặp Zytherion và Vaelorian.",
             "kind_hint": "dialogue",
             "status": "analyzed",
-            "speaker": "Xen",
+            "speaker": "Xenlor",
         }
     ]
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
@@ -3529,7 +3554,7 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
         for row in db.pronunciations
     } == {
         "Vaelorian": "Ve-lô-rian",
-        "Xen": "Xên",
+        "Xenlor": "Xên-lôn",
         "Zytherion": "Di-thê-riôn",
     }
     fallback_event = next(
@@ -3572,7 +3597,7 @@ def test_uncertain_short_names_are_left_verbatim_when_reconciliation_fails(
 
     # A short name is only left unread when nothing can read it. When the model fails, a
     # dictionary entry is used rather than the book being blocked - Wolf, Mag and Sol are
-    # in CMUdict and come out "Uôn", "Méc", "Xan"; Twal is not in it and stays unresolved.
+    # in CMUdict and come out "Uôn", "Méc", "Xôn"; Twal is not in it and stays unresolved.
     #
     # This used to skip all four. The caution was right while the converter dropped any
     # coda it did not know - it turned "Card" into "Ca" - and stopped being right once the
@@ -3580,7 +3605,9 @@ def test_uncertain_short_names_are_left_verbatim_when_reconciliation_fails(
     stored = {row["surface"]: row["spoken_form"] for row in db.pronunciations}
     assert stored["Wolf"] == "Uôn"
     assert stored["Mag"] == "Méc"
-    assert stored["Sol"] == "Xan"
+    # "Xôn", not "Xan": the vowel reacts to the coda that is written, and the /l/ of "Sol"
+    # is written "n". The same rule is why "Golf" is "Gôn".
+    assert stored["Sol"] == "Xôn"
     assert "Twal" not in stored
     skipped = next(
         event for event in db.events if event[1] == "NAME_PRONUNCIATION_UNCERTAIN_SKIPPED"

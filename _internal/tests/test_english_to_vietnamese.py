@@ -18,9 +18,12 @@ import pytest
 
 from ebook_reader.analysis import (
     VIETNAMESE_SYLLABLE_ONSETS,
+    _cmu_phrase_to_vietnamese,
     _cmu_pronunciation_to_vietnamese,
+    _without_tone,
     _cmu_pronunciations,
     _valid_vietnamese_spoken_form,
+    is_vietnamese_syllable,
 )
 
 CORPUS = (
@@ -134,7 +137,21 @@ def test_a_sonorant_outranks_an_obstruent_in_a_final_cluster() -> None:
 def test_r_is_dropped_rather_than_read() -> None:
     """Non-rhotic English has already lost it before Vietnamese sees the word."""
     assert "r" not in _read("Card").casefold()
-    assert _read("Guard") == "Gát"
+    assert "r" not in _read("Guard").casefold()
+
+
+def test_an_r_before_a_final_d_backs_the_stop() -> None:
+    """The one mark the r leaves behind, and the table always said so in a comment.
+
+    Vietnamese borrowed both of these words and ends both in -c: a card is "cạc" and a
+    guard post is "gác". Reading them "cát" and "gát" changes the final consonant, and a
+    listener asked for "cạc" by name. Only an r that is actually in the coda counts, so
+    "Bird" and "Third", whose r is inside the vowel, are unaffected.
+    """
+    assert _read("Card").endswith("c")
+    assert _read("Guard") == "Gác"
+    assert _read("Bird").endswith("t")
+    assert _read("Third").endswith("t")
 
 
 def test_the_final_consonant_is_never_simply_lost() -> None:
@@ -142,3 +159,122 @@ def test_the_final_consonant_is_never_simply_lost() -> None:
     for word in ("Card", "Soul", "Seed", "Path", "Void", "Safe"):
         reading = _read(word)
         assert reading[-1].casefold() in "cmnpt" or reading.endswith(("ch", "ng", "nh")), word
+
+
+def test_a_name_of_several_words_is_read_word_by_word() -> None:
+    """CMUdict is keyed on words, so a phrase missed it entirely and fell to the spelling.
+
+    Every multi-word name in the book took that route: "Eagle Eyes" came back "I-glê-ếiêt",
+    with a cluster no Vietnamese syllable can begin and a silent e read aloud. 35 of 189
+    locked readings in the corpus broke the project's own syllable rule that way, four of
+    them character names.
+    """
+    assert _cmu_phrase_to_vietnamese("Eagle Eyes") == "I-gồ Át"
+    assert _cmu_phrase_to_vietnamese("Oldest Death") == "Ôn-đớt Đét"
+
+
+def test_a_phrase_keeps_hyphens_for_syllables_and_spaces_for_words() -> None:
+    """The shape a listener wrote them in: "he-rồ ọp âu-đít đét"."""
+    reading = _cmu_phrase_to_vietnamese("Juliana Vox Blade")
+    assert reading is not None
+    assert len(reading.split(" ")) == 3, reading
+    assert "-" in reading.split(" ")[0]
+
+
+def test_a_phrase_the_dictionary_cannot_cover_is_left_alone() -> None:
+    """An invented name has no entry, and guessing at one is worse than asking."""
+    assert _cmu_phrase_to_vietnamese("Samael Kaizer Theosbane") is None
+
+
+def test_a_single_word_is_not_treated_as_a_phrase() -> None:
+    assert _cmu_phrase_to_vietnamese("Blade") is None
+
+
+def test_a_possessive_is_not_given_a_syllable() -> None:
+    """The book reads "Dawn’s Scourge" as two names, not three."""
+    assert _cmu_phrase_to_vietnamese("Dawn's Scourge") == "Đon Xớch"
+
+
+def test_an_r_before_a_consonant_closes_the_syllable_it_follows() -> None:
+    """"Arthur" is AR-thur. Left in the next onset it built the cluster "rth", which the
+    repair then spelled out as a syllable the name never had: "A-rơ-thơ"."""
+    assert _read("Arthur") == "A-thơ"
+    assert _read("Portals") == "Po-tồ"
+    assert _read("Market") == "Ma-cớt"
+
+
+def test_an_r_before_a_vowel_is_still_an_onset() -> None:
+    """The rule is about clusters only; a listener reads Herald "he-rồ"."""
+    assert _read("Herald") == "He-rồ"
+
+
+def test_d_is_an_onset_the_splitter_can_peel() -> None:
+    """"đ" and "d" are different onsets and both are real. With "đ" missing from the set the
+    splitter found no legal head in "đr", gave up, and left "Dragon" with an onset cluster."""
+    assert "đ" in VIETNAMESE_SYLLABLE_ONSETS
+    reading = _read("Dragon")
+    assert _valid_vietnamese_spoken_form("Dragon", reading), reading
+
+
+def test_a_syllabic_l_needs_a_schwa_in_front_of_it() -> None:
+    """A stressed AH is a full /ʌ/ with an ordinary /l/ behind it.
+
+    Treating the two alike swallowed the last consonant of the word: "Gulf" read "Gồ" while
+    "Golf", the same rime, read with an -n. Bulk, Result and Adult lost theirs the same way.
+    """
+    assert _read("Gulf").endswith("n")
+    assert _read("Bulk").endswith("n")
+    assert _read("Hull").endswith("n")
+    # the schwa cases the rule is actually for
+    assert _read("Michael") == "Mai-cồ"
+    assert _read("Cable") == "Cây-bồ"
+
+
+def test_the_vowel_reacts_to_the_coda_that_is_written() -> None:
+    """Both vowel rules were keyed on the phone N, so a coda that reads "n" because an /l/
+    survived the cluster missed them. "Golf" is "gôn" in Vietnamese - the ordinary word for
+    the game - and came out "Gan"."""
+    assert _read("Golf") == "Gôn"
+    assert _read("Rudolf") == "Ru-đôn"
+    assert _read("Waldo") == "Uôn-đô"
+    # unchanged: these reach the same rule through a real N
+    assert _read("John") == "Giôn"
+
+
+
+def test_an_english_word_already_shaped_like_a_vietnamese_one_is_left_alone() -> None:
+    """A listener asked for this by name: "may" needs no reading invented for it.
+
+    The hand-written exclusion list covered 28 of the 366 such words among the ten
+    thousand commonest English words.
+    """
+    for word in ("may", "man", "top", "long", "song", "cat", "bay", "run", "pain"):
+        assert is_vietnamese_syllable(word), word
+    for word in ("Blade", "Card", "King", "Seed", "Deck", "Rank", "Samael", "Theosbane"):
+        assert not is_vietnamese_syllable(word), word
+
+
+def test_the_recogniser_knows_real_vietnamese() -> None:
+    """Checked against 6,282 distinct tone-bearing tokens in the book: 99.6% accepted."""
+    for word in (
+        "nguy\u1ec5n", "tr\u01b0\u1eddng", "khuya", "quy\u1ec3n", "ng\u01b0\u1eddi", "\u0111\u01b0\u1eddng", "tuy\u1ec7t",
+        "nhi\u00ean", "vi\u1ec7c", "ti\u1ebfng", "t\u01b0\u01a1ng", "lu\u00f4n", "mi\u1ec7ng", "y\u00eau", "khu\u00f4n", "chi\u1ebfc",
+    ):
+        assert is_vietnamese_syllable(word), word
+
+
+def test_the_velar_spelling_rule_knows_the_diphthong() -> None:
+    """-nh/-ch only after a simple i or \u00ea. "kinh" is a syllable, "king" is not, and
+    "ti\u1ebfng" and "chi\u1ebfc" keep the velar spelling because their nucleus is i\u00ea."""
+    assert is_vietnamese_syllable("kinh")
+    assert not is_vietnamese_syllable("king")
+    assert is_vietnamese_syllable("ti\u1ebfng")
+    assert is_vietnamese_syllable("chi\u1ebfc")
+
+
+def test_a_tone_is_folded_but_a_vowel_is_not() -> None:
+    """Breve, circumflex and horn spell a different vowel, so folding them away made
+    "nhi\u00ean" read "nhien" and stop looking like a syllable."""
+    assert _without_tone("nhi\u00ean") == "nhi\u00ean"
+    assert _without_tone("\u0111\u01b0\u1eddng") == "\u0111\u01b0\u01a1ng"
+    assert _without_tone("ti\u1ebfng") == "ti\u00eang"
