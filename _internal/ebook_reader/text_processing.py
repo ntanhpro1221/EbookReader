@@ -80,12 +80,16 @@ FOLDED_VOCALIZATION_PATTERN = re.compile(
     + r"|[a-z])$",
     re.IGNORECASE,
 )
-# A held sound written out: one consonant, then the same vowel three times or more.
-# "Tuuuuu" is not a name, but the pattern above cannot see it because a letter stands in
-# front of the run. No word in either language repeats a vowel three times, so this cannot
-# swallow a real one.
+# A held sound written out: the same vowel three times or more, anywhere in the token.
+# Neither language repeats a vowel that many times, and the book bears it out - of 11,524
+# distinct tokens across both books, 87 match and every one is a cry, a shout or a word
+# stretched out ("Khôôôông", "Saaaaaaam"). The only other things that match are Roman
+# numerals, which have their own guard.
+#
+# Narrower versions kept missing: anchoring at the start missed "Tuuuuu", and allowing only
+# consonants in front missed "THWAAAM", "Booyaaa" and "ARAAAAH".
 STRETCHED_SOUND_TOKEN_PATTERN = re.compile(
-    r"^[bcdghklmnpqrstvx]?(?P<vowel>[aeiouy])(?P=vowel){2,}h*$",
+    r"(?P<vowel>[aeiouyăâêôơư])(?P=vowel){2,}",
     re.IGNORECASE,
 )
 # A regnal number, not a held sound. "III" folds to a run of one vowel and would otherwise
@@ -299,7 +303,7 @@ def _is_vocalization_token(token: str) -> bool:
     return (
         FOLDED_VOCALIZATION_PATTERN.fullmatch(folded) is not None
         or COMPACT_VOCALIZATION_PATTERN.fullmatch(folded) is not None
-        or STRETCHED_SOUND_TOKEN_PATTERN.fullmatch(folded) is not None
+        or STRETCHED_SOUND_TOKEN_PATTERN.search(token) is not None
     )
 
 

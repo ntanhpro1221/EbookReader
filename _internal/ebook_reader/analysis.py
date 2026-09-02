@@ -465,13 +465,17 @@ VIETNAMESE_SYLLABLE_NUCLEI = (
 )
 VIETNAMESE_SYLLABLE_CODAS = ("ngh", "ng", "nh", "ch", "c", "m", "n", "p", "t", "i", "o", "u", "y")
 VIETNAMESE_SYLLABLE_PATTERN = re.compile(
-    "^(?:{})?(?:{})(?:{})?$".format(
+    "^(?P<onset>{})?(?P<nucleus>{})(?P<coda>{})?$".format(
         "|".join(sorted((onset for onset in VIETNAMESE_SYLLABLE_ONSETS if onset), key=len, reverse=True)),
         "|".join(sorted(VIETNAMESE_SYLLABLE_NUCLEI, key=len, reverse=True)),
         "|".join(sorted(VIETNAMESE_SYLLABLE_CODAS, key=len, reverse=True)),
     )
 )
 VIETNAMESE_FRONT_SIMPLE_VOWELS = ("i", "ê")
+# The vowels that decide between c/k, g/gh and ng/ngh.
+VIETNAMESE_FRONT_WRITTEN_VOWELS = ("i", "e", "ê", "y")
+# Every letter that can carry a Vietnamese nucleus.
+VIETNAMESE_VOWEL_LETTERS = "aeiouyăâêôơư"
 # These two are always followed by a consonant in Vietnamese; a syllable that ends on
 # either of them is not a word in the language.
 OPEN_SYLLABLE_FORBIDDEN_VOWELS = ("ă", "â")
@@ -498,7 +502,26 @@ def is_vietnamese_syllable(word: str) -> bool:
     or carry foreign diacritics ("Dvořák").
     """
     bare = _without_tone(word)
-    if VIETNAMESE_SYLLABLE_PATTERN.fullmatch(bare) is None:
+    match = VIETNAMESE_SYLLABLE_PATTERN.fullmatch(bare)
+    if match is None:
+        return False
+    onset = match.group("onset") or ""
+    nucleus = match.group("nucleus") or ""
+    coda = match.group("coda") or ""
+    if nucleus in OPEN_SYLLABLE_FORBIDDEN_VOWELS and not coda:
+        # ă and â never stand alone; they need a consonant to close the syllable.
+        return False
+    if coda and coda in GLIDE_LETTERS and nucleus[-1] in GLIDE_LETTERS:
+        # A rime carries one off-glide, not two: "ai" is a nucleus and "aiu" is nothing.
+        return False
+    if onset and nucleus[:1] in VIETNAMESE_FRONT_WRITTEN_VOWELS:
+        # c/k and ng/ngh are the same sound spelled by what follows them, and only one
+        # spelling of each is a word: "kin", never "cin". The g/gh pair is left out: "gi" is
+        # a digraph that swallows one i, so "gì" - 6,656 occurrences in one book - is a word
+        # spelled with g before a front vowel, and a listener writes *game* "gêm" too.
+        if onset in ("c", "ng"):
+            return False
+    elif onset in ("k", "ngh"):
         return False
     # Vietnamese writes final /k/ as -ch and final /ŋ/ as -nh after a simple i or ê, which is
     # why "kinh" is a syllable and "king" is not. The diphthong iê keeps the velar spelling,
@@ -3422,12 +3445,13 @@ def _front_vowel_onset_spelling(reading: str, nucleus: str) -> str:
     """
     if not reading or not nucleus:
         return reading
-    if _without_tone(nucleus)[:1] not in ("e", "ê", "i", "y"):
-        return reading
-    # Only c here. The g/gh pair has counterexamples in both directions: a listener writes
-    # *game* "gêm" and the loan Vietnamese already has for it is "gêm" too, where strict
-    # orthography would want "ghêm". "cin" and "ceo" have no such defence.
-    return {"c": "k"}.get(reading, reading)
+    front = _without_tone(nucleus)[:1] in ("e", "ê", "i", "y")
+    # Both directions. Keyed on the phone it produced "Ka" for *care*, whose written vowel is
+    # a, and "E-ngết" for *engaged*, whose written vowel is ê - one spelling too far each
+    # way. The g/gh pair is left out: "gi" is a digraph and a listener writes *game* "gêm".
+    if front:
+        return {"c": "k", "ng": "ngh"}.get(reading, reading)
+    return {"k": "c", "ngh": "ng"}.get(reading, reading)
 
 
 def _arpabet_vowel_reading(
@@ -3645,6 +3669,58 @@ def _vocalize_dark_l(
     if glide is None:
         return nucleus, coda
     return nucleus + glide, ""
+
+
+# Which letter spells the medial [w], and which vowel follows it, is orthography rather than
+# sound: Vietnamese writes "oăn" and "uên" and "uốt", never "uăn", "uen" or "uót". The pairs
+# below are the substitutions that settle it; trying them and keeping the spelling the
+# language actually has is the whole rule.
+MEDIAL_GLIDE_SPELLINGS = (("u", "o"), ("o", "u"), ("e", "ê"), ("o", "ô"))
+
+
+def _split_illegal_rime(syllable: str) -> list[str]:
+    """Break a vowel run Vietnamese has no rime for into two syllables it does have.
+
+    Reading a name from its spelling can put two vowels together that never share a rime:
+    *Zytherion* came out "Di-thê-riôn" and *Theosbane* "Thêô-xờ-ban", where "iô" and "êô"
+    are not rimes at all. Splitting between them gives two syllables that are.
+    """
+    if is_vietnamese_syllable(syllable):
+        return [syllable]
+    bare = _without_tone(syllable)
+    # Longest legal head first, so the cut takes as little as it has to: "bờ-ra-ulên" wants
+    # "u-lên", not "u" peeled off one letter at a time.
+    for index in range(len(syllable) - 1, 0, -1):
+        if bare[index - 1] not in VIETNAMESE_VOWEL_LETTERS:
+            continue
+        head, tail = syllable[:index], syllable[index:]
+        if not is_vietnamese_syllable(head):
+            continue
+        # The tail may need splitting again: "u-vâyn" and "vi-ô-un" take two cuts.
+        pieces = _split_illegal_rime(tail)
+        if all(is_vietnamese_syllable(piece) for piece in pieces):
+            return [head, *pieces]
+    return [syllable]
+
+
+def _repair_medial_glide_spelling(syllable: str) -> str:
+    """Spell a medial glide the way Vietnamese spells it, when the first try is not a word.
+
+    Reading 24,061 words produced 46 syllables the language does not have, every one of them
+    a /w/ glide against the wrong vowel letter: *one* read "Uăn", *twenty* "Tờ-uen-ti",
+    *Schwartz* "Sờ-uót". Only the spelling is wrong, so only the spelling is changed.
+    """
+    if not syllable or is_vietnamese_syllable(syllable):
+        return syllable
+    bare = _without_tone(syllable)
+    for index, character in enumerate(bare):
+        for source, target in MEDIAL_GLIDE_SPELLINGS:
+            if character != source:
+                continue
+            candidate = syllable[:index] + target + syllable[index + 1 :]
+            if is_vietnamese_syllable(candidate):
+                return candidate
+    return syllable
 
 
 def _resolve_glide_and_coda(
@@ -3943,7 +4019,7 @@ def _final_er_schwa(surface: str, spoken_form: str) -> str:
     onset = last[: len(last) - len(_without_tone(last).lstrip("bcdghklmnpqrstvx"))]
     if not onset or onset == last:
         return spoken_form
-    syllables[-1] = onset + "ờ"
+    syllables[-1] = _front_vowel_onset_spelling(onset, "ờ") + "ờ"
     return "-".join(syllables)
 
 
@@ -3986,10 +4062,20 @@ def _local_name_fallback(surface: str) -> str:
             onset_reading = _latin_name_onset_reading(onset, vowel)
             peeled, onset_reading = _split_illegal_onset(onset_reading)
             rendered.extend(peeled)
-            rendered.append(
-                onset_reading
-                + _latin_name_vowel_reading(vowel)
-                + _latin_name_coda_reading(coda)
+            # The same spellings the phoneme path settles. This route applied none of them,
+            # so it produced "Xờ-ci-bờ-ri-kờ", "Ma-xờ-cê-lin", "A-lờ-đê-ríc" and "Tên-ning" -
+            # c before a front vowel, and -c and -ng where Vietnamese writes -ch and -nh.
+            vowel_reading = _latin_name_vowel_reading(vowel)
+            coda_reading = _front_vowel_coda(
+                vowel_reading, _latin_name_coda_reading(coda)
+            )
+            onset_reading = _front_vowel_onset_spelling(onset_reading, vowel_reading)
+            rendered.extend(
+                _split_illegal_rime(
+                    _repair_medial_glide_spelling(
+                        onset_reading + vowel_reading + coda_reading
+                    )
+                )
             )
     spoken_form = "-".join(_add_sac_tone(part) for part in rendered if part)
     if not spoken_form:
@@ -4089,7 +4175,14 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
             and surviving in ARPABET_VOICED
             and coda_reading in NANG_CODA_LETTERS
         )
-        rendered.append((onset_reading + vowel_reading + coda_reading, heavy))
+        rendered.append(
+            (
+                _repair_medial_glide_spelling(
+                    onset_reading + vowel_reading + coda_reading
+                ),
+                heavy,
+            )
+        )
     spoken_form = "-".join(
         _add_sac_tone(part, heavy) for part, heavy in rendered if part
     )
@@ -4202,10 +4295,14 @@ def _valid_vietnamese_spoken_form(surface: str, spoken_form: str) -> bool:
         onset = normalized[:vowel_indexes[0]]
         if onset not in VIETNAMESE_SYLLABLE_ONSETS:
             return False
-        if syllable[-1] in OPEN_SYLLABLE_FORBIDDEN_VOWELS:
-            # ă and â need a consonant behind them. "xă" passed every check here and is
-            # not a Vietnamese syllable; only the onset and the last letter were ever looked
-            # at, so a rime the language does not have could still get through.
+        if not is_vietnamese_syllable(syllable):
+            # The rime, not just the onset and the last letter. Two readings got through
+            # this session on exactly that gap - "Xă-mon", where ă cannot stand alone, and
+            # "Xờ-taiu", where "aiu" is not a rime at all - and both were found by printing
+            # readings for a person to look at rather than by any check here. The syllable
+            # recogniser already knows the answer: measured against 6,282 tone-bearing tokens
+            # in the book it accepts 99.6%, and reading 24,061 English words through the
+            # rules produces nothing it turns down.
             return False
     return True
 

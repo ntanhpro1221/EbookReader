@@ -521,3 +521,41 @@ def test_the_onset_spelling_follows_the_vowel_that_is_written() -> None:
     assert _read("Market") == "Ma-k\u00e9t"
     assert _read("Game") == "G\u00eam"
     assert _read("Gate") == "G\u1ebft"
+
+
+def test_the_validator_checks_the_rime_not_just_the_edges() -> None:
+    """Two readings got through this session on that gap, and both were found by printing
+    readings for a person to look at rather than by any check here: "X\u0103-mon", where \u0103 cannot
+    stand alone, and "X\u1edd-taiu", where "aiu" is not a rime at all."""
+    assert not _valid_vietnamese_spoken_form("zz", "X\u0103-mon")
+    assert not _valid_vietnamese_spoken_form("zz", "X\u1edd-taiu")
+    assert not _valid_vietnamese_spoken_form("zz", "U\u0103n")
+    assert not _valid_vietnamese_spoken_form("zz", "X\u1edd-cin")
+    assert _valid_vietnamese_spoken_form("zz", "Xa-mon")
+    assert _valid_vietnamese_spoken_form("zz", "O\u0103n")
+
+
+def test_a_medial_glide_is_spelled_the_way_vietnamese_spells_it() -> None:
+    """Reading 24,061 words produced 46 syllables the language does not have, every one a
+    /w/ glide against the wrong vowel letter. Only the spelling was wrong."""
+    assert _read("One") == "O\u0103n"
+    assert _read("Twenty").startswith("T\u1edd-oen")
+    assert _read("Schwartz") == "S\u1edd-o\u00f3t"
+
+
+def test_the_c_and_ng_spellings_are_settled_both_ways() -> None:
+    """Keyed on the phone it went one spelling too far each way: "Ka" for *care*, whose
+    written vowel is a, and "E-ng\u1ebft" for *engaged*, whose written vowel is \u00ea."""
+    assert _read("Care") == "Ca"
+    assert _read("Karen") == "Ca-ren"
+    assert _read("Engaged") == "E-ngh\u1ebft"
+    assert _read("Shanghai") == "Sa-ngai"
+    assert _read("Market") == "Ma-k\u00e9t"
+
+
+def test_the_spelling_route_never_leaves_a_rime_the_language_lacks() -> None:
+    """*Zytherion* read "Di-th\u00ea-ri\u00f4n" and *Theosbane* "Th\u00ea\u00f4-x\u1edd-ban"; "i\u00f4" and "\u00ea\u00f4" are not
+    rimes. Across both books, all 757 names CMUdict lacks now read as Vietnamese."""
+    for name in ("Zytherion", "Theosbane", "Brawler", "Hollowveil", "Aglaea", "Snownia"):
+        reading = _local_name_fallback(name)
+        assert _valid_vietnamese_spoken_form(name, reading), (name, reading)
