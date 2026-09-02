@@ -125,7 +125,7 @@ def test_an_unstressed_schwa_is_not_read_as_a_full_a() -> None:
     "natasha" is "na-ta-sa", which is how Vietnamese writes those names.
     """
     assert _read("Incredible") == "In-cờ-re-đi-bồ"
-    assert "nơ" in _read("Benedict")
+    assert _read("Benedict") == "Be-ne-đích"
 
 
 def test_hand_chosen_readings_still_win() -> None:
@@ -231,15 +231,15 @@ def test_a_single_word_is_not_treated_as_a_phrase() -> None:
 
 def test_a_possessive_is_not_given_a_syllable() -> None:
     """The book reads "Dawn’s Scourge" as two names, not three."""
-    assert _cmu_phrase_to_vietnamese("Dawn's Scourge") == "Đon Xờ-cớch"
+    assert _cmu_phrase_to_vietnamese("Dawn's Scourge") == "Đon Xờ-cớt"
 
 
 def test_an_r_before_a_consonant_closes_the_syllable_it_follows() -> None:
     """"Arthur" is AR-thur. Left in the next onset it built the cluster "rth", which the
     repair then spelled out as a syllable the name never had: "A-rơ-thơ"."""
-    assert _read("Arthur") == "A-thơ"
+    assert _read("Arthur") == "A-thờ"
     assert _read("Portals") == "Po-tồ"
-    assert _read("Market") == "Ma-cớt"
+    assert _read("Market") == "Ma-cét"
 
 
 def test_an_r_before_a_vowel_is_still_an_onset() -> None:
@@ -299,62 +299,62 @@ def test_an_english_word_already_shaped_like_a_vietnamese_one_is_left_alone() ->
 def test_the_recogniser_knows_real_vietnamese() -> None:
     """Checked against 6,282 distinct tone-bearing tokens in the book: 99.6% accepted."""
     for word in (
-        "nguy\u1ec5n", "tr\u01b0\u1eddng", "khuya", "quy\u1ec3n", "ng\u01b0\u1eddi", "\u0111\u01b0\u1eddng", "tuy\u1ec7t",
-        "nhi\u00ean", "vi\u1ec7c", "ti\u1ebfng", "t\u01b0\u01a1ng", "lu\u00f4n", "mi\u1ec7ng", "y\u00eau", "khu\u00f4n", "chi\u1ebfc",
+        "nguyễn", "trường", "khuya", "quyển", "người", "đường", "tuyệt",
+        "nhiên", "việc", "tiếng", "tương", "luôn", "miệng", "yêu", "khuôn", "chiếc",
     ):
         assert is_vietnamese_syllable(word), word
 
 
 def test_the_velar_spelling_rule_knows_the_diphthong() -> None:
-    """-nh/-ch only after a simple i or \u00ea. "kinh" is a syllable, "king" is not, and
-    "ti\u1ebfng" and "chi\u1ebfc" keep the velar spelling because their nucleus is i\u00ea."""
+    """-nh/-ch only after a simple i or ê. "kinh" is a syllable, "king" is not, and
+    "tiếng" and "chiếc" keep the velar spelling because their nucleus is iê."""
     assert is_vietnamese_syllable("kinh")
     assert not is_vietnamese_syllable("king")
-    assert is_vietnamese_syllable("ti\u1ebfng")
-    assert is_vietnamese_syllable("chi\u1ebfc")
+    assert is_vietnamese_syllable("tiếng")
+    assert is_vietnamese_syllable("chiếc")
 
 
 def test_a_tone_is_folded_but_a_vowel_is_not() -> None:
     """Breve, circumflex and horn spell a different vowel, so folding them away made
-    "nhi\u00ean" read "nhien" and stop looking like a syllable."""
-    assert _without_tone("nhi\u00ean") == "nhi\u00ean"
-    assert _without_tone("\u0111\u01b0\u1eddng") == "\u0111\u01b0\u01a1ng"
-    assert _without_tone("ti\u1ebfng") == "ti\u00eang"
+    "nhiên" read "nhien" and stop looking like a syllable."""
+    assert _without_tone("nhiên") == "nhiên"
+    assert _without_tone("đường") == "đương"
+    assert _without_tone("tiếng") == "tiêng"
 
 
 def test_the_vowel_follows_the_letter_it_is_spelled_with() -> None:
     """A listener wrote these out, and they do not follow English vowel reduction.
 
-    "dragon" is "\u0111\u1edd-ra-gon", not "\u0110\u01a1-re-g\u00e2n"; "natasha" is "na-ta-sa". These names are
+    "dragon" is "đờ-ra-gon", not "Đơ-re-gân"; "natasha" is "na-ta-sa". These names are
     read from the letters, and the pronunciation only chooses among the values a letter can
     take - which is what a Vietnamese reader writing down an English word does.
     """
-    assert _read("Dragon") == "\u0110\u1edd-ra-gon"
+    assert _read("Dragon") == "Đờ-ra-gon"
     assert _read("Zombie") == "Dom-bi"
     assert _read("Vampire") == "Vam-pai"
     assert _read("Natasha") == "Na-ta-sa"
-    assert _read("Sophia") == "X\u00f4-phi-a"
+    assert _read("Sophia") == "Xô-phi-a"
 
 
 def test_an_inserted_syllable_carries_the_huyen_tone() -> None:
-    """Every epenthesis a listener has written is huy\u1ec1n: "in-c\u1edd-ri-\u0111i-b\u1ed3", "\u0111\u1edd-ra-gon",
-    "b\u1edd-l\u1ebft". It is a weak syllable that was never in the word."""
-    assert _read("Blade") == "B\u1edd-l\u1ebft"
-    assert _read("Dragon").startswith("\u0110\u1edd-")
+    """Every epenthesis a listener has written is huyền: "in-cờ-ri-đi-bồ", "đờ-ra-gon",
+    "bờ-lết". It is a weak syllable that was never in the word."""
+    assert _read("Blade") == "Bờ-lết"
+    assert _read("Dragon").startswith("Đờ-")
 
 
 def test_an_er_ending_is_the_schwa_not_a_full_e() -> None:
-    """"cai-d\u01a1", not "cai-d\u00ea". Keyed on the letter, -er and -or both land on \u01a1."""
-    assert _read("Water").endswith("t\u01a1")
-    assert _read("Master").endswith("t\u01a1")
-    assert _read("Doctor").endswith("t\u01a1")
+    """"cai-dơ", not "cai-dê". Keyed on the letter, -er and -or both land on ơ."""
+    assert _read("Water").endswith("tờ")
+    assert _read("Master").endswith("tờ")
+    assert _read("Doctor").endswith("tờ")
 
 
 def test_a_silent_e_before_a_plural_s_spells_no_vowel() -> None:
     """"James" spells one vowel, not two; counting two left the word unaligned and the
-    reading fell back to the phone alone, giving "Gi\u00e2m"."""
+    reading fell back to the phone alone, giving "Giâm"."""
     assert _vowel_letter_groups("james") == ["a"]
-    assert _read("James") == "Gi\u00eam"
+    assert _read("James") == "Giêm"
 
 
 def test_a_word_that_cannot_be_lined_up_still_reads() -> None:
@@ -368,18 +368,18 @@ def test_a_word_that_cannot_be_lined_up_still_reads() -> None:
 def test_a_stop_final_syllable_takes_nang_when_the_coda_moved_furthest() -> None:
     """The whole difference between the two tones in the readings a listener wrote.
 
-    A voiced English final that lands on -t keeps its place and takes s\u1eafc: *seed* is "x\u00edt",
-    *blade* "b\u1edd-l\u1ebft". One that has to be written -c or -p has moved further and takes n\u1eb7ng:
-    *card* is "c\u1ea1c", *of* "\u1ecdp". A voiceless final always takes s\u1eafc, which is every other
+    A voiced English final that lands on -t keeps its place and takes sắc: *seed* is "xít",
+    *blade* "bờ-lết". One that has to be written -c or -p has moved further and takes nặng:
+    *card* is "cạc", *of* "ọp". A voiceless final always takes sắc, which is every other
     reading in the set - *box*, *cat*, *death*, *desk*, *top*.
     """
-    assert _read("Card") == "C\u1ea1c"
-    assert _read("Of") == "\u1eccp"
-    assert _read("Seed") == "X\u00edt"
-    assert _read("Blade") == "B\u1edd-l\u1ebft"
-    assert _read("Box") == "B\u00f3c"
-    assert _read("Death") == "\u0110\u00e9t"
-    assert _read("George") == "Gi\u00f3ch"
+    assert _read("Card") == "Cạc"
+    assert _read("Of") == "Ọp"
+    assert _read("Seed") == "Xít"
+    assert _read("Blade") == "Bờ-lết"
+    assert _read("Box") == "Bóc"
+    assert _read("Death") == "Đét"
+    assert _read("George") == "Gióch"
 
 
 def test_a_vowel_is_short_before_a_voiceless_consonant() -> None:
@@ -394,62 +394,62 @@ def test_a_vowel_is_short_before_a_voiceless_consonant() -> None:
 
 def test_a_schwa_before_a_nasal_opens_into_a_full_e() -> None:
     """*carmen* is "ca-men" and *elena* "e-le-na", where *benedict*, whose schwa meets a
-    stop, is "be-n\u01a1-\u0111\u00edch"."""
+    stop, is "be-nơ-đích"."""
     assert _read("Carmen") == "Ca-men"
     assert _read("Elena") == "E-le-na"
-    assert _read("Benedict") == "Be-n\u01a1-\u0111\u00edch"
+    assert _read("Rebecca") == "Re-be-ca"
 
 
 def test_a_stressed_o_stays_open_before_a_consonant() -> None:
-    """*tony* is "to-ni"; it rounds when unstressed (*sophia* "x\u00f4-phi-a"), when a consonant
-    closes the syllable (*oldest* "\u00f4n-\u0111\u1edbt") and before a vowel (*noah* "n\u00f4-a")."""
+    """*tony* is "to-ni"; it rounds when unstressed (*sophia* "xô-phi-a"), when a consonant
+    closes the syllable (*oldest* "ôn-đớt") and before a vowel (*noah* "nô-a")."""
     assert _read("Tony") == "To-ni"
-    assert _read("Sophia") == "X\u00f4-phi-a"
-    assert _read("Noah") == "N\u00f4-a"
+    assert _read("Sophia") == "Xô-phi-a"
+    assert _read("Noah") == "Nô-a"
 
 
 def test_a_stressed_u_before_a_nasal_is_the_short_a() -> None:
-    """*month* is "m\u0103n", *dungeon* "\u0111\u0103ng-gi\u1eebng"."""
-    assert _read("Month") == "M\u0103n"
-    assert _read("Dungeon").startswith("\u0110\u0103")
+    """*month* is "măn", *dungeon* "đăng-giừng"."""
+    assert _read("Month") == "Măn"
+    assert _read("Dungeon").startswith("Đă")
 
 
 def test_a_final_k_is_written_ch_unless_an_s_closes_the_syllable_first() -> None:
-    """*jack* is "d\u00e1ch", *action* "\u00e1ch-s\u1eebn", *text* "t\u1ebfch" - the vowel raising with the coda,
-    because -ech is not a rime and -\u00each is. *mask*, *task* and *desk*, all /sk/, keep -c."""
+    """*jack* is "dách", *action* "ách-sừn", *text* "tếch" - the vowel raising with the coda,
+    because -ech is not a rime and -êch is. *mask*, *task* and *desk*, all /sk/, keep -c."""
     assert _read("Jack").endswith("ch")
-    assert _read("Text") == "T\u1ebfch"
-    assert _read("Next") == "N\u1ebfch"
-    assert _read("Mask") == "M\u00e1c"
-    assert _read("Task") == "T\u00e1c"
-    assert _read("Desk") == "\u0110\u00e9c"
+    assert _read("Text") == "Tếch"
+    assert _read("Next") == "Nếch"
+    assert _read("Mask") == "Mác"
+    assert _read("Task") == "Tác"
+    assert _read("Desk") == "Đéc"
     # -och and -uch are not rimes, so a back vowel keeps -c whatever precedes the k
-    assert _read("Box") == "B\u00f3c"
-    assert _read("Book") == "B\u00fac"
+    assert _read("Box") == "Bóc"
+    assert _read("Book") == "Búc"
 
 
 def test_a_coarse_word_is_not_reached_by_a_rule_that_is_otherwise_right() -> None:
-    """"Deck" lands on "\u0110\u1ebfch" by every rule here, and the book says "B\u1ed9 Th\u1ebb (Deck)" nine
+    """"Deck" lands on "Đếch" by every rule here, and the book says "Bộ Thẻ (Deck)" nine
     times. The override table is where a reading gets chosen by hand."""
-    assert _read("Deck") == "\u0110\u00e9c"
+    assert _read("Deck") == "Đéc"
 
 
 def test_the_tion_suffix_is_read_sun() -> None:
-    assert _read("Nation") == "N\u00e2y-s\u1eebn"
-    assert _read("Station") == "X\u1edd-t\u00e2y-s\u1eebn"
-    assert _read("Vision") == "Vi-s\u1eebn"
+    assert _read("Nation") == "Nây-sừn"
+    assert _read("Station") == "Xờ-tây-sừn"
+    assert _read("Vision") == "Vi-sừn"
 
 
 def test_a_run_that_vietnamese_can_begin_a_syllable_with_stays_an_onset() -> None:
-    """*katrina* is "ca-tri-na", not "c\u00e1t-ri-na": "tr" is a Vietnamese onset."""
+    """*katrina* is "ca-tri-na", not "cát-ri-na": "tr" is a Vietnamese onset."""
     assert _read("Katrina") == "Ca-tri-na"
     # and one it cannot begin with is still split across the two syllables
-    assert _read("Arthur") == "A-th\u01a1"
+    assert _read("Arthur") == "A-thờ"
 
 
 def test_an_s_between_a_sonorant_and_a_stop_joins_the_coda() -> None:
-    """*monster* is "m\u00f4n-t\u01a1"; left in the onset the s became a syllable of its own."""
-    assert _read("Monster").endswith("t\u01a1")
+    """*monster* is "môn-tơ"; left in the onset the s became a syllable of its own."""
+    assert _read("Monster").endswith("tờ")
     assert len(_read("Monster").split("-")) == 2
 
 

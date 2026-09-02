@@ -3293,7 +3293,8 @@ VOWEL_LETTER_GROUP_PATTERN = re.compile(r"[aeiouy]+")
 SPELLED_VOWEL_READINGS = {
     ("a", "AA"): "a", ("a", "AE"): "a", ("a", "EH"): "a", ("a", "ER"): "a", ("a", "AH"): "a", ("a", "AX"): "a", ("a", "EY"): "ây",
     ("o", "AA"): "o", ("o", "AH"): "o", ("o", "AX"): "o", ("o", "OW"): "ô", ("o", "UH"): "ô",
-    ("e", "EH"): "e", ("e", "AX"): "ơ", ("e", "ER"): "ơ", ("e", "IY"): "i",
+    ("e", "EH"): "e", ("e", "AX"): "e", ("e", "ER"): "ơ", ("e", "IY"): "e",
+    ("e", "IH"): "e",
     ("i", "IH"): "i", ("i", "IY"): "i", ("i", "AY"): "ai", ("i", "AX"): "i",
     ("u", "AH"): "ă", ("u", "UW"): "u", ("u", "AX"): "ơ",
     ("ee", "IY"): "i", ("ea", "EH"): "e", ("ie", "IY"): "i", ("eo", "AX"): "ừ",
@@ -3440,6 +3441,12 @@ def _arpabet_vowel_reading(
         # The nasal has to close this syllable: ă never stands alone in Vietnamese, so
         # *summon*, whose /m/ opens the next one, is "xa-mon" and not "xă-mon".
         return "ă"
+    if vowel == "ER" and not stressed:
+        # A weak syllable whose vowel is ơ carries huyền. A listener put it that way -
+        # "mon tờ có thanh huyền bởi vì trọng âm trong từ nữa" - and it is the same tone the
+        # inserted syllable of a broken cluster takes: "đờ-ra-gon", "in-cờ-ri-đi-bồ",
+        # "xờ-kiu". Stressed, the vowel is level, as in *service* "xơ-vít".
+        return "ờ"
     if vowel == "AW":
         # English shortens a vowel before a voiceless consonant and holds it before a voiced
         # one, and Vietnamese spells that difference: "au" is the short one, "ao" the long.
@@ -3574,6 +3581,30 @@ GLIDE_MONOPHTHONGS = {"ây": "ê", "uy": "uy"}
 # consonant goes. That is what the listener's readings show: *lake* /leɪk/ is "lếch",
 # *blade* /bleɪd/ "bờ-lết" and *name* /neɪm/ "nêm", but *space* /speɪs/ is "xờ-pây".
 ARPABET_FRICATIVES = frozenset({"F", "V", "TH", "DH", "S", "Z", "SH", "ZH", "HH"})
+
+
+# An English dark /l/ closing a syllable is a back glide, and Vietnamese writes it as the
+# off-glide of the rime where it has one: *skill* is "xờ-kiu", *shield* "siu", *michelle*
+# "mi-xeo". After a back vowel there is no such rime - "ôu" is not one - so the l stays the
+# coda -n it has always been, which is why *soul* is "xôn" and *golf* "gôn".
+DARK_L_OFFGLIDES = {"i": "u", "ê": "u", "e": "o"}
+
+
+def _vocalize_dark_l(
+    nucleus: str,
+    coda: str,
+    coda_phones: tuple[str, ...],
+) -> tuple[str, str]:
+    if not nucleus or _surviving_coda_phone(coda_phones) != "L":
+        return nucleus, coda
+    if len(nucleus) > 1 and _without_tone(nucleus)[-1] in GLIDE_LETTERS:
+        # "ai" already ends in a glide; adding another gave *style* the rime "aiu", which
+        # Vietnamese does not have. The diphthong rule takes it from here.
+        return nucleus, coda
+    glide = DARK_L_OFFGLIDES.get(_without_tone(nucleus)[-1:])
+    if glide is None:
+        return nucleus, coda
+    return nucleus + glide, ""
 
 
 def _resolve_glide_and_coda(
@@ -3723,6 +3754,10 @@ def _arpabet_coda_reading(
     if phone is None:
         return ""
     reading = ARPABET_CODAS[phone]
+    if phone in ("CH", "JH") and "R" not in coda:
+        # A final affricate lands on -t: *match* is "mát", *research* "ri-xớt", *scourge*
+        # "xờ-cớt". After an r it keeps -ch, which is what *george* "gióch" shows.
+        reading = "t"
     if reading == "t" and phone in ARPABET_VOICED and "R" in coda:
         # The r before a final d is the one place the r leaves a mark instead of vanishing:
         # it backs the stop, so "card" is "cac" and "guard" is "gac" - both of which are
@@ -3909,6 +3944,15 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
         # expose an onset that was buried in a cluster: *skill* came out "Xờ-cin" where
         # Vietnamese writes "Xờ-kin".
         onset_reading = _front_vowel_onset(onset_reading, vowel)
+        if (
+            index == 0
+            and not peeled
+            and onset_reading == "t"
+            and surface[:2].casefold() == "th"
+        ):
+            # *Thomas* and *Thompson* are /t/ in English and "th" on the page, and a
+            # listener reads the page: "tho-mát", "thom-sơn".
+            onset_reading = "th"
         rendered.extend((part, False) for part in peeled)
         vowel_reading = _arpabet_vowel_reading(
             onset,
@@ -3922,7 +3966,22 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
         onset_reading, vowel_reading = _resolve_glide_onset(onset_reading, vowel_reading)
         if onset_reading == "gi" and vowel_reading == "i":
             vowel_reading = ""
+        if (
+            vowel == "OW"
+            and not coda
+            and index == len(syllables_out) - 1
+            and surface.casefold().rstrip().endswith("w")
+        ):
+            # A word written with a final w keeps the whole diphthong: *show* is "sâu" and
+            # *shadow* "sa-đâu". One written with a final o does not - *antonio* is
+            # "an-to-ni-ô" - which is the spelling telling the two apart again.
+            vowel_reading = "âu"
+        if letters[index : index + 1] == ("io",) and onset_reading in ("ch", "s", "x"):
+            # -tion and -sion are read "sừn" whole. *question* is /kwestʃən/ and came out
+            # "Quét-chừn" where a listener writes "quét-sừn".
+            onset_reading = "s"
         coda_reading = _arpabet_coda_reading(onset, vowel, coda)
+        vowel_reading, coda_reading = _vocalize_dark_l(vowel_reading, coda_reading, coda)
         vowel_reading, coda_reading = _resolve_glide_and_coda(
             vowel_reading, coda_reading, coda
         )
@@ -3934,7 +3993,8 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
         coda_reading = _front_vowel_coda(vowel_reading, coda_reading, bare_velar)
         surviving = _surviving_coda_phone(coda)
         heavy = (
-            surviving in ARPABET_VOICED
+            index == len(syllables_out) - 1
+            and surviving in ARPABET_VOICED
             and coda_reading in NANG_CODA_LETTERS
         )
         rendered.append((onset_reading + vowel_reading + coda_reading, heavy))
