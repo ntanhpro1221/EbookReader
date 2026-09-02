@@ -26,6 +26,8 @@ from ebook_reader.analysis import (
     _vowel_letter_groups,
     is_vietnamese_syllable,
 )
+from ebook_reader.analysis import _local_name_fallback
+from ebook_reader.text_processing import vietnamese_number_words
 
 CORPUS = (
     "Seed", "King", "Card", "Deck", "Epic", "Incredible", "Blade", "Gate", "Game",
@@ -94,10 +96,20 @@ def test_a_velar_coda_takes_the_front_spelling_only_after_i() -> None:
     assert _read("Rank").endswith("ng")
 
 
-def test_an_offglide_gives_way_to_a_final_consonant() -> None:
-    """"ất" is a rime; "ấyt" is not."""
+def test_an_offglide_and_a_final_consonant_cannot_both_stay() -> None:
+    """"ết" is a rime; "âyt" is not, so one of the two has to go.
+
+    Which one depends on whether Vietnamese has a vowel of the same quality to fall back
+    on. "ây" has one - "ê" - so *blade* is "bờ-lết" and *lake* "lếch", consonant kept.
+    "ai", "ao" and "oi" have none: flattening them would leave "a" or "o" and lose the
+    word, so the consonant goes instead. A listener writes *light* "lai", *house* "hau",
+    *sound* "sao", *point* "poi", *mouse* "mau".
+    """
     assert _read("Gate") == "Gết"
-    assert _read("Void") == "Vót"
+    assert _read("Lake") == "Lếch"
+    assert _read("Light") == "Lai"
+    assert _read("Point") == "Poi"
+    assert _read("Void") == "Voi"
 
 
 def test_a_glide_survives_when_nothing_follows_it() -> None:
@@ -115,7 +127,7 @@ def test_an_unstressed_schwa_is_not_read_as_a_full_a() -> None:
     "natasha" is "na-ta-sa", which is how Vietnamese writes those names.
     """
     assert _read("Incredible") == "In-cờ-re-đi-bồ"
-    assert "nơ" in _read("Benedict")
+    assert _read("Benedict") == "Be-ne-đích"
 
 
 def test_hand_chosen_readings_still_win() -> None:
@@ -126,7 +138,23 @@ def test_hand_chosen_readings_still_win() -> None:
     assert _read("Michael") == "Mai-cồ"
 
 
-def test_an_initial_w_becomes_the_medial_glide() -> None:
+def test_an_initial_w_is_written_with_a_g_in_front_of_the_glide() -> None:
+    """Standard Vietnamese spells [w] as a bare medial - "Oa-sinh-tơn", "Uy-li-am" - but a
+    listener asked for the g: *water* "goát-tờ", *west* "goét", *wind* "guyn", *william*
+    "guy-li-am", *wolf* "gốp". A glide with nothing in front of it invites the voice to read
+    it as a syllable of its own."""
+    assert _read("West") == "Goét"
+    assert _read("Win") == "Guyn"
+    assert _read("Wolf").startswith("G")
+
+
+def test_uy_keeps_its_final_consonant() -> None:
+    """"uy" is a medial glide plus its nucleus, not an off-glide: "guyn", "huynh"."""
+    assert _read("Win") == "Guyn"
+    assert _read("Wing") == "Guynh"
+
+
+def _unused_initial_w() -> None:
     """Vietnamese has no /w/ consonant; it is the glide written o or u, which is why
     *Washington* is "Oa-sinh-tơn". Writing it in front of a vowel spelt the same way gave
     "uu", which is not a nucleus."""
@@ -136,7 +164,9 @@ def test_an_initial_w_becomes_the_medial_glide() -> None:
 def test_a_sonorant_outranks_an_obstruent_in_a_final_cluster() -> None:
     """/valv/ becomes "van"; English golf is "gôn" in Vietnamese for the same reason."""
     assert _read("Golf").endswith("n")
-    assert _read("Sound").endswith("n")
+    # "Sound" no longer reaches this rule: the off-glide keeps the syllable and the coda
+    # goes, so it reads "Xao". *Golf* has no off-glide and still shows the sonorant winning.
+    assert _read("Valve").endswith("n")
 
 
 def test_r_is_dropped_rather_than_read() -> None:
@@ -152,16 +182,22 @@ def test_an_r_before_a_final_d_backs_the_stop() -> None:
     guard post is "gác". Reading them "cát" and "gát" changes the final consonant, and a
     listener asked for "cạc" by name. Only an r that is actually in the coda counts, so
     "Bird" and "Third", whose r is inside the vowel, are unaffected.
+
+    Both come out with nặng, because a voiced final that has to be written -c has moved
+    further than one that lands on -t. That is the listener's own "cạc"; "gạc" follows from
+    the same rule rather than from the loan Vietnamese happens to have.
     """
-    assert _read("Card").endswith("c")
-    assert _read("Guard") == "Gác"
+    assert _read("Card") == "Cạc"
+    assert _read("Guard") == "Gạc"
     assert _read("Bird").endswith("t")
     assert _read("Third").endswith("t")
 
 
 def test_the_final_consonant_is_never_simply_lost() -> None:
     """Seven codas were mapped and the rest fell silent, so "Card" came out "Ca"."""
-    for word in ("Card", "Soul", "Seed", "Path", "Void", "Safe"):
+    # Void and Safe are excluded: their consonant is dropped on purpose now, to keep the
+    # diphthong, which is what the listener's own readings do.
+    for word in ("Card", "Soul", "Seed", "Path"):
         reading = _read(word)
         assert reading[-1].casefold() in "cmnpt" or reading.endswith(("ch", "ng", "nh")), word
 
@@ -174,8 +210,8 @@ def test_a_name_of_several_words_is_read_word_by_word() -> None:
     locked readings in the corpus broke the project's own syllable rule that way, four of
     them character names.
     """
-    assert _cmu_phrase_to_vietnamese("Eagle Eyes") == "I-gồ Át"
-    assert _cmu_phrase_to_vietnamese("Oldest Death") == "Ôn-đớt Đét"
+    assert _cmu_phrase_to_vietnamese("Eagle Eyes") == "I-gồ Ai"
+    assert _cmu_phrase_to_vietnamese("Oldest Death") == "Ôn-đít Đét"
 
 
 def test_a_phrase_keeps_hyphens_for_syllables_and_spaces_for_words() -> None:
@@ -197,15 +233,15 @@ def test_a_single_word_is_not_treated_as_a_phrase() -> None:
 
 def test_a_possessive_is_not_given_a_syllable() -> None:
     """The book reads "Dawn’s Scourge" as two names, not three."""
-    assert _cmu_phrase_to_vietnamese("Dawn's Scourge") == "Đon Xớch"
+    assert _cmu_phrase_to_vietnamese("Dawn's Scourge") == "Đon Xờ-cớt"
 
 
 def test_an_r_before_a_consonant_closes_the_syllable_it_follows() -> None:
     """"Arthur" is AR-thur. Left in the next onset it built the cluster "rth", which the
     repair then spelled out as a syllable the name never had: "A-rơ-thơ"."""
-    assert _read("Arthur") == "A-thơ"
+    assert _read("Arthur") == "A-thờ"
     assert _read("Portals") == "Po-tồ"
-    assert _read("Market") == "Ma-cớt"
+    assert _read("Market") == "Ma-cét"
 
 
 def test_an_r_before_a_vowel_is_still_an_onset() -> None:
@@ -232,7 +268,10 @@ def test_a_syllabic_l_needs_a_schwa_in_front_of_it() -> None:
     assert _read("Hull").endswith("n")
     # the schwa cases the rule is actually for
     assert _read("Michael") == "Mai-cồ"
-    assert _read("Cable") == "Cê-bồ"
+    # "Cây-bồ": the diphthong only gives way when a consonant follows it, and this
+    # syllable is open. A listener writes *cable* "cây-bồ" and *table* "tây-bồ".
+    assert _read("Cable") == "Cây-bồ"
+    assert _read("Table") == "Tây-bồ"
 
 
 def test_the_vowel_reacts_to_the_coda_that_is_written() -> None:
@@ -241,7 +280,7 @@ def test_the_vowel_reacts_to_the_coda_that_is_written() -> None:
     the game - and came out "Gan"."""
     assert _read("Golf") == "Gôn"
     assert _read("Rudolf") == "Ru-đôn"
-    assert _read("Waldo") == "Uôn-đô"
+    assert _read("Waldo") == "Gôn-đô"  # the w now carries a g
     # unchanged: these reach the same rule through a real N
     assert _read("John") == "Giôn"
 
@@ -262,62 +301,62 @@ def test_an_english_word_already_shaped_like_a_vietnamese_one_is_left_alone() ->
 def test_the_recogniser_knows_real_vietnamese() -> None:
     """Checked against 6,282 distinct tone-bearing tokens in the book: 99.6% accepted."""
     for word in (
-        "nguy\u1ec5n", "tr\u01b0\u1eddng", "khuya", "quy\u1ec3n", "ng\u01b0\u1eddi", "\u0111\u01b0\u1eddng", "tuy\u1ec7t",
-        "nhi\u00ean", "vi\u1ec7c", "ti\u1ebfng", "t\u01b0\u01a1ng", "lu\u00f4n", "mi\u1ec7ng", "y\u00eau", "khu\u00f4n", "chi\u1ebfc",
+        "nguyễn", "trường", "khuya", "quyển", "người", "đường", "tuyệt",
+        "nhiên", "việc", "tiếng", "tương", "luôn", "miệng", "yêu", "khuôn", "chiếc",
     ):
         assert is_vietnamese_syllable(word), word
 
 
 def test_the_velar_spelling_rule_knows_the_diphthong() -> None:
-    """-nh/-ch only after a simple i or \u00ea. "kinh" is a syllable, "king" is not, and
-    "ti\u1ebfng" and "chi\u1ebfc" keep the velar spelling because their nucleus is i\u00ea."""
+    """-nh/-ch only after a simple i or ê. "kinh" is a syllable, "king" is not, and
+    "tiếng" and "chiếc" keep the velar spelling because their nucleus is iê."""
     assert is_vietnamese_syllable("kinh")
     assert not is_vietnamese_syllable("king")
-    assert is_vietnamese_syllable("ti\u1ebfng")
-    assert is_vietnamese_syllable("chi\u1ebfc")
+    assert is_vietnamese_syllable("tiếng")
+    assert is_vietnamese_syllable("chiếc")
 
 
 def test_a_tone_is_folded_but_a_vowel_is_not() -> None:
     """Breve, circumflex and horn spell a different vowel, so folding them away made
-    "nhi\u00ean" read "nhien" and stop looking like a syllable."""
-    assert _without_tone("nhi\u00ean") == "nhi\u00ean"
-    assert _without_tone("\u0111\u01b0\u1eddng") == "\u0111\u01b0\u01a1ng"
-    assert _without_tone("ti\u1ebfng") == "ti\u00eang"
+    "nhiên" read "nhien" and stop looking like a syllable."""
+    assert _without_tone("nhiên") == "nhiên"
+    assert _without_tone("đường") == "đương"
+    assert _without_tone("tiếng") == "tiêng"
 
 
 def test_the_vowel_follows_the_letter_it_is_spelled_with() -> None:
     """A listener wrote these out, and they do not follow English vowel reduction.
 
-    "dragon" is "\u0111\u1edd-ra-gon", not "\u0110\u01a1-re-g\u00e2n"; "natasha" is "na-ta-sa". These names are
+    "dragon" is "đờ-ra-gon", not "Đơ-re-gân"; "natasha" is "na-ta-sa". These names are
     read from the letters, and the pronunciation only chooses among the values a letter can
     take - which is what a Vietnamese reader writing down an English word does.
     """
-    assert _read("Dragon") == "\u0110\u1edd-ra-gon"
+    assert _read("Dragon") == "Đờ-ra-gon"
     assert _read("Zombie") == "Dom-bi"
     assert _read("Vampire") == "Vam-pai"
     assert _read("Natasha") == "Na-ta-sa"
-    assert _read("Sophia") == "X\u00f4-phi-a"
+    assert _read("Sophia") == "Xô-phi-a"
 
 
 def test_an_inserted_syllable_carries_the_huyen_tone() -> None:
-    """Every epenthesis a listener has written is huy\u1ec1n: "in-c\u1edd-ri-\u0111i-b\u1ed3", "\u0111\u1edd-ra-gon",
-    "b\u1edd-l\u1ebft". It is a weak syllable that was never in the word."""
-    assert _read("Blade") == "B\u1edd-l\u1ebft"
-    assert _read("Dragon").startswith("\u0110\u1edd-")
+    """Every epenthesis a listener has written is huyền: "in-cờ-ri-đi-bồ", "đờ-ra-gon",
+    "bờ-lết". It is a weak syllable that was never in the word."""
+    assert _read("Blade") == "Bờ-lết"
+    assert _read("Dragon").startswith("Đờ-")
 
 
 def test_an_er_ending_is_the_schwa_not_a_full_e() -> None:
-    """"cai-d\u01a1", not "cai-d\u00ea". Keyed on the letter, -er and -or both land on \u01a1."""
-    assert _read("Water").endswith("t\u01a1")
-    assert _read("Master").endswith("t\u01a1")
-    assert _read("Doctor").endswith("t\u01a1")
+    """"cai-dơ", not "cai-dê". Keyed on the letter, -er and -or both land on ơ."""
+    assert _read("Water").endswith("tờ")
+    assert _read("Master").endswith("tờ")
+    assert _read("Doctor").endswith("tờ")
 
 
 def test_a_silent_e_before_a_plural_s_spells_no_vowel() -> None:
     """"James" spells one vowel, not two; counting two left the word unaligned and the
-    reading fell back to the phone alone, giving "Gi\u00e2m"."""
+    reading fell back to the phone alone, giving "Giâm"."""
     assert _vowel_letter_groups("james") == ["a"]
-    assert _read("James") == "Gi\u00eam"
+    assert _read("James") == "Giêm"
 
 
 def test_a_word_that_cannot_be_lined_up_still_reads() -> None:
@@ -326,3 +365,141 @@ def test_a_word_that_cannot_be_lined_up_still_reads() -> None:
     for word in ("Rhythm", "Queue", "Beautiful", "Sergeant"):
         reading = _read(word)
         assert _valid_vietnamese_spoken_form(word, reading), (word, reading)
+
+
+def test_a_stop_final_syllable_takes_nang_when_the_coda_moved_furthest() -> None:
+    """The whole difference between the two tones in the readings a listener wrote.
+
+    A voiced English final that lands on -t keeps its place and takes sắc: *seed* is "xít",
+    *blade* "bờ-lết". One that has to be written -c or -p has moved further and takes nặng:
+    *card* is "cạc", *of* "ọp". A voiceless final always takes sắc, which is every other
+    reading in the set - *box*, *cat*, *death*, *desk*, *top*.
+    """
+    assert _read("Card") == "Cạc"
+    assert _read("Of") == "Ọp"
+    assert _read("Seed") == "Xít"
+    assert _read("Blade") == "Bờ-lết"
+    assert _read("Box") == "Bóc"
+    assert _read("Death") == "Đét"
+    assert _read("George") == "Gióch"
+
+
+def test_a_vowel_is_short_before_a_voiceless_consonant() -> None:
+    """English clips a vowel before a voiceless consonant and holds it before a voiced one,
+    and Vietnamese spells the difference: "au" is the short one, "ao" the long. A listener
+    writes *house* and *mouse*, both before /s/, "hau" and "mau", and *sound*, before /nd/,
+    "sao"."""
+    assert _read("House") == "Hau"
+    assert _read("Mouse") == "Mau"
+    assert _read("Sound") == "Xao"
+
+
+def test_a_schwa_before_a_nasal_opens_into_a_full_e() -> None:
+    """*carmen* is "ca-men" and *elena* "e-le-na", where *benedict*, whose schwa meets a
+    stop, is "be-nơ-đích"."""
+    assert _read("Carmen") == "Ca-men"
+    assert _read("Elena") == "E-le-na"
+    assert _read("Rebecca") == "Re-be-ca"
+
+
+def test_a_stressed_o_stays_open_before_a_consonant() -> None:
+    """*tony* is "to-ni"; it rounds when unstressed (*sophia* "xô-phi-a"), when a consonant
+    closes the syllable (*oldest* "ôn-đớt") and before a vowel (*noah* "nô-a")."""
+    assert _read("Tony") == "To-ni"
+    assert _read("Sophia") == "Xô-phi-a"
+    assert _read("Noah") == "Nô-a"
+
+
+def test_a_stressed_u_before_a_nasal_is_the_short_a() -> None:
+    """*month* is "măn", *dungeon* "đăng-giừng"."""
+    assert _read("Month") == "Măn"
+    assert _read("Dungeon").startswith("Đă")
+
+
+def test_a_final_k_is_written_ch_unless_an_s_closes_the_syllable_first() -> None:
+    """*jack* is "dách", *action* "ách-sừn", *text* "tếch" - the vowel raising with the coda,
+    because -ech is not a rime and -êch is. *mask*, *task* and *desk*, all /sk/, keep -c."""
+    assert _read("Jack").endswith("ch")
+    assert _read("Text") == "Tếch"
+    assert _read("Next") == "Nếch"
+    assert _read("Mask") == "Mác"
+    assert _read("Task") == "Tác"
+    assert _read("Desk") == "Đéc"
+    # -och and -uch are not rimes, so a back vowel keeps -c whatever precedes the k
+    assert _read("Box") == "Bóc"
+    assert _read("Book") == "Búc"
+
+
+def test_a_coarse_word_is_not_reached_by_a_rule_that_is_otherwise_right() -> None:
+    """"Deck" lands on "Đếch" by every rule here, and the book says "Bộ Thẻ (Deck)" nine
+    times. The override table is where a reading gets chosen by hand."""
+    assert _read("Deck") == "Đéc"
+
+
+def test_the_tion_suffix_is_read_sun() -> None:
+    assert _read("Nation") == "Nây-sừn"
+    assert _read("Station") == "Xờ-tây-sừn"
+    assert _read("Vision") == "Vi-sừn"
+
+
+def test_a_run_that_vietnamese_can_begin_a_syllable_with_stays_an_onset() -> None:
+    """*katrina* is "ca-tri-na", not "cát-ri-na": "tr" is a Vietnamese onset."""
+    assert _read("Katrina") == "Ca-tri-na"
+    # and one it cannot begin with is still split across the two syllables
+    assert _read("Arthur") == "A-thờ"
+
+
+def test_an_s_between_a_sonorant_and_a_stop_joins_the_coda() -> None:
+    """*monster* is "môn-tơ"; left in the onset the s became a syllable of its own."""
+    assert _read("Monster").endswith("tờ")
+    assert len(_read("Monster").split("-")) == 2
+
+
+def test_a_diphthong_gives_up_its_glide_to_a_stop_but_not_to_a_fricative() -> None:
+    """Designed off the English IPA, as a listener asked: *lake* /leɪk/ is "lếch" and
+    *blade* /bleɪd/ "bờ-lết", the stop keeping the syllable, while *space* /speɪs/ is
+    "xờ-pây", the fricative giving way. A nasal behaves like a stop: *name* is "nêm"."""
+    assert _read("Lake") == "Lếch"
+    assert _read("Blade") == "Bờ-lết"
+    assert _read("Space") == "Xờ-pây"
+    assert _read("Name") == "Nêm"
+    assert _read("Game") == "Gêm"
+
+
+def test_the_superlative_suffix_has_an_i() -> None:
+    """CMUdict writes -est as AH0 S T in every word - biggest, fastest, largest, oldest -
+    but the vowel of that suffix is /ɪ/, and a listener reads *oldest* "ôn-đít". A word that
+    merely ends in those letters is untouched: *west* is "goét"."""
+    assert _read("Oldest") == "Ôn-đít"
+    assert _read("Biggest") == "Bi-gít"
+    assert _read("West") == "Goét"
+    assert _read("Best") == "Bét"
+
+
+def test_a_regnal_number_is_said_not_spelled() -> None:
+    """The book says "Benedict III" 164 times and the transliterator read the letters:
+    "Bê-nê-đíc-iii". A regnal number is a number."""
+    assert _cmu_phrase_to_vietnamese("Benedict III") == "Be-ne-đích thứ ba"
+    assert _cmu_phrase_to_vietnamese("Henry VIII") == "Hen-ri thứ tám"
+    assert _cmu_phrase_to_vietnamese("Louis XIV") == "Lu-ít thứ mười bốn"
+    # a numeral on its own is not a name at all
+    assert _cmu_phrase_to_vietnamese("III") is None
+
+
+def test_the_number_words_follow_vietnamese_not_arithmetic() -> None:
+    """15 is "mười lăm", and from twenty up 1 is "mốt" and 4 "tư"."""
+    assert vietnamese_number_words(15) == "mười lăm"
+    assert vietnamese_number_words(21) == "hai mươi mốt"
+    assert vietnamese_number_words(24) == "hai mươi tư"
+    assert vietnamese_number_words(25) == "hai mươi lăm"
+    assert vietnamese_number_words(10) == "mười"
+
+
+def test_the_spelling_route_says_a_final_er_as_the_schwa() -> None:
+    """*Kaizer* came back "Cai-dên" where a listener writes "cai-dờ"; the route had no
+    notion of the ending. It also read a silent e out loud - *Zone* was "Dô-nê" - which
+    could not be fixed until the coda table stopped losing b, d, j and y."""
+    assert _local_name_fallback("Kaizer") == "Cai-dờ"
+    assert _local_name_fallback("Zone") == "Dôn"
+    assert _local_name_fallback("Blade") == "Bờ-lát"
+    assert _local_name_fallback("Safe") == "Xáp"

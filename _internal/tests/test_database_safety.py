@@ -13381,3 +13381,41 @@ def test_candidate_attempt_summary_revalidates_terminal_perceptual_evidence(
 
     with pytest.raises(RuntimeError, match="stored candidate perceptual result differs"):
         db.segment_candidate_attempt_summary(segment_id, "candidate-policy-v1")
+
+
+def test_the_resume_plan_names_the_candidate_it_is_owed(tmp_path: Path) -> None:
+    """A caller that allocates without reading the plan cannot succeed, and one did.
+
+    The ASR repair loop always asked for the standard gate. When the segment's outstanding
+    trigger was a naturalness review, the candidate came out with nothing bound to it, the
+    database refused it, the round marked it invalid, and the next round allocated another
+    one exactly the same way. Five rounds of that ended a ten-chapter run on its second
+    chapter, with the segment reading "Ví dụ: Ưng Nhãn (Eagle Eyes)".
+    """
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    trigger_id = _record_naturalness_repair_trigger(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+    )
+
+    plan = db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", 2)
+    assert plan["action"] == "allocate"
+    assert plan["candidate_repair_requirement"] == NATURALNESS_IMPROVEMENT_REQUIREMENT
+    assert int(plan["repair_trigger_check_id"]) == trigger_id
+
+    # Allocating what the plan asks for works.
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=int(plan["repair_round"]),
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=911,
+        wav_path=tmp_path / "candidates" / "planned.wav",
+        candidates_root=tmp_path / "candidates",
+        perceptual_required=True,
+        candidate_repair_requirement=str(plan["candidate_repair_requirement"]),
+        repair_trigger_check_id=int(plan["repair_trigger_check_id"]),
+    )
+    assert int(candidate["repair_trigger_check_id"]) == trigger_id

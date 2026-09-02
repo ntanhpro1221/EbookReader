@@ -587,3 +587,179 @@ nên thước đo thiên vị.
 Đo trên 3008 segment có audio: nhịp trung vị của segment **có** chữ cái đứng riêng là
 **16,17**, của segment **không có** là **15,55** — cao hơn, không thấp hơn. Không có thiên
 lệch hệ thống. Đây là ca cá biệt, không phải lớp lỗi; không xây bộ hiệu chỉnh cho nó.
+
+---
+
+# Bảy luật rút ra từ 92 cách đọc mẫu: 42 → 72/92
+
+Người nghe đưa thêm 40 cách đọc và nói rõ: *"bạn phải tự tìm quy luật đáp ứng tất cả ví dụ
+tôi đưa"*, và *"luật thiết kế theo bảng ipa tiếng anh"*. Mỗi chỗ tưởng là mâu thuẫn đều hoá
+ra có điều kiện phân biệt.
+
+Bộ đề: **92 từ**, gồm mọi cách đọc người nghe từng viết cộng những cách họ xác nhận là đúng.
+
+## 1. Thanh sắc hay nặng: phụ âm cuối đã dịch chuyển bao xa
+
+| | phụ âm cuối | viết thành | thanh |
+|---|---|---|---|
+| `card` /kɑːd/ | /d/ **kêu** | **-c** | **nặng** — cạc |
+| `of` /ʌv/ | /v/ **kêu** | **-p** | **nặng** — ọp |
+| `seed`, `blade` | /d/ kêu | -t, đúng vị trí của nó | sắc |
+| `box`, `cat`, `death`, `desk`, `top` | điếc | bất kỳ | sắc |
+
+Một phụ âm kêu phải viết thành -c hoặc -p là đã đi xa hơn một phụ âm kêu rơi đúng vào -t.
+**Khớp cả 24 ví dụ có âm tiết đóng.** Kéo theo `guard`→`Gạc`, `mag`→`Mạc`, `bag`→`Bạc`.
+
+## 2. Nguyên âm ngắn trước phụ âm điếc
+
+`house`, `mouse` (trước /s/ điếc) → "h**au**", "m**au**"; `sound` (trước /nd/ kêu) → "s**ao**".
+
+Đây là *pre-fortis clipping*, hiện tượng có thật của tiếng Anh, và tiếng Việt phân biệt đúng
+cặp đó: "au" ngắn, "ao" dài.
+
+## 3. Schwa trước âm mũi mở thành "e"
+
+`carmen` ca-**men**, `elena` e-**le**-na (trước /m/, /n/) vs `benedict` be-**nơ**-đích (trước
+/d/). Âm mũi giữ schwa mở.
+
+## 4. /oʊ/ có trọng âm, âm tiết mở, âm tiết sau bắt đầu bằng phụ âm → "o"
+
+| | | |
+|---|---|---|
+| `tony` | nhấn, mở, sau là /n/ | **to**-ni |
+| `sophia` | **không** nhấn | x**ô**-phi-a |
+| `oldest` | có phụ âm cuối | **ôn**-đít |
+| `noah` | âm tiết sau bắt đầu bằng nguyên âm | n**ô**-a |
+
+Khớp cả 4, mỗi ca rơi vào một nhánh khác nhau.
+
+## 5. /ʌ/ trước âm mũi là "ă"
+
+`month` m**ăn**, `dungeon` đ**ăng**-giừng. Còn `of` (trước /v/) giữ "**ọ**p".
+
+## 6. /k/ cuối viết "ch", trừ khi có /s/ đứng ngay trước
+
+| có /s/ trước /k/ → **-c** | không có → **-ch** |
+|---|---|
+| `mask` mác, `task` tác, `desk` đéc | `jack` dách, `action` ách-sừn, `text` tếch, `next` nếch |
+
+Với `text`/`next` nguyên âm nâng theo: "-ech" không phải vần tiếng Việt, "-**ê**ch" thì phải.
+Nguyên âm sau (o, u) không có vần -ch nên vẫn giữ -c: `box` bóc, `book` búc.
+
+**Va chạm từ vựng:** luật này cho `Deck` → "**Đếch**", đúng luật nhưng là từ thô tục, và sách
+viết "Bộ Thẻ (Deck)" **9 lần**. Đã đưa vào `ARPABET_PRONUNCIATION_OVERRIDES` với "Đéc". Đây
+đúng là việc bảng ngoại lệ sinh ra để làm.
+
+## 7. Nguyên âm đôi nhường chỗ cho âm tắc, không nhường cho âm xát
+
+Người nghe nói thẳng: *"luật thiết kế theo bảng ipa tiếng anh"*.
+
+| | phụ âm cuối | kết quả |
+|---|---|---|
+| `lake` /leɪk/ | /k/ **tắc** | l**ếch** — giữ phụ âm, nguyên âm đơn hoá |
+| `blade` /bleɪd/ | /d/ **tắc** | bờ-l**ết** |
+| `name` /neɪm/ | /m/ **mũi** | n**êm** |
+| `space` /speɪs/ | /s/ **xát** | xờ-p**ây** — giữ nguyên âm đôi, bỏ phụ âm |
+
+Và khi nguyên âm đôi **không có** nguyên âm đơn tiếng Việt cùng chất (ai, ao, oi) thì phụ âm
+cuối luôn phải nhường: `light` **lai**, `house` **hau**, `sound` **sao**, `point` **poi**.
+
+**Sai một lần rồi mới đúng:** bản đầu tôi viết "giữ phụ âm nếu là **âm tắc**", làm `name`→"Nây",
+`game`→"Gây", `james`→"Giây" — vì /m/ là âm **mũi**, không phải âm tắc. Luật đúng phải phát
+biểu theo cái **bị bỏ** (âm xát), không theo cái được giữ.
+
+## 8. Hậu tố -est đọc "ít"
+
+CMUdict ghi hậu tố so sánh nhất là `AH0 S T` cho **mọi** từ — biggest, fastest, largest,
+oldest — nhưng IPA của nó là **/ɪst/**. Người nghe chỉ ra điều này ("oldest trong phiên âm ipa
+thì là đít mà?"). Xử như hậu tố, giống -tion: `oldest`→`Ôn-đít`, `biggest`→`Bi-gít`. Từ chỉ
+tình cờ kết thúc bằng những chữ đó thì không bị đụng: `west`→`Goét`, `best`→`Bét`.
+
+## Kết quả
+
+| | trước | sau |
+|---|---|---|
+| khớp hoàn toàn | 42/92 | **72/92** |
+| khớp nếu bỏ thanh | 45/92 | **74/92** |
+| đúng số âm tiết | 85/92 | **90/92** |
+
+Kiểm định hợp lệ không đổi: **0 cách đọc không hợp lệ** trên 24.061 từ nguồn ngoài.
+
+## Còn lại, và vì sao chưa sửa
+
+- `william` guy-li-am, `water` goát-tờ, `charlie` chác-li, `fernando` phét-nan-đô — chia âm
+  tiết khác, chưa tìm được điều kiện phân biệt.
+- `world` **gua** bỏ hẳn /ld/ nhưng `win` **guyn** giữ /n/.
+- `incredible` in-cờ-**ri**-đi-bồ — `e`+/ɛ/ ra "i", ngược với death/benedict/herald ra "e" (3–1).
+- `sound` "**s**ao" và `sky` "xờ-**k**ai" — chỉ khác chính tả, "s"/"x" và "c"/"k" đọc như nhau.
+- `samael`, `kaizer`, `theosbane` — không có trong CMUdict, đi đường mặt chữ, chưa động tới.
+
+---
+
+# Bộ đối chiếu thứ hai: từ mượn tiếng Việt đã có sẵn
+
+Người nghe chỉ ra điều lẽ ra phải làm từ đầu: *"bạn thực sự biết cách người việt đọc các từ
+tiếng anh? đó chính là mục tiêu của tôi, sao bạn không tự áp dụng mục tiêu đó cho thuật toán
+mà cứ phải hỏi tôi cách đọc hả?"*
+
+Đúng. Tiếng Việt đã mượn hàng loạt từ tiếng Anh và có cách đọc quen thuộc — `mác-két`,
+`in-tơ-nét`, `láp-tóp`, `phây-búc`, `ten-nít`. Đó là bộ đối chiếu tự có, không cần hỏi ai.
+
+Nằm ở `tests/data_vietnamese_loanwords.py`.
+
+## Lọc mới là phần quan trọng
+
+Rất nhiều "từ tiếng Anh" trong tiếng Việt thực ra vào qua **tiếng Pháp hoặc Latin khoa học**,
+và chúng theo phát âm nguồn đó chứ không theo tiếng Anh. Để lẫn vào là kéo bộ luật đi sai:
+
+`ga-ra` (garage) · `cà phê` (café) · `vắc-xin` (vaccin) · `xà phòng` (savon) · `sâm banh`
+(champagne) · `cà vạt` (cravate) · `xăng` (essence) · `bơ` (beurre) · `ga` (gare) · `pin`
+(pile) · `sếp` (chef) · `xì gà` (cigare) · `vi-ta-min` · `vi-rút` · `vi-đi-ô` · `sa-lát` ·
+`me-nu` · `mo-đen` · `pi-da` (Ý) · `tua` (tour) · `ba` (bar)
+
+Còn lại **41 từ vào thẳng từ tiếng Anh**.
+
+Cũng cho **"s" và "x" là tương đương** khi chấm: giọng Bắc đọc hai chữ này như nhau, nên
+chênh lệch đó không đổi âm thanh nào người nghe nghe được.
+
+## Bộ này tự bắt được lỗi mà 138 ví dụ của người nghe không bắt được
+
+`style` ra **`Xờ-taiu`**. "aiu" không phải vần tiếng Việt: luật /l/ tối hoá bán nguyên âm
+đang áp lên một nguyên âm **đã có** bán nguyên âm. Và bộ kiểm tra vẫn cho qua — nó xét âm
+đầu và ký tự cuối, **chưa bao giờ xét vần**. Đây là lỗ hổng đã ghi trong mục "còn hở" từ
+trước, và phải có bộ đối chiếu mới lộ ra.
+
+## Ba luật rút từ bộ này
+
+1. **Âm tắc-xát cuối từ đọc -t**: `match`→mát, `research`→ri-xớt, `scourge`→xờ-cớt. Có R
+   đứng trước thì giữ -ch, đúng bằng `george`→gióch.
+2. **Từ viết kết thúc bằng "w" giữ trọn nguyên âm đôi**: `show`→sâu, `shadow`→sa-đâu. Kết
+   thúc bằng "o" thì không: `antonio`→an-to-ni-ô. Lại là mặt chữ phân biệt.
+3. **Schwa /ər/ có ba nhánh**, và chính từ mượn cho biết nhánh nào:
+   - có trọng âm → đọc theo chữ: `server`→**xe**-vờ
+   - không trọng âm, **giữa từ** → "ơ" ngang: `internet`→in-**tơ**-nét
+   - không trọng âm, **cuối từ** → "ờ" huyền: `number`→năm-**bờ**
+
+   Nhánh thứ ba là của người nghe, và họ giải thích bằng trọng âm: *"mon tờ có thanh huyền
+   bởi vì trọng âm trong từ nữa"*. Hoá ra nó **cùng một luật** với thanh huyền của âm tiết
+   chèn (`đờ-ra-gon`, `xờ-kiu`), không phải hai luật riêng.
+
+## Kết quả âm: không nhân đôi phụ âm giữa hai nguyên âm
+
+Từ mượn thật hay nhân đôi phụ âm: `mác-két`, `cóp-pi`, `ten-nít`, `tắc-xi` — phụ âm vừa
+đóng âm tiết trước vừa mở âm tiết sau. Thử tìm luật cho nó (nguyên âm ngắn + âm tiết mở +
+phụ âm đơn phía sau), nhưng **chính ví dụ của người nghe bác bỏ**: `natasha`→"na-ta-sa" và
+`business`→"bi-xì-nít" đều rơi đúng vào khuôn đó mà không nhân đôi. Không làm.
+
+## Một chỗ hai nguồn nói ngược nhau, và đã chọn
+
+Từ mượn có sẵn dùng thanh **ngang** cho đuôi -er cuối từ (`pốt-tơ`), người nghe viết
+**huyền** (`năm-bờ`, `mon-tờ`, `com-piu-tờ`, `cai-dờ`, `goa-ri-ờ`, `pích-trờ`, `đóc-tờ`,
+`goa-tờ`, `bờ-ro-dờ` — chín từ). Theo người nghe: họ là người nghe cuốn sách này. Họ cũng
+nói `pốt-tơ` "cũng đúng và hay hơn", nên đây là biến thể chấp nhận được chứ không phải lỗi.
+
+| | trước vòng này | sau |
+|---|---|---|
+| khớp 138 cách đọc của người nghe | 73 | **84** |
+| khớp 41 từ mượn có sẵn | 23 | **28** |
+| cách đọc không hợp lệ | 0 | **0** |

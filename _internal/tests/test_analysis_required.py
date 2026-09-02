@@ -3517,7 +3517,7 @@ def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
     assert {
         row["surface"]: row["spoken_form"]
         for row in db.pronunciations
-    } == {"Gary": "Ga-ri", "Xenlor": "Xên-lôn"}
+    } == {"Gary": "Ga-ri", "Xenlor": "Xên-lờ"}
     assert any(event[1] == "NAME_PRONUNCIATION_LOCAL_FALLBACK" for event in db.events)
 
 
@@ -3554,7 +3554,7 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
         for row in db.pronunciations
     } == {
         "Vaelorian": "Ve-lô-rian",
-        "Xenlor": "Xên-lôn",
+        "Xenlor": "Xên-lờ",
         "Zytherion": "Di-thê-riôn",
     }
     fallback_event = next(
@@ -3597,14 +3597,16 @@ def test_uncertain_short_names_are_left_verbatim_when_reconciliation_fails(
 
     # A short name is only left unread when nothing can read it. When the model fails, a
     # dictionary entry is used rather than the book being blocked - Wolf, Mag and Sol are
-    # in CMUdict and come out "Uôn", "Mác", "Xôn"; Twal is not in it and stays unresolved.
+    # in CMUdict and come out "Gôn", "Mạc", "Xôn"; Twal is not in it and stays unresolved.
     #
     # This used to skip all four. The caution was right while the converter dropped any
     # coda it did not know - it turned "Card" into "Ca" - and stopped being right once the
     # converter was rebuilt from the phonology.
     stored = {row["surface"]: row["spoken_form"] for row in db.pronunciations}
-    assert stored["Wolf"] == "Uôn"
-    assert stored["Mag"] == "Mác"
+    # "Gôn": an initial /w/ is written with a g in front of the glide, as a listener asked.
+    assert stored["Wolf"] == "Gôn"
+    # "Mạc": the /g/ is voiced and has to be written -c, which is the nặng case.
+    assert stored["Mag"] == "Mạc"
     # "Xôn", not "Xan": the vowel reacts to the coda that is written, and the /l/ of "Sol"
     # is written "n". The same rule is why "Golf" is "Gôn".
     assert stored["Sol"] == "Xôn"
