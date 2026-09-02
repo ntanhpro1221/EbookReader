@@ -92,6 +92,55 @@ STRETCHED_SOUND_TOKEN_PATTERN = re.compile(
 # be read as a scream; the book says "Benedict III" 164 times. Uppercase only, so a
 # stretched "Iiii" is still a sound.
 ROMAN_NUMERAL_TOKEN_PATTERN = re.compile(r"^[IVXLCDM]+$")
+ROMAN_NUMERAL_VALUES = {
+    "I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000,
+}
+# Vietnamese for the numbers a regnal name reaches. Beyond twenty the pattern is regular and
+# built from these; nothing in a book needs more than that.
+VIETNAMESE_UNITS = (
+    "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín",
+)
+
+
+def roman_numeral_value(token: str) -> int | None:
+    """The number a Roman numeral spells, or None when the token is not one."""
+    if ROMAN_NUMERAL_TOKEN_PATTERN.fullmatch(token) is None:
+        return None
+    total = 0
+    previous = 0
+    for character in reversed(token):
+        value = ROMAN_NUMERAL_VALUES[character]
+        total += -value if value < previous else value
+        previous = max(previous, value)
+    return total or None
+
+
+def vietnamese_number_words(value: int) -> str:
+    """A number written the way it is said, for the numerals a book carries.
+
+    Vietnamese changes the unit inside a compound: 15 is "mười lăm", not "mười năm", and
+    from twenty up 1 becomes "mốt" and 4 "tư".
+    """
+    if value < 0:
+        raise ValueError(value)
+    if value < 10:
+        return VIETNAMESE_UNITS[value]
+    if value < 20:
+        unit = value - 10
+        if unit == 0:
+            return "mười"
+        return "mười " + ("lăm" if unit == 5 else VIETNAMESE_UNITS[unit])
+    tens, unit = divmod(value, 10)
+    head = f"{VIETNAMESE_UNITS[tens]} mươi"
+    if unit == 0:
+        return head
+    if unit == 1:
+        return head + " mốt"
+    if unit == 4:
+        return head + " tư"
+    if unit == 5:
+        return head + " lăm"
+    return f"{head} {VIETNAMESE_UNITS[unit]}"
 MAX_VOCALIZATION_REPETITIONS = 4
 
 

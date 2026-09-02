@@ -4301,10 +4301,27 @@ class BookPipeline:
                 action = str(plan["action"])
                 if action == "allocate":
                     repair_item = self._checkpoint_short_ceiling_repair(item)
+                    # The plan says which kind of candidate the segment is owed. This loop
+                    # ignored it and always asked for the standard gate, so a segment whose
+                    # outstanding trigger was a naturalness review got a candidate with no
+                    # trigger bound to it - which the database then refused, marked invalid,
+                    # and the next round allocated another one exactly the same way. Five
+                    # rounds of that ended a ten-chapter run.
                     candidate = self._allocate_segment_candidate(
                         repair_item,
                         int(plan["repair_round"]),
                         repair_rounds,
+                        candidate_repair_requirement=str(
+                            plan.get(
+                                "candidate_repair_requirement",
+                                STANDARD_CANDIDATE_GATE_REQUIREMENT,
+                            )
+                        ),
+                        repair_trigger_check_id=(
+                            int(plan["repair_trigger_check_id"])
+                            if plan.get("repair_trigger_check_id") is not None
+                            else None
+                        ),
                     )
                     generation_jobs.append((repair_item, candidate))
                     progressed = True

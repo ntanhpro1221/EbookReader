@@ -26,6 +26,8 @@ from ebook_reader.analysis import (
     _vowel_letter_groups,
     is_vietnamese_syllable,
 )
+from ebook_reader.analysis import _local_name_fallback
+from ebook_reader.text_processing import vietnamese_number_words
 
 CORPUS = (
     "Seed", "King", "Card", "Deck", "Epic", "Incredible", "Blade", "Gate", "Game",
@@ -472,3 +474,32 @@ def test_the_superlative_suffix_has_an_i() -> None:
     assert _read("Biggest") == "Bi-gít"
     assert _read("West") == "Goét"
     assert _read("Best") == "Bét"
+
+
+def test_a_regnal_number_is_said_not_spelled() -> None:
+    """The book says "Benedict III" 164 times and the transliterator read the letters:
+    "Bê-nê-đíc-iii". A regnal number is a number."""
+    assert _cmu_phrase_to_vietnamese("Benedict III") == "Be-ne-đích thứ ba"
+    assert _cmu_phrase_to_vietnamese("Henry VIII") == "Hen-ri thứ tám"
+    assert _cmu_phrase_to_vietnamese("Louis XIV") == "Lu-ít thứ mười bốn"
+    # a numeral on its own is not a name at all
+    assert _cmu_phrase_to_vietnamese("III") is None
+
+
+def test_the_number_words_follow_vietnamese_not_arithmetic() -> None:
+    """15 is "mười lăm", and from twenty up 1 is "mốt" and 4 "tư"."""
+    assert vietnamese_number_words(15) == "mười lăm"
+    assert vietnamese_number_words(21) == "hai mươi mốt"
+    assert vietnamese_number_words(24) == "hai mươi tư"
+    assert vietnamese_number_words(25) == "hai mươi lăm"
+    assert vietnamese_number_words(10) == "mười"
+
+
+def test_the_spelling_route_says_a_final_er_as_the_schwa() -> None:
+    """*Kaizer* came back "Cai-dên" where a listener writes "cai-dờ"; the route had no
+    notion of the ending. It also read a silent e out loud - *Zone* was "Dô-nê" - which
+    could not be fixed until the coda table stopped losing b, d, j and y."""
+    assert _local_name_fallback("Kaizer") == "Cai-dờ"
+    assert _local_name_fallback("Zone") == "Dôn"
+    assert _local_name_fallback("Blade") == "Bờ-lát"
+    assert _local_name_fallback("Safe") == "Xáp"

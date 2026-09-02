@@ -3517,7 +3517,7 @@ def test_fantasy_name_uses_logged_local_fallback_after_targeted_retries(
     assert {
         row["surface"]: row["spoken_form"]
         for row in db.pronunciations
-    } == {"Gary": "Ga-ri", "Xenlor": "Xên-lôn"}
+    } == {"Gary": "Ga-ri", "Xenlor": "Xên-lờ"}
     assert any(event[1] == "NAME_PRONUNCIATION_LOCAL_FALLBACK" for event in db.events)
 
 
@@ -3554,7 +3554,7 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
         for row in db.pronunciations
     } == {
         "Vaelorian": "Ve-lô-rian",
-        "Xenlor": "Xên-lôn",
+        "Xenlor": "Xên-lờ",
         "Zytherion": "Di-thê-riôn",
     }
     fallback_event = next(

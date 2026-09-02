@@ -10607,6 +10607,92 @@ class ProjectDB:
         incumbent_sha256: str,
         policy_hash: str,
     ) -> None:
+        trigger = self._unbound_naturalness_trigger_conn(
+            conn,
+            segment_id=int(segment_id),
+            incumbent_sha256=str(incumbent_sha256),
+            policy_hash=str(policy_hash),
+        )
+        if trigger is None:
+            return
+        self._validated_naturalness_repair_trigger_conn(
+            conn,
+            segment_id=int(segment_id),
+            incumbent_sha256=str(incumbent_sha256),
+            policy_hash=str(policy_hash),
+            quality_check_id=int(trigger["id"]),
+        )
+        raise RuntimeError(
+            "naturalness-repair candidate allocation must bind its exact trigger check id"
+        )
+
+    def _planned_candidate_repair_binding_conn(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        segment_id: int,
+        policy_hash: str,
+        ordinary_rows: list[sqlite3.Row],
+    ) -> dict[str, Any]:
+        """Which kind of candidate the next round is owed, and what it binds to.
+
+        The plan used to say nothing on the first allocation and to copy the previous
+        candidate's answer after that, so each caller supplied its own default: the
+        perceptual loop assumed a naturalness repair and the ASR loop assumed the standard
+        gate. A segment whose outstanding trigger was a naturalness review and whose repair
+        came round through the ASR loop therefore got a candidate with no trigger bound to
+        it, which the database refused - and the next round repeated the mistake, because
+        the plan copied it forward. Five rounds of that ended a ten-chapter run.
+
+        The trigger itself is the one place that knows, so it is what is read.
+        """
+        segment = conn.execute(
+            "SELECT wav_sha256 FROM segments WHERE id=?", (int(segment_id),)
+        ).fetchone()
+        incumbent = str(segment["wav_sha256"] or "") if segment is not None else ""
+        if incumbent:
+            trigger = self._unbound_naturalness_trigger_conn(
+                conn,
+                segment_id=int(segment_id),
+                incumbent_sha256=incumbent,
+                policy_hash=str(policy_hash),
+            )
+            if trigger is not None:
+                return {
+                    "candidate_repair_requirement": NATURALNESS_IMPROVEMENT_REQUIREMENT,
+                    "repair_trigger_check_id": int(trigger["id"]),
+                }
+        if ordinary_rows:
+            return {
+                "candidate_repair_requirement": str(
+                    ordinary_rows[0]["candidate_repair_requirement"]
+                ),
+                "repair_trigger_check_id": (
+                    int(ordinary_rows[0]["repair_trigger_check_id"])
+                    if ordinary_rows[0]["repair_trigger_check_id"] is not None
+                    else None
+                ),
+            }
+        return {
+            "candidate_repair_requirement": STANDARD_CANDIDATE_GATE_REQUIREMENT,
+            "repair_trigger_check_id": None,
+        }
+
+    def _unbound_naturalness_trigger_conn(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        segment_id: int,
+        incumbent_sha256: str,
+        policy_hash: str,
+    ) -> sqlite3.Row | None:
+        """The naturalness review this audio still owes a candidate, if it owes one.
+
+        Both the caller that refuses an unbound candidate and the one that plans the next
+        allocation need to know this, and they used to work it out separately: the planner
+        copied the requirement from whatever candidate came before, so one wrong choice
+        repeated itself every round until the run ran out of them.
+        """
         triggers = list(
             conn.execute(
                 """
@@ -10656,16 +10742,8 @@ class ProjectDB:
                     )
             if candidate_evidence:
                 continue
-            self._validated_naturalness_repair_trigger_conn(
-                conn,
-                segment_id=int(segment_id),
-                incumbent_sha256=str(incumbent_sha256),
-                policy_hash=str(policy_hash),
-                quality_check_id=int(trigger["id"]),
-            )
-            raise RuntimeError(
-                "naturalness-repair candidate allocation must bind its exact trigger check id"
-            )
+            return trigger
+        return None
 
     def _candidate_perceptual_requirement_conn(
         self,
@@ -11579,19 +11657,14 @@ class ProjectDB:
                     "candidate_id": None,
                     "repair_round": len(rows),
                 }
-                if ordinary_rows:
-                    allocation_plan.update(
-                        {
-                            "candidate_repair_requirement": str(
-                                ordinary_rows[0]["candidate_repair_requirement"]
-                            ),
-                            "repair_trigger_check_id": (
-                                int(ordinary_rows[0]["repair_trigger_check_id"])
-                                if ordinary_rows[0]["repair_trigger_check_id"] is not None
-                                else None
-                            ),
-                        }
+                allocation_plan.update(
+                    self._planned_candidate_repair_binding_conn(
+                        conn,
+                        segment_id=int(segment_id),
+                        policy_hash=str(policy_hash).strip(),
+                        ordinary_rows=ordinary_rows,
                     )
+                )
                 return allocation_plan
             if not tempo_rows:
                 if any(

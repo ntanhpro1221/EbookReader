@@ -78,7 +78,12 @@ from .models import (
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
 )
 from .process_utils import terminate_process_tree
-from .text_processing import is_vocalization_only
+from .text_processing import (
+    ROMAN_NUMERAL_TOKEN_PATTERN,
+    is_vocalization_only,
+    roman_numeral_value,
+    vietnamese_number_words,
+)
 
 
 ALLOWED_KINDS = {"narration", "dialogue", "thought"}
@@ -3009,6 +3014,9 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             # the other side of the pipeline locked "Argh" as a foreign name and read it
             # "A-rag", which no ASR check could then match.
             or is_vocalization_only(value)
+            # A regnal number is not a name. "Benedict III" appears 164 times in one book
+            # and the transliterator read the numeral "Iii".
+            or ROMAN_NUMERAL_TOKEN_PATTERN.fullmatch(value) is not None
             or all(is_vietnamese_syllable(word) for word in _name_phrase_words(value))
             or not _is_proper_latin_name_surface(value)
         ):
@@ -3862,9 +3870,16 @@ def _latin_name_coda_reading(coda: str) -> str:
     if not key:
         return ""
     return {
+        # b, d, j and y were missing and fell through to "", which dropped the consonant
+        # without saying so - the same silent-loss the phoneme table was rebuilt to stop.
+        # A voiced stop takes its voiceless partner, as everywhere else here.
+        "b": "p",
         "c": "c",
+        "d": "t",
         "f": "p",
         "g": "c",
+        "j": "ch",
+        "y": "i",
         "k": "c",
         "l": "n",
         "m": "m",
@@ -3889,11 +3904,53 @@ def _vowelless_name_reading(value: str) -> str:
     return "-".join(parts)
 
 
+def _final_er_schwa(surface: str, spoken_form: str) -> str:
+    """A word ending in -er or -or ends on the schwa, not on the r read as a coda.
+
+    This route had no notion of the ending, so *Kaizer* came back "Cai-dên" where a listener
+    writes "cai-dờ". The tone is huyền for the same reason it is on the phoneme path: the
+    syllable is weak and at the end of the word.
+    """
+    letters = "".join(character for character in surface.casefold() if character.isalpha())
+    if not letters.endswith(("er", "or")):
+        return spoken_form
+    syllables = spoken_form.split("-")
+    last = syllables[-1]
+    onset = last[: len(last) - len(_without_tone(last).lstrip("bcdghklmnpqrstvx"))]
+    if not onset or onset == last:
+        return spoken_form
+    syllables[-1] = onset + "ờ"
+    return "-".join(syllables)
+
+
+def _silent_e_removed(value: str) -> str:
+    """Drop a word-final e that English does not say.
+
+    This route works from the spelling, so it read the e out loud: *Zone* came back "Dô-nê"
+    and *Theosbane* "Thêô-xờ-ba-nê". It could not be dropped until the coda table stopped
+    losing b, d, j and y, or the consonant the e was hiding went silent with it and *Blade*
+    read "Bờ-la".
+
+    Not in -le, where the l carries a syllable of its own, and not in -es, where the e is
+    already silent and the s is the coda.
+    """
+    if len(value) >= 4 and value.endswith("es") and value[-3] not in "aeiouy":
+        return value[:-2] + "s"
+    if (
+        len(value) >= 3
+        and value.endswith("e")
+        and value[-2] not in "aeiouy"
+        and not (value.endswith("le") and len(value) >= 4 and value[-3] not in "aeiouy")
+    ):
+        return value[:-1]
+    return value
+
+
 def _local_name_fallback(surface: str) -> str:
     """Produce a safe Vietnamese-readable form for any Latin name accepted by the scanner."""
     rendered: list[str] = []
     for part in re.findall(r"[A-Za-z]+", surface):
-        syllables = _latin_name_syllables(part.casefold())
+        syllables = _latin_name_syllables(_silent_e_removed(part.casefold()))
         if not syllables:
             rendered.append(_vowelless_name_reading(part))
             continue
@@ -3913,6 +3970,7 @@ def _local_name_fallback(surface: str) -> str:
     spoken_form = "-".join(_add_sac_tone(part) for part in rendered if part)
     if not spoken_form:
         raise ValueError(f"Tên không chứa ký tự Latin có thể đọc: {surface!r}")
+    spoken_form = _final_er_schwa(surface, spoken_form)
     spoken_form = spoken_form[0].upper() + spoken_form[1:]
     if VIETNAMESE_SPOKEN_FORM_PATTERN.fullmatch(spoken_form) is None:
         raise ValueError(f"Fallback cục bộ tạo cách đọc không hợp lệ: {surface!r} → {spoken_form!r}")
@@ -4070,12 +4128,21 @@ def _cmu_phrase_to_vietnamese(surface: str) -> str | None:
         # A homograph needs the sentence around it, which this path does not have.
         return None
     pronunciations = _cmu_pronunciations(words)
+    if all(roman_numeral_value(word) is not None for word in words):
+        return None
     if len(words) < 2 and pronunciations.get(keys[0]):
         # A single dictionary word is already handled upstream, where a short name still
         # gets the contextual review this path cannot give it.
         return None
     readings: list[str] = []
     for word, key in zip(words, keys):
+        regnal = roman_numeral_value(word)
+        if regnal is not None:
+            # A regnal number is said, not spelled: "Benedict III" is "thứ ba", where the
+            # transliterator read the letters and gave "iii". The book says "Benedict III"
+            # 164 times.
+            readings.append(f"thứ {vietnamese_number_words(regnal)}")
+            continue
         pronunciation = pronunciations.get(key, "")
         if not pronunciation:
             return None
