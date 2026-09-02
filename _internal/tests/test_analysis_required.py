@@ -3555,7 +3555,7 @@ def test_multiple_fantasy_names_recover_when_every_qwen_request_fails(monkeypatc
     } == {
         "Vaelorian": "Ve-lô-rian",
         "Xenlor": "Xên-lờ",
-        "Zytherion": "Di-thê-riôn",
+        "Zytherion": "Di-thê-ri-ôn",
     }
     fallback_event = next(
         event for event in db.events if event[1] == "NAME_PRONUNCIATION_LOCAL_FALLBACK"

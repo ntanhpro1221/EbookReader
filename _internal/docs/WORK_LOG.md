@@ -89,3 +89,83 @@ phục vụ cả hai cờ.
    để có số liệu thật (`--require-fresh` sẽ từ chối run resume).
 4. **`OLLAMA_NUM_PARALLEL` phía server**: phải khởi động lại Ollama, chờ lúc không có run.
 5. **HiFi-Glot** — tồn đọng lâu, chưa khởi động.
+
+---
+
+# Phiên 2026-09-02: cách đọc tên tiếng Anh, và một run chết vì kế hoạch không nói gì
+
+## Việc bắt đầu từ đâu
+
+Truy 9 segment fail của alpha.22 để hỏi người nghe xem cổng ASR có quá nghiêm không. Câu
+trả lời hoá ra **ngược lại**: cả bốn tên bị chặn đều chứa cụm phụ âm **không tồn tại trong
+tiếng Việt** (`xba`, `bla`, `lđ`, `xc`). Cổng bắt đúng; cách đọc mới là thứ sai.
+
+Đo ra: **35/189 cách đọc đã khoá (18,5%) vi phạm chính bộ luật âm tiết của project**, và
+chúng `locked=1` nên tồn tại xuyên mọi run.
+
+## Gốc rễ, và bốn lỗi cùng lộ ra
+
+`_cmu_pronunciations()` tra **cả cụm** trong CMUdict. Từ điển khoá theo **từ**, nên mọi tên
+nhiều từ đều trượt và rơi xuống đường đọc theo **mặt chữ** — đường không biết 'e' câm và
+không tách cụm phụ âm. Xem `ENGLISH_TO_VIETNAMESE.md` cho toàn bộ.
+
+Bốn lỗi độc lập cùng lộ ra khi kiểm định toàn corpus:
+
+1. `VIETNAMESE_SYLLABLE_ONSETS` có "d" nhưng **không có "đ"** — bộ kiểm tra chuẩn hoá đ→d
+   trước khi so, bộ tách cụm thì không, nên bộ tách **bỏ cuộc** đúng chỗ bộ kiểm tra từ chối.
+2. R trước phụ âm bị coi là âm đầu → đẻ ra âm tiết từ gốc không có (`A-rơ-thơ`).
+3. Luật "r + d cuối lùi về -c" **viết trong comment, không có code nào thực hiện**.
+4. Luật /l/ tự thành âm tiết không phân biệt trọng âm → nuốt phụ âm cuối của cả một lớp từ.
+
+## Ba nguồn đối chiếu, mỗi nguồn bắt được thứ hai nguồn kia bỏ sót
+
+| nguồn | quy mô | bắt được gì |
+|---|---|---|
+| 138 cách đọc người nghe viết ra | 138 từ | phần lớn các luật nguyên âm và thanh |
+| Corpus sách (2 cuốn) | 1.495 + 1.692 từ | R làm âm đầu, /l/ theo trọng âm |
+| Nguồn ngoài (10k từ + 27k tên) | 24.061 từ | không có ca không hợp lệ nào lọt |
+| **Từ mượn tiếng Việt có sẵn** | 41 từ | `style`→"Xờ-t**aiu**", vần không tồn tại |
+
+Nguồn thứ tư là do người nghe chỉ ra: *"bạn thực sự biết cách người việt đọc các từ tiếng
+anh? sao bạn không tự áp dụng mục tiêu đó cho thuật toán mà cứ phải hỏi tôi?"* Đúng. Nó nằm
+ở `tests/data_vietnamese_loanwords.py`, và **phần khó là lọc**: rất nhiều "từ tiếng Anh"
+trong tiếng Việt vào qua **tiếng Pháp** (`ga-ra`, `cà phê`, `vắc-xin`, `sa-lát`) và sẽ kéo
+bộ luật Anh→Việt đi sai hướng.
+
+## Điều lặp đi lặp lại trong phiên này
+
+**Bộ kiểm tra hợp lệ chỉ xét âm đầu và ký tự cuối, không bao giờ xét vần.** Nó cho qua
+`Xă-mon` ("ă" không đứng lẻ được) và `Xờ-taiu` ("aiu" không phải vần). Cả hai chỉ lộ ra khi
+**in kết quả ra cho người đọc** hoặc khi có **bộ đối chiếu độc lập** — không lần nào do suy
+luận về luật. Đã vá hai ca cụ thể; **danh sách vần hợp lệ vẫn là lỗ hổng chưa lấp**.
+
+**Luật phải phát biểu theo cái bị bỏ, không theo cái được giữ.** Viết "giữ phụ âm cuối nếu
+là âm tắc" làm hỏng `name`, `game`, `james` — vì /m/ là âm **mũi**. Viết "bỏ nếu là âm xát"
+thì đúng hết.
+
+**Mỗi lần mở rộng một luật quá tay đều bị chính dữ liệu bắt lại**: "R + phụ âm kêu → -c" làm
+`george` thành "Giọc"; tách từ ghép hoàn hảo trên 7 từ ghép thật nhưng hỏng 35 tên bịa.
+
+## alpha.23 chết, và vì sao
+
+`naturalness-repair candidate allocation must bind its exact trigger check id` ở chương 2.
+
+Hai chỗ cấp phát candidate; **kế hoạch không nói cho chỗ nào biết phải cấp loại gì**. Lần đầu
+nó im lặng, các lần sau nó **sao chép candidate trước**. Nên mỗi bên tự đoán mặc định khác
+nhau — và một lần đoán sai thì sai mãi, 5 vòng rồi chết.
+
+Đúng họ lỗi **"một sự thật viết ở hai nơi"** đã ghi trong log này từ phiên trước, lần thứ
+sáu trong lịch sử project. Sửa: chính trigger là nơi duy nhất biết, nên kế hoạch đọc từ đó,
+và đoạn quét trigger dùng chung giữa bên *từ chối* và bên *lập kế hoạch*.
+
+Đáng ghi: **ràng buộc database đã làm đúng việc** — nó biến một lỗi đọc thành một run dừng
+lại thay vì một cuốn sách nói hỏng. Cái thiếu là chưa ai test rằng bên gọi **có thể** lấy
+đúng câu trả lời, và hoá ra không thể.
+
+## Việc còn tồn (cập nhật)
+
+1. **Danh sách vần hợp lệ cho bộ kiểm tra** — hai ca đã lọt trong phiên này.
+2. **Retry phân tích**: 34% ca `DIRECTOR_FIELD_MISMATCH` chỉ bất đồng ở trường không nghe
+   được. Cơ chế chấp nhận đã có nhưng chỉ chạy như phương án cuối. Cách sửa ít rủi ro nhất
+   đã ghi trong `ANALYSIS_RETRY_COST.md`.
+3. Whisper song song / chồng lấn giai đoạn / `OLLAMA_NUM_PARALLEL` / HiFi-Glot — như cũ.

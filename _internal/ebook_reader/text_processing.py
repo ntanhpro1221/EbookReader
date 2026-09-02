@@ -80,12 +80,16 @@ FOLDED_VOCALIZATION_PATTERN = re.compile(
     + r"|[a-z])$",
     re.IGNORECASE,
 )
-# A held sound written out: one consonant, then the same vowel three times or more.
-# "Tuuuuu" is not a name, but the pattern above cannot see it because a letter stands in
-# front of the run. No word in either language repeats a vowel three times, so this cannot
-# swallow a real one.
+# A held sound written out: the same vowel three times or more, anywhere in the token.
+# Neither language repeats a vowel that many times, and the book bears it out - of 11,524
+# distinct tokens across both books, 87 match and every one is a cry, a shout or a word
+# stretched out ("Khôôôông", "Saaaaaaam"). The only other things that match are Roman
+# numerals, which have their own guard.
+#
+# Narrower versions kept missing: anchoring at the start missed "Tuuuuu", and allowing only
+# consonants in front missed "THWAAAM", "Booyaaa" and "ARAAAAH".
 STRETCHED_SOUND_TOKEN_PATTERN = re.compile(
-    r"^[bcdghklmnpqrstvx]?(?P<vowel>[aeiouy])(?P=vowel){2,}h*$",
+    r"(?P<vowel>[aeiouyăâêôơư])(?P=vowel){2,}",
     re.IGNORECASE,
 )
 # A regnal number, not a held sound. "III" folds to a run of one vowel and would otherwise
@@ -103,8 +107,15 @@ VIETNAMESE_UNITS = (
 
 
 def roman_numeral_value(token: str) -> int | None:
-    """The number a Roman numeral spells, or None when the token is not one."""
+    """The number a Roman numeral spells, or None when the token is not one.
+
+    A single letter is only ever read as one when it is "I". This book ranks things
+    "C » B » A » S", so a lone C or D or M is a grade rather than a hundred, and no
+    monarch is numbered V without the letters around it to say so.
+    """
     if ROMAN_NUMERAL_TOKEN_PATTERN.fullmatch(token) is None:
+        return None
+    if len(token) == 1 and token != "I":
         return None
     total = 0
     previous = 0
@@ -130,17 +141,28 @@ def vietnamese_number_words(value: int) -> str:
         if unit == 0:
             return "mười"
         return "mười " + ("lăm" if unit == 5 else VIETNAMESE_UNITS[unit])
-    tens, unit = divmod(value, 10)
-    head = f"{VIETNAMESE_UNITS[tens]} mươi"
-    if unit == 0:
-        return head
-    if unit == 1:
-        return head + " mốt"
-    if unit == 4:
-        return head + " tư"
-    if unit == 5:
-        return head + " lăm"
-    return f"{head} {VIETNAMESE_UNITS[unit]}"
+    if value < 100:
+        tens, unit = divmod(value, 10)
+        head = f"{VIETNAMESE_UNITS[tens]} mươi"
+        if unit == 0:
+            return head
+        if unit == 1:
+            return head + " mốt"
+        if unit == 4:
+            return head + " tư"
+        if unit == 5:
+            return head + " lăm"
+        return f"{head} {VIETNAMESE_UNITS[unit]}"
+    if value < 1000:
+        hundreds, rest = divmod(value, 100)
+        head = f"{VIETNAMESE_UNITS[hundreds]} trăm"
+        if rest == 0:
+            return head
+        # Vietnamese says "lẻ" for the empty tens: 105 is "một trăm lẻ năm".
+        if rest < 10:
+            return f"{head} lẻ {VIETNAMESE_UNITS[rest]}"
+        return f"{head} {vietnamese_number_words(rest)}"
+    raise ValueError(f"number beyond what a book numbers things with: {value}")
 MAX_VOCALIZATION_REPETITIONS = 4
 
 
@@ -299,7 +321,7 @@ def _is_vocalization_token(token: str) -> bool:
     return (
         FOLDED_VOCALIZATION_PATTERN.fullmatch(folded) is not None
         or COMPACT_VOCALIZATION_PATTERN.fullmatch(folded) is not None
-        or STRETCHED_SOUND_TOKEN_PATTERN.fullmatch(folded) is not None
+        or STRETCHED_SOUND_TOKEN_PATTERN.search(token) is not None
     )
 
 

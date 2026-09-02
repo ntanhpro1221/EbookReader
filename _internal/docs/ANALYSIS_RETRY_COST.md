@@ -71,3 +71,44 @@ trường đã được xác lập là **không nghe ra được và không đư
 
 Chưa làm cái nào vì cả hai đều sửa `analysis.py`, mà lúc đo thì một run đang chạy — sửa file
 đó giữa chừng chính là thứ đã buộc phải bỏ cả một project ở alpha.17.
+
+---
+
+## Đo lại trên toàn bộ run (2026-09-02)
+
+Phân bố số lần thử qua mọi project: **1772 lần đầu, 201 lần hai, 88 lần ba** — đúng 14% lượt
+gọi là làm lại, khớp con số đo lần trước.
+
+`DIRECTOR_FIELD_MISMATCH` theo trường, 200 lần:
+
+| trường | số lần | có nghe được không |
+|---|---|---|
+| `emotion,intensity` | 56 | **không** |
+| `kind,speaker` | 50 | có |
+| `emotion,intensity,pace` | 30 | có (pace) |
+| `pace` | 28 | có |
+| `intensity,pace` | 12 | có (pace) |
+| `intensity` | 8 | **không** |
+| `emotion,intensity,volume` | 6 | có (volume → LUFS) |
+| `emotion` | 4 | **không** |
+
+`INAUDIBLE_DELIVERY_FIELDS = {emotion, intensity}`, nên **68/200 (34%) bất đồng chỉ nằm ở
+trường không ai nghe ra được**. Mỗi ca kéo theo tới 2 lần gọi lại.
+
+### Vì sao chưa làm
+
+Cơ chế chấp nhận bất đồng loại này **đã có** (`_feedback_is_inaudible_only`,
+`ANALYSIS_INAUDIBLE_DISAGREEMENT_ACCEPTED`) nhưng chỉ chạy như **phương án cuối**: sau khi
+retry hết lượt *và* không chia batch được nữa. Chuyển nó lên thành quyết định **ngay lập
+tức** sẽ bỏ được toàn bộ retry của 34% đó.
+
+Chưa làm vì hàm chứa nó rất lớn và dày bất biến, và lịch sử project cho thấy mỗi lần chạm
+vào lớp validation phân tích lại sinh lỗi mới (bốn lỗi trong `_validate_analysis_rejection_evidence`,
+ba lần đoán sai liên tiếp ở bộ kiểm tra từ chối). Đổi vài phần trăm thời gian lấy rủi ro đó
+là không đáng khi đang có run chạy.
+
+**Cách làm ít rủi ro nhất khi quay lại:** không sửa vòng retry, mà **không phát sinh objection
+ngay từ đầu** — ở chỗ ghi `issues[stable_id] = "DIRECTOR_FIELD_MISMATCH fields=..."`, bỏ qua
+khi mọi delta chưa giải quyết đều thuộc `INAUDIBLE_DELIVERY_FIELDS` và
+`AFFECT_CUE_DISAGREEMENT_BLOCKS` là False. Một dòng điều kiện, cùng chỗ đã biết sự thật đó,
+thay vì tái cấu trúc luồng retry.

@@ -60,11 +60,30 @@ ASR_INCONCLUSIVE = "inconclusive"
 # so it cannot block a chapter; every other check still applies.
 ASR_MIN_VERIFIABLE_CHARS = 10
 ASR_UNVERIFIABLE_SHORT_TEXT = "ASR_UNVERIFIABLE_SHORT_TEXT"
+# Whisper's own timestamps ran past the end of the file, which it can only do by
+# wandering off the audio. Was a bare string in three places.
+ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE = "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE"
 
 
 def asr_verdict_is_unverifiable(text: str) -> bool:
     """Whether this reference is too short for an ASR verdict to mean anything."""
     return sum(char.isalnum() for char in str(text)) < ASR_MIN_VERIFIABLE_CHARS
+
+
+def asr_answer_is_about_other_audio(reason: str) -> bool:
+    """Whether Whisper has told us its answer is not about the audio it was given.
+
+    The timeline check catches this: the transcript's own timestamps run past the end of the
+    file, which can only happen when the decoder has wandered off the audio into something
+    it was trained on. It is the same unanswerable question as a reference too short to
+    transcribe, established by different evidence, and it deserves the same treatment -
+    a listen rather than a failed chapter.
+
+    "Mẹ kiếp! A a a! Khốn nạn!" came back as "Cảm ơn các bạn đã theo dõi và hẹn gặp lại"
+    twice, from two separately generated takes with different seeds. Whisper is deterministic
+    about it, so another repair round cannot rescue a verdict that was never available.
+    """
+    return str(reason).strip() == ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
 ASR_LOCKED_NAME_ANCHOR_MISMATCH = "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
 ASR_LOCKED_NAME_CANONICAL_PASS = "ASR_LOCKED_NAME_CANONICAL_PASS"
 LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"
@@ -1275,7 +1294,7 @@ class WhisperVerifier:
                 "transcript": transcript,
                 "similarity": similarity,
                 "wer": wer,
-                "reason": "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE",
+                "reason": ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
                 "repairable": False,
                 "severe": False,
             }
