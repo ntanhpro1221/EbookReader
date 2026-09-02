@@ -3165,6 +3165,33 @@ def _arpabet_phones(pronunciation: str) -> tuple[str, ...]:
     return tuple(phones)
 
 
+def _open_consonantal_glide(phones: tuple[str, ...]) -> tuple[str, ...]:
+    """Read a /j/ between a consonant and a vowel as the vowel of its own syllable.
+
+    CMUdict writes *william* "W IH1 L Y AH0 M" and *million* "M IH1 L Y AH0 N", where the
+    /lj/ is one consonant plus a glide. Vietnamese has no such onset, so the l fell into the
+    coda and the glide became a consonant of its own: "Guyn-dơm", "Min-dừn". Spelled out it
+    is li-am and mi-lli-on, and a listener writes "guy-li-am".
+
+    Only between a consonant and a vowel. A word-initial /j/ - "yes", "york" - is a real
+    onset, and a /j/ after a vowel - "lawyer" - is an off-glide.
+    """
+    opened: list[str] = []
+    for index, phone in enumerate(phones):
+        previous = phones[index - 1] if index else ""
+        following = phones[index + 1] if index + 1 < len(phones) else ""
+        if (
+            phone == "Y"
+            and previous
+            and previous not in ARPABET_VOWELS
+            and following in ARPABET_VOWELS
+        ):
+            opened.append("IY")
+            continue
+        opened.append(phone)
+    return tuple(opened)
+
+
 def _restore_intervocalic_r(phones: tuple[str, ...]) -> tuple[str, ...]:
     """Give back the /r/ that an r-coloured vowel swallowed before another vowel.
 
@@ -3303,6 +3330,34 @@ def _vowel_stresses(pronunciation: str) -> tuple[bool, ...]:
         if re.sub(r"\d+$", "", phone) in ARPABET_VOWELS:
             marks.append(phone.endswith("1"))
     return tuple(marks)
+
+
+def _aligned_vowel_stresses(
+    pronunciation: str,
+    phones: tuple[str, ...],
+    resolved: tuple[str, ...],
+) -> tuple[bool, ...]:
+    """Stress per vowel of the repaired phone sequence.
+
+    A vowel the repairs invented - the /j/ of "william" opened into one - carries no stress
+    of its own, so the marks from the dictionary are consumed only by the vowels that were
+    there to begin with.
+    """
+    marks = list(_vowel_stresses(pronunciation))
+    original_vowels = [phone for phone in phones if phone in ARPABET_VOWELS]
+    if len(marks) != len(original_vowels):
+        return tuple(marks)
+    aligned: list[bool] = []
+    taken = 0
+    for phone in resolved:
+        if phone not in ARPABET_VOWELS:
+            continue
+        if taken < len(original_vowels) and phone == original_vowels[taken]:
+            aligned.append(marks[taken])
+            taken += 1
+        else:
+            aligned.append(False)
+    return tuple(aligned)
 
 
 def _aligned_vowel_letters(word: str, phones: tuple[str, ...]) -> tuple[str, ...]:
@@ -3813,9 +3868,14 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
     if override is not None:
         return override
     rendered: list[tuple[str, bool]] = []
-    letters = _aligned_vowel_letters(surface, phones)
-    stresses = _vowel_stresses(pronunciation)
-    syllables_out = _arpabet_syllables(_restore_intervocalic_r(phones))
+    # Both repairs below can add a phone, and one of them adds a vowel, so the letters and
+    # the stresses have to be lined up against what comes out of them rather than against
+    # the raw pronunciation - otherwise "william" reads its last vowel off "ia" instead of
+    # "a" and comes out "Guy-li-ơm".
+    resolved = _open_consonantal_glide(_restore_intervocalic_r(phones))
+    letters = _aligned_vowel_letters(surface, resolved)
+    stresses = _aligned_vowel_stresses(pronunciation, phones, resolved)
+    syllables_out = _arpabet_syllables(resolved)
     for index, (onset, vowel, coda) in enumerate(syllables_out):
         following = coda or (
             syllables_out[index + 1][0] if index + 1 < len(syllables_out) else ()
