@@ -467,6 +467,9 @@ VIETNAMESE_SYLLABLE_PATTERN = re.compile(
     )
 )
 VIETNAMESE_FRONT_SIMPLE_VOWELS = ("i", "ê")
+# These two are always followed by a consonant in Vietnamese; a syllable that ends on
+# either of them is not a word in the language.
+OPEN_SYLLABLE_FORBIDDEN_VOWELS = ("ă", "â")
 
 
 def _without_tone(value: str) -> str:
@@ -546,6 +549,9 @@ ARPABET_PRONUNCIATION_OVERRIDES = {
     # The rules give "Đếch", which is right by every one of them and is also a coarse word
     # in Vietnamese. The book says "Bộ Thẻ (Deck)" nine times and would say it out loud.
     ("D", "EH", "K"): "Đéc",
+    # And "Chôn", which is the ordinary verb for burying someone - not a name. The reading
+    # follows the listener's own "chác-li" for Charlie.
+    ("CH", "AA", "R", "L", "Z"): "Chác-lơ",
     ("AH", "L", "IY", "S", "AH"): "A-li-sa",
     ("AY", "V", "AH", "N"): "Ai-vân",
     ("B", "EH", "N", "JH", "AH", "M", "AH", "N"): "Ben-gia-min",
@@ -567,6 +573,9 @@ ARPABET_ONSET_OVERRIDES = {
     ("DH",): "d",
     ("JH",): "gi",
     ("K", "L"): "cl",
+    # /kw/ is exactly the Vietnamese onset "qu"; split into "cờ" + glide it invented a
+    # syllable, so *quest* read "Cờ-uét" rather than "Quét".
+    ("K", "W"): "qu",
     ("K", "R"): "cr",
     ("NG",): "ng",
     ("SH",): "s",
@@ -3387,6 +3396,13 @@ def _aligned_vowel_letters(word: str, phones: tuple[str, ...]) -> tuple[str, ...
     return tuple(groups)
 
 
+def _front_vowel_onset(reading: str, vowel: str) -> str:
+    """The c/k, g/gh and ng/ngh spellings, which depend on the vowel that follows."""
+    if vowel not in {"EH", "IH", "IY"}:
+        return reading
+    return {"c": "k", "g": "gh", "ng": "ngh"}.get(reading, reading)
+
+
 def _arpabet_vowel_reading(
     onset: tuple[str, ...],
     vowel: str,
@@ -3419,8 +3435,10 @@ def _arpabet_vowel_reading(
         # when a consonant closes the syllable, as in *oldest* "ôn-đớt", and when the next
         # syllable begins with a vowel, as in *noah* "nô-a".
         return "o"
-    if vowel == "AH" and following[:1] in (("M",), ("N",), ("NG",)):
+    if vowel == "AH" and coda[:1] in (("M",), ("N",), ("NG",)):
         # /ʌ/ before a nasal is Vietnamese ă: *month* is "măn", *dungeon* "đăng-giừng".
+        # The nasal has to close this syllable: ă never stands alone in Vietnamese, so
+        # *summon*, whose /m/ opens the next one, is "xa-mon" and not "xă-mon".
         return "ă"
     if vowel == "AW":
         # English shortens a vowel before a voiceless consonant and holds it before a voiced
@@ -3436,6 +3454,11 @@ def _arpabet_vowel_reading(
         return "e"
     spelled = SPELLED_VOWEL_READINGS.get((letter, vowel))
     if spelled is not None:
+        if spelled in OPEN_SYLLABLE_FORBIDDEN_VOWELS and not coda:
+            # ă and â never stand alone in Vietnamese; they need a consonant to close the
+            # syllable. *summon*, whose /m/ opens the next syllable rather than closing this
+            # one, is "xa-mon" - "xă-mon" is not a word in the language.
+            return "a"
         return spelled
     if vowel in {"AH", "AX"} and _arpabet_coda_reading(onset, vowel, coda) == "n":
         return "â"
@@ -3700,7 +3723,7 @@ def _arpabet_coda_reading(
     if phone is None:
         return ""
     reading = ARPABET_CODAS[phone]
-    if phone == "D" and "R" in coda:
+    if reading == "t" and phone in ARPABET_VOICED and "R" in coda:
         # The r before a final d is the one place the r leaves a mark instead of vanishing:
         # it backs the stop, so "card" is "cac" and "guard" is "gac" - both of which are
         # real Vietnamese loans, and the second is the ordinary word for a landing. The
@@ -3882,6 +3905,10 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
         )
         onset_reading = _arpabet_onset_reading(onset, vowel)
         peeled, onset_reading = _split_illegal_onset(onset_reading)
+        # Vietnamese writes /k/ as k and /ɣ/ as gh before a front vowel, and the split can
+        # expose an onset that was buried in a cluster: *skill* came out "Xờ-cin" where
+        # Vietnamese writes "Xờ-kin".
+        onset_reading = _front_vowel_onset(onset_reading, vowel)
         rendered.extend((part, False) for part in peeled)
         vowel_reading = _arpabet_vowel_reading(
             onset,
@@ -4013,6 +4040,11 @@ def _valid_vietnamese_spoken_form(surface: str, spoken_form: str) -> bool:
             return False
         onset = normalized[:vowel_indexes[0]]
         if onset not in VIETNAMESE_SYLLABLE_ONSETS:
+            return False
+        if syllable[-1] in OPEN_SYLLABLE_FORBIDDEN_VOWELS:
+            # ă and â need a consonant behind them. "xă" passed every check here and is
+            # not a Vietnamese syllable; only the onset and the last letter were ever looked
+            # at, so a rime the language does not have could still get through.
             return False
     return True
 
