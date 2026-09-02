@@ -80,6 +80,18 @@ FOLDED_VOCALIZATION_PATTERN = re.compile(
     + r"|[a-z])$",
     re.IGNORECASE,
 )
+# A held sound written out: one consonant, then the same vowel three times or more.
+# "Tuuuuu" is not a name, but the pattern above cannot see it because a letter stands in
+# front of the run. No word in either language repeats a vowel three times, so this cannot
+# swallow a real one.
+STRETCHED_SOUND_TOKEN_PATTERN = re.compile(
+    r"^[bcdghklmnpqrstvx]?(?P<vowel>[aeiouy])(?P=vowel){2,}h*$",
+    re.IGNORECASE,
+)
+# A regnal number, not a held sound. "III" folds to a run of one vowel and would otherwise
+# be read as a scream; the book says "Benedict III" 164 times. Uppercase only, so a
+# stretched "Iiii" is still a sound.
+ROMAN_NUMERAL_TOKEN_PATTERN = re.compile(r"^[IVXLCDM]+$")
 MAX_VOCALIZATION_REPETITIONS = 4
 
 
@@ -232,10 +244,13 @@ def _fold_vocalization_token(token: str) -> str:
 
 
 def _is_vocalization_token(token: str) -> bool:
+    if ROMAN_NUMERAL_TOKEN_PATTERN.fullmatch(token) is not None:
+        return False
     folded = _fold_vocalization_token(token)
     return (
         FOLDED_VOCALIZATION_PATTERN.fullmatch(folded) is not None
         or COMPACT_VOCALIZATION_PATTERN.fullmatch(folded) is not None
+        or STRETCHED_SOUND_TOKEN_PATTERN.fullmatch(folded) is not None
     )
 
 
