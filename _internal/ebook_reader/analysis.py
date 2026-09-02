@@ -3918,6 +3918,13 @@ def _latin_name_vowel_groups(value: str) -> list[tuple[int, int]]:
         index += 1
         while index < len(value) and value[index] in LATIN_NAME_VOWELS:
             index += 1
+        if index < len(value) and value[index] == "w":
+            # In English spelling a w after a vowel belongs to it - ow, aw, ew - and the
+            # reading table has said so all along ("aw" reads "ao"). The grouping never let
+            # those entries be reached, so the w fell to the next onset and the consonants
+            # behind it piled on: *bowker* read "Bô-ucên", *downside* "Đô-unxít". 520
+            # syllables across the dictionary came out that way.
+            index += 1
         groups.append((start, index))
     return groups
 
@@ -3956,6 +3963,12 @@ def _latin_name_syllables(value: str) -> list[tuple[str, str, str]]:
 
 def _latin_name_onset_reading(onset: str, vowel: str) -> str:
     collapsed = re.sub(r"(.)\1+", r"\1", onset.casefold())
+    if len(collapsed) > 2 and collapsed[0] == "w" and collapsed[1] != "h":
+        # English says nothing for a w in front of another consonant - write, wrong,
+        # wrist. The pair "wr" was in the table but a three-consonant run was not, so
+        # *wrzesinski* fell through to letter-by-letter and kept the w as a vowel:
+        # "Urdê-xin-xờ-ki".
+        collapsed = collapsed[1:]
     reading = LATIN_NAME_ONSET_READINGS.get(collapsed)
     if reading is None:
         reading = "".join(
@@ -3971,9 +3984,16 @@ def _latin_name_onset_reading(onset: str, vowel: str) -> str:
 
 def _latin_name_vowel_reading(vowel: str) -> str:
     key = vowel.casefold()
-    return LATIN_NAME_VOWEL_READINGS.get(
-        key,
-        "".join(LATIN_NAME_VOWEL_READINGS.get(character, character) for character in key),
+    reading = LATIN_NAME_VOWEL_READINGS.get(key)
+    if reading is not None:
+        return reading
+    if key.endswith("w") and len(key) > 1:
+        # The table has aw, ew and ow; a longer run ending in w - "iew", "eow", "uaw" - has
+        # no entry, and letter-by-letter left a raw w in the middle of a Vietnamese word.
+        # The w is the glide the vowels in front of it already carry, so it goes.
+        return _latin_name_vowel_reading(key[:-1])
+    return "".join(
+        LATIN_NAME_VOWEL_READINGS.get(character, character) for character in key
     )
 
 
