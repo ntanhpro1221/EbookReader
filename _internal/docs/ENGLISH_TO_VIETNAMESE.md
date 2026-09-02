@@ -493,3 +493,97 @@ Ngược lại, với từ và tên **tiếng Anh thật** (`Herald`, `Death`, `
 Quy mô: trong 832 từ tiếng Anh của sách, **655 luôn viết hoa** (tên riêng, 57.536 lượt) và
 177 có xuất hiện chữ thường (từ thường, 6.028 lượt). Chưa có cách tự động phân biệt "tên
 tiếng Anh" với "tên quốc tế viết bằng chữ Latinh" — **cần tai người nghe quyết định.**
+
+---
+
+# Nguyên âm bám mặt chữ: từ 4/24 lên 10/24 trên chính cách đọc người nghe viết ra
+
+Người nghe đưa 9 cách đọc mẫu mới, cộng với 15 mẫu trước đó thành **bộ đề 24 từ**. Chấm bộ
+luật cũ trên đó: **4/24 đúng hoàn toàn, 5/24 đúng nếu bỏ thanh, 23/24 đúng số âm tiết.**
+
+Cấu trúc âm tiết gần như luôn đúng. Cái sai là **nguyên âm**.
+
+## Khuôn: chữ cái quyết định, phát âm chỉ chọn giá trị
+
+| từ | luật cũ (theo âm vị) | người nghe viết | chữ trong mặt chữ |
+|---|---|---|---|
+| dragon | `Đơ-re-gân` | `đờ-ra-gon` | a, o |
+| zombie | `Dam-bi` | `dom-bi` | o |
+| vampire | `Vem-pai` | `vam-pai` | a |
+| natasha | `Nơ-ta-sơ` | `na-ta-sa` | a, a, a |
+| sophia | `Xô-phi-ơ` | `xô-phi-a` | o, i, a |
+| katrina | `Cớt-ri-nơ` | `ca-tri-na` | a, i, a |
+| benedict | `Be-nơ-đít` | `be-nơ-đích` | e, e, i |
+
+Luật cũ đọc theo **âm vị**: schwa luôn ra "ơ", AE luôn ra "e", AA luôn ra "a". Người nghe
+đọc theo **chữ**: schwa viết `a` thành "a", viết `e` thành "ơ"; AE viết `a` thành "a".
+
+Điều này khớp đúng lời họ nói từ đầu: *"viết các phiên âm của nó như là một đứa trẻ tập đọc
+tiếng anh viết ra"*. Một đứa trẻ đọc theo chữ.
+
+## Ghép chữ ↔ âm vị
+
+CMUdict không cho biết chữ nào ứng với âm vị nào. Nhưng với tên riêng, sau khi bỏ 'e' câm
+thì gần như luôn là **một nhóm nguyên âm ứng một âm vị nguyên âm**.
+
+Hai chi tiết cần thiết, cả hai đều tìm ra bằng đo:
+
+1. **`-le` giữ 'e'**: /l/ tự thành âm tiết có âm vị riêng, nên `incredible` phải giữ.
+2. **`-es` bỏ 'e'**: `James` viết 2 nguyên âm nhưng đọc 1; đếm 2 làm hỏng phép ghép và cách
+   đọc rơi về bảng âm vị, ra `Giâm` thay vì `Giêm`.
+
+Kết quả: **21/21 trên bộ đề, 95,8% trên 882 từ tiếng Anh của sách.** Từ nào không ghép được
+thì rơi về bảng âm vị cũ — không từ chối đọc.
+
+## Bảng
+
+| chữ | AA | AE | AH/schwa | EY | ER | OW | UH | IY/IH | AY | UW |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **a** | a | a | a | ê | | | | | | |
+| **o** | o | | o | | | ô | ô | | | |
+| **e** | | | ơ | | ơ | | | i | | |
+| **i** | | | i | | | | | i | ai | |
+| **u** | | | ă | | | | | | | u |
+
+Cộng `ee`→i, `ea`→e, `ie`→i, `eo`→ơ.
+
+## Thanh của âm tiết chèn: huyền
+
+Mọi lần người nghe viết một âm tiết chèn, nó mang thanh **huyền**: `in-cờ-ri-đi-bồ`,
+`đờ-ra-gon`, `bờ-lết`. Không có ngoại lệ nào. Đó là âm tiết yếu vốn không có trong từ.
+
+## Hai chỗ ví dụ của người nghe tự mâu thuẫn — lấy đa số
+
+- `e`+EH → "e" ở *death*, *benedict*, *herald* nhưng "i" ở *incredible* → chọn **"e"** (3–1)
+- `e`+schwa → "ơ" ở *benedict* nhưng "i" ở *oldest* → chọn **"ơ"** (đúng bản chất schwa)
+
+Người nghe đã nói: *"bạn tìm được bộ luật tốt nhất quán nhất thì là tốt nhất"*.
+
+## Một luật đã thử rồi bỏ
+
+`oldest` → `âu-đít` cho thấy OW nhấn nên ra "âu". Nhưng luật "bỏ bán nguyên âm khi có phụ âm
+cuối" rút "âu" thành "â", nên `Ôn-đớt` biến thành `Ân-đớt` — **xấu đi**. Mẫu `âu-đít` thật ra
+đòi **bỏ hẳn /l/ để giữ nguyên âm đôi**, tức lật một luật khác; chỉ có 1 ví dụ nên chưa lật.
+
+## Kết quả
+
+| | đúng hoàn toàn | đúng bỏ thanh | đúng số âm tiết |
+|---|---|---|---|
+| trước | 4/24 | 5/24 | 23/24 |
+| sau | **10/24** | **12/24** | 23/24 |
+
+Không cách đọc nào xấu đi. Kiểm định hợp lệ giữ nguyên: **0 không hợp lệ** trên 24.061 từ
+nguồn ngoài và 879/879 từ tiếng Anh của sách.
+
+Ba luật đổi kéo theo cách đọc tốt hơn ngoài bộ đề: `Noah` → `Nô-a` (trước `Nô-ơ`) đúng chính
+tả tiếng Việt của tên đó; `game` → `Gêm`, `name` → `Nêm` đúng cách người Việt vẫn đọc.
+
+## Kết quả âm: chữ cái đọc rời không làm lệch thước đo nhịp
+
+Segment `'... như sau: C » B » A » S » SS » SSS.'` fail vì nhịp 9,36 ký tự/giây. Giả thuyết:
+chữ cái đọc thành tên chữ ("xê", "bê", "ét-xì") tốn thời gian gấp mấy lần số ký tự của nó,
+nên thước đo thiên vị.
+
+Đo trên 3008 segment có audio: nhịp trung vị của segment **có** chữ cái đứng riêng là
+**16,17**, của segment **không có** là **15,55** — cao hơn, không thấp hơn. Không có thiên
+lệch hệ thống. Đây là ca cá biệt, không phải lớp lỗi; không xây bộ hiệu chỉnh cho nó.

@@ -660,7 +660,9 @@ ARPABET_SONORANTS = frozenset({"L", "M", "N", "NG", "R", "W", "Y"})
 ARPABET_FRONT_VOWELS = frozenset({"IY", "IH"})
 # The vowel inserted to break an onset cluster Vietnamese cannot say: /ɤ/, written "ơ".
 # "Incredible" becomes "in-cờ-ri-đi-bồ", not "in-cre-di-bồ".
-ONSET_EPENTHESIS_VOWEL = "ơ"
+# The inserted syllable carries the huyền tone, which is how a listener writes it every
+# time: "in-cờ-ri-đi-bồ", "đờ-ra-gon". It is a weak syllable that was never in the word.
+ONSET_EPENTHESIS_VOWEL = "ờ"
 LATIN_NAME_VOWELS = frozenset("aeiouy")
 LATIN_NAME_VOWEL_READINGS = {
     "a": "a",
@@ -3197,10 +3199,70 @@ def _arpabet_onset_reading(onset: tuple[str, ...], vowel: str) -> str:
     return reading
 
 
+VOWEL_LETTER_GROUP_PATTERN = re.compile(r"[aeiouy]+")
+
+# What the letter is read as, once the phone has said which reading of that letter applies.
+# Derived from the readings a listener wrote out, not from a theory of English vowels: they
+# keep the vowel of the spelling and let the pronunciation choose among the values that
+# letter can take. "dragon" is "đờ-ra-gon" and not "Đơ-re-gân"; "natasha" is "na-ta-sa",
+# because the name is not an English word and Vietnamese takes such names from the letters.
+SPELLED_VOWEL_READINGS = {
+    ("a", "AA"): "a", ("a", "AE"): "a", ("a", "AH"): "a", ("a", "AX"): "a", ("a", "EY"): "ê",
+    ("o", "AA"): "o", ("o", "AH"): "o", ("o", "AX"): "o", ("o", "OW"): "ô", ("o", "UH"): "ô",
+    ("e", "EH"): "e", ("e", "AX"): "ơ", ("e", "ER"): "ơ", ("e", "IY"): "i",
+    ("i", "IH"): "i", ("i", "IY"): "i", ("i", "AY"): "ai", ("i", "AX"): "i",
+    ("u", "AH"): "ă", ("u", "UW"): "u", ("u", "AX"): "ơ",
+    ("ee", "IY"): "i", ("ea", "EH"): "e", ("ie", "IY"): "i", ("eo", "AX"): "ơ",
+}
+
+
+def _vowel_letter_groups(word: str) -> list[str]:
+    """The runs of vowel letters in a word, one per vowel it spells."""
+    value = "".join(character for character in word.casefold() if character.isalpha())
+    # A plural or possessive s does not make the e before it heard: "James" spells one
+    # vowel, not two, and counting two left the word unaligned.
+    if len(value) >= 4 and value.endswith("es") and value[-3] not in "aeiouy":
+        value = value[:-2] + "s"
+    # A word-final e after a consonant is silent and spells no vowel - except in -le, where
+    # the l is syllabic and carries one of its own ("incredible").
+    if (
+        len(value) >= 3
+        and value.endswith("e")
+        and value[-2] not in "aeiouy"
+        and not (value.endswith("le") and len(value) >= 4 and value[-3] not in "aeiouy")
+    ):
+        value = value[:-1]
+    return VOWEL_LETTER_GROUP_PATTERN.findall(value)
+
+
+def _aligned_vowel_letters(word: str, phones: tuple[str, ...]) -> tuple[str, ...]:
+    """Which letters spell each vowel phone, or nothing when the two cannot be lined up.
+
+    CMUdict gives no alignment, but for a name it is nearly always one vowel group per
+    vowel phone once the silent e is gone - 95.8% of the English words in the book line up
+    this way. A group of two letters can spell two vowels ("ia" in Juliana), so the longest
+    groups are split until the counts agree; anything else is left unaligned and the reading
+    falls back to the phone alone.
+    """
+    groups = _vowel_letter_groups(word)
+    vowels = [phone for phone in phones if phone in ARPABET_VOWELS]
+    if not groups or not vowels:
+        return ()
+    while len(groups) < len(vowels):
+        longest = max(range(len(groups)), key=lambda index: len(groups[index]))
+        if len(groups[longest]) < 2:
+            return ()
+        groups[longest : longest + 1] = [groups[longest][0], groups[longest][1:]]
+    if len(groups) != len(vowels):
+        return ()
+    return tuple(groups)
+
+
 def _arpabet_vowel_reading(
     onset: tuple[str, ...],
     vowel: str,
     coda: tuple[str, ...],
+    letter: str = "",
 ) -> str:
     if vowel == "AX" and coda[:1] == ("L",):
         # Syllabic /l/, as in the last syllable of "Michael" or "incredible". It carries
@@ -3218,11 +3280,13 @@ def _arpabet_vowel_reading(
     # because an /l/ survived the cluster missed them: "Golf" came out "Gan" while the
     # documented reading, and the ordinary Vietnamese word for the game, is "gôn". Ten
     # words in the book corpus were affected, "Rudolf" and "Waldo" among them.
-    if _arpabet_coda_reading(onset, vowel, coda) == "n":
-        if vowel == "AA":
-            return "ô"
-        if vowel in {"AH", "AX"}:
-            return "â"
+    if vowel == "AA" and _arpabet_coda_reading(onset, vowel, coda) == "n":
+        return "ô"
+    spelled = SPELLED_VOWEL_READINGS.get((letter, vowel))
+    if spelled is not None:
+        return spelled
+    if vowel in {"AH", "AX"} and _arpabet_coda_reading(onset, vowel, coda) == "n":
+        return "â"
     return ARPABET_VOWEL_READINGS[vowel]
 
 
@@ -3552,11 +3616,14 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
     if override is not None:
         return override
     rendered: list[str] = []
-    for onset, vowel, coda in _arpabet_syllables(phones):
+    letters = _aligned_vowel_letters(surface, phones)
+    for index, (onset, vowel, coda) in enumerate(_arpabet_syllables(phones)):
         onset_reading = _arpabet_onset_reading(onset, vowel)
         peeled, onset_reading = _split_illegal_onset(onset_reading)
         rendered.extend(peeled)
-        vowel_reading = _arpabet_vowel_reading(onset, vowel, coda)
+        vowel_reading = _arpabet_vowel_reading(
+            onset, vowel, coda, letters[index] if index < len(letters) else ""
+        )
         onset_reading, vowel_reading = _resolve_glide_onset(onset_reading, vowel_reading)
         if onset_reading == "gi" and vowel_reading == "i":
             vowel_reading = ""

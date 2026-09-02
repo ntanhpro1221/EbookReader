@@ -23,6 +23,7 @@ from ebook_reader.analysis import (
     _without_tone,
     _cmu_pronunciations,
     _valid_vietnamese_spoken_form,
+    _vowel_letter_groups,
     is_vietnamese_syllable,
 )
 
@@ -81,8 +82,8 @@ def test_no_reading_contains_an_onset_cluster(word: str) -> None:
 
 def test_an_onset_cluster_is_broken_with_an_inserted_vowel() -> None:
     """Epenthesis, not deletion - the consonant survives in its own syllable."""
-    assert _read("Blade").startswith("Bơ-")
-    assert _read("Street").startswith("Xơ-")
+    assert _read("Blade").startswith("Bờ-")
+    assert _read("Street").startswith("Xờ-")
 
 
 def test_a_velar_coda_takes_the_front_spelling_only_after_i() -> None:
@@ -95,22 +96,26 @@ def test_a_velar_coda_takes_the_front_spelling_only_after_i() -> None:
 
 def test_an_offglide_gives_way_to_a_final_consonant() -> None:
     """"ất" is a rime; "ấyt" is not."""
-    assert _read("Gate") == "Gất"
+    assert _read("Gate") == "Gết"
     assert _read("Void") == "Vót"
 
 
 def test_a_glide_survives_when_nothing_follows_it() -> None:
     """The reduction is forced by the coda, not a dislike of diphthongs."""
-    assert _read("Noah") == "Nô-ơ"
+    assert _read("Noah") == "Nô-a"
     assert _read("Juli") == "Giu-li"
 
 
 def test_an_unstressed_schwa_is_not_read_as_a_full_a() -> None:
     """CMUdict writes /ʌ/ and /ə/ both as AH and tells them apart only by stress. Reading
     both as "a" gave *incredible* as "in-cơ-re-đa-bồ"; the schwa is mid-central, and so is
-    Vietnamese ơ."""
-    assert _read("Incredible") == "In-cơ-re-đơ-bồ"
-    assert _read("Noah").endswith("ơ")
+    Vietnamese ơ.
+
+    Where the spelling says a, the schwa follows the spelling instead - "Noah" is "Nô-a" and
+    "natasha" is "na-ta-sa", which is how Vietnamese writes those names.
+    """
+    assert _read("Incredible") == "In-cờ-re-đi-bồ"
+    assert "nơ" in _read("Benedict")
 
 
 def test_hand_chosen_readings_still_win() -> None:
@@ -227,7 +232,7 @@ def test_a_syllabic_l_needs_a_schwa_in_front_of_it() -> None:
     assert _read("Hull").endswith("n")
     # the schwa cases the rule is actually for
     assert _read("Michael") == "Mai-cồ"
-    assert _read("Cable") == "Cây-bồ"
+    assert _read("Cable") == "Cê-bồ"
 
 
 def test_the_vowel_reacts_to_the_coda_that_is_written() -> None:
@@ -278,3 +283,46 @@ def test_a_tone_is_folded_but_a_vowel_is_not() -> None:
     assert _without_tone("nhi\u00ean") == "nhi\u00ean"
     assert _without_tone("\u0111\u01b0\u1eddng") == "\u0111\u01b0\u01a1ng"
     assert _without_tone("ti\u1ebfng") == "ti\u00eang"
+
+
+def test_the_vowel_follows_the_letter_it_is_spelled_with() -> None:
+    """A listener wrote these out, and they do not follow English vowel reduction.
+
+    "dragon" is "\u0111\u1edd-ra-gon", not "\u0110\u01a1-re-g\u00e2n"; "natasha" is "na-ta-sa". These names are
+    read from the letters, and the pronunciation only chooses among the values a letter can
+    take - which is what a Vietnamese reader writing down an English word does.
+    """
+    assert _read("Dragon") == "\u0110\u1edd-ra-gon"
+    assert _read("Zombie") == "Dom-bi"
+    assert _read("Vampire") == "Vam-pai"
+    assert _read("Natasha") == "Na-ta-sa"
+    assert _read("Sophia") == "X\u00f4-phi-a"
+
+
+def test_an_inserted_syllable_carries_the_huyen_tone() -> None:
+    """Every epenthesis a listener has written is huy\u1ec1n: "in-c\u1edd-ri-\u0111i-b\u1ed3", "\u0111\u1edd-ra-gon",
+    "b\u1edd-l\u1ebft". It is a weak syllable that was never in the word."""
+    assert _read("Blade") == "B\u1edd-l\u1ebft"
+    assert _read("Dragon").startswith("\u0110\u1edd-")
+
+
+def test_an_er_ending_is_the_schwa_not_a_full_e() -> None:
+    """"cai-d\u01a1", not "cai-d\u00ea". Keyed on the letter, -er and -or both land on \u01a1."""
+    assert _read("Water").endswith("t\u01a1")
+    assert _read("Master").endswith("t\u01a1")
+    assert _read("Doctor").endswith("t\u01a1")
+
+
+def test_a_silent_e_before_a_plural_s_spells_no_vowel() -> None:
+    """"James" spells one vowel, not two; counting two left the word unaligned and the
+    reading fell back to the phone alone, giving "Gi\u00e2m"."""
+    assert _vowel_letter_groups("james") == ["a"]
+    assert _read("James") == "Gi\u00eam"
+
+
+def test_a_word_that_cannot_be_lined_up_still_reads() -> None:
+    """Alignment covers 95.8% of the English words in the book; the rest fall back to the
+    phone table rather than refusing to read."""
+    for word in ("Rhythm", "Queue", "Beautiful", "Sergeant"):
+        reading = _read(word)
+        assert _valid_vietnamese_spoken_form(word, reading), (word, reading)
