@@ -241,7 +241,7 @@ def test_an_r_before_a_consonant_closes_the_syllable_it_follows() -> None:
     repair then spelled out as a syllable the name never had: "A-rơ-thơ"."""
     assert _read("Arthur") == "A-thờ"
     assert _read("Portals") == "Po-tồ"
-    assert _read("Market") == "Ma-cét"
+    assert _read("Market") == "Ma-két"  # as in the loan "mác-két"
 
 
 def test_an_r_before_a_vowel_is_still_an_onset() -> None:
@@ -503,3 +503,21 @@ def test_the_spelling_route_says_a_final_er_as_the_schwa() -> None:
     assert _local_name_fallback("Zone") == "Dôn"
     assert _local_name_fallback("Blade") == "Bờ-lát"
     assert _local_name_fallback("Safe") == "Xáp"
+
+
+def test_a_dark_l_takes_a_diphthong_as_a_whole_rime() -> None:
+    """*sale* is "xeo" and the mail of *email* "meo", not "x\u00ean" and "m\u00ean"; Vietnamese has
+    "eo" for exactly this."""
+    assert _read("Sale") == "Xeo"
+    assert _read("Mail") == "Meo"
+
+
+def test_the_onset_spelling_follows_the_vowel_that_is_written() -> None:
+    """The dark /l/ of *scale* makes the rime "eo", and the onset came out "X\u1edd-ceo" where
+    Vietnamese writes k before e. *market* becomes "Ma-k\u00e9t", which is the loan the language
+    already has. Only c: a listener writes *game* "g\u00eam", not "gh\u00eam"."""
+    assert _read("Scale") == "X\u1edd-keo"
+    assert _read("Skill") == "X\u1edd-kiu"
+    assert _read("Market") == "Ma-k\u00e9t"
+    assert _read("Game") == "G\u00eam"
+    assert _read("Gate") == "G\u1ebft"

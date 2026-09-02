@@ -3412,6 +3412,24 @@ def _front_vowel_onset(reading: str, vowel: str) -> str:
     return {"c": "k", "g": "gh", "ng": "ngh"}.get(reading, reading)
 
 
+def _front_vowel_onset_spelling(reading: str, nucleus: str) -> str:
+    """The same three spellings, settled against the vowel that is actually written.
+
+    Keyed on the phone it missed every nucleus that reached a front vowel some other way:
+    the dark /l/ of *scale* makes the rime "eo", and the onset came out "Xờ-ceo" where
+    Vietnamese writes k before e. Same lesson as everywhere else in these rules - what
+    decides a spelling is the letter, not the phone behind it.
+    """
+    if not reading or not nucleus:
+        return reading
+    if _without_tone(nucleus)[:1] not in ("e", "ê", "i", "y"):
+        return reading
+    # Only c here. The g/gh pair has counterexamples in both directions: a listener writes
+    # *game* "gêm" and the loan Vietnamese already has for it is "gêm" too, where strict
+    # orthography would want "ghêm". "cin" and "ceo" have no such defence.
+    return {"c": "k"}.get(reading, reading)
+
+
 def _arpabet_vowel_reading(
     onset: tuple[str, ...],
     vowel: str,
@@ -3604,6 +3622,9 @@ ARPABET_FRICATIVES = frozenset({"F", "V", "TH", "DH", "S", "Z", "SH", "ZH", "HH"
 # "mi-xeo". After a back vowel there is no such rime - "ôu" is not one - so the l stays the
 # coda -n it has always been, which is why *soul* is "xôn" and *golf* "gôn".
 DARK_L_OFFGLIDES = {"i": "u", "ê": "u", "e": "o"}
+# A diphthong meets the dark /l/ as a whole rime rather than a last letter: *sale* is "xeo"
+# and the mail of *email* "meo", not "xên" and "mên". Vietnamese has "eo" for exactly this.
+DARK_L_NUCLEI = {"ây": "eo"}
 
 
 def _vocalize_dark_l(
@@ -3613,6 +3634,9 @@ def _vocalize_dark_l(
 ) -> tuple[str, str]:
     if not nucleus or _surviving_coda_phone(coda_phones) != "L":
         return nucleus, coda
+    whole = DARK_L_NUCLEI.get(_without_tone(nucleus))
+    if whole is not None:
+        return whole, ""
     if len(nucleus) > 1 and _without_tone(nucleus)[-1] in GLIDE_LETTERS:
         # "ai" already ends in a glide; adding another gave *style* the rime "aiu", which
         # Vietnamese does not have. The diphthong rule takes it from here.
@@ -4058,6 +4082,7 @@ def _cmu_pronunciation_to_vietnamese(surface: str, pronunciation: str) -> str:
             # a listener writes *text* "tếch" and *next* "nếch".
             vowel_reading = vowel_reading[:-1] + "ê"
         coda_reading = _front_vowel_coda(vowel_reading, coda_reading, bare_velar)
+        onset_reading = _front_vowel_onset_spelling(onset_reading, vowel_reading)
         surviving = _surviving_coda_phone(coda)
         heavy = (
             index == len(syllables_out) - 1
