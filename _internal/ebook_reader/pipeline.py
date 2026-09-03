@@ -3359,11 +3359,19 @@ class BookPipeline:
         output = Path(str(candidate["wav_path"]))
         retries = int(self.settings["tts"]["max_retries"])
         current_attempt = int(candidate["tts_attempt"])
-        if current_attempt > retries:
+        # What this candidate *is* comes from the row, not from arithmetic on a settings
+        # value. A clause-split candidate is generated once and never retried directly;
+        # that used to be encoded as tts_attempt == max_retries so that the range below
+        # came out empty. Encoding a state in a configuration constant means changing the
+        # constant changes the state: raising max_retries from 4 to 10 turned every stored
+        # split candidate into "attempt 4 of 10" and handed it six direct attempts it was
+        # never meant to have. alpha.32 holds 85 such rows.
+        is_split = str(candidate["generation_strategy"]) == GENERATION_STRATEGY_SPLIT
+        if not is_split and current_attempt > retries:
             raise RuntimeError("segment candidate TTS attempt exceeds the finite retry schedule")
         last_error = ""
 
-        for attempt in range(current_attempt, retries):
+        for attempt in (range(0) if is_split else range(current_attempt, retries)):
             self._wait_pause_or_stop()
             seed_salt = self._segment_candidate_seed_salt(
                 repair_round,
@@ -3447,7 +3455,7 @@ class BookPipeline:
                 pronunciation_variant,
             )
             split_seed = self.tts.generation_seed(row, split_seed_salt)
-            if int(candidate["tts_attempt"]) < split_attempt:
+            if not is_split:
                 candidate = self.db.restart_segment_candidate_generation(
                     int(candidate["id"]),
                     expected_generation_seed=int(candidate["generation_seed"]),
@@ -3455,10 +3463,12 @@ class BookPipeline:
                     tts_attempt=split_attempt,
                     generation_strategy=GENERATION_STRATEGY_SPLIT,
                 )
-            elif (
-                int(candidate["tts_attempt"]) != split_attempt
-                or int(candidate["generation_seed"]) != split_seed
-            ):
+                is_split = True
+            elif int(candidate["generation_seed"]) != split_seed:
+                # The seed still has to match: it is what ties this row to the audio it
+                # claims. tts_attempt is no longer compared, because a project resumed
+                # after max_retries changed carries the old number legitimately, and
+                # raising on that would turn a settings edit into a crash.
                 raise RuntimeError("segment candidate split checkpoint differs from its retry schedule")
             try:
                 split_provenance = (
