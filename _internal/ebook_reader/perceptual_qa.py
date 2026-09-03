@@ -26,7 +26,25 @@ DEFAULT_MINIMUM_DURATION_SECONDS = 1.5
 DEFAULT_INFERENCE_REPETITIONS = 3
 DEFAULT_INFERENCE_SEED = 42
 # Measured resident size of one scoring worker, used to keep a pool from crowding RAM.
-PERCEPTUAL_WORKER_RAM_GB = 1.0
+PERCEPTUAL_WORKER_RAM_GB = 1.75
+"""What one more scoring worker costs the machine, measured rather than assumed.
+
+This was 1.0, and 1.0 is what usable_for() divided the free memory by when deciding how
+many workers to grant. A worker's own RSS after loading UTMOSv2 is 1.87 GB and peaks at
+2.18 while scoring; watching system-wide availability while workers were added put the
+marginal cost at 1.76 GB for the first and 1.52 for the second. Every one of those numbers
+is well above 1.0, so the pool was granting workers the machine could not hold: with 7.3 GB
+free it offered five, which is about 8.8 GB of workers.
+
+That is not a throughput bug, it is how a run dies. alpha.26 stopped at 357 of 948
+segments on "available RAM 1.1 GB", and the overlap that now runs scoring beside ASR makes
+the old number more dangerous still, because the pool no longer waits for Whisper to
+unload before asking.
+
+Erring high is the cheap direction: too large costs workers, too small costs the run. The
+third reading of that measurement was contaminated - free memory rose while a book job
+beside it released some - so this deserves re-measuring on an idle machine.
+"""
 # Torch takes one thread per core by default, so N workers ask for N x cores threads and
 # spend the difference context switching. Measured on 32 cores over 24 segments: unpinned,
 # 4 workers reached 1.66x and 8 fell back to 1.34x; pinned to 2 threads, 8 workers reached
