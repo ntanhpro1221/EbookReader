@@ -19,7 +19,7 @@ from .asr_contract import (
     SHORT_CONTEXT_REPEAT_COUNT,
 )
 from .resource_manager import trim_process_working_set
-from .text_processing import is_vocalization_only
+from .text_processing import is_vocalization_only, vietnamese_number_words
 
 
 ASR_REPAIR_MIN_WORDS = 1
@@ -163,13 +163,42 @@ DIGIT_NUMBER_WORDS = {
 }
 
 
-def _fold_number_digits(text: str) -> str:
-    """Spell a bare digit the way the book would, so the two can be compared.
+# Above this, a number has no settled spoken form to fold to: a year is read as its own
+# kind of thing and vietnamese_number_words does not claim to cover it either.
+NUMBER_FOLD_CEILING = 999
 
-    Only a token that is entirely a digit changes; "10" becomes "muoi" but "2026" and "3a"
-    are left alone, having no single-word reading to fold to.
+
+def _fold_number_digits(text: str) -> str:
+    """Spell a written number the way the book would, so the two can be compared.
+
+    This used to reach only as far as ten, from an eleven-entry table, and that gap failed
+    whole chapters. alpha.32's chapter 6 was refused over one segment:
+
+        text:  "Hôm nay là ngày 24 tháng Mười hai."
+        heard: "Hôm nay là ngày 24 tháng 12."
+
+    The voice read it exactly right. Whisper writes digits where the book writes words, and
+    "mười hai" against "12" was scored as an error because the table stopped at "10". The
+    same gap turned "thứ Mười" into a near miss and "bốn mươi mốt" into a full one.
+
+    vietnamese_number_words already spells anything up to 999, including the forms a table
+    gets wrong - "hai mươi mốt" rather than "hai mươi một", "mười lăm" rather than "mười
+    năm" - so this defers to it instead of keeping a second, shorter answer to the same
+    question.
+
+    Only a token that is entirely digits changes, and only within range: "2026" and "3a"
+    are left alone, and so is anything with a leading zero, which is a designation rather
+    than a count.
     """
-    return " ".join(DIGIT_NUMBER_WORDS.get(token, token) for token in text.split())
+    folded = []
+    for token in text.split():
+        if token.isdigit() and (token == "0" or not token.startswith("0")):
+            value = int(token)
+            if value <= NUMBER_FOLD_CEILING:
+                folded.append(vietnamese_number_words(value))
+                continue
+        folded.append(token)
+    return " ".join(folded)
 
 
 def normalize_transcript(text: str) -> str:

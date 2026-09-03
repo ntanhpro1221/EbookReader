@@ -174,3 +174,42 @@ thuộc theo bậc: 8 worker giảm ~79%, 2 worker giảm ~12%, 0 worker thì kh
 máy này ranh giới là khoảng 17 GB trống cho đủ 8 worker, 7 GB cho 2. Đó không phải khuyết
 điểm của thiết kế - đó là nó từ chối hứa phần bộ nhớ không có thật, đúng bài học đã trả giá
 bằng alpha.26.
+
+## Một con số viết hai cách từng làm hỏng cả chương (alpha.32, 2026-09-03)
+
+Chương 6 của alpha.32 bị từ chối vì một segment:
+
+```
+văn bản : "Hôm nay là ngày 24 tháng Mười hai."
+nghe ra : "Hôm nay là ngày 24 tháng 12."
+```
+
+**Giọng đọc đúng từng chữ.** Whisper viết chữ số ở chỗ sách viết chữ, và `_fold_number_digits`
+chỉ có bảng **mười một mục** (0–10), nên "mười hai" so với "12" bị tính là sai. Cùng lỗ hổng
+ấy biến "thứ Mười" thành gần-lệch và "bốn mươi mốt" thành lệch hẳn.
+
+`vietnamese_number_words()` đã tồn tại và đọc được tới 999, kể cả những dạng mà một cái bảng
+làm sai — "hai mươi mốt" chứ không "hai mươi một", "mười lăm" chứ không "mười năm". Giờ
+`normalize_transcript` gọi nó thay vì giữ một câu trả lời thứ hai, ngắn hơn, cho cùng câu hỏi.
+
+Đo trên chính các segment bị đánh dấu của alpha.32: **27/39 tăng similarity.** Hai segment
+chặn chương 6:
+
+| segment | trước | sau |
+|---|---:|---:|
+| `c00006_s0000089` ("tháng Mười hai") | 0,833 | **0,932** |
+| `c00006_s0000021` ("bốn mươi mốt") | 0,902 | **0,956** |
+
+Ba segment hỏng còn lại **không đổi** — chúng thuộc lớp "ngoặc tiếng Anh", một vấn đề khác.
+
+Giữ nguyên hai giới hạn có chủ đích: trên 999 thì không gộp (một năm không có dạng đọc cố
+định để gộp về, và gộp bừa sẽ khiến hai thứ khác nhau so bằng nhau), và số có số 0 đứng đầu
+thì không gộp — "007" là một cái tên viết bằng chữ số, không phải một phép đếm.
+
+### Tôi đã kết luận sai một nhịp trước
+
+Nhịp trước tôi viết rằng các segment `failed` "có phần nội dung ngoài tên **cũng** bị nghe
+sai", dựa trên canonical CER 0,235–0,333. Đọc bản ghi thật thì **phần tiếng Việt được phiên
+âm hoàn hảo**; CER cao vì chính cái chữ số viết hai cách này, cộng phần vô nghĩa mà cụm
+tiếng Anh để lại. Chỉ số thống kê đúng, cách đọc nó của tôi thì sai. Bài học: đọc bản ghi
+trước khi kết luận về nó.
