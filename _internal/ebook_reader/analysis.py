@@ -6177,6 +6177,37 @@ def _ollama_usage(envelope: dict) -> dict[str, int] | None:
     return usage or None
 
 
+class AnalysisPromptTruncatedError(RuntimeError):
+    """The prompt did not fit in the context and Ollama silently cut the front off it.
+
+    Ollama does not refuse an oversized prompt or warn about one. It drops as much of the
+    front as it needs and answers about what is left, and an analysis batch missing its
+    first segments still comes back as valid JSON against a valid schema - so the run
+    continues, the checkpoint records it, and nothing anywhere says the model never saw
+    part of the chapter. The counters make it detectable: a prompt reported at exactly the
+    room available is a prompt that was cut to fit.
+    """
+
+
+def _check_prompt_fits(usage: dict[str, int], num_ctx: int, num_predict: int) -> None:
+    """Turn a silent truncation into a loud one.
+
+    This is what makes it safe to size num_ctx to the work instead of picking a number
+    large enough that the question never comes up. Sizing without this trades a known
+    waste for an unknown corruption.
+    """
+    prompt_tokens = usage.get("prompt_eval_count", 0)
+    if prompt_tokens <= 0 or num_ctx <= 0:
+        return
+    room = num_ctx - max(0, num_predict)
+    if room > 0 and prompt_tokens >= room:
+        raise AnalysisPromptTruncatedError(
+            f"Prompt phân tích {prompt_tokens:,} token không vừa ngữ cảnh: num_ctx "
+            f"{num_ctx:,} trừ đầu ra dành sẵn {num_predict:,} chỉ còn {room:,}. "
+            "Ollama đã cắt bớt phần đầu prompt mà không báo."
+        )
+
+
 def _ollama_usage_line(usage: dict[str, int], num_ctx: int) -> str:
     """One line a person can read, and a later script can parse back out of the log."""
     prompt_tokens = usage.get("prompt_eval_count", 0)
@@ -6546,7 +6577,10 @@ class OllamaBookAnalyzer:
                     response.close()
         response_text = "".join(parts) or "{}"
         if usage is not None:
-            self.log(_ollama_usage_line(usage, int(request.get("options", {}).get("num_ctx", 0))))
+            options = request.get("options", {})
+            request_num_ctx = int(options.get("num_ctx", 0))
+            self.log(_ollama_usage_line(usage, request_num_ctx))
+            _check_prompt_fits(usage, request_num_ctx, int(options.get("num_predict", 0)))
         if completion_reason == "length":
             raise AnalysisOutputBudgetError(
                 "Ollama analysis exhausted its output-token budget before completing the JSON response"
