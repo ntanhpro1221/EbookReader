@@ -1492,6 +1492,10 @@ class BookPipeline:
         snapshot = self.resources.snapshot()
         decision = self.resources.decide(snapshot)
         if decision.critical or not decision.allow_cpu_heavy_work:
+            self.log(
+                "Bỏ qua chấm sẵn perceptual song song với ASR: máy đang bận "
+                f"({decision.reason}). Sẽ chấm sau khi ASR xong, như trước đây."
+            )
             return
         pool = PerceptualScorePool(
             self.settings,
@@ -1503,6 +1507,14 @@ class BookPipeline:
         free_ram_gb = float(snapshot.free_ram_gb)
         workers = pool.usable_for(len(wav_paths), free_ram_gb)
         if workers < 2:
+            # Silence here would be the worst outcome to debug: the run behaves exactly as
+            # it did before the overlap existed, saves none of the ~2,500 seconds it was
+            # built for, and leaves nothing in the log to say why. Roughly four gigabytes
+            # free is where this starts paying.
+            self.log(
+                f"Bỏ qua chấm sẵn perceptual song song với ASR: chỉ {free_ram_gb:.1f} GB "
+                f"RAM trống cho {len(wav_paths)} đoạn, không đủ cho hai tiến trình."
+            )
             return
         # The pool logs from the worker thread, so its lines are collected and replayed on
         # the main thread when the scores are collected. Interleaving them with the ASR

@@ -216,3 +216,35 @@ def test_the_pools_log_lines_are_replayed_on_the_main_thread(tmp_path, monkeypat
 
     assert "pool da noi mot cau" not in during
     assert "pool da noi mot cau" in lines
+
+
+def test_skipping_the_overlap_says_so_instead_of_saying_nothing(
+    tmp_path, monkeypatch
+) -> None:
+    """A silent skip is the worst thing to debug.
+
+    The run then behaves exactly as it did before the overlap existed, saves none of the
+    ~2,500 seconds it was built for, and leaves nothing in the log to say why. Both ways
+    of declining have to be readable afterwards.
+    """
+    pipeline, _db, chapter = _arrange(
+        tmp_path, monkeypatch, decision=_allow(allow_cpu_heavy_work=False)
+    )
+    lines: list[str] = []
+    monkeypatch.setattr(pipeline, "log", lines.append)
+
+    pipeline._start_perceptual_prefetch(chapter)
+
+    assert any("Bỏ qua chấm sẵn perceptual" in line for line in lines)
+
+
+def test_too_little_memory_names_the_memory(tmp_path, monkeypatch) -> None:
+    pipeline, _db, chapter = _arrange(tmp_path, monkeypatch)
+    lines: list[str] = []
+    monkeypatch.setattr(pipeline, "log", lines.append)
+    monkeypatch.setattr(_StubPool, "usable_for", lambda self, jobs, free, **kw: 1)
+
+    pipeline._start_perceptual_prefetch(chapter)
+
+    assert any("GB" in line and "Bỏ qua chấm sẵn" in line for line in lines)
+    assert pipeline._collect_perceptual_prefetch(int(chapter["id"])) == {}

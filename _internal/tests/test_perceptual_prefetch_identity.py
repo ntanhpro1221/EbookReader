@@ -86,3 +86,21 @@ def test_workers_are_sized_below_what_a_stage_alongside_has_not_taken_yet(tmp_pa
 def test_a_negative_reserve_cannot_buy_extra_workers(tmp_path) -> None:
     pool = PerceptualScorePool(_pool_settings(), lambda _m: None, workers=8)
     assert pool.usable_for(24, 12.0, reserve_ram_gb=-50.0) == pool.usable_for(24, 12.0)
+
+
+def test_a_worker_is_budgeted_for_what_it_actually_costs() -> None:
+    """The number that decides how many workers a machine is offered.
+
+    It was 1.0 GB. A worker's RSS after loading UTMOSv2 is 1.87 GB and peaks at 2.18 while
+    scoring, and the marginal cost measured by watching system-wide free memory was 1.76 GB
+    for the first worker and 1.52 for the second. At 1.0 the pool offered five workers on
+    7.3 GB of free memory - about 8.8 GB of workers - which is not slow, it is how a run
+    dies: alpha.26 stopped at 357 of 948 segments on "available RAM 1.1 GB".
+    """
+    from ebook_reader.perceptual_qa import PERCEPTUAL_WORKER_RAM_GB
+
+    assert PERCEPTUAL_WORKER_RAM_GB >= 1.5, "below the smallest marginal cost measured"
+
+    pool = PerceptualScorePool(_pool_settings(), lambda _m: None, workers=8)
+    granted = pool.usable_for(95, 7.3)
+    assert granted * PERCEPTUAL_WORKER_RAM_GB <= 7.3, "granted more memory than exists"
