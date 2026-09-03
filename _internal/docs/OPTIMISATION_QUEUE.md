@@ -207,6 +207,34 @@ làm nó **ném lỗi to** lúc nạp model, chứ không âm thầm chạy cả
 chất lượng và **xoá sạch bằng chứng QA audio của cả quyển sách**, bắt ASR + perceptual chạy
 lại từ đầu. Một dòng thêm vào manifest, đúng lúc, tốn 30-40 phút chạy lại.
 
+## 7. Lùi về dải `normal` khi một chỉ dẫn nhịp không đọc tới được — cứu segment khỏi mất sạch audio
+
+`tts.pace_chars_per_second` có ba dải và `analysis` chọn dải cho từng segment. Dải `fast`
+nâng **cận dưới** lên 14,0, nên chỉ dẫn "đọc nhanh lên" biến thành "bản thu này quá chậm".
+
+alpha.43 mất `c00007_s0000074` đúng kiểu ấy: bốn lần thử 12,70 / 12,26 / 12,26 / 12,70, và
+**bản thu 12,70 y hệt đã qua được ở alpha.32** khi dải là `normal` (cận 12,5). Chỉ có chỉ
+dẫn đổi — `neutral/0` thành `afraid/2` — chứ giọng đọc không đổi gì.
+
+**Lớp này nhỏ nhưng đang phình ra, và rủi ro cao:**
+
+| | `fast` | `slow` | `normal` |
+|---|---|---|---|
+| alpha.32 | 3 (0,3%) | 3 | 942 |
+| alpha.43 | **14 (1,5%)** | 3 | 931 |
+
+alpha.43 gán `fast` **nhiều gấp 4,7 lần**, và **1 trong 14** đã mất sạch audio — tỉ lệ ~7%
+trong dải ấy so với nền 0,2% của cả sách. (Việc gán nhiều hơn đi *cùng* với thay đổi
+`num_ctx`, thứ làm đổi cách chia batch nên đổi đầu ra của director. Đó là tương quan với một
+thay đổi đã biết, chưa phải nhân quả đã chứng minh.)
+
+**Cách sửa hẹp:** đường cứu hiện tại khi hết 4 lượt là **chia nhỏ câu**, và với câu ngắn nó
+báo "too short to split safely" rồi bỏ cuộc. Thêm một bước trước khi bỏ: nếu segment không ở
+dải `normal`, **thử lại ở dải `normal`**. Bằng chứng ủng hộ trực tiếp — chính bản thu ấy đạt
+ở `normal`. Mất một sắc thái diễn xuất còn hơn mất cả câu.
+
+Chi tiết và bảng đầy đủ: `docs/PACE_METRIC.md`.
+
 ---
 
 ## Cần gì để xuất bản trọn quyển sách (alpha.32)
