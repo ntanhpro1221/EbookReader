@@ -139,3 +139,33 @@ def test_only_a_real_gender_can_be_pinned(tmp_path) -> None:
             db.lock_character_gender("Noah", value)
     with pytest.raises(ValueError):
         db.lock_character_gender("   ", "male")
+
+
+def test_a_pin_and_the_lookup_agree_on_what_a_name_is(tmp_path) -> None:
+    """The seam that would have made this feature silently useless.
+
+    Casting keys characters with canonical_key(), which collapses runs of whitespace as
+    well as trimming and upper-casing. The lock first wrote its own strip().upper(), which
+    agrees for "Noah" and disagrees for a name typed with a double space - so a listener
+    could pin a gender, be told it was stored, and watch the run ignore it without a word.
+    """
+    from ebook_reader.character_registry import canonical_key
+
+    db = _project(tmp_path)
+    awkward = "Lê  Văn   A"
+    db.lock_character_gender(awkward, "male")
+
+    assert canonical_key(awkward) in db.locked_character_genders()
+
+    identity = _rows((awkward, "female", "..."), (awkward, "female", "..."))
+    assert resolve_gender(identity, identity, db.locked_character_genders()) == (
+        "male",
+        "listener",
+    )
+
+
+def test_the_same_character_typed_two_ways_is_one_pin(tmp_path) -> None:
+    db = _project(tmp_path)
+    db.lock_character_gender("kim luxara", "female")
+    db.lock_character_gender("  KIM   LUXARA  ", "male")
+    assert db.locked_character_genders() == {"KIM LUXARA": "male"}
