@@ -4190,6 +4190,18 @@ def test_critical_ram_stops_only_when_recovery_is_insufficient(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    """Memory that never comes back still ends the run.
+
+    "Insufficient" used to mean "still short after one two-second retry". It now means
+    "still short after the wait window", because a shortage another program is holding
+    ends when that program does, and alpha.26 threw away 357 segments of work to a
+    shortage that was not its own. The window is set to zero here so this test keeps
+    asking its original question - what happens when the memory is simply gone - and
+    test_waiting_for_foreign_ram.py covers the waiting itself.
+    """
+    monkeypatch.setattr(
+        "ebook_reader.pipeline.CRITICAL_RAM_WAIT_TIMEOUT_SECONDS", 0.0
+    )
     source = tmp_path / "001.txt"
     source.write_text("Nội dung kiểm tra RAM vẫn thiếu.", encoding="utf-8")
     settings = build_settings()
@@ -4216,6 +4228,47 @@ def test_critical_ram_stops_only_when_recovery_is_insufficient(
     assert db.book()["status"] == "stopped"
     assert db.book()["stage"] == "critical_stop"
     assert len(notifier.critical_calls) == 1
+
+
+def test_the_gate_carries_on_when_borrowed_memory_comes_back(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The whole point of the wait, seen from the gate rather than from inside it.
+
+    Three Unity editors were holding five and a half gigabytes when alpha.26 stopped. The
+    run had already released its own models; there was nothing more it could give. Once
+    the other program lets go, the gate has no reason left to refuse.
+    """
+    source = tmp_path / "001.txt"
+    source.write_text("Nội dung kiểm tra RAM hồi phục.", encoding="utf-8")
+    settings = build_settings()
+    paths, db, settings = create_or_open_project(
+        [source], tmp_path / "out", settings, "Test Book"
+    )
+    notifier = FakeNotifier()
+    pipeline = BookPipeline(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pause_requested=lambda: False,
+        stop_requested=lambda: False,
+        emit=lambda _kind, _payload: None,
+    )
+    pipeline.tts = FakeTTS(settings, db)
+    pipeline.notifier = notifier
+    # Short, still short after unloading, then the other program closes.
+    snapshots = iter(
+        (resource_snapshot(0.8), resource_snapshot(0.7), resource_snapshot(16.0))
+    )
+    monkeypatch.setattr(pipeline.resources, "snapshot", lambda force=False: next(snapshots))
+    monkeypatch.setattr("ebook_reader.pipeline.time.sleep", lambda _seconds: None)
+
+    decision = pipeline._resource_gate("chapter 1 segment 75", keep_engine="vieneu")
+
+    assert decision.critical is False
+    assert db.book()["status"] != "stopped"
+    assert notifier.critical_calls == []
 
 
 @pytest.mark.parametrize("ordinary_content_is_clean", [True, False])
