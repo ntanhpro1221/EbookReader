@@ -154,7 +154,97 @@ def _canonicalize_named_speakers(
     return aliases_by_target
 
 
-def _validate_casting_inputs(rows: list[Any], minimum_named_mentions: int) -> None:
+# Vietnamese marks gender in the words it uses for people far more reliably than an
+# English pronoun does, and the narration is full of them. Only unambiguous ones are here:
+# "em", "con", "bác" and "người" are used for either, so counting them would add noise
+# rather than evidence.
+MALE_PERSON_WORDS = frozenset(
+    {"cậu", "anh", "ông", "hắn", "gã", "chàng", "thằng", "chú", "lão"}
+)
+FEMALE_PERSON_WORDS = frozenset(
+    {"cô", "chị", "bà", "nàng", "ả", "mụ", "dì", "thím", "nữ"}
+)
+# A scene puts a character beside people of the other gender, so the words in the segments
+# that name them are never pure. The margin has to be wide enough that the character's own
+# pronoun dominates: Noah's 36 segments carry 40 male words to 4 female, because "ông" for
+# his father and "bà" for his mother are there too and still lose ten to one.
+GENDER_EVIDENCE_MINIMUM_HITS = 5
+GENDER_EVIDENCE_MINIMUM_RATIO = 3.0
+WORD_PATTERN = re.compile(r"[^\W\d_]+", flags=re.UNICODE)
+
+
+def _gendered_word_evidence(rows: list[Any], names: set[str]) -> Counter[str]:
+    """Count male and female person-words in every segment that names this character.
+
+    Read from the text rather than from the model, because the model is what is in doubt
+    by the time this is called: for Noah it answered male twice, female twice and unknown
+    ten times across fourteen segments, while the narration says "cậu" eighteen times.
+    """
+    wanted = {name.casefold() for name in names if name}
+    counts: Counter[str] = Counter()
+    if not wanted:
+        return counts
+    for row in rows:
+        text = str(row["text"] or "")
+        lowered = text.casefold()
+        if not any(name in lowered for name in wanted):
+            continue
+        for word in WORD_PATTERN.findall(lowered):
+            if word in MALE_PERSON_WORDS:
+                counts["male"] += 1
+            elif word in FEMALE_PERSON_WORDS:
+                counts["female"] += 1
+    return counts
+
+
+def _decisive(counts: Counter[str]) -> str | None:
+    """The gender the evidence points at, or None when it does not point hard enough."""
+    male, female = counts.get("male", 0), counts.get("female", 0)
+    winner, loser = ("male", female) if male >= female else ("female", male)
+    top = max(male, female)
+    if top < GENDER_EVIDENCE_MINIMUM_HITS:
+        return None
+    if loser > 0 and top / loser < GENDER_EVIDENCE_MINIMUM_RATIO:
+        return None
+    return winner
+
+
+def resolve_gender(identity_rows: list[Any], all_rows: list[Any]) -> tuple[str, str]:
+    """One answer for a character's gender, used by the gate and by the casting alike.
+
+    Two places used to decide this and they disagreed by construction: the gate refused any
+    disagreement at all, while _majority() answered "unknown" on a tie. So a character the
+    model split 2-2 could only ever fail the run, and passing the gate by loosening it
+    would have cast that character with no gender at all. This is the single place now.
+
+    The model's own votes win when they have a majority. When they tie - which is the case
+    that used to kill a run after ninety minutes of analysis - the text is asked instead,
+    and it answers far better than the model does, because Vietnamese marks gender in
+    nearly every word it uses for a person.
+    """
+    votes = Counter(
+        str(row["gender"])
+        for row in identity_rows
+        if str(row["gender"]) in {"male", "female"}
+    )
+    ranked = votes.most_common()
+    if len(ranked) == 1:
+        return ranked[0][0], "model"
+    if ranked and (len(ranked) == 1 or ranked[0][1] > ranked[1][1]):
+        return ranked[0][0], "model_majority"
+    names = {str(row["speaker"]) for row in identity_rows}
+    evidence = _gendered_word_evidence(all_rows, names)
+    decided = _decisive(evidence)
+    if decided is not None:
+        return decided, f"text:{evidence.get('male', 0)}nam/{evidence.get('female', 0)}nữ"
+    return "unknown", "unresolved"
+
+
+def _validate_casting_inputs(
+    rows: list[Any],
+    minimum_named_mentions: int,
+    log: Callable[[str], None] = lambda _message: None,
+) -> None:
     rows_by_identity: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
         speaker = str(row["speaker"])
@@ -163,7 +253,8 @@ def _validate_casting_inputs(rows: list[Any], minimum_named_mentions: int) -> No
             continue
         rows_by_identity[canonical_key(speaker)].append(row)
 
-    gender_conflicts: dict[str, dict[str, int]] = {}
+    gender_conflicts: dict[str, dict[str, Any]] = {}
+    resolved_conflicts: dict[str, tuple[str, str, dict[str, int]]] = {}
     missing_named_genders: dict[str, int] = {}
     identity_instability: dict[str, dict[str, list[Any]]] = {}
     for identity, identity_rows in rows_by_identity.items():
@@ -173,7 +264,23 @@ def _validate_casting_inputs(rows: list[Any], minimum_named_mentions: int) -> No
             if str(row["gender"]) in {"male", "female"}
         )
         if len(gender_counts) > 1:
-            gender_conflicts[identity] = dict(sorted(gender_counts.items()))
+            # A disagreement is only fatal when nothing settles it. It used to be fatal
+            # always: alpha.30 died here after ninety minutes of analysis because the model
+            # called Noah male twice and female twice, while the narration says "cậu"
+            # eighteen times. The resolver is the same one the casting uses, so passing
+            # here means the character is cast as what passed rather than as "unknown".
+            resolved, reason = resolve_gender(identity_rows, rows)
+            if resolved == "unknown":
+                gender_conflicts[identity] = {
+                    **dict(sorted(gender_counts.items())),
+                    "text_evidence": dict(
+                        _gendered_word_evidence(
+                            rows, {str(row["speaker"]) for row in identity_rows}
+                        )
+                    ),
+                }
+            else:
+                resolved_conflicts[identity] = (resolved, reason, dict(gender_counts))
         if (
             len(identity_rows) >= minimum_named_mentions
             and not gender_counts
@@ -194,6 +301,12 @@ def _validate_casting_inputs(rows: list[Any], minimum_named_mentions: int) -> No
                 "character_ids": character_ids,
                 "voice_profile_ids": profile_ids,
             }
+
+    for identity, (resolved, reason, votes) in sorted(resolved_conflicts.items()):
+        log(
+            f"Giới tính của {identity} bị model trả lời mâu thuẫn ({dict(votes)}); "
+            f"đã xác định là {resolved} theo {reason}."
+        )
 
     issues: list[str] = []
     if gender_conflicts:
@@ -748,7 +861,7 @@ def build_registry_and_cast(
     rows = [row for row in db.list_segments() if str(row["status"]) != "pending"]
     voice_cfg = settings["voices"]
     minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
-    _validate_casting_inputs(rows, minimum_main_mentions)
+    _validate_casting_inputs(rows, minimum_main_mentions, log)
     by_speaker: dict[str, list[Any]] = defaultdict(list)
     anonymous_by_gender: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
@@ -800,7 +913,9 @@ def build_registry_and_cast(
     )
     local_count = 0
     for speaker, speaker_rows in speaker_groups:
-        gender = _majority(speaker_rows, "gender")
+        # The same resolver the gate used, so a character that passed the gate on text
+        # evidence is cast as what passed rather than as "unknown".
+        gender, _reason = resolve_gender(speaker_rows, rows)
         age = _majority(speaker_rows, "age")
         local = is_local_speaker(speaker)
         display_name = local_speaker_display(speaker) if local else speaker
