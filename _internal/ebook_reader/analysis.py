@@ -3158,27 +3158,45 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
     return candidates
 
 
-def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
-    targets = {_name_candidate_key(surface) for surface in surfaces}
-    if not targets:
-        return {}
+_CMUDICT_ENTRIES: dict[str, str] | None = None
+
+
+def _cmudict_entries() -> dict[str, str]:
+    """Every entry of the pronunciation dictionary, read once.
+
+    Each lookup used to scan the file, and a word the dictionary does not have scanned all
+    134,000 lines of it before saying so - 70ms, paid again for every name. That is most of
+    a minute on a book with eight hundred invented names, and it made the reading routes
+    unusable one word at a time. The file is 3MB and never changes while a run is going.
+    """
+    global _CMUDICT_ENTRIES
+    if _CMUDICT_ENTRIES is not None:
+        return _CMUDICT_ENTRIES
     if not CMUDICT_PATH.is_file():
         raise RuntimeError(f"Thiếu dữ liệu phát âm tiếng Anh: {CMUDICT_PATH}")
-    result: dict[str, str] = {}
+    entries: dict[str, str] = {}
     with CMUDICT_PATH.open("r", encoding="utf-8") as handle:
         for raw_line in handle:
             word, separator, raw_phones = raw_line.partition(" ")
             if not separator:
                 continue
             key = re.sub(r"\(\d+\)$", "", word.strip().casefold())
-            if key not in targets or key in result:
+            if key in entries:
+                # The first spelling wins, as it did when this scanned the file in order.
                 continue
             phones = raw_phones.partition("#")[0].strip()
             if phones:
-                result[key] = phones
-            if len(result) == len(targets):
-                break
-    return result
+                entries[key] = phones
+    _CMUDICT_ENTRIES = entries
+    return entries
+
+
+def _cmu_pronunciations(surfaces: list[str]) -> dict[str, str]:
+    targets = {_name_candidate_key(surface) for surface in surfaces}
+    if not targets:
+        return {}
+    entries = _cmudict_entries()
+    return {key: entries[key] for key in targets if key in entries}
 
 
 def _arpabet_phones(pronunciation: str) -> tuple[str, ...]:
@@ -4096,9 +4114,34 @@ def _join_name_syllables(word: str, rendered: list[str]) -> str:
 
 
 def _local_name_fallback(surface: str) -> str:
-    """Produce a safe Vietnamese-readable form for any Latin name accepted by the scanner."""
+    """Produce a safe Vietnamese-readable form for any Latin name accepted by the scanner.
+
+    A word the dictionary has is read from its phonemes even here. This route only runs when
+    some word of the name is missing from CMUdict, and it used to spell out every word of the
+    name for that reason - so "Arthur Kaizer Theosbane" read its first word "A-rờ-thun" while
+    "Arthur" on its own read "A-thờ", two readings of one name in one book.
+    """
+    parts = re.findall(r"[A-Za-z]+", surface)
+    dictionary = _cmu_pronunciations(parts)
     words: list[str] = []
-    for part in re.findall(r"[A-Za-z]+", surface):
+    for part in parts:
+        if is_vietnamese_syllable(part):
+            # "Kim Luxara" is half a Vietnamese word and half an invented one. Reading the
+            # Vietnamese half as if it were English gives it a reading it never had.
+            words.append(part)
+            continue
+        pronunciation = dictionary.get(_name_candidate_key(part), "")
+        # Only when the entry has a vowel to build a syllable around. Without that the
+        # phoneme path renders nothing and hands the word back here, and the two routes call
+        # each other until the stack runs out - "fs" is F S, and CMUdict has it.
+        if pronunciation and any(
+            phone in ARPABET_VOWELS for phone in _arpabet_phones(pronunciation)
+        ):
+            try:
+                words.append(_cmu_pronunciation_to_vietnamese(part, pronunciation))
+                continue
+            except ValueError:
+                pass
         rendered: list[str] = []
         syllables = _latin_name_syllables(_silent_e_removed(part.casefold()))
         if not syllables:
@@ -4305,6 +4348,10 @@ def _cmu_phrase_to_vietnamese(surface: str) -> str | None:
         return None
     readings: list[str] = []
     for word, key in zip(words, keys):
+        if is_vietnamese_syllable(word):
+            # Already a Vietnamese word: it is read, not transliterated.
+            readings.append(word)
+            continue
         regnal = roman_numeral_value(word)
         if regnal is not None:
             # A regnal number is said, not spelled: "Benedict III" is "thứ ba", where the
@@ -8694,11 +8741,25 @@ class OllamaBookAnalyzer:
                     for item_id, candidate in pending.items():
                         item = by_id[item_id]
                         try:
-                            must_convert = bool(candidate.get("cmu_pronunciation"))
+                            surface_words = _name_phrase_words(
+                                str(candidate["surface"])
+                            )
+                            # Anything here that is not already a Vietnamese word has to be
+                            # given a Vietnamese reading. Leaving it in English is what put
+                            # two readings of one name in one book: "Michael" was locked
+                            # as written inside "Michael Godswill" while "Michael" on its
+                            # own read "Mai-cồ", and the same happened to Samael, Theosbane,
+                            # Lily and Card. The local routes can read any of them - checked
+                            # against all 117,493 words CMUdict has - so declining is never
+                            # the only way out.
+                            must_convert = bool(candidate.get("cmu_pronunciation")) or any(
+                                not is_vietnamese_syllable(word) for word in surface_words
+                            )
                             should_convert = bool(item.get("convert", False))
                             if must_convert and not should_convert:
                                 raise ValueError(
-                                    f"dictionary English name was not converted: {candidate['surface']!r}"
+                                    "English name was not converted: "
+                                    f"{candidate['surface']!r}"
                                 )
                             if not should_convert:
                                 surface = str(candidate["surface"])

@@ -74,6 +74,16 @@ SPEAKABLE_TOKEN_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
 # No Vietnamese word ends in -gh, so this cannot swallow one: ghe and nghe carry a vowel
 # after the digraph and the token must end at the h.
 PAIN_CRY_PATTERN = r"a+r*g+h*|u+r*g+h*|g+r+h*"
+# The same cries, to be replaced rather than recognised. "Argh" is English on the page
+# and a Vietnamese voice has nothing to say for it: handed the letters, the model ran to
+# its frame ceiling on a two-second scream, the only take in 948 segments to do so, and
+# the ceiling then counted as evidence the take was cut off. Vietnamese writes a cry of
+# pain "Á".
+PAIN_CRY_SPOKEN_PATTERN = re.compile(
+    r"(?<![\w])(?:" + PAIN_CRY_PATTERN + r")(?![\w])",
+    re.IGNORECASE,
+)
+PAIN_CRY_SPOKEN_FORM = "\u00c1"
 FOLDED_VOCALIZATION_PATTERN = re.compile(
     r"^(?:a+h*|u+h*|o+h*|you|ha+|he+|hi+|hu+|huc|hac|hay|hum|hm+|khu+|ho+|"
     + PAIN_CRY_PATTERN
@@ -363,6 +373,7 @@ def normalize_vocalizations_for_tts(text: str) -> str:
         return f"{gasp.group('prefix')}Ha ha.{gasp.group('suffix')}"
 
     result = VOCAL_CUE_PATTERN.sub(replace_cue, text)
+    result = PAIN_CRY_SPOKEN_PATTERN.sub(PAIN_CRY_SPOKEN_FORM, result)
     result = STRETCHED_SIGH_PATTERN.sub("Hầy", result)
     result = STRETCHED_HUM_PATTERN.sub("Hừm", result)
     result = COMPACT_VOCALIZATION_PATTERN.sub(separate_compact_vocalization, result)
