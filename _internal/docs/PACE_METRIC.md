@@ -260,3 +260,50 @@ segment đó. Ước lượng ở trên đo khả năng dãy tất định ấy 
 Điều này **củng cố** mục 4 chứ không làm yếu đi: vì chạy lại vô ích và vì cận dưới không được
 nới, **thêm lượt thử là cách duy nhất còn lại** cho lớp này, ngoài việc sửa văn bản hoặc sửa
 chính cổng.
+
+## Cận nhịp là **theo từng segment**, và phân tích chọn nó — một segment mất audio vì thế (2026-09-04)
+
+Tôi đã viết "cận là 12.5" ở khắp nơi trong tài liệu này và hard-code nó vào
+`scripts/pace_retry_reachability.py`. Sai. `tts.pace_chars_per_second` có **ba dải**, và
+`analysis` gán cho mỗi segment một dải qua trường `pace`:
+
+    slow   [7.0, 19.0]
+    normal [12.5, 24.5]
+    fast   [14.0, 30.0]
+
+Cái làm lộ ra: alpha.43 mất `c00007_s0000074` (*"Tên của cô ta là Juliana Vox Blade."*) với
+những lần thử **12,70 / 12,26 / 12,26 / 12,70** — mà 12,70 thì **trên** 12,5, lẽ ra phải
+đạt.
+
+| | alpha.32 | alpha.43 |
+|---|---|---|
+| emotion / intensity | neutral / 0 | **afraid / 2** |
+| dải `pace` | `normal` | **`fast`** |
+| cận dưới | 12,5 | **14,0** |
+| nhịp đo được | **12,70** | **12,70** (y hệt) |
+| kết cục | qua cổng nhịp (2,48s audio) | **không có audio nào** |
+
+Tổng hợp vẫn tất định — nó cho ra **đúng** 12,70 ở cả hai lần. Thứ đổi là **phân tích**:
+alpha.43 đọc câu ấy thành *afraid*/`fast`, nâng sàn lên 14,0, và bản thu y hệt từ chỗ đạt
+thành chỗ hỏng.
+
+### Điều này nói lên cái gì
+
+**Biến động của phân tích một mình nó có thể làm một segment mất sạch audio.** Không phải
+giọng đọc tệ đi, không phải engine đổi — chỉ là một chỉ dẫn diễn xuất khác đặt ra một cái
+sàn mà câu ấy không đọc tới được. Và vì `fast` nâng **cận dưới**, chỉ dẫn "đọc nhanh lên"
+biến thành "bản thu này quá chậm".
+
+Nên có **hai** loại "ngoài tầm với", và chúng thuộc về hai người khác nhau:
+
+- **dải `normal` mà vẫn không tới sàn** → vấn đề ở **văn bản**. Ví dụ: thang bậc
+  `C » B » A » S » SS » SSS` đọc thành tên chữ cái.
+- **dải `slow`/`fast` mà không tới sàn** → vấn đề ở **chỉ dẫn diễn xuất**. Cùng bản thu ấy
+  qua được ở dải khác.
+
+`scripts/pace_retry_reachability.py` giờ đọc dải của từng segment từ database (và đọc dải
+từ `book_settings.json` của chính project), in thêm cột `dải`, và ở phần kết luận nói rõ
+segment nào thuộc loại nào.
+
+**Ba segment không audio của alpha.32 đều là `normal`**, nên mọi kết luận ở mục trên vẫn
+đứng — lỗi hard-code chỉ cắn khi có segment ngoài dải `normal`, và alpha.43 là lần đầu.

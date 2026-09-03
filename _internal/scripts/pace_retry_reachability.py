@@ -21,20 +21,30 @@ attempt clears the bound and what budget would have been needed. It separates "u
 from "unreachable", which is the distinction that decides whether raising max_retries is
 the answer.
 
-    python scripts/pace_retry_reachability.py <log_path> [lower_bound] [upper_bound]
+    python scripts/pace_retry_reachability.py <project_root>
 
-Read-only.
+The bound is per segment, not global: tts.pace_chars_per_second gives slow [7.0, 19.0],
+normal [12.5, 24.5] and fast [14.0, 30.0], and analysis picks which one a line gets. An
+earlier version of this script assumed 12.5 for everything, which is right only for the
+`normal` band - and alpha.43 lost a segment precisely because its analysis called a line
+afraid/fast, raising the floor to 14.0 so that a take measuring 12.70 failed where the
+identical take had passed at `normal`.
+
+Read-only: opens the project database read-only and writes nothing.
 """
 from __future__ import annotations
 
+import json
 import math
 import re
+import sqlite3
 import statistics
 import sys
 from pathlib import Path
 
-DEFAULT_LOWER_BOUND = 12.5
-DEFAULT_UPPER_BOUND = 24.5
+# Mirrors tts.pace_chars_per_second. Read from the project's own settings when available so
+# a retuned book is measured against its own gate rather than against this default.
+DEFAULT_BANDS = {"slow": (7.0, 19.0), "normal": (12.5, 24.5), "fast": (14.0, 30.0)}
 ATTEMPT = re.compile(
     r"TTS segment (?P<segment>\w+) chưa đạt lần (?P<attempt>\d+)/(?P<budget>\d+).*?"
     r"speech pace (?P<pace>[\d.]+) chars/s"
@@ -67,11 +77,38 @@ def _chance_per_attempt(paces: list[float], bound: float, too_fast: bool) -> flo
     return 1.0 - tail if too_fast else tail
 
 
-def main(log_path: str, lower: float, upper: float) -> int:
-    path = Path(log_path)
+def _bands(root: Path) -> dict[str, tuple[float, float]]:
+    settings = root / "book_settings.json"
+    if not settings.is_file():
+        return dict(DEFAULT_BANDS)
+    try:
+        raw = json.loads(settings.read_text(encoding="utf-8"))
+        ranges = raw.get("tts", {}).get("pace_chars_per_second", {})
+        return {key: (float(value[0]), float(value[1])) for key, value in ranges.items()} or dict(DEFAULT_BANDS)
+    except Exception:  # noqa: BLE001
+        return dict(DEFAULT_BANDS)
+
+
+def _segment_bands(root: Path) -> dict[str, str]:
+    database = root / "project.sqlite3"
+    if not database.is_file():
+        return {}
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    out = {str(row["stable_id"]): str(row["pace"] or "normal")
+           for row in connection.execute("SELECT stable_id, pace FROM segments")}
+    connection.close()
+    return out
+
+
+def main(project_root: str) -> int:
+    root = Path(project_root)
+    path = root / "logs" / "ebook_reader.log"
     if not path.is_file():
         print(f"không tìm thấy log: {path}")
         return 2
+    bands = _bands(root)
+    segment_band = _segment_bands(root)
     text = path.read_text(encoding="utf-8", errors="replace")
 
     exhausted = {match.group("segment") for match in EXHAUSTED.finditer(text)}
@@ -92,14 +129,17 @@ def main(log_path: str, lower: float, upper: float) -> int:
             print(f"({len(retried_then_passed)} segment chạm cổng rồi qua ở lần sau)")
         return 0
 
-    print(f"cổng nhịp [{lower}, {upper}] ký tự/s, ngân sách hiện tại {budget_seen} lần")
+    print("cổng nhịp theo dải: " + ", ".join(f"{k} [{v[0]}, {v[1]}]" for k, v in sorted(bands.items()))
+          + f"; ngân sách hiện tại {budget_seen} lần")
     print(f"{len(retried_then_passed)} segment chạm cổng rồi qua - không tính ở đây")
     print()
     header = "  ".join(f"{value:>4}" for value in BUDGETS)
-    print(f"{'segment':<30} {'các lần thử':<30} {'phía':>6} {'p/lần':>7}   {header}")
+    print(f"{'segment':<30} {'các lần thử':<26} {'dải':>6} {'phía':>6} {'p/lần':>7}   {header}")
     reachable: list[str] = []
     for segment, by_attempt in sorted(attempts.items()):
         paces = [by_attempt[key] for key in sorted(by_attempt)]
+        band = segment_band.get(segment, "normal")
+        lower, upper = bands.get(band, bands.get("normal", (12.5, 24.5)))
         too_fast = statistics.fmean(paces) > upper
         bound = upper if too_fast else lower
         chance = _chance_per_attempt(paces, bound, too_fast)
@@ -108,7 +148,7 @@ def main(log_path: str, lower: float, upper: float) -> int:
         )
         shown = " ".join(f"{value:5.2f}" for value in paces)
         side = "nhanh" if too_fast else "chậm"
-        print(f"{segment[:30]:<30} {shown:<30} {side:>6} {chance:7.1%}   {cells}")
+        print(f"{segment[:30]:<30} {shown:<26} {band:>6} {side:>6} {chance:7.1%}   {cells}")
         if chance >= 0.05:
             reachable.append(segment)
 
@@ -124,22 +164,30 @@ def main(log_path: str, lower: float, upper: float) -> int:
     if unreachable:
         print(
             f"{len(unreachable)}/{len(attempts)} segment ngoài tầm với ở mọi ngân sách. "
-            "Nâng số lần thử không cứu được chúng, và nới cận dưới thì sai: trên 807 "
-            "segment đã nhận, không segment nào rơi xuống dưới 12.5. Cần nhìn vào văn bản "
-            "- một thang bậc ký tự đọc thành tên chữ cái vốn dĩ chậm hơn văn xuôi, và "
-            "thước đo ký tự/giây đang định giá sai loại văn bản ấy."
+            "Thêm lượt thử không cứu được, và nới cận thì sai - trên 807 segment đã nhận "
+            "không cái nào rơi xuống dưới cận của dải nó. Hai nguyên nhân khác nhau, và "
+            "cột `dải` ở trên phân biệt chúng:"
         )
+        # The distinction decides who fixes it. A `normal` segment that cannot reach its
+        # floor is about the text. A `slow`/`fast` one is about the directive analysis gave
+        # it, and the same audio would have passed in another band - which is how alpha.43
+        # lost c00007_s0000074 at 12.70 against a `fast` floor of 14.0 after alpha.32 passed
+        # the identical take at `normal`.
+        for segment in unreachable:
+            band = segment_band.get(segment, "normal")
+            if band == "normal":
+                print(f"    {segment[:30]:<30} dải normal - vấn đề ở **văn bản**: một thang "
+                      "bậc ký tự đọc thành tên chữ cái vốn chậm hơn văn xuôi.")
+            else:
+                low = bands.get(band, (0.0, 0.0))[0]
+                print(f"    {segment[:30]:<30} dải {band} (cận {low}) - vấn đề ở **chỉ dẫn "
+                      f"diễn xuất**, không phải bản thu: cùng bản thu ấy sẽ qua ở dải normal. "
+                      "Phân tích đã gán một nhịp mà câu này không đọc tới được.")
     return 0
 
 
 if __name__ == "__main__":
-    if not 1 <= len(sys.argv) - 1 <= 3:
+    if len(sys.argv) != 2:
         print(__doc__)
         raise SystemExit(2)
-    raise SystemExit(
-        main(
-            sys.argv[1],
-            float(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_LOWER_BOUND,
-            float(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_UPPER_BOUND,
-        )
-    )
+    raise SystemExit(main(sys.argv[1]))
