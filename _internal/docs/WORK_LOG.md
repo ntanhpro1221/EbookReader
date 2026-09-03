@@ -359,3 +359,47 @@ lần ghi không xảy ra thì không được báo là thành công.
 
 Ba cái sau đều xuất hiện trong đúng một ngày, và cả ba đều là cùng một khoảng trống: dự án
 nghiêm khắc trong việc từ chối mà không có đường cho con người giải quyết lời từ chối.
+
+### Lỗi giết alpha.23 rồi giết alpha.32: planning không phải allocating
+
+```
+RuntimeError: naturalness-repair candidate allocation must bind its exact trigger check id
+```
+
+alpha.32 chết ở chương 8/10 vì đúng lỗi đã giết alpha.23. Bản sửa hồi đó (cho vòng sửa ASR
+đọc plan) đúng nhưng **không phủ hết**.
+
+Chuỗi sự kiện, đọc từ DB thật của segment 633 (`c00008_s0000023`, mang **cả hai** cảnh báo
+`ASR_LOCKED_NAME_ANCHOR_REVIEW|PERCEPTUAL_NATURALNESS_REVIEW`):
+
+1. Vòng sửa ASR cấp 5 candidate chuẩn, round 0–4, tạo lúc `t+740s` … `t+1398s`.
+2. QA cảm thụ trên **cùng bản thu ấy** sinh trigger naturalness lúc `t+1643s` — **sau cả năm**.
+3. Từ đó `segment_candidate_resume_plan` **ném** mỗi lần được gọi cho segment này.
+4. Mỗi vòng, pipeline bắt exception, vô hiệu hoá candidate hiện tại **với thông điệp của
+   lần cấp phát kế tiếp làm `failure_reason`**, rồi cấp thêm một cái nữa. Năm lần.
+5. Hết ngân sách, cú ném lên tới đỉnh, lần chạy chết.
+
+**Nguyên nhân:** `_candidate_perceptual_requirement_conn` xác thực *một hàng candidate đã
+tồn tại*, nhưng nó gọi hàm có nhiệm vụ **từ chối cấp phát**. Bất biến ấy thật và cần giữ —
+một candidate chuẩn không được **tạo ra** khi bản thu còn nợ một candidate naturalness —
+nhưng nó chỉ có nghĩa ở **thời điểm cấp phát**. Lúc đọc lịch sử thì không có gì đang được
+tạo ra, và một trigger đến sau thì không candidate nào có thể gắn nó.
+
+Đã bỏ kiểm tra ấy khỏi đường **đọc**, giữ nguyên ở đường **cấp phát** (`allocate_segment_candidate`).
+Với đúng dữ liệu ấy, plan giờ trả về **`action: "exhausted"`**: năm vòng đã dùng, không vòng
+nào khá hơn, segment ở lại dạng cảnh báo và lần chạy đi tiếp. **Review không bị bỏ quên** —
+nó vẫn là `PERCEPTUAL_NATURALNESS_REVIEW`, đúng thứ lệnh `accept` sinh ra để giải quyết.
+
+### Hai lần tôi suýt sửa sai
+
+Lần đầu tôi định làm bất biến ấy "biết thời gian" (bỏ qua trigger mới hơn candidate). Có một
+test cũ **không docstring** khẳng định điều ngược lại, nên tôi kiểm tra: sau bản sửa đó, plan
+trả về `action=generate` mà **không gắn trigger** — review sẽ bị bỏ quên thật. Bản sửa của
+tôi sai và test cũ đúng về mối nguy.
+
+Nhưng test cũ cũng chỉ đúng một nửa: nó biến "hết ngân sách" thành "giết lần chạy". Bản sửa
+đúng không phải làm kiểm tra thông minh hơn mà là **đặt nó ở đúng chỗ**. Test cũ giờ có tên
+mới và có docstring giải thích lần chạy nào đã chết vì nó.
+
+Bài học: một test không có docstring không phải một quyết định, nó chỉ là một hành vi đã
+được đóng băng. Nhưng cũng đừng phá nó trước khi hiểu nó canh cái gì.

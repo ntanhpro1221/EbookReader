@@ -213,3 +213,57 @@ sai", dựa trên canonical CER 0,235–0,333. Đọc bản ghi thật thì **ph
 âm hoàn hảo**; CER cao vì chính cái chữ số viết hai cách này, cộng phần vô nghĩa mà cụm
 tiếng Anh để lại. Chỉ số thống kê đúng, cách đọc nó của tôi thì sai. Bài học: đọc bản ghi
 trước khi kết luận về nó.
+
+## Máy rảnh mà lần chạy không vắt kiệt: GPU 16% suốt pha đắt nhất (đo 2026-09-03)
+
+Lấy mẫu 12 lần trong 24 giây, giữa pha ASR của alpha.32, trên máy đã rảnh:
+
+```
+16, 1437     16, 1437     0, 1433      16, 1435
+0, 1531      16, 1433     14, 1435     15, 1431
+16, 1435     16, 1435     16, 1541     16, 1437
+       (utilization.gpu %, memory.used MiB)
+```
+
+**GPU ghim ở 14–16%, VRAM dùng 1,43 trên 8,15 GB.** Trong pha chiếm 60% thời gian của một
+lần chạy, GPU **rảnh 87%** và **82% VRAM để không**. Whisper giải mã một file một lần.
+
+Đó là câu trả lời cho "nó có vắt kiệt tài nguyên không": **không**, và chỗ không vắt kiệt
+nằm đúng ở khoản đắt nhất.
+
+## faster-whisper: nhanh 2,07 lần, nghe giống hệt
+
+Cùng trọng số `large-v3-turbo`, khác runtime (CTranslate2 thay vì PyTorch). Cùng bản thu,
+cùng văn bản mong đợi (dựng lại bằng `spoken_text_with_anchors`), cùng luật beam theo độ
+dài, chấm qua cùng một ngưỡng.
+
+| mẫu | openai-whisper | faster-whisper | bất đồng đỗ/trượt |
+|---|---:|---:|---|
+| 60 bản thu | 1,18s/bản | 0,70s/bản | **0/60** |
+| **200 bản thu** | **0,77s/bản** | **0,37s/bản** | **0/200** |
+
+200 mẫu: 196 đỗ/đỗ, 4 trượt/trượt. **Không một verdict nào khác nhau.** Trên 3.870 giây ASR
+của alpha.25 thì 2,07× là khoảng **2.000 giây mỗi lần chạy**.
+
+Giới hạn của bằng chứng, nói cho đúng: 200 bản thu từ **một** cuốn sách, một giọng, tiếng
+Việt. Không bất đồng là dấu hiệu mạnh, không phải chứng minh cho cả 948 segment.
+
+### Đổi sang nó là một sự kiện phiên bản
+
+`docs/DEPENDENCIES.md` viết: *"Upgrading any pinned dependency changes the quality-policy
+hash and therefore requires a clean project."* Thêm `faster-whisper` + `ctranslate2` là
+đúng loại thay đổi đó. Không có ghi chép nào nói openai-whisper được **chọn** thay nó — nó
+chỉ là thứ đã được ghim.
+
+Một chi tiết cài đặt phải ghi lại: **CTranslate2 liên kết cuBLAS và cuDNN lúc nạp và không
+kèm chúng.** torch thì có, trong `torch/lib`. Trong venv scratchpad tôi phải chép
+`cublas64_12.dll`, `cublasLt64_12.dll` và `cudnn*64_9.dll` sang cạnh `ctranslate2`. Trên
+venv chính thì torch đã ở đó, nhưng đây là thứ sẽ hỏng trên máy mới nếu không biết trước.
+`os.add_dll_directory` **không** đủ, và PATH kiểu POSIX của Git Bash cũng không.
+
+### Hai đòn bẩy này cộng được với nhau
+
+2,07× là đổi runtime, **chưa** chạm tới chỗ GPU rảnh 87%. faster-whisper có
+`BatchedInferencePipeline` cho phép giải mã nhiều file một lượt, tức đúng thứ để lấp phần
+rảnh ấy. Làm cả hai thì ASR có thể xuống dưới một phần tư thời gian hiện tại — nhưng đó là
+phép đo tiếp theo, không phải một con số để hứa bây giờ.

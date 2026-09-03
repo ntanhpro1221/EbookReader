@@ -18,6 +18,7 @@ engine and soundfile, nothing from ebook_reader - and is meant to be run once pe
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 import time
@@ -71,6 +72,13 @@ def _openai(paths: list[tuple[str, str, float]]) -> list[dict]:
 
 
 def _faster(paths: list[tuple[str, str, float]]) -> list[dict]:
+    # CTranslate2 links cuBLAS and cuDNN at load time and does not ship them. torch does,
+    # in its own lib directory, so an isolated venv can borrow those without the two
+    # environments sharing anything else. EBOOK_READER_TORCH_LIB names that directory.
+    torch_lib = os.environ.get("EBOOK_READER_TORCH_LIB", "")
+    if torch_lib and hasattr(os, "add_dll_directory") and Path(torch_lib).is_dir():
+        os.add_dll_directory(torch_lib)
+
     from faster_whisper import WhisperModel
 
     # "turbo" resolves to the same large-v3-turbo weights the project already loads
