@@ -767,3 +767,28 @@ Cái còn thiếu là một hạng mục: `ASR_UNVERIFIABLE_SHORT_TEXT` đã th�
 quyết vô nghĩa", nhưng không có tương đương cho **"cách diễn đạt khiến bản ghi không đáng
 tin"** — gào, hét, chuỗi thán từ. Trước mắt thì đúng loại việc cần **tai người nghe**, và
 `accept` có sẵn cho đúng việc đó.
+
+#### Theo dõi cả lớp, không chỉ ca gây chú ý: 1 trên 5, không hệ thống
+
+Mục trên viết từ **một** ca. Đó là đủ để chỉ ra cơ chế nhưng không đủ để nói lớp ấy lớn cỡ
+nào, nên theo dấu cả 9 segment `TIMELINE_IMPOSSIBLE` của alpha.32 sang alpha.43 (5 cái đã
+được xử lý tới thời điểm này):
+
+| segment | similarity 32 → 43 | kết cục ở alpha.43 |
+|---|---|---|
+| ch2 `s0000067` | 0,00 → 0,00 | vẫn ảo giác, vẫn được tha |
+| ch2 `s0000071` | 0,00 → 0,00 | vẫn ảo giác, vẫn được tha |
+| ch4 `s0000099` | 0,00 → 0,00 | vẫn ảo giác, vẫn được tha |
+| ch6 `s0000066` | 0,00 → **0,50** | **verified** — nghe rõ hơn thì *cứu* được segment |
+| ch6 `s0000001` | 0,00 → **0,59** | **failed** — ca đã nêu ở trên |
+
+**1/5 chuyển từ "được tha" thành "chặn".** Ba cái không đổi gì, và một cái nghe rõ hơn lại
+đi qua cổng thay vì bị chặn. Vậy đây **không phải một lớp hỏng hệ thống**, mà là một cái
+răng cưa: bản ghi tốt hơn có thể rơi về **hai** phía của ngưỡng 0,78, và nó đã rơi cả hai
+phía ngay trong cùng một chương.
+
+Còn 4 segment nữa (ch7 ×2, ch9, ch10) chưa tới lượt — con số cuối phải chờ chạy xong.
+
+Ghi lại cả cách suy luận: tôi viết mục trên khi n=1, và ca ấy dựng lên một câu chuyện gọn
+gàng ("ASR tốt hơn làm mất chương"). Với n=5 thì câu chuyện ấy đúng về *cơ chế* nhưng sai về
+*quy mô*. Một ca đủ để tìm ra cơ chế, không bao giờ đủ để định giá nó.
