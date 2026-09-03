@@ -7813,6 +7813,49 @@ class ProjectDB:
             ).fetchone()
             return bool(row and row["total"] and row["total"] == row["accepted"] and not row["failed"])
 
+    def lock_character_gender(self, canonical_name: str, gender: str) -> None:
+        """Record a listener's answer about a character's gender, and stop asking.
+
+        The model gets this wrong, and when it is wrong in a tie there is nothing else to
+        consult: alpha.30 finished 948 segments of analysis and then refused to cast,
+        because "NOAH" came back male twice and female twice. The only cure was a code
+        change, which invalidates the analysis fingerprint and costs the whole phase again.
+        A listener can settle it in a second, and this is where their answer lives -
+        alongside `pronounce`, which is the same idea for how a name is read.
+
+        The row is created even when casting has not run yet, so the decision can be made
+        before the failure rather than only after it.
+        """
+        if gender not in {"male", "female"}:
+            raise ValueError("gender must be male or female")
+        key = canonical_name.strip().upper()
+        if not key:
+            raise ValueError("canonical_name must not be empty")
+        now = time.time()
+        with self.transaction() as conn:
+            updated = conn.execute(
+                "UPDATE characters SET gender=?, locked=1, updated_at=? WHERE canonical_name=?",
+                (gender, now, key),
+            ).rowcount
+            if not updated:
+                conn.execute(
+                    """
+                    INSERT INTO characters
+                        (canonical_name, display_name, gender, locked, created_at, updated_at)
+                    VALUES (?,?,?,1,?,?)
+                    """,
+                    (key, canonical_name.strip(), gender, now, now),
+                )
+
+    def locked_character_genders(self) -> dict[str, str]:
+        """Every gender a listener has pinned, keyed the way casting keys characters."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT canonical_name, gender FROM characters "
+                "WHERE locked=1 AND gender IN ('male','female')"
+            ).fetchall()
+        return {str(row["canonical_name"]).upper(): str(row["gender"]) for row in rows}
+
     def upsert_character(
         self,
         *,
@@ -7828,10 +7871,16 @@ class ProjectDB:
         now = time.time()
         with self.transaction() as conn:
             row = conn.execute(
-                "SELECT id FROM characters WHERE canonical_name=?", (canonical_name,)
+                "SELECT id, gender, locked FROM characters WHERE canonical_name=?",
+                (canonical_name,),
             ).fetchone()
             if row:
                 character_id = int(row["id"])
+                # A locked gender is a listener's decision and outranks the model, the way
+                # a locked pronunciation already does. Everything else about the character
+                # is still the model's to update.
+                if int(row["locked"] or 0):
+                    gender = str(row["gender"])
                 conn.execute(
                     """
                     UPDATE characters SET display_name=?,gender=?,age=?,personality=?,importance=?,

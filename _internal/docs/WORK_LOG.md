@@ -245,3 +245,32 @@ suýt mất cả lần chạy.
 Ghi chú phụ: `models.py` chứa cả model dữ liệu phân tích lẫn `ResourceSnapshot`, nên một
 thay đổi thuần về giám sát tài nguyên cũng làm hỏng vân tay resume của phân tích. Ghép cặp
 này hơi rộng, nhưng tách `models.py` là một cuộc tái cấu trúc có rủi ro riêng; ghi lại là đủ.
+
+### `cast`: người nghe chốt giới tính nhân vật, giống `pronounce` chốt cách đọc tên
+
+alpha.30 phân tích xong cả 948 segment rồi từ chối cast vì model trả lời NOAH nam hai lần,
+nữ hai lần. **Từ chối là đúng** - một nhân vật bị lồng sai giới trong cả cuốn sách tệ hơn
+một lần chạy dừng lại. Nhưng không ai làm gì được: giới tính nằm trong phần phân tích, phần
+phân tích có vân tay, và mọi thay đổi code đủ sức phá thế hoà đều làm hỏng vân tay ấy và
+bắt chạy lại cả pha. Một lỗi model mà người nghe trả lời trong một giây lại tốn một tiếng
+máy chạy.
+
+```bash
+ebook-reader-headless cast <project> --character NOAH --gender male
+```
+
+Ghi vào `characters.locked`, cột đã tồn tại sẵn trên bảng mà **chưa đoạn nào tôn trọng** -
+chỉ pronunciations mới dùng khoá. Ba chỗ phải cùng tôn trọng nó, và thiếu chỗ nào cũng vô
+dụng:
+
+1. `resolve_gender()` — quyết định đã ghim đứng trên cả model lẫn văn bản.
+2. Cổng casting — không còn coi đó là xung đột.
+3. `upsert_character()` — trước đây ghi đè `gender` **vô điều kiện**, nên một cái khoá mà
+   chỉ resolver tôn trọng vẫn bị mất trên đường xuống hàng dữ liệu. Mọi thứ khác của nhân
+   vật vẫn là của model.
+
+Hàng được tạo cả khi casting chưa từng chạy, để câu trả lời đưa ra được **trước** lần hỏng
+chứ không chỉ sau nó — nếu chỉ trả lời được sau thì vẫn phải trả tiền cho cả tiếng phân
+tích ấy hai lần.
+
+Chỉ nhận `male`/`female`. Ghim `unknown` là ghi lại một quyết định không ai đưa ra.

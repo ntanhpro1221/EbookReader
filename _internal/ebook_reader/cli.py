@@ -840,6 +840,48 @@ def _command_log(args: argparse.Namespace) -> CommandResult:
 LISTENER_PRONUNCIATION_SOURCE = "listener_choice"
 
 
+def _command_cast(args: argparse.Namespace) -> CommandResult:
+    """Pin a character's gender, on a listener's say-so rather than a model's.
+
+    alpha.30 finished all 948 segments of its analysis and then refused to cast:
+
+        Casting input quality gate failed: gender conflicts={'NOAH': {'female': 2, 'male': 2}}
+
+    The refusal is right - a character voiced as the wrong sex for a whole book is worse
+    than a run that stops - but there was nothing a person could do about it. The gender
+    lives in the analysis, the analysis is fingerprinted, and any code change that could
+    settle the tie invalidates the fingerprint and costs the whole phase again. So a model
+    error that a listener could answer in one second cost an hour of machine time instead.
+
+    This is `pronounce` for casting: locked, so nothing downstream asks again, and readable
+    before casting has ever run so the answer can be given ahead of the failure rather than
+    only after it.
+    """
+    paths = _existing_project_paths(args.project_root)
+    character = str(args.character).strip()
+    gender = str(args.gender).strip().casefold()
+    if not character:
+        return CommandResult(data={}, exit_code=EXIT_USAGE, error="--character must not be empty")
+    if gender not in {"male", "female"}:
+        return CommandResult(
+            data={}, exit_code=EXIT_USAGE, error="--gender must be male or female"
+        )
+    database = ProjectDB(paths.db)
+    database.lock_character_gender(character, gender)
+    stored = database.locked_character_genders().get(character.strip().upper())
+    if stored != gender:
+        # Reporting a write that did not happen is worse than failing.
+        return CommandResult(
+            data={"character": character, "requested": gender, "stored": stored},
+            exit_code=EXIT_VALIDATION_FAILED,
+            error="Không ghi được giới tính đã ghim",
+        )
+    return CommandResult(
+        data={"character": character, "gender": gender, "locked": True},
+        exit_code=EXIT_OK,
+    )
+
+
 def _command_pronounce(args: argparse.Namespace) -> CommandResult:
     """Pin how a name is read, on a listener's say-so rather than a model's.
 
@@ -1164,6 +1206,16 @@ def build_parser() -> argparse.ArgumentParser:
     pronounce.add_argument("--spoken", required=True, help="How it should be read aloud")
     _add_json_argument(pronounce)
     pronounce.set_defaults(handler=_command_pronounce)
+
+    cast = subparsers.add_parser(
+        "cast",
+        help="Pin a character's gender, as a listener decision rather than a model guess",
+    )
+    cast.add_argument("project_root", type=Path)
+    cast.add_argument("--character", required=True, help="The character's name as cast")
+    cast.add_argument("--gender", required=True, choices=("male", "female"))
+    _add_json_argument(cast)
+    cast.set_defaults(handler=_command_cast)
 
     validate = subparsers.add_parser("validate", help="Validate locked inputs, SQLite, and committed output QA")
     validate.add_argument("project_root", type=Path)
