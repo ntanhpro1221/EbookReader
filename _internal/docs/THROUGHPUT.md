@@ -325,3 +325,40 @@ bằng chứng rằng nhãn ấy thực sự đang tiến triển.
 
 Cho vòng sinh candidate dùng `_synthesis_pool` như đường tổng hợp chính. Đo lại bằng chính
 phép đo trên: thời gian pha, và mẫu GPU/VRAM giữa lúc chạy.
+
+## Whisper được nạp 189 lần trong một lần chạy, mất 25 phút (đo 2026-09-04)
+
+Theo dõi log alpha.43 thấy `Nạp faster-whisper` lặp lại mỗi khoảng 70 giây. Đếm trên cả
+alpha.32:
+
+    189 lần nạp trong 378 phút, cách nhau trung vị 50 giây
+    mỗi lần trung vị 7,15s  ->  tổng 1.502s = 25 phút = 9,6% công việc thật của lần chạy
+
+(7,15s là *cận trên*: nó đo từ dòng "Nạp" tới dòng log kế tiếp, nên có thể gồm cả lần giải
+mã đầu. Số lần nạp thì chính xác.)
+
+### Vì sao lại nạp nhiều thế
+
+129 trong 189 lần rơi ngay vào lúc vào pha "Kiểm tra candidate clarity". Vòng sửa chạy
+theo nhịp: sinh candidate (TTS) → kiểm candidate (ASR) → vòng sau. Hai model thay nhau
+chiếm VRAM và đá nhau ra mỗi vòng. 826 candidate chia cho 129 vòng là **6,4 candidate mỗi
+vòng**, tức mỗi vòng **nạp 7 giây để làm khoảng 5 giây việc**.
+
+### Cách sửa rẻ nhất, và vì sao nó rẻ
+
+Giữ Whisper nằm lại trong suốt vòng sửa. Nghe như phải đánh đổi VRAM, nhưng phép đo nói
+không: **giữa vòng sửa, VRAM đỉnh chỉ 2.719 MiB trên 8.151** vì vòng ấy chạy tuần tự với
+một model TTS duy nhất. Whisper turbo float16 khoảng 1,5 GB, thừa chỗ trong 5,4 GB đang bỏ
+không. Tiết kiệm ~1.400s mà không lấy đi gì.
+
+**Giữ Whisper thường trú suốt cả lần chạy thì lại không đáng** - và đây là chỗ dễ nhầm.
+1,5 GB ấy lấy mất một tiến trình của pool TTS ở pha tổng hợp chính: pha ấy tốn 2.658s với 3
+tiến trình, còn 2 tiến trình thì thành ~3.987s, đắt thêm 1.329s - gần đúng bằng số tiết
+kiệm được. Hoà. Và nếu vòng sinh candidate được cho dùng pool (mục trên), đánh đổi ấy còn
+tệ hơn. Phạm vi mới là thứ làm cách sửa này đúng: **thường trú trong vòng sửa, không thường
+trú ngoài nó.**
+
+### Việc cần làm (chưa làm - `pipeline.py`/`asr.py` bị khoá lúc alpha.43 chạy)
+
+Giữ model ASR sống qua các vòng của một chương thay vì nạp lại mỗi vòng. Đo lại bằng chính
+cách đếm trên: số lần nạp mỗi lần chạy.
