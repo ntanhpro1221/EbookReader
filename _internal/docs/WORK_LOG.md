@@ -274,3 +274,41 @@ chứ không chỉ sau nó — nếu chỉ trả lời được sau thì vẫn p
 tích ấy hai lần.
 
 Chỉ nhận `male`/`female`. Ghim `unknown` là ghi lại một quyết định không ai đưa ra.
+
+### `accept`: cánh cổng thứ ba, và lý do 2/10 chương
+
+Đo alpha.25 mới thấy vì sao chỉ 2/10 chương xuất bản được:
+
+| chương | trạng thái | segment lỗi | cảnh báo |
+|---|---|---|---|
+| 1 | xong | 0 | 0 |
+| 4 | **xong** | 0 | **2** |
+| 8 | **hỏng** | **0** | **8** |
+| còn lại | hỏng | 1–4 | 0–5 |
+
+Chương 8 hỏng với **không segment nào lỗi**. Chốt chặn là *mã cảnh báo nào* bị coi là chặn,
+và `PERCEPTUAL_NATURALNESS_REVIEW` không nằm trong `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`.
+
+Bốn segment mang cảnh báo đó ở alpha.32 có điểm 2,18–2,59 với `PERCEPTUAL_BASELINE_DROP` —
+tụt thật so với bản xem trước của preset, không phải nhiễu. **Chặn là đúng.** Bộ kiểm tra
+nói rất thật về ý nghĩa của nó: cần một đôi tai, chứ không phải bằng chứng bản thu hỏng.
+
+Vấn đề là **không có đôi tai nào được phép trả lời**. Vòng sửa chữa thu lại và đôi khi không
+khá hơn; cảnh báo còn nguyên; chương vĩnh viễn không xuất bản. Đó là một **bức tường, không
+phải một cánh cổng**.
+
+Và đây là lần thứ ba cùng một khoảng trống: `pronounce` tồn tại vì một cách đọc cần con
+người, `cast` vì một giới tính cần, và giờ `accept` vì **một bản thu cần**.
+
+```bash
+ebook-reader-headless accept <project> --segment c00003_s0000001_571c52609c96 \
+    --warning PERCEPTUAL_NATURALNESS_REVIEW --note "đã nghe, chấp nhận"
+```
+
+Khoá theo **checksum của bản thu đã nghe**, không theo segment: thu lại là chấp nhận cũ hết
+hiệu lực, vì thứ được chấp nhận là *một bản ghi*, không phải *một hàng dữ liệu*. Cùng lý lẽ
+đã dùng khi khoá điểm cảm thụ theo checksum.
+
+Lệnh từ chối chấp nhận một cảnh báo mà segment không mang, và từ chối chấp nhận khi segment
+chưa có bản thu nào — chấp nhận âm thanh chưa tồn tại là chấp nhận bất cứ thứ gì được tạo
+ra sau đó.

@@ -2888,15 +2888,27 @@ def test_tts_circuit_breaker_counts_only_consecutive_identical_complete_failures
 def test_high_quality_blocks_unreviewed_segment_warnings() -> None:
     pipeline = object.__new__(BookPipeline)
     pipeline.settings = {"quality_profile": "high_quality"}
+
+    class _NothingAccepted:
+        """The check now asks what a listener has accepted; nobody has accepted anything
+        here, which is the case this test has always been about."""
+
+        @staticmethod
+        def accepted_segment_warnings() -> dict:
+            return {}
+
+    pipeline.db = _NothingAccepted()
     rows = [
         {
             "id": 1,
             "stable_id": "c1s1",
+            "wav_sha256": "aaa",
             "warning_code": "TTS_SPLIT_RECOVERY|TTS_GENERATION_CEILING_REACHED",
         },
         {
             "id": 2,
             "stable_id": "c1s2",
+            "wav_sha256": "bbb",
             "warning_code": "LOW_ANALYSIS_CONFIDENCE|TTS_PACE_OUTLIER",
         },
     ]

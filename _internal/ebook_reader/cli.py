@@ -840,6 +840,77 @@ def _command_log(args: argparse.Namespace) -> CommandResult:
 LISTENER_PRONUNCIATION_SOURCE = "listener_choice"
 
 
+def _command_accept(args: argparse.Namespace) -> CommandResult:
+    """Record that a person listened to a take and accepted it despite the warning.
+
+    High-quality policy refuses to publish a chapter whose segments carry warnings it does
+    not allow, and PERCEPTUAL_NATURALNESS_REVIEW is one of those. The verifier is honest
+    about what it means - a score well below the preset's own preview, asking for a human
+    ear, not proof of a bad take - and the repair loop re-cuts the segment and sometimes
+    cannot do better. At that point nothing can clear the warning and the chapter never
+    publishes. That is a wall, not a gate, and it is the third one of these: `pronounce`
+    exists because a reading needed a person, `cast` because a gender did, and this because
+    a recording does.
+
+    Tied to the checksum of the audio that was heard. Re-cutting the take voids it, because
+    what was accepted is a recording, not a row.
+    """
+    paths = _existing_project_paths(args.project_root)
+    stable_id = str(args.segment).strip()
+    code = str(args.warning).strip()
+    if not stable_id or not code:
+        return CommandResult(
+            data={}, exit_code=EXIT_USAGE, error="--segment and --warning must be non-empty"
+        )
+    database = ProjectDB(paths.db)
+    with database.connect() as conn:
+        row = conn.execute(
+            "SELECT stable_id, wav_sha256, warning_code, status FROM segments WHERE stable_id=?",
+            (stable_id,),
+        ).fetchone()
+    if row is None:
+        return CommandResult(
+            data={"segment": stable_id}, exit_code=EXIT_USAGE, error="Không có segment này"
+        )
+    checksum = str(row["wav_sha256"] or "")
+    if not checksum:
+        # Accepting audio that does not exist yet would be accepting whatever is made next.
+        return CommandResult(
+            data={"segment": stable_id},
+            exit_code=EXIT_USAGE,
+            error="Segment chưa có bản thu nào để nghe",
+        )
+    present = {value for value in str(row["warning_code"] or "").split("|") if value}
+    if code not in present:
+        return CommandResult(
+            data={"segment": stable_id, "warning": code, "hiện có": sorted(present)},
+            exit_code=EXIT_USAGE,
+            error="Segment không mang cảnh báo đó",
+        )
+    database.accept_segment_audio(
+        segment_stable_id=stable_id,
+        wav_sha256=checksum,
+        warning_code=code,
+        note=str(getattr(args, "note", "") or ""),
+    )
+    stored = database.accepted_segment_warnings().get((stable_id, checksum), set())
+    if code not in stored:
+        return CommandResult(
+            data={"segment": stable_id, "warning": code},
+            exit_code=EXIT_VALIDATION_FAILED,
+            error="Không ghi được quyết định chấp nhận",
+        )
+    return CommandResult(
+        data={
+            "segment": stable_id,
+            "warning": code,
+            "wav_sha256": checksum,
+            "accepted": True,
+        },
+        exit_code=EXIT_OK,
+    )
+
+
 def _command_cast(args: argparse.Namespace) -> CommandResult:
     """Pin a character's gender, on a listener's say-so rather than a model's.
 
@@ -1281,6 +1352,17 @@ def build_parser() -> argparse.ArgumentParser:
     cast.add_argument("--gender", required=True, choices=("male", "female"))
     _add_json_argument(cast)
     cast.set_defaults(handler=_command_cast)
+
+    accept = subparsers.add_parser(
+        "accept",
+        help="Accept a take a warning flagged, after listening to it",
+    )
+    accept.add_argument("project_root", type=Path)
+    accept.add_argument("--segment", required=True, help="stable_id of the segment")
+    accept.add_argument("--warning", required=True, help="The warning code being accepted")
+    accept.add_argument("--note", default="", help="Why, for whoever reads this later")
+    _add_json_argument(accept)
+    accept.set_defaults(handler=_command_accept)
 
     validate = subparsers.add_parser("validate", help="Validate locked inputs, SQLite, and committed output QA")
     validate.add_argument("project_root", type=Path)

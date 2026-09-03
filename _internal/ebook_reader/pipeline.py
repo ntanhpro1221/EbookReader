@@ -2050,13 +2050,24 @@ class BookPipeline:
         if self.settings.get("quality_profile") != "high_quality":
             return []
         blocking: list[dict[str, Any]] = []
+        # A listener who has heard the take can accept it. Without this the gate is a wall:
+        # the perceptual verifier asks for review, the repair loop re-cuts and sometimes
+        # cannot do better, and then nothing on any side can clear the warning, so the
+        # chapter never publishes. The acceptance is tied to the audio that was heard, so a
+        # later re-cut is judged on its own.
+        accepted = self.db.accepted_segment_warnings()
         for row in rows:
             warning_codes = {
                 value
                 for value in str(row["warning_code"] or "").split("|")
                 if value
             }
-            blocked_codes = sorted(warning_codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
+            heard = accepted.get(
+                (str(row["stable_id"]), str(row["wav_sha256"] or "")), frozenset()
+            )
+            blocked_codes = sorted(
+                warning_codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS - set(heard)
+            )
             if blocked_codes:
                 blocking.append(
                     {

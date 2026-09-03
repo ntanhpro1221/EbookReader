@@ -73,7 +73,7 @@ from .tts_contract import (
 
 # Version 1 is the legacy pre-QA layout. Existing projects did not persist a
 # user_version, so they migrate from 0 through the current schema.
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
@@ -1818,6 +1818,16 @@ CREATE TABLE IF NOT EXISTS character_aliases (
     normalized_alias TEXT NOT NULL UNIQUE,
     confidence REAL NOT NULL DEFAULT 0.5,
     source TEXT NOT NULL DEFAULT 'analysis'
+);
+
+CREATE TABLE IF NOT EXISTS listener_audio_acceptances (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    segment_stable_id TEXT NOT NULL,
+    wav_sha256 TEXT NOT NULL,
+    warning_code TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL,
+    UNIQUE (segment_stable_id, wav_sha256, warning_code)
 );
 
 CREATE TABLE IF NOT EXISTS pronunciations (
@@ -7826,6 +7836,56 @@ class ProjectDB:
                 (chapter_id,),
             ).fetchone()
             return bool(row and row["total"] and row["total"] == row["accepted"] and not row["failed"])
+
+    def accept_segment_audio(
+        self,
+        *,
+        segment_stable_id: str,
+        wav_sha256: str,
+        warning_code: str,
+        note: str = "",
+    ) -> None:
+        """Record that a person listened to this exact take and accepted it anyway.
+
+        The perceptual verifier says a take dropped well below its preset's own preview and
+        asks for review. The repair loop re-cuts the segment and sometimes cannot do better.
+        At that point the chapter refuses to publish, the warning cannot be removed, and
+        there is nobody the machine can ask - so the chapter never publishes at all. That is
+        a wall, not a gate.
+
+        Keyed by the checksum of the audio that was heard, not by the segment: re-cutting
+        the take voids the acceptance, because the person accepted a recording rather than a
+        row. Same reason the perceptual scores are filed by checksum.
+        """
+        stable_id = str(segment_stable_id).strip()
+        checksum = str(wav_sha256).strip().lower()
+        code = str(warning_code).strip()
+        if not stable_id or not checksum or not code:
+            raise ValueError("segment, wav_sha256 and warning_code are all required")
+        with self.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO listener_audio_acceptances
+                    (segment_stable_id, wav_sha256, warning_code, note, created_at)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT (segment_stable_id, wav_sha256, warning_code)
+                DO UPDATE SET note=excluded.note, created_at=excluded.created_at
+                """,
+                (stable_id, checksum, code, str(note), time.time()),
+            )
+
+    def accepted_segment_warnings(self) -> dict[tuple[str, str], set[str]]:
+        """Warnings a listener has accepted, keyed by (segment, the audio they heard)."""
+        accepted: dict[tuple[str, str], set[str]] = {}
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT segment_stable_id, wav_sha256, warning_code "
+                "FROM listener_audio_acceptances"
+            ).fetchall()
+        for row in rows:
+            key = (str(row["segment_stable_id"]), str(row["wav_sha256"]))
+            accepted.setdefault(key, set()).add(str(row["warning_code"]))
+        return accepted
 
     def lock_character_gender(self, canonical_name: str, gender: str) -> None:
         """Record a listener's answer about a character's gender, and stop asking.
