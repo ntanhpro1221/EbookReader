@@ -104,3 +104,56 @@ def test_a_worker_is_budgeted_for_what_it_actually_costs() -> None:
     pool = PerceptualScorePool(_pool_settings(), lambda _m: None, workers=8)
     granted = pool.usable_for(95, 7.3)
     assert granted * PERCEPTUAL_WORKER_RAM_GB <= 7.3, "granted more memory than exists"
+
+
+def test_the_pool_never_sizes_itself_into_the_throttle_it_lives_under() -> None:
+    """decide() calls anything at or below resources.min_free_ram_gb memory pressure, and
+    memory pressure turns off allow_cpu_heavy_work AND allow_new_gpu_batch together.
+
+    A pool that spends the machine down to that band forbids its own work - and since
+    scoring now runs beside ASR, it would stall the very ASR it is meant to hide behind.
+    The old rule reserved a hardcoded 2.0 GB against a 3.5 GB threshold, so it landed
+    squarely inside the band.
+    """
+    from ebook_reader.perceptual_qa import PERCEPTUAL_WORKER_RAM_GB
+
+    settings = _pool_settings()
+    settings["resources"] = {"min_free_ram_gb": 3.5}
+    pool = PerceptualScorePool(settings, lambda _m: None, workers=8)
+
+    for free_ram_gb in (4.0, 6.0, 7.3, 12.0, 24.0):
+        granted = pool.usable_for(95, free_ram_gb)
+        remaining = free_ram_gb - granted * PERCEPTUAL_WORKER_RAM_GB
+        assert remaining >= 3.5, (free_ram_gb, granted, remaining)
+
+
+def test_a_tighter_threshold_is_obeyed_rather_than_ignored() -> None:
+    """The floor comes from the settings, so a project that raises it gets a smaller pool
+    rather than a pool that argues with its own throttle."""
+    generous = dict(_pool_settings(), resources={"min_free_ram_gb": 2.0})
+    strict = dict(_pool_settings(), resources={"min_free_ram_gb": 8.0})
+    assert PerceptualScorePool(generous, lambda _m: None, workers=8).usable_for(95, 12.0) > (
+        PerceptualScorePool(strict, lambda _m: None, workers=8).usable_for(95, 12.0)
+    )
+
+
+def test_the_cap_is_a_thread_budget_because_that_is_what_was_measured() -> None:
+    """8 workers of 2 threads reached 3.68x on 32 cores: workers * threads = cores / 2.
+
+    The cap used to be cores // 2 workers, which says nothing about how many threads each
+    worker claims. On 32 cores that permits 16 workers of 2 threads - full subscription -
+    and the only thing that stopped it was the configured ceiling of 8 sitting in front.
+    Written as the budget it always was, the measured 8 falls out and the rule survives a
+    move to a machine with a different core count.
+    """
+    settings = dict(_pool_settings(), resources={"min_free_ram_gb": 3.5})
+    two_threads = PerceptualScorePool(settings, lambda _m: None, workers=64, threads=2)
+    four_threads = PerceptualScorePool(settings, lambda _m: None, workers=64, threads=4)
+
+    plenty_of_ram = 512.0
+    assert two_threads.usable_for(999, plenty_of_ram) == max(
+        1, (__import__("os").cpu_count() or 1) // 4
+    )
+    assert four_threads.usable_for(999, plenty_of_ram) < two_threads.usable_for(
+        999, plenty_of_ram
+    ), "fatter workers means fewer of them, not the same number"

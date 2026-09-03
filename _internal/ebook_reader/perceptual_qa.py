@@ -600,9 +600,25 @@ class PerceptualScorePool:
         if str(self.settings.get("perceptual_qa", {}).get("device", "cpu")) != "cpu":
             # A GPU pool would multiply VRAM against the engines the pipeline still needs.
             return 0
-        spare = free_ram_gb - 2.0 - max(0.0, float(reserve_ram_gb))
+        # The floor is the throttle's own, not a number of this module's choosing. It used
+        # to be a hardcoded 2.0 while resources.min_free_ram_gb is 3.5, so a pool sized to
+        # the old rule left the machine at 2.0 GB free - inside the band where decide()
+        # reports memory pressure and turns off BOTH allow_cpu_heavy_work and
+        # allow_new_gpu_batch. The pool would size itself into the state that forbids the
+        # work it was built for, and now that scoring runs beside ASR it would stall the
+        # very ASR it is meant to hide behind.
+        floor = float(self.settings.get("resources", {}).get("min_free_ram_gb", 3.5))
+        spare = free_ram_gb - floor - max(0.0, float(reserve_ram_gb))
         affordable = int(max(0.0, spare) / PERCEPTUAL_WORKER_RAM_GB)
-        return max(0, min(self.workers, job_count, affordable, (os.cpu_count() or 1) // 2))
+        # What was measured is a thread budget, not a worker count: 8 workers of 2 threads
+        # reached 3.68x on 32 cores, which is workers * threads = cores / 2. The cap used
+        # to be cores // 2 workers, which says nothing about how many threads each of them
+        # claims - on this machine that is 16 workers of 2 threads, or full subscription,
+        # and the only reason it never happened is that the configured ceiling of 8 hid it.
+        # Expressed as the budget it actually was, the same 8 falls out here and the rule
+        # travels to a machine with a different number of cores.
+        thread_budget = max(1, (os.cpu_count() or 1) // (2 * self.threads))
+        return max(0, min(self.workers, job_count, affordable, thread_budget))
 
     def score_many(
         self,
