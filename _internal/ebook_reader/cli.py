@@ -918,18 +918,29 @@ def _command_accept(args: argparse.Namespace) -> CommandResult:
             error="Segment chưa có bản thu nào để nghe",
         )
     present = {value for value in str(row["warning_code"] or "").split("|") if value}
+    was_failed = str(row["status"]) == "failed"
     if code not in present:
         return CommandResult(
             data={"segment": stable_id, "warning": code, "hiện có": sorted(present)},
             exit_code=EXIT_USAGE,
             error="Segment không mang cảnh báo đó",
         )
-    database.accept_segment_audio(
-        segment_stable_id=stable_id,
-        wav_sha256=checksum,
-        warning_code=code,
-        note=str(getattr(args, "note", "") or ""),
-    )
+    if was_failed:
+        # A failed segment needs its status moved as well: a chapter publishes only when
+        # nothing is failed, so suppressing the warning alone would leave it blocked.
+        database.accept_failed_segment_audio(
+            segment_stable_id=stable_id,
+            wav_sha256=checksum,
+            warning_code=code,
+            note=str(getattr(args, "note", "") or ""),
+        )
+    else:
+        database.accept_segment_audio(
+            segment_stable_id=stable_id,
+            wav_sha256=checksum,
+            warning_code=code,
+            note=str(getattr(args, "note", "") or ""),
+        )
     stored = database.accepted_segment_warnings().get((stable_id, checksum), set())
     if code not in stored:
         return CommandResult(
@@ -943,6 +954,7 @@ def _command_accept(args: argparse.Namespace) -> CommandResult:
             "warning": code,
             "wav_sha256": checksum,
             "accepted": True,
+            "was_failed": was_failed,
         },
         exit_code=EXIT_OK,
     )

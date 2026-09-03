@@ -133,3 +133,96 @@ def test_an_acceptance_of_different_audio_does_not_clear_this_one(monkeypatch) -
 
     pipeline.db = _DB()
     assert pipeline._high_quality_blocking_segment_warnings(rows), "a recut must be judged again"
+
+
+def _db_with_segment(tmp_path: Path):
+    """The earlier tests only needed the acceptance table; these need a real row to move."""
+    source = tmp_path / "001.txt"
+    paragraphs = [f"Doan van thu {index} du dai." for index in range(1, 4)]
+    source.write_text((chr(10) + chr(10)).join(paragraphs), encoding="utf-8")
+    _paths, db, settings = create_or_open_project(
+        [source], tmp_path / "out", build_settings(), "Accept failed"
+    )
+    from ebook_reader.text_processing import load_and_segment_chapter
+
+    chapter = db.list_chapters()[0]
+    rows = load_and_segment_chapter(
+        dict(chapter), max_chars=int(settings["tts"]["max_segment_chars"])
+    )
+    db.replace_chapter_segments(int(chapter["id"]), rows)
+    return db
+
+
+def test_a_failed_segment_moves_to_warning_so_its_chapter_can_publish(tmp_path) -> None:
+    """Suppressing the warning is not enough for a segment the machine gave up on.
+
+    chapter_is_publishable requires every segment to be verified or warning and none
+    failed, so a failed row keeps its chapter blocked no matter what a listener says about
+    the warning. It moves to `warning`, never to `verified`: the code stays on the row and
+    the report still shows it, because what happened is that a person overruled the machine,
+    not that the machine changed its mind.
+    """
+    db = _db_with_segment(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET status='failed', warning_code=?, wav_sha256=? WHERE id=("
+            "SELECT id FROM segments LIMIT 1)",
+            ("ASR_LOCKED_NAME_ANCHOR_MISMATCH", "abc123"),
+        )
+        row = conn.execute("SELECT stable_id, chapter_id FROM segments LIMIT 1").fetchone()
+
+    moved = db.accept_failed_segment_audio(
+        segment_stable_id=str(row["stable_id"]),
+        wav_sha256="abc123",
+        warning_code="ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        note="đã nghe, chữ đọc đúng",
+    )
+
+    assert moved is True
+    with db.connect() as conn:
+        after = conn.execute(
+            "SELECT status, warning_code FROM segments WHERE stable_id=?",
+            (str(row["stable_id"]),),
+        ).fetchone()
+    assert after["status"] == "warning"
+    assert "ASR_LOCKED_NAME_ANCHOR_MISMATCH" in str(after["warning_code"])
+
+
+def test_only_a_failed_row_is_moved(tmp_path) -> None:
+    """A verified segment has nothing to overrule."""
+    db = _db_with_segment(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET status='verified', wav_sha256='abc123' WHERE id=("
+            "SELECT id FROM segments LIMIT 1)"
+        )
+        row = conn.execute("SELECT stable_id FROM segments LIMIT 1").fetchone()
+
+    assert (
+        db.accept_failed_segment_audio(
+            segment_stable_id=str(row["stable_id"]),
+            wav_sha256="abc123",
+            warning_code=WARNING,
+        )
+        is False
+    )
+
+
+def test_accepting_audio_the_segment_no_longer_has_is_refused(tmp_path) -> None:
+    """Between listening and accepting, a retry may have re-cut the take. Vouching for a
+    recording nobody heard is exactly what the checksum is here to prevent."""
+    db = _db_with_segment(tmp_path)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET status='failed', warning_code=?, wav_sha256='new' WHERE id=("
+            "SELECT id FROM segments LIMIT 1)",
+            (WARNING,),
+        )
+        row = conn.execute("SELECT stable_id FROM segments LIMIT 1").fetchone()
+
+    with pytest.raises(RuntimeError, match="not the audio"):
+        db.accept_failed_segment_audio(
+            segment_stable_id=str(row["stable_id"]),
+            wav_sha256="old",
+            warning_code=WARNING,
+        )

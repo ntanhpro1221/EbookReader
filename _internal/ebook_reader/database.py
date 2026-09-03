@@ -7918,6 +7918,63 @@ class ProjectDB:
                 (stable_id, checksum, code, str(note), time.time()),
             )
 
+    def accept_failed_segment_audio(
+        self,
+        *,
+        segment_stable_id: str,
+        wav_sha256: str,
+        warning_code: str,
+        note: str = "",
+    ) -> bool:
+        """Take a failed segment at a listener's word and let its chapter publish.
+
+        A chapter publishes only when every segment is verified or warning and none is
+        failed, so suppressing the warning is not enough for a segment the machine gave up
+        on: the status itself has to move. It moves to `warning`, not to `verified` - the
+        code stays on the row and the report still shows it, because what happened is that
+        a person overruled the machine, not that the machine changed its mind.
+
+        This is deliberately narrower than it looks. It only moves a row that is already
+        `failed`, only for a warning code that row actually carries, and only against the
+        checksum of the audio that was heard - so a later `retry` re-cuts the take and the
+        acceptance no longer applies to anything.
+
+        The reason for allowing it at all is what the evidence showed: alpha.32's blocked
+        segments have their Vietnamese transcribed perfectly and only a transliterated
+        English term coming back as letters, faster-whisper hears the same, and five repair
+        rounds changed nothing. Nobody but a listener can settle those, and without this
+        the book never publishes.
+        """
+        stable_id = str(segment_stable_id).strip()
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT id, status, warning_code, wav_sha256 FROM segments WHERE stable_id=?",
+                (stable_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown segment: {stable_id}")
+            if str(row["status"]) != SegmentStatus.FAILED.value:
+                return False
+            if str(row["wav_sha256"] or "").casefold() != str(wav_sha256).strip().casefold():
+                raise RuntimeError("accepted audio is not the audio this segment now has")
+            conn.execute(
+                "UPDATE segments SET status=?, updated_at=? WHERE id=?",
+                (SegmentStatus.WARNING.value, time.time(), int(row["id"])),
+            )
+            chapter = conn.execute(
+                "SELECT chapter_id FROM segments WHERE id=?", (int(row["id"]),)
+            ).fetchone()
+        self.accept_segment_audio(
+            segment_stable_id=stable_id,
+            wav_sha256=wav_sha256,
+            warning_code=warning_code,
+            note=note,
+        )
+        if chapter is not None:
+            with self.transaction() as conn:
+                self._refresh_chapter_counts_conn(conn, int(chapter["chapter_id"]))
+        return True
+
     def accepted_segment_warnings(self) -> dict[tuple[str, str], set[str]]:
         """Warnings a listener has accepted, keyed by (segment, the audio they heard)."""
         accepted: dict[tuple[str, str], set[str]] = {}

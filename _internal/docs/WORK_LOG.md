@@ -552,3 +552,36 @@ không thoả mãn được, mọi lựa chọn "cấp cái gì đó" đều sai
 Test `test_the_plan_never_proposes_what_the_allocator_will_refuse` giờ ghim hợp đồng chứ
 không ghim câu trả lời hiện tại: kế hoạch có thể **từ chối** thoải mái, nhưng nếu nó bảo cấp
 phát thì việc cấp phát ấy phải làm được.
+
+### `accept` với segment `failed`: ranh giới tôi vẽ ban đầu dựa trên một điều sai
+
+Khi dựng `accept` tôi **cố ý** không cho nó chạm segment `failed`, lý do ghi lại là *"một
+segment hỏng vì neo tên có nội dung ngoài tên **cũng** sai, nên chấp nhận nó là bắt người
+nghe gánh những chữ máy không xác minh được"*.
+
+Chính tôi đã bác bỏ lý do ấy sau đó, khi đọc bản ghi thật: phần tiếng Việt được phiên âm
+**hoàn hảo**, chỉ cụm tiếng Anh trong ngoặc ra vô nghĩa. Nhưng ranh giới thì vẫn còn đó.
+
+Bằng chứng đã đủ để dỡ nó:
+
+- Bản đọc **đúng** ở các ca bị chặn (đã kiểm bảng `pronunciations` và bản ghi ASR).
+- **faster-whisper nghe y hệt** — engine tốt hơn không cứu được lớp này.
+- **Năm vòng sửa** mỗi segment, không vòng nào khá hơn.
+- Khiếm khuyết canonical-similarity là thật nhưng **chưa có ràng buộc an toàn** để sửa.
+- `chapter_is_publishable` đòi **không segment nào `failed`**, nên bốn chương của alpha.32
+  bị chặn bởi đúng **một** segment mỗi chương.
+
+Không ai ngoài người nghe phân xử được, và không có lệnh này thì sách **không bao giờ xuất
+bản**.
+
+**Chuyển sang `warning`, không phải `verified`.** Mã cảnh báo ở lại trên hàng và báo cáo vẫn
+hiện nó, vì điều đã xảy ra là **một người phủ quyết cái máy**, không phải cái máy đổi ý.
+
+Hẹp hơn vẻ ngoài của nó: chỉ chuyển hàng đang `failed`, chỉ với mã cảnh báo hàng ấy **thật
+sự mang**, và chỉ khi checksum khớp bản thu đang có — nên một lần `retry` thu lại là quyết
+định cũ hết hiệu lực. Giữa lúc nghe và lúc chấp nhận có thể đã có một lần thu lại; checksum
+ở đó đúng để chặn việc bảo lãnh cho một bản ghi không ai nghe.
+
+**Năm cánh cổng, cùng một hình dạng:** `pronounce` (cách đọc), `cast` (giới tính),
+`accept` (bản thu nghe được), `retry` (bản thu đáng thu lại), và giờ `accept` cho cả bản thu
+mà máy đã bó tay.
