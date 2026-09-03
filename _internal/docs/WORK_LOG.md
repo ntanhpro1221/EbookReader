@@ -439,3 +439,48 @@ tính toán — tôi không lường trước.
 **Hệ quả cho việc đổi sang faster-whisper:** nó sửa `asr.py` *và* đổi tập phụ thuộc, nên
 đằng nào cũng làm hết hiệu lực toàn bộ QA. Làm trên một project sạch, đúng như
 `docs/DEPENDENCIES.md` vẫn nói.
+
+### Lần chết thứ ba của alpha.32, cùng một họ: hai vòng sửa chữa dùng chung một sổ
+
+```
+RuntimeError: stored candidate repair budget differs from the active repair context
+```
+
+Cùng vòng lặp `_repair_chapter_perceptual_candidates`, cùng lời gọi
+`segment_candidate_resume_plan`, khác bất biến.
+
+**Gốc:** hai vòng sửa chữa lấy ngân sách từ hai nơi và ghi vào **một sổ candidate**:
+
+| vòng | ngân sách | candidate đã ghi |
+|---|---|---|
+| ASR (`pipeline.py:4563`) | `asr.repair_rounds` = **5** | 545 candidate `standard_candidate_gate_v1` |
+| cảm thụ (`pipeline.py:1745`) | `perceptual_qa.repair_rounds` = **2** | 39 candidate `naturalness_improvement_v1` |
+
+Và bảng có `UNIQUE(segment_id, policy_hash, repair_round)` — nghĩa là **hai đường dùng chung
+một không gian số vòng**, nên mỗi segment chỉ thuộc về một đường. Đo trên dữ liệu thật:
+**0 trên 122 segment mang cả hai loại candidate.** Thiết kế nhất quán.
+
+Vì thế bất biến "mọi vòng của một segment phải cùng một ngân sách" **đúng**. Cái sai là
+**người gọi tự nhận một ngân sách không phải của mình**: vòng cảm thụ áp con số 2 của nó lên
+segment mà đường sửa đã thuộc về ASR với ngân sách 5.
+
+**Sửa ở người gọi:** ngân sách chỉ là của vòng này khi segment **chưa có candidate nào**.
+Có rồi thì các vòng của chính segment ấy quyết định. Một segment đã tiêu hết vòng cho ASR
+thì lập kế hoạch ra **`exhausted`** — câu trả lời thành thật, thay vì một cú ném.
+
+Kiểm trên chính DB của alpha.32: **45/45 segment lập kế hoạch được, 0 ca còn ném.**
+
+### Ba lần chết, một hình dạng
+
+| lần | bất biến ném | gốc |
+|---|---|---|
+| alpha.23 | `must bind its exact trigger check id` | vòng ASR không đọc plan |
+| alpha.32 (1) | `must bind its exact trigger check id` | bất biến cấp phát bị gọi trên **đường đọc** |
+| alpha.32 (2) | `stored candidate repair budget differs` | người gọi áp ngân sách **không phải của mình** |
+
+Cả ba: **hai vòng sửa chữa chia nhau một sổ candidate, và một bất biến viết cho sổ đơn loại
+bị áp lên tình huống hai loại.** Bất biến đúng cả ba lần; chỗ áp nó thì sai cả ba lần.
+
+Điều đáng ghi cho người sau: khi thấy một bất biến ném trong `segment_candidate_resume_plan`,
+câu hỏi đầu tiên không phải "bất biến này có quá nghiêm không" mà **"vòng nào đang hỏi, và
+segment này thuộc về vòng nào"**.

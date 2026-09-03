@@ -13496,3 +13496,45 @@ def test_a_review_already_outstanding_still_refuses_a_standard_candidate(
             wav_path=tmp_path / "candidates" / "r0.wav",
             candidates_root=tmp_path / "candidates",
         )
+
+
+def test_a_segments_own_rounds_decide_its_budget_once_it_has_any(tmp_path: Path) -> None:
+    """The crash that ended alpha.32 a second time.
+
+    segment_candidates is UNIQUE(segment_id, policy_hash, repair_round), so the ASR repair
+    track and the naturalness repair track share one round-number space and a segment
+    belongs to whichever claimed it first. Its rounds therefore carry that track's budget -
+    asr.repair_rounds is 5 in this project, perceptual_qa.repair_rounds is 2 - and the
+    perceptual loop asserted its own 2 over segments the ASR loop had already claimed with
+    5, raising "stored candidate repair budget differs from the active repair context".
+
+    The invariant is right: rounds of one segment must agree on a budget. What was wrong is
+    a caller claiming a budget it does not own. Passing None reads the stored one, and a
+    segment that spent its rounds elsewhere plans "exhausted" instead of crashing.
+    """
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=5,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=301,
+        wav_path=tmp_path / "candidates" / "r0.wav",
+        candidates_root=tmp_path / "candidates",
+    )
+
+    # A caller that does not claim a budget inherits the segment's own.
+    plan = db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", None)
+    assert plan["action"] in {"generate", "allocate", "exhausted"}
+
+    # And the invariant still refuses a caller that claims a different one.
+    with pytest.raises(RuntimeError, match="repair budget differs"):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", 2)
+
+
+def test_the_first_allocation_still_has_to_name_a_budget(tmp_path: Path) -> None:
+    """Reading a stored budget only works once something is stored."""
+    db, segment_id, _incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    with pytest.raises(ValueError, match="repair budget is required"):
+        db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", None)
