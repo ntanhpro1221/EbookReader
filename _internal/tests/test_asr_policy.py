@@ -253,8 +253,12 @@ def test_vocalization_verification_does_not_blame_tts_for_whisper_hallucination(
 
 
 def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
+    # Three seconds, not one: the primary decode only asks for beam search above
+    # BEAM_MINIMUM_SECONDS now, and this test is about resampling rather than about which
+    # decode a one-second file gets. See test_beam_only_where_it_helps.py for that.
     sample_rate = 48_000
-    timeline = np.arange(sample_rate, dtype=np.float32) / sample_rate
+    seconds = 3
+    timeline = np.arange(sample_rate * seconds, dtype=np.float32) / sample_rate
     source = 0.1 * np.sin(2 * np.pi * 220 * timeline)
     wav = tmp_path / "speech.wav"
     sf.write(wav, source, sample_rate)
@@ -275,7 +279,7 @@ def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
     assert isinstance(received["audio"], np.ndarray)
     assert received["audio"].dtype == np.float32
     assert received["audio"].ndim == 1
-    assert abs(len(received["audio"]) - 16_000) <= 1
+    assert abs(len(received["audio"]) - 16_000 * seconds) <= 1
     assert received["kwargs"]["fp16"] is False
     assert received["kwargs"]["beam_size"] == build_settings()["asr"]["beam_size"]
 

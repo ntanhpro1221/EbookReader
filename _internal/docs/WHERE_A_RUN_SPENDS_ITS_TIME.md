@@ -69,3 +69,44 @@ không trả về.
 Cách đo lại: `scratchpad/asr_vs_qa.py`. Lưu ý: check theo segment để `chapter_id` NULL và chỉ
 ghi `segment_id`, nên phải nối qua bảng `segments`; và `created_at` là **float unix**, không
 phải chuỗi ISO như tên cột gợi ý.
+
+## Beam search: đo rồi, và nó không chỉ đắt - ở câu ngắn nó còn sai (2026-09-03)
+
+Lượt giải mã chính dùng `beam_size = 5`; lượt xác nhận dùng greedy. Câu hỏi đặt ra không
+phải "greedy nhanh hơn bao nhiêu" (hiển nhiên là nhanh hơn) mà **"hai lối có bất đồng về
+bản thu nào chấp nhận được không"** - vì một lượt giải mã cho lọt bản tồi hoặc đánh trượt
+bản tốt sẽ tốn một lần thu lại, xoá sạch phần tiết kiệm gấp nhiều lần.
+
+Đo bằng `scripts/measure_beam_vs_greedy.py` trên chính WAV của alpha.25, cùng văn bản mong
+đợi, qua đúng `verify()` mà pipeline dùng.
+
+### 160 bản thu mọi độ dài
+
+beam chậm hơn **1,84 lần** (0,92s so với 0,50s mỗi segment). Bất đồng đỗ/trượt 3/160.
+
+| văn bản mong đợi | beam | greedy | ai đúng |
+|---|---|---|---|
+| "Hờ." | *"Hãy subscribe cho kênh Để không bỏ lỡ những video hấp dẫn"* | "Họ" | greedy |
+| "tôi" | "Đôi." | "Tôi..." | greedy |
+| câu dài về Rồng | nghe ra "rồng" | nghe ra "dòng" | **beam** |
+
+### 120 bản thu ngắn hơn 2,5 giây
+
+beam chậm hơn **1,47 lần**. Bảy bất đồng verdict, ba lần lật đỗ/trượt - **cả ba đều nghiêng
+về greedy, không một ca nào beam thắng.** Thêm một ca nữa: tiếng thở dài "Haaa." được beam
+đọc thành "Ah yeah.".
+
+### Cơ chế, không phải trùng hợp
+
+Beam mang nhiều giả thuyết rồi giữ chuỗi xác suất cao nhất. Với audio ít nội dung, **chuỗi
+xác suất cao nhất là câu mẫu** - và câu mẫu của Whisper là câu mẫu YouTube. Đây là chế độ
+hỏng đã được biết đến của Whisper, và phép đo tái hiện nó đúng như dự đoán.
+
+### Đã làm
+
+`beam_minimum_seconds = 2.5`: lượt chính dùng beam khi bản thu dài hơn ngưỡng, dùng greedy
+khi ngắn hơn. Giữ tìm kiếm ở nơi có nội dung nuôi nó, bỏ ở nơi nó tự bịa nội dung. Nhanh
+hơn là lý do nhỏ hơn; **đúng hơn mới là lý do chính**.
+
+Lượt xác nhận vẫn greedy ở mọi độ dài - nó tồn tại để đưa ra một ý kiến *khác*, không phải
+một ý kiến *dài hơn*.
