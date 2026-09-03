@@ -34,6 +34,10 @@ WHISPER_TIMELINE_ABSOLUTE_MARGIN_SECONDS = 1.0
 WHISPER_TIMELINE_DURATION_FACTOR = 2.0
 SHORT_CONTEXT_MAX_WORDS = 5
 SHORT_CONTEXT_GAP_SECONDS = 0.50
+# Where beam search stops helping and starts inventing. Measured, not chosen: see
+# WhisperVerifier._beam_minimum_seconds.
+BEAM_MINIMUM_SECONDS = 2.5
+
 ASR_PASS = "pass"
 ASR_MISMATCH = "mismatch"
 ASR_INCONCLUSIVE = "inconclusive"
@@ -1238,7 +1242,7 @@ class WhisperVerifier:
             "condition_on_previous_text": False,
             "verbose": False,
         }
-        if not confirmation:
+        if not confirmation and duration_seconds > self._beam_minimum_seconds():
             decode_options["beam_size"] = int(self.settings.get("beam_size", 5))
         result = self.model.transcribe(audio, **decode_options)
         raw_segments = result.get("segments", [])
@@ -1248,6 +1252,25 @@ class WhisperVerifier:
             duration_seconds,
         )
         return str(result.get("text", "")).strip()
+
+    def _beam_minimum_seconds(self) -> float:
+        """Below this, the primary decode is greedy too.
+
+        Beam search carries several hypotheses and keeps the most likely sequence, and on
+        audio with little content in it the most likely sequence is boilerplate. Measured
+        on 120 of alpha.25's takes shorter than 2.5 seconds, beam and greedy disagreed
+        about seven of them and flipped the verdict on three - every one of the three in
+        greedy's favour, with beam answering a two-syllable "Hờ." with "Hãy subscribe cho
+        kênh Để không bỏ lỡ những video hấp dẫn", a sigh with "Ah yeah.", and "tôi" with
+        "Đôi.". Not one short take came out better under beam.
+
+        On longer audio it earns its keep: over 160 takes of every length the only
+        disagreement that favoured beam was a full sentence, where it heard "rồng" where
+        greedy heard "dòng". So the search is kept where content supports it and dropped
+        where it invents content instead - which is 1.47x faster on those takes as well,
+        though that is the smaller reason.
+        """
+        return float(self.settings.get("beam_minimum_seconds", BEAM_MINIMUM_SECONDS))
 
     def transcribe(self, path: Path, *, confirmation: bool = False) -> str:
         audio = load_audio_for_whisper(path)

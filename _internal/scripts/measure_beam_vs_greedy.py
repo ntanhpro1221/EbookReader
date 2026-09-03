@@ -14,7 +14,10 @@ stopwatch alone.
 Reads a finished run; writes nothing to it. Needs the GPU free, so run it when no book job
 is going.
 
-    python scripts/measure_beam_vs_greedy.py <finished_project_root> [sample]
+    python scripts/measure_beam_vs_greedy.py <finished_project_root> [sample] [max_seconds]
+
+A third argument keeps only takes shorter than that many seconds, which is where the two
+decodes were measured to differ.
 """
 from __future__ import annotations
 
@@ -77,11 +80,20 @@ def main(project_root: str, sample: int) -> int:
     connection.row_factory = sqlite3.Row
     # Segments whose audio survived, spread across the book rather than taken from one
     # chapter: decode difficulty tracks the writing, and one chapter is one style.
+    # A third argument narrows the sample to short takes. That is where the two decodes
+    # were seen to differ: beam favours high-likelihood generic sequences, and on audio
+    # with little content in it the most likely generic sequence is boilerplate - it
+    # answered a two-syllable "Hờ." with "Hãy subscribe cho kênh...".
+    duration_ceiling = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
+    duration_clause = "AND wav_duration <= ?" if duration_ceiling > 0 else ""
+    parameters = ((duration_ceiling, sample) if duration_ceiling > 0 else (sample,))
     rows = connection.execute(
         "SELECT * FROM segments WHERE wav_path IS NOT NULL AND status != 'failed' "
-        "ORDER BY (id * 2654435761) % 1000003 LIMIT ?",
-        (sample,),
+        f"{duration_clause} ORDER BY (id * 2654435761) % 1000003 LIMIT ?",
+        parameters,
     ).fetchall()
+    if duration_ceiling > 0:
+        print(f"chỉ lấy bản thu ngắn hơn {duration_ceiling:.1f}s")
     connection.close()
     if not rows:
         print("không có segment nào có WAV")
@@ -165,9 +177,9 @@ def main(project_root: str, sample: int) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (2, 3):
+    if len(sys.argv) not in (2, 3, 4):
         print(__doc__)
         raise SystemExit(2)
     raise SystemExit(
-        main(sys.argv[1], int(sys.argv[2]) if len(sys.argv) == 3 else DEFAULT_SAMPLE)
+        main(sys.argv[1], int(sys.argv[2]) if len(sys.argv) >= 3 else DEFAULT_SAMPLE)
     )
