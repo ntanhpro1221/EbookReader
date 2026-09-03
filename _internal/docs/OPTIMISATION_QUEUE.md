@@ -24,7 +24,7 @@ mới nên làm trước:
 | mục | lấy lại | file phải sửa | hình dạng thay đổi |
 |---|---|---|---|
 | 3. hạ `num_ctx` | ~639s pha phân tích | `config.py` | **một hằng số** |
-| 4. `tts.max_retries` 4→10 | chất lượng: cứu 2 segment | `config.py` | **một hằng số** |
+| 4. `tts.max_retries` 4→10 | chất lượng: cứu 2 segment | `config.py` | một hằng số — **nhưng xem cái bẫy sentinel ở mục 4** |
 | 1. pool vòng candidate | ~905s | `pipeline.py` | thêm một đường prefetch |
 | 2. Whisper thường trú | ~230s | `pipeline.py`, `asr.py` | đổi vòng đời model |
 
@@ -137,6 +137,33 @@ xác suất 88% và 73%. Giá: cả sách chỉ 3 segment chạm ngân sách, n�
 Segment thứ ba (`C » B » A » S » SS » SSS`) ngoài tầm với ở mọi ngân sách và **không được
 nới cận dưới vì nó** — 807 segment đã nhận, không cái nào dưới 12.5. Chi tiết:
 `docs/PACE_METRIC.md`.
+
+### Cái bẫy: `max_retries` không chỉ là số lần thử, nó còn là một **sentinel**
+
+Đổi một hằng số nghe như việc an toàn nhất hàng đợi. Nó không hẳn thế. `max_retries` được
+đọc ở **ba** chỗ, và một chỗ dùng nó làm **giá trị đánh dấu**:
+
+    pipeline.py:3086   tts_attempt = max_retries if force_clause_split else 0
+    pipeline.py:3362   if current_attempt > retries: raise ...
+    pipeline.py:3366   for attempt in range(current_attempt, retries)
+
+Candidate thường có `tts_attempt = 0` → `range(0, 4)` → 4 lần thử. Candidate **clause-split
+ép buộc** được ghi với `tts_attempt = max_retries` → `range(4, 4)` → **cố ý không có lần thử
+nào**. Nói cách khác, "không thử lại" được mã hoá *bằng chính con số* `max_retries`.
+
+Nâng 4 → 10 thì những hàng đã ghi với `tts_attempt = 4` tính ra `range(4, 10)` = **6 lần
+thử trên một candidate lẽ ra không có lần nào**. Trong alpha.32 có **85 hàng như vậy**
+(phân bố `tts_attempt`: 0→786, 1→10, 2→2, **4→85**).
+
+**Phạm vi của nguy cơ:** chỉ cắn khi **resume một project đã có** sau khi đổi hằng số.
+Project mới thì không sao - sentinel mới là 10 và `range(10, 10)` vẫn rỗng. Nhưng đổi
+`config.py` chính là thứ vô hiệu hoá bằng chứng QA và buộc xác minh lại *có resume*, nên
+đây không phải tình huống hiếm.
+
+**Cách làm đúng:** hoặc chỉ áp cho project mới (mỗi phiên bản alpha vốn đã là một project
+riêng), hoặc tách sentinel ra khỏi hằng số trước — nó không nên là `max_retries` ngay từ
+đầu. Cái sau mới là sửa thật, và nó chạm `pipeline.py`, nên **mục 4 không còn là "đổi một
+hằng số" nữa** khi có project cần resume.
 
 ## 5. Ngưỡng perceptual theo sigma thay vì theo số tuyệt đối — bớt một nửa việc nghe
 
