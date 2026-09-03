@@ -403,3 +403,39 @@ mới và có docstring giải thích lần chạy nào đã chết vì nó.
 
 Bài học: một test không có docstring không phải một quyết định, nó chỉ là một hành vi đã
 được đóng băng. Nhưng cũng đừng phá nó trước khi hiểu nó canh cái gì.
+
+### "File an toàn" là sai: có hai loại vân tay, và loại thứ hai tốn cả pha QA âm thanh
+
+Tôi đã ghi trong quy tắc làm việc rằng `asr.py`, `pipeline.py`, `database.py`,
+`perceptual_qa.py`, `cli.py`, `scripts/` là **an toàn** khi sửa trong lúc lần chạy đang bay.
+Sai một nửa, và alpha.32 vừa cho thấy nửa sai.
+
+Sau khi `retry` 6 segment rồi `resume` với các bản sửa (`database.py`, `asr.py`), số đếm
+segment nhảy từ `verified: 596, warning: 34, failed: 6` sang `verified: 8,
+signal_passed: 747`. Không phải `retry` làm — nó chỉ reset đúng 6.
+
+Kiểm tra `quality_checks`: policy cũ `e3d2957a…` có **3.415** check, policy mới
+`a120f719…` có **33**. Toàn bộ bằng chứng QA âm thanh mang policy hash cũ nên **hết hiệu
+lực**, và pipeline phải chạy lại ASR + cảm thụ cho 747 segment.
+
+Vì `QUALITY_IMPLEMENTATION_FILES` chứa: `analysis.py`, `asr.py`, `asr_contract.py`,
+`audio_io.py`, `audio_transform_contract.py`, `character_registry.py`, **`config.py`**,
+**`database.py`**, `expression.py`, `models.py`, **`pipeline.py`**, **`perceptual_qa.py`**,
+`perceptual_contract.py`, `quality_policy.py`, `recovery.py`, `runtime_contract.py`,
+**`text_processing.py`**, `tts.py` …
+
+**Hai loại vân tay, hai cái giá khác nhau:**
+
+| nhóm file | hậu quả khi sửa rồi resume |
+|---|---|
+| `ANALYSIS_CASTING_IMPLEMENTATION_FILES`<br>(`analysis.py`, `character_registry.py`, `models.py`, `voice_catalog.py`) | **Chặn resume.** Mất cả pha phân tích (~1 giờ) và phải tạo project sạch. |
+| `QUALITY_IMPLEMENTATION_FILES`<br>(gần như mọi file còn lại, gồm `asr.py`, `pipeline.py`, `database.py`, `config.py`, `text_processing.py`, `perceptual_qa.py`) | Resume chạy được, **nhưng mọi bằng chứng QA âm thanh hết hiệu lực.** WAV còn nguyên (segment về `signal_passed`), phải chạy lại ASR + cảm thụ cho toàn bộ sách (~30–40 phút với 948 segment). |
+| Chỉ `cli.py`, `scripts/`, `tests/`, `docs/` | Thật sự không tốn gì. |
+
+Với alpha.32 thì cái giá ấy **đáng trả**: lần chạy lại xác minh bằng cả bản sửa gộp số lẫn
+bản sửa planning-not-allocating, tức đúng hai thứ đang chặn nó. Nhưng đó là may, không phải
+tính toán — tôi không lường trước.
+
+**Hệ quả cho việc đổi sang faster-whisper:** nó sửa `asr.py` *và* đổi tập phụ thuộc, nên
+đằng nào cũng làm hết hiệu lực toàn bộ QA. Làm trên một project sạch, đúng như
+`docs/DEPENDENCIES.md` vẫn nói.
