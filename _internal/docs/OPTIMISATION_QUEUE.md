@@ -21,14 +21,17 @@ song song của pool (3 tiến trình), tức 4.707s → ~1.600-2.400s.
 
 Chi tiết và cảnh báo về cách quy thời gian: `docs/THROUGHPUT.md`.
 
-## 2. Giữ Whisper thường trú **trong vòng sửa** — ~1.400s, miễn phí
+## 2. Giữ Whisper thường trú **trong vòng sửa** — ~230s (đã hạ từ ~1.400s)
 
-Whisper được nạp **189 lần** mỗi lần chạy, trung vị 7,15s, tổng 1.502s = 9,6% công việc.
+**Đo lại sau khi đổi engine thì mục này nhỏ đi sáu lần.** Whisper vẫn được nạp **189
+lần** mỗi lần chạy, nhưng openai-whisper mất 7,15s mỗi lần (1.502s = 9,6% công việc) còn
+faster-whisper chỉ mất **1,31s** (~248s = 1,6%). alpha.43 đang chạy engine mới, nên nền để
+tính là 1,6% chứ không phải 9,6%.
 129 lần rơi vào lúc vào pha kiểm candidate: vòng sửa xen kẽ TTS và ASR, hai model đá nhau
 ra khỏi VRAM mỗi vòng — 7 giây nạp cho 5 giây việc.
 
-**Phạm vi là thứ làm mục này đúng.** Trong vòng sửa, VRAM đỉnh chỉ 2.719 MiB nên 1,5 GB của
-Whisper là miễn phí. Ngoài vòng sửa thì không: 1,5 GB ấy lấy mất một tiến trình pool ở pha
+**Phạm vi vẫn là thứ làm mục này đúng, và giờ nó còn phải rẻ nữa.** Trong vòng sửa, VRAM
+đỉnh chỉ 2.719 MiB nên 1,5 GB của Whisper là miễn phí. Ngoài vòng sửa thì không: 1,5 GB ấy lấy mất một tiến trình pool ở pha
 tổng hợp chính (2.658s ở 3 tiến trình → ~3.987s ở 2), gần đúng bằng phần tiết kiệm. **Và
 nếu mục 1 đã làm xong thì đánh đổi ấy còn tệ hơn** — pool càng quan trọng thì càng không
 được lấy VRAM của nó.

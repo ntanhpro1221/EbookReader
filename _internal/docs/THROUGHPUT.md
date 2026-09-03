@@ -362,3 +362,25 @@ trú ngoài nó.**
 
 Giữ model ASR sống qua các vòng của một chương thay vì nạp lại mỗi vòng. Đo lại bằng chính
 cách đếm trên: số lần nạp mỗi lần chạy.
+
+### Đính chính: đổi engine đã xử lý phần lớn chuyện nạp lại
+
+Đo lại đúng cách ấy trên alpha.43, lần chạy dùng `asr.engine = faster`:
+
+| | mỗi lần nạp (trung vị) | 189 lần | trên ~15.600s |
+|---|---|---|---|
+| alpha.32 — openai-whisper | 7,15s | 1.502s | **9,6%** |
+| alpha.43 — faster-whisper | **1,31s** | ~248s | **1,6%** |
+
+CTranslate2 nạp nhanh hơn PyTorch khoảng 5,5 lần, nên **giá trị của mục "giữ Whisper thường
+trú" tụt từ ~1.400s xuống ~230s**. Vẫn dương, nhưng nhỏ hơn nhiều và không còn đáng đứng
+trên mục nào khác. Việc đổi engine — làm vì tốc độ giải mã — đã sửa gần hết một vấn đề khác
+mà tôi đang định sửa riêng.
+
+(Mẫu của alpha.43 còn nhỏ: 13 lần nạp trong 18 phút. Nhưng 7,15 so với 1,31 không phải
+nhiễu, và cả hai đo bằng cùng một cách: khoảng cách từ dòng "Nạp" tới dòng log kế tiếp.)
+
+Bài học đáng giữ hơn con số: **tôi suýt ship một thay đổi tin là đáng 1.400s trong khi nó
+đáng 230s**, vì đo nó trên một lần chạy dùng engine cũ rồi xếp hàng nó cho tương lai dùng
+engine mới. Khi một thay đổi khác đang bay, hãy đo lại nền trên chính lần chạy ấy trước khi
+xếp thứ tự.
