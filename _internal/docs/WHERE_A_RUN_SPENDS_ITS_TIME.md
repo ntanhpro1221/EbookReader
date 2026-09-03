@@ -480,3 +480,58 @@ trùng hợp ở n=3.
 **Đừng nới cổng vì chúng.** Nếu muốn cứu, hướng đúng là cho thêm lượt thu hoặc đổi seed cho
 đúng những segment quá ngắn để chia — chứ không phải hạ một ngưỡng mà 1.617 bản thu khác
 đều vượt qua thoải mái.
+
+### Ràng buộc suy ra từ đại số chi phí: tính giá theo bề rộng (đo xong, CHƯA ship)
+
+Bảng chi phí của DP, tối thiểu hoá theo thứ tự từ điển:
+
+| phép | chi phí |
+|---|---|
+| `match_anchor` | **(0, 0, −1, 0)** |
+| `substitute_anchor` | (1, 0, 0, 0) |
+| `insert_transcript` / `delete_*` | (1, 0, 0, 1) |
+| `match_token` | (0, −1, 0, 0) |
+
+Khớp neo luôn thắng thế ở thành phần đầu, **nếu** bề rộng thay thế cố định ở 1. Nới nó với
+giá phẳng `(1,0,0,0)` phá điều đó: hút ba token với giá 1 có thể làm cả đường rẻ hơn là
+khớp neo rồi trả riêng cho các chữ đọc sai — đúng cách ca chốt mất lần khớp của nó.
+
+**Ràng buộc:** thay thế w token thì tốn `(w, 0, 0, 0)`. Suy ra từ chính bảng trên, không
+phải đoán. Hút thêm token không bao giờ rẻ hơn gióng hàng chúng; còn một cái tên thật sự bị
+nghe thành nhiều token thì tốn đúng bằng "thay-một cộng chèn", nhưng ghi điểm tốt hơn ở
+thành phần thứ tư.
+
+Đo bằng `scripts/replay_anchor_alignment.py` với bản vá tại chỗ (`scratchpad/try_width.py`,
+không đụng `asr.py` vì alpha.43 đang chạy):
+
+| | review_eligible | fail | chốt |
+|---|---:|---:|---|
+| hiện tại | 20 | **4** | giữ |
+| tính giá theo bề rộng | 23 | **1** | **giữ** |
+
+Chốt giữ nguyên: neo vẫn khớp chính xác, verdict vẫn `mismatch`, không promoted.
+
+### Nhưng một ca đổi chiều, và tôi chưa chắc chiều nào đúng
+
+Trên mẫu gộp hai cuốn, ca duy nhất còn hỏng là `c00007_s0000074` (Juliana), còn
+`c00010_s0000016` **chuyển thành review_eligible ở canonical sim 0,947**:
+
+```
+mong đợi : Tai Ương Bình Minh (Đon Xờ-cớt).
+nghe ra  : Tài hương bình mình đon sờ cướp.
+```
+
+Trước đây tôi xếp ca này vào loại "tiếng Việt **cũng** nghe sai, hỏng đúng, không bản sửa
+gióng hàng nào nên cứu". Nhìn kỹ thì "Tai Ương Bình Minh" → "Tài hương bình mình" **chủ yếu
+là khác thanh điệu**, mà `_tone_folded_words` **cố ý bỏ qua thanh điệu** vì "một khác biệt
+thanh điệu ở các chữ quanh một cái tên không nói gì về chất lượng bản thu". Theo chính luật
+ấy thì cho nó qua có thể **đúng**.
+
+Tôi không phân xử được bằng phép đo: câu hỏi "Tài hương bình mình có phải một bản đọc chấp
+nhận được của Tai Ương Bình Minh không" cần một đôi tai. Đó cũng chính là thứ lệnh `accept`
+tồn tại để trả lời.
+
+**Chưa ship.** `asr.py` nằm trong `QUALITY_IMPLEMENTATION_FILES` và alpha.43 đang chạy phép
+đo faster-whisper; sửa nó bây giờ là hỏng đúng lần chạy ấy, đúng sai lầm đã mắc với alpha.32.
+Ràng buộc và số đo đã ghi ở đây; merge sau khi alpha.43 xong, và nghe `c00010_s0000016`
+trước khi quyết.
