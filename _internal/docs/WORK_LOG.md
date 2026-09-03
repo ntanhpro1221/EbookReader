@@ -217,3 +217,31 @@ Thiếu RAM do chương trình khác giờ là **chờ có giới hạn** (30 ph
 Chờ được là vì tới lúc đó mọi thứ tiến trình này giữ đã nhả hết - máy thuộc về ai cần nó.
 Mỗi vòng thăm dò vẫn hỏi stop/pause, thiếu đĩa hay quá nhiệt thì không chờ, và hết giờ thì
 dừng đúng như cũ.
+
+### Bài học: đo hằng số mà thay đổi của mình dựa vào, trước khi ship thay đổi ấy
+
+Phần chồng lấn "chấm cảm thụ cạnh ASR" dựa hoàn toàn vào `PERCEPTUAL_WORKER_RAM_GB` để
+quyết định cấp mấy worker. Tôi ship nó mà không đo hằng số đó. Hằng số ghi 1,0 GB; thật ra
+một worker tốn 1,76 GB (biên) và đỉnh RSS 2,18 GB.
+
+Chuỗi hậu quả:
+
+1. alpha.28 khởi động với phần chồng lấn và hằng số sai.
+2. Đo ra hằng số sai ở nhịp sau. Với 7,3 GB trống, pool cấp 5 worker ≈ 8,8 GB. Ở pha ASR,
+   Whisper chiếm ~2,5 GB, còn ~4,5 GB, pool cấp 2 worker ≈ 3,5 GB, để lại ~1,0 GB - **ngay
+   dưới ngưỡng tới hạn 1,5 GB**. Đúng cách alpha.26 chết.
+3. Phải khởi động lại alpha.28 để lấy bản sửa. Tiến trình Python đang chạy không đọc lại
+   mã nguồn đã đổi.
+4. `_validate_resume_stage_fingerprints` **chặn resume**: `analysis.py` và `models.py` đều
+   nằm trong `ANALYSIS_CASTING_IMPLEMENTATION_FILES`, mà tôi đã sửa cả hai. Chặn đúng - trộn
+   kết quả phân tích của hai phiên bản code là đúng thứ bất biến ấy tồn tại để cấm.
+5. Mất 886/948 segment đã phân tích.
+
+**Bài học thật không phải "đừng sửa code khi đang chạy"** - điều đó đã có trong quy tắc và
+tôi vẫn giữ (chỉ sửa cây dev). Bài học là: **một thay đổi phụ thuộc vào hằng số nào thì
+phải đo hằng số ấy trước khi ship.** Đo mất bốn phút; không đo mất một tiếng phân tích và
+suýt mất cả lần chạy.
+
+Ghi chú phụ: `models.py` chứa cả model dữ liệu phân tích lẫn `ResourceSnapshot`, nên một
+thay đổi thuần về giám sát tài nguyên cũng làm hỏng vân tay resume của phân tích. Ghép cặp
+này hơi rộng, nhưng tách `models.py` là một cuộc tái cấu trúc có rủi ro riêng; ghi lại là đủ.
