@@ -120,11 +120,23 @@ def main(project_root: str, sample: int) -> int:
     print(f"    với bản thu trung vị {median_duration:.1f}s: phí cố định chiếm {fixed_share:.0%}")
 
     print()
-    if fixed_share > 0.5:
+    # Three readings, not two. The first version of this script asked `fixed_share > 0.5`
+    # and printed "cost scales with audio length" for a measured 46% - a near-even split
+    # read as one of its two extremes. A verdict that rounds 46 to zero is worse than no
+    # verdict, so the middle band now says what it actually is.
+    if fixed_share > 0.65:
         print(
             "Phần lớn chi phí là phí cố định mỗi lượt gọi, không phải xử lý âm thanh. Lần "
-            "chạy đang trả tiền cho việc có 948 segment chứ không phải cho số giây tiếng "
-            "nói - nên hướng đúng là gọi ít lần hơn, không phải gọi nhanh hơn."
+            "chạy đang trả tiền cho việc có bao nhiêu segment chứ không phải cho số giây "
+            "tiếng nói - nên hướng đúng là gọi ít lần hơn, không phải gọi nhanh hơn."
+        )
+    elif fixed_share >= 0.35:
+        print(
+            f"Chi phí chia gần đôi: {fixed_share:.0%} cố định mỗi lượt, {1 - fixed_share:.0%} "
+            "theo độ dài. Không có đòn bẩy nào một mình giải quyết được - và đây chính là "
+            "lý do gộp lô chỉ được 1,11 lần: nó bỏ bớt một phần phí gọi mà không đụng tới "
+            "nửa còn lại. Gói nhiều segment vào một cửa sổ mới chạm được phần cố định, "
+            "nhưng nó trộn ranh giới bản ghi nên phải đo lợi ích thật trước."
         )
     else:
         print(
