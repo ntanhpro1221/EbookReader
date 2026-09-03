@@ -109,18 +109,29 @@ def main(argument: str) -> int:
         if load_seconds:
             print(f"    nạp model         : {load_seconds:,.0f}s ({load_seconds / total_seconds:.0%})")
 
-    if context and largest_pair * 2 < context:
+    if context:
+        # What the profile is entitled to ask for, not what these requests happened to use.
+        # A window merely larger than the observed traffic is not safe: the output budget is
+        # min(512 + segments * 192, num_ctx // 2, 6144), so halving the window can quietly
+        # halve the answer, and the batch that finally needs the room may not have run yet.
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from ebook_reader.config import analysis_context_window, build_settings
+
+        analysis = build_settings("high_quality")["analysis"]
+        entitled = analysis_context_window(analysis)
         # The KV cache of qwen3:8b is about 36 * 2 * 8 * 128 * num_ctx * 2 bytes.
         per_token_bytes = 36 * 2 * 8 * 128 * 2
-        for candidate in (4096, 8192):
-            if candidate <= context and largest_pair < candidate * 0.8:
-                freed = (context - candidate) * per_token_bytes / 1e9
-                print()
-                print(
-                    f"  num_ctx {candidate:,} vẫn thừa chỗ cho yêu cầu lớn nhất "
-                    f"({largest_pair:,.0f} tok) và trả lại ~{freed:.2f} GB VRAM."
-                )
-                break
+        print()
+        print(f"  hồ sơ high_quality được quyền yêu cầu: num_ctx {entitled:,}")
+        if entitled < context:
+            freed = (context - entitled) * per_token_bytes / 1e9
+            print(f"  lần chạy này đặt {context:,}, thừa ~{freed:.2f} GB VRAM.")
+        if largest_pair > entitled * 0.8:
+            print(
+                f"  CẢNH BÁO: yêu cầu lớn nhất {largest_pair:,.0f} tok đã dùng "
+                f"{largest_pair / entitled:.0%} khung suy ra - phần dự phòng cho prompt "
+                "trong analysis_context_window đang quá hẹp."
+            )
     return 0
 
 

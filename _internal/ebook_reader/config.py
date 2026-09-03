@@ -293,6 +293,48 @@ def normalize_legacy_locked_settings(settings: dict[str, Any]) -> dict[str, Any]
     return effective
 
 
+# The analysis prompt is a fixed instruction block plus a JSON schema plus the segments
+# themselves, and only the last part varies with the batch. Anchored on measurement: a
+# five-segment batch carrying 390 characters of text came back at 1,693 prompt tokens, and
+# a larger one at 2,481, so the fixed part is roughly 1,500 tokens and Vietnamese text runs
+# near 2.5 characters to the token. Both allowances here are deliberately above what was
+# measured - a prompt that overruns num_ctx is truncated by Ollama in silence.
+ANALYSIS_PROMPT_FIXED_TOKENS = 2048
+ANALYSIS_PROMPT_CHARS_PER_TOKEN = 2.0
+ANALYSIS_PROMPT_SCHEMA_TOKENS_PER_SEGMENT = 64
+ANALYSIS_CONTEXT_GRANULARITY = 1024
+ANALYSIS_CONTEXT_MINIMUM = 4096
+
+
+def analysis_context_window(analysis: dict[str, Any]) -> int:
+    """The context this profile's analysis batches actually need.
+
+    num_ctx was one constant, 16384, for every profile. It is the right size for the
+    default profile, whose batches are 28 segments and whose output budget alone is 5,888
+    tokens - but high_quality overrides the batch down to 5 and inherited the 16384 anyway.
+    That reserves about 2.4 GB of KV cache in VRAM whether a prompt fills it or not, and on
+    a card that cannot already hold the model, the context nobody uses is paid for in the
+    slowest half of the work: the model spills onto the CPU and generation, which is 86% of
+    Ollama's time, runs at 25.6 tokens a second instead of what the GPU could do.
+
+    Two things have to fit, and the second is easy to miss: the output budget is
+    ``min(512 + segments * 192, num_ctx // 2, 6144)``, so a context that merely exceeds the
+    requested output would still have the ``// 2`` term quietly cut it in half. The window
+    is therefore at least twice the requested output, and at least prompt plus output.
+    """
+    segments = max(1, int(analysis.get("batch_segments", 28)))
+    characters = max(0, int(analysis.get("batch_chars", 6200)))
+    requested_output = min(512 + segments * 192, 6144)
+    prompt_allowance = (
+        ANALYSIS_PROMPT_FIXED_TOKENS
+        + int(characters / ANALYSIS_PROMPT_CHARS_PER_TOKEN)
+        + segments * ANALYSIS_PROMPT_SCHEMA_TOKENS_PER_SEGMENT
+    )
+    needed = max(2 * requested_output, prompt_allowance + requested_output)
+    rounded = -(-needed // ANALYSIS_CONTEXT_GRANULARITY) * ANALYSIS_CONTEXT_GRANULARITY
+    return max(ANALYSIS_CONTEXT_MINIMUM, rounded)
+
+
 def build_settings(profile: str = "high_quality", overrides: dict[str, Any] | None = None) -> dict[str, Any]:
     if profile not in PROFILE_OVERRIDES:
         raise ValueError(f"Unknown quality profile: {profile}")
@@ -300,6 +342,10 @@ def build_settings(profile: str = "high_quality", overrides: dict[str, Any] | No
     settings["quality_profile"] = profile
     if overrides:
         settings = deep_merge(settings, overrides)
+    # Derived after the overrides, because the batch they may change is what decides it.
+    # An explicit num_ctx in the overrides still wins: a caller naming a number means it.
+    if not (overrides or {}).get("analysis", {}).get("num_ctx"):
+        settings["analysis"]["num_ctx"] = analysis_context_window(settings["analysis"])
     from .voice_catalog import DEFAULT_NARRATOR_BY_GENDER, preset_by_name
 
     voice_overrides = overrides.get("voices", {}) if overrides else {}
