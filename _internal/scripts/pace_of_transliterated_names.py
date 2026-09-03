@@ -1,8 +1,9 @@
 """Does a sentence carrying a transliterated name read slower, or were those three a tail?
 
-alpha.32 finished with three segments that never got audio at all. Five to fifteen
-synthesis attempts each, every take rejected by the pace gate for being too slow, and the
-sentences too short to split:
+alpha.32 finished with three segments that never got audio at all. Four synthesis attempts
+each - tts.max_retries, not the "five to fifteen" an earlier note in this file claimed -
+every take rejected by the pace gate for being too slow, and the sentences too short to
+split:
 
     Tên tôi là Samael Kaizer Theosbane.                     12.25 chars/s
     Ông ta chính là cha tôi, Arthur Kaizer Theosbane.       12.13 chars/s
@@ -17,6 +18,12 @@ syllables - "Samael Kaizer Theosbane" becomes "Xa-ma-eo Cai-dơ Thê-ô-xờ-ben
 voice says those deliberately. If that is systematic, the pace gate and the transliterator
 are two features of one project working against each other, and the gate needs to know.
 If it is not, three sentences drew a short straw and nothing should change.
+
+Since written, scripts/pace_retry_reachability.py has shown the three are not one class:
+two missed the bound by 0.03 and 0.25 chars/s and would clear it most of the time given
+more attempts, while the third reads a rank ladder aloud and no budget reaches it. The
+question below is still worth asking - it is about the other two - but "the three" is no
+longer a thing.
 
 n=3 cannot tell those apart. This asks the whole book: it splits accepted segments by
 whether a locked-name anchor lands in them and compares the pace distributions, computed
