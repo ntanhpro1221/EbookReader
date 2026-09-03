@@ -605,24 +605,50 @@ Với bản thu trung vị **4,8 giây**, phần cố định chiếm **46%**.
 3. **Con số đáng nhớ:** 2.032 lượt giải mã của alpha.25 × 369 ms ≈ **750 giây**, tức khoảng
    **19%** của 3.870s ASR, tiêu vào phí gọi chứ không vào tiếng nói.
 
-### Giải thích khả dĩ nhất, và cách kiểm nó
+### Cơ chế: encoder tính tiền theo cửa sổ 30 giây, không theo lượng âm thanh
 
-Whisper **đệm mọi đầu vào lên 30 giây** trước khi qua encoder, nên một bản thu 1 giây tốn
-đúng một lượt encoder như bản 30 giây; chỉ phần decoder mới tỉ lệ với nội dung. Điều đó khớp
-với hình dạng đo được: một hằng số cộng một hệ số theo giây. Với trung vị 4,8s thì **~84%
-mỗi cửa sổ 30 giây là phần đệm**.
+Whisper đệm mọi đầu vào lên 30 giây trước khi qua encoder. Giả thuyết ấy khớp với hình dạng
+đo được, nhưng khớp không phải là chứng minh, nên `scripts/measure_encoder_window.py` kiểm
+thẳng: **một bản thu duy nhất, đệm bằng im lặng tới nhiều độ dài khác nhau.** Tiếng nói y
+hệt nhau nên decoder có đúng bấy nhiêu token phải sinh; chỉ phần đệm thay đổi.
 
-Tôi **chưa kiểm trực tiếp** cơ chế này — nó khớp với số liệu chứ chưa được chứng minh. Cách
-kiểm: đo riêng thời gian encoder so với decoder, hoặc so bản thu 1s với bản 20s và xem phần
-cố định có đúng bằng nhau không.
+| đệm tới | giải mã | ký tự thu được |
+|---|---|---|
+| 3,0s | 272 ms | 33 |
+| 6,0s | 249 ms | 33 |
+| 12,0s | 273 ms | 33 |
+| 20,0s | 275 ms | 33 |
+| 28,0s | 258 ms | 33 |
+| **31,0s** | **544 ms** | 103 |
+| 45,0s | 560 ms | 104 |
+| 58,0s | 573 ms | 104 |
+| **61,0s** | **874 ms** | 174 |
 
-### Hướng đi mà nó chỉ ra (chưa làm)
+Phẳng trong khoảng 10,7% suốt từ 3 đến 28 giây, rồi **gấp đôi ở 31 giây và gấp ba ở 61
+giây**. Encoder tính tiền theo cửa sổ 30 giây và hoàn toàn mù với lượng âm thanh thật bên
+trong: một bản thu 2 giây trả đúng bằng một bản 28 giây.
 
-Nếu đúng là đệm 30 giây, thì đòn bẩy không phải "giải mã nhanh hơn" mà **"gói nhiều segment
-vào một cửa sổ"**. Với trung vị 4,8s thì một cửa sổ chứa được năm sáu segment, và phí cố
-định chia cho từng ấy.
+Một điều cần nói thẳng: số ký tự tăng 33 → 103 → 174, tức **Whisper bịa chữ vào phần im
+lặng**, nên chiều cao của bậc có lẫn token decoder chứ không thuần encoder. Phần phẳng dưới
+30 giây mới là bằng chứng sạch. Còn việc nó bịa chữ trong im lặng lại là một cảnh báo cho
+chính hướng đi mà phép đo này chỉ ra.
 
-Nhưng nó **trộn ranh giới bản ghi**: phải tách lại theo mốc thời gian, và mọi thứ phía sau —
-neo tên khoá, phép kiểm dòng thời gian ảo giác, similarity theo từng segment — đều giả định
-một bản ghi thuộc về đúng một segment. Đó là một thay đổi lớn hơn nhiều so với đổi engine,
-và phải đo lợi ích thật trước khi đụng vào.
+### Cái giá đang trả, và cái giá để lấy lại
+
+Bản thu trung vị 4,8 giây, cửa sổ 30 giây: **84% mỗi lượt encoder là phần đệm.** Một cửa sổ
+chứa được sáu segment.
+
+| | hiện nay | nếu gói 6 segment/cửa sổ |
+|---|---|---|
+| một lượt ASR (948 segment) | 760s | 468s (**−38%**) |
+| alpha.25 (2.032 lượt giải mã) | — | tiết kiệm ~625s trên 3.870s (**−16%**) |
+
+16% là thật, nhưng nó **không rẻ**. Gói nhiều segment vào một cửa sổ trộn ranh giới bản ghi,
+và mọi thứ phía sau đều giả định một bản ghi thuộc về đúng một segment: neo tên khoá, phép
+kiểm dòng thời gian ảo giác, similarity theo từng segment. Phép đo trên còn cho thấy Whisper
+sẵn sàng bịa chữ ở chỗ không có tiếng nói, nên chỗ nối giữa hai segment là đúng nơi nguy
+hiểm nhất. Đây là thay đổi kiến trúc, không phải một tối ưu - và `asr.py` nằm trong
+`QUALITY_IMPLEMENTATION_FILES`, nên mỗi lần sửa nó là một lần xác minh lại cả quyển sách.
+
+Ghi lại ở đây để lần sau ai đó hỏi "sao ASR chậm thế" thì có sẵn câu trả lời đã đo, và biết
+đòn bẩy nằm ở đâu cùng cái giá của nó - chứ không phải để làm ngay.
