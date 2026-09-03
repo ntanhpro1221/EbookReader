@@ -763,3 +763,43 @@ nói `pốt-tơ` "cũng đúng và hay hơn", nên đây là biến thể chấp
 | khớp 138 cách đọc của người nghe | 73 | **84** |
 | khớp 41 từ mượn có sẵn | 23 | **28** |
 | cách đọc không hợp lệ | 0 | **0** |
+
+## Năm lỗi ASR còn lại của alpha.25 không phải lỗi chuyển tự (điều tra 2026-09-03)
+
+Tồn đọng ghi "bốn lỗi `ASR_LOCKED_NAME_ANCHOR_MISMATCH`, đều là câu có thuật ngữ tiếng Anh
+trong ngoặc". Thực tế là **năm** segment, và nguyên nhân không phải chỗ người ta tưởng.
+
+| giọng đọc | Whisper nghe ra |
+|---|---|
+| Xờ-pi-rít E-xen Du-nít | `S.P.Z.E.S.N.U.N.I.T.` |
+| Ten Đe-mon Pờ-rin | tên **Demon Perrin** |
+| Xa-ma-eo Cai-dơ Thê-ô-xờ-ben | Samenkai giờ theo Oserban |
+| Ju-li-a-na Vóc Bờ-lết | Juliana **Vogtberlitz** |
+| Đon Xờ-cớt | đon sờ cướp |
+
+**Bản đọc đều đúng.** Đã kiểm tra bảng `pronunciations` thật của alpha.25: cả năm cụm đều
+đã được đăng ký và chuyển tự chuẩn - `Skill Card → Xờ-kiu Cạc`,
+`Spirit Essence Units → Xờ-pi-rít E-xen Du-nít`, `Tenth Demon Prince → Ten Đe-mon Pờ-rin`,
+`Dawn's Scourge → Đon Xờ-cớt`. Bộ quét ứng viên tìm ra cả bốn cụm trong ngoặc; máy chuyển
+tự đọc được cả bốn. Không có khâu nào của đường tiếng Anh → tiếng Việt hỏng ở đây.
+
+Cái hỏng là **Whisper**, và nó hỏng theo hai kiểu:
+- đánh vần thành chữ cái (`S.P.Z.E.S...`);
+- **viết lại bằng chính tả tiếng Anh gốc** ("Demon Perrin", "Vogtberlitz") - tức là model
+  đa ngữ nghe ra tiếng Anh trong giọng đọc tiếng Việt.
+
+Kiểu thứ hai thoạt nhìn tưởng sửa được: nếu chấp nhận cả chính tả gốc thì ba ca sẽ qua.
+Nhưng `_locked_name_anchor_forms` **đã** chấp nhận `source_spelling` từ trước rồi; Whisper
+chỉ không ghi ra đủ sạch để khớp - "tên Demon Perrin" không phải "tenth demon prince".
+
+Nới lỏng thành khớp mờ chính là thứ hàm này nói rõ nó từ chối làm: *"Require exact
+locked-name forms in an ASR transcript without fuzzy aliases."* Sự nghiêm ngặt ấy tồn tại
+để một cái tên đọc sai không lọt qua nhờ giống mang máng một cái tên khác. Đánh đổi nó để
+lấy năm segment trên 948 (0,5%) là bán đúng thứ đang bảo vệ chín trăm segment còn lại.
+
+**Kết luận: không sửa.** Đây là cái giá đã thiết kế của việc kiểm tra tên nghiêm ngặt, chứ
+không phải khiếm khuyết. Ai định mở lại chuyện này thì phải trả lời được: làm sao phân biệt
+"Whisper nghe đúng nhưng viết khác" với "giọng đọc sai" khi cả hai đều cho một bản ghi lệch?
+
+Một khiếm khuyết thật thì bảng đó có lộ ra: `Debuff Card → Debuff Card`, không hề chuyển.
+Đã sửa từ trước trong phiên này (quy tắc `must_convert`); code hiện tại cho `Đê-búp Cạc`.
