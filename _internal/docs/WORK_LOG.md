@@ -312,3 +312,50 @@ hiệu lực, vì thứ được chấp nhận là *một bản ghi*, không ph�
 Lệnh từ chối chấp nhận một cảnh báo mà segment không mang, và từ chối chấp nhận khi segment
 chưa có bản thu nào — chấp nhận âm thanh chưa tồn tại là chấp nhận bất cứ thứ gì được tạo
 ra sau đó.
+
+### `retry`: để một bản sửa với được tới đúng segment nó viết ra để sửa
+
+`_verify_chapter_audio` có dòng này:
+
+```python
+if str(row["status"]) == SegmentStatus.FAILED.value:
+    continue
+```
+
+Nghĩa là **một segment đã hỏng là hỏng vĩnh viễn trong project ấy**. Resume duyệt lại mọi
+chương (`_process_all_chapters` không bỏ qua theo trạng thái), nhưng segment hỏng bị bỏ, nên
+chương lại hỏng vì đúng những segment cũ. Cách duy nhất để hưởng bản sửa là chạy sạch — một
+tiếng phân tích để thu lại năm segment.
+
+alpha.32 làm điều đó thành cụ thể: chương 6 bị từ chối vì một segment mà **giọng đọc đúng
+từng chữ**, bản ghi chỉ khác ở "tháng Mười hai" so với "tháng 12". Bản sửa cho đúng chuyện
+đó xuất hiện *trong lúc lần chạy vẫn đang bay*, và không có đường nào áp nó vào segment nó
+được viết ra để sửa.
+
+```bash
+ebook-reader-headless retry <project> --note "đã sửa gộp số"        # mọi segment hỏng
+ebook-reader-headless retry <project> --segment c00006_s0000089_... # một segment
+```
+
+Dùng `reset_segment_pending` đã có sẵn: trả segment về `analyzed`, xoá WAV, xoá bằng chứng
+ASR, xoá warning, cập nhật lại số đếm chương. **Phân tích và casting giữ nguyên** — chúng
+không phải thứ đã sai. Rồi `resume` thu lại và xác minh lại đúng những segment ấy.
+
+Cũng bỏ dấu `failed` trên chương: để nguyên là giữ một lời từ chối đứng trên bản thu không
+còn tồn tại.
+
+Segment chưa hỏng thì không bị chạm — thử lại một segment đã đỗ là ném đi bản thu đã đạt.
+Và lệnh báo lại đúng những gì nó reset, theo cùng quy tắc `pronounce`/`cast` đã theo: một
+lần ghi không xảy ra thì không được báo là thành công.
+
+### Bốn cánh cổng, cùng một hình dạng
+
+| lệnh | người nghe quyết định điều gì | vì máy không quyết được |
+|---|---|---|
+| `pronounce` | một cái tên đọc thế nào | CMUdict và fallback cùng từ chối |
+| `cast` | một nhân vật là nam hay nữ | model trả lời hoà 2-2 |
+| `accept` | một bản thu nghe được không | điểm cảm thụ tụt, sửa mãi không khá hơn |
+| `retry` | một bản thu đáng thu lại không | segment hỏng bị đóng băng vĩnh viễn |
+
+Ba cái sau đều xuất hiện trong đúng một ngày, và cả ba đều là cùng một khoảng trống: dự án
+nghiêm khắc trong việc từ chối mà không có đường cho con người giải quyết lời từ chối.
