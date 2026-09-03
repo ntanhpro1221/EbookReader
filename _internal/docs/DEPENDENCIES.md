@@ -154,3 +154,39 @@ so khớp phiên bản thực đang cài. Cần đưa chúng vào danh sách kh�
 Thêm nữa, policy hash băm **toàn bộ byte** của `pyproject.toml`, nên chỉ đổi dòng `version` cũng làm
 mọi project đang dở hết resume được, dù không có gì ảnh hưởng tới audio. Nên thu hẹp phần đóng góp của
 `pyproject.toml` về đúng dữ liệu dependency thay vì cả file.
+
+## faster-whisper: đã cài, đã kiểm với runtime thật (2026-09-04)
+
+`faster-whisper 1.2.1` + `ctranslate2 4.8.2` đã cài vào venv của dự án. Đây là **sự kiện
+phiên bản**: nó đổi `installed_dependency_provenance()`, tức đổi quality-policy hash, nên
+mọi project đang dở phải xác minh lại. Cài lúc alpha.32 đã chạy xong nên không phá lần chạy
+nào.
+
+**Chưa bật.** `asr.engine` mặc định `"openai"`. Một project bật nó bằng settings, có chủ ý.
+
+### Đo được gì
+
+| | |
+|---|---|
+| 200 bản thu của alpha.25 | 0,77 s/bản → **0,37 s/bản** (2,07×) |
+| bất đồng verdict | **0/200** |
+| 3 bản thu qua đúng `WhisperVerifier` | 2,6s → **1,3s**, bản ghi **giống hệt từng chữ** |
+
+Phép đo cuối là quan trọng nhất: nó đi qua bộ điều hợp thật chứ không phải stub, nên nó
+kiểm luôn phần mà test đơn vị không chạm được — ghép mảnh, mốc thời gian cho phép kiểm ảo
+giác, và `beam_size=1` thay cho "thiếu tham số".
+
+### Chi tiết cài đặt: nhập torch trước là đủ
+
+Tài liệu trước đây của tôi nói phải chép `cublas64_12.dll`, `cublasLt64_12.dll`,
+`cudnn*64_9.dll` từ `torch/lib` sang cạnh package `ctranslate2`. **Trong venv của dự án thì
+không cần.** CTranslate2 liên kết cuBLAS/cuDNN lúc nạp và không kèm chúng; torch thì có, và
+`import torch` trước `from faster_whisper import WhisperModel` đưa chúng vào tiến trình.
+`WhisperVerifier._load_faster` làm đúng thứ tự đó có chủ đích.
+
+Việc chép DLL chỉ cần trong một venv **không có torch** — đó là tình huống của venv
+scratchpad lúc đo, và ở đó `os.add_dll_directory` lẫn PATH kiểu POSIX đều không đủ.
+
+Model CT2 tải từ `mobiuslabsgmbh/faster-whisper-large-v3-turbo` qua Hugging Face Hub, nằm
+trong `runtime/models/huggingface`. Trên Windows không bật Developer Mode thì cache không
+dùng symlink được và tốn thêm dung lượng — cảnh báo vô hại.
