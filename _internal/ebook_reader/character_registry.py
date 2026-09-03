@@ -209,7 +209,11 @@ def _decisive(counts: Counter[str]) -> str | None:
     return winner
 
 
-def resolve_gender(identity_rows: list[Any], all_rows: list[Any]) -> tuple[str, str]:
+def resolve_gender(
+    identity_rows: list[Any],
+    all_rows: list[Any],
+    locked: dict[str, str] | None = None,
+) -> tuple[str, str]:
     """One answer for a character's gender, used by the gate and by the casting alike.
 
     Two places used to decide this and they disagreed by construction: the gate refused any
@@ -217,11 +221,17 @@ def resolve_gender(identity_rows: list[Any], all_rows: list[Any]) -> tuple[str, 
     model split 2-2 could only ever fail the run, and passing the gate by loosening it
     would have cast that character with no gender at all. This is the single place now.
 
-    The model's own votes win when they have a majority. When they tie - which is the case
-    that used to kill a run after ninety minutes of analysis - the text is asked instead,
-    and it answers far better than the model does, because Vietnamese marks gender in
-    nearly every word it uses for a person.
+    A listener's pinned answer outranks everything: they have read the book and the model
+    has not. Otherwise the model's own votes win when they have a majority, and when they
+    tie - the case that used to kill a run after ninety minutes of analysis - the text is
+    asked instead. It answers far better than the model does, because Vietnamese marks
+    gender in nearly every word it uses for a person.
     """
+    if locked:
+        for row in identity_rows:
+            pinned = locked.get(canonical_key(str(row["speaker"])))
+            if pinned:
+                return pinned, "listener"
     votes = Counter(
         str(row["gender"])
         for row in identity_rows
@@ -244,6 +254,7 @@ def _validate_casting_inputs(
     rows: list[Any],
     minimum_named_mentions: int,
     log: Callable[[str], None] = lambda _message: None,
+    locked: dict[str, str] | None = None,
 ) -> None:
     rows_by_identity: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
@@ -269,7 +280,7 @@ def _validate_casting_inputs(
             # called Noah male twice and female twice, while the narration says "cậu"
             # eighteen times. The resolver is the same one the casting uses, so passing
             # here means the character is cast as what passed rather than as "unknown".
-            resolved, reason = resolve_gender(identity_rows, rows)
+            resolved, reason = resolve_gender(identity_rows, rows, locked)
             if resolved == "unknown":
                 gender_conflicts[identity] = {
                     **dict(sorted(gender_counts.items())),
@@ -861,7 +872,8 @@ def build_registry_and_cast(
     rows = [row for row in db.list_segments() if str(row["status"]) != "pending"]
     voice_cfg = settings["voices"]
     minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
-    _validate_casting_inputs(rows, minimum_main_mentions, log)
+    locked_genders = db.locked_character_genders()
+    _validate_casting_inputs(rows, minimum_main_mentions, log, locked_genders)
     by_speaker: dict[str, list[Any]] = defaultdict(list)
     anonymous_by_gender: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
@@ -915,7 +927,7 @@ def build_registry_and_cast(
     for speaker, speaker_rows in speaker_groups:
         # The same resolver the gate used, so a character that passed the gate on text
         # evidence is cast as what passed rather than as "unknown".
-        gender, _reason = resolve_gender(speaker_rows, rows)
+        gender, _reason = resolve_gender(speaker_rows, rows, locked_genders)
         age = _majority(speaker_rows, "age")
         local = is_local_speaker(speaker)
         display_name = local_speaker_display(speaker) if local else speaker
