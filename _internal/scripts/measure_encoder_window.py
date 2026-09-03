@@ -4,6 +4,14 @@ One real take, padded with silence to increasing lengths. The speech is identica
 decoder has the same tokens to produce every time. If the encoder always processes a
 padded 30-second window, every length below 30s costs the same and there is a step at 30.
 If instead the encoder scales with what it is given, cost climbs with the padding.
+
+Answered on alpha.32: flat within 10.7% from 3s to 28s, double at 31s, triple at 61s. The
+encoder charges per 30-second window and is blind to what is inside it. Kept so the claim
+can be rechecked on another card, another engine, or another model.
+
+DO NOT RUN THIS DURING A RUN - it loads Whisper onto the GPU.
+
+    python scripts/measure_encoder_window.py <project_root>
 """
 from __future__ import annotations
 
@@ -13,20 +21,22 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, "D:/Novels/Ebook Reader_dev/_internal")
-import numpy as np
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ebook_reader.asr import load_audio_for_whisper
+import numpy as np  # noqa: E402
 
-DB = (
-    "D:/Novels/Audiobooks/_versions/v0.2.0-alpha.32/alpha32_02502ba320/project.sqlite3"
-)
+from ebook_reader.asr import load_audio_for_whisper  # noqa: E402
+
 LENGTHS = [3.0, 6.0, 12.0, 20.0, 28.0, 31.0, 45.0, 58.0, 61.0]
 REPEATS = 3
 
 
-def main() -> int:
-    connection = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+def main(project_root: str) -> int:
+    database = Path(project_root) / "project.sqlite3"
+    if not database.is_file():
+        print(f"không tìm thấy project: {database}")
+        return 2
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     row = connection.execute(
         "SELECT wav_path, wav_duration FROM segments "
@@ -91,4 +101,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    if len(sys.argv) != 2:
+        print(__doc__)
+        raise SystemExit(2)
+    raise SystemExit(main(sys.argv[1]))
