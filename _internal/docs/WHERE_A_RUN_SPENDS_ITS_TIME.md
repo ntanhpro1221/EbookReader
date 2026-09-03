@@ -363,3 +363,59 @@ hỏng ở cả hai).
 **Chưa ship gì.** Tám điểm là quá mỏng để dựng một luật, và một luật sai ở đây cho qua một
 lần đọc sai thật. Nhưng dữ liệu giờ đã có, bộ đo dùng lại được, và lần thử sau đo được ngay
 bằng một câu: *fail có giảm dưới 8 mà dòng chốt vẫn nguyên không?*
+
+## Ba segment không có audio: hai giả thiết của tôi đều sai, và cái đúng là một xung đột tự gây
+
+alpha.32 kết thúc `completed_with_errors`, 3/10 chương (alpha.25: 2/10). Trong 13 chỗ chặn
+xuất bản, **ba segment chưa từng có audio** — thu 5 đến 15 lần, không lần nào được commit:
+
+```
+high-quality TTS retry required: speech pace 12.25 chars/s;
+split=segment too short to split safely
+```
+
+| segment | pace đo được | văn bản |
+|---|---:|---|
+| `c00005_s0000013` | 12,25 | Tên tôi là **Samael Kaizer Theosbane**. |
+| `c00010_s0000017` | 12,13 | Ông ta chính là cha tôi, **Arthur Kaizer Theosbane**. |
+| `c00009_s0000008` | 9,36 | Cấp Linh Hồn … **C » B » A » S » SS » SSS** |
+
+Cả ba đều **quá chậm** so với cận dưới 12,5 của nhịp `normal`.
+
+### Giả thiết 1: đo sai đơn vị — SAI
+
+Tôi nghĩ cổng đếm **ký tự** trong khi giọng tốn thời gian theo **âm tiết**, và tên chuyển tự
+có tỉ lệ âm-tiết-trên-ký-tự cao bất thường ("Thê-ô-xờ-ben": 4 âm tiết / 10 ký tự, so với
+tiếng Việt thường ~1 âm tiết / 5 ký tự). Đo trên 350 segment lành mạnh: hệ số biến thiên
+của ký-tự/s là **0,085**, của âm-tiết/s là **0,080**. Gần như nhau. Đổi đơn vị không mua
+được gì.
+
+### Giả thiết 2: cận dưới đặt sai — SAI
+
+Lần đo đầu cho p5 = 11,43 ký tự/s, thấp hơn cận 12,5, nghe như cận đặt quá cao. Nhưng tôi
+đã chia cho **thời lượng thô** trong khi cổng chia cho **thời gian nói đã trừ khoảng lặng**.
+Tính đúng như cổng tính, trên 807 segment `normal` đã đạt:
+
+| | |
+|---|---|
+| trung vị | 15,82 |
+| p5 | **13,69** |
+| dưới cận 12,5 | **0 (0,0%)** |
+| trên cận 24,5 | 0 (0,0%) |
+
+**Cận đặt đúng.** Ba ca hỏng thật sự chậm hơn *mọi* bản thu trong 807 bản được chấp nhận.
+
+### Cái đúng: dự án tự đánh nhau
+
+Bản thu **thật sự chậm**, và nó chậm vì đúng thứ dự án tự tạo ra: chính dự án biến
+"Samael Kaizer Theosbane" thành "Xa-ma-eo Cai-dơ Thê-ô-xờ-ben", giọng đọc từng âm tiết có
+gạch nối một cách chậm rãi, rồi **cổng nhịp từ chối kết quả**. Hai trong ba ca là câu có tên
+chuyển tự; ca thứ ba là một chuỗi chữ cái đánh vần, cùng cơ chế ở dạng cực đoan.
+
+Cổng không phân biệt được "chậm vì tên khó" với "chậm vì model lê thê", và với ba câu này
+thì không có đường ra: quá ngắn để chia, hết lượt thu, **không có audio nào cả**. Sách thiếu
+ba câu.
+
+Đây là ranh giới giữa hai tính năng của cùng một dự án, không phải lỗi của bên nào. Cần đo
+thêm trước khi sửa: một segment mang tên chuyển tự có **hệ thống** chậm hơn không, hay ba ca
+này chỉ là đuôi phân bố? n=3 thì chưa trả lời được.
