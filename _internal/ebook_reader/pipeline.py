@@ -3597,7 +3597,9 @@ class BookPipeline:
             # default was taken on one 8151 MiB card; a smaller one cannot hold that many
             # workers and would fail where it could have run more slowly instead.
             snapshot = self.resources.snapshot()
-            workers = workers_for_vram(ceiling, snapshot.gpu_free_mb)
+            workers = workers_for_vram(
+                ceiling, snapshot.gpu_free_mb, snapshot.gpu_total_mb
+            )
             if workers < 2:
                 self.log(
                     f"VRAM còn {snapshot.gpu_free_mb} MiB, không đủ cho pool TTS "
