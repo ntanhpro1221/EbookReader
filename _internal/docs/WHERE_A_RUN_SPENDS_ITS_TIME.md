@@ -453,3 +453,30 @@ lại điều này để người sau không trích nhầm bảng tổng ở tr�
 **Bài học phương pháp:** sửa code giữa chừng làm hỏng chính phép đo mà lần chạy ấy sinh ra
 để phục vụ. Nếu cần một con số so sánh sạch thì phải để một lần chạy đi hết mà không đụng
 vào bất kỳ file nào trong `QUALITY_IMPLEMENTATION_FILES`.
+
+### Giả thiết 3: tên chuyển tự đọc chậm hơn — CŨNG SAI
+
+Nhịp trước tôi kết luận rằng đây là "xung đột tự gây": dự án biến
+"Samael Kaizer Theosbane" thành "Xa-ma-eo Cai-dơ Thê-ô-xờ-ben", giọng đọc từng âm tiết có
+gạch nối chậm rãi, rồi cổng nhịp từ chối. Nghe rất thuyết phục, và **hai trong ba ca hỏng
+đúng là câu có tên**.
+
+Hỏi cả hai cuốn thay vì ba câu (`scripts/pace_of_transliterated_names.py`), chia theo việc
+segment có neo tên khoá hay không, tính nhịp **đúng như `audio_io` tính**:
+
+| | n | trung vị | p5 | p25 | dưới cận 12,5 |
+|---|---:|---:|---:|---:|---|
+| **có** tên chuyển tự | **341** | 15,85 | 13,91 | 15,01 | **0 (0,0%)** |
+| không có | 1.276 | 15,79 | 13,65 | 15,00 | 0 (0,0%) |
+
+Chênh lệch trung vị **−0,05 ký tự/s**, tức **−0,03 sigma**. Nhóm có tên nếu có khác thì
+**nhỉnh hơn**, không chậm hơn. Với 341 mẫu thì đây không phải chuyện thiếu dữ liệu.
+
+**Ba giả thiết, ba lần sai.** Đơn vị đo không sai, cận không đặt sai, và tên chuyển tự
+không đọc chậm hơn. Ba segment ấy chỉ là **đuôi phân bố**: những lần bốc thăm chậm mà năm
+lượt thu lại không lần nào rơi vào khoảng cho phép. Việc "hai trong ba là câu có tên" là
+trùng hợp ở n=3.
+
+**Đừng nới cổng vì chúng.** Nếu muốn cứu, hướng đúng là cho thêm lượt thu hoặc đổi seed cho
+đúng những segment quá ngắn để chia — chứ không phải hạ một ngưỡng mà 1.617 bản thu khác
+đều vượt qua thoải mái.
