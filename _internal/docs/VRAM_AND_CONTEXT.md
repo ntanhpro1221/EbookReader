@@ -67,3 +67,47 @@ Lấy ra khỏi log:
 ```bash
 grep -o "prompt [0-9,]* tok" logs/ebook_reader.log | tr -d ', ' | grep -o '[0-9]*' | sort -n | tail -1
 ```
+
+## Đã sửa, và đã đo lại (2026-09-03)
+
+`num_ctx` không còn là một hằng số cho mọi profile. Nó được suy ra từ chính batch của
+profile đó (`config.analysis_context_window`): high_quality **7.168**, balanced 13.312,
+fast 14.336. Con số 16384 cũ không tuỳ tiện - nó đúng cho profile gốc, 28 segment mỗi batch
+với ngân sách đầu ra 5.888 token - nhưng high_quality ghi đè batch xuống 5 mà vẫn thừa
+hưởng nguyên cái ngữ cảnh ấy.
+
+Đo trên hai lần chạy cùng sách, cùng máy, chỉ khác num_ctx:
+
+| | alpha.27 (16.384) | alpha.28 (7.168) |
+|---|---|---|
+| `ollama ps` kích thước | 7,8 GB | **6,0 GB** |
+| bộ xử lý | 22% CPU / 78% GPU | **100% GPU** |
+| sinh token | 25,8 tok/s | **53,6 tok/s** |
+| một batch 5 segment | 20,8s | **11,3s** |
+
+**Nhanh gấp 2,08 lần ở nửa chậm.** Sinh token chiếm 94% thời gian Ollama (đo trên 40 yêu
+cầu của alpha.27), nên pha phân tích - pha dài nhất của một lần chạy mới, khoảng 95 phút -
+rút còn khoảng một nửa.
+
+Lý do nó hiệu quả đến vậy: sinh token bị giới hạn bởi băng thông bộ nhớ, không phải bởi
+tính toán. Mọi lớp nằm trên CPU đều phải đi qua PCIe cho từng token một. Đưa được model
+lọt hết vào VRAM không phải là tối ưu vi mô, nó xoá hẳn một nút cổ chai.
+
+### Hai bậc phải vượt, không phải một
+
+Ngân sách đầu ra là `min(512 + segment*192, num_ctx // 2, 6144)`. Một ngữ cảnh chỉ *lớn hơn*
+đầu ra yêu cầu thì vế `// 2` vẫn lặng lẽ cắt đôi nó, và một batch phân tích bị cụt giữa
+chừng JSON làm hỏng cả chương. Nên khung phải **ít nhất gấp đôi yêu cầu**, và ít nhất bằng
+prompt cộng đầu ra. Công cụ `scripts/ollama_usage.py` lúc đầu đề xuất 4096 vì chỉ nhìn
+prompt đã quan sát được; 4096 sẽ cắt đôi đầu ra. Đã sửa.
+
+### Bẫy im lặng giờ đã kêu
+
+Ollama không từ chối và không cảnh báo khi prompt vượt ngữ cảnh: nó bỏ phần đầu rồi trả
+lời về phần còn lại, và một batch mất mấy segment đầu vẫn ra JSON hợp lệ đúng schema. Không
+chỗ nào trong hệ thống biết model chưa từng nhìn thấy phần đó.
+
+`_check_prompt_fits` giờ ném `AnalysisPromptTruncatedError` khi số token prompt báo về đúng
+bằng chỗ còn lại - dấu hiệu nó đã bị cắt cho vừa. **Đây là thứ khiến việc thu nhỏ ngữ cảnh
+là an toàn**; thu nhỏ mà không có nó là đổi một sự lãng phí đã biết lấy một sự hỏng hóc
+không biết.
