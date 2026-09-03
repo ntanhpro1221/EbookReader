@@ -803,3 +803,45 @@ không phải khiếm khuyết. Ai định mở lại chuyện này thì phải 
 
 Một khiếm khuyết thật thì bảng đó có lộ ra: `Debuff Card → Debuff Card`, không hề chuyển.
 Đã sửa từ trước trong phiên này (quy tắc `must_convert`); code hiện tại cho `Đê-búp Cạc`.
+
+## Vì sao chương hỏng: đã điều tra, và bộ phân xử neo tên **đúng** (alpha.32, 2026-09-03)
+
+Cả hai chương hỏng đầu tiên của alpha.32 đều hỏng vì `ASR_LOCKED_NAME_ANCHOR_MISMATCH` trên
+câu có ngoặc tiếng Anh, trong khi năm câu **cùng dạng** khác chỉ bị `..._REVIEW` (được phép
+xuất bản). Trông như luật hạ cấp tuỳ tiện, nhất là vì:
+
+| segment | trạng thái | similarity tổng | neo |
+|---|---|---|---|
+| `c00003_s0000029` | **hỏng** | **0,913** | 0/1 |
+| `c00003_s0000030` | cảnh báo | 0,875 | 0/1 |
+
+Bằng chứng *tốt hơn* mà kết cục *xấu hơn*. Cả hai đều cạn 5 vòng sửa, 12 lượt giải mã, neo
+khớp 0%.
+
+**Nhưng số `similarity` tổng thể là số sai để nhìn.** Luật hạ cấp không dùng nó: nó dùng chỉ
+số *canonical* — tính trên phần nội dung **đã bỏ neo ra**, và chỉ hạ cấp khi phần ấy vẫn đạt
+ngưỡng. Nói cách khác: *"cả câu đọc đúng, chỉ cái tên không xác minh được"* thì hạ cấp;
+*"phần còn lại cũng sai"* thì không.
+
+| segment | trạng thái | canonical CER |
+|---|---|---|
+| `c00003_s0000029` | **hỏng** | **0,333** |
+| `c00002_s0000062` | **hỏng** | **0,235** |
+| `c00003_s0000030` | cảnh báo | 0,208 |
+| `c00003_s0000032` | cảnh báo | 0,184 |
+
+Thứ tự sạch. Hai câu hỏng có phần nội dung ngoài tên bị nghe sai nhiều hơn hẳn. **Bộ phân
+xử nhất quán và có nguyên tắc; không sửa gì cả.**
+
+### Và đây là lý do `accept` **chưa** mở rộng sang segment `failed`
+
+`accept` cho phép người nghe chấp nhận một cảnh báo `PERCEPTUAL_NATURALNESS_REVIEW`, vì ở
+đó **chữ đọc đúng, chỉ chất lượng âm thanh bị nghi ngờ** - đúng thứ tai người phân xử được.
+
+Một segment `failed` vì neo tên thì khác: bằng chứng ở trên nói phần nội dung ngoài tên
+**cũng** bị nghe sai. Cho phép chấp nhận nó là để người nghe gánh trách nhiệm về những chữ
+mà máy không xác minh được - một loại quyết định khác hẳn. Ranh giới ấy là cố ý.
+
+Đường đi đúng cho lớp này không phải nới lỏng mà là **nghe tốt hơn**: so faster-whisper với
+openai-whisper trên đúng các bản thu này (`scripts/compare_asr_engines.py`). Nếu nó phiên âm
+những câu này chuẩn hơn thì cả lớp tự khỏi mà không phải hạ một cái chốt nào.
