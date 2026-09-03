@@ -169,3 +169,51 @@ lại thay vì một cuốn sách nói hỏng. Cái thiếu là chưa ai test r�
    được. Cơ chế chấp nhận đã có nhưng chỉ chạy như phương án cuối. Cách sửa ít rủi ro nhất
    đã ghi trong `ANALYSIS_RETRY_COST.md`.
 3. Whisper song song / chồng lấn giai đoạn / `OLLAMA_NUM_PARALLEL` / HiFi-Glot — như cũ.
+
+## 2026-09-03 — hiệu năng: đo trước, sửa sau
+
+Phiên này chuyển trọng tâm từ chuyển tự tiếng Anh sang hiệu năng toàn dự án. Ba phát hiện
+đo được, một khoản lấy không đã làm, và một lần chạy bị giết.
+
+### 1. ASR đắt hơn TTS (`docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`)
+
+Whisper 3.870s, TTS 2.055s, cảm thụ 2.538s trên alpha.25. Cả dự án vẫn ngầm coi TTS là
+phần đắt nhất; không phải, và không gần. 2,14 lượt giải mã mỗi segment **không** phải lãng
+phí - đã kiểm tra: lượt xác nhận chỉ chạy khi lượt đầu MISMATCH/INCONCLUSIVE.
+
+### 2. Chấm cảm thụ giờ chạy cạnh ASR (commit `b96e2ce`)
+
+Chấm điểm là đọc thuần trên CPU; Whisper giữ GPU; file WAV đã có trước khi Whisper bắt đầu.
+Chín trên mười chương có ASR dài hơn chấm điểm, nên gần như toàn bộ 2.538s lọt vào trong.
+Không verdict nào đổi. Hai điều làm cho việc chạy sớm là an toàn:
+
+- **Điểm khoá theo checksum của âm thanh, không theo đường dẫn.** Vòng sửa ASR thu lại
+  segment và ghi bản mới vào *đúng đường dẫn cũ*; khoá theo đường dẫn thì bản mới thừa
+  hưởng điểm của bản đã vứt. Khoá theo checksum thì tra cứu đơn giản là trượt.
+- **Khởi động là một lần đọc không chặn**, không phải cái gate. Gate lặp tới khi máy sẵn
+  sàng, mà lặp ở đây thì chặn đúng cái ASR nó định nấp sau.
+
+Khởi động sau khi Whisper đã nạp, không phải trước: số worker tính từ snapshot RAM, và
+snapshot lấy lúc model chưa nạp thì hứa cho pool phần bộ nhớ model sắp đòi.
+
+### 3. Ba lượt UTMOSv2 là cần (`docs/PERCEPTUAL_QA_COST.md`)
+
+Đo: một lượt lệch tối đa 0,208 so với ba lượt, trên ngưỡng quyết định 0,8. Giữ nguyên 3.
+Kết quả âm được ghi lại.
+
+### 4. Máy hết VRAM và RAM (`docs/VRAM_AND_CONTEXT.md`)
+
+GPU 8.151 MiB, còn trống 308 MiB; qwen3:8b chạy 22% trên CPU vì không lọt. `num_ctx` 16384
+giữ ~2,42 GB KV cache mà prompt đo được chỉ dùng ≥1.351 token (8,2%) - nhưng đó là **cận
+dưới**, và prompt vượt num_ctx thì Ollama cắt trong im lặng, nên chưa đổi. Commit `18295d5`
+ghi lại các bộ đếm Ollama vẫn luôn gửi; lần chạy mới đầu tiên sẽ cho con số thật.
+
+### 5. alpha.26 bị RAM giết ở 357/948 - và điều đó đã được sửa
+
+Ba Unity Editor + Rider giữ ~5,5 GB; máy còn 1,1 GB; pipeline dừng khẩn cấp. Lần chạy
+**không** phải thủ phạm: nó đã tự nhả model và số đo vẫn 1,4 → 1,1 GB.
+
+Thiếu RAM do chương trình khác giờ là **chờ có giới hạn** (30 phút) thay vì giết lần chạy.
+Chờ được là vì tới lúc đó mọi thứ tiến trình này giữ đã nhả hết - máy thuộc về ai cần nó.
+Mỗi vòng thăm dò vẫn hỏi stop/pause, thiếu đĩa hay quá nhiệt thì không chờ, và hết giờ thì
+dừng đúng như cũ.

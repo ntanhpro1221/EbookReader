@@ -137,6 +137,17 @@ from .tts_pool import TTS_POOL_MIN_BATCH
 
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
+# How long a run waits for memory that another program is holding before it gives up.
+# alpha.26 stopped at 357 of 948 segments on "available RAM 1.1 GB" while three Unity
+# editors and an IDE held about five and a half gigabytes. The run was not the cause: it
+# had already unloaded its own models, and the measurement went 1.4 -> 1.1 GB anyway. A
+# run of several hours throwing away its afternoon because somebody opened an editor is a
+# worse outcome than idling through it, and every gigabyte of the shortage comes back by
+# itself when that program closes. Waiting is safe precisely because everything this
+# process holds has already been released: the machine belongs to whatever needs it.
+CRITICAL_RAM_WAIT_TIMEOUT_SECONDS = 1800.0
+CRITICAL_RAM_WAIT_POLL_SECONDS = 15.0
+CRITICAL_RAM_WAIT_LOG_SECONDS = 120.0
 HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
     {
         "TTS_SPLIT_RECOVERY",
@@ -373,6 +384,10 @@ class BookPipeline:
                     f"Đã đo lại RAM sau thu hồi: {before_ram_gb:.1f} → "
                     f"{snapshot.free_ram_gb:.1f} GB khả dụng."
                 )
+                if decision.critical and self.resources.is_ram_only_critical(snapshot):
+                    snapshot, decision = self._wait_for_foreign_ram(
+                        snapshot, decision, checkpoint
+                    )
             if decision.level != self._last_resource_level:
                 self._last_resource_level = decision.level
                 self.emit(
@@ -422,6 +437,78 @@ class BookPipeline:
             if gpu_ok and cpu_ok:
                 return decision
             time.sleep(2.0)
+
+    def _wait_for_foreign_ram(
+        self,
+        snapshot: Any,
+        decision: Any,
+        checkpoint: str,
+    ) -> tuple[Any, Any]:
+        """Idle until memory another program is holding comes back, or give up trying.
+
+        Reached only after this process has released everything it holds and the machine
+        is still short, which means the shortage is somebody else's and will end when they
+        end. Stopping here throws away every hour the run has already spent; waiting costs
+        nothing, because there is nothing left running to cost anything. If the memory does
+        not come back within the timeout the run stops exactly as it did before - the
+        caller sees a critical decision and raises.
+
+        A stop or pause request is honoured on every poll, so this never outlives the
+        user's patience the way a plain sleep would.
+        """
+        started = time.monotonic()
+        announced = False
+        last_logged = 0.0
+        while time.monotonic() - started < CRITICAL_RAM_WAIT_TIMEOUT_SECONDS:
+            if not announced:
+                announced = True
+                self.log(
+                    f"Đang chờ RAM tại checkpoint an toàn ({checkpoint}): còn "
+                    f"{snapshot.free_ram_gb:.1f} GB, cần trên "
+                    f"{float(self.settings['resources']['critical_free_ram_gb']):.1f} GB. "
+                    "Model đã nhả hết; sẽ tự chạy tiếp khi chương trình khác trả lại bộ nhớ."
+                )
+                self.emit(
+                    "resource",
+                    {
+                        "level": ResourceLevel.PAUSE_NEW_WORK.value,
+                        "reason": f"chờ RAM: {snapshot.free_ram_gb:.1f} GB khả dụng",
+                        "gpu_scale": 0.0,
+                    },
+                )
+                if self.settings["safety"].get("notify_on_critical_stop", True):
+                    self.notifier.notify(
+                        "Ebook Reader đang chờ RAM",
+                        f"Chỉ còn {snapshot.free_ram_gb:.1f} GB khả dụng. Pipeline đã nhả "
+                        "hết model và sẽ tự chạy tiếp khi có bộ nhớ.",
+                        project_path=self.paths.root,
+                    )
+            self._wait_pause_or_stop()
+            time.sleep(CRITICAL_RAM_WAIT_POLL_SECONDS)
+            snapshot = self.resources.snapshot(force=True)
+            decision = self.resources.decide(snapshot)
+            if not decision.critical:
+                self.log(
+                    f"RAM đã hồi phục lên {snapshot.free_ram_gb:.1f} GB sau "
+                    f"{time.monotonic() - started:.0f}s chờ; chạy tiếp."
+                )
+                return snapshot, decision
+            if not self.resources.is_ram_only_critical(snapshot):
+                # Disk or temperature became critical while waiting: a different problem,
+                # and not one that waiting for memory solves.
+                return snapshot, decision
+            waited = time.monotonic() - started
+            if waited - last_logged >= CRITICAL_RAM_WAIT_LOG_SECONDS:
+                last_logged = waited
+                self.log(
+                    f"Vẫn đang chờ RAM: {snapshot.free_ram_gb:.1f} GB khả dụng sau "
+                    f"{waited / 60:.0f} phút."
+                )
+        self.log(
+            f"Đã chờ RAM {CRITICAL_RAM_WAIT_TIMEOUT_SECONDS / 60:.0f} phút mà không hồi "
+            "phục; dừng tại checkpoint an toàn."
+        )
+        return snapshot, decision
 
     def _ensure_segments(self) -> None:
         max_chars = int(self.settings["tts"]["max_segment_chars"])
