@@ -20,6 +20,8 @@ def snapshot(**updates):
         disk_free_gb=100.0,
         disk_active_percent=5.0,
         gpu_temp_c=70,
+        gpu_free_mb=6000,
+        gpu_total_mb=8151,
         foreground_cpu_percent=5.0,
         foreground_gpu_percent=0.0,
         seconds_since_user_input=30.0,

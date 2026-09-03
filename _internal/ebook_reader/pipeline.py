@@ -3560,15 +3560,33 @@ class BookPipeline:
         feature, and the sequential path it replaces is the one everything else was proven
         against.
         """
-        workers = int(self.settings["tts"].get("parallel_workers", 0))
-        if workers < 2:
+        ceiling = int(self.settings["tts"].get("parallel_workers", 0))
+        if ceiling < 2:
             return None
         if self._tts_pool is not None:
             return self._tts_pool
         if self._tts_pool_failed:
             return None
         try:
-            from .tts_pool import SynthesisPool
+            from .tts_pool import SynthesisPool, workers_for_vram
+
+            # Sized against the card that is actually here. The measurement behind the
+            # default was taken on one 8151 MiB card; a smaller one cannot hold that many
+            # workers and would fail where it could have run more slowly instead.
+            snapshot = self.resources.snapshot()
+            workers = workers_for_vram(ceiling, snapshot.gpu_free_mb)
+            if workers < 2:
+                self.log(
+                    f"VRAM còn {snapshot.gpu_free_mb} MiB, không đủ cho pool TTS "
+                    f"({ceiling} worker mong muốn); tổng hợp tuần tự."
+                )
+                self._tts_pool_failed = True
+                return None
+            if workers < ceiling:
+                self.log(
+                    f"Pool TTS thu còn {workers}/{ceiling} worker cho "
+                    f"{snapshot.gpu_free_mb} MiB VRAM trống."
+                )
 
             pool = SynthesisPool(self.settings, self.db.path, workers=workers)
             pool.start()

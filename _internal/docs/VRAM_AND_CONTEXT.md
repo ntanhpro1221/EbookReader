@@ -130,3 +130,39 @@ Thời gian mỗi batch (19,6s) lớn hơn thời gian Ollama mỗi yêu cầu (
 
 Nạp prompt cũng nhanh lên, 3.441 → 5.065 tok/s (1,47×), dù đó không phải nửa chiếm thời
 gian. Prompt lớn nhất qua 70 yêu cầu là 3.744 token, tức 52% khung 7.168 - còn dư rộng.
+
+## Gốc rễ: dự án chưa bao giờ đo được VRAM
+
+`ResourceSnapshot` mang nhiệt độ GPU và % GPU của tiến trình foreground, nhưng **không có
+dung lượng VRAM**. Đó là lý do sâu xa khiến mọi hằng số phụ thuộc VRAM đều phải hiệu chỉnh
+bằng tay trên đúng một cái card 8151 MiB rồi ghi thẳng vào defaults: một con số không đo
+được thì bắt buộc phải đoán, và một con số đoán thì đúng ở đây và sai ở mọi nơi khác.
+
+Đã thêm `gpu_free_mb` và `gpu_total_mb` vào snapshot, hỏi qua `nvidia-smi` giống hệt cách
+nhiệt độ vẫn được hỏi. Đo cho cả thiết bị chứ không riêng tiến trình này: câu hỏi mà những
+chỗ gọi nó đặt ra là "card còn bao nhiêu chỗ", mà chương trình foreground đang giữ phần
+còn lại thì không báo cáo cho ta.
+
+### Người dùng đầu tiên: pool tổng hợp TTS
+
+`docs/THROUGHPUT.md` ghi hai điểm đo: 3 worker giữ 5.484 MiB, 5 worker giữ 7.318 MiB. Nối
+thành đường thẳng: **917 MiB mỗi worker trên nền dùng chung 2.733 MiB**. Chính con số ấy
+giờ được áp cho card đang có, thay vì bị nướng thành hằng số.
+
+- `tts.parallel_workers` trở thành **trần**, không phải yêu cầu - đúng hợp đồng mà pool
+  cảm thụ đã dùng từ trước. Đo đạc chỉ có thể hạ nó xuống.
+- Card 8151 MiB vẫn ra đúng 3 worker như đã đo.
+- Card 4 GiB ra 0 và chuyển sang tuần tự, thay vì đòi bộ nhớ không có rồi hỏng.
+- Card 24 GiB ra nhiều worker hơn mà không ai phải sửa hằng số.
+- Máy không đọc được VRAM (không có nvidia-smi, không phải card NVIDIA) giữ nguyên con số
+  cấu hình - đúng như mọi lần chạy trước đây.
+
+`TTS_POOL_FOREGROUND_RESERVE_MB = 800` là phần cố ý chừa lại. 5 worker nhanh hơn 3 đúng
+1,3% trong khi giữ 7.318 trên 8.151 MiB, tức không còn chỗ cho foreground lẫn cho việc giữ
+Whisper thường trú. 1,3% không đáng để chiếm cả card.
+
+### Còn lại chưa suy ra từ máy
+
+`perceptual_qa.parallel_workers` và `worker_threads` (đã co theo RAM và số lõi, nhưng trần
+8 và 2 luồng vẫn là hằng số hiệu chỉnh), `beam_size`, và `min_free_ram_gb` /
+`critical_free_ram_gb` vốn là **GB tuyệt đối** chứ không phải tỉ lệ RAM máy.
