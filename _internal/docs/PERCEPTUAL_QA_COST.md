@@ -89,3 +89,55 @@ tiết lưu của chính nó.
 Một test cũ vỡ vì việc này, và vỡ đúng: nó khẳng định 6 GB trống vẫn đủ cho hai worker —
 điều chỉ đúng khi worker được tính 1,0 GB và mức chừa là 2,0. Ý định của test (nhiều chỗ
 hơn thì nhiều worker hơn) giữ nguyên; con số sinh ra từ số học cũ thì bỏ.
+
+## Cổng perceptual đòi tai người nghe nhiều hơn hẳn với đoạn ngắn (đo 2026-09-04)
+
+`c00003_s0000014` — *"Tất cả đều đã ra đi."*, **1,5 giây** — chặn chương của nó ở **cả**
+alpha.32 lẫn alpha.43, trong khi ASR nghe đúng từng chữ. Vài segment bị chặn khác cũng
+ngắn. Đó là đủ dấu hiệu để hỏi cổng có thiên vị theo độ dài không.
+
+Có, trên 2.282 phép chấm của alpha.32:
+
+| độ dài | n | delta trung vị | **độ lệch chuẩn** | gắn cờ |
+|---|---|---|---|---|
+| <2s | 114 | −0,445 | **0,308** | **14,9%** |
+| 2-3s | 395 | −0,389 | 0,276 | 8,4% |
+| 3-5s | 502 | −0,386 | 0,247 | 2,2% |
+| 5-8s | 490 | −0,388 | 0,209 | 1,0% |
+| ≥8s | 781 | −0,397 | **0,189** | 1,8% |
+
+**Trung vị phẳng** — từ −0,386 tới −0,445, không có xu hướng. Chỉ **độ tán** đổi, tăng 63%
+khi đoạn ngắn lại. Nên đoạn ngắn *không phải điểm tệ hơn*; chúng **tán rộng hơn**, và một
+ngưỡng tuyệt đối cố định thì hớt đúng cái đuôi ấy.
+
+Hệ quả là chữ "tệ nhất" mang hai nghĩa khác nhau trong cùng một cổng: với đoạn dài nó nghĩa
+là **1,5% dưới cùng**, với đoạn ngắn là **15% dưới cùng**.
+
+### Nếu áp cùng một mức khắt khe thay vì cùng một con số
+
+Trên đoạn ≥5s, −0,8 nằm ở *trung vị trừ 2,06 sigma*. Áp đúng 2,06 sigma ấy cho từng nhóm:
+
+| độ dài | ngưỡng mới | gắn cờ nay → mới |
+|---|---|---|
+| <2s | −1,079 | 14,9% → **2,6%** |
+| 2-3s | −0,958 | 8,4% → **0,8%** |
+| 3-5s | −0,895 | 2,2% → 1,4% |
+| 5-8s | −0,819 | 1,0% → 0,8% |
+| ≥8s | −0,787 | 1,8% → **2,8%** |
+
+Tổng: **80 → 39 lần gắn cờ.** Đọc cho đúng: đây **không phải nới lỏng**. Nó *siết* đoạn dài
+(1,8% → 2,8%) và *nới* đoạn ngắn, để mức khắt khe như nhau ở mọi độ dài.
+
+### Chưa phân giải được, và một phép thử rỗng
+
+Phần tán thêm ở đoạn ngắn là **nhiễu của thước đo** hay là **chất lượng thật sự dao động
+hơn**? Dữ liệu này không tách được, và điều đó quan trọng: nếu là cái sau thì cổng đang làm
+đúng việc của nó.
+
+Phép thử tự nhiên — so điểm giữa các bản thu **khác seed của cùng một câu** — trả về biên độ
+**0,000 ở mọi nhóm**. Không phải vì thước đo ổn định, mà vì các hàng `quality_checks` lặp
+lại đang chấm **đúng một file âm thanh**, không phải các bản thu khác nhau. Kết quả rỗng.
+Ghi lại để người sau không thử lại đúng cách ấy; muốn phân giải thì phải **tự tổng hợp cùng
+một câu ngắn nhiều lần với seed khác nhau rồi chấm**.
+
+`scripts/perceptual_duration_bias.py` dựng lại toàn bộ bảng trên từ bất kỳ project nào.
