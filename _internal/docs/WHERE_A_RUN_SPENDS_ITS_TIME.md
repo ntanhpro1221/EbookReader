@@ -329,3 +329,37 @@ faster-whisper nghe **y hệt** trên đúng hai bản thu này: `S.P.Z.E.S.N.U.
 `tên Demon Perrin`. **Engine tốt hơn không sửa được lớp này.** Vấn đề không phải chất lượng
 bộ phiên âm mà là một cụm tiếng Anh phiên sang âm Việt không có bản ghi ổn định ở bất kỳ
 engine nào. Nên 2,07× vẫn đáng đổi vì tốc độ, nhưng đừng mong nó gỡ được các chương này.
+
+### Dữ liệu cho lần thử sau: phân bố canonical trên 46 ca neo thật
+
+`scripts/replay_anchor_alignment.py` chạy trên alpha.25 + alpha.32. Chỉ các ca **neo không
+khớp** (các ca neo khớp không đi qua nhánh này):
+
+| segment | canonical sim | canonical wer | trạng thái | |
+|---|---:|---:|---|---|
+| `c00010_s0000016` | 0,526 | **0,600** | fail | WER cũng trượt |
+| `c00007_s0000074` | 0,556 | 0,167 | fail | **WER đạt / sim trượt** |
+| `c00002_s0000062` | 0,618 | **0,444** | fail | WER cũng trượt |
+| `c00003_s0000029` | 0,667 | 0,250 | fail | **WER đạt / sim trượt** |
+| `c00006_s0000024` | **0,770** | 0,172 | fail | **WER đạt / sim trượt**, trượt đúng 0,01 |
+| `c00002_s0000034` | 0,810 | 0,172 | review_eligible | |
+| … 37 ca còn lại | 0,812 – 1,000 | 0,000 – 0,225 | review_eligible | |
+
+Tổng: **38 review_eligible / 8 fail** (có trùng stable_id giữa hai lần chạy vì cùng segment
+hỏng ở cả hai).
+
+**Điều dữ liệu nói:**
+
+- Dạng "WER đạt mà sim trượt" phủ **5 trên 8** ca hỏng. Đó là chữ ký của rác-tên bị tính
+  hai lần: rác của một cái tên là **nhiều ký tự nhưng ít token**, nên nó đánh vào similarity
+  mức ký tự mạnh hơn hẳn WER mức token.
+- Hai ca hỏng cả WER (`Tai Ương Bình Minh` nghe thành "Tài hương bình mình", và
+  `Spirit Essence Units` trên bản thu của alpha.25) **phải ở lại hỏng** — nội dung thường
+  của chúng thật sự sai.
+- Nhưng `c00006_s0000024` trượt đúng **0,01**. Nên **không có khoảng trống sạch** giữa hai
+  lớp; ngưỡng 0,78 đang làm việc trên lưỡi dao. Nhìn riêng alpha.25 thì tưởng có (0,667 →
+  0,810), thêm alpha.32 vào thì hết.
+
+**Chưa ship gì.** Tám điểm là quá mỏng để dựng một luật, và một luật sai ở đây cho qua một
+lần đọc sai thật. Nhưng dữ liệu giờ đã có, bộ đo dùng lại được, và lần thử sau đo được ngay
+bằng một câu: *fail có giảm dưới 8 mà dòng chốt vẫn nguyên không?*

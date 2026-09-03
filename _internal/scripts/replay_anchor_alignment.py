@@ -168,10 +168,41 @@ def main(roots: list[str]) -> int:
             case["wer"],
         )
         tally[status] += 1
+        result = _adjudicate(
+            case["expected"], case["transcript"], case["anchors"],
+            case["similarity"], case["wer"],
+        )
+        # The canonical figures live inside the anchor metrics, not at the top level.
+        anchor_metrics = result.get("locked_name_anchor_metrics") or {}
+        canonical_similarity = anchor_metrics.get("canonical_similarity")
+        canonical_wer = anchor_metrics.get("canonical_wer")
+        case["canonical_similarity"] = canonical_similarity
+        case["canonical_wer"] = canonical_wer
+        case["status"] = status
         if status == "fail":
             print(f"  fail  {case['stable_id'][:26]}")
             print(f"        mong đợi : {case['expected'][:96]}")
             print(f"        nghe ra  : {case['transcript'][:96]}")
+            if canonical_similarity is not None and canonical_wer is not None:
+                print(
+                    f"        canonical sim={canonical_similarity:.3f} (cần ≥0,78)"
+                    f"  wer={canonical_wer:.3f} (cần ≤0,30)"
+                )
+
+    # Direction three, measured rather than argued: when the anchor does not match, does
+    # "WER passes but similarity fails" separate name-garbage from a real misreading?
+    print()
+    print("phân bố canonical (chỉ các ca neo KHÔNG khớp):")
+    print(f"  {'segment':<28}{'sim':>8}{'wer':>8}  {'trạng thái':<18}")
+    for case in sorted(cases, key=lambda item: item.get("canonical_similarity") or 0.0):
+        if case.get("status") == "pass":
+            continue
+        sim = case.get("canonical_similarity")
+        wer = case.get("canonical_wer")
+        if sim is None or wer is None:
+            continue
+        gap = "WER đạt / sim trượt" if wer <= 0.30 and sim < 0.78 else ""
+        print(f"  {case['stable_id'][:26]:<28}{sim:>8.3f}{wer:>8.3f}  {case['status']:<18}{gap}")
 
     print()
     print("trạng thái neo trên các ca thật:")
