@@ -519,3 +519,36 @@ lệnh `accept` sinh ra để giải quyết.
 
 **Bốn lần chết, một hình dạng.** Và lần này là lần đầu tiên tìm ra trước khi trả giá: soi
 các bất biến hàng xóm ngay sau khi sửa một bất biến cùng họ, thay vì resume rồi chờ.
+
+### Gốc thật của cả bốn lần chết: một trạng thái không thoả mãn được, và một kế hoạch bảo cứ làm
+
+Bản sửa lần thứ tư của tôi né ở người gọi. Viết một test ghim đúng tính chất mà cả bốn lần
+chết đều vi phạm — **bộ lập kế hoạch không được đề xuất thứ mà bộ cấp phát từ chối** — thì
+test **thất bại**. Né được ở một người gọi không có nghĩa mâu thuẫn biến mất; người gọi sau
+sẽ lại vấp.
+
+Hai bất biến ở tầng cấp phát gặp nhau:
+
+- **A:** không được cấp candidate *chuẩn* khi còn trigger naturalness treo.
+- **B:** các vòng của một segment không được **trộn** binding.
+
+Một segment đã có vòng chuẩn (đường ASR) **và** đang có trigger naturalness thì **cấp gì
+cũng vi phạm một trong hai**. Trạng thái ấy **không thoả mãn được**. Cả hai bất biến đều
+đúng; không cái nào nên nới.
+
+Nhưng `_planned_candidate_repair_binding_conn` đọc trigger **trước** và trả về binding
+naturalness **vô điều kiện**, kể cả khi segment đã thuộc đường khác. Nên kế hoạch bảo "cấp
+naturalness ở round N" còn bộ cấp phát ném — và người gọi không còn nước đi nào ngoài chết.
+
+**Sửa:** khi trigger treo *và* các vòng đã có thuộc đường khác, bộ lập kế hoạch trả về
+`exhausted` thay vì một chỉ thị bất khả. Review ở lại dạng `PERCEPTUAL_NATURALNESS_REVIEW` —
+đúng thứ `accept` sinh ra để giải quyết.
+
+**Vì sao không đảo thứ tự ưu tiên.** Cho "đường đã có thắng" nghe hợp lý hơn, nhưng nó tái
+sinh lần chết thứ nhất: segment ấy sẽ được cấp candidate *chuẩn*, và bất biến A ném
+"must bind its exact trigger check id" — đúng lỗi đã giết alpha.23. Trong một trạng thái
+không thoả mãn được, mọi lựa chọn "cấp cái gì đó" đều sai; lựa chọn đúng là **không cấp**.
+
+Test `test_the_plan_never_proposes_what_the_allocator_will_refuse` giờ ghim hợp đồng chứ
+không ghim câu trả lời hiện tại: kế hoạch có thể **từ chối** thoải mái, nhưng nếu nó bảo cấp
+phát thì việc cấp phát ấy phải làm được.

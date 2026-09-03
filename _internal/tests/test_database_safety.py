@@ -13538,3 +13538,63 @@ def test_the_first_allocation_still_has_to_name_a_budget(tmp_path: Path) -> None
     db, segment_id, _incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
     with pytest.raises(ValueError, match="repair budget is required"):
         db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", None)
+
+
+def test_the_plan_never_proposes_what_the_allocator_will_refuse(tmp_path: Path) -> None:
+    """The property all four of this family's crashes violated.
+
+    A plan is an instruction. If it names an allocation the allocator then rejects, the
+    caller has no move that is not a crash, and the run ends - which is what happened four
+    times: twice on the naturalness trigger binding, once on the repair budget, once on
+    mixed trigger bindings.
+
+    The sequence below is the one that produced the fourth: the ASR track claims a segment,
+    its first round is rejected, and a naturalness review arrives for the same audio. The
+    planner proposed a naturalness candidate at round 1; allocate_segment_candidate refused
+    it because a segment's rounds may not mix repair trigger bindings.
+
+    This asserts the contract rather than the current answer: whatever the plan says to
+    allocate must be allocatable.
+    """
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate, candidate_sha256 = _dual_pass_candidate(
+        db,
+        segment_id=segment_id,
+        incumbent_sha256=incumbent_sha256,
+        candidate_path=tmp_path / "candidates" / "r0.wav",
+        generation_seed=401,
+        perceptual_required=True,
+    )
+    stored_budget = int(candidate["repair_budget"])
+    db.mark_segment_candidate_invalid(
+        int(candidate["id"]),
+        expected_wav_sha256=candidate_sha256,
+        reason="test: the ASR track rejected its first round",
+    )
+    _record_naturalness_repair_trigger(
+        db, segment_id=segment_id, incumbent_sha256=incumbent_sha256
+    )
+
+    plan = db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", None)
+    if str(plan["action"]) != "allocate":
+        # Declining is a fine answer - the segment belongs to another track and the review
+        # stays a warning. What must never happen is proposing an allocation that fails.
+        return
+
+    requirement = plan.get("candidate_repair_requirement")
+    trigger = plan.get("repair_trigger_check_id")
+    db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=int(plan["repair_round"]),
+        max_repair_rounds=stored_budget,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=402,
+        wav_path=tmp_path / "candidates" / "r1.wav",
+        candidates_root=tmp_path / "candidates",
+        perceptual_required=True,
+        candidate_repair_requirement=requirement,
+        repair_trigger_check_id=int(trigger) if trigger is not None else None,
+    )
+    # And the ledger it just wrote must still be readable.
+    db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", None)

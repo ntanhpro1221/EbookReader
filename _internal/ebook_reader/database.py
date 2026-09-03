@@ -10825,10 +10825,24 @@ class ProjectDB:
                 policy_hash=str(policy_hash),
             )
             if trigger is not None:
-                return {
-                    "candidate_repair_requirement": NATURALNESS_IMPROVEMENT_REQUIREMENT,
-                    "repair_trigger_check_id": int(trigger["id"]),
-                }
+                # A segment whose rounds already belong to another track cannot take this
+                # one. Two allocation invariants meet here and the state satisfies neither:
+                # a standard candidate is refused while a naturalness review is outstanding,
+                # and a naturalness candidate is refused because a segment's rounds may not
+                # mix bindings. Whatever is allocated, allocate_segment_candidate raises -
+                # so the honest answer is that nothing can be allocated, and saying so is
+                # the difference between a warning left for a listener and a dead run.
+                mismatched_track = any(
+                    str(row["candidate_repair_requirement"])
+                    != NATURALNESS_IMPROVEMENT_REQUIREMENT
+                    for row in ordinary_rows
+                )
+                if not mismatched_track:
+                    return {
+                        "candidate_repair_requirement": NATURALNESS_IMPROVEMENT_REQUIREMENT,
+                        "repair_trigger_check_id": int(trigger["id"]),
+                    }
+                return {"candidate_repair_requirement": None, "repair_trigger_check_id": None}
         if ordinary_rows:
             return {
                 "candidate_repair_requirement": str(
@@ -11818,14 +11832,25 @@ class ProjectDB:
                     "candidate_id": None,
                     "repair_round": len(rows),
                 }
-                allocation_plan.update(
-                    self._planned_candidate_repair_binding_conn(
-                        conn,
-                        segment_id=int(segment_id),
-                        policy_hash=str(policy_hash).strip(),
-                        ordinary_rows=ordinary_rows,
-                    )
+                binding = self._planned_candidate_repair_binding_conn(
+                    conn,
+                    segment_id=int(segment_id),
+                    policy_hash=str(policy_hash).strip(),
+                    ordinary_rows=ordinary_rows,
                 )
+                if binding["candidate_repair_requirement"] is None:
+                    # Nothing can be allocated for this segment: see the comment in
+                    # _planned_candidate_repair_binding_conn. Report it the way an
+                    # exhausted budget is reported, so the caller leaves the review as a
+                    # warning instead of following an instruction that cannot be obeyed.
+                    return {
+                        "segment_id": int(segment_id),
+                        "policy_hash": str(policy_hash).strip(),
+                        "action": "exhausted",
+                        "candidate_id": None,
+                        "repair_round": None,
+                    }
+                allocation_plan.update(binding)
                 return allocation_plan
             if not tempo_rows:
                 if any(
