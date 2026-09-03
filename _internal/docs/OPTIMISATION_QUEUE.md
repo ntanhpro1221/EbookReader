@@ -113,6 +113,23 @@ Segment thứ ba (`C » B » A » S » SS » SSS`) ngoài tầm với ở mọi 
 nới cận dưới vì nó** — 807 segment đã nhận, không cái nào dưới 12.5. Chi tiết:
 `docs/PACE_METRIC.md`.
 
+## 5. Ngưỡng perceptual theo sigma thay vì theo số tuyệt đối — bớt một nửa việc nghe
+
+Không phải tốc độ, mà là **thời gian của chủ sách**. Cổng dùng một ngưỡng tuyệt đối
+(`review_delta = -0.8`) cho mọi độ dài, nhưng độ tán của thước đo tăng 63% khi đoạn ngắn
+lại, trong khi **trung vị phẳng**. Kết quả: đoạn <2s bị gắn cờ 14,9%, đoạn ≥8s chỉ 1,8% —
+"tệ nhất" mang hai nghĩa trong cùng một cổng.
+
+Áp cùng **2,06 sigma** (đúng cái mà −0,8 nghĩa là với đoạn dài) cho từng nhóm độ dài:
+**80 → 39 lần gắn cờ**. Nó *siết* đoạn dài (1,8% → 2,8%) và nới đoạn ngắn, nên là **cân
+bằng lại, không phải nới lỏng**.
+
+Còn một câu chưa trả lời được, và nó quyết định mục này có đúng không: phần tán thêm là
+nhiễu thước đo hay chất lượng thật sự dao động hơn. **Cách đo:** tự tổng hợp vài câu ngắn
+nhiều lần với seed khác nhau rồi chấm perceptual; nếu điểm nhảy loạn trên những bản thu tai
+người nghe thấy như nhau thì là nhiễu. Chưa chạy được vì cần GPU. Chi tiết:
+`docs/PERCEPTUAL_QA_COST.md`, `scripts/perceptual_duration_bias.py`.
+
 ---
 
 ## Đã có script, chưa chạy (cần máy rảnh, không có lần chạy nào đang bay)
