@@ -271,3 +271,57 @@ Invariant "tự nhường foreground và tự tăng lại" không được đán
 
 Đĩa 99% idle và CPU 2,5% — **đừng** đụng vào fsync, checksum, hay số lần ghi `.part`. Chúng không phải nút
 thắt và chúng là thứ giữ cho artifact an toàn khi crash.
+
+## Pha tốn nhất của một lần chạy là pha duy nhất không dùng pool (đo 2026-09-04)
+
+Chủ sách hỏi máy đã bị vắt kiệt chưa. Lấy mẫu GPU 25 giây ngay giữa lúc alpha.43 tạo
+candidate clarity:
+
+    GPU  : trung bình 23,7%   trung vị 16,0%   đỉnh 100%
+    VRAM : trung bình 1.558 MiB   đỉnh 2.719 MiB / 8.151 MiB
+
+Hơn 5 GB VRAM nằm không, và đỉnh 2.719 MiB xấp xỉ đúng `TTS_POOL_BASE_VRAM_MB` = 2.733,
+tức **một model duy nhất**, dù log đã báo "Pool TTS song song: 3 tiến trình" trước đó.
+
+Đọc code thì rõ: `pipeline.py` sinh candidate bằng một vòng lặp thẳng -
+`for index, (item, candidate) in enumerate(generation_jobs, 1)`. Pha tổng hợp chính dùng
+pool; pha sửa clarity thì không.
+
+### Nó tốn bao nhiêu
+
+Quy thời gian cho pha đang hoạt động trên log alpha.32, chỉ tính những bước liên tiếp
+(bước nhảy cách quãng là lúc chạy dừng chứ không phải lúc pha làm việc):
+
+| pha | công việc thật | số việc | trung vị mỗi việc |
+|---|---|---|---|
+| **Tạo candidate clarity (tuần tự)** | **4.707s** | 826 | **5,45s** |
+| Kiểm tra phát âm (ASR) | 4.252s | 2.311 | 1,54s |
+| Tạo audio chapter (**có pool**) | 2.658s | 2.466 | — |
+| Kiểm tra candidate clarity | 2.325s | 1.652 | 0,85s |
+| Perceptual QA chapter | 1.106s | 2.385 | — |
+
+**Pha tốn nhất cả lần chạy chính là pha duy nhất chạy tuần tự.** Đường có pool đi được
+0,93 việc/giây; đường tuần tự đi được 0,18 việc/giây.
+
+Không đọc thẳng tỉ số 5,3× ấy thành mức tăng tốc hứa hẹn: candidate là bản sửa, văn bản và
+tham số khác bản chính nên mỗi cái vốn đắt hơn. Mức đúng để kỳ vọng là mức song song của
+pool - 3 tiến trình như lần chạy này chọn - nên 4.707s có thể xuống khoảng 1.600-2.400s,
+tiết kiệm ~2.300-3.100s trên ~15.600s công việc đo được. Khoảng **15-20% một lần chạy**.
+
+Điểm đáng chú ý nhất: **cơ chế đã có sẵn.** `_synthesis_pool` đang được đường tổng hợp
+chính dùng, và nó đã tự co giãn theo VRAM qua `workers_for_vram`. Đây không phải xây mới,
+mà là cho một vòng lặp dùng thứ vòng lặp bên cạnh đã dùng.
+
+### Một con số suýt bị báo sai
+
+Cách quy thời gian đầu tiên gán thời gian trôi qua cho *nhãn nhìn thấy gần nhất*, và nó cho
+ra "Chuẩn bị và chia văn bản: 3.983s = 18,4%" - nghe như việc xử lý văn bản đang ăn một
+phần năm lần chạy. Cách chặt hơn, chỉ tính khoảng giữa hai bước liên tiếp *cùng một nhãn*,
+làm nhãn ấy **biến mất hoàn toàn**: nó không có bước liên tiếp nào, nên 3.983s kia là thời
+gian rảnh bị gán nhầm chứ không phải công việc. Khi quy thời gian theo nhãn, hãy đòi hỏi
+bằng chứng rằng nhãn ấy thực sự đang tiến triển.
+
+### Việc cần làm (chưa làm - `pipeline.py` bị khoá lúc alpha.43 chạy)
+
+Cho vòng sinh candidate dùng `_synthesis_pool` như đường tổng hợp chính. Đo lại bằng chính
+phép đo trên: thời gian pha, và mẫu GPU/VRAM giữa lúc chạy.
