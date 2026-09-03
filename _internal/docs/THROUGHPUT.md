@@ -303,10 +303,14 @@ Quy thời gian cho pha đang hoạt động trên log alpha.32, chỉ tính nh�
 **Pha tốn nhất cả lần chạy chính là pha duy nhất chạy tuần tự.** Đường có pool đi được
 0,93 việc/giây; đường tuần tự đi được 0,18 việc/giây.
 
-Không đọc thẳng tỉ số 5,3× ấy thành mức tăng tốc hứa hẹn: candidate là bản sửa, văn bản và
-tham số khác bản chính nên mỗi cái vốn đắt hơn. Mức đúng để kỳ vọng là mức song song của
-pool - 3 tiến trình như lần chạy này chọn - nên 4.707s có thể xuống khoảng 1.600-2.400s,
-tiết kiệm ~2.300-3.100s trên ~15.600s công việc đo được. Khoảng **15-20% một lần chạy**.
+Không đọc thẳng tỉ số 5,3× ấy thành mức tăng tốc hứa hẹn, và **cũng đừng lấy số tiến trình
+làm mức tăng tốc** - đó là lỗi tôi đã mắc ở bản đầu của mục này. Pool đã được đo rồi, ngay
+trong docstring của `TTS_POOL_MIN_BATCH`: 2 đoạn 1,00×, 3 đoạn 1,12×, 4 đoạn 1,22×, 9 đoạn
+1,29×, vì 3 worker đã đẩy GPU lên 90%.
+
+Ghép đường cong ấy với kích thước vòng thật (129 vòng, trung vị 5 candidate):
+4.707s → **~3.802s**, tiết kiệm **~905s**, tức 19,2% của pha và khoảng **7,4% một lần
+chạy**. Vẫn là mục đáng làm nhất, và bằng một nửa con số tôi viết lần đầu.
 
 Điểm đáng chú ý nhất: **cơ chế đã có sẵn.** `_synthesis_pool` đang được đường tổng hợp
 chính dùng, và nó đã tự co giãn theo VRAM qua `workers_for_vram`. Đây không phải xây mới,

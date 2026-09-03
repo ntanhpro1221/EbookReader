@@ -10,19 +10,33 @@ pha phân tích.
 
 **Nền ấy đã dịch.** faster-whisper (đã ship, alpha.43 đang chạy) lấy đi khoảng 3.400s của hai
 pha ASR, nên phần việc sau phân tích còn khoảng **12.200s**. Điều đó không làm mục nào rẻ đi
-- nó làm mục 1 **đắt hơn về tỉ trọng**: 4.707s trên 12.200s là **39% phần việc còn lại**.
+- nó làm mục 1 **đắt hơn về tỉ trọng**: 4.707s trên 12.200s là **39% phần việc còn lại**
+(dù phần *lấy lại được* của nó chỉ ~905s, xem mục 1).
 Xem `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md` cho phép đo và biến kiểm của nó.
 
 ---
 
-## 1. Cho vòng sinh candidate dùng pool — ~15-20% một lần chạy, và là 39% phần việc còn lại
+## 1. Cho vòng sinh candidate dùng pool — ~905s, tức ~7,4% một lần chạy
 
 `pipeline.py` sinh candidate clarity bằng vòng lặp thẳng, trong khi đường tổng hợp chính
 dùng `_synthesis_pool`. Đó là **pha tốn nhất cả lần chạy**: 4.707s, 826 việc, 5,45s mỗi
 việc. Lấy mẫu GPU giữa lúc ấy: **23,7% trung bình, VRAM đỉnh 2.719/8.151 MiB.**
 
-Cơ chế đã có sẵn và đã tự co giãn theo VRAM qua `workers_for_vram`. Kỳ vọng đúng là mức
-song song của pool (3 tiến trình), tức 4.707s → ~1.600-2.400s.
+**Ước lượng đầu của tôi ở đây sai 3,5 lần và đã sửa.** Tôi lấy "3 tiến trình" làm mức tăng
+tốc, tức 4.707s → ~1.570s. Nhưng chính dự án đã đo pool rồi, và con số nằm ngay trong
+docstring của `TTS_POOL_MIN_BATCH`: **2 đoạn 1,00×, 3 đoạn 1,12×, 4 đoạn 1,22×, 9 đoạn
+1,29×**. Tổng hợp TTS không giãn tuyến tính theo số worker vì 3 worker đã đẩy GPU lên 90%.
+
+Ghép đường cong ấy với kích thước vòng thật (129 vòng, trung vị **5** candidate):
+
+    tuần tự : 4.707s
+    có pool : ~3.802s      tiết kiệm ~905s = 19,2% của pha, **7,4% một lần chạy**
+
+Vẫn là mục lớn nhất hàng đợi, nhưng bằng một nửa con số tôi viết lần đầu. Bài học: phép đo
+đã có sẵn trong kho, trong một docstring, và tôi công bố ước lượng trước khi đọc nó.
+
+`TTS_POOL_MIN_BATCH = 3` nên 36/129 vòng (7,4% candidate) vẫn chạy tuần tự - đã tính vào
+con số trên.
 
 Chi tiết và cảnh báo về cách quy thời gian: `docs/THROUGHPUT.md`.
 
