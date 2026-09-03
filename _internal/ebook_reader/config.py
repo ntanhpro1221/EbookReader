@@ -250,7 +250,28 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
             "failure_policy": "fail",
             "parallel_workers": 8,
         },
-        "tts": {"max_retries": 4, "batch_size": 8},
+        # Ten, not four, and the two extra segments it buys are the reason.
+        #
+        # alpha.32 finished with three segments that never got audio: the pace gate refused
+        # all four takes and the sentences were too short to split. Estimating from each
+        # segment's own spread across those four (scripts/pace_retry_reachability.py), two
+        # were losing to the budget rather than to the voice - one missed the floor by 0.03
+        # chars/s - and clear it 88% and 73% of the time given ten. The third reads a rank
+        # ladder aloud and no budget reaches it.
+        #
+        # Cheap because it only spends on segments already failing: three in the whole book
+        # reach the budget at all, and eight more touch the gate and pass on the next try.
+        # About 18 extra synthesis calls across 948 segments.
+        #
+        # Re-running never rescues these: synthesis is deterministic per
+        # (stable_id, voice_key, seed_salt), and alpha.43 reproduced alpha.32's four takes
+        # to the decimal. Attempts 5-10 are new salts, so they are six genuinely new takes -
+        # a one-time question whose answer is then permanent for that segment.
+        #
+        # Safe only because a split candidate is now identified by generation_strategy: this
+        # number used to double as the marker for "do not retry", so raising it handed 85
+        # stored rows six attempts they were never meant to have.
+        "tts": {"max_retries": 10, "batch_size": 8},
     },
 }
 

@@ -265,7 +265,29 @@ HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 MAX_PRONUNCIATIONS_PER_BATCH = 32
-NAME_PRONUNCIATION_BATCH_SIZE = 20
+NAME_PRONUNCIATION_BATCH_SIZE = 12
+"""Twelve, because this constant is what sets the analysis context window.
+
+config.analysis_context_window derives num_ctx from the largest request the profile makes,
+and at twenty names that is this batch: it asks for min(512 + 20*192, 6144) = 4,352 output
+tokens, and the derivation demands at least twice the output so the `num_ctx // 2` term
+cannot quietly halve it. That alone forced 9,216. The book's real floor is the segment
+batch, which needs 6,940 and rounds to 7,168.
+
+Measured cost of the difference, alpha.32 at 7,168 against alpha.43 at 9,216 on the same
+book: generation ran 56.4 tok/s against 50.1, and the analysis phase 3,851s against 4,490s.
+A wider KV cache on a card that already holds the model spills work to the CPU - the same
+mechanism recorded at 16,384, where generation fell to 25.6 tok/s.
+
+Twelve reaches 7,168 without overriding the derivation or capping any output budget. The
+price is 112 names going from 6 batches to 10: four more calls out of 424, each smaller than
+the ones it replaces.
+
+Unmeasured, and worth watching in the next run's log: whether smaller batches change how
+often Qwen fails to produce a valid reading. alpha.43 logged 18 names still failing after
+three attempts in batch 1, so smaller may well be better, but that is a guess until the
+failure count says otherwise.
+"""
 NAME_PRONUNCIATION_MIN_OCCURRENCES = 1
 NAME_PRONUNCIATION_ID_PREFIX = "N"
 NAME_PRONUNCIATION_ID_WIDTH = 3
