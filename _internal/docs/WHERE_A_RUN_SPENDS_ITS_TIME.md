@@ -136,3 +136,41 @@ Thoạt nhìn tưởng thay đổi beam làm tệ đi. Xem từng ca thì **khô
 so sánh giữa hai lần chạy không tách được bộ giải mã khỏi giọng đọc. Bằng chứng có kiểm
 soát - 120 bản thu **giống hệt**, ba lần lật verdict, cả ba nghiêng về greedy - vẫn là bằng
 chứng tốt hơn hẳn, và nó không mâu thuẫn với bảng trên.
+
+## Chồng lấn cảm thụ với ASR: đo trên lần chạy thật (alpha.32, 2026-09-03)
+
+Thời gian cảm thụ **còn nằm trên dòng thời gian tuần tự** (tức phần chưa nấp được sau ASR):
+
+| chương | alpha.25 | alpha.32 | số worker chồng lấn |
+|---|---:|---:|---|
+| 4 | 305,1s | **77,7s** | 8 |
+| 5 | 307,8s | **57,0s** | 8 |
+| 6 | 209,4s | **39,0s** | 8 |
+| 2 | 308,2s | 270,7s | chỉ 2 (RAM thiếu) |
+| 3 | 334,9s | **995,3s** | **bỏ qua** (5,1 GB trống) |
+| 1 | 51,7s | 31,6s | 2 (chương 2 segment) |
+
+**Ba chương chạy đủ 8 worker: 822,3s → 173,7s, giảm 79%.** Chiếu ra mười chương thì vào
+khoảng 2.000 trên 2.538 giây - gần bằng dự đoán ban đầu.
+
+ASR thì đứng yên (có chương tăng, có chương giảm, không lệch hệ thống), đúng dấu hiệu cần
+thấy: **chồng lấn không lấn sang thời gian của cái nó nấp sau.**
+
+### Ba chương còn lại giải thích hết phần còn lại của bảng
+
+- **Chương 2 chỉ giảm 12%** vì pool chỉ được 2 worker: lúc ấy máy còn 8,4 GB trống, mà
+  ngân sách 1,75 GB/worker trên nền `min_free_ram_gb` cho ra `(8,4−3,5)/1,75 = 2`. Đúng
+  công thức, chỉ là máy chật.
+- **Chương 3 tệ gấp ba** vì chồng lấn **bị bỏ qua hoàn toàn** (5,1 GB trống, không đủ cho
+  hai tiến trình - và nó **ghi rõ lý do** vào log, đúng chỗ mà trước đây nó im lặng), cộng
+  bốn lần sửa naturalness phải chấm lại trong tiến trình chính.
+- **Chương 1 chỉ có 2 segment**, và 31,6s còn lại gần như toàn bộ là lần nạp model UTMOSv2
+  duy nhất trong tiến trình chính.
+
+### Điều đáng ghi cho người sau
+
+Khoản tiết kiệm **phụ thuộc trực tiếp vào RAM trống** khi chương bắt đầu ASR, và nó phụ
+thuộc theo bậc: 8 worker giảm ~79%, 2 worker giảm ~12%, 0 worker thì không giảm gì. Trên
+máy này ranh giới là khoảng 17 GB trống cho đủ 8 worker, 7 GB cho 2. Đó không phải khuyết
+điểm của thiết kế - đó là nó từ chối hứa phần bộ nhớ không có thật, đúng bài học đã trả giá
+bằng alpha.26.
