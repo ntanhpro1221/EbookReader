@@ -810,3 +810,29 @@ alpha.43 ủng hộ điều đó chứ không chỉ là suy diễn ngữ âm:
 Năm bản thu độc lập cùng hỏng theo một kiểu thì khó tin là "năm bản thu tồi" hơn là "câu này
 không nghe ra được". Nghĩa là **thêm nỗ lực của máy không cứu được nó** — đúng chỗ cần
 `accept`, và cũng đúng lý do `accept` tồn tại.
+
+#### Bảng cuối (7/9 đã xử lý), và lớp ấy thật ra là gì
+
+| segment | sim 32 → 43 | kết cục ở alpha.43 |
+|---|---|---|
+| ch2 `s0000067` (`S`) | 0,00 → 0,00 | vẫn `TIMELINE_IMPOSSIBLE`, vẫn được tha |
+| ch2 `s0000071` (`SSS`) | 0,00 → 0,00 | vẫn `TIMELINE_IMPOSSIBLE`, vẫn được tha |
+| ch4 `s0000099` (`—RẦM!!`) | 0,00 → 0,00 | `UNVERIFIABLE_SHORT_TEXT`, được tha |
+| ch7 `s0000035` (`"Argh!"`) | 0,00 → 0,00 | **verified**, không còn cảnh báo nào |
+| ch6 `s0000066` | 0,00 → 0,50 | qua cổng |
+| ch7 `s0000051` | 0,00 → **1,00** | qua cổng — bản ghi **hoàn hảo** ở chỗ engine cũ ảo giác |
+| ch6 `s0000001` | 0,00 → 0,59 | **chặn** |
+
+**6/7 không chặn, 1/7 chặn.** Còn 2 segment (ch9, ch10).
+
+**Lớp này là gì:** nhìn văn bản thì rõ — `S`, `SSS`, `—RẦM!!`, `"Argh!"`, `"Mẹ kiếp! A a a!"`.
+Đây là **chữ cái đơn, tiếng động, tiếng gào** — những chỗ gần như không có nội dung lời nói
+để mà nghe. Whisper lấp chỗ trống bằng thứ nó được huấn luyện (`"Các bạn hãy đăng ký kênh
+để ủng hộ kênh của mình nhé."` là ví dụ hoàn hảo). Phán quyết ASR ở đây vốn dĩ vô nghĩa, và
+đó chính là điều hai mã miễn trừ đang nói.
+
+**Một lỗi của tôi trong lúc đếm, đáng ghi lại:** bảng đầu tôi kiểm
+`"TIMELINE_IMPOSSIBLE" in codes` với `codes` là một **set** — mà thành viên của set phải
+khớp *nguyên vẹn*, còn mã thật là `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE`. Nên nó không bao giờ
+khớp, và tôi báo "0 segment còn ảo giác" trong khi có 2. Tổng số chặn/không chặn thì vẫn
+đúng vì tính bằng đường khác. Kiểm chuỗi con thì đừng dùng `in` trên set.
