@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -136,6 +137,17 @@ from .tts_pool import TTS_POOL_MIN_BATCH
 
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
+# How long a run waits for memory that another program is holding before it gives up.
+# alpha.26 stopped at 357 of 948 segments on "available RAM 1.1 GB" while three Unity
+# editors and an IDE held about five and a half gigabytes. The run was not the cause: it
+# had already unloaded its own models, and the measurement went 1.4 -> 1.1 GB anyway. A
+# run of several hours throwing away its afternoon because somebody opened an editor is a
+# worse outcome than idling through it, and every gigabyte of the shortage comes back by
+# itself when that program closes. Waiting is safe precisely because everything this
+# process holds has already been released: the machine belongs to whatever needs it.
+CRITICAL_RAM_WAIT_TIMEOUT_SECONDS = 1800.0
+CRITICAL_RAM_WAIT_POLL_SECONDS = 15.0
+CRITICAL_RAM_WAIT_LOG_SECONDS = 120.0
 HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
     {
         "TTS_SPLIT_RECOVERY",
@@ -270,6 +282,7 @@ class BookPipeline:
         self._tts_pool: Any = None
         self._tts_pool_failed = False
         self.perceptual_qa = UTMOSNaturalnessVerifier(settings, self.log)
+        self._perceptual_prefetch: dict[str, Any] | None = None
         self._last_resource_level: ResourceLevel | None = None
         self._completed_noop = False
         self._last_tts_failure_signature: str | None = None
@@ -371,6 +384,10 @@ class BookPipeline:
                     f"Đã đo lại RAM sau thu hồi: {before_ram_gb:.1f} → "
                     f"{snapshot.free_ram_gb:.1f} GB khả dụng."
                 )
+                if decision.critical and self.resources.is_ram_only_critical(snapshot):
+                    snapshot, decision = self._wait_for_foreign_ram(
+                        snapshot, decision, checkpoint
+                    )
             if decision.level != self._last_resource_level:
                 self._last_resource_level = decision.level
                 self.emit(
@@ -420,6 +437,78 @@ class BookPipeline:
             if gpu_ok and cpu_ok:
                 return decision
             time.sleep(2.0)
+
+    def _wait_for_foreign_ram(
+        self,
+        snapshot: Any,
+        decision: Any,
+        checkpoint: str,
+    ) -> tuple[Any, Any]:
+        """Idle until memory another program is holding comes back, or give up trying.
+
+        Reached only after this process has released everything it holds and the machine
+        is still short, which means the shortage is somebody else's and will end when they
+        end. Stopping here throws away every hour the run has already spent; waiting costs
+        nothing, because there is nothing left running to cost anything. If the memory does
+        not come back within the timeout the run stops exactly as it did before - the
+        caller sees a critical decision and raises.
+
+        A stop or pause request is honoured on every poll, so this never outlives the
+        user's patience the way a plain sleep would.
+        """
+        started = time.monotonic()
+        announced = False
+        last_logged = 0.0
+        while time.monotonic() - started < CRITICAL_RAM_WAIT_TIMEOUT_SECONDS:
+            if not announced:
+                announced = True
+                self.log(
+                    f"Đang chờ RAM tại checkpoint an toàn ({checkpoint}): còn "
+                    f"{snapshot.free_ram_gb:.1f} GB, cần trên "
+                    f"{float(self.settings['resources']['critical_free_ram_gb']):.1f} GB. "
+                    "Model đã nhả hết; sẽ tự chạy tiếp khi chương trình khác trả lại bộ nhớ."
+                )
+                self.emit(
+                    "resource",
+                    {
+                        "level": ResourceLevel.PAUSE_NEW_WORK.value,
+                        "reason": f"chờ RAM: {snapshot.free_ram_gb:.1f} GB khả dụng",
+                        "gpu_scale": 0.0,
+                    },
+                )
+                if self.settings["safety"].get("notify_on_critical_stop", True):
+                    self.notifier.notify(
+                        "Ebook Reader đang chờ RAM",
+                        f"Chỉ còn {snapshot.free_ram_gb:.1f} GB khả dụng. Pipeline đã nhả "
+                        "hết model và sẽ tự chạy tiếp khi có bộ nhớ.",
+                        project_path=self.paths.root,
+                    )
+            self._wait_pause_or_stop()
+            time.sleep(CRITICAL_RAM_WAIT_POLL_SECONDS)
+            snapshot = self.resources.snapshot(force=True)
+            decision = self.resources.decide(snapshot)
+            if not decision.critical:
+                self.log(
+                    f"RAM đã hồi phục lên {snapshot.free_ram_gb:.1f} GB sau "
+                    f"{time.monotonic() - started:.0f}s chờ; chạy tiếp."
+                )
+                return snapshot, decision
+            if not self.resources.is_ram_only_critical(snapshot):
+                # Disk or temperature became critical while waiting: a different problem,
+                # and not one that waiting for memory solves.
+                return snapshot, decision
+            waited = time.monotonic() - started
+            if waited - last_logged >= CRITICAL_RAM_WAIT_LOG_SECONDS:
+                last_logged = waited
+                self.log(
+                    f"Vẫn đang chờ RAM: {snapshot.free_ram_gb:.1f} GB khả dụng sau "
+                    f"{waited / 60:.0f} phút."
+                )
+        self.log(
+            f"Đã chờ RAM {CRITICAL_RAM_WAIT_TIMEOUT_SECONDS / 60:.0f} phút mà không hồi "
+            "phục; dừng tại checkpoint an toàn."
+        )
+        return snapshot, decision
 
     def _ensure_segments(self) -> None:
         max_chars = int(self.settings["tts"]["max_segment_chars"])
@@ -1357,10 +1446,121 @@ class BookPipeline:
             quality_check_id=quality_check_id,
         )
 
+    def _perceptual_pending_rows(self, chapter_id: int) -> list[Any]:
+        """Segments of this chapter whose current audio has no perceptual evidence yet."""
+        return [
+            row
+            for row in self.db.list_segments(chapter_id=chapter_id)
+            if str(row["status"]) != SegmentStatus.FAILED.value
+            and row["wav_path"]
+            and not self.db.segment_audio_is_current_qa_verified(
+                int(row["id"]),
+                str(row["wav_sha256"] or ""),
+                SEGMENT_PERCEPTUAL_QUALITY_STAGE,
+            )
+        ]
+
+    def _start_perceptual_prefetch(self, chapter: Any) -> None:
+        """Score this chapter on the CPU while Whisper reads it on the GPU.
+
+        Measured on alpha.25, ASR is the most expensive stage of a run - 3,870 seconds
+        against TTS's 2,055 - and perceptual scoring is 2,538 seconds that ran after it,
+        on the CPU, while the GPU had nothing left to do. In nine of ten chapters the ASR
+        time was longer than the scoring time, so nearly all of the scoring fits inside it.
+
+        Nothing about a verdict moves. The parent still judges every segment itself, in the
+        same order, against the same thresholds; only the arithmetic that produces a number
+        from a file happens sooner. A score is filed under the checksum of the audio it
+        heard, so a take that ASR repair replaces afterwards cannot pick up the old score -
+        the lookup simply misses and the parent scores the new take itself.
+
+        This is called once Whisper is resident, not before: the worker count comes from a
+        free-RAM snapshot, and a snapshot taken while the model was still unloaded would
+        promise the pool memory that the model is about to want.
+        """
+        if self._perceptual_prefetch is not None:
+            return
+        if not self._perceptual_qa_enabled() or self._perceptual_qa_uses_gpu():
+            return
+        chapter_id = int(chapter["id"])
+        pending = self._perceptual_pending_rows(chapter_id)
+        if len(pending) < 2:
+            return
+        # A non-blocking read of the same decision the gate blocks on. The gate itself
+        # loops until the machine is ready, and looping here would stall the ASR that this
+        # is supposed to hide behind; a busy machine simply keeps today's behaviour.
+        snapshot = self.resources.snapshot()
+        decision = self.resources.decide(snapshot)
+        if decision.critical or not decision.allow_cpu_heavy_work:
+            return
+        pool = PerceptualScorePool(
+            self.settings,
+            self.log,
+            workers=self._perceptual_pool_workers(),
+            threads=self._perceptual_worker_threads(),
+        )
+        wav_paths = [str(row["wav_path"]) for row in pending]
+        free_ram_gb = float(snapshot.free_ram_gb)
+        workers = pool.usable_for(len(wav_paths), free_ram_gb)
+        if workers < 2:
+            return
+        # The pool logs from the worker thread, so its lines are collected and replayed on
+        # the main thread when the scores are collected. Interleaving them with the ASR
+        # progress of a different stage would make the log lie about the order of events.
+        messages: list[str] = []
+        handle: dict[str, Any] = {
+            "chapter_id": chapter_id,
+            "scores": {},
+            "messages": messages,
+            "requested": len(wav_paths),
+            "workers": workers,
+        }
+
+        def run() -> None:
+            try:
+                handle["scores"] = pool.score_many(wav_paths, free_ram_gb=free_ram_gb)
+            except Exception as exc:  # noqa: BLE001
+                # Never a quality problem: an empty map means the parent scores everything.
+                messages.append(f"Chấm sẵn perceptual song song thất bại ({exc}).")
+                handle["scores"] = {}
+
+        pool.log = messages.append
+        thread = threading.Thread(
+            target=run,
+            name=f"perceptual-prefetch-ch{chapter_id}",
+            daemon=True,
+        )
+        handle["thread"] = thread
+        self._perceptual_prefetch = handle
+        thread.start()
+        self.log(
+            f"Chấm sẵn perceptual chapter {chapter['chapter_index']} song song với ASR: "
+            f"{len(wav_paths)} đoạn trên {workers} tiến trình."
+        )
+
+    def _collect_perceptual_prefetch(self, chapter_id: int) -> dict[str, float]:
+        """Take the scores the background pool produced, or nothing if it was not started."""
+        handle = self._perceptual_prefetch
+        self._perceptual_prefetch = None
+        if handle is None or int(handle["chapter_id"]) != chapter_id:
+            return {}
+        handle["thread"].join()
+        for message in handle["messages"]:
+            self.log(message)
+        scores = dict(handle["scores"])
+        if scores:
+            self.log(
+                f"Chấm sẵn song song xong: {len(scores)}/{handle['requested']} đoạn "
+                "có điểm trước khi ASR kết thúc."
+            )
+        return scores
+
     def _prefetch_perceptual_scores(
         self,
         pending: list[Any],
         gate_label: str,
+        *,
+        reserve_ram_gb: float = 0.0,
     ) -> dict[str, float]:
         """Score this chapter's pending takes across processes before judging any of them.
 
@@ -1368,6 +1568,9 @@ class BookPipeline:
         cores costs nothing the gates depend on. The verdicts below are untouched: they run
         in this process, in the same order, against the same thresholds. A file the pool
         did not return simply is not in the map, and the parent scores it itself.
+
+        Scores come back keyed by the checksum of the audio each one heard, so a take that
+        ASR repair replaced after this ran cannot be looked up by the row that replaced it.
         """
         if not pending or self._perceptual_qa_uses_gpu():
             return {}
@@ -1379,7 +1582,9 @@ class BookPipeline:
         )
         wav_paths = [str(row["wav_path"]) for row in pending]
         snapshot = self.resources.snapshot()
-        workers = pool.usable_for(len(wav_paths), float(snapshot.free_ram_gb))
+        workers = pool.usable_for(
+            len(wav_paths), float(snapshot.free_ram_gb), reserve_ram_gb=reserve_ram_gb
+        )
         if workers < 2:
             return {}
         # The gate runs once for the batch rather than once per file: the pool holds the
@@ -1390,7 +1595,11 @@ class BookPipeline:
             require_gpu=False,
             require_cpu_io=True,
         )
-        scores = pool.score_many(wav_paths, free_ram_gb=float(snapshot.free_ram_gb))
+        scores = pool.score_many(
+            wav_paths,
+            free_ram_gb=float(snapshot.free_ram_gb),
+            reserve_ram_gb=reserve_ram_gb,
+        )
         if scores:
             self.log(
                 f"{gate_label}: chấm sẵn {len(scores)}/{len(wav_paths)} đoạn "
@@ -1426,7 +1635,9 @@ class BookPipeline:
         label = f"Perceptual QA chapter {chapter['chapter_index']}"
         review_candidates: list[dict[str, Any]] = []
         self._progress(label, 0, len(pending))
-        prefetched_scores = self._prefetch_perceptual_scores(pending, label)
+        prefetched_scores = self._collect_perceptual_prefetch(chapter_id)
+        if not prefetched_scores:
+            prefetched_scores = self._prefetch_perceptual_scores(pending, label)
         for index, row in enumerate(pending, 1):
             if not self.db.segment_audio_is_current_qa_verified(
                 int(row["id"]),
@@ -1446,7 +1657,7 @@ class BookPipeline:
                     gate_label=(
                         f"UTMOSv2 chapter {chapter['chapter_index']} segment {row['seq']}"
                     ),
-                    prefetched_score=prefetched_scores.get(str(row["wav_path"])),
+                    prefetched_score=prefetched_scores.get(str(row["wav_sha256"] or "")),
                 )
                 baseline_pitch_semitones = int(
                     result.get("baseline_pitch_semitones", 0)
@@ -2128,7 +2339,11 @@ class BookPipeline:
         self._close_synthesis_pool()
         self.tts.unload_all()
         self.db.update_chapter_status(chapter_id, ChapterStatus.VERIFYING.value)
-        self._verify_chapter_audio(chapter, verifier)
+        self._verify_chapter_audio(
+            chapter,
+            verifier,
+            on_model_resident=lambda: self._start_perceptual_prefetch(chapter),
+        )
         verifier.unload()
         perceptual_reviews = self._verify_chapter_perceptual_audio(chapter)
         perceptual_reviews = self._repair_chapter_perceptual_candidates(
@@ -3904,7 +4119,21 @@ class BookPipeline:
             "selected_quality_check_id": int(selected_evidence["quality_check_id"]),
         }
 
-    def _verify_chapter_audio(self, chapter: Any, verifier: WhisperVerifier) -> None:
+    def _verify_chapter_audio(
+        self,
+        chapter: Any,
+        verifier: WhisperVerifier,
+        *,
+        on_model_resident: Callable[[], None] | None = None,
+    ) -> None:
+        """Read back every segment of the chapter and judge what was actually said.
+
+        ``on_model_resident`` fires once, after the first decode returns, which is the
+        first moment Whisper is loaded and the machine's free memory is what it will be
+        for the rest of this stage. Anything sized from a snapshot before that point is
+        sized against memory the model has not claimed yet.
+        """
+        model_resident_announced = False
         chapter_id = int(chapter["id"])
         rows = self.db.list_segments(chapter_id=chapter_id)
         pending: list[dict[str, Any]] = []
@@ -4059,6 +4288,7 @@ class BookPipeline:
             confirmation: bool = False,
             repair_round: int | None = None,
         ) -> list[dict[str, Any]]:
+            nonlocal model_resident_announced
             issues: list[dict[str, Any]] = []
             self._progress(label, 0, len(items))
             for index, item in enumerate(items, 1):
@@ -4072,6 +4302,9 @@ class BookPipeline:
                     repair_round=repair_round,
                     delivery_mode=delivery_mode_for(item),
                 )
+                if on_model_resident is not None and not model_resident_announced:
+                    model_resident_announced = True
+                    on_model_resident()
                 result = require_endpoint_repair(item, result)
                 last_results[int(item["id"])] = result
                 if _asr_verdict(result) == ASR_PASS:

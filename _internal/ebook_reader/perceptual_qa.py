@@ -12,6 +12,7 @@ from typing import Any, Callable, Iterator
 import numpy as np
 import soundfile as sf
 
+from .io_utils import sha256_file
 from .resource_manager import trim_process_working_set
 from .tts import apply_pitch_variant
 from .voice_catalog import VOICE_PREVIEW_FILENAMES
@@ -524,17 +525,24 @@ def _score_worker_init(settings: dict[str, Any], threads: int) -> None:
 
 
 def _score_worker_job(wav_path: str) -> tuple[str, float | None]:
-    """Score one file, or report failure so the parent can re-run it itself.
+    """Score one file and say which audio the score belongs to.
 
     A worker never decides anything. Returning None for a file it could not score leaves
     the parent to call its own scorer, which raises and classifies the failure through the
     same path it would have taken had no pool existed.
+
+    The checksum is taken **after** scoring and is what the score is filed under, because
+    a path is not an identity: ASR repair re-cuts a segment and writes a new take to the
+    same path. A score filed under the path would then be read back for audio it never
+    heard. WAVs are written to a .part file and renamed, so the reader sees one whole take
+    or the other, never a torn one - and whichever it saw, the checksum names it.
     """
     verifier = _WORKER.get("verifier")
     if verifier is None:
         return wav_path, None
     try:
-        return wav_path, float(verifier._score(Path(wav_path)))
+        score = float(verifier._score(Path(wav_path)))
+        return sha256_file(Path(wav_path)), score
     except Exception:  # noqa: BLE001
         return wav_path, None
 
@@ -555,14 +563,27 @@ class PerceptualScorePool:
         self.workers = max(0, int(workers))
         self.threads = max(1, int(threads))
 
-    def usable_for(self, job_count: int, free_ram_gb: float) -> int:
-        """How many workers this batch may actually have, or 0 to score in the parent."""
+    def usable_for(
+        self,
+        job_count: int,
+        free_ram_gb: float,
+        *,
+        reserve_ram_gb: float = 0.0,
+    ) -> int:
+        """How many workers this batch may actually have, or 0 to score in the parent.
+
+        ``reserve_ram_gb`` is what a stage running alongside this pool has not allocated
+        yet. Scoring beside ASR is measured from a snapshot taken while Whisper is still
+        unloaded, so the free RAM it reports is RAM this pool would otherwise take from
+        the model about to want it.
+        """
         if self.workers < 2 or job_count < 2:
             return 0
         if str(self.settings.get("perceptual_qa", {}).get("device", "cpu")) != "cpu":
             # A GPU pool would multiply VRAM against the engines the pipeline still needs.
             return 0
-        affordable = int(max(0.0, free_ram_gb - 2.0) / PERCEPTUAL_WORKER_RAM_GB)
+        spare = free_ram_gb - 2.0 - max(0.0, float(reserve_ram_gb))
+        affordable = int(max(0.0, spare) / PERCEPTUAL_WORKER_RAM_GB)
         return max(0, min(self.workers, job_count, affordable, (os.cpu_count() or 1) // 2))
 
     def score_many(
@@ -570,9 +591,18 @@ class PerceptualScorePool:
         wav_paths: list[str],
         *,
         free_ram_gb: float,
+        reserve_ram_gb: float = 0.0,
     ) -> dict[str, float]:
-        """Return the scores that succeeded. Anything missing is the parent's to compute."""
-        workers = self.usable_for(len(wav_paths), free_ram_gb)
+        """Scores that succeeded, keyed by the checksum of the audio each one heard.
+
+        Anything missing is the parent's to compute. A caller looks a score up by the
+        checksum its row carries now, so a take replaced since scoring simply is not
+        found - the staleness check is the key itself rather than a comparison somebody
+        has to remember to write.
+        """
+        workers = self.usable_for(
+            len(wav_paths), free_ram_gb, reserve_ram_gb=reserve_ram_gb
+        )
         if workers < 2:
             return {}
         import multiprocessing as mp
@@ -585,9 +615,9 @@ class PerceptualScorePool:
                 initializer=_score_worker_init,
                 initargs=(self.settings, self.threads),
             ) as pool:
-                for wav_path, score in pool.imap_unordered(_score_worker_job, wav_paths):
+                for checksum, score in pool.imap_unordered(_score_worker_job, wav_paths):
                     if score is not None:
-                        scores[wav_path] = float(score)
+                        scores[checksum] = float(score)
         except Exception as exc:  # noqa: BLE001
             # A pool that cannot start is a throughput problem, never a quality one: the
             # parent scores everything itself and the run is exactly what it always was.

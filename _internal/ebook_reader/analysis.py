@@ -6148,6 +6148,60 @@ def _name_pronunciation_schema(batch_ids: list[str]) -> dict[str, Any]:
     return schema
 
 
+OLLAMA_USAGE_FIELDS = (
+    "prompt_eval_count",
+    "prompt_eval_duration",
+    "eval_count",
+    "eval_duration",
+    "load_duration",
+    "total_duration",
+)
+
+
+def _ollama_usage(envelope: dict) -> dict[str, int] | None:
+    """The token and timing counters Ollama already sends with its last chunk.
+
+    Every one of these arrived on every request the project has ever made and all but
+    ``eval_count`` was dropped on the floor. Without them the size of a prompt is a guess,
+    and so is every decision that depends on it: whether ``num_ctx`` of 16384 is twice what
+    the work needs, whether a batch of five is the right batch, whether the model spilling
+    22% of itself onto the CPU costs anything worth closing an editor for. Counting is
+    cheaper than arguing.
+    """
+    usage: dict[str, int] = {}
+    for field in OLLAMA_USAGE_FIELDS:
+        try:
+            usage[field] = int(envelope[field])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return usage or None
+
+
+def _ollama_usage_line(usage: dict[str, int], num_ctx: int) -> str:
+    """One line a person can read, and a later script can parse back out of the log."""
+    prompt_tokens = usage.get("prompt_eval_count", 0)
+    output_tokens = usage.get("eval_count", 0)
+    parts = [f"Ollama: prompt {prompt_tokens:,} tok"]
+    if num_ctx > 0:
+        parts[0] += f"/{num_ctx:,} ctx ({prompt_tokens / num_ctx:.0%})"
+    parts.append(f"sinh {output_tokens:,} tok")
+    for label, count_field, duration_field in (
+        ("nạp prompt", "prompt_eval_count", "prompt_eval_duration"),
+        ("sinh", "eval_count", "eval_duration"),
+    ):
+        nanoseconds = usage.get(duration_field, 0)
+        count = usage.get(count_field, 0)
+        if nanoseconds > 0 and count > 0:
+            parts.append(f"{label} {count * 1e9 / nanoseconds:,.1f} tok/s")
+    load_nanoseconds = usage.get("load_duration", 0)
+    if load_nanoseconds > 0:
+        parts.append(f"nạp model {load_nanoseconds / 1e9:.1f}s")
+    total_nanoseconds = usage.get("total_duration", 0)
+    if total_nanoseconds > 0:
+        parts.append(f"tổng {total_nanoseconds / 1e9:.1f}s")
+    return " | ".join(parts)
+
+
 def _analysis_output_token_limit(segment_count: int, num_ctx: int) -> int:
     requested = max(
         ANALYSIS_OUTPUT_MIN_TOKENS,
@@ -6421,6 +6475,7 @@ class OllamaBookAnalyzer:
             completed = False
             completion_reason = ""
             evaluation_count = None
+            usage: dict[str, int] | None = None
             response: requests.Response | None = None
             try:
                 response = self.session.post(
@@ -6459,6 +6514,7 @@ class OllamaBookAnalyzer:
                                 evaluation_count = int(envelope["eval_count"])
                             except (KeyError, TypeError, ValueError):
                                 evaluation_count = None
+                            usage = _ollama_usage(envelope)
                     if activity is not None and now - last_activity >= ANALYSIS_ACTIVITY_SECONDS:
                         activity(int(elapsed), sum(len(part) for part in parts))
                         last_activity = now
@@ -6489,6 +6545,8 @@ class OllamaBookAnalyzer:
                 if response is not None:
                     response.close()
         response_text = "".join(parts) or "{}"
+        if usage is not None:
+            self.log(_ollama_usage_line(usage, int(request.get("options", {}).get("num_ctx", 0))))
         if completion_reason == "length":
             raise AnalysisOutputBudgetError(
                 "Ollama analysis exhausted its output-token budget before completing the JSON response"
