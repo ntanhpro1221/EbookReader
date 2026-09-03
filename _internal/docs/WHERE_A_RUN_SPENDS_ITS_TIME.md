@@ -680,3 +680,42 @@ Chiếu lên alpha.32: pha ASR chính 4.252s → ~1.550s, kiểm candidate 2.325
 
 **Tạm thời.** alpha.43 mới xong 1 chương rưỡi (n=179 so với 2.311). Trung vị có thể dịch khi
 chạy xong, và con số cuối phải lấy từ lần chạy đầy đủ.
+
+### Đổi engine có làm máy nghe khác đi không? Chương 1-2, gần như không
+
+Tốc độ chỉ là nửa câu hỏi. `scripts/measure_batched_asr.py` đã đặt ra tiêu chuẩn: *"một bản
+giải mã làm đổi điều máy nghe thấy thì không phải một tối ưu, nó là một engine khác."* Hai
+chương đầu đã xong ở cả hai lần chạy nên so được trực tiếp, trên 79 segment có bản ghi ở cả
+hai:
+
+| | alpha.32 (openai) | alpha.43 (faster) |
+|---|---|---|
+| bản ghi khác nhau sau chuẩn hoá | — | **1/79 = 1,3%** |
+| `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | 1 | 1 |
+| `ASR_LOCKED_NAME_ANCHOR_REVIEW` | 5 | 5 |
+| `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` | 2 | 2 |
+| `ASR_UNVERIFIABLE_SHORT_TEXT` | 1 | 1 |
+| `TTS_SPLIT_RECOVERY` | 2 | 2 |
+
+**Mọi lớp cảnh báo ASR giữ nguyên.** Đúng cái tiêu chuẩn đặt ra.
+
+Segment duy nhất khác - `c00002_s0000037`, văn bản `Rare (Hiếm - B): Mạnh hơn / khó tìm
+hơn.` - thì faster-whisper nghe **tệ hơn**, không phải tốt hơn:
+
+    openai : "Rai hiếm B mạnh hơn trên khó tìm hơn."     similarity 0,86   WER 0,125
+    faster : "ra hiếm, bê mạnh hơn trên khó tìm hơn."    similarity 0,80   WER 0,25
+
+### Và một chỗ suýt quy sai nhân quả
+
+Chương 2 của alpha.43 hỏng vì `PERCEPTUAL_NATURALNESS_REVIEW` đúng trên segment ấy, nên rất
+dễ kết luận "engine mới làm hỏng chương". So từng trường thì không phải:
+
+    generation_delivery_mode :  clarity  ->  primary
+    wav_sha256               :  04e5fd80 ->  69838cd7   (cùng voice, cùng 2,56s)
+
+alpha.32 nhận một bản đã **qua sửa clarity**; alpha.43 đang cầm bản **primary**. Hai bản thu
+khác nhau thì điểm perceptual khác nhau - và perceptual chấm *âm thanh*, không chấm bản ghi.
+Trên bằng chứng này, chỗ hỏng ấy **không quy được cho engine**.
+
+**Tạm thời và phải làm lại khi chạy xong:** n=79 trên 948, và một quyển sách đang chạy dở
+thì các segment còn lại chưa qua hết vòng sửa.
