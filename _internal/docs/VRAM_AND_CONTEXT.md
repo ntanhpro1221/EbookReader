@@ -166,3 +166,33 @@ Whisper thường trú. 1,3% không đáng để chiếm cả card.
 `perceptual_qa.parallel_workers` và `worker_threads` (đã co theo RAM và số lõi, nhưng trần
 8 và 2 luồng vẫn là hằng số hiệu chỉnh), `beam_size`, và `min_free_ram_gb` /
 `critical_free_ram_gb` vốn là **GB tuyệt đối** chứ không phải tỉ lệ RAM máy.
+
+## Ngưỡng RAM tuyệt đối: đã xét, và giữ nguyên có lý do
+
+Tồn đọng ghi `min_free_ram_gb` (3,5) và `critical_free_ram_gb` (1,5) "vẫn là GB tuyệt đối
+chứ không theo máy", như thể đó là khiếm khuyết. Xét lại thì **không phải**.
+
+Hai ngưỡng ấy canh những khoản cấp phát **có kích thước cố định trên mọi máy**:
+
+| | |
+|---|---|
+| qwen3:8b ở num_ctx 7168 | 6,0 GB VRAM |
+| ba worker tổng hợp | 5.484 MiB VRAM |
+| một worker chấm cảm thụ | 1,75 GB RAM |
+| Whisper turbo | ~2,5 GB VRAM |
+
+Một *phần trăm của máy* là đơn vị sai để đo một model có kích thước cố định. Máy 128 GB mà
+chỉ còn 1,5 GB trống thì đang gặp rắc rối thật, y như máy 8 GB.
+
+Điều máy nhỏ xứng đáng được nhận **không phải là một ngưỡng lỏng hơn** - nới ra chỉ khiến
+nó chạy vào đúng vùng thrashing - mà là **một câu trả lời thẳng ngay từ đầu**. Trước đây
+`doctor` kiểm tra mọi module import được, mọi tài sản tồn tại, và **không nói một chữ nào
+về bộ nhớ**. Máy quá nhỏ vẫn qua sạch mọi kiểm tra rồi mới biết sự thật một cách chậm chạp:
+nhường tài nguyên ở mọi cổng, đẩy model phân tích sang CPU, hoặc dừng giữa sách vì
+"available RAM 1.1 GB" - đúng cách alpha.26 kết thúc ở 357/948.
+
+`doctor` giờ có `headroom:ram` và `headroom:vram`. Mọi con số đều lấy từ chính hằng số mà
+lần chạy sẽ dùng, không phải viết cứng - viết cứng thì nó vẫn "đạt" sau khi thứ nó mô tả đã
+phình ra, đúng kiểu pool chấm điểm từng hứa 5 worker trên bộ nhớ chỉ chứa nổi 2.
+
+Trên máy này: RAM 31,3 GB / cần 7,0 GB; VRAM 8.151 MiB / cần 5.367 MiB.

@@ -2138,6 +2138,20 @@ CREATE INDEX IF NOT EXISTS idx_analysis_critic_attempts_candidate
 """
 
 
+def _character_key(name: str) -> str:
+    """The one way a character name becomes a key, borrowed rather than re-implemented.
+
+    Casting looks a character up by canonical_key(), which collapses runs of whitespace as
+    well as trimming and upper-casing. This module first wrote its own strip().upper(),
+    which agrees with it for "Noah" and disagrees for "Lê  Văn  A" - so a listener could
+    pin a gender, be told it was stored, and have the run ignore it in silence. Imported
+    inside the function because character_registry imports this module.
+    """
+    from .character_registry import canonical_key
+
+    return canonical_key(name)
+
+
 class ProjectDB:
     def __init__(self, path: Path, synchronous: str = "FULL") -> None:
         self.path = path
@@ -7828,7 +7842,7 @@ class ProjectDB:
         """
         if gender not in {"male", "female"}:
             raise ValueError("gender must be male or female")
-        key = canonical_name.strip().upper()
+        key = _character_key(canonical_name)
         if not key:
             raise ValueError("canonical_name must not be empty")
         now = time.time()
@@ -7854,7 +7868,7 @@ class ProjectDB:
                 "SELECT canonical_name, gender FROM characters "
                 "WHERE locked=1 AND gender IN ('male','female')"
             ).fetchall()
-        return {str(row["canonical_name"]).upper(): str(row["gender"]) for row in rows}
+        return {_character_key(str(row["canonical_name"])): str(row["gender"]) for row in rows}
 
     def upsert_character(
         self,

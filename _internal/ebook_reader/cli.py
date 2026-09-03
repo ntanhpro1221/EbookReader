@@ -1001,6 +1001,70 @@ def _find_module(name: str) -> dict[str, Any]:
     return {"ok": spec is not None, "detail": str(spec.origin if spec is not None else "not installed")}
 
 
+def _headroom_checks() -> dict[str, dict[str, Any]]:
+    """Can this machine actually hold the work, rather than merely start it?
+
+    doctor checked that every module imports and every asset exists, and said nothing about
+    memory. So a machine too small for the job passed every check and then discovered the
+    truth slowly: yielding to its own throttle on every gate, spilling the analysis model
+    onto the CPU, or stopping mid-book on "available RAM 1.1 GB" - which is how alpha.26
+    ended, 357 segments of 948 in.
+
+    The thresholds themselves stay absolute, and that is deliberate: they guard allocations
+    that are the same size on every machine. qwen3:8b holds 6.0 GB of VRAM at the context
+    this profile derives, three synthesis workers hold 5,484 MiB, a scoring worker costs
+    1.75 GB of RAM. A fraction of the machine is the wrong unit for a fixed-size model.
+    What a small machine is owed is not a looser threshold but a straight answer up front,
+    which is what this is.
+
+    Every number here is measured and lives in the module that uses it, so this cannot
+    drift away from what the run will really ask for.
+    """
+    import psutil
+
+    from .perceptual_qa import PERCEPTUAL_WORKER_RAM_GB
+    from .resource_manager import NvidiaProbe
+    from .tts_pool import (
+        TTS_POOL_BASE_VRAM_MB,
+        TTS_POOL_FOREGROUND_RESERVE_MB,
+        TTS_POOL_WORKER_VRAM_MB,
+    )
+
+    settings = build_settings()
+    checks: dict[str, dict[str, Any]] = {}
+
+    minimum_free = float(settings["resources"]["min_free_ram_gb"])
+    # Two workers is the smallest thing worth calling a pool; below that the scoring
+    # never runs beside ASR and the run keeps the sequential timeline it always had.
+    required_ram_gb = minimum_free + 2 * PERCEPTUAL_WORKER_RAM_GB
+    total_ram_gb = psutil.virtual_memory().total / 1024**3
+    checks["headroom:ram"] = {
+        "ok": total_ram_gb >= required_ram_gb,
+        "detail": (
+            f"{total_ram_gb:.1f} GB tổng; cần {required_ram_gb:.1f} GB "
+            f"({minimum_free:.1f} ngưỡng nhường + 2 x {PERCEPTUAL_WORKER_RAM_GB:.2f} worker chấm điểm)"
+        ),
+    }
+
+    free_mb, total_mb = NvidiaProbe().gpu_memory()
+    if total_mb is None:
+        checks["headroom:vram"] = {
+            "ok": True,
+            "detail": "không đọc được VRAM; mọi thứ chạy như trước khi phép đo này tồn tại",
+        }
+    else:
+        pool_mb = TTS_POOL_BASE_VRAM_MB + 2 * TTS_POOL_WORKER_VRAM_MB
+        required_mb = pool_mb + TTS_POOL_FOREGROUND_RESERVE_MB
+        checks["headroom:vram"] = {
+            "ok": total_mb >= required_mb,
+            "detail": (
+                f"{total_mb} MiB tổng, {free_mb} MiB trống; cần {required_mb} MiB "
+                f"(pool 2 worker {pool_mb} + {TTS_POOL_FOREGROUND_RESERVE_MB} chừa foreground)"
+            ),
+        }
+    return checks
+
+
 def _command_doctor(args: argparse.Namespace) -> CommandResult:
     package_root = Path(__file__).resolve().parents[1]
     checks: dict[str, dict[str, Any]] = {}
@@ -1032,6 +1096,7 @@ def _command_doctor(args: argparse.Namespace) -> CommandResult:
         "ok": bool(previews),
         "detail": f"{len(previews)} WAV preview(s)",
     }
+    checks.update(_headroom_checks())
     runtime_root = Path(os.environ["EBOOK_READER_RUNTIME"]).resolve()
     checks["runtime:setup_marker"] = setup_marker_check(runtime_root)
     checks["model:utmosv2_cache"] = perceptual_cache_check(runtime_root)
