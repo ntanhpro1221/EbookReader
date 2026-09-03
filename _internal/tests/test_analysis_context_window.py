@@ -98,3 +98,40 @@ def test_an_oversized_prompt_is_treated_as_a_batch_to_split() -> None:
     assert "AnalysisPromptTruncatedError" in clause, (
         "an oversized prompt must reach the splitting handler, not the catch-all"
     )
+
+
+def test_every_kind_of_analysis_request_fits_not_just_the_segment_batch() -> None:
+    """The one a live run had to find.
+
+    alpha.32 derived 7,168 from a five-segment batch and then normalised English names,
+    which sends twenty at once and asks for 4,352 output tokens. The ``num_ctx // 2`` term
+    cut that to exactly half the window, left the prompt the other half, and Ollama
+    truncated the prompt in silence. The guard caught it and the batch recovered, but the
+    window was wrong: it had been sized for one of the two request shapes.
+    """
+    from ebook_reader.analysis import NAME_PRONUNCIATION_BATCH_SIZE
+
+    window = analysis_context_window({"batch_segments": 5, "batch_chars": 6200})
+    name_output = min(512 + NAME_PRONUNCIATION_BATCH_SIZE * 192, 6144)
+    assert window // 2 >= name_output, "the name batch would have its answer halved"
+
+
+def test_the_two_request_shapes_are_measured_on_their_own_terms() -> None:
+    """Names are short and their answers long; segments are the reverse. Applying the
+    segment character allowance to a list of names would reserve context nobody uses, and
+    context nobody uses is paid for in VRAM the model then cannot have."""
+    from ebook_reader.config import _analysis_request_shapes
+
+    shapes = _analysis_request_shapes({"batch_segments": 5, "batch_chars": 6200})
+    segment_items, segment_chars = shapes[0]
+    name_items, name_chars = shapes[1]
+
+    assert segment_items == 5 and segment_chars == 6200
+    assert name_items > segment_items
+    assert name_chars < segment_chars
+
+
+def test_the_window_still_costs_less_than_the_constant_it_replaced() -> None:
+    """Correctness took some of the saving back; it must not take all of it, or the model
+    goes back to running part of itself on the CPU."""
+    assert analysis_context_window({"batch_segments": 5, "batch_chars": 6200}) < 16384
