@@ -7763,6 +7763,50 @@ class ProjectDB:
             if row is not None:
                 self._refresh_chapter_counts_conn(conn, int(row["chapter_id"]))
 
+    def retry_failed_segments(
+        self,
+        reason: str,
+        *,
+        stable_id: str | None = None,
+    ) -> list[str]:
+        """Send failed segments back to be re-cut, keeping the analysis they already have.
+
+        A failed segment is failed for the life of the project: _verify_chapter_audio skips
+        anything already marked failed, so resuming after fixing an ASR defect re-verifies
+        nothing and the chapter fails again on the same segments. The only way to benefit
+        from the fix was a clean run - an hour of analysis to re-cut five segments.
+
+        alpha.32 made that concrete. Chapter 6 was refused over one segment whose voice read
+        it correctly and whose transcript differed only in "tháng Mười hai" against "tháng
+        12", and the fix for that landed while the run was still going.
+
+        Returns the segments it reset, so a caller can report a write that did not happen.
+        """
+        with self.transaction() as conn:
+            if stable_id:
+                rows = conn.execute(
+                    "SELECT id, stable_id, chapter_id FROM segments "
+                    "WHERE stable_id=? AND status=?",
+                    (stable_id, SegmentStatus.FAILED.value),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, stable_id, chapter_id FROM segments WHERE status=? "
+                    "ORDER BY stable_id",
+                    (SegmentStatus.FAILED.value,),
+                ).fetchall()
+        reset: list[str] = []
+        chapters: set[int] = set()
+        for row in rows:
+            self.reset_segment_pending(int(row["id"]), reason)
+            reset.append(str(row["stable_id"]))
+            chapters.add(int(row["chapter_id"]))
+        for chapter_id in sorted(chapters):
+            # The chapter refused to publish because of these segments. Leaving it marked
+            # failed would keep that verdict standing over audio that no longer exists.
+            self.update_chapter_status(chapter_id, ChapterStatus.PENDING.value, "")
+        return reset
+
     def requeue_segment_for_asr(self, segment_id: int, reason: str) -> None:
         with self.transaction() as conn:
             row = conn.execute(

@@ -840,6 +840,43 @@ def _command_log(args: argparse.Namespace) -> CommandResult:
 LISTENER_PRONUNCIATION_SOURCE = "listener_choice"
 
 
+def _command_retry(args: argparse.Namespace) -> CommandResult:
+    """Send failed segments back to be re-cut, without redoing the analysis.
+
+    A failed segment is failed for the life of the project: _verify_chapter_audio skips
+    anything already marked failed, so resuming after fixing an ASR defect re-verifies
+    nothing and the chapter fails again on the same segments. The only way to benefit from
+    the fix was a clean run - an hour of analysis to re-cut five segments - and any code
+    change able to fix the analysis itself invalidates the resume fingerprint on top.
+
+    alpha.32 made that concrete twice over. Chapter 6 was refused over one segment whose
+    voice read it correctly and whose transcript differed only in "tháng Mười hai" against
+    "tháng 12". The fix for that landed while the run was still going, and there was no way
+    to apply it to the segment it was written for.
+
+    Resets to `analyzed`, so the analysis and the casting stay: only the audio and the ASR
+    evidence go. Then `resume` re-cuts and re-verifies exactly those segments.
+    """
+    paths = _existing_project_paths(args.project_root)
+    stable_id = str(getattr(args, "segment", "") or "").strip() or None
+    database = ProjectDB(paths.db)
+    reset = database.retry_failed_segments(
+        f"retry requested: {str(getattr(args, 'note', '') or 'no reason given')}",
+        stable_id=stable_id,
+    )
+    if not reset:
+        return CommandResult(
+            data={"segment": stable_id, "reset": []},
+            exit_code=EXIT_USAGE,
+            error=(
+                "Không có segment nào đang ở trạng thái failed để thử lại"
+                if stable_id is None
+                else "Segment đó không ở trạng thái failed"
+            ),
+        )
+    return CommandResult(data={"reset": reset, "count": len(reset)}, exit_code=EXIT_OK)
+
+
 def _command_accept(args: argparse.Namespace) -> CommandResult:
     """Record that a person listened to a take and accepted it despite the warning.
 
@@ -1363,6 +1400,18 @@ def build_parser() -> argparse.ArgumentParser:
     accept.add_argument("--note", default="", help="Why, for whoever reads this later")
     _add_json_argument(accept)
     accept.set_defaults(handler=_command_accept)
+
+    retry = subparsers.add_parser(
+        "retry",
+        help="Send failed segments back to be re-cut, keeping the analysis",
+    )
+    retry.add_argument("project_root", type=Path)
+    retry.add_argument(
+        "--segment", default="", help="One stable_id; omit to retry every failed segment"
+    )
+    retry.add_argument("--note", default="", help="Why, for whoever reads this later")
+    _add_json_argument(retry)
+    retry.set_defaults(handler=_command_retry)
 
     validate = subparsers.add_parser("validate", help="Validate locked inputs, SQLite, and committed output QA")
     validate.add_argument("project_root", type=Path)
