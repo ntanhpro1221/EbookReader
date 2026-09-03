@@ -130,6 +130,25 @@ nhiều lần với seed khác nhau rồi chấm perceptual; nếu điểm nhả
 người nghe thấy như nhau thì là nhiễu. Chưa chạy được vì cần GPU. Chi tiết:
 `docs/PERCEPTUAL_QA_COST.md`, `scripts/perceptual_duration_bias.py`.
 
+## 6. `faster-whisper` chưa được khai báo là dependency — lỗ tái lập, **không phải** lỗi chạy
+
+alpha.43 đang chạy `asr.engine = faster`, dùng `faster-whisper 1.2.1` + `ctranslate2 4.8.2`
+cài trong runtime venv. **Cả hai đều không có trong `pyproject.toml` lẫn `uv.lock`.** Dựng
+lại môi trường từ manifest thì không ra được môi trường đang chạy.
+
+Mức độ: **có giới hạn, và đã kiểm chứ không đoán.** Mặc định `asr.engine` vẫn là `openai`
+(cố ý - đổi engine là một "version event"), nên cấu hình mặc định dựng lại được. Còn nếu ai
+đặt `faster` trên môi trường thiếu gói, `asr.required = True` và `failure_policy = "fail"`
+làm nó **ném lỗi to** lúc nạp model, chứ không âm thầm chạy cả sách mà không có ASR.
+
+Đáng chú ý: `load()` khi engine `faster` hỏng thì **không lùi về `openai`** - nó tắt ASR.
+Đúng ở đây chỉ vì `required=True` biến việc tắt ấy thành ném lỗi.
+
+**Không sửa được lúc này, và lý do đáng ghi lại:** `../pyproject.toml` và `../uv.lock` nằm
+*trong* `QUALITY_IMPLEMENTATION_FILES`. Sửa chúng giữa lúc alpha.43 chạy sẽ đổi fingerprint
+chất lượng và **xoá sạch bằng chứng QA audio của cả quyển sách**, bắt ASR + perceptual chạy
+lại từ đầu. Một dòng thêm vào manifest, đúng lúc, tốn 30-40 phút chạy lại.
+
 ---
 
 ## Đã có script, chưa chạy (cần máy rảnh, không có lần chạy nào đang bay)

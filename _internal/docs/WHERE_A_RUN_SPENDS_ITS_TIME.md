@@ -678,6 +678,12 @@ faster-whisper cải thiện ít hơn. Đoạn dài hơn ở pha chính mới ch
 Chiếu lên alpha.32: pha ASR chính 4.252s → ~1.550s, kiểm candidate 2.325s → ~1.600s. Khoảng
 **3.400s trên ~15.600s công việc**.
 
+**Có một phép đo cũ xác nhận.** Docstring của `asr.engine` trong `config.py` đã ghi
+**"2,07× trên 200 bản thu, không lệch phán quyết lần nào"**. Con số của tôi - 2,25× sau khi
+chia biến kiểm ra - khớp với nó, và tỉ lệ 78/79 bản ghi giống hệt khớp với "không lệch phán
+quyết". Lần này phép đo có sẵn trong kho *xác nhận* kết quả thay vì bác nó, nhưng bài học
+vẫn thế: đọc nó **trước**.
+
 **Tạm thời.** alpha.43 mới xong 1 chương rưỡi (n=179 so với 2.311). Trung vị có thể dịch khi
 chạy xong, và con số cuối phải lấy từ lần chạy đầy đủ.
 
