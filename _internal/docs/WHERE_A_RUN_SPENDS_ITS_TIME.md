@@ -652,3 +652,31 @@ hiểm nhất. Đây là thay đổi kiến trúc, không phải một tối ưu
 
 Ghi lại ở đây để lần sau ai đó hỏi "sao ASR chậm thế" thì có sẵn câu trả lời đã đo, và biết
 đòn bẩy nằm ở đâu cùng cái giá của nó - chứ không phải để làm ngay.
+
+## faster-whisper: ~2,25 lần trên pha ASR, đo bằng một biến kiểm nội bộ (tạm thời, 2026-09-04)
+
+alpha.43 chạy `asr.engine = faster`; alpha.32 chạy engine cũ. Cùng quyển sách, cùng máy,
+tính theo thời gian mỗi việc giữa hai bước liên tiếp cùng nhãn:
+
+| pha (mỗi việc) | alpha.32 (openai) | alpha.43 (faster) | tỉ lệ |
+|---|---|---|---|
+| **Kiểm tra phát âm** (ASR) | 1,54s | **0,56s** | **2,75×** |
+| Kiểm tra candidate clarity (ASR) | 0,85s | 0,48s | 1,77× |
+| Tạo candidate clarity (**TTS — biến kiểm**) | 5,45s | 4,46s | 1,22× |
+
+**Hàng TTS là chỗ giữ cho con số trung thực.** Sinh candidate không dính gì tới engine ASR,
+nên 1,22× của nó đo phần cải thiện đến từ việc *máy rảnh hơn* chứ không từ engine — chủ sách
+có nói "giờ máy rảnh rồi" trước khi alpha.43 chạy. Chia nó ra:
+
+    pha ASR chính : 2,75 / 1,22 ≈ **2,25×** thuộc về engine
+    kiểm candidate: 1,77 / 1,22 ≈ **1,45×**
+
+Hai pha ASR lệch nhau, và điều đó khớp với phép đo cửa sổ 30 giây ở trên: bản kiểm candidate
+là những đoạn rất ngắn, mà đoạn ngắn thì chi phí bị phần encoder cố định chi phối - phần
+faster-whisper cải thiện ít hơn. Đoạn dài hơn ở pha chính mới cho decoder chỗ để nhanh hơn.
+
+Chiếu lên alpha.32: pha ASR chính 4.252s → ~1.550s, kiểm candidate 2.325s → ~1.600s. Khoảng
+**3.400s trên ~15.600s công việc**.
+
+**Tạm thời.** alpha.43 mới xong 1 chương rưỡi (n=179 so với 2.311). Trung vị có thể dịch khi
+chạy xong, và con số cuối phải lấy từ lần chạy đầy đủ.
