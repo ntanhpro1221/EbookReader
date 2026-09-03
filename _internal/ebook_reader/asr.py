@@ -1194,13 +1194,58 @@ class WhisperVerifier:
         self.log = log
         self.model = None
         self.device = str(self.settings.get("device", "cuda"))
+        # "openai" is what every run so far used. "faster" runs the same large-v3-turbo
+        # weights through CTranslate2, measured at 2.07x with zero verdict disagreements
+        # over 200 takes - see docs/WHERE_A_RUN_SPENDS_ITS_TIME.md. It is opt-in because
+        # adding the dependency is a version event and because nothing downstream should
+        # have to know which runtime produced a transcript.
+        self.engine = str(self.settings.get("engine", "openai")).strip().casefold()
+        if self.engine not in {"openai", "faster"}:
+            raise ValueError("asr.engine must be openai or faster")
         self._last_transcription_timeline_impossible = False
+
+    def _load_faster(self) -> bool:
+        """Load the CTranslate2 runtime, importing torch first on purpose.
+
+        CTranslate2 links cuBLAS and cuDNN at load time and does not ship them; torch does,
+        in its own lib directory. Importing torch first puts those DLLs in the process, and
+        in a scratchpad venv without torch neither os.add_dll_directory nor a PATH entry was
+        enough - the libraries had to sit beside the ctranslate2 package. That is the shape
+        of failure to expect on a machine where this does not work.
+        """
+        import torch  # noqa: F401  - imported for its bundled CUDA libraries
+        from faster_whisper import WhisperModel
+
+        device = self.device
+        if device.startswith("cuda") and not torch.cuda.is_available():
+            if self.settings.get("cpu_fallback", True):
+                device = "cpu"
+            else:
+                raise RuntimeError("CUDA unavailable for Whisper")
+        model_name = str(self.settings["model"])
+        compute_type = str(
+            self.settings.get(
+                "compute_type", "float16" if device.startswith("cuda") else "int8"
+            )
+        )
+        self.log(f"Nạp faster-whisper {model_name} trên {device} ({compute_type}).")
+        self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        self.device = device
+        return True
 
     def load(self) -> bool:
         if not self.settings.get("enabled", True):
             return False
         if self.model is not None:
             return True
+        if self.engine == "faster":
+            try:
+                return self._load_faster()
+            except Exception as exc:  # noqa: BLE001
+                self.log(f"Không nạp được faster-whisper: {exc}")
+                if self.settings.get("required", False) or self.settings.get("failure_policy") == "fail":
+                    raise
+                return False
         try:
             import torch
             import whisper
@@ -1273,6 +1318,8 @@ class WhisperVerifier:
         }
         if not confirmation and duration_seconds > self._beam_minimum_seconds():
             decode_options["beam_size"] = int(self.settings.get("beam_size", 5))
+        if self.engine == "faster":
+            return self._transcribe_faster(audio, duration_seconds, decode_options)
         result = self.model.transcribe(audio, **decode_options)
         raw_segments = result.get("segments", [])
         segments = [item for item in raw_segments if isinstance(item, dict)]
@@ -1281,6 +1328,43 @@ class WhisperVerifier:
             duration_seconds,
         )
         return str(result.get("text", "")).strip()
+
+    def _transcribe_faster(
+        self,
+        audio: np.ndarray,
+        duration_seconds: float,
+        decode_options: dict[str, Any],
+    ) -> str:
+        """The same request through CTranslate2, answered in the same shape.
+
+        Nothing downstream may learn which runtime produced this. The timeline check reads
+        segment end times, so the generator is drained into the dicts it expects; greedy is
+        beam_size 1 rather than an absent argument; and fp16 is a load-time compute_type
+        here rather than a decode option.
+        """
+        segments_iterator, _info = self.model.transcribe(
+            audio,
+            language=str(decode_options["language"]),
+            task=str(decode_options["task"]),
+            temperature=float(decode_options["temperature"]),
+            condition_on_previous_text=bool(decode_options["condition_on_previous_text"]),
+            beam_size=int(decode_options.get("beam_size", 1)),
+        )
+        parts: list[str] = []
+        segments: list[dict[str, Any]] = []
+        for item in segments_iterator:
+            parts.append(str(getattr(item, "text", "")))
+            segments.append(
+                {
+                    "start": float(getattr(item, "start", 0.0) or 0.0),
+                    "end": float(getattr(item, "end", 0.0) or 0.0),
+                }
+            )
+        self._last_transcription_timeline_impossible = transcription_exceeds_audio_timeline(
+            segments,
+            duration_seconds,
+        )
+        return "".join(parts).strip()
 
     def _beam_minimum_seconds(self) -> float:
         """Below this, the primary decode is greedy too.
