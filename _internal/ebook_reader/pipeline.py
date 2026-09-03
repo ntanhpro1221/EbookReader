@@ -1809,10 +1809,26 @@ class BookPipeline:
 
             for segment_id, repair_context in list(repair_targets.items()):
                 segment = dict(self.db.get_segment(segment_id))
+                # segment_candidates is UNIQUE(segment_id, policy_hash, repair_round), so
+                # the two repair tracks share one round-number space and a segment belongs
+                # to whichever claimed it first. Its rounds therefore carry that track's
+                # budget - asr.repair_rounds is 5, perceptual_qa.repair_rounds is 2 - and
+                # asserting this loop's budget over a segment the ASR loop already claimed
+                # raised "stored candidate repair budget differs from the active repair
+                # context" and ended alpha.32 a second time.
+                #
+                # A budget is only this loop's to set when nothing has been allocated yet.
+                # Otherwise the segment's own rounds decide, and a segment that spent them
+                # on ASR repairs plans "exhausted" - which is the honest answer rather than
+                # a crash.
+                existing_candidates = self.db.list_segment_candidates(
+                    segment_id=segment_id,
+                    policy_hash=self.quality_policy_hash,
+                )
                 plan = self.db.segment_candidate_resume_plan(
                     segment_id,
                     self.quality_policy_hash,
-                    repair_rounds,
+                    None if existing_candidates else repair_rounds,
                 )
                 action = str(plan["action"])
                 if action == "allocate":

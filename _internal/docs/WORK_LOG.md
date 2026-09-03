@@ -403,3 +403,84 @@ mới và có docstring giải thích lần chạy nào đã chết vì nó.
 
 Bài học: một test không có docstring không phải một quyết định, nó chỉ là một hành vi đã
 được đóng băng. Nhưng cũng đừng phá nó trước khi hiểu nó canh cái gì.
+
+### "File an toàn" là sai: có hai loại vân tay, và loại thứ hai tốn cả pha QA âm thanh
+
+Tôi đã ghi trong quy tắc làm việc rằng `asr.py`, `pipeline.py`, `database.py`,
+`perceptual_qa.py`, `cli.py`, `scripts/` là **an toàn** khi sửa trong lúc lần chạy đang bay.
+Sai một nửa, và alpha.32 vừa cho thấy nửa sai.
+
+Sau khi `retry` 6 segment rồi `resume` với các bản sửa (`database.py`, `asr.py`), số đếm
+segment nhảy từ `verified: 596, warning: 34, failed: 6` sang `verified: 8,
+signal_passed: 747`. Không phải `retry` làm — nó chỉ reset đúng 6.
+
+Kiểm tra `quality_checks`: policy cũ `e3d2957a…` có **3.415** check, policy mới
+`a120f719…` có **33**. Toàn bộ bằng chứng QA âm thanh mang policy hash cũ nên **hết hiệu
+lực**, và pipeline phải chạy lại ASR + cảm thụ cho 747 segment.
+
+Vì `QUALITY_IMPLEMENTATION_FILES` chứa: `analysis.py`, `asr.py`, `asr_contract.py`,
+`audio_io.py`, `audio_transform_contract.py`, `character_registry.py`, **`config.py`**,
+**`database.py`**, `expression.py`, `models.py`, **`pipeline.py`**, **`perceptual_qa.py`**,
+`perceptual_contract.py`, `quality_policy.py`, `recovery.py`, `runtime_contract.py`,
+**`text_processing.py`**, `tts.py` …
+
+**Hai loại vân tay, hai cái giá khác nhau:**
+
+| nhóm file | hậu quả khi sửa rồi resume |
+|---|---|
+| `ANALYSIS_CASTING_IMPLEMENTATION_FILES`<br>(`analysis.py`, `character_registry.py`, `models.py`, `voice_catalog.py`) | **Chặn resume.** Mất cả pha phân tích (~1 giờ) và phải tạo project sạch. |
+| `QUALITY_IMPLEMENTATION_FILES`<br>(gần như mọi file còn lại, gồm `asr.py`, `pipeline.py`, `database.py`, `config.py`, `text_processing.py`, `perceptual_qa.py`) | Resume chạy được, **nhưng mọi bằng chứng QA âm thanh hết hiệu lực.** WAV còn nguyên (segment về `signal_passed`), phải chạy lại ASR + cảm thụ cho toàn bộ sách (~30–40 phút với 948 segment). |
+| Chỉ `cli.py`, `scripts/`, `tests/`, `docs/` | Thật sự không tốn gì. |
+
+Với alpha.32 thì cái giá ấy **đáng trả**: lần chạy lại xác minh bằng cả bản sửa gộp số lẫn
+bản sửa planning-not-allocating, tức đúng hai thứ đang chặn nó. Nhưng đó là may, không phải
+tính toán — tôi không lường trước.
+
+**Hệ quả cho việc đổi sang faster-whisper:** nó sửa `asr.py` *và* đổi tập phụ thuộc, nên
+đằng nào cũng làm hết hiệu lực toàn bộ QA. Làm trên một project sạch, đúng như
+`docs/DEPENDENCIES.md` vẫn nói.
+
+### Lần chết thứ ba của alpha.32, cùng một họ: hai vòng sửa chữa dùng chung một sổ
+
+```
+RuntimeError: stored candidate repair budget differs from the active repair context
+```
+
+Cùng vòng lặp `_repair_chapter_perceptual_candidates`, cùng lời gọi
+`segment_candidate_resume_plan`, khác bất biến.
+
+**Gốc:** hai vòng sửa chữa lấy ngân sách từ hai nơi và ghi vào **một sổ candidate**:
+
+| vòng | ngân sách | candidate đã ghi |
+|---|---|---|
+| ASR (`pipeline.py:4563`) | `asr.repair_rounds` = **5** | 545 candidate `standard_candidate_gate_v1` |
+| cảm thụ (`pipeline.py:1745`) | `perceptual_qa.repair_rounds` = **2** | 39 candidate `naturalness_improvement_v1` |
+
+Và bảng có `UNIQUE(segment_id, policy_hash, repair_round)` — nghĩa là **hai đường dùng chung
+một không gian số vòng**, nên mỗi segment chỉ thuộc về một đường. Đo trên dữ liệu thật:
+**0 trên 122 segment mang cả hai loại candidate.** Thiết kế nhất quán.
+
+Vì thế bất biến "mọi vòng của một segment phải cùng một ngân sách" **đúng**. Cái sai là
+**người gọi tự nhận một ngân sách không phải của mình**: vòng cảm thụ áp con số 2 của nó lên
+segment mà đường sửa đã thuộc về ASR với ngân sách 5.
+
+**Sửa ở người gọi:** ngân sách chỉ là của vòng này khi segment **chưa có candidate nào**.
+Có rồi thì các vòng của chính segment ấy quyết định. Một segment đã tiêu hết vòng cho ASR
+thì lập kế hoạch ra **`exhausted`** — câu trả lời thành thật, thay vì một cú ném.
+
+Kiểm trên chính DB của alpha.32: **45/45 segment lập kế hoạch được, 0 ca còn ném.**
+
+### Ba lần chết, một hình dạng
+
+| lần | bất biến ném | gốc |
+|---|---|---|
+| alpha.23 | `must bind its exact trigger check id` | vòng ASR không đọc plan |
+| alpha.32 (1) | `must bind its exact trigger check id` | bất biến cấp phát bị gọi trên **đường đọc** |
+| alpha.32 (2) | `stored candidate repair budget differs` | người gọi áp ngân sách **không phải của mình** |
+
+Cả ba: **hai vòng sửa chữa chia nhau một sổ candidate, và một bất biến viết cho sổ đơn loại
+bị áp lên tình huống hai loại.** Bất biến đúng cả ba lần; chỗ áp nó thì sai cả ba lần.
+
+Điều đáng ghi cho người sau: khi thấy một bất biến ném trong `segment_candidate_resume_plan`,
+câu hỏi đầu tiên không phải "bất biến này có quá nghiêm không" mà **"vòng nào đang hỏi, và
+segment này thuộc về vòng nào"**.

@@ -267,3 +267,99 @@ venv chính thì torch đã ở đó, nhưng đây là thứ sẽ hỏng trên m
 `BatchedInferencePipeline` cho phép giải mã nhiều file một lượt, tức đúng thứ để lấp phần
 rảnh ấy. Làm cả hai thì ASR có thể xuống dưới một phần tư thời gian hiện tại — nhưng đó là
 phép đo tiếp theo, không phải một con số để hứa bây giờ.
+
+## Vì sao hai chương vẫn hỏng: một phép đo tự mâu thuẫn (chẩn đoán 2026-09-03, CHƯA sửa)
+
+Sau khi `retry` + `resume` với bản sửa gộp số, alpha.32 vẫn hỏng chương 2 và 3 vì đúng hai
+segment cũ. Nhưng lần này chẩn đoán đi tới tận gốc, và gốc **không phải** chính sách.
+
+```
+văn bản : Hắn là Hoàng Tử Quỷ Thứ Mười (Tenth Demon Prince).
+nghe ra : Hắn là hoàng tử quỷ thứ 10, tên Demon Prince.
+```
+
+Phần tiếng Việt **hoàn hảo** ("thứ 10" giờ đã gộp về "thứ mười"), và Whisper còn viết đúng
+chính tả tiếng Anh gốc. Vậy mà:
+
+| | canonical WER (≤0,30) | canonical similarity (≥0,78) |
+|---|---|---|
+| `Spirit Essence Units` | 0,222 ✓ | **0,765 ✗** |
+| `Tenth Demon Prince` | 0,250 ✓ | **0,667 ✗** |
+
+Hai chỉ số cùng đo "nội dung ngoài tên" mà nói ngược nhau. Lý do nằm trong
+`_minimum_cost_locked_name_alignment`: nhánh `substitute_anchor` chuyển
+`(unit+1, transcript_index+1)` — **tiêu đúng một token** — trong khi `match_anchor` tiêu
+`len(form_tokens)`. Một cái tên nhiều chữ bị nghe khác chiếm nhiều token ("tên demon prince"
+= 3); một token thành neo, **hai token còn lại bị tính vào nội dung thường**. Nên một câu
+đọc đúng hoàn toàn trượt canonical similarity **vì cái tên của nó trượt**. WER thoát vì nó
+chuẩn hoá theo độ dài; similarity ở mức ký tự thì không.
+
+### Bản sửa hiển nhiên là sai, và một test cũ đã chứng minh
+
+Cho `substitute_anchor` tiêu đúng số token nó được nghe thành (rộng tới 1..N theo dạng dài
+nhất của neo, cùng chi phí). Nó đưa cả hai ca lên `review_eligible` — tức
+`ASR_LOCKED_NAME_ANCHOR_REVIEW`, cảnh báo **được phép xuất bản**.
+
+Nhưng `test_clarity_final_gate_preserves_anchor_failure_from_either_decode` vỡ, và nó vỡ
+**đúng**. Kịch bản của nó: bản ghi *"Anh Lucien nói sai phần còn lại"* cho văn bản
+*"Anh Lu-si-en đã đến"* — nội dung thường **cũng sai**. Với bản sửa, neo hút luôn ba token
+sai đó và `ASR_MISMATCH` biến mất.
+
+Tôi đã lập luận rằng phần thưởng cho khớp chính xác `(0,-1,0,0)` sẽ ngăn việc hút bừa. Lập
+luận ấy **thiếu**: nó chỉ bảo vệ nội dung **đúng**. Khi xung quanh cũng sai thì không có
+khớp nào để mất, và việc hút là miễn phí.
+
+**Đã hoàn nguyên.** Vấn đề là thật và đã được mô tả chính xác, nhưng ràng buộc đúng thì tôi
+chưa có, và đây là lõi của phép so sánh bảo vệ 900 segment còn lại.
+
+### Hướng cho lần sau
+
+Câu hỏi phải trả lời: *token bản ghi nào thuộc về cái tên?* Vài ý, chưa cái nào được đo:
+
+- Giới hạn bề rộng bằng số token của **dạng neo**, và chỉ hút khi các token bị hút **không
+  khớp** bất kỳ token thường nào đang chờ — tức phân biệt "rác của tên" với "nội dung sai".
+- Tính chi phí theo bề rộng để việc hút không còn miễn phí, rồi đo lại trên cả hai ca.
+- Hoặc bỏ hẳn hướng gióng hàng: nếu `canonical_wer` đạt mà `canonical_similarity` trượt
+  **và** neo không khớp, thì chính sự chênh lệch ấy là dấu hiệu rác-của-tên đang bị tính
+  hai lần. Cần đo trên corpus để biết nó có phân biệt được hay không.
+
+### Và một kết quả âm quan trọng
+
+faster-whisper nghe **y hệt** trên đúng hai bản thu này: `S.P.Z.E.S.N.U.N.D.` và
+`tên Demon Perrin`. **Engine tốt hơn không sửa được lớp này.** Vấn đề không phải chất lượng
+bộ phiên âm mà là một cụm tiếng Anh phiên sang âm Việt không có bản ghi ổn định ở bất kỳ
+engine nào. Nên 2,07× vẫn đáng đổi vì tốc độ, nhưng đừng mong nó gỡ được các chương này.
+
+### Dữ liệu cho lần thử sau: phân bố canonical trên 46 ca neo thật
+
+`scripts/replay_anchor_alignment.py` chạy trên alpha.25 + alpha.32. Chỉ các ca **neo không
+khớp** (các ca neo khớp không đi qua nhánh này):
+
+| segment | canonical sim | canonical wer | trạng thái | |
+|---|---:|---:|---|---|
+| `c00010_s0000016` | 0,526 | **0,600** | fail | WER cũng trượt |
+| `c00007_s0000074` | 0,556 | 0,167 | fail | **WER đạt / sim trượt** |
+| `c00002_s0000062` | 0,618 | **0,444** | fail | WER cũng trượt |
+| `c00003_s0000029` | 0,667 | 0,250 | fail | **WER đạt / sim trượt** |
+| `c00006_s0000024` | **0,770** | 0,172 | fail | **WER đạt / sim trượt**, trượt đúng 0,01 |
+| `c00002_s0000034` | 0,810 | 0,172 | review_eligible | |
+| … 37 ca còn lại | 0,812 – 1,000 | 0,000 – 0,225 | review_eligible | |
+
+Tổng: **38 review_eligible / 8 fail** (có trùng stable_id giữa hai lần chạy vì cùng segment
+hỏng ở cả hai).
+
+**Điều dữ liệu nói:**
+
+- Dạng "WER đạt mà sim trượt" phủ **5 trên 8** ca hỏng. Đó là chữ ký của rác-tên bị tính
+  hai lần: rác của một cái tên là **nhiều ký tự nhưng ít token**, nên nó đánh vào similarity
+  mức ký tự mạnh hơn hẳn WER mức token.
+- Hai ca hỏng cả WER (`Tai Ương Bình Minh` nghe thành "Tài hương bình mình", và
+  `Spirit Essence Units` trên bản thu của alpha.25) **phải ở lại hỏng** — nội dung thường
+  của chúng thật sự sai.
+- Nhưng `c00006_s0000024` trượt đúng **0,01**. Nên **không có khoảng trống sạch** giữa hai
+  lớp; ngưỡng 0,78 đang làm việc trên lưỡi dao. Nhìn riêng alpha.25 thì tưởng có (0,667 →
+  0,810), thêm alpha.32 vào thì hết.
+
+**Chưa ship gì.** Tám điểm là quá mỏng để dựng một luật, và một luật sai ở đây cho qua một
+lần đọc sai thật. Nhưng dữ liệu giờ đã có, bộ đo dùng lại được, và lần thử sau đo được ngay
+bằng một câu: *fail có giảm dưới 8 mà dòng chốt vẫn nguyên không?*
