@@ -610,7 +610,15 @@ class PerceptualScorePool:
         floor = float(self.settings.get("resources", {}).get("min_free_ram_gb", 3.5))
         spare = free_ram_gb - floor - max(0.0, float(reserve_ram_gb))
         affordable = int(max(0.0, spare) / PERCEPTUAL_WORKER_RAM_GB)
-        return max(0, min(self.workers, job_count, affordable, (os.cpu_count() or 1) // 2))
+        # What was measured is a thread budget, not a worker count: 8 workers of 2 threads
+        # reached 3.68x on 32 cores, which is workers * threads = cores / 2. The cap used
+        # to be cores // 2 workers, which says nothing about how many threads each of them
+        # claims - on this machine that is 16 workers of 2 threads, or full subscription,
+        # and the only reason it never happened is that the configured ceiling of 8 hid it.
+        # Expressed as the budget it actually was, the same 8 falls out here and the rule
+        # travels to a machine with a different number of cores.
+        thread_budget = max(1, (os.cpu_count() or 1) // (2 * self.threads))
+        return max(0, min(self.workers, job_count, affordable, thread_budget))
 
     def score_many(
         self,

@@ -135,3 +135,25 @@ def test_a_tighter_threshold_is_obeyed_rather_than_ignored() -> None:
     assert PerceptualScorePool(generous, lambda _m: None, workers=8).usable_for(95, 12.0) > (
         PerceptualScorePool(strict, lambda _m: None, workers=8).usable_for(95, 12.0)
     )
+
+
+def test_the_cap_is_a_thread_budget_because_that_is_what_was_measured() -> None:
+    """8 workers of 2 threads reached 3.68x on 32 cores: workers * threads = cores / 2.
+
+    The cap used to be cores // 2 workers, which says nothing about how many threads each
+    worker claims. On 32 cores that permits 16 workers of 2 threads - full subscription -
+    and the only thing that stopped it was the configured ceiling of 8 sitting in front.
+    Written as the budget it always was, the measured 8 falls out and the rule survives a
+    move to a machine with a different core count.
+    """
+    settings = dict(_pool_settings(), resources={"min_free_ram_gb": 3.5})
+    two_threads = PerceptualScorePool(settings, lambda _m: None, workers=64, threads=2)
+    four_threads = PerceptualScorePool(settings, lambda _m: None, workers=64, threads=4)
+
+    plenty_of_ram = 512.0
+    assert two_threads.usable_for(999, plenty_of_ram) == max(
+        1, (__import__("os").cpu_count() or 1) // 4
+    )
+    assert four_threads.usable_for(999, plenty_of_ram) < two_threads.usable_for(
+        999, plenty_of_ram
+    ), "fatter workers means fewer of them, not the same number"
