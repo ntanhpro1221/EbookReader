@@ -111,3 +111,22 @@ chỗ nào trong hệ thống biết model chưa từng nhìn thấy phần đó
 bằng chỗ còn lại - dấu hiệu nó đã bị cắt cho vừa. **Đây là thứ khiến việc thu nhỏ ngữ cảnh
 là an toàn**; thu nhỏ mà không có nó là đổi một sự lãng phí đã biết lấy một sự hỏng hóc
 không biết.
+
+### Xác nhận bằng đồng hồ tường (70 yêu cầu của alpha.28)
+
+Bảng trên đo tốc độ sinh token. Đây là thời gian thật của cả pha, cùng sách, cùng máy,
+đếm từ dòng log "batch N/194":
+
+| | giây mỗi batch |
+|---|---|
+| alpha.27 (num_ctx 16.384) | 40,8 |
+| alpha.28 (num_ctx 7.168) | **19,6** |
+
+**2,08×** - trùng khít với mức tăng tốc sinh token, tức sinh token đúng là nút cổ chai chứ
+không phải một trong nhiều chi phí. Chiếu ra 194 batch: **132 phút → 63 phút**.
+
+Thời gian mỗi batch (19,6s) lớn hơn thời gian Ollama mỗi yêu cầu (9,6s) vì high_quality bật
+`director_critic_enabled`, tức hai yêu cầu mỗi batch, cộng phần việc của host.
+
+Nạp prompt cũng nhanh lên, 3.441 → 5.065 tok/s (1,47×), dù đó không phải nửa chiếm thời
+gian. Prompt lớn nhất qua 70 yêu cầu là 3.744 token, tức 52% khung 7.168 - còn dư rộng.
