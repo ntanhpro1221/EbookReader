@@ -91,6 +91,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "asr": {
         "enabled": True,
         "required": True,
+        # "openai" is what every run through alpha.32 used. "faster" runs the same
+        # large-v3-turbo weights through CTranslate2: measured 2.07x over 200 takes with
+        # zero verdict disagreements, and verified against the real runtime to produce
+        # word-identical transcripts. Left at openai because changing it is a version
+        # event - see docs/DEPENDENCIES.md - so a project opts in deliberately.
+        "engine": "openai",
         "model": "turbo",
         "device": "cuda",
         "cpu_fallback": True,
