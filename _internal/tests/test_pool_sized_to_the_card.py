@@ -23,47 +23,65 @@ from ebook_reader.tts_pool import (
 
 def test_the_card_it_was_fitted_on_still_gets_what_it_measured() -> None:
     """8151 MiB with the models unloaded: the three workers docs/THROUGHPUT.md measured."""
-    assert workers_for_vram(3, 8151) == 3
+    assert workers_for_vram(3, 8151, 8151) == 3
+
+
+def test_a_desktop_using_part_of_the_card_does_not_cost_a_worker(tmp_path=None) -> None:
+    """The reserve is against the card's total, not against what is left.
+
+    Free VRAM already excludes what the desktop holds, so taking a foreground reserve out
+    of it a second time leaves that much idle on top of what the foreground already has.
+    alpha.32 showed the cost in a live run: 6,029 MiB free, three workers need 5,484 and
+    fit with room to spare, and the pool took two.
+    """
+    assert workers_for_vram(3, 6029, 8151) == 3
+    # A caller that does not know the card's size has nothing to reserve against, so the
+    # free figure is used as it stands rather than shrunk by a number about a whole card.
+    assert workers_for_vram(3, 6029) == 3
 
 
 def test_a_smaller_card_runs_slower_instead_of_failing() -> None:
     """The failure this replaces: a default fitted on 8 GiB applied to a 4 GiB card asks
     for memory that is not there."""
-    assert workers_for_vram(3, 4096) == 0
-    assert workers_for_vram(3, 6000) == 2
+    assert workers_for_vram(3, 4096, 4096) == 0
+    assert workers_for_vram(3, 5000, 8151) == 2
 
 
 def test_a_bigger_card_gets_more_without_anyone_editing_a_constant() -> None:
-    assert workers_for_vram(8, 24576) == 8
-    assert workers_for_vram(16, 24576) > 8
+    assert workers_for_vram(8, 24576, 24576) == 8
+    assert workers_for_vram(16, 24576, 24576) > 8
 
 
 def test_the_setting_stays_a_ceiling_that_measurement_can_only_lower() -> None:
     """A number in the settings is a permission, not a demand - the same contract the
     perceptual pool already uses."""
-    assert workers_for_vram(3, 65536) == 3
-    assert workers_for_vram(0, 65536) == 0
-    assert workers_for_vram(1, 65536) == 1, "below two there is no pool to size"
+    assert workers_for_vram(3, 65536, 65536) == 3
+    assert workers_for_vram(0, 65536, 65536) == 0
+    assert workers_for_vram(1, 65536, 65536) == 1, "below two there is no pool to size"
 
 
 def test_room_is_left_for_whoever_else_is_using_the_computer() -> None:
     """Five workers were 1.3% faster than three and held 7318 of 8151 MiB, leaving nothing
     for the foreground or for keeping Whisper resident. That trade is refused on purpose."""
     exactly_three = TTS_POOL_BASE_VRAM_MB + 3 * TTS_POOL_WORKER_VRAM_MB
-    assert workers_for_vram(3, exactly_three) < 3
-    assert workers_for_vram(3, exactly_three + TTS_POOL_FOREGROUND_RESERVE_MB) == 3
+    # A card whose whole capacity is exactly three workers has nothing left for anyone.
+    assert workers_for_vram(3, exactly_three, exactly_three) < 3
+    assert (
+        workers_for_vram(3, exactly_three, exactly_three + TTS_POOL_FOREGROUND_RESERVE_MB)
+        == 3
+    )
 
 
 def test_a_card_that_cannot_be_measured_changes_nothing() -> None:
     """No nvidia-smi, no NVIDIA card, a probe that timed out: every run before this one
     used the configured number, and an unanswered question is not a reason to change that.
     """
-    assert workers_for_vram(3, None) == 3
-    assert workers_for_vram(3, 0) == 3
+    assert workers_for_vram(3, None, None) == 3
+    assert workers_for_vram(3, 0, 0) == 3
 
 
 def test_one_worker_is_not_a_pool() -> None:
     """A pool of one is the sequential path with process machinery around it: the cost
     without the reason."""
-    barely = TTS_POOL_BASE_VRAM_MB + TTS_POOL_FOREGROUND_RESERVE_MB + TTS_POOL_WORKER_VRAM_MB
-    assert workers_for_vram(3, barely) == 0
+    barely = TTS_POOL_BASE_VRAM_MB + TTS_POOL_WORKER_VRAM_MB
+    assert workers_for_vram(3, barely, barely) == 0

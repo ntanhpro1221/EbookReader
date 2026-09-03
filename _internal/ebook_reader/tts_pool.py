@@ -64,6 +64,7 @@ worth owning the whole card, so the reserve is deliberate rather than incidental
 def workers_for_vram(
     ceiling: int,
     free_vram_mb: int | None,
+    total_vram_mb: int | None = None,
     *,
     reserve_mb: int = TTS_POOL_FOREGROUND_RESERVE_MB,
 ) -> int:
@@ -72,12 +73,24 @@ def workers_for_vram(
     ``ceiling`` is what the settings ask for, and it stays a ceiling: measurement can only
     lower it. A machine whose VRAM cannot be read - no nvidia-smi, no NVIDIA card - gets
     the ceiling unchanged, which is what every run did before this existed.
+
+    The reserve is taken against the card's **total**, not against what is free, and the
+    first version of this got that wrong. Free VRAM already excludes whatever the desktop
+    is holding, so subtracting a foreground reserve from it a second time leaves that much
+    idle on top of what the foreground already has. alpha.32 showed the cost: 6,029 MiB
+    free, three workers need 5,484 and fit with room to spare, and the pool took two.
+
+    The measured-good configuration is three workers holding 5,484 of 8,151 MiB - which
+    leaves 2,667 for everything else - so a rule that refuses it whenever the desktop is
+    using more than about 1.9 GB is stricter than the measurement it was built from.
     """
     ceiling = max(0, int(ceiling))
     if ceiling < 2 or free_vram_mb is None or free_vram_mb <= 0:
         return ceiling
-    spare = int(free_vram_mb) - max(0, int(reserve_mb)) - TTS_POOL_BASE_VRAM_MB
-    affordable = spare // TTS_POOL_WORKER_VRAM_MB
+    budget = int(free_vram_mb)
+    if total_vram_mb:
+        budget = min(budget, int(total_vram_mb) - max(0, int(reserve_mb)))
+    affordable = (budget - TTS_POOL_BASE_VRAM_MB) // TTS_POOL_WORKER_VRAM_MB
     if affordable < 2:
         # One worker in a pool is the sequential path with extra machinery around it.
         return 0

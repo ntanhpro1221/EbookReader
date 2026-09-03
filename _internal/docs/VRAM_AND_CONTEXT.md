@@ -225,3 +225,33 @@ Tên thì ngắn mà câu trả lời dài; segment thì ngược lại. Cửa s
 theo đúng đặc điểm của nó. high_quality: **7.168 → 9.216**. Vẫn tiết kiệm ~1,06 GB VRAM so
 với hằng số 16.384 cũ, chỉ là trả lại một phần để đổi lấy tính đúng đắn mà một lần chạy
 thật đã đòi.
+
+## Mức chừa VRAM từng đếm trùng (sửa trong lúc alpha.32 chạy)
+
+Log của alpha.32:
+
+```
+Pool TTS thu còn 2/3 worker cho 6029 MiB VRAM trống.
+```
+
+Ba worker chiếm 5.484 MiB, **vừa khít trong 6.029 MiB trống**, mà pool vẫn chỉ lấy hai.
+
+Nguyên nhân là lỗi trong chính công thức tôi viết: `free_vram_mb` **đã** trừ phần desktop
+đang giữ rồi, mà tôi còn trừ tiếp 800 MiB "chừa cho foreground". Tức là để không 800 MiB
+*ngoài* phần người khác đã dùng - đếm trùng.
+
+Nặng hơn: cấu hình đã đo là **ba worker giữ 5.484 trên 8.151 MiB**, tức chừa lại 2.667 MiB
+cho mọi thứ khác. Một quy tắc từ chối chính cấu hình ấy mỗi khi desktop dùng quá ~1,9 GB
+là **nghiêm khắc hơn cả phép đo sinh ra nó**.
+
+Sửa: mức chừa tính trên **tổng dung lượng card**, còn phần trống là trần cứng.
+
+| VRAM trống (card 8.151 MiB) | trước | sau |
+|---:|---:|---:|
+| 8.151 | 3 | 3 |
+| 6.029 | **2** | **3** |
+| 5.000 | 2 | 2 |
+| 4.000 | 0 | 0 |
+
+Máy không đọc được VRAM thì không có gì để chừa, nên dùng thẳng con số cấu hình - y như
+trước khi phép đo này tồn tại.
