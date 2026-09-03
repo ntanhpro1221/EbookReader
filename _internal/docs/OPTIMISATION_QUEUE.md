@@ -73,7 +73,7 @@ tổng hợp chính (2.658s ở 3 tiến trình → ~3.987s ở 2), gần đúng
 nếu mục 1 đã làm xong thì đánh đổi ấy còn tệ hơn** — pool càng quan trọng thì càng không
 được lấy VRAM của nó.
 
-## 3. Hạ `num_ctx` về ~7.168 — ~16% pha phân tích
+## 3. Hạ `num_ctx` về 7.168 bằng cách hạ batch tên — ~639s, ~16% pha phân tích
 
 alpha.32 ở 7.168 chạy pha phân tích trong 3.851s; alpha.43 ở 9.216 mất 4.490s. Số lượt gọi
 và số token gần như không đổi (+1,4% và +2,6%); **tốc độ sinh tụt 56,4 → 50,1 tok/s**, riêng
@@ -81,7 +81,27 @@ nó giải thích 542s trong 639s chênh lệch.
 
 Đổi lại được đúng một lần guard cắt prompt. Cái làm ngữ cảnh nhỏ an toàn là **guard**, không
 phải ngữ cảnh lớn — guard biến một lần hỏng âm thầm thành một lần chia batch nhìn thấy được.
-**Giữ guard, hạ num_ctx.** Chi tiết: `docs/VRAM_AND_CONTEXT.md`.
+
+**Nhưng đừng đè lên phép suy ra — hãy sửa cái làm nó lớn.** 9.216 đến từ batch chuẩn hoá tên:
+20 tên xin `min(512 + 20*192, 6144)` = 4.352 token đầu ra, và phép suy ra đòi ít nhất gấp
+đôi số ấy để tránh bị `num_ctx // 2` cắt lén. Sàn thật của quyển sách này là batch *segment*
+(5 đoạn, 6.200 ký tự) chỉ cần 6.940 → **7.168**.
+
+    NAME_PRONUNCIATION_BATCH_SIZE   num_ctx suy ra   số batch cho 112 tên
+                               20             9216                      6
+                               16             8192                      7
+                             **12**         **7168**                 **10**
+                                8             7168                     14
+
+**Hạ `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12** đưa num_ctx về đúng 7.168 mà **không đè gì
+cả**: phép suy ra vẫn bảo đảm gấp đôi đầu ra, không có cái cắt lén nào. Giá là 112 tên đi từ
+6 batch thành 10 - **4 lời gọi thêm trên 424**, và mỗi cái còn nhỏ hơn trước.
+
+Chưa đo: batch tên nhỏ hơn ảnh hưởng thế nào tới *chất lượng* cách đọc. Log alpha.43 có
+"Chuẩn hóa tên batch 1 còn 18 tên lỗi sau lần 3", nên batch nhỏ hơn có thể còn đỡ hơn - đó
+là phỏng đoán, phải nhìn số tên lỗi ở lần chạy sau.
+
+Chi tiết: `docs/VRAM_AND_CONTEXT.md`.
 
 ## 4. Nâng `tts.max_retries` 4 → 10 — cứu 2 trong 3 segment không có audio
 

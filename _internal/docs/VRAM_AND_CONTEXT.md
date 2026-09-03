@@ -286,14 +286,21 @@ một lần chia batch nhìn thấy được. Cách suy luận đúng là **gi�
 phải nâng num_ctx cho vừa trường hợp xấu nhất lý thuyết mà quyển sách này không bao giờ
 chạm tới: prompt lớn nhất cả hai lần chạy đều là ~4.357 token.
 
-### Cơ chế: một giả thuyết, chưa kiểm
+### Cơ chế: **không phải giả thuyết** - dự án đã đo nó rồi
 
 KV cache của qwen3:8b ≈ 36 lớp × 2 × 8 đầu × 128 chiều × 2 byte = 147.456 byte mỗi token,
 tức 1,06 GB ở 7.168 và 1,36 GB ở 9.216 - hơn nhau **300 MB**. Trên card 8,15 GB đã chứa
 model, 300 MB ấy đủ để đẩy một lớp xuống CPU, và một lớp qua PCIe mỗi token thì đúng là
-kiểu chậm 11% mà không đổi số token. Nhưng đó là giả thuyết: phép đo chỉ nói ngữ cảnh rộng
-hơn thì sinh chậm hơn. Muốn biết chắc thì xem `ollama ps` giữa lúc chạy, cột nào ghi
-CPU/GPU.
+kiểu chậm 11% mà không đổi số token. Và đây là chỗ tôi ghi sai lần đầu: tôi để mục này là "giả thuyết chưa kiểm" trong khi chính
+docstring của `analysis_context_window` đã ghi cơ chế ấy, đo ở 16.384: *"model tràn xuống
+CPU và phần sinh... chạy 25,6 token mỗi giây"*. Ghép lại thành ba điểm trên cùng một đường:
+
+    num_ctx 16.384 ->  25,6 tok/s   (đo trước, trong docstring)
+    num_ctx  9.216 ->  50,1 tok/s   (alpha.43)
+    num_ctx  7.168 ->  56,4 tok/s   (alpha.32)
+
+Cơ chế đã được xác lập từ trước; phép đo của tôi chỉ nối dài đường cong. **Lần thứ hai trong
+một phiên tôi công bố một kết luận trước khi đọc phép đo đã nằm sẵn trong kho.**
 
 ### Suýt ghi ngược lại
 
