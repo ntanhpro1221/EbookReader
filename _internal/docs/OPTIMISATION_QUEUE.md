@@ -149,6 +149,12 @@ lại, trong khi **trung vị phẳng**. Kết quả: đoạn <2s bị gắn c�
 **80 → 39 lần gắn cờ**. Nó *siết* đoạn dài (1,8% → 2,8%) và nới đoạn ngắn, nên là **cân
 bằng lại, không phải nới lỏng**.
 
+**Nhưng nó không mở khoá thêm chương nào — đã kiểm.** Trong 6 segment perceptual đang chặn
+của alpha.32, ngưỡng mới gỡ được 3 (gồm cả hai đoạn ngắn 2,48s và 1,84s đúng kiểu thiên vị
+độ dài). Chạy lại cổng xuất bản với 3 cái đã gỡ: **0/7 chương được mở**, vì chương nào cũng
+còn ít nhất một chỗ chặn khác. Giá trị của mục này là **thời gian nghe của chủ sách**, không
+phải số chương xuất bản. Đừng bán nó như cái thứ hai.
+
 Còn một câu chưa trả lời được, và nó quyết định mục này có đúng không: phần tán thêm là
 nhiễu thước đo hay chất lượng thật sự dao động hơn. **Cách đo:** tự tổng hợp vài câu ngắn
 nhiều lần với seed khác nhau rồi chấm perceptual; nếu điểm nhảy loạn trên những bản thu tai
@@ -173,6 +179,27 @@ làm nó **ném lỗi to** lúc nạp model, chứ không âm thầm chạy cả
 *trong* `QUALITY_IMPLEMENTATION_FILES`. Sửa chúng giữa lúc alpha.43 chạy sẽ đổi fingerprint
 chất lượng và **xoá sạch bằng chứng QA audio của cả quyển sách**, bắt ASR + perceptual chạy
 lại từ đầu. Một dòng thêm vào manifest, đúng lúc, tốn 30-40 phút chạy lại.
+
+---
+
+## Cần gì để xuất bản trọn quyển sách (alpha.32)
+
+Đây mới là câu trả lời mà mọi thứ ở trên phục vụ. `scripts/what_blocks_publication.py` giờ
+in thẳng ra:
+
+    Đang xuất bản được: 3/10
+      chỉ cần tai người nghe : +4 chương [2, 3, 7, 8]  => 7/10
+      cần bản thu mới trước  : +3 chương [5, 9, 10]  => 10/10
+
+**Bốn chương chỉ đợi tai người.** 10 chỗ có bản thu để nghe, mỗi chỗ một lệnh `accept` in
+sẵn - hoặc mở `review.html` mà `scripts/build_review_page.py` dựng ra, có sẵn trình phát.
+
+**Ba chương còn lại không nghe được.** Segment chặn chúng **không có audio nào**: cổng nhịp
+từ chối cả 4 lần thử, nên không có gì để nghe và `accept` sẽ báo lỗi vì không có checksum để
+đối chiếu. Chúng cần **mục 4** (`tts.max_retries` 4 → 10), thứ đã đo là cứu được 2 trong 3
+với xác suất 88% và 73%.
+
+Nói gọn: **một tối cặm cụi nghe cộng một hằng số đổi từ 4 lên 10 là ra cả quyển sách.**
 
 ---
 

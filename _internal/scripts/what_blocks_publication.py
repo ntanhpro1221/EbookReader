@@ -52,6 +52,12 @@ def main(project_root: str) -> int:
     print()
 
     blocked = 0
+    # Two kinds of blocker need two different things from two different parties, and the
+    # difference decides what the owner should do tonight. A segment that has audio can be
+    # settled by listening. A segment with no audio at all has nothing to listen to - the
+    # pace gate rejected every take - so no amount of ear helps and it needs more attempts.
+    only_ear: list[int] = []
+    needs_takes: list[int] = []
     for chapter in chapters:
         if _published(chapter):
             continue
@@ -70,6 +76,12 @@ def main(project_root: str) -> int:
             blocking = sorted(codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
             for code in blocking:
                 reasons.append(("cảnh báo chặn xuất bản", row, code))
+        missing_audio = [
+            row for _kind, row, _code in reasons
+            if not (row["wav_path"] and Path(str(row["wav_path"])).is_file())
+        ]
+        if reasons:
+            (needs_takes if missing_audio else only_ear).append(int(chapter["chapter_index"]))
         if not reasons:
             # Nothing in this chapter needs a person; it simply has not been reached yet.
             print(f"ch{chapter['chapter_index']:<3} {chapter['status']} - chưa tới lượt, không có gì chặn")
@@ -82,10 +94,21 @@ def main(project_root: str) -> int:
             print(f"      nghe    : {row['wav_path']}")
             print(f"      văn bản : {str(row['text'] or '')[:110]}")
             print(f"      máy nghe: {str(row['asr_text'] or '(không có bản ghi)')[:110]}")
-            print(
-                f"      chấp nhận: ebook-reader-headless accept \"{root}\" "
-                f"--segment {row['stable_id']} --warning {code} --note \"đã nghe\""
-            )
+            # `accept` vouches for a recording, and checks the checksum to make sure it
+            # vouches for the one that was heard. A segment with no audio has nothing to
+            # vouch for, so printing the command here would hand the listener a line that
+            # can only fail.
+            if row["wav_path"] and Path(str(row["wav_path"])).is_file():
+                print(
+                    f"      chấp nhận: ebook-reader-headless accept \"{root}\" "
+                    f"--segment {row['stable_id']} --warning {code} --note \"đã nghe\""
+                )
+            else:
+                print(
+                    "      KHÔNG có bản thu nào để nghe - cổng nhịp từ chối cả 4 lần thử. "
+                    "`accept` sẽ báo lỗi vì không có checksum để đối chiếu; cần thêm lượt "
+                    "thử (tts.max_retries), xem docs/PACE_METRIC.md."
+                )
         print()
 
     connection.close()
@@ -97,6 +120,19 @@ def main(project_root: str) -> int:
         "`accept`; nếu đọc sai thật thì để nguyên, hoặc `retry` để thu lại. Quyết định gắn "
         "với đúng bản thu đó - thu lại là nó hết hiệu lực."
     )
+
+    count = len(published)
+    print()
+    print(f"Đang xuất bản được: {count}/{len(chapters)}")
+    if only_ear:
+        print(f"  chỉ cần tai người nghe : +{len(only_ear)} chương {only_ear}"
+              f"  => {count + len(only_ear)}/{len(chapters)}")
+    if needs_takes:
+        print(f"  cần bản thu mới trước  : +{len(needs_takes)} chương {needs_takes}"
+              f"  => {count + len(only_ear) + len(needs_takes)}/{len(chapters)}")
+        print("    (những chương này có segment không có audio nào - cổng nhịp từ chối cả "
+              "4 lần thử. Nghe không giải quyết được vì không có gì để nghe; xem "
+              "docs/PACE_METRIC.md về việc nâng tts.max_retries.)")
     return 0
 
 
