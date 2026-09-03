@@ -16,6 +16,24 @@ Xem `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md` cho phép đo và biến kiểm của 
 
 ---
 
+## Làm cái nào trước
+
+Xếp theo giá trị thì mục 1 đứng đầu, nhưng xếp theo **giá trị chia cho rủi ro** thì mục 3
+mới nên làm trước:
+
+| mục | lấy lại | file phải sửa | hình dạng thay đổi |
+|---|---|---|---|
+| 3. hạ `num_ctx` | ~639s pha phân tích | `config.py` | **một hằng số** |
+| 4. `tts.max_retries` 4→10 | chất lượng: cứu 2 segment | `config.py` | **một hằng số** |
+| 1. pool vòng candidate | ~905s | `pipeline.py` | thêm một đường prefetch |
+| 2. Whisper thường trú | ~230s | `pipeline.py`, `asr.py` | đổi vòng đời model |
+
+Mục 3 và 4 là đổi số, xác minh lại bằng chính lần chạy kế tiếp. Mục 1 đáng làm nhất về con
+số nhưng động vào vòng sửa - nơi đã sinh ra bốn lần sập cùng một họ (xem `WORK_LOG.md`).
+Làm 3 và 4 trước, đo lại, rồi mới tới 1.
+
+---
+
 ## 1. Cho vòng sinh candidate dùng pool — ~905s, tức ~7,4% một lần chạy
 
 `pipeline.py` sinh candidate clarity bằng vòng lặp thẳng, trong khi đường tổng hợp chính
