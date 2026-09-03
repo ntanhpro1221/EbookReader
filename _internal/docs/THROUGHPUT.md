@@ -388,3 +388,56 @@ Bài học đáng giữ hơn con số: **tôi suýt ship một thay đổi tin l
 đáng 230s**, vì đo nó trên một lần chạy dùng engine cũ rồi xếp hàng nó cho tương lai dùng
 engine mới. Khi một thay đổi khác đang bay, hãy đo lại nền trên chính lần chạy ấy trước khi
 xếp thứ tự.
+
+## Lợi ích lớn nhất của faster-whisper là **gián tiếp**: vòng sửa co lại một nửa (đo 2026-09-04)
+
+Sau khi `phase_timings.py` biết đếm vòng sửa, so hai lần chạy bằng cùng một phép đo:
+
+| | alpha.32 (openai) | alpha.43 (faster) |
+|---|---|---|
+| sinh candidate (**TTS**) | 4.707s | **2.375s** |
+| kiểm candidate (**ASR**) | 2.325s | **512s** |
+| perceptual candidate | 563s | 484s |
+| UTMOS candidate | 422s | 312s |
+| **tổng vòng sửa** | **8.016s** | **3.683s** |
+
+Cột `kiểm candidate` giảm 4,5 lần là engine — chuyện đã biết. Nhưng `sinh candidate` là
+**TTS**, không dính gì tới engine ASR, mà cũng giảm một nửa. Đó mới là phần đáng chú ý.
+
+### Vì sao: bản ghi tốt hơn kích hoạt ít việc sửa hơn
+
+| | alpha.32 | alpha.43 |
+|---|---|---|
+| segment phải sửa | 152 (16,0%) | 147 (15,5%) |
+| candidate sinh ra | **883** | **431** |
+| candidate / segment phải sửa | **5,81** | **2,90** |
+
+**Số segment cần sửa gần như y hệt** (152 so với 147) — engine mới không làm giọng đọc tốt
+lên. Nhưng mỗi segment ấy tốn **một nửa số candidate**.
+
+Phân bố theo vòng cho thấy hai hiệu ứng cùng lúc:
+
+| vòng sửa | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| alpha.32 | 242 | 197 | 157 | 150 | **137 (57% sống tới vòng 4)** |
+| alpha.43 | 147 | 107 | 68 | 63 | **46 (31%)** |
+
+1. **Vòng 0 sinh ít hơn**: 147 so với 242, cho số segment gần bằng nhau. alpha.32 thường
+   thử *cả hai* biến thể phát âm ngay từ vòng đầu; alpha.43 phần lớn chỉ cần một.
+2. **Tắt nhanh hơn**: 31% sống tới vòng 4 thay vì 57%.
+
+Cả hai đều là thứ ta chờ đợi khi bản ghi đáng tin hơn: ít `ASR_MISMATCH` giả, nên vòng sửa
+vừa kích hoạt nhẹ hơn vừa hội tụ sớm hơn.
+
+*(Đã kiểm giả thuyết thay thế và bác bỏ: không phải alpha.43 bỏ bớt một biến thể phát âm.
+Cả hai lần chạy đều dùng cả hai, tỉ lệ tương tự — 526/357 so với 276/155.)*
+
+### Cộng lại
+
+    ASR trực tiếp   : 2.325s -> 512s     tiết kiệm 1.813s
+    TTS gián tiếp   : 4.707s -> 2.375s   tiết kiệm 2.332s
+
+**Phần gián tiếp lớn hơn phần trực tiếp.** Đổi engine ASR hoá ra chủ yếu là một thay đổi
+về *khối lượng việc phải làm*, không phải về *tốc độ làm việc ấy*.
+
+(alpha.43 đang chạy nốt chương 10, nên các số của nó sẽ nhích lên chút ít.)
