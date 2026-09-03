@@ -535,3 +535,45 @@ tồn tại để trả lời.
 đo faster-whisper; sửa nó bây giờ là hỏng đúng lần chạy ấy, đúng sai lầm đã mắc với alpha.32.
 Ràng buộc và số đo đã ghi ở đây; merge sau khi alpha.43 xong, và nghe `c00010_s0000016`
 trước khi quyết.
+
+## `BatchedInferencePipeline` không lấp được GPU rảnh (đo 2026-09-04)
+
+Tồn đọng ghi nó là đòn bẩy lớn kế tiếp: GPU chỉ 14–16% suốt pha ASR, VRAM 1,43/8,15 GB, mà
+Whisper giải mã một file một lần — nên giải mã nhiều file cùng lúc *hẳn* phải lấp chỗ trống.
+"Hẳn phải" đúng là thứ dự án này liên tục sai, và xây nó nghĩa là sửa `asr.py`, một file mà
+mỗi lần sửa tốn cả lượt xác minh lại. Nên đo trước khi viết.
+
+48 bản thu của alpha.32, cùng tuỳ chọn, cùng luật beam-theo-độ-dài, hai lần chạy:
+
+| | một-lần-một | theo lô (batch 8) | nhanh hơn |
+|---|---:|---:|---:|
+| lần 1 | 1,075 s/bản | 0,898 s/bản | 1,20× |
+| lần 2 | 1,046 s/bản | 0,938 s/bản | **1,11×** |
+
+**Không phải 3–5× như chỗ GPU rảnh gợi ý.** Nếu thời gian nằm ở phần tính toán GPU song
+song hoá được thì gộp lô đã ăn hết chỗ đó; nó không ăn, nên **thời gian nằm ở chỗ khác** —
+nạp và resample audio phía CPU, tính mel, VAD, hoặc phí tổn mỗi lời gọi. Con số này bác bỏ
+cách hiểu "GPU rảnh nên cứ song song hoá là xong".
+
+### Chất lượng thì không đổi
+
+| | |
+|---|---|
+| bản ghi **thô** khác nhau | 4/48 (8,3%) |
+| sau **chuẩn hoá** còn khác | **0/48 (0,0%)** |
+
+Khác biệt thô chỉ là ngắt câu — *"thất bại, và"* so với *"thất bại. Và"* — mà pipeline không
+bao giờ so văn bản thô: `normalize_transcript` bỏ hết dấu câu trước khi so. Nên gộp lô
+không đổi một verdict nào.
+
+### Kết luận: chưa đáng
+
+1,11× trên phần ASR còn lại sau faster-whisper (~1.870s) là khoảng 170 giây, đổi lấy một
+thay đổi trong `asr.py` cộng một lượt xác minh lại cả sách. **Không đáng bây giờ.**
+
+Câu hỏi hay hơn mà phép đo này mở ra: **nếu không phải tính toán GPU thì thời gian ASR nằm
+ở đâu?** Đó mới là phép đo tiếp theo đáng làm, và nó rẻ hơn nhiều so với việc xây một cái lô.
+
+*Lưu ý về điều kiện đo:* alpha.43 đang dùng GPU cho Ollama lúc chạy phép đo này, nên con số
+tuyệt đối bị ảnh hưởng. Tỉ lệ giữa hai cách trên cùng một máy cùng một lúc thì vẫn so được,
+và đó là thứ câu hỏi này cần.
