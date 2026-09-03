@@ -181,3 +181,53 @@ nhau giữa các câu. `Rare (Hiếm - B)` ngắt 15% và nhịp nói 10,50 (ch�
 hình dự đoán nó ngắt 49,3%.
 
 Lặng đo thật: trung vị **17,3%** mỗi segment, cao nhất 26,7% — thấp hơn nhiều so với mô hình.
+
+## Ba segment không có audio: không phải một lớp, và "thử thêm" chỉ đúng với hai (đo 2026-09-04)
+
+Ghi chép trước nói ba segment ấy là một lớp, bị cổng nhịp từ chối sau "5 đến 15 lần thử",
+và cách chữa là "thử thêm hoặc đổi seed". Đọc log thì cả ba mệnh đề đều sai ở mức độ khác
+nhau.
+
+**Ngân sách là 4, không phải 5-15.** `tts.max_retries` = 4. Chúng cũng chưa từng vào đường
+sửa candidate - bảng `segment_candidates` trống trơn cho cả ba - vì đường ấy dành cho lỗi
+ASR và perceptual, còn nhịp thì hỏng ngay ở vòng tổng hợp chính.
+
+**Các lần thử có khác nhau thật.** Seed lấy từ `stable_int("segment::...::{seed_salt}")` và
+salt đổi theo vòng, nên bốn lần là bốn bản thu khác nhau - thấy rõ qua nhịp đo được.
+
+**Và chúng không cùng một lớp:**
+
+| segment | bốn lần thử | tốt nhất | cách cận 12.5 |
+|---|---|---|---|
+| c00010_s0000017 | 11.81 10.44 **12.47** 12.13 | 12.47 | **0.03** - trượt 0,24% |
+| c00005_s0000013 | 11.05 11.82 12.25 12.25 | 12.25 | 2% |
+| c00009_s0000008 | 9.22 10.51 10.70 9.36 | 10.70 | 17% |
+
+Lấy độ lệch chuẩn của chính bốn lần ấy mà ước lượng (bốn mẫu là mỏng, con số này để phân
+biệt "nửa sigma" với "ba sigma" chứ không phải để đặt cược):
+
+| segment | xác suất mỗi lần | ngân sách 4 | 10 | 16 |
+|---|---|---|---|---|
+| c00010_s0000017 | 18,8% | 57% | **88%** | 96% |
+| c00005_s0000013 | 12,3% | 41% | **73%** | 88% |
+| c00009_s0000008 | ~0% | 0% | **0%** | 1% |
+
+**Hai segment đầu trượt vì hết lượt, không phải vì giọng không đọc nổi.** Nâng
+`tts.max_retries` từ 4 lên 10 chỉ tốn thêm lượt cho đúng những segment đang hỏng: cả sách
+chỉ có 3 segment chạm tới ngân sách, 8 segment khác chạm cổng rồi qua ngay lần sau. Giá
+phải trả là ~18 lượt tổng hợp thêm cho một quyển sách 948 segment.
+
+**Segment thứ ba là một vấn đề khác hẳn.** Văn bản của nó là một thang bậc:
+
+    Cấp Linh Hồn được phân loại theo hệ thống như sau: C » B » A » S » SS » SSS.
+
+Giọng đọc *tên chữ cái*, không đọc văn xuôi. Thước đo ký tự/giây được hiệu chỉnh trên văn
+xuôi nên định giá sai loại văn bản này theo đúng cấu tạo của nó - và không ngân sách nào
+cứu được. Nới cận dưới thì vẫn sai, vì lý do đã đo ở trên: trong 807 segment đã nhận, không
+segment nào rơi xuống dưới 12.5. Đây là một lớp văn bản mà cổng cần nhận ra, không phải một
+cái cận cần nới.
+
+`scripts/pace_retry_reachability.py` dựng lại bảng này từ log của bất kỳ lần chạy nào. Nó
+chỉ tính những segment thực sự hết lượt, và biết cổng có hai cận - phiên bản đầu đọc mọi
+lần từ chối thành "quá chậm" và biến một segment bị từ chối vì đọc *quá nhanh* (25.30,
+27.51 so với cận trên 24.5) thành một segment luôn vượt cận dưới.
