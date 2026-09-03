@@ -44,6 +44,46 @@ two jobs appeared to take 35.4 s while four took 18.7 s, which is the model file
 reaching the OS cache, not the pool being fast.
 """
 
+# The two points the comment above records, turned into a line: 3 workers held 5484 MiB
+# and 5 held 7318, so each worker costs about 917 MiB and the pool starts from a shared
+# 2733 MiB. Fitted on one 8151 MiB card, which is exactly why it must be applied to the
+# card actually present rather than baked into a default. A machine with more room should
+# get more workers without anyone editing a constant, and a machine with less must get
+# fewer or it will not run at all.
+TTS_POOL_BASE_VRAM_MB = 2733
+TTS_POOL_WORKER_VRAM_MB = 917
+TTS_POOL_FOREGROUND_RESERVE_MB = 800
+"""What the pool leaves on the card for whoever else is using the computer.
+
+Five workers were measured 1.3% faster than three while holding 7318 of 8151 MiB, which
+left nothing for the foreground and nothing for keeping Whisper resident. That 1.3% is not
+worth owning the whole card, so the reserve is deliberate rather than incidental.
+"""
+
+
+def workers_for_vram(
+    ceiling: int,
+    free_vram_mb: int | None,
+    *,
+    reserve_mb: int = TTS_POOL_FOREGROUND_RESERVE_MB,
+) -> int:
+    """How many synthesis workers this card can hold, up to the configured ceiling.
+
+    ``ceiling`` is what the settings ask for, and it stays a ceiling: measurement can only
+    lower it. A machine whose VRAM cannot be read - no nvidia-smi, no NVIDIA card - gets
+    the ceiling unchanged, which is what every run did before this existed.
+    """
+    ceiling = max(0, int(ceiling))
+    if ceiling < 2 or free_vram_mb is None or free_vram_mb <= 0:
+        return ceiling
+    spare = int(free_vram_mb) - max(0, int(reserve_mb)) - TTS_POOL_BASE_VRAM_MB
+    affordable = spare // TTS_POOL_WORKER_VRAM_MB
+    if affordable < 2:
+        # One worker in a pool is the sequential path with extra machinery around it.
+        return 0
+    return min(ceiling, affordable)
+
+
 TTS_POOL_WORKER_THREADS = 1
 """Torch claims one thread per core by default, so N workers ask for N x cores and spend the
 difference context switching. The perceptual pool measured 4 workers at 1.66x unpinned and

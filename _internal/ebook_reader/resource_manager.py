@@ -21,6 +21,8 @@ class ResourceSnapshot:
     disk_free_gb: float
     disk_active_percent: float | None
     gpu_temp_c: int | None
+    gpu_free_mb: int | None
+    gpu_total_mb: int | None
     foreground_cpu_percent: float | None
     foreground_gpu_percent: float | None
     seconds_since_user_input: float | None
@@ -104,6 +106,39 @@ class NvidiaProbe:
             return int(float(completed.stdout.strip().splitlines()[0]))
         except Exception:
             return None
+
+    def gpu_memory(self) -> tuple[int | None, int | None]:
+        """Free and total VRAM in MiB, or a pair of Nones on any machine without them.
+
+        Nothing in this project could see VRAM before this. Every constant that depends on
+        it - how many synthesis workers fit, how large a context window to reserve, whether
+        Whisper can stay resident - was therefore fitted by hand against one 8 GiB card and
+        written into the defaults, which is why they were right here and wrong anywhere
+        else. A number that cannot be measured has to be guessed.
+
+        Reported for the device as a whole, not for this process: the question these
+        callers ask is how much room is left on the card, and the foreground program
+        holding the rest of it does not report to us.
+        """
+        if not self.executable:
+            return None, None
+        try:
+            completed = subprocess.run(
+                [
+                    self.executable,
+                    "--query-gpu=memory.free,memory.total",
+                    "--format=csv,noheader,nounits",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+            )
+            free_text, _separator, total_text = completed.stdout.strip().splitlines()[0].partition(",")
+            return int(float(free_text)), int(float(total_text))
+        except Exception:
+            return None, None
 
     def process_gpu_percent(self, pid: int | None) -> float | None:
         if not self.executable or not pid:
@@ -211,6 +246,7 @@ class AdaptiveResourceManager:
         self._last_disk_time = now
 
         gpu_temp = self.nvidia.gpu_temperature()
+        gpu_free_mb, gpu_total_mb = self.nvidia.gpu_memory()
         pid = self.windows.foreground_pid()
         foreground_cpu = self.windows.process_cpu(pid)
         foreground_gpu = self.nvidia.process_gpu_percent(pid)
@@ -220,6 +256,8 @@ class AdaptiveResourceManager:
             disk_free_gb=disk.free / (1024**3),
             disk_active_percent=disk_active,
             gpu_temp_c=gpu_temp,
+            gpu_free_mb=gpu_free_mb,
+            gpu_total_mb=gpu_total_mb,
             foreground_cpu_percent=foreground_cpu,
             foreground_gpu_percent=foreground_gpu,
             seconds_since_user_input=self.windows.seconds_since_input(),
