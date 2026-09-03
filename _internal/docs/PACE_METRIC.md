@@ -231,3 +231,32 @@ cái cận cần nới.
 chỉ tính những segment thực sự hết lượt, và biết cổng có hai cận - phiên bản đầu đọc mọi
 lần từ chối thành "quá chậm" và biến một segment bị từ chối vì đọc *quá nhanh* (25.30,
 27.51 so với cận trên 24.5) thành một segment luôn vượt cận dưới.
+
+## Tổng hợp là tất định, nên "chạy lại" không bao giờ cứu được (xác nhận 2026-09-04)
+
+alpha.43 hỏng chương 5 đúng trên `c00005_s0000013`, cùng segment đã chặn chương 5 của
+alpha.32. Seed lấy từ `stable_int("segment::{stable_id}::{voice_key}::{seed_salt}")` — hoàn
+toàn tất định — nên có một dự đoán kiểm được: bốn lần thử của alpha.43 phải ra **đúng** bốn
+bản thu của alpha.32.
+
+    alpha.32 :  11,05   11,82   12,25   12,25
+    alpha.43 :  11,05   11,82   12,25   12,25
+
+Giống đến từng chữ số thập phân, qua hai lần chạy khác engine ASR và khác `num_ctx`.
+
+### Hai hệ quả
+
+**1. Chạy lại quyển sách không bao giờ cứu những segment này.** Cùng bốn bản thu ấy hiện ra
+mỗi lần. Đó là một tính chất tốt — kết quả tái lập được — nhưng nó xoá sổ "thử chạy lại xem
+sao" khỏi danh sách cách chữa.
+
+**2. Con số "88% / 73%" là một *tiên nghiệm*, không phải xác suất lặp lại được.** Nâng
+`tts.max_retries` không phải là "quay xúc xắc thêm sáu lần"; nó là **rút thêm sáu bản thu cụ
+thể, tất định**, vì attempt 5-10 dùng salt khác nên seed khác. Hoặc trong sáu bản ấy có một
+bản vượt 12,5, hoặc không có bản nào — và một khi đã thử thì câu trả lời là **vĩnh viễn** cho
+segment đó. Ước lượng ở trên đo khả năng dãy tất định ấy *có chứa* một bản đạt; nó không nói
+"thử nhiều lần rồi sẽ được".
+
+Điều này **củng cố** mục 4 chứ không làm yếu đi: vì chạy lại vô ích và vì cận dưới không được
+nới, **thêm lượt thử là cách duy nhất còn lại** cho lớp này, ngoài việc sửa văn bản hoặc sửa
+chính cổng.
