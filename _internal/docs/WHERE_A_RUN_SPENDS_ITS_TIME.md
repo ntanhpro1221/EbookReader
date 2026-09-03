@@ -725,3 +725,45 @@ Trên bằng chứng này, chỗ hỏng ấy **không quy được cho engine**.
 
 **Tạm thời và phải làm lại khi chạy xong:** n=79 trên 948, và một quyển sách đang chạy dở
 thì các segment còn lại chưa qua hết vòng sửa.
+
+### ASR tốt hơn có thể làm **mất** một chương, và đây là cơ chế
+
+alpha.43 hỏng chương 6 trong khi alpha.32 **xuất bản được** chương ấy. Đây là khác biệt kết
+quả đầu tiên giữa hai lần chạy, và nó không phải chuyện engine nghe tệ hơn — ngược lại hẳn.
+
+Segment `c00006_s0000001`, văn bản `"Mẹ kiếp! A a a! Khốn nạn!"` (một tiếng gào):
+
+| | máy nghe | similarity | kết cục |
+|---|---|---|---|
+| alpha.32 (openai) | *"Cảm ơn các bạn đã theo dõi và hẹn gặp lại."* | **0,00** | `TIMELINE_IMPOSSIBLE` → warning → **xuất bản** |
+| alpha.43 (faster) | *"Mày tiếp, á á khốn nặng"* | **0,59** | `MISMATCH_UNRESOLVED` → failed → **chặn** |
+
+Bản của alpha.32 là ảo giác kinh điển của Whisper (đoạn kết video YouTube). faster-whisper
+nghe **tốt hơn nhiều** — và bị phạt vì điều đó.
+
+**Cơ chế nằm trong danh sách miễn trừ.** `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS` tha
+`ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` với lý do hoàn toàn đúng — comment trong `pipeline.py`
+còn nêu **đúng câu này** làm ví dụ: mốc thời gian chạy quá cuối file nghĩa là bộ giải mã đã
+lạc khỏi âm thanh, nên bản ghi *không mang thông tin gì* về bản thu. Nhưng khi engine mới
+không ảo giác nữa, cùng segment ấy cho ra một bản ghi **có** thông tin, và thông tin ấy nói
+"chưa khớp lắm" (0,59 so với ngưỡng 0,78 của high_quality). Thế là chặn.
+
+Nói gọn: **danh sách miễn trừ được hiệu chỉnh quanh kiểu hỏng của openai-whisper.** Bản ghi
+sai đến mức vô nghĩa thì được tha; bản ghi gần đúng thì chặn.
+
+Đếm được (alpha.43 mới xong 6/10 chương, nên là tỉ lệ chứ không phải tổng):
+
+| | `TIMELINE_IMPOSSIBLE` (được tha) | `ASR_MISMATCH_UNRESOLVED` (chặn) |
+|---|---|---|
+| alpha.32, 10 chương | **9** (0,9/chương) | 0 |
+| alpha.43, 6 chương | **2** (0,33/chương) | 1 |
+
+**Đừng đọc thành "quay lại engine cũ".** Ít ảo giác đi là tốt hơn thật; chương 6 của alpha.32
+xuất bản được *nhờ* Whisper ảo giác, và đó không phải một bảo đảm chất lượng. Bản thu gần
+như chắc chắn ổn: "Mẹ kiếp"→"Mày tiếp", "khốn nạn"→"khốn nặng" là kiểu nghe nhầm rất hợp lý
+với một câu **gào lên**.
+
+Cái còn thiếu là một hạng mục: `ASR_UNVERIFIABLE_SHORT_TEXT` đã thừa nhận "quá ngắn nên phán
+quyết vô nghĩa", nhưng không có tương đương cho **"cách diễn đạt khiến bản ghi không đáng
+tin"** — gào, hét, chuỗi thán từ. Trước mắt thì đúng loại việc cần **tai người nghe**, và
+`accept` có sẵn cho đúng việc đó.
