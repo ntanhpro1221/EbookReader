@@ -1825,6 +1825,30 @@ class BookPipeline:
                     segment_id=segment_id,
                     policy_hash=self.quality_policy_hash,
                 )
+                # And a segment already belongs to one repair track. Its rounds must share
+                # a requirement and a trigger - allocate_segment_candidate refuses
+                # "same-policy candidate rounds cannot mix repair trigger bindings" - so a
+                # naturalness candidate cannot join a segment the ASR loop claimed, even
+                # though the plan will happily propose one. Following that proposal is the
+                # fourth crash of this family, and the budget fix above is what made it
+                # reachable.
+                #
+                # There is nothing this loop can do for such a segment. The review stays a
+                # PERCEPTUAL_NATURALNESS_REVIEW warning, which is what `accept` is for.
+                claimed_by_other_track = any(
+                    str(row["candidate_repair_requirement"])
+                    != NATURALNESS_IMPROVEMENT_REQUIREMENT
+                    for row in existing_candidates
+                )
+                if claimed_by_other_track:
+                    self.log(
+                        f"Segment {segment['stable_id']} đã thuộc đường sửa ASR; "
+                        "review naturalness của nó ở lại dạng cảnh báo."
+                    )
+                    unresolved.append(segment)
+                    completed_ids.append(segment_id)
+                    progressed = True
+                    continue
                 plan = self.db.segment_candidate_resume_plan(
                     segment_id,
                     self.quality_policy_hash,
