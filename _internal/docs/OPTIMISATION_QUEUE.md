@@ -8,9 +8,14 @@ mục 2 sai phạm vi thì mục 1 mất phần lớn giá trị.
 Nền để so: alpha.32 tốn ~15.600 giây công việc đo được sau pha phân tích, cộng ~3.850 giây
 pha phân tích.
 
+**Nền ấy đã dịch.** faster-whisper (đã ship, alpha.43 đang chạy) lấy đi khoảng 3.400s của hai
+pha ASR, nên phần việc sau phân tích còn khoảng **12.200s**. Điều đó không làm mục nào rẻ đi
+- nó làm mục 1 **đắt hơn về tỉ trọng**: 4.707s trên 12.200s là **39% phần việc còn lại**.
+Xem `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md` cho phép đo và biến kiểm của nó.
+
 ---
 
-## 1. Cho vòng sinh candidate dùng pool — ~15-20% một lần chạy
+## 1. Cho vòng sinh candidate dùng pool — ~15-20% một lần chạy, và là 39% phần việc còn lại
 
 `pipeline.py` sinh candidate clarity bằng vòng lặp thẳng, trong khi đường tổng hợp chính
 dùng `_synthesis_pool`. Đó là **pha tốn nhất cả lần chạy**: 4.707s, 826 việc, 5,45s mỗi
