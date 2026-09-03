@@ -419,3 +419,37 @@ ba câu.
 Đây là ranh giới giữa hai tính năng của cùng một dự án, không phải lỗi của bên nào. Cần đo
 thêm trước khi sửa: một segment mang tên chuyển tự có **hệ thống** chậm hơn không, hay ba ca
 này chỉ là đuôi phân bố? n=3 thì chưa trả lời được.
+
+## Vì sao không dùng số tổng của alpha.32 để đo chồng lấn
+
+alpha.32 chạy hết, nhưng tôi đã bắt nó **xác minh lại cả sách ba lần** (mỗi lần sửa
+`pipeline.py`/`database.py` là một lần đổi policy hash). Hậu quả trên số liệu:
+
+| | alpha.25 | alpha.32 |
+|---|---:|---:|
+| lượt giải mã ASR | 2.032 | **4.918** |
+| lượt chấm cảm thụ | 979 | **2.513** |
+
+Nên **mọi con số tổng đều không so được**. Tính theo mỗi lượt:
+
+| | alpha.25 | alpha.32 |
+|---|---:|---:|
+| cảm thụ | 2,59 s/lượt | **0,85 s/lượt** |
+| ASR | 1,90 s/lượt | 2,50 s/lượt |
+
+Cảm thụ giảm **3,05×** — phù hợp với chồng lấn. Nhưng ASR **tăng 0,60 s/lượt**, và tôi
+**không tách được** hai cách giải thích:
+
+- pool chấm điểm tranh CPU với Whisper (tức chồng lấn có lấy sang thời gian của ASR), hay
+- các lượt xác minh lại giải mã đi giải mã lại đúng những segment khó nhất, nên trung bình
+  mỗi lượt nặng hơn — 5,2 lượt/segment so với 2,14 của alpha.25.
+
+Cách thứ hai đủ sức giải thích toàn bộ, và dữ liệu này không phân biệt được.
+
+**Bằng chứng tốt hơn vẫn là phép đo sạch trước đó**: ba chương chạy đủ 8 worker trong
+alpha.32 khi chưa có lượt xác minh lại nào, 822,3s → 173,7s (giảm 79%), ASR đứng yên. Ghi
+lại điều này để người sau không trích nhầm bảng tổng ở trên.
+
+**Bài học phương pháp:** sửa code giữa chừng làm hỏng chính phép đo mà lần chạy ấy sinh ra
+để phục vụ. Nếu cần một con số so sánh sạch thì phải để một lần chạy đi hết mà không đụng
+vào bất kỳ file nào trong `QUALITY_IMPLEMENTATION_FILES`.
