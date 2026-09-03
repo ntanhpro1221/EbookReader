@@ -792,3 +792,21 @@ Còn 4 segment nữa (ch7 ×2, ch9, ch10) chưa tới lượt — con số cuố
 Ghi lại cả cách suy luận: tôi viết mục trên khi n=1, và ca ấy dựng lên một câu chuyện gọn
 gàng ("ASR tốt hơn làm mất chương"). Với n=5 thì câu chuyện ấy đúng về *cơ chế* nhưng sai về
 *quy mô*. Một ca đủ để tìm ra cơ chế, không bao giờ đủ để định giá nó.
+
+#### Máy đã cố hết mức, và đó chính là bằng chứng
+
+Tôi đoán bản thu của `c00006_s0000001` vẫn ổn còn câu gào thì khó nghe. Sổ candidate của
+alpha.43 ủng hộ điều đó chứ không chỉ là suy diễn ngữ âm:
+
+    r0 a0 dual_failed  2,08s   beam=ASR_MISMATCH; greedy=ASR_MISMATCH
+    r1 a0 dual_failed  1,92s   beam=ASR_MISMATCH; greedy=ASR_MISMATCH
+    r2 a0 dual_failed  1,84s   beam=ASR_MISMATCH; greedy=ASR_MISMATCH
+    r3 a0 dual_failed  2,16s   beam=ASR_MISMATCH; greedy=ASR_MISMATCH
+    r4 a0 dual_failed  2,00s   beam=ASR_MISMATCH; greedy=ASR_MISMATCH
+
+**Năm vòng sửa, năm bản thu seed khác nhau, mười lần giải mã, tất cả đều lệch.** Ngân sách
+`asr.repair_rounds = 5` của high_quality đã dùng hết và dùng đúng.
+
+Năm bản thu độc lập cùng hỏng theo một kiểu thì khó tin là "năm bản thu tồi" hơn là "câu này
+không nghe ra được". Nghĩa là **thêm nỗ lực của máy không cứu được nó** — đúng chỗ cần
+`accept`, và cũng đúng lý do `accept` tồn tại.
