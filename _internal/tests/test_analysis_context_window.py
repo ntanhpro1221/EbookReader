@@ -76,3 +76,25 @@ def test_a_response_without_counters_cannot_accuse_anyone() -> None:
     _check_prompt_fits({}, num_ctx=8192, num_predict=1472)
     _check_prompt_fits({"prompt_eval_count": 0}, num_ctx=8192, num_predict=1472)
     _check_prompt_fits({"prompt_eval_count": 9000}, num_ctx=0, num_predict=0)
+
+
+def test_an_oversized_prompt_is_treated_as_a_batch_to_split() -> None:
+    """The recovery already existed; the new error just has to reach it.
+
+    A batch that is too big for the context is the same shape of problem as one that runs
+    past its output budget or its wall clock, and the pipeline answers all of those by
+    halving the batch and trying again. Halving it halves the segment text, which is the
+    only part of the prompt that grows - so the split is the actual remedy rather than a
+    generic retry. Left in the catch-all branch, this error would have re-sent the
+    identical batch until the attempts ran out and then failed the chapter.
+    """
+    import inspect
+
+    from ebook_reader import analysis
+
+    source = inspect.getsource(analysis.OllamaBookAnalyzer)
+    handler = source[source.index("AnalysisOutputBudgetError,\n") :]
+    clause = handler[: handler.index(") as exc:")]
+    assert "AnalysisPromptTruncatedError" in clause, (
+        "an oversized prompt must reach the splitting handler, not the catch-all"
+    )

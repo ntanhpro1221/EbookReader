@@ -8109,6 +8109,7 @@ class OllamaBookAnalyzer:
                         raise
                     except (
                         AnalysisOutputBudgetError,
+                        AnalysisPromptTruncatedError,
                         AnalysisWallTimeoutError,
                         OllamaStreamIncompleteError,
                     ) as exc:
@@ -8139,6 +8140,12 @@ class OllamaBookAnalyzer:
                                     split_reason = "Batch vượt giới hạn thời gian"
                                 elif isinstance(exc, AnalysisOutputBudgetError):
                                     split_reason = "Batch chạm trần token đầu ra"
+                                elif isinstance(exc, AnalysisPromptTruncatedError):
+                                    # Halving the batch halves the segment text, which is
+                                    # the only part of the prompt that grows - so the split
+                                    # this shares with the other oversize errors is not a
+                                    # generic retry, it is the actual remedy.
+                                    split_reason = "Prompt vượt ngữ cảnh"
                                 else:
                                     split_reason = "Stream batch bị ngắt"
                                 self.log(
