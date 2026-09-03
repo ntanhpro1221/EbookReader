@@ -10948,12 +10948,6 @@ class ProjectDB:
                 raise RuntimeError(
                     "standard segment candidate has an unexpected repair trigger"
                 )
-            self._require_no_unbound_naturalness_trigger_conn(
-                conn,
-                segment_id=int(candidate["segment_id"]),
-                incumbent_sha256=str(candidate["incumbent_sha256"]),
-                policy_hash=str(candidate["policy_hash"]),
-            )
             return requirement
         if trigger_check_id is None:
             raise RuntimeError(

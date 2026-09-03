@@ -12025,9 +12025,27 @@ def test_standard_candidate_rejects_an_unbound_naturalness_trigger(
         )
 
 
-def test_standard_candidate_resume_rejects_a_later_naturalness_trigger(
+def test_reading_a_plan_never_raises_over_a_later_naturalness_trigger(
     tmp_path: Path,
 ) -> None:
+    """Planning is not allocating, and this refusal killed two runs.
+
+    The invariant it enforces is real: a standard candidate must not be *created* while its
+    audio still owes a naturalness one. But it was also applied when merely *reading* an
+    existing candidate to work out a plan, and a segment can owe an ASR repair first and a
+    naturalness review afterwards.
+
+    alpha.32 ended at chapter 8 of 10 that way. Segment 633 had five standard candidates
+    from ASR repair; the naturalness review for the same incumbent arrived after all of
+    them; and from then on the perceptual repair loop could not so much as ask what to do
+    with that segment - the plan call raised. Each round it caught the exception, invalidated
+    the current candidate with the message as its failure reason, and allocated another one,
+    until the budget was gone and the raise reached the top.
+
+    With the read path silent, the same data plans "exhausted": five rounds were spent and
+    none worked, so the segment stays a PERCEPTUAL_NATURALNESS_REVIEW warning and the run
+    goes on. The review is not lost - that warning is what `accept` exists for.
+    """
     db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
     db.allocate_segment_candidate(
         segment_id=segment_id,
@@ -12046,12 +12064,9 @@ def test_standard_candidate_resume_rejects_a_later_naturalness_trigger(
         incumbent_sha256=incumbent_sha256,
     )
 
-    with pytest.raises(RuntimeError, match="bind its exact trigger"):
-        db.segment_candidate_resume_plan(
-            segment_id,
-            "candidate-policy-v1",
-            2,
-        )
+    plan = db.segment_candidate_resume_plan(segment_id, "candidate-policy-v1", 2)
+
+    assert plan["action"] in {"generate", "exhausted", "allocate"}
 
 
 def test_naturalness_candidate_binds_exact_trigger_when_candidate_sha_matches_incumbent(
@@ -13419,3 +13434,65 @@ def test_the_resume_plan_names_the_candidate_it_is_owed(tmp_path: Path) -> None:
         repair_trigger_check_id=int(plan["repair_trigger_check_id"]),
     )
     assert int(candidate["repair_trigger_check_id"]) == trigger_id
+
+
+def test_a_review_raised_after_a_candidate_is_history_not_a_violation(tmp_path: Path) -> None:
+    """The same defect from the other side: an exhausted budget must report itself.
+
+    See test_reading_a_plan_never_raises_over_a_later_naturalness_trigger for the run this
+    ended. What matters here is that the plan comes back at all, so the caller can decide
+    the segment is unresolved instead of the run dying inside a read.
+    """
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    candidate = db.allocate_segment_candidate(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        repair_round=0,
+        max_repair_rounds=2,
+        incumbent_sha256=incumbent_sha256,
+        generation_seed=101,
+        wav_path=tmp_path / "candidates" / "r0.wav",
+        candidates_root=tmp_path / "candidates",
+    )
+
+    # The review lands after the candidate was allocated, on the same incumbent audio.
+    trigger_id = _record_naturalness_repair_trigger(
+        db, segment_id=segment_id, incumbent_sha256=incumbent_sha256
+    )
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE quality_checks SET created_at=? WHERE id=?",
+            (float(candidate["created_at"]) + 60.0, trigger_id),
+        )
+
+    # Reading the plan must not raise: this is what killed the run.
+    plan = db.segment_candidate_resume_plan(
+        segment_id=segment_id,
+        policy_hash="candidate-policy-v1",
+        max_repair_rounds=2,
+    )
+    assert plan is not None
+
+
+def test_a_review_already_outstanding_still_refuses_a_standard_candidate(
+    tmp_path: Path,
+) -> None:
+    """The invariant keeps its meaning: allocating the wrong kind of candidate while a
+    review is genuinely outstanding is still refused, because there "now" is the allocation
+    moment and the review really would go unanswered."""
+    db, segment_id, incumbent_sha256, _incumbent_path = _candidate_db(tmp_path)
+    _record_naturalness_repair_trigger(
+        db, segment_id=segment_id, incumbent_sha256=incumbent_sha256
+    )
+
+    with pytest.raises(RuntimeError, match="must bind its exact trigger check id"):
+        db.allocate_segment_candidate(
+            segment_id=segment_id,
+            policy_hash="candidate-policy-v1",
+            repair_round=0,
+            max_repair_rounds=2,
+            incumbent_sha256=incumbent_sha256,
+            generation_seed=101,
+            wav_path=tmp_path / "candidates" / "r0.wav",
+            candidates_root=tmp_path / "candidates",
+        )
