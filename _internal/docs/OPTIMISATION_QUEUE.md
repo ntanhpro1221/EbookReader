@@ -56,6 +56,31 @@ Vẫn là mục lớn nhất hàng đợi, nhưng bằng một nửa con số t�
 `TTS_POOL_MIN_BATCH = 3` nên 36/129 vòng (7,4% candidate) vẫn chạy tuần tự - đã tính vào
 con số trên.
 
+### Hình dạng của thay đổi, và cái bẫy im lặng trong nó
+
+Đường tổng hợp chính **không** song song hoá vòng ghi sổ của nó; nó dùng **prefetch**:
+`pool.synthesize_many(jobs)` tổng hợp cả lô song song, rồi vòng tuần tự gọi
+`_claim_prefetched_segment` để nhận từng kết quả sau khi kiểm stable_id, seed, file có thật,
+và checksum. Cái gì bị từ chối thì tổng hợp lại tại chỗ. Nghĩa là **ghi DB vẫn tuần tự** -
+không có chuyện tranh chấp SQLite - và pool chỉ làm phần TTS thuần tuý. Vòng candidate cần
+đúng hình dạng ấy.
+
+Ba ràng buộc đã kiểm trên dữ liệu thật, không phải đoán:
+
+1. **Chỉ attempt 0 được prefetch** (`pipeline.py:3687`: một attempt sau tồn tại vì có gì đó
+   đã sai, nên không được đoán trước). Trên alpha.32, **786/883 = 89%** candidate ở
+   attempt 0, nên ràng buộc này chỉ bỏ lỡ 11%.
+2. **Salt phải theo từng job, không theo cả lô.** `_prefetch_segment_batch` gắn cứng
+   `"seed_salt": f"{seed_salt_prefix}_0"` cho mọi job. Candidate thì lấy salt từ
+   `segment_candidate_split_seed_salt(repair_round, variant)`, và **cả hai variant đều tồn
+   tại trong cùng một quyển sách** (`locked_spoken_v1` 526, `source_spelling_v1` 357), với
+   round khác nhau giữa các segment. Một lô candidate vì thế **không đồng nhất**.
+3. **Sai salt thì hỏng *im lặng*.** `_claim_prefetched_segment` kiểm
+   `seed == generation_seed(row, seed_salt)`; lệch một chút là **mọi** kết quả bị từ chối,
+   rơi hết về tổng hợp tuần tự. Kết quả: trả tiền VRAM cho pool và không nhanh hơn tí nào -
+   trông y hệt "pool không giúp gì" chứ không phải một lỗi. **Test phải khẳng định số kết
+   quả được *nhận*, không phải chỉ khẳng định chạy xong.**
+
 Chi tiết và cảnh báo về cách quy thời gian: `docs/THROUGHPUT.md`.
 
 ## 2. Giữ Whisper thường trú **trong vòng sửa** — ~230s (đã hạ từ ~1.400s)
