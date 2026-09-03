@@ -577,3 +577,52 @@ Câu hỏi hay hơn mà phép đo này mở ra: **nếu không phải tính toá
 *Lưu ý về điều kiện đo:* alpha.43 đang dùng GPU cho Ollama lúc chạy phép đo này, nên con số
 tuyệt đối bị ảnh hưởng. Tỉ lệ giữa hai cách trên cùng một máy cùng một lúc thì vẫn so được,
 và đó là thứ câu hỏi này cần.
+
+## Thời gian ASR nằm ở đâu: gần một nửa là phí cố định mỗi lời gọi (đo 2026-09-04)
+
+Phép đo trước bác bỏ "GPU rảnh nên cứ song song hoá". Câu hỏi kế tiếp rẻ hơn nhiều so với
+việc xây bất cứ thứ gì: **thời gian ấy nằm ở đâu?** 60 bản thu của alpha.32, tách phần nạp
+audio khỏi phần gọi model, rồi khớp bình phương tối thiểu theo độ dài:
+
+| | |
+|---|---|
+| nạp + resample (soundfile + polyphase) | 0,36s tổng — **0,7%**, 6 ms/bản |
+| giải mã | 54,48s tổng — **99,3%**, 908 ms/bản |
+| tỉ lệ thời gian thực | 0,153× |
+
+```
+giải mã ≈ 369 ms  +  90 ms × (số giây âm thanh)
+```
+
+Với bản thu trung vị **4,8 giây**, phần cố định chiếm **46%**.
+
+### Ba hệ quả
+
+1. **Nạp audio không phải chỗ tốn.** 0,7% — đừng tối ưu nó.
+2. **Phép đo này giải thích vì sao batching chỉ được 1,11×.**
+   `BatchedInferencePipeline` gộp các *cửa sổ trong một file*, không gộp *giữa các file*,
+   nên nó không chia sẻ được đúng cái phí đang chiếm gần nửa chi phí.
+3. **Con số đáng nhớ:** 2.032 lượt giải mã của alpha.25 × 369 ms ≈ **750 giây**, tức khoảng
+   **19%** của 3.870s ASR, tiêu vào phí gọi chứ không vào tiếng nói.
+
+### Giải thích khả dĩ nhất, và cách kiểm nó
+
+Whisper **đệm mọi đầu vào lên 30 giây** trước khi qua encoder, nên một bản thu 1 giây tốn
+đúng một lượt encoder như bản 30 giây; chỉ phần decoder mới tỉ lệ với nội dung. Điều đó khớp
+với hình dạng đo được: một hằng số cộng một hệ số theo giây. Với trung vị 4,8s thì **~84%
+mỗi cửa sổ 30 giây là phần đệm**.
+
+Tôi **chưa kiểm trực tiếp** cơ chế này — nó khớp với số liệu chứ chưa được chứng minh. Cách
+kiểm: đo riêng thời gian encoder so với decoder, hoặc so bản thu 1s với bản 20s và xem phần
+cố định có đúng bằng nhau không.
+
+### Hướng đi mà nó chỉ ra (chưa làm)
+
+Nếu đúng là đệm 30 giây, thì đòn bẩy không phải "giải mã nhanh hơn" mà **"gói nhiều segment
+vào một cửa sổ"**. Với trung vị 4,8s thì một cửa sổ chứa được năm sáu segment, và phí cố
+định chia cho từng ấy.
+
+Nhưng nó **trộn ranh giới bản ghi**: phải tách lại theo mốc thời gian, và mọi thứ phía sau —
+neo tên khoá, phép kiểm dòng thời gian ảo giác, similarity theo từng segment — đều giả định
+một bản ghi thuộc về đúng một segment. Đó là một thay đổi lớn hơn nhiều so với đổi engine,
+và phải đo lợi ích thật trước khi đụng vào.
