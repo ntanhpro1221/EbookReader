@@ -22,6 +22,7 @@ Reads a finished project's WAVs and writes nothing.
 """
 from __future__ import annotations
 
+import gc
 import sqlite3
 import sys
 import time
@@ -94,12 +95,26 @@ def main(project_root: str, sample: int, max_workers: int) -> int:
                 out = list(pool.map(_one, audio))
         return time.perf_counter() - started, out
 
+    # VRAM is what decides whether this is deployable at all: the card is 8.15 GB and the
+    # synthesis pool already sizes itself from what is free. A speedup that costs a TTS
+    # worker is not a speedup, so the cost is measured here rather than assumed.
+    def _vram_used_mb() -> float:
+        try:
+            free, total = torch.cuda.mem_get_info()
+        except Exception:  # noqa: BLE001
+            return 0.0
+        return (total - free) / 1024 / 1024
+
+    idle_vram = _vram_used_mb()
     count = len(takes)
     total_audio = sum(duration for _clip, duration in audio)
     print()
-    print(f"{count} bản thu, {total_audio:.1f}s âm thanh")
+    print(f"{count} bản thu, {total_audio:.1f}s âm thanh, VRAM nền {idle_vram:.0f} MiB")
     print()
-    print(f"{'luồng':>6}  {'tổng':>9}  {'mỗi bản':>9}  {'nhanh hơn':>10}  {'bản ghi khác':>13}")
+    print(
+        f"{'luồng':>6}  {'tổng':>9}  {'mỗi bản':>9}  {'nhanh hơn':>10}"
+        f"  {'bản ghi khác':>13}  {'VRAM':>9}"
+    )
 
     baseline_seconds = 0.0
     baseline_text: list[str] = []
@@ -108,7 +123,9 @@ def main(project_root: str, sample: int, max_workers: int) -> int:
         model = WhisperModel(
             "turbo", device="cuda", compute_type="float16", num_workers=workers
         )
-        model.transcribe(audio[0][0], beam_size=1, **options)[0].__next__()  # warm
+        # list(), not next(): transcribe returns a generator whose work happens on
+        # iteration, and a take that yields no segment would raise StopIteration here.
+        list(model.transcribe(audio[0][0], beam_size=1, **options)[0])  # warm
         seconds, texts = _run(model, workers)
         if workers == 1:
             baseline_seconds, baseline_text = seconds, texts
@@ -123,8 +140,13 @@ def main(project_root: str, sample: int, max_workers: int) -> int:
         print(
             f"{workers:6d}  {seconds:8.1f}s  {seconds / count:8.3f}s"
             f"  {speedup:9.2f}x  {differing:6d}/{count}"
+            f"  {_vram_used_mb() - idle_vram:7.0f}MiB"
         )
+        # Each pass builds its own model. Without dropping the previous one the card
+        # accumulates them and the later, wider configurations measure a starved GPU.
         del model
+        gc.collect()
+        torch.cuda.empty_cache()
 
     print()
     print(
