@@ -484,3 +484,38 @@ bị áp lên tình huống hai loại.** Bất biến đúng cả ba lần; ch�
 Điều đáng ghi cho người sau: khi thấy một bất biến ném trong `segment_candidate_resume_plan`,
 câu hỏi đầu tiên không phải "bất biến này có quá nghiêm không" mà **"vòng nào đang hỏi, và
 segment này thuộc về vòng nào"**.
+
+### Lần chết thứ tư — tìm ra **trước** khi lần chạy gặp nó
+
+Sau khi sửa lần chết thứ ba, tôi không resume ngay mà đi soi chính hàm ấy tìm các bất biến
+cùng họ. Ngay dòng trên chỗ vừa sửa:
+
+```python
+if len(repair_bindings) != 1:
+    raise RuntimeError("same-policy candidate rounds contain mixed repair trigger bindings")
+```
+
+Cùng giả định "một sổ, một loại". Trước đây không segment nào mang cả hai loại — **nhưng
+chính vì lần chết trước đã chặn**. Bản sửa ngân sách của tôi vừa mở đường tới đó.
+
+Dựng đúng tình huống: đường ASR chiếm segment, round 0 hỏng, rồi một review naturalness đến.
+
+```
+plan  : action=allocate round=1 requirement=naturalness_improvement_v1 trigger=3
+cấp phát: NÉM "same-policy candidate rounds cannot mix repair trigger bindings"
+```
+
+**Bộ lập kế hoạch và bộ cấp phát mâu thuẫn nhau**: một bên bảo cấp phát naturalness, bên kia
+bảo không được trộn.
+
+(Lần dựng đầu tiên tôi truyền ngân sách 5 trong khi hàng đã lưu là 2, và nhận một lỗi
+"cannot mix repair budgets" — **hiện vật của cách tôi dựng**, không phải lỗi thật. Dựng lại
+cho khớp mới lộ ra lỗi thật.)
+
+**Sửa ở người gọi, lần nữa.** Nhất quán với `UNIQUE(segment_id, policy_hash, repair_round)`:
+mỗi segment thuộc **một** đường sửa. Vòng cảm thụ giờ bỏ qua segment mà candidate đang có
+thuộc loại khác, ghi log, và để review ở lại dạng `PERCEPTUAL_NATURALNESS_REVIEW` — đúng thứ
+lệnh `accept` sinh ra để giải quyết.
+
+**Bốn lần chết, một hình dạng.** Và lần này là lần đầu tiên tìm ra trước khi trả giá: soi
+các bất biến hàng xóm ngay sau khi sửa một bất biến cùng họ, thay vì resume rồi chờ.
