@@ -126,6 +126,25 @@ Chưa đo: batch tên nhỏ hơn ảnh hưởng thế nào tới *chất lượn
 "Chuẩn hóa tên batch 1 còn 18 tên lỗi sau lần 3", nên batch nhỏ hơn có thể còn đỡ hơn - đó
 là phỏng đoán, phải nhìn số tên lỗi ở lần chạy sau.
 
+### Cảnh báo: đây **không phải** một núm thuần tốc độ
+
+Đổi `num_ctx` làm **đổi cả đầu ra của phân tích**, và alpha.43 cho thấy mức độ:
+
+| | dải `fast` được gán |
+|---|---|
+| alpha.32 (ctx 7.168) | 3 segment (0,3%) |
+| alpha.43 (ctx 9.216) | **14 segment (1,5%)** |
+
+Cùng quyển sách, cùng prompt. Ngữ cảnh rộng hơn đổi cách chia batch (10 lần chia so với 3)
+và đổi cả số học của suy luận, nên director chọn khác. Điều đó **đổi chỉ dẫn diễn xuất → đổi
+âm thanh → đổi kết cục**: chính cơ chế đã lấy mất audio của `c00007_s0000074` (xem mục 7).
+
+Nên hạ num_ctx **sẽ lại làm đổi kết quả một lần nữa**. Có thể đổi theo hướng tốt - alpha.32
+ở 7.168 gán `fast` ít hơn nhiều và không mất segment nào vì dải - nhưng phải coi đây là
+**thay đổi chạm chất lượng**, xác minh bằng `scripts/compare_runs.py`, chứ không phải một
+con số vô hại. Đó cũng đúng là lý do `pyproject.toml`/`config.py` nằm trong
+`QUALITY_IMPLEMENTATION_FILES` ngay từ đầu.
+
 Chi tiết: `docs/VRAM_AND_CONTEXT.md`.
 
 ## 4. Nâng `tts.max_retries` 4 → 10 — cứu 2 trong 3 segment không có audio
