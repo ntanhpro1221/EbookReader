@@ -3405,7 +3405,18 @@ def test_name_pronunciation_rejects_invalid_confidence_without_locking(
     assert float(stored[-1]["confidence"]) == LOCAL_NAME_FALLBACK_CONFIDENCE
 
 
-def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> None:
+def test_a_name_with_an_english_word_cannot_be_left_in_english(monkeypatch) -> None:
+    """Two readings of one name in one book is what this prevents.
+
+    The model used to be allowed to decline: alpha.25 locked ten names as written, so
+    "Michael" read "Mai-cồ" on its own and stayed "Michael" inside "Michael Godswill", and
+    the same split hit Samael, Theosbane, Lily and Card. A name every word of which is
+    already Vietnamese never reaches the model at all - the scanner drops it - so anything
+    that gets here has something to read, and the local routes can read any of it: checked
+    against all 117,493 words CMUdict has.
+
+    Declining is refused, the batch retries, and the reading comes from the local route.
+    """
     db = FakeDB()
     db.rows = [
         {
@@ -3441,10 +3452,9 @@ def test_passthrough_name_decision_is_checkpointed_for_resume(monkeypatch) -> No
     monkeypatch.setattr(analyzer, "_stream_json_response", response)
 
     assert analyzer.reconcile_name_pronunciations() == 1
-    assert analyzer.reconcile_name_pronunciations() == 0
-    assert attempts == 1
-    assert db.pronunciations[0]["spoken_form"] == "Cooldown"
-    assert db.pronunciations[0]["source"] == "english_name_transliteration"
+    assert attempts == 3, "refusing to convert is not accepted, so the batch retries"
+    assert db.pronunciations[0]["spoken_form"] != "Cooldown"
+    assert db.pronunciations[0]["spoken_form"] == _local_name_fallback("Cooldown")
 
 
 def test_an_english_word_shaped_like_a_vietnamese_one_never_reaches_the_model() -> None:

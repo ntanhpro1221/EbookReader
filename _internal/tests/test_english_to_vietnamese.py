@@ -500,9 +500,30 @@ def test_the_spelling_route_says_a_final_er_as_the_schwa() -> None:
     notion of the ending. It also read a silent e out loud - *Zone* was "Dô-nê" - which
     could not be fixed until the coda table stopped losing b, d, j and y."""
     assert _local_name_fallback("Kaizer") == "Cai-dờ"
-    assert _local_name_fallback("Zone") == "Dôn"
-    assert _local_name_fallback("Blade") == "Bờ-lát"
-    assert _local_name_fallback("Safe") == "Xáp"
+    # Words CMUdict lacks, which is the only kind that reaches this route now. The silent e
+    # of "Theosbane" and "Xenlor" is dropped; the coda it was hiding is not.
+    assert _local_name_fallback("Theosbane") == "Thê-ô-xờ-ban"
+    assert _local_name_fallback("Xenlore") == "Xên-lôn"
+
+
+def test_a_word_the_dictionary_has_reads_the_same_either_way() -> None:
+    """Two readings of one name in one book is what this prevents.
+
+    The spelling route used to spell out every word of a name, so "Arthur Kaizer Theosbane"
+    read its first word "A-rờ-thun" while "Arthur" alone read "A-thờ". The same split gave
+    Michael, Samael, Lily and Card two readings each in alpha.25.
+    """
+    for word in ("Arthur", "Michael", "Blade", "Card", "Lily"):
+        assert _local_name_fallback(word) == _read(word), word
+    assert _local_name_fallback("Arthur Kaizer Theosbane").startswith(_read("Arthur"))
+    assert _local_name_fallback("Michael Godswill").startswith(_read("Michael"))
+
+
+def test_a_vietnamese_word_inside_a_name_is_left_alone() -> None:
+    """"Kim Luxara" is half a Vietnamese word and half an invented one; reading the
+    Vietnamese half as English gives it a reading it never had."""
+    assert _local_name_fallback("Kim Luxara") == "Kim lu-xa-ra"
+    assert _cmu_phrase_to_vietnamese("Spirit King") == "Xờ-pi-rít Kinh"
 
 
 def test_a_dark_l_takes_a_diphthong_as_a_whole_rime() -> None:
@@ -539,8 +560,8 @@ def test_a_medial_glide_is_spelled_the_way_vietnamese_spells_it() -> None:
     """Reading 24,061 words produced 46 syllables the language does not have, every one a
     /w/ glide against the wrong vowel letter. Only the spelling was wrong."""
     assert _read("One") == "O\u0103n"
-    assert _read("Twenty").startswith("T\u1edd-oen")
-    assert _read("Schwartz") == "S\u1edd-o\u00f3t"
+    assert _read("Twenty").startswith("Tờ-goen")  # the peeled glide keeps its g
+    assert _read("Schwartz") == "Sờ-goát"  # the peeled glide keeps its g
 
 
 def test_the_c_and_ng_spellings_are_settled_both_ways() -> None:
@@ -590,3 +611,38 @@ def test_a_single_letter_is_a_grade_not_a_hundred() -> None:
     assert roman_numeral_value("XIV") == 14
     assert vietnamese_number_words(105) == "m\u1ed9t tr\u0103m l\u1ebb n\u0103m"
     assert vietnamese_number_words(120) == "m\u1ed9t tr\u0103m hai m\u01b0\u01a1i"
+
+
+def test_a_w_inside_an_onset_cluster_still_takes_its_g() -> None:
+    """The glide was only recognised standing alone, so a cluster left it bare against the
+    vowel: *cartwheel* read "Ca-t\u1edd-uiu", where "uiu" is not a rime. /kw/ is exempt - it
+    already reads "qu", which is a Vietnamese onset."""
+    assert _read("Cartwheel") == "Ca-t\u1edd-guyn"
+    assert _read("Wheel") == "Guyn"
+    assert _read("Quest") == "Qu\u00e9t"
+    assert _read("Queen") == "Quin"
+
+
+def test_every_word_the_dictionary_has_reads_as_vietnamese() -> None:
+    """117,493 letter-only entries in CMUdict, every reading a Vietnamese word.
+
+    The corpus and the listener's own examples between them left nine syllables the language
+    does not have, all of them a /w/ that began an onset cluster. Nothing smaller than the
+    whole dictionary would have found "cartwheel", "enwright", "wnek" and "wnuk".
+    """
+    for word in ("Cartwheel", "Enwright", "Wnek", "Wnuk", "Square", "Twenty"):
+        reading = _read(word)
+        assert _valid_vietnamese_spoken_form(word, reading), (word, reading)
+
+
+def test_the_dictionary_is_read_once() -> None:
+    """Every lookup used to scan the file, and a word it does not have scanned all 134,000
+    lines before saying so - 70ms, paid again for every name. Reading a name one word at a
+    time made that most of a minute on a book with eight hundred invented names."""
+    from ebook_reader.analysis import _cmu_pronunciations, _cmudict_entries
+
+    entries = _cmudict_entries()
+    assert len(entries) > 100_000
+    assert _cmudict_entries() is entries, "the second call must not read the file again"
+    # and it answers the same as the scan it replaced
+    assert _cmu_pronunciations(["Blade", "zzzznotaword"]) == {"blade": entries["blade"]}
