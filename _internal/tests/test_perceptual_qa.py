@@ -574,13 +574,21 @@ def test_worker_count_never_exceeds_what_the_moment_affords() -> None:
 
     A run must be able to shrink when the machine is busy, so the pool sizes itself from
     free RAM at the moment the batch starts rather than from a number fixed at startup.
+
+    The figures moved once the arithmetic underneath became honest. This used to call 6 GB
+    the frugal case and expect two workers out of it, which was true only while a worker
+    was budgeted at 1.0 GB and the reserve was a hardcoded 2.0. A worker costs 1.75 and the
+    reserve is now resources.min_free_ram_gb, so 6 GB affords one - and one is not a pool.
+    What the test is actually about is unchanged: more room means more workers, and there
+    is always a point where the machine is too busy to be worth the processes.
     """
     pool = PerceptualScorePool(_pool_settings(), lambda _message: None, workers=8)
 
     generous = pool.usable_for(24, 32.0)
-    frugal = pool.usable_for(24, 6.0)
+    frugal = pool.usable_for(24, 9.0)
 
     assert generous > frugal >= 2
+    assert pool.usable_for(24, 6.0) < frugal
     assert generous <= 8
     # Never more workers than files, however much RAM is free.
     assert pool.usable_for(3, 64.0) <= 3

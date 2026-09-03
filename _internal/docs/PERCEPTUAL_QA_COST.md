@@ -60,3 +60,32 @@ Con số "8 worker đạt 3,68×" vẫn đạt được: 8 worker cần `2 + 8×
 
 **Cần đo lại trên máy rảnh.** Lần đo này chạy song song với alpha.28, và số thứ ba đã bị
 nhiễm. Cách đo: `scratchpad/worker_ram.py`.
+
+## Pool từng tự chỉnh cỡ vào đúng vùng cấm chính nó
+
+`usable_for()` chừa lại một hằng số **2,0 GB** cứng. `resources.min_free_ram_gb` là **3,5 GB**.
+Và trong `AdaptiveResourceManager.decide()`, RAM trống ở hoặc dưới 3,5 GB là "memory
+pressure", mà memory pressure tắt **cả hai**:
+
+```python
+allow_new_gpu_batch = not (foreground_gpu_pressure or memory_pressure or ...)
+allow_cpu_heavy_work = not (foreground_cpu_pressure or ... or memory_pressure or ...)
+```
+
+Nên một pool chỉnh cỡ theo quy tắc cũ sẽ tiêu máy xuống còn 2,0 GB trống — tức **tự đặt
+mình vào trạng thái cấm đúng loại việc nó sinh ra để làm**. Và từ khi chấm điểm chạy cạnh
+ASR, hậu quả nặng hơn: `allow_new_gpu_batch` tắt theo, nên pool sẽ **làm nghẽn chính cái
+ASR mà nó định nấp sau**.
+
+Test `test_a_busy_machine_keeps_todays_behaviour_instead_of_stalling_asr` không bắt được
+điều này, vì nó chỉ phủ quyết định **lúc khởi động**, không phủ trạng thái pool **tạo ra
+sau khi đã chạy**.
+
+Đã sửa: mức chừa lấy từ chính ngưỡng của van tiết lưu (`resources.min_free_ram_gb`), không
+phải một con số do module này tự chọn. Với 7,3 GB trống: 2 worker, còn lại 3,8 GB — trên
+ngưỡng. Một dự án nâng ngưỡng lên thì được pool nhỏ hơn, thay vì một pool cãi nhau với van
+tiết lưu của chính nó.
+
+Một test cũ vỡ vì việc này, và vỡ đúng: nó khẳng định 6 GB trống vẫn đủ cho hai worker —
+điều chỉ đúng khi worker được tính 1,0 GB và mức chừa là 2,0. Ý định của test (nhiều chỗ
+hơn thì nhiều worker hơn) giữ nguyên; con số sinh ra từ số học cũ thì bỏ.
