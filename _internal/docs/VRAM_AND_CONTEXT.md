@@ -196,3 +196,32 @@ lần chạy sẽ dùng, không phải viết cứng - viết cứng thì nó v�
 phình ra, đúng kiểu pool chấm điểm từng hứa 5 worker trên bộ nhớ chỉ chứa nổi 2.
 
 Trên máy này: RAM 31,3 GB / cần 7,0 GB; VRAM 8.151 MiB / cần 5.367 MiB.
+
+## Bẫy cắt prompt đã kêu trong lần chạy thật (alpha.32, 2026-09-03)
+
+```
+Prompt phân tích ... không vừa ngữ cảnh: num_ctx 7.168 trừ đầu ra dành sẵn 3.584
+chỉ còn 3.584. Ollama đã cắt bớt phần đầu prompt mà không báo.
+```
+
+Đây là **giá trị của cái bẫy, chứng minh bằng chính lần chạy**: không có nó thì batch ấy
+trả về JSON hợp lệ cho những cái tên còn sót lại sau khi bị cắt, không ai biết gì, và một
+số tên sẽ có cách đọc do model bịa từ ngữ cảnh cụt. Có nó thì batch chia nhỏ, thử lại, và
+về đích đủ **112/112 tên**.
+
+Nhưng nó kêu vì suy luận `num_ctx` của tôi **chỉ biết một trong hai hình dạng yêu cầu**.
+Pha phân tích gọi Ollama theo hai kiểu khác hẳn nhau:
+
+| | số mục | văn bản prompt | đầu ra yêu cầu |
+|---|---:|---:|---:|
+| batch segment (high_quality) | 5 | tới 6.200 ký tự | 1.472 |
+| batch chuẩn hoá tên | **20** | vài chục ký tự mỗi tên | **4.352** |
+
+Tên thì ngắn mà câu trả lời dài; segment thì ngược lại. Cửa sổ 7.168 suy từ batch segment
+để `num_ctx // 2 = 3.584` — **nhỏ hơn 4.352 mà batch tên xin** — nên vế `// 2` cắt đôi phần
+đầu ra, chừa nửa còn lại cho prompt, và prompt không vừa.
+
+`analysis_context_window` giờ lấy **max trên mọi hình dạng yêu cầu**, mỗi hình dạng tính
+theo đúng đặc điểm của nó. high_quality: **7.168 → 9.216**. Vẫn tiết kiệm ~1,06 GB VRAM so
+với hằng số 16.384 cũ, chỉ là trả lại một phần để đổi lấy tính đúng đắn mà một lần chạy
+thật đã đòi.

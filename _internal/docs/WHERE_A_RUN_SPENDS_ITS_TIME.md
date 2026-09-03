@@ -110,3 +110,29 @@ hơn là lý do nhỏ hơn; **đúng hơn mới là lý do chính**.
 
 Lượt xác nhận vẫn greedy ở mọi độ dài - nó tồn tại để đưa ra một ý kiến *khác*, không phải
 một ý kiến *dài hơn*.
+
+### So hai lần chạy thì không kết luận được về bộ giải mã (alpha.32 vs alpha.25)
+
+Chương 2, 77 segment, chỉ lượt giải mã đầu tiên (không xác nhận, không vòng sửa):
+
+| | đỗ | lệch | không kết luận |
+|---|---|---|---|
+| alpha.25 (beam mọi độ dài) | 47 (61%) | 29 (38%) | 1 (1%) |
+| alpha.32 (greedy dưới 2,5s) | 44 (57%) | 31 (40%) | 2 (3%) |
+
+Thoạt nhìn tưởng thay đổi beam làm tệ đi. Xem từng ca thì **không ca nào chống lại greedy**:
+
+- `c00002_s0000037` (2,48s): alpha.32 có similarity **cao hơn** (0,833 so với 0,800) nhưng
+  vẫn trượt, vì trượt ở **neo tên khoá** chứ không ở similarity. Giọng đọc chữ "Rare" khác
+  nhau giữa hai lần thu - alpha.25 nghe ra "ra", alpha.32 nghe ra "Gai".
+- `c00002_s0000042` (**12,80s**): trên ngưỡng, nên **beam ở cả hai lần chạy**. Không thể do
+  thay đổi này.
+- `c00002_s0000067` (0,48s): văn bản chỉ là một chữ **"S"**. Cả hai đều cho ra vô nghĩa;
+  alpha.25 ra "ừ ừ" và lọt qua, alpha.32 ảo giác một câu dài. Đây là lớp
+  `ASR_UNVERIFIABLE_SHORT_TEXT` đã biết, không phải chuyện beam.
+
+**Bài học về phương pháp:** alpha.32 thu lại toàn bộ âm thanh với seed và casting riêng, nên
+đây là hai *tập bản thu* khác nhau chứ không phải hai *bộ giải mã* trên cùng bản thu. Một
+so sánh giữa hai lần chạy không tách được bộ giải mã khỏi giọng đọc. Bằng chứng có kiểm
+soát - 120 bản thu **giống hệt**, ba lần lật verdict, cả ba nghiêng về greedy - vẫn là bằng
+chứng tốt hơn hẳn, và nó không mâu thuẫn với bảng trên.

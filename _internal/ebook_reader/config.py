@@ -306,6 +306,30 @@ ANALYSIS_CONTEXT_GRANULARITY = 1024
 ANALYSIS_CONTEXT_MINIMUM = 4096
 
 
+def _analysis_request_shapes(analysis: dict[str, Any]) -> list[tuple[int, int]]:
+    """Every kind of request the analysis phase makes, as (items, prompt characters).
+
+    There is more than one, and the first version of this only knew about the segment
+    batch. alpha.32 found the other one the hard way: normalising English names sends
+    NAME_PRONUNCIATION_BATCH_SIZE of them at once, and 20 names ask for 4,352 output
+    tokens - more than half of the 7,168 window derived from a five-segment batch. The
+    ``num_ctx // 2`` term then cut the output allowance to exactly half the window, leaving
+    the prompt the other half and not enough of it, and Ollama truncated the prompt in
+    silence. The guard caught it and the batch recovered, but the window was simply wrong.
+
+    Names are short, so that request carries almost no text and a great deal of answer;
+    segments are the reverse. Sizing one window for both means taking each shape on its own
+    terms rather than applying the segment allowance to a list of names.
+    """
+    from .analysis import NAME_PRONUNCIATION_BATCH_SIZE
+
+    return [
+        (max(1, int(analysis.get("batch_segments", 28))), max(0, int(analysis.get("batch_chars", 6200)))),
+        # A name plus its context is a few dozen characters, not a paragraph.
+        (int(NAME_PRONUNCIATION_BATCH_SIZE), int(NAME_PRONUNCIATION_BATCH_SIZE) * 80),
+    ]
+
+
 def analysis_context_window(analysis: dict[str, Any]) -> int:
     """The context this profile's analysis batches actually need.
 
@@ -322,15 +346,15 @@ def analysis_context_window(analysis: dict[str, Any]) -> int:
     requested output would still have the ``// 2`` term quietly cut it in half. The window
     is therefore at least twice the requested output, and at least prompt plus output.
     """
-    segments = max(1, int(analysis.get("batch_segments", 28)))
-    characters = max(0, int(analysis.get("batch_chars", 6200)))
-    requested_output = min(512 + segments * 192, 6144)
-    prompt_allowance = (
-        ANALYSIS_PROMPT_FIXED_TOKENS
-        + int(characters / ANALYSIS_PROMPT_CHARS_PER_TOKEN)
-        + segments * ANALYSIS_PROMPT_SCHEMA_TOKENS_PER_SEGMENT
-    )
-    needed = max(2 * requested_output, prompt_allowance + requested_output)
+    needed = 0
+    for items, characters in _analysis_request_shapes(analysis):
+        requested_output = min(512 + items * 192, 6144)
+        prompt_allowance = (
+            ANALYSIS_PROMPT_FIXED_TOKENS
+            + int(characters / ANALYSIS_PROMPT_CHARS_PER_TOKEN)
+            + items * ANALYSIS_PROMPT_SCHEMA_TOKENS_PER_SEGMENT
+        )
+        needed = max(needed, 2 * requested_output, prompt_allowance + requested_output)
     rounded = -(-needed // ANALYSIS_CONTEXT_GRANULARITY) * ANALYSIS_CONTEXT_GRANULARITY
     return max(ANALYSIS_CONTEXT_MINIMUM, rounded)
 
