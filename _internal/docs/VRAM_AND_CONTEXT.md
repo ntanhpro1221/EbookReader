@@ -315,3 +315,37 @@ Hạ `ANALYSIS_CONTEXT_*` để mức suy ra bám theo prompt quan sát được
 của batch tên. Đây cũng chính là câu hỏi chủ sách đã đặt - *"project tưởng nó đang tự căn
 chỉnh theo mức độ tài nguyên hiện có của máy mà?"* - áp vào ngữ cảnh: con số nên bám theo
 việc thật, và guard là thứ khiến việc bám sát ấy an toàn.
+
+## alpha.44 xác nhận: 7.168 **không kèm** cắt prompt (đo 2026-09-04)
+
+Hạ `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12 để num_ctx suy ra về 7.168. Pha phân tích:
+
+| | num_ctx | pha phân tích | lượt gọi | tốc độ sinh | guard cắt prompt |
+|---|---|---|---|---|---|
+| alpha.32 | 7.168 | 3.846s | 418 | 56,4 tok/s | **1 lần** |
+| alpha.43 | 9.216 | 4.475s | 424 | 50,1 tok/s | 0 |
+| **alpha.44** | **7.168** | **3.733s** | 418 | **57,6 tok/s** | **0** |
+
+**Đúng thứ mà thay đổi này nhắm tới:** lấy tốc độ của 7.168 mà không lấy chỗ hỏng của nó.
+alpha.32 ở cùng ngữ cảnh đã cắt prompt một lần; alpha.44 không lần nào, vì batch tên nhỏ hơn
+xin ít token đầu ra hơn nên prompt vừa. Tiết kiệm **742s** so với alpha.43 - hơn mức 639s đã
+dự đoán.
+
+### Câu hỏi để mở, và số liệu sớm đang **nghiêng về phía xấu**
+
+Docstring của hằng số ghi rõ là chưa đo: batch tên nhỏ hơn ảnh hưởng thế nào tới *chất lượng*
+cách đọc. Số liệu batch 1:
+
+| | cỡ batch 1 | thất bại → CMU | tỉ lệ |
+|---|---|---|---|
+| alpha.43 | 20 | 18 | 90% |
+| alpha.44 | 12 | 12 | **100%** |
+
+Tỉ lệ **cao hơn**, không thấp hơn. Chưa kết luận được: batch 1 chứa đúng những tên khó ở cả
+hai lần chạy, thành phần batch khác nhau, và alpha.44 mới tới batch 2. Con số đáng tin là
+tổng cuối cùng - trong 112 tên, bao nhiêu tên phải rơi về từ điển CMU. Ghi lại ở đây trước
+khi biết đáp án, để đáp án rơi vào đâu thì cũng đã có chỗ.
+
+(Và một lần suýt báo sai nữa: tôi đọc "không có dòng `còn N tên lỗi sau lần 3`" thành "không
+tên nào lỗi", trong khi pha ấy **đang chạy dở** và batch 1 đã có 12 tên rơi về CMU. Đừng đọc
+sự vắng mặt của một dòng log như một kết quả khi việc chưa xong.)
