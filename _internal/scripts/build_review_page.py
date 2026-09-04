@@ -9,8 +9,17 @@ This writes one HTML file next to the project with a player per segment, the sen
 voice was asked to say, what Whisper heard, and the exact `accept` command behind a copy
 button.
 
-Deliberately local. The page references the WAVs by relative path and is opened from disk;
-nothing is uploaded. The audio is the owner's book.
+Deliberately local: nothing is uploaded, because the audio is the owner's book.
+
+The audio is embedded as data: URIs rather than linked by relative path. A linked page only
+plays where the viewer will fetch sibling files from disk, and the first version of this was
+opened in a preview pane that renders local files as a static snapshot - every player showed
+0:00 / 0:00 and the page was useless for the one job it exists for. Embedding costs about
+4.5 MB for a book's worth of blocked segments and works anywhere.
+
+The bytes go in verbatim, never re-encoded. Half these segments are flagged for a *perceptual*
+judgement, so handing the listener a lossily compressed copy would be asking them to rule on
+audio the pipeline never produced.
 
     python scripts/build_review_page.py <project_root> [output_html]
 
@@ -18,8 +27,9 @@ Read-only with respect to the project: opens the database read-only, writes only
 """
 from __future__ import annotations
 
+import base64
 import html
-import json
+import mimetypes
 import sqlite3
 import sys
 from pathlib import Path
@@ -29,6 +39,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS  # noqa: E402
 
 PAGE_NAME = "review.html"
+
+
+def _embedded_audio(path: Path) -> str:
+    """The WAV as a data: URI, byte for byte.
+
+    Returns "" when the file is missing, which the caller renders as "no recording" rather
+    than as a silent player.
+    """
+    if not path.is_file():
+        return ""
+    kind = mimetypes.guess_type(path.name)[0] or "audio/wav"
+    return f"data:{kind};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
 
 
 def _blocking(row: sqlite3.Row) -> list[str]:
@@ -64,11 +86,7 @@ def main(project_root: str, output: str | None) -> int:
         ):
             for code in _blocking(row):
                 path = str(row["wav_path"] or "")
-                # A relative href keeps the page portable if the folder is moved or copied.
-                try:
-                    href = Path(path).resolve().relative_to(destination.parent).as_posix() if path else ""
-                except ValueError:
-                    href = Path(path).as_posix() if path else ""
+                href = _embedded_audio(Path(path)) if path else ""
                 items.append({
                     "chapter": int(chapter["chapter_index"]),
                     "stable_id": str(row["stable_id"]),
@@ -91,7 +109,9 @@ def main(project_root: str, output: str | None) -> int:
             '<p class="none">Không có bản thu - máy chưa tạo được audio nào cho câu này.</p>'
         )
         player = (
-            f'<audio controls preload="none" src="{html.escape(item["href"])}"></audio>'
+            # base64 is [A-Za-z0-9+/=], so nothing here needs escaping; preload="metadata"
+            # so the duration shows without decoding every clip on load.
+            f'<audio controls preload="metadata" src="{item["href"]}"></audio>'
             if item["href"] else ""
         )
         cards.append(f"""<article>
