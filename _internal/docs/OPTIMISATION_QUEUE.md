@@ -27,13 +27,20 @@ Chủ sách chọn: **giữ chú thích tiếng Anh**, **lùi dải nhịp về 
 | ✅ | `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12 → `num_ctx` 7.168 | `6278c2e` |
 | ✅ | Lùi dải nhịp về `normal` + `TTS_PACE_BAND_RELAXED` | `aef4f20` |
 | ✅ | `asr.engine` mặc định `faster`, khai báo dependency, cấm tải giữa chừng | `5fcb06e` |
-| ⏸ | **Mục 1 (pool vòng candidate)** — hoãn có chủ ý | — |
+| 🔧 | **Mục 1 (pool vòng candidate)** — đã code + test xong trên `dev/alpha13`, **chưa merge** | `ab5d025` |
 
 **Vì sao hoãn mục 1.** Năm thay đổi trên đều đổi fingerprint, nên alpha.44 phải xác minh cả
 năm cùng lúc. Thêm mục rủi ro nhất — sửa đúng vòng đã sinh ra bốn lần sập cùng một họ — thì
 nếu alpha.44 có gì lạ sẽ **không quy trách nhiệm được**. Đây cũng chính là thứ tự tài liệu
 này tự đề ra ở mục "Làm cái nào trước": làm hằng số trước, đo lại, rồi mới tới thay đổi cấu
-trúc. Làm mục 1 sau alpha.44, với một nền sạch để đo.
+trúc. Làm mục 1 sau alpha.44, với một nền sạch để đo. **Đã viết xong và test xong** trong lúc
+alpha.44 chạy (nhánh dev, production không đụng tới), nên chỉ còn việc merge và chạy alpha.45
+khi alpha.44 cho xong con số của nó.
+
+Test của nó được kiểm bằng **đột biến**: cố tình đưa lại lỗi "một prefix cho cả lô" thì 4
+test đỏ, hoàn nguyên thì cả 15 xanh. Bản test đầu tiên của tôi so
+`_segment_candidate_seed_salt` với chính nó - chứng minh hàm tất định, và không nói gì về
+việc hai phía có khớp nhau không. Một test trông như phủ đúng cái bẫy mà nó không phủ.
 
 Mục 2 (Whisper thường trú) giá trị đã tụt còn ~230s sau khi đổi engine — để sau mục 1.
 Mục 5 (ngưỡng perceptual theo sigma) vẫn chờ phép đo phân giải nhiễu-hay-thật.
