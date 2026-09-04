@@ -331,7 +331,7 @@ alpha.32 ở cùng ngữ cảnh đã cắt prompt một lần; alpha.44 không l
 xin ít token đầu ra hơn nên prompt vừa. Tiết kiệm **742s** so với alpha.43 - hơn mức 639s đã
 dự đoán.
 
-### Câu hỏi để mở, và số liệu sớm đang **nghiêng về phía xấu**
+### Câu hỏi để mở đã có đáp án: batch tên nhỏ hơn **không** làm hỏng cách đọc
 
 Docstring của hằng số ghi rõ là chưa đo: batch tên nhỏ hơn ảnh hưởng thế nào tới *chất lượng*
 cách đọc. Số liệu batch 1:
@@ -341,10 +341,21 @@ cách đọc. Số liệu batch 1:
 | alpha.43 | 20 | 18 | 90% |
 | alpha.44 | 12 | 12 | **100%** |
 
-Tỉ lệ **cao hơn**, không thấp hơn. Chưa kết luận được: batch 1 chứa đúng những tên khó ở cả
-hai lần chạy, thành phần batch khác nhau, và alpha.44 mới tới batch 2. Con số đáng tin là
-tổng cuối cùng - trong 112 tên, bao nhiêu tên phải rơi về từ điển CMU. Ghi lại ở đây trước
-khi biết đáp án, để đáp án rơi vào đâu thì cũng đã có chỗ.
+Tỉ lệ ấy **cao hơn**, và nó đã làm tôi lo nhầm. Khi pha chạy xong, tổng mới là con số đáng
+tin:
+
+| | cỡ batch | tên rơi về CMU | khoá được |
+|---|---|---|---|
+| alpha.43 | 20 | **18** | 112/112 |
+| alpha.44 | 12 | **17** | 112/112 |
+
+**Trung tính, nhỉnh hơn một chút.** Cả hai đều khoá đủ 112 tên. Tỉ lệ batch 1 là ảo ảnh:
+batch 1 chứa đúng những tên khó ở cả hai lần chạy (`Apex`, `Arthur Kaizer Theosbane`, `Card`,
+`Debuff`...), nên batch nhỏ hơn chỉ dồn chúng đặc hơn chứ không tạo thêm chỗ hỏng. Tỉ lệ
+theo từng batch không nói lên điều gì khi thành phần batch tự nó đã lệch.
+
+Vậy thay đổi này **được 742s mà không trả giá gì**: không cắt prompt, không mất chất lượng
+cách đọc.
 
 (Và một lần suýt báo sai nữa: tôi đọc "không có dòng `còn N tên lỗi sau lần 3`" thành "không
 tên nào lỗi", trong khi pha ấy **đang chạy dở** và batch 1 đã có 12 tên rơi về CMU. Đừng đọc
