@@ -3357,6 +3357,7 @@ class BookPipeline:
         chapter: Any,
         *,
         repair_short_utterance: bool = True,
+        prefetched: dict[str, Any] | None = None,
     ) -> Any:
         candidate = self.db.get_segment_candidate(int(candidate["id"]))
         if str(candidate["state"]) != SEGMENT_CANDIDATE_GENERATING:
@@ -3396,16 +3397,30 @@ class BookPipeline:
             if int(candidate["generation_seed"]) != expected_seed:
                 raise RuntimeError("segment candidate generation seed differs from its deterministic salt")
             try:
-                checksum, metrics, seed = (
-                    self._synthesize_atomic_with_pronunciation_variant(
-                        row,
-                        output,
-                        pronunciation_delivery_variant=pronunciation_variant,
-                        seed_salt=seed_salt,
-                        repair_short_utterance=repair_short_utterance,
-                        delivery_mode=DELIVERY_CLARITY,
-                    )
+                # Only the first attempt can have been prefetched: a later one exists
+                # because the take before it was wrong, and guessing at that would mean
+                # synthesizing for a repair nobody has chosen. _claim_prefetched_segment
+                # re-derives the seed from this salt and declines anything that does not
+                # match, so a wrong salt costs a regeneration rather than wrong audio.
+                claimed = self._claim_prefetched_segment(
+                    prefetched if attempt == current_attempt else None,
+                    row,
+                    output,
+                    seed_salt,
                 )
+                if claimed is not None:
+                    checksum, metrics, seed = claimed
+                else:
+                    checksum, metrics, seed = (
+                        self._synthesize_atomic_with_pronunciation_variant(
+                            row,
+                            output,
+                            pronunciation_delivery_variant=pronunciation_variant,
+                            seed_salt=seed_salt,
+                            repair_short_utterance=repair_short_utterance,
+                            delivery_mode=DELIVERY_CLARITY,
+                        )
+                    )
                 if int(seed) != expected_seed:
                     raise RuntimeError("TTS returned a seed that differs from the candidate ledger")
                 if (
@@ -3697,6 +3712,77 @@ class BookPipeline:
         pool, self._tts_pool = self._tts_pool, None
         if pool is not None:
             pool.close()
+
+    def _prefetch_candidate_batch(
+        self,
+        pairs: list[tuple[Any, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """Synthesize a batch of candidate first attempts in parallel, keyed by segment.
+
+        The repair loop was the most expensive phase of a run - 4,707s on alpha.32 against
+        2,658s for ordinary synthesis - and the only one that never used the pool. It is
+        the same prefetch shape the main path uses: the pool does pure TTS, the committing
+        loop stays serial and keeps every database write, and anything it declines is
+        synthesized inline.
+
+        The salt is per job, which is the whole difficulty. A candidate's seed salt carries
+        its repair round *and* its pronunciation variant, and a batch mixes both - alpha.32
+        used locked_spoken 526 times and source_spelling 357. _prefetch_segment_batch sends
+        one prefix for the whole batch, and reusing it here would compute the wrong seed for
+        most of the jobs; _claim_prefetched_segment would then decline every result and the
+        pool would cost its VRAM and return nothing, which reads as "pooling did not help"
+        rather than as a bug. Hence the explicit per-candidate salt below.
+
+        Only tts_attempt 0 is offered, for the reason _prefetch_segment_batch gives: a later
+        attempt exists because something was wrong. On alpha.32 that still covers 786 of 883
+        candidates.
+        """
+        eligible = [
+            (row, candidate)
+            for row, candidate in pairs
+            if int(candidate["tts_attempt"]) == 0
+            and str(candidate["generation_strategy"]) != GENERATION_STRATEGY_SPLIT
+            and str(candidate["postprocess_profile"]) == POSTPROCESS_PROFILE_NONE
+        ]
+        if len(eligible) < TTS_POOL_MIN_BATCH:
+            return {}
+        pool = self._synthesis_pool()
+        if pool is None:
+            return {}
+        jobs = []
+        for row, candidate in eligible:
+            variant = str(candidate["pronunciation_delivery_variant"])
+            jobs.append(
+                {
+                    "row": {key: row[key] for key in row.keys()},
+                    "output": str(candidate["wav_path"]),
+                    "seed_salt": self._segment_candidate_seed_salt(
+                        int(candidate["repair_round"]), 0, variant
+                    ),
+                    "kwargs": {
+                        "delivery_mode": DELIVERY_CLARITY,
+                        "pronunciation_delivery_variant": variant,
+                    },
+                }
+            )
+        try:
+            results = pool.synthesize_many(jobs)
+        except Exception as exc:  # noqa: BLE001
+            self._tts_pool_failed = True
+            self._close_synthesis_pool()
+            self.log(f"Pool TTS song song hỏng khi sinh candidate, chuyển sang tuần tự: {exc!r}")
+            self.db.event(
+                "warning",
+                "TTS_POOL_FAILED",
+                f"Pool TTS song song hỏng giữa chừng khi sinh candidate: {exc!r}",
+                {"segments": len(jobs)},
+            )
+            return {}
+        return {
+            str(item["stable_id"]): item
+            for item in results
+            if item.get("stable_id") and not item.get("error")
+        }
 
     def _prefetch_segment_batch(
         self,
@@ -4965,13 +5051,22 @@ class BookPipeline:
                 self.perceptual_qa.unload()
                 repair_label = f"Tạo candidate clarity chapter {chapter['chapter_index']}"
                 self._progress(repair_label, 0, len(generation_jobs))
+                prefetched_candidates = self._prefetch_candidate_batch(generation_jobs)
                 for index, (item, candidate) in enumerate(generation_jobs, 1):
                     self._resource_gate(
                         f"candidate clarity chapter {chapter['chapter_index']} segment {item['seq']}",
                         keep_engine=None,
                     )
-                    self._process_segment_candidate(item, candidate, chapter)
+                    self._process_segment_candidate(
+                        item,
+                        candidate,
+                        chapter,
+                        prefetched=prefetched_candidates.pop(str(item["stable_id"]), None),
+                    )
                     self._progress(repair_label, index, len(generation_jobs))
+                # Each worker holds a VieNeu copy, and the decode phase that follows needs
+                # the VRAM for Whisper - the same reason the main synthesis path closes it.
+                self._close_synthesis_pool()
                 self.tts.unload_all()
                 progressed = True
                 continue
