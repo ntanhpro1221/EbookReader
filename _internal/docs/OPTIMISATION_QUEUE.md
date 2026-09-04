@@ -101,7 +101,20 @@ Ba ràng buộc đã kiểm trên dữ liệu thật, không phải đoán:
    `segment_candidate_split_seed_salt(repair_round, variant)`, và **cả hai variant đều tồn
    tại trong cùng một quyển sách** (`locked_spoken_v1` 526, `source_spelling_v1` 357), với
    round khác nhau giữa các segment. Một lô candidate vì thế **không đồng nhất**.
-3. **Sai salt thì hỏng *im lặng*.** `_claim_prefetched_segment` kiểm
+3. **Biến thể phát âm đi qua được pool.** `tts.synthesize_atomic` có nhận
+   `pronunciation_delivery_variant`, và `_worker_job` truyền thẳng `**payload["kwargs"]`,
+   nên không cần đụng gì tới `tts_pool.py`. (`_supports_pronunciation_delivery_variant`
+   là phép kiểm cho *provider* trong tiến trình chính, không phải cho worker.)
+4. **Cache phát âm của worker: an toàn, nhưng vì một lý do cụ thể.** Docstring của
+   `SynthesisPool` cảnh báo worker cache phát âm lần đầu tổng hợp và parent phải
+   `restart()` khi học được cách đọc mới. Trong pipeline **không có lời gọi `restart()`
+   nào** - thay vào đó pool bị `_close_synthesis_pool()` ở cuối pha tổng hợp mỗi chương
+   (dòng 2416, để nhả VRAM trước khi nạp Whisper) rồi dựng lại lười biếng. Vòng sửa chạy
+   *sau* đó, nên pool của nó là pool mới với phát âm hiện hành. Đừng phá tính chất ấy: nếu
+   giữ pool sống xuyên qua ranh giới ấy thì phải gọi `restart()` cho đúng hợp đồng.
+5. **Phải đóng pool trước pha kiểm candidate**, y như dòng 2416 làm cho đường chính - pool
+   giữ một bản VieNeu mỗi worker, và pha kiểm cần VRAM cho Whisper.
+6. **Sai salt thì hỏng *im lặng*.** `_claim_prefetched_segment` kiểm
    `seed == generation_seed(row, seed_salt)`; lệch một chút là **mọi** kết quả bị từ chối,
    rơi hết về tổng hợp tuần tự. Kết quả: trả tiền VRAM cho pool và không nhanh hơn tí nào -
    trông y hệt "pool không giúp gì" chứ không phải một lỗi. **Test phải khẳng định số kết
