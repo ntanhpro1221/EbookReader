@@ -14,6 +14,32 @@ pha ASR, nên phần việc sau phân tích còn khoảng **12.200s**. Điều �
 (dù phần *lấy lại được* của nó chỉ ~905s, xem mục 1).
 Xem `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md` cho phép đo và biến kiểm của nó.
 
+
+## Trạng thái sau phiên 2026-09-04 (chuẩn bị alpha.44)
+
+Chủ sách chọn: **giữ chú thích tiếng Anh**, **lùi dải nhịp về `normal` kèm cảnh báo**,
+**đợi alpha.44 rồi nghe một lần**. Đã ship:
+
+| | thay đổi | commit |
+|---|---|---|
+| ✅ | Tách sentinel khỏi `max_retries` (dùng `generation_strategy`) | `303e5c9` |
+| ✅ | `tts.max_retries` 4 → 10 | `6278c2e` |
+| ✅ | `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12 → `num_ctx` 7.168 | `6278c2e` |
+| ✅ | Lùi dải nhịp về `normal` + `TTS_PACE_BAND_RELAXED` | `aef4f20` |
+| ✅ | `asr.engine` mặc định `faster`, khai báo dependency, cấm tải giữa chừng | `5fcb06e` |
+| ⏸ | **Mục 1 (pool vòng candidate)** — hoãn có chủ ý | — |
+
+**Vì sao hoãn mục 1.** Năm thay đổi trên đều đổi fingerprint, nên alpha.44 phải xác minh cả
+năm cùng lúc. Thêm mục rủi ro nhất — sửa đúng vòng đã sinh ra bốn lần sập cùng một họ — thì
+nếu alpha.44 có gì lạ sẽ **không quy trách nhiệm được**. Đây cũng chính là thứ tự tài liệu
+này tự đề ra ở mục "Làm cái nào trước": làm hằng số trước, đo lại, rồi mới tới thay đổi cấu
+trúc. Làm mục 1 sau alpha.44, với một nền sạch để đo.
+
+Mục 2 (Whisper thường trú) giá trị đã tụt còn ~230s sau khi đổi engine — để sau mục 1.
+Mục 5 (ngưỡng perceptual theo sigma) vẫn chờ phép đo phân giải nhiễu-hay-thật.
+
+---
+
 ---
 
 ## Làm cái nào trước
