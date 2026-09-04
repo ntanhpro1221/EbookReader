@@ -379,3 +379,33 @@ Nói cách khác, thay đổi này không chuyển chương từ "hỏng" sang "
 chương từ **"máy bó tay và người cũng không làm gì được"** sang **"chỉ cần tai người nghe"**
 - đúng cái ranh giới mà `scripts/what_blocks_publication.py` chia hai nhóm. Đó mới là giá
 trị thật của nó, và đừng báo cáo nó thành thứ khác.
+
+## Cả hai dự đoán của phép đo tầm với đều đúng (alpha.44, 2026-09-04)
+
+`scripts/pace_retry_reachability.py` chia ba segment không có audio của alpha.32 thành hai
+lớp và gắn số cho từng lớp. alpha.44 nâng ngân sách lên 10 và thử cả hai:
+
+| segment | cách sàn | dự đoán ở ngân sách 10 | kết quả alpha.44 |
+|---|---|---|---|
+| `c00005_s0000013` | 2% | **73%** | **CỨU ĐƯỢC** - 12,71 chars/s |
+| `c00009_s0000008` | 17% | **~0%** | **trượt cả 10 lần** |
+
+Dãy của segment thứ hai: 9,22 / 10,51 / 10,70 / 9,36 / 9,22 / 9,98 / 9,36 / 9,08 / 9,08 /
+10,70. Tốt nhất **10,70** so với sàn 12,5 - không lần nào tới gần, đúng như "ngoài tầm với ở
+mọi ngân sách".
+
+**Sự dồn cụm còn rõ hơn ở đây:** 10 lần thử chỉ cho 6 giá trị phân biệt, mỗi giá trị 9,08 /
+9,22 / 9,36 / 10,70 đều xuất hiện hai lần. Bản thu không rải đều quanh một trung bình; chúng
+rơi vào một số ít kết cục. Đó là lý do "xác suất mỗi lần thử" nên đọc là bậc độ lớn.
+
+Và nó xác nhận cách chia lớp: đây **không** phải segment thiếu lượt thử, mà là **văn bản sai
+loại** cho thước đo - một thang bậc `C » B » A » S » SS » SSS` đọc thành tên chữ cái thì chậm
+hơn văn xuôi theo đúng cấu tạo. Thêm lượt thử không sửa được điều đó, và đó chính là điều
+phép đo đã nói trước khi tiêu một giây GPU nào.
+
+### Cổng lùi dải nhịp: đường thường gặp đã chạy đúng
+
+Dòng lỗi cuối cùng kết thúc bằng `pace_band=already normal`. Cổng mới đã được gọi, thấy
+segment vốn ở dải `normal`, và trả lời ngay mà không tốn lần tổng hợp nào - đúng đường mà
+`test_a_normal_segment_never_pays_for_this` khẳng định. Đường *kích hoạt thật* thì vẫn chưa
+được chạy trong một lần chạy thật (xem mục trên).
