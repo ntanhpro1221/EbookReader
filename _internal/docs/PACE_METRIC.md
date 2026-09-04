@@ -360,3 +360,22 @@ giả định "mỗi lần thử là một lần rút độc lập từ phân ph
 rải đều. Vẫn còn đủ đa dạng để cuối cùng chạm 12,71, nên kết luận không đổi - nhưng con số
 "73%" nên đọc là *thứ tự độ lớn*, không phải xác suất tính được. Hai segment còn lại
 (`c00009_s0000008` thang bậc ký tự, `c00010_s0000017`) sẽ nói rõ hơn ở chương 9 và 10.
+
+### Cứu được không có nghĩa là xuất bản được - nhưng nó đổi *ai* giải quyết được
+
+Chương 5 của alpha.44 vẫn hỏng, và vẫn hỏng tại `c00005_s0000013`. Nhưng lý do đã khác hẳn:
+
+    alpha.32/43 : SEGMENT_FAILED          - không có bản thu nào
+    alpha.44    : ASR_LOCKED_NAME_ANCHOR_MISMATCH - có bản thu 2,40s
+
+    văn bản : Tên tôi là Samael Kaizer Theosbane.
+    máy nghe: Tên tôi là Samen Kai The Theosaban.     similarity 0,67
+
+Vượt được cổng nhịp thì tới cổng neo tên, và tên chuyển tự ấy bị nghe lệch. **Chương vẫn
+chặn.** Nhưng cả hai chỗ chặn của chương 5 giờ **đều có audio**, còn trước đây một chỗ thì
+không - và `accept` từ chối một segment không có bản thu vì không có checksum để đối chiếu.
+
+Nói cách khác, thay đổi này không chuyển chương từ "hỏng" sang "xuất bản được". Nó chuyển
+chương từ **"máy bó tay và người cũng không làm gì được"** sang **"chỉ cần tai người nghe"**
+- đúng cái ranh giới mà `scripts/what_blocks_publication.py` chia hai nhóm. Đó mới là giá
+trị thật của nó, và đừng báo cáo nó thành thứ khác.
