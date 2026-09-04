@@ -255,3 +255,63 @@ Sửa: mức chừa tính trên **tổng dung lượng card**, còn phần trố
 
 Máy không đọc được VRAM thì không có gì để chừa, nên dùng thẳng con số cấu hình - y như
 trước khi phép đo này tồn tại.
+
+## num_ctx 9.216 đắt hơn 7.168 16% một pha phân tích, và mua về đúng một lần guard (đo 2026-09-04)
+
+Hai lần chạy cùng quyển sách, cùng model, khác mỗi `num_ctx`:
+
+| | alpha.32 (ctx 7.168) | alpha.43 (ctx 9.216) |
+|---|---|---|
+| số lượt gọi | 418 | 424 (+1,4%) |
+| token sinh ra | 197.263 | 202.411 (+2,6%) |
+| **tốc độ sinh** | **56,4 tok/s** | **50,1 tok/s (−11%)** |
+| nạp prompt | 5.045 tok/s | 4.827 tok/s |
+| **pha phân tích** | **3.851s** | **4.490s (+16%)** |
+| guard cắt prompt | 1 lần | 0 lần |
+
+Số lượt gọi và số token gần như không đổi. Pha chậm đi vì **chính việc sinh token chậm đi
+11%** - riêng nó giải thích 542s trong 639s chênh lệch. Ngữ cảnh rộng thêm 29% lấy đi 16%
+của pha phân tích.
+
+### Đổi lại được gì
+
+Đúng một lần: ở 7.168, guard bắt được một prompt không vừa và **chia đôi batch** để chạy
+lại. Đó là chuyện tốn khoảng mươi giây. **630 giây để tránh một lần chia batch là một cái
+giá tồi** - tôi đã sửa quá tay.
+
+Điều làm ngữ cảnh nhỏ trở nên an toàn không phải là ngữ cảnh lớn, mà là **cái guard**. Không
+có nó, 7.168 hỏng âm thầm: Ollama cắt đầu prompt, trả JSON hợp lệ, checkpoint ghi nhận, và
+không chỗ nào nói rằng model chưa từng nhìn thấy mấy segment đầu. Có nó, 7.168 hỏng thành
+một lần chia batch nhìn thấy được. Cách suy luận đúng là **giữ guard và hạ num_ctx**, không
+phải nâng num_ctx cho vừa trường hợp xấu nhất lý thuyết mà quyển sách này không bao giờ
+chạm tới: prompt lớn nhất cả hai lần chạy đều là ~4.357 token.
+
+### Cơ chế: **không phải giả thuyết** - dự án đã đo nó rồi
+
+KV cache của qwen3:8b ≈ 36 lớp × 2 × 8 đầu × 128 chiều × 2 byte = 147.456 byte mỗi token,
+tức 1,06 GB ở 7.168 và 1,36 GB ở 9.216 - hơn nhau **300 MB**. Trên card 8,15 GB đã chứa
+model, 300 MB ấy đủ để đẩy một lớp xuống CPU, và một lớp qua PCIe mỗi token thì đúng là
+kiểu chậm 11% mà không đổi số token. Và đây là chỗ tôi ghi sai lần đầu: tôi để mục này là "giả thuyết chưa kiểm" trong khi chính
+docstring của `analysis_context_window` đã ghi cơ chế ấy, đo ở 16.384: *"model tràn xuống
+CPU và phần sinh... chạy 25,6 token mỗi giây"*. Ghép lại thành ba điểm trên cùng một đường:
+
+    num_ctx 16.384 ->  25,6 tok/s   (đo trước, trong docstring)
+    num_ctx  9.216 ->  50,1 tok/s   (alpha.43)
+    num_ctx  7.168 ->  56,4 tok/s   (alpha.32)
+
+Cơ chế đã được xác lập từ trước; phép đo của tôi chỉ nối dài đường cong. **Lần thứ hai trong
+một phiên tôi công bố một kết luận trước khi đọc phép đo đã nằm sẵn trong kho.**
+
+### Suýt ghi ngược lại
+
+Lần grep đầu tôi tìm chuỗi "cắt ngắn" trong khi guard in ra "cắt **bớt** phần đầu prompt",
+nên nó báo alpha.32 có **0** lần cắt. Từ đó suy ra "9.216 chẳng mua được gì" - đúng kết
+luận cuối cùng, nhưng bằng một lý do sai, và lý do sai ấy sẽ dẫn tới việc bỏ luôn cả guard.
+Kiểm một con số 0 bằng cách đọc đúng chuỗi mà code thật sự in ra.
+
+### Việc cần làm (chưa làm - `config.py` bị khoá lúc alpha.43 chạy)
+
+Hạ `ANALYSIS_CONTEXT_*` để mức suy ra bám theo prompt quan sát được thay vì trần lý thuyết
+của batch tên. Đây cũng chính là câu hỏi chủ sách đã đặt - *"project tưởng nó đang tự căn
+chỉnh theo mức độ tài nguyên hiện có của máy mà?"* - áp vào ngữ cảnh: con số nên bám theo
+việc thật, và guard là thứ khiến việc bám sát ấy an toàn.

@@ -36,6 +36,7 @@ from .asr_contract import (
 )
 from .audio_io import (
     AudioQualityError,
+    _segment_value,
     ChapterQualityError,
     assemble_chapter_atomic_with_metrics,
     export_json_atomic,
@@ -148,6 +149,17 @@ CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
 CRITICAL_RAM_WAIT_TIMEOUT_SECONDS = 1800.0
 CRITICAL_RAM_WAIT_POLL_SECONDS = 15.0
 CRITICAL_RAM_WAIT_LOG_SECONDS = 120.0
+PACE_BAND_RELAXED_METRIC = "pace_band_relaxed"
+PACE_BAND_RELAXED_WARNING = "TTS_PACE_BAND_RELAXED"
+PACE_BAND_RELAX_ATTEMPTS = 4
+"""Four takes at the relaxed band, not the full budget.
+
+The seed does not depend on pace, so these replay the same takes the direct attempts already
+produced and judge them against the normal floor instead. If none of the first four clears
+it, the ones after will not either for a different reason - they are the same audio. Bounded
+so a doomed segment cannot spend the whole raised max_retries twice.
+"""
+
 HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
     {
         "TTS_SPLIT_RECOVERY",
@@ -912,6 +924,8 @@ class BookPipeline:
             warnings.append("TTS_SPLIT_RECOVERY")
         if signal.get("pace_outlier"):
             warnings.append("TTS_PACE_OUTLIER")
+        if signal.get(PACE_BAND_RELAXED_METRIC):
+            warnings.append(PACE_BAND_RELAXED_WARNING)
         if signal.get("pitch_variant_skipped") or signal.get("pitch_variant_mixed"):
             warnings.append(PITCH_VARIANT_SKIPPED_WARNING)
         if signal.get(GENERATION_CEILING_METRIC):
@@ -3359,11 +3373,19 @@ class BookPipeline:
         output = Path(str(candidate["wav_path"]))
         retries = int(self.settings["tts"]["max_retries"])
         current_attempt = int(candidate["tts_attempt"])
-        if current_attempt > retries:
+        # What this candidate *is* comes from the row, not from arithmetic on a settings
+        # value. A clause-split candidate is generated once and never retried directly;
+        # that used to be encoded as tts_attempt == max_retries so that the range below
+        # came out empty. Encoding a state in a configuration constant means changing the
+        # constant changes the state: raising max_retries from 4 to 10 turned every stored
+        # split candidate into "attempt 4 of 10" and handed it six direct attempts it was
+        # never meant to have. alpha.32 holds 85 such rows.
+        is_split = str(candidate["generation_strategy"]) == GENERATION_STRATEGY_SPLIT
+        if not is_split and current_attempt > retries:
             raise RuntimeError("segment candidate TTS attempt exceeds the finite retry schedule")
         last_error = ""
 
-        for attempt in range(current_attempt, retries):
+        for attempt in (range(0) if is_split else range(current_attempt, retries)):
             self._wait_pause_or_stop()
             seed_salt = self._segment_candidate_seed_salt(
                 repair_round,
@@ -3447,7 +3469,7 @@ class BookPipeline:
                 pronunciation_variant,
             )
             split_seed = self.tts.generation_seed(row, split_seed_salt)
-            if int(candidate["tts_attempt"]) < split_attempt:
+            if not is_split:
                 candidate = self.db.restart_segment_candidate_generation(
                     int(candidate["id"]),
                     expected_generation_seed=int(candidate["generation_seed"]),
@@ -3455,10 +3477,12 @@ class BookPipeline:
                     tts_attempt=split_attempt,
                     generation_strategy=GENERATION_STRATEGY_SPLIT,
                 )
-            elif (
-                int(candidate["tts_attempt"]) != split_attempt
-                or int(candidate["generation_seed"]) != split_seed
-            ):
+                is_split = True
+            elif int(candidate["generation_seed"]) != split_seed:
+                # The seed still has to match: it is what ties this row to the audio it
+                # claims. tts_attempt is no longer compared, because a project resumed
+                # after max_retries changed carries the old number legitimately, and
+                # raising on that would turn a settings edit into a crash.
                 raise RuntimeError("segment candidate split checkpoint differs from its retry schedule")
             try:
                 split_provenance = (
@@ -3953,6 +3977,19 @@ class BookPipeline:
             except Exception as exc:  # noqa: BLE001
                 last_error = f"{last_error}; split={exc}"
 
+        relaxed_error = self._retry_in_normal_pace_band(
+            row,
+            output,
+            delivery_mode=delivery_mode,
+            seed_salt_prefix=seed_salt_prefix,
+            repair_short_utterance=repair_short_utterance,
+            asr_repair_round=asr_repair_round,
+        )
+        if relaxed_error is None:
+            return
+        if relaxed_error:
+            last_error = f"{last_error}; {relaxed_error}"
+
         self.db.mark_failed(int(row["id"]), last_error)
         self.log(f"TTS segment {row['stable_id']} thất bại hoàn toàn: {last_error}")
         self.db.event(
@@ -3967,6 +4004,102 @@ class BookPipeline:
             raise RuntimeError(
                 f"TTS circuit breaker opened after {failure_limit} identical failures: {last_error}"
             )
+
+    def _retry_in_normal_pace_band(
+        self,
+        row: Any,
+        output: Path,
+        *,
+        delivery_mode: str,
+        seed_salt_prefix: str,
+        repair_short_utterance: bool,
+        asr_repair_round: int | None,
+    ) -> str | None:
+        """Last resort before the sentence is lost: read it at the `normal` pace band.
+
+        tts.pace_chars_per_second has three bands and analysis assigns one per segment.
+        `fast` raises the *lower* bound to 14.0, so a directive meaning "say this faster"
+        becomes "this take is too slow" - and alpha.43 lost c00007_s0000074 that way, with
+        four takes at 12.70, 12.26, 12.26 and 12.70 against a floor of 14.0. alpha.32 had
+        passed the identical 12.70 take when the same line was `normal`. Only the acting
+        directive changed; the voice did not.
+
+        So the same salts are replayed with the band relaxed. The seed does not depend on
+        pace, and the evidence that this works is that both runs produced exactly 12.70:
+        the take is the same, only the floor it is judged against moves.
+
+        Returns None when a take was accepted, otherwise a reason to append to the caller's
+        error. Costs nothing on the common path - a `normal` segment returns immediately.
+        """
+        pace = str(_segment_value(row, "pace", "normal"))
+        if pace == "normal":
+            return "pace_band=already normal"
+        try:
+            relaxed = {key: row[key] for key in row.keys()}
+        except AttributeError:
+            relaxed = dict(row)
+        relaxed["pace"] = "normal"
+
+        self.log(
+            f"TTS segment {row['stable_id']} không đạt nhịp ở dải '{pace}'; "
+            "thử lại ở dải 'normal' trước khi bỏ cuộc."
+        )
+        attempts = min(PACE_BAND_RELAX_ATTEMPTS, int(self.settings["tts"]["max_retries"]))
+        last: str = "pace_band=no take reached the normal floor either"
+        for attempt in range(attempts):
+            self._wait_pause_or_stop()
+            seed_salt = f"{seed_salt_prefix}_{attempt}"
+            try:
+                self.db.mark_generating(
+                    int(row["id"]),
+                    self.tts.generation_seed(row, seed_salt),
+                    delivery_mode=delivery_mode,
+                    repair_round=asr_repair_round,
+                    policy_hash=self.quality_policy_hash,
+                )
+                checksum, metrics, seed = self.tts.synthesize_atomic(
+                    relaxed,
+                    output,
+                    seed_salt=seed_salt,
+                    repair_short_utterance=repair_short_utterance,
+                    delivery_mode=delivery_mode,
+                )
+            except Exception as exc:  # noqa: BLE001
+                last = f"pace_band={exc}"
+                continue
+            if metrics.get("pace_outlier"):
+                last = (
+                    "pace_band=still outside the normal band at "
+                    f"{metrics.get('chars_per_second', 0.0):.2f} chars/s"
+                )
+                continue
+            metrics["tts_delivery_mode"] = delivery_mode
+            if asr_repair_round is not None:
+                metrics[ASR_CLARITY_REPAIR_ROUND_METRIC] = int(asr_repair_round)
+            # The listener is told, because the delivery is not what analysis asked for.
+            # This warning is deliberately NOT in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS:
+            # flattening a reading is a trade a person should hear before it ships. It
+            # trades "no audio at all, nothing to listen to" for "audio plus a decision",
+            # which is the strictly better of the two.
+            metrics[PACE_BAND_RELAXED_METRIC] = 1.0
+            metrics["pace_band_requested"] = pace
+            self.db.mark_signal_passed(
+                int(row["id"]),
+                wav_path=output,
+                wav_sha256=checksum,
+                duration=float(metrics["duration"]),
+                signal=metrics,
+                generation_seed=seed,
+                warning_codes=self._signal_warning_codes(metrics),
+            )
+            self._reset_tts_failure_streak()
+            self.log(
+                f"Đã cứu TTS segment {row['stable_id']} bằng cách hạ dải nhịp "
+                f"'{pace}' → 'normal' ({metrics.get('chars_per_second', 0.0):.2f} chars/s). "
+                "Sắc thái diễn xuất bị làm phẳng - đã gắn cảnh báo để người nghe quyết."
+            )
+            return None
+        return last
 
     def _synthesize_split(
         self,

@@ -687,3 +687,64 @@ hai hướng ngược nhau trong cùng một phiên.
   người thật, im lặng suốt cho tới khi có người siết phép đo.
 
 **Output:** `D:\Novels\Audiobooks\_versions\v0.2.0-alpha.16\alpha16-pool_c05e09eb67`
+
+## alpha.43 — kết quả cuối (2026-09-04 05:22)
+
+`asr.engine = faster`, `num_ctx = 9.216`, NOAH khoá giới tính. Chạy xong: **2/10 chương xuất
+bản**, 8 chương hỏng.
+
+### Tốc độ
+
+| | tổng | nghỉ | **làm việc** |
+|---|---|---|---|
+| alpha.32 | 7,41h | 1,41h (4 lần dừng, dài nhất 33 phút) | **6,00h** |
+| alpha.43 | 3,34h | **0h** | **3,34h** |
+
+**1,80× tính trên thời gian làm việc.** Không phải 2,2× của đồng hồ treo tường — alpha.32
+có 1,41h dừng vì cổng tài nguyên, và alpha.43 chạy trên máy rảnh nên không dừng lần nào.
+Biến kiểm (thời gian TTS mỗi việc, không dính engine ASR) cho 1,22×, nên phần quy được cho
+engine và cho khối lượng việc nó tiết kiệm là khoảng **1,48×**.
+
+Chi tiết theo pha: `docs/THROUGHPUT.md` — vòng sửa 8.016s → 3.860s, kiểm candidate
+2.325s → 536s. Pha phân tích thì **chậm hơn** (3.851s → 4.490s) vì num_ctx, xem
+`docs/VRAM_AND_CONTEXT.md`.
+
+### Chất lượng: 9/10 chương giống hệt
+
+| ch | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| alpha.32 | MP3 | hỏng | hỏng | MP3 | hỏng | **MP3** | hỏng | hỏng | hỏng | hỏng |
+| alpha.43 | MP3 | hỏng | hỏng | MP3 | hỏng | **hỏng** | hỏng | hỏng | hỏng | hỏng |
+
+**Chỉ chương 6 khác**, và alpha.32 xuất bản được nó *vì Whisper ảo giác* — bản ghi vô nghĩa
+được miễn trừ, còn bản ghi gần đúng của faster-whisper thì bị chặn. Cơ chế và cả lớp 9
+segment ấy: `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`.
+
+### Engine có đổi điều máy nghe không: **1,6%**
+
+So cả sách thì 88/944 bản ghi khác nhau (9,3%), nhưng con số ấy trộn hai chuyện. Tách theo
+checksum âm thanh:
+
+| | segment | bản ghi khác |
+|---|---|---|
+| **cùng một file âm thanh** | 837 | **13 = 1,6%** ← thuần tuý do engine |
+| âm thanh khác nhau | 107 | 75 = 70,1% ← bản thu khác, không quy cho engine |
+
+**Trên cùng một âm thanh, faster-whisper đồng ý với openai-whisper 98,4%.** Khớp với ước
+lượng 1,3% đo trên chương 1-2 lúc đang chạy. Con số 9,3% bị thổi lên bởi 107 segment
+(11,3%) có *âm thanh khác* — hệ quả của num_ctx đổi phân tích, không phải của engine.
+
+Ảo giác giảm rõ: `TIMELINE_IMPOSSIBLE` 9 → 5, `UNVERIFIABLE_SHORT_TEXT` 6 → 4,
+`ANCHOR_REVIEW` 41 → 37. Đổi lại: +1 `ANCHOR_MISMATCH`, +1 `MISMATCH_UNRESOLVED`,
++3 `PERCEPTUAL_NATURALNESS_REVIEW` (cái sau là do âm thanh khác, không phải engine).
+
+### Kết luận
+
+**Giữ `asr.engine = faster`.** Nó trả về 1,48× cho lần chạy, giảm ảo giác, và giữ nguyên
+điều máy nghe được ở mức 98,4% trên cùng âm thanh. Cái giá là một chương — một chương trước
+đó chỉ xuất bản được nhờ một bản ghi vô nghĩa được miễn trừ, và giờ chỉ cần một lệnh
+`accept` là xong.
+
+**Nhưng `num_ctx = 9.216` thì không giữ.** Nó làm pha phân tích chậm 16%, và nó đổi đầu ra
+của phân tích đủ để 107 segment có âm thanh khác và một segment mất sạch audio vì bị gán dải
+`fast`. Xem mục 3 và 7 của `docs/OPTIMISATION_QUEUE.md`.

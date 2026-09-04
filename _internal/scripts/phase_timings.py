@@ -14,6 +14,19 @@ Two ways this measurement goes wrong, both hit while writing it:
   regenerates almost nothing, so it reported 6.8 seconds of TTS for 77 segments. A resumed
   run cannot answer how long synthesis takes. Pass --require-fresh to refuse one.
 
+**Blind spot, found 2026-09-04 and now reported.** The four stages below are the ones a
+chapter passes through once. They leave out the candidate repair loop entirely - "Tạo
+candidate clarity", "Kiểm tra candidate clarity" and their perceptual companions - and that
+loop is the single most expensive thing in a run: 4,707 seconds on alpha.32 against the 2,658
+of ordinary synthesis. Every overlap ceiling this script printed before that date was
+computed without the largest consumer in the picture.
+
+The repair stages cannot use the block method the four stages use. Generation and checking
+alternate every few seconds, so a "contiguous block" of one label swallows the other label's
+time. They are measured instead as the sum of gaps between consecutive progress steps of the
+same label, which counts work rather than wall clock, and reported separately for that
+reason.
+
 Read-only: parses the log file, touches nothing.
 """
 
@@ -32,11 +45,48 @@ PHASES = (
     ("Perceptual", "Perceptual QA chapter"),
     ("MP3", "Ghép và kiểm tra MP3 chapter"),
 )
+# Interleaved stages: measured per work item, not as blocks. See the docstring.
+REPAIR_PREFIXES = (
+    ("sinh candidate", "Tạo candidate clarity chapter"),
+    ("kiểm candidate", "Kiểm tra candidate clarity chapter"),
+    ("perceptual cand.", "Perceptual QA candidate clarity chapter"),
+    ("UTMOS cand.", "UTMOSv2 candidate perceptual chapter"),
+)
+STEP = re.compile(
+    r"^([\d\-]+ [\d:,]+) \| \w+ \| EVENT work_progress \{'label': '([^']+)', 'done': (\d+)"
+)
+MAX_STEP_SECONDS = 300.0
 LINE = re.compile(
     r"^([\d\-]+ [\d:,]+) \| \w+ \| EVENT work_progress \{'label': '([^']+)'"
 )
 BLOCK_GAP_SECONDS = 300.0
 MIN_FRESH_TTS_SHARE = 0.10
+
+
+def repair_loop_seconds(log_path: Path) -> dict[str, float]:
+    """Work time for the interleaved repair stages, summed between consecutive steps.
+
+    A step that jumps by more than one, or a gap longer than MAX_STEP_SECONDS, means the run
+    was paused or resumed rather than working, and is not counted.
+    """
+    last: dict[str, tuple[datetime, int]] = {}
+    totals: dict[str, float] = {name: 0.0 for name, _prefix in REPAIR_PREFIXES}
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = STEP.match(line)
+        if not match:
+            continue
+        stamp = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S,%f")
+        label, done = match.group(2), int(match.group(3))
+        name = next((n for n, prefix in REPAIR_PREFIXES if label.startswith(prefix)), None)
+        if name is None:
+            continue
+        previous = last.get(label)
+        if previous and done == previous[1] + 1:
+            delta = (stamp - previous[0]).total_seconds()
+            if 0 < delta < MAX_STEP_SECONDS:
+                totals[name] += delta
+        last[label] = (stamp, done)
+    return totals
 
 
 def _events(log_path: Path) -> list[tuple[datetime, str, str]]:
@@ -134,6 +184,28 @@ def main() -> int:
         f"  chồng lấn tiết kiệm tối đa = min(TTS, ngoài TTS) = {ceiling:.1f}s ({share:.0f}%)"
     )
     print("  (trần lý thuyết: giả định chồng lấn hoàn hảo và không tranh tài nguyên)")
+
+    repair = repair_loop_seconds(log_path)
+    repair_total = sum(repair.values())
+    if repair_total > 0:
+        print()
+        print("  vòng sửa candidate (đo theo từng việc, không phải theo khối - xem docstring):")
+        for name, _prefix in REPAIR_PREFIXES:
+            seconds = repair.get(name, 0.0)
+            if seconds > 0:
+                print(f"    {name:<18} {seconds:9.1f}s")
+        print(f"    {'tổng':<18} {repair_total:9.1f}s")
+        # The ceiling above is computed from the four once-per-chapter stages. Printing the
+        # repair loop beside it without saying so would leave the same wrong impression in
+        # a different shape.
+        if ceiling > 0:
+            print()
+            print(
+                f"  Trần {ceiling:.0f}s ở trên **không** tính vòng này. Vòng sửa tốn "
+                f"{repair_total:.0f}s, tức {repair_total / max(1.0, repair_total + synthesis + other):.0%} "
+                "tổng công việc đo được - và nó chạy tuần tự, không dùng pool. "
+                "Xem docs/THROUGHPUT.md."
+            )
     return 0
 
 

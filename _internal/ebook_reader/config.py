@@ -91,12 +91,27 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "asr": {
         "enabled": True,
         "required": True,
-        # "openai" is what every run through alpha.32 used. "faster" runs the same
-        # large-v3-turbo weights through CTranslate2: measured 2.07x over 200 takes with
-        # zero verdict disagreements, and verified against the real runtime to produce
-        # word-identical transcripts. Left at openai because changing it is a version
-        # event - see docs/DEPENDENCIES.md - so a project opts in deliberately.
-        "engine": "openai",
+        # "faster" runs the same large-v3-turbo weights through CTranslate2. It was left at
+        # "openai" until a whole book had been produced on it, because swapping the engine
+        # is a version event (docs/DEPENDENCIES.md). alpha.43 was that book, and the
+        # evidence is in docs/VERSIONS.md:
+        #
+        #   - about 2.25x on the ASR phase, after dividing out an engine-independent
+        #     control for the machine simply being quieter
+        #   - on byte-identical audio the two engines agree on 98.4% of transcripts
+        #     (13 of 837 differ); the raw whole-book figure of 9.3% is segments that got
+        #     different takes, which is analysis drift rather than the decoder
+        #   - 9 of 10 chapters reached the identical publish/fail outcome
+        #   - the repair loop halves, 8,016s to 3,683s, because fewer false mismatches
+        #     trigger fewer rounds - a larger saving than the direct speedup
+        #
+        # The one chapter that differs, chapter 6, published under openai only because
+        # Whisper hallucinated on a screamed line and a meaningless transcript is exempt
+        # while a nearly-right one blocks. That is not a chapter the old engine earned.
+        #
+        # "openai" remains selectable, and openai-whisper stays declared, so this is
+        # reversible with one setting.
+        "engine": "faster",
         "model": "turbo",
         "device": "cuda",
         "cpu_fallback": True,
@@ -250,7 +265,28 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
             "failure_policy": "fail",
             "parallel_workers": 8,
         },
-        "tts": {"max_retries": 4, "batch_size": 8},
+        # Ten, not four, and the two extra segments it buys are the reason.
+        #
+        # alpha.32 finished with three segments that never got audio: the pace gate refused
+        # all four takes and the sentences were too short to split. Estimating from each
+        # segment's own spread across those four (scripts/pace_retry_reachability.py), two
+        # were losing to the budget rather than to the voice - one missed the floor by 0.03
+        # chars/s - and clear it 88% and 73% of the time given ten. The third reads a rank
+        # ladder aloud and no budget reaches it.
+        #
+        # Cheap because it only spends on segments already failing: three in the whole book
+        # reach the budget at all, and eight more touch the gate and pass on the next try.
+        # About 18 extra synthesis calls across 948 segments.
+        #
+        # Re-running never rescues these: synthesis is deterministic per
+        # (stable_id, voice_key, seed_salt), and alpha.43 reproduced alpha.32's four takes
+        # to the decimal. Attempts 5-10 are new salts, so they are six genuinely new takes -
+        # a one-time question whose answer is then permanent for that segment.
+        #
+        # Safe only because a split candidate is now identified by generation_strategy: this
+        # number used to double as the marker for "do not retry", so raising it handed 85
+        # stored rows six attempts they were never meant to have.
+        "tts": {"max_retries": 10, "batch_size": 8},
     },
 }
 

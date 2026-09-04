@@ -115,6 +115,8 @@ def test_one_click_startup_contract() -> None:
         "pyworld==0.3.5",
         "imageio-ffmpeg==0.6.0",
         "openai-whisper==20250625",
+        "faster-whisper==1.2.1",
+        "ctranslate2==4.8.2",
         "torch==2.11.0",
         "torchaudio==2.11.0",
         "torchvision==0.26.0",
@@ -130,6 +132,9 @@ def test_one_click_startup_contract() -> None:
     assert 'VieNeuEngine' in setup
     assert 'required-set(e.voices)' in setup
     assert "whisper.load_model('turbo'" in setup
+    # asr.engine defaults to "faster" and its loader refuses to download mid-run, so setup
+    # has to fetch the CTranslate2 weights too - a different artifact from the .pt above.
+    assert "from faster_whisper import WhisperModel" in setup
     assert "torchvision==0.26.0" in setup
     assert "fold0_s42_best_model.pth" in setup
     assert "506474f2b33dc77c234d668cc419be1861899cad" in setup

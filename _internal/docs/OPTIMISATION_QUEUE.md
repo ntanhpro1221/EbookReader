@@ -1,0 +1,323 @@
+# Hàng đợi tối ưu đã đo, xếp theo giá trị
+
+Mỗi mục dưới đây có một con số đo được đứng sau, và mỗi mục đều **chưa ship** vì
+`QUALITY_IMPLEMENTATION_FILES` bị khoá trong lúc alpha.43 chạy. Tài liệu này tồn tại vì các
+mục ấy **ảnh hưởng lẫn nhau**: làm mục 1 xong thì mục 2 phải giữ nguyên phạm vi hẹp, và làm
+mục 2 sai phạm vi thì mục 1 mất phần lớn giá trị.
+
+Nền để so: alpha.32 tốn ~15.600 giây công việc đo được sau pha phân tích, cộng ~3.850 giây
+pha phân tích.
+
+**Nền ấy đã dịch.** faster-whisper (đã ship, alpha.43 đang chạy) lấy đi khoảng 3.400s của hai
+pha ASR, nên phần việc sau phân tích còn khoảng **12.200s**. Điều đó không làm mục nào rẻ đi
+- nó làm mục 1 **đắt hơn về tỉ trọng**: 4.707s trên 12.200s là **39% phần việc còn lại**
+(dù phần *lấy lại được* của nó chỉ ~905s, xem mục 1).
+Xem `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md` cho phép đo và biến kiểm của nó.
+
+
+## Trạng thái sau phiên 2026-09-04 (chuẩn bị alpha.44)
+
+Chủ sách chọn: **giữ chú thích tiếng Anh**, **lùi dải nhịp về `normal` kèm cảnh báo**,
+**đợi alpha.44 rồi nghe một lần**. Đã ship:
+
+| | thay đổi | commit |
+|---|---|---|
+| ✅ | Tách sentinel khỏi `max_retries` (dùng `generation_strategy`) | `303e5c9` |
+| ✅ | `tts.max_retries` 4 → 10 | `6278c2e` |
+| ✅ | `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12 → `num_ctx` 7.168 | `6278c2e` |
+| ✅ | Lùi dải nhịp về `normal` + `TTS_PACE_BAND_RELAXED` | `aef4f20` |
+| ✅ | `asr.engine` mặc định `faster`, khai báo dependency, cấm tải giữa chừng | `5fcb06e` |
+| ⏸ | **Mục 1 (pool vòng candidate)** — hoãn có chủ ý | — |
+
+**Vì sao hoãn mục 1.** Năm thay đổi trên đều đổi fingerprint, nên alpha.44 phải xác minh cả
+năm cùng lúc. Thêm mục rủi ro nhất — sửa đúng vòng đã sinh ra bốn lần sập cùng một họ — thì
+nếu alpha.44 có gì lạ sẽ **không quy trách nhiệm được**. Đây cũng chính là thứ tự tài liệu
+này tự đề ra ở mục "Làm cái nào trước": làm hằng số trước, đo lại, rồi mới tới thay đổi cấu
+trúc. Làm mục 1 sau alpha.44, với một nền sạch để đo.
+
+Mục 2 (Whisper thường trú) giá trị đã tụt còn ~230s sau khi đổi engine — để sau mục 1.
+Mục 5 (ngưỡng perceptual theo sigma) vẫn chờ phép đo phân giải nhiễu-hay-thật.
+
+---
+
+---
+
+## Làm cái nào trước
+
+Xếp theo giá trị thì mục 1 đứng đầu, nhưng xếp theo **giá trị chia cho rủi ro** thì mục 3
+mới nên làm trước:
+
+| mục | lấy lại | file phải sửa | hình dạng thay đổi |
+|---|---|---|---|
+| 3. hạ `num_ctx` | ~639s pha phân tích | `config.py` | **một hằng số** |
+| 4. `tts.max_retries` 4→10 | chất lượng: cứu 2 segment | `config.py` | một hằng số — **nhưng xem cái bẫy sentinel ở mục 4** |
+| 1. pool vòng candidate | ~905s | `pipeline.py` | thêm một đường prefetch |
+| 2. Whisper thường trú | ~230s | `pipeline.py`, `asr.py` | đổi vòng đời model |
+
+Mục 3 và 4 là đổi số, xác minh lại bằng chính lần chạy kế tiếp. Mục 1 đáng làm nhất về con
+số nhưng động vào vòng sửa - nơi đã sinh ra bốn lần sập cùng một họ (xem `WORK_LOG.md`).
+Làm 3 và 4 trước, đo lại, rồi mới tới 1.
+
+---
+
+## 1. Cho vòng sinh candidate dùng pool — ~905s, tức ~7,4% một lần chạy
+
+`pipeline.py` sinh candidate clarity bằng vòng lặp thẳng, trong khi đường tổng hợp chính
+dùng `_synthesis_pool`. Đó là **pha tốn nhất cả lần chạy**: 4.707s, 826 việc, 5,45s mỗi
+việc. Lấy mẫu GPU giữa lúc ấy: **23,7% trung bình, VRAM đỉnh 2.719/8.151 MiB.**
+
+**Ước lượng đầu của tôi ở đây sai 3,5 lần và đã sửa.** Tôi lấy "3 tiến trình" làm mức tăng
+tốc, tức 4.707s → ~1.570s. Nhưng chính dự án đã đo pool rồi, và con số nằm ngay trong
+docstring của `TTS_POOL_MIN_BATCH`: **2 đoạn 1,00×, 3 đoạn 1,12×, 4 đoạn 1,22×, 9 đoạn
+1,29×**. Tổng hợp TTS không giãn tuyến tính theo số worker vì 3 worker đã đẩy GPU lên 90%.
+
+Ghép đường cong ấy với kích thước vòng thật (129 vòng, trung vị **5** candidate):
+
+    tuần tự : 4.707s
+    có pool : ~3.802s      tiết kiệm ~905s = 19,2% của pha, **7,4% một lần chạy**
+
+Vẫn là mục lớn nhất hàng đợi, nhưng bằng một nửa con số tôi viết lần đầu. Bài học: phép đo
+đã có sẵn trong kho, trong một docstring, và tôi công bố ước lượng trước khi đọc nó.
+
+`TTS_POOL_MIN_BATCH = 3` nên 36/129 vòng (7,4% candidate) vẫn chạy tuần tự - đã tính vào
+con số trên.
+
+### Hình dạng của thay đổi, và cái bẫy im lặng trong nó
+
+Đường tổng hợp chính **không** song song hoá vòng ghi sổ của nó; nó dùng **prefetch**:
+`pool.synthesize_many(jobs)` tổng hợp cả lô song song, rồi vòng tuần tự gọi
+`_claim_prefetched_segment` để nhận từng kết quả sau khi kiểm stable_id, seed, file có thật,
+và checksum. Cái gì bị từ chối thì tổng hợp lại tại chỗ. Nghĩa là **ghi DB vẫn tuần tự** -
+không có chuyện tranh chấp SQLite - và pool chỉ làm phần TTS thuần tuý. Vòng candidate cần
+đúng hình dạng ấy.
+
+Ba ràng buộc đã kiểm trên dữ liệu thật, không phải đoán:
+
+1. **Chỉ attempt 0 được prefetch** (`pipeline.py:3687`: một attempt sau tồn tại vì có gì đó
+   đã sai, nên không được đoán trước). Trên alpha.32, **786/883 = 89%** candidate ở
+   attempt 0, nên ràng buộc này chỉ bỏ lỡ 11%.
+2. **Salt phải theo từng job, không theo cả lô.** `_prefetch_segment_batch` gắn cứng
+   `"seed_salt": f"{seed_salt_prefix}_0"` cho mọi job. Candidate thì lấy salt từ
+   `segment_candidate_split_seed_salt(repair_round, variant)`, và **cả hai variant đều tồn
+   tại trong cùng một quyển sách** (`locked_spoken_v1` 526, `source_spelling_v1` 357), với
+   round khác nhau giữa các segment. Một lô candidate vì thế **không đồng nhất**.
+3. **Sai salt thì hỏng *im lặng*.** `_claim_prefetched_segment` kiểm
+   `seed == generation_seed(row, seed_salt)`; lệch một chút là **mọi** kết quả bị từ chối,
+   rơi hết về tổng hợp tuần tự. Kết quả: trả tiền VRAM cho pool và không nhanh hơn tí nào -
+   trông y hệt "pool không giúp gì" chứ không phải một lỗi. **Test phải khẳng định số kết
+   quả được *nhận*, không phải chỉ khẳng định chạy xong.**
+
+Chi tiết và cảnh báo về cách quy thời gian: `docs/THROUGHPUT.md`.
+
+## 2. Giữ Whisper thường trú **trong vòng sửa** — ~230s (đã hạ từ ~1.400s)
+
+**Đo lại sau khi đổi engine thì mục này nhỏ đi sáu lần.** Whisper vẫn được nạp **189
+lần** mỗi lần chạy, nhưng openai-whisper mất 7,15s mỗi lần (1.502s = 9,6% công việc) còn
+faster-whisper chỉ mất **1,31s** (~248s = 1,6%). alpha.43 đang chạy engine mới, nên nền để
+tính là 1,6% chứ không phải 9,6%.
+129 lần rơi vào lúc vào pha kiểm candidate: vòng sửa xen kẽ TTS và ASR, hai model đá nhau
+ra khỏi VRAM mỗi vòng — 7 giây nạp cho 5 giây việc.
+
+**Phạm vi vẫn là thứ làm mục này đúng, và giờ nó còn phải rẻ nữa.** Trong vòng sửa, VRAM
+đỉnh chỉ 2.719 MiB nên 1,5 GB của Whisper là miễn phí. Ngoài vòng sửa thì không: 1,5 GB ấy lấy mất một tiến trình pool ở pha
+tổng hợp chính (2.658s ở 3 tiến trình → ~3.987s ở 2), gần đúng bằng phần tiết kiệm. **Và
+nếu mục 1 đã làm xong thì đánh đổi ấy còn tệ hơn** — pool càng quan trọng thì càng không
+được lấy VRAM của nó.
+
+## 3. Hạ `num_ctx` về 7.168 bằng cách hạ batch tên — ~639s, ~16% pha phân tích
+
+alpha.32 ở 7.168 chạy pha phân tích trong 3.851s; alpha.43 ở 9.216 mất 4.490s. Số lượt gọi
+và số token gần như không đổi (+1,4% và +2,6%); **tốc độ sinh tụt 56,4 → 50,1 tok/s**, riêng
+nó giải thích 542s trong 639s chênh lệch.
+
+Đổi lại được đúng một lần guard cắt prompt. Cái làm ngữ cảnh nhỏ an toàn là **guard**, không
+phải ngữ cảnh lớn — guard biến một lần hỏng âm thầm thành một lần chia batch nhìn thấy được.
+
+**Nhưng đừng đè lên phép suy ra — hãy sửa cái làm nó lớn.** 9.216 đến từ batch chuẩn hoá tên:
+20 tên xin `min(512 + 20*192, 6144)` = 4.352 token đầu ra, và phép suy ra đòi ít nhất gấp
+đôi số ấy để tránh bị `num_ctx // 2` cắt lén. Sàn thật của quyển sách này là batch *segment*
+(5 đoạn, 6.200 ký tự) chỉ cần 6.940 → **7.168**.
+
+    NAME_PRONUNCIATION_BATCH_SIZE   num_ctx suy ra   số batch cho 112 tên
+                               20             9216                      6
+                               16             8192                      7
+                             **12**         **7168**                 **10**
+                                8             7168                     14
+
+**Hạ `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12** đưa num_ctx về đúng 7.168 mà **không đè gì
+cả**: phép suy ra vẫn bảo đảm gấp đôi đầu ra, không có cái cắt lén nào. Giá là 112 tên đi từ
+6 batch thành 10 - **4 lời gọi thêm trên 424**, và mỗi cái còn nhỏ hơn trước.
+
+Chưa đo: batch tên nhỏ hơn ảnh hưởng thế nào tới *chất lượng* cách đọc. Log alpha.43 có
+"Chuẩn hóa tên batch 1 còn 18 tên lỗi sau lần 3", nên batch nhỏ hơn có thể còn đỡ hơn - đó
+là phỏng đoán, phải nhìn số tên lỗi ở lần chạy sau.
+
+### Cảnh báo: đây **không phải** một núm thuần tốc độ
+
+Đổi `num_ctx` làm **đổi cả đầu ra của phân tích**, và alpha.43 cho thấy mức độ:
+
+| | dải `fast` được gán |
+|---|---|
+| alpha.32 (ctx 7.168) | 3 segment (0,3%) |
+| alpha.43 (ctx 9.216) | **14 segment (1,5%)** |
+
+Cùng quyển sách, cùng prompt. Ngữ cảnh rộng hơn đổi cách chia batch (10 lần chia so với 3)
+và đổi cả số học của suy luận, nên director chọn khác. Điều đó **đổi chỉ dẫn diễn xuất → đổi
+âm thanh → đổi kết cục**: chính cơ chế đã lấy mất audio của `c00007_s0000074` (xem mục 7).
+
+Nên hạ num_ctx **sẽ lại làm đổi kết quả một lần nữa**. Có thể đổi theo hướng tốt - alpha.32
+ở 7.168 gán `fast` ít hơn nhiều và không mất segment nào vì dải - nhưng phải coi đây là
+**thay đổi chạm chất lượng**, xác minh bằng `scripts/compare_runs.py`, chứ không phải một
+con số vô hại. Đó cũng đúng là lý do `pyproject.toml`/`config.py` nằm trong
+`QUALITY_IMPLEMENTATION_FILES` ngay từ đầu.
+
+Chi tiết: `docs/VRAM_AND_CONTEXT.md`.
+
+## 4. Nâng `tts.max_retries` 4 → 10 — cứu 2 trong 3 segment không có audio
+
+Không phải tối ưu tốc độ, mà là chất lượng. Hai segment trượt cổng nhịp vì **hết lượt**,
+không phải vì giọng không đọc nổi: một cái trượt 0,03 ký tự/s. Ở ngân sách 10 chúng qua với
+xác suất 88% và 73%. Giá: cả sách chỉ 3 segment chạm ngân sách, nên ~18 lượt tổng hợp thêm.
+
+Segment thứ ba (`C » B » A » S » SS » SSS`) ngoài tầm với ở mọi ngân sách và **không được
+nới cận dưới vì nó** — 807 segment đã nhận, không cái nào dưới 12.5. Chi tiết:
+`docs/PACE_METRIC.md`.
+
+### Cái bẫy: `max_retries` không chỉ là số lần thử, nó còn là một **sentinel**
+
+Đổi một hằng số nghe như việc an toàn nhất hàng đợi. Nó không hẳn thế. `max_retries` được
+đọc ở **ba** chỗ, và một chỗ dùng nó làm **giá trị đánh dấu**:
+
+    pipeline.py:3086   tts_attempt = max_retries if force_clause_split else 0
+    pipeline.py:3362   if current_attempt > retries: raise ...
+    pipeline.py:3366   for attempt in range(current_attempt, retries)
+
+Candidate thường có `tts_attempt = 0` → `range(0, 4)` → 4 lần thử. Candidate **clause-split
+ép buộc** được ghi với `tts_attempt = max_retries` → `range(4, 4)` → **cố ý không có lần thử
+nào**. Nói cách khác, "không thử lại" được mã hoá *bằng chính con số* `max_retries`.
+
+Nâng 4 → 10 thì những hàng đã ghi với `tts_attempt = 4` tính ra `range(4, 10)` = **6 lần
+thử trên một candidate lẽ ra không có lần nào**. Trong alpha.32 có **85 hàng như vậy**
+(phân bố `tts_attempt`: 0→786, 1→10, 2→2, **4→85**).
+
+**Phạm vi của nguy cơ:** chỉ cắn khi **resume một project đã có** sau khi đổi hằng số.
+Project mới thì không sao - sentinel mới là 10 và `range(10, 10)` vẫn rỗng. Nhưng đổi
+`config.py` chính là thứ vô hiệu hoá bằng chứng QA và buộc xác minh lại *có resume*, nên
+đây không phải tình huống hiếm.
+
+**Cách làm đúng:** hoặc chỉ áp cho project mới (mỗi phiên bản alpha vốn đã là một project
+riêng), hoặc tách sentinel ra khỏi hằng số trước — nó không nên là `max_retries` ngay từ
+đầu. Cái sau mới là sửa thật, và nó chạm `pipeline.py`, nên **mục 4 không còn là "đổi một
+hằng số" nữa** khi có project cần resume.
+
+## 5. Ngưỡng perceptual theo sigma thay vì theo số tuyệt đối — bớt một nửa việc nghe
+
+Không phải tốc độ, mà là **thời gian của chủ sách**. Cổng dùng một ngưỡng tuyệt đối
+(`review_delta = -0.8`) cho mọi độ dài, nhưng độ tán của thước đo tăng 63% khi đoạn ngắn
+lại, trong khi **trung vị phẳng**. Kết quả: đoạn <2s bị gắn cờ 14,9%, đoạn ≥8s chỉ 1,8% —
+"tệ nhất" mang hai nghĩa trong cùng một cổng.
+
+Áp cùng **2,06 sigma** (đúng cái mà −0,8 nghĩa là với đoạn dài) cho từng nhóm độ dài:
+**80 → 39 lần gắn cờ**. Nó *siết* đoạn dài (1,8% → 2,8%) và nới đoạn ngắn, nên là **cân
+bằng lại, không phải nới lỏng**.
+
+**Nhưng nó không mở khoá thêm chương nào — đã kiểm.** Trong 6 segment perceptual đang chặn
+của alpha.32, ngưỡng mới gỡ được 3 (gồm cả hai đoạn ngắn 2,48s và 1,84s đúng kiểu thiên vị
+độ dài). Chạy lại cổng xuất bản với 3 cái đã gỡ: **0/7 chương được mở**, vì chương nào cũng
+còn ít nhất một chỗ chặn khác. Giá trị của mục này là **thời gian nghe của chủ sách**, không
+phải số chương xuất bản. Đừng bán nó như cái thứ hai.
+
+Còn một câu chưa trả lời được, và nó quyết định mục này có đúng không: phần tán thêm là
+nhiễu thước đo hay chất lượng thật sự dao động hơn. **Cách đo:** tự tổng hợp vài câu ngắn
+nhiều lần với seed khác nhau rồi chấm perceptual; nếu điểm nhảy loạn trên những bản thu tai
+người nghe thấy như nhau thì là nhiễu. Chưa chạy được vì cần GPU. Chi tiết:
+`docs/PERCEPTUAL_QA_COST.md`, `scripts/perceptual_duration_bias.py`.
+
+## 6. `faster-whisper` chưa được khai báo là dependency — lỗ tái lập, **không phải** lỗi chạy
+
+alpha.43 đang chạy `asr.engine = faster`, dùng `faster-whisper 1.2.1` + `ctranslate2 4.8.2`
+cài trong runtime venv. **Cả hai đều không có trong `pyproject.toml` lẫn `uv.lock`.** Dựng
+lại môi trường từ manifest thì không ra được môi trường đang chạy.
+
+Mức độ: **có giới hạn, và đã kiểm chứ không đoán.** Mặc định `asr.engine` vẫn là `openai`
+(cố ý - đổi engine là một "version event"), nên cấu hình mặc định dựng lại được. Còn nếu ai
+đặt `faster` trên môi trường thiếu gói, `asr.required = True` và `failure_policy = "fail"`
+làm nó **ném lỗi to** lúc nạp model, chứ không âm thầm chạy cả sách mà không có ASR.
+
+Đáng chú ý: `load()` khi engine `faster` hỏng thì **không lùi về `openai`** - nó tắt ASR.
+Đúng ở đây chỉ vì `required=True` biến việc tắt ấy thành ném lỗi.
+
+**Không sửa được lúc này, và lý do đáng ghi lại:** `../pyproject.toml` và `../uv.lock` nằm
+*trong* `QUALITY_IMPLEMENTATION_FILES`. Sửa chúng giữa lúc alpha.43 chạy sẽ đổi fingerprint
+chất lượng và **xoá sạch bằng chứng QA audio của cả quyển sách**, bắt ASR + perceptual chạy
+lại từ đầu. Một dòng thêm vào manifest, đúng lúc, tốn 30-40 phút chạy lại.
+
+## 7. Lùi về dải `normal` khi một chỉ dẫn nhịp không đọc tới được — cứu segment khỏi mất sạch audio
+
+`tts.pace_chars_per_second` có ba dải và `analysis` chọn dải cho từng segment. Dải `fast`
+nâng **cận dưới** lên 14,0, nên chỉ dẫn "đọc nhanh lên" biến thành "bản thu này quá chậm".
+
+alpha.43 mất `c00007_s0000074` đúng kiểu ấy: bốn lần thử 12,70 / 12,26 / 12,26 / 12,70, và
+**bản thu 12,70 y hệt đã qua được ở alpha.32** khi dải là `normal` (cận 12,5). Chỉ có chỉ
+dẫn đổi — `neutral/0` thành `afraid/2` — chứ giọng đọc không đổi gì.
+
+**Lớp này nhỏ nhưng đang phình ra, và rủi ro cao:**
+
+| | `fast` | `slow` | `normal` |
+|---|---|---|---|
+| alpha.32 | 3 (0,3%) | 3 | 942 |
+| alpha.43 | **14 (1,5%)** | 3 | 931 |
+
+alpha.43 gán `fast` **nhiều gấp 4,7 lần**, và **1 trong 14** đã mất sạch audio — tỉ lệ ~7%
+trong dải ấy so với nền 0,2% của cả sách. (Việc gán nhiều hơn đi *cùng* với thay đổi
+`num_ctx`, thứ làm đổi cách chia batch nên đổi đầu ra của director. Đó là tương quan với một
+thay đổi đã biết, chưa phải nhân quả đã chứng minh.)
+
+**Cách sửa hẹp:** đường cứu hiện tại khi hết 4 lượt là **chia nhỏ câu**, và với câu ngắn nó
+báo "too short to split safely" rồi bỏ cuộc. Thêm một bước trước khi bỏ: nếu segment không ở
+dải `normal`, **thử lại ở dải `normal`**. Bằng chứng ủng hộ trực tiếp — chính bản thu ấy đạt
+ở `normal`. Mất một sắc thái diễn xuất còn hơn mất cả câu.
+
+Chi tiết và bảng đầy đủ: `docs/PACE_METRIC.md`.
+
+---
+
+## Cần gì để xuất bản trọn quyển sách (alpha.32)
+
+Đây mới là câu trả lời mà mọi thứ ở trên phục vụ. `scripts/what_blocks_publication.py` giờ
+in thẳng ra:
+
+    Đang xuất bản được: 3/10
+      chỉ cần tai người nghe : +4 chương [2, 3, 7, 8]  => 7/10
+      cần bản thu mới trước  : +3 chương [5, 9, 10]  => 10/10
+
+**Bốn chương chỉ đợi tai người.** 10 chỗ có bản thu để nghe, mỗi chỗ một lệnh `accept` in
+sẵn - hoặc mở `review.html` mà `scripts/build_review_page.py` dựng ra, có sẵn trình phát.
+
+**Ba chương còn lại không nghe được.** Segment chặn chúng **không có audio nào**: cổng nhịp
+từ chối cả 4 lần thử, nên không có gì để nghe và `accept` sẽ báo lỗi vì không có checksum để
+đối chiếu. Chúng cần **mục 4** (`tts.max_retries` 4 → 10), thứ đã đo là cứu được 2 trong 3
+với xác suất 88% và 73%.
+
+Nói gọn: **một tối cặm cụi nghe cộng một hằng số đổi từ 4 lên 10 là ra cả quyển sách.**
+
+---
+
+## Đã có script, chưa chạy (cần máy rảnh, không có lần chạy nào đang bay)
+
+- `scripts/measure_ollama_parallel.py` — pha phân tích gửi 424 request tuần tự; sinh token
+  bị chặn bởi băng thông bộ nhớ nên gộp request có thể tăng thông lượng gộp. Đo trước, và
+  đo cả VRAM: mỗi chỗ song song cần một KV cache riêng.
+- `scripts/measure_concurrent_asr.py` — giữ một lời gọi mỗi segment (không trộn ranh giới
+  bản ghi) nhưng chạy nhiều lời gọi cùng lúc. Cột "bản ghi khác" phải bằng 0.
+
+## Đã đo và **bác bỏ** — đừng làm lại
+
+- **Gộp lô ASR**: 1,11× chứ không phải 3-5×. Lý do đã biết: `BatchedInferencePipeline` gộp
+  các cửa sổ *trong một file*, không gộp giữa các file.
+- **Gói nhiều segment vào một cửa sổ 30 giây**: đúng về mặt số học (encoder tính tiền theo
+  cửa sổ, 84% mỗi cửa sổ là đệm, ~16% ASR) nhưng nó trộn ranh giới bản ghi mà neo tên khoá,
+  kiểm dòng thời gian ảo giác và similarity từng segment đều dựa vào. Không phải một tối ưu.
+- **Tối ưu việc nạp audio**: 0,7% chi phí giải mã. Bỏ qua.
+- **Bỏ chú thích tiếng Anh trong ngoặc**, và **"chú thích dài mới hỏng"**: cả hai đều bị số
+  liệu bác. `docs/` và `scripts/english_gloss_risk.py`.

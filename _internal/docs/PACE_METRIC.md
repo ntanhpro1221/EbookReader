@@ -181,3 +181,129 @@ nhau giữa các câu. `Rare (Hiếm - B)` ngắt 15% và nhịp nói 10,50 (ch�
 hình dự đoán nó ngắt 49,3%.
 
 Lặng đo thật: trung vị **17,3%** mỗi segment, cao nhất 26,7% — thấp hơn nhiều so với mô hình.
+
+## Ba segment không có audio: không phải một lớp, và "thử thêm" chỉ đúng với hai (đo 2026-09-04)
+
+Ghi chép trước nói ba segment ấy là một lớp, bị cổng nhịp từ chối sau "5 đến 15 lần thử",
+và cách chữa là "thử thêm hoặc đổi seed". Đọc log thì cả ba mệnh đề đều sai ở mức độ khác
+nhau.
+
+**Ngân sách là 4, không phải 5-15.** `tts.max_retries` = 4. Chúng cũng chưa từng vào đường
+sửa candidate - bảng `segment_candidates` trống trơn cho cả ba - vì đường ấy dành cho lỗi
+ASR và perceptual, còn nhịp thì hỏng ngay ở vòng tổng hợp chính.
+
+**Các lần thử có khác nhau thật.** Seed lấy từ `stable_int("segment::...::{seed_salt}")` và
+salt đổi theo vòng, nên bốn lần là bốn bản thu khác nhau - thấy rõ qua nhịp đo được.
+
+**Và chúng không cùng một lớp:**
+
+| segment | bốn lần thử | tốt nhất | cách cận 12.5 |
+|---|---|---|---|
+| c00010_s0000017 | 11.81 10.44 **12.47** 12.13 | 12.47 | **0.03** - trượt 0,24% |
+| c00005_s0000013 | 11.05 11.82 12.25 12.25 | 12.25 | 2% |
+| c00009_s0000008 | 9.22 10.51 10.70 9.36 | 10.70 | 17% |
+
+Lấy độ lệch chuẩn của chính bốn lần ấy mà ước lượng (bốn mẫu là mỏng, con số này để phân
+biệt "nửa sigma" với "ba sigma" chứ không phải để đặt cược):
+
+| segment | xác suất mỗi lần | ngân sách 4 | 10 | 16 |
+|---|---|---|---|---|
+| c00010_s0000017 | 18,8% | 57% | **88%** | 96% |
+| c00005_s0000013 | 12,3% | 41% | **73%** | 88% |
+| c00009_s0000008 | ~0% | 0% | **0%** | 1% |
+
+**Hai segment đầu trượt vì hết lượt, không phải vì giọng không đọc nổi.** Nâng
+`tts.max_retries` từ 4 lên 10 chỉ tốn thêm lượt cho đúng những segment đang hỏng: cả sách
+chỉ có 3 segment chạm tới ngân sách, 8 segment khác chạm cổng rồi qua ngay lần sau. Giá
+phải trả là ~18 lượt tổng hợp thêm cho một quyển sách 948 segment.
+
+**Segment thứ ba là một vấn đề khác hẳn.** Văn bản của nó là một thang bậc:
+
+    Cấp Linh Hồn được phân loại theo hệ thống như sau: C » B » A » S » SS » SSS.
+
+Giọng đọc *tên chữ cái*, không đọc văn xuôi. Thước đo ký tự/giây được hiệu chỉnh trên văn
+xuôi nên định giá sai loại văn bản này theo đúng cấu tạo của nó - và không ngân sách nào
+cứu được. Nới cận dưới thì vẫn sai, vì lý do đã đo ở trên: trong 807 segment đã nhận, không
+segment nào rơi xuống dưới 12.5. Đây là một lớp văn bản mà cổng cần nhận ra, không phải một
+cái cận cần nới.
+
+`scripts/pace_retry_reachability.py` dựng lại bảng này từ log của bất kỳ lần chạy nào. Nó
+chỉ tính những segment thực sự hết lượt, và biết cổng có hai cận - phiên bản đầu đọc mọi
+lần từ chối thành "quá chậm" và biến một segment bị từ chối vì đọc *quá nhanh* (25.30,
+27.51 so với cận trên 24.5) thành một segment luôn vượt cận dưới.
+
+## Tổng hợp là tất định, nên "chạy lại" không bao giờ cứu được (xác nhận 2026-09-04)
+
+alpha.43 hỏng chương 5 đúng trên `c00005_s0000013`, cùng segment đã chặn chương 5 của
+alpha.32. Seed lấy từ `stable_int("segment::{stable_id}::{voice_key}::{seed_salt}")` — hoàn
+toàn tất định — nên có một dự đoán kiểm được: bốn lần thử của alpha.43 phải ra **đúng** bốn
+bản thu của alpha.32.
+
+    alpha.32 :  11,05   11,82   12,25   12,25
+    alpha.43 :  11,05   11,82   12,25   12,25
+
+Giống đến từng chữ số thập phân, qua hai lần chạy khác engine ASR và khác `num_ctx`.
+
+### Hai hệ quả
+
+**1. Chạy lại quyển sách không bao giờ cứu những segment này.** Cùng bốn bản thu ấy hiện ra
+mỗi lần. Đó là một tính chất tốt — kết quả tái lập được — nhưng nó xoá sổ "thử chạy lại xem
+sao" khỏi danh sách cách chữa.
+
+**2. Con số "88% / 73%" là một *tiên nghiệm*, không phải xác suất lặp lại được.** Nâng
+`tts.max_retries` không phải là "quay xúc xắc thêm sáu lần"; nó là **rút thêm sáu bản thu cụ
+thể, tất định**, vì attempt 5-10 dùng salt khác nên seed khác. Hoặc trong sáu bản ấy có một
+bản vượt 12,5, hoặc không có bản nào — và một khi đã thử thì câu trả lời là **vĩnh viễn** cho
+segment đó. Ước lượng ở trên đo khả năng dãy tất định ấy *có chứa* một bản đạt; nó không nói
+"thử nhiều lần rồi sẽ được".
+
+Điều này **củng cố** mục 4 chứ không làm yếu đi: vì chạy lại vô ích và vì cận dưới không được
+nới, **thêm lượt thử là cách duy nhất còn lại** cho lớp này, ngoài việc sửa văn bản hoặc sửa
+chính cổng.
+
+## Cận nhịp là **theo từng segment**, và phân tích chọn nó — một segment mất audio vì thế (2026-09-04)
+
+Tôi đã viết "cận là 12.5" ở khắp nơi trong tài liệu này và hard-code nó vào
+`scripts/pace_retry_reachability.py`. Sai. `tts.pace_chars_per_second` có **ba dải**, và
+`analysis` gán cho mỗi segment một dải qua trường `pace`:
+
+    slow   [7.0, 19.0]
+    normal [12.5, 24.5]
+    fast   [14.0, 30.0]
+
+Cái làm lộ ra: alpha.43 mất `c00007_s0000074` (*"Tên của cô ta là Juliana Vox Blade."*) với
+những lần thử **12,70 / 12,26 / 12,26 / 12,70** — mà 12,70 thì **trên** 12,5, lẽ ra phải
+đạt.
+
+| | alpha.32 | alpha.43 |
+|---|---|---|
+| emotion / intensity | neutral / 0 | **afraid / 2** |
+| dải `pace` | `normal` | **`fast`** |
+| cận dưới | 12,5 | **14,0** |
+| nhịp đo được | **12,70** | **12,70** (y hệt) |
+| kết cục | qua cổng nhịp (2,48s audio) | **không có audio nào** |
+
+Tổng hợp vẫn tất định — nó cho ra **đúng** 12,70 ở cả hai lần. Thứ đổi là **phân tích**:
+alpha.43 đọc câu ấy thành *afraid*/`fast`, nâng sàn lên 14,0, và bản thu y hệt từ chỗ đạt
+thành chỗ hỏng.
+
+### Điều này nói lên cái gì
+
+**Biến động của phân tích một mình nó có thể làm một segment mất sạch audio.** Không phải
+giọng đọc tệ đi, không phải engine đổi — chỉ là một chỉ dẫn diễn xuất khác đặt ra một cái
+sàn mà câu ấy không đọc tới được. Và vì `fast` nâng **cận dưới**, chỉ dẫn "đọc nhanh lên"
+biến thành "bản thu này quá chậm".
+
+Nên có **hai** loại "ngoài tầm với", và chúng thuộc về hai người khác nhau:
+
+- **dải `normal` mà vẫn không tới sàn** → vấn đề ở **văn bản**. Ví dụ: thang bậc
+  `C » B » A » S » SS » SSS` đọc thành tên chữ cái.
+- **dải `slow`/`fast` mà không tới sàn** → vấn đề ở **chỉ dẫn diễn xuất**. Cùng bản thu ấy
+  qua được ở dải khác.
+
+`scripts/pace_retry_reachability.py` giờ đọc dải của từng segment từ database (và đọc dải
+từ `book_settings.json` của chính project), in thêm cột `dải`, và ở phần kết luận nói rõ
+segment nào thuộc loại nào.
+
+**Ba segment không audio của alpha.32 đều là `normal`**, nên mọi kết luận ở mục trên vẫn
+đứng — lỗi hard-code chỉ cắn khi có segment ngoài dải `normal`, và alpha.43 là lần đầu.

@@ -271,3 +271,173 @@ Invariant "tự nhường foreground và tự tăng lại" không được đán
 
 Đĩa 99% idle và CPU 2,5% — **đừng** đụng vào fsync, checksum, hay số lần ghi `.part`. Chúng không phải nút
 thắt và chúng là thứ giữ cho artifact an toàn khi crash.
+
+## Pha tốn nhất của một lần chạy là pha duy nhất không dùng pool (đo 2026-09-04)
+
+Chủ sách hỏi máy đã bị vắt kiệt chưa. Lấy mẫu GPU 25 giây ngay giữa lúc alpha.43 tạo
+candidate clarity:
+
+    GPU  : trung bình 23,7%   trung vị 16,0%   đỉnh 100%
+    VRAM : trung bình 1.558 MiB   đỉnh 2.719 MiB / 8.151 MiB
+
+Hơn 5 GB VRAM nằm không, và đỉnh 2.719 MiB xấp xỉ đúng `TTS_POOL_BASE_VRAM_MB` = 2.733,
+tức **một model duy nhất**, dù log đã báo "Pool TTS song song: 3 tiến trình" trước đó.
+
+Đọc code thì rõ: `pipeline.py` sinh candidate bằng một vòng lặp thẳng -
+`for index, (item, candidate) in enumerate(generation_jobs, 1)`. Pha tổng hợp chính dùng
+pool; pha sửa clarity thì không.
+
+### Nó tốn bao nhiêu
+
+Quy thời gian cho pha đang hoạt động trên log alpha.32, chỉ tính những bước liên tiếp
+(bước nhảy cách quãng là lúc chạy dừng chứ không phải lúc pha làm việc):
+
+| pha | công việc thật | số việc | trung vị mỗi việc |
+|---|---|---|---|
+| **Tạo candidate clarity (tuần tự)** | **4.707s** | 826 | **5,45s** |
+| Kiểm tra phát âm (ASR) | 4.252s | 2.311 | 1,54s |
+| Tạo audio chapter (**có pool**) | 2.658s | 2.466 | — |
+| Kiểm tra candidate clarity | 2.325s | 1.652 | 0,85s |
+| Perceptual QA chapter | 1.106s | 2.385 | — |
+
+**Pha tốn nhất cả lần chạy chính là pha duy nhất chạy tuần tự.** Đường có pool đi được
+0,93 việc/giây; đường tuần tự đi được 0,18 việc/giây.
+
+Không đọc thẳng tỉ số 5,3× ấy thành mức tăng tốc hứa hẹn, và **cũng đừng lấy số tiến trình
+làm mức tăng tốc** - đó là lỗi tôi đã mắc ở bản đầu của mục này. Pool đã được đo rồi, ngay
+trong docstring của `TTS_POOL_MIN_BATCH`: 2 đoạn 1,00×, 3 đoạn 1,12×, 4 đoạn 1,22×, 9 đoạn
+1,29×, vì 3 worker đã đẩy GPU lên 90%.
+
+Ghép đường cong ấy với kích thước vòng thật (129 vòng, trung vị 5 candidate):
+4.707s → **~3.802s**, tiết kiệm **~905s**, tức 19,2% của pha và khoảng **7,4% một lần
+chạy**. Vẫn là mục đáng làm nhất, và bằng một nửa con số tôi viết lần đầu.
+
+Điểm đáng chú ý nhất: **cơ chế đã có sẵn.** `_synthesis_pool` đang được đường tổng hợp
+chính dùng, và nó đã tự co giãn theo VRAM qua `workers_for_vram`. Đây không phải xây mới,
+mà là cho một vòng lặp dùng thứ vòng lặp bên cạnh đã dùng.
+
+### Một con số suýt bị báo sai
+
+Cách quy thời gian đầu tiên gán thời gian trôi qua cho *nhãn nhìn thấy gần nhất*, và nó cho
+ra "Chuẩn bị và chia văn bản: 3.983s = 18,4%" - nghe như việc xử lý văn bản đang ăn một
+phần năm lần chạy. Cách chặt hơn, chỉ tính khoảng giữa hai bước liên tiếp *cùng một nhãn*,
+làm nhãn ấy **biến mất hoàn toàn**: nó không có bước liên tiếp nào, nên 3.983s kia là thời
+gian rảnh bị gán nhầm chứ không phải công việc. Khi quy thời gian theo nhãn, hãy đòi hỏi
+bằng chứng rằng nhãn ấy thực sự đang tiến triển.
+
+### Việc cần làm (chưa làm - `pipeline.py` bị khoá lúc alpha.43 chạy)
+
+Cho vòng sinh candidate dùng `_synthesis_pool` như đường tổng hợp chính. Đo lại bằng chính
+phép đo trên: thời gian pha, và mẫu GPU/VRAM giữa lúc chạy.
+
+## Whisper được nạp 189 lần trong một lần chạy, mất 25 phút (đo 2026-09-04)
+
+Theo dõi log alpha.43 thấy `Nạp faster-whisper` lặp lại mỗi khoảng 70 giây. Đếm trên cả
+alpha.32:
+
+    189 lần nạp trong 378 phút, cách nhau trung vị 50 giây
+    mỗi lần trung vị 7,15s  ->  tổng 1.502s = 25 phút = 9,6% công việc thật của lần chạy
+
+(7,15s là *cận trên*: nó đo từ dòng "Nạp" tới dòng log kế tiếp, nên có thể gồm cả lần giải
+mã đầu. Số lần nạp thì chính xác.)
+
+### Vì sao lại nạp nhiều thế
+
+129 trong 189 lần rơi ngay vào lúc vào pha "Kiểm tra candidate clarity". Vòng sửa chạy
+theo nhịp: sinh candidate (TTS) → kiểm candidate (ASR) → vòng sau. Hai model thay nhau
+chiếm VRAM và đá nhau ra mỗi vòng. 826 candidate chia cho 129 vòng là **6,4 candidate mỗi
+vòng**, tức mỗi vòng **nạp 7 giây để làm khoảng 5 giây việc**.
+
+### Cách sửa rẻ nhất, và vì sao nó rẻ
+
+Giữ Whisper nằm lại trong suốt vòng sửa. Nghe như phải đánh đổi VRAM, nhưng phép đo nói
+không: **giữa vòng sửa, VRAM đỉnh chỉ 2.719 MiB trên 8.151** vì vòng ấy chạy tuần tự với
+một model TTS duy nhất. Whisper turbo float16 khoảng 1,5 GB, thừa chỗ trong 5,4 GB đang bỏ
+không. Tiết kiệm ~1.400s mà không lấy đi gì.
+
+**Giữ Whisper thường trú suốt cả lần chạy thì lại không đáng** - và đây là chỗ dễ nhầm.
+1,5 GB ấy lấy mất một tiến trình của pool TTS ở pha tổng hợp chính: pha ấy tốn 2.658s với 3
+tiến trình, còn 2 tiến trình thì thành ~3.987s, đắt thêm 1.329s - gần đúng bằng số tiết
+kiệm được. Hoà. Và nếu vòng sinh candidate được cho dùng pool (mục trên), đánh đổi ấy còn
+tệ hơn. Phạm vi mới là thứ làm cách sửa này đúng: **thường trú trong vòng sửa, không thường
+trú ngoài nó.**
+
+### Việc cần làm (chưa làm - `pipeline.py`/`asr.py` bị khoá lúc alpha.43 chạy)
+
+Giữ model ASR sống qua các vòng của một chương thay vì nạp lại mỗi vòng. Đo lại bằng chính
+cách đếm trên: số lần nạp mỗi lần chạy.
+
+### Đính chính: đổi engine đã xử lý phần lớn chuyện nạp lại
+
+Đo lại đúng cách ấy trên alpha.43, lần chạy dùng `asr.engine = faster`:
+
+| | mỗi lần nạp (trung vị) | 189 lần | trên ~15.600s |
+|---|---|---|---|
+| alpha.32 — openai-whisper | 7,15s | 1.502s | **9,6%** |
+| alpha.43 — faster-whisper | **1,31s** | ~248s | **1,6%** |
+
+CTranslate2 nạp nhanh hơn PyTorch khoảng 5,5 lần, nên **giá trị của mục "giữ Whisper thường
+trú" tụt từ ~1.400s xuống ~230s**. Vẫn dương, nhưng nhỏ hơn nhiều và không còn đáng đứng
+trên mục nào khác. Việc đổi engine — làm vì tốc độ giải mã — đã sửa gần hết một vấn đề khác
+mà tôi đang định sửa riêng.
+
+(Mẫu của alpha.43 còn nhỏ: 13 lần nạp trong 18 phút. Nhưng 7,15 so với 1,31 không phải
+nhiễu, và cả hai đo bằng cùng một cách: khoảng cách từ dòng "Nạp" tới dòng log kế tiếp.)
+
+Bài học đáng giữ hơn con số: **tôi suýt ship một thay đổi tin là đáng 1.400s trong khi nó
+đáng 230s**, vì đo nó trên một lần chạy dùng engine cũ rồi xếp hàng nó cho tương lai dùng
+engine mới. Khi một thay đổi khác đang bay, hãy đo lại nền trên chính lần chạy ấy trước khi
+xếp thứ tự.
+
+## Lợi ích lớn nhất của faster-whisper là **gián tiếp**: vòng sửa co lại một nửa (đo 2026-09-04)
+
+Sau khi `phase_timings.py` biết đếm vòng sửa, so hai lần chạy bằng cùng một phép đo:
+
+| | alpha.32 (openai) | alpha.43 (faster) |
+|---|---|---|
+| sinh candidate (**TTS**) | 4.707s | **2.375s** |
+| kiểm candidate (**ASR**) | 2.325s | **512s** |
+| perceptual candidate | 563s | 484s |
+| UTMOS candidate | 422s | 312s |
+| **tổng vòng sửa** | **8.016s** | **3.683s** |
+
+Cột `kiểm candidate` giảm 4,5 lần là engine — chuyện đã biết. Nhưng `sinh candidate` là
+**TTS**, không dính gì tới engine ASR, mà cũng giảm một nửa. Đó mới là phần đáng chú ý.
+
+### Vì sao: bản ghi tốt hơn kích hoạt ít việc sửa hơn
+
+| | alpha.32 | alpha.43 |
+|---|---|---|
+| segment phải sửa | 152 (16,0%) | 147 (15,5%) |
+| candidate sinh ra | **883** | **431** |
+| candidate / segment phải sửa | **5,81** | **2,90** |
+
+**Số segment cần sửa gần như y hệt** (152 so với 147) — engine mới không làm giọng đọc tốt
+lên. Nhưng mỗi segment ấy tốn **một nửa số candidate**.
+
+Phân bố theo vòng cho thấy hai hiệu ứng cùng lúc:
+
+| vòng sửa | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| alpha.32 | 242 | 197 | 157 | 150 | **137 (57% sống tới vòng 4)** |
+| alpha.43 | 147 | 107 | 68 | 63 | **46 (31%)** |
+
+1. **Vòng 0 sinh ít hơn**: 147 so với 242, cho số segment gần bằng nhau. alpha.32 thường
+   thử *cả hai* biến thể phát âm ngay từ vòng đầu; alpha.43 phần lớn chỉ cần một.
+2. **Tắt nhanh hơn**: 31% sống tới vòng 4 thay vì 57%.
+
+Cả hai đều là thứ ta chờ đợi khi bản ghi đáng tin hơn: ít `ASR_MISMATCH` giả, nên vòng sửa
+vừa kích hoạt nhẹ hơn vừa hội tụ sớm hơn.
+
+*(Đã kiểm giả thuyết thay thế và bác bỏ: không phải alpha.43 bỏ bớt một biến thể phát âm.
+Cả hai lần chạy đều dùng cả hai, tỉ lệ tương tự — 526/357 so với 276/155.)*
+
+### Cộng lại
+
+    ASR trực tiếp   : 2.325s -> 512s     tiết kiệm 1.813s
+    TTS gián tiếp   : 4.707s -> 2.375s   tiết kiệm 2.332s
+
+**Phần gián tiếp lớn hơn phần trực tiếp.** Đổi engine ASR hoá ra chủ yếu là một thay đổi
+về *khối lượng việc phải làm*, không phải về *tốc độ làm việc ấy*.
+
+(alpha.43 đang chạy nốt chương 10, nên các số của nó sẽ nhích lên chút ít.)

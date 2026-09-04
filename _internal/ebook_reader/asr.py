@@ -1229,7 +1229,27 @@ class WhisperVerifier:
             )
         )
         self.log(f"Nạp faster-whisper {model_name} trên {device} ({compute_type}).")
-        self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        # local_files_only, for the same reason the openai path checks for its checkpoint
+        # before loading: a job must never pull a model over the network while it runs. The
+        # CTranslate2 weights are a different artifact from openai-whisper's .pt - they come
+        # from the Hugging Face cache, not runtime/models/whisper - and alpha.43 fetched
+        # about 1.5 GB mid-run without anything noticing, because this call had neither the
+        # guard nor a root. Setup pre-fetches them; if they are absent, say so and stop
+        # rather than start a download nobody asked for.
+        try:
+            self.model = WhisperModel(
+                model_name,
+                device=device,
+                compute_type=compute_type,
+                local_files_only=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(
+                f"Thiếu faster-whisper {model_name} trong cache Hugging Face: {exc}. "
+                "Job không được tự tải model giữa chừng. Chạy lại scripts/setup_windows.ps1 "
+                "để tải sẵn, hoặc đặt asr.engine = \"openai\" để dùng checkpoint đã có "
+                "trong runtime/models/whisper."
+            ) from exc
         self.device = device
         return True
 
