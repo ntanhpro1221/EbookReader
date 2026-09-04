@@ -331,3 +331,32 @@ và chỉ có một cái đúng.
 
 Muốn kiểm nó thật thì cần một segment ngoài dải `normal` mà giọng không đọc tới sàn được -
 đúng loại `c00007_s0000074` của alpha.43, thứ mà việc đưa num_ctx về 7.168 vừa làm biến mất.
+
+## `max_retries` 10 đã cứu được segment đầu tiên (alpha.44, 2026-09-04)
+
+`c00005_s0000013` - *"Tên tôi là Samael Kaizer Theosbane."* - chưa từng có bản thu nào ở
+alpha.32 lẫn alpha.43. Ở alpha.44 nó **có audio**:
+
+| | status | audio | nhịp |
+|---|---|---|---|
+| alpha.32 (4 lần) | failed | không có | tốt nhất 12,25 |
+| alpha.43 (4 lần) | failed | không có | tốt nhất 12,25 |
+| **alpha.44 (10 lần)** | **signal_passed** | **2,40s** | **12,71** |
+
+`pace_outlier = 0.0` và **không mã cảnh báo nào** - đây là bản thu đạt thật, không phải bản
+được nới tay.
+
+### Mô hình của tôi đúng kết quả nhưng sai cơ chế
+
+Ước lượng cũ: 12,3% mỗi lần thử, tức 73% trong 10 lần. Nó đã xảy ra. Nhưng dãy thật cho thấy
+giả định "mỗi lần thử là một lần rút độc lập từ phân phối liên tục" là **sai**:
+
+    lần 1  11,05      lần 5  10,70
+    lần 2  11,82      lần 6  12,25   <- lặp
+    lần 3  12,25      lần 7  11,82   <- lặp
+    lần 4  12,25      lần 8-10 -> 12,71 (đạt)
+
+12,25 xuất hiện ba lần, 11,82 hai lần. Các bản thu **dồn về một số ít kết cục** chứ không
+rải đều. Vẫn còn đủ đa dạng để cuối cùng chạm 12,71, nên kết luận không đổi - nhưng con số
+"73%" nên đọc là *thứ tự độ lớn*, không phải xác suất tính được. Hai segment còn lại
+(`c00009_s0000008` thang bậc ký tự, `c00010_s0000017`) sẽ nói rõ hơn ở chương 9 và 10.
