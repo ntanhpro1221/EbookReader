@@ -398,3 +398,36 @@ này không lật kết luận nào đã ghi - 1,6% bản ghi khác nhau trên *
 đứng, vì phép đo ấy so cùng một audio nên không dính nhiễu phân tích - nhưng nó đặt lại
 thước cho những so sánh ở mức chương và mức cảnh báo, nơi con số nhỏ dễ bị đọc thành xu
 hướng.
+
+### Trục trôi dạt thứ hai: đúc vai - và chương 6 của alpha.44 là nhiễu, không phải công của thay đổi nào
+
+alpha.44 lấy lại chương 6 mà alpha.43 đánh mất, và lấy lại đẹp: segment tiếng gào ra
+`verified`, similarity **1,00**, không mã cảnh báo - trong khi alpha.32 xuất bản chính chương
+ấy nhờ một bản ghi **ảo giác được miễn trừ**. Rất dễ ghi công cho `max_retries` hoặc engine.
+Cả hai đều không phải.
+
+Truy ra thì lý do nằm ở chỗ khác:
+
+    alpha.32: voice=14  speaker="…người bị bắt"      pitch=-4  sha=cea8dd10
+    alpha.44: voice=16  speaker="…người bị bắt nạt"  pitch=0   sha=a1492959
+
+Phân tích **nhận diện nhân vật khác đi** - "người bị bắt" so với "người bị bắt nạt" - nên
+đúc giọng khác, pitch khác, seed khác, âm thanh khác, và bản mới tình cờ được Whisper nghe
+đúng hoàn toàn. Cả hai đều là bản `primary`, không candidate nào, nên vòng sửa không dính
+dáng gì.
+
+Đo trục ấy trên cả sách:
+
+| | speaker khác | giọng khác |
+|---|---|---|
+| alpha.32 ↔ alpha.44 (**cùng 7.168**) | **1,8%** | **2,4%** |
+| alpha.32 ↔ alpha.43 (7.168 vs 9.216) | 9,0% | 6,1% |
+
+Cùng hình dạng với trôi dạt chỉ dẫn (3,1% cùng ctx, 11,5% khác ctx). **Nền nhiễu của phân
+tích không chỉ là chỉ dẫn diễn xuất - nó gồm cả việc đúc vai**, và chương 6 rơi đúng vào
+2,4% ấy.
+
+**Hệ quả cho cách đọc kết quả alpha.44:** chênh lệch một hai chương giữa các lần chạy nằm
+trong nhiễu. Muốn quy cho một thay đổi cụ thể thì phải truy tới từng segment và chỉ ra cơ
+chế - như đã làm cho `c00005_s0000013` (cứu thật, do `max_retries`) và cho chương 6 này (may,
+do đúc vai). Đếm chương không đủ.
