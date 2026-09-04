@@ -409,3 +409,23 @@ Dòng lỗi cuối cùng kết thúc bằng `pace_band=already normal`. Cổng m
 segment vốn ở dải `normal`, và trả lời ngay mà không tốn lần tổng hợp nào - đúng đường mà
 `test_a_normal_segment_never_pays_for_this` khẳng định. Đường *kích hoạt thật* thì vẫn chưa
 được chạy trong một lần chạy thật (xem mục trên).
+
+### Bảng điểm cuối: 3/3, và thứ tự cũng đúng
+
+`c00010_s0000017` được cứu ở **lần thử 5**, nhịp 12,82, `signal_passed`, không cảnh báo nào.
+Bốn lần đầu (11,81 / 10,44 / 12,47 / 12,13) tái lập chính xác alpha.32 và alpha.43 - tất
+định thêm một lần nữa.
+
+| segment | cách sàn | dự đoán ở ngân sách 10 | kết quả | cứu ở lần |
+|---|---|---|---|---|
+| `c00010_s0000017` | **0,24%** | 88% | **cứu được** | **5** |
+| `c00005_s0000013` | 2% | 73% | **cứu được** | 8-10 |
+| `c00009_s0000008` | 17% | ~0% | **trượt cả 10** | — |
+
+Không chỉ ba dự đoán đều đúng, mà **thứ tự cũng đúng**: cách sàn càng gần thì cứu càng sớm,
+và cái xa nhất thì không bao giờ. Với một mô hình mà tôi đã phải hạ xuống thành "bậc độ lớn"
+sau khi thấy bản thu dồn cụm, đó là nhiều hơn mức nó hứa.
+
+**2 trong 3 segment không có audio đã có bản thu.** Chương 5 và chương 10 vì thế rời khỏi
+nhóm "cần bản thu mới" sang nhóm "chỉ cần tai người nghe". Chương 9 ở lại, và ở lại vì đúng
+lý do đã đo: văn bản của nó không phải văn xuôi.
