@@ -307,3 +307,27 @@ segment nào thuộc loại nào.
 
 **Ba segment không audio của alpha.32 đều là `normal`**, nên mọi kết luận ở mục trên vẫn
 đứng — lỗi hard-code chỉ cắn khi có segment ngoài dải `normal`, và alpha.43 là lần đầu.
+
+### alpha.44 nhiều khả năng **không** thử tới cổng lùi dải nhịp
+
+Cổng ấy chỉ kích hoạt khi một segment ngoài dải `normal` dùng hết cả 10 lần thử. alpha.44
+gán `fast` cho 8 segment; đối chiếu nhịp đã đo được của chính những segment ấy ở alpha.32:
+
+| segment | nhịp ở alpha.32 | cách sàn 14,0 |
+|---|---|---|
+| `c00005_s0000081` | 17,81 | +3,81 |
+| `c00005_s0000082`-`085` | 14,78 - 15,49 | +0,78 … +1,49 |
+| `c00006_s0000086` | 16,57 | +2,57 |
+| **`c00008_s0000058`** | **14,07** | **+0,07** |
+| `c00006_s0000001` (tiếng gào) | không có số | không rõ |
+
+**0/8 có nguy cơ rõ ràng.** Một cái cách sàn đúng 0,07 và một cái không có số đo, còn lại
+đều thoải mái.
+
+Nghĩa là **thay đổi này đã ship nhưng lần chạy hiện tại nhiều khả năng không chạm tới nó.**
+Nó có test đơn vị, nhưng đường đi thật trong một lần chạy thật thì chưa. Ghi lại để đừng ai
+đọc "alpha.44 xong xuôi" thành "cổng lùi dải nhịp đã được kiểm chứng" - hai chuyện khác nhau,
+và chỉ có một cái đúng.
+
+Muốn kiểm nó thật thì cần một segment ngoài dải `normal` mà giọng không đọc tới sàn được -
+đúng loại `c00007_s0000074` của alpha.43, thứ mà việc đưa num_ctx về 7.168 vừa làm biến mất.
