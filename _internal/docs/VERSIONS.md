@@ -748,3 +748,49 @@ lượng 1,3% đo trên chương 1-2 lúc đang chạy. Con số 9,3% bị thổ
 **Nhưng `num_ctx = 9.216` thì không giữ.** Nó làm pha phân tích chậm 16%, và nó đổi đầu ra
 của phân tích đủ để 107 segment có âm thanh khác và một segment mất sạch audio vì bị gán dải
 `fast`. Xem mục 3 và 7 của `docs/OPTIMISATION_QUEUE.md`.
+
+## alpha.44 — kết quả cuối (2026-09-04 11:47)
+
+`asr.engine = faster` (mặc định), `num_ctx = 7.168`, `tts.max_retries = 10`, cổng lùi dải
+nhịp, sentinel tách khỏi hằng số. **3/10 chương xuất bản** — bằng alpha.32, hơn alpha.43.
+
+### Con số thật sự đổi không phải số chương
+
+| | chương xuất bản | **segment không có audio** | chỉ cần nghe là xong |
+|---|---|---|---|
+| alpha.32 | 3/10 | **3** | 7/10 |
+| alpha.43 | 2/10 | 4 | 6/10 |
+| **alpha.44** | **3/10** | **1** | **9/10** |
+
+`max_retries = 10` cứu 2 trong 3 segment chưa từng có bản thu, nên chương 5 và 10 rời nhóm
+"cần bản thu mới" sang nhóm "chỉ cần tai người nghe". **Một tối nghe giờ đưa sách từ 3/10 lên
+9/10 thay vì 7/10.** Chỉ chương 9 ở lại, vì thang bậc `C » B » A » S » SS » SSS` là sai loại
+văn bản cho thước đo nhịp, không phải thiếu lượt thử.
+
+### Thời gian: nhanh hơn ở phân tích, chậm hơn ở tổng hợp - và lý do là một lỗi
+
+| | tổng | nghỉ | làm việc | phân tích | sinh tok/s |
+|---|---|---|---|---|---|
+| alpha.32 | 7,41h | 1,41h | 6,00h | 3.846s | 56,4 |
+| alpha.43 | 3,34h | 0h | 3,34h | 4.475s | 50,1 |
+| alpha.44 | 4,08h | 0,27h | **3,81h** | **3.733s** | **57,6** |
+
+Pha phân tích nhanh nhất trong ba lần (−742s so với alpha.43), nhưng tổng thời gian làm việc
+lại **chậm hơn 0,47h**. Không phải do `max_retries`: cả sách chỉ thêm 7 lần thử lại.
+
+Lý do là **pool TTS tắt vĩnh viễn sau một lần đọc VRAM**. `_synthesis_pool` từ chối dựng pool
+khi VRAM không đủ hai worker, và chốt `_tts_pool_failed` - cùng cái chốt dùng cho lỗi thật.
+alpha.44 đọc được 4.467 MiB đúng một lần, ngay sau chương 2, rồi tổng hợp **chương 3-10 tuần
+tự**: TTS chính 2.233s → 4.270s, mất khoảng **2.037 giây** vì một khoảnh khắc.
+
+Đã sửa trên `dev/alpha13` (`c0b70e3`), kèm một lỗi thứ hai mà test của nó lôi ra: khối
+`except` báo `{"workers": workers}` trong khi `workers` được gán *bên trong* `try`, nên một
+lỗi import hoặc lỗi đọc tài nguyên sẽ làm chính khối xử lý lỗi ném `UnboundLocalError` - biến
+"không dựng được pool" thành "hỏng cả quyển sách", đúng thứ docstring của hàm hứa không bao
+giờ xảy ra.
+
+### Cổng lùi dải nhịp: đường thường gặp chạy, đường thật chưa
+
+Không segment nào kích hoạt nó. Dòng lỗi của `c00009_s0000008` kết thúc bằng
+`pace_band=already normal`, tức cổng được gọi và từ chối đúng cách mà không tốn lần tổng hợp
+nào. Đường *thật sự hạ dải* vẫn chưa chạy trong một lần chạy thật.
