@@ -141,3 +141,43 @@ Ghi lại để người sau không thử lại đúng cách ấy; muốn phân 
 một câu ngắn nhiều lần với seed khác nhau rồi chấm**.
 
 `scripts/perceptual_duration_bias.py` dựng lại toàn bộ bảng trên từ bất kỳ project nào.
+
+### Đính chính ba con số của mục trên (2026-09-04)
+
+Đọc kỹ các hàng `quality_checks` của một segment hỏng lặp lại (`c00003_s0000014`, 1,52s,
+hỏng ở cả ba lần chạy) lôi ra hai lỗi trong cách tôi đo, và cả hai đều làm phóng đại kết quả.
+
+**1. Candidate sửa làm lệch phân bố.** Phân bố ban đầu gộp cả phép chấm trên *bản thu chính*
+lẫn trên *candidate sửa*. Candidate là bản thu lại của những segment vốn đã bị nghi ngờ, nên
+chúng nằm thấp hơn hẳn: trung vị ở nhóm <2s là **−0,815** so với **−0,434** của bản thu
+chính. Chỉ 4,7% mẫu, nhưng một cái cổng được hiệu chỉnh một phần bằng chính những bản nó đã
+loại thì sai về hình dạng bất kể sai số to hay nhỏ.
+
+Bỏ chúng ra, thiên vị vẫn còn nhưng **nhỏ hơn tôi đã báo**:
+
+| độ dài | gắn cờ (có lẫn candidate) | gắn cờ (chỉ bản thu chính) |
+|---|---|---|
+| <2s | 14,9% | **9,9%** |
+| ≥8s | 1,8% | 1,7% |
+
+Tỉ lệ so với đoạn dài vì thế là **~6 lần**, không phải 8-15 lần. Ngưỡng <2s dịch từ −1,079
+sang **−1,063**.
+
+**2. Tôi lấy nhầm hàng kiểm.** Câu truy vấn cũ lấy phép chấm perceptual *mới nhất* của mỗi
+segment. Nhưng một segment hỏng có nhiều hàng: bản thu chính mang mã chặn, rồi các candidate
+sửa mang `PERCEPTUAL_SHORT_AUDIO` với `baseline_delta = null`. Lấy hàng mới nhất là lấy đúng
+hàng *không* có số. `c00003_s0000014` vì thế **rơi khỏi** bảng của tôi hoàn toàn, và con số
+"3 trong 6" là vô nghĩa.
+
+Đếm đúng - lấy hàng mang mã chặn, dùng phân bố sạch:
+
+    21/40 segment từng bị gắn cờ perceptual sẽ hết chặn
+
+Những segment **vẫn** chặn phần lớn là đoạn **dài** (7,9s / 8,9s / 10,2s / 11,8s / 12,1s),
+vì ngưỡng theo sigma **siết** đoạn dài lại (−0,786 thay vì −0,8). Đúng như đã nói: đây là
+cân bằng lại, không phải nới lỏng.
+
+**3. Kết luận quan trọng nhất thì không đổi: vẫn 0 chương được mở.** Chạy lại cổng xuất bản
+với cách lấy hàng đã sửa cho ra đúng kết quả cũ - mọi chương bị chặn đều còn một segment
+`failed` hoặc một segment perceptual vẫn chặn. Tôi đã đi tới kết luận đúng bằng một phép đo
+sai, và điều đó không làm phép đo ấy đỡ sai đi.

@@ -42,13 +42,24 @@ def main(project_root: str, review_delta: float) -> int:
     connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     points: list[tuple[float, float]] = []
+    candidates = 0
     for row in connection.execute(
         "SELECT metrics_json FROM quality_checks WHERE stage LIKE '%percept%'"
     ):
         metrics = json.loads(str(row["metrics_json"] or "{}"))
         seconds, delta = metrics.get("duration_seconds"), metrics.get("baseline_delta")
-        if seconds and delta is not None:
-            points.append((float(seconds), float(delta)))
+        if not seconds or delta is None:
+            continue
+        # Repair candidates are re-takes of segments already judged suspect, so they sit
+        # lower than the population and would drag the threshold down with them: on
+        # alpha.32 their median at under two seconds is -0.815 against -0.434 for primary
+        # takes. They are only 4.7% of the sample, so the effect is small - the sub-2s
+        # threshold moves from -1.079 to -1.063 - but a gate calibrated partly on its own
+        # rejects is the wrong shape of measurement whatever the size of the error.
+        if metrics.get("candidate_repair_requirement"):
+            candidates += 1
+            continue
+        points.append((float(seconds), float(delta)))
     connection.close()
     if len(points) < 50:
         print("chưa đủ điểm perceptual để nói gì")
@@ -58,7 +69,8 @@ def main(project_root: str, review_delta: float) -> int:
     for seconds, delta in points:
         grouped.setdefault(_bucket(seconds), []).append(delta)
 
-    print(f"{len(points)} phép chấm perceptual, ngưỡng review_delta = {review_delta}")
+    print(f"{len(points)} phép chấm perceptual trên bản thu chính "
+          f"({candidates} phép chấm candidate sửa đã loại), ngưỡng review_delta = {review_delta}")
     print()
     print(f"{'độ dài':>7}  {'n':>5}  {'delta trung vị':>14}  {'độ lệch chuẩn':>13}  {'gắn cờ':>7}")
     for name, _low, _high in BUCKETS:
