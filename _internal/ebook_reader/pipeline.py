@@ -3669,6 +3669,11 @@ class BookPipeline:
             return self._tts_pool
         if self._tts_pool_failed:
             return None
+        # Bound before the try: the handler reports it, and an import or a resource probe
+        # that raises would otherwise make the except block itself raise UnboundLocalError -
+        # turning "the pool could not be built" into a failed book, which is the one thing
+        # this method's docstring promises cannot happen.
+        workers = 0
         try:
             from .tts_pool import SynthesisPool, workers_for_vram
 
@@ -3680,11 +3685,17 @@ class BookPipeline:
                 ceiling, snapshot.gpu_free_mb, snapshot.gpu_total_mb
             )
             if workers < 2:
+                # Not latched, unlike the exception path below. Free VRAM is a reading of
+                # this instant, and the instant this is taken is a chapter boundary, where
+                # the previous chapter's models may not have finished releasing. alpha.44
+                # sampled 4,467 MiB once, right after chapter 2 - enough for one worker,
+                # not two - and synthesized chapters 3 to 10 serially because of it, about
+                # 2,037 seconds. The next chapter deserves to be asked again; a transient
+                # shortage is not a broken pool.
                 self.log(
                     f"VRAM còn {snapshot.gpu_free_mb} MiB, không đủ cho pool TTS "
-                    f"({ceiling} worker mong muốn); tổng hợp tuần tự."
+                    f"({ceiling} worker mong muốn); tổng hợp tuần tự chương này."
                 )
-                self._tts_pool_failed = True
                 return None
             if workers < ceiling:
                 self.log(
