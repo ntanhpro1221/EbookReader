@@ -22,9 +22,24 @@ from ebook_reader.asr import (
 from ebook_reader.config import build_settings
 
 
+
+def _openai_settings():
+    """Settings that name the engine these tests exercise instead of inheriting it.
+
+    Every verifier below is handed a fake model shaped like openai-whisper's return value,
+    a dict with a "text" key. asr.engine now defaults to "faster", whose adapter unpacks
+    (segments, info) from the call - so an openai-shaped fake fails there with "not enough
+    values to unpack", an error about the harness rather than about anything under test.
+
+    Stating the engine keeps each test measuring what it says it measures. Coverage of the
+    CTranslate2 adapter lives in the tests that build a fake of that shape on purpose.
+    """
+    return build_settings(overrides={"asr": {"engine": "openai"}})
+
+
 def test_whisper_unload_trims_process_working_set(monkeypatch) -> None:
     trims: list[bool] = []
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     verifier.model = object()
     monkeypatch.setattr(asr_module, "trim_process_working_set", lambda: trims.append(True))
 
@@ -36,7 +51,7 @@ def test_whisper_unload_trims_process_working_set(monkeypatch) -> None:
 
 def test_whisper_unload_without_model_does_not_trim_working_set(monkeypatch) -> None:
     trims: list[bool] = []
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     monkeypatch.setattr(asr_module, "trim_process_working_set", lambda: trims.append(True))
 
     verifier.unload()
@@ -70,6 +85,10 @@ def test_asr_fail_policy_rejects_missing_model_cache(monkeypatch, tmp_path: Path
             "asr": {
                 "download_root": str(tmp_path),
                 "failure_policy": "fail",
+                # The guard under test belongs to the openai loader, which checks
+                # download_root for its .pt. The faster loader has its own guard, checked
+                # in test_faster_engine_refuses_to_download_mid_run.
+                "engine": "openai",
             }
         }
     )
@@ -84,7 +103,7 @@ def test_asr_fail_policy_rejects_missing_model_cache(monkeypatch, tmp_path: Path
 
 
 def test_non_lexical_text_skips_whisper_and_one_word_can_be_repaired(monkeypatch) -> None:
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     monkeypatch.setattr(
         verifier,
         "load",
@@ -154,7 +173,7 @@ def test_whisper_padding_hallucination_does_not_fail_vocal_audio(tmp_path: Path)
                 "segments": [{"start": 0.0, "end": 29.98}],
             }
 
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     verifier.model = FakeModel()
     verifier.device = "cpu"
 
@@ -186,7 +205,7 @@ def test_repeated_short_context_can_confirm_a_short_utterance(tmp_path: Path) ->
                 "segments": [{"start": 0.0, "end": 3.8}],
             }
 
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     verifier.model = FakeModel()
     verifier.device = "cpu"
 
@@ -235,7 +254,7 @@ def test_vocalization_verification_does_not_blame_tts_for_whisper_hallucination(
 ) -> None:
     wav = tmp_path / "vocal.wav"
     sf.write(wav, np.zeros(round(48_000 * duration), dtype=np.float32), 48_000)
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     verifier.model = object()
     monkeypatch.setattr(verifier, "load", lambda: True)
     monkeypatch.setattr(verifier, "transcribe", lambda _path: transcript)
@@ -271,7 +290,7 @@ def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
             received["kwargs"] = kwargs
             return {"text": "xin chào"}
 
-    verifier = WhisperVerifier(build_settings(), lambda _message: None)
+    verifier = WhisperVerifier(_openai_settings(), lambda _message: None)
     verifier.model = FakeModel()
     verifier.device = "cpu"
 
@@ -285,3 +304,30 @@ def test_whisper_receives_in_process_resampled_audio(tmp_path: Path) -> None:
 
     assert verifier.transcribe(wav, confirmation=True) == "xin chào"
     assert "beam_size" not in received["kwargs"]
+
+
+def test_faster_engine_refuses_to_download_mid_run(monkeypatch, tmp_path: Path) -> None:
+    """The CTranslate2 loader must not pull 1.5 GB while a book is being produced.
+
+    The openai path has always checked download_root before loading, because a job that
+    downloads mid-run is a job that can stall or fail on a network it never asked about.
+    The faster path had no such guard: alpha.43 fetched the CTranslate2 weights into the
+    Hugging Face cache during the run and nothing recorded it. It now loads with
+    local_files_only and turns a missing model into an instruction.
+    """
+    settings = build_settings(overrides={"asr": {"engine": "faster", "failure_policy": "fail"}})
+
+    class _Absent:
+        def __init__(self, *args, **kwargs):
+            assert kwargs.get("local_files_only") is True, "must never reach the network"
+            raise OSError("model not found in local cache")
+
+    fake_torch = SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False))
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(
+        sys.modules, "faster_whisper", SimpleNamespace(WhisperModel=_Absent)
+    )
+    verifier = WhisperVerifier(settings, lambda _message: None)
+
+    with pytest.raises(RuntimeError, match="Thiếu faster-whisper"):
+        verifier.load()

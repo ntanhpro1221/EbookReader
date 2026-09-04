@@ -238,6 +238,15 @@ Invoke-NativeChecked {
     & $Python -c "import whisper; m=whisper.load_model('turbo', device='cpu', download_root=r'$WhisperRoot'); del m; print('Whisper Turbo ready')"
 } "Tải Whisper Turbo"
 
+# asr.engine defaults to "faster", which is a different artifact: CTranslate2 weights from
+# the Hugging Face cache rather than openai-whisper's .pt in $WhisperRoot. The loader runs
+# with local_files_only so a job can never fetch them mid-run, which means setup has to.
+# Both are installed because asr.engine can select either.
+Write-Host "Tải faster-whisper Turbo (CTranslate2)..."
+Invoke-NativeChecked {
+    & $Python -c "from faster_whisper import WhisperModel; m=WhisperModel('turbo', device='cpu', compute_type='int8'); del m; print('faster-whisper Turbo ready')"
+} "Tải faster-whisper Turbo"
+
 Install-PerceptualQaAssets
 
 Write-Host "Chạy system check..."

@@ -18,6 +18,16 @@ dependencies = [
   "pyworld==0.3.5",
   "imageio-ffmpeg==0.6.0",
   "openai-whisper==20250625",
+  # The ASR engine asr.engine selects. faster-whisper runs the same large-v3-turbo weights
+  # through CTranslate2; alpha.43 measured it at about 2.25x on the ASR phase with 98.4%
+  # identical transcripts on identical audio, and it halves the repair loop by triggering
+  # fewer false mismatches. Both were installed into the runtime and used by a full book
+  # before being declared here, which meant the environment that ran alpha.43 could not be
+  # rebuilt from this file. Declared now, with openai-whisper kept because asr.engine can
+  # still select it and because docs/DEPENDENCIES.md treats an engine swap as a version
+  # event worth being able to reverse.
+  "faster-whisper==1.2.1",
+  "ctranslate2==4.8.2",
   "torch==2.11.0",
   "torchaudio==2.11.0",
   "torchvision==0.26.0",

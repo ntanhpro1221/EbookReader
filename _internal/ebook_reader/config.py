@@ -91,12 +91,27 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "asr": {
         "enabled": True,
         "required": True,
-        # "openai" is what every run through alpha.32 used. "faster" runs the same
-        # large-v3-turbo weights through CTranslate2: measured 2.07x over 200 takes with
-        # zero verdict disagreements, and verified against the real runtime to produce
-        # word-identical transcripts. Left at openai because changing it is a version
-        # event - see docs/DEPENDENCIES.md - so a project opts in deliberately.
-        "engine": "openai",
+        # "faster" runs the same large-v3-turbo weights through CTranslate2. It was left at
+        # "openai" until a whole book had been produced on it, because swapping the engine
+        # is a version event (docs/DEPENDENCIES.md). alpha.43 was that book, and the
+        # evidence is in docs/VERSIONS.md:
+        #
+        #   - about 2.25x on the ASR phase, after dividing out an engine-independent
+        #     control for the machine simply being quieter
+        #   - on byte-identical audio the two engines agree on 98.4% of transcripts
+        #     (13 of 837 differ); the raw whole-book figure of 9.3% is segments that got
+        #     different takes, which is analysis drift rather than the decoder
+        #   - 9 of 10 chapters reached the identical publish/fail outcome
+        #   - the repair loop halves, 8,016s to 3,683s, because fewer false mismatches
+        #     trigger fewer rounds - a larger saving than the direct speedup
+        #
+        # The one chapter that differs, chapter 6, published under openai only because
+        # Whisper hallucinated on a screamed line and a meaningless transcript is exempt
+        # while a nearly-right one blocks. That is not a chapter the old engine earned.
+        #
+        # "openai" remains selectable, and openai-whisper stays declared, so this is
+        # reversible with one setting.
+        "engine": "faster",
         "model": "turbo",
         "device": "cuda",
         "cpu_fallback": True,
