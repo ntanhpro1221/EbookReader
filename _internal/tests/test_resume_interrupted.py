@@ -11,6 +11,7 @@ nothing else - restarting a run somebody asked to stop would be worse than the g
 """
 from __future__ import annotations
 
+import io
 import json
 import sys
 from pathlib import Path
@@ -144,5 +145,59 @@ def test_a_log_that_cannot_be_written_still_resumes_the_book(tmp_path: Path, mon
     monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
     (tmp_path / resume_interrupted.LOG_NAME).mkdir()  # open() on a directory raises OSError
 
+    assert resume_interrupted.main([str(tmp_path)]) == 0
+    assert started == [project]
+
+
+class _Cp1252Stdout:
+    """Windows hands scripts a console that cannot encode Vietnamese, Task Scheduler included."""
+
+    def __init__(self) -> None:
+        self.buffer = io.BytesIO()
+
+    def write(self, text: str) -> int:
+        raise UnicodeEncodeError("charmap", text, 0, 1, "character maps to <undefined>")
+
+    def flush(self) -> None:
+        pass
+
+
+def test_a_console_that_cannot_print_vietnamese_still_resumes_the_book(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The real failure: every message is Vietnamese, so printing killed the whole run."""
+    project = _project(tmp_path, "alpha.9", {"state": "running", "supervisor_pid": 999_999})
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+    monkeypatch.setattr(sys, "stdout", _Cp1252Stdout())
+
+    assert resume_interrupted.main([str(tmp_path)]) == 0
+    assert started == [project], "a console encoding must not cost a night of audio"
+    assert "TIẾP TỤC" in (tmp_path / resume_interrupted.LOG_NAME).read_text(encoding="utf-8")
+
+
+def test_an_empty_root_survives_that_console_too(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(sys, "stdout", _Cp1252Stdout())
+    assert resume_interrupted.main([str(tmp_path)]) == 0
+
+
+def test_stdout_closed_entirely_is_survivable(tmp_path: Path, monkeypatch) -> None:
+    """Under pythonw there is no console at all; the fallback write must not raise either."""
+    project = _project(tmp_path, "alpha.9", {"state": "running", "supervisor_pid": 999_999})
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+
+    class _Closed:
+        def write(self, text: str) -> int:
+            raise ValueError("I/O operation on closed file")
+
+        def flush(self) -> None:
+            pass
+
+        @property
+        def buffer(self):
+            raise ValueError("I/O operation on closed file")
+
+    monkeypatch.setattr(sys, "stdout", _Closed())
     assert resume_interrupted.main([str(tmp_path)]) == 0
     assert started == [project]
