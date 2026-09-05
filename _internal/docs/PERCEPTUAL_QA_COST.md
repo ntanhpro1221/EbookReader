@@ -219,3 +219,56 @@ thấy. Nhưng nó tốn 5 lần báo nhầm cho mỗi lần bắt đúng, và �
 
 Cả hai ca đều là lỗi thật, và cùng một nguyên nhân: ký tự `»` lọt tới giọng đọc nên không
 có chỗ ngắt nghỉ. Cổng nhịp phát hiện đúng triệu chứng của một lỗi nằm ở tầng văn bản.
+
+## Câu hỏi mở của mục 5 đã trả lời được — bằng dữ liệu có sẵn, không cần GPU (06/09/2026)
+
+`docs/OPTIMISATION_QUEUE.md` mục 5 đề xuất đổi ngưỡng perceptual từ số tuyệt đối
+(`review_delta = -0.8`) sang **cùng một số sigma** cho từng nhóm độ dài, và để lại một câu
+hỏi quyết định mục ấy đúng hay sai:
+
+> phần tán thêm ở đoạn ngắn là **nhiễu thước đo** hay **chất lượng thật sự dao động hơn**?
+> Cách đo: tự tổng hợp vài câu ngắn nhiều lần với seed khác nhau rồi chấm perceptual.
+> Chưa chạy được vì cần GPU.
+
+**Không cần tổng hợp gì cả.** Vòng sửa chữa đã làm đúng thí nghiệm ấy hàng trăm lần và lưu
+kết quả: `segment_candidates` giữ `generation_seed`, `wav_duration` và `perceptual_result_json`
+cho từng bản thu. Cùng một câu, cùng giọng, chỉ khác seed.
+
+Gộp bốn lần chạy alpha.32/43/44/46, lấy những segment có **từ hai seed khác nhau trở lên**,
+rồi **khử trùng lặp theo văn bản** (cùng một câu xuất hiện ở nhiều lần chạy chỉ tính một):
+
+| độ dài | số câu | biên độ `baseline_delta` trung vị | lớn nhất |
+|---|---|---|---|
+| **< 4s** | 8 | **0,178** | **0,703** |
+| **≥ 4s** | 3 | **0,047** | 0,304 |
+
+Đoạn ngắn dao động **gấp ~3,8 lần** đoạn dài, trên đúng cùng một câu chữ.
+
+### Vì sao con số 0,703 mới là điều đáng sợ
+
+Câu `"Thương hại? Ta sao?"` dài 1,60s có `baseline_delta` **dịch 0,703 chỉ vì đổi seed**.
+Ngưỡng gắn cờ là **−0,8**. Nghĩa là **88% toàn bộ ngưỡng có thể bị vượt bởi việc tung lại
+xúc xắc**, trên một bản thu mà văn bản, giọng và mọi tham số đều y hệt.
+
+Với một cổng dùng số tuyệt đối cho mọi độ dài, đó không phải là đo chất lượng nữa.
+
+### Điều này KHÔNG phân biệt được, và đừng nói là có
+
+Seed khác nhau tạo ra audio **thật sự khác nhau**, nên phép đo này không tách được:
+
+- thước đo UTMOSv2 nhiễu hơn trên đoạn ngắn, hay
+- bản thu ngắn thật sự dao động chất lượng nhiều hơn.
+
+Cả hai đều dẫn tới cùng một kết luận cho mục 5 — ngưỡng tuyệt đối là sai với đoạn ngắn — nên
+câu hỏi ấy không chặn quyết định. Nhưng đừng trích tài liệu này như bằng chứng "thước đo bị
+nhiễu"; nó chỉ chứng minh **biến động giữa các lần thu của cùng một câu**.
+
+### Giới hạn cỡ mẫu, nói thẳng
+
+**8 câu ngắn và 3 câu dài.** Đó là tất cả những gì bốn lần chạy để lại có từ hai seed trở
+lên, vì chỉ segment bị vòng sửa chữa đụng tới mới được thu lại — nên mẫu còn **thiên về
+những câu vốn đã có vấn đề**. Hiệu ứng 3,8 lần đủ lớn để không phải ngẫu nhiên, nhưng con số
+chính xác thì đừng tin quá ba chữ số.
+
+Muốn chắc hơn thì vẫn là thí nghiệm cũ: tổng hợp một câu ngắn ~20 lần với 20 seed rồi chấm.
+Chỉ khác là bây giờ ta đã biết nó sẽ cho ra cái gì.

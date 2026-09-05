@@ -247,10 +247,21 @@ của alpha.32, ngưỡng mới gỡ được 3 (gồm cả hai đoạn ngắn 2
 còn ít nhất một chỗ chặn khác. Giá trị của mục này là **thời gian nghe của chủ sách**, không
 phải số chương xuất bản. Đừng bán nó như cái thứ hai.
 
-Còn một câu chưa trả lời được, và nó quyết định mục này có đúng không: phần tán thêm là
-nhiễu thước đo hay chất lượng thật sự dao động hơn. **Cách đo:** tự tổng hợp vài câu ngắn
-nhiều lần với seed khác nhau rồi chấm perceptual; nếu điểm nhảy loạn trên những bản thu tai
-người nghe thấy như nhau thì là nhiễu. Chưa chạy được vì cần GPU. Chi tiết:
+**Câu hỏi mở đã trả lời (06/09/2026) — và không cần GPU.** Câu hỏi là: phần tán thêm ở
+đoạn ngắn là nhiễu thước đo hay chất lượng thật sự dao động hơn. Không cần tổng hợp lại gì
+cả: vòng sửa chữa đã thu lại cùng một câu với seed khác nhau hàng trăm lần và
+`segment_candidates` lưu đủ `generation_seed` + `wav_duration` + `perceptual_result_json`.
+
+Gộp alpha.32/43/44/46, khử trùng lặp theo văn bản, chỉ lấy câu có từ hai seed khác nhau:
+**đoạn <4s dao động 0,178 (trung vị), đoạn ≥4s dao động 0,047 — gấp 3,8 lần.** Cá biệt câu
+`"Thương hại? Ta sao?"` (1,60s) dịch **0,703** chỉ vì đổi seed, tức **88% của cả ngưỡng
+−0,8**, trên đúng cùng một câu chữ.
+
+Phép đo này **không** tách được "thước đo nhiễu" khỏi "bản thu ngắn thật sự dao động hơn" —
+seed khác thì audio thật sự khác. Nhưng cả hai đều dẫn tới cùng kết luận: **ngưỡng tuyệt đối
+là sai với đoạn ngắn**, nên câu hỏi ấy không còn chặn mục này.
+
+Cỡ mẫu nhỏ (8 câu ngắn, 3 câu dài) và thiên về câu vốn có vấn đề. Chi tiết và giới hạn:
 `docs/PERCEPTUAL_QA_COST.md`, `scripts/perceptual_duration_bias.py`.
 
 ## 6. `faster-whisper` chưa được khai báo là dependency — lỗ tái lập, **không phải** lỗi chạy
