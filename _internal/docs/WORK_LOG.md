@@ -585,3 +585,37 @@ sự mang**, và chỉ khi checksum khớp bản thu đang có — nên một l�
 **Năm cánh cổng, cùng một hình dạng:** `pronounce` (cách đọc), `cast` (giới tính),
 `accept` (bản thu nghe được), `retry` (bản thu đáng thu lại), và giờ `accept` cho cả bản thu
 mà máy đã bó tay.
+
+## Trang review nói *vì sao* cần nghe, không chỉ nói mã cảnh báo (2026-09-04)
+
+Chủ sách hỏi thẳng: *"trong các file mà tôi cần review thì bạn phải note xem là tại sao đoạn
+đó lại cần phải review chứ?"* Đúng. Một mã như `PERCEPTUAL_NATURALNESS_REVIEW` không nói
+nghe cái gì, và tệ hơn, nó không nói máy **đã kiểm gì và thấy ổn** - nên người nghe phải xét
+lại cả đoạn thay vì đúng một chỗ đang bị nghi.
+
+`scripts/review_evidence.py` gom bằng chứng thật của từng đoạn bị chặn: mọi phép kiểm đã
+chạy, phán quyết và con số của nó, mức khớp tốt nhất qua các lần giải mã, và với neo tên thì
+cả **các âm tiết mà tên lẽ ra phải được đọc thành**. Chi tiết cuối quan trọng: với
+`c00005_s0000013`, máy biết tên phải nghe ra "xa men cai dờ thê ô xờ ban" - đó chính là thứ
+cần nghe, mà mã cảnh báo chưa bao giờ nói ra.
+
+Mỗi thẻ giờ có bốn dòng: **máy thấy gì** (kèm số), **đã kiểm ổn** (để khỏi nghe lại),
+**nghe cái gì** (cụ thể), **tin máy tới đâu**. Dòng cuối chính là chỗ phép đo thiên vị độ dài
+trả công: cờ perceptual trên đoạn 1,5s đến từ một phép kiểm gắn cờ 9,9% đoạn ngắn so với 1,7%
+đoạn dài - người nghe xứng đáng biết bằng chứng ấy yếu trước khi bỏ công.
+
+### Tầng kiểm chứng là thứ đáng tiền nhất
+
+Ghi chú do một workflow sinh: 14 agent viết, 14 agent **phản biện** từng ghi chú đối chiếu
+với file bằng chứng. **11/14 bị sửa.** Những lỗi nó bắt được đều thuộc loại sẽ khiến người
+nghe nghe nhầm chỗ:
+
+- **bịa mốc thời gian** - "chỉ nghe 1 giây cuối" trong khi file không có mốc thời gian nào
+- **đếm sai** - "4 lần giải mã" trong khi file ghi 5
+- **bảo kiểm thứ máy đã xác nhận đạt** - dò xem có nuốt chữ không, khi ASR đạt 1.0 cả 5 lượt
+- **lấy chính tả ASR làm bằng chứng phát âm** - Whisper viết sai dấu tiếng Việt là chuyện
+  thường, không chứng minh giọng đọc sai (cùng nguyên tắc với neo tên)
+- **trích số đẹp nhất như thể là mức chung** - 0,98 chỉ có ở 2/12 lần, 10 lần còn lại 0,87-0,91
+
+Một ghi chú sai bằng chứng còn tệ hơn không có ghi chú, vì nó điều hướng sự chú ý sai chỗ.
+Đó là lý do tầng phản biện tồn tại, và tỉ lệ 11/14 nói nó không thừa.
