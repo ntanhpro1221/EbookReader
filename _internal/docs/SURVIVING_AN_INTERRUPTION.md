@@ -192,13 +192,64 @@ là lỗi**. Vô hiệu hoá nhánh mới thì sách bị đánh dấu failed tr
 
 ---
 
+## 3. Ollama chết theo kiểu tệ hơn cả hai kiểu trên
+
+Đây là thứ **chỉ một lần ngủ thật mới lộ ra**, và nó phủ nhận giả định ngầm của cả
+phần 1 lẫn phần 2: rằng tiến trình của ta là tiến trình duy nhất giữ ngữ cảnh CUDA.
+Không phải. Ollama là một dịch vụ riêng, cũng giữ ngữ cảnh CUDA, cũng mất nó khi máy
+ngủ — nhưng nó **treo mà vẫn trông khoẻ**.
+
+Đo lúc 18:45 ngày 05/09/2026, khoảng 90 giây sau khi máy thức:
+
+| kiểm tra | kết quả |
+|---|---|
+| `GET /api/tags` | **HTTP 200 trong 17ms** |
+| `GET /api/ps` | qwen3:8b, `size_vram` 6,03 GB, "đang nạp" |
+| `nvidia-smi` | giữ 6762 MiB, **utilization 0%** |
+| `POST /api/generate` | **không trả về gì sau 20 giây** |
+
+Mọi phép kiểm tra rẻ tiền đều nói "sống". Câu hỏi trung thực duy nhất — *có nhả ra
+được một token không* — nói "chết", và không có gì đang hỏi câu đó.
+
+Pipeline thì xử lý đúng: coi kết nối rớt là lỗi truyền tải và thử lại, đúng như comment
+trong `analysis.py` hứa. Nhưng nó **thử lại vào một cái xác**, với ngân sách hữu hạn —
+2 lượt cho phản biện đạo diễn, 3 cho batch. Không can thiệp thì sách hỏng sau vài phút.
+
+### `scripts/ollama_watchdog.py`
+
+Khởi động lại `ollama serve`. Chỉ thế mới chữa được: ngữ cảnh mất là mất suốt đời tiến
+trình, không có cách cứu tại chỗ nào để thử trước.
+
+Dè dặt có chủ ý, vì **lỗi ngược lại cũng thật**: khởi động lại một Ollama khoẻ sẽ đuổi
+một model 6 GB ra khỏi VRAM, và một probe xếp hàng sau request thật thì **trông y hệt**
+một cái treo. Nên phải có hai tín hiệu độc lập:
+
+1. Có project **đang chạy thật**, và log của nó **im quá `STALL_SECONDS` (10 phút)**.
+   Batch phân tích rơi xuống mỗi 5–20 giây, tổng hợp còn ồn hơn, nên 10 phút im nằm
+   ngoài mọi hành vi bình thường.
+2. Probe sinh chữ, cho **`PROBE_TIMEOUT_SECONDS` (2 phút)** — đủ lâu để một request
+   thật chạy xong trước nó. Dưới một phút là gọi một dịch vụ đang bận là đã chết.
+
+Và **không giữ model nào thì không khởi động lại**: kiểu treo này là một model *đã nạp*
+mà không sinh được chữ. Chưa nạp gì thì chẳng có gì kẹt quanh một ngữ cảnh chết.
+
+Phần lớn test khoá lại **những lần nó từ chối hành động**, không phải lần nó khởi động
+lại. Bỏ bất kỳ luật kiềm chế nào cũng làm test đỏ.
+
+Chạy chung Scheduled Task với phần 1, là action thứ hai — cùng ba trigger, và nó chỉ
+ghi log khi thật sự làm gì (`_ollama_watchdog.log` không tồn tại nghĩa là chưa phải
+can thiệp lần nào).
+
 ## Còn thiếu gì
 
 Nói thẳng, vì chỗ này dễ tưởng là đã xong hơn thực tế:
 
-- **Chưa có lần ngủ thật nào kiểm chứng phần 2.** Toàn bộ được test bằng lỗi dựng
-  sẵn qua `run_worker` thật, chứ chưa ai suspend máy giữa một run rồi xem nó tự
-  đứng dậy. Lúc viết, alpha.45 đang chạy nên không thử được.
+- **Đã có một lần ngủ thật (05/09/2026, ngủ 17:02 → thức 18:43).** Kết quả: trigger sự
+  kiện thức dậy bắn đúng 1 phút sau (18:44:22), watchdog thấy project `running` nên
+  đúng đắn không đụng vào, và worker sống sót qua giấc ngủ — nó kẹt ở một request HTTP
+  xuyên 1h40 rồi rớt khi thức, và đường xử lý lỗi truyền tải có sẵn nhận đúng.
+  **Đường mất-ngữ-cảnh-CUDA của phần 2 vẫn chưa chạy**, vì tiến trình của ta không phải
+  cái mất ngữ cảnh — Ollama mới là (phần 3).
 - **Danh sách marker lấy từ các lỗi hậu-suspend đã biết**, không phải từ một lỗi
   quan sát được trên chính máy này. Lần mất ngữ cảnh thật đầu tiên nên được đối
   chiếu với `GPU_CONTEXT_LOST_MARKERS`; nếu nó rơi vào nhánh failed thì thêm chuỗi
