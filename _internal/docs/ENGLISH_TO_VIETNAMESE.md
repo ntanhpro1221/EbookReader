@@ -845,3 +845,24 @@ mà máy không xác minh được - một loại quyết định khác hẳn. R
 Đường đi đúng cho lớp này không phải nới lỏng mà là **nghe tốt hơn**: so faster-whisper với
 openai-whisper trên đúng các bản thu này (`scripts/compare_asr_engines.py`). Nếu nó phiên âm
 những câu này chuẩn hơn thì cả lớp tự khỏi mà không phải hạ một cái chốt nào.
+
+## Âm cuối "-er": giữ "ờ", không đổi sang "ơ" (chủ sách quyết, 05/09/2026)
+
+Chủ sách từng viết "phải là u-ni-vơ chứ?" khi thấy `Universe` đọc thành `U-ni-vờt`. Phần
+"vờt" là lỗi thật và đã sửa (coda `-rs` sau `ER` bị bỏ), còn phần thanh điệu thì **không**.
+
+Đo trước khi hỏi, và con số làm thay đổi câu hỏi:
+
+- `universe` và `use`/`user` đứng riêng **không xuất hiện lần nào** trong 948 segment. Đó là
+  ví dụ để dạy luật, không phải từ trong sách — sửa cũng không đổi được gì cho bản thu này.
+- Luật ấy đổi **7 tên** đang kết thúc bằng schwa: `A-thờ` (Arthur), `cai-dờ` (Kaizer),
+  `Le-xờ`, `Mai-nờ`, `Hăn-tờ`, `Tây-mờ`, `O-vờ` — trong đó Arthur và Kaizer là tên nhân vật
+  chính mà chủ sách **đã nghe qua nhiều phiên bản và chưa từng phàn nàn**.
+- 25 tên khác cũng chứa "ờ" nhưng là để **tách cụm phụ âm đầu** (`Bờ-lết`, `Cờ-ri-pơ-linh`)
+  — luật khác hẳn, không dính dáng.
+
+Đưa đúng bảy tên ấy ra hỏi, chủ sách chọn **giữ nguyên "ờ"**. Vậy nên đừng "sửa" nó nữa.
+
+> Vẫn còn một điểm bất nhất chưa được xử: `Supporter` đọc là `Xơ-po-tờ` — dùng "ơ" cho chỗ
+> tách cụm nhưng "ờ" cho âm cuối, trong cùng một từ. Nếu có ai nghe thấy gợn, đó là chỗ để
+> nhìn lại; nhưng phải hỏi trước, không tự đổi.

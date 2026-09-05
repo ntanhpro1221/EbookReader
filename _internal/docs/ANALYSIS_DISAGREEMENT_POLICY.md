@@ -6,8 +6,11 @@ Hỏi trực tiếp, chủ nhân chọn: **lấy cách đọc của model, gắn
 quyết** — thay vì để cả quyển sách chết. Cùng hình dạng với lựa chọn trước đó về dải nhịp
 ("lùi về `normal` nhưng ghi cảnh báo").
 
-Tài liệu này ghi lại **vì sao chưa làm được ngay**, và làm đúng thì phải làm thế nào. Đừng
-lặp lại cuộc điều tra này từ đầu.
+Đã cài đặt xong trên `dev/alpha13` (`f7dcb43`), **chưa merge** vì `analysis.py` nằm trong
+`QUALITY_IMPLEMENTATION_FILES` và alpha.46 đang chạy.
+
+Tài liệu này ghi lại cách làm, và quan trọng hơn là **hai cách làm sai mà tôi đã thử
+trước** — cả hai đều trông hợp lý. Đừng lặp lại chúng.
 
 ## Bậc thang hiện có
 
@@ -45,9 +48,9 @@ lặp lại đúng một `speaker` bị tranh cãi. Mười chương phân tích
 > Cùng ngày, alpha.46 gặp ba lần bất đồng tương tự (batch 74, 80, 107) và **sống cả ba**,
 > vì các batch ấy chia được. Nên đây là lỗi hiếm — nhưng khi trúng thì mất nhiều giờ.
 
-## Vì sao không vá nhanh được
+## Cách sai thứ nhất: chỉ gỡ chốt cho dữ liệu đi qua
 
-Đã thử, và test tích hợp chặn lại — ghi ở đây để không ai thử lại cùng cách:
+Test tích hợp chặn lại. Ghi ở đây để không ai thử lại cùng cách:
 
 Nhánh chấp nhận ở bậc 4 **chỉ chạy được với bất đồng đến từ host affect**, tức đúng
 `emotion`/`intensity`, *sau khi* phản biện đạo diễn đã **chấp nhận**. Lúc ấy vẫn còn một
@@ -75,33 +78,70 @@ Còn một cạm bẫy nữa: nếu chỉ "không raise" mà không trả lại 
 `_heuristic`, mà `_heuristic` trả `speaker = "UNKNOWN"` cho mọi dòng hội thoại. Như thế là
 **tệ hơn** cách đọc đang tranh cãi, chỉ khác là im lặng hơn.
 
-## Làm đúng thì làm thế nào
+## Cách sai thứ hai: thêm một trạng thái ledger mới
 
-Cần một **trạng thái ledger tường minh**, không phải một đường vòng:
+Bản ghi đầu của tài liệu này kết luận phải thêm `ACCEPTED_UNDER_PROTEST` kèm migration
+bảng, vì `analysis_candidates.state` có `CHECK (state IN (...))`. Nghe có vẻ đúng đắn —
+nhưng nó **đắt mà không cần thiết**, và một migration schema chỉ để lách một chốt là dấu
+hiệu chốt ấy đang bị hiểu sai.
 
-1. Thêm `ANALYSIS_CANDIDATE_ACCEPTED_UNDER_PROTEST` vào `database.py`, cạnh
-   `ANALYSIS_CANDIDATE_CRITIC_REJECTED`. Trạng thái này nói đúng sự thật: đã publish, và
-   critic **không** đồng ý.
-2. Sinh evidence từ chính phán quyết của critic (`critic_evidence` vốn đã có sẵn ở nhánh từ
-   chối), đánh dấu rõ là bằng chứng *phản đối*, không phải chấp thuận.
-3. Nới chốt `director_critic_required` để chấp nhận trạng thái mới, chứ không phải để lọt
-   `None`.
-4. Vòng commit lấy dữ liệu từ envelope model bị từ chối
-   (`candidate_json` → `_analysis_envelope_validated`), **không** từ `_heuristic`.
-5. Phát `ANALYSIS_AUDIBLE_DISAGREEMENT_ACCEPTED` kèm `disputed_segments` (dùng
-   `AnalysisFeedbackIssue.stable_id`, **không** phải `.id` — trường ấy không tồn tại) và
-   `fields`, để trang review chỉ đúng segment cho người nghe.
-6. Chỉ dùng ở bậc cuối: đã hết lượt thử **và** `split_result is None`.
+## Cách đã làm
 
-Cả `analysis.py` lẫn `database.py` đều nằm trong `QUALITY_IMPLEMENTATION_FILES`, nên việc
-này **phải đợi giữa hai lần chạy**.
+Không đụng schema, không thêm trạng thái.
 
-## Test đã viết sẵn (và đã bắt được lỗi)
+Mấu chốt: **không cần nói dối chỗ nào cả.**
 
-Ba test tích hợp dựng đúng tình huống — batch một segment hội thoại, critic luôn tranh cãi
-`speaker` — và khẳng định: sách không chết, cảnh báo nêu đúng segment và trường, và
-**speaker được publish là câu trả lời của model chứ không phải `UNKNOWN`**. Test thứ hai
-mới là test quan trọng: sống sót thôi chưa đủ.
+- **Hàng ledger giữ nguyên `critic_rejected`.** Vì đó là sự thật. Critic đã bác.
+- **Candidate cố ý *không* được gắn vào commit** (`analysis_candidate_id=None`).
+  `database.py` có chốt cứng: commit kèm candidate id thì candidate **bắt buộc** phải
+  `critic_accepted`. Chốt ấy đúng, nên đừng nới nó — chỉ cần đừng khai đây là một commit
+  được chấp nhận, vì nó không phải.
+- **Ba dữ kiện commit cần đều là sự thật độc lập với phán quyết của critic**: generator
+  contract (generator đã sinh ra gì), host affect clearance (host đã thông qua gì), và
+  chính phán quyết phản đối của critic. Cả ba đọc lại được từ candidate row bền vững.
+- **Sự kiện commit là `ANALYSIS_DIRECTOR_CRITIC_PROTESTED`**, mức `warning`, chứ không phải
+  `..._ACCEPTED`. Sự kiện commit mới là thứ một lần audit về sau đọc; ghi "accepted" ở đây
+  là giấu đúng cái duy nhất đáng biết về những segment này.
+- **Dữ liệu publish lấy từ envelope model bị từ chối**, không phải `_heuristic`.
 
-Chính chúng đã lôi ra chốt `thiếu evidence` mà test hàm rời không thể thấy. Khi làm lại,
-viết lại chúng trước.
+### Cạm bẫy thứ hai, suýt làm hỏng đúng ý người ra quyết định
+
+Nếu chỉ "không raise" mà không nạp lại `validated`, vòng commit rơi xuống `_heuristic` — hàm
+ấy dò cảm xúc bằng từ khoá và trả `speaker = "UNKNOWN"` cho **mọi** dòng hội thoại. Tức là
+chọn "giữ cách đọc của model" nhưng nhận về "không có người nói". Tệ hơn cách đọc đang tranh
+cãi, chỉ khác là im lặng hơn. Vòng commit còn index thẳng `validated[stable_id]`, nên nhánh
+mới **bắt buộc** phải tự nạp lại `validated`.
+
+### Ranh giới: chỉ bất đồng, không phải critic hỏng
+
+Nhánh mới **chỉ chạy khi mọi issue là `DIRECTOR_FIELD_MISMATCH`** — tức critic đã đọc phần
+delivery và nêu đích danh trường nó không đồng ý. Đó là tình huống chủ nhân phán quyết.
+
+Một critic trả về câu trả lời không dùng được (`DIRECTOR_INVALID_RESPONSE`, hash mismatch)
+thì **không phải đang bất đồng — nó đang hỏng**, và publish đè lên một cái hỏng là một quyết
+định khác mà chưa ai đưa ra. Những trường hợp ấy vẫn kết thúc batch y như cũ.
+
+> Bằng chứng ranh giới vạch đúng chỗ: ba test có sẵn quanh "invalid reason" và "exhausted
+> budget" **xanh trở lại mà không phải sửa một dòng nào** sau khi thu hẹp. Trước khi thu
+> hẹp, cả ba đều đỏ.
+
+### Một cái bẫy trong chính test
+
+Sửa `speaker` trong phán quyết của critic làm **câu trả lời của critic** trượt kiểm tra
+provenance, và hệ thống ghi nhận là `DIRECTOR_INVALID_RESPONSE speaker_provenance` — tức
+test dựng nhầm sang nhánh "critic hỏng". Dùng `pace`: cũng ảnh hưởng âm thanh, không bị
+kiểm provenance, và cho ra đúng `DIRECTOR_FIELD_MISMATCH` như lần chạy thật.
+
+### Bậc thang sau thay đổi
+
+`test_persistent_director_rejection_splits_then_publishes_the_singleton` ghi lại: một batch
+4 segment đi qua `[4, 4, 2, 2, 1, 1, 1, 1, 2, 2, 1, 1, 1, 1]`. Kỳ vọng cũ dừng ở
+`[4,4,2,2,1,1]` vì singleton đầu tiên giết cả quyển sách; giờ nó xử hết cả bốn segment.
+
+## Đo rồi bỏ: Ollama giữ VRAM sau pha phân tích
+
+Trong alpha.46, pool TTS có lúc phải tổng hợp tuần tự vì VRAM chỉ còn ~3.990 MiB, và giả
+thuyết là Ollama vẫn ôm 6 GB sau khi phân tích xong. **Không phải.** Ollama tự nhả model
+theo `keep_alive` mặc định; kiểm tra lúc đó `/api/ps` trả `{"models":[]}` và GPU còn 6.159
+MiB. Cửa sổ bị siết chỉ kéo dài 20:34 → 20:36, tức khoảng 2,3 phút ở mức lợi 1,12× của
+pool — **mất chừng 15 giây**. Không đáng thêm một lời gọi unload vào ranh giới pha.
