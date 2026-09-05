@@ -21,7 +21,15 @@ The bytes go in verbatim, never re-encoded. Half these segments are flagged for 
 judgement, so handing the listener a lossily compressed copy would be asking them to rule on
 audio the pipeline never produced.
 
-    python scripts/build_review_page.py <project_root> [output_html]
+Each card carries a note saying why *this* segment needs an ear: what the machine measured,
+what it already checked and found fine, the one thing to listen for, and how far to trust the
+machine's own verdict here. A bare warning code does none of that - it does not even say
+which half of the clip is in question, so the listener re-judges the whole thing.
+
+Notes come from a JSON file (see scripts/review_evidence.py and the review-notes workflow).
+Without one the page still builds, with the codes alone.
+
+    python scripts/build_review_page.py <project_root> [output_html] [notes_json]
 
 Read-only with respect to the project: opens the database read-only, writes only the page.
 """
@@ -29,6 +37,7 @@ from __future__ import annotations
 
 import base64
 import html
+import json
 import mimetypes
 import sqlite3
 import sys
@@ -60,7 +69,16 @@ def _blocking(row: sqlite3.Row) -> list[str]:
     return sorted(codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
 
 
-def main(project_root: str, output: str | None) -> int:
+def _load_notes(path: str | None) -> dict[str, dict]:
+    if not path or not Path(path).is_file():
+        return {}
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    entries = raw.get("notes", raw) if isinstance(raw, dict) else raw
+    return {str(n["stable_id"]): n for n in entries if n and n.get("stable_id")}
+
+
+def main(project_root: str, output: str | None, notes_path: str | None = None) -> int:
+    notes = _load_notes(notes_path)
     root = Path(project_root).resolve()
     database = root / "project.sqlite3"
     if not database.is_file():
@@ -96,6 +114,7 @@ def main(project_root: str, output: str | None) -> int:
                     "href": href,
                     "text": str(row["text"] or ""),
                     "heard": str(row["asr_text"] or ""),
+                    "note": notes.get(str(row["stable_id"])),
                     "command": (
                         f'ebook-reader-headless accept "{root}" --segment {row["stable_id"]} '
                         f'--warning {code} --note "đã nghe"'
@@ -114,14 +133,30 @@ def main(project_root: str, output: str | None) -> int:
             f'<audio controls preload="metadata" src="{item["href"]}"></audio>'
             if item["href"] else ""
         )
+        note = item["note"]
+        trust = str(note.get("trust", "")) if note else ""
+        note_block = ""
+        if note:
+            note_block = f"""
+  <div class="why">
+    <p><b>Máy thấy gì</b> {html.escape(str(note.get('trigger', '')))}</p>
+    <p class="ok"><b>Đã kiểm, ổn</b> {html.escape(str(note.get('already_ok', '')))}</p>
+    <p class="do"><b>Nghe cái gì</b> {html.escape(str(note.get('listen_for', '')))}</p>
+    <p class="tw"><b>Tin máy tới đâu</b> {html.escape(str(note.get('trust_why', '')))}</p>
+  </div>"""
+        trust_chip = (
+            f'<span class="trust t-{ {"thấp": "low", "vừa": "mid", "cao": "high"}.get(trust, "mid") }">'
+            f"tin máy: {html.escape(trust)}</span>" if trust else ""
+        )
         cards.append(f"""<article>
   <header>
     <span class="ch">ch{item['chapter']}</span>
     <code>{html.escape(item['stable_id'])}</code>
     <span class="tag {'gave' if item['gave_up'] else 'warn'}">{html.escape(item['code'])}</span>
+    {trust_chip}
     <span class="dur">{item['seconds']:.1f}s</span>
   </header>
-  {player}{missing}
+  {player}{missing}{note_block}
   <dl>
     <dt>Câu</dt><dd>{html.escape(item['text'])}</dd>
     <dt>Máy nghe</dt><dd class="heard">{html.escape(item['heard']) or '<i>(không có bản ghi)</i>'}</dd>
@@ -150,14 +185,26 @@ def main(project_root: str, output: str | None) -> int:
  dl {{ display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; margin: 0 0 .7rem; }}
  dt {{ opacity: .6; font-size: .82em; }} dd {{ margin: 0; }}
  .heard {{ font-style: italic; }}
+ .why {{ border-left: 3px solid color-mix(in oklab, currentColor 25%, transparent);
+         padding: .1rem 0 .1rem .75rem; margin: 0 0 .8rem; }}
+ .why p {{ margin: .25rem 0; }}
+ .why b {{ display: inline-block; min-width: 8.5rem; font-size: .78em; text-transform: uppercase;
+           letter-spacing: .03em; opacity: .65; font-weight: 600; }}
+ .why .do {{ font-weight: 600; }}
+ .why .ok b, .why .ok {{ opacity: .95; }}
+ .why .tw {{ opacity: .75; font-size: .93em; }}
+ .trust {{ font-size: .72em; padding: .12rem .45rem; border-radius: 999px; border: 1px solid currentColor; }}
+ .t-low {{ color: #6b7280; }} .t-mid {{ color: #8a6100; }} .t-high {{ color: #b3261e; }}
  .none {{ color: #b3261e; margin: .2rem 0 .7rem; }}
  button {{ font: inherit; padding: .35rem .7rem; border-radius: 7px; cursor: pointer;
            border: 1px solid color-mix(in oklab, currentColor 35%, transparent);
            background: transparent; color: inherit; }}
 </style>
 <h1>{len(items)} chỗ cần tai người nghe</h1>
-<p class="lede">Nghe, đọc hai dòng. Giọng đọc đúng thì chép lệnh và chạy; đọc sai thật thì
-để nguyên. Quyết định gắn với đúng bản thu này — thu lại là nó hết hiệu lực.</p>
+<p class="lede">Mỗi thẻ nói rõ máy thấy gì, đã kiểm được gì là ổn, và cần nghe đúng cái gì.
+Giọng đọc đúng thì chép lệnh và chạy; đọc sai thật thì để nguyên. Quyết định gắn với đúng bản
+thu này — thu lại là nó hết hiệu lực. <b>tin máy: thấp</b> nghĩa là chính phép đo hay báo động
+giả ở ca đó, không phải bản thu chắc chắn ổn.</p>
 {"".join(cards) if cards else "<p>Không chương nào đang chờ quyết định.</p>"}
 <script>
 document.addEventListener('click', async (event) => {{
@@ -179,7 +226,13 @@ document.addEventListener('click', async (event) => {{
 
 
 if __name__ == "__main__":
-    if not 1 <= len(sys.argv) - 1 <= 2:
+    if not 1 <= len(sys.argv) - 1 <= 3:
         print(__doc__)
         raise SystemExit(2)
-    raise SystemExit(main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None))
+    raise SystemExit(
+        main(
+            sys.argv[1],
+            sys.argv[2] if len(sys.argv) > 2 and sys.argv[2] != "-" else None,
+            sys.argv[3] if len(sys.argv) > 3 else None,
+        )
+    )
