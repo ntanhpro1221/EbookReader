@@ -145,3 +145,57 @@ def test_global_resource_settings_can_be_updated_while_manager_is_alive(tmp_path
     assert manager.settings["mode"] == "max_safe"
     assert manager.settings["max_gpu_temp_c"] == 90
     assert decision.level != ResourceLevel.PAUSE_NEW_WORK
+
+
+# --- the lighter yield must never be the stricter one ----------------------------------
+
+
+def _decide(tmp_path, **updates):
+    manager = AdaptiveResourceManager(build_settings(), tmp_path)
+    return manager.decide(snapshot(**updates))
+
+
+def test_being_active_at_the_keyboard_does_not_stop_cpu_work(tmp_path) -> None:
+    """The defect this pins, measured on alpha.46: one "user is active" stretch ran 112
+    minutes at 0.38 segments/min against 5.60 at full speed, because
+    pipeline._wait_for_resources sleeps two seconds and re-asks for as long as this flag
+    is False. The level's declared throttle is 0.70 on the GPU, not a halt."""
+    decision = _decide(tmp_path, cpu_percent=60.0, seconds_since_user_input=1.0)
+
+    assert decision.level is ResourceLevel.YIELD_LIGHT
+    assert decision.gpu_batch_scale == 0.70, "the yield this level is meant to apply"
+    assert decision.allow_cpu_heavy_work is True
+
+
+def test_the_light_yield_is_never_stricter_than_the_heavy_one(tmp_path) -> None:
+    """The property, not the value. YIELD_LIGHT is reached only when every CPU-side
+    pressure is absent - that is what makes it the lighter level - so it cannot be right
+    for it to forbid work that YIELD_HEAVY, which fires because pressure exists, allows.
+    """
+    light = _decide(tmp_path, cpu_percent=60.0, seconds_since_user_input=1.0)
+    # Foreground GPU pressure alone: real pressure, but none of it on the CPU side.
+    heavy = _decide(tmp_path, foreground_gpu_percent=90.0)
+
+    assert light.level is ResourceLevel.YIELD_LIGHT
+    assert heavy.level is ResourceLevel.YIELD_HEAVY
+    assert heavy.allow_cpu_heavy_work is True, "no CPU-side pressure in this snapshot"
+    assert light.allow_cpu_heavy_work >= heavy.allow_cpu_heavy_work
+    assert light.gpu_batch_scale >= heavy.gpu_batch_scale
+
+
+def test_real_cpu_pressure_still_stops_cpu_work(tmp_path) -> None:
+    """Yielding is still the point. A foreground actually using the CPU takes the heavy
+    branch, and that branch does block - on evidence rather than on presence."""
+    decision = _decide(tmp_path, foreground_cpu_percent=95.0)
+
+    assert decision.level is ResourceLevel.YIELD_HEAVY
+    assert decision.allow_cpu_heavy_work is False
+
+
+def test_low_memory_still_stops_cpu_work(tmp_path) -> None:
+    """3.0 GB, not 0.5: below min_free_ram_gb so memory_pressure is on, but above the
+    critical floor, which stops everything and is a different decision entirely."""
+    decision = _decide(tmp_path, free_ram_gb=3.0)
+
+    assert decision.level is ResourceLevel.YIELD_HEAVY
+    assert decision.allow_cpu_heavy_work is False

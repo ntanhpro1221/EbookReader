@@ -366,7 +366,26 @@ class AdaptiveResourceManager:
                 reason,
                 gpu_batch_scale=0.70,
                 allow_new_gpu_batch=True,
-                allow_cpu_heavy_work=False,
+                # True, and it has to be. Reaching this branch already proves every CPU-side
+                # pressure is absent: foreground_cpu_pressure, disk_io_pressure,
+                # memory_pressure and disk_space_pressure are each False, or the YIELD_HEAVY
+                # branch above would have returned instead. Blocking CPU work here made the
+                # *lighter* yield stricter than the heavier one, which gates the same flag on
+                # those pressures actually existing.
+                #
+                # Not a small inversion. pipeline._wait_for_resources sleeps two seconds and
+                # re-asks whenever a checkpoint needs CPU I/O and this is False, so the run
+                # simply stopped for as long as somebody used the machine. Measured across
+                # alpha.46's first 4.4 hours:
+                #
+                #   maximum      452 segments in  80.6 min  =  5.60 /min
+                #   yield_heavy   69 segments in  30.4 min  =  2.27 /min
+                #   yield_light   57 segments in 150.2 min  =  0.38 /min
+                #
+                # One "user is active" stretch ran 21:44 to 23:36 - 112 minutes at a
+                # fifteenth of full speed, for a level whose declared throttle is 0.70. The
+                # GPU scale above is the yield this level is meant to apply; that is enough.
+                allow_cpu_heavy_work=True,
             )
 
         stable_for = time.monotonic() - self._last_pressure_at
