@@ -429,3 +429,46 @@ sau khi thấy bản thu dồn cụm, đó là nhiều hơn mức nó hứa.
 **2 trong 3 segment không có audio đã có bản thu.** Chương 5 và chương 10 vì thế rời khỏi
 nhóm "cần bản thu mới" sang nhóm "chỉ cần tai người nghe". Chương 9 ở lại, và ở lại vì đúng
 lý do đã đo: văn bản của nó không phải văn xuôi.
+
+## Một đoạn bị đọc hai lần, và vì sao KHÔNG nên siết trần thời lượng (đo 2026-09-04)
+
+Chủ sách nghe `c00007_s0000045` và phán **"sai, bị đọc 2 lần"**. Đây là lỗi thật duy nhất
+trong 14 đoạn bị chặn của alpha.44, và cũng là lỗi duy nhất mà cổng perceptual bắt được mà
+không cổng nào khác thấy.
+
+Vì sao không cổng nào khác thấy:
+
+    văn bản : "Mẹ kiếp!"   6 ký tự nói được
+    âm thanh: 1,60s        ở nhịp thường chỉ cần ~0,4s
+    asr_text: None         quá ngắn, ASR bỏ qua (ASR_UNVERIFIABLE_SHORT_TEXT)
+    nhịp    : None         dưới rate_check_min_chars = 24, cổng nhịp bỏ qua
+    trần    : 9,30s        rộng gấp gần 6 lần thời lượng thật
+
+Ba cổng đều bỏ trống đúng chỗ này. Trần 9,3 giây cho một câu 6 ký tự là do sàn
+`MIN_VALIDATION_SECONDS` chi phối khi văn bản quá ngắn.
+
+### Cách sửa hiển nhiên - siết trần - đã đo và **bác bỏ**
+
+Tính giây-trên-mỗi-ký-tự cho cả 132 đoạn ngắn (dưới 24 ký tự) của sách:
+
+| s/ký-tự | đoạn | |
+|---|---|---|
+| 0,720 | `C` | hợp lệ - một chữ cái đọc thành tên bậc |
+| 0,640 | `B` | hợp lệ |
+| 0,560 | `A` | hợp lệ |
+| 0,520 | `SS`, `"Có!"` | hợp lệ |
+| 0,347 | `—RẦM!!` | hợp lệ - tiếng động |
+| **0,267** | **`"Mẹ kiếp!"`** | **hỏng thật** |
+
+Trung vị 0,096, p90 0,220. Đoạn hỏng đứng **thứ chín**, không phải ngoại lệ. Một cái trần đủ
+chặt để bắt nó sẽ loại luôn chữ cái đơn và tiếng động - đúng lớp mà dự án đã nhiều lần thấy
+là mong manh (`is_short_utterance`, sửa micro-utterance, miễn trừ
+`ASR_UNVERIFIABLE_SHORT_TEXT`).
+
+**Tỉ lệ thời lượng không tách được "đọc hai lần" khỏi "câu ngắn đọc chậm có chủ ý".** Nên
+không ship hằng số nào ở đây. Muốn bắt lớp này thì cần một tín hiệu khác - ví dụ so sánh
+tự tương quan trong chính waveform để phát hiện lặp - và đó là một phép đo khác, chưa làm.
+
+Trước mắt, cổng perceptual là thứ duy nhất bắt được nó, và nó bắt đúng. Đó là lập luận
+ngược lại việc nới cổng perceptual quá tay: 5 báo động giả cho 1 lần bắt đúng, nhưng lần
+bắt đúng ấy là lỗi mà **không cổng nào khác** trong hệ thống nhìn thấy.
