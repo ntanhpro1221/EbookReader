@@ -431,3 +431,40 @@ tích không chỉ là chỉ dẫn diễn xuất - nó gồm cả việc đúc v
 trong nhiễu. Muốn quy cho một thay đổi cụ thể thì phải truy tới từng segment và chỉ ra cơ
 chế - như đã làm cho `c00005_s0000013` (cứu thật, do `max_retries`) và cho chương 6 này (may,
 do đúc vai). Đếm chương không đủ.
+
+### Đo lại nền nhiễu với cặp thứ ba: 3,1% là cặp may, không phải sàn (06/09/2026)
+
+alpha.46 chạy `num_ctx = 7.168`, cùng model, cùng `batch_segments`/`batch_chars`/
+`temperature`/`max_retries`/`retry_policy_version` với alpha.32 và alpha.44 — đã đối chiếu
+từng trường trong `settings_json` của cả ba project. Nên giờ có **ba** cặp cùng cấu hình chứ
+không phải một.
+
+Đo lại đúng bốn trường `pace`/`emotion`/`intensity`/`kind` như phép đo gốc. Ba con số cũ tái
+lập chính xác, nên phương pháp là một:
+
+| cặp | khác nhau | |
+|---|---|---|
+| alpha.32 ↔ alpha.44 | **3,1%** | cùng cấu hình |
+| alpha.44 ↔ alpha.46 | **6,2%** | cùng cấu hình |
+| alpha.32 ↔ alpha.46 | **7,4%** | cùng cấu hình |
+| alpha.43 ↔ alpha.46 | 9,1% | 9.216 vs 7.168 |
+| alpha.43 ↔ alpha.44 | 10,7% | 9.216 vs 7.168 |
+| alpha.32 ↔ alpha.43 | 11,5% | 7.168 vs 9.216 |
+
+**Hai kết luận cũ phải sửa.**
+
+1. **Nền nhiễu không phải 3,1%.** Ba cặp cùng cấu hình trải từ 3,1% đến 7,4%. Con số 3,1%
+   là cặp thấp nhất, và mục ở trên gọi nó là "sàn của mọi phép so sánh". Dùng 3,1% làm ngưỡng
+   thì một khác biệt 6% giữa hai lần chạy cùng cấu hình sẽ bị đọc nhầm thành hiệu ứng thật.
+   Ngưỡng an toàn là **~7,4%**, tức cặp cao nhất đã quan sát được.
+
+2. **`num_ctx` không nhân nhiễu lên bốn lần.** Ba cặp khác ctx trải 9,1–11,5% (trung bình
+   10,4%); ba cặp cùng ctx trải 3,1–7,4% (trung bình 5,6%). Tỉ số là **~1,9 lần**, không phải
+   4. Con số "bốn lần" ra đời từ việc so 11,5% với đúng cặp cùng-cấu-hình thấp nhất.
+
+`num_ctx` **vẫn** làm lệch nhiều hơn cùng cấu hình — kết luận định tính không đổi, chỉ độ lớn
+bị thổi lên. Nhưng khoảng của hai nhóm nay **chồng lấn** (7,4% so với 9,1%), nên một cặp lẻ
+không còn phân biệt được hai nguyên nhân nữa.
+
+> Bài học chung: một hằng số rút ra từ **một** cặp quan sát là một mẫu, không phải một sàn.
+> Có ba cặp thì nó tăng gấp đôi.
