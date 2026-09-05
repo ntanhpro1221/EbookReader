@@ -750,6 +750,11 @@ LATIN_NAME_VOWEL_READINGS = {
     "ea": "i",
     "ee": "i",
     "ei": "ây",
+    # "eo" is a Vietnamese rime - theo, kéo, mèo - and the only one of the e- pairs that
+    # was missing. Without it the letters fell through separately to "êô", which is not a
+    # rime at all, so _split_illegal_rime cut it in half: Theosbane read "The-ô-bên" in
+    # three syllables. The owner asked twice for "theo-bên". One table entry, no splitting.
+    "eo": "eo",
     "eu": "iu",
     "ew": "iu",
     "ey": "ây",
@@ -4155,6 +4160,26 @@ COMPOUND_NAME_MIN_PART = 4
 COMPOUND_NAME_LINKING_LETTERS = frozenset("sz")
 
 
+def _compound_part_reading(part: str, pronunciation: str) -> str:
+    """One half of a compound name, read the way a Vietnamese reader would say it.
+
+    A half that is already a Vietnamese syllable is left alone. This is the rule
+    _local_name_fallback states for whole words - "Kim Luxara" is half a Vietnamese word,
+    and reading that half as English gives it a reading it never had - and the compound
+    path simply never applied it.
+
+    It is why this function exists at all. "Theosbane" reached "The-ô-bên" because "theo"
+    went through its CMUdict entry, /ˈθiːoʊ/, which is two syllables. But "theo" is a
+    Vietnamese word, and the owner asked twice for "theo-bên". The docstring below has
+    claimed "Theo-bên" since it was written; only the code disagreed.
+
+    "bane" is not a Vietnamese syllable, so it still reads from its phonemes as "Bên".
+    """
+    if is_vietnamese_syllable(part):
+        return part
+    return _cmu_pronunciation_to_vietnamese(part, pronunciation)
+
+
 def _compound_name_reading(surface: str) -> str | None:
     """Read an invented name built out of two English words the dictionary does know.
 
@@ -4201,8 +4226,8 @@ def _compound_name_reading(surface: str) -> str | None:
             if tail_pronunciation is None:
                 continue
             try:
-                head_reading = _cmu_pronunciation_to_vietnamese(head, head_pronunciation)
-                tail_reading = _cmu_pronunciation_to_vietnamese(tail, tail_pronunciation)
+                head_reading = _compound_part_reading(head, head_pronunciation)
+                tail_reading = _compound_part_reading(tail, tail_pronunciation)
             except ValueError:
                 continue
             if not head_reading or not tail_reading:
