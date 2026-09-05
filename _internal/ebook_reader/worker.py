@@ -29,6 +29,157 @@ from .process_utils import terminate_process_tree
 from .resource_manager import set_worker_priority
 from .runtime_contract import runtime_contract_errors
 
+# A GPU context that died under the process, as opposed to a GPU that is broken.
+#
+# Windows destroys CUDA contexts when the machine suspends, so the first GPU call after a
+# wake fails - and neither PyTorch nor CTranslate2 can rebuild a context inside the process
+# that lost one. Nothing is wrong with the machine and nothing is wrong with the book: the
+# work is checkpointed and perfectly resumable, it just needs a *new process*. So this ends
+# the run as a clean stop rather than a failure, and the resume watchdog starts it again.
+#
+# Requires the message to be about the GPU at all (GPU_CONTEXT_SUBJECTS) before a marker
+# counts, because a few markers are generic enough to appear in unrelated errors.
+GPU_CONTEXT_SUBJECTS = ("cuda", "cublas", "cudnn", "ctranslate", "gpu", "nvidia")
+GPU_CONTEXT_LOST_MARKERS = (
+    "unspecified launch failure",
+    "invalid device context",
+    "context is destroyed",
+    "invalid resource handle",
+    "cuda_error_invalid_context",
+    "cuda_error_not_initialized",
+    "cuda_error_system_not_ready",
+    "cuda_error_device_unavailable",
+    "initialization error",
+    "system not yet initialized",
+    "all cuda-capable devices are busy or unavailable",
+    "no cuda-capable device is detected",
+    "unknown error",
+)
+# These win over the markers above. A driver that is too old or a build without a kernel for
+# this card will fail again in a fresh process, so restarting would loop forever; an illegal
+# memory access is a bug worth seeing rather than papering over.
+GPU_CONTEXT_PERMANENT_MARKERS = (
+    "driver version is insufficient",
+    "no kernel image is available",
+    "device-side assert",
+    "illegal memory access",
+    "misaligned address",
+)
+GPU_CONTEXT_LOST_FILE_NAME = "gpu_context_lost.json"
+# Bounded so a genuinely dead GPU fails loudly instead of restarting forever. The count
+# resets whenever the book made progress since the last loss, so a machine that sleeps every
+# night never approaches it, while a card that cannot synthesize a single segment gives up.
+GPU_CONTEXT_LOST_MAX_ATTEMPTS = 5
+
+
+def _exception_chain_text(error: BaseException) -> str:
+    """Every message in the chain, lowercased.
+
+    The interesting string is usually not on the exception that surfaced: the driver error
+    arrives as __cause__ of a RuntimeError raised by the pipeline.
+    """
+    seen: list[str] = []
+    current: BaseException | None = error
+    depth = 0
+    while current is not None and depth < 12:
+        seen.append(f"{type(current).__name__}: {current}")
+        current = current.__cause__ or current.__context__
+        depth += 1
+    return " | ".join(seen).lower()
+
+
+def is_lost_gpu_context(error: BaseException) -> bool:
+    """Did the GPU context die under us, rather than the GPU being broken?"""
+    text = _exception_chain_text(error)
+    if not any(subject in text for subject in GPU_CONTEXT_SUBJECTS):
+        return False
+    if any(marker in text for marker in GPU_CONTEXT_PERMANENT_MARKERS):
+        return False
+    return any(marker in text for marker in GPU_CONTEXT_LOST_MARKERS)
+
+
+def _segments_with_audio(db: ProjectDB | None) -> int:
+    if db is None:
+        return 0
+    try:
+        return sum(int(counts.get("audio", 0)) for counts in db.chapter_progress_counts().values())
+    except Exception:  # noqa: BLE001 - a progress reading must never decide the run's fate
+        logging.exception("Could not read progress while recording a GPU context loss")
+        return 0
+
+
+def _record_gpu_context_loss(paths: ProjectPaths, db: ProjectDB | None) -> dict[str, Any]:
+    """Count consecutive losses that produced no progress, and say whether to try again.
+
+    Progress since the last loss means the restarts are working - a machine that suspends
+    every night resets to one each time. No progress across GPU_CONTEXT_LOST_MAX_ATTEMPTS
+    restarts means restarting is not the answer, and the run should fail where a human can
+    see it.
+    """
+    from .background_runner import BackgroundPaths
+
+    marker = BackgroundPaths.for_project(paths.root).root / GPU_CONTEXT_LOST_FILE_NAME
+    previous: dict[str, Any] = {}
+    try:
+        previous = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        previous = {}
+    if not isinstance(previous, dict):
+        previous = {}
+
+    done = _segments_with_audio(db)
+    made_progress = done > int(previous.get("segments_done", -1) or 0)
+    attempt = 1 if made_progress else int(previous.get("attempt", 0) or 0) + 1
+    record = {
+        "attempt": attempt,
+        "max_attempts": GPU_CONTEXT_LOST_MAX_ATTEMPTS,
+        "segments_done": done,
+        "made_progress_since_last": made_progress,
+        "resumable": attempt <= GPU_CONTEXT_LOST_MAX_ATTEMPTS,
+    }
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        # Without the marker the count cannot advance, so every loss would look like the
+        # first. Better that than refusing to resume a book because a file would not write.
+        logging.exception("Could not write the GPU context loss marker")
+    return record
+
+
+def _finalize_gpu_context_loss(
+    *,
+    paths: ProjectPaths,
+    db: ProjectDB | None,
+    settings: dict[str, Any] | None,
+    pipeline: BookPipeline | None,
+    error: BaseException,
+    record: dict[str, Any],
+) -> None:
+    """Persist the interruption as a stop, which is what it is: resumable, nothing lost."""
+    if db is None:
+        return
+    detail = (
+        f"Ngữ cảnh GPU bị huỷ giữa chừng (thường do máy ngủ/ngủ đông): {error}. "
+        f"Lần thử {record['attempt']}/{record['max_attempts']}; "
+        f"{record['segments_done']} segment đã có audio được giữ nguyên."
+    )
+    try:
+        db.update_book(status=BookStatus.STOPPED.value, stage="stopped", error=detail)
+    except Exception:  # noqa: BLE001
+        logging.exception("Could not persist the GPU context loss status")
+    try:
+        db.event("warning", "GPU_CONTEXT_LOST", detail, dict(record))
+    except Exception:  # noqa: BLE001
+        logging.exception("Could not persist the GPU context loss event")
+    _refresh_terminal_reports_best_effort(
+        paths=paths,
+        db=db,
+        settings=settings,
+        pipeline=pipeline,
+        transition="GPU context loss",
+    )
+
 
 def _configure_logging(log_file: Path) -> None:
     log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -515,6 +666,45 @@ def run_worker(
         )
     except BaseException as exc:  # noqa: BLE001
         details = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        if is_lost_gpu_context(exc):
+            # The machine suspended and took the CUDA context with it. Nothing is broken and
+            # nothing is lost - but this process cannot rebuild a context it lost, so it ends
+            # the run as a stop and lets the watchdog start a fresh one. Reported as ok=True
+            # + stopped=True so the supervisor records "stopped" rather than "failed", with
+            # gpu_context_lost marking it as an interruption nobody asked for.
+            record = _record_gpu_context_loss(paths, db)
+            if record["resumable"]:
+                logging.warning("GPU context lost; ending the run so a fresh process can resume")
+                _finalize_gpu_context_loss(
+                    paths=paths,
+                    db=db,
+                    settings=settings,
+                    pipeline=pipeline,
+                    error=exc,
+                    record=record,
+                )
+                _emit(message_queue, "log", {"text": details})
+                _emit(
+                    message_queue,
+                    "finished",
+                    {
+                        "ok": True,
+                        "stopped": True,
+                        "gpu_context_lost": True,
+                        "attempt": record["attempt"],
+                        "text": (
+                            "Mất ngữ cảnh GPU (máy ngủ?); đã dừng sạch để tiến trình mới "
+                            f"chạy tiếp (lần {record['attempt']}/{record['max_attempts']})."
+                        ),
+                    },
+                )
+                return
+            # Restarting is not the answer: GPU_CONTEXT_LOST_MAX_ATTEMPTS restarts produced
+            # no progress at all. Fall through and fail where a human will see it.
+            logging.error(
+                "GPU context lost %s times with no progress; failing instead of restarting",
+                record["attempt"],
+            )
         logging.exception("Unrecoverable pipeline error")
         _finalize_unrecoverable_failure(
             paths=paths,
