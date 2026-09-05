@@ -176,17 +176,27 @@ def main(project_root: str, output: str | None, notes_path: str | None = None) -
         "SELECT id, chapter_index, status, output_mp3 FROM chapters ORDER BY chapter_index"
     ).fetchall()
 
+    # _accepted was written and then never called, so the page asked for decisions that had
+    # already been made. On alpha.46 that was four of nine cards - four takes the owner had
+    # listened to and passed, put back in front of him. Asking again is the exact friction
+    # this page exists to remove, and it also teaches a listener that their verdicts do not
+    # stick.
+    accepted = _accepted(connection)
+
     items: list[dict] = []
     for chapter in chapters:
         published = bool(chapter["output_mp3"]) and Path(str(chapter["output_mp3"])).is_file()
         if published:
             continue
         for row in connection.execute(
-            "SELECT stable_id, status, warning_code, wav_path, wav_duration, text, asr_text "
-            "FROM segments WHERE chapter_id=? ORDER BY seq",
+            "SELECT stable_id, status, warning_code, wav_path, wav_duration, text, asr_text, "
+            "wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
             (int(chapter["id"]),),
         ):
+            checksum = str(row["wav_sha256"] or "").lower()
             for code in _blocking(row):
+                if (str(row["stable_id"]), code, checksum) in accepted:
+                    continue
                 path = str(row["wav_path"] or "")
                 href = _embedded_audio(Path(path)) if path else ""
                 items.append({
