@@ -32,8 +32,30 @@ import datetime as _dt  # noqa: E402
 from ebook_reader.background_runner import get_status, start_background  # noqa: E402
 
 DEFAULT_VERSIONS_ROOT = Path("D:/Novels/Audiobooks/_versions")
-RESUMABLE_STATE = "lost"
 LOG_NAME = "_auto_resume.log"
+
+# Two different interruptions, and the state file distinguishes them.
+#
+# "lost": the machine went away and took the process with it. get_status reports this when
+# the record says active but the process holding that pid is gone.
+#
+# "stopped" + gpu_context_lost: the process is alive but its CUDA context died under it,
+# which is what suspending the machine does. The worker cannot rebuild a context it lost,
+# so it ends the run as a clean stop and asks for a fresh process. It looks exactly like a
+# stop somebody requested, which is why the marker matters - see _wants_a_fresh_process.
+RESUMABLE_STATE = "lost"
+SELF_STOPPED_STATE = "stopped"
+GPU_CONTEXT_LOST_KEY = "gpu_context_lost"
+
+
+def _wants_a_fresh_process(status) -> bool:
+    """A stop nobody asked for, because the GPU context died and only a new process fixes it."""
+    if str(status.state) != SELF_STOPPED_STATE:
+        return False
+    last_event = status.last_event
+    if not isinstance(last_event, dict):
+        return False
+    return bool(last_event.get(GPU_CONTEXT_LOST_KEY))
 
 
 def _say_safely(line: str) -> None:
@@ -104,7 +126,7 @@ def main(argv: list[str]) -> int:
         if status.stop_requested:
             say(f"  bỏ qua  {label}: đã có yêu cầu dừng, không tự chạy lại")
             continue
-        if str(status.state) != RESUMABLE_STATE:
+        if str(status.state) != RESUMABLE_STATE and not _wants_a_fresh_process(status):
             say(f"  bỏ qua  {label}: trạng thái {status.state}")
             continue
         detail = str(status.detail or "").strip()

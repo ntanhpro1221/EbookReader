@@ -201,3 +201,60 @@ def test_stdout_closed_entirely_is_survivable(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr(sys, "stdout", _Closed())
     assert resume_interrupted.main([str(tmp_path)]) == 0
     assert started == [project]
+
+
+def _gpu_stopped(**extra) -> dict:
+    """What the supervisor writes when the worker ended itself over a dead CUDA context."""
+    state = {
+        "state": "stopped",
+        "exit_code": 0,
+        "detail": "Mất ngữ cảnh GPU",
+        "last_event": {"kind": "finished", "ok": True, "stopped": True, "gpu_context_lost": True},
+    }
+    state.update(extra)
+    return state
+
+
+def test_a_stop_caused_by_a_dead_gpu_context_is_resumed(tmp_path: Path, monkeypatch) -> None:
+    """The process survived the suspend; its CUDA context did not. Only a new process fixes it."""
+    project = _project(tmp_path, "alpha.9", _gpu_stopped())
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+
+    resume_interrupted.main([str(tmp_path)])
+
+    assert started == [project]
+
+
+def test_an_ordinary_stop_is_still_left_alone(tmp_path: Path, monkeypatch) -> None:
+    """Same state string. Without the marker it is a stop somebody wanted."""
+    _project(tmp_path, "alpha.9", {"state": "stopped", "last_event": {"kind": "finished", "ok": True}})
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+
+    resume_interrupted.main([str(tmp_path)])
+
+    assert started == []
+
+
+def test_a_gpu_stop_that_also_carries_a_stop_request_is_left_alone(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Asked to stop, then the context died on the way out. The request still wins."""
+    _project(tmp_path, "alpha.9", _gpu_stopped(stop_requested=True))
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+
+    resume_interrupted.main([str(tmp_path)])
+
+    assert started == []
+
+
+def test_a_stopped_run_with_no_last_event_is_left_alone(tmp_path: Path, monkeypatch) -> None:
+    _project(tmp_path, "alpha.9", {"state": "stopped"})
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+
+    resume_interrupted.main([str(tmp_path)])
+
+    assert started == []
