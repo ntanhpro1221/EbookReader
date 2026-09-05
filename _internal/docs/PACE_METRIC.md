@@ -499,3 +499,29 @@ khác.
 Trước mắt, cổng perceptual là thứ duy nhất bắt được nó, và nó bắt đúng. Đó là lập luận
 ngược lại việc nới cổng perceptual quá tay: 5 báo động giả cho 1 lần bắt đúng, nhưng lần
 bắt đúng ấy là lỗi mà **không cổng nào khác** trong hệ thống nhìn thấy.
+
+
+### Thu lại có cứu được không: có, và dữ liệu đã có sẵn câu trả lời
+
+Chủ sách hỏi thẳng: *"cuối cùng 'Mẹ kiếp!' có sửa được không? không được thì thôi, phải chấp
+nhận do nó là lỗi của model."* Không cần chạy thêm gì để trả lời - ba lần chạy đã tổng hợp
+đúng câu ấy với ba seed khác nhau:
+
+| lần chạy | thời lượng | seed | điểm lặp | |
+|---|---|---|---|---|
+| alpha.32 | 0,56s | 545472223 | — | bình thường |
+| alpha.43 | 0,80s | 2056556507 | — | bình thường |
+| alpha.44 | **1,60s** | 272553937 | **0,441** | **đọc 2 lần** |
+
+**Lỗi phụ thuộc seed, không cố định.** Hai trong ba seed cho bản đọc sạch, và độ dài của
+chúng (0,56s, 0,80s) đúng tầm cần thiết cho 6 ký tự, còn 1,60s là ngoại lệ.
+
+Nên thu lại là cách chữa đúng, không phải cách né. Với `max_retries = 10`, kể cả giả định
+bi quan là một nửa số seed bị lặp thì xác suất cả 10 lần đều hỏng vẫn dưới 0,1%. (n=3 nên
+tỉ lệ 1/3 chỉ là ước lượng thô; điều chắc chắn là nó **không** cố định.)
+
+### Chuyện gì xảy ra nếu 10 lần đều lặp
+
+Không có đường nào dẫn tới hỏng chương trình. Thứ tự leo thang: thử lại 10 lần với seed khác
+→ chia nhỏ câu → hạ dải nhịp về `normal` → đánh dấu `failed` và chặn chương, để người nghe
+quyết. Đó là cùng một đường mà mọi lỗi chất lượng khác đi qua.
