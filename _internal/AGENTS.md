@@ -476,6 +476,17 @@ là bước kiểm read-only chạy mỗi phiên bản (nó không bao giờ t�
 - **Không sửa bất kỳ file nào trong `QUALITY_IMPLEMENTATION_FILES` khi đang có job chạy**, kể cả chỉ đổi
   dòng `version` của `pyproject.toml`. Pipeline tính hash một lần lúc khởi tạo nên job đang chạy không chết
   ngay, nhưng lần resume kế tiếp sẽ bị từ chối.
+- **`git merge` của một nhánh cũng là "sửa file", dù bạn không gõ vào file nào.** Ngày 05/09/2026 tôi merge
+  `dev/alpha13` vào production để lấy một script trong `scripts/` — merge nhánh lấy **cả nhánh**, và nó kéo
+  theo `analysis.py` đang nằm chờ trên đó. alpha.46 đang chạy dở. Không segment nào bị ghi sai hash (pipeline
+  tính một lần lúc khởi tạo, đúng như dòng trên), nhưng chương 3 lúc ấy đang `failed` và **cần một lần
+  `resume` để xuất** — mà resume thì sẽ bị từ chối. Đổi một script an toàn suýt mất một chương.
+  - Muốn lấy một commit khi đang có job chạy: **`git cherry-pick` commit đó**, đừng merge nhánh.
+  - Hoặc tốt hơn: đừng để việc chạm file bị khoá nằm chung nhánh với việc merge được.
+  - Cách kiểm tra sau khi merge, mất một giây:
+    `git diff --stat <trước> HEAD -- _internal/ebook_reader/` — phải rỗng.
+  - Cách kiểm chứng job vẫn còn nguyên vẹn: tính lại `quality_policy_hash(build_quality_policy(settings))`
+    từ `settings_json` của project và so với `generation_policy_hash` trong bảng `segments`.
 - Chỉ nâng khi có lý do. `numpy`, `librosa`, `transformers`, `huggingface-hub`, `torch*` và `timm` ràng buộc
   với UTMOSv2/Whisper và với cache revision đã khóa; `pyworld` quyết định pitch; `vieneu` quyết định audio.
 - `vieneu` 3.3.0 chuyển engine mặc định sang ONNX Runtime và đẩy torch xuống extra `legacy`; tham số `style`
