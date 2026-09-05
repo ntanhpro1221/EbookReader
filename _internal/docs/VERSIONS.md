@@ -892,3 +892,75 @@ docstring `TTS_POOL_MIN_BATCH`), nên không đáng phức tạp hoá bằng cá
 
 Ba dòng "repeated a critic-rejected candidate projection" trong log là chuyện khác — bộ phân
 tích tự cắt batch, không liên quan tới âm thanh.
+
+---
+
+### Kết quả chạy alpha.46: lần chạy tốt nhất từ trước tới nay, và hai lỗi nó phơi ra
+
+Chạy 05→06/09/2026. **Lần đầu tiên không segment nào thiếu bản thu.**
+
+| phiên bản | segment có audio | MP3 xuất được |
+|---|---|---|
+| alpha.32 | 945 | 3/10 |
+| alpha.43 | 944 | 2/10 |
+| alpha.44 | 947 | 3/10 |
+| **alpha.46** | **948** | **5/10** |
+
+#### ASR tất định tuyệt đối trên audio giống hệt — và điều đó sửa lại một con số cũ
+
+So alpha.44 với alpha.46: **947 segment chung, 837 (88,4%) có audio giống hệt từng byte.**
+Trên toàn bộ 837 đoạn ấy, **bản ghi ASR trùng khít 837/837 — không một khác biệt nào.**
+
+Điều này sửa lại cách dùng con số "~1,6% bản ghi khác nhau" vẫn được trích: nó đo **hai
+engine khác nhau trên cùng audio** (openai-whisper so với faster-whisper), **không phải**
+nhiễu giữa hai lần chạy. Giữa hai lần chạy, với cùng một engine và audio giống hệt, nhiễu
+bản ghi là **0**. Đừng dùng 1,6% làm ngưỡng bỏ qua cho việc so sánh run-với-run nữa.
+
+Hệ quả: **mọi khác biệt bản ghi đều truy được về khác biệt audio.** 82 bản ghi khác nhau,
+tất cả đều nằm trong 110 đoạn có audio khác. Không có ngoại lệ nào.
+
+#### Vì sao 110 đoạn có audio khác — quy tới cơ chế
+
+| nguyên nhân | đoạn | |
+|---|---|---|
+| chỉ dẫn diễn xuất khác | **87** | 79% — nhiễu của pha phân tích |
+| chuyển đổi ký tự (`»`, `↓`, ngoặc) | **15** | thay đổi thật, cố ý |
+| cả hai | 1 | |
+| chưa giải thích được | 7 | 0,7% toàn sách, đáng xem sau |
+
+Bài học phương pháp: cách đo ngây thơ ("8,8% bản ghi khác nhau") **gán sai gấp năm lần**.
+Nhóm chứng đối đúng không phải cả sách mà là *segment không chứa ký tự bị đổi* — nhóm ấy
+cũng đổi 8,4%, nên phần quy được cho bản sửa chỉ là 2,9 điểm phần trăm. Truy tới audio rồi
+tới nguyên nhân mới ra con số thật: 16/110.
+
+#### Bản sửa `↓` chạy thật, nghe được
+
+```
+văn bản       : ↓ 10.000.000 Đơn vị Tinh hoa Linh hồn
+alpha.44 nghe : 10 triệu đơn vị tinh hoa linh hồn          ← ký tự bị nuốt
+alpha.46 nghe : giảm 10 triệu đơn vị tinh hoa linh hồn     ← đọc thành "giảm"
+```
+
+similarity 0,816 → 0,837. Đúng điều chủ sách yêu cầu.
+
+#### Hai lỗi alpha.46 phơi ra, cả hai đều nghiêm trọng hơn bất kỳ tinh chỉnh nào
+
+1. **`yield_light` chặn CPU vô điều kiện** trong khi `yield_heavy` chỉ chặn khi có sức ép
+   thật. Chế độ "nhẹ" hoá ra khắt khe hơn chế độ "nặng", và pipeline xử lý bằng
+   `time.sleep(2.0)` lặp vô hạn. Đo được: **0,38 segment/phút** so với 5,60 ở `maximum` —
+   chậm 14,7 lần, kéo dài 112 phút chỉ vì chủ sách đang dùng máy. Xem
+   `docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`.
+
+2. **Phán quyết của người nghe bị lần `resume` kế tiếp xoá sạch.** Acceptance nằm ở
+   `listener_audio_acceptances`, hai cổng quyết định đọc `quality_checks`, và không cổng nào
+   tra bảng kia. Bức tường mà `accept` sinh ra để gỡ quay lại sau đúng một lần resume. Xem
+   commit `1f0ce37`.
+
+Ngoài ra `build_review_page.py` có hàm `_accepted` được viết và **không bao giờ được gọi**,
+nên trang review đưa 4/9 thẻ là những bản thu chủ sách đã duyệt rồi.
+
+#### Vì sao alpha.46 dừng ở 5/10
+
+Bản sửa lỗi (2) bắt buộc đổi vân tay chất lượng, mà resume dưới vân tay mới thì bị từ chối —
+đúng thiết kế. Nó **không làm mất gì đạt được**: một lần resume *trước khi* sửa đã re-fail
+đúng ba chương ấy, và chính lần thử đó lộ ra lỗi.
