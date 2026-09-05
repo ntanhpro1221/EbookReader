@@ -14,6 +14,11 @@ heard.
 
     python scripts/port_listener_acceptances.py <source_project> <target_project> [--dry-run]
 
+Run it again as the run progresses, and once more when it finishes. A verdict is refused
+while the target has not synthesized that segment yet, or while the warning has not been
+raised on it yet - both change as chapters complete. Against alpha.46 the same command
+carried 3 verdicts at one point and 5 an hour later, purely because more audio existed.
+
 Refuses to carry a verdict when:
   - the target has no such segment, or has not synthesized it yet
   - the target's audio differs by a single byte from what was heard
