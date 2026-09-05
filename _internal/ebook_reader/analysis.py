@@ -3342,6 +3342,13 @@ def _arpabet_syllables(
 def _arpabet_onset_reading(onset: tuple[str, ...], vowel: str) -> str:
     if not onset:
         return ""
+    # /j/ before /uː/ is already inside the Vietnamese "u", so writing it as well doubles it.
+    # "Unit" is Y UW N AH T and came out "Du-nít"; the owner's correction was blunt and
+    # right - "u-nít, thế cho nó thuần Việt". The same glide gave "Du-ni-vờt" for universe
+    # and "Dút" for use. Only this pair: Y before any other vowel is a real consonant that
+    # Vietnamese does write, as in "yes".
+    if onset == ("Y",) and vowel == "UW":
+        return ""
     reading = ARPABET_ONSET_OVERRIDES.get(onset)
     if reading is None:
         reading = "".join(ARPABET_ONSETS.get(phone, "") for phone in onset)
@@ -3922,6 +3929,15 @@ def _arpabet_coda_reading(
         # the project already reads Michael as "Mai-cồ", not "Mai-cơn". Handled in the
         # vowel, so nothing is left for the coda.
         return ""
+    if vowel == "ER" and _surviving_coda_phone(coda) in ("S", "Z"):
+        # "ơ" already ends the syllable; adding the usual "t" for a final sibilant makes
+        # "vờt" and "tờt", which are not Vietnamese sounds. The owner rejected both by ear -
+        # "vờt là cái gì? tiếng việt làm gì có cái gì đọc là vờt?" - and gave "u-ni-vơ" as
+        # the reading. This book has it twice: universe, and Hunters as "Hăn-tờt".
+        #
+        # Only after ER. Elsewhere a final sibilant does become "t" and should: bus is
+        # "Bắt" and gas "Gát", which is how Vietnamese takes those words.
+        return ""
     phone = _surviving_coda_phone(coda)
     if phone is None:
         return ""
@@ -4135,6 +4151,66 @@ def _join_name_syllables(word: str, rendered: list[str]) -> str:
     return _final_er_schwa(word, joined) if joined else ""
 
 
+COMPOUND_NAME_MIN_PART = 4
+COMPOUND_NAME_LINKING_LETTERS = frozenset("sz")
+
+
+def _compound_name_reading(surface: str) -> str | None:
+    """Read an invented name built out of two English words the dictionary does know.
+
+    "Theosbane" is not in CMUdict, so it fell to the spelling route and came back
+    "Thê-ô-xờ-ban" - which the owner rejected outright: nobody reads it that way. But both
+    halves are in the dictionary, "theo" as The-ô and "bane" as Bên, and joined they give
+    Theo-bên, which is what he asked for. The spelling route was answering a question the
+    dictionary could already answer.
+
+    A linking s or z between the halves is allowed and not voiced, the way English writes
+    "Theo-s-bane" and says the two words. Both halves must be at least three letters, so a
+    stray fragment cannot license a split, and both must carry a vowel or the phoneme route
+    has nothing to build a syllable around.
+
+    Returns None when no such split exists, and the caller falls back to spelling as before.
+    """
+    word = str(surface).casefold()
+    if len(word) < COMPOUND_NAME_MIN_PART * 2 or not word.isalpha():
+        return None
+    entries = _cmudict_entries()
+
+    def usable(candidate: str) -> str | None:
+        pronunciation = entries.get(candidate)
+        if not pronunciation:
+            return None
+        if not any(phone in ARPABET_VOWELS for phone in _arpabet_phones(pronunciation)):
+            return None
+        return pronunciation
+
+    # Longest head first: "theosbane" must not split as "the" + "osbane" when "theo" is
+    # there to be found.
+    for head_length in range(len(word) - COMPOUND_NAME_MIN_PART, COMPOUND_NAME_MIN_PART - 1, -1):
+        head = word[:head_length]
+        head_pronunciation = usable(head)
+        if head_pronunciation is None:
+            continue
+        for skip in (0, 1):
+            if skip and word[head_length : head_length + 1] not in COMPOUND_NAME_LINKING_LETTERS:
+                continue
+            tail = word[head_length + skip :]
+            if len(tail) < COMPOUND_NAME_MIN_PART:
+                continue
+            tail_pronunciation = usable(tail)
+            if tail_pronunciation is None:
+                continue
+            try:
+                head_reading = _cmu_pronunciation_to_vietnamese(head, head_pronunciation)
+                tail_reading = _cmu_pronunciation_to_vietnamese(tail, tail_pronunciation)
+            except ValueError:
+                continue
+            if not head_reading or not tail_reading:
+                continue
+            return f"{head_reading}-{tail_reading.casefold()}"
+    return None
+
+
 def _local_name_fallback(surface: str) -> str:
     """Produce a safe Vietnamese-readable form for any Latin name accepted by the scanner.
 
@@ -4164,6 +4240,10 @@ def _local_name_fallback(surface: str) -> str:
                 continue
             except ValueError:
                 pass
+        compound = _compound_name_reading(part)
+        if compound is not None:
+            words.append(compound)
+            continue
         rendered: list[str] = []
         syllables = _latin_name_syllables(_silent_e_removed(part.casefold()))
         if not syllables:

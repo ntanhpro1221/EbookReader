@@ -501,9 +501,14 @@ def test_the_spelling_route_says_a_final_er_as_the_schwa() -> None:
     could not be fixed until the coda table stopped losing b, d, j and y."""
     assert _local_name_fallback("Kaizer") == "Cai-dờ"
     # Words CMUdict lacks, which is the only kind that reaches this route now. The silent e
-    # of "Theosbane" and "Xenlor" is dropped; the coda it was hiding is not.
-    assert _local_name_fallback("Theosbane") == "Thê-ô-xờ-ban"
+    # of "Xenlore" is dropped; the coda it was hiding is not.
     assert _local_name_fallback("Xenlore") == "Xên-lôn"
+    # "Theosbane" no longer reaches the spelling route at all: both halves are in the
+    # dictionary, theo as The-ô and bane as Bên, so it is read as the compound it is. The
+    # owner rejected the spelled reading outright - nobody says "thê ô sờ ban" - and the
+    # docstring of test_the_spelling_route_reads_a_phrase_one_word_at_a_time had already
+    # recorded a listener writing "theo-bên" while its assertion froze the other one.
+    assert _local_name_fallback("Theosbane") == "The-ô-bên"
 
 
 def test_a_word_the_dictionary_has_reads_the_same_either_way() -> None:
@@ -594,9 +599,13 @@ def test_a_plural_s_yields_to_the_consonant_it_follows() -> None:
 def test_the_spelling_route_reads_a_phrase_one_word_at_a_time() -> None:
     """It used to run a phrase through as a single stream of syllables joined by hyphens:
     "Xa-men-cai-d\u00ean-th\u00ea-\u00f4-x\u1edd-ban" - one long word, with the -er ending never seen because it
-    was not at the end of anything. A listener writes "sa-men cai-d\u01a1 theo-b\u00ean"."""
+    was not at the end of anything. A listener writes "sa-men cai-d\u01a1 theo-b\u00ean".
+
+    That listener's reading is now what comes out. The assertion below used to say
+    "th\u00ea-\u00f4-x\u1edd-ban" while this docstring said "theo-b\u00ean" three lines above it - the target was
+    written down and the test froze the miss instead."""
     reading = _local_name_fallback("Samael Kaizer Theosbane")
-    assert reading == "Xa-men cai-d\u1edd th\u00ea-\u00f4-x\u1edd-ban"
+    assert reading == "Xa-men cai-d\u1edd The-\u00f4-b\u00ean"
     assert len(reading.split(" ")) == 3
 
 
