@@ -552,3 +552,29 @@ cách lỗi thật 21%. Không segment sạch nào tới gần, và lỗi thật
 
 Bộ phát hiện chưa bắt được gì trong alpha.46 **vì lần chạy này không có đoạn nào đọc lặp**,
 không phải vì ngưỡng đặt sai. Đừng hạ nó xuống chỉ vì nó im.
+
+### Bắt được thật, lần đầu — alpha.47, 06/09/2026
+
+`c00007_s0000045` — **"Mẹ kiếp!"**, đúng đoạn chủ sách nghe ở alpha.44 và phán *"sai, bị đọc
+2 lần"*, và đúng đoạn ông hỏi lại *"thế cuối cùng có sửa được không? không được thì thôi,
+phải chấp nhận do nó là lỗi của model"*.
+
+```
+TTS segment c00007_s0000045 chưa đạt lần 1/10; đang tạo lại:
+  high-quality TTS retry required: đọc lặp nội dung (giống hai nửa 0.44…)
+```
+
+| | độ dài | lần thử |
+|---|---|---|
+| alpha.44 (chủ sách nghe) | **1,60s** | 1 |
+| alpha.47 | **0,64s** | **2** |
+
+Điểm 0,44 khớp con số 0,441 đo được ở alpha.44 — cùng một defect, cùng một điểm số, ở một
+lần chạy độc lập. Bộ dò từ chối bản thu ngay **lần 1/10**, thu lại, và bản mới ngắn hơn một
+nửa: đúng thứ một lần đọc phải có so với hai lần.
+
+Trả lời dứt điểm câu hỏi của chủ sách: **không phải chấp nhận, máy tự sửa được.**
+
+Và nó xác nhận điều đã ghi ở mục trên: bộ dò im suốt alpha.45 và alpha.46 **không phải vì
+ngưỡng đặt sai** mà vì hai lần chạy ấy không có đoạn nào đọc lặp. Khoảng cách
+`0,244 → 0,35 → 0,441` giữ nguyên ý nghĩa qua ba lần chạy.
