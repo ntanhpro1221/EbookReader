@@ -156,6 +156,30 @@ SEGMENT_ENDPOINT_WINDOW_SECONDS = 0.020
 # concentrated in the few segments carrying a transliterated term, which is exactly why
 # those segments and only those were failing.
 PAUSE_GROUP_SECONDS = 0.276
+REPEATED_UTTERANCE_METRIC = "repeated_utterance_score"
+# Above this, the two sides of the longest internal silence are saying the same thing.
+#
+# The owner heard "Mẹ kiếp!" read twice and asked why a real defect was not being fixed. The
+# waveform shows it plainly - two syllables, 0.72s of silence, the same two syllables again -
+# but nothing in the system saw it: ASR skips a six-character line, the pace gate skips
+# anything under rate_check_min_chars, and the duration ceiling for that text is 9.30s.
+#
+# Duration alone cannot catch it. Measured over the book's 132 short segments, the doubled
+# take ranks ninth in seconds-per-character, behind "C", "B" and "—RẦM!!", so any ceiling
+# tight enough would reject single letters and sound effects. Energy envelope alone does not
+# separate it either: it came 3rd by autocorrelation and outside the top 12 by half
+# similarity.
+#
+# Comparing the MFCCs of the two halves does separate it, and cleanly. Over the 613 segments
+# in this book with a long enough internal silence to split, the doubled take scores 0.441
+# and ranks first; the next is 0.244 and the rest fall away. A sentence with an ordinary
+# pause says different things either side, so its halves do not match. 0.35 sits in the gap
+# with room on both sides and flags nothing else in the book.
+REPEATED_UTTERANCE_THRESHOLD = 0.35
+REPEATED_UTTERANCE_MIN_GAP_SECONDS = 0.25
+REPEATED_UTTERANCE_SILENCE_DBFS = -30.0
+REPEATED_UTTERANCE_HOP_SECONDS = 0.02
+REPEATED_UTTERANCE_MIN_HALF_FRAMES = 4
 PAUSE_GROUP_PATTERN = re.compile(r"[.!?…,;:()\[\]{}\-–—/\"'“”‘’]+")
 # A hyphen joining two letters marks a syllable inside a transliterated word, not a silence.
 SYLLABLE_HYPHEN_PATTERN = re.compile(r"(?<=[^\W\d_])[-–—](?=[^\W\d_])", re.UNICODE)
@@ -513,7 +537,76 @@ def validate_audio_array(
             )
         metrics["chars_per_second"] = float(rate)
         metrics["pace_outlier"] = float(rate < lower_bound or rate > upper_bound)
+    score = repeated_utterance_score(array, sample_rate)
+    if score is not None:
+        metrics[REPEATED_UTTERANCE_METRIC] = float(score)
     return array, metrics
+
+
+def repeated_utterance_score(audio: Any, sample_rate: int) -> float | None:
+    """How alike the two sides of the longest internal silence sound.
+
+    VieNeu occasionally says a short line twice. Nothing else in the pipeline can see it:
+    the transcript check skips text this short, the pace gate skips it too, and the duration
+    ceiling for a six-character line is nine seconds. See REPEATED_UTTERANCE_THRESHOLD for
+    what was measured and what was ruled out.
+
+    Returns None when there is no internal silence long enough to split on, which is most
+    audio, and the caller records nothing.
+    """
+    try:
+        import librosa
+    except ImportError:  # pragma: no cover - librosa ships with the runtime
+        return None
+    array = np.asarray(audio, dtype=np.float32).reshape(-1)
+    hop = max(1, int(sample_rate * REPEATED_UTTERANCE_HOP_SECONDS))
+    if array.size < hop * 8:
+        return None
+    rms = librosa.feature.rms(y=array, frame_length=hop * 2, hop_length=hop)[0]
+    peak = float(rms.max())
+    if peak <= 0.0:
+        return None
+    quiet = 20.0 * np.log10(rms / peak + 1e-12) < REPEATED_UTTERANCE_SILENCE_DBFS
+
+    # The longest quiet run that is not at either edge - leading and trailing silence say
+    # nothing about repetition.
+    longest, span, index = 0, None, 0
+    while index < len(quiet):
+        if not quiet[index]:
+            index += 1
+            continue
+        end = index
+        while end < len(quiet) and quiet[end]:
+            end += 1
+        if index > 2 and end < len(quiet) - 2 and (end - index) > longest:
+            longest, span = end - index, (index, end)
+        index = end
+    if span is None or longest * REPEATED_UTTERANCE_HOP_SECONDS < REPEATED_UTTERANCE_MIN_GAP_SECONDS:
+        return None
+
+    coefficients = librosa.feature.mfcc(y=array, sr=sample_rate, n_mfcc=13, hop_length=hop)
+    left, right = coefficients[:, : span[0]], coefficients[:, span[1] :]
+    if left.shape[1] < REPEATED_UTTERANCE_MIN_HALF_FRAMES:
+        return None
+    if right.shape[1] < REPEATED_UTTERANCE_MIN_HALF_FRAMES:
+        return None
+
+    # Stretched to a common length: the two readings are the same words, not the same
+    # duration, so comparing them frame for frame would miss on tempo alone.
+    width = min(left.shape[1], right.shape[1])
+
+    def resample(matrix: Any) -> Any:
+        source = np.linspace(0.0, 1.0, matrix.shape[1])
+        target = np.linspace(0.0, 1.0, width)
+        return np.stack([np.interp(target, source, matrix[row]) for row in range(matrix.shape[0])])
+
+    def standardize(matrix: Any) -> Any:
+        return (matrix - matrix.mean(axis=1, keepdims=True)) / (
+            matrix.std(axis=1, keepdims=True) + 1e-9
+        )
+
+    left, right = standardize(resample(left)), standardize(resample(right))
+    return float(np.mean(np.sum(left * right, axis=1) / width))
 
 
 def inspect_wav(

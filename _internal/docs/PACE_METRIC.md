@@ -466,8 +466,35 @@ là mong manh (`is_short_utterance`, sửa micro-utterance, miễn trừ
 `ASR_UNVERIFIABLE_SHORT_TEXT`).
 
 **Tỉ lệ thời lượng không tách được "đọc hai lần" khỏi "câu ngắn đọc chậm có chủ ý".** Nên
-không ship hằng số nào ở đây. Muốn bắt lớp này thì cần một tín hiệu khác - ví dụ so sánh
-tự tương quan trong chính waveform để phát hiện lặp - và đó là một phép đo khác, chưa làm.
+không ship hằng số nào ở đây.
+
+### Tín hiệu đúng: so hai nửa bằng MFCC
+
+Chủ sách hỏi lại - *"đọc 2 lần là lỗi sao lại chưa sửa?"* - và đúng: tôi đã nêu đúng tín
+hiệu cần dùng rồi lại hoãn nó. Đo luôn.
+
+Waveform nói thẳng: hai âm tiết, **im lặng 0,72s**, rồi đúng hai âm tiết ấy lần nữa. Đây là
+lỗi của model đọc, không phải của văn bản.
+
+Ba tín hiệu, đo trên cả sách:
+
+| tín hiệu | thứ hạng của đoạn hỏng |
+|---|---|
+| giây/ký-tự | 9 / 132 |
+| tự tương quan bao năng lượng | 3 / 132 |
+| giống-hai-nửa theo năng lượng | ngoài top 12 |
+| **giống-hai-nửa theo MFCC** | **1 / 613** |
+
+MFCC tách sạch: đoạn hỏng **0,441**, cái thứ hai **0,244**, phần còn lại rơi hẳn. Lý do nó
+hoạt động: một câu có khoảng nghỉ bình thường thì hai bên **nói hai thứ khác nhau** nên phổ
+không khớp; đọc lặp thì hai bên nói cùng một thứ.
+
+Ngưỡng **0,35** nằm giữa khoảng trống ấy, rộng về cả hai phía, và không gắn cờ nhầm đoạn nào
+trong 947 đoạn của sách.
+
+`REPEATED_UTTERANCE_THRESHOLD` trong `audio_io.py`. Nó **kích hoạt thu lại**, không phải hỏi
+người nghe: không có gì để người ta quyết cả, bản thu đơn giản là sai, và lần thử sau có seed
+khác.
 
 Trước mắt, cổng perceptual là thứ duy nhất bắt được nó, và nó bắt đúng. Đó là lập luận
 ngược lại việc nới cổng perceptual quá tay: 5 báo động giả cho 1 lần bắt đúng, nhưng lần
