@@ -12599,12 +12599,25 @@ class ProjectDB:
         with self.connect() as conn:
             rows = list(
                 conn.execute(
-                    "SELECT id,status,wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
+                    "SELECT id,stable_id,status,wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
                     (int(chapter_id),),
                 )
             )
             if not rows:
                 return False
+            # A take a person listened to and let stand is evidence, and it is the only
+            # evidence that exists for these. The machine's stored verdict stays `fail` after
+            # an acceptance - deliberately, because what happened is that somebody overruled
+            # it, not that it changed its mind - so requiring a passing check here refused
+            # exactly the segments `accept` was written to release. alpha.46 hit it as
+            # SEGMENT_QA_EVIDENCE_MISSING on chapter 9, one resume after seven verdicts were
+            # carried in. Keyed by artifact like every other use, so a re-cut take voids it.
+            accepted = {
+                (str(a), str(b))
+                for a, b in conn.execute(
+                    "SELECT segment_stable_id, wav_sha256 FROM listener_audio_acceptances"
+                )
+            }
             for row in rows:
                 if str(row["status"]) not in {
                     SegmentStatus.VERIFIED.value,
@@ -12612,7 +12625,11 @@ class ProjectDB:
                 }:
                     return False
                 artifact_sha256 = str(row["wav_sha256"] or "").strip()
-                if not artifact_sha256 or not self._quality_check_is_current_pass_conn(
+                if not artifact_sha256:
+                    return False
+                if (str(row["stable_id"]), artifact_sha256) in accepted:
+                    continue
+                if not self._quality_check_is_current_pass_conn(
                     conn,
                     scope=QUALITY_SCOPE_SEGMENT,
                     stage=normalized_stage,

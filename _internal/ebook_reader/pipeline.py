@@ -1292,9 +1292,36 @@ class BookPipeline:
             SEGMENT_PERCEPTUAL_QUALITY_STAGE,
         )
 
+    def _listener_ruled_on_this_take(self, row: Any) -> bool:
+        """Has a person already listened to *this exact recording* and let it stand?
+
+        `accept` exists because some segments cannot be settled by any amount of machinery -
+        alpha.32's blocked takes had their Vietnamese transcribed perfectly and only a
+        transliterated English name coming back as letters, and five repair rounds changed
+        nothing. A listener rules, the chapter publishes.
+
+        But the acceptance lived only in `listener_audio_acceptances`, and the resume scan
+        below reads `quality_checks`, so the next resume re-failed the very segment somebody
+        had just cleared. alpha.46 showed it end to end: seven verdicts were carried into the
+        project, `what_blocks_publication` reported chapters 3, 9 and 10 unblocked, and the
+        resume marked all three ASR_CONTENT_GATE_FAILED again - against the same
+        wav_sha256 the acceptance names. The gate that `accept` was written to remove came
+        back one resume later.
+
+        Bound to the checksum, like every other use of an acceptance: re-cutting the take
+        voids it, because the person agreed to a recording rather than to a row.
+        """
+        artifact_sha256 = str(row["wav_sha256"] or "").strip()
+        if not artifact_sha256:
+            return False
+        accepted = self.db.accepted_segment_warnings()
+        return bool(accepted.get((str(row["stable_id"]), artifact_sha256)))
+
     def _segment_has_current_asr_failure(self, row: Any) -> bool:
         artifact_sha256 = str(row["wav_sha256"] or "").strip()
         if not artifact_sha256:
+            return False
+        if self._listener_ruled_on_this_take(row):
             return False
         check = self.db.latest_quality_check(
             scope=QUALITY_SCOPE_SEGMENT,

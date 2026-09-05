@@ -4349,3 +4349,122 @@ def test_locked_name_review_does_not_block_its_chapter() -> None:
     # A genuine mismatch still fails the segment, so it must not be waived here as well.
     assert ASR_LOCKED_NAME_ANCHOR_MISMATCH not in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
     assert PERCEPTUAL_NATURALNESS_REVIEW_CODE not in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
+
+
+def test_a_take_the_listener_cleared_is_not_re_failed_by_the_next_resume(
+    tmp_path: Path,
+) -> None:
+    """`accept` exists to remove a wall no machinery can get past, and the resume scan put
+    it straight back.
+
+    The acceptance lives in listener_audio_acceptances; the scan reads quality_checks. So a
+    segment somebody had just cleared came back ASR_CONTENT_GATE_FAILED on the next resume,
+    against the very wav_sha256 the acceptance names. alpha.46 showed it end to end: seven
+    carried verdicts, three chapters reported unblocked, and the resume re-failed all three.
+    """
+    pipeline, _chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+        artifact_sha256=str(row["wav_sha256"]),
+        policy_hash=pipeline.quality_policy_hash,
+        policy_version=QUALITY_POLICY_VERSION,
+        verdict="fail",
+        metrics={"reason": "ASR_MISMATCH_UNRESOLVED"},
+    )
+    assert pipeline._segment_has_current_asr_failure(row) is True
+
+    pipeline.db.accept_segment_audio(
+        segment_stable_id=str(row["stable_id"]),
+        wav_sha256=str(row["wav_sha256"]),
+        warning_code="ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        note="chủ sách đã nghe: đọc đúng",
+    )
+
+    assert pipeline._segment_has_current_asr_failure(row) is False
+
+
+def test_an_acceptance_does_not_survive_a_recut(tmp_path: Path) -> None:
+    """Bound to the recording, not the row. A retry makes audio nobody has heard, and the
+    stored failure must bite again."""
+    pipeline, _chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+        artifact_sha256=str(row["wav_sha256"]),
+        policy_hash=pipeline.quality_policy_hash,
+        policy_version=QUALITY_POLICY_VERSION,
+        verdict="fail",
+        metrics={"reason": "ASR_MISMATCH_UNRESOLVED"},
+    )
+    pipeline.db.accept_segment_audio(
+        segment_stable_id=str(row["stable_id"]),
+        wav_sha256="0" * 64,          # a different take entirely
+        warning_code="ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        note="nghe một bản thu khác",
+    )
+
+    assert pipeline._segment_has_current_asr_failure(row) is True
+
+
+def test_a_chapter_counts_a_listener_cleared_take_as_evidence(tmp_path: Path) -> None:
+    """The second gate with the same blindness, and the one that failed alpha.46's ch9.
+
+    chapter_segments_have_current_audio_qa demanded a passing check for every segment. An
+    acceptance leaves the machine's verdict at `fail` on purpose - a person overruled it,
+    the machine did not change its mind - so the chapter refused the very segments `accept`
+    had just released, under a different code: SEGMENT_QA_EVIDENCE_MISSING.
+    """
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+        artifact_sha256=str(row["wav_sha256"]),
+        policy_hash=pipeline.quality_policy_hash,
+        policy_version=QUALITY_POLICY_VERSION,
+        verdict="fail",
+        metrics={"reason": "ASR_MISMATCH_UNRESOLVED"},
+    )
+    # As it stands after a real run: the listener accepts a segment that reached `warning`,
+    # not one still mid-pipeline. Without this the gate refuses on the status check and
+    # never reaches the question being tested.
+    with pipeline.db.transaction() as conn:
+        conn.execute("UPDATE segments SET status='warning' WHERE id=?", (int(row["id"]),))
+    chapter_id = int(chapter["id"])
+    assert pipeline.db.chapter_segments_have_current_audio_qa(chapter_id) is False
+
+    pipeline.db.accept_segment_audio(
+        segment_stable_id=str(row["stable_id"]),
+        wav_sha256=str(row["wav_sha256"]),
+        warning_code="ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        note="chủ sách đã nghe: đọc đúng",
+    )
+
+    assert pipeline.db.chapter_segments_have_current_audio_qa(chapter_id) is True
+
+
+def test_the_chapter_gate_ignores_an_acceptance_for_other_audio(tmp_path: Path) -> None:
+    pipeline, chapter, row, _expected = _asr_signal_pipeline(tmp_path, repair_rounds=1)
+    pipeline.db.record_quality_check(
+        scope=QUALITY_SCOPE_SEGMENT,
+        stage=SEGMENT_AUDIO_QUALITY_STAGE,
+        segment_id=int(row["id"]),
+        artifact_sha256=str(row["wav_sha256"]),
+        policy_hash=pipeline.quality_policy_hash,
+        policy_version=QUALITY_POLICY_VERSION,
+        verdict="fail",
+        metrics={"reason": "ASR_MISMATCH_UNRESOLVED"},
+    )
+    with pipeline.db.transaction() as conn:
+        conn.execute("UPDATE segments SET status='warning' WHERE id=?", (int(row["id"]),))
+    pipeline.db.accept_segment_audio(
+        segment_stable_id=str(row["stable_id"]),
+        wav_sha256="0" * 64,
+        warning_code="ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+        note="một bản thu khác",
+    )
+
+    assert pipeline.db.chapter_segments_have_current_audio_qa(int(chapter["id"])) is False
