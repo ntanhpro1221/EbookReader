@@ -21,10 +21,24 @@ chỉ là danh sách commit.
 cd _internal
 ./runtime/.venv/Scripts/python.exe -m ebook_reader.cli create \
   --output-root "D:/Novels/Audiobooks/_versions/<tag>" \
-  --source-dir "D:/Novels/Ebook Reader/Text_Tmp" \
-  --range "000..001" --width 3 --title "<tag>" --profile high_quality --json
-./runtime/.venv/Scripts/python.exe scripts/run_book_job.py "<project-root>"
+  --source-dir "D:/Novels/Tools/Text" \
+  --range "000..009" --width 3 --title "<tag>" --profile high_quality --json
+./runtime/.venv/Scripts/python.exe -m ebook_reader.cli run "<project-root>" --json
 ```
+
+> **Nguồn phải là `D:/Novels/Tools/Text`, không phải `Text_Tmp`.** Chỗ này từng ghi sai và
+> đã tốn một lần chạy: alpha.46 lần đầu được tạo từ `Ebook Reader/Text_Tmp`, ra 995 segment
+> thay vì 948, tức **một quyển sách khác** - không so được với alpha.43/44/45 nên toàn bộ ý
+> nghĩa của việc đánh số phiên bản mất sạch.
+>
+> Cách kiểm tra rẻ nhất, làm ngay sau `create`: `input_manifest_hash` phải bắt đầu bằng
+> `02502ba320`, và thư mục project phải tên `<tag>_02502ba320`. Hash khác nghĩa là nguồn khác,
+> dừng lại trước khi chạy chứ đừng phát hiện sau ba tiếng.
+
+Dùng `cli run` chứ không phải `run_book_job.py`: `run` khởi động qua background supervisor nên
+chạy tiếp được sau khi đóng terminal, `stop`/`resume` dùng được, và watchdog tự chạy lại
+(`scripts/resume_interrupted.py`) mới nhìn thấy nó. `run_book_job.py` chạy worker ngay trong
+tiến trình gọi, mất hết những thứ đó.
 
 Chấm giữa chừng, không cần đợi xong:
 
