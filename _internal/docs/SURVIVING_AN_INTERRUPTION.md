@@ -58,22 +58,29 @@ checkpoint chứ không làm lại cuốn sách từ đầu**.
 
 ```
 Tên      : EbookReaderAutoResume
-Trigger  : AtLogOn (user NGDtuanh), trễ PT3M
 Action   : _internal\runtime\.venv\Scripts\pythonw.exe scripts\resume_interrupted.py
 Thư mục  : D:\Novels\Ebook Reader\_internal
-Principal: Interactive, RunLevel Limited
+Principal: InteractiveToken, LeastPrivilege
+Trigger 1: LogonTrigger, trễ PT3M          — máy khởi động lại / đăng nhập lại
+Trigger 2: EventTrigger Power-Troubleshooter ID 1, trễ PT1M — máy vừa thức dậy
+Trigger 3: TimeTrigger lặp PT5M vô hạn     — lưới an toàn
 ```
 
 Vài lựa chọn có lý do:
 
 - **`AtLogOn` chứ không phải `AtStartup`.** Worker cần GPU và cần phiên người
   dùng; chạy ở session 0 lúc khởi động thì không thấy GPU.
-- **Trễ 3 phút.** Cho driver, dịch vụ và ổ đĩa ổn định trước. Không có gì gấp —
-  cuốn sách đã dừng sẵn rồi.
-- **`pythonw.exe` chứ không phải `python.exe`.** Tránh một cửa sổ console nháy lên
-  mỗi lần đăng nhập.
-- **`Interactive` / `Limited`.** Không cần quyền admin, và phải nằm trong phiên
-  người dùng để thấy GPU.
+- **Có trigger sự kiện thức dậy** vì **thức dậy từ sleep không kích hoạt
+  `AtLogOn`** — không ai đăng nhập lại cả. Thiếu nó thì phần 2 dưới đây nằm chờ
+  tới lần đăng nhập kế tiếp, tức là có thể cả đêm.
+- **Lặp 5 phút** làm lưới an toàn cho mọi đường mà hai trigger kia bỏ sót.
+  `start_background` tự chặn double-start nên chạy thừa là vô hại, và script chỉ
+  đọc 28 file JSON.
+- **Trễ 3 phút / 1 phút.** Cho driver, dịch vụ và ổ đĩa ổn định trước.
+- **`pythonw.exe` chứ không phải `python.exe`.** Tránh cửa sổ console nháy lên.
+- **Đăng ký bằng XML.** `New-ScheduledTaskTrigger -RepetitionDuration
+  ([TimeSpan]::MaxValue)` của PowerShell 5.1 báo lỗi
+  `P99999999DT23H59M59S ... out of range`; XML bỏ trống `<Duration>` là lặp vô hạn.
 
 Xem / gỡ:
 
@@ -123,15 +130,82 @@ Bài học rộng hơn: **test trên `tmp_path` không thay được một lần
 ## 2. Máy ngủ / ngủ đông rồi thức dậy
 
 Khác hẳn. Tiến trình **vẫn sống** — nên `get_status` báo `running`, và phần 1 ở
-trên (đúng đắn) không đụng vào. Cái chết là **ngữ cảnh CUDA**: driver huỷ ngữ cảnh
-khi máy suspend, và lời gọi CUDA đầu tiên sau khi thức dậy trả về lỗi.
+trên (đúng đắn) không đụng vào. Cái chết là **ngữ cảnh CUDA**: Windows huỷ ngữ
+cảnh khi máy suspend, và lời gọi GPU đầu tiên sau khi thức dậy ném lỗi.
 
-Xem `docs/VRAM_AND_CONTEXT.md`.
+### Vì sao "nhả model rồi nạp lại" không cứu được
+
+Đây là điều phản trực giác và là lý do phần này không giống
+`_recover_from_memory_pressure`. **Cả PyTorch lẫn CTranslate2 đều không dựng lại
+được ngữ cảnh CUDA bên trong chính tiến trình đã mất nó.** `torch.cuda.empty_cache()`
+không giúp gì; ngữ cảnh coi như mất suốt đời tiến trình. Thứ duy nhất chữa được là
+**một tiến trình mới**.
+
+Kiến trúc làm điều đó rắc rối hơn tưởng: pool TTS là các tiến trình con `spawn`
+(nên chúng có thể được dựng lại), nhưng **ASR chạy ngay trong tiến trình worker
+chính** (`asr.py` nạp faster-whisper lên `cuda`). Nên không có cách nào cứu tại chỗ.
+
+### Cách xử lý
+
+Worker phân loại lỗi (`is_lost_gpu_context`) và, nếu đúng là mất ngữ cảnh, **kết
+thúc run như một lần dừng sạch** thay vì một thất bại: `BookStatus.STOPPED`, sự
+kiện `GPU_CONTEXT_LOST`, và terminal event mang cờ `gpu_context_lost: true`.
+
+Chỗ hay: **không phải sửa `background_runner.py` một dòng nào.** `_terminal_result`
+vốn ánh xạ `ok=True, stopped=True` → state `"stopped"`, và `stop_requested` chỉ bật
+khi có người thật sự yêu cầu. `_record_worker_event` giữ nguyên mọi key tuỳ ý, nên
+cờ đi thẳng vào `last_event`. Watchdog nhận ra đúng tổ hợp đó:
+
+> `state == "stopped"` **và** `last_event.gpu_context_lost` **và không** `stop_requested`
+> = một lần dừng không ai yêu cầu, cần một tiến trình mới.
+
+### Chặn vòng lặp vô hạn
+
+Rủi ro của thiết kế này là một GPU hỏng thật sẽ khởi động lại mãi mãi. Hai lớp
+chặn:
+
+1. **Lỗi vĩnh viễn bị loại thẳng** và thắng mọi marker nhất thời trong cùng chuỗi:
+   driver quá cũ, không có kernel image cho card này, device-side assert, illegal
+   memory access, misaligned address. Những lỗi này sẽ hỏng y hệt trong tiến trình
+   mới.
+2. **Đếm có ràng buộc tiến độ.** `runtime/background/gpu_context_lost.json` giữ số
+   lần thử. Số này **chỉ tăng khi lần mất trước không tạo ra tiến độ nào**; hễ số
+   segment đã có audio tăng lên thì reset về 1. Nên một máy ngủ mỗi đêm không bao
+   giờ tiến gần giới hạn, còn một card không tổng hợp nổi một segment thì sau 5 lần
+   sẽ hỏng hẳn để người xem thấy.
+
+### Nhận diện lỗi
+
+Marker được so trên **toàn bộ chuỗi exception** (`__cause__` / `__context__`), vì
+chuỗi thú vị hầu như không nằm trên exception nổi lên trên cùng — lỗi driver tới
+dưới dạng `__cause__` của một `RuntimeError` từ pipeline.
+
+Và chỉ tính khi thông điệp **có nói về GPU** (`cuda`, `cublas`, `cudnn`,
+`ctranslate`, `gpu`, `nvidia`). Vài marker như `"unknown error"` hay
+`"initialization error"` quá chung để tin một mình.
+
+### Một lưu ý khi test
+
+Test qua `run_worker` thật, không chỉ test các hàm rời — vì **định tuyến mới chính
+là lỗi**. Vô hiệu hoá nhánh mới thì sách bị đánh dấu failed trở lại và test nói ra
+điều đó. Test hàm rời không bắt được chuyện đó.
 
 ---
 
 ## Còn thiếu gì
 
+Nói thẳng, vì chỗ này dễ tưởng là đã xong hơn thực tế:
+
+- **Chưa có lần ngủ thật nào kiểm chứng phần 2.** Toàn bộ được test bằng lỗi dựng
+  sẵn qua `run_worker` thật, chứ chưa ai suspend máy giữa một run rồi xem nó tự
+  đứng dậy. Lúc viết, alpha.45 đang chạy nên không thử được.
+- **Danh sách marker lấy từ các lỗi hậu-suspend đã biết**, không phải từ một lỗi
+  quan sát được trên chính máy này. Lần mất ngữ cảnh thật đầu tiên nên được đối
+  chiếu với `GPU_CONTEXT_LOST_MARKERS`; nếu nó rơi vào nhánh failed thì thêm chuỗi
+  vào đó.
+- **Một run đang chạy không được bảo vệ bởi bản vá vừa merge.** Tiến trình worker
+  đã nạp `worker.py` cũ vào bộ nhớ; sửa file trên đĩa không đổi được nó. Chỉ những
+  lần khởi động sau mới có.
 - Máy sập nguồn giữa lúc đang ghi `state.json` — `atomic_write_json` lo phần ghi,
   nhưng chưa ai thử rút điện thật để kiểm chứng.
 - Nếu người dùng có nhiều tài khoản Windows, task chỉ đăng ký cho `NGDtuanh`.
