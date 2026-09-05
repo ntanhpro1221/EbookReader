@@ -112,3 +112,37 @@ def test_one_failure_does_not_stop_the_rest(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(resume_interrupted, "start_background", flaky)
     assert resume_interrupted.main([str(tmp_path)]) == 0
     assert len(seen) == 2
+
+
+def test_it_records_what_it_did_beside_the_projects(tmp_path: Path, monkeypatch) -> None:
+    """At logon nobody reads stdout, so the decision has to survive somewhere."""
+    _project(tmp_path, "alpha.9", {"state": "running", "supervisor_pid": 999_999})
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: None)
+
+    resume_interrupted.main([str(tmp_path)])
+
+    log = (tmp_path / resume_interrupted.LOG_NAME).read_text(encoding="utf-8")
+    assert "TIẾP TỤC" in log and "alpha.9" in log
+
+
+def test_the_log_file_is_not_mistaken_for_a_project(tmp_path: Path, monkeypatch) -> None:
+    """It lives in the directory being scanned, so the scan has to step over it."""
+    _project(tmp_path, "alpha.9", {"state": "finished"})
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: None)
+
+    resume_interrupted.main([str(tmp_path)])
+    assert (tmp_path / resume_interrupted.LOG_NAME).is_file()
+
+    assert len(resume_interrupted.projects_under(tmp_path)) == 1
+    assert resume_interrupted.main([str(tmp_path)]) == 0
+
+
+def test_a_log_that_cannot_be_written_still_resumes_the_book(tmp_path: Path, monkeypatch) -> None:
+    """Logging is for us. Failing to log must never cost the user a night of audio."""
+    project = _project(tmp_path, "alpha.9", {"state": "running", "supervisor_pid": 999_999})
+    started: list[Path] = []
+    monkeypatch.setattr(resume_interrupted, "start_background", lambda p: started.append(Path(p)))
+    (tmp_path / resume_interrupted.LOG_NAME).mkdir()  # open() on a directory raises OSError
+
+    assert resume_interrupted.main([str(tmp_path)]) == 0
+    assert started == [project]

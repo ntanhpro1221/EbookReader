@@ -27,10 +27,27 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import datetime as _dt  # noqa: E402
+
 from ebook_reader.background_runner import get_status, start_background  # noqa: E402
 
 DEFAULT_VERSIONS_ROOT = Path("D:/Novels/Audiobooks/_versions")
 RESUMABLE_STATE = "lost"
+LOG_NAME = "_auto_resume.log"
+
+
+def _log_line(root: Path, line: str) -> None:
+    """Nobody is watching stdout at logon, so leave a trail beside the projects.
+
+    Outside the repo, and a file rather than a directory so the version scan skips it.
+    A logging failure must never be the reason a book fails to resume.
+    """
+    stamp = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with (root / LOG_NAME).open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp}  {line}\n")
+    except OSError:
+        pass
 
 
 def projects_under(root: Path) -> list[Path]:
@@ -52,6 +69,10 @@ def main(argv: list[str]) -> int:
     positional = [value for value in argv if not value.startswith("--")]
     root = Path(positional[0]) if positional else DEFAULT_VERSIONS_ROOT
 
+    def say(line: str) -> None:
+        print(line)
+        _log_line(root, line)
+
     projects = projects_under(root)
     if not projects:
         print(f"không tìm thấy project nào dưới {root}")
@@ -62,13 +83,13 @@ def main(argv: list[str]) -> int:
         status = get_status(project)
         label = f"{project.parent.name}/{project.name}"
         if status.stop_requested:
-            print(f"  bỏ qua  {label}: đã có yêu cầu dừng, không tự chạy lại")
+            say(f"  bỏ qua  {label}: đã có yêu cầu dừng, không tự chạy lại")
             continue
         if str(status.state) != RESUMABLE_STATE:
-            print(f"  bỏ qua  {label}: trạng thái {status.state}")
+            say(f"  bỏ qua  {label}: trạng thái {status.state}")
             continue
         detail = str(status.detail or "").strip()
-        print(f"  TIẾP TỤC {label}: {detail or 'bị ngắt giữa chừng'}")
+        say(f"  TIẾP TỤC {label}: {detail or 'bị ngắt giữa chừng'}")
         if dry_run:
             resumed += 1
             continue
@@ -76,9 +97,9 @@ def main(argv: list[str]) -> int:
             start_background(project)
             resumed += 1
         except Exception as error:  # noqa: BLE001 - one bad project must not stop the rest
-            print(f"     không chạy lại được: {error!r}")
+            say(f"     không chạy lại được: {error!r}")
 
-    print(f"{len(projects)} project, {resumed} được chạy tiếp{' (thử khan)' if dry_run else ''}")
+    say(f"{len(projects)} project, {resumed} được chạy tiếp{' (thử khan)' if dry_run else ''}")
     return 0
 
 
