@@ -504,11 +504,12 @@ def test_the_spelling_route_says_a_final_er_as_the_schwa() -> None:
     # of "Xenlore" is dropped; the coda it was hiding is not.
     assert _local_name_fallback("Xenlore") == "Xên-lôn"
     # "Theosbane" no longer reaches the spelling route at all: both halves are in the
-    # dictionary, theo as The-ô and bane as Bên, so it is read as the compound it is. The
-    # owner rejected the spelled reading outright - nobody says "thê ô sờ ban" - and the
-    # docstring of test_the_spelling_route_reads_a_phrase_one_word_at_a_time had already
-    # recorded a listener writing "theo-bên" while its assertion froze the other one.
-    assert _local_name_fallback("Theosbane") == "The-ô-bên"
+    # dictionary, so it is read as the compound it is. The owner rejected the spelled
+    # reading outright - nobody says "thê ô sờ ban" - and asked twice for "theo-bên".
+    # "theo" is itself a Vietnamese syllable, so the compound path reads it as one instead
+    # of through its CMUdict entry /ˈθiːoʊ/, which is two. "bane" is not, so it still
+    # reads from its phonemes as "bên".
+    assert _local_name_fallback("Theosbane") == "Theo-bên"
 
 
 def test_a_word_the_dictionary_has_reads_the_same_either_way() -> None:
@@ -601,11 +602,12 @@ def test_the_spelling_route_reads_a_phrase_one_word_at_a_time() -> None:
     "Xa-men-cai-d\u00ean-th\u00ea-\u00f4-x\u1edd-ban" - one long word, with the -er ending never seen because it
     was not at the end of anything. A listener writes "sa-men cai-d\u01a1 theo-b\u00ean".
 
-    That listener's reading is now what comes out. The assertion below used to say
-    "th\u00ea-\u00f4-x\u1edd-ban" while this docstring said "theo-b\u00ean" three lines above it - the target was
-    written down and the test froze the miss instead."""
+    That listener's reading is now what comes out - all of it. This assertion froze
+    "th\u00ea-\u00f4-x\u1edd-ban" first and "The-\u00f4-b\u00ean" second, both times while the docstring three
+    lines above it already said "theo-b\u00ean". Writing the target down and asserting
+    something else is how a test keeps a defect alive, and it did that twice here."""
     reading = _local_name_fallback("Samael Kaizer Theosbane")
-    assert reading == "Xa-men cai-d\u1edd The-\u00f4-b\u00ean"
+    assert reading == "Xa-men cai-d\u1edd theo-b\u00ean"
     assert len(reading.split(" ")) == 3
 
 
@@ -655,3 +657,47 @@ def test_the_dictionary_is_read_once() -> None:
     assert _cmudict_entries() is entries, "the second call must not read the file again"
     # and it answers the same as the scan it replaced
     assert _cmu_pronunciations(["Blade", "zzzznotaword"]) == {"blade": entries["blade"]}
+
+
+# --- a half that is already a Vietnamese word ------------------------------------------
+
+
+def test_eo_is_a_rime_and_is_not_cut_in_half() -> None:
+    """Every other e- pair was in the table; "eo" was not, so the letters fell through
+    separately to "êô", which is no rime at all, and the splitter cut it. But eo is as
+    Vietnamese as a rime gets - theo, kéo, mèo."""
+    from ebook_reader.analysis import _latin_name_vowel_reading, _split_illegal_rime
+
+    assert _latin_name_vowel_reading("eo") == "eo"
+    assert _split_illegal_rime("theo") == ["theo"]
+
+
+def test_a_compound_half_that_is_a_vietnamese_word_is_read_as_one() -> None:
+    """The rule _local_name_fallback already states for whole words - "Kim Luxara" is half
+    a Vietnamese word, and reading that half as English gives it a reading it never had -
+    which the compound path never applied.
+
+    "theo" has a CMUdict entry, /ˈθiːoʊ/, and going through it produced two syllables:
+    "The-ô-bên". The owner asked twice for "theo-bên"; so had this function's own docstring
+    since it was written.
+    """
+    from ebook_reader.analysis import _local_name_fallback
+
+    assert _local_name_fallback("Theosbane") == "Theo-bên"
+
+
+def test_the_half_that_is_not_a_vietnamese_word_still_reads_from_its_phonemes() -> None:
+    """Otherwise the rule would be "prefer spelling", which would wreck "bane" - it is not
+    a Vietnamese syllable, and its phonemes are what make it "bên" rather than "ban"."""
+    from ebook_reader.analysis import _local_name_fallback
+
+    assert _local_name_fallback("Theosbane").endswith("-bên")
+
+
+def test_the_owners_full_name_reads_the_same_way_everywhere() -> None:
+    """The defect this whole path exists for: one name read two ways in one book."""
+    from ebook_reader.analysis import _local_name_fallback
+
+    standalone = _local_name_fallback("Theosbane")
+    in_phrase = _local_name_fallback("Arthur Kaizer Theosbane")
+    assert in_phrase.endswith(standalone.casefold())
