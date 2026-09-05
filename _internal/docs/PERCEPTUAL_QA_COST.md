@@ -141,3 +141,81 @@ Ghi lại để người sau không thử lại đúng cách ấy; muốn phân 
 một câu ngắn nhiều lần với seed khác nhau rồi chấm**.
 
 `scripts/perceptual_duration_bias.py` dựng lại toàn bộ bảng trên từ bất kỳ project nào.
+
+### Đính chính ba con số của mục trên (2026-09-04)
+
+Đọc kỹ các hàng `quality_checks` của một segment hỏng lặp lại (`c00003_s0000014`, 1,52s,
+hỏng ở cả ba lần chạy) lôi ra hai lỗi trong cách tôi đo, và cả hai đều làm phóng đại kết quả.
+
+**1. Candidate sửa làm lệch phân bố.** Phân bố ban đầu gộp cả phép chấm trên *bản thu chính*
+lẫn trên *candidate sửa*. Candidate là bản thu lại của những segment vốn đã bị nghi ngờ, nên
+chúng nằm thấp hơn hẳn: trung vị ở nhóm <2s là **−0,815** so với **−0,434** của bản thu
+chính. Chỉ 4,7% mẫu, nhưng một cái cổng được hiệu chỉnh một phần bằng chính những bản nó đã
+loại thì sai về hình dạng bất kể sai số to hay nhỏ.
+
+Bỏ chúng ra, thiên vị vẫn còn nhưng **nhỏ hơn tôi đã báo**:
+
+| độ dài | gắn cờ (có lẫn candidate) | gắn cờ (chỉ bản thu chính) |
+|---|---|---|
+| <2s | 14,9% | **9,9%** |
+| ≥8s | 1,8% | 1,7% |
+
+Tỉ lệ so với đoạn dài vì thế là **~6 lần**, không phải 8-15 lần. Ngưỡng <2s dịch từ −1,079
+sang **−1,063**.
+
+**2. Tôi lấy nhầm hàng kiểm.** Câu truy vấn cũ lấy phép chấm perceptual *mới nhất* của mỗi
+segment. Nhưng một segment hỏng có nhiều hàng: bản thu chính mang mã chặn, rồi các candidate
+sửa mang `PERCEPTUAL_SHORT_AUDIO` với `baseline_delta = null`. Lấy hàng mới nhất là lấy đúng
+hàng *không* có số. `c00003_s0000014` vì thế **rơi khỏi** bảng của tôi hoàn toàn, và con số
+"3 trong 6" là vô nghĩa.
+
+Đếm đúng - lấy hàng mang mã chặn, dùng phân bố sạch:
+
+    21/40 segment từng bị gắn cờ perceptual sẽ hết chặn
+
+Những segment **vẫn** chặn phần lớn là đoạn **dài** (7,9s / 8,9s / 10,2s / 11,8s / 12,1s),
+vì ngưỡng theo sigma **siết** đoạn dài lại (−0,786 thay vì −0,8). Đúng như đã nói: đây là
+cân bằng lại, không phải nới lỏng.
+
+**3. Kết luận quan trọng nhất thì không đổi: vẫn 0 chương được mở.** Chạy lại cổng xuất bản
+với cách lấy hàng đã sửa cho ra đúng kết quả cũ - mọi chương bị chặn đều còn một segment
+`failed` hoặc một segment perceptual vẫn chặn. Tôi đã đi tới kết luận đúng bằng một phép đo
+sai, và điều đó không làm phép đo ấy đỡ sai đi.
+
+## Tai người đã phán 14/14: đo được tỉ lệ báo động giả thật (2026-09-04)
+
+Chủ sách nghe hết 14 đoạn bị chặn của alpha.44 và phán từng đoạn. Đây là **ground truth**
+đầu tiên của dự án - trước giờ mọi con số đều là máy tự chấm máy.
+
+| cổng | gắn cờ | đọc ĐÚNG | hỏng THẬT | báo động giả |
+|---|---|---|---|---|
+| `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | 6 | **6** | 0 | **100%** |
+| `PERCEPTUAL_NATURALNESS_REVIEW` | 6 | 5 | **1** | **83%** |
+| `TTS_PACE_OUTLIER` | 1 | 0 | 1 | 0% |
+| `SEGMENT_FAILED` (cổng nhịp) | 1 | 0 | 1 | 0% |
+
+### Neo tên: 6/6 đều là báo động giả
+
+Cả sáu đều đọc đúng. Chủ sách nhận xét ba lần, mỗi lần một đoạn khác nhau:
+
+> *"đọc đúng từ, có vẻ máy nghe sai. có vẻ máy nghe phần tiếng anh convert tiếng việt không tốt"*
+> *"những từ được convert từ tiếng anh sang âm tiếng việt thì tool nghe của bạn nghe không tốt"*
+
+Điều này khẳng định lý do `ASR_LOCKED_NAME_ANCHOR_REVIEW` được miễn trừ ngay từ đầu, và
+đặt câu hỏi vì sao `..._MISMATCH` lại **chặn**: trên quyển sách này, mọi lần nó chặn đều sai.
+Whisper đơn giản là không nghe được tên tiếng Anh đã phiên âm sang âm Việt - đúng cái mà
+`scripts/compare_asr_engines.py` đã đo (đổi engine không cứu được lớp này).
+
+### Perceptual: 5 báo động giả cho 1 lần bắt đúng
+
+`c00007_s0000045` bị chủ sách phán **"sai, bị đọc 2 lần"** - giọng đọc lặp nội dung hai lần.
+Cổng perceptual bắt được nó. Năm đoạn còn lại đều ổn.
+
+Nên cổng này **không vô dụng**: nó là thứ duy nhất bắt được một lỗi mà không cổng nào khác
+thấy. Nhưng nó tốn 5 lần báo nhầm cho mỗi lần bắt đúng, và đó chính là mức giá mà mục
+"ngưỡng theo sigma" đang định giảm.
+
+### Cổng nhịp: 2/2 đều đúng
+
+Cả hai ca đều là lỗi thật, và cùng một nguyên nhân: ký tự `»` lọt tới giọng đọc nên không
+có chỗ ngắt nghỉ. Cổng nhịp phát hiện đúng triệu chứng của một lỗi nằm ở tầng văn bản.

@@ -29,6 +29,7 @@ from ebook_reader.tts import (
     VieNeuEngine,
     apply_pitch_variant,
     is_fatal_tts_error,
+    is_transient_tts_memory_error,
     vieneu_sampling_for_segment,
 )
 from ebook_reader.tts_contract import (
@@ -382,12 +383,29 @@ def test_single_syllable_repair_uses_a_micro_generation_budget() -> None:
 
 
 def test_missing_locked_vieneu_preset_is_fatal() -> None:
+    """A preset that is absent will still be absent after waiting, so stopping is right."""
     assert is_fatal_tts_error(
         RuntimeError("Locked VieNeu preset 'Phạm Tuyên' is unavailable; refusing to change voice silently")
     )
-    assert is_fatal_tts_error(
-        RuntimeError("DefaultCPUAllocator: not enough memory: you tried to allocate 2442336000 bytes")
-    )
+
+
+def test_an_allocation_failure_is_no_longer_fatal() -> None:
+    """This assertion used to sit in the test above, and it was right when written.
+
+    Retrying an out-of-memory error immediately just runs out of memory again, so with no
+    way to release and wait, failing fast was the better of the two behaviours available.
+
+    The pipeline now has a third: _recover_from_memory_pressure drops every model this
+    process holds, waits up to half an hour for whoever took the memory to give it back,
+    and retries the same attempt. That changes which classification is correct. The owner
+    reported the old behaviour as a bug - opening Unity or Rider mid-run ended a book that
+    had been running for hours - and asked for exactly this.
+
+    Full split in test_memory_pressure_is_not_fatal.py.
+    """
+    message = "DefaultCPUAllocator: not enough memory: you tried to allocate 2442336000 bytes"
+    assert not is_fatal_tts_error(RuntimeError(message))
+    assert is_transient_tts_memory_error(RuntimeError(message))
 
 
 def test_pitch_variant_preserves_duration_and_changes_waveform() -> None:

@@ -307,3 +307,168 @@ segment nào thuộc loại nào.
 
 **Ba segment không audio của alpha.32 đều là `normal`**, nên mọi kết luận ở mục trên vẫn
 đứng — lỗi hard-code chỉ cắn khi có segment ngoài dải `normal`, và alpha.43 là lần đầu.
+
+### alpha.44 nhiều khả năng **không** thử tới cổng lùi dải nhịp
+
+Cổng ấy chỉ kích hoạt khi một segment ngoài dải `normal` dùng hết cả 10 lần thử. alpha.44
+gán `fast` cho 8 segment; đối chiếu nhịp đã đo được của chính những segment ấy ở alpha.32:
+
+| segment | nhịp ở alpha.32 | cách sàn 14,0 |
+|---|---|---|
+| `c00005_s0000081` | 17,81 | +3,81 |
+| `c00005_s0000082`-`085` | 14,78 - 15,49 | +0,78 … +1,49 |
+| `c00006_s0000086` | 16,57 | +2,57 |
+| **`c00008_s0000058`** | **14,07** | **+0,07** |
+| `c00006_s0000001` (tiếng gào) | không có số | không rõ |
+
+**0/8 có nguy cơ rõ ràng.** Một cái cách sàn đúng 0,07 và một cái không có số đo, còn lại
+đều thoải mái.
+
+Nghĩa là **thay đổi này đã ship nhưng lần chạy hiện tại nhiều khả năng không chạm tới nó.**
+Nó có test đơn vị, nhưng đường đi thật trong một lần chạy thật thì chưa. Ghi lại để đừng ai
+đọc "alpha.44 xong xuôi" thành "cổng lùi dải nhịp đã được kiểm chứng" - hai chuyện khác nhau,
+và chỉ có một cái đúng.
+
+Muốn kiểm nó thật thì cần một segment ngoài dải `normal` mà giọng không đọc tới sàn được -
+đúng loại `c00007_s0000074` của alpha.43, thứ mà việc đưa num_ctx về 7.168 vừa làm biến mất.
+
+## `max_retries` 10 đã cứu được segment đầu tiên (alpha.44, 2026-09-04)
+
+`c00005_s0000013` - *"Tên tôi là Samael Kaizer Theosbane."* - chưa từng có bản thu nào ở
+alpha.32 lẫn alpha.43. Ở alpha.44 nó **có audio**:
+
+| | status | audio | nhịp |
+|---|---|---|---|
+| alpha.32 (4 lần) | failed | không có | tốt nhất 12,25 |
+| alpha.43 (4 lần) | failed | không có | tốt nhất 12,25 |
+| **alpha.44 (10 lần)** | **signal_passed** | **2,40s** | **12,71** |
+
+`pace_outlier = 0.0` và **không mã cảnh báo nào** - đây là bản thu đạt thật, không phải bản
+được nới tay.
+
+### Mô hình của tôi đúng kết quả nhưng sai cơ chế
+
+Ước lượng cũ: 12,3% mỗi lần thử, tức 73% trong 10 lần. Nó đã xảy ra. Nhưng dãy thật cho thấy
+giả định "mỗi lần thử là một lần rút độc lập từ phân phối liên tục" là **sai**:
+
+    lần 1  11,05      lần 5  10,70
+    lần 2  11,82      lần 6  12,25   <- lặp
+    lần 3  12,25      lần 7  11,82   <- lặp
+    lần 4  12,25      lần 8-10 -> 12,71 (đạt)
+
+12,25 xuất hiện ba lần, 11,82 hai lần. Các bản thu **dồn về một số ít kết cục** chứ không
+rải đều. Vẫn còn đủ đa dạng để cuối cùng chạm 12,71, nên kết luận không đổi - nhưng con số
+"73%" nên đọc là *thứ tự độ lớn*, không phải xác suất tính được. Hai segment còn lại
+(`c00009_s0000008` thang bậc ký tự, `c00010_s0000017`) sẽ nói rõ hơn ở chương 9 và 10.
+
+### Cứu được không có nghĩa là xuất bản được - nhưng nó đổi *ai* giải quyết được
+
+Chương 5 của alpha.44 vẫn hỏng, và vẫn hỏng tại `c00005_s0000013`. Nhưng lý do đã khác hẳn:
+
+    alpha.32/43 : SEGMENT_FAILED          - không có bản thu nào
+    alpha.44    : ASR_LOCKED_NAME_ANCHOR_MISMATCH - có bản thu 2,40s
+
+    văn bản : Tên tôi là Samael Kaizer Theosbane.
+    máy nghe: Tên tôi là Samen Kai The Theosaban.     similarity 0,67
+
+Vượt được cổng nhịp thì tới cổng neo tên, và tên chuyển tự ấy bị nghe lệch. **Chương vẫn
+chặn.** Nhưng cả hai chỗ chặn của chương 5 giờ **đều có audio**, còn trước đây một chỗ thì
+không - và `accept` từ chối một segment không có bản thu vì không có checksum để đối chiếu.
+
+Nói cách khác, thay đổi này không chuyển chương từ "hỏng" sang "xuất bản được". Nó chuyển
+chương từ **"máy bó tay và người cũng không làm gì được"** sang **"chỉ cần tai người nghe"**
+- đúng cái ranh giới mà `scripts/what_blocks_publication.py` chia hai nhóm. Đó mới là giá
+trị thật của nó, và đừng báo cáo nó thành thứ khác.
+
+## Cả hai dự đoán của phép đo tầm với đều đúng (alpha.44, 2026-09-04)
+
+`scripts/pace_retry_reachability.py` chia ba segment không có audio của alpha.32 thành hai
+lớp và gắn số cho từng lớp. alpha.44 nâng ngân sách lên 10 và thử cả hai:
+
+| segment | cách sàn | dự đoán ở ngân sách 10 | kết quả alpha.44 |
+|---|---|---|---|
+| `c00005_s0000013` | 2% | **73%** | **CỨU ĐƯỢC** - 12,71 chars/s |
+| `c00009_s0000008` | 17% | **~0%** | **trượt cả 10 lần** |
+
+Dãy của segment thứ hai: 9,22 / 10,51 / 10,70 / 9,36 / 9,22 / 9,98 / 9,36 / 9,08 / 9,08 /
+10,70. Tốt nhất **10,70** so với sàn 12,5 - không lần nào tới gần, đúng như "ngoài tầm với ở
+mọi ngân sách".
+
+**Sự dồn cụm còn rõ hơn ở đây:** 10 lần thử chỉ cho 6 giá trị phân biệt, mỗi giá trị 9,08 /
+9,22 / 9,36 / 10,70 đều xuất hiện hai lần. Bản thu không rải đều quanh một trung bình; chúng
+rơi vào một số ít kết cục. Đó là lý do "xác suất mỗi lần thử" nên đọc là bậc độ lớn.
+
+Và nó xác nhận cách chia lớp: đây **không** phải segment thiếu lượt thử, mà là **văn bản sai
+loại** cho thước đo - một thang bậc `C » B » A » S » SS » SSS` đọc thành tên chữ cái thì chậm
+hơn văn xuôi theo đúng cấu tạo. Thêm lượt thử không sửa được điều đó, và đó chính là điều
+phép đo đã nói trước khi tiêu một giây GPU nào.
+
+### Cổng lùi dải nhịp: đường thường gặp đã chạy đúng
+
+Dòng lỗi cuối cùng kết thúc bằng `pace_band=already normal`. Cổng mới đã được gọi, thấy
+segment vốn ở dải `normal`, và trả lời ngay mà không tốn lần tổng hợp nào - đúng đường mà
+`test_a_normal_segment_never_pays_for_this` khẳng định. Đường *kích hoạt thật* thì vẫn chưa
+được chạy trong một lần chạy thật (xem mục trên).
+
+### Bảng điểm cuối: 3/3, và thứ tự cũng đúng
+
+`c00010_s0000017` được cứu ở **lần thử 5**, nhịp 12,82, `signal_passed`, không cảnh báo nào.
+Bốn lần đầu (11,81 / 10,44 / 12,47 / 12,13) tái lập chính xác alpha.32 và alpha.43 - tất
+định thêm một lần nữa.
+
+| segment | cách sàn | dự đoán ở ngân sách 10 | kết quả | cứu ở lần |
+|---|---|---|---|---|
+| `c00010_s0000017` | **0,24%** | 88% | **cứu được** | **5** |
+| `c00005_s0000013` | 2% | 73% | **cứu được** | 8-10 |
+| `c00009_s0000008` | 17% | ~0% | **trượt cả 10** | — |
+
+Không chỉ ba dự đoán đều đúng, mà **thứ tự cũng đúng**: cách sàn càng gần thì cứu càng sớm,
+và cái xa nhất thì không bao giờ. Với một mô hình mà tôi đã phải hạ xuống thành "bậc độ lớn"
+sau khi thấy bản thu dồn cụm, đó là nhiều hơn mức nó hứa.
+
+**2 trong 3 segment không có audio đã có bản thu.** Chương 5 và chương 10 vì thế rời khỏi
+nhóm "cần bản thu mới" sang nhóm "chỉ cần tai người nghe". Chương 9 ở lại, và ở lại vì đúng
+lý do đã đo: văn bản của nó không phải văn xuôi.
+
+## Một đoạn bị đọc hai lần, và vì sao KHÔNG nên siết trần thời lượng (đo 2026-09-04)
+
+Chủ sách nghe `c00007_s0000045` và phán **"sai, bị đọc 2 lần"**. Đây là lỗi thật duy nhất
+trong 14 đoạn bị chặn của alpha.44, và cũng là lỗi duy nhất mà cổng perceptual bắt được mà
+không cổng nào khác thấy.
+
+Vì sao không cổng nào khác thấy:
+
+    văn bản : "Mẹ kiếp!"   6 ký tự nói được
+    âm thanh: 1,60s        ở nhịp thường chỉ cần ~0,4s
+    asr_text: None         quá ngắn, ASR bỏ qua (ASR_UNVERIFIABLE_SHORT_TEXT)
+    nhịp    : None         dưới rate_check_min_chars = 24, cổng nhịp bỏ qua
+    trần    : 9,30s        rộng gấp gần 6 lần thời lượng thật
+
+Ba cổng đều bỏ trống đúng chỗ này. Trần 9,3 giây cho một câu 6 ký tự là do sàn
+`MIN_VALIDATION_SECONDS` chi phối khi văn bản quá ngắn.
+
+### Cách sửa hiển nhiên - siết trần - đã đo và **bác bỏ**
+
+Tính giây-trên-mỗi-ký-tự cho cả 132 đoạn ngắn (dưới 24 ký tự) của sách:
+
+| s/ký-tự | đoạn | |
+|---|---|---|
+| 0,720 | `C` | hợp lệ - một chữ cái đọc thành tên bậc |
+| 0,640 | `B` | hợp lệ |
+| 0,560 | `A` | hợp lệ |
+| 0,520 | `SS`, `"Có!"` | hợp lệ |
+| 0,347 | `—RẦM!!` | hợp lệ - tiếng động |
+| **0,267** | **`"Mẹ kiếp!"`** | **hỏng thật** |
+
+Trung vị 0,096, p90 0,220. Đoạn hỏng đứng **thứ chín**, không phải ngoại lệ. Một cái trần đủ
+chặt để bắt nó sẽ loại luôn chữ cái đơn và tiếng động - đúng lớp mà dự án đã nhiều lần thấy
+là mong manh (`is_short_utterance`, sửa micro-utterance, miễn trừ
+`ASR_UNVERIFIABLE_SHORT_TEXT`).
+
+**Tỉ lệ thời lượng không tách được "đọc hai lần" khỏi "câu ngắn đọc chậm có chủ ý".** Nên
+không ship hằng số nào ở đây. Muốn bắt lớp này thì cần một tín hiệu khác - ví dụ so sánh
+tự tương quan trong chính waveform để phát hiện lặp - và đó là một phép đo khác, chưa làm.
+
+Trước mắt, cổng perceptual là thứ duy nhất bắt được nó, và nó bắt đúng. Đó là lập luận
+ngược lại việc nới cổng perceptual quá tay: 5 báo động giả cho 1 lần bắt đúng, nhưng lần
+bắt đúng ấy là lỗi mà **không cổng nào khác** trong hệ thống nhìn thấy.

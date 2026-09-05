@@ -116,6 +116,81 @@ VIETNAMESE_UNITS = (
 )
 
 
+# Ký tự sách có mà giọng đọc không đọc được. Chúng đi thẳng tới TTS và không tạo ra khoảng
+# nghỉ nào, nên một chú thích bị nuốt vào thành một thành phần của câu: chủ sách nghe
+# "Thường (Common) (C) » Hiếm" ra thành "Thường Common C hiếm" - dính liền, không nhịp.
+#
+# Có hai loại, và loại thứ hai là chỗ dễ làm sai:
+#   - Ký tự MANG NGHĨA phải thành CHỮ. "↓ 1.000 Đơn vị" nghĩa là *giảm* 1.000 đơn vị; bỏ nó
+#     đi là bỏ mất nghĩa của câu.
+#   - Ký tự NGĂN CÁCH phải thành DẤU PHẨY, không được bỏ trần. Bỏ trần thì chú thích lẫn vào
+#     câu văn như một thành phần bình thường, đúng cái lỗi đang phải sửa.
+SPOKEN_SYMBOL_WORDS = {
+    "↓": "giảm",
+    "↑": "tăng",
+}
+# Ngoặc và mũi tên ngăn cách: thành dấu phẩy để giọng nghỉ đúng một nhịp trước và sau phần
+# được ngăn. `,` và `()` đều đã nằm trong PAUSE_GROUP_PATTERN của audio_io nên số nhóm nghỉ
+# không đổi - thay đổi duy nhất là giọng NGHỈ THẬT ở chỗ thước đo vốn đã luôn tính là có
+# nghỉ. Trên c00009_s0000018 thước đo trừ 6,90s khoảng lặng của 11,80s âm thanh mà giọng
+# không hề nghỉ, thổi nhịp từ 10,76 lên 25,92 chars/s và vượt cận trên 24,5.
+SPOKEN_SEPARATORS = "»«›‹→⇒▸▶►([{)]}"
+# Đầu dòng đánh dấu mục, không ngăn cách gì với thứ đứng trước vì không có gì đứng trước.
+SPOKEN_DROPPED = "•▪◦*"
+_SPOKEN_COMMA_RUN = re.compile(r"(?:\s*,)+(?=\s*,)")
+_SPOKEN_SPACE_RUN = re.compile(r"[ \t]{2,}")
+_SPOKEN_LEADING_COMMA = re.compile(r"^\s*,\s*", re.MULTILINE)
+# A comma this introduced has to attach to the word before it. "C , B" puts the silence in
+# the wrong place, which is the defect being fixed rather than a cosmetic detail.
+_SPOKEN_SPACE_BEFORE_PUNCT = re.compile(r"\s+([,.!?;:…])")
+# A separator immediately before real punctuation or the end is a pause with nothing after
+# it - "(Spirit Essence Units)" would otherwise close on a hanging comma.
+_SPOKEN_TRAILING_COMMA = re.compile(r",(\s*(?:[.!?…]|$))")
+
+
+def _spoken_symbols_in_span(text: str) -> str:
+    result = []
+    for character in text:
+        if character in SPOKEN_SYMBOL_WORDS:
+            result.append(f" {SPOKEN_SYMBOL_WORDS[character]} ")
+        elif character in SPOKEN_SEPARATORS:
+            result.append(", ")
+        elif character in SPOKEN_DROPPED:
+            result.append("")
+        else:
+            result.append(character)
+    return "".join(result)
+
+
+def spoken_symbols_to_words(text: str) -> str:
+    """Turn characters the voice cannot say into words it can, or into a pause.
+
+    The book's own text is never changed - this is only what gets handed to the voice, and
+    to the transcript comparison that has to match it.
+
+    Square brackets carry two different jobs in this book and only one of them is a
+    separator. "[A-rank]" is an annotation the voice should pause around; "[thở dài]" is a
+    stage direction normalize_vocalizations_for_tts turns into an actual breath, "Hầy...".
+    Converting the second kind to commas destroys the cue before that function ever sees it,
+    which is what the anchor tests caught. Vocal cues are therefore passed through untouched
+    and normalized later, as they always were.
+    """
+    parts: list[str] = []
+    position = 0
+    for match in VOCAL_CUE_PATTERN.finditer(str(text)):
+        parts.append(_spoken_symbols_in_span(str(text)[position:match.start()]))
+        parts.append(match.group(0))
+        position = match.end()
+    parts.append(_spoken_symbols_in_span(str(text)[position:]))
+    out = "".join(parts)
+    out = _SPOKEN_SPACE_BEFORE_PUNCT.sub(r"\1", out)
+    out = _SPOKEN_COMMA_RUN.sub("", out)
+    out = _SPOKEN_LEADING_COMMA.sub("", out)
+    out = _SPOKEN_TRAILING_COMMA.sub(r"\1", out)
+    out = _SPOKEN_SPACE_RUN.sub(" ", out)
+    return out.strip().strip(",").strip()
+
+
 def roman_numeral_value(token: str) -> int | None:
     """The number a Roman numeral spells, or None when the token is not one.
 

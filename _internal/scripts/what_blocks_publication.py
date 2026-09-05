@@ -25,6 +25,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS  # noqa: E402
 
 
+def _accepted(connection) -> set:
+    """(stable_id, warning_code, wav_sha256) triples a listener has already ruled on.
+
+    The pipeline subtracts these in _high_quality_blocking_segment_warnings, so a report
+    that does not is describing a book the pipeline no longer sees - it keeps asking for
+    decisions already made. Keyed by checksum, so re-cutting a take voids the decision
+    exactly as it does everywhere else.
+    """
+    try:
+        rows = connection.execute(
+            "SELECT segment_stable_id, warning_code, wav_sha256 FROM listener_audio_acceptances"
+        ).fetchall()
+    except Exception:  # noqa: BLE001 - older projects have no such table
+        return set()
+    return {(str(r[0]), str(r[1]), str(r[2]).lower()) for r in rows}
+
+
 def main(project_root: str) -> int:
     root = Path(project_root)
     database = root / "project.sqlite3"
@@ -47,6 +64,7 @@ def main(project_root: str) -> int:
         path = str(row["output_mp3"] or "")
         return bool(path) and Path(path).is_file()
 
+    accepted = _accepted(connection)
     published = [row for row in chapters if _published(row)]
     print(f"{len(published)}/{len(chapters)} chương có MP3 trên đĩa")
     print()
@@ -62,14 +80,19 @@ def main(project_root: str) -> int:
         if _published(chapter):
             continue
         segments = connection.execute(
-            "SELECT stable_id, status, warning_code, wav_path, wav_duration, text, asr_text "
-            "FROM segments WHERE chapter_id=? ORDER BY seq",
+            "SELECT stable_id, status, warning_code, wav_path, wav_duration, text, asr_text, "
+            "wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
             (int(chapter["id"]),),
         ).fetchall()
         reasons: list[tuple[str, sqlite3.Row, str]] = []
         for row in segments:
             codes = {value for value in str(row["warning_code"] or "").split("|") if value}
-            if str(row["status"]) == "failed":
+            checksum = str(row["wav_sha256"] or "").lower()
+            codes -= {
+                code for code in codes
+                if (str(row["stable_id"]), code, checksum) in accepted
+            }
+            if str(row["status"]) == "failed" and codes:
                 # The machine gave up: five repair rounds and no take it would accept.
                 reasons.append(("máy đã bó tay", row, sorted(codes)[0] if codes else "SEGMENT_FAILED"))
                 continue

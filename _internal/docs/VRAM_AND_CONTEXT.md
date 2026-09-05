@@ -315,3 +315,119 @@ Hạ `ANALYSIS_CONTEXT_*` để mức suy ra bám theo prompt quan sát được
 của batch tên. Đây cũng chính là câu hỏi chủ sách đã đặt - *"project tưởng nó đang tự căn
 chỉnh theo mức độ tài nguyên hiện có của máy mà?"* - áp vào ngữ cảnh: con số nên bám theo
 việc thật, và guard là thứ khiến việc bám sát ấy an toàn.
+
+## alpha.44 xác nhận: 7.168 **không kèm** cắt prompt (đo 2026-09-04)
+
+Hạ `NAME_PRONUNCIATION_BATCH_SIZE` 20 → 12 để num_ctx suy ra về 7.168. Pha phân tích:
+
+| | num_ctx | pha phân tích | lượt gọi | tốc độ sinh | guard cắt prompt |
+|---|---|---|---|---|---|
+| alpha.32 | 7.168 | 3.846s | 418 | 56,4 tok/s | **1 lần** |
+| alpha.43 | 9.216 | 4.475s | 424 | 50,1 tok/s | 0 |
+| **alpha.44** | **7.168** | **3.733s** | 418 | **57,6 tok/s** | **0** |
+
+**Đúng thứ mà thay đổi này nhắm tới:** lấy tốc độ của 7.168 mà không lấy chỗ hỏng của nó.
+alpha.32 ở cùng ngữ cảnh đã cắt prompt một lần; alpha.44 không lần nào, vì batch tên nhỏ hơn
+xin ít token đầu ra hơn nên prompt vừa. Tiết kiệm **742s** so với alpha.43 - hơn mức 639s đã
+dự đoán.
+
+### Câu hỏi để mở đã có đáp án: batch tên nhỏ hơn **không** làm hỏng cách đọc
+
+Docstring của hằng số ghi rõ là chưa đo: batch tên nhỏ hơn ảnh hưởng thế nào tới *chất lượng*
+cách đọc. Số liệu batch 1:
+
+| | cỡ batch 1 | thất bại → CMU | tỉ lệ |
+|---|---|---|---|
+| alpha.43 | 20 | 18 | 90% |
+| alpha.44 | 12 | 12 | **100%** |
+
+Tỉ lệ ấy **cao hơn**, và nó đã làm tôi lo nhầm. Khi pha chạy xong, tổng mới là con số đáng
+tin:
+
+| | cỡ batch | tên rơi về CMU | khoá được |
+|---|---|---|---|
+| alpha.43 | 20 | **18** | 112/112 |
+| alpha.44 | 12 | **17** | 112/112 |
+
+**Trung tính, nhỉnh hơn một chút.** Cả hai đều khoá đủ 112 tên. Tỉ lệ batch 1 là ảo ảnh:
+batch 1 chứa đúng những tên khó ở cả hai lần chạy (`Apex`, `Arthur Kaizer Theosbane`, `Card`,
+`Debuff`...), nên batch nhỏ hơn chỉ dồn chúng đặc hơn chứ không tạo thêm chỗ hỏng. Tỉ lệ
+theo từng batch không nói lên điều gì khi thành phần batch tự nó đã lệch.
+
+Vậy thay đổi này **được 742s mà không trả giá gì**: không cắt prompt, không mất chất lượng
+cách đọc.
+
+(Và một lần suýt báo sai nữa: tôi đọc "không có dòng `còn N tên lỗi sau lần 3`" thành "không
+tên nào lỗi", trong khi pha ấy **đang chạy dở** và batch 1 đã có 12 tên rơi về CMU. Đừng đọc
+sự vắng mặt của một dòng log như một kết quả khi việc chưa xong.)
+
+## Nền nhiễu của phân tích: 3,1% — và num_ctx nhân nó lên bốn lần (đo 2026-09-04)
+
+alpha.44 cho thứ mà hai lần chạy trước không cho được: **một biến kiểm**. alpha.32 và
+alpha.44 chạy cùng `num_ctx = 7.168`; alpha.43 chạy 9.216. So chỉ dẫn diễn xuất
+(`pace`/`emotion`/`intensity`/`kind`) trên cả 948 segment:
+
+| so sánh | khác nhau |
+|---|---|
+| alpha.32 ↔ alpha.44 (**cùng 7.168**) | **3,1%** ← nền nhiễu |
+| alpha.32 ↔ alpha.43 (7.168 vs 9.216) | **11,5%** |
+| alpha.43 ↔ alpha.44 (9.216 vs 7.168) | 10,7% |
+
+**Phân tích không tất định.** Hai lần chạy cùng cấu hình vẫn lệch 3,1% - suy luận LLM không
+tái lập theo từng bit, và việc chia batch cũng lệch chút ít. Đó là **sàn** của mọi phép so
+sánh giữa hai lần chạy trong dự án này.
+
+**Đổi num_ctx nhân sàn ấy lên khoảng bốn lần**, 3,1% → 11,5%. Và 11,5% ấy khớp gần khít với
+11,3% segment có *âm thanh khác* đã đo giữa alpha.32 và alpha.43 (107/944). Chuỗi nhân quả
+vì thế khép lại: **ngữ cảnh → chỉ dẫn diễn xuất → âm thanh → kết cục.**
+
+### Thấy được ở hai segment cụ thể
+
+| segment | alpha.32 | alpha.43 (9.216) | alpha.44 |
+|---|---|---|---|
+| `c00007_s0000074` Juliana | normal/neutral/0 | **fast/afraid/2** → mất audio | **normal/neutral/0** |
+| `c00006_s0000001` tiếng gào | fast/angry/3 | **normal/neutral/0** → chặn ch6 | **fast/angry/3** |
+
+Cả hai segment từng làm hỏng một chương ở alpha.43 đều **quay về đúng cách đọc của
+alpha.32** khi ngữ cảnh trở lại 7.168.
+
+### Hệ quả cho cách đọc mọi phép so sánh trước đó
+
+Bất kỳ khác biệt nào dưới ~3% giữa hai lần chạy **không phải bằng chứng của gì cả**. Điều
+này không lật kết luận nào đã ghi - 1,6% bản ghi khác nhau trên *cùng một file âm thanh* vẫn
+đứng, vì phép đo ấy so cùng một audio nên không dính nhiễu phân tích - nhưng nó đặt lại
+thước cho những so sánh ở mức chương và mức cảnh báo, nơi con số nhỏ dễ bị đọc thành xu
+hướng.
+
+### Trục trôi dạt thứ hai: đúc vai - và chương 6 của alpha.44 là nhiễu, không phải công của thay đổi nào
+
+alpha.44 lấy lại chương 6 mà alpha.43 đánh mất, và lấy lại đẹp: segment tiếng gào ra
+`verified`, similarity **1,00**, không mã cảnh báo - trong khi alpha.32 xuất bản chính chương
+ấy nhờ một bản ghi **ảo giác được miễn trừ**. Rất dễ ghi công cho `max_retries` hoặc engine.
+Cả hai đều không phải.
+
+Truy ra thì lý do nằm ở chỗ khác:
+
+    alpha.32: voice=14  speaker="…người bị bắt"      pitch=-4  sha=cea8dd10
+    alpha.44: voice=16  speaker="…người bị bắt nạt"  pitch=0   sha=a1492959
+
+Phân tích **nhận diện nhân vật khác đi** - "người bị bắt" so với "người bị bắt nạt" - nên
+đúc giọng khác, pitch khác, seed khác, âm thanh khác, và bản mới tình cờ được Whisper nghe
+đúng hoàn toàn. Cả hai đều là bản `primary`, không candidate nào, nên vòng sửa không dính
+dáng gì.
+
+Đo trục ấy trên cả sách:
+
+| | speaker khác | giọng khác |
+|---|---|---|
+| alpha.32 ↔ alpha.44 (**cùng 7.168**) | **1,8%** | **2,4%** |
+| alpha.32 ↔ alpha.43 (7.168 vs 9.216) | 9,0% | 6,1% |
+
+Cùng hình dạng với trôi dạt chỉ dẫn (3,1% cùng ctx, 11,5% khác ctx). **Nền nhiễu của phân
+tích không chỉ là chỉ dẫn diễn xuất - nó gồm cả việc đúc vai**, và chương 6 rơi đúng vào
+2,4% ấy.
+
+**Hệ quả cho cách đọc kết quả alpha.44:** chênh lệch một hai chương giữa các lần chạy nằm
+trong nhiễu. Muốn quy cho một thay đổi cụ thể thì phải truy tới từng segment và chỉ ra cơ
+chế - như đã làm cho `c00005_s0000013` (cứu thật, do `max_retries`) và cho chương 6 này (may,
+do đúc vai). Đếm chương không đủ.
