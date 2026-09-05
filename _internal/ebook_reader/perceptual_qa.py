@@ -26,7 +26,17 @@ DEFAULT_MINIMUM_DURATION_SECONDS = 1.5
 DEFAULT_INFERENCE_REPETITIONS = 3
 DEFAULT_INFERENCE_SEED = 42
 # Measured resident size of one scoring worker, used to keep a pool from crowding RAM.
-PERCEPTUAL_WORKER_RAM_GB = 1.75
+#
+# Re-measured on alpha.47 (2026-09-06) while a batch was actually loaded, and 1.75 was 24%
+# low: eleven loaded children read 2.08-2.36 GB, median 2.16. Sampling matters more than it
+# sounds - the same processes read 0.01 GB a few seconds earlier while still importing, so a
+# snapshot taken at the wrong moment supports any number you like.
+#
+# 2.30 rather than the 2.16 median, because the two errors are not symmetric. Overestimating
+# costs one worker of parallelism. Underestimating is what put alpha.47 at 2.0 GB free and
+# into yield_heavy, where the throttle stops the very work the pool was sized for - the pool
+# sizes itself into the state that forbids it.
+PERCEPTUAL_WORKER_RAM_GB = 2.30
 """What one more scoring worker costs the machine, measured rather than assumed.
 
 This was 1.0, and 1.0 is what usable_for() divided the free memory by when deciding how

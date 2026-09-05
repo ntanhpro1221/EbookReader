@@ -1024,6 +1024,26 @@ def _command_pronounce(args: argparse.Namespace) -> CommandResult:
             exit_code=EXIT_USAGE,
             error="--surface and --spoken must both be non-empty",
         )
+    # Changing a reading changes the text handed to the voice, and a run in flight is
+    # carrying items whose spoken-text checksum was taken before the change. alpha.47 died
+    # on exactly that: `pronounce Theosbane "theo-bên"` at 03:33, and at 04:06 chapter 5
+    # verification raised "spoken-text checksum drifted before candidate or final
+    # verification". Nothing on disk was inconsistent afterwards and a resume picked
+    # straight up - which is what makes this worth refusing rather than warning. The cost
+    # is an aborted run and a traceback that points at the pipeline, with no evidence left
+    # anywhere to say a person edited a name half an hour earlier.
+    from .background_runner import get_status
+
+    status = get_status(paths.root)
+    if status.running:
+        return CommandResult(
+            data={"surface": surface, "state": str(status.state)},
+            exit_code=EXIT_USAGE,
+            error=(
+                "Project đang chạy. Đổi cách đọc lúc này làm lệch checksum của text đang "
+                "được kiểm và giết cả lần chạy. Dừng bằng `stop`, ghim, rồi `resume`."
+            ),
+        )
     database = ProjectDB(paths.db)
     before = {
         str(row["surface"]): dict(row)
