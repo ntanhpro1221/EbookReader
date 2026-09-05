@@ -42,6 +42,37 @@ def _accepted(connection) -> set:
     return {(str(r[0]), str(r[1]), str(r[2]).lower()) for r in rows}
 
 
+def _stale_qa_failure(connection, row, accepted: set) -> bool:
+    """Does this segment still carry a failed QA verdict nobody has overruled?
+
+    The chapter gate wants a passing segment_audio check for every segment, so a row can
+    look clean here - status warning, no blocking code left - and still stop its chapter.
+    A listener's acceptance counts as the evidence instead, keyed by artifact like
+    everywhere else.
+
+    Best-effort: an older project without these tables simply reports nothing extra, since
+    the point is to stop over-promising, not to invent a new way to fail.
+    """
+    checksum = str(row["wav_sha256"] or "").lower()
+    if not checksum:
+        return False
+    if any(
+        stable_id == str(row["stable_id"]) and wav == checksum
+        for stable_id, _code, wav in accepted
+    ):
+        return False
+    try:
+        verdict = connection.execute(
+            "SELECT verdict FROM quality_checks WHERE scope='segment' AND stage='segment_audio_v1' "
+            "AND segment_id=(SELECT id FROM segments WHERE stable_id=?) "
+            "ORDER BY id DESC LIMIT 1",
+            (str(row["stable_id"]),),
+        ).fetchone()
+    except Exception:  # noqa: BLE001 - older projects have no such table
+        return False
+    return bool(verdict and str(verdict[0]) in {"fail", "asr_inconclusive"})
+
+
 def main(project_root: str) -> int:
     root = Path(project_root)
     database = root / "project.sqlite3"
@@ -99,6 +130,14 @@ def main(project_root: str) -> int:
             blocking = sorted(codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
             for code in blocking:
                 reasons.append(("cảnh báo chặn xuất bản", row, code))
+            if not blocking and _stale_qa_failure(connection, row, accepted):
+                # A layer this report used to be blind to, and it made the report lie.
+                # chapter_segments_have_current_audio_qa demands a passing segment_audio
+                # check for every segment; a row can sit at warning with no blocking code
+                # while its stored verdict is still fail, and the chapter refuses with
+                # SEGMENT_QA_EVIDENCE_MISSING. alpha.46 hit exactly that on chapter 9 while
+                # this script was printing "không có gì chặn".
+                reasons.append(("bằng chứng QA chưa đạt", row, "SEGMENT_QA_EVIDENCE_MISSING"))
         missing_audio = [
             row for _kind, row, _code in reasons
             if not (row["wav_path"] and Path(str(row["wav_path"])).is_file())
