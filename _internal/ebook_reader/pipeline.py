@@ -128,13 +128,14 @@ from .tts import (
     PRONUNCIATION_DELIVERY_SOURCE,
     TTSCoordinator,
     is_fatal_tts_error,
+    is_transient_tts_memory_error,
     short_utterance_repair_frame_cap,
 )
 from .tts_contract import (
     HA_VOCALIZATION_MAX_NEW_FRAMES,
     HA_VOCALIZATION_PROVENANCE_FIELDS,
 )
-from .tts_pool import TTS_POOL_MIN_BATCH
+from .tts_pool import TTS_POOL_BASE_VRAM_MB, TTS_POOL_MIN_BATCH
 
 
 CRITICAL_RAM_RECOVERY_WAIT_SECONDS = 2.0
@@ -521,6 +522,72 @@ class BookPipeline:
             "phục; dừng tại checkpoint an toàn."
         )
         return snapshot, decision
+
+    def _recover_from_memory_pressure(self, where: str, error: str) -> bool:
+        """Give the memory back, wait for somebody else's to come back, say whether to retry.
+
+        The owner reported that opening Unity, Rider or Photoshop mid-run made the book fail
+        "for no reason". It was not without reason: the other program took the memory,
+        VieNeu raised an out-of-memory error, and that was classified as a fatal engine
+        failure - so an hours-long run stopped rather than waiting a few minutes for a
+        shortage that ends by itself.
+
+        This releases every model this process holds, so what remains is genuinely somebody
+        else's, then polls until the card has room again. Bounded by the same half-hour
+        ceiling as the RAM wait, and it honours a stop request on every poll, so it can
+        never outlast the user's patience.
+
+        Returns True when there is room to try again, False when the wait ran out.
+        """
+        self._close_synthesis_pool()
+        self.tts.unload_all()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:  # noqa: BLE001 - freeing is best effort, never a new failure
+            pass
+
+        started = time.monotonic()
+        snapshot = self.resources.snapshot(force=True)
+        needed = TTS_POOL_BASE_VRAM_MB
+        self.log(
+            f"Hết bộ nhớ khi {where}: {error[:120]}. Đã nhả hết model; VRAM trống "
+            f"{snapshot.gpu_free_mb} MiB, cần khoảng {needed} MiB. Đang chờ chương trình "
+            "khác trả lại bộ nhớ rồi thử lại."
+        )
+        self.emit(
+            "resource",
+            {
+                "level": ResourceLevel.PAUSE_NEW_WORK.value,
+                "reason": f"chờ VRAM: {snapshot.gpu_free_mb} MiB khả dụng",
+                "gpu_scale": 0.0,
+            },
+        )
+        last_logged = 0.0
+        while time.monotonic() - started < CRITICAL_RAM_WAIT_TIMEOUT_SECONDS:
+            self._wait_pause_or_stop()
+            time.sleep(CRITICAL_RAM_WAIT_POLL_SECONDS)
+            snapshot = self.resources.snapshot(force=True)
+            if int(snapshot.gpu_free_mb or 0) >= needed:
+                self.log(
+                    f"VRAM đã hồi phục lên {snapshot.gpu_free_mb} MiB sau "
+                    f"{time.monotonic() - started:.0f}s chờ; thử lại."
+                )
+                return True
+            waited = time.monotonic() - started
+            if waited - last_logged >= CRITICAL_RAM_WAIT_LOG_SECONDS:
+                last_logged = waited
+                self.log(
+                    f"Vẫn đang chờ VRAM: {snapshot.gpu_free_mb} MiB khả dụng sau "
+                    f"{waited / 60:.0f} phút."
+                )
+        self.log(
+            f"Đã chờ VRAM {CRITICAL_RAM_WAIT_TIMEOUT_SECONDS / 60:.0f} phút mà không hồi "
+            "phục; coi như lỗi engine."
+        )
+        return False
 
     def _ensure_segments(self) -> None:
         max_chars = int(self.settings["tts"]["max_segment_chars"])
@@ -3441,6 +3508,10 @@ class BookPipeline:
                 self._reset_tts_failure_streak()
                 return checkpoint
             except Exception as exc:  # noqa: BLE001
+                if is_transient_tts_memory_error(exc) and self._recover_from_memory_pressure(
+                    f"sinh candidate {row['stable_id']}", str(exc)
+                ):
+                    continue
                 if is_fatal_tts_error(exc):
                     raise RuntimeError(f"Fatal TTS engine failure: {exc}") from exc
                 last_error = str(exc)
@@ -3962,6 +4033,14 @@ class BookPipeline:
                     )
                 return
             except Exception as exc:  # noqa: BLE001
+                # Somebody else's memory, not a broken engine. Release, wait, try the same
+                # attempt again - the retry loop is bounded, and so is the wait, so this
+                # cannot spin. Only when the wait runs out does it fall through to the
+                # fatal path it used to take immediately.
+                if is_transient_tts_memory_error(exc) and self._recover_from_memory_pressure(
+                    f"tổng hợp {row['stable_id']}", str(exc)
+                ):
+                    continue
                 if is_fatal_tts_error(exc):
                     raise RuntimeError(f"Fatal TTS engine failure: {exc}") from exc
                 last_error = str(exc)

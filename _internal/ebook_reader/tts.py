@@ -56,18 +56,33 @@ from .tts_contract import (
 )
 
 
+# Running out of memory is not the same kind of event as a missing module, and treating it
+# as one killed runs. The owner reported it directly: opening Unity, Rider or Photoshop
+# mid-run made the book fail "for no reason". What actually happened is that another program
+# took the memory, VieNeu raised an out-of-memory error, and this list classified that as
+# fatal - so the run stopped instead of waiting for the memory to come back.
+#
+# The pipeline already knows how to wait: _wait_for_foreign_ram idles up to half an hour for
+# memory somebody else is holding, on the reasoning that stopping throws away every hour the
+# run has already spent while waiting costs nothing. An OOM raised inside the engine simply
+# never reached it.
 FATAL_TTS_MARKERS = (
     "cuda driver",
     "cublas",
     "cudnn",
     "no module named",
+    "thiếu vieneu",
+    "locked vieneu preset",
+    "only vieneu profiles",
+)
+# Somebody else's memory pressure, which ends when they end. Release what this process
+# holds, wait, and try the attempt again.
+TRANSIENT_TTS_MEMORY_MARKERS = (
     "out of memory",
     "not enough memory",
     "defaultcpuallocator",
     "alloc_cpu.cpp",
-    "thiếu vieneu",
-    "locked vieneu preset",
-    "only vieneu profiles",
+    "cuda_error_out_of_memory",
 )
 
 # Delivery metadata no longer touches sampling, and this is why.
@@ -141,8 +156,20 @@ LOCKED_ENGLISH_NAME_PRONUNCIATION_SOURCES = frozenset(
 
 
 def is_fatal_tts_error(error: BaseException) -> bool:
+    """A failure that will still be there after waiting: a missing module, a broken driver.
+
+    Memory pressure is deliberately not in this set. See TRANSIENT_TTS_MEMORY_MARKERS.
+    """
     message = str(error).casefold()
     return any(marker in message for marker in FATAL_TTS_MARKERS)
+
+
+def is_transient_tts_memory_error(error: BaseException) -> bool:
+    """A failure that ends when whoever took the memory gives it back."""
+    message = str(error).casefold()
+    if any(marker in message for marker in FATAL_TTS_MARKERS):
+        return False
+    return any(marker in message for marker in TRANSIENT_TTS_MEMORY_MARKERS)
 
 
 def _set_generation_seed(seed: int) -> None:
