@@ -69,3 +69,46 @@ thực sự bí, và mỗi câu trả lời được ghi lại là của ngườ
 Ngay sau khi chốt `Deck`, run vấp tiếp **`Epic`, `Juli`, `Lily`** — trong đó hai cái là tên
 nhân vật. Đây không phải sự cố một lần; nó là hình dạng thường trực của một cuốn sách nhiều
 tên riêng nước ngoài, và là lý do cái van phải tồn tại chứ không phải một bản vá tạm.
+
+## Một tên hai cách đọc, qua cánh cửa không ai canh (alpha.47, 06/09/2026)
+
+alpha.47 khoá đồng thời hai cách đọc cho cùng một nhân vật:
+
+| surface | spoken_form | conf |
+|---|---|---|
+| `Arthur Kaizer Theosbane` | `A-thờ cai-dờ theo-bên` | 0,88 |
+| `Samael Kaizer Theosbane` | `Xa-men cai-dờ theo-bên` | 0,88 |
+| **`Theosbane`** | **`Thê-ô-ban`** | 0,85 |
+
+Docstring của `_local_name_fallback` nói rằng cả đường đọc-theo-chính-tả tồn tại là để chặn
+"hai cách đọc của một tên trong một quyển sách". Nó chặn được đường ấy — nhưng defect đi vào
+bằng cửa khác: **cách đọc được đề xuất theo từng surface và kiểm tra theo từng surface**,
+nên không có gì so `Theosbane` với chữ `Theosbane` nằm trong `Samael Kaizer Theosbane`.
+
+Code cho ra `Theo-bên` cho tên đơn; bản ghi `Thê-ô-ban` đến từ model, không phải từ fallback.
+
+### `name_component_corrections()` — có hàm, **chưa nối vào**
+
+Đối chiếu chéo: với mỗi tên nhiều từ, nếu số nhóm âm tiết (tách theo khoảng trắng) bằng số
+từ thì thành phần tương ứng đọc được trực tiếp; tên đơn nào lệch thì báo. Khác hoa/thường
+không tính là hai cách đọc.
+
+Trường hợp không căn được (3 từ, 2 nhóm) thì **bỏ qua chứ không đoán**.
+
+### Cái bẫy trong việc nối nó vào, và vì sao chưa nối
+
+Đường duy nhất ghi đè được hàng đã khoá là `set_listener_pronunciation`, mà docstring của nó
+nói rõ:
+
+> khoá là thứ bảo vệ một quyết định của con người khỏi bị một phép phiên âm ghi đè. Nó sai
+> khi chính con người là bên yêu cầu.
+
+Dùng nó cho một phép đối chiếu **tự động** là làm đúng điều nó cảnh báo: nếu chủ sách đã tự
+ghim `Theosbane` bằng lệnh `pronounce`, phép đối chiếu sẽ lấy tên dài ghi đè lên và **xoá
+quyết định của ông**.
+
+Nên khi nối, luật bắt buộc là: **không bao giờ ghi đè hàng có `source = listener_choice`.**
+Chiều đúng phải ngược lại — một tên người đã ghim nên kéo theo tên dài chứa nó.
+
+Trong alpha.47 việc này đã xử tay bằng `pronounce Theosbane "theo-bên"` (11 chỗ dùng tên đơn
+đều chưa được thu lúc ghim, nên cả quyển nhất quán).
