@@ -139,13 +139,23 @@ SPOKEN_SEPARATORS = "»«›‹→⇒▸▶►([{)]}"
 SPOKEN_DROPPED = "•▪◦*"
 _SPOKEN_COMMA_RUN = re.compile(r"(?:\s*,)+(?=\s*,)")
 _SPOKEN_SPACE_RUN = re.compile(r"[ \t]{2,}")
-_SPOKEN_LEADING_COMMA = re.compile(r"^\s*,\s*", re.MULTILINE)
 # A comma this introduced has to attach to the word before it. "C , B" puts the silence in
 # the wrong place, which is the defect being fixed rather than a cosmetic detail.
 _SPOKEN_SPACE_BEFORE_PUNCT = re.compile(r"\s+([,.!?;:…])")
-# A separator immediately before real punctuation or the end is a pause with nothing after
-# it - "(Spirit Essence Units)" would otherwise close on a hanging comma.
-_SPOKEN_TRAILING_COMMA = re.compile(r",(\s*(?:[.!?…]|$))")
+# A separator immediately before real punctuation is a pause with nothing after it -
+# "(Spirit Essence Units)." would otherwise close on a hanging comma.
+#
+# Deliberately NOT anchored at the end of the string, and there is no matching rule for the
+# start, because this function must leave a *fragment* of its own output alone - see
+# spoken_symbols_to_words. A boundary is the one piece of context a fragment does not share
+# with the text it came from.
+_SPOKEN_TRAILING_COMMA = re.compile(r",(\s*[.!?…])")
+# Separators sitting at either end of the whole text are removed before conversion rather
+# than trimmed away as commas afterwards. Same result, but stable: a fragment of converted
+# text contains no separators at all, so this can never fire a second time. ↓ and ↑ are not
+# in here - they mean "giảm" and "tăng", and a word does not stop meaning something because
+# it happens to start the line.
+_SPOKEN_BOUNDARY_TRIM = SPOKEN_SEPARATORS + SPOKEN_DROPPED + " \t\r\n"
 
 
 def _spoken_symbols_in_span(text: str) -> str:
@@ -174,21 +184,42 @@ def spoken_symbols_to_words(text: str) -> str:
     Converting the second kind to commas destroys the cue before that function ever sees it,
     which is what the anchor tests caught. Vocal cues are therefore passed through untouched
     and normalized later, as they always were.
+
+    **Stable on its own output, including fragments of it.** The repair path splits a long
+    segment into pieces of the already-converted text and then re-derives each piece to check
+    the boundary text did not move; a rule that reads the start or end of the string sees a
+    different context in a piece than in the text it came from, and the check fails. alpha.45
+    died that way at chapter 2: "(Legendary)" became ", Legendary," which pushed the segment
+    to 174 characters over a 170 cap, so the splitter cut at a comma this function had just
+    created, and the second pass trimmed that now-trailing comma back off.
+
+    So nothing here is anchored to a boundary. Separators at either end are removed *before*
+    conversion instead, which reaches the same tidy result - a fragment of converted text has
+    no separators left in it, so that rule cannot fire twice.
     """
-    parts: list[str] = []
+    source = str(text)
+    spans: list[tuple[str, bool]] = []
     position = 0
-    for match in VOCAL_CUE_PATTERN.finditer(str(text)):
-        parts.append(_spoken_symbols_in_span(str(text)[position:match.start()]))
-        parts.append(match.group(0))
+    for match in VOCAL_CUE_PATTERN.finditer(source):
+        spans.append((source[position:match.start()], False))
+        spans.append((match.group(0), True))
         position = match.end()
-    parts.append(_spoken_symbols_in_span(str(text)[position:]))
-    out = "".join(parts)
+    spans.append((source[position:], False))
+    # Trim the two ends of the whole text, never a vocal cue: the brackets delimiting
+    # "[thở dài]" are separators too, and eating the opening one leaves a cue the later
+    # vocalization pass no longer recognises - it read out "thở dài," as words.
+    if not spans[0][1]:
+        spans[0] = (spans[0][0].lstrip(_SPOKEN_BOUNDARY_TRIM), False)
+    if not spans[-1][1]:
+        spans[-1] = (spans[-1][0].rstrip(_SPOKEN_BOUNDARY_TRIM), False)
+    out = "".join(
+        span if is_cue else _spoken_symbols_in_span(span) for span, is_cue in spans
+    )
     out = _SPOKEN_SPACE_BEFORE_PUNCT.sub(r"\1", out)
     out = _SPOKEN_COMMA_RUN.sub("", out)
-    out = _SPOKEN_LEADING_COMMA.sub("", out)
     out = _SPOKEN_TRAILING_COMMA.sub(r"\1", out)
     out = _SPOKEN_SPACE_RUN.sub(" ", out)
-    return out.strip().strip(",").strip()
+    return out.strip()
 
 
 def roman_numeral_value(token: str) -> int | None:
