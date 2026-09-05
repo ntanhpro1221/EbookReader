@@ -79,6 +79,73 @@ def _accepted(connection) -> set:
     return {(str(r[0]), str(r[1]), str(r[2]).lower()) for r in rows}
 
 
+# What a whole class of warning means, met once instead of re-derived per card. Every line
+# is taken from the code that raises the warning, or from a measurement, never from a guess.
+CLASS_NOTES: dict[str, tuple[str, str, str]] = {
+    "ASR_LOCKED_NAME_ANCHOR_REVIEW": (
+        "Máy không nghe ra một cái tên đã khóa cách đọc, trong bản ghi của chính nó.",
+        "Đo trên alpha.46: 19/19 cảnh báo loại này là tên hoặc thuật ngữ tiếng Anh được "
+        "đọc theo âm Việt, và Whisper không ánh xạ ngược được về chính tả tiếng Anh. "
+        "Không cái nào là lỗi đọc. Hôm 04/09 chủ sách nghe 6 cái loại này, phán 6/6 đúng.",
+        "Chỉ nghe đúng cái tên. Phần tiếng Việt quanh nó máy đều nghe lại chính xác.",
+    ),
+    # Self-contained on purpose. Groups are ordered by size, so which classes appear and in
+    # what order changes with the data - a note that says "as above" points at nothing the
+    # moment the other group is empty, which is exactly what happened the first time.
+    "ASR_LOCKED_NAME_ANCHOR_MISMATCH": (
+        "Máy nghe ra một chuỗi khác hẳn ở chỗ đáng lẽ là một cái tên đã khóa cách đọc.",
+        "Cùng nguyên nhân với nhóm ANCHOR_REVIEW: tên tiếng Anh đọc theo âm Việt thì "
+        "Whisper không ánh xạ ngược được. Đo trên alpha.46, 19/19 cảnh báo anchor thuộc "
+        "lớp này và không cái nào là lỗi đọc; hôm 04/09 chủ sách nghe 6 cái, phán 6/6 đúng.",
+        "Chỉ nghe đúng cái tên. Phần tiếng Việt quanh nó máy đều nghe lại chính xác.",
+    ),
+    "ASR_UNVERIFIABLE_SHORT_TEXT": (
+        "Câu ngắn dưới 10 ký tự - quá ngắn để Whisper phiên âm được.",
+        "Ở 3 ký tự tỉ lệ trượt là 75%, so với 0,2% ở 30 ký tự: không đủ audio để phiên âm "
+        'nên Whisper bịa từ dữ liệu huấn luyện - nhãn hạng "SSS" từng trả về thành một '
+        "lời mời đăng ký kênh YouTube.",
+        "BỎ QUA hoàn toàn dòng 'máy nghe' - nó không nói gì về audio. Nghe thẳng bản thu.",
+    ),
+    "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE": (
+        "Dấu thời gian của chính Whisper chạy quá phần cuối file.",
+        "Nó chỉ làm được thế khi bộ giải mã đi lạc khỏi audio, nên bản ghi ấy không còn "
+        "nói về đoạn này nữa.",
+        "BỎ QUA dòng 'máy nghe'. Nghe thẳng bản thu.",
+    ),
+    "TTS_SPLIT_RECOVERY": (
+        "Câu này phải cắt nhỏ mới thu được, rồi ghép lại.",
+        "Bản thu là các mảnh nối liền, nên chỗ đáng ngờ nằm ở mối nối chứ không ở cách đọc.",
+        "Nghe chỗ chuyển giữa các mệnh đề: có hụt hơi, cắt cụt hay lặp chữ ở mối nối không.",
+    ),
+    "PERCEPTUAL_NATURALNESS_REVIEW": (
+        "Điểm tự nhiên của bản thu thấp hơn nền của chính giọng đó.",
+        "Đây là chấm tương đối chứ không tuyệt đối - câu ngắn hoặc nhiều dấu câu thường bị "
+        "hạ điểm mà tai người không thấy vấn đề.",
+        "Nghe xem giọng có gượng, méo, hay ngắt nhịp lạ không.",
+    ),
+}
+
+
+def _group_header(code: str, count: int, commands: list[str]) -> str:
+    """One heading per cause, so a listener meets a class once rather than count times."""
+    note = CLASS_NOTES.get(code)
+    explain = ""
+    if note:
+        trigger, evidence, listen = note
+        explain = (
+            f'<p class="cl-t"><b>Máy thấy gì</b> {html.escape(trigger)}</p>'
+            f'<p class="cl-e"><b>Đã biết gì về lớp này</b> {html.escape(evidence)}</p>'
+            f'<p class="cl-l"><b>Nghe cái gì</b> {html.escape(listen)}</p>'
+        )
+    joined = " && ".join(commands)
+    return (
+        f'<section class="grp"><h2>{html.escape(code)}'
+        f'<span class="n">{count} đoạn</span></h2>{explain}'
+        f'<button class="all" data-cmd="{html.escape(joined)}">'
+        f"Chép lệnh chấp nhận cho cả {count} đoạn</button></section>"
+    )
+
+
 def _blocking(row: sqlite3.Row) -> list[str]:
     codes = {value for value in str(row["warning_code"] or "").split("|") if value}
     if str(row["status"]) == "failed":
@@ -139,8 +206,25 @@ def main(project_root: str, output: str | None, notes_path: str | None = None) -
                 })
     connection.close()
 
-    cards = []
+    # Grouped by cause, smallest group first. Met 28 times in a row, the same class gets
+    # re-derived 28 times; met once with its explanation, the rest is a rhythm. The small
+    # groups lead because those are the varied ones that deserve fresh attention - the big
+    # uniform class is the one it is safe to settle into.
+    sizes: dict[str, int] = {}
+    commands: dict[str, list[str]] = {}
     for item in items:
+        sizes[item["code"]] = sizes.get(item["code"], 0) + 1
+        commands.setdefault(item["code"], []).append(item["command"])
+    items.sort(key=lambda i: (sizes[i["code"]], i["code"], i["chapter"], i["stable_id"]))
+
+    cards = []
+    current_code: str | None = None
+    for item in items:
+        if item["code"] != current_code:
+            current_code = item["code"]
+            cards.append(
+                _group_header(current_code, sizes[current_code], commands[current_code])
+            )
         missing = "" if item["href"] else (
             '<p class="none">Không có bản thu - máy chưa tạo được audio nào cho câu này.</p>'
         )
@@ -202,6 +286,18 @@ def main(project_root: str, output: str | None, notes_path: str | None = None) -
  dl {{ display: grid; grid-template-columns: max-content 1fr; gap: .2rem .8rem; margin: 0 0 .7rem; }}
  dt {{ opacity: .6; font-size: .82em; }} dd {{ margin: 0; }}
  .heard {{ font-style: italic; }}
+ .grp {{ margin: 2.2rem 0 1rem; padding: .9rem 1rem; border-radius: 10px;
+         background: color-mix(in oklab, currentColor 7%, transparent); }}
+ .grp:first-of-type {{ margin-top: .6rem; }}
+ .grp h2 {{ font-size: .95rem; margin: 0 0 .5rem; display: flex; gap: .6rem;
+            align-items: baseline; font-family: ui-monospace, monospace; }}
+ .grp .n {{ font-family: system-ui, sans-serif; font-weight: 400; opacity: .6;
+            font-size: .85em; margin-left: auto; }}
+ .grp p {{ margin: .3rem 0; font-size: .92em; }}
+ .grp b {{ display: inline-block; min-width: 10.5rem; font-size: .74em; text-transform: uppercase;
+           letter-spacing: .03em; opacity: .65; font-weight: 600; }}
+ .grp .cl-l {{ font-weight: 500; }}
+ button.all {{ margin-top: .6rem; }}
  .why {{ border-left: 3px solid color-mix(in oklab, currentColor 25%, transparent);
          padding: .1rem 0 .1rem .75rem; margin: 0 0 .8rem; }}
  .why p {{ margin: .25rem 0; }}

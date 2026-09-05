@@ -525,3 +525,30 @@ tỉ lệ 1/3 chỉ là ước lượng thô; điều chắc chắn là nó **kh
 Không có đường nào dẫn tới hỏng chương trình. Thứ tự leo thang: thử lại 10 lần với seed khác
 → chia nhỏ câu → hạ dải nhịp về `normal` → đánh dấu `failed` và chặn chương, để người nghe
 quyết. Đó là cùng một đường mà mọi lỗi chất lượng khác đi qua.
+
+### Kiểm chứng ngưỡng đọc-lặp trên một lần chạy độc lập (alpha.46)
+
+Ngưỡng `REPEATED_UTTERANCE_THRESHOLD = 0.35` được chọn từ **một** ví dụ: `c00007_s0000045`
+của alpha.44 đạt 0,441, cao nhất trong 613 segment, và cái kế tiếp là 0,244. Một điểm dữ
+liệu thì chưa nói được gì về báo động giả.
+
+alpha.46 cho điểm dữ liệu thứ hai, trên 470 segment đã chấm:
+
+| | |
+|---|---|
+| thấp nhất | −0,235 |
+| trung vị | 0,003 |
+| phân vị 90% | 0,080 |
+| phân vị 95% | 0,105 |
+| phân vị 99% | 0,200 |
+| **cao nhất** | **0,244** |
+| vượt ngưỡng 0,35 | **0** |
+
+Cao nhất của một lần chạy sạch rơi đúng 0,244 — **trùng khít** với "cái kế tiếp" của alpha.44.
+Hai lần chạy khác nhau, cùng một trần cho audio bình thường.
+
+Nên khoảng cách hiện tại là **0,244 → 0,35 → 0,441**: ngưỡng nằm giữa, cách trần sạch 43% và
+cách lỗi thật 21%. Không segment sạch nào tới gần, và lỗi thật thì vượt hẳn.
+
+Bộ phát hiện chưa bắt được gì trong alpha.46 **vì lần chạy này không có đoạn nào đọc lặp**,
+không phải vì ngưỡng đặt sai. Đừng hạ nó xuống chỉ vì nó im.

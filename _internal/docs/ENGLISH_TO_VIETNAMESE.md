@@ -866,3 +866,31 @@ Chủ sách từng viết "phải là u-ni-vơ chứ?" khi thấy `Universe` đ�
 > Vẫn còn một điểm bất nhất chưa được xử: `Supporter` đọc là `Xơ-po-tờ` — dùng "ơ" cho chỗ
 > tách cụm nhưng "ờ" cho âm cuối, trong cùng một từ. Nếu có ai nghe thấy gợn, đó là chỗ để
 > nhìn lại; nhưng phải hỏi trước, không tự đổi.
+
+## Cái giá phía sau: cổng anchor báo động giả trên chính những tên này
+
+Đọc tên tiếng Anh theo âm Việt là điều chủ sách muốn. Hệ quả là **Whisper không ánh xạ ngược
+được** từ âm Việt về chính tả tiếng Anh, nên cổng kiểm tra anchor kêu — trên chính những
+segment mà giọng đọc đúng.
+
+Đo trên alpha.46 (05–06/09/2026), **19 segment** mang cảnh báo `ASR_LOCKED_NAME_ANCHOR_*`:
+
+| loại | số | ví dụ máy nghe |
+|---|---|---|
+| thuật ngữ Anh trong ngoặc | 10 | `Beast Form` → "bitform"; `Soul Arsenal` → "Solarseno"; `Defiled Ones` → "Defi, Lê Tôn" |
+| tên riêng Anh inline | 9 | `Samael Kaizer Theosbane` → "Samen Kai giờ theo Âu Bên"; `Juliana Vox Blade` → "Juliana Vogtberlitz" |
+
+**19/19 cùng một nguyên nhân duy nhất.** Không có cái nào là lỗi đọc.
+
+Đối chiếu với phán quyết của tai người: hôm 04/09/2026 chủ sách nghe 6 segment mang cảnh báo
+anchor và kết luận **6/6 đọc đúng** — báo động giả toàn phần. Chính ông nói ra nguyên nhân:
+*"những từ được convert từ tiếng anh sang âm tiếng việt thì tool nghe của bạn nghe không tốt"*.
+
+Nên cổng này hiện tính phí bằng **tai người**: 19 lần nghe cho một lớp lỗi đã biết là giả.
+Nhưng nới nó là một quyết định chất lượng, không phải một bản vá — nới ra thì một lần đọc sai
+tên thật cũng lọt. Cần hỏi chủ sách kèm số liệu, đừng tự đổi.
+
+> Ghi chú cho lần hỏi: câu hỏi đúng không phải "có bỏ cổng anchor không" mà là "khi đoạn văn
+> có tên tiếng Anh **đã được khoá cách đọc**, và ASR trượt đúng ở tên đó chứ không ở phần
+> tiếng Việt quanh nó, thì đó có còn là bằng chứng gì không". Phần tiếng Việt trong cả 19
+> segment đều được nghe lại chính xác.

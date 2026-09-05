@@ -836,3 +836,58 @@ không nghe ra được". Nghĩa là **thêm nỗ lực của máy không cứu 
 khớp *nguyên vẹn*, còn mã thật là `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE`. Nên nó không bao giờ
 khớp, và tôi báo "0 segment còn ảo giác" trong khi có 2. Tổng số chặn/không chặn thì vẫn
 đúng vì tính bằng đường khác. Kiểm chuỗi con thì đừng dùng `in` trên set.
+
+## Nhường máy cho người dùng: 0,38 segment/phút, và nghịch lý nhẹ-hơn-nặng
+
+Đo trên 4,4 giờ đầu của alpha.46, gán mỗi segment hoàn tất cho chế độ tài nguyên đang có
+hiệu lực đúng lúc đó:
+
+| chế độ | segment | phút | nhịp |
+|---|---|---|---|
+| `maximum` | 452 | 80,6 | **5,60 /phút** |
+| `yield_heavy` | 69 | 30,4 | **2,27 /phút** |
+| `yield_light` | 57 | 150,2 | **0,38 /phút** |
+
+`yield_light` khai báo `gpu_batch_scale = 0.70` — giảm 30% — nhưng thực tế chạy chậm hơn
+**14,7 lần**, và **chậm hơn cả `yield_heavy`**, chế độ đáng lẽ nhường nhiều hơn.
+
+### Nguyên nhân
+
+`YIELD_LIGHT` đặt `allow_cpu_heavy_work=False` **vô điều kiện**. `YIELD_HEAVY` thì đặt cờ ấy
+**có điều kiện**, chỉ chặn khi thật sự có `foreground_cpu_pressure`, `disk_io_pressure`,
+`memory_pressure` hoặc `disk_space_pressure`.
+
+Mà nhánh `YIELD_LIGHT` **chỉ chạy tới được khi cả bốn sức ép ấy đều vắng mặt** — nếu có bất
+kỳ cái nào thì nhánh `YIELD_HEAVY` phía trên đã return rồi. Nói cách khác: chế độ nhẹ chặn
+CPU chính vì lý do khiến nó là chế độ nhẹ.
+
+Hậu quả không nhỏ, vì `pipeline._wait_for_resources` xử lý cờ ấy bằng cách ngủ:
+
+```python
+cpu_ok = (not require_cpu_io) or decision.allow_cpu_heavy_work
+if gpu_ok and cpu_ok:
+    return decision
+time.sleep(2.0)
+```
+
+Nên mọi checkpoint cần CPU I/O **đứng im chừng nào người dùng còn động vào máy**. Điều kiện
+kích hoạt chỉ là `user_active and cpu_percent >= 55` — tức chỉ cần đang dùng máy. Tối
+05/09/2026 nó ở trạng thái đó liên tục **21:44 → 23:36, 112 phút**, sinh được 57 segment.
+Với nhịp của `yield_heavy` thì quãng ấy chỉ mất 25 phút.
+
+### Đã sửa
+
+`allow_cpu_heavy_work=True` ở `YIELD_LIGHT`. Việc nhường mà chế độ này định làm là
+`gpu_batch_scale=0.70`, và thế là đủ; sức ép CPU thật vẫn rơi xuống `YIELD_HEAVY` và vẫn bị
+chặn như cũ.
+
+Test khoá lại **tính chất** chứ không phải giá trị: chế độ nhẹ không bao giờ được phép khắt
+khe hơn chế độ nặng, ở cả cờ CPU lẫn `gpu_batch_scale`.
+
+### Một phép đo sai, ghi lại để đừng lặp
+
+Trước khi tìm ra nguyên nhân thật, tôi đo "thời gian nạp UTMOSv2" bằng cách ghép dòng
+`Loading pretrained weights` với dòng `Processing audio` kế tiếp, và ra **47 phút / 18% lần
+chạy**. Sai. Nhìn thẳng vào log thì các dòng nạp cách nhau **0,6 giây**; hàm ghép cặp của tôi
+đã bắt sang sự kiện của thành phần khác. Một phép đo phải được nhìn tận mắt ở một mẫu cụ thể
+trước khi tin vào con số tổng.
