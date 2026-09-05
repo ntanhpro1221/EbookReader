@@ -19,12 +19,17 @@ def _pool(workers: int = 8, threads: int = 2) -> PerceptualScorePool:
     return PerceptualScorePool(settings, lambda _m: None, workers=workers, threads=threads)
 
 
-def test_the_constant_matches_what_a_loaded_worker_actually_costs() -> None:
-    """Measured on alpha.47 at the peak: eleven loaded children at 2.08-2.36 GB, median
-    2.16. The same processes read 0.01 GB seconds earlier while importing, which is how a
-    badly timed snapshot supports any number you like."""
-    assert PERCEPTUAL_WORKER_RAM_GB >= 2.16, "below the measured median is what broke it"
-    assert PERCEPTUAL_WORKER_RAM_GB <= 2.5, "far above the measured max only wastes workers"
+def test_the_constant_is_built_on_the_peak_not_a_snapshot() -> None:
+    """A budget has to hold when workers are at their high-water mark together.
+
+    Two honest readings of the same pool disagree, and the difference is the whole point:
+    one sample of eleven live workers gave a 2.16 median, while peak-RSS-per-pid tracked
+    across 31 workers over 15 minutes gave 2.50 median and 2.68 max. A snapshot catches
+    most workers below their peak, so sizing on one under-budgets - the first attempt at
+    this fix used 2.30 and covers 29% of workers at peak.
+    """
+    assert PERCEPTUAL_WORKER_RAM_GB >= 2.5, "a snapshot median under-budgets the peak"
+    assert PERCEPTUAL_WORKER_RAM_GB <= 2.8, "far above the observed max only wastes workers"
 
 
 def test_a_reserve_shrinks_the_pool() -> None:

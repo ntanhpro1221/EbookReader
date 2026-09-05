@@ -32,11 +32,21 @@ DEFAULT_INFERENCE_SEED = 42
 # sounds - the same processes read 0.01 GB a few seconds earlier while still importing, so a
 # snapshot taken at the wrong moment supports any number you like.
 #
-# 2.30 rather than the 2.16 median, because the two errors are not symmetric. Overestimating
-# costs one worker of parallelism. Underestimating is what put alpha.47 at 2.0 GB free and
-# into yield_heavy, where the throttle stops the very work the pool was sized for - the pool
-# sizes itself into the state that forbids it.
-PERCEPTUAL_WORKER_RAM_GB = 2.30
+# A budget has to be built on the *peak*, and a snapshot cannot see one. Tracking peak RSS
+# per pid across 31 loaded workers over 15 minutes gives 1.72 min, 2.50 median, 2.68 max -
+# where a single sample of eleven live workers read 2.16 median. Both were honest readings
+# of the same pool; the snapshot simply catches most workers below their high-water mark.
+# A first attempt at this fix used 2.30 from the snapshot, and that covers only 29% of
+# workers at peak.
+#
+# 2.65 is just under the observed maximum, because the two errors are not symmetric.
+# Overestimating costs one worker of parallelism. Underestimating is what put alpha.47 at
+# 2.0 GB free and into yield_heavy, where the throttle stops the very work the pool was
+# sized for - the pool sizes itself into the state that forbids it.
+#
+# One 15-minute window on one machine. If the pool is ever sized on a different box, measure
+# again rather than trusting this number to travel.
+PERCEPTUAL_WORKER_RAM_GB = 2.65
 """What one more scoring worker costs the machine, measured rather than assumed.
 
 This was 1.0, and 1.0 is what usable_for() divided the free memory by when deciding how
