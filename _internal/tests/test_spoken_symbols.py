@@ -140,3 +140,39 @@ def test_a_separator_at_either_end_still_leaves_no_hanging_comma() -> None:
     assert spoken_symbols_to_words("» Hiếm") == "Hiếm"
     assert spoken_symbols_to_words("Thường (Common)") == "Thường, Common"
     assert spoken_symbols_to_words("(Common)") == "Common"
+
+
+def test_a_slash_between_words_becomes_a_pause() -> None:
+    """The voice reads "/" aloud as "trên", which is right for a fraction and wrong for an
+    alternative: "Mạnh hơn / khó tìm hơn" came out "mạnh hơn TRÊN khó tìm hơn". The symbol
+    stopped separating and became a word inside the sentence, which is the thing the owner
+    refused outright."""
+    assert spoken_symbols_to_words("Mạnh hơn / khó tìm hơn.") == "Mạnh hơn, khó tìm hơn."
+    assert spoken_symbols_to_words("Vệ quân/Hộ vệ") == "Vệ quân, Hộ vệ"
+
+
+def test_a_slash_between_digits_keeps_its_reading() -> None:
+    """8.5/10 is "tám phẩy năm trên mười" and that is correct. The book has exactly one of
+    these against eight word/word slashes, and it would be lost by a blanket rule."""
+    text = "số điểm cao chót vót 8.5/10 trên khắp cõi mạng."
+    assert spoken_symbols_to_words(text) == text
+
+
+def test_a_comma_before_a_colon_collapses() -> None:
+    """"Rare (Hiếm - B):" produced "Rare, Hiếm - B,:" - a comma the conversion introduced,
+    left sitting against the colon that follows it."""
+    assert spoken_symbols_to_words("Rare (Hiếm - B): Mạnh hơn.") == "Rare, Hiếm - B: Mạnh hơn."
+
+
+def test_the_slash_rule_is_also_stable_on_fragments() -> None:
+    """Same invariant as everything else here: the repair path re-derives pieces of this
+    output, and a rule that fires twice moves the boundary text."""
+    for sample in ("Sentry (Vệ quân/Hộ vệ): Chuyên gia phòng ngự.",
+                   "Rare (Hiếm - B): Mạnh hơn / khó tìm hơn."):
+        converted = spoken_symbols_to_words(sample)
+        assert spoken_symbols_to_words(converted) == converted
+        cuts = [i + 1 for i, ch in enumerate(converted) if ch in ",.!?…" and i + 1 < len(converted)]
+        for cut in cuts:
+            for piece in (converted[:cut], converted[cut:].strip()):
+                if piece:
+                    assert spoken_symbols_to_words(piece) == piece, piece

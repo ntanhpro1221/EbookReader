@@ -85,6 +85,7 @@ from .expression import narrative_break_ms, shape_segment
 from .perceptual_qa import (
     DEFAULT_PERCEPTUAL_WORKER_THREADS,
     PERCEPTUAL_INCONCLUSIVE,
+    PERCEPTUAL_WORKER_RAM_GB,
     PERCEPTUAL_OK,
     PERCEPTUAL_REVIEW,
     PerceptualQAUnavailable,
@@ -1615,7 +1616,15 @@ class BookPipeline:
         )
         wav_paths = [str(row["wav_path"]) for row in pending]
         free_ram_gb = float(snapshot.free_ram_gb)
-        workers = pool.usable_for(len(wav_paths), free_ram_gb)
+        # The synthesis pool starts moments after this one and takes RAM this snapshot still
+        # counts as free. usable_for has taken a reserve for exactly that since it was
+        # written - "RAM this pool would otherwise take from the model about to want it" -
+        # and nothing has ever passed one, so the perceptual pool sized itself as though it
+        # were alone. On alpha.47 that meant 8 scoring workers plus 3 synthesis workers,
+        # 24.2 GB of 31.3, and a run in yield_heavy at 2.0 GB free.
+        workers = pool.usable_for(
+            len(wav_paths), free_ram_gb, reserve_ram_gb=self._synthesis_pool_ram_reserve()
+        )
         if workers < 2:
             # Silence here would be the worst outcome to debug: the run behaves exactly as
             # it did before the overlap existed, saves none of the ~2,500 seconds it was
@@ -1676,6 +1685,25 @@ class BookPipeline:
                 "có điểm trước khi ASR kết thúc."
             )
         return scores
+
+    def _synthesis_pool_ram_reserve(self) -> float:
+        """RAM the synthesis pool is about to want, which no snapshot can see yet.
+
+        Sized from the configured ceiling rather than from what the pool will actually
+        build, because the pool has not decided yet and asking later is too late - the
+        scoring workers are already resident by then. Reserving for a pool that turns out
+        smaller costs one scoring worker; not reserving cost alpha.47 the whole throttle.
+
+        A synthesis worker measured 2.33 GB resident on alpha.47, the same order as a
+        scoring one, so the scoring constant stands in for both rather than inventing a
+        second number nobody re-measures.
+        """
+        if self._tts_pool_failed:
+            return 0.0
+        ceiling = int(self.settings.get("tts", {}).get("parallel_workers", 0))
+        if ceiling < 2:
+            return 0.0
+        return float(ceiling) * PERCEPTUAL_WORKER_RAM_GB
 
     def _prefetch_perceptual_scores(
         self,
@@ -5465,6 +5493,25 @@ class BookPipeline:
                 similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
                 warning_code=warning,
             )
+            if self._listener_ruled_on_this_take(item):
+                # The third gate with the same blindness, and the one that survived the
+                # first two fixes. A person listened to this exact recording and let it
+                # stand; the verifier then re-derives its own verdict from the transcript
+                # and overrules them, because nothing here has ever consulted the
+                # acceptance table. alpha.47 showed it after the other two were fixed:
+                # chapter 3 was cleared, the resume ran, and c00003_s0000029 came back
+                # failed with "Locked-name pronunciation remained mismatched after all
+                # repair rounds" - which is true, and is exactly what the listener already
+                # heard and accepted.
+                #
+                # The warning stays on the row and the failed ASR result is still recorded,
+                # because the machine did not change its mind. Only the status is left
+                # alone, which is what an acceptance means everywhere else.
+                self.log(
+                    f"Segment {item['stable_id']} vẫn lệch ASR, nhưng chủ sách đã nghe "
+                    "đúng bản thu này và chấp nhận; giữ nguyên trạng thái."
+                )
+                continue
             self.db.mark_failed(
                 int(item["id"]),
                 (

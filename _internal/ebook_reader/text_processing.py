@@ -149,7 +149,17 @@ _SPOKEN_SPACE_BEFORE_PUNCT = re.compile(r"\s+([,.!?;:…])")
 # start, because this function must leave a *fragment* of its own output alone - see
 # spoken_symbols_to_words. A boundary is the one piece of context a fragment does not share
 # with the text it came from.
-_SPOKEN_TRAILING_COMMA = re.compile(r",(\s*[.!?…])")
+_SPOKEN_TRAILING_COMMA = re.compile(r",(\s*[.!?…:;])")
+# A slash between words is an alternative and wants the pause a comma gives. Between digits
+# it is a fraction, and Vietnamese reads that slash aloud as "trên" - "8.5/10" is "tám phẩy
+# năm trên mười", which is right. The voice applies the fraction reading to both, so
+# "Mạnh hơn / khó tìm hơn" came out "mạnh hơn TRÊN khó tìm hơn": the symbol stopped being a
+# separator and became a word inside the sentence, which is the exact thing the owner
+# refused - "cái đó nó bị lẫn vào làm một thành phần trong câu văn là không được".
+#
+# Letters on both sides only, so the book's one real fraction keeps its reading. Checked
+# across all 948 segments: 8 word/word, 1 digit/digit.
+_SPOKEN_WORD_SLASH = re.compile(r"(?<=[^\W\d_])\s*/\s*(?=[^\W\d_])", re.UNICODE)
 # Separators sitting at either end of the whole text are removed before conversion rather
 # than trimmed away as commas afterwards. Same result, but stable: a fragment of converted
 # text contains no separators at all, so this can never fire a second time. ↓ and ↑ are not
@@ -215,6 +225,7 @@ def spoken_symbols_to_words(text: str) -> str:
     out = "".join(
         span if is_cue else _spoken_symbols_in_span(span) for span, is_cue in spans
     )
+    out = _SPOKEN_WORD_SLASH.sub(", ", out)
     out = _SPOKEN_SPACE_BEFORE_PUNCT.sub(r"\1", out)
     out = _SPOKEN_COMMA_RUN.sub("", out)
     out = _SPOKEN_TRAILING_COMMA.sub(r"\1", out)

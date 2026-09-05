@@ -891,3 +891,38 @@ Trước khi tìm ra nguyên nhân thật, tôi đo "thời gian nạp UTMOSv2" 
 chạy**. Sai. Nhìn thẳng vào log thì các dòng nạp cách nhau **0,6 giây**; hàm ghép cặp của tôi
 đã bắt sang sự kiện của thành phần khác. Một phép đo phải được nhìn tận mắt ở một mẫu cụ thể
 trước khi tin vào con số tổng.
+
+## Sức ép RAM của pool: một lỗi thật, nhưng đừng bán nó như tiết kiệm thời gian
+
+Pool chấm cảm thụ tự định cỡ mà không biết pool TTS sắp khởi động, và hằng số RAM mỗi worker
+thấp hơn thực tế — hai cái cộng lại đẩy alpha.47 xuống 1,5–2,3 GB trống và ném run vào
+`yield_heavy`. Chi tiết bản sửa: commit `01384a7` và `ad9fd0c`.
+
+Nhưng **đo mới biết nó tốn bao nhiêu**, và câu trả lời khiêm tốn. Trên 166 phút đầu của
+alpha.47:
+
+| chế độ | thời gian | tỉ lệ |
+|---|---|---|
+| `maximum` | 156,1 phút | **94,0%** |
+| `yield_heavy` | 5,2 phút | 3,1% |
+| `yield_light` | 2,9 phút | 1,7% |
+| `pause_new_work` | 1,8 phút | 1,1% |
+
+Tổng cộng **~6 phút trên 166**, tức 3,7%. Worker chấm cảm thụ sống ngắn, nên mỗi lần siết
+chỉ kéo dài dưới một phút rồi nhả.
+
+**Giá trị của bản sửa là không tự bắn vào chân, không phải throughput.** Một pool tự đưa mình
+vào trạng thái cấm chính công việc nó đang làm là sai bất kể tốn mấy phút, và trên một máy ít
+RAM hơn thì cùng lỗi ấy sẽ không còn nhẹ như vậy. Nhưng đừng trích nó như một mục tối ưu.
+
+### Đối chiếu để giữ đúng tỉ lệ
+
+Cùng họ vấn đề — "cơ chế nhường máy tự chặn công việc" — nhưng hai bậc độ lớn khác nhau:
+
+| lỗi | tốn |
+|---|---|
+| `yield_light` chặn CPU vô điều kiện (alpha.46) | **112 phút liên tục**, 0,38 segment/phút |
+| pool vượt ngân sách RAM (alpha.47) | ~6 phút rải rác |
+
+Cái thứ nhất là mất một buổi tối; cái thứ hai là một vết xước. Cả hai đều đáng sửa, chỉ đừng
+báo cáo chúng như nhau.

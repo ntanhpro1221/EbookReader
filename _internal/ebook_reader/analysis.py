@@ -4160,6 +4160,44 @@ COMPOUND_NAME_MIN_PART = 4
 COMPOUND_NAME_LINKING_LETTERS = frozenset("sz")
 
 
+def name_component_corrections(readings: dict[str, str]) -> dict[str, str]:
+    """One name must not read two ways because it appeared in two surfaces.
+
+    Readings are proposed per surface and each is checked on its own, so nothing ever
+    compares "Theosbane" with the "Theosbane" inside "Samael Kaizer Theosbane". alpha.47
+    locked both: `theo-bên` inside the full names, `Thê-ô-ban` alone. Same book, same
+    character, two readings - exactly the defect _local_name_fallback's docstring says the
+    whole route exists to prevent, arriving through a door nobody was watching.
+
+    The longer reading is the one to trust here, and not by preference: a multi-word name
+    carries more context for the model, and in alpha.47 the full names were locked at 0.88
+    confidence against 0.85 for the bare one. Its component is read off directly when the
+    reading has exactly as many space-separated groups as the surface has words, which is
+    the only case where alignment is certain. Anything else is left alone rather than
+    guessed at.
+
+    Returns {surface: corrected_reading} for single-word names that disagree - empty when
+    everything already agrees, which is the normal case.
+    """
+    corrections: dict[str, str] = {}
+    single = {s: r for s, r in readings.items() if len(str(s).split()) == 1}
+    for surface, reading in readings.items():
+        words = str(surface).split()
+        groups = str(reading).split()
+        if len(words) < 2 or len(words) != len(groups):
+            continue
+        for word, group in zip(words, groups):
+            existing = single.get(word)
+            if existing is None or existing == group:
+                continue
+            # Case differs constantly between a name at the start of a phrase and alone,
+            # and that is not two readings - only the syllables are compared.
+            if existing.casefold() == group.casefold():
+                continue
+            corrections[word] = group
+    return corrections
+
+
 def _compound_part_reading(part: str, pronunciation: str) -> str:
     """One half of a compound name, read the way a Vietnamese reader would say it.
 
