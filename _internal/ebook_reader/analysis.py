@@ -750,11 +750,6 @@ LATIN_NAME_VOWEL_READINGS = {
     "ea": "i",
     "ee": "i",
     "ei": "ây",
-    # "eo" is a Vietnamese rime - theo, kéo, mèo - and the only one of the e- pairs that
-    # was missing. Without it the letters fell through separately to "êô", which is not a
-    # rime at all, so _split_illegal_rime cut it in half: Theosbane read "The-ô-bên" in
-    # three syllables. The owner asked twice for "theo-bên". One table entry, no splitting.
-    "eo": "eo",
     "eu": "iu",
     "ew": "iu",
     "ey": "ây",
@@ -4160,26 +4155,6 @@ COMPOUND_NAME_MIN_PART = 4
 COMPOUND_NAME_LINKING_LETTERS = frozenset("sz")
 
 
-def _compound_part_reading(part: str, pronunciation: str) -> str:
-    """One half of a compound name, read the way a Vietnamese reader would say it.
-
-    A half that is already a Vietnamese syllable is left alone. This is the rule
-    _local_name_fallback states for whole words - "Kim Luxara" is half a Vietnamese word,
-    and reading that half as English gives it a reading it never had - and the compound
-    path simply never applied it.
-
-    It is why this function exists at all. "Theosbane" reached "The-ô-bên" because "theo"
-    went through its CMUdict entry, /ˈθiːoʊ/, which is two syllables. But "theo" is a
-    Vietnamese word, and the owner asked twice for "theo-bên". The docstring below has
-    claimed "Theo-bên" since it was written; only the code disagreed.
-
-    "bane" is not a Vietnamese syllable, so it still reads from its phonemes as "Bên".
-    """
-    if is_vietnamese_syllable(part):
-        return part
-    return _cmu_pronunciation_to_vietnamese(part, pronunciation)
-
-
 def _compound_name_reading(surface: str) -> str | None:
     """Read an invented name built out of two English words the dictionary does know.
 
@@ -4226,8 +4201,8 @@ def _compound_name_reading(surface: str) -> str | None:
             if tail_pronunciation is None:
                 continue
             try:
-                head_reading = _compound_part_reading(head, head_pronunciation)
-                tail_reading = _compound_part_reading(tail, tail_pronunciation)
+                head_reading = _cmu_pronunciation_to_vietnamese(head, head_pronunciation)
+                tail_reading = _cmu_pronunciation_to_vietnamese(tail, tail_pronunciation)
             except ValueError:
                 continue
             if not head_reading or not tail_reading:
@@ -5166,44 +5141,6 @@ def _analysis_envelope_validated(candidate: dict[str, Any]) -> dict[str, dict[st
         str(segment["stable_id"]): copy.deepcopy(segment["data"])
         for segment in candidate["segments"]
     }
-
-
-_REASON_WORD_PATTERN = re.compile(r"[^a-z]+")
-
-
-def _disputed_delivery_fields(reason: str) -> tuple[str, ...]:
-    """Which parts of the delivery a critic reason is complaining about.
-
-    The critic states its objection in more than one shape - "DIRECTOR_FIELD_MISMATCH
-    fields=speaker" and "DIRECTOR_INVALID_RESPONSE speaker_provenance" both mean the
-    speaker is disputed - so this looks for the canonical field names anywhere in the
-    reason rather than parsing one format. Splitting on non-letters keeps "speaker" out of
-    a word that merely contains it and finds it inside "speaker_provenance".
-
-    Only used to tell a listener which part to listen for, so a reason naming no field
-    contributes none rather than failing.
-    """
-    words = set(_REASON_WORD_PATTERN.split(reason.casefold()))
-    return tuple(
-        field for field in _database.ANALYSIS_CRITIC_DELIVERY_FIELDS if field in words
-    )
-
-
-def _rejected_candidate_data(candidate_row: Any) -> dict[str, dict[str, Any]]:
-    """What the model actually said, for a batch the director critic threw out.
-
-    The verdict is about one field of one segment; the rest of the envelope passed the
-    schema and is the best answer anyone has. Read from the durable ledger row rather than
-    held in a local, so a resumed run sees exactly what the original run saw.
-
-    Never raises: this only feeds a last-resort path that is already the alternative to
-    ending the book, so a malformed row means "no better answer available", not a crash.
-    """
-    try:
-        candidate = json.loads(str(candidate_row["candidate_json"]))
-        return _analysis_envelope_validated(candidate)
-    except Exception:  # noqa: BLE001
-        return {}
 
 
 def _analysis_commit_envelope(
@@ -7274,51 +7211,6 @@ class OllamaBookAnalyzer:
             raise RuntimeError("Durable analysis candidate generator contract is invalid")
         return contract
 
-    def _can_publish_under_protest(self, candidate_row: Any) -> bool:
-        """May this rejected batch be published over the critic's objection?
-
-        Two conditions, and the second is the narrow one.
-
-        First, the facts a durable commit needs must be readable back. Three of the four
-        are true whatever the verdict was - what the generator produced, what the host
-        affect pass cleared, and the critic's own recorded objection - but if the host
-        never cleared it, or the critic left no durable attempt, there is nothing honest
-        to commit.
-
-        Second, every issue must be a DIRECTOR_FIELD_MISMATCH: the critic read the
-        delivery and named the fields it disagrees about. That is the situation the owner
-        ruled on. A critic that returned an unusable answer - DIRECTOR_INVALID_RESPONSE, a
-        candidate hash mismatch - has not disagreed with anything, it has malfunctioned,
-        and publishing over a malfunction is a different decision that nobody has made.
-        Those keep ending the batch exactly as before, which is what the older tests
-        around invalid reasons and exhausted budgets pin.
-        """
-        try:
-            self._durable_generator_contract(candidate_row)
-            self._durable_host_clearance(candidate_row)
-            issues, _evidence = self._durable_director_rejection(candidate_row)
-        except Exception:  # noqa: BLE001 - unavailable means "fail the batch", not "crash"
-            return False
-        return bool(issues) and all(
-            str(reason).startswith("DIRECTOR_FIELD_MISMATCH fields=")
-            for reason in issues.values()
-        )
-
-    def _protest_director_evidence(self, candidate_row: Any) -> dict[str, Any]:
-        """The critic's actual objection, recorded as an objection.
-
-        Deliberately not shaped as an acceptance: this is the evidence that the director
-        critic *disagreed*, carried into the commit so the disagreement is discoverable
-        from the committed batch rather than only from a log line.
-        """
-        issues, evidence = self._durable_director_rejection(candidate_row)
-        return {
-            **evidence,
-            "director_critic_outcome": "rejected",
-            "published_under_protest": True,
-            "director_critic_issues": issues,
-        }
-
     def _durable_director_rejection(
         self,
         candidate_row: Any,
@@ -7694,15 +7586,6 @@ class OllamaBookAnalyzer:
             split_scalable_failure = False
             repeated_host_candidate = False
             repeated_director_candidate = False
-            # The durable row and the model's own schema-valid answer for a batch the
-            # director critic threw out. Kept because the last-resort path below has to
-            # publish *something*, and the alternative the commit loop falls back to is
-            # _heuristic, which reads emotion off keyword matching and returns UNKNOWN for
-            # every line of dialogue. Publishing a disputed speaker is a judgement call;
-            # publishing no speaker at all is just a worse reading, delivered quietly.
-            rejected_candidate_row: Any = None
-            rejected_candidate_data: dict[str, dict[str, Any]] = {}
-            published_under_protest = False
             received_incomplete_ids = False
             received_semantic_issues = False
             received_director_critic_issues = False
@@ -8180,10 +8063,6 @@ class OllamaBookAnalyzer:
                                     received_director_critic_issues = True
                                     durable_critic_exhausted = True
                                     validated = {}
-                                    rejected_candidate_row = analysis_candidate
-                                    rejected_candidate_data = _rejected_candidate_data(
-                                        analysis_candidate
-                                    )
                                     last_error = (
                                         "durable director critic attempt budget is exhausted"
                                     )
@@ -8197,10 +8076,6 @@ class OllamaBookAnalyzer:
                                         ),
                                     )
                                     validated = {}
-                                    rejected_candidate_row = analysis_candidate
-                                    rejected_candidate_data = _rejected_candidate_data(
-                                        analysis_candidate
-                                    )
                                     issue_summary = "; ".join(
                                         f"{seg_id}: {reason}"
                                         for seg_id, reason in list(
@@ -8530,80 +8405,6 @@ class OllamaBookAnalyzer:
                     f"Batch {group_index} không chốt được delivery sau {retry_count} lần; "
                     "bất đồng chỉ ở trường không ảnh hưởng âm thanh nên vẫn đi tiếp."
                 )
-            elif (
-                len(validated) != len(group)
-                and required
-                and split_result is None
-                and rejected_candidate_row is not None
-                and all(
-                    str(row["stable_id"]) in rejected_candidate_data for row in group
-                )
-                and self._can_publish_under_protest(rejected_candidate_row)
-            ):
-                # Last resort, and the owner's decision on 2026-09-05: publish the model's
-                # own reading with a warning rather than end the book.
-                #
-                # The escape above only covers host affect disagreement - emotion and
-                # intensity - which happens *after* the director critic accepted, so an
-                # acceptance record still exists. A critic rejection has none, and a batch
-                # that cannot be split (one segment, or one cohesive unit of dialogue that
-                # deliberately refuses to split because splitting makes speaker attribution
-                # worse) had nothing left to try. A run died exactly there: batch 74, four
-                # segments, the model repeating one disputed speaker, and ten chapters of
-                # finished analysis thrown away with it.
-                #
-                # Nothing false is written. The ledger row stays critic_rejected, because
-                # it was; the candidate is deliberately NOT bound to this commit, because
-                # this is not a critic-accepted commit; and the evidence recorded is the
-                # critic's actual objection.
-                validated = dict(rejected_candidate_data)
-                published_under_protest = True
-                accepted_analysis_candidate_id = None
-                accepted_director_evidence = self._protest_director_evidence(
-                    rejected_candidate_row
-                )
-                accepted_generator_contract = self._durable_generator_contract(
-                    rejected_candidate_row
-                )
-                accepted_host_clearance = self._durable_host_clearance(
-                    rejected_candidate_row
-                )
-                # Taken from the critic's own durable verdict rather than from
-                # validation_feedback, which is a tuple of issues on one path and a plain
-                # {stable_id: reason} dict on another - reading it as objects gave an empty
-                # list, and a warning with no segment id cannot send anybody to the right
-                # forty seconds of audio.
-                protest_issues, _protest_evidence = self._durable_director_rejection(
-                    rejected_candidate_row
-                )
-                disputed = sorted(str(key) for key in protest_issues)
-                fields = sorted(
-                    {
-                        field
-                        for reason in protest_issues.values()
-                        for field in _disputed_delivery_fields(str(reason))
-                    }
-                )
-                self.db.event(
-                    "warning",
-                    "ANALYSIS_AUDIBLE_DISAGREEMENT_ACCEPTED",
-                    f"batch {group_index} published an audible delivery disagreement so "
-                    f"the book could continue: {last_error}",
-                    {
-                        "batch_index": group_index,
-                        "expected_segments": len(group),
-                        "disputed_segments": disputed,
-                        "fields": fields,
-                        "needs_listener": True,
-                        "analysis_candidate_id": int(rejected_candidate_row["id"]),
-                    },
-                )
-                self.log(
-                    f"Batch {group_index} vẫn bất đồng ở trường ảnh hưởng âm thanh "
-                    f"({', '.join(fields) or 'không rõ'}) sau {retry_count} lần và không "
-                    "chia nhỏ được nữa; lấy cách đọc của model và gắn cảnh báo để người "
-                    "nghe quyết, thay vì bỏ cả quyển sách."
-                )
             elif len(validated) != len(group) and required:
                 message = (
                     f"Phân tích bắt buộc thất bại ở batch {group_index}: "
@@ -8664,26 +8465,11 @@ class OllamaBookAnalyzer:
                         for row in group
                     ],
                     low_confidence_threshold=confidence_threshold,
-                    # A batch published over the critic's objection must not be recorded as
-                    # one the critic accepted. The committed event is the thing a later
-                    # audit reads; saying "accepted" here would hide the one fact that
-                    # matters about these segments.
-                    event_level="warning" if published_under_protest else "info",
-                    event_code=(
-                        "ANALYSIS_DIRECTOR_CRITIC_PROTESTED"
-                        if published_under_protest
-                        else "ANALYSIS_DIRECTOR_CRITIC_ACCEPTED"
-                    ),
+                    event_level="info",
+                    event_code="ANALYSIS_DIRECTOR_CRITIC_ACCEPTED",
                     event_message=(
-                        (
-                            f"Đã phát {len(group)} segment ở batch {group_index} dù phản "
-                            "biện đạo diễn không đồng ý; cần người nghe xác nhận."
-                        )
-                        if published_under_protest
-                        else (
-                            f"Phản biện đạo diễn đã chấp nhận {len(group)} segment "
-                            f"ở batch {group_index}."
-                        )
+                        f"Phản biện đạo diễn đã chấp nhận {len(group)} segment "
+                        f"ở batch {group_index}."
                     ),
                     event_details=accepted_details,
                     analysis_model_name=self.model,
