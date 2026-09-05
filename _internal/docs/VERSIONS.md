@@ -794,3 +794,87 @@ giờ xảy ra.
 Không segment nào kích hoạt nó. Dòng lỗi của `c00009_s0000008` kết thúc bằng
 `pace_band=already normal`, tức cổng được gọi và từ chối đúng cách mà không tốn lần tổng hợp
 nào. Đường *thật sự hạ dải* vẫn chưa chạy trong một lần chạy thật.
+
+---
+
+### Kết quả chạy alpha.45: chết ở chương 2 sau 1h56, vì một hồi quy do chính bản sửa trước gây ra
+
+Chạy 07:43 → 09:39 UTC. Phân tích **xong toàn bộ 948 segment**, tổng hợp xong chương 1, chết
+giữa chương 2 với circuit breaker:
+
+```
+TTS circuit breaker opened after 3 identical failures:
+  split part pronunciation materialization changed its boundary text
+```
+
+Số lần xuất hiện chuỗi lỗi đó: **alpha.43 = 0, alpha.44 = 0, alpha.45 = 7.** Hồi quy mới,
+không phải lỗi tiềm ẩn lâu ngày.
+
+#### Ba thứ phải xếp thẳng hàng mới nổ
+
+`_synthesize_split` cắt một segment dài thành mảnh của text **đã materialize**, rồi
+materialize lại từng mảnh và đòi kết quả không đổi. Chuỗi nhân quả:
+
+1. `spoken_symbols_to_words` đổi `(Legendary)` thành `, Legendary,` — **thêm ký tự**.
+2. Segment vì thế dài 174 ký tự, vượt cap 170 của bộ cắt.
+3. Bộ cắt bèn cắt tại **dấu phẩy mà chính hàm ấy vừa tạo ra**.
+4. Mảnh 0 kết thúc bằng dấu phẩy. Lượt materialize thứ hai gặp luật
+   `,(\s*(?:[.!?…]|$))` — dấu phẩy đứng ngay trước `$` — và cắt nó đi.
+5. `expected_part_text != piece` → hỏng. Ba lần → breaker.
+
+alpha.43 và .44 không dính vì trước bản sửa ấy **không có dấu phẩy mới nào cho bộ cắt cắt vào**.
+
+#### Bất biến bị bỏ sót: hàm phải ổn định trên mảnh của chính đầu ra của nó
+
+Đây là điều tôi không nghĩ tới khi viết. Idempotent trên *cả chuỗi* là chưa đủ — đường sửa
+chữa cắt chuỗi ra rồi chạy lại trên từng mảnh, mà **một luật neo `^`/`$` nhìn thấy biên của
+mảnh, không phải biên của đoạn nó sinh ra từ đó**. Biên là thứ duy nhất một mảnh không thừa
+hưởng từ đoạn cha.
+
+Sửa bằng cách **bỏ mọi luật đọc biên chuỗi**. Việc dọn dẹp mà chúng làm nay làm *trước* khi
+chuyển đổi: ký tự phân cách nằm ở hai đầu bị bỏ đi thay vì đổi thành dấu phẩy rồi cắt lại.
+Cùng kết quả, nhưng ổn định theo cấu trúc — mảnh của text đã chuyển không còn ký tự phân cách
+nào, nên luật ấy không thể bắn lần hai.
+
+Đo trên cả sách thay vì trên ví dụ:
+
+| | code cũ | code mới |
+|---|---|---|
+| segment kiểm tra | 948 | 948 |
+| segment cắt được | 204 | 204 |
+| **lệch biên** | **3** | **0** |
+| không idempotent | 0 | 0 |
+
+#### Hai thứ rơi ra từ bản sửa
+
+- **Trim hai đầu suýt ăn mất vocal cue.** Ngoặc bao `[thở dài]` cũng là ký tự phân cách; bỏ
+  ngoặc mở làm cue không còn được nhận ra và biến thành hai từ đọc thành tiếng. Đúng cái bẫy
+  test anchor đã bắt lần trước — nó bắt được lần này nữa.
+- **Bỏ trim dấu phẩy hai đầu thôi xoá dấu câu của tác giả.** 10 segment là câu thơ kết thúc
+  bằng dấu phẩy (`'Sinh ra từ bóng tối, mang trên mình lời nguyền,'`); `.strip(",")` cũ xoá
+  mất nhịp nghỉ mà tác giả cố ý đặt. Toàn bộ 10 khác biệt cũ↔mới đều là dấu phẩy được giữ lại.
+
+#### Xác nhận được: chốt pool của alpha.44 đã hết chốt
+
+Trong 1h56, pool TTS dựng thành công **4 lần** với 3 tiến trình, và đúng **một lần** tụt xuống
+tuần tự:
+
+```
+VRAM còn 3798 MiB, không đủ cho pool TTS (3 worker mong muốn); tổng hợp tuần tự chương này.
+```
+
+`(3798 − 2733) / 917 = 1` worker, mà pool một worker thì vô nghĩa. Lúc đó máy đang mở Unity
+(3 tiến trình) và Rider — đúng kịch bản chủ nhân từng phàn nàn là "mở Unity lên cái là fail".
+**Nó không fail.** Nó hạ xuống tuần tự cho một chương rồi thôi; VRAM sau đó về 5343 MiB. Ở
+alpha.44 chính khoảnh khắc này đã khoá pool suốt 8 chương và tốn 2.037 giây.
+
+Giá phải trả cho một chương tuần tự là nhỏ: pool 3 worker chỉ nhanh hơn 1,12× (đo trong
+docstring `TTS_POOL_MIN_BATCH`), nên không đáng phức tạp hoá bằng cách dựng lại pool giữa chương.
+
+#### Vẫn chưa chạy lần nào trong thực tế
+
+- **Phát hiện đọc 2 lần** (`repeated_utterance_score`): không segment nào chạm ngưỡng 0,35.
+- **Lùi dải nhịp**: vẫn chưa segment nào đi vào đường hạ dải thật (giống alpha.44).
+
+Ba dòng "repeated a critic-rejected candidate projection" trong log là chuyện khác — bộ phân
+tích tự cắt batch, không liên quan tới âm thanh.
