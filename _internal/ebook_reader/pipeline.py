@@ -35,6 +35,8 @@ from .asr_contract import (
     COLLAPSED_SHORT_CONTEXT_MODE,
 )
 from .audio_io import (
+    REPEATED_UTTERANCE_METRIC,
+    REPEATED_UTTERANCE_THRESHOLD,
     AudioQualityError,
     _segment_value,
     ChapterQualityError,
@@ -4000,6 +4002,16 @@ class BookPipeline:
                     if metrics.get("pace_outlier"):
                         retry_reasons.append(
                             f"speech pace {metrics.get('chars_per_second', 0.0):.2f} chars/s"
+                        )
+                    # A doubled reading is regenerated rather than reported: the next
+                    # attempt has a different seed and the engine does not usually repeat
+                    # twice running. Asking a person to listen would be the wrong gate -
+                    # there is nothing for them to decide, the take is simply wrong.
+                    repeated = float(metrics.get(REPEATED_UTTERANCE_METRIC, 0.0) or 0.0)
+                    if repeated > REPEATED_UTTERANCE_THRESHOLD:
+                        retry_reasons.append(
+                            f"đọc lặp nội dung (giống hai nửa {repeated:.2f} > "
+                            f"{REPEATED_UTTERANCE_THRESHOLD})"
                         )
                     if retry_reasons:
                         raise AudioQualityError(
