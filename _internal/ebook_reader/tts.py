@@ -33,7 +33,11 @@ from .models import (
     ENGLISH_NAME_PRONUNCIATION_SOURCE,
 )
 from .resource_manager import trim_process_working_set
-from .text_processing import is_standalone_ha_gasp, normalize_vocalizations_for_tts
+from .text_processing import (
+    is_standalone_ha_gasp,
+    normalize_vocalizations_for_tts,
+    spoken_symbols_to_words,
+)
 from .voice_catalog import FORMANT_RATIO_MAX, FORMANT_RATIO_MIN
 from .tts_contract import (
     HA_VOCALIZATION_DELIVERY_PROFILE,
@@ -807,7 +811,19 @@ class TTSCoordinator:
         if normalized_variant not in PRONUNCIATION_DELIVERY_VARIANTS:
             raise ValueError("Unsupported pronunciation delivery variant")
         self._load_pronunciations()
-        source_text = str(row["text"])
+        # Before anything else, so every downstream consumer sees the same string: the
+        # voice, the transcript comparison that has to match what the voice was given, and
+        # the pace metric that budgets a silence per punctuation group. Characters the voice
+        # cannot say used to pass straight through - the owner heard "Thường (Common) (C) »
+        # Hiếm" come out as one unbroken run, because a guillemet is not a pause and neither
+        # is a bracket the voice ignores.
+        #
+        # Anchors are computed from this text, and their source offsets are only ever
+        # compared against other anchors derived the same way (pipeline.py builds an
+        # identity tuple from them), never used to slice row["text"]. Normalising here keeps
+        # those offsets internally consistent. row["text"] itself is untouched - the book's
+        # text is not what changes, only what is handed to the voice.
+        source_text = spoken_symbols_to_words(str(row["text"]))
         origins = [(index, index + 1) for index in range(len(source_text))]
         anchor_tags = [frozenset() for _character in source_text]
         anchors: list[dict[str, Any]] = []
