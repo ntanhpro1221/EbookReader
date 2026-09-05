@@ -46,6 +46,23 @@ def _anchor_forms(metrics: dict) -> list[dict]:
     return out
 
 
+def _accepted(connection) -> set:
+    """(stable_id, wav_sha256) pairs a listener has already ruled on.
+
+    The pipeline subtracts these in _high_quality_blocking_segment_warnings, so a report
+    that does not is describing a book the pipeline no longer sees - it would keep asking
+    for decisions already made. Keyed by checksum, so re-cutting a take voids the decision
+    exactly as it does everywhere else.
+    """
+    try:
+        rows = connection.execute(
+            "SELECT segment_stable_id, warning_code, wav_sha256 FROM listener_audio_acceptances"
+        ).fetchall()
+    except Exception:  # noqa: BLE001 - older projects have no such table
+        return set()
+    return {(str(r[0]), str(r[1]), str(r[2]).lower()) for r in rows}
+
+
 def collect(root: Path) -> list[dict]:
     connection = sqlite3.connect(f"file:{root / 'project.sqlite3'}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row

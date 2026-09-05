@@ -181,3 +181,41 @@ cân bằng lại, không phải nới lỏng.
 với cách lấy hàng đã sửa cho ra đúng kết quả cũ - mọi chương bị chặn đều còn một segment
 `failed` hoặc một segment perceptual vẫn chặn. Tôi đã đi tới kết luận đúng bằng một phép đo
 sai, và điều đó không làm phép đo ấy đỡ sai đi.
+
+## Tai người đã phán 14/14: đo được tỉ lệ báo động giả thật (2026-09-04)
+
+Chủ sách nghe hết 14 đoạn bị chặn của alpha.44 và phán từng đoạn. Đây là **ground truth**
+đầu tiên của dự án - trước giờ mọi con số đều là máy tự chấm máy.
+
+| cổng | gắn cờ | đọc ĐÚNG | hỏng THẬT | báo động giả |
+|---|---|---|---|---|
+| `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | 6 | **6** | 0 | **100%** |
+| `PERCEPTUAL_NATURALNESS_REVIEW` | 6 | 5 | **1** | **83%** |
+| `TTS_PACE_OUTLIER` | 1 | 0 | 1 | 0% |
+| `SEGMENT_FAILED` (cổng nhịp) | 1 | 0 | 1 | 0% |
+
+### Neo tên: 6/6 đều là báo động giả
+
+Cả sáu đều đọc đúng. Chủ sách nhận xét ba lần, mỗi lần một đoạn khác nhau:
+
+> *"đọc đúng từ, có vẻ máy nghe sai. có vẻ máy nghe phần tiếng anh convert tiếng việt không tốt"*
+> *"những từ được convert từ tiếng anh sang âm tiếng việt thì tool nghe của bạn nghe không tốt"*
+
+Điều này khẳng định lý do `ASR_LOCKED_NAME_ANCHOR_REVIEW` được miễn trừ ngay từ đầu, và
+đặt câu hỏi vì sao `..._MISMATCH` lại **chặn**: trên quyển sách này, mọi lần nó chặn đều sai.
+Whisper đơn giản là không nghe được tên tiếng Anh đã phiên âm sang âm Việt - đúng cái mà
+`scripts/compare_asr_engines.py` đã đo (đổi engine không cứu được lớp này).
+
+### Perceptual: 5 báo động giả cho 1 lần bắt đúng
+
+`c00007_s0000045` bị chủ sách phán **"sai, bị đọc 2 lần"** - giọng đọc lặp nội dung hai lần.
+Cổng perceptual bắt được nó. Năm đoạn còn lại đều ổn.
+
+Nên cổng này **không vô dụng**: nó là thứ duy nhất bắt được một lỗi mà không cổng nào khác
+thấy. Nhưng nó tốn 5 lần báo nhầm cho mỗi lần bắt đúng, và đó chính là mức giá mà mục
+"ngưỡng theo sigma" đang định giảm.
+
+### Cổng nhịp: 2/2 đều đúng
+
+Cả hai ca đều là lỗi thật, và cùng một nguyên nhân: ký tự `»` lọt tới giọng đọc nên không
+có chỗ ngắt nghỉ. Cổng nhịp phát hiện đúng triệu chứng của một lỗi nằm ở tầng văn bản.
