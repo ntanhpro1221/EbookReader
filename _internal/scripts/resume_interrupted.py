@@ -36,6 +36,22 @@ RESUMABLE_STATE = "lost"
 LOG_NAME = "_auto_resume.log"
 
 
+def _say_safely(line: str) -> None:
+    """Print without letting the console's encoding decide whether the book resumes.
+
+    Every message here is Vietnamese and Windows hands scripts a cp1252 stdout more
+    often than not - Task Scheduler included - where printing raises UnicodeEncodeError.
+    Losing a night of audio because a console could not render "bỏ qua" would be absurd.
+    """
+    try:
+        print(line)
+    except (UnicodeEncodeError, OSError, ValueError):
+        try:
+            sys.stdout.buffer.write(line.encode("utf-8", "replace") + b"\n")
+        except Exception:  # noqa: BLE001 - stdout may be closed entirely under pythonw
+            pass
+
+
 def _log_line(root: Path, line: str) -> None:
     """Nobody is watching stdout at logon, so leave a trail beside the projects.
 
@@ -70,12 +86,15 @@ def main(argv: list[str]) -> int:
     root = Path(positional[0]) if positional else DEFAULT_VERSIONS_ROOT
 
     def say(line: str) -> None:
-        print(line)
+        # Log first: printing is the fragile half, and a print that dies must not
+        # take the record with it. Every line here contains Vietnamese, and a
+        # console this lands on may be cp1252 - Task Scheduler's especially.
         _log_line(root, line)
+        _say_safely(line)
 
     projects = projects_under(root)
     if not projects:
-        print(f"không tìm thấy project nào dưới {root}")
+        _say_safely(f"không tìm thấy project nào dưới {root}")
         return 0
 
     resumed = 0
