@@ -5493,6 +5493,25 @@ class BookPipeline:
                 similarity=float(result.get("similarity", 0.0)), wer=float(result.get("wer", 1.0)),
                 warning_code=warning,
             )
+            if self._listener_ruled_on_this_take(item):
+                # The third gate with the same blindness, and the one that survived the
+                # first two fixes. A person listened to this exact recording and let it
+                # stand; the verifier then re-derives its own verdict from the transcript
+                # and overrules them, because nothing here has ever consulted the
+                # acceptance table. alpha.47 showed it after the other two were fixed:
+                # chapter 3 was cleared, the resume ran, and c00003_s0000029 came back
+                # failed with "Locked-name pronunciation remained mismatched after all
+                # repair rounds" - which is true, and is exactly what the listener already
+                # heard and accepted.
+                #
+                # The warning stays on the row and the failed ASR result is still recorded,
+                # because the machine did not change its mind. Only the status is left
+                # alone, which is what an acceptance means everywhere else.
+                self.log(
+                    f"Segment {item['stable_id']} vẫn lệch ASR, nhưng chủ sách đã nghe "
+                    "đúng bản thu này và chấp nhận; giữ nguyên trạng thái."
+                )
+                continue
             self.db.mark_failed(
                 int(item["id"]),
                 (
