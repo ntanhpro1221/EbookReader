@@ -925,8 +925,29 @@ tất cả đều nằm trong 110 đoạn có audio khác. Không có ngoại l�
 |---|---|---|
 | chỉ dẫn diễn xuất khác | **87** | 79% — nhiễu của pha phân tích |
 | chuyển đổi ký tự (`»`, `↓`, ngoặc) | **15** | thay đổi thật, cố ý |
+| **cách đọc tên đổi** | **7** | ba chỉnh âm chủ sách yêu cầu, xem dưới |
 | cả hai | 1 | |
-| chưa giải thích được | 7 | 0,7% toàn sách, đáng xem sau |
+
+Nhóm thứ ba ban đầu bị tôi ghi là "chưa giải thích được". Truy tiếp thì hoá ra là kết quả
+tốt nhất trong cả phép so sánh: **8/112 tên đổi cách đọc, và cả 8 đều là cải thiện**, không
+có cái nào là trôi ngẫu nhiên.
+
+| tên | alpha.44 | alpha.46 | chỉnh âm nào |
+|---|---|---|---|
+| `Spirit Essence Units` | E-xen **Du**-nít | **U-nít** | *"u-nít chứ không phải du-nít"* |
+| `Hunters` | Hăn-**tờt** | **Hăn-tờ** | *"vờt là cái gì? tiếng việt làm gì có"* |
+| `Arthur/Samael Kaizer Theosbane` | thê-ô-xờ-ban | **The-ô-bên** | đường ghép từ điển |
+| `Lily Elderwing` | ê-lờ-đê-rờ-uinh | Eo-đờ-guynh | cụm phụ âm đầu |
+| `Michael Godswill` | gô-đờ-xờ-uin | Gót-guyn | |
+| `Soulbound Artifacts` | Xao-lờ-baon | Xôn-bao | |
+| `Kim Luxara` | lu-xa-ra | Lu-xa-ra | viết hoa |
+
+Cả ba câu chủ sách nói ngày 04/09 đều nghe được trong bản thu thật. `Theosbane` sẽ đổi lần
+nữa ở alpha.47 thành **Theo-bên** (hai âm tiết) nhờ bản sửa đường ghép từ điển merge sau khi
+alpha.46 đã chạy.
+
+> Bài học nhỏ: đừng để một dòng "chưa giải thích được" nằm lại trong tài liệu. Bảy đoạn ấy
+> nhìn như nhiễu còn sót, thực ra là bằng chứng ba yêu cầu của chủ sách đã thành hiện thực.
 
 Bài học phương pháp: cách đo ngây thơ ("8,8% bản ghi khác nhau") **gán sai gấp năm lần**.
 Nhóm chứng đối đúng không phải cả sách mà là *segment không chứa ký tự bị đổi* — nhóm ấy
