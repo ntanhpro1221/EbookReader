@@ -14,7 +14,14 @@ heard.
 
     python scripts/port_listener_acceptances.py <source_project> <target_project> [--dry-run]
 
-Run it again as the run progresses, and once more when it finishes. A verdict is refused
+Run it again as the run progresses, after every `resume`, and once more when it finishes.
+
+The resume matters as much as the progress. A verdict is written against the segment's
+status at the time: `accept_segment_audio` when the row is a warning, `accept_failed_segment_audio`
+when it is failed, and only the second one moves the status. So a segment accepted while it
+was a warning and then failed by a later pass keeps its verdict and loses its status, and
+the chapter gate checks status before it ever looks at verdicts. alpha.47 held chapter 3
+back for exactly that until this was run again. A verdict is refused
 while the target has not synthesized that segment yet, or while the warning has not been
 raised on it yet - both change as chapters complete. Against alpha.46 the same command
 carried 3 verdicts at one point and 5 an hour later, purely because more audio existed.
