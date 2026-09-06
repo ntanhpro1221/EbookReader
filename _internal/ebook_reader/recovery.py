@@ -37,13 +37,38 @@ def _perceptual_qa_enabled(settings: dict) -> bool:
     return bool(settings.get("perceptual_qa", {}).get("enabled", False))
 
 
+def _listener_accepted_takes(db: ProjectDB) -> set[tuple[str, str]]:
+    """(segment, checksum) pairs a person listened to and let stand.
+
+    Loaded once per recovery scan rather than per segment: the scan walks every segment in
+    the book and this is the same small table each time.
+    """
+    return set(db.accepted_segment_warnings())
+
+
 def _segment_has_current_audio_qa(
     db: ProjectDB,
     settings: dict,
     *,
     segment_id: int,
     artifact_sha256: str,
+    stable_id: str = "",
+    accepted: set[tuple[str, str]] | None = None,
 ) -> bool:
+    # The machine's stored verdict on an accepted take stays `fail` on purpose - somebody
+    # overruled it, it did not change its mind - so asking for a passing check here requeues
+    # exactly the segments an acceptance exists to release. alpha.48 showed what that costs:
+    # a resume requeued the accepted takes, and chapters 7 and 9, both published an hour
+    # earlier, came back as "MP3 must be rebuilt". Nothing was lost, because a requeue
+    # re-runs ASR on the same audio rather than re-cutting it, but the repair loop that
+    # follows can re-cut - and a re-cut take voids the verdict for good.
+    #
+    # Keyed by artifact like every other use, so a take that really is new is judged on its
+    # own. Same rule the chapter gate already applies in
+    # `ProjectDB.chapter_segments_have_current_audio_qa`; this is the per-segment path that
+    # was missed.
+    if accepted is not None and stable_id and (stable_id, artifact_sha256) in accepted:
+        return True
     if not db.segment_audio_is_current_qa_verified(
         segment_id,
         artifact_sha256,
@@ -150,6 +175,7 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             )
             return report
 
+    accepted_takes = _listener_accepted_takes(db)
     for row in db.list_segments(statuses=("signal_passed", "verified", "warning")):
         wav_text = str(row["wav_path"] or "")
         wav = Path(wav_text) if wav_text else None
@@ -168,6 +194,8 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
                 settings,
                 segment_id=int(row["id"]),
                 artifact_sha256=str(row["wav_sha256"] or ""),
+                stable_id=str(row["stable_id"] or ""),
+                accepted=accepted_takes,
             )
             if status in {
                 SegmentStatus.VERIFIED.value,
