@@ -1524,5 +1524,26 @@ tích" biến mất.
 Nằm ở `analysis.py` (file bị khoá) nên phải là một phiên bản riêng. Cách kiểm đã có sẵn:
 chạy lại đúng thí nghiệm này, nếu tập nhân vật ra 23 thì bản sửa đúng.
 
+**Bản sửa có hai nửa, và nửa thứ hai sẽ hỏng lặng lẽ nếu bỏ sót.**
+
+*Nửa một* — trong `analysis.py`, khi một `stable_group` còn đoạn `pending` thì gửi **cả
+nhóm** thay vì các `pending_runs`. Tính chất đáng giá: trên lần chạy liền mạch mọi đoạn đều
+`pending` nên `pending_runs` vốn đã bằng cả nhóm — **thay đổi này không thể làm đổi đầu ra
+của một lần chạy không bị ngắt.** Nó chỉ chạm vào resume, và chỉ tốn thêm phần đã xong của
+**một** nhóm (nhóm đang dở), tức tối đa 28 đoạn.
+
+*Nửa hai* — đường ghi trong `database.py` có guard theo status:
+
+```sql
+WHERE id=? AND stable_id=? AND text_sha256=? AND status=?
+```
+
+với `expected_status` mặc định là `pending`. Phân tích lại một đoạn đang ở `analyzed` sẽ
+khớp **0 dòng** — không lỗi, không cảnh báo, kết quả mới lặng lẽ bị vứt. Nên nửa hai phải
+truyền `expected_status` bằng đúng status hiện tại của đoạn.
+
+Đúng loại hỏng-lặng-lẽ mà đêm nay đã gặp hai lần (watcher, và trang A/B). Nếu làm bản sửa
+này: **khẳng định số dòng UPDATE khớp**, đừng chỉ khẳng định nó chạy xong.
+
 Nhánh thí nghiệm đã dừng sau khi có kết quả; không chạy tiếp phần tổng hợp vì câu hỏi đã được
 trả lời.
