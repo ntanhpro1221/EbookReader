@@ -1084,3 +1084,29 @@ thì tuyệt đối không.
 **Bài học chung.** Cách đọc một cái tên **không ổn định giữa các lần chạy**. Ba lần chạy cho
 ba kết quả, và lần duy nhất đúng chắc chắn là lần có người sửa tay. Nên bất cứ cái gì phụ
 thuộc "máy sẽ đọc tên này giống lần trước" đều là giả định sai.
+
+
+### alpha.50: bản sửa tên được trang bị nhưng chưa có dịp dùng
+
+Pha tên chạy lúc 15:17, khóa 19 tên còn lại. `name_component_corrections` tìm được **0 chỗ
+mâu thuẫn** và `_reconcile_name_components` không sửa gì — **đúng như nó nên làm**:
+
+| bề mặt | alpha.50 đọc |
+|---|---|
+| `Theosbane` | `Theo-bên` |
+| `Samael Kaizer Theosbane` | `Xa-men cai-dờ **theo-bên**` |
+| `Arthur Kaizer Theosbane` | `A-thờ cai-dờ **theo-bên**` |
+
+Lần này máy bốc ra `Theo-bên`, chỉ khác `theo-bên` ở chữ hoa — mà bộ dò cố ý bỏ qua khác
+biệt hoa/thường, nên không có gì để sửa.
+
+**Nói thẳng: alpha.49 bị dừng để sửa một lỗi mà alpha.50 không tái hiện.** Bản sửa vẫn đúng
+— lỗi có thật ở alpha.47 và alpha.49 — nhưng riêng lần chạy này thì không cần tới nó, và
+~70 phút phân tích của alpha.49 là giá phải trả cho một quyết định dựa trên một lần bốc thăm.
+Nếu gặp lại tình huống ấy: đếm xem cái tên xuất hiện bao nhiêu lần *và* nhớ rằng lần chạy sau
+có thể tự bốc đúng.
+
+Hệ quả: **reconciler vẫn chưa từng chạy thật.** Nó có test, nhưng chưa có bằng chứng sống.
+Bốn lần bốc cho cùng một cái tên tới giờ: `theo-bên` (người sửa), `Theo-bên`, `Thê-ô-ban`,
+`Theo-bên`. Cách chặn đứng cái xổ số ấy không phải reconciler mà là
+`port_pronunciations.py` — gieo sẵn cách đọc trước khi chạy, dùng từ alpha.51.
