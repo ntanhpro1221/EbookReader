@@ -1346,7 +1346,27 @@ Hai lần chạy liền mạch cho cùng một tập nhân vật; lần duy nh�
 đúng thì **`resume` không miễn phí**: nó đổi đầu ra của phân tích, kéo theo casting, kéo theo
 audio, kéo theo phán quyết hết hiệu lực.
 
-**Chưa chứng minh — mới là tương quan trên ba lần chạy.** Cách kiểm rẻ nhất: chạy hai bản
+**Cơ chế thì đã có, và nó nằm trong code.** `_analysis_group_fingerprint` băm **toàn bộ
+thành phần của batch**:
+
+```python
+sources = [{stable_id, text_sha256, chapter_id, paragraph_index, kind_hint} for row in group]
+material = {"context_hash": ..., "sources": sources}
+```
+
+Vân tay ấy là đầu vào của `_analysis_retry_seed`. Còn log thì ghi *"Đang phân tích batch
+N/196 **của phần còn lại**"* — resume **chia lại batch trên phần chưa làm**, nên ranh giới
+nhóm gần như chắc chắn khác với lần chia ban đầu.
+
+Chuỗi đầy đủ, mỗi mắt xích đều đọc được trong code:
+
+> resume chia lại batch → `group_fingerprint` khác → seed phân tích khác → LLM trả lời khác
+> → speaker/emotion khác → sổ nhân vật khác → casting khác → audio khác → phán quyết hết hiệu lực
+
+Điều này **không** chứng minh resume *có* chia batch khác đi ở thực tế; nó chứng minh rằng
+**nếu có thì trôi là hệ quả tất yếu**, chứ không phải trùng hợp.
+
+**Hiệu ứng thì chưa chứng minh — mới là tương quan trên ba lần chạy.** Cách kiểm rẻ nhất: chạy hai bản
 cùng code trên cùng nguồn, một bản để liền mạch, một bản `stop` giữa pha phân tích rồi
 `resume`, sau đó so `canonical_name` của bảng `characters`. Nếu tập nhân vật khác nhau thì
 xác nhận, và lúc ấy mọi lần dừng-rồi-chạy-tiếp giữa pha phân tích đều phải bị coi là **đổi
