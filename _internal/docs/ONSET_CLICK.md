@@ -141,4 +141,26 @@ Chạy `_cap_segment_edge_silence` qua đúng 151 bản thu thật của chươn
 **Đúng 1 trên 151 bản thu bị cắt**, tổng cộng 0,65 giây. Đó là toàn bộ can thiệp: một file,
 0,65 giây, và chương từ trượt thành đạt. Cách đo lại: `scratchpad/verify_cap_on_chapter8.py`.
 
-Đã nhập vào production ở `c40215a` và chạy trong alpha.49.
+Đã nhập vào production ở `c40215a`.
+
+### Nó bắn thật, và tôi đã mô tả quá nhẹ
+
+Bốn chương đầu của alpha.50, đối chiếu với alpha.48:
+
+| chương | lặng dài nhất (48 / 50) | đã cắt |
+|---|---|---|
+| 1 | 0,18 / 0,18 | – |
+| 2 | 0,56 / 0,56 | – |
+| 4 | 0,62 / 0,62 | `0000047.wav: đuôi 0,42s → cắt 0,07s` |
+| 6 | 0,66 / 0,66 | – |
+
+Docstring của test viết "trên hầu như mọi chương đây là đường không ai đi". **Sai ở mức độ**:
+nó đi 1 trên 4 chương. Cắt ở **đuôi**, không phải đầu — phân bố đuôi có p99 0,23s nhưng đỉnh
+0,44s, nên vượt trần 0,35s là chuyện thỉnh thoảng xảy ra, không phải ngoại lệ hiếm.
+
+Điều đáng chú ý hơn: chương 4 ra **đúng 0,62s ở cả hai bản**, dù alpha.50 đã cắt 0,07 giây.
+Nghĩa là khoảng lặng dài nhất của chương ấy nằm ở chỗ khác, và bản cắt **không đụng tới con
+số nó sinh ra để bảo vệ**. Can thiệp đúng như thiết kế: nhỏ, đúng chỗ, không kéo theo gì.
+
+Bốn chương giống hệt nhau giữa hai bản (0,18 / 0,56 / 0,62 / 0,66) cũng là thêm một lần xác
+nhận pipeline tái lập được.
