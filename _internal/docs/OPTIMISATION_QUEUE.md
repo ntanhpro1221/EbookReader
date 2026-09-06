@@ -55,12 +55,25 @@ Mục 5 (ngưỡng perceptual theo sigma) vẫn chờ phép đo phân giải nhi
 Xếp theo giá trị thì mục 1 đứng đầu, nhưng xếp theo **giá trị chia cho rủi ro** thì mục 3
 mới nên làm trước:
 
-| mục | lấy lại | file phải sửa | hình dạng thay đổi |
+| mục | lấy lại | file phải sửa | trạng thái |
 |---|---|---|---|
-| 3. hạ `num_ctx` | ~639s pha phân tích | `config.py` | **một hằng số** |
-| 4. `tts.max_retries` 4→10 | chất lượng: cứu 2 segment | `config.py` | một hằng số — **nhưng xem cái bẫy sentinel ở mục 4** |
-| 1. pool vòng candidate | ~905s | `pipeline.py` | thêm một đường prefetch |
-| 2. Whisper thường trú | ~230s | `pipeline.py`, `asr.py` | đổi vòng đời model |
+| 3. hạ `num_ctx` | ~639s pha phân tích | `config.py` | **đã ship** — thực tế 638s |
+| 4. `tts.max_retries` → 10 | chất lượng: cứu 2 segment | `config.py` | **đã ship** — profile `high_quality`, config.py:289 |
+| 6. khai báo `faster-whisper` | lỗ tái lập | `pyproject.toml` | **đã ship** — `faster-whisper==1.2.1` |
+| 1. pool vòng candidate | ~905s | `pipeline.py` | chưa ship — thêm một đường prefetch |
+| 2. Whisper thường trú | ~230s | `pipeline.py`, `asr.py` | chưa ship — đổi vòng đời model |
+
+Kiểm lại trạng thái ship bằng chính code, đừng tin bảng này (2026-09-06):
+
+```bash
+grep -n "NAME_PRONUNCIATION_BATCH_SIZE = " _internal/ebook_reader/analysis.py   # mục 3: 12
+grep -n '"tts": {"max_retries"' _internal/ebook_reader/config.py                # mục 4: 10
+grep -n "faster-whisper==" _internal/pyproject.toml                             # mục 6
+```
+
+`config.py` mặc định vẫn ghi `max_retries: 3`; số 10 đến từ **override của profile
+`high_quality`** ở `config.py:289`, nên đọc mỗi dòng mặc định sẽ tưởng mục 4 chưa làm.
+Cách chắc chắn là đọc `book_settings.json` của project đang chạy.
 
 Mục 3 và 4 là đổi số, xác minh lại bằng chính lần chạy kế tiếp. Mục 1 đáng làm nhất về con
 số nhưng động vào vòng sửa - nơi đã sinh ra bốn lần sập cùng một họ (xem `WORK_LOG.md`).
