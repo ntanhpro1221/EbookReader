@@ -66,6 +66,22 @@ Nó không phải một cú vấp rồi đi tiếp: không chấm thì đoạn �
 nào**, và cửa 2 sau đó cũng từ chối chương. Ba trên mười chương của alpha.50 có một đoạn như
 vậy (3, 7, 10).
 
+**Và cái giá lớn hơn thế nhiều.** `_verify_chapter_perceptual_audio` raise **giữa vòng lặp**,
+nên vòng sửa cảm thụ chạy ngay sau nó không bao giờ được chạy. Đối chiếu cùng chương 3:
+
+| | candidate cảm thụ đã dựng | đoạn còn cảnh báo |
+|---|---|---|
+| alpha.48 | **13** | 2 |
+| alpha.50 | **0** | 5 |
+
+alpha.48 tự cắt lại 11 trên 13 đoạn bị cờ; alpha.50 không cắt lại đoạn nào, vì cửa thứ sáu
+bật lên ở đoạn 29 và mọi thứ phía sau chết theo. Nên **ba đoạn "cần tai người" thừa ra ở
+chương 3 của alpha.50 là thiệt hại dây chuyền, không phải yêu cầu thật** — sau bản sửa thì
+vòng sửa chạy lại và chúng sẽ tự biến mất, đúng như ở alpha.48.
+
+Bài học kèm theo: khi một cổng raise giữa vòng lặp kiểm, đừng chỉ đếm đoạn nó chặn — hãy hỏi
+**cái gì lẽ ra chạy sau nó**.
+
 **alpha.50 không bị dừng vì việc này.** Sửa `pipeline.py` là đổi vân tay, tức mất 64 phút
 phân tích đã xong để đổi lấy ba chương. Để nó ra bảy chương còn lại, rồi nhập bản sửa ở
 alpha.51.
