@@ -22,6 +22,7 @@ Written for Task Scheduler at logon; safe to run by hand at any time.
 """
 from __future__ import annotations
 
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -102,6 +103,35 @@ def projects_under(root: Path) -> list[Path]:
     return found
 
 
+def pending_analysis_count(project: Path) -> int:
+    """How many segments are still unanalysed, or -1 when it cannot be read.
+
+    A resume that lands inside the analysis phase does not merely continue - it changes what
+    the analysis produces. The interrupted group is re-analysed as a fragment of itself with
+    truncated neighbour context, so speakers are assigned differently, the character registry
+    shifts, casting shifts with it, and every listener verdict on the affected audio dies.
+    Proven by controlled experiment on 2026-09-07: one stop at 620/948 took the character
+    count from 23 to 19, with all 18 speaker changes after the interruption point.
+
+    The watchdog still resumes - a run lying dead until morning is worse than a slightly
+    different book - but the fact has to be on the record, or the next person comparing two
+    versions spends three hours discovering it again, as I did.
+    """
+    database = project / "project.sqlite3"
+    if not database.is_file():
+        return -1
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        row = connection.execute(
+            "SELECT COUNT(*) FROM segments WHERE status='pending'"
+        ).fetchone()
+        return int(row[0]) if row else -1
+    except sqlite3.OperationalError:
+        return -1
+    finally:
+        connection.close()
+
+
 def main(argv: list[str]) -> int:
     dry_run = "--dry-run" in argv
     positional = [value for value in argv if not value.startswith("--")]
@@ -131,6 +161,14 @@ def main(argv: list[str]) -> int:
             continue
         detail = str(status.detail or "").strip()
         say(f"  TIẾP TỤC {label}: {detail or 'bị ngắt giữa chừng'}")
+        unanalysed = pending_analysis_count(project)
+        if unanalysed > 0:
+            say(
+                f"     CẢNH BÁO: còn {unanalysed} đoạn chưa phân tích, nên lần resume này "
+                "rơi vào GIỮA PHA PHÂN TÍCH. Bản phân tích sẽ khác bản chạy liền mạch: "
+                "người nói, sổ nhân vật, casting và audio đều có thể đổi, và phán quyết "
+                "của người nghe trên những đoạn ấy hết hiệu lực. Xem VERSIONS.md."
+            )
         if dry_run:
             resumed += 1
             continue

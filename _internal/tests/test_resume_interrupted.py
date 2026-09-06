@@ -258,3 +258,74 @@ def test_a_stopped_run_with_no_last_event_is_left_alone(tmp_path: Path, monkeypa
     resume_interrupted.main([str(tmp_path)])
 
     assert started == []
+
+
+def test_it_can_tell_whether_a_resume_lands_inside_the_analysis_phase(tmp_path) -> None:
+    """A resume during analysis does not continue the book, it changes it.
+
+    The interrupted group is re-analysed as a fragment with truncated neighbour context, so
+    speakers shift, the character registry shifts, casting shifts, and every verdict on the
+    affected audio dies. Proven on 2026-09-07: one stop at 620/948 took 23 characters to 19.
+
+    The watchdog still resumes - a run dead until morning is worse than a slightly different
+    book - so the requirement is that it can say so, loudly, in the log.
+    """
+    from ebook_reader.database import ProjectDB
+    from scripts.resume_interrupted import pending_analysis_count
+
+    root = tmp_path / "proj"
+    root.mkdir()
+    db = ProjectDB(root / "project.sqlite3")
+    db.initialize_book(
+        title="Book",
+        project_root=root,
+        settings={},
+        settings_hash="s",
+        input_manifest_hash="m",
+    )
+    chapter_id = db.ensure_chapters(
+        [
+            {
+                "chapter_index": 1,
+                "title": "One",
+                "input_path": root / "one.txt",
+                "input_sha256": "src",
+                "input_size": 1,
+                "output_mp3": root / "one.mp3",
+            }
+        ]
+    )[0]
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {
+                "stable_id": f"c1s{index}",
+                "seq": index,
+                "paragraph_index": index,
+                "text": "Một câu.",
+                "text_sha256": f"h{index}",
+                "kind_hint": "narration",
+            }
+            for index in range(3)
+        ],
+    )
+
+    assert pending_analysis_count(root) == 3
+
+    with db.transaction() as conn:
+        conn.execute("UPDATE segments SET status='analyzed' WHERE stable_id IN ('c1s0','c1s1')")
+
+    assert pending_analysis_count(root) == 1
+
+    with db.transaction() as conn:
+        conn.execute("UPDATE segments SET status='analyzed'")
+
+    assert pending_analysis_count(root) == 0
+
+
+def test_a_project_it_cannot_read_reports_unknown_rather_than_zero(tmp_path) -> None:
+    """Zero would read as "analysis is finished, resume freely", which is the wrong default
+    for a database that is missing or unreadable."""
+    from scripts.resume_interrupted import pending_analysis_count
+
+    assert pending_analysis_count(tmp_path / "nothing-here") == -1

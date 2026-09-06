@@ -9,6 +9,25 @@ Không mất dữ liệu bao giờ: pipeline checkpoint liên tục vào `projec
 `resume` luôn chạy tiếp được. Vấn đề chưa bao giờ là mất việc — mà là **không có ai
 bấm nút**.
 
+> **Bổ sung 2026-09-07, và nó sửa một chỗ câu trên nói thiếu.** Không mất dữ liệu là đúng.
+> Nhưng nếu bị ngắt **giữa pha phân tích** thì `resume` **đổi đầu ra**: nhóm đang dở được
+> phân tích lại như một mảnh với ngữ cảnh cụt, nên người nói bị gán khác đi, sổ nhân vật đổi,
+> casting đổi, seed đổi, audio đổi — và mọi phán quyết của chủ sách trên những đoạn ấy hết
+> hiệu lực.
+>
+> Đã chứng minh bằng thí nghiệm có đối chứng: cùng code, cùng nguồn, một lần `stop`/`resume`
+> ở 620/948 làm tập nhân vật tụt 23 → 19 và 18 đoạn đổi người nói, tất cả sau mốc bị ngắt.
+> Xem `VERSIONS.md`.
+>
+> **Sau pha phân tích thì resume trung thành** — chương 1–4 của alpha.51 trùng khít alpha.48
+> từng byte. Ranh giới là câu truy vấn này:
+> `SELECT COUNT(*) FROM segments WHERE status='pending'`.
+>
+> Watchdog **vẫn nên** tự resume: một run chết nằm im tới sáng còn tệ hơn một quyển sách
+> hơi khác. Nhưng nó phải **ghi lại** rằng lần resume ấy rơi vào pha phân tích, để sau này
+> ai đó đối chiếu hai bản và thấy casting lệch thì biết ngay tại sao, thay vì đi truy ba
+> tiếng như đêm nay.
+
 Có hai kiểu ngắt, cơ chế khác hẳn nhau, nên phải xử lý riêng.
 
 ---
