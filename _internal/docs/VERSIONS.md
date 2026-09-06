@@ -1287,3 +1287,31 @@ alpha.47.
 
 Điều này **không** làm audio tái lập được; casting vẫn trôi (xem mục casting ở trên). Nó đóng
 đúng một nguồn trôi trong hai nguồn đã biết.
+
+### alpha.51 chương 3: chương chết suốt năm bản, xuất được — và bằng cả bốn mắt xích
+
+alpha.46 → alpha.50 đều để chương 3 chết. alpha.51 xuất nó lúc 23:41:46, và đáng ghi vì
+**không mắt xích nào thừa**:
+
+| mắt xích | bằng chứng |
+|---|---|
+| ASR vẫn gắn cờ đoạn ấy | `ASR_LOCKED_NAME_ANCHOR_MISMATCH`, sim 0,870 — y hệt bốn bản trước |
+| watcher chuyển phán quyết đúng cửa sổ | 3 phán quyết vào alpha.51 |
+| cửa 3 và 5 giữ đoạn ở `warning` | status `warning`, không phải `failed` |
+| cửa 6 bỏ qua tiền đề ASR | pha cảm thụ chạy trọn |
+
+Và chẩn đoán "thiệt hại dây chuyền" đúng như đã đoán:
+
+| | candidate cảm thụ dựng | còn cảnh báo cảm thụ |
+|---|---|---|
+| alpha.50 (cửa 6 chặn) | **0** | 5 |
+| alpha.51 (đã sửa) | **13** | 2 |
+| alpha.48 (đoạn kia đang `failed` nên bị bỏ qua) | 13 | 2 |
+
+Ba đoạn mà báo cáo chặn-xuất-bản của alpha.50 xin tai người nghe đã **tự biến mất** — vòng
+sửa cắt lại chúng, đúng như `is_collateral_warning()` dự đoán. Không lần nghe nào bị tiêu phí.
+
+**Suýt mất chương này vì một lỗi của tôi.** Watcher đã âm thầm chết ba phút sau mỗi lần khởi
+động kể từ bản sửa chiều nay (xem `fix: the watcher's new liveness signal was wrong`). Nếu
+không bắt được lúc 23:2x — mười lăm phút trước khi cửa sổ của chương 3 đóng — thì mắt xích
+thứ hai đứt và chương lại chết đúng như năm bản trước.
