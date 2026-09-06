@@ -38,6 +38,29 @@ alpha.46 và alpha.47 lần lượt tìm ra ba cửa đầu, mỗi cửa bằng 
    phán quyết trên đúng bản thu này. Sửa ở alpha.47, commit `1bcf1a5`.
 4. **Cửa đếm status** (`chapter_is_publishable`) — thuần đếm, không biết gì về phán quyết.
    Không cần dạy nó, vì `accept_failed_segment_audio` đã sửa status ngay từ đầu nguồn.
+5. **Cửa quét recovery** (`recovery.py::_segment_has_current_audio_qa`) — chạy ở **mỗi lần
+   resume**, duyệt từng segment của cả quyển và đòi một `quality_check` đạt. Sửa ở alpha.48,
+   commit `513ef1a`.
+
+### Cửa thứ năm: một lần resume gỡ ngược hai chương đã xuất
+
+alpha.48 xuất chương 7 và 9. Một tiếng sau, `resume` requeue đúng những bản thu đã có phán
+quyết — *"Recovery requires ASR and perceptual QA under the current locked quality policy"* —
+và cả hai chương quay về `warning: MP3 must be rebuilt`.
+
+**Chưa mất phán quyết nào lần đó**: requeue chỉ chạy lại ASR trên cùng bản thu, không cắt
+lại, và cả 7 acceptance vẫn khớp checksum sau khi dừng run. Nhưng vòng sửa chạy *sau* một
+lần ASR trượt thì **có** cắt lại, và bản cắt lại làm phán quyết mất hiệu lực vĩnh viễn. Lần
+resume kế tiếp sẽ tiêu công nghe của chủ sách chứ không phải một chương.
+
+Kiểm trên chính dữ liệu alpha.48, cả 7 bản thu có phán quyết:
+
+| | trước bản sửa | sau bản sửa |
+|---|---|---|
+| 7/7 bản thu | **requeue** | giữ nguyên |
+
+Cách đo lại: `scratchpad/verify_recovery_fix.py` (chạy trên **bản sao** database — dựng
+`ProjectDB` là có ghi, đừng trỏ vào project thật).
 
 Cửa 2 kiểm tra status **trước** khi hỏi tới phán quyết, nên với một đoạn `failed` nó từ chối
 mà không bao giờ đọc tới bảng chấp nhận. Điều đó không sai: một dòng `failed` thì đúng là
