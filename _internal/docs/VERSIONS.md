@@ -1148,9 +1148,35 @@ nên đổi giọng là **đổi seed là đổi audio**. Mỗi đoạn trôi k�
 
 27 đoạn nhiều hơn hẳn 3 cái tên trôi ở `port_pronunciations.py`, và cùng một hậu quả.
 
-**Chưa biết nguyên nhân.** alpha.47 → alpha.48 trôi **0 đoạn**, nên trôi không phải điều tất
-yếu — có gì đó trong alpha.49/50 làm nó xê dịch (cả hai đều đụng `analysis.py`). Đừng đoán;
-đo bằng cách so `voice_profile_id` giữa hai bản liền nhau và xem đoạn nào đổi.
+**Nguyên nhân đã tìm ra, và nó nằm trong code chứ không phải trong nhiễu.**
+
+Hai tầng trôi, tầng dưới kéo tầng trên:
+
+1. **Tập nhân vật trôi.** alpha.48 nhận diện 23 nhân vật có thoại, alpha.50 chỉ 19; chỉ 17
+   tên chung. `THEOSBANE` và `RAM` là nhân vật ở alpha.48 mà không ở alpha.50; `IVEN` thì
+   ngược lại.
+2. **Bộ phân giọng phụ thuộc thứ tự.** Trong 17 tên chung, **17/17 giữ nguyên giới và tuổi**
+   — thứ mà casting lẽ ra dựa vào — nhưng chỉ **12/17 giữ nguyên giọng**.
+
+Đọc `character_registry.py` là rõ: hàm `rank` xếp theo `usage[name]`, tức **số lần preset đã
+được dùng**, rồi `selected = min(candidates, key=rank)` và `usage[name] += 1`. Đó là một bộ
+cấp phát **tham lam, có trạng thái**: giọng của một nhân vật phụ thuộc vào những nhân vật
+được cast **trước** nó.
+
+Nên chuỗi nhân quả là:
+
+> phân tích ra tập nhân vật khác → thứ tự cấp phát dịch → 5/17 nhân vật chung đổi giọng →
+> 27 đoạn đổi seed → đổi audio → phán quyết và bằng chứng QA mất hiệu lực
+
+Điều này cũng giải thích vì sao alpha.47 → alpha.48 trôi **0 đoạn**: tập nhân vật y hệt nhau.
+
+**Bản sửa: mang `canonical_name → voice_key` sang, gieo trước khi cast.** Nó đi vòng qua bộ
+cấp phát cho mọi nhân vật đã biết, nên **miễn nhiễm với việc tập nhân vật trôi** — mỗi cái
+tên tự mang giọng của nó. Bộ cấp phát chỉ còn lo những nhân vật thật sự mới. Cần mang cả
+`pitch_semitones` và `formant_ratio`, vì hai cái đó cũng nằm trong voice_key.
+
+Một nhân vật ứng **đúng một giọng** ở cả hai bản (0 nhân vật dùng >1 giọng trên 948 đoạn),
+nên phép ánh xạ không mơ hồ.
 
 **Hướng sửa có sẵn hình dạng.** `book_status` đã có cờ `casting_finalized`, tức casting *đã*
 được khóa trong phạm vi một project. Việc còn thiếu là mang nó **sang project mới**, đúng như
