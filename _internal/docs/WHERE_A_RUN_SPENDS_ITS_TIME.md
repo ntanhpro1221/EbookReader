@@ -943,3 +943,34 @@ lượng, nên không đáng siết thêm.
 **Chưa đo được là cái giá.** 3 worker thì chấm chậm hơn 8, và việc chấm vốn được giấu sau
 ASR nên có thể không mất gì — nhưng "có thể" không phải là một phép đo. Đừng ghi bản sửa này
 là thắng thuần cho tới khi có thời gian hoàn thành chương của hai bản để so.
+
+## Đo tỉ lệ bị siết: mẫu số là chỗ dễ sai nhất (2026-09-06)
+
+`resource_manager` ghi một dòng **mỗi lần đổi chế độ**, không ghi định kỳ. Nên nếu lấy
+"khoảng giữa các sự kiện resource" làm mẫu số thì một lần chạy **không bị siết lần nào**
+lại ra mẫu số gần bằng 0, và mọi tỉ lệ tính trên đó đều vô nghĩa.
+
+Tôi đã mắc đúng lỗi ấy: đo ra "`yield_light` chiếm 54%" và suýt báo cáo nó như một lỗi
+throughput lớn. Con số thật là 16,4%, và mẫu số đúng phải là **thời gian log thật sự có hoạt
+động** — cộng khoảng cách giữa các dòng log liên tiếp, bỏ mọi khoảng > 5 phút (dừng/resume),
+và tính phần trước sự kiện đầu tiên là `maximum`.
+
+| bản | chạy thật | bị siết | |
+|---|---|---|---|
+| alpha.47 | 180,2 phút | 11,7 phút | 6,5% |
+| alpha.48 | 175,5 phút | 1,2 phút | **0,7%** — máy rảnh |
+| alpha.50 | 95,5 phút | 22,0 phút | **23,0%** — chủ sách đang dùng máy |
+
+Tách theo nguyên nhân trên alpha.50: **72% do máy bận** (`foreground CPU 60–75%`), **3,3% do
+RAM của chính pipeline**. Ngân sách RAM của pool đang giữ đúng; phần còn lại là bộ quản lý
+nhường máy, tức là nó đang làm đúng việc.
+
+Kèm theo đó là dấu hiệu "ramp bị reset": `yield_light — ramping after N/28s stable` xuất
+hiện 31 lần, **26 lần chết trong 2 giây**, đúng 1 lần đi hết 28/28. Trên máy bận thì đó là
+hệ quả chứ không phải lỗi. Chỉ đáng xem lại nếu thấy khuôn hình ấy trên một máy **rảnh**.
+
+**Đừng so tổng thời lượng alpha.50 với alpha.48.** Một bản nhường máy 23% thời gian thì dài
+hơn là đương nhiên; muốn so tốc độ thì so phần `maximum`.
+
+Cách đo lại: `scratchpad/resource_share.py` (tỉ lệ theo chế độ) và
+`scratchpad/resource_reasons.py` (tách theo nguyên nhân).
