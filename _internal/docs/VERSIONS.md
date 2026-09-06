@@ -1485,10 +1485,44 @@ người nói, cùng chỉ lệch *sau* mốc bị ngắt.
 Nếu phải dừng, hãy dừng **sau khi phân tích xong** — lúc ấy `resume` chỉ tiếp tục phần tổng
 hợp, và tổng hợp thì tái lập được (đã chứng minh: chương 1–4 của alpha.51 trùng khít alpha.48).
 
-**Cơ chế vẫn chưa biết.** Không phải chia lại batch — `analysis_candidates` cho thấy 200 vân
-tay nhóm giống hệt nhau giữa lần bị ngắt và lần liền mạch. Ứng viên tiếp theo là ngữ cảnh
-được dựng lại từ database khi resume, khác với ngữ cảnh sống mà lần chạy đầu mang theo. Chưa
-kiểm.
+### Cơ chế: nhóm dở dang bị phân tích lại thành **mảnh**
+
+Không phải chia lại batch — `stable_groups` được chia từ **toàn bộ** đoạn nên giống hệt nhau
+mọi lần chạy, đúng như 200 vân tay trùng khít đã cho thấy. Cái đổi nằm ngay sau đó:
+
+```python
+for row in stable_group:
+    if str(row["status"]) == "pending":
+        pending_run.append(row)
+    elif pending_run:
+        pending_runs.append(pending_run)
+```
+
+Chỉ những đoạn **còn `pending`** được gửi đi. Nhóm nào đang dở lúc bị ngắt sẽ được phân tích
+lại như một **mảnh** của chính nó — và `_analysis_context_hash` lấy `_neighbor_texts` *trong
+nhóm*, nên một mảnh có láng giềng khác hẳn nhóm đầy đủ. Model nhìn thấy ít ngữ cảnh hơn và
+gán người nói khác đi.
+
+Kiểm trên dữ liệu thí nghiệm:
+
+| | |
+|---|---|
+| đoạn thứ 620 (mốc ngắt) | `c00008_s0000010` |
+| chỗ lệch đầu tiên | **#651** — ngay sau ranh giới nhóm (nhóm tối đa 28 đoạn) |
+| khoảng lệch | #651 → #947, **tới hết sách** |
+| lệch trước mốc ngắt | **không có đoạn nào** |
+
+Sai một mảnh rồi lan tới cuối sách, vì các bước gộp sổ nhân vật
+(`_merge_local_speakers_with_named_identity` và bạn bè) chạy trên **toàn cục**.
+
+### Bản sửa khả dĩ, chưa làm
+
+Khi resume, phân tích lại **cả nhóm ổn định** thay vì chỉ mảnh còn `pending`. Giá là làm lại
+vài đoạn đã xong; đổi lại `resume` trở thành trung thành, và quy tắc "đừng dừng giữa pha phân
+tích" biến mất.
+
+Nằm ở `analysis.py` (file bị khoá) nên phải là một phiên bản riêng. Cách kiểm đã có sẵn:
+chạy lại đúng thí nghiệm này, nếu tập nhân vật ra 23 thì bản sửa đúng.
 
 Nhánh thí nghiệm đã dừng sau khi có kết quả; không chạy tiếp phần tổng hợp vì câu hỏi đã được
 trả lời.
