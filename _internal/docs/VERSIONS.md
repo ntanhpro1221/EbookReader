@@ -1498,10 +1498,20 @@ for row in stable_group:
         pending_runs.append(pending_run)
 ```
 
-Chỉ những đoạn **còn `pending`** được gửi đi. Nhóm nào đang dở lúc bị ngắt sẽ được phân tích
-lại như một **mảnh** của chính nó — và `_analysis_context_hash` lấy `_neighbor_texts` *trong
-nhóm*, nên một mảnh có láng giềng khác hẳn nhóm đầy đủ. Model nhìn thấy ít ngữ cảnh hơn và
-gán người nói khác đi.
+Chỉ những đoạn **còn `pending`** được gửi đi, nên nhóm đang dở bị phân tích lại như một
+**mảnh** của chính nó.
+
+> **Sửa lại lời giải thích, 04:00.** Tôi viết rằng mảnh bị *cụt ngữ cảnh*. Sai. Có sẵn một
+> test cố ý ghim điều ngược lại —
+> `test_resume_hole_splits_pending_runs_but_keeps_original_neighbor_context_and_scope` —
+> và nó chứng minh `original_context` mang **văn bản láng giềng qua cái lỗ**: mảnh đầu vẫn
+> biết `next_text` của đoạn đã xong, mảnh sau vẫn biết `previous_text`.
+>
+> Cái mảnh đánh mất là **tính chung**: model gán người nói cho cả nhóm **một lượt**, cân các
+> thành viên với nhau. Hai mảnh là hai quyết định độc lập, dù mỗi mảnh được kể đầy đủ những
+> gì nằm cạnh nó.
+
+Kết quả vẫn thế: người nói bị gán khác đi.
 
 Kiểm trên dữ liệu thí nghiệm:
 
