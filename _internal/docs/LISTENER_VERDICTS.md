@@ -2,8 +2,9 @@
 
 Nghe là tài nguyên khan hiếm nhất của dự án này. Máy có thể chạy cả đêm; chủ sách chỉ ngồi
 nghe được vài chục đoạn. Nên mỗi phán quyết đã cho phải sống qua được mọi bản kế tiếp — và
-suốt alpha.44 → alpha.48 nó liên tục **không** sống được, theo năm cách khác nhau. Bốn cách
-là code — năm cái cổng, mỗi cái tìm ra bằng cách để một chương chết ở đó. Cách còn lại là
+suốt alpha.44 → alpha.50 nó liên tục **không** sống được, theo sáu cách khác nhau. Năm cách
+là code — sáu cái cổng, mỗi cái tìm ra bằng cách để một chương chết ở đó, và cái sau chỉ lộ
+ra khi cái trước đã thông. Cách còn lại là
 *thời điểm*, không phải code, và nó là lý do tồn tại của
 `scripts/watch_listener_acceptances.py`.
 
@@ -26,9 +27,9 @@ một đoạn đã `failed`, chỉ ghi phán quyết là chưa đủ: status ph�
 `warning` chứ không phải `verified` — mã cảnh báo vẫn nằm trên dòng và báo cáo vẫn hiện nó,
 vì chuyện đã xảy ra là *một người phủ quyết máy*, không phải máy đổi ý.
 
-## Năm cửa mà một phán quyết phải đi qua
+## Sáu cửa mà một phán quyết phải đi qua
 
-alpha.46, alpha.47 và alpha.48 lần lượt tìm ra chúng, mỗi cửa bằng cách để một chương chết
+alpha.46 tới alpha.50 lần lượt tìm ra chúng, mỗi cửa bằng cách để một chương chết
 ở đó:
 
 1. **Cửa cảnh báo** (`_high_quality_blocking_segment_warnings`) — trừ đi mã đã được chấp
@@ -43,6 +44,31 @@ alpha.46, alpha.47 và alpha.48 lần lượt tìm ra chúng, mỗi cửa bằng
 5. **Cửa quét recovery** (`recovery.py::_segment_has_current_audio_qa`) — chạy ở **mỗi lần
    resume**, duyệt từng segment của cả quyển và đòi một `quality_check` đạt. Sửa ở alpha.48,
    commit `513ef1a`.
+
+6. **Cửa tiền đề của pha cảm thụ** (`_verify_chapter_perceptual_audio`) — đòi một
+   `segment_audio_v1` **đạt** trước khi chịu chấm. Tìm ra ở alpha.50, sửa ở nhánh
+   `fix/perceptual-precondition`, dành cho alpha.51.
+
+### Cửa thứ sáu: chỉ tới được vì năm cửa trước đã thông
+
+alpha.50 chương 3 chết với một lỗi **chưa từng xuất hiện ở bản nào trước đó**:
+
+```
+Perceptual QA requires current ASR evidence for c00003_s0000029_6fca388a80c8
+```
+
+Chính chỗ "chưa từng xuất hiện" mới là điều đáng nói. Các bản trước đánh đoạn ấy `failed` và
+run dừng ở một cửa xa hơn về trước; giờ nó giữ được `warning`, đi tiếp, và đâm vào một tiền
+đề chưa ai dạy về bảng phán quyết. **Sửa xong năm cửa thì cửa thứ sáu mới lộ ra** — đó là
+hình dạng bình thường của loại lỗi này, nên đừng cho rằng cửa thứ sáu là cửa cuối.
+
+Nó không phải một cú vấp rồi đi tiếp: không chấm thì đoạn ấy **không có bằng chứng cảm thụ
+nào**, và cửa 2 sau đó cũng từ chối chương. Ba trên mười chương của alpha.50 có một đoạn như
+vậy (3, 7, 10).
+
+**alpha.50 không bị dừng vì việc này.** Sửa `pipeline.py` là đổi vân tay, tức mất 64 phút
+phân tích đã xong để đổi lấy ba chương. Để nó ra bảy chương còn lại, rồi nhập bản sửa ở
+alpha.51.
 
 Cửa 2 kiểm tra status **trước** khi hỏi tới phán quyết, nên với một đoạn `failed` nó từ chối
 mà không bao giờ đọc tới bảng chấp nhận. Điều đó không sai: một dòng `failed` thì đúng là
