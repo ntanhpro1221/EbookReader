@@ -619,3 +619,57 @@ nghe nghe nhầm chỗ:
 
 Một ghi chú sai bằng chứng còn tệ hơn không có ghi chú, vì nó điều hướng sự chú ý sai chỗ.
 Đó là lý do tầng phản biện tồn tại, và tỉ lệ 11/14 nói nó không thừa.
+
+---
+
+## Đêm 06→07/09/2026: ba bản sửa được chứng minh, và bốn cơ chế tôi đoán sai
+
+### Kết quả
+
+alpha.50 ra **6/10 chương**; alpha.51 ra **8/10, 73 phút audio** — bản tốt nhất tới nay. Hai
+chương còn lại (5 và 10) chờ đúng **hai lần nghe**, và audio của chúng giống hệt từng byte
+qua bốn phiên bản nên nghe một lần là xong.
+
+Ba bản sửa, mỗi cái có bằng chứng sống chứ không chỉ test:
+
+| bản sửa | bằng chứng |
+|---|---|
+| cổng thứ sáu | chương 3 và 7 xuất được sau khi chết ở 5 và 3 bản liên tiếp |
+| chặn lặng hai đầu | chương 8: 0,68s so với 1,02s (hỏng) ở alpha.48 |
+| gieo cách đọc tên | pha tên bỏ qua hoàn toàn; `Theosbane` giữ `theo-bên` của chủ sách |
+
+### Phát hiện lớn nhất: `resume` giữa pha phân tích đổi quyển sách
+
+Thí nghiệm có đối chứng, một biến: cùng code, cùng nguồn, một lần `stop`/`resume` ở 620/948
+→ tập nhân vật **23 → 19**, 18 đoạn đổi người nói, **toàn bộ sau mốc bị ngắt**. Tái hiện
+đúng dấu vân tay của alpha.50. Đã thành quy tắc trong `AGENTS.md`.
+
+Kèm theo: **nền nhiễu của phân tích hiện là 0%**, không phải 3,1–7,4% như tài liệu kế thừa.
+Chính vì tin 0% mà 18 đoạn lệch mới bị truy tới nơi.
+
+### Bốn lần đoán sai cơ chế, và cái chung của chúng
+
+1. **cờ cảm thụ là nhiễu** → sai; máy chấm tất định (10 file, 0 lần đổi phán quyết)
+2. **sửa file bị khoá đổi muối seed** → sai; seed chỉ phụ thuộc `stable_id + voice_key + salt`,
+   cái đổi là **casting**
+3. **resume chia lại batch** → sai; 200 vân tay nhóm giống hệt, có sẵn trong
+   `analysis_candidates`
+4. **mảnh bị cụt ngữ cảnh** → sai; `original_context` mang láng giềng qua lỗ, có test ghim.
+   Mảnh mất **tính chung**, không mất ngữ cảnh
+
+Cả bốn đều đọc ra từ mã nguồn và đều nghe trọn vẹn. Cả bốn đều bị bác bởi thứ đã nằm sẵn
+trong kho: một bảng, một test, một phép đo. **Đọc code cho ra giả thuyết, không cho ra kết
+luận** — trong repo này gần như luôn có sẵn thứ để hỏi.
+
+### Hai lỗi tôi tự gây ra
+
+- **Trang A/B ghép nhầm audio**: dựng đường dẫn từ `seq` trong khi thư mục đặt tên theo
+  `segment_id`. Đã gửi cho chủ sách trước khi kiểm. Giờ mọi cặp đều được xác minh đúng chiều
+  trước khi gửi.
+- **Watcher tự tắt sau 3 phút**: tôi thay tín hiệu `state.json` bằng heartbeat của lease và
+  **khẳng định** rằng lease đập thường xuyên, thay vì kiểm. Nó chập chờn — chạy đúng 5 tiếng
+  cho alpha.50, rồi cũ 2.380 giây trên alpha.51. Bắt được 15 phút trước khi cửa sổ chương 3
+  đóng; nếu không thì chương ấy lại chết như năm bản trước.
+
+Điểm chung: **cả hai đều hỏng lặng lẽ**. Đó là lý do mọi test mới đêm nay đều khẳng định
+*kết quả được nhận*, không phải *lệnh chạy xong*.
