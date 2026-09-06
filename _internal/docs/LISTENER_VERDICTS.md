@@ -57,10 +57,23 @@ alpha.50 chương 3 chết với một lỗi **chưa từng xuất hiện ở b�
 Perceptual QA requires current ASR evidence for c00003_s0000029_6fca388a80c8
 ```
 
-Chính chỗ "chưa từng xuất hiện" mới là điều đáng nói. Các bản trước đánh đoạn ấy `failed` và
-run dừng ở một cửa xa hơn về trước; giờ nó giữ được `warning`, đi tiếp, và đâm vào một tiền
-đề chưa ai dạy về bảng phán quyết. **Sửa xong năm cửa thì cửa thứ sáu mới lộ ra** — đó là
-hình dạng bình thường của loại lỗi này, nên đừng cho rằng cửa thứ sáu là cửa cuối.
+Chính chỗ "chưa từng xuất hiện" mới là điều đáng nói, và cơ chế cụ thể hơn tôi tưởng lúc đầu.
+`pending` được lọc như sau:
+
+```python
+if str(row["status"]) != SegmentStatus.FAILED.value
+```
+
+Các bản trước, đoạn ấy đang là `failed`, nên nó **bị loại khỏi danh sách chấm** — không phải
+"run dừng ở cửa trước", mà là **lặng lẽ bị bỏ qua**, và pha cảm thụ chạy trọn vẹn quanh nó.
+Bản sửa cửa 3 và cửa 5 giữ cho nó ở `warning`, thế là nó **lọt vào** `pending`, gặp tiền đề,
+và làm nổ cả pha.
+
+Nói cách khác: **chính các bản sửa trước đã biến một đoạn được bỏ qua thành một đoạn làm chết
+cả pha.** Không bản sửa nào sai — đoạn ấy *đáng* được chấm — nhưng đây là hình dạng cần nhớ:
+gỡ một cái chặn có thể đưa dữ liệu vào một đường mà trước giờ chưa bao giờ thấy nó.
+
+**Sửa xong năm cửa thì cửa thứ sáu mới lộ ra**, nên đừng cho rằng cửa thứ sáu là cửa cuối.
 
 Nó không phải một cú vấp rồi đi tiếp: không chấm thì đoạn ấy **không có bằng chứng cảm thụ
 nào**, và cửa 2 sau đó cũng từ chối chương. Ba trên mười chương của alpha.50 có một đoạn như
