@@ -1354,3 +1354,42 @@ xác nhận, và lúc ấy mọi lần dừng-rồi-chạy-tiếp giữa pha ph�
 
 Điều này cũng đáng nhớ cho chính cách làm việc: hôm qua tôi dừng và resume nhiều lần vì lý do
 tốt, và có thể mỗi lần như thế đã âm thầm đổi quyển sách.
+
+### alpha.51 khép lại: 8/10 chương, và dự báo đúng cả mười
+
+Xuất được **1, 2, 3, 4, 6, 7, 8, 9** — **73 phút audio**, so với 56 phút / 6 chương của
+alpha.50. Hai chương dừng:
+
+| chương | chết vì | ai gỡ được |
+|---|---|---|
+| 5 | `c00005_s0000013` chưa ai nghe | **chỉ tai chủ sách** |
+| 10 | `c00010_s0000017` chưa ai nghe | **chỉ tai chủ sách** |
+
+Cả hai dừng ở **cửa 1** (cửa cảnh báo), không phải cửa thứ sáu — nghĩa là mọi đoạn *có* phán
+quyết đều đã đi lọt, và hai đoạn còn lại chặn vì lý do trung thực: chưa ai nghe chúng.
+
+**Dự báo lập từ 17:15 hôm trước đúng cả mười chương.**
+
+Hai chương được cứu bằng code so với alpha.50:
+
+| chương | alpha.50 | alpha.51 | mắt xích |
+|---|---|---|---|
+| 3 | hỏng | **xuất** | ASR gắn cờ → watcher chuyển (23:37) → cửa 3/5 giữ `warning` → cửa 6 bỏ qua |
+| 7 | hỏng | **xuất** | như trên, watcher chuyển 00:25:18, chương xuất 00:26:46 (**biên 88 giây**) |
+
+Biên 88 giây xác nhận nhịp poll 15 giây là đúng: ở 45 giây thì đây là chuyện may rủi.
+
+**Ba bản sửa đều đã chứng minh trên dữ liệu thật:**
+
+- **cửa thứ sáu** — cứu chương 3 và 7, và cho vòng sửa cảm thụ chạy lại (13 candidate thay
+  vì 0, 3 đoạn tự sửa xong nên không cần ai nghe)
+- **chặn lặng hai đầu** — chương 8 lặng 0,68s, cắt đúng 0,65s khỏi đúng bản thu; alpha.48
+  từng hỏng ở 1,02s
+- **gieo cách đọc tên** — pha tên in "Không còn tên tiếng Anh cần chuẩn hóa"; `Theosbane`
+  giữ `theo-bên` với `source=listener_choice`
+
+Tài nguyên: bị siết **85,4 phút (38,2%)** cộng **16 phút chờ RAM** — nhẹ hơn alpha.50 (56% và
+34 phút) vì chạy phần lớn qua đêm.
+
+**Khoảng cách tới 10/10 giờ chỉ là hai lần nghe**, và cả hai bản thu đã giống hệt từng byte
+qua bốn phiên bản, nên nghe một lần là dùng được mãi.
