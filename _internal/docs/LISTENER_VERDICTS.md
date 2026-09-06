@@ -95,6 +95,27 @@ vòng sửa chạy lại và chúng sẽ tự biến mất, đúng như ở alph
 Bài học kèm theo: khi một cổng raise giữa vòng lặp kiểm, đừng chỉ đếm đoạn nó chặn — hãy hỏi
 **cái gì lẽ ra chạy sau nó**.
 
+#### Quy tắc: chỉ phán quyết họ ASR mới chạm cửa thứ sáu
+
+Cửa này đòi `segment_audio_v1` đạt, nên nó chỉ chặn những đoạn mà chính ASR đã trượt. Đối
+chiếu cả 7 phán quyết của alpha.48:
+
+| loại cảnh báo được chấp nhận | số đoạn | verdict ASR | cửa 6 |
+|---|---|---|---|
+| `PERCEPTUAL_NATURALNESS_REVIEW` | 4 | `pass` | đi qua |
+| `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | 3 | `fail` | **chặn** |
+
+Ba đoạn bị chặn nằm ở chương 3, 7 và 10 — và alpha.50 chết đúng ba chương ấy. Dùng bảng này
+để **dự đoán trước** chương nào sẽ chết thay vì chờ nó chết:
+
+```sql
+SELECT a.segment_stable_id, q.verdict FROM listener_audio_acceptances a
+JOIN segments s ON s.stable_id = a.segment_stable_id
+JOIN quality_checks q ON q.segment_id = s.id AND q.stage='segment_audio_v1'
+```
+
+`verdict='fail'` nghĩa là chương chứa nó sẽ dừng ở cửa thứ sáu.
+
 **alpha.50 không bị dừng vì việc này.** Sửa `pipeline.py` là đổi vân tay, tức mất 64 phút
 phân tích đã xong để đổi lấy ba chương. Để nó ra bảy chương còn lại, rồi nhập bản sửa ở
 alpha.51.
