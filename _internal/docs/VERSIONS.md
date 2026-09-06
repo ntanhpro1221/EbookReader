@@ -1004,3 +1004,40 @@ cho mọi dấu `/`. Bản sửa chỉ đổi khi hai bên là chữ cái, nên 
 chặn sang loại chỉ ghi nhận — nên chương tự xuất mà không cần một lần nghe nào. Thứ hai, lỗi
 này chỉ lộ ra khi đọc dòng "máy nghe" của trang review như một **nguồn dữ liệu**, không phải
 như một thứ để người nghe đối chiếu rồi bỏ qua.
+
+#### alpha.48 kết thúc: 7/10 chương có audio, và một cổng thứ năm lộ ra ở lần resume
+
+Run chính (08:13 → 11:01) xuất **6 chương**, resume xuất thêm chương 8 khi mã hoá lại rơi
+xuống dưới ngưỡng 1,0s. Trên đĩa: **1, 2, 4, 6, 7, 8, 9**. Thiếu 3, 5, 10.
+
+**Watcher phán quyết đã làm đúng việc của nó.** Ba lần bắt kịp cửa sổ, mỗi lần trước cổng
+chưa tới một phút:
+
+| giờ | phán quyết chuyển | chương bị xét | cách |
+|---|---|---|---|
+| 10:07:13 | `c00005_s0000052` | 10:07:57 | 44s |
+| 10:23:29 | `c00007_s0000074` | 10:24:35 | 66s |
+| 10:50:00 | `c00009_s0000066` | 10:50:59 | 59s |
+
+Chương 7 là bằng chứng rõ nhất: alpha.47 chết đúng ở segment ấy, alpha.48 xuất ngay lần đầu.
+Biên 44–66 giây cũng cho thấy hạ nhịp poll từ 45s xuống 15s là đúng — ở 45s thì hai trong ba
+lần là may rủi.
+
+**Cổng thứ năm.** `resume` lúc 11:04 không xuất được chương 3; thay vào đó chương 7 và 9 —
+đã xuất một tiếng trước — quay về `warning: MP3 must be rebuilt`. `recovery.py` quét mọi
+segment ở mỗi lần resume và đòi một `quality_check` đạt; acceptance thì cố ý để phán quyết
+của máy ở `fail`, nên nó requeue đúng những bản thu chủ sách đã nghe. Bốn cổng trước đã được
+dạy đọc bảng acceptance; đây là cổng thứ năm.
+
+**Không mất phán quyết nào** — requeue chỉ chạy lại ASR trên cùng bản thu, và cả 7 acceptance
+vẫn khớp checksum sau khi dừng run. Nhưng vòng sửa chạy *sau* một lần ASR trượt thì **có**
+cắt lại, và bản cắt lại làm phán quyết mất hiệu lực vĩnh viễn. Đã dừng run tại đó.
+
+**Hai bản sửa cho alpha.49** (`c40215a`, `513ef1a`): chặn trần lặng hai đầu ở khâu ghép, và
+cho `recovery.py` đọc bảng acceptance. Cả hai đổi vân tay chất lượng
+(`b63e95be` → `9f7c21ce`), nên alpha.48 không resume được nữa — đánh đổi đã chấp nhận, vì
+mỗi lần resume lại tiến gần hơn tới chỗ xoá mất công nghe của chủ sách.
+
+**Còn chờ tai người:** `c00005_s0000013` ("Samael Kaizer Theosbane") và `c00010_s0000017`
+("Arthur Kaizer Theosbane") — cả hai đều là anchor tên bị Whisper viết theo chính tả tiếng
+Anh, xem `SHORT_NAME_PRONUNCIATION.md`.
