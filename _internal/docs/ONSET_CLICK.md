@@ -105,9 +105,31 @@ Không phải lỗi cách đọc:
 | alpha.46 | 1878932885 | 2,08s | 0,51s |
 | alpha.47/48 | 1670529513 | 2,64s | **1,02s** |
 
-Cùng `text_sha256`, cùng `spoken_text_sha256`. Chỉ khác seed — mọi lần sửa file trong
-`QUALITY_IMPLEMENTATION_FILES` đều đổi muối seed, và lần bốc mới giữ dấu ba chấm đầu câu lâu
-gấp đôi. Câu đó mở đầu bằng "…", nên **nghỉ là đúng**; chỉ là nghỉ quá tay.
+Cùng `text_sha256`, cùng `spoken_text_sha256`. Chỉ khác seed.
+
+**Nguyên nhân đổi seed, đo lại 2026-09-06 — bản đầu của mục này ghi sai.** Tôi viết "mọi lần
+sửa file trong `QUALITY_IMPLEMENTATION_FILES` đều đổi muối seed". Không có cơ chế nào như
+vậy. `generation_seed` là
+
+```python
+stable_int(f"segment::{stable_id}::{voice_key}::{seed_salt}")
+```
+
+— không dính gì tới vân tay implementation, cũng không tới policy hash: alpha.47, 48 và 50
+cho **cùng một seed** cho đoạn này dù cả ba khác vân tay.
+
+Cái thật sự đổi giữa alpha.46 và alpha.47 là **giọng được cast**:
+
+| bản | voice_key | seed |
+|---|---|---|
+| alpha.46 | `preset_thanh_binh_f100_p-04` | 1878932885 |
+| alpha.47 → 50 | `preset_thanh_binh_f109_p-01` | 1670529513 |
+
+Casting đổi giọng → `voice_key` đổi → seed đổi → audio đổi. Câu đó mở đầu bằng "…", nên
+**nghỉ là đúng**; giọng mới chỉ nghỉ lâu gấp đôi giọng cũ.
+
+Điều này quan trọng cho người đọc sau: audio khác nhau giữa hai bản thì **truy về casting**,
+đừng đi tìm một cơ chế re-salt không tồn tại.
 
 Phân bố trên 841 bản thu của alpha.48:
 
