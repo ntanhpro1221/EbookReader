@@ -2,9 +2,10 @@
 
 Nghe là tài nguyên khan hiếm nhất của dự án này. Máy có thể chạy cả đêm; chủ sách chỉ ngồi
 nghe được vài chục đoạn. Nên mỗi phán quyết đã cho phải sống qua được mọi bản kế tiếp — và
-suốt alpha.44 → alpha.48 nó liên tục **không** sống được, theo bốn cách khác nhau. Ba cách
-đầu đã sửa. Cách thứ tư là một vấn đề về *thời điểm*, không phải về code, và nó là lý do
-tồn tại của `scripts/watch_listener_acceptances.py`.
+suốt alpha.44 → alpha.48 nó liên tục **không** sống được, theo năm cách khác nhau. Bốn cách
+là code — năm cái cổng, mỗi cái tìm ra bằng cách để một chương chết ở đó. Cách còn lại là
+*thời điểm*, không phải code, và nó là lý do tồn tại của
+`scripts/watch_listener_acceptances.py`.
 
 ## Một phán quyết là gì
 
@@ -25,9 +26,10 @@ một đoạn đã `failed`, chỉ ghi phán quyết là chưa đủ: status ph�
 `warning` chứ không phải `verified` — mã cảnh báo vẫn nằm trên dòng và báo cáo vẫn hiện nó,
 vì chuyện đã xảy ra là *một người phủ quyết máy*, không phải máy đổi ý.
 
-## Bốn cửa mà một phán quyết phải đi qua
+## Năm cửa mà một phán quyết phải đi qua
 
-alpha.46 và alpha.47 lần lượt tìm ra ba cửa đầu, mỗi cửa bằng cách để một chương chết ở đó:
+alpha.46, alpha.47 và alpha.48 lần lượt tìm ra chúng, mỗi cửa bằng cách để một chương chết
+ở đó:
 
 1. **Cửa cảnh báo** (`_high_quality_blocking_segment_warnings`) — trừ đi mã đã được chấp
    nhận. Sửa ở alpha.46.
@@ -41,6 +43,11 @@ alpha.46 và alpha.47 lần lượt tìm ra ba cửa đầu, mỗi cửa bằng 
 5. **Cửa quét recovery** (`recovery.py::_segment_has_current_audio_qa`) — chạy ở **mỗi lần
    resume**, duyệt từng segment của cả quyển và đòi một `quality_check` đạt. Sửa ở alpha.48,
    commit `513ef1a`.
+
+Cửa 2 kiểm tra status **trước** khi hỏi tới phán quyết, nên với một đoạn `failed` nó từ chối
+mà không bao giờ đọc tới bảng chấp nhận. Điều đó không sai: một dòng `failed` thì đúng là
+không phải bằng chứng. Nó chỉ có nghĩa là **status phải được sửa ở nguồn**, và cửa 4 tồn tại
+để bắt đúng trường hợp đó.
 
 ### Cửa thứ năm: một lần resume gỡ ngược hai chương đã xuất
 
@@ -62,11 +69,6 @@ Kiểm trên chính dữ liệu alpha.48, cả 7 bản thu có phán quyết:
 Cách đo lại: `scratchpad/verify_recovery_fix.py` (chạy trên **bản sao** database — dựng
 `ProjectDB` là có ghi, đừng trỏ vào project thật).
 
-Cửa 2 kiểm tra status **trước** khi hỏi tới phán quyết, nên với một đoạn `failed` nó từ chối
-mà không bao giờ đọc tới bảng chấp nhận. Điều đó không sai: một dòng `failed` thì đúng là
-không phải bằng chứng. Nó chỉ có nghĩa là **status phải được sửa ở nguồn**, và cửa 4 tồn tại
-để bắt đúng trường hợp đó.
-
 ## Cửa sổ hẹp — cái mà alpha.48 tìm ra
 
 Ba bản sửa trên đều đúng, và chương 3 của alpha.48 vẫn chết. Không có gì hỏng cả:
@@ -86,8 +88,11 @@ người chấm nhìn thấy: cửa 3 giữ đoạn khỏi `mark_failed`, cửa 
 xuất ngay lần đầu.
 
 ```
-python scripts/watch_listener_acceptances.py <project nguồn> <project đích> --interval 45
+python scripts/watch_listener_acceptances.py <project nguồn> <project đích> --interval 15
 ```
+
+Nhịp 15 giây chứ không phải 45: đo trên alpha.48, ba lần bắt kịp cách cổng lần lượt 44, 66
+và 59 giây, nên ở 45 giây thì hai trong ba lần là may rủi.
 
 Nó ghi vào một database đang có tiến trình khác dùng, nên nó làm ít nhất có thể: mỗi vòng là
 một phép so **chỉ đọc**, và `ProjectDB` chỉ được dựng — tức chỉ mở transaction ghi — trong
