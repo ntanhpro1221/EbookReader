@@ -1363,8 +1363,27 @@ Chuỗi đầy đủ, mỗi mắt xích đều đọc được trong code:
 > resume chia lại batch → `group_fingerprint` khác → seed phân tích khác → LLM trả lời khác
 > → speaker/emotion khác → sổ nhân vật khác → casting khác → audio khác → phán quyết hết hiệu lực
 
-Điều này **không** chứng minh resume *có* chia batch khác đi ở thực tế; nó chứng minh rằng
-**nếu có thì trôi là hệ quả tất yếu**, chứ không phải trùng hợp.
+> **BÁC BỎ, 20 phút sau khi viết.** Vân tay nhóm **được lưu** trong bảng
+> `analysis_candidates`, nên không cần đoán. So cả ba bản:
+>
+> | | vân tay chung |
+> |---|---|
+> | alpha.48 ∩ alpha.51 | 200 / 200 |
+> | **alpha.48 ∩ alpha.50** (bị ngắt) | **200 / 200** |
+> | alpha.50 ∩ alpha.51 | 200 / 200 |
+>
+> Giống hệt. **Resume không chia lại batch**, nên chuỗi ở trên không xảy ra. Tôi đã viết một
+> cơ chế nghe rất thuyết phục — đọc code, khớp log, giải thích được mọi thứ — mà dữ liệu nằm
+> sẵn trong database ngay lúc ấy đã bác bỏ nó. Bài học: cơ chế đọc ra từ code vẫn chỉ là giả
+> thuyết, và ở đây có bảng để hỏi.
+>
+> (Dè dặt: `analysis_candidates` chỉ ghi những nhóm có sinh candidate, không phải toàn bộ
+> 196 batch. Nhưng 200 vân tay trùng khít giữa một lần chạy bị ngắt và hai lần liền mạch là
+> bằng chứng mạnh chống lại việc chia lại nhóm.)
+
+Vậy nguyên nhân trôi casting của alpha.50 **vẫn chưa biết**. Thí nghiệm `exp_resume_analysis`
+vẫn đáng chạy — nó đo thẳng cái cần đo (tập nhân vật sau một lần resume có chủ ý), thay vì
+suy từ một cơ chế.
 
 **Hiệu ứng thì chưa chứng minh — mới là tương quan trên ba lần chạy.** Cách kiểm rẻ nhất: chạy hai bản
 cùng code trên cùng nguồn, một bản để liền mạch, một bản `stop` giữa pha phân tích rồi
