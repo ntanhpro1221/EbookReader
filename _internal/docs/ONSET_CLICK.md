@@ -91,3 +91,43 @@ nhắm vào nó phải được tai người xác nhận trước khi vào đư�
 Ghi lại vì đã trả giá: **chạy đối chứng trước, sửa sau**. Tiếng rè chữ "mẹ" đã bị đuổi qua
 ba lần sửa hậu xử lý trước khi ai đó nghĩ đến việc nghe thử file thô — và file thô đã có
 sẵn lỗi. Ba lần sửa đó đều vô nghĩa ngay từ đầu.
+
+## Lặng ở hai đầu bản thu: cái hố một giây ở chương 8 (đo 2026-09-06)
+
+alpha.48 chương 8 trượt `chapter_post_encode_v1` với "unexpected silence 1.02s". Con số ấy
+**là lặng đầu của chính một bản thu**, nằm trước khoảng nghỉ 0,38s và sau đuôi 0,17s của bản
+trước — tổng cộng **1,57 giây chết** giữa chương.
+
+Không phải lỗi cách đọc:
+
+| | seed | dài | lặng đầu |
+|---|---|---|---|
+| alpha.46 | 1878932885 | 2,08s | 0,51s |
+| alpha.47/48 | 1670529513 | 2,64s | **1,02s** |
+
+Cùng `text_sha256`, cùng `spoken_text_sha256`. Chỉ khác seed — mọi lần sửa file trong
+`QUALITY_IMPLEMENTATION_FILES` đều đổi muối seed, và lần bốc mới giữ dấu ba chấm đầu câu lâu
+gấp đôi. Câu đó mở đầu bằng "…", nên **nghỉ là đúng**; chỉ là nghỉ quá tay.
+
+Phân bố trên 841 bản thu của alpha.48:
+
+| | lặng đầu | lặng cuối |
+|---|---|---|
+| p50 | 0,11s | 0,17s |
+| p90 | 0,12s | 0,21s |
+| p99 | 0,22s | 0,23s |
+| max | 1,02s | 0,44s |
+
+**Đúng 2 bản** vượt 0,5s, và cả hai đều mở đầu bằng dấu ba chấm (bản thứ ba, 0,46s, cũng thế).
+
+**Cách chữa: chặn trần ở khâu ghép, không phải thu lại.** Thu lại không chắc khỏi — alpha.46
+bốc seed khác cho đúng câu ấy và vẫn ra 0,51s, tức vẫn quá ngưỡng. Cắt sạch thì mất đi cái
+ngập ngừng mà dấu ba chấm đang đòi. `_cap_segment_edge_silence` cắt phần vượt quá **0,35s**
+và chỉ cắt bản sao tạm: **file trên đĩa không bị đụng tới**, vì checksum của nó là khoá mà
+một nửa bằng chứng trong dự án này được lưu theo, và lặng ở đầu không phải lý do để xét lại
+cách đọc. Phần đã cắt được ghi vào `ChapterQualityMetrics.trimmed_segment_edges`.
+
+0,35s + 0,38s nghỉ = 0,73s, vẫn nghe rõ là một quãng ngập ngừng.
+
+Nằm ở nhánh `fix/edge-silence`, **chưa nhập vào production** vì `audio_io.py` đang bị đóng
+băng trong lúc alpha.48 chạy.

@@ -4,7 +4,7 @@ import json
 import math
 import os
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
@@ -63,6 +63,18 @@ CHAPTER_SILENCE_FLOOR_DBFS = -65.0
 CHAPTER_DROPOUT_HARD_SECONDS = 5.0
 CHAPTER_DROPOUT_REVIEW_SECONDS = 1.0
 CHAPTER_EDGE_SILENCE_REVIEW_SECONDS = 2.0
+# A take can open or close with dead air the assembler never asked for. It is rare and it is
+# not the take's fault: identical text and identical spoken form, a different generation seed,
+# and a leading ellipsis that the engine holds for twice as long. Measured over 841 takes of
+# alpha.48 the leading silence is p50 0.11s, p99 0.22s, and exactly two takes exceed 0.5s.
+# Those two are what pushed chapter 8 over the one-second chapter limit, on top of the 0.38s
+# break and the previous take's tail.
+#
+# Capped rather than regenerated: alpha.46 drew a different seed for the same sentence and
+# still opened with 0.51s, so a retry is not reliably a cure. Capped rather than removed: a
+# line that opens on an ellipsis is meant to hesitate, and 0.35s in front of a 0.38s break
+# still reads as one.
+SEGMENT_EDGE_SILENCE_CAP_SECONDS = 0.35
 CHAPTER_JOIN_WINDOW_SECONDS = 0.001
 CHAPTER_JOIN_JUMP_HARD = 0.70
 CHAPTER_JOIN_JUMP_REVIEW = 0.18
@@ -93,6 +105,10 @@ class ChapterQualityMetrics:
     max_join_jump_dbfs: float | None
     hard_failures: tuple[str, ...]
     review_flags: tuple[str, ...]
+    # What the assembler trimmed off the takes' edges before joining them. Empty on almost
+    # every chapter. Recorded because silently altering delivered audio and leaving no trace
+    # is how a defect becomes a mystery three versions later.
+    trimmed_segment_edges: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -1019,6 +1035,70 @@ def _silence_metrics(
     )
 
 
+def _edge_silence_seconds(audio: np.ndarray, sample_rate: int) -> tuple[float, float]:
+    """(leading, trailing) dead air, by the same floor the chapter check uses."""
+    frame_size = max(1, int(round(sample_rate * CHAPTER_SILENCE_FRAME_SECONDS)))
+    frame_count = audio.size // frame_size
+    if frame_count <= 0:
+        return 0.0, 0.0
+    frames = audio[: frame_count * frame_size].astype(np.float64).reshape(frame_count, frame_size)
+    rms = np.sqrt(np.mean(np.square(frames), axis=1))
+    silent = rms <= 10 ** (CHAPTER_SILENCE_FLOOR_DBFS / 20.0)
+    leading = 0
+    for value in silent:
+        if not value:
+            break
+        leading += 1
+    trailing = 0
+    for value in silent[::-1]:
+        if not value:
+            break
+        trailing += 1
+    if leading >= frame_count:
+        return 0.0, 0.0  # nothing but silence: not this function's problem to solve
+    return leading * frame_size / sample_rate, trailing * frame_size / sample_rate
+
+
+def _cap_segment_edge_silence(
+    entries: list[tuple[Path, int]],
+    sample_rate: int,
+    work_dir: Path,
+) -> tuple[list[tuple[Path, int]], list[dict[str, Any]]]:
+    """Substitute a trimmed copy for any take that opens or closes on too much dead air.
+
+    The take on disk is never touched. It is the artifact every QA stage ruled on, its
+    checksum is the key half the evidence in this project is filed under, and the silence is
+    not a reason to re-judge the reading. What changes is only how much of that silence the
+    assembler carries into the chapter.
+    """
+    capped: list[tuple[Path, int]] = []
+    trimmed: list[dict[str, Any]] = []
+    for index, (path, break_ms) in enumerate(entries):
+        try:
+            audio, rate = sf.read(path, dtype="float32", always_2d=False)
+        except Exception as exc:  # noqa: BLE001
+            raise AudioQualityError(f"cannot read WAV: {path}: {exc}") from exc
+        leading, trailing = _edge_silence_seconds(np.asarray(audio), rate)
+        if leading <= SEGMENT_EDGE_SILENCE_CAP_SECONDS and trailing <= SEGMENT_EDGE_SILENCE_CAP_SECONDS:
+            capped.append((path, break_ms))
+            continue
+        start = int(round(max(0.0, leading - SEGMENT_EDGE_SILENCE_CAP_SECONDS) * rate))
+        end = len(audio) - int(round(max(0.0, trailing - SEGMENT_EDGE_SILENCE_CAP_SECONDS) * rate))
+        work_dir.mkdir(parents=True, exist_ok=True)
+        target = work_dir / f"trimmed_{index:05d}_{path.stem}.wav"
+        sf.write(target, np.asarray(audio)[start:end], rate, subtype="PCM_16")
+        capped.append((target, break_ms))
+        trimmed.append(
+            {
+                "source": str(path),
+                "leading_silence_seconds": round(leading, 3),
+                "trailing_silence_seconds": round(trailing, 3),
+                "removed_seconds": round((start + (len(audio) - end)) / rate, 3),
+            }
+        )
+    return capped, trimmed
+
+
 def _max_join_jump(audio: np.ndarray, sample_rate: int, join_times: list[float]) -> float:
     if audio.size < 2 or not join_times:
         return 0.0
@@ -1165,6 +1245,9 @@ def assemble_chapter_atomic_with_metrics(
     decoded_temp = output.with_name(output.stem + ".qa.part.wav")
     sample_rate = int(settings["tts"]["sample_rate"])
     silence_dir = work_dir or output.parent / ".silence_cache"
+    # Cap dead air at the take's edges before the timeline is measured, so the expected
+    # duration and the break ranges describe what is actually going into the chapter.
+    entries, trimmed_edges = _cap_segment_edge_silence(entries, sample_rate, silence_dir)
     expected_duration, expected_breaks, join_times = _source_timeline(entries, sample_rate)
     temp.unlink(missing_ok=True)
     decoded_temp.unlink(missing_ok=True)
@@ -1261,6 +1344,16 @@ def assemble_chapter_atomic_with_metrics(
         with temp.open("rb+") as handle:
             os.fsync(handle.fileno())
         os.replace(temp, output)
+        if trimmed_edges:
+            quality = replace(
+                quality,
+                trimmed_segment_edges=tuple(
+                    f"{Path(item['source']).name}: đầu {item['leading_silence_seconds']}s "
+                    f"cuối {item['trailing_silence_seconds']}s, cắt bớt "
+                    f"{item['removed_seconds']}s"
+                    for item in trimmed_edges
+                ),
+            )
         return ChapterAssemblyResult(checksum=candidate_checksum, quality=quality)
     except ChapterQualityError:
         raise
