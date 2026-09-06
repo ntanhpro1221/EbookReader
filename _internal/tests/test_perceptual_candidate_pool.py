@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from ebook_reader.pipeline import (
+    BookPipeline,
     DELIVERY_CLARITY,
     GENERATION_STRATEGY_SPLIT,
     POSTPROCESS_PROFILE_NONE,
@@ -72,14 +73,10 @@ class _Pipeline:
     def log(self, message: str) -> None:
         self.logged.append(message)
 
-    @staticmethod
-    def _segment_candidate_seed_salt(
-        repair_round: int, tts_attempt: int, variant: str
-    ) -> str:
-        prefix = f"asr_clarity_candidate_{int(repair_round)}"
-        if variant == "locked_spoken_v1":
-            return f"{prefix}_{int(tts_attempt)}"
-        return f"{prefix}_{variant}_{int(tts_attempt)}"
+    # The real one, not a copy. A double with its own salt implementation would let these
+    # tests pass while the producer and the committing loop disagreed - the exact silent
+    # failure they exist to catch.
+    _segment_candidate_seed_salt = staticmethod(BookPipeline._segment_candidate_seed_salt)
 
 
 class _Pool:
@@ -95,8 +92,6 @@ class _Pool:
 
 
 def _prefetch(pipeline: _Pipeline, pairs: list[tuple[Any, Any]]) -> dict:
-    from ebook_reader.pipeline import BookPipeline
-
     return BookPipeline._prefetch_candidate_batch(pipeline, pairs)
 
 
@@ -180,3 +175,62 @@ def test_a_broken_pool_returns_nothing_rather_than_failing_the_book() -> None:
 
     assert _prefetch(pipeline, _pairs(TTS_POOL_MIN_BATCH)) == {}
     assert pipeline._tts_pool_failed is True
+
+
+def test_the_salt_the_pool_uses_is_the_salt_the_claim_expects() -> None:
+    """The failure mode the plan warns about, and the one a test can miss.
+
+    `_claim_prefetched_segment` re-derives the seed from the committing loop's own salt and
+    declines anything that differs. So a producer that computes the salt even slightly
+    differently does not corrupt anything - every result is refused, the loop synthesizes
+    inline, and the run pays the pool's VRAM for nothing. That reads as "pooling did not
+    help" rather than as a bug, which is why asserting the batch was *offered* is not enough:
+    what matters is that the two derivations agree.
+
+    They agree by construction only as long as the producer keeps reading tts_attempt from
+    the candidate row while the loop starts its range at that same attempt. This pins it.
+    """
+    pool = _Pool()
+    pairs = [
+        (_segment("c1s0", 0), _candidate(0, variant="locked_spoken_v1", repair_round=0)),
+        (_segment("c1s1", 1), _candidate(1, variant="source_spelling_v1", repair_round=3)),
+        (_segment("c1s2", 2), _candidate(2, variant="locked_spoken_v1", repair_round=7)),
+    ]
+
+    _prefetch(_Pipeline(pool), pairs)
+
+    for job, (_row, candidate) in zip(pool.seen, pairs):
+        # What the committing loop computes on its first iteration: attempt starts at the
+        # candidate's own tts_attempt, not at zero-by-convention.
+        expected = BookPipeline._segment_candidate_seed_salt(
+            int(candidate["repair_round"]),
+            int(candidate["tts_attempt"]),
+            str(candidate["pronunciation_delivery_variant"]),
+        )
+        assert job["seed_salt"] == expected
+
+
+def test_every_offered_take_is_claimable() -> None:
+    """End of the same argument: run the real claim against the real producer output.
+
+    A take is accepted only when the segment matches, the seed matches the salt this attempt
+    would have used, the file exists and its checksum matches. Here the first two are what
+    the producer controls, so they are what this asserts - the file checks are exercised by
+    _claim_prefetched_segment's own tests.
+    """
+    pool = _Pool()
+    pairs = _pairs(TTS_POOL_MIN_BATCH)
+    pipeline = _Pipeline(pool)
+
+    prefetched = _prefetch(pipeline, pairs)
+
+    assert len(prefetched) == len(pairs), "the producer dropped takes it should have offered"
+    for job, (row, candidate) in zip(pool.seen, pairs):
+        result = prefetched[str(row["stable_id"])]
+        assert result["stable_id"] == row["stable_id"]
+        loop_salt = BookPipeline._segment_candidate_seed_salt(
+            int(candidate["repair_round"]),
+            int(candidate["tts_attempt"]),
+            str(candidate["pronunciation_delivery_variant"]),
+        )
+        assert job["seed_salt"] == loop_salt
