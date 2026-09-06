@@ -926,3 +926,20 @@ Cùng họ vấn đề — "cơ chế nhường máy tự chặn công việc" �
 
 Cái thứ nhất là mất một buổi tối; cái thứ hai là một vết xước. Cả hai đều đáng sửa, chỉ đừng
 báo cáo chúng như nhau.
+
+### alpha.48 xác nhận bản sửa, trên cùng một mẻ việc
+
+Phép đối chiếu sạch vì cùng chương, cùng số đoạn: **chương 3, 111 đoạn.**
+
+| | alpha.47 | alpha.48 |
+|---|---|---|
+| worker chấm cảm thụ | 8 | **3** |
+| RAM trống lúc căng nhất | 1,5–2,3 GB | **3,4 GB** |
+
+Ngân sách 2,65 GB/worker cộng phần dành sẵn cho pool TTS đã tự cắt pool từ 8 xuống 3. RAM
+dừng ngay dưới sàn 3,5 thay vì thủng sâu — lệch khoảng 0,1 GB, nằm trong sai số của phép ước
+lượng, nên không đáng siết thêm.
+
+**Chưa đo được là cái giá.** 3 worker thì chấm chậm hơn 8, và việc chấm vốn được giấu sau
+ASR nên có thể không mất gì — nhưng "có thể" không phải là một phép đo. Đừng ghi bản sửa này
+là thắng thuần cho tới khi có thời gian hoàn thành chương của hai bản để so.
