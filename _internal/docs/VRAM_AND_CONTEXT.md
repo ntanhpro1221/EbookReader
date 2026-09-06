@@ -377,6 +377,18 @@ alpha.44 chạy cùng `num_ctx = 7.168`; alpha.43 chạy 9.216. So chỉ dẫn d
 tái lập theo từng bit, và việc chia batch cũng lệch chút ít. Đó là **sàn** của mọi phép so
 sánh giữa hai lần chạy trong dự án này.
 
+> **Sàn ấy đã cũ, đo lại 2026-09-07: nó là 0%.** So `speaker` của cả 948 đoạn giữa alpha.48
+> và alpha.51 — hai lần chạy **liền mạch**, cách nhau nhiều giờ và **ba bản sửa code** — cho
+> **0 đoạn lệch**, và cùng 23 nhân vật, cùng casting không lệch một đoạn.
+>
+> Nên phân tích **có** tất định, và mọi phép so giữa hai lần chạy trong dự án này nhạy hơn
+> con số 3,1% ở trên rất nhiều: một đoạn lệch là một tín hiệu, không phải nhiễu.
+>
+> Không rõ vì sao số cũ là 3,1% — có thể một trong các lần chạy ấy đã bị ngắt (xem
+> `VERSIONS.md`: một lần `stop`/`resume` giữa pha phân tích làm lệch 18 đoạn và mất 4 nhân
+> vật), hoặc phân tích hồi đó chưa được gieo seed theo nội dung. **Đừng suy; nếu cần con số,
+> đo lại bằng hai lần chạy liền mạch.**
+
 **Đổi num_ctx nhân sàn ấy lên khoảng bốn lần**, 3,1% → 11,5%. Và 11,5% ấy khớp gần khít với
 11,3% segment có *âm thanh khác* đã đo giữa alpha.32 và alpha.43 (107/944). Chuỗi nhân quả
 vì thế khép lại: **ngữ cảnh → chỉ dẫn diễn xuất → âm thanh → kết cục.**
