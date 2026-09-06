@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any, Iterable
@@ -87,6 +88,38 @@ def decode_text_bytes(raw: bytes) -> str:
     return unicodedata.normalize("NFC", raw.decode("utf-8", errors="replace"))
 
 
+REPLACE_RETRY_ATTEMPTS = 12
+REPLACE_RETRY_DELAY_SECONDS = 0.05
+
+
+def _replace_with_retry(temp: Path, path: Path) -> None:
+    """os.replace, but survive a reader holding the destination open.
+
+    On Windows a rename onto an open file fails with PermissionError (WinError 5), and
+    every reader of these files opens them the ordinary way - so *reading* a state file can
+    break the process writing it. It is not hypothetical: alpha.50 died 44 minutes into its
+    analysis on
+
+        PermissionError: [WinError 5] Access is denied:
+        'runtime/background/state.json.part' -> 'runtime/background/state.json'
+
+    because a script was polling that state file every 15 seconds. `cli status` reads the
+    same file, so a person checking on their own run could have done it just as easily.
+
+    The window is microseconds wide, so retrying briefly closes it: twelve attempts across
+    about 0.6s. If it still fails the error is raised unchanged, because a rename that is
+    blocked for that long is not this race.
+    """
+    for attempt in range(REPLACE_RETRY_ATTEMPTS):
+        try:
+            os.replace(temp, path)
+            return
+        except PermissionError:
+            if attempt == REPLACE_RETRY_ATTEMPTS - 1:
+                raise
+            time.sleep(REPLACE_RETRY_DELAY_SECONDS)
+
+
 def atomic_write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".part")
@@ -95,7 +128,7 @@ def atomic_write_bytes(path: Path, data: bytes, *, fsync: bool = True) -> None:
         handle.flush()
         if fsync:
             os.fsync(handle.fileno())
-    os.replace(temp, path)
+    _replace_with_retry(temp, path)
 
 
 def atomic_write_json(path: Path, data: Any, *, fsync: bool = True) -> None:

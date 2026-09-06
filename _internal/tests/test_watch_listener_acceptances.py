@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 from ebook_reader.database import ProjectDB
@@ -91,10 +92,15 @@ def _synthesize(target: Path, checksum: str) -> None:
         )
 
 
-def _write_state(target: Path, state: str) -> None:
-    directory = target / "runtime" / "background"
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "state.json").write_text(json.dumps({"state": state}), encoding="utf-8")
+def _heartbeat(target: Path, *, age_seconds: float) -> None:
+    """A running worker lease, last heard from `age_seconds` ago."""
+    with ProjectDB(target / "project.sqlite3").transaction() as conn:
+        conn.execute("DELETE FROM worker_leases")
+        conn.execute(
+            "INSERT INTO worker_leases(worker_name,pid,generation,state,heartbeat_at) "
+            "VALUES('pipeline',1,1,'running',?)",
+            (time.time() - age_seconds,),
+        )
 
 
 def test_nothing_is_pending_until_the_audio_exists(tmp_path: Path) -> None:
@@ -151,20 +157,33 @@ def test_the_watcher_stops_when_the_run_does(tmp_path: Path) -> None:
     """It is pointed at a running project and has to let go of it without being told."""
     target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
 
-    _write_state(target, "running")
+    _heartbeat(target, age_seconds=5)
     assert watcher.run_is_over(target) is False
 
-    _write_state(target, "finished")
+    _heartbeat(target, age_seconds=watcher.RUN_IS_OVER_AFTER_SECONDS + 60)
     assert watcher.run_is_over(target) is True
 
 
-def test_a_missing_state_file_is_not_read_as_a_finished_run(tmp_path: Path) -> None:
-    """A half-written state file would otherwise end the watch early and silently."""
+def test_the_state_file_has_no_say(tmp_path: Path) -> None:
+    """This is the whole point. Polling state.json every fifteen seconds is what killed
+    alpha.50: on Windows the supervisor's rename onto an open file fails outright. So the
+    file is left alone, and a state.json insisting the run is alive must change nothing."""
+    target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
+    directory = target / "runtime" / "background"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "state.json").write_text(json.dumps({"state": "running"}), encoding="utf-8")
+
+    _heartbeat(target, age_seconds=watcher.RUN_IS_OVER_AFTER_SECONDS + 60)
+
+    assert watcher.run_is_over(target) is True
+
+
+def test_a_project_with_no_lease_yet_is_not_read_as_finished(tmp_path: Path) -> None:
+    """A run that has not written its first heartbeat must not end the watch early."""
     target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
 
-    assert watcher.run_is_over(target) is False
+    assert watcher.run_is_over(target) is True
 
-    (target / "runtime" / "background").mkdir(parents=True, exist_ok=True)
-    (target / "runtime" / "background" / "state.json").write_text("{not json", encoding="utf-8")
+    _heartbeat(target, age_seconds=1)
 
     assert watcher.run_is_over(target) is False

@@ -33,7 +33,6 @@ a handful of times rather than a hundred. It exits on its own when the run finis
 """
 from __future__ import annotations
 
-import json
 import sqlite3
 import sys
 import time
@@ -119,15 +118,42 @@ def pending_verdicts(source: Path, target: Path) -> list[tuple[str, str, str]]:
     return pending
 
 
+RUN_IS_OVER_AFTER_SECONDS = 180.0
+
+
 def run_is_over(target: Path) -> bool:
-    """True once the background run has finished, so the watcher can stop by itself."""
-    state_path = target / "runtime" / "background" / "state.json"
-    try:
-        state = json.loads(state_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        # No state file, or a half-written one: say nothing and look again next cycle.
+    """True once the background run has finished, so the watcher can stop by itself.
+
+    Deliberately does **not** read `runtime/background/state.json`. On Windows a rename onto
+    an open file fails, so polling that file every fifteen seconds eventually lands inside
+    the supervisor's own write and kills the run with
+
+        PermissionError: [WinError 5] Access is denied: 'state.json.part' -> 'state.json'
+
+    which is exactly how alpha.50 died 44 minutes into its analysis, at the hand of this
+    watcher. `atomic_write_bytes` now retries that rename, but the right fix on this side is
+    not to hold the file at all: SQLite is built for concurrent readers and the pipeline
+    heartbeats into it anyway.
+
+    A lease whose heartbeat has gone quiet for three minutes means the worker is gone. The
+    pipeline heartbeats far more often than that, so the margin is generous - a watcher that
+    lingers an extra cycle costs nothing, and one that quits early stops carrying verdicts.
+    """
+    database = target / "project.sqlite3"
+    if not database.is_file():
         return False
-    return str(state.get("state") or "") not in {"running", "starting"}
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        row = connection.execute(
+            "SELECT MAX(heartbeat_at) FROM worker_leases WHERE state='running'"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    finally:
+        connection.close()
+    if row is None or row[0] is None:
+        return True
+    return (time.time() - float(row[0])) > RUN_IS_OVER_AFTER_SECONDS
 
 
 def watch(
