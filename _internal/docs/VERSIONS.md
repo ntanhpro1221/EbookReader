@@ -1181,10 +1181,21 @@ nên phép ánh xạ không mơ hồ.
 #### Hai hướng sửa, và cái đắt hơn có lẽ đúng hơn
 
 **A — mang casting sang** (`port_casting.py`, song sinh với `port_pronunciations.py`).
-Gieo `canonical_name → voice_key + pitch + formant` trước khi cast. Rẻ, nằm trong `scripts/`,
-không đụng file bị khoá, và giải quyết đúng triệu chứng. Nhưng nó là **một lớp băng**: bộ
-cấp phát vẫn phụ thuộc thứ tự, và bất cứ nhân vật mới nào cũng vẫn có thể xê dịch những
-nhân vật sau nó *trong cùng lần chạy đó*.
+
+> **Sửa lại: A KHÔNG rẻ, và tôi đã viết sai ở bản trước.** Kiểm code thì thấy không có chỗ
+> nào để gieo vào. `port_pronunciations.py` chạy được vì `normalize_name_pronunciations`
+> **bỏ qua** tên đã có cách đọc khoá — một cái seam có sẵn. Casting **không có seam như
+> thế**: `build_registry_and_cast` tính giọng lại từ đầu mỗi lần chạy, và tuy có
+> `locked_character_genders()` cho giới tính thì **không có cơ chế tương đương cho giọng**.
+>
+> Thêm nữa, nhân vật chỉ tồn tại **sau** khi phân tích chạy, và casting chạy ngay sau đó rồi
+> tổng hợp bắt đầu — nên cũng không có khoảnh khắc nào để chen vào giữa.
+>
+> Nghĩa là A cũng phải sửa `character_registry.py` (file bị khoá) để tạo ra cái seam ấy.
+> Ưu thế "rẻ, chỉ nằm trong `scripts/`" biến mất.
+
+Nếu vẫn làm A, nó vẫn là **một lớp băng**: bộ cấp phát vẫn phụ thuộc thứ tự, và bất cứ nhân
+vật mới nào cũng vẫn xê dịch những nhân vật sau nó *trong cùng lần chạy đó*.
 
 **B — bỏ tính phụ thuộc thứ tự khỏi bộ cấp phát.** `rank()` hiện xếp theo `usage[name]`, tức
 trạng thái tích luỹ. Nếu thay tiêu chí phá hoà bằng một hàm băm ổn định của
@@ -1196,11 +1207,13 @@ Cái giá của B: mất bảo đảm "trải giọng đều", vì hai nhân v�
 chính codebase đã nói cái đó xử lý được — *"Formant, not pitch, is what makes a reused preset
 sound like a different person"* — và thang formant đã tồn tại sẵn cho việc dùng lại preset.
 
-B đụng `character_registry.py` (file bị khoá) và **đổi giọng của cả quyển một lần**, nên phải
-là một phiên bản riêng, có đối chiếu bằng tai trước sau. A làm được ngay và không mất gì.
-Làm A trước để bảo vệ công nghe, nhưng **đừng nhầm A là đã sửa xong**: nguyên nhân gốc là
-trạng thái tích luỹ trong `rank()`, và chừng nào nó còn thì casting vẫn là hàm của tập nhân
-vật chứ không phải của nhân vật.
+Cả hai đều đụng `character_registry.py` và đều đổi giọng của cả quyển một lần, nên **cả hai
+đều phải là một phiên bản riêng có đối chiếu bằng tai trước sau**. Khi giá đã ngang nhau thì
+B đúng hơn: nó sửa nguyên nhân — trạng thái tích luỹ trong `rank()` — thay vì dựng một kho
+trạng thái thứ hai để bù cho nó.
+
+Bài học chung của tối nay, mắc ba lần: **"chỉ là một script" là một giả định về code, không
+phải một sự thật.** Kiểm xem có seam để móc vào chưa, trước khi định giá.
 
 **Hướng sửa có sẵn hình dạng.** `book_status` đã có cờ `casting_finalized`, tức casting *đã*
 được khóa trong phạm vi một project. Việc còn thiếu là mang nó **sang project mới**, đúng như
