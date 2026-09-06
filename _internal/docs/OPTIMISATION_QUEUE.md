@@ -208,8 +208,17 @@ nếu mục 1 đã làm xong thì đánh đổi ấy còn tệ hơn** — pool c
 >
 > Ba lần chạy cuối ở cùng cấu hình cho 3.841 / 3.845 / 3.853 giây — **chênh 12 giây trên
 > 64 phút, tức 0,3%**. Pha phân tích vì thế là một mốc so sánh dùng được: lần sau lệch quá
-> vài chục giây thì đó là thay đổi thật, không phải nhiễu. alpha.46 chậm hơn ~190s ở đúng
-> cấu hình ấy, nên nó là tải máy chứ không phải num_ctx.
+> vài chục giây thì đó là thay đổi thật, không phải nhiễu.
+>
+> **Nhưng 0,3% ấy đo trên máy rảnh.** alpha.51 ra 3.926s (+85s, +2,2% so với alpha.48) trong
+> khi bị siết **51,8%** thời gian. Nên biên nhiễu là hàm của việc máy có đang được dùng hay
+> không, và phải kiểm `resource_share.py` trước khi gọi một chênh lệch là "thay đổi thật".
+>
+> Điều đáng chú ý theo hướng ngược lại: máy bị dùng hơn nửa thời gian mà pha phân tích chỉ
+> chậm 2,2%. Pha ấy do **Ollama** — một tiến trình riêng — chạy, nên `gpu_scale` của bộ quản
+> lý tài nguyên gần như không chạm tới nó. Siết chủ yếu ăn vào pha TTS và ASR.
+>
+> alpha.46 chậm hơn ~190s ở đúng cấu hình ấy, nên nó là tải máy chứ không phải num_ctx.
 >
 > Cách đo lại: mốc đầu và mốc cuối của dòng `Đang phân tích batch` trong
 > `logs/ebook_reader.log`.
