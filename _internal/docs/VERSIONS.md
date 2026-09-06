@@ -1178,6 +1178,30 @@ tên tự mang giọng của nó. Bộ cấp phát chỉ còn lo những nhân v
 Một nhân vật ứng **đúng một giọng** ở cả hai bản (0 nhân vật dùng >1 giọng trên 948 đoạn),
 nên phép ánh xạ không mơ hồ.
 
+#### Hai hướng sửa, và cái đắt hơn có lẽ đúng hơn
+
+**A — mang casting sang** (`port_casting.py`, song sinh với `port_pronunciations.py`).
+Gieo `canonical_name → voice_key + pitch + formant` trước khi cast. Rẻ, nằm trong `scripts/`,
+không đụng file bị khoá, và giải quyết đúng triệu chứng. Nhưng nó là **một lớp băng**: bộ
+cấp phát vẫn phụ thuộc thứ tự, và bất cứ nhân vật mới nào cũng vẫn có thể xê dịch những
+nhân vật sau nó *trong cùng lần chạy đó*.
+
+**B — bỏ tính phụ thuộc thứ tự khỏi bộ cấp phát.** `rank()` hiện xếp theo `usage[name]`, tức
+trạng thái tích luỹ. Nếu thay tiêu chí phá hoà bằng một hàm băm ổn định của
+`canonical_name`, thì giọng của một nhân vật chỉ phụ thuộc **chính nhân vật ấy** — mất một
+nhân vật ở đầu không còn kéo cả dãy sau dịch, và casting tái lập được mà **không cần mang gì
+sang cả**.
+
+Cái giá của B: mất bảo đảm "trải giọng đều", vì hai nhân vật có thể trúng cùng preset. Nhưng
+chính codebase đã nói cái đó xử lý được — *"Formant, not pitch, is what makes a reused preset
+sound like a different person"* — và thang formant đã tồn tại sẵn cho việc dùng lại preset.
+
+B đụng `character_registry.py` (file bị khoá) và **đổi giọng của cả quyển một lần**, nên phải
+là một phiên bản riêng, có đối chiếu bằng tai trước sau. A làm được ngay và không mất gì.
+Làm A trước để bảo vệ công nghe, nhưng **đừng nhầm A là đã sửa xong**: nguyên nhân gốc là
+trạng thái tích luỹ trong `rank()`, và chừng nào nó còn thì casting vẫn là hàm của tập nhân
+vật chứ không phải của nhân vật.
+
 **Hướng sửa có sẵn hình dạng.** `book_status` đã có cờ `casting_finalized`, tức casting *đã*
 được khóa trong phạm vi một project. Việc còn thiếu là mang nó **sang project mới**, đúng như
 `port_pronunciations.py` mang cách đọc tên — gieo trước khi chạy thì audio ổn định, và công
