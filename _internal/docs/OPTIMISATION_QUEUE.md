@@ -352,3 +352,32 @@ Nói gọn: **một tối cặm cụi nghe cộng một hằng số đổi từ 
 - **Tối ưu việc nạp audio**: 0,7% chi phí giải mã. Bỏ qua.
 - **Bỏ chú thích tiếng Anh trong ngoặc**, và **"chú thích dài mới hỏng"**: cả hai đều bị số
   liệu bác. `docs/` và `scripts/english_gloss_risk.py`.
+
+## Đã loại: chồng lấn pha phân tích với TTS (đo 2026-09-06, alpha.49)
+
+Ý tưởng nghe rất hợp lý: pha phân tích chạy 948/948 segment rồi mới tới chương đầu tiên,
+mất khoảng **64 phút** trong đó chưa dựng một giây audio nào. Chương 1 đã phân tích xong từ
+phút thứ nhất, nên về lý thì có thể dựng audio chương 1 song song với phân tích chương 10.
+
+**Đo trong lúc alpha.49 đang phân tích, 12 mẫu:**
+
+| tài nguyên | mức |
+|---|---|
+| GPU | **96%** (min 96, max 97) |
+| VRAM | 6.450 / 8.151 MiB — **79%** |
+| CPU | 5% |
+| RAM | còn trống 21,2 GB |
+
+**GPU đã kín.** Ollama chiếm 96% suốt pha ấy, nên TTS chạy chồng lên không lấy thêm được gì
+— nó chỉ tranh đúng cái tài nguyên đang là nút cổ chai, và còn phải chen vào 1,7 GB VRAM
+trống trong khi VieNeu cần nhiều hơn thế. Chồng lấn ở đây không phải "được thêm", mà là
+"chia lại cùng một miếng, cộng thêm rủi ro hết VRAM".
+
+CPU nhàn 5% và 21 GB RAM trống **không phải năng lực bỏ phí** theo nghĩa dùng được: việc
+CPU-nặng duy nhất trong pipeline là chấm cảm thụ, mà nó cần audio — thứ chưa tồn tại trong
+pha phân tích.
+
+Kết luận: pha phân tích đã vắt kiệt đúng tài nguyên quyết định. Muốn nó nhanh hơn thì phải
+làm **ít việc GPU hơn** (mục 3 — hạ `num_ctx`), không phải xếp thêm việc GPU vào cạnh nó.
+Cách đo lại: `nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader`
+lặp vài chục lần trong lúc pha phân tích chạy.
