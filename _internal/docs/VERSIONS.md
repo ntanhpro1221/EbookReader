@@ -985,3 +985,22 @@ nên trang review đưa 4/9 thẻ là những bản thu chủ sách đã duyệt
 Bản sửa lỗi (2) bắt buộc đổi vân tay chất lượng, mà resume dưới vân tay mới thì bị từ chối —
 đúng thiết kế. Nó **không làm mất gì đạt được**: một lần resume *trước khi* sửa đã re-fail
 đúng ba chương ấy, và chính lần thử đó lộ ra lỗi.
+
+### alpha.48: bản sửa dấu `/` gỡ được một chương mà hai lần chạy trước phải hỏi tai người
+
+`c00002_s0000037` — `Rare (Hiếm - B): Mạnh hơn / khó tìm hơn.` — chặn chương 2 ở **cả
+alpha.46 lẫn alpha.47**. Nguyên nhân tìm ra từ chính dòng "máy nghe" trên trang review:
+
+| | alpha.47 | alpha.48 |
+|---|---|---|
+| máy nghe | mạnh hơn **trên** khó tìm hơn | mạnh hơn**,** khó tìm hơn |
+| similarity | 0,80 | **0,914** |
+| cảnh báo | `PERCEPTUAL_NATURALNESS_REVIEW` — **chặn** | `ASR_LOCKED_NAME_ANCHOR_REVIEW` — được phép |
+
+Chữ "trên" không phải giọng đọc bịa: tiếng Việt đọc phân số bằng "trên", và giọng áp cách ấy
+cho mọi dấu `/`. Bản sửa chỉ đổi khi hai bên là chữ cái, nên `8.5/10` giữ nguyên.
+
+Đáng ghi vì hai lẽ. Thứ nhất, **nó đổi hạng cảnh báo chứ không chỉ đổi điểm số** — từ loại
+chặn sang loại chỉ ghi nhận — nên chương tự xuất mà không cần một lần nghe nào. Thứ hai, lỗi
+này chỉ lộ ra khi đọc dòng "máy nghe" của trang review như một **nguồn dữ liệu**, không phải
+như một thứ để người nghe đối chiếu rồi bỏ qua.
