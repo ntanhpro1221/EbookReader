@@ -1,7 +1,8 @@
 # Hàng đợi tối ưu đã đo, xếp theo giá trị
 
-Mỗi mục dưới đây có một con số đo được đứng sau, và mỗi mục đều **chưa ship** vì
-`QUALITY_IMPLEMENTATION_FILES` bị khoá trong lúc alpha.43 chạy. Tài liệu này tồn tại vì các
+Mỗi mục dưới đây có một con số đo được đứng sau. Trạng thái ship ghi ở **từng mục** —
+câu "mỗi mục đều chưa ship" ở bản đầu đã cũ từ lúc mục 3 lên tàu; đừng tin phần mở đầu,
+đọc mục. Tài liệu này tồn tại vì các
 mục ấy **ảnh hưởng lẫn nhau**: làm mục 1 xong thì mục 2 phải giữ nguyên phạm vi hẹp, và làm
 mục 2 sai phạm vi thì mục 1 mất phần lớn giá trị.
 
@@ -145,6 +146,23 @@ nếu mục 1 đã làm xong thì đánh đổi ấy còn tệ hơn** — pool c
 được lấy VRAM của nó.
 
 ## 3. Hạ `num_ctx` về 7.168 bằng cách hạ batch tên — ~639s, ~16% pha phân tích
+
+> **ĐÃ SHIP.** `NAME_PRONUNCIATION_BATCH_SIZE = 12` (analysis.py:268), và alpha.46 trở đi
+> chạy ở 7.168. Đo lại pha phân tích trên chính log các bản:
+>
+> | bản | num_ctx | pha phân tích |
+> |---|---|---|
+> | alpha.43 | 9.216 | 74m39s (4.479s) |
+> | alpha.46 | 7.168 | 67m14s (4.034s) |
+> | alpha.47 | 7.168 | 64m13s (3.853s) |
+> | alpha.48 | 7.168 | **64m01s (3.841s)** |
+>
+> Dự đoán tiết kiệm **639s**; thực tế **638s** (4.479 → 3.841). Hiếm khi một dự đoán trúng
+> sát thế, nên ghi lại cả hai con số. alpha.46 chậm hơn hai bản sau ~190s — cùng cấu hình,
+> nên phần chênh ấy là nhiễu tải máy chứ không phải num_ctx.
+>
+> Cách đo lại: mốc đầu và mốc cuối của dòng `Đang phân tích batch` trong
+> `logs/ebook_reader.log`.
 
 alpha.32 ở 7.168 chạy pha phân tích trong 3.851s; alpha.43 ở 9.216 mất 4.490s. Số lượt gọi
 và số token gần như không đổi (+1,4% và +2,6%); **tốc độ sinh tụt 56,4 → 50,1 tok/s**, riêng
