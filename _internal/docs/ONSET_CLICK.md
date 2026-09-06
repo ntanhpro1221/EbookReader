@@ -129,5 +129,16 @@ cách đọc. Phần đã cắt được ghi vào `ChapterQualityMetrics.trimmed
 
 0,35s + 0,38s nghỉ = 0,73s, vẫn nghe rõ là một quãng ngập ngừng.
 
-Nằm ở nhánh `fix/edge-silence`, **chưa nhập vào production** vì `audio_io.py` đang bị đóng
-băng trong lúc alpha.48 chạy.
+### Kiểm trên chính chương đã trượt
+
+Chạy `_cap_segment_edge_silence` qua đúng 151 bản thu thật của chương 8 alpha.48:
+
+| | khoảng chết lớn nhất | lặng đầu lớn nhất |
+|---|---|---|
+| trước | **1,52s** — chương trượt | 1,00s |
+| sau | **0,88s** — chương đạt | 0,36s |
+
+**Đúng 1 trên 151 bản thu bị cắt**, tổng cộng 0,65 giây. Đó là toàn bộ can thiệp: một file,
+0,65 giây, và chương từ trượt thành đạt. Cách đo lại: `scratchpad/verify_cap_on_chapter8.py`.
+
+Đã nhập vào production ở `c40215a` và chạy trong alpha.49.
