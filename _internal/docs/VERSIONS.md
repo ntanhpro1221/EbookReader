@@ -27,6 +27,21 @@ cd _internal
 ./runtime/.venv/Scripts/python.exe -m ebook_reader.cli run "<project-root>" --json
 ```
 
+**Gieo từ bản nào?** Bản có phán quyết của người, **không phải bản gần nhất**. Tính tới
+2026-09-06 đó là **alpha.47**: chỉ nó có `Theosbane = theo-bên` với `source=listener_choice`.
+alpha.48 và alpha.50 chỉ trùng nhờ may (`Theo-bên`, khác chữ hoa), alpha.49 thì lệch hẳn
+(`Thê-ô-ban`). Gieo nhầm nguồn là chép lại một lần bốc thăm của máy thay vì quyết định của
+chủ sách — và vì `port_pronunciations.py` giữ nguyên `source`, cái sai ấy sẽ tự nhân bản
+sang mọi bản sau.
+
+Kiểm nhanh trước khi gieo:
+
+```bash
+_internal/.venv/Scripts/python.exe -c "import sqlite3,glob;d=sqlite3.connect(glob.glob('D:/Novels/Audiobooks/_versions/<tag>/*/project.sqlite3')[0]);print([r for r in d.execute(\"SELECT surface,spoken_form,source FROM pronunciations WHERE source='listener_choice'\")])"
+```
+
+Rỗng nghĩa là bản ấy không mang quyết định nào của người — tìm bản khác.
+
 `port_pronunciations.py` chạy **giữa `create` và `run`**, không lúc nào khác. Cách đọc một
 cái tên không ổn định giữa các lần chạy — đo trên 112 tên: alpha.46 lệch 4, alpha.49 lệch 3,
 alpha.47 lệch 0 — và mỗi cái tên trôi làm đổi audio của mọi segment chứa nó, tức xoá luôn
