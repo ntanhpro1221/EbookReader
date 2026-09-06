@@ -118,7 +118,30 @@ def pending_verdicts(source: Path, target: Path) -> list[tuple[str, str, str]]:
     return pending
 
 
-RUN_IS_OVER_AFTER_SECONDS = 180.0
+# Whether the worker process is alive, asked of the operating system. Two earlier signals
+# were wrong: `state.json` cannot be polled without breaking the supervisor's own writes on
+# Windows, and the lease heartbeat is not a liveness signal at all - alpha.51 was publishing
+# chapters with a lease 2,380 seconds stale, which sent this watcher home three minutes into
+# every run. The pid is read from SQLite, so nothing here opens a file the pipeline writes.
+
+
+def _process_is_alive(pid: int) -> bool:
+    """Ask the OS, because every cheaper signal in this project has turned out to lie."""
+    if pid <= 0:
+        return False
+    try:
+        import psutil
+    except ImportError:
+        # Without psutil, keep watching rather than guess: an extra cycle costs a read, and
+        # a wrong "it finished" costs every verdict the rest of the run would have carried.
+        return True
+    try:
+        process = psutil.Process(pid)
+        return process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return False
+    except psutil.Error:
+        return True
 
 
 def run_is_over(target: Path) -> bool:
@@ -131,13 +154,17 @@ def run_is_over(target: Path) -> bool:
         PermissionError: [WinError 5] Access is denied: 'state.json.part' -> 'state.json'
 
     which is exactly how alpha.50 died 44 minutes into its analysis, at the hand of this
-    watcher. `atomic_write_bytes` now retries that rename, but the right fix on this side is
-    not to hold the file at all: SQLite is built for concurrent readers and the pipeline
-    heartbeats into it anyway.
+    watcher.
 
-    A lease whose heartbeat has gone quiet for three minutes means the worker is gone. The
-    pipeline heartbeats far more often than that, so the margin is generous - a watcher that
-    lingers an extra cycle costs nothing, and one that quits early stops carrying verdicts.
+    The replacement was wrong too, and worse for being quiet. I used the lease heartbeat and
+    wrote that "the pipeline heartbeats far more often" than the three-minute margin. It does
+    not: alpha.51 was publishing chapters with a lease 2,380 seconds stale, so the watcher
+    went home three minutes into the run and every verdict after that went uncarried. A
+    watcher that quits early fails in silence, which is the worst way for this particular
+    tool to fail.
+
+    So ask the operating system whether the worker process is alive. The pid comes from
+    SQLite - built for concurrent readers - and no file the pipeline writes is ever opened.
     """
     database = target / "project.sqlite3"
     if not database.is_file():
@@ -145,15 +172,18 @@ def run_is_over(target: Path) -> bool:
     connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     try:
         row = connection.execute(
-            "SELECT MAX(heartbeat_at) FROM worker_leases WHERE state='running'"
+            "SELECT pid FROM worker_leases WHERE state='running' ORDER BY heartbeat_at DESC "
+            "LIMIT 1"
         ).fetchone()
     except sqlite3.OperationalError:
         return False
     finally:
         connection.close()
     if row is None or row[0] is None:
-        return True
-    return (time.time() - float(row[0])) > RUN_IS_OVER_AFTER_SECONDS
+        # No running lease recorded yet. A project that has not started must not be read as
+        # one that has finished, or the watcher quits before the run it was pointed at.
+        return False
+    return not _process_is_alive(int(row[0]))
 
 
 def watch(

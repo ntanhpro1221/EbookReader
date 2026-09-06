@@ -12,6 +12,7 @@ database a pipeline is writing to: it decides read-only, and it carries a verdic
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -23,6 +24,16 @@ sys.path.insert(0, str(SCRIPTS))
 
 import port_listener_acceptances as porter  # noqa: E402
 import watch_listener_acceptances as watcher  # noqa: E402
+
+def _a_pid_nobody_is_using() -> int:
+    """A pid that is certainly not running, so "the worker is gone" can be tested."""
+    import psutil
+
+    for candidate in range(600000, 610000):
+        if not psutil.pid_exists(candidate):
+            return candidate
+    raise AssertionError("no free pid found")
+
 
 HEARD = "a" * 64
 OTHER = "b" * 64
@@ -92,14 +103,19 @@ def _synthesize(target: Path, checksum: str) -> None:
         )
 
 
-def _heartbeat(target: Path, *, age_seconds: float) -> None:
-    """A running worker lease, last heard from `age_seconds` ago."""
+def _lease(target: Path, *, pid: int, age_seconds: float = 0.0) -> None:
+    """A running worker lease for `pid`, last heartbeat `age_seconds` ago.
+
+    Age is a parameter only so a test can prove it is *ignored*. alpha.51 published chapters
+    with a lease 2,380 seconds stale, so treating the heartbeat as liveness sent the watcher
+    home three minutes into every run.
+    """
     with ProjectDB(target / "project.sqlite3").transaction() as conn:
         conn.execute("DELETE FROM worker_leases")
         conn.execute(
             "INSERT INTO worker_leases(worker_name,pid,generation,state,heartbeat_at) "
-            "VALUES('pipeline',1,1,'running',?)",
-            (time.time() - age_seconds,),
+            "VALUES('pipeline',?,1,'running',?)",
+            (pid, time.time() - age_seconds),
         )
 
 
@@ -153,15 +169,26 @@ def test_a_cycle_with_nothing_ready_touches_nothing(tmp_path: Path) -> None:
     assert ProjectDB(target / "project.sqlite3").accepted_segment_warnings() == {}
 
 
-def test_the_watcher_stops_when_the_run_does(tmp_path: Path) -> None:
+def test_the_watcher_stops_when_the_worker_process_goes(tmp_path: Path) -> None:
     """It is pointed at a running project and has to let go of it without being told."""
     target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
 
-    _heartbeat(target, age_seconds=5)
+    _lease(target, pid=os.getpid())
     assert watcher.run_is_over(target) is False
 
-    _heartbeat(target, age_seconds=watcher.RUN_IS_OVER_AFTER_SECONDS + 60)
+    _lease(target, pid=_a_pid_nobody_is_using())
     assert watcher.run_is_over(target) is True
+
+
+def test_a_stale_heartbeat_does_not_end_the_watch(tmp_path: Path) -> None:
+    """The bug this replaced. alpha.51 was publishing chapters with a lease 2,380 seconds
+    stale, and a watcher keyed on that heartbeat quit three minutes in and carried nothing
+    for the rest of the run - silently, which is the worst way for this tool to fail."""
+    target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
+
+    _lease(target, pid=os.getpid(), age_seconds=4000)
+
+    assert watcher.run_is_over(target) is False
 
 
 def test_the_state_file_has_no_say(tmp_path: Path) -> None:
@@ -173,17 +200,17 @@ def test_the_state_file_has_no_say(tmp_path: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "state.json").write_text(json.dumps({"state": "running"}), encoding="utf-8")
 
-    _heartbeat(target, age_seconds=watcher.RUN_IS_OVER_AFTER_SECONDS + 60)
+    _lease(target, pid=_a_pid_nobody_is_using())
 
     assert watcher.run_is_over(target) is True
 
 
 def test_a_project_with_no_lease_yet_is_not_read_as_finished(tmp_path: Path) -> None:
-    """A run that has not written its first heartbeat must not end the watch early."""
+    """A run that has not written its first lease must not end the watch before it starts."""
     target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
 
-    assert watcher.run_is_over(target) is True
+    assert watcher.run_is_over(target) is False
 
-    _heartbeat(target, age_seconds=1)
+    _lease(target, pid=os.getpid())
 
     assert watcher.run_is_over(target) is False
