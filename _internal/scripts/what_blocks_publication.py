@@ -28,6 +28,21 @@ from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS  # noqa:
 ASR_EVIDENCE_ABORT = "Perceptual QA requires current ASR evidence"
 
 
+def is_collateral_warning(chapter_error: str, code: str) -> bool:
+    """True when this warning is what the repair loop would have removed on its own.
+
+    `_verify_chapter_perceptual_audio` raises from inside its scoring loop, so a chapter that
+    stops there never reaches the repair loop that follows. Every perceptual warning it
+    leaves behind is therefore unrepaired-by-default rather than a judgement anyone needs to
+    make - alpha.48 re-cut eleven of thirteen such takes in the same chapter and asked for
+    none of them.
+
+    Only perceptual codes qualify. An anchor mismatch is not something the perceptual repair
+    loop would have touched, so it stays a real request no matter why the chapter stopped.
+    """
+    return ASR_EVIDENCE_ABORT in str(chapter_error or "") and str(code).startswith("PERCEPTUAL")
+
+
 def _accepted(connection) -> set:
     """(stable_id, warning_code, wav_sha256) triples a listener has already ruled on.
 
@@ -122,7 +137,6 @@ def main(project_root: str) -> int:
         # project on work the machine does for free: alpha.50 chapter 3 listed four such
         # segments, and the same chapter in alpha.48 - where the loop did run - re-cut
         # eleven of thirteen and asked for none of them.
-        aborted_before_repair = ASR_EVIDENCE_ABORT in str(chapter["last_error"] or "")
         segments = connection.execute(
             "SELECT stable_id, status, warning_code, wav_path, wav_duration, text, asr_text, "
             "wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
@@ -142,7 +156,7 @@ def main(project_root: str) -> int:
                 continue
             blocking = sorted(codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
             for code in blocking:
-                is_collateral = aborted_before_repair and code.startswith("PERCEPTUAL")
+                is_collateral = is_collateral_warning(chapter["last_error"], code)
                 reasons.append((
                     "chưa chắc cần nghe" if is_collateral else "cảnh báo chặn xuất bản",
                     row,

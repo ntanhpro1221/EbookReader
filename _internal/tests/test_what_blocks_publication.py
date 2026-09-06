@@ -95,3 +95,37 @@ def test_a_project_without_the_table_is_not_an_error() -> None:
     conn.execute("CREATE TABLE segments (id INTEGER PRIMARY KEY, stable_id TEXT)")
 
     assert report._stale_qa_failure(conn, _row(), set()) is False
+
+
+def test_a_perceptual_warning_after_an_aborted_repair_is_not_a_request() -> None:
+    """The report's job is to spend the owner's listening only where it is needed.
+
+    A chapter that stops on the perceptual precondition never reaches the repair loop, so the
+    perceptual warnings left on its segments are what that loop would have re-cut. alpha.50
+    listed seven such segments as work for a person; alpha.48, where the loop ran, re-cut
+    eleven of thirteen and asked for none.
+    """
+    assert report.is_collateral_warning(
+        "Perceptual QA requires current ASR evidence for c1s1",
+        "PERCEPTUAL_NATURALNESS_REVIEW",
+    ) is True
+
+
+def test_a_perceptual_warning_from_a_completed_pass_is_a_request() -> None:
+    """The loop ran and still could not fix it, which is exactly when an ear is needed."""
+    assert report.is_collateral_warning(
+        "High-quality policy requires repair or review for segment warnings: c1s1=...",
+        "PERCEPTUAL_NATURALNESS_REVIEW",
+    ) is False
+
+
+def test_an_anchor_mismatch_is_never_collateral() -> None:
+    """The perceptual repair loop would not have touched it, so the abort is irrelevant."""
+    assert report.is_collateral_warning(
+        "Perceptual QA requires current ASR evidence for c1s1",
+        "ASR_LOCKED_NAME_ANCHOR_MISMATCH",
+    ) is False
+
+
+def test_a_chapter_with_no_error_recorded_is_not_collateral() -> None:
+    assert report.is_collateral_warning(None, "PERCEPTUAL_NATURALNESS_REVIEW") is False
