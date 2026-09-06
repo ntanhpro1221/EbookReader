@@ -181,9 +181,10 @@ def test_the_watcher_stops_when_the_worker_process_goes(tmp_path: Path) -> None:
 
 
 def test_a_stale_heartbeat_does_not_end_the_watch(tmp_path: Path) -> None:
-    """The bug this replaced. alpha.51 was publishing chapters with a lease 2,380 seconds
-    stale, and a watcher keyed on that heartbeat quit three minutes in and carried nothing
-    for the rest of the run - silently, which is the worst way for this tool to fail."""
+    """The bug this replaced, and the reason it survived review: the heartbeat is
+    intermittent, not dead. It tracked alpha.50 for five hours and stopped at the right
+    moment; alpha.51 then published chapters with a lease 2,380 seconds stale, so a watcher
+    keyed on it quit three minutes in and carried nothing for the rest of the run."""
     target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
 
     _lease(target, pid=os.getpid(), age_seconds=4000)

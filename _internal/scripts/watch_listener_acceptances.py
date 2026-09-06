@@ -120,9 +120,10 @@ def pending_verdicts(source: Path, target: Path) -> list[tuple[str, str, str]]:
 
 # Whether the worker process is alive, asked of the operating system. Two earlier signals
 # were wrong: `state.json` cannot be polled without breaking the supervisor's own writes on
-# Windows, and the lease heartbeat is not a liveness signal at all - alpha.51 was publishing
-# chapters with a lease 2,380 seconds stale, which sent this watcher home three minutes into
-# every run. The pid is read from SQLite, so nothing here opens a file the pipeline writes.
+# Windows, and the lease heartbeat is *intermittent* - it tracked alpha.50 correctly for five
+# hours and went 2,380 seconds stale on alpha.51 while that run was publishing chapters. An
+# intermittent signal is worse than a broken one: it passes every test you think to run.
+# The pid is read from SQLite, so nothing here opens a file the pipeline writes.
 
 
 def _process_is_alive(pid: int) -> bool:
@@ -157,11 +158,13 @@ def run_is_over(target: Path) -> bool:
     watcher.
 
     The replacement was wrong too, and worse for being quiet. I used the lease heartbeat and
-    wrote that "the pipeline heartbeats far more often" than the three-minute margin. It does
-    not: alpha.51 was publishing chapters with a lease 2,380 seconds stale, so the watcher
-    went home three minutes into the run and every verdict after that went uncarried. A
-    watcher that quits early fails in silence, which is the worst way for this particular
-    tool to fail.
+    wrote that "the pipeline heartbeats far more often" than the three-minute margin.
+
+    Sometimes it does. It tracked alpha.50 for five hours and stopped at exactly the right
+    moment. Then alpha.51 published chapters with a lease 2,380 seconds stale, so the watcher
+    went home three minutes in and every verdict after that went uncarried. An intermittent
+    signal is worse than a dead one: it works while you are watching and fails in silence
+    when you are not, which is the worst way for this particular tool to fail.
 
     So ask the operating system whether the worker process is alive. The pid comes from
     SQLite - built for concurrent readers - and no file the pipeline writes is ever opened.
