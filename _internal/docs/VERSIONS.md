@@ -1041,3 +1041,36 @@ mỗi lần resume lại tiến gần hơn tới chỗ xoá mất công nghe c�
 **Còn chờ tai người:** `c00005_s0000013` ("Samael Kaizer Theosbane") và `c00010_s0000017`
 ("Arthur Kaizer Theosbane") — cả hai đều là anchor tên bị Whisper viết theo chính tả tiếng
 Anh, xem `SHORT_NAME_PRONUNCIATION.md`.
+
+### alpha.49: dừng giữa chừng vì một cái tên đọc hai kiểu
+
+Chạy 11:33 → 12:45, xuất chương 1, đang dựng chương 2 thì dừng. **Cố ý dừng**, không phải sập.
+
+Pha phân tích 3.845s (64,1 phút) — điểm dữ liệu thứ ba ở `num_ctx` 7.168, xem
+`OPTIMISATION_QUEUE.md` mục 3.
+
+**Lý do dừng.** `Theosbane` — họ của nhân vật chính — bị khóa hai cách đọc trong cùng một
+quyển:
+
+| | `Theosbane` đứng một mình | nguồn |
+|---|---|---|
+| alpha.47 | `theo-bên` | **`listener_choice`** — chủ sách sửa tay bằng `pronounce` |
+| alpha.48 | `Theo-bên` | máy, **trùng nhờ may** (chỉ khác hoa/thường) |
+| alpha.49 | `Thê-ô-ban` | máy, **lệch thật** |
+
+Trong khi đó `Samael Kaizer Theosbane` và `Arthur Kaizer Theosbane` đều đọc `...theo-bên`.
+Đếm trên văn bản: **11 lần đứng một mình** (chương 5, 7, 8, 10) so với **7 lần trong tên đầy
+đủ**. Bốn trên mười chương sẽ đọc họ nhân vật chính sai so với cách chủ sách đã chọn.
+
+**Vì sao dừng chứ không chạy nốt.** Còn khoảng 2 tiếng dựng audio để cho ra 4 chương đã biết
+chắc là hỏng, và bản sửa động vào `analysis.py` nên đổi vân tay — tức không resume vào được
+dù có muốn. Chạy tiếp là tiêu 2 giờ GPU cho thứ phải bỏ đi.
+
+Bản sửa: commit `d919474`, xem `LISTENER_VERDICTS.md` và test
+`tests/test_name_component_relock.py`. Điểm cốt lõi: `relock_machine_pronunciation` vạch ranh
+giới ở **nguồn** chứ không ở khóa — máy được sửa phỏng đoán của chính nó, `listener_choice`
+thì tuyệt đối không.
+
+**Bài học chung.** Cách đọc một cái tên **không ổn định giữa các lần chạy**. Ba lần chạy cho
+ba kết quả, và lần duy nhất đúng chắc chắn là lần có người sửa tay. Nên bất cứ cái gì phụ
+thuộc "máy sẽ đọc tên này giống lần trước" đều là giả định sai.
