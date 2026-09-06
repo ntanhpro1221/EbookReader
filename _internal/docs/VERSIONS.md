@@ -1315,3 +1315,42 @@ sửa cắt lại chúng, đúng như `is_collateral_warning()` dự đoán. Kh�
 động kể từ bản sửa chiều nay (xem `fix: the watcher's new liveness signal was wrong`). Nếu
 không bắt được lúc 23:2x — mười lăm phút trước khi cửa sổ của chương 3 đóng — thì mắt xích
 thứ hai đứt và chương lại chết đúng như năm bản trước.
+
+
+## Nghi phạm của trôi casting: pha phân tích **bị ngắt rồi resume** (2026-09-07)
+
+Đo thêm sau khi alpha.51 xong pha phân tích:
+
+| đối chiếu | đoạn đổi giọng | nhân vật |
+|---|---|---|
+| alpha.48 → alpha.50 | 27 | 23 vs 19 |
+| alpha.50 → alpha.51 | 27 (đổi ngược lại) | 19 vs 23 |
+| **alpha.48 → alpha.51** | **0** | **23 vs 23** |
+
+alpha.51 quay về **đúng casting của alpha.48, không lệch một đoạn nào**. Nên casting không
+trôi lung tung — alpha.50 là ngoại lệ, và câu hỏi đúng là *alpha.50 khác ở chỗ nào*.
+
+**Không phải cách đọc tên.** Đã kiểm: alpha.50 và alpha.48 giống nhau **0/112 tên khác**. Nên
+việc gieo cách đọc ở alpha.51 không phải thứ ổn định hoá casting, và lời cải chính trước đó
+(`docs: porting readings fixes one cause of audio drift, not the audio`) vẫn đứng.
+
+**Nghi phạm còn lại khớp hoàn hảo:**
+
+| bản | pha phân tích | nhân vật |
+|---|---|---|
+| alpha.48 | liền mạch | 23 |
+| alpha.50 | **crash ở 643/948 rồi `resume`** | **19** |
+| alpha.51 | liền mạch | 23 |
+
+Hai lần chạy liền mạch cho cùng một tập nhân vật; lần duy nhất bị ngắt cho tập khác. Nếu
+đúng thì **`resume` không miễn phí**: nó đổi đầu ra của phân tích, kéo theo casting, kéo theo
+audio, kéo theo phán quyết hết hiệu lực.
+
+**Chưa chứng minh — mới là tương quan trên ba lần chạy.** Cách kiểm rẻ nhất: chạy hai bản
+cùng code trên cùng nguồn, một bản để liền mạch, một bản `stop` giữa pha phân tích rồi
+`resume`, sau đó so `canonical_name` của bảng `characters`. Nếu tập nhân vật khác nhau thì
+xác nhận, và lúc ấy mọi lần dừng-rồi-chạy-tiếp giữa pha phân tích đều phải bị coi là **đổi
+đầu ra**, không phải tạm nghỉ.
+
+Điều này cũng đáng nhớ cho chính cách làm việc: hôm qua tôi dừng và resume nhiều lần vì lý do
+tốt, và có thể mỗi lần như thế đã âm thầm đổi quyển sách.
