@@ -164,3 +164,26 @@ số nó sinh ra để bảo vệ**. Can thiệp đúng như thiết kế: nhỏ
 
 Bốn chương giống hệt nhau giữa hai bản (0,18 / 0,56 / 0,62 / 0,66) cũng là thêm một lần xác
 nhận pipeline tái lập được.
+
+### Chương 8, phép thử thật (alpha.50, 2026-09-06)
+
+Chương từng sinh ra bản sửa này, đo qua bốn bản:
+
+| bản | lặng dài nhất | kết cục |
+|---|---|---|
+| alpha.46 | 0,66s | xuất |
+| alpha.47 | **1,00s** | xuất — đúng sát ngưỡng |
+| alpha.48 | **1,02s** | **hỏng**; mã hoá lại ở lần resume ra 1,00s rồi mới xuất |
+| alpha.50 | **0,72s** | xuất ngay lần đầu |
+
+Ghi trong metrics của alpha.50: `0000093.wav: đầu 1.0s cuối 0.08s, cắt bớt 0.65s` — đúng bản
+thu đã khoanh vùng (câu mở đầu bằng dấu ba chấm), đúng 0,65 giây mà phép đo ngoại tuyến
+trên 151 bản thu của alpha.48 đã dự đoán.
+
+**Đừng kể chuyện này là "cứu một chương vốn luôn hỏng".** Chương ấy nằm trên lưỡi dao: 1,00
+thì qua, 1,02 thì trượt, và khác biệt giữa hai lần chỉ là nhiễu của bộ mã hoá — alpha.48
+trượt lần đầu rồi qua ở lần mã hoá thứ hai với **cùng một đống audio**. Cái bản sửa làm được
+là **đưa nó ra khỏi lưỡi dao**: 0,72 so với ngưỡng 1,00 là biên thật, không phải may.
+
+Đó cũng là lý do một bản sửa như thế đáng làm dù "chương vẫn xuất được": một chương xuất
+được nhờ may thì lần chạy sau sẽ hỏng, và không ai biết tại sao.
