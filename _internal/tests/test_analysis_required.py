@@ -6357,17 +6357,29 @@ def test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic(
     analyzer = OllamaBookAnalyzer(build_settings(), db, lambda _message: None)
     monkeypatch.setattr(analyzer, "ensure_available", lambda: True)
 
+    # The group carries the analysed `mortality-thought` as well, because a resume sends its
+    # stable group whole (see test_resume_analyses_the_whole_group.py). This test is about
+    # the semantic lock surviving the critic, not about how the group is assembled, so it
+    # reads the wake row by name rather than assuming it arrives alone.
     def generate(group, **_kwargs):
-        assert [str(row["stable_id"]) for row in group] == ["wake-thought"]
-        item = analysis_item("wake-thought")
-        item.update({"kind": "thought", "emotion": "afraid", "intensity": 2})
-        return {"segments": [item]}
+        assert "wake-thought" in [str(row["stable_id"]) for row in group]
+        items = []
+        for row in group:
+            item = analysis_item(str(row["stable_id"]))
+            item.update({"kind": "thought", "emotion": "afraid", "intensity": 2})
+            items.append(item)
+        return {"segments": items}
 
     def dissent(group, validated, **kwargs):
+        wake_index = next(
+            index
+            for index, row in enumerate(group)
+            if str(row["stable_id"]) == "wake-thought"
+        )
         return director_critic_payload(
             group,
             validated,
-            corrections={0: {"emotion": "neutral"}},
+            corrections={wake_index: {"emotion": "neutral"}},
             candidate_rows=kwargs["candidate_rows"],
             candidate_hash=kwargs["candidate_hash"],
         )
@@ -6377,12 +6389,19 @@ def test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic(
 
     analyzer.analyze_all(lambda: False)
 
-    assert len(db.updated) == 1
-    assert db.updated[0][1]["emotion"] == "afraid"
+    wake_updates = [
+        data
+        for segment_id, data, _threshold in db.updated
+        if int(segment_id) == 2
+    ]
+    assert len(wake_updates) == 1
+    assert wake_updates[0]["emotion"] == "afraid", "the critic must not win here"
     evidence = json.loads(db.analysis_critic_attempts[0]["evidence_json"])
-    assert evidence["segments"][0]["host_semantic_override"]["rule"] == (
-        "adjacent_thought_wake_self_rescue"
-    )
+    overrides = [
+        segment.get("host_semantic_override", {}).get("rule")
+        for segment in evidence["segments"]
+    ]
+    assert "adjacent_thought_wake_self_rescue" in overrides
 
 
 def test_director_valid_semantic_lock_dissent_is_audited_without_veto(monkeypatch) -> None:
@@ -11304,9 +11323,26 @@ def test_high_quality_starts_legacy_twenty_segment_setting_in_five_row_groups(
     assert len(accepted_events) == 3
 
 
-def test_resume_hole_splits_pending_runs_but_keeps_original_neighbor_context_and_scope(
+def test_resume_hole_sends_the_whole_group_and_keeps_original_neighbor_context_and_scope(
     monkeypatch,
 ) -> None:
+    """A resume used to send only the rows still pending, split around the analysed hole.
+
+    That was changed on 2026-09-07, and the assertion below flipped with it. The reason is
+    not context - this test was right that `original_context` carries the neighbours' source
+    text across the hole, and it still checks exactly that. What a fragment loses is
+    *jointness*: the model assigns speakers to a group in one pass, weighing its members
+    against each other, and two fragments are two independent decisions however faithfully
+    each is told what sits beside it.
+
+    Measured with one deliberate stop at 620/948 on the same source and the same seeded
+    readings: the interrupted run found 19 characters where the uninterrupted one found 23,
+    with 18 speaker assignments changed - every one after the interruption point, running to
+    the end of the book because the registry merges are global.
+
+    The cost of sending the group whole is bounded by one group: only the group in flight
+    when the run stopped is ever partial, so at most four segments are analysed twice.
+    """
     db = FakeDB()
     db.rows = [
         {
@@ -11345,7 +11381,8 @@ def test_resume_hole_splits_pending_runs_but_keeps_original_neighbor_context_and
 
     analyzer.analyze_all(lambda: False)
 
-    assert target_groups == [["resume-hole-1"], ["resume-hole-3"]]
+    assert target_groups == [["resume-hole-1", "resume-hole-2", "resume-hole-3"]]
+    # Unchanged, and the point: the neighbours were never the thing that was missing.
     assert context_seen["resume-hole-1"]["next_text"] == db.rows[1]["text"]
     assert context_seen["resume-hole-3"]["previous_text"] == db.rows[1]["text"]
     speakers = {data["speaker"] for _segment_id, data, _threshold in db.updated}
