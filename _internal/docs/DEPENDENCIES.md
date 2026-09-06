@@ -190,3 +190,33 @@ scratchpad lúc đo, và ở đó `os.add_dll_directory` lẫn PATH kiểu POSIX
 Model CT2 tải từ `mobiuslabsgmbh/faster-whisper-large-v3-turbo` qua Hugging Face Hub, nằm
 trong `runtime/models/huggingface`. Trên Windows không bật Developer Mode thì cache không
 dùng symlink được và tốn thêm dung lượng — cảnh báo vô hại.
+
+## Hai venv, và cái bẫy mất mười lăm phút (2026-09-06)
+
+Dự án có **hai** môi trường, và chúng không thay thế được cho nhau:
+
+| đường dẫn | dùng cho | có gì |
+|---|---|---|
+| `_internal/.venv` | script, test, truy vấn SQLite | 209 gói, torch 2.13.0, **không có** torchaudio/librosa/transformers/utmosv2 |
+| `_internal/runtime/.venv` | **mọi lệnh CLI thật** | torch 2.11.0+cu128, CUDA True, đủ ngăn xếp ML |
+
+Chạy `python -m ebook_reader.cli resume` bằng `_internal/.venv` cho ra:
+
+```
+BackgroundStartError: High-quality runtime contract is invalid:
+dependency:torch: 2.13.0 (expected 2.11.0+cu128); ...
+dependency:torchaudio: import failed: ModuleNotFoundError
+```
+
+Thông báo ấy **đọc y hệt như một venv vừa bị hỏng**, và nó nêu đúng đường dẫn interpreter
+đang dùng — nhưng không nói rằng đó là interpreter sai. Tôi đã đi tìm kẻ đã gỡ gói: xem
+mtime của `site-packages` (đổi, nhưng chỉ vì `__pycache__`), xem `uv.lock` (không đổi từ
+04-09), tìm tiến trình cài đặt (không có). Chỉ tới khi thấy `torch-2.13.0.dist-info` đề ngày
+**03-08** mới rõ: venv này chưa bao giờ có ngăn xếp ML, và nó không phải venv đang chạy.
+
+**Luôn dùng `_internal/runtime/.venv/Scripts/python.exe` cho mọi lệnh `ebook_reader.cli`.**
+Tài liệu này và `VERSIONS.md` vẫn luôn ghi `runtime/.venv`; cái sai là thói quen gõ tắt.
+
+Dấu hiệu nhận ra ngay: nếu lỗi liệt kê **nhiều** gói cùng thiếu và torch lệch phiên bản
+trong khi một run vừa chạy xong bình thường, đó là sai interpreter, không phải hỏng môi
+trường. Một môi trường hỏng thật thì run đang chạy cũng đã chết.
