@@ -7,9 +7,15 @@ this is not sampling: greedy decoding on a near-tie is at the mercy of GPU arith
 
 The reading is not the expensive part. A drifted name changes the audio of every segment
 containing it, and a verdict binds to a recording - so the drift quietly voids listening
-already spent. Carrying the readings forward fixes the reading, the audio and the verdict at
-once, and `normalize_name_pronunciations` skips any name already locked, so seeded names are
-never sent to the model.
+already spent. Carrying the readings forward removes that cause, and
+`normalize_name_pronunciations` skips any name already locked, so seeded names are never sent
+to the model.
+
+It removes *that* cause, not all of them. Casting drifts between runs too - 27 segments
+between alpha.48 and alpha.50, against 3 drifted names - because the voice allocator ranks on
+how many times each preset has been used, so losing one character upstream shifts every
+character cast after it. Seeding readings does not touch that. Saying this fixes "the audio"
+would be claiming a reproducibility this alone cannot deliver.
 
 These tests pin the refusal above all: seeding after analysis moves the spoken text under
 audio that already exists.
