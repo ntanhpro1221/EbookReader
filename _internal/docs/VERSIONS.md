@@ -1459,3 +1459,36 @@ Tài nguyên: bị siết **85,4 phút (38,2%)** cộng **16 phút chờ RAM** �
 
 **Khoảng cách tới 10/10 giờ chỉ là hai lần nghe**, và cả hai bản thu đã giống hệt từng byte
 qua bốn phiên bản, nên nghe một lần là dùng được mãi.
+
+## XÁC NHẬN: `resume` giữa pha phân tích làm đổi quyển sách (thí nghiệm 2026-09-07)
+
+Thí nghiệm có đối chứng, một biến:
+
+| nhánh | phân tích | nhân vật | đoạn khác người nói so với alpha.51 |
+|---|---|---|---|
+| alpha.51 | liền mạch | **23** | — |
+| `exp_resume_analysis` | **ngắt ở 620/948 rồi `resume`** | **19** | **18**, toàn bộ ở chương 8 |
+
+Cùng code (`5fce9750`), cùng nguồn (`02502ba320`), cùng 112 cách đọc gieo từ alpha.47. Khác
+biệt duy nhất là một lần `stop` rồi `resume` có chủ ý giữa pha phân tích.
+
+Nó **tái hiện đúng dấu vân tay của alpha.50**: cùng tụt 23 → 19 nhân vật, cùng kiểu lệch
+người nói, cùng chỉ lệch *sau* mốc bị ngắt.
+
+**Hệ quả thực tế, và nó nặng:**
+
+> Dừng rồi chạy tiếp giữa pha phân tích **không phải tạm nghỉ — đó là đổi quyển sách.**
+> Người nói khác → sổ nhân vật khác → casting khác → audio khác → **mọi phán quyết của
+> người nghe trên những đoạn ấy hết hiệu lực.**
+
+**Quy tắc rút ra:** đừng `stop` giữa pha phân tích trừ khi chấp nhận mất kết quả phân tích.
+Nếu phải dừng, hãy dừng **sau khi phân tích xong** — lúc ấy `resume` chỉ tiếp tục phần tổng
+hợp, và tổng hợp thì tái lập được (đã chứng minh: chương 1–4 của alpha.51 trùng khít alpha.48).
+
+**Cơ chế vẫn chưa biết.** Không phải chia lại batch — `analysis_candidates` cho thấy 200 vân
+tay nhóm giống hệt nhau giữa lần bị ngắt và lần liền mạch. Ứng viên tiếp theo là ngữ cảnh
+được dựng lại từ database khi resume, khác với ngữ cảnh sống mà lần chạy đầu mang theo. Chưa
+kiểm.
+
+Nhánh thí nghiệm đã dừng sau khi có kết quả; không chạy tiếp phần tổng hợp vì câu hỏi đã được
+trả lời.
