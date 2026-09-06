@@ -11,8 +11,14 @@ over the line too - and removing the pause outright would flatten a hesitation t
 is asking for. The assembler caps it instead.
 
 Measured over 841 takes of alpha.48: leading silence p50 0.11s, p99 0.22s, and exactly two
-takes above 0.5s. The cap at 0.35s is far outside the ordinary spread, so on almost every
-chapter these tests describe a path nothing takes.
+takes above 0.5s.
+
+The trailing edge is the one that fires in practice, and I understated it here at first. Its
+p99 is 0.23s but its maximum is 0.44s, so takes above the 0.35s cap turn up occasionally
+rather than almost never: over alpha.50's first four chapters the cap trimmed one take, by
+0.07s. The chapter's own longest-silence measurement was unchanged by that trim, which is the
+intervention behaving exactly as designed - small, local, and not disturbing the number it
+exists to protect.
 """
 from __future__ import annotations
 
