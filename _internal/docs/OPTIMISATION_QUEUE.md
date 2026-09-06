@@ -150,14 +150,32 @@ Chi tiết và cảnh báo về cách quy thời gian: `docs/THROUGHPUT.md`.
 > chạy, nên "giữ thường trú" nghĩa là để Whisper nằm cạnh pool TTS.
 >
 > Con số VRAM trong mục này (**đỉnh 2.719/8.151 MiB**) được đo khi vòng candidate còn chạy
-> **tuần tự**. Vòng candidate clarity đã dùng pool từ lâu, và nhánh `perf/candidate-pool`
-> vừa nối nốt vòng candidate perceptual — mỗi worker giữ một bản VieNeu, đo được **2,33 GB
-> thường trú trên alpha.47**. Ba worker là ~7 GB trên card 8 GB. Nền cũ không còn dùng để
-> quyết định mục này được nữa.
+> **tuần tự**, nên nó không còn dùng để quyết định được nữa.
 >
-> **Đừng làm mục 2 trước khi đo lại VRAM trong lúc vòng candidate có pool.** Đổi 230 giây —
-> **1,6% một lần chạy** — lấy nguy cơ hết VRAM là món hời tệ: alpha.26 chết ở 357/948 vì
-> đúng loại lỗi ấy, và một lần chạy hỏng đắt gấp năm mươi lần khoản tiết kiệm.
+> **Đo lại trên alpha.50** (158 mẫu, 13,2 phút, run ở `maximum`, pool clarity đang chạy):
+>
+> | | |
+> |---|---|
+> | VRAM p50 | 3.846 MiB |
+> | VRAM p90 | 4.414 MiB |
+> | **VRAM đỉnh** | **4.703 MiB — 58% card** |
+> | còn trống lúc đỉnh | **3.448 MiB** |
+>
+> Lọc riêng 67 mẫu lúc GPU ≥ 50% (tức đang thật sự làm việc): p50 4.387, đỉnh vẫn 4.703.
+>
+> **Sửa một con số tôi tự bịa ra bằng phép nhân.** Bản trước của mục này ghi "ba worker là
+> ~7 GB trên card 8 GB" — tôi lấy 2,33 GB/worker nhân ba, chứ không đo. Đỉnh thật là 4,7 GB.
+> faster-whisper large-v3-turbo cỡ 1,5–2 GB, tức **vẫn còn 1,4–1,9 GB dư** nếu giữ thường
+> trú. Phản đối về VRAM của tôi yếu hơn hẳn những gì tôi đã viết.
+>
+> Vẫn **chưa làm**, nhưng vì lý do khác: phần thưởng là 230 giây — **1,6% một lần chạy** —
+> còn thời điểm rủi ro nhất (pool đủ cỡ *và* Whisper cùng nằm trong VRAM) là thứ hôm nay
+> chưa bao giờ xảy ra, nên chưa ai đo được nó. Muốn làm thì đo đúng khoảnh khắc ấy trước,
+> đừng suy ra như tôi đã làm. alpha.26 chết ở 357/948 vì hết bộ nhớ, và một lần chạy hỏng
+> đắt gấp năm mươi lần khoản tiết kiệm.
+>
+> Cách đo lại: `scratchpad/vram_in_candidate_phase.py` cộng một sampler `nvidia-smi` mỗi 5
+> giây; **lọc bỏ mẫu lúc run bị siết**, nếu không sẽ đo một cái pool đã bị bóp còn 0,25 GPU.
 
 **Đo lại sau khi đổi engine thì mục này nhỏ đi sáu lần.** Whisper vẫn được nạp **189
 lần** mỗi lần chạy, nhưng openai-whisper mất 7,15s mỗi lần (1.502s = 9,6% công việc) còn
