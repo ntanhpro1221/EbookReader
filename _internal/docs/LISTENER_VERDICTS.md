@@ -177,6 +177,20 @@ một phép so **chỉ đọc**, và `ProjectDB` chỉ được dựng — tức
 những vòng thực sự có phán quyết vừa dùng được. Trên một run mười chương, đó là vài lần chứ
 không phải hàng trăm. Nó tự thoát khi run kết thúc.
 
+## Trước khi mời ai đó nghe: kiểm xem nghe có gỡ được không
+
+```bash
+_internal/runtime/.venv/Scripts/python.exe scripts/simulate_acceptance.py "<project-root>"
+```
+
+Nó chép database, ghi thử phán quyết, chạy **cả bốn cổng**, rồi nói chương nào sẽ mở và
+chương nào **vẫn chặn** — tức "nghe đoạn này là phí công".
+
+Đáng làm vì lịch sử: sáu cổng, mỗi cổng chỉ lộ ra khi cổng trước đã thông, và câu "đoạn này
+là cảnh báo duy nhất đang chặn" đã sai **năm lần liên tiếp**. Hai lần `what_blocks_publication.py`
+mời chủ sách đi nghe những đoạn không gỡ được gì. Nghe là thứ khan hiếm nhất ở đây; đừng tiêu
+nó vào một phỏng đoán.
+
 ## Thứ tự chạy, cho người sau
 
 - Chạy `watch_listener_acceptances.py` **song song với run**, ngay từ lúc khởi động.
