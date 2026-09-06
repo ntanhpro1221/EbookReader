@@ -377,17 +377,27 @@ alpha.44 chạy cùng `num_ctx = 7.168`; alpha.43 chạy 9.216. So chỉ dẫn d
 tái lập theo từng bit, và việc chia batch cũng lệch chút ít. Đó là **sàn** của mọi phép so
 sánh giữa hai lần chạy trong dự án này.
 
-> **Sàn ấy đã cũ, đo lại 2026-09-07: nó là 0%.** So `speaker` của cả 948 đoạn giữa alpha.48
-> và alpha.51 — hai lần chạy **liền mạch**, cách nhau nhiều giờ và **ba bản sửa code** — cho
-> **0 đoạn lệch**, và cùng 23 nhân vật, cùng casting không lệch một đoạn.
+> **Đo lại 2026-09-07 trên cặp mới nhất: 0%.** alpha.48 ↔ alpha.51, **đúng bốn trường ấy**
+> (`pace`/`emotion`/`intensity`/`kind`), cả 948 đoạn: **0 đoạn lệch**. `speaker` cũng 0, cùng
+> 23 nhân vật, casting không lệch một đoạn. Hai lần chạy **liền mạch**, cách nhau nhiều giờ
+> và ba bản sửa code.
 >
-> Nên phân tích **có** tất định, và mọi phép so giữa hai lần chạy trong dự án này nhạy hơn
-> con số 3,1% ở trên rất nhiều: một đoạn lệch là một tín hiệu, không phải nhiễu.
+> Ba phép đo trong mục này **không mâu thuẫn nhau** — chúng mô tả ba thời kỳ code khác nhau:
 >
-> Không rõ vì sao số cũ là 3,1% — có thể một trong các lần chạy ấy đã bị ngắt (xem
-> `VERSIONS.md`: một lần `stop`/`resume` giữa pha phân tích làm lệch 18 đoạn và mất 4 nhân
-> vật), hoặc phân tích hồi đó chưa được gieo seed theo nội dung. **Đừng suy; nếu cần con số,
-> đo lại bằng hai lần chạy liền mạch.**
+> | cặp | thời kỳ | khác nhau |
+> |---|---|---|
+> | alpha.32 ↔ .44 ↔ .46 | cũ | 3,1 – 7,4% |
+> | **alpha.48 ↔ alpha.51** | **hiện tại** | **0%** |
+>
+> Nên "nền nhiễu của phân tích" **không phải hằng số của hệ thống**, nó là tính chất của một
+> thời kỳ code — và hiện tại nó bằng 0. Với hôm nay: **một đoạn lệch là một tín hiệu**, và
+> chính vì tin điều đó mà 18 đoạn lệch của alpha.50 mới bị truy tới nơi, thay vì lọt vào
+> "nhiễu bình thường" dưới ngưỡng 7,4%.
+>
+> Vì sao thời kỳ cũ lệch 3,1–7,4% thì **chưa biết** — có thể một lần chạy trong đó đã bị ngắt
+> (xem `VERSIONS.md`: một lần `stop`/`resume` giữa pha phân tích làm lệch 18 đoạn), hoặc
+> phân tích hồi ấy chưa gieo seed theo nội dung. Đừng suy; cần con số thì đo lại bằng hai lần
+> chạy liền mạch **của chính thời kỳ đang xét**.
 
 **Đổi num_ctx làm lệch 11,5%**, và với sàn thật là 0% thì **cả 11,5% ấy là do num_ctx**,
 không phải 11,5% trừ đi một nền nhiễu 3,1%. Kết luận cũ ("nhân sàn lên bốn lần") đọc sai
@@ -483,4 +493,10 @@ bị thổi lên. Nhưng khoảng của hai nhóm nay **chồng lấn** (7,4% so
 không còn phân biệt được hai nguyên nhân nữa.
 
 > Bài học chung: một hằng số rút ra từ **một** cặp quan sát là một mẫu, không phải một sàn.
+>
+> **Và một bài học nữa, thêm 07/09.** Mục này giờ có ba con số cho cùng một đại lượng: 3,1%,
+> 3,1–7,4%, rồi 0%. Không cái nào sai — chúng đo những thời kỳ code khác nhau. Cái sai là
+> gọi bất kỳ cái nào trong đó là "**sàn** của mọi phép so sánh trong dự án này", vì câu ấy
+> biến một quan sát nhất thời thành một hằng số vĩnh viễn. Nền nhiễu phải được **đo lại cho
+> thời kỳ đang xét**, không được kế thừa.
 > Có ba cặp thì nó tăng gấp đôi.
