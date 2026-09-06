@@ -2,11 +2,13 @@
 
 Nghe là tài nguyên khan hiếm nhất của dự án này. Máy có thể chạy cả đêm; chủ sách chỉ ngồi
 nghe được vài chục đoạn. Nên mỗi phán quyết đã cho phải sống qua được mọi bản kế tiếp — và
-suốt alpha.44 → alpha.50 nó liên tục **không** sống được, theo sáu cách khác nhau. Năm cách
-là code — sáu cái cổng, mỗi cái tìm ra bằng cách để một chương chết ở đó, và cái sau chỉ lộ
-ra khi cái trước đã thông. Cách còn lại là
-*thời điểm*, không phải code, và nó là lý do tồn tại của
-`scripts/watch_listener_acceptances.py`.
+suốt alpha.44 → alpha.50 nó liên tục **không** sống được, theo **bảy** cách khác nhau:
+
+- **sáu cái cổng** trong code, mỗi cái tìm ra bằng cách để một chương chết ở đó, và cái sau
+  chỉ lộ ra khi cái trước đã thông. Năm cổng phải sửa; cổng 4 thì không, vì sửa ở đầu nguồn
+  (`accept_failed_segment_audio`) đã lo xong.
+- **một vấn đề thời điểm**, không nằm ở cổng nào cả: phán quyết tới sau khi chương đã bị
+  chấm. Đó là lý do tồn tại của `scripts/watch_listener_acceptances.py`.
 
 ## Một phán quyết là gì
 
