@@ -1254,3 +1254,36 @@ chậm đi.
 **Watcher phán quyết**: chuyển 21 lượt trong suốt run, thoát đúng lúc run kết thúc (bản sửa
 chiều nay thay việc đọc `state.json` bằng đọc heartbeat trong SQLite — xem
 `fix: reading a state file must not be able to kill the run writing it`).
+
+### alpha.51: xổ số cách đọc tên đã đóng
+
+Pha tên in đúng một dòng lúc 21:39:44:
+
+```
+Không còn tên tiếng Anh cần chuẩn hóa cách đọc.
+```
+
+112 cách đọc gieo từ alpha.47, **không cái nào được hỏi lại model**. Đối chiếu:
+
+| | alpha.50 | alpha.51 |
+|---|---|---|
+| tên phải chuẩn hoá | 19 | **0** |
+| thời gian pha tên | ~100 giây | ~0 |
+| vòng lặp "tên lỗi" | 11–12 mỗi batch | **0** |
+
+**Cái đáng giá không phải 100 giây.** Mỗi vòng "tên lỗi" là một lần validator từ chối rồi hỏi
+lại model, tức một cơ hội nữa để nó trả về cách đọc khác lần trước. Bốn lần bốc cho
+`Theosbane` qua bốn bản: `theo-bên` (chủ sách sửa tay), `Theo-bên`, `Thê-ô-ban`, `Theo-bên`.
+
+alpha.51 ghi:
+
+```
+Theosbane -> theo-bên   [listener_choice]
+```
+
+Lần đầu tiên một quyết định của chủ sách sống sang được một project mới thay vì chết theo
+phiên bản sinh ra nó. `Rare` và `Subachim` — hai cái tên trôi khác — cũng ghim ở giá trị
+alpha.47.
+
+Điều này **không** làm audio tái lập được; casting vẫn trôi (xem mục casting ở trên). Nó đóng
+đúng một nguồn trôi trong hai nguồn đã biết.
