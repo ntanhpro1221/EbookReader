@@ -272,3 +272,40 @@ chính xác thì đừng tin quá ba chữ số.
 
 Muốn chắc hơn thì vẫn là thí nghiệm cũ: tổng hợp một câu ngắn ~20 lần với 20 seed rồi chấm.
 Chỉ khác là bây giờ ta đã biết nó sẽ cho ra cái gì.
+
+## Cờ cảm thụ dẫn tới đâu? (đo 2026-09-06, alpha.43 → alpha.48)
+
+Tài liệu này vẫn chỉ đo *giá*. Đây là nửa còn lại: khi nó lên tiếng, nó có đúng không?
+
+| bản | bị cờ | thay bản thu | giữ nguyên | còn cảnh báo |
+|---|---|---|---|---|
+| alpha.43 | 44 | 35 | 0 | 9 |
+| alpha.44 | 41 | 35 | 6 | 0 |
+| alpha.46 | 37 | 32 | 0 | 5 |
+| alpha.47 | 38 | 33 | 0 | 5 |
+| alpha.48 | 20 | 17 | 0 | 3 |
+
+**Điểm chấm là tất định.** 10 file được chấm lại trong cùng một lần chạy, **0 lần đổi phán
+quyết**. Nên cờ không phải nhiễu — giả thuyết đầu tiên của tôi, và nó sai. (Con số lệch
+0,208 đo trước đây là giữa `num_repetitions` 1 và 3, không phải giữa hai lần chạy cùng cấu
+hình.)
+
+Vậy 84% cờ dẫn tới một bản thu **khác thật**, và bản mới chấm đạt. Đó là một lời khẳng định
+rằng phép kiểm tra đáng đồng tiền — và **chưa lời nào từng được kiểm chứng bằng tai**.
+
+Bằng chứng người thật, tất cả những gì có: **22 cờ đi hết vòng sửa mà vẫn còn cảnh báo, 10
+cái tới được tai chủ sách, cả 10 đều được chấp nhận là đọc đúng.** Không một cờ nào từng
+được người xác nhận là bắt đúng lỗi. Nhưng đó là mẫu thiên lệch — chúng đúng là những ca
+vòng sửa chịu thua.
+
+**Thí nghiệm còn làm được.** Cả hai bản thu còn trên đĩa dưới `work/candidates/.../round_000.wav`
+và `round_001.wav`. Hiện còn **13 cặp** trải trên năm bản (2/2/3/3/3). Nghe A/B 13 cặp là
+trả lời được câu hỏi đắt nhất còn treo trong pipeline.
+
+**Nhưng ~90% cặp đã mất.** alpha.47 thay 33 bản thu vì cờ cảm thụ và chỉ giữ được 2 cặp.
+Bằng chứng cho phép kiểm tra tốn kém nhất đang bị xoá đi ngay khi nó được tạo ra. Giữ lại
+bản bị cờ khi sửa vì cảm thụ là việc nên làm, và nó nằm ở `pipeline.py` nên phải chờ hết
+lần chạy này.
+
+Cách đo lại: `scratchpad/perceptual_outcomes.py`, `same_audio_two_verdicts.py`,
+`how_flags_clear.py`, `perceptual_pairs2.py`.

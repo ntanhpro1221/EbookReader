@@ -112,3 +112,42 @@ Chiều đúng phải ngược lại — một tên người đã ghim nên kéo
 
 Trong alpha.47 việc này đã xử tay bằng `pronounce Theosbane "theo-bên"` (11 chỗ dùng tên đơn
 đều chưa được thu lúc ghim, nên cả quyển nhất quán).
+
+## Cái mà anchor thật sự đang đo (đo 2026-09-06, alpha.43 → alpha.48)
+
+Trong năm lần chạy, **12 segment** bị chặn vì `ASR_LOCKED_NAME_ANCHOR_MISMATCH` sau khi đã
+hết mọi vòng sửa. Đọc từng cái một thì lộ ra một khuôn hình:
+
+| tên | ta cho đọc | Whisper viết ra |
+|---|---|---|
+| Scourge | Xờ-cớt | "sờ cướp" |
+| Apex | Ây-pếch | "APEC" |
+| Kaizer | cai-dờ | "Kaiser" |
+| Samael | Xa-men | "Sam Min", "Samen" |
+| Vox | Vóc | "Vogtberlitz" |
+| Spirit | Xờ-pi-rít | "S&P ZIT" |
+
+Không cái nào trong số này là bằng chứng TTS đọc sai. "sờ cướp" và "Xờ-cớt" gần như trùng
+âm; "APEC" là một từ Whisper biết rõ nên mô hình ngôn ngữ của nó bám vào; "Kaiser" chính là
+cách viết gốc của phần tên ấy — tức Whisper *nghe đúng* rồi viết về chính tả tiếng Anh.
+
+**Anchor đang đo lựa chọn chính tả của Whisper, không phải cách phát âm của TTS.** Danh sách
+dạng được chấp nhận có `spoken_form`, `source_spelling`, bản bỏ dấu, và `vietnamese_phoneme_exact`
+— nhưng tất cả đều **khớp tuyệt đối**, và đều áp cho **cả cụm tên một lúc**.
+
+Hai lỗ hổng, đo riêng:
+
+1. **Không cho trộn hai cách.** "Samael Kaizer Theosbane" đọc "Xa-men cai-dờ theo-bên" bị
+   nghe thành "Sam Min **Kaiser** **theo bên**" — một phần theo chính tả Anh, phần kia theo
+   phiên âm của ta. Không dạng nào phủ được hỗn hợp. Trên 12 segment bị chặn, cho phép trộn
+   cứu được **3** (đều là cùng một segment lặp qua các bản).
+2. **Phoneme so tuyệt đối.** 9 segment còn lại mỗi cái kẹt ở **đúng một** thành phần, và
+   phần lớn chỉ lệch một phụ âm cuối. Một phép so khoảng cách phoneme có dung sai nhỏ sẽ bắt
+   được hầu hết — nhưng nới một cổng *đúng-sai* thì phải có tai người xác nhận trước.
+
+**Chưa sửa gì.** Cả hai đều là nới lỏng một cổng tồn tại để bắt tên đọc sai, và bằng chứng
+hiện có là gián tiếp: suy ra từ chính tả Whisper, không phải từ việc nghe. Việc cần làm
+trước là đưa đúng 9 bản thu này cho chủ sách nghe với câu hỏi "tên đọc có đúng không?".
+Nếu phần lớn là đúng, con số đó biện minh cho bản sửa và cũng đo được nó cứu bao nhiêu.
+
+Cách đo lại: `scratchpad/blocking_anchor_mixture.py`.
