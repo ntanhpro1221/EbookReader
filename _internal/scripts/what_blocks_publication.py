@@ -24,6 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS  # noqa: E402
 
+# The chapter error that means the perceptual repair loop never got to run.
+ASR_EVIDENCE_ABORT = "Perceptual QA requires current ASR evidence"
+
 
 def _accepted(connection) -> set:
     """(stable_id, warning_code, wav_sha256) triples a listener has already ruled on.
@@ -83,7 +86,8 @@ def main(project_root: str) -> int:
     connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     chapters = connection.execute(
-        "SELECT id, chapter_index, status, output_mp3 FROM chapters ORDER BY chapter_index"
+        "SELECT id, chapter_index, status, output_mp3, last_error FROM chapters "
+        "ORDER BY chapter_index"
     ).fetchall()
 
     # chapters.output_mp3 keeps the path of a file a previous pass wrote, and a chapter
@@ -107,9 +111,18 @@ def main(project_root: str) -> int:
     # pace gate rejected every take - so no amount of ear helps and it needs more attempts.
     only_ear: list[int] = []
     needs_takes: list[int] = []
+    needs_gate_fix: list[int] = []
+    collateral = 0
     for chapter in chapters:
         if _published(chapter):
             continue
+        # A chapter that died on the perceptual precondition never ran its repair loop, so
+        # its perceptual warnings are what the loop would have re-cut rather than anything a
+        # person needs to rule on. Saying otherwise spends the scarcest resource in the
+        # project on work the machine does for free: alpha.50 chapter 3 listed four such
+        # segments, and the same chapter in alpha.48 - where the loop did run - re-cut
+        # eleven of thirteen and asked for none of them.
+        aborted_before_repair = ASR_EVIDENCE_ABORT in str(chapter["last_error"] or "")
         segments = connection.execute(
             "SELECT stable_id, status, warning_code, wav_path, wav_duration, text, asr_text, "
             "wav_sha256 FROM segments WHERE chapter_id=? ORDER BY seq",
@@ -129,7 +142,12 @@ def main(project_root: str) -> int:
                 continue
             blocking = sorted(codes - HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS)
             for code in blocking:
-                reasons.append(("cảnh báo chặn xuất bản", row, code))
+                is_collateral = aborted_before_repair and code.startswith("PERCEPTUAL")
+                reasons.append((
+                    "chưa chắc cần nghe" if is_collateral else "cảnh báo chặn xuất bản",
+                    row,
+                    code,
+                ))
             if not blocking and _stale_qa_failure(connection, row, accepted):
                 # A layer this report used to be blind to, and it made the report lie.
                 # chapter_segments_have_current_audio_qa demands a passing segment_audio
@@ -143,13 +161,28 @@ def main(project_root: str) -> int:
             if not (row["wav_path"] and Path(str(row["wav_path"])).is_file())
         ]
         if reasons:
-            (needs_takes if missing_audio else only_ear).append(int(chapter["chapter_index"]))
+            genuine = [item for item in reasons if item[0] != "chưa chắc cần nghe"]
+            if not genuine:
+                # Every blocker here is collateral from the aborted repair loop. Listening
+                # would settle nothing; fixing the gate and re-running is what settles it.
+                needs_gate_fix.append(int(chapter["chapter_index"]))
+            else:
+                (needs_takes if missing_audio else only_ear).append(int(chapter["chapter_index"]))
         if not reasons:
             # Nothing in this chapter needs a person; it simply has not been reached yet.
             print(f"ch{chapter['chapter_index']:<3} {chapter['status']} - chưa tới lượt, không có gì chặn")
             continue
         blocked += 1
-        print(f"ch{chapter['chapter_index']:<3} {chapter['status']} - {len(reasons)} chỗ cần quyết định")
+        collateral_here = sum(1 for kind, _row, _code in reasons if kind == "chưa chắc cần nghe")
+        collateral += collateral_here
+        real_here = len(reasons) - collateral_here
+        headline = f"{real_here} chỗ cần quyết định"
+        if collateral_here:
+            headline += (
+                f", + {collateral_here} chỗ có lẽ KHÔNG cần: chương chết trước khi vòng sửa "
+                "cảm thụ kịp chạy"
+            )
+        print(f"ch{chapter['chapter_index']:<3} {chapter['status']} - {headline}")
         for kind, row, code in reasons:
             print()
             print(f"    [{kind}] {row['stable_id']}  ({row['wav_duration'] or 0:.1f}s)  {code}")
@@ -182,16 +215,31 @@ def main(project_root: str) -> int:
         "`accept`; nếu đọc sai thật thì để nguyên, hoặc `retry` để thu lại. Quyết định gắn "
         "với đúng bản thu đó - thu lại là nó hết hiệu lực."
     )
+    if collateral:
+        print()
+        print(
+            f"BỎ QUA {collateral} chỗ đánh dấu [chưa chắc cần nghe]: chương của chúng chết ở "
+            "tiền đề ASR của pha cảm thụ, nên vòng sửa cảm thụ chưa từng chạy. Đó là việc "
+            "máy tự làm - alpha.48 tự cắt lại 11 trên 13 đoạn như vậy ở cùng một chương. "
+            "Sửa cổng rồi chạy lại, còn sót cái nào thì lúc ấy hãy nghe."
+        )
 
     count = len(published)
     print()
     print(f"Đang xuất bản được: {count}/{len(chapters)}")
+    running = count
+    if needs_gate_fix:
+        running += len(needs_gate_fix)
+        print(f"  chỉ cần bản sửa code   : +{len(needs_gate_fix)} chương {needs_gate_fix}"
+              f"  => {running}/{len(chapters)}")
     if only_ear:
-        print(f"  chỉ cần tai người nghe : +{len(only_ear)} chương {only_ear}"
-              f"  => {count + len(only_ear)}/{len(chapters)}")
+        running += len(only_ear)
+        print(f"  cần tai người nghe     : +{len(only_ear)} chương {only_ear}"
+              f"  => {running}/{len(chapters)}")
     if needs_takes:
+        running += len(needs_takes)
         print(f"  cần bản thu mới trước  : +{len(needs_takes)} chương {needs_takes}"
-              f"  => {count + len(only_ear) + len(needs_takes)}/{len(chapters)}")
+              f"  => {running}/{len(chapters)}")
         print("    (những chương này có segment không có audio nào - cổng nhịp từ chối cả "
               "4 lần thử. Nghe không giải quyết được vì không có gì để nghe; xem "
               "docs/PACE_METRIC.md về việc nâng tts.max_retries.)")
