@@ -1381,9 +1381,36 @@ Chuỗi đầy đủ, mỗi mắt xích đều đọc được trong code:
 > 196 batch. Nhưng 200 vân tay trùng khít giữa một lần chạy bị ngắt và hai lần liền mạch là
 > bằng chứng mạnh chống lại việc chia lại nhóm.)
 
-Vậy nguyên nhân trôi casting của alpha.50 **vẫn chưa biết**. Thí nghiệm `exp_resume_analysis`
-vẫn đáng chạy — nó đo thẳng cái cần đo (tập nhân vật sau một lần resume có chủ ý), thay vì
-suy từ một cơ chế.
+Vậy **cơ chế** vẫn chưa biết. Nhưng chỗ rẽ nhánh thì định vị được, và nó rất sạch.
+
+### Phân tích tái lập hoàn hảo — trừ sau chỗ bị ngắt
+
+So `speaker` được gán cho từng đoạn trên cả 948:
+
+| đối chiếu | đoạn khác người nói | đoạn khác `kind` |
+|---|---|---|
+| alpha.48 vs **alpha.51** | **0** | 0 |
+| alpha.48 vs **alpha.50** | **26** | 0 |
+
+Hai lần chạy liền mạch, cách nhau nhiều giờ và nhiều bản sửa, cho ra **đúng cùng một phân
+tích, không lệch một đoạn nào**. Nên phân tích *là* tái lập được — đây là thứ làm mọi phép so
+phiên bản trong tài liệu này có nghĩa.
+
+Và cả 26 đoạn lệch của alpha.50 đều nằm ở **chương 7 và 8**, tức **sau mốc nó bị ngắt**
+(643/948, khoảng cuối chương 6). Ví dụ:
+
+| đoạn | alpha.50 | alpha.48 & .51 |
+|---|---|---|
+| `c00007_s0000056` | `HOÀNG TỬ QUỶ THỨ MƯỜI` | `NOAH` |
+| `c00008_s0000037` | `Juliana` | `HOÀNG TỬ QUỶ THỨ MƯỜI` |
+| `c00008_s0000062` | `HOÀNG TỬ QUỶ THỨ MƯỜI` | `NPC_LOCAL::…::thanh niên` |
+
+Gán sai người nói kéo theo sổ nhân vật (23 → 19) và kéo theo casting (27 đoạn đổi giọng).
+
+**Cái đã biết**: phân tích tái lập được, và alpha.50 chỉ rẽ nhánh sau chỗ nó bị ngắt.
+**Cái chưa biết**: tại sao — vân tay nhóm giống hệt, nên không phải chia lại batch.
+Thí nghiệm `exp_resume_analysis` đo thẳng: cùng code, cùng nguồn, một lần `stop`/`resume` có
+chủ ý ở 620/948.
 
 **Hiệu ứng thì chưa chứng minh — mới là tương quan trên ba lần chạy.** Cách kiểm rẻ nhất: chạy hai bản
 cùng code trên cùng nguồn, một bản để liền mạch, một bản `stop` giữa pha phân tích rồi
