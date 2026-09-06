@@ -2074,14 +2074,28 @@ class BookPipeline:
                 self.perceptual_qa.unload()
                 label = f"Tạo candidate perceptual chapter {chapter['chapter_index']}"
                 self._progress(label, 0, len(generation_jobs))
+                # The clarity repair loop has prefetched its candidates since the pool was
+                # introduced; this one, doing the same work for a perceptual review, was
+                # left synthesizing them one at a time beside an idle pool.
+                prefetched_candidates = self._prefetch_candidate_batch(generation_jobs)
                 for index, (segment, candidate) in enumerate(generation_jobs, 1):
                     self._resource_gate(
                         f"candidate perceptual chapter {chapter['chapter_index']} "
                         f"segment {segment['seq']}",
                         keep_engine=None,
                     )
-                    self._process_segment_candidate(segment, candidate, chapter)
+                    self._process_segment_candidate(
+                        segment,
+                        candidate,
+                        chapter,
+                        prefetched=prefetched_candidates.pop(
+                            str(segment["stable_id"]), None
+                        ),
+                    )
                     self._progress(label, index, len(generation_jobs))
+                # Each worker holds a VieNeu copy and the scoring that follows needs the
+                # VRAM, the same reason the clarity loop closes the pool here.
+                self._close_synthesis_pool()
                 self.tts.unload_all()
                 progressed = True
                 continue
@@ -3899,6 +3913,17 @@ class BookPipeline:
                         int(candidate["repair_round"]), 0, variant
                     ),
                     "kwargs": {
+                        # _process_segment_candidate synthesizes with repair_short_utterance
+                        # True, and the claim can only check the seed, the file and its
+                        # checksum - never the generation parameters. Omitting this here let
+                        # a worker build a take under a different frame cap that the loop
+                        # would then accept as its own. It has never happened: the flag only
+                        # bites when a short utterance also carries
+                        # TTS_GENERATION_CEILING_REACHED, which is 0 of 1,604 attempt-0
+                        # candidates across alpha.43 to alpha.49. Passed anyway, because
+                        # "the two paths agree" is a property worth having by construction
+                        # rather than by luck.
+                        "repair_short_utterance": True,
                         "delivery_mode": DELIVERY_CLARITY,
                         "pronunciation_delivery_variant": variant,
                     },
