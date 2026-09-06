@@ -969,8 +969,32 @@ Kèm theo đó là dấu hiệu "ramp bị reset": `yield_light — ramping afte
 hiện 31 lần, **26 lần chết trong 2 giây**, đúng 1 lần đi hết 28/28. Trên máy bận thì đó là
 hệ quả chứ không phải lỗi. Chỉ đáng xem lại nếu thấy khuôn hình ấy trên một máy **rảnh**.
 
-**Đừng so tổng thời lượng alpha.50 với alpha.48.** Một bản nhường máy 23% thời gian thì dài
-hơn là đương nhiên; muốn so tốc độ thì so phần `maximum`.
+### Còn một loại thời gian nữa mà phép đo trên **không** tính: đứng chờ RAM
+
+`resource_share.py` chia thời gian theo *chế độ*, nhưng pipeline còn có thể **dừng hẳn ở một
+checkpoint an toàn** và chờ RAM. alpha.50:
+
+| số lần | mỗi lần (giây) |
+|---|---|
+| 3 | 16 |
+| 1 | 31 |
+| 2 | 77 |
+| 1 | **904** |
+
+**Tổng 1.137 giây ≈ 19 phút**, gần như dồn hết vào một lần chờ 15 phút. RAM khả dụng có lúc
+tụt còn **1,2 GB**.
+
+Hai điều rút ra:
+
+1. **Sàn RAM không tuyệt đối.** Sau ~14 phút chờ, nó chạy tiếp ở **2,6 GB** — dưới sàn 3,5.
+   Có đường thoát để khỏi treo vĩnh viễn, và đó là thiết kế đúng; chỉ cần biết là con số 3,5
+   là mục tiêu chứ không phải điều kiện cứng.
+2. **Đo tỉ lệ siết theo chế độ vẫn chưa đủ.** Muốn biết một lần chạy mất bao nhiêu vì áp lực
+   tài nguyên thì phải cộng cả thời gian chờ:
+   `grep -ao "sau [0-9]*s chờ" logs/ebook_reader.log`.
+
+**Đừng so tổng thời lượng alpha.50 với alpha.48.** Một bản nhường máy 23% thời gian *và* đứng
+chờ RAM thêm 19 phút thì dài hơn là đương nhiên; muốn so tốc độ thì so phần `maximum`.
 
 Cách đo lại: `scratchpad/resource_share.py` (tỉ lệ theo chế độ) và
 `scratchpad/resource_reasons.py` (tách theo nguyên nhân).
