@@ -23,8 +23,18 @@ cd _internal
   --output-root "D:/Novels/Audiobooks/_versions/<tag>" \
   --source-dir "D:/Novels/Tools/Text" \
   --range "000..009" --width 3 --title "<tag>" --profile high_quality --json
+./runtime/.venv/Scripts/python.exe scripts/port_pronunciations.py "<project trước>" "<project-root>"
 ./runtime/.venv/Scripts/python.exe -m ebook_reader.cli run "<project-root>" --json
 ```
+
+`port_pronunciations.py` chạy **giữa `create` và `run`**, không lúc nào khác. Cách đọc một
+cái tên không ổn định giữa các lần chạy — đo trên 112 tên: alpha.46 lệch 4, alpha.49 lệch 3,
+alpha.47 lệch 0 — và mỗi cái tên trôi làm đổi audio của mọi segment chứa nó, tức xoá luôn
+phán quyết người nghe đã cho cho những segment ấy. `normalize_name_pronunciations` bỏ qua tên
+đã có cách đọc khóa, nên gieo sẵn bảng là những tên đó không bao giờ được gửi lên model.
+
+Nó **từ chối** một project đã phân tích segment: đổi cách đọc sau lúc ấy làm trôi spoken text
+dưới audio đã có — đúng cái bẫy khiến `pronounce` phải từ chối chạy giữa chừng.
 
 > **Nguồn phải là `D:/Novels/Tools/Text`, không phải `Text_Tmp`.** Chỗ này từng ghi sai và
 > đã tốn một lần chạy: alpha.46 lần đầu được tạo từ `Ebook Reader/Text_Tmp`, ra 995 segment
