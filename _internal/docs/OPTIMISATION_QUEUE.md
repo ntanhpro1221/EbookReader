@@ -145,6 +145,20 @@ Chi tiết và cảnh báo về cách quy thời gian: `docs/THROUGHPUT.md`.
 
 ## 2. Giữ Whisper thường trú **trong vòng sửa** — ~230s (đã hạ từ ~1.400s)
 
+> **Chưa ship, và mục 1 vừa làm nó khó hơn** (2026-09-06). `verifier.unload()` vẫn được gọi
+> ở cả bốn chỗ trong vòng sửa (`pipeline.py` 2073, 2121, 5207, 5284) — chúng nhả VRAM để TTS
+> chạy, nên "giữ thường trú" nghĩa là để Whisper nằm cạnh pool TTS.
+>
+> Con số VRAM trong mục này (**đỉnh 2.719/8.151 MiB**) được đo khi vòng candidate còn chạy
+> **tuần tự**. Vòng candidate clarity đã dùng pool từ lâu, và nhánh `perf/candidate-pool`
+> vừa nối nốt vòng candidate perceptual — mỗi worker giữ một bản VieNeu, đo được **2,33 GB
+> thường trú trên alpha.47**. Ba worker là ~7 GB trên card 8 GB. Nền cũ không còn dùng để
+> quyết định mục này được nữa.
+>
+> **Đừng làm mục 2 trước khi đo lại VRAM trong lúc vòng candidate có pool.** Đổi 230 giây —
+> **1,6% một lần chạy** — lấy nguy cơ hết VRAM là món hời tệ: alpha.26 chết ở 357/948 vì
+> đúng loại lỗi ấy, và một lần chạy hỏng đắt gấp năm mươi lần khoản tiết kiệm.
+
 **Đo lại sau khi đổi engine thì mục này nhỏ đi sáu lần.** Whisper vẫn được nạp **189
 lần** mỗi lần chạy, nhưng openai-whisper mất 7,15s mỗi lần (1.502s = 9,6% công việc) còn
 faster-whisper chỉ mất **1,31s** (~248s = 1,6%). alpha.43 đang chạy engine mới, nên nền để
