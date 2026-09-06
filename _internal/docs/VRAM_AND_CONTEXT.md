@@ -389,9 +389,13 @@ sánh giữa hai lần chạy trong dự án này.
 > vật), hoặc phân tích hồi đó chưa được gieo seed theo nội dung. **Đừng suy; nếu cần con số,
 > đo lại bằng hai lần chạy liền mạch.**
 
-**Đổi num_ctx nhân sàn ấy lên khoảng bốn lần**, 3,1% → 11,5%. Và 11,5% ấy khớp gần khít với
-11,3% segment có *âm thanh khác* đã đo giữa alpha.32 và alpha.43 (107/944). Chuỗi nhân quả
-vì thế khép lại: **ngữ cảnh → chỉ dẫn diễn xuất → âm thanh → kết cục.**
+**Đổi num_ctx làm lệch 11,5%**, và với sàn thật là 0% thì **cả 11,5% ấy là do num_ctx**,
+không phải 11,5% trừ đi một nền nhiễu 3,1%. Kết luận cũ ("nhân sàn lên bốn lần") đọc sai
+theo hướng làm nhẹ đi: hiệu ứng lớn hơn những gì nó nói.
+
+11,5% ấy khớp gần khít với 11,3% segment có *âm thanh khác* đã đo giữa alpha.32 và alpha.43
+(107/944). Chuỗi nhân quả vì thế khép lại: **ngữ cảnh → chỉ dẫn diễn xuất → âm thanh →
+kết cục.** Sàn 0% làm chuỗi này *chặt hơn*, vì không còn phần dư nào để đổ cho nhiễu.
 
 ### Thấy được ở hai segment cụ thể
 
