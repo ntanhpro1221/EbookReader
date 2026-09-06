@@ -1183,3 +1183,37 @@ nên phép ánh xạ không mơ hồ.
 `port_pronunciations.py` mang cách đọc tên — gieo trước khi chạy thì audio ổn định, và công
 nghe của chủ sách sống qua được các bản. Chưa làm; ghi ở đây vì nó là ứng viên lớn nhất còn
 lại cho việc bảo vệ thứ tài nguyên khan hiếm nhất.
+
+### alpha.50 khép lại: 6/10 chương, và bốn chương hỏng đều đoán trước được
+
+Xuất được **1, 2, 4, 6, 8, 9** — 56 phút audio. Bốn chương hỏng:
+
+| chương | chết vì | gỡ bằng |
+|---|---|---|
+| 3 | cổng thứ sáu (`c00003_s0000029`) | bản sửa code |
+| 5 | `c00005_s0000013` chưa ai nghe | tai chủ sách |
+| 7 | cổng thứ sáu (`c00007_s0000074`) | bản sửa code |
+| 10 | cổng thứ sáu (`c00010_s0000016`) | code **+** tai (`c00010_s0000017`) |
+
+**Cả bốn đều đã được dự báo đúng từ 17:15**, bằng quy tắc "chỉ phán quyết họ ASR mới chạm cửa
+thứ sáu" (xem `LISTENER_VERDICTS.md`) — chứ không phải phát hiện dần qua ba tiếng.
+
+**Thắng lợi đã kiểm chứng:** chương 8 xuất ngay lần đầu với lặng dài nhất **0,72s**, so với
+1,02s (hỏng) ở alpha.48. Bản chặn lặng-hai-đầu cắt đúng 0,65s khỏi đúng bản thu đã khoanh
+vùng. Xem `ONSET_CLICK.md`.
+
+**Máy bận chi phối thời lượng.** Trên 263 phút chạy thật:
+
+| | |
+|---|---|
+| bị siết | **147,8 phút — 56,1%** |
+| trong đó `yield_heavy` | 92,5 phút |
+| chờ RAM ở checkpoint | **34 phút** |
+
+Nên **đừng so tổng thời lượng alpha.50 với bản nào khác**. Hơn một nửa lần chạy là nhường
+máy cho chủ sách, và đó là bộ quản lý tài nguyên làm đúng việc — không phải ba bản sửa làm
+chậm đi.
+
+**Watcher phán quyết**: chuyển 21 lượt trong suốt run, thoát đúng lúc run kết thúc (bản sửa
+chiều nay thay việc đọc `state.json` bằng đọc heartbeat trong SQLite — xem
+`fix: reading a state file must not be able to kill the run writing it`).
