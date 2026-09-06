@@ -298,14 +298,18 @@ cái tới được tai chủ sách, cả 10 đều được chấp nhận là �
 được người xác nhận là bắt đúng lỗi. Nhưng đó là mẫu thiên lệch — chúng đúng là những ca
 vòng sửa chịu thua.
 
-**Thí nghiệm còn làm được.** Cả hai bản thu còn trên đĩa dưới `work/candidates/.../round_000.wav`
-và `round_001.wav`. Hiện còn **13 cặp** trải trên năm bản (2/2/3/3/3). Nghe A/B 13 cặp là
-trả lời được câu hỏi đắt nhất còn treo trong pipeline.
+**Thí nghiệm làm được, và không thiếu vật liệu.** Sổ cái `segment_candidates` ghi mọi lần
+sửa vì cảm thụ: `candidate_repair_requirement='naturalness_improvement_v1'`, `state='promoted'`,
+với `incumbent_sha256` là bản bị loại và `wav_sha256` là bản được đưa lên thay. **Cả hai bản
+đều còn trên đĩa, 30/30 ở alpha.47.** Tổng cộng 140 cặp trên năm bản.
 
-**Nhưng ~90% cặp đã mất.** alpha.47 thay 33 bản thu vì cờ cảm thụ và chỉ giữ được 2 cặp.
-Bằng chứng cho phép kiểm tra tốn kém nhất đang bị xoá đi ngay khi nó được tạo ra. Giữ lại
-bản bị cờ khi sửa vì cảm thụ là việc nên làm, và nó nằm ở `pipeline.py` nên phải chờ hết
-lần chạy này.
+> **Sửa lại một khẳng định sai của chính tài liệu này.** Bản trước ghi "chỉ còn 13 cặp" và
+> "~90% bằng chứng đã bị xoá". Cả hai đều sai, và cùng một nguyên nhân: tôi dựng đường dẫn
+> thư mục candidate từ `seq` của segment, trong khi thư mục được đặt tên theo `segment_id`.
+> Hai số ấy trùng nhau đủ thường xuyên để không lộ ra ngay. Không có bằng chứng nào bị xoá
+> cả. Bài học: `segment_candidates` có sẵn checksum của cả hai bản — **tra theo checksum,
+> đừng đoán đường dẫn**, và kiểm lại chiều của mỗi cặp (bản bị loại phải có phán quyết
+> `review`, bản giữ phải `ok`) trước khi đưa cho ai nghe.
 
 Cách đo lại: `scratchpad/perceptual_outcomes.py`, `same_audio_two_verdicts.py`,
 `how_flags_clear.py`, `perceptual_pairs2.py`.
