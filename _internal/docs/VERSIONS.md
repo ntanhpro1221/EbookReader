@@ -1125,3 +1125,35 @@ Hệ quả: **reconciler vẫn chưa từng chạy thật.** Nó có test, nhưn
 Bốn lần bốc cho cùng một cái tên tới giờ: `theo-bên` (người sửa), `Theo-bên`, `Thê-ô-ban`,
 `Theo-bên`. Cách chặn đứng cái xổ số ấy không phải reconciler mà là
 `port_pronunciations.py` — gieo sẵn cách đọc trước khi chạy, dùng từ alpha.51.
+
+## Casting trôi giữa các bản, và nó đắt hơn trôi cách đọc tên (đo 2026-09-06)
+
+Đối chiếu `voice_profile_id` của cả 948 đoạn:
+
+| đối chiếu | số đoạn đổi giọng |
+|---|---|
+| alpha.46 ↔ alpha.48 | 80 (**8,4%**) |
+| alpha.47 ↔ alpha.48 | **0** |
+| alpha.50 ↔ alpha.48 | 27 (**2,8%**) |
+
+Ví dụ: `c00006_s0000028` đi từ `preset_ngoc_linh_f093_p+00` sang `preset_doan_trang_f108_p+00`
+— khác cả giọng lẫn cao độ.
+
+**Vì sao đắt.** `generation_seed = stable_int("segment::{stable_id}::{voice_key}::{salt}")`,
+nên đổi giọng là **đổi seed là đổi audio**. Mỗi đoạn trôi kéo theo:
+
+- phán quyết của chủ sách trên đoạn ấy **hết hiệu lực** (phán quyết gắn với bản thu);
+- toàn bộ bằng chứng QA của đoạn phải chấm lại;
+- và nếu đoạn ấy nằm trong chương đang chờ xuất, chương ấy quay lại vạch xuất phát.
+
+27 đoạn nhiều hơn hẳn 3 cái tên trôi ở `port_pronunciations.py`, và cùng một hậu quả.
+
+**Chưa biết nguyên nhân.** alpha.47 → alpha.48 trôi **0 đoạn**, nên trôi không phải điều tất
+yếu — có gì đó trong alpha.49/50 làm nó xê dịch (cả hai đều đụng `analysis.py`). Đừng đoán;
+đo bằng cách so `voice_profile_id` giữa hai bản liền nhau và xem đoạn nào đổi.
+
+**Hướng sửa có sẵn hình dạng.** `book_status` đã có cờ `casting_finalized`, tức casting *đã*
+được khóa trong phạm vi một project. Việc còn thiếu là mang nó **sang project mới**, đúng như
+`port_pronunciations.py` mang cách đọc tên — gieo trước khi chạy thì audio ổn định, và công
+nghe của chủ sách sống qua được các bản. Chưa làm; ghi ở đây vì nó là ứng viên lớn nhất còn
+lại cho việc bảo vệ thứ tài nguyên khan hiếm nhất.
