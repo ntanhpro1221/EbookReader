@@ -1788,8 +1788,22 @@ class BookPipeline:
         prefetched_scores = self._collect_perceptual_prefetch(chapter_id)
         if not prefetched_scores:
             prefetched_scores = self._prefetch_perceptual_scores(pending, label)
+        accepted_takes = set(self.db.accepted_segment_warnings())
         for index, row in enumerate(pending, 1):
-            if not self.db.segment_audio_is_current_qa_verified(
+            # The sixth gate to overrule a listener, and it only became reachable because the
+            # five before it were fixed: the segment now keeps `warning` instead of being
+            # marked failed, so the run walks on to here instead of stopping earlier.
+            #
+            # An acceptance deliberately leaves the machine's ASR verdict at `fail` - a person
+            # overruled it rather than it changing its mind - so demanding a passing ASR check
+            # before scoring refuses exactly the takes an acceptance exists to release, and
+            # the chapter dies with PERCEPTUAL_ASR_EVIDENCE_MISSING. alpha.50 chapter 3 hit
+            # it on c00003_s0000029, whose verdict was given on 2026-09-04 and whose audio is
+            # byte-identical to what was heard.
+            #
+            # Keyed by artifact like every other use, so a re-cut take is judged on its own.
+            heard = (str(row["stable_id"]), str(row["wav_sha256"] or "")) in accepted_takes
+            if not heard and not self.db.segment_audio_is_current_qa_verified(
                 int(row["id"]),
                 str(row["wav_sha256"] or ""),
                 SEGMENT_AUDIO_QUALITY_STAGE,
