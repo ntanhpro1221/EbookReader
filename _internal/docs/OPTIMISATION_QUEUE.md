@@ -169,10 +169,15 @@ nếu mục 1 đã làm xong thì đánh đổi ấy còn tệ hơn** — pool c
 > | alpha.46 | 7.168 | 67m14s (4.034s) |
 > | alpha.47 | 7.168 | 64m13s (3.853s) |
 > | alpha.48 | 7.168 | **64m01s (3.841s)** |
+> | alpha.49 | 7.168 | 64m05s (3.845s) |
 >
 > Dự đoán tiết kiệm **639s**; thực tế **638s** (4.479 → 3.841). Hiếm khi một dự đoán trúng
-> sát thế, nên ghi lại cả hai con số. alpha.46 chậm hơn hai bản sau ~190s — cùng cấu hình,
-> nên phần chênh ấy là nhiễu tải máy chứ không phải num_ctx.
+> sát thế, nên ghi lại cả hai con số.
+>
+> Ba lần chạy cuối ở cùng cấu hình cho 3.841 / 3.845 / 3.853 giây — **chênh 12 giây trên
+> 64 phút, tức 0,3%**. Pha phân tích vì thế là một mốc so sánh dùng được: lần sau lệch quá
+> vài chục giây thì đó là thay đổi thật, không phải nhiễu. alpha.46 chậm hơn ~190s ở đúng
+> cấu hình ấy, nên nó là tải máy chứ không phải num_ctx.
 >
 > Cách đo lại: mốc đầu và mốc cuối của dòng `Đang phân tích batch` trong
 > `logs/ebook_reader.log`.
