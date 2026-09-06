@@ -266,6 +266,8 @@ HOST_DESPERATE_EXERTION_NONASSERTIVE_PREFIX_PATTERN = re.compile(
 )
 MAX_PRONUNCIATIONS_PER_BATCH = 32
 NAME_PRONUNCIATION_BATCH_SIZE = 12
+# Marks a reading this machine rewrote to agree with itself, not one it proposed fresh.
+NAME_COMPONENT_CONSISTENCY_SOURCE = "name_component_consistency"
 """Twelve, because this constant is what sets the analysis context window.
 
 config.analysis_context_window derives num_ctx from the largest request the profile makes,
@@ -9350,7 +9352,53 @@ class OllamaBookAnalyzer:
             f"Đã khóa cách đọc thuần Việt cho {converted_count}/{len(candidates)} "
             "tên tiếng Anh hoặc fantasy cần xem xét."
         )
+        self._reconcile_name_components()
         return converted_count
+
+    def _reconcile_name_components(self) -> int:
+        """Make one name read one way, once every reading for the book exists.
+
+        Readings are proposed per surface and locked as each is validated, so nothing in
+        that loop can compare "Theosbane" against the "Theosbane" inside "Samael Kaizer
+        Theosbane". alpha.49 locked `Thê-ô-ban` for the bare name and `theo-bên` inside both
+        full names - the family name of the protagonist, read two ways, across four of the
+        ten chapters. alpha.47 had the same split and it was a person who repaired it, by
+        hand, with `pronounce`; alpha.48 only agreed by luck, differing in case alone.
+
+        So it has to run here, after the whole set is locked, and it has to be able to
+        rewrite a lock - which is why it goes through `relock_machine_pronunciation` and not
+        `upsert_pronunciation`. That method refuses `listener_choice`, so the one thing this
+        cannot do is overrule the person it is imitating.
+        """
+        readings = {
+            str(row["surface"]): str(row["spoken_form"])
+            for row in self.db.list_pronunciations()
+        }
+        corrections = name_component_corrections(readings)
+        applied = 0
+        for surface, corrected in corrections.items():
+            if not self.db.relock_machine_pronunciation(
+                normalized_surface=_name_candidate_key(surface),
+                spoken_form=corrected,
+                source=NAME_COMPONENT_CONSISTENCY_SOURCE,
+            ):
+                continue
+            applied += 1
+            self.db.event(
+                "info",
+                "NAME_COMPONENT_READING_UNIFIED",
+                f"{surface}: {readings[surface]!r} -> {corrected!r} cho khớp cách đọc "
+                "trong tên đầy đủ",
+                {
+                    "surface": surface,
+                    "was": readings[surface],
+                    "now": corrected,
+                },
+            )
+            self.log(
+                f"Thống nhất cách đọc {surface}: {readings[surface]} -> {corrected}"
+            )
+        return applied
 
     def release_model(self) -> None:
         """Unload Qwen from Ollama VRAM while keeping the HTTP session reusable."""

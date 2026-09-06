@@ -30,6 +30,7 @@ from .config import (
     validate_settings,
 )
 from .database import (
+    LISTENER_PRONUNCIATION_SOURCE,
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
@@ -835,9 +836,6 @@ def _command_log(args: argparse.Namespace) -> CommandResult:
 
     content = tail_log(paths.root, lines=int(args.lines))
     return CommandResult(data={"project_root": str(paths.root), "lines": int(args.lines), "log": content})
-
-
-LISTENER_PRONUNCIATION_SOURCE = "listener_choice"
 
 
 def _command_retry(args: argparse.Namespace) -> CommandResult:

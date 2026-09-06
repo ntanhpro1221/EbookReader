@@ -77,6 +77,10 @@ SCHEMA_VERSION = 13
 QUALITY_SCOPE_SEGMENT = "segment"
 QUALITY_SCOPE_CHAPTER = "chapter"
 QUALITY_SCOPES = {QUALITY_SCOPE_SEGMENT, QUALITY_SCOPE_CHAPTER}
+# The one pronunciation source that means a person listened and decided. Defined here
+# rather than in cli.py because the table lives here and `relock_machine_pronunciation` has
+# to know what it must never touch; cli.py imports it back.
+LISTENER_PRONUNCIATION_SOURCE = "listener_choice"
 SEGMENT_AUDIO_QUALITY_STAGE = "segment_audio_v1"
 SEGMENT_ASR_DECODE_QUALITY_STAGE = "segment_asr_decode_v1"
 SEGMENT_PERCEPTUAL_QUALITY_STAGE = "segment_perceptual_v1"
@@ -8231,6 +8235,48 @@ class ProjectDB:
                     (minimum_confidence,),
                 )
             )
+
+    def relock_machine_pronunciation(
+        self,
+        *,
+        normalized_surface: str,
+        spoken_form: str,
+        source: str,
+    ) -> bool:
+        """Rewrite a locked reading the machine wrote. Never one a person chose.
+
+        `upsert_pronunciation` refuses every locked row, which is right for a fresh proposal:
+        a lock is what stops a transliteration overwriting a decision. But a name read two
+        ways in one book is a defect that can only be repaired *after* both readings exist,
+        and by then both are locked - so the repair had nowhere to go and the detector that
+        finds it sat unused for two versions.
+
+        The line this draws is the source, not the lock. `listener_choice` is the one source
+        that means a person listened and decided; nothing here may touch it. Everything else
+        is the machine's own guess, and the machine is allowed to correct its own guess.
+
+        Returns True when a row actually changed, so the caller can say what it did rather
+        than assume.
+        """
+        key = str(normalized_surface).strip()
+        reading = str(spoken_form).strip()
+        if not key or not reading:
+            raise ValueError("normalized_surface and spoken_form are both required")
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT source, spoken_form FROM pronunciations WHERE normalized_surface=?",
+                (key,),
+            ).fetchone()
+            if row is None or str(row["source"]) == LISTENER_PRONUNCIATION_SOURCE:
+                return False
+            if str(row["spoken_form"]) == reading:
+                return False
+            conn.execute(
+                "UPDATE pronunciations SET spoken_form=?, source=?, updated_at=? "
+                "WHERE normalized_surface=?",
+                (reading, str(source), time.time(), key),
+            )
+        return True
 
     def upsert_voice_profile(self, data: dict[str, Any]) -> int:
         now = time.time()
