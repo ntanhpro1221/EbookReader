@@ -40,6 +40,13 @@ Không đổi sang phân tích cuốn chiếu nếu người dùng chưa thay đ
 
 ## Invariant an toàn
 
+- **Trong lúc pha phân tích chạy, đừng chạy việc nặng nào khác trên máy** — kể cả `pytest`.
+  Phân tích của dự án này tái lập hoàn hảo: alpha.48, .49 và .51 giống nhau **từng byte**.
+  alpha.52 lệch **54 phân vai** so với cả ba, và hình dạng là *một* nhóm lệch ở thứ 45/201 rồi
+  lan ra 57 nhóm phía sau, vì registry nhân vật mang cái lệch ấy đi tiếp. Lúc nhóm 45 chạy thì
+  tôi đang chạy một lượt pytest đầy đủ. Chưa chứng minh được nhân quả (một quan sát, không phải
+  thí nghiệm), nhưng chờ thì tốn **không gì cả**, còn đoán sai thì tốn cả một quỹ đạo phân tích.
+  Chi tiết: `docs/VERSIONS.md`.
 - `interactive_prompts=false`; pipeline/worker không mở prompt hoặc `QMessageBox`.
 - CLI `status`/`report`/`log` và `create --dry-run` là read-only: không mkdir, migrate SQLite, recovery,
   dọn lease hay chạm file control; SQLite đang chạy phải được đọc bằng URI `mode=ro`, không dùng `immutable=1` vì có WAL.
