@@ -573,10 +573,37 @@ chọn nằm ở vòng nào?*
 **106 trên 641 segment (16,5%) lấy bản thu thắng cuộc từ vòng 2 trở đi.** Cắt ngân sách xuống
 2 vòng là vứt đúng 106 segment ấy — mỗi cái là một chương không xuất được.
 
-Chú ý cột `v3` cao hơn `v2` ở cả sáu bản. Không phải nhiễu: vòng 3 là chỗ máy đổi *chiến lược*
-sinh chứ không chỉ đổi seed. Vòng 2 chỉ gieo lại thì hiếm khi thoát; đổi cách sinh thì thoát
-được. Ai muốn cắt thì cắt vòng 2, đừng cắt vòng 3 — nhưng vòng 2 rẻ nhất trong ba vòng nên
-cắt cũng chẳng được bao nhiêu.
+Chú ý cột `v3` cao hơn `v2` ở cả sáu bản. Tôi đoán đầu tiên là "vòng 3 đổi chiến lược sinh" —
+**sai**: `generation_strategy` là `direct_v1` suốt vòng 0–3, `split_v1` mãi vòng 4 mới xuất hiện.
+
+Thứ thật sự luân phiên là `pronunciation_delivery_variant`, tức **văn bản đưa cho TTS**:
+
+| vòng | `locked_spoken_v1` | `source_spelling_v1` |
+|---|---|---|
+| 0 | 641 | – |
+| 1 | 123 | **338** |
+| 2 | 291 | – |
+| 3 | 84 | **183** |
+| 4 | 104 | 104 |
+
+Vòng **chẵn** thu lại bằng đúng cách đọc đã khoá, chỉ khác seed. Vòng **lẻ** đưa cho TTS
+*chính tả gốc* thay cho dạng phiên âm. Đó là lý do v1 và v3 ăn đứt v0 và v2 — đổi đầu vào thì
+thoát được, gieo lại thì hiếm.
+
+Và bản thân tỉ lệ thắng của hai biến thể cũng đáng ghi:
+
+| biến thể | được chọn |
+|---|---|
+| `locked_spoken_v1` | 251/848 = **29,6%** |
+| `source_spelling_v1` | 199/558 = **35,7%** |
+
+`source_spelling_v1` chỉ được thử trên những segment **đã trượt** với `locked_spoken_v1`, tức
+một tập khó hơn hẳn — vậy mà vẫn thắng cao hơn 6 điểm. Nói cách khác: với một phần đáng kể tên
+riêng, **đưa chính tả gốc cho TTS đọc lại đúng hơn là đưa phiên âm ta soạn**. Chưa đủ để đảo
+thứ tự (phiên âm vẫn phải đi trước, vì nó là thứ chủ sách duyệt), nhưng đủ để không ai nên bỏ
+vòng lẻ đi.
+
+Ai muốn cắt thì cắt vòng 2 — vòng gieo-lại-thuần — đừng cắt vòng lẻ.
 
 **Bài học rộng hơn, đáng nhớ hơn con số:** khi đếm để quyết định bỏ một cơ chế, kiểm xem mẫu số
 có bị chính những ca thất bại nhồi lên không. Đếm theo *lượt* thì cơ chế nào cũng trông vô dụng,
