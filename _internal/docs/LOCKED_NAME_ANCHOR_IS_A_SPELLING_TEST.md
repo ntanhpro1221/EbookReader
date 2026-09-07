@@ -585,3 +585,47 @@ Chế độ so `vietnamese_phoneme_exact` lẽ ra phải xử được `Xa`/`Sa`
 xử được ở đây, và tôi **chưa biết vì sao** — nghi là do máy nghe tách thành năm token
 (`Sa-men` `Kai` `dở` `theo` `bên`) trong khi khoá có ba thành phần, nhưng đó là giả thuyết chưa
 kiểm. Ghi lại làm điểm khởi đầu, không phải kết luận.
+
+### Nguyên nhân gốc, và nó nhỏ hơn tưởng: `k` với `c`
+
+Truy bằng cách gọi thẳng các hàm neo, không cần chạy máy. Ba thành phần tách đúng, và **chỉ
+một cái trượt**:
+
+| thành phần | khớp với gì trong bản ghi |
+|---|---|
+| `Samael` ← `Xa`,`men` | `Sa-men` ✓ |
+| `Kaizer` ← `cai`,`dờ` | **không có** ✗ |
+| `Theosbane` ← `theo`,`bên` | `theobên` ✓ |
+
+Thử từng biến thể của span thì tách được nguyên nhân:
+
+| span | khớp? |
+|---|---|
+| `caidở` | **có** — dù `dở` khác thanh với `dờ` |
+| `Kaidở`, `Kaidờ`, `kaidờ` | **không** |
+
+**Dấu thanh chưa bao giờ là vấn đề.** Chỉ `k` với `c`.
+
+Tiếng Việt viết âm /k/ là `c` ở mọi chỗ trừ trước `i, e, ê, y` — nên `kai` không phải chính tả
+tiếng Việt, và bộ chuyển âm vị đọc thứ nó không nhận ra như tiếng Anh:
+
+| tiếng Việt | Whisper viết |
+|---|---|
+| `cai` → `kˈaːj` | `kai` → `kˈaɪ` |
+| `co` → `kˈɔ` | `ko` → `kˈoʊ` |
+| `ci` → `sˈaɪ` (!) | |
+
+### Đã sửa 2026-09-08 06:20
+
+`_fold_vietnamese_k_to_c` gấp `k` thành `c` khi đứng trước nguyên âm sau, ngay trước khi
+chuyển âm vị. Đây **đúng cùng phép gấp mà docstring của `_vietnamese_phonemes` đã tự nhận là
+làm cho `gi` và `d`** — chỉ là bỏ sót một cặp. Sau khi vá, cả ba thành phần đều khớp.
+
+Kiểm hồi quy, và ba cái đầu là những thứ dễ hỏng nhất:
+
+| | |
+|---|---|
+| `Lucien` vs `lusienne` | vẫn **khác** — bộ chắn độ dài còn nguyên tác dụng |
+| `Kaizer` vs `kaiser` | vẫn khớp — ca cứu ban đầu không mất |
+| `ke`, `kê`, `ki`, `ky`, `kỳ` | **không bị đụng** — chính tả Việt hợp lệ |
+| bộ test đầy đủ | xanh |

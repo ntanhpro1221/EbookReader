@@ -133,6 +133,38 @@ _PHONEME_CACHE: dict[str, str] = {}
 _PHONEMIZER: list[Any] = []
 
 
+_VIETNAMESE_K_BEFORE_BACK_VOWEL = re.compile(
+    r"(?<![a-zà-ỹ])k(?=[aàáảãạăằắẳẵặâầấẩẫậoòóỏõọôồốổỗộơờớởỡợuùúủũụưừứửữự])",
+    re.IGNORECASE,
+)
+
+
+def _fold_vietnamese_k_to_c(token: str) -> str:
+    """`k` before a back vowel is spelled `c` in Vietnamese, and sounds the same.
+
+    Vietnamese writes /k/ as `k` before i, e, ê and y, and as `c` everywhere else - so `kai`
+    is not a Vietnamese spelling at all. The phonemiser treats what it cannot read as
+    Vietnamese as English, and the two land nowhere near each other: `cai` gives kˈaːj while
+    `kai` gives kˈaɪ, `co` gives kˈɔ while `ko` gives kˈoʊ.
+
+    That cost the book's own protagonist. `Samael Kaizer Theosbane` is locked to
+    `Xa-men cai-dờ theo-bên`; Whisper wrote `Sa-men Kai dở theo bên`, which is that reading,
+    correctly, in a spelling Whisper prefers. Samael and Theosbane matched on phonemes and
+    Kaizer did not, so the anchor found nothing, the canonical fold could not happen, and a
+    segment the content check scored 0.979 was blocked.
+
+    Measured on the failing case: the span `caidở` matches the locked `cai-dờ` and `Kaidở`
+    does not, while `caidở` matches **despite** the tone differing between `dở` and `dờ`. So
+    the tone was never the problem and `k` against `c` was all of it.
+
+    This is the same fold the phonemiser's own docstring already claims for `gi` and `d`,
+    applied to a pair it missed. It stays an equality test afterwards.
+    """
+    return _VIETNAMESE_K_BEFORE_BACK_VOWEL.sub(
+        lambda match: "C" if match.group().isupper() else "c", token
+    )
+
+
 def _vietnamese_phonemes(token: str) -> str:
     """Deterministic phonemes for one token, or "" when phonemisation is unavailable.
 
@@ -143,6 +175,10 @@ def _vietnamese_phonemes(token: str) -> str:
     """
     if not token:
         return ""
+    cached = _PHONEME_CACHE.get(token)
+    if cached is not None:
+        return cached
+    token = _fold_vietnamese_k_to_c(token)
     cached = _PHONEME_CACHE.get(token)
     if cached is not None:
         return cached
