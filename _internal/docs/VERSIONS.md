@@ -2179,3 +2179,32 @@ danh sách cho qua — nó mời người nghe nếu muốn, không chặn chư�
 bản là chuyện dễ tự khen. Cách duy nhất để biết mình không tự lừa là **ghi trước cái gì sẽ
 khiến mình nghi ngờ**: nếu chương 011 qua mà bản ghi vẫn còn "giá trị tuyệt đối", thì nó qua vì
 một lỗ hổng nào đó chứ không phải vì đã sửa. Bản ghi sạch, nên kết luận đứng.
+
+### Cả cuốn tái lập từng bit: 576/577 segment, và cái thứ 577 là cái ta cố ý đổi
+
+alpha.55 và alpha.56 chạy cùng chín chương với cùng mã sinh, khác nhau đúng một thứ: `|` được
+thêm vào `SPOKEN_SEPARATORS`. So checksum từng segment đã sinh của hai lượt:
+
+| | |
+|---|---|
+| giống nhau **từng bit** | **576** |
+| khác | **1** |
+
+Và cái khác duy nhất là `c00002_s0000099` — đoạn danh sách kỹ năng, đúng segment mà bản vá
+`||` đổi lời đọc, dài 19,96s → 16,28s.
+
+**Đây là nền móng của toàn bộ thiết kế "nghe một lần là xong".** Phán quyết người nghe được
+khoá theo `(segment_stable_id, wav_sha256)`; nếu TTS không tái lập được thì mỗi lượt chạy mới
+sẽ sinh checksum mới và mọi phán quyết mất hiệu lực — 26 phút nghe sẽ thành 26 phút **mỗi
+lần**. Đo được 576/577 nghĩa là nó giữ, và giữ chặt.
+
+Bằng chứng nó thật sự hoạt động chứ không chỉ đúng trên lý thuyết: chương 013 và 014 của
+alpha.56 xuất bản **mang theo segment `failed`** — máy vẫn phán y như alpha.55, không đổi ý
+điều gì — nhưng phán quyết cũ khớp checksum nên chương đi qua. `"Juli!"` giữ nguyên
+`fe62b2a53d` qua một lượt chạy hoàn toàn mới.
+
+> **Cảnh báo cho chính tôi.** Vì lý do ấy, ba chương alpha.55 từng chặn (013, 014, 016) **không
+> kiểm được** bất cứ chẩn đoán nào về neo tên hay tiếng cười: cả năm đoạn chặn của chúng đều đã
+> được chấp nhận từ vòng trước, nên chúng qua nhờ phán quyết chứ không nhờ máy khá lên. Tôi đã
+> tuyên bố chúng là phép kiểm, rồi phát hiện chính mình đã che mất chúng. Phép kiểm thật là
+> chương mới chưa ai nghe — từ `019` trở đi.
