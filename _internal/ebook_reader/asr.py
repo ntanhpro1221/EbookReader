@@ -472,9 +472,19 @@ def _locked_name_anchor_component_match(
     cursor = max(0, int(from_token))
     found: list[bool] = []
     token_start: int | None = None
-    for source_component, spoken_syllables in components:
+    for position, (source_component, spoken_syllables) in enumerate(components):
         matched_end: int | None = None
-        for start_index in range(cursor, len(tokens)):
+        # The first part of a name may sit anywhere at or after the cursor; every later part
+        # has to follow the one before it immediately, because a name is spoken as one run.
+        #
+        # Allowing gaps is not merely loose, it is actively unsafe once the caller folds the
+        # matched span out of the sentence metrics: "samen đã giết rất nhiều người kaiser
+        # theo bên" matched with the middle five words inside the span, and folding that away
+        # would delete a whole clause from the comparison and hide whatever the take really
+        # got wrong. A permissive name check that also erases its surroundings is worse than
+        # no check.
+        starts = range(cursor, len(tokens)) if position == 0 else (cursor,)
+        for start_index in starts:
             if start_index in blocked:
                 continue
             span = ""

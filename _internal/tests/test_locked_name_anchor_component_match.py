@@ -320,3 +320,23 @@ def test_the_broken_take_is_not_folded_away_with_it() -> None:
         metrics = _metrics(transcript)
         assert metrics["canonical_promoted"] is False, transcript
         assert metrics["canonical_wer"] == 1.0, transcript
+
+
+def test_the_parts_of_a_name_must_be_adjacent() -> None:
+    """Not just tidiness - once the caller folds the matched span out of the sentence
+    metrics, a gap becomes a hole in the comparison. Without this, "samen đã giết rất nhiều
+    người kaiser theo bên" matched with five ordinary words inside the span, and folding it
+    away would delete a whole clause from the score and hide whatever the take really got
+    wrong. A permissive name check that also erases its surroundings is worse than none."""
+    assert not _passes("samen đã giết rất nhiều người kaiser theo bên")
+    assert not _passes("samen à kaiser theo bên")
+
+
+def test_a_matched_name_covers_only_its_own_tokens() -> None:
+    """What the fold is allowed to remove: exactly the name, never more."""
+    result = _locked_name_anchor_component_match(
+        ANCHOR, "tên tôi là samen kaiser theo bên".split()
+    )
+
+    assert result["passed"]
+    assert (result["token_start"], result["token_end"]) == (3, 7)
