@@ -95,20 +95,78 @@ Không riêng "Samael". Cùng một dạng lỗi ở `c00010_s0000017`:
 Mọi câu chứa tên tiếng Anh đã khoá đều nằm trong vùng rủi ro, và rủi ro **cao nhất** ở câu
 ngắn — nơi tên chiếm phần lớn số chữ và van cứu tự tắt.
 
-## Hướng sửa (chưa làm — `asr.py` là file khoá)
+## Hướng sửa (`asr.py` là file khoá — làm ở nhánh `fix/anchor-and-acceptance`)
 
 `asr.py` nằm trong `QUALITY_IMPLEMENTATION_FILES`; sửa nó là đổi
 `quality_implementation_hash()` và alpha.51 sẽ từ chối resume. Nên fix thuộc về bản sau.
 
-Ba hướng, theo thứ tự tôi tin cậy:
+**Đã đo, nên bỏ được hai hướng sai.** Trước khi sửa, tôi đo độ tương đồng của bản đọc đúng
+và bản đọc sai:
 
-1. **Cho neo nhận cả dạng chính tả gốc rời từng chữ.** Neo hiện có `source_spelling` là cả
-   cụm `["samael","kaizer","theosbane"]` — đòi khớp cả ba. Whisper gõ `Samen Kaiser theo
-   bên`: trộn phiên âm với chính tả gốc. Cho phép **khớp trộn từng chữ một** thì vòng 0 đỗ.
-2. **Bỏ điều kiện `ordinary >= anchor` của van cứu.** Điều kiện này tắt van đúng lúc cần
-   nhất. Ngưỡng tương đồng đã có sẵn để làm việc của nó rồi.
-3. **So bằng âm, không bằng chữ.** Đúng nhất, đắt nhất: chuyển cả hai vế về một dạng biểu
-   diễn âm rồi mới so. Sửa được tận gốc mọi biến thể chính tả Whisper có thể nghĩ ra.
+| bản thu | Whisper gõ | `raw_similarity` |
+|---|---|---|
+| vòng 0 — **đọc đúng** | `Samen Kaiser theo bên` | **0,818** |
+| bản giữ — **đọc sai** | `Sam Min Kaiser theo bên` | **0,816** |
+
+Cách nhau **0,002**. Nên hướng "nới van cứu bằng độ tương đồng" — hướng tôi đề xuất trong bản
+đầu của tài liệu này — **là sai**: nó thả bản hỏng qua đúng bằng bản đúng. Phép đo tương đồng
+**cả câu** không phân biệt được, vì lỗi phát âm một âm tiết bị hoà tan vào khoảng cách chính
+tả của cả cụm tên. Đây cũng là lý do phải cẩn thận với chính con số 0,818 mà tài liệu này
+từng khoe là "đủ điều kiện đỗ": nó đủ điều kiện, nhưng bản hỏng cũng vậy.
+
+**Và hướng thứ hai cũng sai, dù nó trông rất đúng.** Chấm tương đồng ký tự nhưng thu hẹp
+về riêng thành phần tên thì tách được hai bản kia (0,800 so với 0,667) — nhưng không đặt được
+ngưỡng nào cả:
+
+| cặp | tương đồng | phải ra sao |
+|---|---|---|
+| `samen` với `xamen` (đúng) | 0,800 | **đỗ** |
+| `lucian` với `lucien` (tên khác) | **0,833** | **trượt** |
+
+Tên khác lại giống hơn bản đọc đúng. Mọi ngưỡng nhận bản đúng đều nhận luôn một tên khác. Các
+test neo cũ ghim đúng điều này, và chúng có lý — dựng thử hướng đó thì **18 test đỏ**.
+
+**Hướng đúng: so âm, không so chữ.** Trong tiếng Việt "x" và "s" là một âm còn "e" và "i" thì
+không — đúng cái tai người nghe ra. Mã đã có sẵn `_vietnamese_phonemes`, chỉ là chưa ai dùng
+nó ở mức thành phần:
+
+| | |
+|---|---|
+| kỳ vọng `xa`+`men` | `sˈaː mˈɛn` |
+| đúng `sa`+`men` | `sˈaː mˈɛn` — **khớp chính xác** |
+| sai `sam`+`min` | `sˈaːm mˈɪn` — khác |
+| `kaizer` với `kaiser` | `kˈaɪzɚ` cả hai — **khớp** |
+| `lucien` với `lucian` | khác |
+
+**Không có ngưỡng nào cả** — âm khớp hoặc không. Đó là ưu điểm lớn nhất của hướng này so với
+hai hướng trước.
+
+Cách ghép thành phần nằm sẵn trong dữ liệu, không cần tra bảng: cách đọc dùng **gạch nối bên
+trong một thành phần và dấu cách giữa các thành phần**, nên `"Xa-men cai-dờ theo-bên"` tách
+theo dấu cách ra đúng ba phần của `Samael Kaizer Theosbane`, rồi mỗi phần tách theo gạch nối
+ra các âm tiết cần đọc. Khi hai bên không tách ra cùng số phần thì **từ chối luôn** thay vì
+đoán — ghép sai còn tệ hơn không ghép.
+
+### Bốn ràng buộc, mỗi cái do một test cũ bắt được
+
+Dựng xong bản đầu thì nó đúng cả bốn ca thật nhưng phá 18 test khác. Mỗi lần sửa lộ ra một
+ràng buộc mà tôi không nghĩ tới:
+
+1. **Không được dài hơn cách viết dài nhất mà neo chấp nhận.** Máy phiên âm đọc `enne` và
+   `en` như nhau, nên "Lucien" nuốt luôn "Lusienne" — hai nhân vật khác nhau.
+2. **Không được dùng token mà một lần xuất hiện khác đã chiếm.** Không có nó thì một cái tên
+   đòi ba lần được thoả bằng **một** lần đọc: phép căn chỉnh khớp lần 2 và 3, để lần 1 tự do
+   đi tìm lại cái tên ngay trong đoạn của lần 2.
+3. **Phải đi một chiều.** Không có nó thì "Iven gặp Lucien" thoả được danh sách neo viết theo
+   thứ tự Lucien rồi Iven.
+4. **Không được dùng token mà chữ thường đã khớp.** Với "Mây may áo" đọc thành "Lucy may áo",
+   cái tên đọc sai, nhưng chữ "may" thường ở ngay sau lại là đồng tự của nó sau khi bỏ dấu.
+   Được tự do quét thì nó vớ đúng chữ đó và cho đỗ một bản đọc sai tên.
+
+Một cách chữa nghe rất hợp lý mà **sai**: ghim cứu hộ vào đúng vị trí phép căn chỉnh gán cho
+neo. Khi neo không khớp được, phép căn chỉnh đặt nó vào chỗ **rẻ nhất về chi phí sửa** chứ
+không phải chỗ cái tên nằm — với ca Samael, nó đặt vào token cuối câu ("bên"). Ghim vào đó
+thì cứu hộ chết đúng ở ca nó sinh ra để cứu. Ràng buộc (4) mới là cách chữa đúng.
 
 Sửa xong phải kiểm lại đúng ba đoạn trên: vòng 0 và vòng 2 của `c00005_s0000013` **phải đỗ**,
 còn bản `Sam Min` **phải trượt**. Nếu bản `Sam Min` cũng đỗ theo thì đã nới quá tay.
