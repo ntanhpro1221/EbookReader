@@ -1,3 +1,16 @@
+# ĐÃ ÁP HẾT 2026-09-08 01:12 — thư mục này giờ là hồ sơ, không phải hàng chờ
+
+Tám bản vá dưới đây **đã được ghi vào cây thật** sau khi alpha.56 chạy xong 9/9 và bộ canh xác
+nhận không còn lượt nào đang bay. `quality_implementation_hash()` đổi thành `7deaf44c644f36ee`.
+
+Kiểm ngay sau khi áp: `check_sources.py` báo **478/478 chương chia đoạn được, 58.258 segment** —
+trước đó là 470/478. Không sửa một chữ nào trong nguồn.
+
+Các script vẫn nằm đây làm hồ sơ. Chúng `assert` chuỗi gốc trước khi thay nên chạy lại sẽ dừng
+chứ không làm hỏng gì. Đọc tiếp bên dưới để biết mỗi cái đổi gì và vì sao.
+
+---
+
 # Bản vá đã kiểm, chờ máy rảnh mới ghi vào file bị khoá
 
 Năm script trong thư mục này sửa **file nằm trong `QUALITY_IMPLEMENTATION_FILES`**. Ghi vào

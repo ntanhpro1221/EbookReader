@@ -217,9 +217,106 @@ def test_terminal_mismatched_quote_marks_do_not_open_cross_paragraph_state(
     assert rows[-1]["kind_hint"] == "narration"
 
 
-def test_unclosed_quote_state_fails_closed_at_chapter_boundary() -> None:
-    with pytest.raises(RuntimeError, match="Unclosed dialogue quote at the end of chapter 7"):
-        segment_chapter_text(7, "“Câu thoại chưa được đóng.\n\nVẫn còn trong lời thoại.")
+def test_unclosed_quote_is_recovered_instead_of_refusing_the_chapter() -> None:
+    """A missing quote mark used to refuse the chapter, which stops a whole book on a typo.
+
+    Eight of this book's 478 chapters trip it, in a source nobody here wrote. The chapter has
+    to come out; being cast slightly wrong is a smaller loss than not existing.
+    """
+    warnings: list[str] = []
+
+    rows = segment_chapter_text(
+        7,
+        "“Câu thoại chưa được đóng.\n\nVẫn còn trong lời thoại.",
+        warnings=warnings,
+    )
+
+    assert rows, "chương phải chia ra được, không được từ chối"
+    assert warnings and "chapter 7" in warnings[0].lower()
+
+
+def test_recovery_never_drops_a_spoken_word() -> None:
+    """The point of the whole exercise: recover the casting, never the words.
+
+    segment_chapter_text already proves this for itself on every chapter through its token
+    check; this pins the promise so nobody relaxes that check later.
+    """
+    text = (
+        "“Mở ra mà không đóng lại.\n\n"
+        "Một đoạn kể bình thường ở giữa.\n\n"
+        "“Một câu thoại khác, đóng đàng hoàng.”\n\n"
+        "Đoạn kể cuối cùng."
+    )
+
+    rows = segment_chapter_text(3, text)
+    spoken = " ".join(str(row["text"]) for row in rows)
+
+    for word in ("Mở", "đóng", "bình", "thường", "đàng", "hoàng", "cuối", "cùng"):
+        assert word in spoken
+
+
+def test_a_quote_spanning_paragraphs_still_closes_where_it_should() -> None:
+    """Recovery must not punish the legitimate case that made the state cross-paragraph.
+
+    Chapter 019 of this book carries a six-line oath: one opening mark, five paragraphs, then
+    the closing mark. That is not a defect and must keep its single dialogue reading.
+    """
+    text = (
+        "“Món nợ của Theosbane luôn được trả,\n\n"
+        "Lời hứa của Zynx không bao giờ lung lay,\n\n"
+        "Danh dự của Kallith còn quý hơn cả vàng.”\n\n"
+        "Tôi liếc xuống nhìn cậu ta."
+    )
+    warnings: list[str] = []
+
+    rows = segment_chapter_text(19, text, warnings=warnings)
+
+    assert warnings == [], "lời thề đóng đúng chỗ, không được coi là hỏng"
+    assert [row["kind_hint"] for row in rows][-1] == "narration"
+    assert rows[0]["kind_hint"] == "dialogue"
+
+
+def test_recovery_closes_the_offending_paragraph_not_the_innocent_one() -> None:
+    """Chapter 019's real shape, with the straight quotes it really uses.
+
+    The oath opens in one paragraph and closes two later - legitimate, and only possible
+    because the quote state crosses paragraphs. The real fault is a later paragraph ending
+    with a mark it never opened. With straight quotes the opener and the closer are the same
+    character, so that stray mark reads as an opening and hangs to the end of the chapter.
+    That is the whole class of defect.
+
+    A recovery that blamed the first odd paragraph would break the oath and leave the real
+    fault in place - exactly what two earlier versions of check_sources.py did.
+    """
+    text = "\n\n".join(
+        [
+            '"Món nợ của Theosbane luôn được trả,',
+            'Danh dự của Kallith còn quý hơn cả vàng."',
+            "Trước khi hai người kia kịp phản hồi, gã nhóc lên tiếng.",
+            'Đúng là vậy, nhưng tiền nong có hơi eo hẹp."',
+            "À, đương nhiên rồi nhỉ.",
+        ]
+    )
+    warnings: list[str] = []
+
+    rows = segment_chapter_text(19, text, warnings=warnings)
+
+    assert len(warnings) == 1, warnings
+    assert "paragraph 4" in warnings[0], warnings[0]
+    # lời thề vẫn là lời thoại trải hai đoạn, recovery không đụng vào
+    assert rows[0]["kind_hint"] == "dialogue"
+    assert str(rows[0]["text"]).startswith('"Món nợ')
+
+
+def test_recovery_terminates_on_a_chapter_of_nothing_but_open_quotes() -> None:
+    """The lever is applied one paragraph at a time, so it has to be proved to terminate."""
+    text = "\n\n".join(f"“Đoạn thứ {index} không bao giờ đóng." for index in range(12))
+    warnings: list[str] = []
+
+    rows = segment_chapter_text(4, text, warnings=warnings)
+
+    assert rows
+    assert len(warnings) == 1
 
 
 def test_inline_curly_single_quote_is_an_inner_thought() -> None:
