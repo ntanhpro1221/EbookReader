@@ -556,3 +556,40 @@ Hai thứ dựng trong ngày, và thiếu một trong hai thì nó không khả 
 Cùng lý do ấy áp cho cách đọc tên và casting: alpha.56 khởi động với **138 cách đọc, 14 phán
 quyết, 38 nhân vật ghim giọng**, tích luỹ từ hai bản trước. Mỗi bản thêm vào kho chứ không bắt
 đầu lại.
+
+## Kiểm chéo bằng đơn vị khác: 58.260 segment, và hai ước lượng gặp nhau
+
+Hàm trên đo theo **số chữ**. Có một đơn vị sát máy hơn — **số segment**, vì đó là thứ máy thật
+sự lần lượt xử lý. Trước nay chưa ai biết cả cuốn có bao nhiêu segment, chỉ suy ra từ mười
+chương. Giờ thì biết chính xác, vì chạy được chính `segment_chapter_text` lên cả 478 chương:
+
+| | |
+|---|---|
+| chương chia được (sau khi vá 8 dấu ngoặc) | **478/478** |
+| **tổng segment cả cuốn** | **58.260** |
+| trung bình | 122 segment/chương |
+
+Đây **không phải ngoại suy** — là đếm thật, chỉ tốn vài giây CPU. Chạy lại bất cứ lúc nào bằng
+`scripts/check_sources.py`, nó in con số này khi nguồn sạch.
+
+Ghép với đồng hồ thật của từng lượt chạy:
+
+| bản | chương | segment | đồng hồ | giây/segment | suy ra 58.260 segment |
+|---|---|---|---|---|---|
+| alpha.50 | 10 | 948 | 7,42h | 28,19s | 19,0 ngày |
+| alpha.51 | 10 | 948 | 12,32h | 46,79s | 31,6 ngày |
+| alpha.52 | 10 | 948 | 2,47h | 9,36s | 6,3 ngày |
+| alpha.53 | 10 | 948 | 2,69h | 10,22s | 6,9 ngày |
+| alpha.54 | 10 | 948 | 2,46h | 9,36s | 6,3 ngày |
+| **alpha.55** | 9 | **1.083** | **2,34h** | **7,78s** | **5,2 ngày** |
+
+**alpha.55 là điểm đáng tin nhất** trong bảng: chương mới tinh, mã hiện tại, không ăn theo phán
+quyết cũ. Nó cho **5,2 ngày**, còn hàm đếm chữ cho **5,4 ngày**. Hai cách đo không liên quan gì
+nhau về phương pháp mà lệch 4% — đó là lý do để tin cả hai hơn hẳn tin một cái.
+
+alpha.50 và alpha.51 lệch xa vì `updated_at - created_at` là **đồng hồ treo tường**, không phải
+giờ máy: hai lượt ấy có quãng nằm chờ và có lần tôi chạy bộ test đè lên. Đừng dùng chúng để ước
+lượng; giữ lại trong bảng để nhắc rằng đồng hồ treo tường đo cả sự cẩu thả của người vận hành.
+
+**Cảnh báo giữ nguyên hiệu lực:** cả hai ước lượng đều là **giờ máy**, và ràng buộc thật là tai
+người — xem mục trên về 212 chương / 26 phút.
