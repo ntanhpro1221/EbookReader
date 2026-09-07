@@ -1882,3 +1882,34 @@ của alpha.53: im lặng 1,32s → 0,64s, hết cờ.
 **Điều KHÔNG nên kết luận nếu ra 10/10:** rằng giọng đọc đã hết lỗi ngữ điệu. Nhịp ngắt 0,18s
 giữa từ ghép "đầu vào" vẫn còn nguyên đó, nằm dưới mọi ngưỡng, và không phép kiểm nào hiện có
 nhìn thấy nó. Chủ sách nghe ra nó bằng tai trong một đoạn 13 giây; máy thì không.
+
+## Chạy cả cuốn: chia lô KHÔNG an toàn với công cụ hiện có
+
+Tôi đã đề xuất chạy thử một lô 50 chương trước rồi mới chạy cả cuốn. **Đề xuất ấy sai**, và
+lý do đáng ghi lại vì nó không hiển nhiên.
+
+Mỗi lô là một project riêng, nên nó **phân tích lại từ đầu và cấp phát giọng lại từ đầu**. Bộ
+cấp phát xếp hạng theo `usage[name]`, tức nó phụ thuộc vào *tập nhân vật* của chính project
+đó. Hai lô thấy hai tập nhân vật khác nhau, nên cùng một nhân vật có thể nhận hai giọng khác
+nhau ở chương 40 và chương 60.
+
+Bằng chứng đã có sẵn, không cần thí nghiệm mới: ở alpha.52, một nhãn nhân vật đổi chuỗi tên
+(`người bị bắt nạt` → `người bị đánh`, **cùng ID phòng**) là đủ để giọng nhảy từ 16 sang 14.
+
+Và bất biến bảo vệ chuyện này — `một speaker → đúng một voice_profile_id`, kiểm tra ở
+`character_registry.py` và ném `RuntimeError` khi vi phạm — chỉ chạy **trong phạm vi một
+project**. Không có gì kiểm nó xuyên qua các lô, vì không có gì nối các lô lại.
+
+`port_pronunciations.py` mang được cách đọc tên, `seed_listener_acceptances.py` mang được phán
+quyết người nghe. **Không có cái tương đương cho casting.**
+
+### Ba lựa chọn, và cái giá thật của mỗi cái
+
+| | cách | cái giá |
+|---|---|---|
+| 1 | **Một lượt 478 chương** | 5,4 ngày liên tục. Casting nhất quán. Nhưng phát hiện một lớp lỗi mới ở ngày thứ tư là mất cả bốn ngày — đúng điều chương 10 vừa dạy. |
+| 2 | **Viết cơ chế mang casting**, rồi chia lô | Việc thật, chưa làm. Nhưng nó biến 5,4 ngày thành nhiều lô sửa được giữa chừng, và giữ nguyên casting. |
+| 3 | Chia lô ngay | **Không được.** Cùng nhân vật, hai giọng, và chỉ lộ ra khi nghe. |
+
+Hướng 2 là hướng đúng nếu định chạy cả cuốn nhiều lần. Hướng 1 đúng nếu chỉ chạy một lần và
+chấp nhận rủi ro thời gian.
