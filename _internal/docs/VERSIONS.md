@@ -1946,3 +1946,32 @@ Cái nó mở ra, ngoài chuyện chia lô: **sửa casting bằng tay rồi gi�
 chương 6 của alpha.52 chết vì giọng 14 không đọc được "Mẹ kiếp", và **không có cách nào** ghim
 lại giọng 16 — `cast` chỉ đổi được giới tính, mà giới tính vốn đã đúng. Với cơ chế này thì
 chuyện đó là một dòng lệnh.
+
+#### Thiết kế cơ chế mang casting — và sửa lại ước lượng của chính tôi
+
+Đọc kỹ hơn thì **ước lượng "soi gương `locked_genders`" của tôi là quá lạc quan**. Giới tính
+dùng lại cột `gender` có sẵn trong `characters`; giọng thì không có cột nào để dùng lại.
+
+**Thứ phải mang không phải tên preset.** `_profile_for_preset` dựng khoá
+`f"{name}::{formant_key}::{pitch_key}"`, và bảng `voice_profiles` lưu nó thành `voice_key`,
+ví dụ `preset_thanh_binh_f109_p-01`. Âm sắc do **cả ba** quyết định. Mà `formant_ratio` lấy
+theo `self.variant_usage[name] % len(variants)` — tức **phụ thuộc thứ tự cấp phát**. Nên khoá
+mỗi tên preset thì cùng một nhân vật vẫn có thể ra âm sắc khác ở lô sau. Phải mang `voice_key`.
+
+**Bốn mảnh:**
+
+| mảnh | việc |
+|---|---|
+| cột `locked_voice_key` trên `characters` | thêm cột + migration (mẫu có ở `database.py:2272`) |
+| `locked_character_voices()` | soi `locked_character_genders()`, trả `{character_key: voice_key}` |
+| nhánh ở chỗ gọi trong `build_registry_and_cast` | có khoá thì dựng thẳng profile từ `voice_key`, **và vẫn phải báo cho allocator là preset ấy đã dùng**, kẻo nhân vật sau đụng trùng |
+| `port_casting.py` | soi `port_pronunciations.py` |
+
+**Chỗ dễ làm sai nhất** là mảnh thứ ba: nếu quên báo usage thì một nhân vật có giọng khoá sẽ
+"vô hình" với bộ cấp phát, và nhân vật tiếp theo được giao đúng giọng ấy — hai người một giọng,
+đúng loại lỗi chỉ lộ ra khi nghe. Bất biến `một speaker → một voice_profile_id` ở
+`character_registry.py:836` bắt được trường hợp ngược lại (một tên, hai giọng) nhưng **không**
+bắt được trường hợp này.
+
+Chưa làm: máy đang chạy alpha.54, và đây là thay đổi schema nên phải kiểm tử tế chứ không làm
+dở giữa chừng.
