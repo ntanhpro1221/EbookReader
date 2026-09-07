@@ -26,7 +26,14 @@ from ebook_reader.recovery import RecoveryError, recover_project
 
 def setup_db(tmp_path: Path):
     paths = ProjectPaths.build(tmp_path / "project")
-    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.5}})
+    settings = build_settings(
+        overrides={
+            "tts": {"min_seconds_per_100_chars": 0.5},
+            # high_quality stopped enabling perceptual QA on 2026-09-07, and one test here
+            # is about what happens when its evidence goes missing - so it has to exist.
+            "perceptual_qa": {"enabled": True},
+        }
+    )
     db = ProjectDB(paths.db)
     db.initialize_book(
         title="T",

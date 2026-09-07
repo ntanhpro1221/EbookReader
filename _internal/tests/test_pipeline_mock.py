@@ -612,6 +612,10 @@ def _asr_signal_pipeline(tmp_path: Path, *, repair_rounds: int):
     settings = build_settings(
         overrides={
             "asr": {"repair_rounds": repair_rounds},
+            # These tests read `perceptual_result` off the candidates they promote, so they
+            # have to ask for perceptual QA: high_quality stopped enabling it on 2026-09-07.
+            # docs/PERCEPTUAL_QA_COST.md.
+            "perceptual_qa": {"enabled": True},
             "tts": {
                 "min_seconds_per_100_chars": 0.2,
                 "pace_chars_per_second": {"normal": [1.0, 100.0]},
@@ -1918,6 +1922,10 @@ def _locked_name_variant_pipeline(
     settings = build_settings(
         overrides={
             "asr": {"repair_rounds": repair_rounds},
+            # These tests read `perceptual_result` off the candidates they promote, so they
+            # have to ask for perceptual QA: high_quality stopped enabling it on 2026-09-07.
+            # docs/PERCEPTUAL_QA_COST.md.
+            "perceptual_qa": {"enabled": True},
             "tts": {
                 "min_seconds_per_100_chars": 0.2,
                 "pace_chars_per_second": {"normal": [1.0, 100.0]},

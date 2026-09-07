@@ -39,12 +39,20 @@ def _write_sources(root: Path, names: list[str]) -> list[Path]:
     return paths
 
 
-def _create_project(tmp_path: Path, names: list[str] | None = None) -> Path:
+def _create_project(
+    tmp_path: Path,
+    names: list[str] | None = None,
+    *,
+    perceptual_qa: bool = False,
+) -> Path:
+    """`perceptual_qa` is opt-in because high_quality stopped enabling it on 2026-09-07;
+    only a test about perceptual evidence needs to pay for it. docs/PERCEPTUAL_QA_COST.md."""
     sources = _write_sources(tmp_path / "sources", names or ["000.txt", "001.txt"])
+    overrides = {"perceptual_qa": {"enabled": True}} if perceptual_qa else None
     paths, _db, _settings = create_or_open_project(
         sources,
         tmp_path / "out",
-        build_settings("high_quality"),
+        build_settings("high_quality", overrides),
         "CLI Test",
     )
     return paths.root
@@ -272,7 +280,7 @@ def test_validate_rejects_completed_chapter_without_perceptual_evidence(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    project_root = _create_project(tmp_path, ["000.txt"])
+    project_root = _create_project(tmp_path, ["000.txt"], perceptual_qa=True)
     writable_db = ProjectDB(project_root / "project.sqlite3")
     chapter = writable_db.list_chapters()[0]
     writable_db.update_chapter_status(int(chapter["id"]), "completed")

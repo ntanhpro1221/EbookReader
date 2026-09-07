@@ -12665,16 +12665,25 @@ class ProjectDB:
                 )
             }
             for row in rows:
+                artifact_sha256 = str(row["wav_sha256"] or "").strip()
+                if not artifact_sha256:
+                    return False
+                # Before the status gate, not after it. The exemption above was written for
+                # rows the machine had given up on, and those rows are `failed` - so putting
+                # the status check first made it unreachable for exactly the segments it
+                # names. alpha.51 chapter 10 showed the whole loop: `accept` moved the row to
+                # `warning`, all four gates read open, the resume re-verified the segment and
+                # returned it to `failed`, and this gate then refused the chapter with
+                # SEGMENT_QA_EVIDENCE_MISSING - over audio a person had listened to and let
+                # stand, still matching the checksum the acceptance names. Accepting again
+                # only ran the loop again.
+                if (str(row["stable_id"]), artifact_sha256) in accepted:
+                    continue
                 if str(row["status"]) not in {
                     SegmentStatus.VERIFIED.value,
                     SegmentStatus.WARNING.value,
                 }:
                     return False
-                artifact_sha256 = str(row["wav_sha256"] or "").strip()
-                if not artifact_sha256:
-                    return False
-                if (str(row["stable_id"]), artifact_sha256) in accepted:
-                    continue
                 if not self._quality_check_is_current_pass_conn(
                     conn,
                     scope=QUALITY_SCOPE_SEGMENT,
