@@ -784,3 +784,61 @@ Ba lượt pytest đầy đủ chạy đè lên pha phân tích alpha.52. Phân 
 rồi lan ra 57 nhóm; nhãn một nhân vật đổi → giọng 16 thành 14 → giọng mới không đọc được "Mẹ
 kiếp" → **mất chương 6, không cứu được trong bản đó**. Chưa chứng minh được nhân quả, nhưng
 chờ thì tốn không gì cả. Quy tắc đã ghi vào `AGENTS.md`, phần invariant an toàn.
+
+## Đêm 2026-09-07 → 08: bốn chỉ thị, và ba phép kiểm bắt nhầm thứ
+
+Chủ sách ra bốn lệnh: **(1)** dấu ngoặc thiếu không được làm hỏng chương trình, **(2)** không
+phải tự nghe, project phải tự ra sản phẩm, **(3)** chia lô theo số từ chứ không theo chương,
+**(4)** cần cài gì cứ cài.
+
+### Kết quả
+
+| | trạng thái |
+|---|---|
+| (4) cài `praat-parselmouth` + `librosa` | **xong** — 6 test mù bấy lâu giờ chạy, 49/49 xanh |
+| (3) chia lô | **xong** — `plan_batches.py`, cân theo giờ máy |
+| (1) ngoặc treo | **xong, đã kiểm, chờ áp** — 478/478 chương chia được **không sửa nguồn** |
+| (2) không cần tai người | **quá nửa** — 3/6 đoạn chặn được giải phóng |
+
+### Ba phép kiểm cùng một hình dạng lỗi
+
+Không phải "ngưỡng đặt sai". Cả ba là **một lớp ca chưa ai nghĩ tới**:
+
+| phép kiểm | định bắt | thực tế bắt |
+|---|---|---|
+| neo tên (`asr_only_failure`) | tên bị đọc sai | mọi đoạn **chỉ gồm** một tên ngắn |
+| `is_vocalization_only` | tiếng cười | tiếng cười — trừ khi viết là `Ahaha` |
+| trần khung (`generation_frame_cap`) | mô hình lảm nhảm vô tận | câu không hạ giọng |
+
+Cả ba lộ ra bằng cùng một cách: **nhìn vào những ca bị chặn rồi hỏi chúng có điểm gì chung.**
+
+### Chỗ tôi sai, và thứ cứu tôi
+
+Tôi công bố rằng `generation_endpoint_active` bắt nhầm ngữ điệu, kèm một tương quan tuyệt đối
+(0/899 trên dấu chấm, 14/57 trên dấu phẩy và hỏi), viết bản vá, viết tài liệu, báo chủ sách.
+**Mũi tên nhân quả ngược.** Câu không hạ giọng → mô hình không dừng → chạm trần → **cắt thật**.
+Cả năm bản thu của `"Rồi, rồi,"` dài đúng 0,96 giây, bằng trần khung.
+
+Thứ bắt được: một test tên `..._remain_blocking` đỏ lên — người trước đã ghim đúng hành vi tôi
+vừa bỏ. **Quy tắc rút ra:** test đỏ đúng chỗ vừa đổi, tên mô tả chính hành vi vừa bỏ, thì mặc
+định là *mình sai* cho tới khi đọc xong và chứng minh ngược lại.
+
+Chi tiết: [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md).
+
+### Hai lần đo sai vì chọn nhầm cửa sổ
+
+1. **"6% nhân vật lặp lại giữa các lô"** — đo trên chương 000–018, khúc mở đầu, nơi sách thay
+   nhân vật nhanh nhất. Cả cuốn: **80%**, đến lô 9 là 95%. Sai số 13 lần, và nó là khác biệt
+   giữa "chia lô vô hại" và "chia lô làm hỏng phân tích".
+2. **"563 lượt thu vòng 2–4 cứu được 4 segment"** — mẫu số bị chính những ca vô vọng nhồi lên.
+   Đếm theo *segment*: **106/641 = 16,5%** lấy bản thắng từ vòng 2 trở đi.
+
+Cùng một bài học: khi một con số dẫn tới kết luận "bỏ cơ chế này đi", kiểm xem mẫu số có bị
+chính thất bại nhồi lên không, và cửa sổ đo có đại diện không.
+
+### Một dự đoán ghi trước, và nó đúng
+
+Trước khi chạy alpha.56 tôi ghi: *chương 011 phải xuất **vì đọc đúng**, không phải vì phán
+quyết — tôi cố ý không chấp nhận đoạn danh sách kỹ năng.* Kết quả: bản ghi sạch cụm "giá trị
+tuyệt đối", similarity 0,57 → 0,83, chương 115/116 → **116/116**, và **3,68 giây lời đọc thừa**
+biến mất. Ghi trước cái gì sẽ khiến mình nghi ngờ là cách duy nhất để một kết quả tốt có giá trị.
