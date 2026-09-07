@@ -5089,6 +5089,38 @@ def _analysis_context_hash(
     )
 
 
+def _group_rows_to_analyse(stable_group: list[Any]) -> list[list[Any]]:
+    """Which rows of a stable group to send to the model.
+
+    A group whose rows are all pending is sent whole - which is every group of an
+    uninterrupted run, so this function cannot change what such a run produces.
+
+    A partially analysed group means a resume landed inside it, and sending only the pending
+    remainder is what made a resume produce a different book. Measured on 2026-09-07 with one
+    stop at 620/948: the character registry went from 23 to 19 and 18 speaker assignments
+    changed, every one after the interruption point, cascading to the end of the book through
+    the registry merges.
+
+    **Not because the fragment loses context.** It does not: `original_context` carries the
+    neighbours' source text across the hole, which
+    `test_resume_hole_splits_pending_runs_but_keeps_original_neighbor_context_and_scope`
+    pins deliberately. What a fragment loses is *jointness* - the model assigns speakers to a
+    group in one pass, weighing its members against each other, and two fragments are two
+    independent decisions no matter how faithfully each one is told what sits beside it.
+
+    So the group goes whole. That conflicts with the two tests above, which pin the fragment
+    behaviour on purpose; replacing behaviour somebody chose is a decision to take awake and
+    in the open, not at four in the morning.
+
+    So the group goes whole and the finished rows are analysed again. That costs redoing at
+    most one group - only the group in flight when the run stopped is ever partial - and buys
+    a resume that continues the book rather than replacing it.
+    """
+    if any(str(row["status"]) == "pending" for row in stable_group):
+        return [list(stable_group)]
+    return []
+
+
 def _analysis_group_fingerprint(
     group: list[Any],
     original_context: dict[str, dict[str, Any]] | None = None,
@@ -7650,16 +7682,7 @@ class OllamaBookAnalyzer:
         groups: list[tuple[list[Any], str]] = []
         for stable_group in stable_groups:
             local_scope = _local_scope_for_group(stable_group)
-            pending_runs: list[list[Any]] = []
-            pending_run: list[Any] = []
-            for row in stable_group:
-                if str(row["status"]) == "pending":
-                    pending_run.append(row)
-                elif pending_run:
-                    pending_runs.append(pending_run)
-                    pending_run = []
-            if pending_run:
-                pending_runs.append(pending_run)
+            pending_runs = _group_rows_to_analyse(stable_group)
             for pending_group in pending_runs:
                 if self.quality_profile != "high_quality":
                     groups.append((pending_group, local_scope))
@@ -8698,7 +8721,13 @@ class OllamaBookAnalyzer:
                             "segment_id": int(row["id"]),
                             "stable_id": str(row["stable_id"]),
                             "text_sha256": _source_text_sha256(row),
-                            "expected_status": "pending",
+                            # The row's real status, not the literal "pending". On a resume
+                            # a whole stable group is re-sent (see _group_rows_to_analyse),
+                            # and some of its rows are already `analyzed`; the UPDATE guards
+                            # on this column, so hard-coding "pending" would match zero rows
+                            # and drop the new result without an error. Identical on an
+                            # uninterrupted run, where every row is pending.
+                            "expected_status": str(row["status"]),
                             "data": validated[str(row["stable_id"])],
                         }
                         for row in group

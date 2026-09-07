@@ -319,8 +319,23 @@ def _locked_name_anchor_components(
     surface = str(anchor.get("surface", "")).strip() or str(
         anchor.get("normalized_surface", "")
     ).strip()
-    surface_parts = surface.split()
     spoken_parts = str(anchor.get("spoken_form", "")).split()
+    surface_parts = surface.split()
+    if surface_parts and len(surface_parts) != len(spoken_parts):
+        # The convention holds for names, and breaks for terms whose *English* spelling
+        # carries the hyphen: "Safe-Zone" is one whitespace part against a spoken "Xây Dôn"
+        # that is two. Splitting the surface on its hyphens too lines those up. Tried only
+        # after the plain split has already failed, so it can never take apart a name the
+        # convention already matched - "Jean-Luc" against a spoken "Giăng-Luých" stays one
+        # part and keeps working. Measured on the book's 112 seeded readings: 107 aligned
+        # without this, all 112 with it, and none changed.
+        hyphen_split = [
+            piece
+            for piece in re.split(r"[-‐-―]|\s+", surface)
+            if piece.strip()
+        ]
+        if len(hyphen_split) == len(spoken_parts):
+            surface_parts = hyphen_split
     if not surface_parts or len(surface_parts) != len(spoken_parts):
         return []
     components: list[tuple[str, tuple[str, ...]]] = []
@@ -457,9 +472,19 @@ def _locked_name_anchor_component_match(
     cursor = max(0, int(from_token))
     found: list[bool] = []
     token_start: int | None = None
-    for source_component, spoken_syllables in components:
+    for position, (source_component, spoken_syllables) in enumerate(components):
         matched_end: int | None = None
-        for start_index in range(cursor, len(tokens)):
+        # The first part of a name may sit anywhere at or after the cursor; every later part
+        # has to follow the one before it immediately, because a name is spoken as one run.
+        #
+        # Allowing gaps is not merely loose, it is actively unsafe once the caller folds the
+        # matched span out of the sentence metrics: "samen đã giết rất nhiều người kaiser
+        # theo bên" matched with the middle five words inside the span, and folding that away
+        # would delete a whole clause from the comparison and hide whatever the take really
+        # got wrong. A permissive name check that also erases its surroundings is worse than
+        # no check.
+        starts = range(cursor, len(tokens)) if position == 0 else (cursor,)
+        for start_index in starts:
             if start_index in blocked:
                 continue
             span = ""
@@ -749,7 +774,22 @@ def _canonical_locked_name_metrics(
     operations: list[dict[str, Any]],
     transcript_tokens: list[str],
     anchor_count: int,
+    rescued_spans: dict[tuple[int, int], tuple[int, int]] | None = None,
 ) -> tuple[float, float, float]:
+    """Sentence metrics with each locked name folded into one placeholder on both sides.
+
+    `rescued_spans` names the occurrences the component-phoneme check matched after the
+    alignment had already given up on them, mapped to the transcript tokens they cover. Those
+    tokens have to be folded away like any other matched name, and the alignment cannot say
+    so: it parked the anchor on a single substitution and left the rest of the name to be
+    swept up as insertions.
+
+    Skipping this is not a small error. On alpha.52's "Tên tôi là Samael Kaizer Theosbane."
+    the name is four transcript tokens; counting three of them as insertions against a
+    four-token canonical expectation gives WER 0.75 where the truth is 0.0, so the take the
+    check had just accepted was refused by the content gate one step later - the anchor fix
+    passed the name and changed nothing that anybody could see.
+    """
     expected_tokens = [
         _semantic_anchor_token(
             int(unit["repeat_index"]),
@@ -760,12 +800,34 @@ def _canonical_locked_name_metrics(
         else str(unit["token"])
         for unit in units
     ]
+    # Transcript index -> the occurrence whose rescued span covers it, so every operation
+    # landing inside a rescued name folds into that name's single placeholder however the
+    # alignment happened to distribute those tokens.
+    rescued_by_index: dict[int, tuple[int, int]] = {}
+    for occurrence, (span_start, span_end) in (rescued_spans or {}).items():
+        for index in range(int(span_start), int(span_end)):
+            rescued_by_index[index] = occurrence
+    emitted_rescues: set[tuple[int, int]] = set()
+
+    def _consume_rescued(index: int) -> bool:
+        """Emit the placeholder once per rescued name and swallow the rest of its tokens."""
+        occurrence = rescued_by_index.get(index)
+        if occurrence is None:
+            return False
+        if occurrence not in emitted_rescues:
+            emitted_rescues.add(occurrence)
+            actual_tokens.append(
+                _semantic_anchor_token(occurrence[0], occurrence[1], anchor_count)
+            )
+        return True
+
     actual_tokens: list[str] = []
     transcript_cursor = 0
     for operation in operations:
         kind = str(operation["kind"])
         if kind in {"insert_transcript", "match_token", "substitute_token"}:
-            actual_tokens.append(transcript_tokens[transcript_cursor])
+            if not _consume_rescued(transcript_cursor):
+                actual_tokens.append(transcript_tokens[transcript_cursor])
             transcript_cursor += 1
         elif kind == "match_anchor":
             actual_tokens.append(
@@ -782,13 +844,14 @@ def _canonical_locked_name_metrics(
             # ordinary substitution here would punish the same disagreement twice and
             # push short sentences past the WER gate on their names alone. A name the
             # transcript dropped entirely stays a `delete_anchor` and still counts.
-            actual_tokens.append(
-                _semantic_anchor_token(
-                    int(operation["repeat_index"]),
-                    int(operation["anchor_index"]),
-                    anchor_count,
+            if not _consume_rescued(transcript_cursor):
+                actual_tokens.append(
+                    _semantic_anchor_token(
+                        int(operation["repeat_index"]),
+                        int(operation["anchor_index"]),
+                        anchor_count,
+                    )
                 )
-            )
             transcript_cursor += 1
     if transcript_cursor != len(transcript_tokens):
         raise RuntimeError("Locked-name canonical alignment did not consume transcript")
@@ -932,6 +995,10 @@ def adjudicate_locked_name_anchors(
     # moves forward as occurrences are visited would still let the first one re-find the
     # name inside the span the second had taken. Three requirements would then be met by two
     # readings. A test pins exactly that, and this is what it caught.
+    # Occurrence -> transcript span, for the names the component-phoneme check matched after
+    # the alignment gave up on them. The canonical metrics need it: without the span they
+    # fold away one token of a multi-token name and count the rest as insertions.
+    rescued_spans: dict[tuple[int, int], tuple[int, int]] = {}
     claimed_tokens: set[int] = {
         index
         for ordinary_operation in operations
@@ -1004,6 +1071,10 @@ def adjudicate_locked_name_anchors(
                     component_cursor = max(
                         component_cursor, int(component_match["token_end"])
                     )
+                    rescued_spans[(repeat_index, anchor_index)] = (
+                        int(component_match["token_start"] or 0),
+                        int(component_match["token_end"]),
+                    )
                     claimed_tokens.update(
                         range(
                             int(component_match["token_start"] or 0),
@@ -1060,6 +1131,7 @@ def adjudicate_locked_name_anchors(
         operations,
         transcript_tokens,
         len(safe_anchors),
+        rescued_spans,
     )
     ordinary_expected_tokens = sum(1 for unit in units if unit["kind"] != "anchor")
     # An anchor unit stands in for however many written tokens its spoken form has, so

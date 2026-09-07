@@ -219,3 +219,124 @@ def test_a_real_mispronunciation_is_still_refused_after_the_fix() -> None:
 
     assert result["component_matched"] == [True, False]
     assert result["passed"] is False
+
+
+def test_a_hyphen_in_the_english_spelling_does_not_disable_the_check() -> None:
+    """The convention is "hyphen inside a name part, space between them", and it holds for
+    names. It breaks for game terms whose *English* spelling carries the hyphen: "Safe-Zone"
+    is one whitespace part against a spoken "Xây Dôn" that is two, so the components did not
+    line up and the check switched itself off. Five of this book's 112 seeded readings are
+    that shape, and they are common words in it: A-rank, B-rank, SS-rank, Safe-Zone, Western
+    Safe-Zone."""
+    assert _locked_name_anchor_components(
+        {"surface": "Safe-Zone", "spoken_form": "Xây Dôn"}
+    ) == [("Safe", ("Xây",)), ("Zone", ("Dôn",))]
+
+    assert _passes(
+        "khu xây dôn phía tây", {"surface": "Safe-Zone", "spoken_form": "Xây Dôn"}
+    )
+
+
+def test_the_hyphen_fallback_cannot_take_apart_a_name_that_already_worked() -> None:
+    """It runs only after the plain split has failed, which is what makes it safe to add: a
+    hyphenated *name* read as one hyphenated spoken part stays one component, exactly as
+    before. Measured on the 112 seeded readings: 107 aligned without this, 112 with it, and
+    not one of the 107 changed."""
+    assert _locked_name_anchor_components(
+        {"surface": "Jean-Luc", "spoken_form": "Giăng-Luých"}
+    ) == [("Jean-Luc", ("Giăng", "Luých"))]
+
+    assert _locked_name_anchor_components(ANCHOR) == [
+        ("Samael", ("Xa", "men")),
+        ("Kaizer", ("cai", "dờ")),
+        ("Theosbane", ("theo", "bên")),
+    ]
+
+
+def test_a_multi_word_term_with_a_hyphen_inside_it_lines_up() -> None:
+    assert _locked_name_anchor_components(
+        {"surface": "Western Safe-Zone", "spoken_form": "Goét-tờn Xây Dôn"}
+    ) == [("Western", ("Goét", "tờn")), ("Safe", ("Xây",)), ("Zone", ("Dôn",))]
+
+
+# Passing the anchor is only half the job, and the other half failed silently in production.
+# alpha.52 chapter 5 held on this exact segment *after* the rescue had accepted the take:
+# the anchor said pass, and the content gate refused it one step later on WER 0.444. The
+# canonical metrics exist to stop a name being punished twice, but they read the alignment,
+# and the alignment had parked this anchor on a single substitution - so three of the name's
+# four transcript tokens were counted as insertions and canonical WER came out 0.75 where the
+# truth is 0.0. The rescue changed a status field and nothing anybody could hear.
+
+
+def _adjudicate_with_thresholds(transcript: str) -> dict:
+    from tests.test_asr_locked_name_anchors import _anchor, _asr_result
+
+    from ebook_reader.asr import ASR_MISMATCH, adjudicate_locked_name_anchors
+
+    expected, surface, spoken = CHAPTER_5
+    result = _asr_result(transcript, verdict=ASR_MISMATCH, reason="ASR_MISMATCH")
+    result["similarity"] = 0.818
+    result["wer"] = 0.444
+    return adjudicate_locked_name_anchors(
+        expected,
+        result,
+        [_anchor(surface, spoken, spoken_start=expected.index("Xa-men"))],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+
+def _metrics(transcript: str) -> dict:
+    from ebook_reader.asr import LOCKED_NAME_ANCHOR_METRICS_KEY
+
+    return _adjudicate_with_thresholds(transcript)[LOCKED_NAME_ANCHOR_METRICS_KEY]
+
+
+def test_a_rescued_name_is_folded_out_of_the_sentence_metrics() -> None:
+    """The whole name is one placeholder on both sides, so what is left to score is the
+    Vietnamese around it - which was read perfectly."""
+    metrics = _metrics("Tên tôi là Samen Kaiser theo bên.")
+
+    assert metrics["canonical_similarity"] == 1.0
+    assert metrics["canonical_wer"] == 0.0
+
+
+def test_a_rescued_name_actually_clears_the_content_gate() -> None:
+    """The assertion that would have caught the half-finished fix. Without the span, this
+    take passes the anchor and is still refused, which is worth nothing."""
+    metrics = _metrics("Tên tôi là Samen Kaiser theo bên.")
+
+    assert metrics["canonical_threshold_passed"] is True
+    assert metrics["canonical_promoted"] is True
+
+
+def test_the_broken_take_is_not_folded_away_with_it() -> None:
+    """Folding only applies to a name the check actually matched. "Sam Min" was not matched,
+    so its tokens stay in the comparison and it stays refused."""
+    for transcript in (
+        "Tên tôi là Sam Min Kaiser theo bên.",
+        "Tên tôi là Samen Kai rửa theo binh.",
+    ):
+        metrics = _metrics(transcript)
+        assert metrics["canonical_promoted"] is False, transcript
+        assert metrics["canonical_wer"] == 1.0, transcript
+
+
+def test_the_parts_of_a_name_must_be_adjacent() -> None:
+    """Not just tidiness - once the caller folds the matched span out of the sentence
+    metrics, a gap becomes a hole in the comparison. Without this, "samen đã giết rất nhiều
+    người kaiser theo bên" matched with five ordinary words inside the span, and folding it
+    away would delete a whole clause from the score and hide whatever the take really got
+    wrong. A permissive name check that also erases its surroundings is worse than none."""
+    assert not _passes("samen đã giết rất nhiều người kaiser theo bên")
+    assert not _passes("samen à kaiser theo bên")
+
+
+def test_a_matched_name_covers_only_its_own_tokens() -> None:
+    """What the fold is allowed to remove: exactly the name, never more."""
+    result = _locked_name_anchor_component_match(
+        ANCHOR, "tên tôi là samen kaiser theo bên".split()
+    )
+
+    assert result["passed"]
+    assert (result["token_start"], result["token_end"]) == (3, 7)
