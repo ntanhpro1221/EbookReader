@@ -1793,3 +1793,26 @@ chưa**. Đó là bài học đắt nhất về cách nghiệm thu một bản v
 
 **Watcher tự thoát đúng lúc** (12:43:08, `lease còn lại: 0`) — bản vá tín hiệu sống thứ ba
 được xác nhận trong sản xuất, đúng tình huống trước đây làm nó treo mười một tiếng.
+
+### alpha.53 tái lập alpha.51 chính xác — quy tắc nhường máy đã có số
+
+Phân tích xong lúc ~14:07. Kết quả, so với chính alpha.51:
+
+| | alpha.51 | alpha.52 (máy có tải) | **alpha.53 (máy yên)** |
+|---|---|---|---|
+| nhóm phân tích trùng khớp | — | 140/198 | **198/198** |
+| nhân vật tìm được | 23 | 20 | **23** |
+| đoạn lệch phân vai | — | 54 | **0** |
+| giọng của `c00006_s0000001` | 16 | 14 | **16** |
+
+Cùng mã, cùng nguồn, cùng 112 cách đọc đã gieo. Biến số **duy nhất** khác giữa alpha.52 và
+alpha.53 là có hay không có việc nặng chạy đè lên pha phân tích, và nó đổi 54 phân vai cùng
+một chương.
+
+Đoạn `c00006_s0000001` đã trở lại giọng 16 — giọng đọc được "Mẹ kiếp". Dự đoán chương 6 xuất
+được đứng vững tới bước này; phần còn lại chờ pha tổng hợp.
+
+**Đây cũng là câu trả lời cho một câu hỏi cũ.** `PRONUNCIATION_VARIANT_DRIFT.md` và các mục
+trước từng quy trôi dạt cho "số học GPU không tất định" — một lời giải thích đúng nhưng vô
+dụng, vì nó không chỉ ra việc gì phải làm. Hoá ra phần lớn nó **điều khiển được**: giữ máy
+yên thì phân tích tái lập tuyệt đối, ba lần liên tiếp trước đây và lần này là lần thứ tư.
