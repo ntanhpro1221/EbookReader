@@ -537,3 +537,51 @@ Hai ca còn chặn cùng chương thì **không** thuộc lớp này, và đáng
 - `"Dịch câu này: Kalbi kathub 'ala ramal."` → `Thịt câu này, Kambi Khá Thớp A La Rambo.` —
   **tiếng Ả Rập trong nguồn**, và `Dịch` → `Thịt` là nghe sai thật ở phần tiếng Việt. Không
   phép kiểm nào trong dự án được thiết kế cho văn bản đa ngữ hệ.
+
+## Ví dụ sắc nhất: 97,9% khớp, vẫn bị chặn, vì `x` và `s` viết khác nhau
+
+Lượt kiểm một chương 2026-09-08 05:45 (`v0.2.0-alpha.58-kiem-tieu-de`), đoạn
+`c00001_s0000001`:
+
+```
+gốc : Sau khi Samael Kaizer Theosbane bước ra ngoài, Sảnh Thẩm Vấn liền chìm…
+nghe: Sau khi Sa-men Kai dở theo bên bước ra ngoài, sảnh thầm vẫn liền chìm…
+```
+
+| số đo | giá trị |
+|---|---|
+| `raw_similarity` | **0,979** |
+| `raw_wer` | **0,045** |
+| `matched_occurrence_count` | **0** / cần 1 |
+| `canonical_similarity` | 0,722 (sàn 0,78) |
+| `status` | **fail** |
+
+Cách đọc đã khoá là `Xa-men cai-dờ theo-bên`. Máy nghe ra `Sa-men Kai dở theo bên`. Đối chiếu:
+
+| khoá | nghe | khác chỗ nào |
+|---|---|---|
+| `Xa-men` | `Sa-men` | **`x` và `s` trong tiếng Việt Bắc bộ phát âm giống hệt nhau** |
+| `cai-dờ` | `Kai dở` | `c`/`k` cùng âm; dấu thanh khác |
+| `theo-bên` | `theo bên` | gạch nối so với dấu cách |
+
+**Không có lỗi đọc nào ở đây.** Cả ba khác biệt là khác *chính tả*, không phải khác *âm*.
+
+### Chuỗi đổ vỡ
+
+Neo không khớp ⇒ không gấp được tên vào một chỗ giữ chỗ ⇒ số đo canonical tính trên văn bản
+chưa gấp ⇒ canonical 0,722 dưới sàn 0,78 ⇒ chặn. Một đoạn khớp 97,9% bị chặn bởi một phép kiểm
+phụ, trong khi phép kiểm chính đã qua từ lâu.
+
+`canonical_waiver_available = True` nhưng `canonical_promoted = False` — cơ chế miễn có tồn tại
+và không bắn được, vì nó cũng cần cái gấp mà neo không tạo ra.
+
+### Vì sao đáng ghi dù đã biết
+
+Đây là **tên chính của cuốn sách**, và là lô thứ hai liên tiếp nó trượt. Cái mới ở đây là số
+đo: trước nay tài liệu này lập luận rằng neo so chính tả; giờ có một ca mà **phép kiểm nội dung
+cho 0,979 còn neo cho 0** trên cùng một đoạn. Khoảng cách ấy là thước đo của vấn đề.
+
+Chế độ so `vietnamese_phoneme_exact` lẽ ra phải xử được `Xa`/`Sa` (cả hai ra `sˈaː`). Nó không
+xử được ở đây, và tôi **chưa biết vì sao** — nghi là do máy nghe tách thành năm token
+(`Sa-men` `Kai` `dở` `theo` `bên`) trong khi khoá có ba thành phần, nhưng đó là giả thuyết chưa
+kiểm. Ghi lại làm điểm khởi đầu, không phải kết luận.
