@@ -346,9 +346,14 @@ Hai script làm cùng một việc cho hai loại quyết định của con ngư
 cli create ...
 python scripts/port_pronunciations.py       <nguồn> <đích>   # cách đọc tên
 python scripts/seed_listener_acceptances.py <nguồn> <đích>   # phán quyết người nghe
+python scripts/port_casting.py              <nguồn> <đích>   # phân vai giọng
 cli run ...
 python scripts/watch_listener_acceptances.py <nguồn> <đích>  # chỉ còn lo ca bản thu ĐỔI
 ```
+
+Ba script đầu mang ba loại quyết định của con người sang bản mới: **đọc thế nào**, **nghe rồi
+và chấp nhận**, và **ai nói bằng giọng nào**. Cả ba đều chạy giữa `create` và `run`, và cả ba
+đều bất động nếu không có gì để mang.
 
 Watcher vẫn có việc: nó bắt các phán quyết cho bản thu **mới xuất hiện trong lúc chạy**. Nhưng
 ca thường gặp — bản thu không đổi giữa hai phiên bản — thì đã hết đua.
