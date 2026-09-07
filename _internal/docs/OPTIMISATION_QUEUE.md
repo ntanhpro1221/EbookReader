@@ -50,6 +50,25 @@ Mục 5 (ngưỡng perceptual theo sigma) vẫn chờ phép đo phân giải nhi
 
 ---
 
+## Cảnh báo: mọi phần trăm dưới đây sắp lệch chuẩn (2026-09-07)
+
+Mọi con số "% một lần chạy" trong tài liệu này đo trên **lượt chạy có phép kiểm cảm thụ**.
+Từ alpha.52 phép kiểm ấy **tắt** (`PERCEPTUAL_QA_COST.md`), và nó là khoản tốn lớn nhất
+ngoài TTS. Nên:
+
+- **Mẫu số nhỏ đi**, tức mọi mục còn lại tự động chiếm **phần trăm lớn hơn** trước. "1,6%
+  một lần chạy" của mục 2 sẽ không còn là 1,6%.
+- **Tử số cũng đổi.** Cả mục 1 lẫn mục 2 đều nằm trong vòng sửa candidate, mà vòng ấy trước
+  đây chạy cho *cả* lỗi ASR lẫn lỗi cảm thụ. Bỏ nhánh cảm thụ thì vòng sửa chạy ít hơn hẳn,
+  nên khoản tiết kiệm tuyệt đối (905s và 230s) **cũng nhỏ đi**, không chỉ đổi tỷ lệ.
+
+Hai thứ đổi ngược chiều nhau, nên **không suy ra được** kết quả bằng phép nhân — đúng cái sai
+mà mục 2 đã tự thú ở trên ("tôi lấy 2,33 GB/worker nhân ba, chứ không đo").
+
+**Việc phải làm:** đo lại cơ cấu thời gian trên alpha.52 rồi mới xếp lại hàng đợi. Đừng dùng
+các phần trăm dưới đây để quyết định gì cho tới lúc đó. `WHERE_A_RUN_SPENDS_ITS_TIME.md` cũng
+cần đo lại cùng lúc, vì nó chia thời gian theo pha trên cùng loại lượt chạy cũ.
+
 ## Làm cái nào trước
 
 Xếp theo giá trị thì mục 1 đứng đầu, nhưng xếp theo **giá trị chia cho rủi ro** thì mục 3
