@@ -84,3 +84,50 @@ có gì để phân biệt, nên không có gì để ghi.
 
 Phép kiểm là thứ đúng và cần giữ: nó bảo vệ bất biến *"cùng một tên không đổi cách đọc"*.
 Cái sai là dữ liệu đưa vào nó.
+
+## Giọng trôi vì ghim bị rớt, và va chạm sinh ra từ đó
+
+Đo 2026-09-08. `port_casting.py` mang casting sang lô sau bằng câu hỏi *"ai đã nói trong lô
+này?"* — join `characters` với `segments` và `voice_profiles`. Câu hỏi ấy **bỏ sót nhân vật đã
+ghim giọng mà im lặng ở lô đó**.
+
+alpha.56: 38 nhân vật có `locked_voice_key`, **18** thực sự nói. 20 bị rớt — 14 là NPC cục bộ
+theo chương (đúng phải rớt) nhưng **5 là nhân vật có tên**, trong đó có `THEOSBANE`, chính cái
+tên chủ sách tự tay chọn cách đọc, và nó có mặt ở **156/478 chương**.
+
+### Hậu quả đo được: một va chạm giọng
+
+| | số ghim | giọng bị dùng chung |
+|---|---|---|
+| alpha.55 | 23 | **0** |
+| alpha.56 | 38 | **1** — `THEOSBANE` và `SAMAEL` cùng `preset_thanh_binh_f093_p-04` |
+
+Chuỗi nhân quả: `THEOSBANE` im lặng suốt chương 010–018 ⇒ ghim của nó bị rớt khi gieo alpha.56
+⇒ bộ cấp phát không biết giọng ấy đã có chủ ⇒ giao cho `SAMAEL`.
+
+### Đã sửa: hợp hai câu hỏi, và từ chối va chạm
+
+Một câu hỏi thôi thì mất người, theo hai chiều ngược nhau:
+
+| hỏi gì | mất ai |
+|---|---|
+| *ai đã nói ở lô này* | 20 nhân vật đã ghim mà im lặng (alpha.56) |
+| *ai đang được ghim* | 15 nhân vật vừa được cấp giọng mà chưa ghim, gồm `ARTHUR` (alpha.55) — vì **bộ cấp phát không ghi `locked_voice_key`**, chỉ script này và lệnh `cast` mới ghi |
+
+Nên hỏi cả hai, bản đã nói thắng khi bất đồng — ghim nói *đã quyết gì*, segment nói *đã nghe
+gì*, và cái đã nghe mới là cái người nghe chấp nhận.
+
+Và khi hai nhân vật cùng một giọng thì **không mang giọng ấy đi đâu cả**, để bộ cấp phát chia
+lại. Đây đúng là luật script này vốn đã áp cho ca ngược (một nhân vật hai giọng): chọn bên
+thắng nghĩa là quyết định ai đổi giọng mà không có bằng chứng nào.
+
+### CHƯA sửa: lỗi sâu hơn
+
+Bản vá trên chặn va chạm **lan sang lô sau**, nhưng không chặn va chạm **mới sinh ra**. Gốc rễ
+là bộ cấp phát chỉ `reserve()` giọng của nhân vật **có trong danh sách casting của lô này**.
+Một nhân vật đã ghim mà im lặng thì không nằm trong danh sách ấy, nên giọng của nó vẫn được coi
+là còn trống.
+
+Sửa đúng là ở `character_registry.py`: reserve **mọi** `locked_voice_key` trong bảng
+`characters`, kể cả của nhân vật không nói câu nào ở lô này. Chưa làm vì file ấy bị khoá và
+alpha.57 đang chạy.

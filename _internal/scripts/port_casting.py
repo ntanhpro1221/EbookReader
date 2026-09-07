@@ -35,35 +35,105 @@ from ebook_reader.database import ProjectDB  # noqa: E402
 from scripts.port_listener_acceptances import _say_safely  # noqa: E402
 
 
+SPOKE_HERE_SQL = """
+    SELECT DISTINCT c.canonical_name AS canonical_name, v.*
+    FROM characters c
+    JOIN segments s ON s.canonical_character_id = c.id
+    JOIN voice_profiles v ON v.id = s.voice_profile_id
+    ORDER BY c.canonical_name
+"""
+
+PINNED_SQL = """
+    SELECT DISTINCT c.canonical_name AS canonical_name, v.*
+    FROM characters c
+    JOIN voice_profiles v ON v.voice_key = c.locked_voice_key
+    WHERE c.locked_voice_key <> ''
+    ORDER BY c.canonical_name
+"""
+
+
 def read_casting(source: Path) -> list[tuple[str, str, dict]]:
-    """(canonical_name, voice_key, profile row) for every character with a voice."""
+    """(canonical_name, voice_key, profile row) for every character with a voice.
+
+    Two queries, because either alone loses characters, in opposite directions.
+
+    Asking only who **spoke in this batch** drops anyone already pinned who happened to be
+    silent here. Measured on alpha.56: 38 characters carried a pin, 18 spoke, so 20 were
+    dropped - fourteen of them chapter-local NPCs that should go, but five named characters
+    that should not, including THEOSBANE, whose reading the owner chose personally.
+    THEOSBANE appears in 156 of the book's 478 chapters, so it would simply have been recast
+    with a different voice the next time it opened its mouth. That is the casting drift this
+    script exists to prevent, arriving one batch later.
+
+    Asking only who is **pinned** drops the other side: the allocator does not write
+    locked_voice_key, only this script and the `cast` command do, so a character cast fresh
+    in this batch has a voice and no pin. Measured on alpha.55: 15 of the 18 who spoke had no
+    pin, ARTHUR among them.
+
+    So both, with the voice actually used this batch winning any disagreement - a pin says
+    what was decided, a segment says what was heard, and what was heard is what the listener
+    accepted.
+    """
     connection = sqlite3.connect(f"file:{source / 'project.sqlite3'}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
     try:
-        rows = connection.execute(
-            """
-            SELECT DISTINCT c.canonical_name AS canonical_name, v.*
-            FROM characters c
-            JOIN segments s ON s.canonical_character_id = c.id
-            JOIN voice_profiles v ON v.id = s.voice_profile_id
-            ORDER BY c.canonical_name
-            """
-        ).fetchall()
-    except sqlite3.OperationalError:
-        return []
+        try:
+            rows = list(connection.execute(SPOKE_HERE_SQL))
+        except sqlite3.OperationalError:
+            return []
+        try:
+            rows += list(connection.execute(PINNED_SQL))
+        except sqlite3.OperationalError:
+            # A project older than the locked_voice_key column has no pins to carry, which
+            # is not an error - alpha.54 and earlier are in that state.
+            pass
     finally:
         connection.close()
-    out: list[tuple[str, str, dict]] = []
+    from collections import Counter
+
+    from ebook_reader.analysis import is_local_speaker
+
+    candidates: list[tuple[str, str, dict]] = []
     seen: set[str] = set()
     for row in rows:
         name = str(row["canonical_name"])
+        # A chapter-local NPC is scoped to a chapter of the SOURCE batch; its id names
+        # nothing in the target and carrying it only litters the characters table.
+        if is_local_speaker(name):
+            continue
         if name in seen:
-            # A character with two voices is a bug the source project should have caught;
-            # carrying either one would make it permanent, so carry neither and say so.
-            _say_safely(f"  BỎ QUA {name}: nguồn có nhiều hơn một giọng cho nhân vật này")
+            # Two voices for one character. The first row wins because the spoke-here query
+            # runs first: what was heard outranks what was pinned, since a listener verdict
+            # was given on the audio. A genuine two-voice conflict inside one batch is a bug
+            # the source project should have caught, and assert_voice_stability reports it.
             continue
         seen.add(name)
-        out.append((name, str(row["voice_key"]), {key: row[key] for key in row.keys()}))
+        candidates.append((name, str(row["voice_key"]), {key: row[key] for key in row.keys()}))
+
+    # And the mirror case: one voice for two characters. alpha.55 had none of these among its
+    # pinned characters; alpha.56 had one, THEOSBANE and SAMAEL both on
+    # preset_thanh_binh_f093_p-04 - caused by this very script, in the version that carried
+    # only characters who spoke. THEOSBANE was silent through chapters 010-018, so its pin
+    # was dropped, and the allocator handed its voice to SAMAEL knowing nothing about it.
+    #
+    # Carrying both would make that permanent, and picking a winner means deciding which of
+    # two characters changes voice on no evidence. So carry neither and say so, which is the
+    # same rule this script already applies to a character holding two voices. Both get a
+    # fresh non-colliding voice in the target, and the collision ends here instead of
+    # propagating to every later batch.
+    holders = Counter(voice_key for _name, voice_key, _profile in candidates)
+    out: list[tuple[str, str, dict]] = []
+    for name, voice_key, profile in candidates:
+        if holders[voice_key] > 1:
+            shared = sorted(
+                other for other, key, _p in candidates if key == voice_key and other != name
+            )
+            _say_safely(
+                f"  BỎ QUA {name}: giọng {voice_key} đang bị dùng chung với {', '.join(shared)}"
+                " — không mang giọng nào trong số đó, để bộ cấp phát chia lại"
+            )
+            continue
+        out.append((name, voice_key, profile))
     return out
 
 
