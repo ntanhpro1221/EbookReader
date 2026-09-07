@@ -456,3 +456,41 @@ def test_standalone_ha_gasp_is_narrowly_recognized(text: str) -> None:
 )
 def test_non_standalone_ha_text_does_not_activate_gasp_delivery(text: str) -> None:
     assert not is_standalone_ha_gasp(text)
+
+
+def test_load_and_segment_chapter_forwards_the_warnings_list() -> None:
+    """The recovery is only useful if it reaches whoever is watching."""
+    import inspect
+
+    from ebook_reader.text_processing import load_and_segment_chapter
+
+    signature = inspect.signature(load_and_segment_chapter)
+
+    assert "warnings" in signature.parameters
+
+
+def test_the_pipeline_asks_for_the_warnings_and_says_them_out_loud() -> None:
+    """A chapter recovered in silence is the defect this was built to prevent.
+
+    segment_chapter_text recovers a source that never closes a quote instead of refusing the
+    chapter, and the recovery may read a stretch as dialogue that was narration - a chapter
+    cast slightly wrong rather than a chapter that does not exist. That trade is worth making
+    only when somebody is told, because a mis-cast stretch nobody recorded is exactly what
+    reaches the finished book unnoticed.
+
+    Eight of this source's 478 chapters recover, and when this was first written the pipeline
+    called load_and_segment_chapter without the argument, so all eight would have been
+    recovered without a word in the log.
+    """
+    import inspect
+
+    from ebook_reader.pipeline import BookPipeline
+
+    source = inspect.getsource(BookPipeline)
+
+    assert "warnings=segmentation_warnings" in source, (
+        "bộ chia đoạn phải được hỏi nó đã phục hồi những gì"
+    )
+    assert "SOURCE_QUOTE_RECOVERED" in source, (
+        "phục hồi phải để lại một sự kiện đọc được, không chỉ một dòng log"
+    )

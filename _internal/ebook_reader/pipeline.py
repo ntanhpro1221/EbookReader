@@ -602,10 +602,34 @@ class BookPipeline:
                 self._progress("Chuẩn bị và chia văn bản", index, len(chapters))
                 continue
             self._wait_pause_or_stop()
-            rows = load_and_segment_chapter(dict(chapter), max_chars=max_chars)
+            # segment_chapter_text recovers from a source that never closes a quote instead
+            # of refusing the chapter, and that recovery may read a stretch as dialogue that
+            # was narration - a chapter cast slightly wrong rather than a chapter that does
+            # not exist. Cheap, and worth it, but only if somebody is told: a mis-cast
+            # stretch nobody recorded is exactly the defect that reaches the finished book
+            # unnoticed. Eight of this source's 478 chapters recover.
+            segmentation_warnings: list[str] = []
+            rows = load_and_segment_chapter(
+                dict(chapter),
+                max_chars=max_chars,
+                warnings=segmentation_warnings,
+            )
             if not rows:
                 raise RuntimeError(f"Chapter has no readable content: {chapter['input_path']}")
             self.db.replace_chapter_segments(int(chapter["id"]), rows)
+            for warning in segmentation_warnings:
+                self.log(f"NGUỒN HỎNG, ĐÃ TỰ PHỤC HỒI — {warning}")
+                self.db.event(
+                    "warning",
+                    "SOURCE_QUOTE_RECOVERED",
+                    warning,
+                    {
+                        "chapter_id": int(chapter["id"]),
+                        "chapter_index": int(chapter["chapter_index"]),
+                        "chapter_title": str(chapter["title"]),
+                        "input_path": str(chapter["input_path"]),
+                    },
+                )
             self.log(f"Đã chia {chapter['title']} thành {len(rows):,} segment và checkpoint vào SQLite.")
             self._progress("Chuẩn bị và chia văn bản", index, len(chapters))
 
