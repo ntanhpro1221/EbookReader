@@ -2061,3 +2061,53 @@ chứ không phải đếm ký tự.
 > Rồi tôi kết luận "5 trong 13 chương chỉ hỏng vì bộ phân tích không biết ngoặc cong". Sai:
 > `QUOTE_PATTERN` là `[“\"]…[”\"]`, nó nhận cả hai loại và cả trường hợp trộn. Lỗi nằm ở
 > **script đếm của tôi** chỉ đếm ngoặc thẳng. Đếm đúng thì 13 thành 8.
+
+## alpha.55: chương mới chặn nhiều hơn hẳn, và 11/15 đoạn chặn là câu quá ngắn để kiểm
+
+alpha.54 đạt 10/10. alpha.55 — cùng mã, chương 011–019 — chặn 4 trên 7 chương đầu. Khác biệt
+**không phải** vì chương mới khó hơn: alpha.54 chạy trên mười chương **đã qua năm vòng người
+nghe**, mang sang 8 phán quyết. Chương mới thì chưa có gì.
+
+### 15 đoạn đang chặn, phân theo độ dài
+
+| dài | số đoạn |
+|---|---|
+| **≤6 chữ** | **11** |
+| >6 chữ | 4 |
+
+Những đoạn ngắn nhất:
+
+| lời | thời lượng | mã chặn |
+|---|---|---|
+| `"Hộc!"` | 0,32s | `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` |
+| `"Im đi!!"` | 0,48s | `ASR_UNVERIFIABLE_SHORT_TEXT` |
+| `"Juli!"` | 0,56s | `ASR_LOCKED_NAME_ANCHOR_MISMATCH` |
+| `"Khục!"` | 1,04s | `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` |
+| `—KENGGG!` | 1,04s | `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` |
+
+**Đây không phải "ASR khó xác minh", mà là "không có gì để xác minh".** Một tiếng nấc 0,32 giây
+không mang đủ tín hiệu để đối chiếu với văn bản. Bằng chứng: cùng một bản thu, Whisper giải mã
+36 lần cho `c00005_s0000054` và cho ra lúc `'Đi'`, lúc `'Thường đi, thường đi, thường đi.'` —
+nó ảo giác lặp vòng, một chế độ hỏng đã biết trên audio ngắn. Phán quyết `fail` ở đó **không
+phải bằng chứng bản thu có lỗi**.
+
+Khái niệm ấy đã tồn tại: `ASR_UNVERIFIABLE_SHORT_TEXT`. Nhưng ngưỡng của nó chỉ phủ một trong
+năm ca trên; bốn ca còn lại rơi vào các mã coi là hỏng thật.
+
+### Quyết định này thuộc về chủ sách, không phải tôi
+
+Nới ngưỡng "quá ngắn để kiểm" là **làm phép kiểm dễ dãi hơn** — đúng cái bẫy cả tài liệu này
+cảnh báo. Khác biệt là ở đây nó có lý lẽ: với một tiếng thốt 0,3 giây thì ASR không phải là
+một phép kiểm yếu, nó **không phải là phép kiểm nào cả**. Nhưng nới xong thì những đoạn ấy
+không còn lưới nào ngoài tai người.
+
+Ba hướng, chưa làm cái nào:
+
+| | hướng | đánh đổi |
+|---|---|---|
+| 1 | giữ nguyên | mỗi tiếng nấc, mỗi tiếng gọi tên đều chặn một chương cho tới khi có người nghe |
+| 2 | nới `ASR_UNVERIFIABLE_SHORT_TEXT` phủ hết đoạn dưới ~1,2s | mất lưới trên đúng loại đoạn TTS hay hỏng nhất |
+| 3 | giữ chặn, nhưng gom chúng thành **một trang nghe** thay vì chặn từng chương | tốn tai người, nhưng có kiểm soát |
+
+Hướng 3 hợp với những gì hôm nay dựng được — phán quyết giờ sống qua các phiên bản, nên nghe
+một lần là xong vĩnh viễn.
