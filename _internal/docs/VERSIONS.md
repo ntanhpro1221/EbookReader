@@ -1913,3 +1913,36 @@ quyết người nghe. **Không có cái tương đương cho casting.**
 
 Hướng 2 là hướng đúng nếu định chạy cả cuốn nhiều lần. Hướng 1 đúng nếu chỉ chạy một lần và
 chấp nhận rủi ro thời gian.
+
+### Hướng 2 đắt bao nhiêu: định giá trước khi khuyên
+
+Không đoán — đọc mã. Cơ chế cần viết đã có **mẫu sẵn để soi gương**:
+
+```python
+# database.py:8059 — đã tồn tại cho GIỚI TÍNH
+def locked_character_genders(self) -> dict[str, str]:
+    """Every gender a listener has pinned, keyed the way casting keys characters."""
+    ... WHERE locked=1 AND gender IN ('male','female')
+
+# character_registry.py:875 — bộ cấp phát đã tôn trọng nó
+locked_genders = db.locked_character_genders()
+```
+
+Tức là **khái niệm "người quyết, máy tuân" đã có sẵn trong casting**, chỉ chưa áp cho giọng.
+Việc phải làm là bốn mảnh, mỗi mảnh đều có bản mẫu:
+
+| mảnh | mẫu để soi |
+|---|---|
+| lưu giọng đã khoá theo nhân vật | cột `locked` + `gender` trong `characters` |
+| `locked_character_voices()` | `locked_character_genders()` |
+| nhánh trong bộ cấp phát: có giọng khoá thì dùng, khỏi xếp hạng | chỗ `resolve_gender(..., locked_genders)` |
+| `port_casting.py` | `port_pronunciations.py` |
+
+Cỡ việc tương đương một trong các fix hôm nay — không phải việc lớn, vì nó lặp lại một khuôn
+đã đúng chứ không phát minh khuôn mới. Và nó trả lại giá trị **ngay từ lần chạy lại thứ hai**,
+mà cuốn này đã chạy bốn bản trong một ngày.
+
+Cái nó mở ra, ngoài chuyện chia lô: **sửa casting bằng tay rồi giữ được qua các bản**. Hôm nay
+chương 6 của alpha.52 chết vì giọng 14 không đọc được "Mẹ kiếp", và **không có cách nào** ghim
+lại giọng 16 — `cast` chỉ đổi được giới tính, mà giới tính vốn đã đúng. Với cơ chế này thì
+chuyện đó là một dòng lệnh.
