@@ -2234,3 +2234,27 @@ alpha.56 xuất bản **mang theo segment `failed`** — máy vẫn phán y như
 > được chấp nhận từ vòng trước, nên chúng qua nhờ phán quyết chứ không nhờ máy khá lên. Tôi đã
 > tuyên bố chúng là phép kiểm, rồi phát hiện chính mình đã che mất chúng. Phép kiểm thật là
 > chương mới chưa ai nghe — từ `019` trở đi.
+
+### alpha.56 chốt: 9/9 xuất bản, nhưng **6/9 là công của máy**
+
+`book.status = completed`, không lỗi nào trong log, cả chín chương ra MP3.
+
+Con số 9/9 ấy **không so được** với 5/9 của alpha.55, vì nó trộn hai thứ khác hẳn nhau. Tách ra
+bằng `scripts/machine_credit.py` — áp đúng luật của `_high_quality_blocking_segment_warnings`
+lên trạng thái segment, một lần có phán quyết và một lần bỏ hết:
+
+| | alpha.55 | alpha.56 |
+|---|---|---|
+| **công của máy** (bỏ hết phán quyết) | **5/9** | **6/9** |
+| phán quyết cứu thêm | 3 | 3 |
+| chương xuất được | 5/9 lúc chạy | **9/9** |
+
+**Máy khá lên đúng một chương**, và là chương `011` — đúng cái đã dự đoán trước khi chạy, và
+kiểm được bằng bản ghi ASR chứ không phải bằng trạng thái chương. Ba chương `013`/`014`/`016`
+đi qua nhờ tai chủ sách từ vòng trước; bản thu của chúng **vẫn mang trạng thái `failed`**.
+
+> **Vì sao phải viết script để nói điều này.** "9/9" là con số dễ báo cáo và dễ tin. Nhưng một
+> lượt chạy mang phán quyết từ lượt trước sẽ luôn xuất được nhiều chương hơn, kể cả khi mã
+> không đổi một dòng — và đọc con số ấy thành "máy khá lên" là tự lừa mình một cách có hệ
+> thống. `machine_credit.py` tồn tại để mỗi bản sau đều phải trả lời câu hỏi ấy, không phải chỉ
+> lần này.
