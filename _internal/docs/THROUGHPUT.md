@@ -560,7 +560,7 @@ Cùng lý do ấy áp cho cách đọc tên và casting: alpha.56 khởi động
 quyết, 38 nhân vật ghim giọng**, tích luỹ từ hai bản trước. Mỗi bản thêm vào kho chứ không bắt
 đầu lại.
 
-## Kiểm chéo bằng đơn vị khác: 58.260 segment, và hai ước lượng gặp nhau
+## Kiểm chéo bằng đơn vị khác: 58.258 segment, và hai ước lượng gặp nhau
 
 Hàm trên đo theo **số chữ**. Có một đơn vị sát máy hơn — **số segment**, vì đó là thứ máy thật
 sự lần lượt xử lý. Trước nay chưa ai biết cả cuốn có bao nhiêu segment, chỉ suy ra từ mười
