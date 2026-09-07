@@ -279,3 +279,31 @@ mà nó sinh ra để chặn.
 cho đỗ nhiều hơn thì chưa phân biệt được gì". Lần này chính tôi suýt viết ra một cái. Cách bắt
 được nó không phải chạy thêm test, mà là **hỏi ngược lại: fix này làm gì dễ dãi hơn, và chỗ dễ
 dãi ấy có nhìn thấy được không?**
+
+## Kết cục: máy tự chọn đúng bản thu, ngay vòng đầu
+
+alpha.53 chương 5, `c00005_s0000013` — đoạn khởi đầu toàn bộ câu chuyện này:
+
+| | alpha.51 / .52 | **alpha.53** |
+|---|---|---|
+| vòng sửa đã chạy | 5, **tất cả `dual_failed`** | **1, `promoted`** |
+| bản thu cuối | `6da1eaa3…` — "Sam Min Kaiser theo bên" | `fc691064…` — "Samen Kaiser theo bên" |
+| neo tên | `missing_or_wrong` | `matched_by_component_phonemes` |
+| canonical | 0,00 / 0,75 | **1,00 / 0,00, `canonical_promoted`** |
+| chương | **trượt** ở cả hai bản | **xuất** |
+
+Chủ sách nghe bản cũ và nói "tôi nghe đọc như là xa-min ấy". Bản mới là bản thu mà chính vòng
+sửa đã tạo ra từ alpha.51 rồi **tự loại đi hai lần**. Không cần tai người, không cần phán
+quyết: máy nhận ra nó ngay vòng đầu.
+
+Và nó rẻ hơn: **1 vòng sửa thay vì 5**. Phép kiểm sai không chỉ giữ lại bản hỏng, nó còn bắt
+máy chạy thêm bốn vòng để tìm thứ nó đã có trong tay.
+
+**Chuỗi đầy đủ, cho người sau:** ba lần tôi tưởng đã xong mà chưa.
+
+1. Neo so chính tả với chữ phiên âm → sửa thành so âm theo từng thành phần tên.
+2. Neo đỗ rồi mà cổng nội dung vẫn từ chối → gấp tên ra khỏi số đo câu.
+3. Gấp được rồi thì span có thể nuốt cả chữ thường ở giữa → buộc các phần của tên liền kề.
+
+Mỗi bước đều "trông như đã sửa xong" ở tầng nó vừa chạm vào. Chỉ có câu hỏi cuối cùng —
+**chương có ra được file MP3 với bản thu ĐÚNG không** — mới phân biệt được ba trạng thái ấy.
