@@ -2019,3 +2019,45 @@ sau:
 Không tầng nào nhìn thấy được cho tới khi tầng trước thông. Đó là lý do "chương có ra MP3
 không" là câu hỏi nghiệm thu duy nhất đáng tin — bốn lần liên tiếp, mọi tín hiệu ở tầng dưới
 đều đã xanh trong khi chương vẫn chết.
+
+## Chạy cả cuốn bị chặn bởi 8 chương văn bản, không phải bởi mã
+
+alpha.55 (chương 11–20) chết **bốn giây** sau khi khởi động:
+
+```
+Unclosed dialogue quote at the end of chapter 10; expected '"'
+```
+
+Không phải lỗi của cơ chế mang casting vừa viết — lỗi ở `019.txt` dòng 309: một bài thề nhiều
+dòng mở ngoặc kép và không bao giờ đóng.
+
+Quét toàn bộ nguồn (`scripts/check_sources.py`): **8 trên 478 chương** có dấu ngoặc kép treo.
+
+| chương | dòng | dạng lỗi |
+|---|---|---|
+| 019 | 309 | bài thề nhiều dòng không đóng |
+| 216 | 261 | câu thoại không đóng |
+| 287 | 291 | `"Thung Lũng…,  tôi khẽ nói` — thiếu ngoặc đóng |
+| 375 | 35 | `"Có lẽ á? đứa trẻ lặp lại` — thiếu ngoặc đóng |
+| 397, 405, 430, 452 | | câu thoại không đóng |
+
+Ca 287 và 375 cho thấy đây là **thiếu một ký tự**, không phải phong cách viết.
+
+**Hệ quả cho quyết định chạy cả cuốn:** hôm nay không chạy được. Lượt chạy sẽ chết ở chương 19
+sau vài giây, sửa xong lại chết ở 216, và cứ thế **tám lần**. `run` chia đoạn tuần tự và ném
+lỗi ở chương hỏng đầu tiên; `create` thì không kiểm gì cả, nên một project có thể được tạo,
+gieo đủ cách đọc/phán quyết/casting, rồi mới từ chối chạy.
+
+`scripts/check_sources.py` lấp chỗ đó: quét cả thư mục nguồn và liệt kê **mọi** chương hỏng
+trong một lượt, kèm dòng và nội dung, để sửa hết một lần. Nó **không sửa gì** — dấu thiếu có
+thể thuộc cuối câu thơ, cuối đoạn, hoặc chính dấu thừa mới là lỗi; quyết định đó là đọc sách
+chứ không phải đếm ký tự.
+
+> **Hai lần tôi sai trong chính lượt điều tra này.** Bản đầu của công cụ báo nhầm dòng: nó đếm
+> độ sâu ngoặc, mà khi đã có một dấu lẻ thì mọi cặp phía sau đều lệch pha, nên nó chỉ vào
+> `019.txt` dòng 357 — một câu mở đóng đàng hoàng — trong khi chỗ hỏng ở 309. Cách đúng đơn
+> giản hơn: **dòng đầu tiên có số dấu lẻ**.
+>
+> Rồi tôi kết luận "5 trong 13 chương chỉ hỏng vì bộ phân tích không biết ngoặc cong". Sai:
+> `QUOTE_PATTERN` là `[“\"]…[”\"]`, nó nhận cả hai loại và cả trường hợp trộn. Lỗi nằm ở
+> **script đếm của tôi** chỉ đếm ngoặc thẳng. Đếm đúng thì 13 thành 8.
