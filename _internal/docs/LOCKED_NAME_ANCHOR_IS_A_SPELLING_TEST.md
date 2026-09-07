@@ -199,7 +199,22 @@ Whisper đọ với chữ phiên âm rồi gọi chênh lệch chính tả là l
 Một phép kiểm biết phát hiện lỗi nhưng không biết phân biệt bản đúng với bản sai thì tệ hơn
 là không có: nó bắt đúng chỗ đau, rồi vứt luôn thuốc.
 
-## Ranh giới của fix, đo trên ca thật đầu tiên nó không cứu được
+## Ranh giới của fix — nhưng ví dụ dưới đây lấy từ một bản thu đã hỏng
+
+> **Sửa lại, 2026-09-07 14:25.** Mục này viết khi alpha.52 chương 3 trượt, và tôi lấy chính
+> bản thu ấy làm ví dụ cho ranh giới. **Bản thu ấy là sản phẩm của lệch phân vai**, không
+> phải bản thu đúng của đoạn này.
+>
+> alpha.53 chạy lại với phân vai đúng, ra **cùng một bản thu với alpha.51**, và trên bản đó
+> Whisper viết `"tên Demon Prince"` — tức **chính tả gốc**, khớp thẳng qua đường
+> `source_spelling`. Kết quả: `matched_by_component_phonemes`, canonical 1,00/0,00,
+> `ASR_LOCKED_NAME_CANONICAL_PASS`. **Đoạn này không còn cần tai người nữa.**
+>
+> Ranh giới mô tả bên dưới vẫn có thật — `pɜː` và `pˈɔ` thật sự không khớp, và lý do không
+> nới vẫn đứng vững. Nhưng nó **chưa có ca thật nào** trong cuốn sách này. Bài học: đừng lấy
+> dữ liệu từ một lượt chạy đã hỏng ở tầng khác để mô tả giới hạn của một phép kiểm.
+
+### Ví dụ (từ bản thu lệch của alpha.52)
 
 alpha.52 chương 3, `c00003_s0000029`:
 
