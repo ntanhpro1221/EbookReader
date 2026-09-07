@@ -405,3 +405,50 @@ phải sự thật** — nó là thứ một mô hình khác nghe được, và 
 của nó. Thời lượng, số âm tiết và vị trí khoảng lặng là những thứ không thể ảo giác.
 
 Đoạn này cần tai người, và đó là đường đúng: máy không quyết được thì người quyết.
+
+## Phiên âm giúp tên bịa, hại chữ Anh thường — con số gộp che mất chuyện đó
+
+Máy thu lại một segment hỏng bằng hai kiểu văn bản luân phiên: vòng chẵn đưa **cách đọc đã
+khoá** (`locked_spoken_v1`), vòng lẻ đưa **chính tả gốc** (`source_spelling_v1`). Gộp cả sáu
+phiên bản alpha.50–55 thì chính tả gốc thắng 35,7% còn phiên âm 29,6%, và tôi suýt kết luận
+"phiên âm nói chung là có hại".
+
+Tách theo từng tên thì thấy nó **không phải một xu hướng, mà là hai xu hướng ngược nhau**:
+
+| tên | phiên âm thắng | chính tả gốc thắng | chênh |
+|---|---|---|---|
+| `Juli` | 2/11 = 18% | 5/6 = 83% | **+65** |
+| `Rare` | 0/6 = 0% | 3/7 = 43% | **+43** |
+| `Eagle Eyes` | 0/6 = 0% | 3/7 = 43% | **+43** |
+| `Asmodeus` | 0/10 = 0% | 5/20 = 25% | **+25** |
+| `Michael Godswill` | 0/20 = 0% | 6/36 = 17% | **+17** |
+| … | | | |
+| `Arthur Kaizer Theosbane` | 3/27 = 11% | 0/26 = 0% | **−11** |
+| `Samael` | 3/26 = 12% | 0/32 = 0% | **−12** |
+| `Samael Kaizer Theosbane` | 5/31 = 16% | 0/24 = 0% | **−16** |
+| `Theosbane` | 6/19 = 32% | 1/19 = 5% | **−26** |
+
+Đường phân chia đọc ra ngay: **tên bịa thì phiên âm thắng, chữ Anh thông thường thì chính tả
+gốc thắng.** `Theosbane`, `Samael`, `Kaizer` là thứ TTS tiếng Việt không có cửa đoán, nên soạn
+sẵn cách đọc là đúng. `Rare`, `Eagle Eyes`, `Michael`, `Juli` thì nó đọc được, và ép phiên âm
+chỉ tổ làm hỏng.
+
+### Ba chỗ phải cẩn thận trước khi hành động theo bảng này
+
+1. **Không phải A/B sạch.** `source_spelling_v1` chỉ được thử *sau khi* `locked_spoken_v1` đã
+   trượt, nên nó luôn nhận tập khó hơn. Điều đó làm nó **thiệt**, tức chênh lệch dương ở nửa
+   trên là con số *dưới đáy*; nhưng cũng có nghĩa hai cột không so được trực tiếp.
+2. **Cách khớp tên là thô.** Mỗi segment bị gán cho cái tên dài nhất tìm thấy trong đó. Segment
+   có hai tên thì cái thứ hai biến mất khỏi thống kê.
+3. **Nhiều dòng 0% cả hai cột** là những segment không cách nào cứu được — chúng kéo cả hai
+   cột xuống mà không nói gì về biến thể nào tốt hơn. Bảng trên đã lọc bỏ tên nào có dưới 6
+   lượt ở một trong hai cột, nhưng lọc thế vẫn còn sót.
+
+### Việc nên làm, chưa làm
+
+Một phép A/B thật: cùng một segment, sinh cả hai biến thể ở **cùng một vòng**, cùng seed, rồi
+so. Rẻ (chỉ gấp đôi số bản thu trên tập segment có tên riêng) và trả lời dứt điểm câu "danh
+sách phiên âm nên bỏ những mục nào".
+
+Nếu bảng trên đúng thì việc cần làm không phải bỏ phiên âm, mà là **thu hẹp danh sách lại còn
+tên bịa** — và đó là thay đổi chạm vào thứ chủ sách đã duyệt, nên phải hỏi.
