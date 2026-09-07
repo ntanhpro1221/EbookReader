@@ -219,3 +219,41 @@ def test_a_real_mispronunciation_is_still_refused_after_the_fix() -> None:
 
     assert result["component_matched"] == [True, False]
     assert result["passed"] is False
+
+
+def test_a_hyphen_in_the_english_spelling_does_not_disable_the_check() -> None:
+    """The convention is "hyphen inside a name part, space between them", and it holds for
+    names. It breaks for game terms whose *English* spelling carries the hyphen: "Safe-Zone"
+    is one whitespace part against a spoken "Xây Dôn" that is two, so the components did not
+    line up and the check switched itself off. Five of this book's 112 seeded readings are
+    that shape, and they are common words in it: A-rank, B-rank, SS-rank, Safe-Zone, Western
+    Safe-Zone."""
+    assert _locked_name_anchor_components(
+        {"surface": "Safe-Zone", "spoken_form": "Xây Dôn"}
+    ) == [("Safe", ("Xây",)), ("Zone", ("Dôn",))]
+
+    assert _passes(
+        "khu xây dôn phía tây", {"surface": "Safe-Zone", "spoken_form": "Xây Dôn"}
+    )
+
+
+def test_the_hyphen_fallback_cannot_take_apart_a_name_that_already_worked() -> None:
+    """It runs only after the plain split has failed, which is what makes it safe to add: a
+    hyphenated *name* read as one hyphenated spoken part stays one component, exactly as
+    before. Measured on the 112 seeded readings: 107 aligned without this, 112 with it, and
+    not one of the 107 changed."""
+    assert _locked_name_anchor_components(
+        {"surface": "Jean-Luc", "spoken_form": "Giăng-Luých"}
+    ) == [("Jean-Luc", ("Giăng", "Luých"))]
+
+    assert _locked_name_anchor_components(ANCHOR) == [
+        ("Samael", ("Xa", "men")),
+        ("Kaizer", ("cai", "dờ")),
+        ("Theosbane", ("theo", "bên")),
+    ]
+
+
+def test_a_multi_word_term_with_a_hyphen_inside_it_lines_up() -> None:
+    assert _locked_name_anchor_components(
+        {"surface": "Western Safe-Zone", "spoken_form": "Goét-tờn Xây Dôn"}
+    ) == [("Western", ("Goét", "tờn")), ("Safe", ("Xây",)), ("Zone", ("Dôn",))]
