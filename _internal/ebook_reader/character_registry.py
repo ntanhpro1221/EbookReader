@@ -1028,12 +1028,21 @@ def build_registry_and_cast(
             importance="minor",
             confidence=confidence,
         )
-        preset, formant_ratio, age_pitch = allocator.choose(
-            gender, npc=True, age=_majority(anonymous_rows, "age")
+        # The anonymous groups are cast here rather than in the loop above, and they carry
+        # a pinned voice for the same reason a named character does: a listener hears "the
+        # unnamed men in this scene" as a voice, and it changing between versions is the
+        # same defect however minor the characters are.
+        anonymous_canonical = f"ANONYMOUS_{gender.upper()}"
+        profile_id = _pinned_profile_id(
+            db, locked_voices, anonymous_canonical, allocator, True, log
         )
-        profile_id = _profile_for_preset(
-            db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
-        )
+        if profile_id is None:
+            preset, formant_ratio, age_pitch = allocator.choose(
+                gender, npc=True, age=_majority(anonymous_rows, "age")
+            )
+            profile_id = _profile_for_preset(
+                db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
+            )
         db.set_character_and_voice_for_segments(
             [int(row["id"]) for row in anonymous_rows],
             character_id,

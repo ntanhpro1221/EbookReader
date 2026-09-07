@@ -201,3 +201,33 @@ def test_a_source_that_never_cast_carries_nothing(tmp_path: Path) -> None:
     target = _project(tmp_path / "new")
 
     assert porter.port(source_db.project_root, target.project_root) == (0, 0)
+
+
+def test_the_anonymous_groups_are_pinned_too(tmp_path: Path) -> None:
+    """Casting happens at two call sites, and the first version of this patched one.
+
+    The unnamed groups - ANONYMOUS_MALE and its siblings - are cast separately from the
+    named speaker loop. A listener hears "the unnamed men in this scene" as a voice, and it
+    changing between versions is the same defect however minor the characters are. alpha.51
+    had an ANONYMOUS_UNKNOWN with a real voice, so this is not hypothetical.
+    """
+    db = _project(tmp_path)
+    db.set_locked_character_voice("ANONYMOUS_MALE", KEY)
+
+    assert db.locked_character_voices()["ANONYMOUS_MALE"] == KEY
+
+
+def test_a_pinned_key_naming_no_profile_falls_back_and_says_so(tmp_path: Path) -> None:
+    """A carried decision that has gone stale must not kill the run - casting afresh is a
+    defensible answer. Doing it silently is not: somebody chose that voice."""
+    from ebook_reader.character_registry import _pinned_profile_id
+
+    db = _project(tmp_path)
+    said: list[str] = []
+
+    result = _pinned_profile_id(
+        db, {"NOAH": "preset_that_does_not_exist"}, "NOAH", None, False, said.append
+    )
+
+    assert result is None
+    assert said and "preset_that_does_not_exist" in said[0]
