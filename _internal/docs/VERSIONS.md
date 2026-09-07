@@ -1975,3 +1975,47 @@ bắt được trường hợp này.
 
 Chưa làm: máy đang chạy alpha.54, và đây là thay đổi schema nên phải kiểm tử tế chứ không làm
 dở giữa chừng.
+
+### alpha.54: 10/10 — lần đầu tiên, và ba phép kiểm nghi ngờ đều qua
+
+| bản | xuất được |
+|---|---|
+| alpha.51 | 8/10 |
+| alpha.52 | 5/10 |
+| alpha.53 | 9/10 |
+| **alpha.54** | **10/10** |
+
+101,4 phút audio, chạy hết 148 phút. Phân tích tái lập alpha.53 chính xác: **200/200 nhóm
+khớp, 0 lệch phân vai, 23 nhân vật** — lần thứ năm liên tiếp máy-yên cho kết quả giống hệt.
+
+**Kiểm nghi ngờ** — viết ra trước khi chạy, vì một kết quả đẹp là lúc dễ tự lừa nhất:
+
+| kiểm | mong đợi | thực tế |
+|---|---|---|
+| `c00010_s0000016` (đọc "cướp" thay "cớt") | **phải trượt** | `failed`, neo `missing_or_wrong` |
+| `c00010_s0000017` (đúng âm, khác chữ) | **phải tự đỗ** | `verified`, `matched_by_component_phonemes` |
+| im lặng chương 10 | dưới 1,0s | **0,64s** |
+
+Phép kiểm neo tên **vẫn phân biệt**: một đoạn được cứu, một đoạn vẫn bị chặn và chỉ xuất được
+nhờ phán quyết của người. Nếu cả hai cùng đỗ thì fix đã nới tay — đó là điều tôi ghi sẵn phải
+nghi ngờ, và nó không xảy ra.
+
+**Bán kính của cơ chế cắt im lặng, đo thật:** 16 đoạn bị chạm trên toàn bộ 10 chương, tổng
+cộng 2,03 giây bị cắt — trung bình 0,127s mỗi đoạn, tức **0,04% thời lượng cuốn sách**. Ngưỡng
+đặt theo phân vị 99,5 của chính cuốn sách nên nó chỉ chạm phần đuôi, không nắn lại cách đọc.
+
+### Chương 10 mất bốn tầng mới thông
+
+Nó trượt ở alpha.51, .52 và .53, mỗi lần một lý do khác, và mỗi lần sửa xong lại lộ ra tầng
+sau:
+
+| tầng | vấn đề | fix |
+|---|---|---|
+| 1 | neo tên chấm chính tả | khớp âm theo thành phần |
+| 2 | neo đỗ mà cổng nội dung vẫn từ chối | gấp tên khỏi số đo câu |
+| 3 | phán quyết đúng mà `chapter_is_publishable` vẫn chặn | cổng thứ tám |
+| 4 | im lặng 1,32s trong MP3 | cắt im lặng bên trong |
+
+Không tầng nào nhìn thấy được cho tới khi tầng trước thông. Đó là lý do "chương có ra MP3
+không" là câu hỏi nghiệm thu duy nhất đáng tin — bốn lần liên tiếp, mọi tín hiệu ở tầng dưới
+đều đã xanh trong khi chương vẫn chết.
