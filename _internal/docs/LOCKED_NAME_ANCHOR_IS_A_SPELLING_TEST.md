@@ -307,3 +307,31 @@ máy chạy thêm bốn vòng để tìm thứ nó đã có trong tay.
 
 Mỗi bước đều "trông như đã sửa xong" ở tầng nó vừa chạm vào. Chỉ có câu hỏi cuối cùng —
 **chương có ra được file MP3 với bản thu ĐÚNG không** — mới phân biệt được ba trạng thái ấy.
+
+## Một manh mối đã thử và bỏ: dấu phẩy của Whisper không dùng làm phép đo ngữ điệu được
+
+Chủ sách nghe ra nhịp ngắt 0,18s **giữa từ ghép "đầu vào"** trong `c00010_s0000082`, và Whisper
+cũng nghe ra — nó gõ `'đầu,'` với dấu phẩy mà văn bản gốc không có. Từ đó có một ý tưởng hấp
+dẫn: **dấu câu của Whisper là bằng chứng về ngữ điệu**, nên đếm dấu phẩy thừa là bắt được lỗi
+ngắt sai, mà không tốn thêm lần tổng hợp nào.
+
+**Đo rồi, không dùng được.** Trên 1.086 bản gõ của alpha.53: **243 đoạn (22,4%)** có nhiều dấu
+phẩy hơn gốc. Tỷ lệ ấy quá cao để là tỷ lệ lỗi, và nhìn vào thì rõ vì sao — Whisper đổi *mọi*
+dấu câu thành phẩy:
+
+```
+gốc : Ví dụ: Ảnh Bộ (Shadow Step) - Cho phép dịch chuyển…
+nghe: Ví dụ, ảnh bộ Shadow Step cho phép dịch chuyển…
+```
+
+Hai chấm, ngoặc đơn, gạch ngang — tất cả thành phẩy. Đó là văn phong ghi chép, không phải chỗ
+giọng đọc ngừng.
+
+**Tín hiệu thật thì hẹp hơn:** một dấu phẩy chèn vào *giữa một cụm liền mạch* của văn bản gốc.
+Bắt được nó cần dóng hàng từng chữ giữa gốc và bản gõ rồi hỏi "chỗ ngắt này có tương ứng ranh
+giới nào trong gốc không" — việc thật, chưa làm. Ghi lại đây để người sau đừng thử lại phiên
+bản đếm-thô và tưởng mình có phép đo.
+
+**Và ghi lại cái đã biết chắc:** `c00010_s0000082` có `attempt_count=1`, không chia nhỏ, không
+`TTS_SPLIT_RECOVERY`. Nhịp ngắt ấy đến thẳng từ mô hình TTS, không phải do ghép lại — nên đổi
+cách chia đoạn sẽ không sửa được nó.
