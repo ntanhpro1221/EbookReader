@@ -322,3 +322,60 @@ vụ. Một test ghim riêng điều này.
 **Bài học chung, không riêng script này:** một tín hiệu "còn sống" phải được kiểm ở **cả hai**
 đầu — lúc chưa bắt đầu, lúc đang chạy, và lúc đã kết thúc. Ba lần liên tiếp tôi chỉ kiểm đầu
 giữa.
+
+## Nhánh `fix/resume-fidelity`: câu hỏi đã sắc lại (2026-09-07)
+
+Trước đây tôi báo cáo nhánh này là "đúng nhưng chưa xong, và **hai** test cũ không đồng ý",
+rồi để chủ sách quyết. Đọc kỹ lại thì cả hai vế đều cần sửa.
+
+### Chỉ một test bất đồng, không phải hai
+
+`test_pending_singleton_wake_retains_previous_source_lock_in_durable_critic` **không nói gì**
+về chính sách tách nhóm. Chủ đề của nó là khoá ngữ nghĩa `adjacent_thought_wake_self_rescue`
+giữ được `emotion="afraid"` khi director critic đòi đổi sang `neutral`. Dòng
+
+```python
+assert [str(row["stable_id"]) for row in group] == ["wake-thought"]
+```
+
+nằm **bên trong hàm mock**, chỉ để mock biết trả về đúng một mục. Nó vô tình ghim hành vi hiện
+tại chứ không bảo vệ hành vi ấy. Nhóm to lên thì phải sửa mock, còn điều test bảo vệ không suy
+suyển gì.
+
+`test_resume_hole_splits_pending_runs_but_keeps_original_neighbor_context_and_scope` thì có
+ghim thật (`target_groups == [["resume-hole-1"], ["resume-hole-3"]]`). Nhưng ba khẳng định
+mang ý nghĩa của nó — `next_text`, `previous_text`, và phạm vi cục bộ — **vẫn đúng** sau fix,
+vì gửi nguyên nhóm thì hàng xóm còn nguyên chứ không mất đi.
+
+### Cái giá: dưới 0,42%
+
+Đây là con số tôi chưa từng tính trước khi để câu hỏi treo, và nó đổi hẳn cán cân.
+
+`stable_groups` dựng từ **mọi** dòng, nên nhóm đã xong hẳn thì bỏ qua, nhóm chưa động tới thì
+gửi nguyên — **giống hệt cách cũ**. Hai cách chỉ khác nhau ở nhóm *vắt ngang* điểm ngắt, và
+mỗi lần ngắt chỉ tạo ra **một** nhóm như vậy.
+
+| điểm ngắt (trên 948 đoạn, nhóm 5) | nhóm vắt ngang | đoạn phân tích lại |
+|---|---|---|
+| 620 | 0 | 0 (0,00%) |
+| 622 | 1 | 2 (0,21%) |
+| 623 | 1 | 3 (0,32%) |
+| 624 | 1 | 4 (0,42%) |
+
+**Tối đa 4 đoạn.** Không phải "phân tích lại nửa cuốn sách" như cái giá tôi ngầm giả định khi
+để câu hỏi lại cho chủ sách.
+
+### Đổi lại được gì
+
+Thí nghiệm có kiểm soát ngày 2026-09-07: cùng mã, cùng nguồn, cùng cách đọc đã gieo, một lần
+dừng cố ý ở 620/948. Lượt liền mạch tìm ra **23 nhân vật**, lượt bị ngắt tìm ra **19**, với
+**18 phân vai khác nhau** — và mọi khác biệt đều nằm sau điểm ngắt, kéo tới hết sách vì các
+lần trộn registry là toàn cục.
+
+### Đề xuất
+
+Làm. Bốn đoạn phân tích lại đổi lấy chuyện một lượt bị ngắt cho ra **đúng cuốn sách** như lượt
+liền mạch. Test thứ hai chỉ cần sửa mock; test thứ nhất cần đổi một khẳng định về `target_groups`
+kèm ghi chú vì sao — ba khẳng định thật của nó vẫn xanh.
+
+**Chưa gộp**: `analysis.py` là file khoá, và alpha.52 đang chạy. Chờ bản đó xong.
