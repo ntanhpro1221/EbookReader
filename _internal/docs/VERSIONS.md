@@ -2258,3 +2258,43 @@ kiểm được bằng bản ghi ASR chứ không phải bằng trạng thái ch
 > không đổi một dòng — và đọc con số ấy thành "máy khá lên" là tự lừa mình một cách có hệ
 > thống. `machine_credit.py` tồn tại để mỗi bản sau đều phải trả lời câu hỏi ấy, không phải chỉ
 > lần này.
+
+## alpha.57 (chương 019–027): dự đoán của tôi sai, 6/9 chương bị chặn
+
+Ghi trước khi chạy: *"chương chặn giảm từ 4/9 xuống 1–2/9"*. Thực tế **6/9**, công của máy
+**3/9** (không phán quyết nào áp dụng được — chúng thuộc về chương 010–018).
+
+### Sáu chương bị chặn, và không cái nào thuộc lớp mà bản vá nhắm tới
+
+| chương | mã | thứ chặn |
+|---|---|---|
+| 019 | `ASR_MISMATCH_UNRESOLVED` | `"Khác gì ăn cướp không?"` — nghi đọc hai lần |
+| 020 | `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | `Selene Valkryn` → máy nghe `Selenva L. Green` |
+| 021 | 4 lỗi | câu **tiếng Ả Rập** `Kalbi kathub 'ala ramal`; TTS sinh hỏng; lệch nhịp; `"Haa! Tiếp theo."` |
+| 022 | **`CHAPTER_QA_REVIEW_REQUIRED`** | **`join discontinuity 0.183`** — chỗ nối khi ghép MP3 |
+| 023 | `SEGMENT_FAILED` | **tiêu đề chương**, chết vì lỗi đếm chữ số |
+| 024 | `ASR_MISMATCH_UNRESOLVED` | |
+
+**Bản vá có tác dụng đúng chỗ nó nhắm** — `"Tiếp theo."` (0,72s), `"Do đó,"` (4 ký tự) giờ ra
+cảnh báo thuộc nhóm cho qua thay vì chặn chương. Nhưng **không một chương nào bị chặn vì lớp ca
+ấy nữa.**
+
+### Vì sao tôi đoán sai
+
+Tôi dựng dự đoán trên **hồ sơ lỗi của alpha.55** (tên ngắn, tiếng cười) rồi giả định chương mới
+hỏng y như thế. Chúng hỏng kiểu khác hẳn: có câu tiếng Ả Rập, có TTS sinh hỏng hoàn toàn, có
+lỗi ghép audio.
+
+Đây là **lần thứ ba trong một đêm** tôi ngoại suy từ một cửa sổ không đại diện — sau "6% nhân
+vật lặp lại" (thật ra 80%) và "563 lượt thu cứu 4 segment" (mẫu số bị chính ca vô vọng nhồi
+lên). Ba lần cùng một hình dạng: **lấy một mẫu nhỏ, giả định nó đại diện, không kiểm.**
+
+### Ba thứ lượt chạy này dạy được
+
+1. **Có cơ chế chặn thứ sáu tôi chưa biết.** `CHAPTER_QA_REVIEW_REQUIRED` ở tầng chương, đo
+   chỗ nối audio, hoàn toàn ngoài `_high_quality_blocking_segment_warnings`.
+   `scripts/machine_credit.py` **không thấy nó** — nó đếm 5 trong khi thật ra 6.
+2. **Lỗi đếm chữ số có thật và giết chương.** Xem
+   [PACE_COUNTS_THE_WRONG_STRING.md](PACE_COUNTS_THE_WRONG_STRING.md).
+3. **Văn bản gốc có tiếng Ả Rập.** `"Dịch câu này: Kalbi kathub 'ala ramal."` — không phép kiểm
+   nào trong dự án được thiết kế cho chuyện đó, và nó sẽ còn xuất hiện.
