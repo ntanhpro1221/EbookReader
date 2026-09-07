@@ -1751,3 +1751,32 @@ kiểm lại rằng nó không nới quá tay: đoạn `c00006_s0000016` ("cư�
 "Sam Min" **vẫn phải trượt** ở mức phép kiểm — chúng chỉ được xuất bản nhờ có người nghe và
 chấp nhận, chứ không phải nhờ máy đổi ý. Kiểm bằng cách đếm `matched_by_component_phonemes`
 và soát thủ công vài ca.
+
+### alpha.52 chốt 5/10 — và bốn trên năm chương hỏng đã có bản vá chờ sẵn
+
+| chương | chặn ở | bản vá |
+|---|---|---|
+| 1, 2, 4, 8, 9 | — | xuất bản |
+| **3** | `c00003_s0000029`, ranh giới fix neo (`Pờ-rin`/`Perrin`) — phán quyết khớp | cổng thứ tám |
+| **5** | `c00005_s0000013`, neo **đỗ**, canonical 0,0/0,75 → không được nâng | gấp tên khỏi số đo câu |
+| **6** | lệch phân tích → giọng 16→14 → không đọc được "Mẹ kiếp" | **chỉ chạy lại sạch mới cứu được** |
+| **7** | `c00007_s0000074`, phán quyết khớp, dòng vẫn `failed` | cổng thứ tám |
+| **10** | `s0000017` neo **đỗ** nhưng canonical 0,43/0,43; `s0000016` phán quyết khớp | cả hai bản vá |
+
+**Bốn trên năm chương hỏng vì hai bản vá chưa gộp**, không phải vì bản thu tệ. Chương 6 là
+chương duy nhất hỏng thật, và nó hỏng vì lệch phân tích — thứ tôi có phần gây ra.
+
+**Hai ca độc lập chứng minh nửa sau của fix neo là bắt buộc.** Chương 5 và chương 10 đều có
+`anchor.passed = True` rồi vẫn bị cổng nội dung từ chối:
+
+| đoạn | canonical sim/wer thực tế | sau khi vá |
+|---|---|---|
+| `c00005_s0000013` (vòng 0) | 0,00 / 0,75 | 1,00 / 0,00 → **được nâng** |
+| `c00010_s0000017` | 0,43 / 0,43 | ~1,00 / 0,00 → **được nâng** |
+
+Bản thu thứ hai chính là bản chủ sách đã nghe và nói "đúng rồi". Nếu chỉ nhìn `anchor.status`
+thì cả hai đều trông như đã sửa xong — **chỉ khi nhìn chương có xuất được không mới thấy là
+chưa**. Đó là bài học đắt nhất về cách nghiệm thu một bản vá.
+
+**Watcher tự thoát đúng lúc** (12:43:08, `lease còn lại: 0`) — bản vá tín hiệu sống thứ ba
+được xác nhận trong sản xuất, đúng tình huống trước đây làm nó treo mười một tiếng.
