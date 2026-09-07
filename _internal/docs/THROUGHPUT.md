@@ -499,3 +499,27 @@ T(giây) ≈ 0,0915 × (số chữ)      →  1 giờ máy cho mỗi ~39.000 ch�
 
 Cách đo lại: thời gian pha lấy từ `analysis_candidates.created_at` và `chapters.started_at/
 completed_at`; số chữ đếm bằng `len(open(...).read())` trên chính file nguồn.
+
+### Điểm dữ liệu thứ hai: hàm có biên dao động ít nhất ±8%
+
+alpha.54 chạy **cùng 105.416 chữ** như alpha.53, cùng mã trừ một ngưỡng cắt im lặng:
+
+| | alpha.53 | alpha.54 |
+|---|---|---|
+| đồng hồ thật | **161,4 phút** | **148 phút** |
+| chương xuất được | 9/10 | **10/10** |
+| TTS | 2.267s | 1.901s |
+| ngoài TTS | 784s | 775s |
+| vòng sửa candidate | 1.538s | 1.277s |
+
+alpha.54 nhanh hơn 8% **và** xuất nhiều hơn một chương. Hàm dự 160,7 phút: đúng cho alpha.53,
+cao hơn 8% với alpha.54.
+
+**Tôi không giải thích được sạch sẽ.** Cắt im lặng chỉ bỏ 2,03 giây audio, không thể tiết kiệm
+13 phút. Chênh lệch nằm chủ yếu ở TTS (366s) và vòng sửa (260s), mà cả hai đều là công việc
+lẽ ra phải giống nhau. Có thể là dao động giữa các lượt chạy, có thể là một biến chưa nhìn ra.
+Hai điểm dữ liệu thì chưa phân biệt được, và bịa một nguyên nhân sẽ tệ hơn là nói không biết.
+
+**Hệ quả:** dùng hàm với biên **ít nhất ±8%**. Cho 478 chương thì 130 giờ nên đọc là **120–140
+giờ**, và đó là biên *dưới* — nó đo từ đúng hai lượt chạy trên cùng một đoạn văn bản, chưa nói
+gì về biến động giữa các chương khác nhau.
