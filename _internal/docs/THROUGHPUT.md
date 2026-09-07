@@ -523,3 +523,36 @@ Hai điểm dữ liệu thì chưa phân biệt được, và bịa một nguyê
 **Hệ quả:** dùng hàm với biên **ít nhất ±8%**. Cho 478 chương thì 130 giờ nên đọc là **120–140
 giờ**, và đó là biên *dưới* — nó đo từ đúng hai lượt chạy trên cùng một đoạn văn bản, chưa nói
 gì về biến động giữa các chương khác nhau.
+
+## Chi phí tai người: sửa lại con số "48 chương", và vì sao nó không đáng sợ như nghe
+
+Sáng 2026-09-07 tôi ước "khoảng 48 chương cần người xem" cho cả cuốn. **Sai gấp bốn lần**, và
+sai vì suy từ nhầm mẫu: alpha.53 chặn 1/10 chương, nhưng mười chương ấy **đã qua năm vòng
+người nghe** và mang sang 8 phán quyết. Chương mới tinh thì chưa có gì.
+
+Đo trên alpha.55 — chín chương chưa ai nghe bao giờ:
+
+| | alpha.55 | suy ra 478 chương |
+|---|---|---|
+| chương bị chặn | 4/9 (**44%**) | **~212** |
+| đoạn cần phán quyết | 7 | **~372** |
+| **tổng audio phải nghe** | **29 giây** | **~26 phút** |
+
+**"212 chương" và "26 phút" là cùng một sự thật**, và con số thứ hai mới là con số đúng để
+quyết định. Đoạn bị chặn ngắn **chính vì** đoạn ngắn là thứ ASR không kiểm được — trung bình
+4,2 giây. Một chương bị chặn không có nghĩa phải nghe cả chương; nó có nghĩa phải nghe một
+tiếng thốt nửa giây.
+
+### Điều làm con số ấy khả thi
+
+Hai thứ dựng trong ngày, và thiếu một trong hai thì nó không khả thi:
+
+1. **Gom lại nghe một lượt.** 7 đoạn của alpha.55 nối thành một file 35 giây kèm mốc thời gian
+   và lời gốc. Chủ sách nghe một lần, trả lời một lần.
+2. **Phán quyết sống qua các phiên bản** (`seed_listener_acceptances.py`). Trước hôm nay, nghe
+   xong một đoạn thì bản sau phải nghe lại — với một cuốn phải chạy nhiều lần thì 26 phút
+   thành 26 phút **mỗi lần**. Giờ là một lần cho mãi mãi.
+
+Cùng lý do ấy áp cho cách đọc tên và casting: alpha.56 khởi động với **138 cách đọc, 14 phán
+quyết, 38 nhân vật ghim giọng**, tích luỹ từ hai bản trước. Mỗi bản thêm vào kho chứ không bắt
+đầu lại.
