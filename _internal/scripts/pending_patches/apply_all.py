@@ -31,6 +31,8 @@ LEASE_STALE_SECONDS = 180.0
 ORDER = (
     "patch_reserve_all.py",
     "patch_reserve_test.py",
+    "patch_name_no_halt.py",
+    "patch_name_no_halt_test.py",
 )
 
 APPLIED = (

@@ -842,3 +842,55 @@ Trước khi chạy alpha.56 tôi ghi: *chương 011 phải xuất **vì đọc 
 quyết — tôi cố ý không chấp nhận đoạn danh sách kỹ năng.* Kết quả: bản ghi sạch cụm "giá trị
 tuyệt đối", similarity 0,57 → 0,83, chương 115/116 → **116/116**, và **3,68 giây lời đọc thừa**
 biến mất. Ghi trước cái gì sẽ khiến mình nghi ngờ là cách duy nhất để một kết quả tốt có giá trị.
+
+## 03:00 — alpha.57 chết vì một từ: `Cred`
+
+```
+RuntimeError: High-quality pronunciation QA could not resolve: Cred
+```
+
+Cùng một hình dạng với dấu ngoặc kép: **một từ trong nguồn làm dừng cả cuốn sách.**
+
+`Cred` là đơn vị tiền trong truyện, có mặt ở **24/478 chương**. Trong cùng lô có 12 tên trượt
+kiểm tra qua 3 lần thử; 11 cái được cứu bằng từ điển CMU hoặc dự phòng cục bộ. Riêng nó có cụm
+phụ âm đầu `cr` không nằm trong `LATIN_NAME_ONSET_READINGS`, nên
+`_short_name_local_fallback_is_safe` từ chối đoán — **đúng**, đoán sai một cái tên suốt cả cuốn
+thì tệ hơn nhiều.
+
+Nhưng rồi nó ném lỗi. Một lượt chạy **1.357 segment đã phân tích xong** dừng ở bước ngay sau
+phân tích, và thứ duy nhất đưa nó đi tiếp được là một người gõ tay cách đọc vào.
+
+### Mã tự mâu thuẫn với chính nó
+
+```
+self.log("Bỏ qua cách đọc tự động cho tên ngắn chưa đủ chắc chắn: ['Cred']. TTS sẽ đọc nguyên văn.")
+...
+raise RuntimeError("High-quality pronunciation QA could not resolve: Cred")
+```
+
+Ba dòng nói "TTS sẽ đọc nguyên văn", dòng sau giết cả lượt chạy. Hai câu ấy không thể cùng đúng.
+
+Và lập luận biện hộ, trong docstring của `_command_pronounce`, thật ra **ủng hộ đọc nguyên
+văn** chứ không ủng hộ dừng: *"đọc sai một cái tên suốt cả cuốn còn tệ hơn để người đọc đánh
+vần chữ Latin"*. Kết luận của câu ấy là đánh vần, không phải dừng. Dừng chỉ đúng khi có người
+đứng sẵn để hỏi.
+
+### Đã làm
+
+1. **Gỡ tắc ngay:** thêm `Cred` → `Cờ-rết`, khớp đúng số nhiều của chính nó (`Creds` →
+   `Cờ-rết`) đã có sẵn trong bảng, cùng họ với `Credit` → `Cờ-re-đít`.
+
+   Ghi với nguồn `english_name_transliteration`, **không phải** `listener_choice`. Đây là
+   phỏng đoán của máy theo đúng quy ước máy đã dùng cho 176 tên khác; gán nó thành quyết định
+   của chủ sách sẽ nhân bản vĩnh viễn qua `port_pronunciations`, thứ giữ nguyên `source`.
+
+2. **`resume`, không tạo lại.** 1,5 giờ phân tích được giữ nguyên.
+
+3. **Vá gốc, đang chờ máy rảnh:** bỏ `raise`, giữ nguyên việc từ chối đoán, ghi sự kiện
+   `NAME_PRONUNCIATION_UNCERTAIN_SKIPPED` rồi đi tiếp.
+
+   Có một test ghim hành vi dừng — `test_high_quality_blocks_unresolved_short_name_pronunciation`
+   — và tối nay tôi đã trả giá một lần cho việc đè lên loại quyết định như thế. Khác biệt lần
+   này: **chủ sách đã ra lệnh thẳng vào đúng lớp lỗi này** ("nhỡ sách khác cũng gặp chuyện thế
+   này thì project phải tự xử lý được chứ?"), chứ không phải phân tích của tôi thắng. Test được
+   viết lại kèm nguyên do, không xoá đi.
