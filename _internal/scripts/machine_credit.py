@@ -17,6 +17,7 @@ Chỉ đọc, không sửa gì.
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -70,12 +71,45 @@ def _blockers(connection: sqlite3.Connection, *, honour_verdicts: bool) -> dict[
     return blocked
 
 
+def _chapter_level_failures(connection: sqlite3.Connection) -> dict[str, str]:
+    """Chương bị chặn bởi thứ KHÔNG phải cảnh báo segment.
+
+    Điểm mù của chính script này, alpha.57 chỉ ra: nó đếm 5 chương bị chặn trong khi thật ra 6.
+    Chương 022 trượt ở `CHAPTER_QA_REVIEW_REQUIRED` với "join discontinuity 0.183" - một phép
+    kiểm ở tầng chương, đo chỗ nối giữa các segment khi ghép MP3, hoàn toàn nằm ngoài
+    `_high_quality_blocking_segment_warnings`.
+
+    Một thước đo tự tin mà mù một phần thì nguy hơn không có thước đo, nên nó được đếm riêng
+    và gọi tên chứ không gộp im lặng.
+    """
+    titles = {
+        int(row["id"]): str(row["title"])
+        for row in connection.execute("SELECT id, title FROM chapters")
+    }
+    out: dict[str, str] = {}
+    for row in connection.execute(
+        "SELECT chapter_id, failure_codes_json, metrics_json FROM quality_checks"
+        " WHERE scope='chapter' AND verdict<>'pass' ORDER BY id"
+    ):
+        codes = str(row["failure_codes_json"] or "")
+        if "SEGMENT_QA_REVIEW_REQUIRED" in codes:
+            continue  # đã tính ở cổng segment
+        try:
+            detail = str(json.loads(row["metrics_json"] or "{}").get("error", ""))
+        except (TypeError, ValueError):
+            detail = ""
+        title = titles.get(int(row["chapter_id"] or -1), "?")
+        out[title] = f"{codes}: {detail[:90]}"
+    return out
+
+
 def _report(root: Path, label: str) -> tuple[int, int, int]:
     connection = _open(root)
     try:
         titles = [str(row["title"]) for row in connection.execute("SELECT title FROM chapters")]
         with_verdicts = _blockers(connection, honour_verdicts=True)
         without = _blockers(connection, honour_verdicts=False)
+        chapter_level = _chapter_level_failures(connection)
         verdicts = connection.execute(
             "SELECT COUNT(*) FROM listener_audio_acceptances"
         ).fetchone()[0]
@@ -86,15 +120,23 @@ def _report(root: Path, label: str) -> tuple[int, int, int]:
     _say("  (Đây là trạng thái database LÚC NÀY, không phải kết cục lịch sử của lượt chạy:")
     _say("   phán quyết thêm vào SAU khi chạy vẫn nằm đây. alpha.55 thật ra chặn 4 chương,")
     _say("   rồi tôi mới nghe và chấp nhận, nên hôm nay nó chỉ còn 1.)")
-    _say(f"  chặn kể cả khi tính phán quyết : {len(with_verdicts)}")
-    _say(f"  chặn nếu BỎ phán quyết         : {len(without)}")
-    _say(f"  -> công của máy: {len(titles) - len(without)}/{len(titles)} chương"
+    extra_count = len({t for t in chapter_level if t not in without})
+    _say(f"  chặn ở cổng cảnh báo segment, tính phán quyết : {len(with_verdicts)}")
+    _say(f"  chặn ở cổng ấy nếu BỎ phán quyết              : {len(without)}")
+    _say(f"  chặn ở TẦNG CHƯƠNG (ngoài cổng ấy)            : {extra_count}")
+    _say(f"  -> công của máy: {len(titles) - len(without) - extra_count}/{len(titles)} chương"
          f"; phán quyết cứu thêm {len(without) - len(with_verdicts)}")
     for title in sorted(without):
         rescued = " (phán quyết cứu)" if title not in with_verdicts else ""
         _say(f"     {title}{rescued}: {'; '.join(without[title])}")
+    extra = {t: d for t, d in chapter_level.items() if t not in without}
+    if extra:
+        _say(f"  + {len(extra)} chương bị chặn ở TẦNG CHƯƠNG, ngoài cổng cảnh báo segment:")
+        for title, detail in sorted(extra.items()):
+            _say(f"     {title}: {detail}")
+        _say(f"  => tổng chương không xuất được: {len(without) + len(extra)}")
     _say("")
-    return len(titles), len(with_verdicts), len(without)
+    return len(titles), len(with_verdicts), len(without) + len(extra)
 
 
 def main(argv: list[str]) -> int:
