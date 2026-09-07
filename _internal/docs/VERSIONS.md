@@ -1557,3 +1557,33 @@ này: **khẳng định số dòng UPDATE khớp**, đừng chỉ khẳng địn
 
 Nhánh thí nghiệm đã dừng sau khi có kết quả; không chạy tiếp phần tổng hợp vì câu hỏi đã được
 trả lời.
+
+
+## Trôi casting có hai nguyên nhân, không phải một (đo 2026-09-07)
+
+Sau khi chứng minh resume làm đổi phân tích, tôi định quy mọi trôi casting về đó — và đã
+kiểm trước khi viết. **Không đứng vững.** Đối chiếu giờ `LAUNCH` của supervisor với lúc pha
+phân tích kết thúc:
+
+| bản | phân tích bị ngắt | trôi casting so với alpha.48 |
+|---|---|---|
+| alpha.46 | **không** | **80 đoạn (8,4%)** |
+| alpha.47 | không | **0** |
+| alpha.50 | **có** (LAUNCH thứ hai lúc 13:42, phân tích xong 14:03) | 27 đoạn |
+| alpha.51 | không | **0** |
+
+alpha.46 chạy liền mạch mà vẫn lệch 80 đoạn. Nó cũng là bản duy nhất có **4/112 cách đọc tên
+khác** alpha.48. Nên hai nguyên nhân, không phải một:
+
+1. **Phân tích bị ngắt** → tập nhân vật đổi → casting đổi (alpha.50)
+2. **Code/cách đọc khác nhau giữa các bản xa nhau** → phân tích ra khác → casting đổi (alpha.46)
+
+**Hệ quả cho hàng đợi việc:** ba lần chạy cùng thời kỳ code và liền mạch (alpha.47, .48, .51)
+trôi **0 đoạn**. Nên bộ cấp phát giọng **không** bất ổn giữa hai lần chạy giống nhau, và
+mục "sửa bộ cấp phát" (hướng B ở trên) **không cần cho tính tái lập**. Tính phụ thuộc thứ tự
+của nó chỉ lộ ra khi tập nhân vật đổi vì lý do khác — lúc ấy nó *khuếch đại* thiệt hại chứ
+không gây ra thiệt hại.
+
+Vẫn đáng làm hướng B không? Có, nhưng với lý do khác và mức ưu tiên thấp hơn: nó biến một
+thay đổi nhỏ ở đầu nguồn (mất một nhân vật) thành thiệt hại cục bộ thay vì lan cả dãy. Đó là
+tính bền, không phải tính tái lập.
