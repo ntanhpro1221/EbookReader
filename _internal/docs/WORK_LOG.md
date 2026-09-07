@@ -673,3 +673,32 @@ luận** — trong repo này gần như luôn có sẵn thứ để hỏi.
 
 Điểm chung: **cả hai đều hỏng lặng lẽ**. Đó là lý do mọi test mới đêm nay đều khẳng định
 *kết quả được nhận*, không phải *lệnh chạy xong*.
+
+## 2026-09-07 — Ba phát hiện, và alpha.51 chốt ở 8/10
+
+**1. Phép kiểm cảm thụ: không có tín hiệu đo được.** Thí nghiệm mù mười cặp, chủ sách chấm.
+4 đúng / 3 ngược / 3 không phân biệt được — ngang tung đồng xu (P(≥4/7)=0,50) trên chính
+mười lời chê to nhất nó từng đưa ra. Chi tiết và ba lựa chọn: `PERCEPTUAL_QA_COST.md`.
+
+**2. Neo tên khoá đang chấm chính tả, không chấm cách đọc.** Nó loại hai bản thu đọc **đúng**
+tên "Samael" và giữ lại bản đọc **sai** ("Sam Min"), vì Whisper viết `Kaiser` còn neo đòi
+`cai dờ` — cùng một âm, khác chính tả. Van cứu bằng độ tương đồng tắt đúng ở câu mà tên chiếm
+phần lớn số chữ, tức câu tự giới thiệu tên. `raw_similarity` của bản đúng là 0,818 trên ngưỡng
+0,78: đủ điều kiện đỗ, không ai hỏi tới. Chi tiết và ba hướng sửa:
+`LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md`.
+
+**3. Phán quyết của người nghe không sống qua một `resume`.** Chấp nhận → `warning` → resume
+kiểm lại → `failed` → cổng bằng chứng từ chối, vì miễn trừ nằm sau cửa trạng thái. Vòng lặp
+khép kín; chương 10 không thể xuất bản nếu không sửa mã. `LISTENER_VERDICTS.md`.
+
+**Chốt alpha.51: 8/10 chương.** Chương 5 và 10 đều bị chặn bởi phát hiện 2 và 3 — cả hai đều
+là lỗi mã, **không** phải lỗi bản thu, và không phải chuyện chờ tai người.
+
+**Đáng chú ý về phương pháp.** Cả ba phát hiện đều ra từ bằng chứng máy đã lưu sẵn từ trước —
+`segment_candidates`, `locked_name_anchor_metrics`, mốc thời gian trong `quality_checks` — chứ
+không cần chạy thêm lượt nào. Sổ ghi đã có câu trả lời từ lâu; chỉ là chưa ai hỏi nó.
+
+Và hai lần trong phiên này tôi chẩn đoán sai rồi bị bằng chứng bẻ lại: đoán "phiên âm thiếu
+âm" (chủ sách sửa: phiên âm đúng, giọng đọc sai), rồi đoán "phải sửa từ điển cho cả 18 đoạn"
+(Whisper cho thấy 17/18 vốn đã đúng). Bài học lặp lại: **đọc bằng chứng đã lưu trước khi dựng
+giả thuyết** — nó nằm sẵn trong database cả rồi.

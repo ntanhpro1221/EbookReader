@@ -201,3 +201,70 @@ nó vào một phỏng đoán.
   một tiếng sau, thuần tuý vì có thêm audio.
 - Một phán quyết bị từ chối vì "bản thu đã khác" **là hàng rào an toàn đang làm việc**. Đừng
   tìm cách vòng qua nó; đưa đoạn ấy vào trang nghe lại.
+
+## Cổng thứ bảy: phán quyết không sống nổi qua một `resume` (2026-09-07)
+
+Sáu cổng cũ đã sửa. Cái này là cổng thứ bảy, và nó khác các cổng trước ở một điểm quan
+trọng: **chính lời chấp nhận tạo ra trạng thái làm nó trượt.**
+
+Quan sát trên alpha.51, chương 10, có đủ mốc thời gian:
+
+1. **08:46** — ghi phán quyết cho `c00010_s0000017`. `accept_failed_segment_audio` chuyển
+   trạng thái `failed` → `warning`, đúng như thiết kế.
+2. **08:46** — kiểm cả bốn cổng: **chương 10 thông hết**. Chạy `simulate_acceptance.py`
+   cũng nói vậy.
+3. **08:48** — `resume`.
+4. **08:52** — chương 10 trượt ở `SEGMENT_QA_EVIDENCE_MISSING`, đoạn ấy quay lại `failed`.
+
+Lời chấp nhận vẫn còn nguyên trong bảng, vẫn khớp đúng `wav_sha256` hiện tại
+(`4d01fa057f33…`) — kiểm lại sau khi chạy xong thì `accepted_segment_warnings()` trả về đúng
+cặp ấy. Nhưng **dòng log của chốt chặn không xuất hiện lần nào**:
+
+> `Segment … vẫn lệch ASR, nhưng chủ sách đã nghe đúng bản thu này và chấp nhận; giữ nguyên
+> trạng thái.`
+
+Nghĩa là trong lúc chạy, `_listener_ruled_on_this_take` đọc ra **False**; kiểm lại sau đó thì
+**True**. Chưa truy ra dòng nào gây chênh lệch đó — ghi lại đây như một câu hỏi mở, **không
+phải như một cơ chế đã biết**. (Trong phiên này tôi đã khẳng định nhầm cơ chế bốn lần; lần
+này thì không.)
+
+### Chỗ chắc chắn, đã đọc mã
+
+Ở `database.py::chapter_segments_have_current_audio_qa`, miễn trừ nằm **sau** cửa trạng thái:
+
+```python
+for row in rows:
+    if str(row["status"]) not in {VERIFIED, WARNING}:
+        return False                     # <-- chặn ở đây
+    ...
+    if (str(row["stable_id"]), artifact_sha256) in accepted:
+        continue                         # <-- miễn trừ, không bao giờ tới
+```
+
+Một dòng `failed` không bao giờ chạm tới được cái miễn trừ viết ra cho đúng nó. Dù vì sao mà
+dòng ấy thành `failed`, hậu quả là như nhau: **chương bị từ chối bởi chính cái cổng lẽ ra
+phải tha nó.**
+
+### Vòng lặp khép kín
+
+```
+accept  →  warning  →  resume kiểm lại  →  failed  →  accept  →  …
+```
+
+Chương 10 **không thể xuất bản** nếu không sửa mã. Bấm `accept` lại chỉ chạy thêm một vòng.
+Đây là lý do alpha.51 dừng ở 8/10 chứ không phải 9/10.
+
+### Việc cho người sau
+
+1. **Sửa thứ tự trong `chapter_segments_have_current_audio_qa`** — kiểm miễn trừ **trước**
+   cửa trạng thái. Rẻ, rõ, và đúng ý nghĩa của "chấp nhận" ở mọi chỗ khác.
+2. **Tìm cho ra vì sao chốt chặn đọc False trong lúc chạy.** Đây mới là gốc.
+3. **`simulate_acceptance.py` đang nói dối, phải sửa.** Nó gọi các hàm database và kết luận
+   "thông", trong khi pipeline chạy thật thì trượt — vì nó mô phỏng trạng thái *trước* khi
+   `resume` kiểm lại. Một bộ mô phỏng không mô phỏng bước kiểm lại thì không trả lời được
+   câu hỏi nó sinh ra để trả lời. Nó đã mời chủ sách nghe rồi phụ lòng — đúng cái lỗi nó
+   được viết ra để chặn.
+
+`c00010_s0000016` trong cùng chương minh hoạ hàng rào đang làm **đúng** việc: phán quyết của
+nó buộc vào `51ba05b3…`, bản thu hiện tại đã khác, nên nó không được tha. Đó là thiết kế
+đúng, không phải lỗi.

@@ -313,3 +313,60 @@ với `incumbent_sha256` là bản bị loại và `wav_sha256` là bản đư�
 
 Cách đo lại: `scratchpad/perceptual_outcomes.py`, `same_audio_two_verdicts.py`,
 `how_flags_clear.py`, `perceptual_pairs2.py`.
+
+---
+
+## Kết quả: phép kiểm cảm thụ không có tín hiệu đo được (2026-09-07)
+
+Thí nghiệm mà tài liệu này hẹn ở trên đã chạy xong. **Mười cặp to nhất, nghe mù, chủ sách
+chấm.**
+
+Cách dựng: `scripts/build_perceptual_ab_page.py` lấy mười lần loại có `drop` lớn nhất trong
+năm bản (0.974–1.208, trên ngưỡng 0.8), ghép mỗi cặp thành A/B, **xáo ngẫu nhiên chiều** rồi
+cất khoá giải mã sang `_versions/_listening/perceptual_ab_key.json`. Chủ sách nghe mà không
+biết bên nào là bản máy đã loại, và trả lời được phép chọn "=" khi không phân biệt được.
+
+Đáp án: `1:B 2:A 3:A 4:= 5:= 6:A 7:B 8:A 9:= 10:B`
+
+| kết cục | số cặp |
+|---|---|
+| máy loại đúng bản dở hơn | **4/10** |
+| máy loại **nhầm bản hay hơn** | **3/10** |
+| chủ sách không phân biệt được | **3/10** |
+
+**Đọc cho đúng: đây không phải "máy chấm ngược", mà là "máy không có tín hiệu".** Bốn đúng
+ba sai trên bảy cặp phân biệt được là đúng bằng tung đồng xu — P(≥4 trong 7) = 0,50 chẵn.
+Ba cặp còn lại chủ sách nghe hai lần không thấy khác nhau, dù máy chấm chúng lệch tới
+1,038 / 1,035 / 0,979.
+
+Và cần nhớ đây là **mười lời chê to nhất** phép kiểm từng đưa ra. Nếu có tín hiệu ở đâu thì
+phải là ở đây. Không có.
+
+> **Sửa một con số tôi đã nói sai trong phiên này.** Lần đầu tôi báo "3 đúng / 4 ngược" —
+> tôi đảo hai cột khi so `rejected_is` với câu trả lời. Số đúng là 4/3/3. Kết luận không đổi
+> về bản chất (vẫn là ngang đồng xu), nhưng con số thì phải đúng.
+
+### Cái giá đã trả cho chỗ không có tín hiệu này
+
+- Là khoản tốn lớn nhất ngoài TTS trong mỗi lượt chạy.
+- Đã loại và cắt lại khoảng 150 bản thu qua năm phiên bản.
+- Mỗi lần cắt lại là thêm một vòng TTS **và** một vòng ASR xác minh.
+
+### Việc phải quyết
+
+Đây là quyết định của chủ sách, không phải của tôi, nên chỉ ghi lựa chọn:
+
+1. **Tắt hẳn** — lấy lại toàn bộ thời gian đó, chấp nhận mất một phép kiểm chưa chứng minh
+   được là mình có tác dụng.
+2. **Nâng ngưỡng rất cao** — chỉ giữ lại những ca cực đoan hơn cả mười ca này. Nhưng mười ca
+   này *đã là* cực đoan nhất, nên gần như chắc chắn tương đương với tắt hẳn.
+3. **Giữ nguyên** — trả giá đã biết để đổi lấy lợi ích chưa đo được.
+
+Chưa có bằng chứng nào ủng hộ (3). Muốn cứu phép kiểm này thì phải có một thí nghiệm mù
+thứ hai cho thấy nó ăn đứt đồng xu — mà lần thử tốt nhất vừa rồi thì không.
+
+n = 10, và đó là hạn của kết luận này: nó không chứng minh phép kiểm *vô dụng*, nó chỉ nói
+rằng ở chỗ đáng ra phải rõ nhất, **không đo được tác dụng nào**.
+
+Khoá giải mã và câu trả lời: `_versions/_listening/perceptual_ab_key.json`,
+`scratchpad/ab_decoded.json`.
