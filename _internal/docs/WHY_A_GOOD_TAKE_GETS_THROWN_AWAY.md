@@ -94,10 +94,26 @@ sửa không thể sửa được một lỗi do trần khung gây ra, vì nó k
 chỉ đổi seed. Đây mới là chỗ hỏng, và nó cũng giải thích vì sao chương bị chặn *vĩnh viễn*
 chứ không phải *thỉnh thoảng*.
 
-**Hướng sửa, chưa làm:** khi một bản thu vừa chạm trần vừa còn to ở cuối, vòng sau phải **nới
-trần khung** chứ không chỉ gieo lại seed — có chặn trên, vì trần khung tồn tại để chặn mô hình
-lảm nhảm vô tận trên đầu vào hai chữ. Sửa chỗ này là đổi cách sinh audio, phải có GPU mới kiểm
-được, nên chờ máy rảnh.
+Và có một chi tiết làm chuyện tệ hơn: **bản thu gốc dài 1,92 giây, còn năm bản sửa lại đều
+0,96 giây.** Vòng sửa không chỉ không nới trần — nó *siết xuống một nửa*. `_checkpoint_short_
+ceiling_repair` đặt `generation_frame_cap = 12` ngay khi segment mang nhãn
+`TTS_GENERATION_CEILING_REACHED`, nên mỗi vòng sửa lại cho ra bản ngắn hơn bản nó định thay.
+
+### Hướng sửa: chưa chốt, và tôi không giả vờ là đã chốt
+
+Ý định của trần khung là **chặn mô hình lảm nhảm vô tận** trên đầu vào hai chữ — một rủi ro
+thật, `TTS_GENERATION_CEILING_REACHED` sinh ra vì nó. Nên "nới trần" không hiển nhiên đúng: có
+thể ở 0,96 giây mô hình vẫn còn to *vì nó đang sắp lảm nhảm*, và cắt là đúng.
+
+Hai giả thuyết, phân biệt được bằng một phép thử rẻ nhưng **cần GPU**:
+
+1. **Câu cần dài hơn 12 khung.** Sinh lại `"Rồi, rồi,"` với trần 16, 20, 24 và nghe/đo xem nó
+   có kết thúc tự nhiên không. Nếu có, trần phải căn theo độ dài lời chứ không phải hằng số.
+2. **Mô hình không chịu dừng trên câu không hạ giọng.** Nếu nới tới 24 khung mà nó vẫn còn to
+   ở cuối, thì trần đang che một lỗi khác, và sửa đúng là ở chỗ đưa văn bản cho TTS — ví dụ
+   thêm một dấu kết thúc cho bản đọc mà không thêm vào bản hiển thị.
+
+Chưa đo thì chưa biết, và đoán bừa ở đây chính là cách tôi đã sai một lần trong tài liệu này.
 
 ## Bài học
 
