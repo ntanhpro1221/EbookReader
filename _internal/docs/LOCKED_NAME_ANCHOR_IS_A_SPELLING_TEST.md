@@ -364,3 +364,44 @@ muốn sửa phải thu lại và hy vọng bản mới khá hơn. Đó là mộ
 sửa cho lỗi đọc sai tên — để đổi lấy một cái vấp 0,2 giây xảy ra 30 lần trong 100 phút audio.
 
 Ghi lại con số để lần sau ai muốn làm thì đã có mẫu số, chứ không phải bắt đầu từ cảm giác.
+
+## Whisper lặp vòng: bản gõ nói dối, thời lượng nói thật
+
+alpha.55 chương 013, `c00004_s0000065`:
+
+```
+GỐC : "...Thằng ranh xấc xược!"
+NGHE: Hằng danh sắc sược. Hằng danh sắc sược. Hằng danh sắc sược.
+```
+
+Đọc bản gõ thì kết luận hiển nhiên là **giọng đọc lặp ba lần**, và trong mã có sẵn
+`repeated_utterance_score` để bắt đúng chuyện đó — mà nó trả về `None`. Có vẻ như một lưới an
+toàn hỏng, ngay lúc cần.
+
+**Thời lượng bác bỏ toàn bộ suy luận đó.** Bản thu dài 1,54s, trong đó:
+
+| | |
+|---|---|
+| lặng đầu | 0,68s |
+| **tiếng nói** | **0,72s** |
+| lặng cuối | 0,14s |
+| khoảng lặng bên trong | **không có** |
+
+"Thằng ranh xấc xược" là 5 âm tiết. Đọc một lần đã 0,7–0,9 giây; ba lần cần chừng 2,7 giây.
+**Không thể nhét vào 0,72 giây.** Giọng đọc nói đúng một lần, và Whisper lặp — chế độ hỏng
+lặp vòng đã biết của nó trên audio ngắn.
+
+**Nên ba kết luận của tôi đều sai, và mỗi cái sai một kiểu:**
+
+| tôi đã nói | thực tế |
+|---|---|
+| giọng đọc lặp ba lần | nói một lần |
+| bộ dò lặp hỏng trong sản xuất | **đúng** — không có gì để bắt |
+| test `repeated_utterance` đỏ = bộ dò hỏng | venv `scripts` thiếu `librosa`, đúng như đã phân loại |
+
+**Bài học, và nó ngược với bài học ngay phía trên.** Ca `||` được tìm ra nhờ *đọc bản gõ thay
+vì đọc mã lỗi*. Ca này thì bản gõ dẫn thẳng vào kết luận sai. Bản gõ là **bằng chứng, không
+phải sự thật** — nó là thứ một mô hình khác nghe được, và mô hình ấy cũng hỏng theo cách riêng
+của nó. Thời lượng, số âm tiết và vị trí khoảng lặng là những thứ không thể ảo giác.
+
+Đoạn này cần tai người, và đó là đường đúng: máy không quyết được thì người quyết.
