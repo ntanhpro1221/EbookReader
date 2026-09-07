@@ -500,3 +500,40 @@ phải nới lỏng: nguồn là thứ có thẩm quyền, và nguồn ghi cả 
 14 đoạn này **không chặn chương nào**. Cái giá của chúng là làm dày danh sách "nghe nếu muốn"
 bằng những mục không có gì để nghe — đáng sửa để báo cáo cuối cùng trung thực, nhưng xếp sau
 những thứ đang chặn thật.
+
+## Đoạn *trộn*: lời khớp hoàn toàn, tiếng thốt thì không — và cả đoạn trượt
+
+alpha.57, chương 021:
+
+```
+gốc : "Haa! Tiếp theo."
+nghe: "À, tiếp theo."
+sim = 0,85   (sàn 0,78 → ĐẠT)
+wer = 0,33   (trần 0,30 → TRƯỢT, lệch 0,03)
+```
+
+Bỏ tiếng thốt ra thì phần còn lại khớp **từng chữ**: `Tiếp theo` = `tiếp theo`. Cái duy nhất
+khác là `Haa!` → `À,` — hai tiếng thốt, cùng nghĩa, khác chính tả. Whisper không có chính tả
+chuẩn cho tiếng thốt và không thể có.
+
+`is_vocalization_only` đã xử đúng ca **thuần tiếng thốt** — `"Haa!"` một mình thì được tha. Lỗ
+hổng là đoạn **trộn**: một tiếng thốt cộng một câu, và tiếng thốt kéo cả đoạn xuống dưới trần
+WER.
+
+### Hướng, và vì sao chưa làm
+
+Bỏ token tiếng thốt ra khỏi cả hai vế trước khi tính điểm — cùng lý lẽ đã dùng cho
+`VOCALIZATION_ASR_COMPATIBLE`, chỉ mở rộng từ "cả đoạn" sang "phần tiếng thốt trong đoạn".
+
+**Bằng chứng mỏng: đúng một ca.** Trên alpha.55 và alpha.57 gộp lại tôi tìm được một đoạn trộn
+kiểu này. Sửa một cơ chế trung tâm dựa trên một quan sát chính là hình dạng sai lầm mà
+[WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) ghi lại. Cần đếm
+trên vài lô nữa trước khi động vào.
+
+Hai ca còn chặn cùng chương thì **không** thuộc lớp này, và đáng ghi vì chúng khác nhau:
+
+- `Tôi cười toe toét.` → `Tôi cười tué toách.` — **từ láy biểu cảm**, Whisper méo. Không phải
+  tiếng thốt, cần lớp xử lý khác.
+- `"Dịch câu này: Kalbi kathub 'ala ramal."` → `Thịt câu này, Kambi Khá Thớp A La Rambo.` —
+  **tiếng Ả Rập trong nguồn**, và `Dịch` → `Thịt` là nghe sai thật ở phần tiếng Việt. Không
+  phép kiểm nào trong dự án được thiết kế cho văn bản đa ngữ hệ.
