@@ -134,3 +134,53 @@ Nếu một test đỏ lên đúng chỗ ta vừa đổi, và tên nó mô tả 
 là **ta sai**, cho tới khi đọc xong nó và chứng minh được ngược lại.
 
 Xem thêm [LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md).
+
+## Bộ dò lặp: điểm số bị khoảng lặng hai đầu bóp méo — và vì sao tôi vẫn không vá
+
+Đo 2026-09-08 03:50, trên 386 segment của alpha.57.
+
+`repeated_utterance_score` tự mô tả là *"hai nửa của khoảng lặng dài nhất giống nhau đến đâu"*.
+Nhưng nó cắt như thế này:
+
+```python
+left, right = coefficients[:, : span[0]], coefficients[:, span[1] :]
+```
+
+`left` là **mọi thứ từ đầu file** tới khoảng lặng — tức gồm cả lặng đầu. `right` là mọi thứ từ
+khoảng lặng **tới hết file** — gồm cả lặng cuối. Rồi hai bên bị kéo về cùng độ dài để so. Một
+bên là *lặng-rồi-tiếng*, bên kia là *tiếng-rồi-lặng*, nên sau khi chuẩn hoá thời gian thì cùng
+một chữ rơi vào vị trí khác nhau.
+
+**Đo được cụ thể:** trên `c00001_s0000156`, cắt lặng hai đầu đưa điểm từ **0,081 lên 0,541** —
+từ dưới ngưỡng 0,35 lên trên. Trên toàn bộ 386 segment, sửa như thế làm trung vị gần như không
+đổi (−0,008 → 0,019) và số ca vượt ngưỡng đi từ **0 lên 3**. Hẹp, không phải một cú đẩy toàn cục.
+
+**Vậy mà tôi không vá.** Vì không chứng minh được ba ca ấy có thật sự lặp hay không:
+
+| segment | lời | ASR nghe | ghi chú |
+|---|---|---|---|
+| `c00001_s0000156` | `"Khác gì ăn cướp không?"` | **hai lần**, ở 3/4 cấu hình giải mã | 1,47s tiếng cho 17 ký tự = **11,6 kt/s, nhịp bình thường** |
+| `c00003_s0000187` | `"Tiếp theo."` | **một lần** | đã `verified` |
+| `c00003_s0000070` | `"Tiếp theo."` | **một lần** | |
+
+Phép đo sóng âm của tôi thấy hai cụm tiếng nói cách nhau 0,43–0,72 giây, nhưng **nó không phân
+biệt được "đọc hai lần" với "đọc một lần có nhịp nghỉ giữa câu"** — và tốc độ đọc tính ra lại
+ủng hộ cách hiểu thứ hai. Hai ca `"Tiếp theo."` thì ASR nghe rõ ràng là một lần.
+
+Nên bản vá này có thể đang biến một lỗi thật thành ba lần thu lại, trong đó hai lần vô cớ.
+
+### Cái đứng vững, và cái cần để đi tiếp
+
+Đứng vững: **thước đo không đo thứ nó nói là nó đo.** Khoảng lặng ngoài rìa không nằm giữa hai
+nửa, nên nó không được phép ảnh hưởng tới việc hai nửa giống nhau đến đâu. Đó là lỗi bất kể sự
+thật của ba ca kia nằm ở đâu.
+
+Cần để đi tiếp — một trong hai, cái nào cũng được:
+
+1. **Nghe ba file.** Rẻ nhất, nhưng chủ sách đã nói không muốn phải nghe.
+2. **Dựng ca đối chứng bằng chính TTS:** sinh `"Tiếp theo."` với năm seed khác nhau, đo phân bố
+   điểm khi đã cắt lặng. Nếu một câu hai từ *bình thường* cũng cho 0,4–0,6 thì ngưỡng 0,35 mới
+   là chỗ sai, không phải phép cắt. Cần GPU.
+
+Ghi lại theo đúng bài học của chính tài liệu này: một tương quan đẹp và một cơ chế nghe hợp lý
+đã dẫn tôi tới kết luận sai một lần đêm nay. Lần này dừng ở chỗ bằng chứng dừng.
