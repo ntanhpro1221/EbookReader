@@ -145,7 +145,47 @@ def _process_is_alive(pid: int) -> bool:
         return True
 
 
-def run_is_over(target: Path) -> bool:
+# A run that finished cleanly leaves `worker_leases` empty, and so does a run that has not
+# started. The query cannot tell them apart, which is why the watcher for alpha.51 was still
+# polling eleven hours after that run ended. These are the two things that can.
+TERMINAL_BOOK_STAGES = frozenset({"completed", "completed_with_errors"})
+
+
+def _running_lease_pid(target: Path) -> int | None:
+    """The pid of the current run, or None when no lease says one is running."""
+    database = target / "project.sqlite3"
+    if not database.is_file():
+        return None
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        row = connection.execute(
+            "SELECT pid FROM worker_leases WHERE state='running' ORDER BY heartbeat_at DESC "
+            "LIMIT 1"
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    finally:
+        connection.close()
+    if row is None or row[0] is None:
+        return None
+    return int(row[0])
+
+
+def _book_stage(target: Path) -> str:
+    database = target / "project.sqlite3"
+    if not database.is_file():
+        return ""
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        row = connection.execute("SELECT stage FROM book LIMIT 1").fetchone()
+    except sqlite3.OperationalError:
+        return ""
+    finally:
+        connection.close()
+    return str(row[0] or "") if row is not None else ""
+
+
+def run_is_over(target: Path, *, lease_seen: bool = False) -> bool:
     """True once the background run has finished, so the watcher can stop by itself.
 
     Deliberately does **not** read `runtime/background/state.json`. On Windows a rename onto
@@ -157,36 +197,33 @@ def run_is_over(target: Path) -> bool:
     which is exactly how alpha.50 died 44 minutes into its analysis, at the hand of this
     watcher.
 
-    The replacement was wrong too, and worse for being quiet. I used the lease heartbeat and
-    wrote that "the pipeline heartbeats far more often" than the three-minute margin.
+    The heartbeat was wrong too, and worse for being quiet. I used its age and wrote that
+    "the pipeline heartbeats far more often" than the three-minute margin. Sometimes it does.
+    It tracked alpha.50 for five hours and stopped at exactly the right moment; then
+    alpha.51 published chapters with a lease 2,380 seconds stale, so the watcher went home
+    three minutes in and every verdict after that went uncarried.
 
-    Sometimes it does. It tracked alpha.50 for five hours and stopped at exactly the right
-    moment. Then alpha.51 published chapters with a lease 2,380 seconds stale, so the watcher
-    went home three minutes in and every verdict after that went uncarried. An intermittent
-    signal is worse than a dead one: it works while you are watching and fails in silence
-    when you are not, which is the worst way for this particular tool to fail.
+    Asking the OS whether the pid is alive fixed both, and failed a third way. A run that
+    shuts down cleanly **deletes its lease**, so the query returns nothing - which is also
+    what a project that has not started yet returns. The guard written for the second case
+    swallowed the first, and the alpha.51 watcher was still polling eleven hours after that
+    run ended, holding a task slot and reporting nothing.
 
-    So ask the operating system whether the worker process is alive. The pid comes from
-    SQLite - built for concurrent readers - and no file the pipeline writes is ever opened.
+    Three signals, three ways to be wrong, and one thing in common: each was checked against
+    a run that was alive and never against one that had finished. So this asks both halves.
+    A lease that names a live pid means the run continues. No lease means the run is over if
+    either the book reached a terminal stage or this watcher saw a lease earlier - and means
+    nothing yet if neither holds, because then the run has genuinely not started.
     """
-    database = target / "project.sqlite3"
-    if not database.is_file():
-        return False
-    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
-    try:
-        row = connection.execute(
-            "SELECT pid FROM worker_leases WHERE state='running' ORDER BY heartbeat_at DESC "
-            "LIMIT 1"
-        ).fetchone()
-    except sqlite3.OperationalError:
-        return False
-    finally:
-        connection.close()
-    if row is None or row[0] is None:
-        # No running lease recorded yet. A project that has not started must not be read as
-        # one that has finished, or the watcher quits before the run it was pointed at.
-        return False
-    return not _process_is_alive(int(row[0]))
+    pid = _running_lease_pid(target)
+    if pid is not None:
+        return not _process_is_alive(pid)
+    if lease_seen:
+        # There was a lease and now there is not. Only a finished run removes it.
+        return True
+    # Never saw one. A book that reached a terminal stage finished before this watcher
+    # started; anything else has not begun, and must not end the watch.
+    return _book_stage(target) in TERMINAL_BOOK_STAGES
 
 
 def watch(
@@ -198,7 +235,9 @@ def watch(
 ) -> int:
     """Poll until the run ends. Returns how many verdicts were carried in total."""
     carried_total = 0
+    lease_seen = False
     while True:
+        lease_seen = lease_seen or _running_lease_pid(target) is not None
         pending = pending_verdicts(source, target)
         if pending:
             names = ", ".join(f"{sid} [{code}]" for sid, _sha, code in pending)
@@ -207,7 +246,7 @@ def watch(
             carried_total += carried
         if once:
             return carried_total
-        if run_is_over(target):
+        if run_is_over(target, lease_seen=lease_seen):
             _say_safely(
                 f"{time.strftime('%H:%M:%S')} run đã dừng; tổng cộng chuyển {carried_total}"
             )

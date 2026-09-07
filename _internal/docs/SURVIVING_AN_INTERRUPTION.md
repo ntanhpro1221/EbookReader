@@ -279,3 +279,46 @@ Nói thẳng, vì chỗ này dễ tưởng là đã xong hơn thực tế:
 - Máy sập nguồn giữa lúc đang ghi `state.json` — `atomic_write_json` lo phần ghi,
   nhưng chưa ai thử rút điện thật để kiểm chứng.
 - Nếu người dùng có nhiều tài khoản Windows, task chỉ đăng ký cho `NGDtuanh`.
+
+## Ba tín hiệu "run còn sống", ba kiểu sai (2026-09-07)
+
+`watch_listener_acceptances.py` cần biết run đã dừng chưa để tự thoát. Tôi làm sai ba lần,
+và **cả ba lần đều vì một lý do giống nhau**: tôi kiểm tín hiệu lúc run đang chạy, không bao
+giờ kiểm lúc run đã xong.
+
+| lần | tín hiệu | hỏng thế nào | phát hiện ra sao |
+|---|---|---|---|
+| 1 | đọc `runtime/background/state.json` | **giết chết alpha.50** — trên Windows, đổi tên đè lên file đang mở thì lỗi `WinError 5`, và cứ 15 giây một lần thì sớm muộn cũng rơi trúng lúc supervisor ghi | run chết sau 44 phút phân tích |
+| 2 | độ cũ của heartbeat trong lease | **chập chờn** — theo alpha.50 đúng suốt 5 tiếng, rồi alpha.51 xuất chương với lease cũ 2.380 giây, nên watcher về nhà sau 3 phút | tình cờ, 15 phút trước cửa sổ chương 3 |
+| 3 | pid trong lease còn sống không | **không bao giờ bắn** — tắt sạch thì pipeline **xoá lease**, truy vấn trả về rỗng, và guard "chưa có lease thì chưa bắt đầu" nuốt luôn trường hợp này | **chủ sách đưa bảng background tasks**: watcher alpha.51 vẫn chạy lúc 10:22 cho một run kết thúc từ 08:52 |
+
+Lần 3 là kiểu hỏng tệ nhất trong ba: không có gì sai cả, chỉ là một task treo im lặng chiếm
+chỗ và không báo gì. Nếu chủ sách không mở bảng ấy ra thì nó còn chạy đến hết phiên.
+
+### Vì sao truy vấn ấy không thể tự trả lời
+
+```sql
+SELECT pid FROM worker_leases WHERE state='running' ORDER BY heartbeat_at DESC LIMIT 1
+```
+
+Trả về rỗng ở **hai** tình huống trái ngược nhau: run **chưa bắt đầu**, và run **đã kết thúc
+sạch**. Guard viết cho tình huống đầu (đúng — không được thoát trước khi run kịp khởi động)
+che mất tình huống sau. Một test cũ ghim đúng nửa đầu ấy và không thể phát hiện nửa sau.
+
+### Cách phân biệt
+
+Hai nguồn tin, mỗi nguồn lấp chỗ trống của nguồn kia:
+
+1. **Watcher có từng thấy lease chưa.** Thấy rồi mà giờ mất → run đã xong. Dùng cho run chết
+   đột ngột chưa kịp ghi stage kết thúc.
+2. **Stage của sách.** `completed` hoặc `completed_with_errors` → đã xong từ trước. Dùng cho
+   watcher khởi động *sau* khi run kết thúc, nó không có gì để nhớ.
+
+Và **lease còn sống thắng cả hai** — vì `resume` chạy trên cuốn sách mà stage vẫn còn ghi
+`completed_with_errors` từ lượt trước. Đó chính là tình huống alpha.51, tức là tình huống
+người ta bật watcher lên. Đảo thứ tự thì watcher thoát ngay giữa lượt chạy nó sinh ra để phục
+vụ. Một test ghim riêng điều này.
+
+**Bài học chung, không riêng script này:** một tín hiệu "còn sống" phải được kiểm ở **cả hai**
+đầu — lúc chưa bắt đầu, lúc đang chạy, và lúc đã kết thúc. Ba lần liên tiếp tôi chỉ kiểm đầu
+giữa.

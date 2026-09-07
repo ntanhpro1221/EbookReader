@@ -215,3 +215,68 @@ def test_a_project_with_no_lease_yet_is_not_read_as_finished(tmp_path: Path) -> 
     _lease(target, pid=os.getpid())
 
     assert watcher.run_is_over(target) is False
+
+
+def _clear_leases(target: Path) -> None:
+    """What a clean shutdown does. Not a fixture convenience - the pipeline really does
+    leave `worker_leases` empty, and that is the whole bug below."""
+    with ProjectDB(target / "project.sqlite3").transaction() as conn:
+        conn.execute("DELETE FROM worker_leases")
+
+
+def _stage(target: Path, stage: str) -> None:
+    with ProjectDB(target / "project.sqlite3").transaction() as conn:
+        conn.execute("UPDATE book SET stage=?", (stage,))
+
+
+def test_a_finished_run_ends_the_watch_even_though_its_lease_is_gone(tmp_path: Path) -> None:
+    """The third wrong liveness signal, and the one that failed silently for eleven hours.
+
+    A run that shuts down cleanly deletes its lease, so the pid query returns nothing - which
+    is exactly what a project that has not started returns. The guard written for the second
+    case swallowed the first, and the alpha.51 watcher was still polling at 10:22 the next
+    morning for a run that ended at 08:52, holding a task slot and carrying nothing.
+    """
+    target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
+
+    _lease(target, pid=os.getpid())
+    assert watcher.run_is_over(target) is False
+
+    _clear_leases(target)
+
+    assert watcher.run_is_over(target, lease_seen=True) is True
+
+
+def test_a_book_that_already_finished_ends_the_watch_immediately(tmp_path: Path) -> None:
+    """The other half, for a watcher started *after* the run it was pointed at had ended -
+    it never saw a lease, so it has nothing to remember. alpha.51 sat at
+    `completed_with_errors`."""
+    target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
+    _clear_leases(target)
+
+    for stage in ("completed", "completed_with_errors"):
+        _stage(target, stage)
+        assert watcher.run_is_over(target) is True, stage
+
+
+def test_a_project_that_has_not_started_still_does_not_end_the_watch(tmp_path: Path) -> None:
+    """The property the fix must not break, and the reason the bug lasted: a run that has
+    not written its first lease looks identical to one that finished. Only a terminal stage
+    or a lease this watcher saw itself tells them apart."""
+    target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
+    _clear_leases(target)
+    _stage(target, "full_book_analysis")
+
+    assert watcher.run_is_over(target) is False
+    assert watcher.run_is_over(target, lease_seen=False) is False
+
+
+def test_a_live_lease_outranks_a_stale_terminal_stage(tmp_path: Path) -> None:
+    """A resume runs against a book whose stage still reads `completed_with_errors` from the
+    previous attempt - which is exactly the alpha.51 case a watcher would be started for. The
+    lease has to win, or the watcher quits during the run it exists to cover."""
+    target = _project(tmp_path / "new", checksum=HEARD, warning=WARNING, status="warning")
+    _stage(target, "completed_with_errors")
+    _lease(target, pid=os.getpid())
+
+    assert watcher.run_is_over(target, lease_seen=True) is False
