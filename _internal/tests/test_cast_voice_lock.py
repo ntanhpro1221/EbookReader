@@ -82,6 +82,33 @@ def test_repinning_replaces_rather_than_accumulates(tmp_path) -> None:
     assert db.locked_character_voices() == {"NOAH": "preset_thai_son_f100_p+00"}
 
 
+def test_a_reserved_preset_is_taken_in_both_pools(tmp_path: Path) -> None:
+    """The bug alpha.55 found by running. The first version reserved only the pinned
+    character's own pool, so CÔNG TƯỚC pinned in the named pool and ÔNG LÃO allocated in the
+    NPC pool came out with the identical voice_key. alpha.54 cast the same book with no
+    pinning and had no collisions at all, so the carry introduced them.
+
+    A voice that belongs to somebody is taken everywhere, not taken in one ledger.
+    """
+    baseline = PresetAllocator("Phạm Tuyên", 2)
+    npc_first, _r, _p = baseline.choose("male", npc=True)
+
+    allocator = PresetAllocator("Phạm Tuyên", 2)
+    allocator.reserve(str(npc_first["name"]))
+    npc_after, _r2, _p2 = allocator.choose("male", npc=True)
+    named_after, _r3, _p3 = PresetAllocator("Phạm Tuyên", 2).choose("male", npc=False)
+
+    assert str(npc_after["name"]) != str(npc_first["name"]), "NPC pool must see the reservation"
+
+    named = PresetAllocator("Phạm Tuyên", 2)
+    named.reserve(str(named_after["name"]))
+    npc_side, _r4, _p4 = named.choose("male", npc=True)
+
+    assert str(npc_side["name"]) != str(named_after["name"]), (
+        "a voice reserved for a named character must not be handed to an NPC"
+    )
+
+
 def test_reserving_a_preset_stops_the_next_character_being_handed_it() -> None:
     """The hazard in the whole mechanism. A pinned voice is invisible to the ranking unless
     it is counted, and an unused preset always sorts first - so the very next character
@@ -91,23 +118,21 @@ def test_reserving_a_preset_stops_the_next_character_being_handed_it() -> None:
     first, _ratio, _pitch = allocator.choose("male", npc=False)
 
     allocator_two = PresetAllocator("Phạm Tuyên", 2)
-    allocator_two.reserve(str(first["name"]), npc=False)
+    allocator_two.reserve(str(first["name"]))
     after_reserve, _ratio2, _pitch2 = allocator_two.choose("male", npc=False)
 
     assert str(after_reserve["name"]) != str(first["name"])
 
 
-def test_reserving_keeps_the_pools_apart() -> None:
-    """Named characters and NPCs draw from separate usage counters; reserving in one must
-    not spend the other's budget."""
+def test_the_pools_stay_separate_for_ordinary_allocation() -> None:
+    """Reserving crosses the pools on purpose, but ordinary casting does not: a named
+    character using a preset should not push NPCs off it, which is what the two counters are
+    for."""
     allocator = PresetAllocator("Phạm Tuyên", 2)
-    baseline, _r, _p = allocator.choose("male", npc=True)
+    named, _r, _p = allocator.choose("male", npc=False)
+    npc, _r2, _p2 = allocator.choose("male", npc=True)
 
-    other = PresetAllocator("Phạm Tuyên", 2)
-    other.reserve(baseline["name"], npc=False)
-    npc_choice, _r2, _p2 = other.choose("male", npc=True)
-
-    assert str(npc_choice["name"]) == str(baseline["name"])
+    assert str(npc["name"]) == str(named["name"])
 
 
 # The carry itself. It copies the voice profiles as well as the mapping, because a pinned

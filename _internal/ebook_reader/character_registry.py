@@ -480,7 +480,7 @@ class PresetAllocator:
         self.variant_usage[name] += 1
         return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
-    def reserve(self, preset_name: str, *, npc: bool) -> None:
+    def reserve(self, preset_name: str) -> None:
         """Record that a preset is taken, for a character this allocator never chose.
 
         A pinned voice is invisible to the ranking unless it is counted here, and an unused
@@ -488,9 +488,18 @@ class PresetAllocator:
         somebody had just pinned to someone else. Two people, one voice, and nothing catches
         it: the invariant in `verify_casting` checks that one speaker resolves to one
         profile, which is the opposite direction.
+
+        **Both pools, not the character's own.** The first version took an `npc` flag and
+        counted only that side, and alpha.55 showed what that costs: CÔNG TƯỚC was pinned to
+        `preset_thai_son_f087_p+00` from the named pool, and ÔNG LÃO - an NPC, so a different
+        counter - was handed the identical voice_key. alpha.54 cast the same book with no
+        pinning and had no collisions at all, so this was introduced by the carry. A voice
+        that belongs to somebody is taken everywhere, not taken in one ledger.
         """
-        self.pool_usage["npc" if npc else "named"][str(preset_name)] += 1
-        self.variant_usage[str(preset_name)] += 1
+        name = str(preset_name)
+        for pool in self.pool_usage.values():
+            pool[name] += 1
+        self.variant_usage[name] += 1
 
 
 def _pinned_profile_id(
@@ -521,7 +530,7 @@ def _pinned_profile_id(
     except KeyError:
         log(f"Giọng đã ghim {voice_key!r} cho {canonical!r} không có trong project; cấp phát lại.")
         return None
-    allocator.reserve(str(row["preset_name"]), npc=local)
+    allocator.reserve(str(row["preset_name"]))
     return int(row["id"])
 
 
