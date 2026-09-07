@@ -113,25 +113,12 @@ mạch) có prompt **y hệt như trước** — thay đổi này không đượ
 
 ---
 
-## Bổ sung 2026-09-08 00:00 — bản thu tốt bị vứt vì ngữ điệu chưa hạ giọng
+## RÚT LẠI 2026-09-08 — "bản thu tốt bị vứt" là chẩn đoán sai của tôi
 
-Chi tiết đầy đủ ở [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](../../docs/WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md).
+Tôi đã cất ở đây hai bản vá nới lỏng `generation_endpoint_active`, kèm lập luận rằng nó bắt
+nhầm ngữ điệu thay vì bắt bản thu bị cắt. **Sai, và sai theo hướng nguy hiểm** — vá vào là cho
+audio bị cắt thật lọt qua. Đã xoá cả hai.
 
-Tóm tắt: `generation_endpoint_active` bật khi âm còn to ở cuối file, để bắt bản thu bị cắt
-giữa chừng. Đo trên 956 bản thu bị loại: nó bật **14 lần, toàn bộ là câu kết thúc bằng dấu
-phẩy hoặc dấu hỏi** — 0 lần trên dấu chấm (662 ca), dấu chấm than (202), hay chữ cái (35).
-Nó đang bắt **ngữ điệu chưa hạ giọng**, thứ mà dấu phẩy và dấu hỏi bắt buộc phải có.
-
-Trong 14 lần đó, 2 lần cả hai bộ giải mã đều đã qua. `"Rồi, rồi,"` của alpha.55 có hai bản thu
-vòng 3 và 4 đạt similarity 1,0 / WER 0 trên cả beam lẫn greedy — **cả hai bị vứt**, segment giữ
-bản 0,43, dán nhãn `ASR_MISMATCH_UNRESOLVED`, và chặn chương 016.
-
-| script | file | đổi gì |
-|---|---|---|
-| `patch_endpoint.py` | `database.py` | `generation_endpoint_active` thôi chặn **khi và chỉ khi** cả hai lần giải mã đều qua. |
-| `patch_endpoint_tests.py` | `tests/` | Bỏ nó khỏi danh sách parametrize "chặn dù ASR qua", thêm 2 test cho luật mới. |
-
-Thu hẹp chứ không bỏ: giải mã trượt thì nó vẫn chặn, và `pace_outlier`,
-`pitch_variant_skipped`, `pitch_variant_mixed` không đụng tới.
-`_validated_dual_failed_candidate_conn` **cố ý giữ cách nhìn cũ** — nó kiểm tra lịch sử ghi
-dưới luật cũ, thu hẹp cả chỗ đó thì mọi project cũ sẽ ném lỗi khi resume.
+Xem [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](../../docs/WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) cho
+chẩn đoán đúng: trần khung sinh (`generation_frame_cap`) mới là chỗ hỏng, và nó cần GPU để
+kiểm nên chưa vá.

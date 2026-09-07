@@ -1,78 +1,120 @@
 # Vì sao một bản thu tốt bị vứt đi
 
+> **Tiêu đề này sai, và tôi giữ nó lại làm bằng chứng.** Bản đầu của tài liệu này (2026-09-07
+> 23:58) kết luận rằng phép kiểm `generation_endpoint_active` bắt nhầm *ngữ điệu chưa hạ giọng*
+> thay vì bắt bản thu bị cắt, và tôi đã viết sẵn bản vá nới lỏng nó. **Bản vá đó sai và đã bị
+> rút.** Chuyện thật ở dưới, cùng với chỗ tôi trượt chân — vì cách trượt đáng ghi lại hơn cả
+> kết luận.
+
 Đo 2026-09-07, trên 956 bản thu bị loại (`dual_failed`) gộp từ alpha.50–55.
 
-## Chuyện bắt đầu từ một chương không xuất được
+## Hiện tượng: một chương bị chặn bởi hai chữ
 
-alpha.55 có 4 chương không xuất được MP3. Cả bốn đều **đã có file audio**; chúng bị chặn ở
-`chapter_post_encode_v1` bởi mã `SEGMENT_QA_REVIEW_REQUIRED`. Một trong bốn là chương 016, bị
-chặn bởi một đoạn hai chữ:
+alpha.55 có 4 chương không xuất được MP3 — cả bốn **đã có file audio**, đều bị chặn ở
+`chapter_post_encode_v1` bởi `SEGMENT_QA_REVIEW_REQUIRED`. Chương 016 bị chặn bởi:
 
 ```
 "Rồi, rồi,"      1,92 giây      ASR_MISMATCH_UNRESOLVED      similarity 0,43
 ```
 
-Nhìn vào lịch sử thu lại của nó thì thấy chuyện khác hẳn cái nhãn:
+Lịch sử thu lại của nó nói khác hẳn cái nhãn:
 
-| vòng | trạng thái | beam | greedy | lý do loại |
-|---|---|---|---|---|
-| 0 | dual_failed | 0,43 | **1,00** | `beam=ASR_MISMATCH; greedy=ASR_REPEATED_SHORT_PASS; blocking_signal=generation_endpoint_active` |
-| 1 | dual_failed | 0,43 | 0,43 | `beam=ASR_MISMATCH; greedy=ASR_MISMATCH; blocking_signal=…` |
-| 2 | dual_failed | **1,00** | 0,83 | `beam=ASR_REPEATED_SHORT_PASS; greedy=ASR_REPEATED_SHORT_PASS; blocking_signal=…` |
-| **3** | dual_failed | **1,00** | **1,00** | **`beam=ok; greedy=ok; blocking_signal=generation_endpoint_active`** |
-| **4** | dual_failed | **1,00** | **1,00** | **`beam=ok; greedy=ok; blocking_signal=generation_endpoint_active`** |
+| vòng | beam | greedy | lý do loại |
+|---|---|---|---|
+| 0 | 0,43 | **1,00** | `beam=ASR_MISMATCH; greedy=ASR_REPEATED_SHORT_PASS; blocking_signal=generation_endpoint_active` |
+| 1 | 0,43 | 0,43 | `beam=ASR_MISMATCH; greedy=ASR_MISMATCH; blocking_signal=…` |
+| 2 | **1,00** | 0,83 | `beam=ASR_REPEATED_SHORT_PASS; greedy=…; blocking_signal=…` |
+| **3** | **1,00** | **1,00** | **`beam=ok; greedy=ok; blocking_signal=generation_endpoint_active`** |
+| **4** | **1,00** | **1,00** | **`beam=ok; greedy=ok; blocking_signal=generation_endpoint_active`** |
 
-**Hai bản thu mà cả hai bộ giải mã chép đúng hoàn toàn, WER bằng 0, đều bị vứt.** Máy giữ lại
-bản gốc 0,43, dán nhãn `ASR_MISMATCH_UNRESOLVED`, và chặn cả chương — bằng một lý do **không
-phải là lý do thật**. Nhãn nói ASR không khớp; hồ sơ nói ASR khớp tuyệt đối.
+Hai bản thu mà cả hai bộ giải mã chép đúng hoàn toàn, WER 0, đều bị vứt. Máy giữ bản 0,43 và
+chặn cả chương bằng nhãn `ASR_MISMATCH_UNRESOLVED` — **một cái nhãn mà hồ sơ của chính nó bác
+bỏ**.
 
-## Thủ phạm đo nhầm thứ
+## Chỗ tôi trượt chân
 
-`generation_endpoint_active` bật khi `trailing_rms` còn cao hơn ngưỡng ở cuối file
-(`segment_endpoint_floor_dbfs: -51,0`). Ý định của nó: bắt bản thu **bị cắt giữa chừng**.
+Tôi đo tương quan giữa việc `generation_endpoint_active` bật và ký tự cuối của câu:
 
-Nó không làm việc ấy. Nó bắt **ngữ điệu chưa hạ giọng**:
-
-| văn bản kết thúc bằng | số lần bị chặn | trên tổng |
+| kết thúc bằng | bị chặn | trên tổng |
 |---|---|---|
 | `.` | **0** | 662 |
 | `!` | **0** | 202 |
 | chữ cái | **0** | 35 |
-| `,` | **10** | 37 (27%) |
-| `?` | **4** | 20 (20%) |
+| `,` | **10** | 37 |
+| `?` | **4** | 20 |
 
-**Không một lần nào trên dấu chấm, dấu chấm than, hay chữ cái.** Cả 14 lần nó bật đều là câu
-kết thúc bằng dấu phẩy hoặc dấu hỏi — mà dấu phẩy nghĩa là câu còn tiếp, dấu hỏi thì lên giọng
-ở cuối. **Cả hai đều đúng phải còn năng lượng ở cuối.**
+Tương quan tuyệt đối, và tôi kết luận ngay: *nó bắt ngữ điệu chưa hạ giọng, mà dấu phẩy và dấu
+hỏi thì đúng phải thế.* Tôi viết bản vá, viết tài liệu, và báo cho chủ sách.
 
-Trong 14 lần ấy, **2 lần cả hai bộ giải mã đều đã qua**.
+**Tôi chưa loại biến gây nhiễu.** Một test có sẵn tên là
+`test_active_ceiling_endpoint_repairs_are_finite_and_remain_blocking` đỏ lên — có người đã cố ý
+ghim đúng hành vi tôi vừa đổi. Đọc nó thì thấy nó dựng ca kèm `generation_ceiling_hit = 1.0`.
 
-## Vì sao bản vá là thu hẹp chứ không phải bỏ
+Đo lại với biến ấy:
 
-Bằng chứng ASR **bác bỏ trực tiếp** giả thuyết mà tín hiệu này tồn tại để bắt: nếu cả hai bộ
-giải mã chép ra đủ lời mong đợi, thì không có gì bị cắt. Nên:
+- **Cả 14 ca endpoint bật đều có `generation_ceiling_hit = True`.** Phép thu hẹp tôi định làm
+  sẽ không đổi một ca nào.
+- Trong cả kho chỉ có **22 bản thu chạm trần khung, và tất cả đều kết thúc bằng `,` hoặc `?`**.
 
-> `generation_endpoint_active` thôi chặn **khi và chỉ khi** cả hai lần giải mã đều qua.
+Tương quan với dấu câu là thật, nhưng nó nằm ở **chạm trần khung**, không nằm ở endpoint.
 
-Còn giải mã trượt thì nó vẫn chặn như cũ. `pace_outlier`, `pitch_variant_skipped`,
-`pitch_variant_mixed` không đụng tới trong mọi trường hợp.
+## Chuyện thật
 
-`_validated_dual_failed_candidate_conn` **cố ý giữ cách nhìn cũ**, không thu hẹp: nó kiểm tra
-*lịch sử đã ghi* dưới luật cũ, và phải tiếp tục kiểm được. Thu hẹp cả chỗ đó thì mọi project cũ
-sẽ ném `dual-failed candidate has neither an ASR nor signal blocker` khi resume.
+Chuỗi nhân quả đi ngược với những gì tôi viết:
 
-## Bài học rộng hơn
+```
+câu không hạ giọng  →  mô hình không phát token kết thúc  →  sinh cho tới khi CHẠM TRẦN KHUNG
+                    →  bản thu bị cắt thật  →  còn to ở cuối  →  endpoint bật ĐÚNG
+```
 
-Ba lần trong một tối tôi gặp cùng một hình dạng lỗi: **một phép kiểm dựng cho tình huống A, gặp
-tình huống B trông giống A, và không ai bảo nó cách phân biệt.**
+Bằng chứng dứt điểm — năm bản thu của `"Rồi, rồi,"`:
+
+| vòng | thời lượng | trailing_rms | sàn |
+|---|---|---|---|
+| 0 | **0,96s** | 0,065 | −51 dBFS ≈ 0,003 |
+| 1 | **0,96s** | 0,095 | |
+| 2 | **0,96s** | 0,073 | |
+| 3 | **0,96s** | 0,095 | |
+| 4 | **0,96s** | 0,117 | |
+
+**Cả năm dài đúng 0,96 giây** — bằng trần khung 12. Không phải trùng hợp: mọi vòng bị chặt tại
+cùng một chỗ, khi tiếng còn to gấp 20–40 lần sàn. Bản thu **bị cắt thật**, và
+`generation_endpoint_active` làm đúng việc của nó.
+
+ASR chép ra đủ chữ chỉ có nghĩa là *các chữ* lọt vào trong 0,96 giây — không có nghĩa là đuôi
+không bị chặt.
+
+## Lỗi thật nằm ở đâu
+
+`short_utterance_repair_frame_cap()` trả về hằng số: 12 khung cho đoạn ngắn, 6 cho đoạn cực
+ngắn, **chỉ căn theo số ký tự**. Nó không biết vòng trước đã bị cắt.
+
+Nên **năm vòng thu lại đều dùng đúng một trần khung và cho ra năm bản cắt y hệt nhau.** Vòng
+sửa không thể sửa được một lỗi do trần khung gây ra, vì nó không bao giờ đổi trần khung — nó
+chỉ đổi seed. Đây mới là chỗ hỏng, và nó cũng giải thích vì sao chương bị chặn *vĩnh viễn*
+chứ không phải *thỉnh thoảng*.
+
+**Hướng sửa, chưa làm:** khi một bản thu vừa chạm trần vừa còn to ở cuối, vòng sau phải **nới
+trần khung** chứ không chỉ gieo lại seed — có chặn trên, vì trần khung tồn tại để chặn mô hình
+lảm nhảm vô tận trên đầu vào hai chữ. Sửa chỗ này là đổi cách sinh audio, phải có GPU mới kiểm
+được, nên chờ máy rảnh.
+
+## Bài học
+
+Ba lỗi tối nay cùng một hình dạng — phép kiểm dựng cho tình huống A, gặp tình huống B trông
+giống A, không ai bảo nó cách phân biệt:
 
 | phép kiểm | định bắt | thực tế bắt |
 |---|---|---|
-| `generation_endpoint_active` | bản thu bị cắt | dấu phẩy và dấu hỏi |
-| neo tên (`asr_only_failure`) | tên bị đọc sai | mọi đoạn chỉ gồm một cái tên ngắn |
+| neo tên (`asr_only_failure`) | tên bị đọc sai | mọi đoạn chỉ gồm một tên ngắn |
 | `is_vocalization_only` | tiếng cười, tiếng thốt | tiếng cười — trừ khi viết là `Ahaha` |
+| trần khung (`generation_frame_cap`) | mô hình lảm nhảm vô tận | câu không hạ giọng |
 
-Cả ba đều không phải "ngưỡng đặt sai". Cả ba là **một lớp ca chưa ai nghĩ tới**, và cả ba đều
-lộ ra bằng cùng một cách: nhìn vào những ca bị chặn rồi hỏi *chúng có điểm gì chung*.
+Còn một bài học thứ tư, đắt hơn ba cái kia: **tôi đã có một tương quan tuyệt đối — 0/899 so với
+14/57 — và nó vẫn dẫn tôi tới kết luận sai.** Tương quan đúng, mũi tên nhân quả ngược. Thứ cứu
+được là một test mà người trước đã viết, đặt tên thẳng vào cái tôi định phá: *remain blocking*.
+
+Nếu một test đỏ lên đúng chỗ ta vừa đổi, và tên nó mô tả chính hành vi ta vừa bỏ, thì mặc định
+là **ta sai**, cho tới khi đọc xong nó và chứng minh được ngược lại.
 
 Xem thêm [LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md).
