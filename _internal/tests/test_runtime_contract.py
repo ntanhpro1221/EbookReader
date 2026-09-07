@@ -8,6 +8,8 @@ from types import SimpleNamespace
 import pytest
 
 from ebook_reader import runtime_contract
+from ebook_reader.config import build_settings
+from ebook_reader.runtime_contract import perceptual_settings_check
 
 
 class FakeDistribution:
@@ -341,3 +343,28 @@ def test_the_contract_table_agrees_with_the_pinned_versions() -> None:
         if expected.split("+", 1)[0] != pin:
             drift[name] = (expected, pin)
     assert not drift, f"contract table and pyproject disagree: {drift}"
+
+
+def test_disabled_perceptual_qa_does_not_block_the_run(tmp_path: Path) -> None:
+    """A check that is switched off must not be able to stop a run.
+
+    high_quality stopped requiring perceptual QA on 2026-09-07, and this contract kept
+    verifying its settings and its checkpoint anyway - so `run` refused to start with
+    "perceptual_qa.enabled=False, expected True". The settings it was checking describe a
+    model that is never loaded. Two enforcement points, and finding one is not finding both.
+    """
+    settings = build_settings("high_quality")
+    assert settings["perceptual_qa"]["enabled"] is False
+
+    result = perceptual_settings_check(tmp_path / "runtime", settings)
+
+    assert result["ok"] is True
+
+
+def test_enabled_perceptual_qa_is_still_verified_in_full(tmp_path: Path) -> None:
+    """The skip is conditional, not a removal: turn it on and the checkpoint must be real."""
+    settings = build_settings("high_quality", {"perceptual_qa": {"enabled": True}})
+
+    result = perceptual_settings_check(tmp_path / "runtime", settings)
+
+    assert result["ok"] is False

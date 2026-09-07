@@ -308,6 +308,15 @@ def perceptual_settings_check(
     if not isinstance(perceptual, dict):
         return {"ok": False, "detail": "perceptual_qa settings are missing or invalid"}
 
+    if not perceptual.get("enabled"):
+        # Nothing below is reachable with perceptual QA off: no model is loaded, no
+        # checkpoint is read, and the inference settings describe work that never runs.
+        # Verifying them anyway is how a disabled check still blocks a run - which is
+        # exactly what happened the first time high_quality stopped requiring it, and cost
+        # alpha.52 a create. The settings stay in the file so turning it back on is one
+        # flag; they are only checked when they matter. docs/PERCEPTUAL_QA_COST.md.
+        return {"ok": True, "detail": "perceptual QA is disabled; its settings are unused"}
+
     errors: list[str] = []
     expected_settings = {
         "enabled": True,
