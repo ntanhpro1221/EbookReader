@@ -2298,3 +2298,33 @@ lên). Ba lần cùng một hình dạng: **lấy một mẫu nhỏ, giả đị
    [PACE_COUNTS_THE_WRONG_STRING.md](PACE_COUNTS_THE_WRONG_STRING.md).
 3. **Văn bản gốc có tiếng Ả Rập.** `"Dịch câu này: Kalbi kathub 'ala ramal."` — không phép kiểm
    nào trong dự án được thiết kế cho chuyện đó, và nó sẽ còn xuất hiện.
+
+## Kiểm hai bản vá trên audio thật: chương 023 từ `failed` thành 74/74
+
+Hai lượt chạy một chương, 2026-09-08, trên đúng chương alpha.57 đã đánh mất.
+
+### Điều kiện phủ định ghi trước
+
+- Tiêu đề phải **bị đo nhịp** rồi mới qua — nếu nó lọt xuống dưới ngưỡng 24 ký tự và né được
+  phép kiểm thì kết quả vô nghĩa.
+- Neo tên phải cho `matched_occurrence_count = 1` — nếu chương xuất bản mà số ấy vẫn là 0 thì
+  nó qua bằng đường khác, không phải nhờ bản vá.
+
+### Kết quả
+
+| | alpha.57 (trước) | kiểm (sau) |
+|---|---|---|
+| tiêu đề `Chương 22 - 22:` | `SEGMENT_FAILED`, 11 lần thử, 10,68 kt/s | **`verified`, 16,61 kt/s, có bị đo** |
+| `matched_occurrence_count` | **0** / cần 1 | **1** |
+| trạng thái neo | `fail` | **`pass`** |
+| `canonical_similarity` | 0,722 (sàn 0,78) | **1,000** |
+| chương | `failed` 73/74 | **`completed` 74/74**, 0 cảnh báo, 0 lỗi |
+
+Cả hai điều kiện phủ định đều không xảy ra. `canonical_similarity` nhảy từ 0,722 lên 1,000 vì
+neo khớp được thì tên mới gấp vào chỗ giữ chỗ, và phần còn lại khớp hoàn toàn — đúng chuỗi
+nhân quả đã mô tả khi chẩn đoán, chạy ngược lại.
+
+### Vì sao hai lượt chạy một chương chứ không phải một lượt chín chương
+
+Rẻ hơn hai mươi lần và trả lời đúng câu hỏi. Chương 023 mang **cả hai** lỗi cùng lúc, nên một
+chương đủ để kiểm cả hai bản vá; chạy chín chương chỉ thêm nhiễu từ những lỗi khác chưa sửa.
