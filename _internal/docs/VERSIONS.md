@@ -1587,3 +1587,37 @@ không gây ra thiệt hại.
 Vẫn đáng làm hướng B không? Có, nhưng với lý do khác và mức ưu tiên thấp hơn: nó biến một
 thay đổi nhỏ ở đầu nguồn (mất một nhân vật) thành thiệt hại cục bộ thay vì lan cả dãy. Đó là
 tính bền, không phải tính tái lập.
+
+## alpha.52: bản đầu tiên không có phép kiểm cảm thụ, và neo tên chấm âm
+
+Chạy 2026-09-07 03:15Z. Ba thay đổi so với alpha.51, tất cả đều từ bằng chứng alpha.51 để lại.
+
+**1. Phép kiểm cảm thụ tắt.** Chủ sách quyết sau thí nghiệm A/B mù: 4 đúng / 3 ngược / 3 không
+phân biệt được, trên chính mười lời chê to nhất của nó. `PERCEPTUAL_QA_COST.md`.
+
+**2. Neo tên khoá so âm thay vì so chữ.** `LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md`.
+
+**3. Phán quyết người nghe sống được qua `resume`.** `LISTENER_VERDICTS.md`.
+
+### Cần theo dõi gì ở bản này
+
+Đây là lần đầu ba thứ ấy cùng đổi, nên có vài điều **chưa ai đo**:
+
+- **Thời gian chạy.** alpha.51 mất 73 phút *có* cảm thụ. Cảm thụ là khoản tốn lớn nhất ngoài
+  TTS, nên bản này phải nhanh hơn đáng kể. Nếu không nhanh hơn thì giả định về chi phí của nó
+  đã sai và phải đo lại.
+- **Số bản thu bị cắt lại.** alpha.51 cắt lại ~30 lần vì cảm thụ. Bản này phải là 0.
+- **Neo tên có thả oan không.** Fix neo được thiết kế để *phân biệt*, không phải để nới. Bằng
+  chứng nó phân biệt được: `c00010_s0000016` ("cướp" thay vì "cớt") vẫn trượt. Nếu bản này
+  bỗng dưng 10/10 mà không đoạn nào bị chặn, **hãy nghi ngờ** và nghe lại vài đoạn tên.
+- **Chương 5 và 10.** Hai chương alpha.51 không xuất được. Chương 5 phải lấy bản đọc đúng
+  (`Samen`) thay vì bản `Sam Min`. Chương 10 cần đoạn `s0000016` — đoạn thật sự đọc sai — nên
+  vẫn có thể xin tai người, và lần này lời chấp nhận sẽ sống qua resume.
+
+### Hai chốt cho một chính sách
+
+Tắt cảm thụ cần sửa **hai** chỗ, không phải một: `validate_settings` trong `config.py` và
+`perceptual_settings_check` trong `runtime_contract.py`. Sửa chỗ đầu rồi tưởng xong, và
+`run` từ chối khởi động với "perceptual_qa.enabled=False, expected True" — mất một lần tạo
+project. Bài học chung: **tìm thấy một chốt không có nghĩa là đã tìm thấy hết.** Trước khi
+đổi một chính sách, quét cả `raise`, `assert` lẫn hợp đồng runtime.
