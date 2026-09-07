@@ -176,3 +176,23 @@ def test_the_slash_rule_is_also_stable_on_fragments() -> None:
             for piece in (converted[:cut], converted[cut:].strip()):
                 if piece:
                     assert spoken_symbols_to_words(piece) == piece, piece
+
+
+def test_a_pipe_is_a_pause_not_a_mathematical_symbol() -> None:
+    """The voice read `||` as "giá trị tuyệt đối của" - absolute value of.
+
+    alpha.55 chapter 011 lists skills as "Hỏa Cầu (Fireball) (Thường) || Sương Giáng
+    (Mistfall) …", and Whisper transcribed the take as "Fireball thường giá trị tuyệt đối
+    của xương dáng". A listener would hear a phrase that is not in the book between every
+    entry in the list. In this book `||` separates items, so a pause is what it means.
+
+    24 of them across 4 of 478 chapters: rare, and wrong every single time.
+    """
+    spoken = spoken_symbols_to_words("Hỏa Cầu (Fireball) || Sương Giáng (Mistfall)")
+
+    assert "|" not in spoken
+    assert spoken == "Hỏa Cầu, Fireball, Sương Giáng, Mistfall"
+
+
+def test_a_single_pipe_separates_too() -> None:
+    assert spoken_symbols_to_words("A | B") == "A, B"

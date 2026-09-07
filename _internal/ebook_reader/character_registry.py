@@ -480,7 +480,7 @@ class PresetAllocator:
         self.variant_usage[name] += 1
         return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
-    def reserve(self, preset_name: str, *, npc: bool) -> None:
+    def reserve(self, preset_name: str) -> None:
         """Record that a preset is taken, for a character this allocator never chose.
 
         A pinned voice is invisible to the ranking unless it is counted here, and an unused
@@ -488,9 +488,18 @@ class PresetAllocator:
         somebody had just pinned to someone else. Two people, one voice, and nothing catches
         it: the invariant in `verify_casting` checks that one speaker resolves to one
         profile, which is the opposite direction.
+
+        **Both pools, not the character's own.** The first version took an `npc` flag and
+        counted only that side, and alpha.55 showed what that costs: CÔNG TƯỚC was pinned to
+        `preset_thai_son_f087_p+00` from the named pool, and ÔNG LÃO - an NPC, so a different
+        counter - was handed the identical voice_key. alpha.54 cast the same book with no
+        pinning and had no collisions at all, so this was introduced by the carry. A voice
+        that belongs to somebody is taken everywhere, not taken in one ledger.
         """
-        self.pool_usage["npc" if npc else "named"][str(preset_name)] += 1
-        self.variant_usage[str(preset_name)] += 1
+        name = str(preset_name)
+        for pool in self.pool_usage.values():
+            pool[name] += 1
+        self.variant_usage[name] += 1
 
 
 def _pinned_profile_id(
@@ -521,7 +530,7 @@ def _pinned_profile_id(
     except KeyError:
         log(f"Giọng đã ghim {voice_key!r} cho {canonical!r} không có trong project; cấp phát lại.")
         return None
-    allocator.reserve(str(row["preset_name"]), npc=local)
+    allocator.reserve(str(row["preset_name"]))
     return int(row["id"])
 
 
@@ -852,7 +861,7 @@ def _merge_adjacent_local_speakers(
             )
 
 
-def assert_voice_stability(db: ProjectDB) -> None:
+def assert_voice_stability(db: ProjectDB, log: Callable[[str], None] = lambda _m: None) -> None:
     """Refuse a casting where one person would be read by two different voices."""
     # One character, one voice - checked on the resolved character rather than on the
     # speaker label. Checking labels was a blind spot with real consequences: a boy who
@@ -888,6 +897,36 @@ def assert_voice_stability(db: ProjectDB) -> None:
         raise RuntimeError(
             f"A character resolved to multiple voice profiles: {split_characters}"
         )
+
+    # And the other direction, which nothing checked until alpha.55 produced it. Two
+    # characters on one profile sound like the same person, and no gate downstream can tell:
+    # every segment is verified, every chapter publishes, and only a listener finds it.
+    #
+    # It is reported rather than raised because at some book size sharing becomes
+    # unavoidable - there are only so many presets times formant variants - and killing a
+    # run over an inevitability would be worse than saying so. alpha.54 cast 23 characters
+    # into 23 distinct voices, so at this scale a collision means something is wrong, not
+    # that the catalogue ran out.
+    shared_profiles = {
+        profile_id: sorted(character_ids)
+        for profile_id, character_ids in _characters_by_profile(profiles_by_character).items()
+        if len(character_ids) > 1
+    }
+    if shared_profiles:
+        log(
+            "CẢNH BÁO: nhiều nhân vật dùng chung một giọng, người nghe sẽ tưởng là cùng "
+            f"một người: {shared_profiles}"
+        )
+
+
+def _characters_by_profile(
+    profiles_by_character: dict[int, set[int]],
+) -> dict[int, list[int]]:
+    inverted: dict[int, list[int]] = defaultdict(list)
+    for character_id, profile_ids in profiles_by_character.items():
+        for profile_id in profile_ids:
+            inverted[int(profile_id)].append(int(character_id))
+    return inverted
 
 
 def build_registry_and_cast(
@@ -1052,7 +1091,7 @@ def build_registry_and_cast(
 
     used_voices = len({str(profile["preset_name"]) for profile in db.list_voice_profiles()})
     voice_variants = len(profile_cache)
-    assert_voice_stability(db)
+    assert_voice_stability(db, log)
     log(
         f"Đã khóa voice casting VieNeu: dùng {used_voices}/{len(VIENEU_PRESETS)} preset; "
         f"{voice_variants} biến thể giọng; "
