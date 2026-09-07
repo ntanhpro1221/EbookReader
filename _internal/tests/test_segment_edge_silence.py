@@ -28,8 +28,11 @@ import pytest
 
 from ebook_reader.audio_io import (
     SEGMENT_EDGE_SILENCE_CAP_SECONDS,
+    SEGMENT_INTERNAL_SILENCE_CAP_SECONDS,
+    _cap_internal_silence,
     _cap_segment_edge_silence,
     _edge_silence_seconds,
+    _internal_silence_runs,
 )
 
 RATE = 24000
@@ -121,3 +124,116 @@ def test_a_take_that_is_all_silence_is_left_alone(tmp_path):
 
     assert entries[0][0] == tmp_path / "a.wav"
     assert trimmed == []
+
+
+# A take can be perfectly framed and still stop dead in the middle of a sentence. alpha.53
+# chapter 10 did: 1.20s of nothing after "công bằng", which the owner picked out by ear from
+# a 12-second clip. Measured across all 10,869 silences in that run's 948 takes, the median
+# is 0.04s, the 99th percentile 0.60s and the 99.5th 0.64s; ten gaps exceed 0.8s and exactly
+# one exceeds 1.0s. The cap is set from that distribution, not from the chapter check it
+# happens to satisfy - "longer than this book ever pauses on purpose", with the other 99.5%
+# of its prosody left exactly as performed.
+
+
+def _take_with_pause(pause: float, *, speech: float = 1.0) -> np.ndarray:
+    return np.concatenate(
+        [_tone(speech), np.zeros(int(RATE * pause), dtype=np.float32), _tone(speech)]
+    )
+
+
+def _longest_internal(audio: np.ndarray) -> float:
+    runs = _internal_silence_runs(audio, RATE)
+    return max(((end - start) * 0.02 for start, end in runs), default=0.0)
+
+
+def test_an_over_long_pause_is_shortened_not_removed() -> None:
+    """The sentence break is real and has to survive; only the dead air goes."""
+    audio = _take_with_pause(1.30)
+
+    capped, removed = _cap_internal_silence(audio, RATE)
+
+    assert removed == pytest.approx(1.30 - SEGMENT_INTERNAL_SILENCE_CAP_SECONDS, abs=0.03)
+    assert _longest_internal(capped) == pytest.approx(
+        SEGMENT_INTERNAL_SILENCE_CAP_SECONDS, abs=0.03
+    )
+
+
+def test_a_pause_this_book_actually_performs_is_left_alone() -> None:
+    """0.60s is the 99th percentile of the run. Touching it would be reshaping the reading,
+    not repairing it."""
+    audio = _take_with_pause(0.60)
+
+    capped, removed = _cap_internal_silence(audio, RATE)
+
+    assert removed == 0.0
+    assert len(capped) == len(audio)
+
+
+def test_edge_silence_is_not_treated_as_an_internal_pause() -> None:
+    """The edges have their own cap and their own reason; counting them twice would trim a
+    take that is merely framed loosely."""
+    audio = np.concatenate(
+        [np.zeros(int(RATE * 1.2), dtype=np.float32), _tone(1.0), np.zeros(int(RATE * 1.2), dtype=np.float32)]
+    )
+
+    assert _internal_silence_runs(audio, RATE) == []
+    assert _cap_internal_silence(audio, RATE)[1] == 0.0
+
+
+def test_several_over_long_pauses_are_each_capped() -> None:
+    audio = np.concatenate(
+        [
+            _tone(0.5),
+            np.zeros(int(RATE * 1.2), dtype=np.float32),
+            _tone(0.5),
+            np.zeros(int(RATE * 1.0), dtype=np.float32),
+            _tone(0.5),
+        ]
+    )
+
+    capped, removed = _cap_internal_silence(audio, RATE)
+
+    assert removed > 0.8
+    assert _longest_internal(capped) == pytest.approx(
+        SEGMENT_INTERNAL_SILENCE_CAP_SECONDS, abs=0.03
+    )
+
+
+def test_a_silent_take_is_still_left_alone() -> None:
+    """No speech means no internal pause, and nothing here should try to fix that."""
+    audio = np.zeros(int(RATE * 2.0), dtype=np.float32)
+
+    assert _cap_internal_silence(audio, RATE)[1] == 0.0
+
+
+def test_the_take_on_disk_is_untouched_by_the_internal_cap(tmp_path) -> None:
+    """Same rule as the edge cap: the take is the artifact every QA stage ruled on and its
+    checksum keys half the evidence in this project."""
+    path = tmp_path / "take.wav"
+    sf.write(path, _take_with_pause(1.30), RATE, subtype="PCM_16")
+    before = path.read_bytes()
+
+    capped, trimmed = _cap_segment_edge_silence([(path, 0)], RATE, tmp_path / "work")
+
+    assert trimmed, "an over-long internal pause must be reported"
+    assert capped[0][0] != path
+    assert path.read_bytes() == before
+
+
+def test_both_caps_apply_to_one_take(tmp_path) -> None:
+    """A take can be loosely framed *and* stop dead in the middle."""
+    path = tmp_path / "take.wav"
+    audio = np.concatenate(
+        [
+            np.zeros(int(RATE * 0.9), dtype=np.float32),
+            _tone(0.5),
+            np.zeros(int(RATE * 1.3), dtype=np.float32),
+            _tone(0.5),
+        ]
+    )
+    sf.write(path, audio, RATE, subtype="PCM_16")
+
+    _capped, trimmed = _cap_segment_edge_silence([(path, 0)], RATE, tmp_path / "work")
+
+    assert trimmed[0]["internal_removed_seconds"] > 0.5
+    assert trimmed[0]["removed_seconds"] > trimmed[0]["internal_removed_seconds"]

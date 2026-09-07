@@ -75,6 +75,16 @@ CHAPTER_EDGE_SILENCE_REVIEW_SECONDS = 2.0
 # line that opens on an ellipsis is meant to hesitate, and 0.35s in front of a 0.38s break
 # still reads as one.
 SEGMENT_EDGE_SILENCE_CAP_SECONDS = 0.35
+# A pause *inside* a take, capped by what this book's own reading actually does. Measured
+# over all 10,869 silences in alpha.53's 948 takes: median 0.04s, 99th percentile 0.60s,
+# 99.5th 0.64s. Ten gaps in the whole book exceed 0.8s and exactly one exceeds 1.0s - the
+# 1.20s after "công bằng" in chapter 10, which the owner picked out by ear as a dead spot.
+#
+# So this threshold is set by the distribution, not by the chapter check it happens to
+# satisfy. Setting it just under CHAPTER_DROPOUT_REVIEW_SECONDS would be tuning the audio to
+# silence an alarm; 0.65s says "longer than this book ever pauses on purpose" and leaves the
+# other 99.5% of its prosody exactly as the voice performed it.
+SEGMENT_INTERNAL_SILENCE_CAP_SECONDS = 0.65
 CHAPTER_JOIN_WINDOW_SECONDS = 0.001
 CHAPTER_JOIN_JUMP_HARD = 0.70
 CHAPTER_JOIN_JUMP_REVIEW = 0.18
@@ -1059,6 +1069,69 @@ def _edge_silence_seconds(audio: np.ndarray, sample_rate: int) -> tuple[float, f
     return leading * frame_size / sample_rate, trailing * frame_size / sample_rate
 
 
+def _internal_silence_runs(
+    audio: np.ndarray,
+    sample_rate: int,
+) -> list[tuple[int, int]]:
+    """(start_frame, end_frame) of every silent run that is not at either edge.
+
+    Same floor as the edge measure and the chapter check, so all three agree on what silence
+    is. Runs touching either end are excluded: those belong to `_edge_silence_seconds`, which
+    caps them differently and for a different reason.
+    """
+    frame_size = max(1, int(round(sample_rate * CHAPTER_SILENCE_FRAME_SECONDS)))
+    frame_count = audio.size // frame_size
+    if frame_count <= 0:
+        return []
+    frames = audio[: frame_count * frame_size].astype(np.float64).reshape(
+        frame_count, frame_size
+    )
+    rms = np.sqrt(np.mean(np.square(frames), axis=1))
+    silent = rms <= 10 ** (CHAPTER_SILENCE_FLOOR_DBFS / 20.0)
+    runs: list[tuple[int, int]] = []
+    start: int | None = None
+    for index, value in enumerate(silent):
+        if value and start is None:
+            start = index
+        elif not value and start is not None:
+            runs.append((start, index))
+            start = None
+    if start is not None:
+        runs.append((start, len(silent)))
+    return [run for run in runs if run[0] > 0 and run[1] < frame_count]
+
+
+def _cap_internal_silence(
+    audio: np.ndarray,
+    sample_rate: int,
+) -> tuple[np.ndarray, float]:
+    """Shorten every over-long pause inside a take. Returns (audio, seconds removed).
+
+    The pause is shortened, never removed: what is left is still the longest pause this book
+    performs on purpose. A voice that stops for a second and a quarter mid-paragraph is not
+    doing prosody, and the reader hears a dropout - but the sentence break itself is real and
+    has to survive.
+    """
+    frame_size = max(1, int(round(sample_rate * CHAPTER_SILENCE_FRAME_SECONDS)))
+    keep_frames = int(round(SEGMENT_INTERNAL_SILENCE_CAP_SECONDS / CHAPTER_SILENCE_FRAME_SECONDS))
+    drop: list[tuple[int, int]] = []
+    for start, end in _internal_silence_runs(audio, sample_rate):
+        if end - start <= keep_frames:
+            continue
+        drop.append(((start + keep_frames) * frame_size, end * frame_size))
+    if not drop:
+        return audio, 0.0
+    kept: list[np.ndarray] = []
+    cursor = 0
+    removed = 0
+    for start, end in drop:
+        kept.append(audio[cursor:start])
+        removed += end - start
+        cursor = end
+    kept.append(audio[cursor:])
+    return np.concatenate(kept), removed / sample_rate
+
+
 def _cap_segment_edge_silence(
     entries: list[tuple[Path, int]],
     sample_rate: int,
@@ -1078,22 +1151,33 @@ def _cap_segment_edge_silence(
             audio, rate = sf.read(path, dtype="float32", always_2d=False)
         except Exception as exc:  # noqa: BLE001
             raise AudioQualityError(f"cannot read WAV: {path}: {exc}") from exc
-        leading, trailing = _edge_silence_seconds(np.asarray(audio), rate)
-        if leading <= SEGMENT_EDGE_SILENCE_CAP_SECONDS and trailing <= SEGMENT_EDGE_SILENCE_CAP_SECONDS:
+        samples = np.asarray(audio)
+        leading, trailing = _edge_silence_seconds(samples, rate)
+        start = int(round(max(0.0, leading - SEGMENT_EDGE_SILENCE_CAP_SECONDS) * rate))
+        end = len(samples) - int(
+            round(max(0.0, trailing - SEGMENT_EDGE_SILENCE_CAP_SECONDS) * rate)
+        )
+        edged = samples[start:end]
+        removed_edges = (len(samples) - len(edged)) / rate
+        # And the pauses inside it. A take can be perfectly framed and still stop dead in the
+        # middle of a sentence, which is what chapter 10 of alpha.53 did after "công bằng" -
+        # the single longest silence in 10,869 across the whole book, and the one the owner
+        # picked out by ear.
+        inner, removed_inner = _cap_internal_silence(edged, rate)
+        if removed_edges <= 0.0 and removed_inner <= 0.0:
             capped.append((path, break_ms))
             continue
-        start = int(round(max(0.0, leading - SEGMENT_EDGE_SILENCE_CAP_SECONDS) * rate))
-        end = len(audio) - int(round(max(0.0, trailing - SEGMENT_EDGE_SILENCE_CAP_SECONDS) * rate))
         work_dir.mkdir(parents=True, exist_ok=True)
         target = work_dir / f"trimmed_{index:05d}_{path.stem}.wav"
-        sf.write(target, np.asarray(audio)[start:end], rate, subtype="PCM_16")
+        sf.write(target, inner, rate, subtype="PCM_16")
         capped.append((target, break_ms))
         trimmed.append(
             {
                 "source": str(path),
                 "leading_silence_seconds": round(leading, 3),
                 "trailing_silence_seconds": round(trailing, 3),
-                "removed_seconds": round((start + (len(audio) - end)) / rate, 3),
+                "internal_removed_seconds": round(removed_inner, 3),
+                "removed_seconds": round(removed_edges + removed_inner, 3),
             }
         )
     return capped, trimmed
