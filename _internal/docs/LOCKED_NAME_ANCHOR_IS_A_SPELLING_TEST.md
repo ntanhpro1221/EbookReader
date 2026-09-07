@@ -198,3 +198,35 @@ Whisper đọ với chữ phiên âm rồi gọi chênh lệch chính tả là l
 
 Một phép kiểm biết phát hiện lỗi nhưng không biết phân biệt bản đúng với bản sai thì tệ hơn
 là không có: nó bắt đúng chỗ đau, rồi vứt luôn thuốc.
+
+## Ranh giới của fix, đo trên ca thật đầu tiên nó không cứu được
+
+alpha.52 chương 3, `c00003_s0000029`:
+
+| | |
+|---|---|
+| lời | "Hắn là Hoàng Tử Quỷ Thứ Mười (Tenth Demon Prince)." |
+| neo | `Tenth Demon Prince` → `Ten Đe-mon Pờ-rin` |
+| Whisper gõ | "Hắn là hoàng tử quỷ thứ 10, tên **Demon Perrin**." |
+| khớp âm từng phần | `[Tenth ✓, Demon ✓, Prince ✗]` |
+
+Hai thành phần đầu được cứu. `Prince` thì không, và lý do rất hẹp:
+
+```
+kỳ vọng  pờ | rin  ->  pˈɔ    ɹˈin
+tách     per| rin  ->  pɜː    ɹˈin      <- âm tiết SAU khớp chính xác
+```
+
+Lệch đúng **một nguyên âm**: `pɜː` (tiếng Anh "per") so với `pˈɔ` (tiếng Việt "pờ"). Tai người
+nghe là một âm; máy phiên âm coi là hai.
+
+**Không nới, và đây là lý do.** Nới nguyên âm ở mức này là mở lại đúng cánh cửa đã đóng:
+`Lucian` với `Lucien` cũng lệch nguyên âm, và test cũ ghim rằng chúng **phải** khác nhau — hai
+nhân vật khác nhau. Chưa có cách nào tôi đo được để phân biệt "lệch nguyên âm vì phiên âm Việt
+hoá" với "lệch nguyên âm vì tên khác". Nới bừa là đổi lỗi chặn oan lấy lỗi thả oan, mà thả oan
+thì ghim khiếm khuyết vào sách.
+
+**Và hệ thống vẫn xử đúng ca này.** Khi máy không quyết được, phán quyết của người quyết —
+`c00003_s0000029` đã có phán quyết từ 2026-09-04, và nó đã nằm trong alpha.52. Fix này làm
+**giảm** số đoạn cần tai người, không phải xoá bỏ chúng. Đừng đọc nó thành "phép kiểm neo tên
+giờ đã đúng cho mọi tên".
