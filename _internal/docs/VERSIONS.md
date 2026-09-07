@@ -1860,3 +1860,25 @@ tầng sau.
 `break_ms` lớn nhất trong chương chỉ 380ms, và kể cả khi mọi biên đều đúng ngưỡng 0,35s thì
 tổng tối đa cũng chỉ 1,08s. Nên **1,32s là im lặng nằm BÊN TRONG một bản thu**, không phải ở
 biên — hướng điều tra riêng, chưa làm.
+
+## alpha.54: một thay đổi, một dự đoán
+
+Chạy 16:13. Khác alpha.53 **đúng một điểm**: cắt im lặng bên trong bản thu ở ngưỡng 0,65s
+(`THROUGHPUT.md` không liên quan; xem `audio_io.SEGMENT_INTERNAL_SILENCE_CAP_SECONDS`).
+
+**Dự đoán: 10/10.** Chín chương của alpha.53 không có lý do gì đổi — ngưỡng 0,65s nằm trên
+phân vị 99,5 của chính cuốn sách, và ghép thử cho thấy chỉ 11 đoạn của chương 10 bị chạm, chín
+trong số đó dưới một phần mười giây. Chương 10 đã được kiểm bằng cách ghép lại từ chính bản thu
+của alpha.53: im lặng 1,32s → 0,64s, hết cờ.
+
+**Nếu KHÔNG ra 10/10 thì nghi ngay hai chỗ:**
+
+1. **Chương nào đó tụt khỏi 9 chương cũ.** Nghĩa là việc xén đã đổi thứ khác — thời lượng,
+   điểm nối, hay một phép kiểm chương khác. Ngưỡng đặt cao để tránh đúng điều này, nên nếu nó
+   xảy ra thì giả định "chỉ chạm 0,5% khoảng lặng" là sai.
+2. **Chương 10 vẫn trượt nhưng ở mã lỗi khác.** Đó lại là tin tốt kiểu khác: nó nghĩa là fix
+   đúng và có một tầng nữa phía sau chưa ai đi tới — y như chương 10 của alpha.53 đã dạy.
+
+**Điều KHÔNG nên kết luận nếu ra 10/10:** rằng giọng đọc đã hết lỗi ngữ điệu. Nhịp ngắt 0,18s
+giữa từ ghép "đầu vào" vẫn còn nguyên đó, nằm dưới mọi ngưỡng, và không phép kiểm nào hiện có
+nhìn thấy nó. Chủ sách nghe ra nó bằng tai trong một đoạn 13 giây; máy thì không.
