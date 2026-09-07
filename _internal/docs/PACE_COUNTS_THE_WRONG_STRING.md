@@ -45,24 +45,43 @@ Báo cáo lỗi ghi **10,68**. Khớp đến số lẻ thứ hai.
 do này** — để so bản ghi với văn bản thì phải nở số ra chữ trước. ASR biết số nở ra; thước đo
 nhịp thì không.
 
-## Rộng bao nhiêu
+## Rộng bao nhiêu — và ba lần tôi đoán sai con số này
 
-**Mọi tiêu đề chương trong sách đều có số** (`Chương N - N: …`). Nhưng không phải cái nào cũng
-bị kiểm: phép kiểm nhịp chỉ chạy khi segment có từ `rate_check_min_chars = 24` ký tự trở lên.
+**Mọi tiêu đề chương trong sách đều có số** (`Chương N - N: …`), nhưng phép kiểm nhịp chỉ chạy
+khi segment có từ `rate_check_min_chars = 24` ký tự trở lên. Đó là điều quyết định, và tôi đã
+bỏ sót nó ở lần ước đầu tiên.
 
-| | |
-|---|---|
-| tiêu đề có số | 476/478 |
-| đủ dài để **bị kiểm** | **274** |
-| dự đoán trượt | **180** (38% tổng số chương) |
-| trong đó **xa dưới ngưỡng** (<11 kt/s) nên gần như chắc | **67** |
+Số **quan sát được** trên chín chương của alpha.57:
 
-> **Con số 180 mỏng, con số 67 chắc.** Mô hình hiệu chỉnh trên vỏn vẹn **ba** tiêu đề đã chạy
-> thật (nhịp đọc tự nhiên 17,3 kt/s trên chữ đọc). Ước đầu tiên của tôi dùng 15,8 và cho 241
-> cái; nó dự thừa — chương 012 bị dự là chết mà thật ra đo được 13,87 kt/s và qua. Những cái
-> sát ngưỡng là tung đồng xu; những cái dưới 11 thì không.
->
-> **Cơ chế thì chắc chắn**, độc lập với con số: nó khớp đến số lẻ thứ hai trên chương 023.
+| tiêu đề | ký tự viết | bị kiểm? | nhịp đo được | kết quả |
+|---|---|---|---|---|
+| ch019 `Chương 18 - 18: Bịp bợm` | 16 | **không** | – | qua |
+| ch020, ch021, ch022, ch024, ch025 | 17–21 | **không** | – | qua |
+| **ch023 `Chương 22 - 22: Ấn tượng đầu tiên`** | **24** | **có** | **10,68** | **CHẾT** |
+| ch026 `Chương 25 - 25: Danh tiếng…` | 36 | có | 13,20 | qua |
+| ch027 `Chương 26: Phản diện phụ…` | 28 | có | 14,52 | qua |
+
+**Một trên ba tiêu đề bị kiểm đã chết. Một trên chín chương mất tiêu đề.** Đó là quan sát, không
+phải mô hình.
+
+### Ba lần ước, ba lần sai theo cùng một hướng
+
+| lần | giả định nhịp đọc tự nhiên | dự đoán cả cuốn | sai ở đâu |
+|---|---|---|---|
+| 1 | 15,8 kt/s | 241 chương | quên mất `rate_check_min_chars`, và giả định quá thấp |
+| 2 | 15,8 kt/s, có lọc | 180 chương | vẫn giả định quá thấp |
+| 3 | 17,3 kt/s (hiệu chỉnh trên **3** mẫu) | 180, "67 cái chắc chắn" | **ch026 nằm trong nhóm 67 ấy và đã qua** |
+
+Mỗi lần hiệu chỉnh lại, con số tụt xuống. Nhịp đọc thật của ch026 tính ngược ra là **19,1
+kt/s**, cao hơn hằng số tôi dùng 10%. Cả ước lượng dựng trên một hằng số tôi chưa đo tử tế, và
+biên dao động của nó nuốt trọn khoảng cách tới ngưỡng.
+
+**Nên tôi không đưa con số cho cả cuốn nữa.** Cái đứng vững:
+
+- **Cơ chế chắc chắn** — khớp đến số lẻ thứ hai trên ch023, và giải thích được vì sao 11 lần
+  thử cho 11 kết quả y hệt.
+- **Tần suất quan sát được: 1/9 chương, 1/3 tiêu đề bị kiểm.** Muốn con số cho cả cuốn thì phải
+  đo nhịp đọc tự nhiên trên vài trăm segment có chữ số, chứ không phải trên ba cái.
 
 ## Hướng sửa
 
