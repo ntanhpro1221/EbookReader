@@ -230,3 +230,37 @@ thì ghim khiếm khuyết vào sách.
 `c00003_s0000029` đã có phán quyết từ 2026-09-04, và nó đã nằm trong alpha.52. Fix này làm
 **giảm** số đoạn cần tai người, không phải xoá bỏ chúng. Đừng đọc nó thành "phép kiểm neo tên
 giờ đã đúng cho mọi tên".
+
+## Lỗ hổng dễ dãi tự tìm ra, và cái giá của việc bịt nó: bằng không
+
+Sau khi viết phần gấp tên khỏi số đo câu, tôi soát lại chính nó thay vì chờ nó cắn. Phép khớp
+thành phần cho phép các phần của tên khớp **cách quãng**:
+
+```
+"samen đã giết rất nhiều người kaiser theo bên"
+ └────────── span phủ 9 token cho một cái tên 4 token ──────────┘
+```
+
+Riêng chuyện đó chỉ là lỏng. Cộng với việc **gấp span ra khỏi số đo câu** — thứ làm cho cứu hộ
+có tác dụng — thì nó xoá luôn cả mệnh đề ở giữa khỏi phép so, và mọi lỗi phiên âm nằm trong đó
+biến mất khỏi điểm số.
+
+**Và nó sẽ vô hình**: `anchor.status` đẹp hơn, chương xuất được nhiều hơn. Đúng dạng hỏng khó
+phát hiện nhất — thứ chỉ lộ ra khi có người nghe và thấy sách sai.
+
+Đã buộc các phần sau phải liền kề phần trước, đúng cách một cái tên được nói ra.
+
+**Cái giá, đo trên dữ liệu thật:** chạy lại toàn bộ 51 ca mà alpha.52 đã cứu, với mã đã siết:
+
+| | |
+|---|---|
+| vẫn cứu được | **57** (nhiều hơn, nhờ bản vá gạch nối) |
+| mất đi | **0** |
+
+Không một ca hợp lệ nào phải trả giá. Đó là hình dạng của một ràng buộc đúng: nó chỉ chặn thứ
+mà nó sinh ra để chặn.
+
+**Bài học về cách nghiệm thu:** cả ngày hôm nay tôi lặp lại một câu — "một phép kiểm chỉ biết
+cho đỗ nhiều hơn thì chưa phân biệt được gì". Lần này chính tôi suýt viết ra một cái. Cách bắt
+được nó không phải chạy thêm test, mà là **hỏi ngược lại: fix này làm gì dễ dãi hơn, và chỗ dễ
+dãi ấy có nhìn thấy được không?**
