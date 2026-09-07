@@ -1673,10 +1673,23 @@ nên là hệ quả chứ không phải nguyên nhân.
 mọi thứ phía sau đi theo quỹ đạo khác. Đó cũng là lý do nó lệch giống hệt nhau so với cả ba
 bản trước: chúng cùng chung quỹ đạo gốc.
 
-**Nghi phạm, và tôi không chứng minh được.** Lúc 10:31:37 tôi đang chạy một lượt pytest đầy
-đủ trên cùng máy. Cơ chế hợp lý — llama.cpp/Ollama có thể đổi cách gộp lô theo tải, và số học
-đổi theo. Nhưng đây là **một quan sát, không phải một thí nghiệm**: tôi không lặp lại được,
-và không loại trừ được nguyên nhân khác.
+**Nghi phạm, và alpha.53 đã củng cố nó đáng kể.** Lúc 10:31:37 tôi đang chạy một lượt pytest
+đầy đủ trên cùng máy. Cơ chế hợp lý — llama.cpp/Ollama có thể đổi cách gộp lô theo tải.
+
+alpha.53 chạy lại đúng mã ấy, đúng nguồn ấy, đúng 112 cách đọc ấy, **khác mỗi một điều: máy
+được để yên**. Và nó chạy qua **đúng nhóm 45** — nhóm alpha.52 lệch — rồi khớp lại với
+alpha.51:
+
+| lượt | máy trong pha phân tích | nhóm 45 |
+|---|---|---|
+| alpha.48 / .49 / .51 | yên | giống nhau |
+| **alpha.52** | **ba lượt pytest đè lên** | **lệch** |
+| **alpha.53** | **yên** | **khớp lại alpha.51** |
+
+Vẫn chưa phải chứng minh: tôi không lặp lại thí nghiệm, không cố ý tạo tải để xem nó có lệch
+lại không, và một biến số khác chưa biết vẫn có thể giải thích cả hai. Nhưng "trùng mốc thời
+gian" đã thành "bỏ tải ra thì lệch biến mất, ở đúng cái nhóm ấy" — đủ để quy tắc nhường máy
+không còn là phòng xa mà là kết luận.
 
 **Quy tắc rút ra, đúng dù nguyên nhân là gì:** không chạy việc nặng trên máy trong lúc pha
 phân tích đang chạy. Lệnh thường trực là *nhường máy cho cuốn sách*, và tôi đã chạy ba lượt
