@@ -3,13 +3,14 @@ r"""Áp toàn bộ bản vá đang chờ, đúng thứ tự, rồi chạy bộ t
     python scripts/pending_patches/apply_all.py                 # thử, không ghi gì
     python scripts/pending_patches/apply_all.py --apply         # ghi thật rồi chạy test
 
-**CHỈ CHẠY KHI KHÔNG CÓ LƯỢT `run` NÀO ĐANG BAY.** Bốn trong tám bản vá sửa file nằm trong
+**CHỈ CHẠY KHI KHÔNG CÓ LƯỢT `run` NÀO ĐANG BAY.** Bản vá trong `ORDER` sửa file nằm trong
 `QUALITY_IMPLEMENTATION_FILES`, nên ghi vào chúng đổi `quality_implementation_hash()` và lượt
-`resume` kế tiếp sẽ bị từ chối. Script tự kiểm điều này trước khi ghi.
+`resume` kế tiếp sẽ bị từ chối. Script tự kiểm điều này trước khi ghi, bằng nhịp tim của
+`worker_leases` chứ không bằng file khoá.
 
-Thứ tự có ý nghĩa: `patch_quote_tests.py` viết một test mà `patch_test2.py` viết đè lại (bản
-đầu escape sai, giữ cả hai để lịch sử khớp với commit). Mỗi script `assert` chuỗi gốc trước khi
-thay, nên áp sai thứ tự hay áp hai lần thì nó dừng chứ không làm hỏng file.
+`ORDER` là hàng chờ; `APPLIED` là hồ sơ những cái đã vào cây thật. Mỗi script `assert` chuỗi
+gốc trước khi thay, nên áp sai thứ tự hay áp hai lần thì nó dừng chứ không làm hỏng file — đó
+là lý do giữ lại `APPLIED` thay vì xoá.
 """
 from __future__ import annotations
 
@@ -25,7 +26,14 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
+# Tám bản vá đầu ĐÃ ÁP 2026-09-08 01:12; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ
+# không hỏng gì. Hai bản cuối đang chờ máy rảnh.
 ORDER = (
+    "patch_reserve_all.py",
+    "patch_reserve_test.py",
+)
+
+APPLIED = (
     "patch_quote_recovery.py",
     "patch_quote_tests.py",
     "patch_test2.py",

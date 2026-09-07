@@ -1,4 +1,25 @@
-# ĐÃ ÁP HẾT 2026-09-08 01:12 — thư mục này giờ là hồ sơ, không phải hàng chờ
+# Trạng thái: 8 bản vá ĐÃ ÁP (01:12), 2 bản vá ĐANG CHỜ (02:20)
+
+## Đang chờ — cần máy rảnh
+
+| script | file | đổi gì |
+|---|---|---|
+| `patch_reserve_all.py` | `character_registry.py` | Giữ chỗ **mọi** giọng đã ghim trước khi phân vai, kể cả của nhân vật im lặng ở lô này. |
+| `patch_reserve_test.py` | `tests/` | 2 test: giọng của nhân vật im lặng vẫn được giữ; ghim trỏ vào profile không tồn tại thì bỏ qua và nói ra chứ không giết lượt chạy. |
+
+Vì sao: `reserve()` chỉ được gọi từ `_pinned_profile_id`, tức chỉ khi đang phân vai cho một
+nhân vật. Nhân vật đã ghim mà **không nói câu nào** ở lô này thì không giữ chỗ gì cả, và một
+preset chưa dùng bao giờ cũng xếp đầu. alpha.56: `THEOSBANE` im lặng suốt chương 010–018 ⇒
+`preset_thanh_binh_f093_p-04` trông như còn trống ⇒ bộ cấp phát giao cho `SAMAEL`. alpha.55,
+nơi mọi nhân vật đã ghim đều có nói, **không có va chạm nào**.
+
+Bản vá bỏ luôn `reserve()` trong `_pinned_profile_id` để khỏi đếm hai lần cùng một giọng.
+
+Áp bằng `apply_all.py` sau khi cập nhật `ORDER`, hoặc chạy tay hai script theo thứ tự trên.
+
+---
+
+# ĐÃ ÁP 2026-09-08 01:12 — tám bản vá dưới đây đã vào cây thật
 
 Tám bản vá dưới đây **đã được ghi vào cây thật** sau khi alpha.56 chạy xong 9/9 và bộ canh xác
 nhận không còn lượt nào đang bay. `quality_implementation_hash()` đổi thành `7deaf44c644f36ee`.
