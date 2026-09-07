@@ -1811,6 +1811,10 @@ CREATE TABLE IF NOT EXISTS characters (
     mention_count INTEGER NOT NULL DEFAULT 0,
     confidence REAL NOT NULL DEFAULT 0.5,
     locked INTEGER NOT NULL DEFAULT 0,
+    -- The voice this character keeps across versions, as a `voice_profiles.voice_key`
+    -- (preset::formant::pitch). Empty means the allocator decides, which is every character
+    -- until somebody pins one.
+    locked_voice_key TEXT NOT NULL DEFAULT '',
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
@@ -2266,6 +2270,13 @@ class ProjectDB:
         if "formant_ratio" not in voice_columns:
             conn.execute(
                 "ALTER TABLE voice_profiles ADD COLUMN formant_ratio REAL NOT NULL DEFAULT 1.0"
+            )
+        character_columns = {
+            str(row[1]) for row in conn.execute("PRAGMA table_info(characters)")
+        }
+        if "locked_voice_key" not in character_columns:
+            conn.execute(
+                "ALTER TABLE characters ADD COLUMN locked_voice_key TEXT NOT NULL DEFAULT ''"
             )
         book_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
         if "casting_finalized" not in book_columns:
@@ -8064,6 +8075,52 @@ class ProjectDB:
                 "WHERE locked=1 AND gender IN ('male','female')"
             ).fetchall()
         return {_character_key(str(row["canonical_name"])): str(row["gender"]) for row in rows}
+
+    def locked_character_voices(self) -> dict[str, str]:
+        """Every voice pinned to a character, keyed the way casting keys characters.
+
+        The value is a `voice_profiles.voice_key` - preset, formant and pitch together -
+        because all three decide what the character sounds like. Carrying the preset name
+        alone would not be enough: the formant warp comes from the allocator's variant
+        counter, so it depends on the order characters happened to be cast in, and the same
+        pinned preset could come back with a different timbre in the next run.
+        """
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT canonical_name, locked_voice_key FROM characters "
+                "WHERE locked_voice_key <> ''"
+            ).fetchall()
+        return {
+            _character_key(str(row["canonical_name"])): str(row["locked_voice_key"])
+            for row in rows
+        }
+
+    def set_locked_character_voice(self, canonical_name: str, voice_key: str) -> None:
+        """Pin a character's voice, creating the row if the project has not analysed yet.
+
+        Seeding before analysis is the point: `port_casting.py` runs between `create` and
+        `run`, so the allocator finds the decision already made rather than making its own
+        and being overruled afterwards.
+        """
+        name = str(canonical_name).strip()
+        key = str(voice_key).strip()
+        if not name or not key:
+            raise ValueError("canonical_name and voice_key are both required")
+        now = time.time()
+        with self.transaction() as conn:
+            updated = conn.execute(
+                "UPDATE characters SET locked_voice_key=?, updated_at=? WHERE canonical_name=?",
+                (key, now, name),
+            ).rowcount
+            if not updated:
+                conn.execute(
+                    """
+                    INSERT INTO characters
+                        (canonical_name,display_name,locked_voice_key,created_at,updated_at)
+                    VALUES(?,?,?,?,?)
+                    """,
+                    (name, name, key, now, now),
+                )
 
     def upsert_character(
         self,
