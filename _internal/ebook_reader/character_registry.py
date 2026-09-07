@@ -480,6 +480,50 @@ class PresetAllocator:
         self.variant_usage[name] += 1
         return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
+    def reserve(self, preset_name: str, *, npc: bool) -> None:
+        """Record that a preset is taken, for a character this allocator never chose.
+
+        A pinned voice is invisible to the ranking unless it is counted here, and an unused
+        preset always sorts first - so the very next character would be handed the voice
+        somebody had just pinned to someone else. Two people, one voice, and nothing catches
+        it: the invariant in `verify_casting` checks that one speaker resolves to one
+        profile, which is the opposite direction.
+        """
+        self.pool_usage["npc" if npc else "named"][str(preset_name)] += 1
+        self.variant_usage[str(preset_name)] += 1
+
+
+def _pinned_profile_id(
+    db: ProjectDB,
+    locked_voices: dict[str, str],
+    canonical: str,
+    allocator: Any,
+    local: bool,
+    log: Any,
+) -> int | None:
+    """The voice a previous run gave this character, if somebody carried it over.
+
+    Returns None when nothing is pinned, which is every character until `port_casting.py`
+    runs - so a project that never used it casts exactly as it did before.
+
+    A pinned key that names no profile in this project is reported and ignored rather than
+    raising: the run should not die because a carried decision has gone stale, and casting
+    afresh is a defensible answer. It is logged because silently re-casting a voice somebody
+    chose is not.
+    """
+    # `canonical` has already been through canonical_key at the call site, and
+    # locked_character_voices keys the same way; applying it again is idempotent and says so.
+    voice_key = locked_voices.get(canonical_key(canonical), "")
+    if not voice_key:
+        return None
+    try:
+        row = db.voice_profile_by_key(voice_key)
+    except KeyError:
+        log(f"Giọng đã ghim {voice_key!r} cho {canonical!r} không có trong project; cấp phát lại.")
+        return None
+    allocator.reserve(str(row["preset_name"]), npc=local)
+    return int(row["id"])
+
 
 def _profile_for_preset(
     db: ProjectDB,
@@ -873,6 +917,7 @@ def build_registry_and_cast(
     voice_cfg = settings["voices"]
     minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
     locked_genders = db.locked_character_genders()
+    locked_voices = db.locked_character_voices()
     _validate_casting_inputs(rows, minimum_main_mentions, log, locked_genders)
     by_speaker: dict[str, list[Any]] = defaultdict(list)
     anonymous_by_gender: dict[str, list[Any]] = defaultdict(list)
@@ -947,15 +992,17 @@ def build_registry_and_cast(
         for alias in sorted(aliases_by_speaker.get(speaker, {speaker}), key=str.casefold):
             db.add_alias(character_id, alias, normalize_name(alias), confidence, "analysis")
         db.set_character_for_speaker(speaker, character_id)
-        preset, formant_ratio, age_pitch = allocator.choose(
-            gender,
-            npc=local,
-            age=age,
-            prominent=importance == "main",
-        )
-        profile_id = _profile_for_preset(
-            db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
-        )
+        profile_id = _pinned_profile_id(db, locked_voices, canonical, allocator, local, log)
+        if profile_id is None:
+            preset, formant_ratio, age_pitch = allocator.choose(
+                gender,
+                npc=local,
+                age=age,
+                prominent=importance == "main",
+            )
+            profile_id = _profile_for_preset(
+                db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
+            )
         db.set_voice_for_character_segments(character_id, profile_id)
         local_count += int(local)
 
