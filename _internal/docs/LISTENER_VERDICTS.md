@@ -352,3 +352,19 @@ python scripts/watch_listener_acceptances.py <nguồn> <đích>  # chỉ còn lo
 
 Watcher vẫn có việc: nó bắt các phán quyết cho bản thu **mới xuất hiện trong lúc chạy**. Nhưng
 ca thường gặp — bản thu không đổi giữa hai phiên bản — thì đã hết đua.
+
+### Cổng thứ tám cắn thật, cùng ngày nó được tìm ra
+
+alpha.52 chương 7, `c00007_s0000074`: phán quyết đã được **gieo trước** và khớp đúng
+`wav_sha256` của bản thu hiện tại (`5ae7d646b0…`). Dòng vẫn `failed`, và chương bị chặn bởi
+
+> `1 segment failed; chapter MP3 intentionally not published`
+
+— đúng nhánh `chapter_is_publishable`, đúng cái cổng tìm ra bằng `grep` buổi sáng và vá ở
+nhánh `fix/publishable-honours-verdicts` (chưa gộp vì `database.py` là file khoá và alpha.52
+đang chạy).
+
+Đáng ghi vì hai lẽ. Một, nó xác nhận cách tìm bằng liệt kê điểm thực thi là đúng: cổng ấy
+**thật sự** chặn, không phải giả thuyết. Hai, nó cho thấy hai fix của cùng một buổi sáng phối
+hợp thế nào — gieo trước đưa phán quyết vào đúng lúc, còn cổng thứ tám mới là thứ chịu đọc nó.
+Thiếu một trong hai thì chương vẫn chết, và mỗi cái một mình đều trông như "đã sửa xong".
