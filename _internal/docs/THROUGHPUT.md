@@ -441,3 +441,61 @@ Cả hai lần chạy đều dùng cả hai, tỉ lệ tương tự — 526/357 
 về *khối lượng việc phải làm*, không phải về *tốc độ làm việc ấy*.
 
 (alpha.43 đang chạy nốt chương 10, nên các số của nó sẽ nhích lên chút ít.)
+
+## Hàm thời gian: bao lâu cho bao nhiêu chữ (đo trên alpha.53, 2026-09-07)
+
+Đo trên alpha.53 — bản đầu tiên **không có phép kiểm cảm thụ**, nên con số này đã tính sẵn
+khoản tiết kiệm đó và **không** dùng được cho các bản trước.
+
+```
+T(giây) = 0,0672 × (số chữ) + 256 × (số chương)
+```
+
+Dạng một biến, khi chương dài trung bình ~10.500 chữ như cuốn này:
+
+```
+T(giây) ≈ 0,0915 × (số chữ)      →  1 giờ máy cho mỗi ~39.000 chữ
+```
+
+### Ba thành phần
+
+| khoản | s/chữ | tỷ trọng | ghi chú |
+|---|---|---|---|
+| phân tích | 0,0363 | 40% | tuyến tính theo đoạn, mà đoạn tỷ lệ với chữ |
+| tổng hợp + kiểm | 0,0309 | 34% | khớp tuyến tính, R²=0,668 |
+| cố định + vòng sửa | 0,0242 | 26% | 130 s/chương cố định + 126 s/chương vòng sửa |
+
+### Kiểm chứng
+
+| | |
+|---|---|
+| dự đoán cho 10 chương (105.416 chữ) | **160,7 phút** |
+| đo thật | **161,4 phút** |
+
+### Áp cho cả cuốn
+
+`D:/Novels/Tools/Text` = 478 chương, **5.111.981 chữ**:
+
+| | |
+|---|---|
+| thời gian máy | **130 giờ ≈ 5,4 ngày** liên tục |
+| audio tạo ra | ~82 giờ |
+| đĩa | ~49 GB |
+| tỷ lệ | **1,59 phút máy cho mỗi phút audio** |
+
+### Bốn chỗ hàm này yếu — đọc trước khi tin
+
+1. **Số hạng vòng sửa lấy từ đúng một quan sát.** Chương 7 của alpha.53 tốn 1530s trong khi
+   mô hình dự 400s; phần dôi 1130s chia đều cho 9 chương thành 126 s/chương. Vòng sửa là thứ
+   **gập ghềnh**, không đều: một chương xui có thể tốn gấp bốn lần trung bình.
+2. **R² = 0,668** cho phần khớp theo chương, và đó là *sau khi* bỏ chương 7 ra. Giữ nó lại thì
+   R² tụt còn 0,085 — tức riêng vòng sửa đã lấn át toàn bộ tín hiệu.
+3. **Chỉ tính giờ máy.** alpha.53 tắc 1/10 chương; ở 478 chương là **khoảng 48 chương cần
+   người xem**. Đó mới là ràng buộc thật, và hàm này không nói gì về nó.
+4. **Prompt phẳng trong phạm vi đã đo.** Qua 5 chặng của lượt chạy: 2336 → 2591 → 2423 → 2387
+   → 2344 token, không có xu hướng tăng, cao nhất 46% của `num_ctx` 7168. Nên registry nhân
+   vật **không** bị nhồi vào prompt và phép nhân tuyến tính đứng vững — nhưng điều đó mới đo ở
+   quy mô 948 đoạn và 23 nhân vật. Ở 478 chương với vài trăm nhân vật thì chưa ai biết.
+
+Cách đo lại: thời gian pha lấy từ `analysis_candidates.created_at` và `chapters.started_at/
+completed_at`; số chữ đếm bằng `len(open(...).read())` trên chính file nguồn.
