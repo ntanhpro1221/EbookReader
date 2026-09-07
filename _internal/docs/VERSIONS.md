@@ -1816,3 +1816,47 @@ một chương.
 trước từng quy trôi dạt cho "số học GPU không tất định" — một lời giải thích đúng nhưng vô
 dụng, vì nó không chỉ ra việc gì phải làm. Hoá ra phần lớn nó **điều khiển được**: giữ máy
 yên thì phân tích tái lập tuyệt đối, ba lần liên tiếp trước đây và lần này là lần thứ tư.
+
+### alpha.53 kết quả: 9/10 — bốn cơ chế dự đoán đúng, một thứ thứ năm chặn lại
+
+| bản | xuất được |
+|---|---|
+| alpha.51 | 8/10 |
+| alpha.52 | 5/10 |
+| **alpha.53** | **9/10** |
+
+**Chấm lại bảng dự đoán viết trước khi chạy:**
+
+| chương | dự đoán | thực tế | ghi chú |
+|---|---|---|---|
+| 3 | xuất nhờ phán quyết + cổng 8 | ✅ xuất | **tốt hơn dự đoán**: tự đỗ, không đụng tới phán quyết |
+| 5 | xuất bằng bản đọc ĐÚNG | ✅ đúng y hệt | 1 vòng sửa thay vì 5; lấy `fc691064` thay `6da1eaa3` |
+| 6 | xuất nhờ phân tích đúng quỹ đạo | ✅ xuất | giọng 16, wav trùng byte alpha.51 |
+| 7 | xuất nhờ phán quyết + cổng 8 | ✅ xuất | **tốt hơn**: vòng sửa tạo bản mới, tự đỗ |
+| 10 | xuất | ❌ **trượt** | hai đoạn đều đúng như dự đoán, chương chết ở chỗ khác |
+
+**Bốn trên năm cơ chế đúng.** Chương 10 hụt vì một thứ nằm ngoài cả bốn.
+
+### Chương 10: dự đoán đoạn đúng cả hai chiều, chương chết ở tầng sau
+
+| đoạn | dự đoán | thực tế |
+|---|---|---|
+| `s0000017` (đọc đúng, khác chính tả) | **tự đỗ** | ✅ `verified`, `matched_by_component_phonemes` |
+| `s0000016` (đọc "cướp" thay "cớt") | **vẫn trượt** | ✅ `failed`, `missing_or_wrong` |
+
+Đây chính là bài kiểm tra "fix có nới tay không", và nó **qua**: một đoạn được cứu, một đoạn
+vẫn bị chặn, đúng như thiết kế. Cổng thứ tám cũng ăn — chương đi qua được tầng đoạn dù còn một
+đoạn `failed`.
+
+Rồi nó chết ở **`chapter_post_encode_v1`**: `longest_unexpected_silence_seconds = 1,32` trong
+khi các chương khác 0,52–0,68.
+
+**Không phải hồi quy.** Thời lượng MP3 khớp chính xác (sai số 1e-13) nên không đoạn nào bị mất,
+và `trimmed_segment_edges = []` nên cơ chế cắt biên không hề động vào. Quan trọng hơn: ở
+alpha.51 và alpha.52, **chương 10 chưa bao giờ đi tới bước ghép MP3**, nên phép kiểm này chưa
+từng chạy trên nó. Fix đưa chương đi xa hơn mọi lần trước, và phơi ra một lỗi vốn đã nằm sẵn ở
+tầng sau.
+
+`break_ms` lớn nhất trong chương chỉ 380ms, và kể cả khi mọi biên đều đúng ngưỡng 0,35s thì
+tổng tối đa cũng chỉ 1,08s. Nên **1,32s là im lặng nằm BÊN TRONG một bản thu**, không phải ở
+biên — hướng điều tra riêng, chưa làm.
