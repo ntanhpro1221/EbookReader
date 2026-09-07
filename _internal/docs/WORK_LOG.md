@@ -739,3 +739,48 @@ nó ở chỗ **rẻ nhất về chi phí sửa**, với ca Samael là token cu�
 hôm qua, ba lần hôm nay. Bộ test cũ là thứ bắt được cả ba lần hôm nay — chúng ghim những
 ràng buộc mà người viết fix mới không có cách nào tự nghĩ ra. Đừng nới một test cũ để fix mới
 xanh; đọc xem nó đang bảo vệ điều gì.
+
+## 2026-09-07 chiều — sáu fix, và bốn trong số đó tìm ra trước khi chúng kịp tốn gì
+
+alpha.52 chốt 5/10, alpha.53 đang chạy với cả sáu. Nhưng điều đáng để lại cho người sau không
+phải danh sách fix, mà là **cách chúng được tìm ra**.
+
+### Bốn cái tìm ra bằng cách hỏi
+
+| fix | câu hỏi đã dẫn tới nó |
+|---|---|
+| cổng thứ tám (`chapter_is_publishable`) | "còn chỗ nào quyết định xuất bản mà chưa bao giờ hỏi bảng chấp nhận?" |
+| gạch nối trong chính tả Anh | "fix này phủ được bao nhiêu trong 112 cách đọc thật?" → 107, hụt 5 |
+| ràng buộc liền kề | "bản vá của tôi làm gì **dễ dãi hơn**, và chỗ đó có nhìn thấy được không?" |
+| resume gửi nguyên nhóm | "cái giá tôi *đoán* lúc đẩy câu hỏi sang chủ sách là bao nhiêu?" → 0,42% |
+
+Bảy cổng đầu tiên của họ phán quyết đều tìm ra bằng cách để một chương chết vào từng cái, mỗi
+lần một lượt chạy. Cổng thứ tám tốn một lần `grep` và mười phút. **Với bất kỳ chính sách nào
+có nhiều điểm thực thi, liệt kê hết rồi kiểm từng cái rẻ hơn hẳn chờ chúng cắn.**
+
+### Hai cái phải trả giá mới thấy
+
+- **Cổng thứ tám** bị chương 7 đẩy sang: phán quyết đã gieo, khớp checksum, dòng vẫn `failed`.
+- **Nửa sau của fix neo** bị chương 5 và 10 phơi ra, và đây là bài học đắt nhất:
+
+  | đoạn | `anchor.passed` | canonical | chương xuất được? |
+  |---|---|---|---|
+  | `c00005_s0000013` | **True** | 0,00 / 0,75 | **không** |
+  | `c00010_s0000017` | **True** | 0,43 / 0,43 | **không** |
+
+  Nhìn `anchor.status` thì cả hai trông như đã sửa xong. **Chỉ khi hỏi "chương có xuất được
+  không" mới lộ ra là chưa.** Nghiệm thu một bản vá bằng trường trạng thái nó vừa đổi là
+  nghiệm thu chính cái nó vừa làm — phải hỏi tới kết cục cuối cùng.
+
+### Ba lần sai bị bằng chứng bẻ, và một lần suýt
+
+Chẩn đoán "phiên âm thiếu âm" (chủ sách sửa), "phải sửa từ điển cả 18 đoạn" (Whisper cho thấy
+17/18 vốn đúng), "hai test bất đồng" (chỉ một). Và suýt ship một lỗ hổng dễ dãi trong chính
+bản vá của mình — bắt được không phải nhờ test mà nhờ hỏi ngược lại.
+
+### Cái giá của việc không nhường máy
+
+Ba lượt pytest đầy đủ chạy đè lên pha phân tích alpha.52. Phân tích lệch một lần ở nhóm 45/201
+rồi lan ra 57 nhóm; nhãn một nhân vật đổi → giọng 16 thành 14 → giọng mới không đọc được "Mẹ
+kiếp" → **mất chương 6, không cứu được trong bản đó**. Chưa chứng minh được nhân quả, nhưng
+chờ thì tốn không gì cả. Quy tắc đã ghi vào `AGENTS.md`, phần invariant an toàn.
