@@ -452,3 +452,51 @@ sách phiên âm nên bỏ những mục nào".
 
 Nếu bảng trên đúng thì việc cần làm không phải bỏ phiên âm, mà là **thu hẹp danh sách lại còn
 tên bịa** — và đó là thay đổi chạm vào thứ chủ sách đã duyệt, nên phải hỏi.
+
+## Cái gì đẩy một đoạn vào diện "cần nghe" mãi không ra: ngoặc đơn tiếng Anh
+
+Đo 2026-09-08 trên alpha.50–54 (cùng mười chương, năm lượt chạy). 66 segment từng cảnh báo,
+**29 cảnh báo ở cả năm lượt** — tức không phải xui, mà là tính chất của chính đoạn văn:
+
+| mã | số đoạn cảnh báo ở cả 5 lượt |
+|---|---|
+| `ASR_LOCKED_NAME_ANCHOR_REVIEW` | **14** |
+| `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` | 7 |
+| `ASR_UNVERIFIABLE_SHORT_TEXT` | 4 |
+| `TTS_SPLIT_RECOVERY` | 3 |
+| `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | 1 |
+
+Nhìn 14 đoạn đầu thì thấy ngay điểm chung: **cái nào cũng có tên tiếng Anh trong ngoặc đơn** —
+`Hình thái Dã thú (Beast Form)`, `Cổng Cưỡng ép (Forced Portals)`, `Kẻ dị thường (Anomaly)`,
+`Tai Ương Bình Minh (Dawn's Scourge)`.
+
+### Đo, và loại biến gây nhiễu
+
+Thô: 7,9% segment bất kỳ có ngoặc Anh, nhưng 66,7% ca `ANCHOR_REVIEW` có — gấp 8,4 lần.
+
+Nhiễu hiển nhiên: đoạn có ngoặc có thể chỉ **dài hơn**, nên chứa nhiều tên hơn, nên dễ dính
+hơn. Lọc còn những đoạn **có chứa ít nhất một tên đã khoá** (196/948):
+
+| | bị `ANCHOR_REVIEW` |
+|---|---|
+| có ngoặc Anh | **10/70 = 14,3%** |
+| không ngoặc | 5/126 = 4,0% |
+
+Gấp **3,6 lần**, và nhiễu đi ngược hướng lo ngại: đoạn có ngoặc **ngắn hơn** (120 chữ so với
+136). Hiệu ứng đứng vững.
+
+### Vì sao, và hướng sửa
+
+Neo tên so **chính tả** Whisper viết ra với **phiên âm** ta soạn, và hai thứ ấy không bao giờ
+gặp nhau trên một cái tên Whisper nhận ra. Khi văn bản gốc viết `Hình thái Dã thú (Beast Form)`
+thì TTS đọc cả phần trong ngoặc, Whisper chép lại `Beast Form` — **đúng**, nhưng neo đang chờ
+`hin thai da thu` nên báo cần nghe.
+
+Hướng sửa: khi **chính văn bản gốc** đặt nguyên bản tiếng Anh ngay cạnh cái tên đã khoá, thì
+Whisper viết ra dạng tiếng Anh ấy phải được coi là **khớp**, chứ không phải lệch. Đây không
+phải nới lỏng: nguồn là thứ có thẩm quyền, và nguồn ghi cả hai dạng.
+
+**Chưa làm, và không gấp.** `ASR_LOCKED_NAME_ANCHOR_REVIEW` nằm trong danh sách cho qua, nên
+14 đoạn này **không chặn chương nào**. Cái giá của chúng là làm dày danh sách "nghe nếu muốn"
+bằng những mục không có gì để nghe — đáng sửa để báo cáo cuối cùng trung thực, nhưng xếp sau
+những thứ đang chặn thật.
