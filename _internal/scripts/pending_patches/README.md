@@ -52,3 +52,61 @@ Việc "không cần tai người" mới xong một phần. Trong 6 đoạn ch�
 | `Hỏa Cầu (Fireball) … \|\| Sương Giá` | 19,96s | `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | **vẫn chặn — đúng.** Chủ sách xác nhận đoạn này đọc sai. |
 
 Đoạn cuối *phải* vẫn chặn: đó là bằng chứng bản vá không hạ chuẩn ở chỗ phép kiểm còn nhìn được.
+
+---
+
+## Bổ sung 2026-09-07 23:50 — chia lô làm hỏng phân tích, và cách chặn
+
+Chủ sách dặn: *"phân lô thế nào cũng được, đừng để phân tích bị sai do phân lô có vấn đề"*.
+Tôi đi kiểm và **có vấn đề thật**.
+
+Prompt phân tích mang một mục:
+
+```
+Nhân vật đã biết từ các phần trước:
+- JULIANA; số lần đã gặp=55; gender đã biết=female
+...
+```
+
+Mục ấy dựng từ `db.list_segments(...)` của **chính project đó** ([analysis.py:6557]). Một lô mới
+là một project mới, chưa phân tích gì, nên mục ấy rỗng: `(Chưa có nhân vật đã biết)`. Mô hình
+phải đoán lại giới tính và tên của một dàn nhân vật mà lô trước đã dựng xong.
+
+### Lớn cỡ nào
+
+Đo trên chính văn bản cuốn này — tên riêng Latin xuất hiện ≥5 lần, so theo 16 lô của
+`plan_batches --hours 8`:
+
+| lô | tên trong lô | đã thấy ở lô trước | % đã biết |
+|---|---|---|---|
+| 2 | 91 | 50 | 55% |
+| 5 | 119 | 103 | 87% |
+| 9 | 81 | 77 | **95%** |
+| 15 | 145 | 128 | 88% |
+
+**Từ lô 2 trở đi: 1.234/1.538 = 80% tên trong mỗi lô đã từng xuất hiện ở lô trước.**
+
+> Một phép đo trước đó của tôi nói 6%, và nó **sai vì chọn nhầm cửa sổ**: nó so nhãn người
+> nói giữa chương 000–009 và 010–018, tức đúng khúc mở đầu, nơi sách giới thiệu rồi bỏ nhân
+> vật nhanh hơn bất cứ đâu. Lấy cả cuốn thì ra 80%.
+
+### Ngữ cảnh câu trước/sau thì KHÔNG sao
+
+Đã kiểm: `previous_text`/`next_text` chỉ lấy khi cùng `chapter_id`
+([analysis.py:4944]). Cắt lô tại ranh giới chương không mất gì mà ranh giới chương chưa mất.
+Nhóm segment cũng không vượt chương. Vậy chỉ có đúng một lỗ, là danh sách nhân vật.
+
+### Vá
+
+| script | file | đổi gì |
+|---|---|---|
+| — (đã áp) | `scripts/port_casting.py` | Mang thêm **tên, giới tính, số lần gặp**, không chỉ giọng. Lọc bỏ `NARRATOR`/`UNKNOWN`, `ANONYMOUS_*`, và NPC cục bộ theo chương — cái cuối vô nghĩa ở lô sau. |
+| `patch_known_carry.py` | `analysis.py` | Danh sách "nhân vật đã biết" đọc cả bảng `characters`. Segment thắng nếu có cả hai: số đếm tự đo hơn số đếm được kể, và cộng vào là đếm trùng. |
+| `patch_fakedb.py` | `tests/` | `FakeDB` có `list_characters`; 3 test mới. |
+
+Mang sang **không khoá** (`locked=0`): `locked` nghĩa là *người* đã quyết và đè vĩnh viễn lên
+mô hình. Đây là một cái máy kể cho cái máy sau nghe, mô hình vẫn phải được quyền sửa nếu sách
+nói khác.
+
+Đã kiểm: **613 test xanh** trong bản sao. Một test ghim rằng lô đầu tiên (và mọi lượt chạy một
+mạch) có prompt **y hệt như trước** — thay đổi này không được đụng tới chúng.
