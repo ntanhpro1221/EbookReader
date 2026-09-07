@@ -2148,3 +2148,34 @@ Ba hướng, chưa làm cái nào:
 
 Hướng 3 hợp với những gì hôm nay dựng được — phán quyết giờ sống qua các phiên bản, nên nghe
 một lần là xong vĩnh viễn.
+
+## alpha.56: chương 011 xuất bản **vì đọc đúng**, không phải vì được tha
+
+Trước khi chạy, tôi ghi sẵn một dự đoán và nói rõ điều gì sẽ khiến tôi nghi ngờ:
+
+> Chương 011 phải xuất **vì đọc đúng**, không phải vì phán quyết. Tôi *không* chấp nhận đoạn
+> danh sách kỹ năng — chủ sách xác nhận nó đọc sai, nên nếu nó vẫn qua được thì có gì đó sai
+> chỗ khác.
+
+Nó qua, và qua đúng vì lý do đúng. Đoạn `c00002_s0000099`:
+
+| | alpha.55 | alpha.56 |
+|---|---|---|
+| máy nghe ra | `…thường **giá trị tuyệt đối của** xương dáng…` | `…thường xương dáng, thường dáng…` |
+| thời lượng | 19,96s | **16,28s** |
+| similarity | 0,57 | **0,83** |
+| trạng thái | `failed` | **`verified`** |
+| chương | 115/116, chặn | **116/116, xuất** |
+
+Cụm "giá trị tuyệt đối" biến mất hẳn khỏi bản ghi. `SPOKEN_SEPARATORS` thêm `|` nên `||` không
+còn được đọc thành "giá trị tuyệt đối" nữa — và **3,68 giây lời đọc thừa** biến mất theo. Đó
+là cái giá thật của lỗi ấy, đo bằng đồng hồ chứ không bằng cảm giác.
+
+Đoạn ấy vẫn mang `ASR_LOCKED_NAME_ANCHOR_REVIEW`, và điều đó **đúng**: ASR vẫn không xác nhận
+được cách viết mấy cái tên tiếng Anh trong danh sách, nhưng nội dung thì qua. Mã ấy nằm trong
+danh sách cho qua — nó mời người nghe nếu muốn, không chặn chương.
+
+**Vì sao chuyện này đáng ghi.** Một chương chuyển từ `failed` sang `completed` giữa hai phiên
+bản là chuyện dễ tự khen. Cách duy nhất để biết mình không tự lừa là **ghi trước cái gì sẽ
+khiến mình nghi ngờ**: nếu chương 011 qua mà bản ghi vẫn còn "giá trị tuyệt đối", thì nó qua vì
+một lỗ hổng nào đó chứ không phải vì đã sửa. Bản ghi sạch, nên kết luận đứng.
