@@ -1332,6 +1332,21 @@ def assemble_chapter_atomic_with_metrics(
                 metrics=quality.to_dict(),
                 failure_codes=("CHAPTER_QA_HARD_FAILURE",),
             )
+        if trimmed_edges:
+            # Attached before the review check, not after it. A chapter that fails is the one
+            # somebody has to diagnose, and leaving this out of its metrics says the edges
+            # were never trimmed when they were - which is exactly the wrong turn it caused
+            # on alpha.53 chapter 10, where the real cause was silence *inside* a take and
+            # the empty list pointed at the edge cap instead.
+            quality = replace(
+                quality,
+                trimmed_segment_edges=tuple(
+                    f"{Path(item['source']).name}: đầu {item['leading_silence_seconds']}s "
+                    f"cuối {item['trailing_silence_seconds']}s, cắt bớt "
+                    f"{item['removed_seconds']}s"
+                    for item in trimmed_edges
+                ),
+            )
         if settings.get("quality_profile") == "high_quality" and quality.review_flags:
             raise ChapterQualityError(
                 "temporary MP3 requires review under high-quality policy: "
@@ -1344,16 +1359,6 @@ def assemble_chapter_atomic_with_metrics(
         with temp.open("rb+") as handle:
             os.fsync(handle.fileno())
         os.replace(temp, output)
-        if trimmed_edges:
-            quality = replace(
-                quality,
-                trimmed_segment_edges=tuple(
-                    f"{Path(item['source']).name}: đầu {item['leading_silence_seconds']}s "
-                    f"cuối {item['trailing_silence_seconds']}s, cắt bớt "
-                    f"{item['removed_seconds']}s"
-                    for item in trimmed_edges
-                ),
-            )
         return ChapterAssemblyResult(checksum=candidate_checksum, quality=quality)
     except ChapterQualityError:
         raise

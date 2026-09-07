@@ -597,3 +597,52 @@ def test_endpoint_floor_tracks_the_loudness_anchors() -> None:
     assert normal_target - endpoint_floor == pytest.approx(26.0, abs=1.0)
     # The active floor is measured before any gain, so it must not move with them.
     assert float(audio["segment_active_floor_dbfs"]) == pytest.approx(-45.0)
+
+
+def test_a_failed_chapter_still_reports_the_edges_it_trimmed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The chapter that fails is the one somebody has to diagnose.
+
+    `trimmed_segment_edges` used to be attached after the review check raised, so a failing
+    chapter's metrics always showed an empty list - saying the edge cap had never run when it
+    had. On alpha.53 chapter 10 that sent the diagnosis at the edge cap for several minutes;
+    the real cause was 1.38s of silence *inside* a take, which the edge cap does not touch and
+    was never claiming to.
+    """
+    settings = build_settings(overrides={"tts": {"min_seconds_per_100_chars": 0.2}})
+    sample_rate = int(settings["tts"]["sample_rate"])
+    source = tmp_path / "source.wav"
+    timeline = np.arange(int(sample_rate * 1.0), dtype=np.float32) / sample_rate
+    tone = 0.12 * np.sin(2 * np.pi * 220 * timeline)
+    lead_in = np.zeros(int(sample_rate * 0.9), dtype=np.float32)
+    atomic_write_wav(
+        source,
+        np.concatenate([lead_in, tone]),
+        sample_rate,
+        "A sufficiently long sentence for deterministic audio QA.",
+        settings,
+    )
+    output = tmp_path / "chapter_001.mp3"
+    evaluate = audio_io._evaluate_chapter_quality
+
+    def force_review_flag(*args: Any, **kwargs: Any) -> audio_io.ChapterQualityMetrics:
+        return replace(evaluate(*args, **kwargs), review_flags=("forced review",))
+
+    monkeypatch.setattr(audio_io, "_evaluate_chapter_quality", force_review_flag)
+
+    with pytest.raises(ChapterQualityError) as captured:
+        assemble_chapter_atomic_with_metrics(
+            [source],
+            output,
+            settings,
+            title="Chapter 1",
+            book_title="Test book",
+            track=1,
+            work_dir=tmp_path / "silence",
+        )
+
+    trimmed = captured.value.metrics["trimmed_segment_edges"]
+    assert trimmed, "a failing chapter must still say what it trimmed"
+    assert "source.wav" in trimmed[0]
