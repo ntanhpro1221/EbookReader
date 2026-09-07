@@ -257,3 +257,66 @@ def test_a_multi_word_term_with_a_hyphen_inside_it_lines_up() -> None:
     assert _locked_name_anchor_components(
         {"surface": "Western Safe-Zone", "spoken_form": "Goét-tờn Xây Dôn"}
     ) == [("Western", ("Goét", "tờn")), ("Safe", ("Xây",)), ("Zone", ("Dôn",))]
+
+
+# Passing the anchor is only half the job, and the other half failed silently in production.
+# alpha.52 chapter 5 held on this exact segment *after* the rescue had accepted the take:
+# the anchor said pass, and the content gate refused it one step later on WER 0.444. The
+# canonical metrics exist to stop a name being punished twice, but they read the alignment,
+# and the alignment had parked this anchor on a single substitution - so three of the name's
+# four transcript tokens were counted as insertions and canonical WER came out 0.75 where the
+# truth is 0.0. The rescue changed a status field and nothing anybody could hear.
+
+
+def _adjudicate_with_thresholds(transcript: str) -> dict:
+    from tests.test_asr_locked_name_anchors import _anchor, _asr_result
+
+    from ebook_reader.asr import ASR_MISMATCH, adjudicate_locked_name_anchors
+
+    expected, surface, spoken = CHAPTER_5
+    result = _asr_result(transcript, verdict=ASR_MISMATCH, reason="ASR_MISMATCH")
+    result["similarity"] = 0.818
+    result["wer"] = 0.444
+    return adjudicate_locked_name_anchors(
+        expected,
+        result,
+        [_anchor(surface, spoken, spoken_start=expected.index("Xa-men"))],
+        min_similarity=0.78,
+        max_wer=0.30,
+    )
+
+
+def _metrics(transcript: str) -> dict:
+    from ebook_reader.asr import LOCKED_NAME_ANCHOR_METRICS_KEY
+
+    return _adjudicate_with_thresholds(transcript)[LOCKED_NAME_ANCHOR_METRICS_KEY]
+
+
+def test_a_rescued_name_is_folded_out_of_the_sentence_metrics() -> None:
+    """The whole name is one placeholder on both sides, so what is left to score is the
+    Vietnamese around it - which was read perfectly."""
+    metrics = _metrics("Tên tôi là Samen Kaiser theo bên.")
+
+    assert metrics["canonical_similarity"] == 1.0
+    assert metrics["canonical_wer"] == 0.0
+
+
+def test_a_rescued_name_actually_clears_the_content_gate() -> None:
+    """The assertion that would have caught the half-finished fix. Without the span, this
+    take passes the anchor and is still refused, which is worth nothing."""
+    metrics = _metrics("Tên tôi là Samen Kaiser theo bên.")
+
+    assert metrics["canonical_threshold_passed"] is True
+    assert metrics["canonical_promoted"] is True
+
+
+def test_the_broken_take_is_not_folded_away_with_it() -> None:
+    """Folding only applies to a name the check actually matched. "Sam Min" was not matched,
+    so its tokens stay in the comparison and it stays refused."""
+    for transcript in (
+        "Tên tôi là Sam Min Kaiser theo bên.",
+        "Tên tôi là Samen Kai rửa theo binh.",
+    ):
+        metrics = _metrics(transcript)
+        assert metrics["canonical_promoted"] is False, transcript
+        assert metrics["canonical_wer"] == 1.0, transcript
