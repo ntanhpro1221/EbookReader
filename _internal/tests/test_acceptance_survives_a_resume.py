@@ -154,3 +154,82 @@ def test_a_segment_with_no_audio_at_all_still_blocks(
     assert not db.chapter_segments_have_current_audio_qa(
         chapter_id, SEGMENT_AUDIO_QUALITY_STAGE
     )
+
+
+# The eighth gate. Found by asking rather than by losing a chapter to it: the seventh had
+# just been fixed the same morning, and `chapter_is_publishable` counted `status='failed'`
+# with no acceptance exemption at all - so an overruled segment would have cleared the
+# evidence gate and been refused two lines later by the status count.
+
+
+def test_a_chapter_publishes_over_an_overruled_segment(
+    project: tuple[ProjectDB, int],
+) -> None:
+    db, chapter_id = project
+    _accept(db)
+    _refail(db)
+
+    assert db.chapter_is_publishable(chapter_id)
+
+
+def test_both_gates_agree_about_the_same_segment(
+    project: tuple[ProjectDB, int],
+) -> None:
+    """The failure mode this pair exists to stop: one gate lets a verdict through and the
+    next refuses it, so the chapter still cannot publish and the listening bought nothing.
+    Six of the previous seven gates were found exactly this way, one at a time."""
+    db, chapter_id = project
+    _accept(db)
+    _refail(db)
+
+    assert db.chapter_segments_have_current_audio_qa(
+        chapter_id, SEGMENT_AUDIO_QUALITY_STAGE
+    )
+    assert db.chapter_is_publishable(chapter_id)
+
+
+def test_a_failed_segment_nobody_ruled_on_still_stops_publication(
+    project: tuple[ProjectDB, int],
+) -> None:
+    db, chapter_id = project
+    _refail(db)
+
+    assert not db.chapter_is_publishable(chapter_id)
+
+
+def test_a_verdict_on_other_audio_does_not_publish_this_take(
+    project: tuple[ProjectDB, int],
+) -> None:
+    """`retry` re-cuts the take and the acceptance must stop applying. Moving an exemption
+    into a second gate is a second chance to lose that property."""
+    db, chapter_id = project
+    _accept(db, checksum=OTHER)
+    _refail(db)
+
+    assert not db.chapter_is_publishable(chapter_id)
+
+
+def test_an_empty_chapter_is_not_publishable(
+    project: tuple[ProjectDB, int],
+) -> None:
+    """Preserved from the counting version, which required total > 0."""
+    db, chapter_id = project
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM segments WHERE chapter_id=?", (chapter_id,))
+
+    assert not db.chapter_is_publishable(chapter_id)
+
+
+def test_a_segment_still_being_worked_on_is_not_publishable(
+    project: tuple[ProjectDB, int],
+) -> None:
+    """Only `verified`, `warning` and an accepted take pass. A segment mid-pipeline must not
+    slip through because it happens not to say `failed`."""
+    db, chapter_id = project
+    with db.transaction() as conn:
+        conn.execute(
+            "UPDATE segments SET status=? WHERE stable_id='c1s1'",
+            (SegmentStatus.SIGNAL_PASSED.value,),
+        )
+
+    assert not db.chapter_is_publishable(chapter_id)

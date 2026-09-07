@@ -7873,17 +7873,47 @@ class ProjectDB:
         )
 
     def chapter_is_publishable(self, chapter_id: int) -> bool:
+        """Is every segment of this chapter in a state that may go into the book?
+
+        A take a person listened to and let stand counts, even while the row says `failed`.
+        That combination is not a contradiction, it is the normal end state of an overruled
+        segment: the machine keeps its verdict - deliberately, because what happened is that
+        somebody disagreed with it, not that it changed its mind - and a resume that
+        re-verifies the segment writes `failed` again every time.
+
+        The eighth gate of this shape since alpha.46, and it was found by asking rather than
+        by losing a chapter to it. The seventh had just been fixed the same morning:
+        `chapter_segments_have_current_audio_qa` checked status before consulting the
+        acceptance, so the exemption was unreachable for exactly the rows it named. This
+        counted `failed` and refused, with no exemption at all.
+
+        Bound to the checksum like every other use, so `retry` re-cuts the take and the
+        acceptance stops applying to anything.
+        """
         with self.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT COUNT(*) AS total,
-                       SUM(CASE WHEN status IN ('verified','warning') THEN 1 ELSE 0 END) AS accepted,
-                       SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
-                FROM segments WHERE chapter_id=?
-                """,
+            rows = conn.execute(
+                "SELECT stable_id, status, wav_sha256 FROM segments WHERE chapter_id=?",
                 (chapter_id,),
-            ).fetchone()
-            return bool(row and row["total"] and row["total"] == row["accepted"] and not row["failed"])
+            ).fetchall()
+            if not rows:
+                return False
+            accepted_takes = {
+                (str(a), str(b))
+                for a, b in conn.execute(
+                    "SELECT segment_stable_id, wav_sha256 FROM listener_audio_acceptances"
+                )
+            }
+        for row in rows:
+            if str(row["status"]) in {
+                SegmentStatus.VERIFIED.value,
+                SegmentStatus.WARNING.value,
+            }:
+                continue
+            checksum = str(row["wav_sha256"] or "").strip()
+            if checksum and (str(row["stable_id"]), checksum) in accepted_takes:
+                continue
+            return False
+        return True
 
     def accept_segment_audio(
         self,
