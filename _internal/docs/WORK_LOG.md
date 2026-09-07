@@ -702,3 +702,40 @@ Và hai lần trong phiên này tôi chẩn đoán sai rồi bị bằng chứng
 âm" (chủ sách sửa: phiên âm đúng, giọng đọc sai), rồi đoán "phải sửa từ điển cho cả 18 đoạn"
 (Whisper cho thấy 17/18 vốn đã đúng). Bài học lặp lại: **đọc bằng chứng đã lưu trước khi dựng
 giả thuyết** — nó nằm sẵn trong database cả rồi.
+
+### Ba fix, nhánh `fix/anchor-and-acceptance` (2026-09-07 chiều)
+
+**1. Tắt phép kiểm cảm thụ trong hồ sơ `high_quality`.** Chủ sách quyết sau khi xem kết quả
+A/B. Không xoá bộ máy: một dòng cấu hình bật lại được, và bộ test của nó tự bật lên để vẫn
+kiểm được. Đây là thay đổi mã chứ không phải cấu hình, vì `validate_settings` vốn **bắt buộc**
+`high_quality` phải bật cảm thụ.
+
+**2. Đưa miễn trừ "chủ sách đã nghe" lên trước cửa kiểm trạng thái** trong
+`chapter_segments_have_current_audio_qa`. Test mới: hai test ghim fix (đỏ trên mã cũ, xanh
+trên mã mới), ba test canh biên (xanh cả hai bên — chấp nhận vẫn buộc vào checksum bản thu,
+`retry` vẫn vô hiệu hoá nó, đoạn chưa ai nghe vẫn bị chặn).
+
+**3. Neo tên khoá: so âm thay vì so chữ.** Việc lớn nhất, và cũng là việc tôi sai nhiều lần
+nhất. Ghi lại hai hướng đã đo rồi vứt vì chúng *trông* đúng:
+
+- Nới van tương đồng cả câu: bản đúng 0,818, bản hỏng 0,816. Thả cả hai.
+- Tương đồng ký tự theo thành phần: tách được hai bản đó (0,800/0,667) nhưng "Lucian" đối
+  "Lucien" được 0,833 — cao hơn bản phải đỗ. **Dựng thử làm đỏ 18 test.**
+
+Hướng dùng: so **âm tiết bằng `_vietnamese_phonemes`**, theo từng thành phần tên. "xa" và
+"sa" cùng một âm còn "men" và "min" thì không; "kaizer" và "kaiser" ra âm giống hệt. **Không
+ngưỡng nào cả.**
+
+Bốn ràng buộc phát sinh, mỗi cái do một test cũ bắt được, chi tiết trong
+`LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md`. Đáng nhớ nhất là cách chữa nghe hợp lý mà sai:
+ghim tìm kiếm vào vị trí phép căn chỉnh gán cho neo — khi neo không khớp, phép căn chỉnh đặt
+nó ở chỗ **rẻ nhất về chi phí sửa**, với ca Samael là token cuối câu.
+
+**Kết quả trên dữ liệu thật, qua đường thật:** vòng 0 chương 5 (đọc đúng) ĐỖ, bản đang giữ
+(đọc sai) TRƯỢT, vòng 4 (hỏng) TRƯỢT, và `c00010_s0000017` — đoạn chủ sách nói "đúng rồi" —
+ĐỖ, tức **chương 10 không còn cần tai người nữa**.
+
+**Cách làm đáng giữ:** mọi khẳng định cơ chế trong phiên này đều sai cho tới khi đo. Bốn lần
+hôm qua, ba lần hôm nay. Bộ test cũ là thứ bắt được cả ba lần hôm nay — chúng ghim những
+ràng buộc mà người viết fix mới không có cách nào tự nghĩ ra. Đừng nới một test cũ để fix mới
+xanh; đọc xem nó đang bảo vệ điều gì.

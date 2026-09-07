@@ -171,6 +171,24 @@ thì cứu hộ chết đúng ở ca nó sinh ra để cứu. Ràng buộc (4) m
 Sửa xong phải kiểm lại đúng ba đoạn trên: vòng 0 và vòng 2 của `c00005_s0000013` **phải đỗ**,
 còn bản `Sam Min` **phải trượt**. Nếu bản `Sam Min` cũng đỗ theo thì đã nới quá tay.
 
+## Fix này KHÔNG làm gì (và đó là điểm mạnh của nó)
+
+Chương 10 có **hai** đoạn bị chặn, và fix chỉ gỡ một:
+
+| đoạn | neo đòi | Whisper gõ | sau fix |
+|---|---|---|---|
+| `c00010_s0000017` | `A-thờ cai-dờ theo-bên` | `Arthur Kaiser theo bên` | **đỗ** |
+| `c00010_s0000016` | `Đon Xờ-cớt` | `đon sờ **cướp**` | **vẫn trượt** |
+
+Đoạn thứ hai trượt ở đúng thành phần thứ hai: `[True, False]`. `sờ` khớp `Xờ` (s với x cùng
+âm), nhưng `cướp` không phải `cớt` — giọng đọc sai thật. Chủ sách đã nghe và chấp nhận nó từ
+trước, nên chương vẫn xuất được, nhưng bằng **lời chấp nhận** chứ không phải bằng fix này.
+
+Đây là phép thử quan trọng nhất của cả thay đổi. Một fix chỉ biết cho đỗ nhiều hơn thì không
+phân biệt được gì cả — nó chỉ dời chỗ hỏng từ "chặn oan" sang "thả oan". Fix này cho đỗ đúng
+những bản lệch **chính tả** và vẫn chặn những bản lệch **âm**, và cả hai vế đều có bản thu
+thật làm bằng chứng.
+
 ## Bài học chung
 
 Phép kiểm này **có** tín hiệu thật — nó tìm ra đúng một đoạn hỏng trong 18 đoạn, và chủ sách
