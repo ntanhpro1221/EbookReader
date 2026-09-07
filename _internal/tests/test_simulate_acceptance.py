@@ -132,3 +132,44 @@ def test_nothing_to_simulate_is_reported_rather_than_crashing(tmp_path: Path) ->
     project = _project(tmp_path / "p", warning="", status="verified")
 
     assert sim.simulate(project, None) == ([], [])
+
+
+def test_a_project_without_perceptual_qa_is_not_judged_on_its_evidence(tmp_path: Path) -> None:
+    """high_quality stopped enabling perceptual QA on 2026-09-07, and the pipeline then skips
+    that evidence entirely. Demanding it here would report a chapter blocked on a gate the
+    real run does not have - and send somebody to listen for nothing, which is the one
+    failure this script exists to prevent."""
+    project = _project(tmp_path / "p", warning=BLOCKING, status="failed")
+    (project / "book_settings.json").write_text(
+        '{"perceptual_qa": {"enabled": false}}', encoding="utf-8"
+    )
+
+    assert sim.perceptual_qa_enabled(project) is False
+
+    db = ProjectDB(project / "project.sqlite3")
+    without = sim.chapter_verdicts(db, perceptual=False)
+    with_it = sim.chapter_verdicts(db, perceptual=True)
+
+    assert without[1]["bằng chứng cảm thụ"] is True
+    assert with_it[1]["bằng chứng cảm thụ"] is False
+
+
+def test_missing_or_broken_settings_assume_the_stricter_world(tmp_path: Path) -> None:
+    """Guessing wrong in this direction only costs a listen that turns out unnecessary.
+    Guessing wrong the other way publishes a chapter the pipeline will refuse."""
+    project = _project(tmp_path / "p", warning=BLOCKING, status="failed")
+
+    assert sim.perceptual_qa_enabled(project) is True
+
+    (project / "book_settings.json").write_text("{ not json", encoding="utf-8")
+
+    assert sim.perceptual_qa_enabled(project) is True
+
+
+def test_an_enabled_project_is_still_judged_on_perceptual_evidence(tmp_path: Path) -> None:
+    project = _project(tmp_path / "p", warning=BLOCKING, status="failed")
+    (project / "book_settings.json").write_text(
+        '{"perceptual_qa": {"enabled": true}}', encoding="utf-8"
+    )
+
+    assert sim.perceptual_qa_enabled(project) is True

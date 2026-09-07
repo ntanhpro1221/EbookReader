@@ -22,6 +22,7 @@ simulating.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import sqlite3
 import sys
@@ -79,7 +80,26 @@ def blocking_warnings(project: Path) -> list[tuple[str, str, str, str]]:
     return out
 
 
-def chapter_verdicts(db: ProjectDB) -> dict[int, dict[str, bool]]:
+def perceptual_qa_enabled(project: Path) -> bool:
+    """Does this project actually run the perceptual check?
+
+    It stopped being part of `high_quality` on 2026-09-07, and the pipeline skips its
+    evidence entirely when it is off. A simulation that demands that evidence anyway reports
+    chapters blocked on a gate the real run does not have - which sends somebody to listen
+    for nothing, the exact failure this script exists to prevent.
+    """
+    settings_file = project / "book_settings.json"
+    if not settings_file.is_file():
+        return True
+    try:
+        settings = json.loads(settings_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # Unreadable settings must not silently relax a gate: assume the stricter world.
+        return True
+    return bool((settings.get("perceptual_qa") or {}).get("enabled", False))
+
+
+def chapter_verdicts(db: ProjectDB, *, perceptual: bool = True) -> dict[int, dict[str, bool]]:
     """Every gate a chapter must pass, per chapter, under the acceptances now recorded."""
     accepted = db.accepted_segment_warnings()
     verdicts: dict[int, dict[str, bool]] = {}
@@ -102,8 +122,11 @@ def chapter_verdicts(db: ProjectDB) -> dict[int, dict[str, bool]]:
             "bằng chứng ASR": db.chapter_segments_have_current_audio_qa(
                 chapter_id, SEGMENT_AUDIO_QUALITY_STAGE
             ),
-            "bằng chứng cảm thụ": db.chapter_segments_have_current_audio_qa(
-                chapter_id, SEGMENT_PERCEPTUAL_QUALITY_STAGE
+            "bằng chứng cảm thụ": (
+                not perceptual
+                or db.chapter_segments_have_current_audio_qa(
+                    chapter_id, SEGMENT_PERCEPTUAL_QUALITY_STAGE
+                )
             ),
             "đếm status": db.chapter_is_publishable(chapter_id),
         }
@@ -125,7 +148,8 @@ def simulate(project: Path, wanted: set[str] | None) -> tuple[list[int], list[in
         copy.mkdir()
         shutil.copy2(project / "project.sqlite3", copy / "project.sqlite3")
         db = ProjectDB(copy / "project.sqlite3")
-        before = chapter_verdicts(db)
+        perceptual = perceptual_qa_enabled(project)
+        before = chapter_verdicts(db, perceptual=perceptual)
         for stable_id, code, checksum, status in candidates:
             _say_safely(f"  chấp nhận {stable_id} [{code}] (đang {status})")
             record = (
@@ -139,7 +163,7 @@ def simulate(project: Path, wanted: set[str] | None) -> tuple[list[int], list[in
                 warning_code=code,
                 note="mô phỏng",
             )
-        after = chapter_verdicts(db)
+        after = chapter_verdicts(db, perceptual=perceptual)
 
     freed, stuck = [], []
     for index, gates in sorted(after.items()):
