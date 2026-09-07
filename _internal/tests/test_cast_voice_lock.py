@@ -256,3 +256,61 @@ def test_a_pinned_key_naming_no_profile_falls_back_and_says_so(tmp_path: Path) -
 
     assert result is None
     assert said and "preset_that_does_not_exist" in said[0]
+
+
+def test_two_characters_on_one_voice_is_reported(tmp_path: Path) -> None:
+    """The invariant that was missing. `assert_voice_stability` checked one character
+    resolving to several voices and never the reverse, so alpha.55 shipped two pairs of
+    characters sharing a voice_key and nothing downstream noticed: every segment verified,
+    every chapter published, and only a listener would hear that two people sound identical.
+
+    Reported rather than raised - at some book size sharing becomes unavoidable, and killing
+    a run over an inevitability would be worse than saying so.
+    """
+    from ebook_reader.character_registry import assert_voice_stability
+
+    db = _project(tmp_path)
+    profile = db.upsert_voice_profile(
+        {
+            "voice_key": KEY,
+            "engine": "vieneu",
+            "preset_name": "Thanh Bình",
+            "description": "d",
+            "seed": 1,
+            "pitch_semitones": 0,
+            "formant_ratio": 1.0,
+            "status": "ready",
+        }
+    )
+    first = db.upsert_character(
+        canonical_name="MỘT", display_name="Một", gender="male", age="adult",
+        personality="", mentions=2, importance="main", confidence=0.9,
+    )
+    second = db.upsert_character(
+        canonical_name="HAI", display_name="Hai", gender="male", age="adult",
+        personality="", mentions=2, importance="main", confidence=0.9,
+    )
+    with db.connect() as conn:
+        chapter_id = int(conn.execute("SELECT id FROM chapters LIMIT 1").fetchone()["id"])
+    db.replace_chapter_segments(
+        chapter_id,
+        [
+            {"stable_id": "s1", "seq": 0, "paragraph_index": 0, "text": "A.",
+             "text_sha256": "h1", "kind_hint": "dialogue"},
+            {"stable_id": "s2", "seq": 1, "paragraph_index": 0, "text": "B.",
+             "text_sha256": "h2", "kind_hint": "dialogue"},
+        ],
+    )
+    with db.transaction() as conn:
+        conn.execute(
+            "UPDATE segments SET speaker='MỘT', canonical_character_id=?, voice_profile_id=? "
+            "WHERE stable_id='s1'", (first, profile))
+        conn.execute(
+            "UPDATE segments SET speaker='HAI', canonical_character_id=?, voice_profile_id=? "
+            "WHERE stable_id='s2'", (second, profile))
+
+    said: list[str] = []
+    assert_voice_stability(db, said.append)
+
+    assert said, "sharing a voice must be reported"
+    assert "chung một giọng" in said[0]

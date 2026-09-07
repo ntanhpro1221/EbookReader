@@ -861,7 +861,7 @@ def _merge_adjacent_local_speakers(
             )
 
 
-def assert_voice_stability(db: ProjectDB) -> None:
+def assert_voice_stability(db: ProjectDB, log: Callable[[str], None] = lambda _m: None) -> None:
     """Refuse a casting where one person would be read by two different voices."""
     # One character, one voice - checked on the resolved character rather than on the
     # speaker label. Checking labels was a blind spot with real consequences: a boy who
@@ -897,6 +897,36 @@ def assert_voice_stability(db: ProjectDB) -> None:
         raise RuntimeError(
             f"A character resolved to multiple voice profiles: {split_characters}"
         )
+
+    # And the other direction, which nothing checked until alpha.55 produced it. Two
+    # characters on one profile sound like the same person, and no gate downstream can tell:
+    # every segment is verified, every chapter publishes, and only a listener finds it.
+    #
+    # It is reported rather than raised because at some book size sharing becomes
+    # unavoidable - there are only so many presets times formant variants - and killing a
+    # run over an inevitability would be worse than saying so. alpha.54 cast 23 characters
+    # into 23 distinct voices, so at this scale a collision means something is wrong, not
+    # that the catalogue ran out.
+    shared_profiles = {
+        profile_id: sorted(character_ids)
+        for profile_id, character_ids in _characters_by_profile(profiles_by_character).items()
+        if len(character_ids) > 1
+    }
+    if shared_profiles:
+        log(
+            "CẢNH BÁO: nhiều nhân vật dùng chung một giọng, người nghe sẽ tưởng là cùng "
+            f"một người: {shared_profiles}"
+        )
+
+
+def _characters_by_profile(
+    profiles_by_character: dict[int, set[int]],
+) -> dict[int, list[int]]:
+    inverted: dict[int, list[int]] = defaultdict(list)
+    for character_id, profile_ids in profiles_by_character.items():
+        for profile_id in profile_ids:
+            inverted[int(profile_id)].append(int(character_id))
+    return inverted
 
 
 def build_registry_and_cast(
@@ -1061,7 +1091,7 @@ def build_registry_and_cast(
 
     used_voices = len({str(profile["preset_name"]) for profile in db.list_voice_profiles()})
     voice_variants = len(profile_cache)
-    assert_voice_stability(db)
+    assert_voice_stability(db, log)
     log(
         f"Đã khóa voice casting VieNeu: dùng {used_voices}/{len(VIENEU_PRESETS)} preset; "
         f"{voice_variants} biến thể giọng; "
