@@ -314,3 +314,91 @@ def test_two_characters_on_one_voice_is_reported(tmp_path: Path) -> None:
 
     assert said, "sharing a voice must be reported"
     assert "chung một giọng" in said[0]
+
+
+def _silent_pin(db, *, name: str, voice_key: str, preset: str = "Ngọc Linh") -> None:
+    """Pin a character that has no segment at all - the case the carry used to lose."""
+    db.upsert_voice_profile(
+        {
+            "voice_key": voice_key,
+            "engine": "vieneu",
+            "preset_name": preset,
+            "description": "",
+            "seed": 5,
+            "pitch_semitones": 0,
+            "formant_ratio": 1.0,
+            "status": "ready",
+        }
+    )
+    db.set_locked_character_voice(name, voice_key)
+
+
+def test_the_carry_keeps_a_pin_whose_character_never_spoke(tmp_path: Path) -> None:
+    """The leak that cost alpha.56 a collision.
+
+    read_casting asked "who spoke in this batch?", so a character pinned in an earlier batch
+    and silent in this one had its pin dropped on the way out. On alpha.56 that was 20 of 38,
+    five of them named, THEOSBANE included - a character in 156 of the book's 478 chapters
+    whose reading the owner chose personally. The next batch would simply have recast it.
+    """
+    source_db = _cast_project(tmp_path / "old", name="NOAH", voice_key=KEY)
+    _silent_pin(source_db, name="THEOSBANE", voice_key="preset_ngoc_linh_f100_p+00")
+    target = _project(tmp_path / "new")
+
+    porter.port(source_db.project_root, target.project_root)
+
+    carried = target.locked_character_voices()
+    assert carried.get("NOAH") == KEY, "người có nói vẫn phải mang sang"
+    assert carried.get("THEOSBANE") == "preset_ngoc_linh_f100_p+00", (
+        "người đã ghim mà im lặng cũng phải mang sang"
+    )
+
+
+def test_the_carry_keeps_a_voice_allocated_but_never_pinned(tmp_path: Path) -> None:
+    """The other direction, which asking only "who is pinned?" would lose.
+
+    The allocator does not write locked_voice_key - only this script and the `cast` command
+    do - so a character cast fresh in a batch holds a voice and no pin. On alpha.55, 15 of
+    the 18 characters who spoke were in that state, ARTHUR among them.
+    """
+    source_db = _cast_project(tmp_path / "old", name="ARTHUR", voice_key=KEY)
+    assert source_db.locked_character_voices() == {}, "dựng đúng: chưa ai ghim gì"
+    target = _project(tmp_path / "new")
+
+    porter.port(source_db.project_root, target.project_root)
+
+    assert target.locked_character_voices().get("ARTHUR") == KEY
+
+
+def test_two_characters_on_one_voice_are_both_left_behind(tmp_path: Path) -> None:
+    """Carrying a collision would make it permanent; picking a winner has no evidence.
+
+    So neither is carried and the allocator redistributes - the same rule this script already
+    applied to one character holding two voices.
+    """
+    source_db = _cast_project(tmp_path / "old", name="SAMAEL", voice_key=KEY)
+    # THEOSBANE pinned to the very voice SAMAEL is using: exactly alpha.56's state.
+    source_db.set_locked_character_voice("THEOSBANE", KEY)
+    target = _project(tmp_path / "new")
+
+    porter.port(source_db.project_root, target.project_root)
+
+    carried = target.locked_character_voices()
+    assert "SAMAEL" not in carried
+    assert "THEOSBANE" not in carried
+
+
+def test_a_chapter_local_npc_is_not_carried(tmp_path: Path) -> None:
+    """NPC_LOCAL::C00003::… names a chapter of the SOURCE batch and nothing in the target.
+
+    The NPC here **speaks**, on purpose: a silent one is dropped anyway for having no
+    segment, so it would pass this test for the wrong reason and prove nothing. Carrying a
+    talkative one is what the old query did, and it put fourteen such rows into alpha.56.
+    """
+    local = "NPC_LOCAL::C00003::R213A57300B43D1"
+    source_db = _cast_project(tmp_path / "old", name=local, voice_key=KEY)
+    target = _project(tmp_path / "new")
+
+    porter.port(source_db.project_root, target.project_root)
+
+    assert not any("NPC_LOCAL" in name for name in target.locked_character_voices())
