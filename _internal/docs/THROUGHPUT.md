@@ -490,8 +490,11 @@ T(giây) ≈ 0,0915 × (số chữ)      →  1 giờ máy cho mỗi ~39.000 ch�
    **gập ghềnh**, không đều: một chương xui có thể tốn gấp bốn lần trung bình.
 2. **R² = 0,668** cho phần khớp theo chương, và đó là *sau khi* bỏ chương 7 ra. Giữ nó lại thì
    R² tụt còn 0,085 — tức riêng vòng sửa đã lấn át toàn bộ tín hiệu.
-3. **Chỉ tính giờ máy.** alpha.53 tắc 1/10 chương; ở 478 chương là **khoảng 48 chương cần
-   người xem**. Đó mới là ràng buộc thật, và hàm này không nói gì về nó.
+3. **Chỉ tính giờ máy.** Ràng buộc thật là tai người, và hàm này không nói gì về nó.
+
+   > Chỗ này từng ghi "**khoảng 48 chương cần người xem**", suy từ việc alpha.53 tắc 1/10
+   > chương. **Sai gấp bốn lần** — xem mục "Chi phí tai người" bên dưới. Mười chương của
+   > alpha.53 đã qua năm vòng người nghe; chương mới tinh chặn 44%, không phải 10%.
 4. **Prompt phẳng trong phạm vi đã đo.** Qua 5 chặng của lượt chạy: 2336 → 2591 → 2423 → 2387
    → 2344 token, không có xu hướng tăng, cao nhất 46% của `num_ctx` 7168. Nên registry nhân
    vật **không** bị nhồi vào prompt và phép nhân tuyến tính đứng vững — nhưng điều đó mới đo ở
@@ -565,16 +568,24 @@ chương. Giờ thì biết chính xác, vì chạy được chính `segment_cha
 
 | | |
 |---|---|
-| chương chia được (sau khi vá 8 dấu ngoặc) | **478/478** |
-| **tổng segment cả cuốn** | **58.260** |
+| chương chia được | **478/478** |
+| **tổng segment cả cuốn** | **58.258** |
 | trung bình | 122 segment/chương |
+
+> **Hai con số, và con số đang dùng là 58.258.** Sửa tám dấu ngoặc *trong nguồn* cho 58.260;
+> để nguyên nguồn và cho bộ chia đoạn **tự phục hồi** cho 58.258. Chênh 2 segment vì phục hồi
+> đóng ngoặc ở cuối đoạn văn thay vì ở đúng chỗ dấu bị mất, nên ranh giới vài mảnh khác đi.
+>
+> Từ 2026-09-08 sản xuất chạy đường phục hồi và **không sửa nguồn**, nên **58.258** là con số
+> sống. Con số kia giữ lại vì nó là bằng chứng hai đường cho ra gần như y hệt nhau — nếu chúng
+> lệch nhiều thì phục hồi đang làm điều gì đó khác hẳn việc đóng một dấu ngoặc.
 
 Đây **không phải ngoại suy** — là đếm thật, chỉ tốn vài giây CPU. Chạy lại bất cứ lúc nào bằng
 `scripts/check_sources.py`, nó in con số này khi nguồn sạch.
 
 Ghép với đồng hồ thật của từng lượt chạy:
 
-| bản | chương | segment | đồng hồ | giây/segment | suy ra 58.260 segment |
+| bản | chương | segment | đồng hồ | giây/segment | suy ra 58.258 segment |
 |---|---|---|---|---|---|
 | alpha.50 | 10 | 948 | 7,42h | 28,19s | 19,0 ngày |
 | alpha.51 | 10 | 948 | 12,32h | 46,79s | 31,6 ngày |
