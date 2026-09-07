@@ -1,6 +1,6 @@
 # Nhật ký phiên bản
 
-Mỗi phiên bản là một tag Git kèm một lần chạy thật trên chapter thuộc `Text_Tmp`. Mục đích của file này là
+Mỗi phiên bản là một tag Git kèm một lần chạy thật trên chapter thuộc `D:/Novels/Tools/Text`. Mục đích của file này là
 để người tiếp theo biết **tại sao** một thay đổi được thực hiện và **bằng chứng nào** dẫn tới nó, chứ không
 chỉ là danh sách commit.
 
@@ -19,13 +19,34 @@ chỉ là danh sách commit.
 
 ```bash
 cd _internal
+# 1. Chọn dải chương. Cân theo giờ máy, không theo số chương:
+./.venv/Scripts/python.exe scripts/plan_batches.py "D:/Novels/Tools/Text" --hours 8
+
+# 2. Tạo project.
 ./runtime/.venv/Scripts/python.exe -m ebook_reader.cli create \
   --output-root "D:/Novels/Audiobooks/_versions/<tag>" \
   --source-dir "D:/Novels/Tools/Text" \
   --range "000..009" --width 3 --title "<tag>" --profile high_quality --json
-./runtime/.venv/Scripts/python.exe scripts/port_pronunciations.py "<project trước>" "<project-root>"
+
+# 3. Gieo, GIỮA `create` và `run`, theo đúng thứ tự này.
+./runtime/.venv/Scripts/python.exe scripts/port_pronunciations.py       "<project trước>" "<project-root>"
+./runtime/.venv/Scripts/python.exe scripts/port_casting.py              "<project trước>" "<project-root>"
+./runtime/.venv/Scripts/python.exe scripts/seed_listener_acceptances.py "<project trước>" "<project-root>"
+
+# 4. Chạy.
 ./runtime/.venv/Scripts/python.exe -m ebook_reader.cli run "<project-root>" --json
 ```
+
+**Ba bước gieo, ba thứ khác nhau, bỏ cái nào cũng mất một thứ cụ thể:**
+
+| script | mang gì | bỏ thì mất gì |
+|---|---|---|
+| `port_pronunciations.py` | cách đọc tên đã khoá | tên đọc khác đi ⇒ audio đổi ⇒ **mọi phán quyết cũ hết hiệu lực** |
+| `port_casting.py` | giọng đã ghim **và** tên/giới tính/số lần gặp của nhân vật | cùng nhân vật đổi giọng giữa hai lô; và phân tích mất **80%** dàn nhân vật lẽ ra đã biết |
+| `seed_listener_acceptances.py` | phán quyết người nghe, khoá theo checksum | phải nghe lại từ đầu mỗi lượt chạy |
+
+Thứ tự có ý nghĩa: cách đọc phải vào trước, vì nó quyết định audio, còn audio quyết định
+checksum mà phán quyết bám vào.
 
 **Gieo từ bản nào?** Bản có phán quyết của người, **không phải bản gần nhất**. Tính tới
 2026-09-06 đó là **alpha.47**: chỉ nó có `Theosbane = theo-bên` với `source=listener_choice`.
@@ -55,6 +76,11 @@ dưới audio đã có — đúng cái bẫy khiến `pronounce` phải từ ch�
 > đã tốn một lần chạy: alpha.46 lần đầu được tạo từ `Ebook Reader/Text_Tmp`, ra 995 segment
 > thay vì 948, tức **một quyển sách khác** - không so được với alpha.43/44/45 nên toàn bộ ý
 > nghĩa của việc đánh số phiên bản mất sạch.
+>
+> **Hash phụ thuộc DẢI CHƯƠNG, không chỉ nguồn.** `02502ba320` là hash của dải `000..009`;
+> dải `010..018` cho `70f7c62800`. So hash chỉ có nghĩa **giữa hai lượt chạy cùng dải** — đó
+> là cách alpha.50–54 so được với nhau. Chạy dải mới thì ghi lại hash mới của nó, đừng tưởng
+> hash lạ là nguồn sai.
 >
 > Cách kiểm tra rẻ nhất, làm ngay sau `create`: `input_manifest_hash` phải bắt đầu bằng
 > `02502ba320`, và thư mục project phải tên `<tag>_02502ba320`. Hash khác nghĩa là nguồn khác,
