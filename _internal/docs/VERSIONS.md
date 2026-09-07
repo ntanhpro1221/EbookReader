@@ -1689,3 +1689,29 @@ lần này không phải lỗi của tôi thì cái giá của việc chờ là 
 dạng), vài cái chỉ là đổi nhãn cho cùng một nhân vật (`r5eacf93…::người bị bắt nạt` →
 `r5eacf93…::người bị đánh` — cùng ID phòng). Không nghe thì không nói được bên nào hay hơn,
 và đây **không** phải thứ đáng đem ra làm phiền tai chủ sách.
+
+#### Lệch phân tích có giá thật: nó lấy mất chương 6
+
+Lúc ghi mục trên tôi viết "chưa rõ lệch này tốt hay xấu". Chương 6 trả lời.
+
+`c00006_s0000001` — `"Mẹ kiếp! A a a! Khốn nạn!"`, đoạn mà docstring của `asr.py` lấy làm ví
+dụ kinh điển về ca khó:
+
+| | alpha.51 | alpha.52 |
+|---|---|---|
+| người nói | `…r5eacf93…::người bị bắt nạt` | `…r5eacf93…::người bị đánh` |
+| `voice_profile_id` | **16** | **14** |
+| Whisper nghe | "Mẹ kiếp A-A-A khốn nạn." | "À à, khốn nạn." |
+| kết quả | **verified** | **failed** (`ASR_MISMATCH_UNRESOLVED`) |
+
+Cùng một đoạn, cùng một câu, **cùng một ID phòng** — chỉ khác cái nhãn mà phân tích gán. Nhãn
+đổi thì `voice_profile_id` đổi, giọng đổi thì bản thu đổi, và giọng 14 nuốt mất hai chữ "Mẹ
+kiếp".
+
+Đây là chuỗi nhân quả đầy đủ từ một lần lệch phân tích tới một chương không xuất được, và nó
+làm rõ cái giá của việc chạy việc nặng đè lên pha phân tích: không phải "20 nhân vật thay vì
+23", mà là **một chương phải sửa tay**.
+
+Và nó cũng cho thấy vì sao bộ cấp phát giọng đáng được làm bền hơn (hướng B trong mục hàng đợi
+tối ưu, hiện xếp ưu tiên thấp): ở đây một thay đổi nhãn **cục bộ trong một phòng** đã đủ để
+đổi giọng của đoạn, chứ chưa cần tới chuyện tập nhân vật toàn cục thay đổi.
