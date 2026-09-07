@@ -2120,9 +2120,13 @@ Mỗi cấu hình tự nó tất định — chạy lại ra đúng chữ ấy. 
 trên cùng một file 0,56 giây**, và đó mới là điều đáng nói: phép kiểm không có một câu trả lời,
 nó có ba, tuỳ ai hỏi.
 
-Và nhìn cột phải thì thấy điều thứ hai: `Lưu Lee`, `Yulay`, `Lưu ly` — **đó là "Juli" đọc đúng**.
-Bản thu không hỏng; cái hỏng là chỗ nối từ âm sang chữ. Phán quyết `fail` ở đây **không phải bằng
-chứng bản thu có lỗi**.
+Cách đọc đã khoá cho `Juli` là `Giu-li`. Không bản giải mã nào ra `Giu-li`; `Yulay` thì gần với
+*Juli* đọc kiểu Anh, `Lưu ly` và `Lưu Lee` thì bắt đầu bằng phụ âm khác hẳn.
+
+**Không kết luận được bản thu đúng hay sai từ đây** — tôi suýt viết "vậy là nó đọc đúng, chỉ
+hỏng ở chỗ nối âm sang chữ", nhưng ba bản giải mã bất đồng thì chúng không cùng làm chứng cho
+một kết luận nào cả. Điều duy nhất đứng vững: phán quyết `fail` ở đây **không phải bằng chứng
+bản thu có lỗi** — nó là bằng chứng phép kiểm không có ý kiến. Muốn biết thì phải nghe.
 
 Khái niệm ấy đã tồn tại: `ASR_UNVERIFIABLE_SHORT_TEXT`. Nhưng ngưỡng của nó chỉ phủ một trong
 năm ca trên; bốn ca còn lại rơi vào các mã coi là hỏng thật.
