@@ -2086,10 +2086,43 @@ Những đoạn ngắn nhất:
 | `—KENGGG!` | 1,04s | `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` |
 
 **Đây không phải "ASR khó xác minh", mà là "không có gì để xác minh".** Một tiếng nấc 0,32 giây
-không mang đủ tín hiệu để đối chiếu với văn bản. Bằng chứng: cùng một bản thu, Whisper giải mã
-36 lần cho `c00005_s0000054` và cho ra lúc `'Đi'`, lúc `'Thường đi, thường đi, thường đi.'` —
-nó ảo giác lặp vòng, một chế độ hỏng đã biết trên audio ngắn. Phán quyết `fail` ở đó **không
-phải bằng chứng bản thu có lỗi**.
+không mang đủ tín hiệu để đối chiếu với văn bản.
+
+> **Sửa lỗi 2026-09-07 tối.** Chỗ này ban đầu tôi viết: *"cùng một bản thu, Whisper giải mã 36
+> lần cho `c00005_s0000054` và cho ra lúc `'Đi'`, lúc `'Thường đi, thường đi, thường đi.'` — nó
+> ảo giác lặp vòng"*. **Sai hai lần, và bản thật mạnh hơn bản sai.**
+>
+> Sai thứ nhất: giải mã ở đây là **tất định** — `temperature=0.0`,
+> `condition_on_previous_text=False`, `beam_size` cố định. Một file cho ra một kết quả, mãi mãi.
+> "36 lần cho kết quả khác nhau" là chuyện không thể xảy ra. Con số 36 là *38 lần chấm trên 6
+> bản thu khác nhau*, tôi đã gộp phương sai giữa các bản thu vào thành phương sai của bộ giải mã.
+>
+> Sai thứ hai: cái `×3` **không phải ảo giác của Whisper, mà do chính máy tạo ra**.
+> `verify_repeated_short` nối bản thu ngắn lại `SHORT_CONTEXT_REPEAT_COUNT = 3` lần, chèn khoảng
+> lặng giữa các bản, rồi so với văn bản gốc cũng nhân ba. Bản ghi `'Thường đi, thường đi, thường
+> đi.'` là Whisper **thuật lại trung thực** thứ máy đưa cho nó. Sáng nay tôi cũng đã đọc ngược
+> đúng chuyện này một lần nữa ở chỗ khác và kết luận "Whisper lặp vòng" — kết luận cuối (bộ dò
+> lặp không hỏng) thì đúng, nhưng lý do tôi đưa ra thì sai.
+
+Sự thật đo được, trên đúng đoạn ấy — `"Juli!"`, 0,56 giây, 6 bản thu, mỗi bản chấm 6 lần
+(`beam5`/`greedy` × `direct`/`repeat3`/`repeat3_collapsed_v1`):
+
+| bản thu | ba cấu hình giải mã nghe ra |
+|---|---|
+| `fe62b2a5` | `Đi` / `Thường đi ×3` / `Từng đi ×3` |
+| `c3d76a2b` | `Hù lì ×3` / `Hù lì, ×3` / `Hãy subscribe cho kênh Ghiền Mì Gõ…` |
+| `678e8a75` | `Lưu Lee` / `Lưu ly ×3` / `Lưu ly. ×3` |
+| `cbf0338a` | `Yêu lấy` / `Lưu lấy` / `Yulay` |
+| `80bee7cd` | `rồi` / `Rây Rây` / `Rây` |
+| `50823798` | `Rulé.` / `Môlé ×3` |
+
+Mỗi cấu hình tự nó tất định — chạy lại ra đúng chữ ấy. Nhưng **ba cấu hình bất đồng với nhau
+trên cùng một file 0,56 giây**, và đó mới là điều đáng nói: phép kiểm không có một câu trả lời,
+nó có ba, tuỳ ai hỏi.
+
+Và nhìn cột phải thì thấy điều thứ hai: `Lưu Lee`, `Yulay`, `Lưu ly` — **đó là "Juli" đọc đúng**.
+Bản thu không hỏng; cái hỏng là chỗ nối từ âm sang chữ. Phán quyết `fail` ở đây **không phải bằng
+chứng bản thu có lỗi**.
 
 Khái niệm ấy đã tồn tại: `ASR_UNVERIFIABLE_SHORT_TEXT`. Nhưng ngưỡng của nó chỉ phủ một trong
 năm ca trên; bốn ca còn lại rơi vào các mã coi là hỏng thật.

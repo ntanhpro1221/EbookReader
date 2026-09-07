@@ -545,3 +545,39 @@ bản ghi lưu trữ — **không** nằm trong schema gửi model; nó được
 thức, và loại lỗi ở đó **im lặng** — đúng như `expected_status` bị hard-code `"pending"` đã
 cho thấy: UPDATE khớp không dòng nào và câu trả lời bị vứt mà không ai báo. Đổi 7 giờ lấy rủi
 ro ấy chỉ đáng khi có test ghim được chuyện dóng sai.
+
+## Đừng cắt ngân sách thu lại: vòng 2–4 đẻ ra bản thu thắng cuộc trong 1/6 số ca
+
+Mỗi segment hỏng được thu lại tối đa 5 vòng. Nhìn qua thì đó là chỗ cắt ngon nhất còn lại: một
+segment đã trượt hai vòng thì trượt luôn, cắt còn 2 vòng là tiết kiệm được GPU thật.
+
+**Tôi đã suýt đề xuất đúng như thế, dựa trên một phép đếm sai.** Phép đếm ấy là: gộp 6 phiên
+bản, đếm số *lượt thu* ở vòng 2–4 và số lượt "cứu được" → 563 lượt thu, cứu 4, tức 0,7%. Nghe
+là bỏ ngay.
+
+Sai ở mẫu số. Một segment cứng đầu chạy hết 5 vòng sẽ được đếm **một lần cho mỗi vòng**, nên
+nó nhồi mẫu số bằng chính những ca vô vọng, rồi kết luận "vòng sau vô dụng" — một lập luận
+vòng tròn. Phép đo đúng là hỏi theo **segment**, không theo lượt thu: *bản thu cuối cùng được
+chọn nằm ở vòng nào?*
+
+| bản | segment có thu lại | chọn ở v0 | v1 | v2 | v3 | v4 | không bao giờ |
+|---|---|---|---|---|---|---|---|
+| alpha.50 | 131 | 34 | 29 | 6 | 13 | 6 | 43 |
+| alpha.51 | 148 | 47 | 31 | 6 | 13 | 3 | 48 |
+| alpha.52 | 104 | 26 | 32 | 4 | 9 | 5 | 28 |
+| alpha.53 | 97 | 26 | 30 | 4 | 10 | 4 | 23 |
+| alpha.54 | 97 | 26 | 30 | 4 | 10 | 4 | 23 |
+| alpha.55 | 64 | 21 | 12 | 0 | 4 | 1 | 26 |
+| **gộp** | **641** | **180** | **164** | **24** | **59** | **23** | **191** |
+
+**106 trên 641 segment (16,5%) lấy bản thu thắng cuộc từ vòng 2 trở đi.** Cắt ngân sách xuống
+2 vòng là vứt đúng 106 segment ấy — mỗi cái là một chương không xuất được.
+
+Chú ý cột `v3` cao hơn `v2` ở cả sáu bản. Không phải nhiễu: vòng 3 là chỗ máy đổi *chiến lược*
+sinh chứ không chỉ đổi seed. Vòng 2 chỉ gieo lại thì hiếm khi thoát; đổi cách sinh thì thoát
+được. Ai muốn cắt thì cắt vòng 2, đừng cắt vòng 3 — nhưng vòng 2 rẻ nhất trong ba vòng nên
+cắt cũng chẳng được bao nhiêu.
+
+**Bài học rộng hơn, đáng nhớ hơn con số:** khi đếm để quyết định bỏ một cơ chế, kiểm xem mẫu số
+có bị chính những ca thất bại nhồi lên không. Đếm theo *lượt* thì cơ chế nào cũng trông vô dụng,
+vì cái vô vọng bao giờ cũng chiếm nhiều lượt nhất.
