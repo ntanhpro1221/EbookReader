@@ -1640,3 +1640,52 @@ Tắt cảm thụ cần sửa **hai** chỗ, không phải một: `validate_sett
 `run` từ chối khởi động với "perceptual_qa.enabled=False, expected True" — mất một lần tạo
 project. Bài học chung: **tìm thấy một chốt không có nghĩa là đã tìm thấy hết.** Trước khi
 đổi một chính sách, quét cả `raise`, `assert` lẫn hợp đồng runtime.
+
+### alpha.52 phân tích lệch khỏi ba bản trước — một lần, rồi lan
+
+Phân tích của dự án này **tái lập hoàn hảo**, và có đối chứng ba chiều để nói thế:
+
+| cặp | lệch người nói | nhóm trả lời khác |
+|---|---|---|
+| alpha.48 vs .49 | **0** | 0 |
+| alpha.48 vs .51 | **0** | 0 |
+| alpha.49 vs .51 | **0** | 0 |
+| **alpha.52 vs cả ba** | **54 (5,7%)** | **58** |
+
+Ba lượt chạy độc lập ra kết quả giống nhau từng byte. alpha.52 lệch, và lệch **hệt như nhau**
+so với cả ba — nên đây không phải nhiễu ngẫu nhiên (nhiễu thì mỗi cặp phải lệch mỗi kiểu).
+
+**Đầu vào giống hệt nhau.** Cùng model `qwen3:8b`, cùng digest, cùng manifest nguồn, cùng 112
+cách đọc đã gieo, mục `analysis` trong settings **giống từng byte**, và 198/198
+`group_fingerprint` của alpha.52 trùng alpha.51 — tức prompt và seed y hệt. Trường duy nhất
+khác trong hợp đồng gửi đi là `acceptance_envelope_hash`, mà nó băm **từ chính câu trả lời**,
+nên là hệ quả chứ không phải nguyên nhân.
+
+**Hình dạng: một lần lệch rồi lan.**
+
+| | |
+|---|---|
+| nhóm lệch đầu tiên | thứ **45/201**, lúc **10:31:37** |
+| nhóm lệch trước đó | **0** |
+| nhóm lệch từ đó trở đi | 57 |
+
+44 nhóm đầu khớp chính xác. Một nhóm lệch, rồi registry nhân vật mang cái lệch ấy đi tiếp và
+mọi thứ phía sau đi theo quỹ đạo khác. Đó cũng là lý do nó lệch giống hệt nhau so với cả ba
+bản trước: chúng cùng chung quỹ đạo gốc.
+
+**Nghi phạm, và tôi không chứng minh được.** Lúc 10:31:37 tôi đang chạy một lượt pytest đầy
+đủ trên cùng máy. Cơ chế hợp lý — llama.cpp/Ollama có thể đổi cách gộp lô theo tải, và số học
+đổi theo. Nhưng đây là **một quan sát, không phải một thí nghiệm**: tôi không lặp lại được,
+và không loại trừ được nguyên nhân khác.
+
+**Quy tắc rút ra, đúng dù nguyên nhân là gì:** không chạy việc nặng trên máy trong lúc pha
+phân tích đang chạy. Lệnh thường trực là *nhường máy cho cuốn sách*, và tôi đã chạy ba lượt
+test đầy đủ đè lên đúng pha nhạy cảm nhất — pha mà một lần lệch sẽ lan ra cả cuốn. Kể cả khi
+lần này không phải lỗi của tôi thì cái giá của việc chờ là bằng không, còn cái giá của việc
+đoán sai là cả một quỹ đạo phân tích.
+
+**Chưa rõ lệch này là tốt hay xấu.** 20 nhân vật thay vì 23. Vài thay đổi trông như *tiến bộ*
+(`UNKNOWN` → `NPC_LOCAL::…::người tự nói chuyện`, tức một người nói vô danh đã được nhận
+dạng), vài cái chỉ là đổi nhãn cho cùng một nhân vật (`r5eacf93…::người bị bắt nạt` →
+`r5eacf93…::người bị đánh` — cùng ID phòng). Không nghe thì không nói được bên nào hay hơn,
+và đây **không** phải thứ đáng đem ra làm phiền tai chủ sách.
