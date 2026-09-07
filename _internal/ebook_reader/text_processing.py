@@ -134,7 +134,12 @@ SPOKEN_SYMBOL_WORDS = {
 # không đổi - thay đổi duy nhất là giọng NGHỈ THẬT ở chỗ thước đo vốn đã luôn tính là có
 # nghỉ. Trên c00009_s0000018 thước đo trừ 6,90s khoảng lặng của 11,80s âm thanh mà giọng
 # không hề nghỉ, thổi nhịp từ 10,76 lên 25,92 chars/s và vượt cận trên 24,5.
-SPOKEN_SEPARATORS = "»«›‹→⇒▸▶►([{)]}"
+# `|` is here because the voice reads it as mathematics. alpha.55 chapter 011 lists skills as
+# "Hỏa Cầu (Fireball) (Thường) || Sương Giáng (Mistfall) …" and Whisper transcribed the take
+# as "Fireball thường giá trị tuyệt đối của xương dáng" - the voice said "absolute value of"
+# between every entry. In this book `||` separates list items; a pause is what it means.
+# 24 of them across 4 chapters, so rare, and wrong every single time.
+SPOKEN_SEPARATORS = "»«›‹→⇒▸▶►([{)]}|"
 # Đầu dòng đánh dấu mục, không ngăn cách gì với thứ đứng trước vì không có gì đứng trước.
 SPOKEN_DROPPED = "•▪◦*"
 _SPOKEN_COMMA_RUN = re.compile(r"(?:\s*,)+(?=\s*,)")
