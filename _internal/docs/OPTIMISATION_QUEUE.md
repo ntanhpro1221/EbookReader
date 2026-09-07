@@ -50,7 +50,42 @@ Mục 5 (ngưỡng perceptual theo sigma) vẫn chờ phép đo phân giải nhi
 
 ---
 
-## Cảnh báo: mọi phần trăm dưới đây sắp lệch chuẩn (2026-09-07)
+## MỐC MỚI, đo trên alpha.53 — lượt chạy sạch, không cảm thụ (2026-09-07)
+
+Đo bằng `scripts/phase_timings.py`. **Dùng bảng này, đừng dùng các phần trăm cũ bên dưới.**
+
+| khoản | giây | tỷ trọng công việc đo được |
+|---|---|---|
+| phân tích | 3.828 | 45% |
+| TTS | 2.267 | 27% |
+| ngoài TTS (Whisper + MP3) | 784 | 9% |
+| **vòng sửa candidate** | **1.538** | **18%** |
+| — sinh candidate | 1.168 | |
+| — kiểm candidate | 370 | |
+| tổng | 8.417 | (đồng hồ thật 161 phút) |
+
+**Điều tắt cảm thụ thật sự lấy đi**, so với số liệu alpha.51:
+
+| | alpha.51 | alpha.53 |
+|---|---|---|
+| cảm thụ mức chương | 332,5s | **0** |
+| cảm thụ trong vòng candidate | 519,5s | **0** |
+| UTMOS candidate | 322,3s | **0** |
+| sinh candidate | 1.937,3s | 1.168,2s |
+| kiểm candidate | 832,2s | 369,5s |
+
+> **So sánh này KHÔNG sạch, đừng trích riêng con số hiệu.** alpha.51 là một lượt **resume**:
+> `phase_timings` in `phân tích 0.0s` cho nó, tức nó không thu lại toàn bộ, và các con số vòng
+> sửa của nó đo theo từng việc nên có thể gộp nhiều lần thử. Ba khoản đầu thì chắc chắn (bằng
+> 0 là bằng 0). Hai khoản sau chỉ nói được "nhỏ đi", không nói được "nhỏ đi bao nhiêu vì cảm
+> thụ" — muốn biết thì phải có một lượt chạy **sạch và có cảm thụ** để so, mà hiện không có.
+
+**Hệ quả cho hàng đợi:** phân tích giờ là khoản lớn nhất (45%), không phải vòng sửa. Cả hai mục
+chưa ship (pool candidate, Whisper thường trú) đều nằm trong hai khoản cộng lại chỉ còn 27% —
+nên giá trị của chúng đã **nhỏ đi đáng kể** so với lúc được xếp hạng. Muốn rút ngắn một lượt
+chạy bây giờ thì chỗ đáng nhìn là **pha phân tích**.
+
+## Cảnh báo: mọi phần trăm dưới đây đo khi CÒN cảm thụ (2026-09-07)
 
 Mọi con số "% một lần chạy" trong tài liệu này đo trên **lượt chạy có phép kiểm cảm thụ**.
 Từ alpha.52 phép kiểm ấy **tắt** (`PERCEPTUAL_QA_COST.md`), và nó là khoản tốn lớn nhất
