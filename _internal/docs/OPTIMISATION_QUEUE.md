@@ -512,3 +512,36 @@ Kết luận: pha phân tích đã vắt kiệt đúng tài nguyên quyết đ�
 làm **ít việc GPU hơn** (mục 3 — hạ `num_ctx`), không phải xếp thêm việc GPU vào cạnh nó.
 Cách đo lại: `nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader`
 lặp vài chục lần trong lúc pha phân tích chạy.
+
+## Pha phân tích: 93% là sinh token, nên gộp lô không giúp gì
+
+Đo trên alpha.54, 417 lần gọi Ollama, tổng 63,5 phút:
+
+| khoản | giây | tỷ trọng |
+|---|---|---|
+| **sinh token** | **3.541** | **93%** |
+| nạp prompt | 201 | 5% |
+| nạp model | 5 | 0% |
+| overhead còn lại | 62 | 2% |
+
+Trung bình mỗi lần: prompt 2.416 token, sinh 468 token, tốc độ 55,5 tok/s.
+
+**Hệ quả thứ nhất: gộp lô to hơn gần như vô ích.** Overhead mỗi lần gọi chỉ 2%. Tăng
+`batch_segments` từ 5 lên 10 thì số lần gọi giảm một nửa nhưng token sinh mỗi lần tăng gấp
+đôi — tổng token gần như không đổi, mà 93% chi phí nằm ở đó. Đây là loại tối ưu nghe hợp lý
+nhưng không có gì để lấy.
+
+**Hệ quả thứ hai: schema đã gọn rồi.** 10 trường mỗi đoạn, và `notes` — trường dài nhất trong
+bản ghi lưu trữ — **không** nằm trong schema gửi model; nó được tính lại bằng
+`canonical_analysis_note()` sau khi model trả lời. Tối ưu ấy đã làm từ trước.
+
+**Đòn bẩy còn lại, và nó nhỏ:** mỗi đoạn model phải nhắc lại `id` dạng
+`c00001_s0000000_7d9b3fda46a9` — 28 ký tự, khoảng 12 token, chỉ để định danh dòng. Năm đoạn là
+~60 token, tức **~13% đầu ra**. Thay bằng chỉ số 0–4 trong lô sẽ lấy lại chừng đó.
+
+Ước tính: 13% × 93% × 45% ≈ **5% một lượt chạy**, tức ~7 giờ trên 130 giờ.
+
+**Chưa làm, và không nên làm vội.** `id` là thứ dóng kết quả về đúng dòng. Đổi nó là đổi giao
+thức, và loại lỗi ở đó **im lặng** — đúng như `expected_status` bị hard-code `"pending"` đã
+cho thấy: UPDATE khớp không dòng nào và câu trả lời bị vứt mà không ai báo. Đổi 7 giờ lấy rủi
+ro ấy chỉ đáng khi có test ghim được chuyện dóng sai.
