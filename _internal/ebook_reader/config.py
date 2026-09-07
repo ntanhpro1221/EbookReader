@@ -260,8 +260,10 @@ PROFILE_OVERRIDES: dict[str, dict[str, Any]] = {
         # 8 workers of 2 threads measured 3.68x over the single-process loop on 32 cores,
         # with identical scores. The pool shrinks itself for small batches, low RAM and a
         # GPU device, so this is a ceiling rather than a demand.
+        # Off by default since 2026-09-07: it scored a coin flip on its own loudest calls.
+        # See validate_settings below and docs/PERCEPTUAL_QA_COST.md.
         "perceptual_qa": {
-            "enabled": True,
+            "enabled": False,
             "failure_policy": "fail",
             "parallel_workers": 8,
         },
@@ -626,11 +628,24 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("perceptual_qa.parallel_workers must be non-negative")
     if int(perceptual.get("worker_threads", 2)) < 1:
         raise ValueError("perceptual_qa.worker_threads must be positive")
-    if settings.get("quality_profile") == "high_quality" and (
-        not perceptual.get("enabled") or perceptual.get("failure_policy") != "fail"
+    # high_quality no longer demands perceptual QA, because a blind test showed it cannot
+    # tell the better take from the worse one. Ten pairs, the ten largest score drops it had
+    # ever produced (0.974-1.208 against a 0.8 threshold), shuffled and judged by ear: three
+    # were indistinguishable, and of the seven the owner could separate it called four right
+    # and three backwards. P(>=4 of 7) under a fair coin is 0.50. If it carried signal
+    # anywhere it would be here, and it does not - while being the largest cost in a run
+    # after TTS and the reason ~150 takes were re-cut across five versions. Measured
+    # 2026-09-07; the pairs, the answers and the arithmetic are in docs/PERCEPTUAL_QA_COST.md.
+    #
+    # Kept configurable rather than deleted: the machinery is sound, only its usefulness is
+    # unproven, and a second blind round could still argue for it. Turning it back on is one
+    # setting. Note that the ASR name-anchor check is a different story - it found a genuinely
+    # broken take that the owner independently confirmed, and it stays required above.
+    if settings.get("quality_profile") == "high_quality" and perceptual.get("enabled") and (
+        perceptual.get("failure_policy") != "fail"
     ):
         raise ValueError(
-            "high_quality requires enabled perceptual QA with failure_policy=fail"
+            "high_quality with perceptual QA enabled requires failure_policy=fail"
         )
 
     safety = settings.get("safety", {})

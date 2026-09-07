@@ -95,6 +95,29 @@ ASR_WER_SIMILARITY_MARGIN = 0.12
 ANCHOR_COMPARISON_NORMALIZED_EXACT = "normalized_exact"
 ANCHOR_COMPARISON_DIACRITIC_FOLDED_EXACT = "diacritic_folded_exact"
 ANCHOR_COMPARISON_VIETNAMESE_PHONEME_EXACT = "vietnamese_phoneme_exact"
+ANCHOR_COMPARISON_COMPONENT_PHONEMES = "component_phonemes"
+# Every exact form above compares Whisper's *spelling* to a Vietnamese transliteration, and
+# those two can never agree on a name Whisper recognises: it writes "Kaiser" where the anchor
+# holds "cai-dờ", and "Arthur" where the anchor holds "A-thờ". Same sound, different letters,
+# scored as a pronunciation failure.
+#
+# alpha.51 showed what that costs. For "Tên tôi là Samael Kaizer Theosbane." the repair loop
+# produced a take Whisper read back as "Samen Kaiser theo bên" - the correct reading, twice,
+# in rounds 0 and 2 - rejected both, and kept the original, which Whisper read back as "Sam
+# Min Kaiser theo bên". The owner listened on 2026-09-07 and confirmed the kept take is the
+# broken one.
+#
+# Two approaches were measured and thrown away before this one. Sentence similarity cannot
+# see the defect at all: the good take scored 0.818 and the broken one 0.816, because one
+# wrong syllable dissolves into the spelling distance of the whole name. Character similarity
+# scoped to the name separates those two (0.800 against 0.667) but cannot be thresholded:
+# "Lucian" against a locked "Lucien" scores 0.833 - higher than the take that must pass - so
+# any threshold that admits the good reading also admits a different name. The existing
+# anchor tests pin that, and they were right to.
+#
+# So compare sounds, not letters, and do it per name component. "xa" and "sa" are the same
+# phoneme in Vietnamese while "men" and "min" are not, which is exactly the distinction the
+# ear made. No threshold is involved: the phoneme sequences match or they do not.
 # Canonicalising an unmatched anchor removes it from the sentence metrics so the same
 # disagreement is not punished twice. That is only sound while enough ordinary content
 # remains to carry an independent verdict: in "Anh Lucy" the name is half the utterance,
@@ -278,6 +301,203 @@ def _locked_name_anchor_forms(
     return forms
 
 
+def _locked_name_anchor_components(
+    anchor: Mapping[str, Any],
+) -> list[tuple[str, tuple[str, ...]]]:
+    """(source component, spoken syllables) per part of the name, or [] if they do not align.
+
+    The mapping is already in the data and needs no lookup, because a spoken form hyphenates
+    within a name part and spaces between them: "Xa-men cai-dờ theo-bên" splits on whitespace
+    into exactly the three parts of "Samael Kaizer Theosbane", and each of those splits on
+    its hyphens into the syllables to sound out.
+
+    When the two do not split to the same length - a spoken form written without that
+    convention - this returns nothing. A wrong alignment would score real names against the
+    wrong parts, which is worse than not trying: the caller keeps the exact forms it already
+    had and loses none of them.
+    """
+    surface = str(anchor.get("surface", "")).strip() or str(
+        anchor.get("normalized_surface", "")
+    ).strip()
+    surface_parts = surface.split()
+    spoken_parts = str(anchor.get("spoken_form", "")).split()
+    if not surface_parts or len(surface_parts) != len(spoken_parts):
+        return []
+    components: list[tuple[str, tuple[str, ...]]] = []
+    for source_part, spoken_part in zip(surface_parts, spoken_parts):
+        syllables = tuple(
+            piece for piece in re.split(r"[-‐-―]", spoken_part) if piece.strip()
+        )
+        if not syllables:
+            return []
+        components.append((source_part, syllables))
+    return components
+
+
+def _anchor_component_key(value: str) -> str:
+    """One name part reduced to bare letters, so only the sounds are left to disagree."""
+    folded = _diacritic_folded_token(normalize_transcript(str(value)))
+    return "".join(character for character in folded if character.isalnum())
+
+
+def _anchor_component_phonemes(parts: Sequence[str]) -> tuple[str, ...] | None:
+    """Phoneme per syllable, or None when any syllable cannot be sounded out."""
+    sounds = [_vietnamese_phonemes(_anchor_component_key(part)) for part in parts]
+    if not sounds or not all(sounds):
+        return None
+    return tuple(sounds)
+
+
+def _anchor_component_splits(text: str, count: int) -> list[tuple[str, ...]]:
+    """Every way to cut `text` into `count` non-empty pieces.
+
+    Whisper decides its own word boundaries and does not know the anchor's: it wrote the
+    two syllables of "Xa-men" as the single token "samen". Trying the cuts is what lets a
+    two-syllable component be recognised inside one written word. Names are short, so this
+    stays small - and it is bounded below in case one ever is not.
+    """
+    if count <= 0 or len(text) < count:
+        return []
+    if count == 1:
+        return [(text,)]
+    results: list[tuple[str, ...]] = []
+    for cut in range(1, len(text) - count + 2):
+        head = text[:cut]
+        for tail in _anchor_component_splits(text[cut:], count - 1):
+            results.append((head, *tail))
+            if len(results) >= _ANCHOR_COMPONENT_SPLIT_LIMIT:
+                return results
+    return results
+
+
+_ANCHOR_COMPONENT_SPLIT_LIMIT = 512
+
+
+def _anchor_component_sounds_right(
+    spoken_syllables: Sequence[str],
+    source_component: str,
+    span: str,
+) -> bool:
+    """Does this stretch of transcript sound like this part of the name?
+
+    Two ways to be right, and a name only needs one of them.
+
+    The transliteration is the intended reading, so its syllables are sounded out and the
+    span is cut every way it can be cut into that many pieces - "samen" becomes "sa"+"men"
+    and matches "Xa-men" exactly, while "sam min" cannot become anything that matches.
+
+    The source spelling is the other way, and it is what rescues the case that started all
+    this: Whisper writes an English name in English, and "kaiser" and "kaizer" sound out
+    identically even though no amount of letter comparison will agree on them.
+    """
+    if not span:
+        return False
+    source_key = _anchor_component_key(source_component)
+    # Sound alone is not quite enough, because the phonemiser is happy to drop letters that
+    # do not change a sound: "enne" and "en" come out identical, so a locked "Lucien" would
+    # otherwise swallow "Lusienne" - a different character with a different name. Requiring
+    # the transcript's spelling to be no longer than the longest spelling the anchor itself
+    # accepts costs nothing legitimate (Whisper's "samen" and "kaiser" are both shorter than
+    # the forms they match) and keeps two similar names apart.
+    longest_accepted = max(
+        len(source_key),
+        sum(len(_anchor_component_key(part)) for part in spoken_syllables),
+    )
+    if len(span) > longest_accepted:
+        return False
+    if source_key:
+        source_sound = _vietnamese_phonemes(source_key)
+        span_sound = _vietnamese_phonemes(span)
+        if source_sound and span_sound and source_sound == span_sound:
+            return True
+    expected = _anchor_component_phonemes(spoken_syllables)
+    if expected is None:
+        return False
+    for pieces in _anchor_component_splits(span, len(expected)):
+        if _anchor_component_phonemes(pieces) == expected:
+            return True
+    return False
+
+
+def _locked_name_anchor_component_match(
+    anchor: Mapping[str, Any],
+    transcript_tokens: Sequence[str],
+    *,
+    blocked_tokens: frozenset[int] | set[int] | None = None,
+    from_token: int = 0,
+) -> dict[str, Any] | None:
+    """Does the transcript carry every part of this name, judged by sound rather than spelling?
+
+    Deliberately post-hoc: it runs only after exact matching has already failed, and it never
+    touches the alignment or the evidence that produced that failure. The exact forms stay
+    the primary path because they are cheap and unambiguous; this is the rescue for the case
+    they structurally cannot handle - a name Whisper recognises and therefore spells in
+    English, against an anchor holding its Vietnamese transliteration.
+
+    Every component must be found, in order, and each one consumes the tokens it matched.
+    Three properties depend on that and each is pinned by a test the first draft of this
+    broke: components of one name cannot be gathered out of order from across a sentence; a
+    name required three times cannot be satisfied three times by one utterance of it; and
+    occurrences stay monotonic, so the second reading of a repeated line binds to the second
+    span rather than back to the first. `from_token` is where the previous occurrence
+    stopped, and the returned `token_end` is where the next one may start.
+
+    All components must match. A name is wrong if any part of it is wrong, and accepting a
+    majority would let a badly-read first syllable hide behind two parts that came out fine -
+    precisely how the broken alpha.51 take survived the sentence metric: "Sam Min" averaged
+    away against "Kaiser theo bên".
+    """
+    components = _locked_name_anchor_components(anchor)
+    if not components:
+        return None
+    tokens = [_anchor_component_key(token) for token in transcript_tokens]
+    if not any(tokens):
+        return None
+    blocked = set(blocked_tokens or ())
+    cursor = max(0, int(from_token))
+    found: list[bool] = []
+    token_start: int | None = None
+    for source_component, spoken_syllables in components:
+        matched_end: int | None = None
+        for start_index in range(cursor, len(tokens)):
+            if start_index in blocked:
+                continue
+            span = ""
+            for end_index in range(start_index, len(tokens)):
+                if end_index in blocked:
+                    break
+                span += tokens[end_index]
+                if _anchor_component_sounds_right(
+                    spoken_syllables, source_component, span
+                ):
+                    matched_end = end_index + 1
+                    break
+                if len(span) > _ANCHOR_COMPONENT_SPAN_SLACK + max(
+                    len(_anchor_component_key(source_component)),
+                    sum(len(_anchor_component_key(part)) for part in spoken_syllables),
+                ):
+                    # Longer than any spelling this component could wear; stop growing.
+                    break
+            if matched_end is not None:
+                if token_start is None:
+                    token_start = start_index
+                cursor = matched_end
+                break
+        found.append(matched_end is not None)
+        if matched_end is None:
+            break
+    return {
+        "components": [source for source, _syllables in components],
+        "component_matched": found,
+        "passed": bool(len(found) == len(components) and all(found)),
+        "token_start": token_start,
+        "token_end": cursor,
+    }
+
+
+_ANCHOR_COMPONENT_SPAN_SLACK = 3
+
+
 def _locked_name_anchor_token_span(
     expected_spoken_text: str,
     expected_tokens: list[str],
@@ -434,7 +654,11 @@ def _minimum_cost_locked_name_alignment(
                         state,
                         (unit_index + 1, transcript_index + 1),
                         (0, -1, 0, 0) if exact else (1, 0, 0, 0),
-                        {"kind": "match_token" if exact else "substitute_token"},
+                        {
+                            "kind": "match_token" if exact else "substitute_token",
+                            "token_start": transcript_index,
+                            "token_end": transcript_index + 1,
+                        },
                     )
                 continue
 
@@ -702,6 +926,32 @@ def adjudicate_locked_name_anchors(
         in {"match_anchor", "substitute_anchor", "delete_anchor"}
     }
     matched_occurrence_count = 0
+    # Tokens an exact match has already claimed. The rescue below may not reuse them, and
+    # the reason is not order alone: the alignment is free to match the *second* and *third*
+    # occurrences of a repeated name and leave the first unassigned, so a cursor that only
+    # moves forward as occurrences are visited would still let the first one re-find the
+    # name inside the span the second had taken. Three requirements would then be met by two
+    # readings. A test pins exactly that, and this is what it caught.
+    claimed_tokens: set[int] = {
+        index
+        for ordinary_operation in operations
+        if ordinary_operation.get("kind") == "match_token"
+        for index in range(
+            int(ordinary_operation["token_start"]), int(ordinary_operation["token_end"])
+        )
+    }
+    # And how far along the transcript the occurrences have read, which is a separate
+    # requirement from what they consumed: anchors must appear in the order they were
+    # written, so a later one may not match text an earlier one has already passed.
+    component_cursor = 0
+    for occurrence_operation in anchor_operations.values():
+        if occurrence_operation.get("kind") == "match_anchor":
+            claimed_tokens.update(
+                range(
+                    int(occurrence_operation["token_start"]),
+                    int(occurrence_operation["token_end"]),
+                )
+            )
     for repeat_index in range(repeat_count):
         for anchor_index, anchor in enumerate(safe_anchors):
             forms = _locked_name_anchor_forms(anchor)
@@ -731,6 +981,7 @@ def adjudicate_locked_name_anchors(
                 )
             elif operation is not None and operation["kind"] == "match_anchor":
                 matched_occurrence_count += 1
+                component_cursor = max(component_cursor, int(operation["token_end"]))
                 anchor_evidence.update(
                     {
                         "status": "matched",
@@ -743,12 +994,47 @@ def adjudicate_locked_name_anchors(
                     }
                 )
             else:
+                component_match = _locked_name_anchor_component_match(
+                    anchor,
+                    transcript_tokens,
+                    blocked_tokens=claimed_tokens,
+                    from_token=component_cursor,
+                )
+                if component_match is not None and component_match["passed"]:
+                    component_cursor = max(
+                        component_cursor, int(component_match["token_end"])
+                    )
+                    claimed_tokens.update(
+                        range(
+                            int(component_match["token_start"] or 0),
+                            int(component_match["token_end"]),
+                        )
+                    )
+                    # Exact matching cannot recognise this name, but every part of it is
+                    # audibly present. Counted as matched and labelled distinctly, so the
+                    # report still shows that the spelling disagreed.
+                    matched_occurrence_count += 1
+                    anchor_evidence.update(
+                        {
+                            "status": "matched_by_component_phonemes",
+                            "matched": True,
+                            "matched_form": "component_phonemes",
+                            "matched_comparison_mode": (
+                                ANCHOR_COMPARISON_COMPONENT_PHONEMES
+                            ),
+                            "component_phonemes": component_match,
+                        }
+                    )
+                    evidence.append(anchor_evidence)
+                    continue
                 anchor_evidence.update(
                     {
                         "status": "missing_or_wrong",
                         "matched": False,
                     }
                 )
+                if component_match is not None:
+                    anchor_evidence["component_phonemes"] = component_match
                 if operation is not None:
                     token_start = operation["token_start"]
                     token_end = operation["token_end"]

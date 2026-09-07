@@ -126,7 +126,14 @@ def _pipeline_with_asr_evidence(tmp_path: Path) -> tuple[BookPipeline, object, o
     source.write_text("Một câu đủ dài để kiểm tra perceptual QA.", encoding="utf-8")
     settings = build_settings(
         overrides={
-            "perceptual_qa": {"checkpoint_path": str(checkpoint), "device": "cpu"},
+            # Explicit since 2026-09-07: high_quality no longer turns perceptual QA on,
+            # so a suite that exists to exercise it has to ask for it. See
+            # docs/PERCEPTUAL_QA_COST.md for why the default moved.
+            "perceptual_qa": {
+                "enabled": True,
+                "checkpoint_path": str(checkpoint),
+                "device": "cpu",
+            },
             "tts": {"min_seconds_per_100_chars": 0.2},
         }
     )

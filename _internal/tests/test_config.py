@@ -38,7 +38,11 @@ def test_unattended_safety_defaults() -> None:
     assert high_quality["analysis"]["retry_policy_version"] == ANALYSIS_RETRY_POLICY_VERSION
     assert high_quality["analysis"]["retry_temperatures"] == [0.1, 0.2, 0.3]
     assert high_quality["asr"]["repair_rounds"] == 5
-    assert high_quality["perceptual_qa"]["enabled"] is True
+    # Off since 2026-09-07. A blind A/B on the ten largest score drops it had ever produced
+    # came back 4 right, 3 backwards, 3 indistinguishable - a coin flip on its own loudest
+    # calls - while being the largest cost in a run after TTS. The settings below stay because
+    # the machinery is intact and one setting turns it back on. docs/PERCEPTUAL_QA_COST.md.
+    assert high_quality["perceptual_qa"]["enabled"] is False
     assert high_quality["perceptual_qa"]["failure_policy"] == "fail"
     assert high_quality["perceptual_qa"]["repair_rounds"] == 2
     # Live calibration: sub-1.5 s expressive phrases produced false MOS outliers,
