@@ -308,3 +308,47 @@ cái, mỗi lần một lượt chạy. Cổng thứ tám tìm ra bằng một l
 kỳ chính sách nào có nhiều điểm thực thi, **liệt kê hết điểm thực thi rồi kiểm từng cái** rẻ
 hơn là chờ chúng cắn — và tắt phép kiểm cảm thụ sáng nay cũng đã dạy đúng bài đó một lần rồi:
 hai chốt cho một chính sách, tìm thấy một không có nghĩa là đã tìm thấy hết.
+
+## Cửa sổ mang phán quyết: thua 4 giây, và cách bỏ hẳn cuộc đua
+
+alpha.52 chương 3, có mốc thời gian đến từng giây:
+
+| | |
+|---|---|
+| chương 3 trượt | **11:46:00** — `c00003_s0000029=ASR_LOCKED_NAME_ANCHOR_MISMATCH` |
+| watcher mang phán quyết sang | **11:46:04** |
+
+Phán quyết đúng, checksum khớp, đoạn đang ở `warning` — và chương vẫn chết. Chậm **4 giây**.
+
+`watch_listener_acceptances.py` được viết ra chính để canh cửa sổ này, và nhịp 15 giây của nó
+chọn theo các biên đã đo (44/66/59/88 giây). Ca này hẹp hơn thế nhiều. Rút nhịp xuống 3 giây
+thì lần sau có thể thắng — nhưng đó là **siết chặt cuộc đua**, không phải bỏ nó.
+
+### Bỏ hẳn cuộc đua: gieo trước
+
+Phán quyết khoá theo `(segment_stable_id, wav_sha256, warning_code)`, và **mọi cổng đọc nó
+đều đối chiếu với checksum *hiện tại* của đoạn**. Nên ghi phán quyết vào lúc bản thu còn chưa
+tồn tại là **vô hại và bất động**:
+
+- bản thu trả về **y hệt** — trường hợp thường gặp với đoạn không đổi — thì phán quyết đã nằm
+  sẵn đó lúc cổng chạy. **Không còn cửa sổ nào để lỡ.**
+- bản thu trả về **khác** thì phán quyết không khớp gì cả, đúng hàng rào mà `retry` dựa vào.
+
+Đây không phải một `port` lỏng tay hơn; là **cùng một luật, áp sớm hơn**. Nó chỉ ghi những
+phán quyết người thật đã cho, về bản thu người thật đã nghe.
+
+`scripts/seed_listener_acceptances.py` — chạy ngay sau `create`, cạnh `port_pronunciations.py`.
+Hai script làm cùng một việc cho hai loại quyết định của con người mà dự án này lưu lại.
+
+### Thứ tự đúng cho bản sau
+
+```bash
+cli create ...
+python scripts/port_pronunciations.py       <nguồn> <đích>   # cách đọc tên
+python scripts/seed_listener_acceptances.py <nguồn> <đích>   # phán quyết người nghe
+cli run ...
+python scripts/watch_listener_acceptances.py <nguồn> <đích>  # chỉ còn lo ca bản thu ĐỔI
+```
+
+Watcher vẫn có việc: nó bắt các phán quyết cho bản thu **mới xuất hiện trong lúc chạy**. Nhưng
+ca thường gặp — bản thu không đổi giữa hai phiên bản — thì đã hết đua.
