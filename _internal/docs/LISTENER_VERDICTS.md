@@ -268,3 +268,43 @@ Chương 10 **không thể xuất bản** nếu không sửa mã. Bấm `accept`
 `c00010_s0000016` trong cùng chương minh hoạ hàng rào đang làm **đúng** việc: phán quyết của
 nó buộc vào `51ba05b3…`, bản thu hiện tại đã khác, nên nó không được tha. Đó là thiết kế
 đúng, không phải lỗi.
+
+## Cổng thứ tám — và lần đầu tìm ra nó mà không mất chương nào
+
+Sau khi sửa cổng thứ bảy, thay vì chờ chương tiếp theo chết, tôi đi hỏi thẳng: **còn chỗ nào
+ra quyết định xuất bản mà chưa bao giờ hỏi đến bảng chấp nhận?**
+
+Có một: `chapter_is_publishable`.
+
+```sql
+SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed
+...
+return total == accepted and not failed
+```
+
+Đếm số đoạn `failed` rồi từ chối, **không có miễn trừ nào cả**. Mà `failed` chính là trạng
+thái cuối bình thường của một đoạn đã bị người nghe phủ quyết: máy giữ nguyên phán quyết của
+nó (cố ý — vì chuyện xảy ra là *có người không đồng ý*, không phải máy đổi ý), và mỗi lần
+resume kiểm lại là nó ghi `failed` một lần nữa.
+
+Nên chuỗi sự việc sẽ là: cổng bằng chứng cho qua (nhờ fix hôm nay), rồi hai dòng sau cổng này
+từ chối. Chương vẫn không xuất được, và lần nghe vẫn mua được số không.
+
+Đã sửa cùng kiểu: đoạn nào mang lời chấp nhận **khớp checksum bản thu hiện tại** thì tính là
+xuất bản được, dù dòng ghi `failed`. Sáu test, trong đó một test ghim riêng chuyện **hai cổng
+phải đồng ý về cùng một đoạn** — đó đúng là kiểu hỏng đã xảy ra sáu trên bảy lần trước: cổng
+này tha, cổng kia chặn.
+
+### Không có cổng thứ chín
+
+Quét toàn bộ: mọi nơi quyết định — `validate` trong CLI, `recovery.py`, `pipeline.py` — đều
+gọi qua đúng hai hàm `chapter_segments_have_current_audio_qa` và `chapter_is_publishable`, nên
+cả hai fix lan tới hết. Hai chỗ còn đếm `failed` là `_refresh_chapter_counts_conn` (bộ đếm
+thống kê) và phần dựng báo cáo — chúng *báo cáo* trạng thái chứ không chặn gì, và báo cáo
+đúng sự thật "máy vẫn không đồng ý" là hành vi đúng.
+
+**Cách làm này rẻ hơn hẳn cách cũ.** Bảy cổng đầu tìm ra bằng cách để một chương chết vào từng
+cái, mỗi lần một lượt chạy. Cổng thứ tám tìm ra bằng một lần `grep` và mười phút đọc. Với bất
+kỳ chính sách nào có nhiều điểm thực thi, **liệt kê hết điểm thực thi rồi kiểm từng cái** rẻ
+hơn là chờ chúng cắn — và tắt phép kiểm cảm thụ sáng nay cũng đã dạy đúng bài đó một lần rồi:
+hai chốt cho một chính sách, tìm thấy một không có nghĩa là đã tìm thấy hết.
