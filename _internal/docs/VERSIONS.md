@@ -1603,9 +1603,28 @@ phân biệt được, trên chính mười lời chê to nhất của nó. `PER
 
 Đây là lần đầu ba thứ ấy cùng đổi, nên có vài điều **chưa ai đo**:
 
-- **Thời gian chạy.** alpha.51 mất 73 phút *có* cảm thụ. Cảm thụ là khoản tốn lớn nhất ngoài
-  TTS, nên bản này phải nhanh hơn đáng kể. Nếu không nhanh hơn thì giả định về chi phí của nó
-  đã sai và phải đo lại.
+- **Thời gian chạy — và đừng so bằng đồng hồ treo tường.** Tôi viết mục này lúc đầu là
+  "alpha.51 mất 73 phút, bản này phải nhanh hơn". **So thế là sai.** Chạy
+  `scripts/phase_timings.py` trên alpha.51 thì dòng đầu ghi `phân tích 0.0s`: đó là một lượt
+  **resume**, nên số của nó không hề có pha phân tích. alpha.52 chạy sạch nên phải trả cả
+  ~70 phút phân tích mà alpha.51 không trả — nó sẽ *lâu hơn* về đồng hồ, và điều đó không nói
+  gì về phép kiểm cảm thụ cả.
+
+  **So đúng là so từng khoản.** alpha.51 tiêu cho cảm thụ, đo được trực tiếp:
+
+  | khoản | giây |
+  |---|---|
+  | cảm thụ mức chương | 332,5 |
+  | cảm thụ trong vòng candidate | 519,5 |
+  | UTMOS candidate | 322,3 |
+  | **tổng** | **1.174,3s (~20 phút)** |
+
+  Trên tổng công việc đo được 5.930s, tức **19,8%**. Ba khoản này ở alpha.52 phải bằng **0**.
+
+  Còn hai khoản lớn nhất — sinh candidate 1.937,3s và kiểm candidate 832,2s — trước đây chạy
+  cho *cả* lỗi ASR lẫn lỗi cảm thụ, và `phase_timings.py` không tách được hai nguồn. Chúng
+  phải **nhỏ đi**, nhưng nhỏ bao nhiêu thì chưa ai biết, và đó chính là con số đáng đo nhất ở
+  alpha.52: nó nói phép kiểm cảm thụ thật sự đã bắt cả bộ máy sửa chữa chạy bao nhiêu.
 - **Số bản thu bị cắt lại.** alpha.51 cắt lại ~30 lần vì cảm thụ. Bản này phải là 0.
 - **Neo tên có thả oan không.** Fix neo được thiết kế để *phân biệt*, không phải để nới. Bằng
   chứng nó phân biệt được: `c00010_s0000016` ("cướp" thay vì "cớt") vẫn trượt. Nếu bản này
