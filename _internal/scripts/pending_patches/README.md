@@ -1,21 +1,20 @@
-# Trạng thái: 8 bản vá ĐÃ ÁP (01:12), 2 bản vá ĐANG CHỜ (02:20)
+# Trạng thái 2026-09-08 05:25: hàng chờ RỖNG, 14 bản vá đã vào cây thật
 
-## Đang chờ — cần máy rảnh
+`apply_all.py` giờ báo "hàng chờ rỗng" và không làm gì. Muốn thêm bản vá mới thì đưa tên vào
+`ORDER`; `APPLIED` là hồ sơ những cái đã vào, giữ lại vì mỗi script `assert` chuỗi gốc trước
+khi thay — chạy lại một cái đã áp thì nó dừng chứ không làm hỏng file.
 
-| script | file | đổi gì |
+## Mười bốn bản vá, theo thứ tự đã áp
+
+| # | áp lúc | đổi gì |
 |---|---|---|
-| `patch_reserve_all.py` | `character_registry.py` | Giữ chỗ **mọi** giọng đã ghim trước khi phân vai, kể cả của nhân vật im lặng ở lô này. |
-| `patch_reserve_test.py` | `tests/` | 2 test: giọng của nhân vật im lặng vẫn được giữ; ghim trỏ vào profile không tồn tại thì bỏ qua và nói ra chứ không giết lượt chạy. |
+| 1–8 | 01:12 | ngoặc kép treo tự phục hồi; đoạn chỉ gồm tên ngắn không chặn chương; `Ahaha` là tiếng cười; danh sách nhân vật đọc cả bảng `characters` |
+| 9 | 01:31 | phục hồi ngoặc phải **để lại dấu vết** (`SOURCE_QUOTE_RECOVERED`), không được im lặng |
+| 10–11 | 05:07 | giữ chỗ **mọi** giọng đã ghim, kể cả của nhân vật im lặng ở lô này |
+| 12–13 | 05:07 | tên không đọc được thì đọc nguyên văn, **không giết cả cuốn sách** |
+| 14 | 05:22 | đếm ký tự **như giọng đọc phát ra**, không như chữ viết |
 
-Vì sao: `reserve()` chỉ được gọi từ `_pinned_profile_id`, tức chỉ khi đang phân vai cho một
-nhân vật. Nhân vật đã ghim mà **không nói câu nào** ở lô này thì không giữ chỗ gì cả, và một
-preset chưa dùng bao giờ cũng xếp đầu. alpha.56: `THEOSBANE` im lặng suốt chương 010–018 ⇒
-`preset_thanh_binh_f093_p-04` trông như còn trống ⇒ bộ cấp phát giao cho `SAMAEL`. alpha.55,
-nơi mọi nhân vật đã ghim đều có nói, **không có va chạm nào**.
-
-Bản vá bỏ luôn `reserve()` trong `_pinned_profile_id` để khỏi đếm hai lần cùng một giọng.
-
-Áp bằng `apply_all.py` sau khi cập nhật `ORDER`, hoặc chạy tay hai script theo thứ tự trên.
+Chi tiết từng cái ở các mục bên dưới và trong `docs/`.
 
 ---
 

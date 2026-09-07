@@ -104,3 +104,30 @@ chạy thật trước khi tin.
 | **nhịp đọc** | **đọc quá chậm** | **văn bản có chữ số** |
 
 Xem [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md).
+
+## Đã sửa 2026-09-08 05:20
+
+`spoken_speakable_chars()` trong `audio_io.py`: nở chữ số ra chữ đọc bằng
+`vietnamese_number_words` rồi mới đếm. Dùng ở cả hai chỗ từng đếm sai —
+`segment_duration_policy` (số khung cho phép sinh) và phép kiểm nhịp.
+
+Tiêu đề chương 023 giờ đo **17,78 kt/s** thay vì 10,68.
+
+### Ba chỗ cố ý KHÔNG đụng
+
+1. **`is_short_utterance` vẫn đếm chữ viết.** Nó trả lời câu hỏi khác — *"đây có phải một câu
+   ngắn không?"* — và với câu hỏi ấy thì độ dài viết mới là thứ đáng đếm.
+2. **Số từ 1000 trở lên vẫn tính theo chữ viết**, vì `vietnamese_number_words` dừng ở 999.
+   Chúng vẫn bị đếm thiếu. Bịa một hệ số ước cho chúng là đoán, mà đoán chính là thứ đã tạo ra
+   lỗi này.
+3. **`rate_check_min_chars` giữ nguyên 24.** Nhưng lưu ý hệ quả: đếm theo chữ đọc làm nhiều
+   segment vượt ngưỡng 24 hơn trước, nên **nhiều segment bị kiểm nhịp hơn**. Ví dụ
+   `Chương 129 - 129: Lật bàn [I]` đi từ 19 lên 49 ký tự. Đó là đúng hướng — một câu 49 ký tự
+   đọc thì đủ dài để đo nhịp thật — nhưng nó là thay đổi hành vi, không phải chỉ sửa số học.
+
+### Kiểm trước khi áp
+
+- **0/14 phán quyết người nghe dính segment có chữ số**, nên đổi số khung sinh không làm mất
+  phán quyết nào.
+- Ba test ghim: tiêu đề ch023 đếm 24→40 và vượt sàn; văn bản không có số đếm **y hệt như trước**;
+  số quá lớn để đọc thành chữ thì để nguyên chứ không đoán.

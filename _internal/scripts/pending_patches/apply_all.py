@@ -28,14 +28,15 @@ LEASE_STALE_SECONDS = 180.0
 
 # Tám bản vá đầu ĐÃ ÁP 2026-09-08 01:12; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ
 # không hỏng gì. Hai bản cuối đang chờ máy rảnh.
-ORDER = (
+ORDER: tuple[str, ...] = ()
+
+APPLIED = (
     "patch_reserve_all.py",
     "patch_reserve_test.py",
     "patch_name_no_halt.py",
     "patch_name_no_halt_test.py",
-)
-
-APPLIED = (
+    "patch_pace_digits.py",
+    "patch_pace_digits_test.py",
     "patch_quote_recovery.py",
     "patch_quote_tests.py",
     "patch_test2.py",
@@ -113,6 +114,10 @@ def main(argv: list[str]) -> int:
         help="Ghi kể cả khi phát hiện lượt chạy đang bay. Đừng.",
     )
     args = parser.parse_args(argv)
+
+    if not ORDER:
+        _say(f"Hàng chờ rỗng. {len(APPLIED)} bản vá đã vào cây thật; xem README.md.")
+        return 0
 
     missing = [name for name in ORDER if not (HERE / name).is_file()]
     if missing:
