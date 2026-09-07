@@ -1715,3 +1715,39 @@ làm rõ cái giá của việc chạy việc nặng đè lên pha phân tích: 
 Và nó cũng cho thấy vì sao bộ cấp phát giọng đáng được làm bền hơn (hướng B trong mục hàng đợi
 tối ưu, hiện xếp ưu tiên thấp): ở đây một thay đổi nhãn **cục bộ trong một phòng** đã đủ để
 đổi giọng của đoạn, chứ chưa cần tới chuyện tập nhân vật toàn cục thay đổi.
+
+## alpha.53: kế hoạch, kèm dự đoán từng chương để còn kiểm được
+
+Chưa chạy. Viết trước khi chạy, vì một dự đoán viết sau khi biết kết quả thì không kiểm được gì.
+
+**Khác alpha.52 ở ba chỗ**, tất cả đã có test và đang chờ gộp:
+
+1. `chapter_is_publishable` đọc phán quyết người nghe (cổng thứ tám).
+2. Neo tên khớp âm **và** gấp cái tên ra khỏi số đo câu (nửa sau, thiếu nó thì nửa đầu vô dụng).
+3. Gạch nối trong chính tả tiếng Anh không làm tắt phép kiểm.
+
+**Và một điều kiện vận hành:** máy phải **hoàn toàn yên** trong pha phân tích. Đây mới là thay
+đổi quan trọng nhất, vì nó quyết định chương 6.
+
+### Dự đoán
+
+| chương | alpha.52 | dự đoán alpha.53 | nhờ đâu |
+|---|---|---|---|
+| 1, 2, 4 | xuất | xuất | — |
+| **3** | trượt | **xuất** | phán quyết đã gieo + cổng thứ tám |
+| **5** | trượt | **xuất, bằng bản đọc ĐÚNG** | nửa sau của fix neo: vòng 0 được nâng lên đỗ |
+| **6** | trượt | **xuất** | phân tích về đúng quỹ đạo → giọng 16 → đọc được "Mẹ kiếp" |
+| **7** | trượt | **xuất** | phán quyết đã gieo + cổng thứ tám |
+| 8, 9 | ? | xuất | — |
+| **10** | ? | **xuất** | `s0000017` tự đỗ nhờ khớp âm; `s0000016` nhờ phán quyết + cổng thứ tám |
+
+**Tức là dự đoán 10/10.** Nếu ra đúng thì bốn thứ cùng đúng một lúc. Nếu không ra 10/10 thì
+bảng này chỉ thẳng vào chỗ giả định nào sai — đó là lý do nó được viết ra.
+
+### Điều đáng nghi ngờ nếu nó ra 10/10
+
+Fix neo tên được dựng để **phân biệt**, không phải để nới. Nếu alpha.53 ra 10/10 thì phải
+kiểm lại rằng nó không nới quá tay: đoạn `c00006_s0000016` ("cướp" thay vì "cớt") và bản
+"Sam Min" **vẫn phải trượt** ở mức phép kiểm — chúng chỉ được xuất bản nhờ có người nghe và
+chấp nhận, chứ không phải nhờ máy đổi ý. Kiểm bằng cách đếm `matched_by_component_phonemes`
+và soát thủ công vài ca.
