@@ -122,3 +122,34 @@ audio bị cắt thật lọt qua. Đã xoá cả hai.
 Xem [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](../../docs/WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) cho
 chẩn đoán đúng: trần khung sinh (`generation_frame_cap`) mới là chỗ hỏng, và nó cần GPU để
 kiểm nên chưa vá.
+
+---
+
+## Sau khi áp: chạy alpha.57 trên chương 019–027
+
+Không tuỳ tiện chọn dải này. Ba lý do:
+
+1. **Nó buộc phải chạy được sau bản vá, và không chạy được trước.** Chương `019` là một trong
+   tám chương ngoặc kép treo — `segment_chapter_text` ném lỗi ngay ở chương đầu tiên của dải.
+   Nên lượt này kiểm bản vá phục hồi trên dữ liệu thật, không phải trên ca dựng sẵn.
+2. **Cùng cỡ với alpha.55 nên so được.** 9 chương, 1.357 segment (alpha.55: 9 chương, 1.083
+   segment), ~2,9 giờ máy so với 2,34.
+3. **Chương mới, chưa ai nghe.** Đây là điều kiện bắt buộc để kiểm chẩn đoán neo tên và tiếng
+   cười: ba chương từng chặn của alpha.55 (013/014/016) **không kiểm được gì**, vì năm trong sáu
+   đoạn chặn của chúng đã có phán quyết mang sang và đi qua nhờ phán quyết chứ không nhờ máy.
+
+### Con số để so, ghi trước khi chạy
+
+| | alpha.55 (010–018) | alpha.57 (019–027) dự đoán |
+|---|---|---|
+| chương chặn | **4/9** | **1–2/9** |
+| đoạn chặn | 6 | 2–3 |
+| chương phải phục hồi ngoặc | 0 | **1** (`019`) |
+
+Dự đoán ấy dựa trên: ba trong sáu đoạn chặn của alpha.55 thuộc đúng hai lớp mà bản vá nhắm vào
+(đoạn chỉ gồm một tên ngắn; tiếng cười viết `Ahaha`). Nếu tỉ lệ chặn **không** giảm, chẩn đoán
+sai và phải đo lại chứ đừng vá thêm.
+
+**Điều sẽ khiến tôi nghi ngờ dù kết quả đẹp:** nếu chương `019` xuất bản mà `warnings` của bộ
+chia đoạn **rỗng**, nghĩa là nó không hề phải phục hồi — tức nguồn đã bị ai sửa, hoặc bản vá
+không chạy, và con số 9/9 chẳng nói lên điều gì.
