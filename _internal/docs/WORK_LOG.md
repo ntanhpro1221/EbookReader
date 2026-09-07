@@ -894,3 +894,21 @@ vần chữ Latin"*. Kết luận của câu ấy là đánh vần, không phả
    này: **chủ sách đã ra lệnh thẳng vào đúng lớp lỗi này** ("nhỡ sách khác cũng gặp chuyện thế
    này thì project phải tự xử lý được chứ?"), chứ không phải phân tích của tôi thắng. Test được
    viết lại kèm nguyên do, không xoá đi.
+
+### Bức tường ấy rộng bao nhiêu
+
+Đo bằng chính đường ống, trên 9 chương mới của alpha.57:
+
+| | |
+|---|---|
+| cách đọc mới sinh ra | **55** |
+| tên trượt kiểm tra (3 vòng thử lại) | 12 → 9 → 3 |
+| tên **không cứu được** | **1** (`Cred`) |
+
+Tức **một lần dừng cứng trên mỗi chín chương mới**.
+
+Tôi **không** nhân con số ấy lên 478 chương, vì đó đúng là cái sai đã mắc với "6% nhân vật lặp
+lại": tên mới xuất hiện dày nhất ở đầu sách rồi thưa dần khi dàn nhân vật đã đủ. Con số thật
+nằm giữa "một nhúm" và "~50" — và điều đáng nói không phải độ lớn, mà là **mỗi cái trong số đó
+hôm nay là một lần dừng cứng cần người gõ tay mới đi tiếp được**.
+
