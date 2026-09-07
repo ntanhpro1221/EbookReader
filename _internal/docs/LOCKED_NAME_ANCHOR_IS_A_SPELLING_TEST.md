@@ -335,3 +335,32 @@ bản đếm-thô và tưởng mình có phép đo.
 **Và ghi lại cái đã biết chắc:** `c00010_s0000082` có `attempt_count=1`, không chia nhỏ, không
 `TTS_SPLIT_RECOVERY`. Nhịp ngắt ấy đến thẳng từ mô hình TTS, không phải do ghép lại — nên đổi
 cách chia đoạn sẽ không sửa được nó.
+
+## Nhịp ngắt giữa cụm: đo được, hiếm, và chưa sửa được
+
+Chủ sách nghe ra nhịp ngắt 0,18s giữa từ ghép **"đầu vào"**. Đo trên mẫu 30 đoạn của alpha.54,
+dùng mốc thời gian từng chữ của Whisper:
+
+| | |
+|---|---|
+| khoảng ngừng >0,12s | 61 |
+| trong đó **ngừng giữa cụm** | **1 (2%)** |
+
+Ví dụ duy nhất: 0,20s giữa "tộc" và "rồi", chỗ văn bản gốc chỉ có một dấu cách. Suy ra cả
+cuốn 948 đoạn thì chừng **30 lần**, mỗi lần 0,18–0,20 giây.
+
+> **Phép đo đầu tiên của tôi vô dụng, và cách nó hỏng đáng ghi lại.** Nó hỏi "chữ trước chỗ
+> ngừng có dấu câu không" và lấy dấu câu **từ chính bản gõ của Whisper**. Nhưng Whisper *thêm*
+> dấu phẩy chính vì nó nghe thấy chỗ ngừng — ca "đầu vào" nó gõ `'đầu,'`. Nên mọi chỗ ngừng
+> đều "hợp lệ" theo định nghĩa, và kết quả ra **0%**.
+>
+> Đó không phải "không có lỗi", mà là "phép đo không thể thấy lỗi" — dùng đầu ra của thứ đang
+> kiểm làm chuẩn kiểm. Chuẩn đúng là **văn bản gốc**, thứ độc lập với cái đang đo. Đổi chuẩn
+> thì con số thành 2%.
+
+**Chưa sửa, và lý do không phải là lười.** Dò ra được không có nghĩa sửa được: nhịp ngắt do
+chính mô hình TTS sinh ra (`attempt_count=1`, không chia nhỏ, không `TTS_SPLIT_RECOVERY`), nên
+muốn sửa phải thu lại và hy vọng bản mới khá hơn. Đó là một vòng sửa đầy đủ — cùng cỡ với vòng
+sửa cho lỗi đọc sai tên — để đổi lấy một cái vấp 0,2 giây xảy ra 30 lần trong 100 phút audio.
+
+Ghi lại con số để lần sau ai muốn làm thì đã có mẫu số, chứ không phải bắt đầu từ cảm giác.
