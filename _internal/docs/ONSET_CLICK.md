@@ -332,6 +332,38 @@ tiếng "tóp" ở trên, thứ nằm trong đầu ra thô của model và chỉ
 
 Hai lỗi, hai chỗ, hai cách chữa. Gộp chúng lại là đi sửa nhầm chỗ.
 
+### Chương hỏng khác chương sạch ở đúng một chỗ
+
+Đo biên độ mẫu mép của mọi đoạn, năm chương đầu lô 1:
+
+```
+ch001 completed  n= 77   trung vị 0,0000   p95 0,0002   max 0,0011
+ch002 completed  n=111   trung vị 0,0000   p95 0,0006   max 0,0076
+ch003 FAILED     n=121   trung vị 0,0000   p95 0,0016   max 0,0519
+ch004 completed  n=129   trung vị 0,0000   p95 0,0005   max 0,0013
+ch005 completed  n= 93   trung vị 0,0000   p95 0,0007   max 0,0022
+```
+
+Trung vị bằng **0,0000 ở mọi chương**: bản thu bình thường bắt đầu và kết thúc ở im lặng. Chương
+hỏng có một mép lớn gấp **7–47 lần** mọi chương sạch, và chỉ **một** đoạn như thế trong 121.
+
+Hai điều rút ra, và điều thứ hai đổi hẳn đánh giá về cái giá:
+
+1. Fade nhắm **đúng** thứ cần nhắm — một mép bất thường duy nhất trong cả chương.
+2. Với 4/5 chương còn lại, fade **gần như không đổi gì**, vì mép đã bằng 0 sẵn. "Đổi audio của
+   mọi chương" mà tôi viết ở trên là đúng về *byte* nhưng gần như vô nghĩa về *tiếng*.
+
+### Một hướng thứ hai, có lẽ tốt hơn
+
+Vì mép sạch nằm ở 0,000x còn mép hỏng ở 0,05, có thể bắt nó **ở tầng segment** — nơi vòng sửa
+còn chạy được — thay vì che ở khâu ghép. Như thế là chữa nguyên nhân (một bản thu bắt đầu hoặc
+kết thúc giữa chừng sóng âm) chứ không phải chữa triệu chứng, và không đụng tới 99% đoạn còn
+lại.
+
+Cái giá của hướng này là **một ngưỡng mới**, và hôm nay đã có ba ngưỡng tôi định bịa rồi bị số
+liệu bác bỏ. Số liệu ở đây nghiêng về nó (khoảng trống giữa 0,008 và 0,052 là rất rộng) nhưng
+mới trên **năm chương**. Phải đo rộng hơn trước khi chọn.
+
 ### Hướng chữa, chưa làm
 
 Fade một mili-giây ở đầu và cuối mỗi đoạn **trước khi ghép**. Nó đưa bước nhảy về 0 theo định
