@@ -799,3 +799,42 @@ của lần lùi, chúng khẳng định về **số lần thử** và **trạng
 Chưa làm vì chưa đo tổng: cần biết bộ test mất bao nhiêu giây trong `time.sleep` trước khi nói
 sửa nó đáng bao nhiêu. Cách đo rẻ: `-o faulthandler_timeout=30` một lượt rồi đếm số dump rơi
 vào dòng 3817.
+
+---
+
+## `TTS_PACE_BAND_RELAXED` chặn chương, và cái tên gợi ý điều ngược lại
+
+**Chưa giải quyết.** Chương 007 của lô 1 hỏng vì:
+
+```
+High-quality policy requires repair or review for segment warnings:
+c00008_s0000058_b47b5843ed04=TTS_PACE_BAND
+```
+
+Đoạn ấy: `"C-Cái con ả này! Cô ta đang hả hê trước nỗi đau của tôi đấy à?!"` — phân tích gán
+nhịp **`fast`**, đọc ra **11,22 ký tự/giây**, tức chậm hơn cả **sàn của băng `normal`** (12,5).
+Model không giao đúng nhịp được yêu cầu, nên phép kiểm nổ **đúng**, và máy **không** được tự
+cho qua: nhịp đo trên sóng âm chứ không qua ASR, tức là nhân chứng thứ hai.
+
+### Chỗ chưa hiểu
+
+Mã hiện tại trên đoạn là `TTS_PACE_BAND_RELAXED`, và `PACE_BAND_RELAX_ATTEMPTS = 4` — đường ống
+thử lại bốn lần **chấm theo sàn `normal` thay vì theo băng đã yêu cầu**. Tức nó đã tự nhượng bộ
+một lần rồi mới gắn nhãn ấy.
+
+Nhưng nhãn ấy **không** nằm trong `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`, nên nó chặn chương.
+Hai cách đọc, và chưa biết cách nào đúng:
+
+- *"đã đạt theo băng nới lỏng"* → chặn là **mâu thuẫn**: đường ống nhượng bộ rồi cổng phủ nhận
+  nhượng bộ ấy.
+- *"đã nới lỏng mà vẫn không đạt, đành giữ bản đang có"* → chặn là **nhất quán**.
+
+Đoạn này đo 11,22 < 12,5 nên nó **không** đạt cả băng nới lỏng, tức nghiêng về cách đọc thứ
+hai. Nhưng cần đọc chỗ đặt `pace_band_relaxed` mới chắc, và cái tên thì gợi ý cách đọc thứ nhất.
+
+### Một chi tiết chưa khớp
+
+`segment_candidates` của đoạn này **rỗng** — không có vòng thu lại nào được ghi, dù
+`PACE_BAND_RELAX_ATTEMPTS = 4` nói là có bốn lần thử. Hoặc bốn lần ấy đi đường khác không ghi
+vào bảng candidate, hoặc chúng không hề chạy. Đây là chỗ đáng đo đầu tiên, vì nó cùng hình dạng
+với lỗ hổng trần khung: *một đoạn đáng được thu lại mà không có ứng viên nào*.
