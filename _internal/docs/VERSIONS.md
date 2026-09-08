@@ -152,6 +152,17 @@ Dải **019..027**, cùng nguồn và cùng dải với alpha.60 (`input_manifes
 | bản vá trần khung (`repairable` khi chạm trần) | [WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md) |
 | 16 bản vá trước đó | [WORK_LOG.md](WORK_LOG.md) |
 
+**Đối chứng đã xác nhận, không phải giả định.** Sau pha chia đoạn, so hai project:
+
+```
+segment mỗi chương : 206 179 227 135 74 104 140 125 167  — trùng khít cả chín chương
+stable_id          : 1.357 / 1.357 trùng nhau, tập hợp bằng nhau
+```
+
+Quan trọng vì `stable_id` quyết định hạt giống sinh audio: cùng chia đoạn, cùng giọng, cùng
+cách đọc thì ra **cùng bản thu tới từng bit**. Nên mọi khác biệt giữa alpha.60 và alpha.62 quy
+được về những thay đổi trong mã, chứ không phải về việc phân tích trôi đi.
+
 **Ba thứ phải đo khi xong, theo thứ tự:**
 
 1. `scripts/compare_runs.py <alpha.60> <alpha.62>` — chương nào đổi kết cục. Nó **tách riêng**
