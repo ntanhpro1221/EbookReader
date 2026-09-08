@@ -22,9 +22,9 @@ số segment chênh tới 40% giữa chương nhiều đối thoại và chươn
 ra những lô lệch nhau tới 2,7 giờ; chia theo giờ máy cho ra 15 lô trong khoảng 7,9–8,2 giờ và
 một lô cuối 5,9 giờ.
 
-| lô | chương | số chương | segment | giờ máy |
-|---|---|---|---|---|
-| 1 | 000..029 | 30 | 3.727 | 8,1 |
+| lô | chương | số chương | segment | giờ máy | |
+|---|---|---|---|---|---|
+| 1 | 000..029 | 30 | 3.727 | 8,1 | ← đang chạy, `lo01_768c98bb4f`, bắt đầu 2026-09-08 17:57 |
 | 2 | 030..059 | 30 | 3.762 | 8,1 |
 | 3 | 060..091 | 32 | 3.675 | 7,9 |
 | 4 | 092..118 | 27 | 3.795 | 8,2 |
@@ -71,7 +71,15 @@ lớn nhất là `port_pronunciations`: cách đọc một cái tên đổi thì
 người nghe khoá theo checksum audio — nên mất cách đọc là mất luôn mọi lần nghe đã bỏ ra.
 
 Kiểm rẻ nhất ngay sau `create`: tên thư mục project phải chứa hash của **dải ấy**. Hash phụ
-thuộc dải chứ không chỉ nguồn, nên chỉ so được giữa hai lượt cùng dải.
+thuộc dải chứ không chỉ nguồn, nên chỉ so được giữa hai lượt cùng dải. Hash đã biết:
+
+```
+000..009  02502ba320      019..027  7b4c5ae6cc
+010..018  70f7c62800      000..029  768c98bb4f   (lô 1, sau khi lọc thuỷ ấn)
+```
+
+`768c98bb4f` được đo **sau** khi `patch_strip_zero_width` vào cây, nên nó đã tính cả việc bỏ
+ký tự vô hình. Một lượt tạo lại dải ấy trên mã cũ hơn sẽ ra hash khác, và đó là đúng.
 
 ## Còn cái gì có thể dừng cả dây
 
