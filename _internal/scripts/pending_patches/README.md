@@ -186,3 +186,37 @@ sai và phải đo lại chứ đừng vá thêm.
 **Điều sẽ khiến tôi nghi ngờ dù kết quả đẹp:** nếu chương `019` xuất bản mà `warnings` của bộ
 chia đoạn **rỗng**, nghĩa là nó không hề phải phục hồi — tức nguồn đã bị ai sửa, hoặc bản vá
 không chạy, và con số 9/9 chẳng nói lên điều gì.
+
+---
+
+## Quy ước bắt buộc từ 2026-09-08: **đừng ghi bằng `open(p, "w")`**
+
+Mọi script vá trong thư mục này ghi bằng:
+
+```python
+io.open(p, "w", encoding="utf-8").write(s)     # ĐỪNG
+```
+
+`open(..., "w")` **cắt file về rỗng ngay lúc mở**, rồi mới mã hoá và ghi. Nếu mã hoá nổ giữa
+chừng thì file gốc đã mất, và cái nổ là một `UnicodeEncodeError` — thứ mà chính hôm nay chúng
+ta biết là có thật, vì model phân tích nhả ra nửa cặp surrogate làm chết cả lô 1.
+
+Nó đã xảy ra: script viết post-mortem cho đúng sự cố ấy có ký tự hỏng trong một chuỗi Python,
+nổ ở dòng `.write`, và **xoá sạch `docs/PRODUCTION_PLAN.md`**. Commit mất một nhịp mới phát
+hiện; khôi phục từ commit trước.
+
+Ở đây mới chỉ là một tài liệu. Các script trong thư mục này ghi vào `ebook_reader/*.py`.
+
+Dùng:
+
+```python
+import os, tempfile
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p) or ".", suffix=".tmp")
+os.close(fd)
+io.open(tmp, "w", encoding="utf-8").write(s)
+os.replace(tmp, p)          # đổi chỗ nguyên tử; hỏng lúc mã hoá thì bản gốc còn nguyên
+```
+
+Dự án đã có `io_utils.atomic_write_text` làm đúng việc này cho mã sản xuất. Script vá chạy
+trước khi `ebook_reader` chắc chắn import được nên tự làm lấy, nhưng nguyên tắc là một:
+**không bao giờ cắt bản gốc trước khi bản mới đã nằm trọn trên đĩa.**
