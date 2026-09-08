@@ -6445,6 +6445,56 @@ def _check_prompt_fits(usage: dict[str, int], num_ctx: int, num_predict: int) ->
         )
 
 
+LONE_SURROGATE_PATTERN = re.compile("[\ud800-\udfff]")
+
+
+def strip_lone_surrogates(value: Any) -> Any:
+    """Bỏ những code point là **một nửa** của cặp surrogate, ở mọi chuỗi trong cấu trúc.
+
+    Lô 1 của kế hoạch sản xuất chết ở đây, 2026-09-08, sau 1.406/3.727 đoạn:
+
+        UnicodeEncodeError: 'utf-8' codec can't encode character '\ud83d' - surrogates
+        not allowed
+
+    Model phân tích nhả ra một emoji vỡ - `\ud83d` mà không có nửa sau. `json.loads` dựng nó
+    thành một code point hợp lệ trong `str` của Python nhưng **không mã hoá UTF-8 được**, nên
+    mọi thứ hạ nguồn kế thừa một quả mìn: hàm nổ là `sha256_text` lúc băm bằng chứng critic,
+    nhưng nó có thể nổ ở bất cứ chỗ nào ghi xuống sqlite hay ra file.
+
+    Dọn ngay tại **biên nhận**, không dọn ở chỗ nổ. Chỗ nổ chỉ là chỗ xui; biên nhận là chỗ
+    duy nhất mà "sau điểm này, chuỗi luôn mã hoá được" trở thành một lời hứa giữ được.
+
+    Xoá đúng khoảng D800-DFFF là đủ và không quá tay: `json.loads` đã ghép mọi cặp **hợp lệ**
+    thành ký tự thật, nên thứ còn sót lại trong khoảng ấy chắc chắn là nửa lạc.
+    """
+    if isinstance(value, str):
+        return LONE_SURROGATE_PATTERN.sub("", value)
+    if isinstance(value, list):
+        return [strip_lone_surrogates(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(strip_lone_surrogates(item) for item in value)
+    if isinstance(value, dict):
+        return {
+            strip_lone_surrogates(key): strip_lone_surrogates(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def contains_lone_surrogate(value: Any) -> bool:
+    """Có nửa surrogate lạc nào trong cấu trúc không? Dùng để log, không để quyết định."""
+    if isinstance(value, str):
+        return bool(LONE_SURROGATE_PATTERN.search(value))
+    if isinstance(value, (list, tuple)):
+        return any(contains_lone_surrogate(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            contains_lone_surrogate(key) or contains_lone_surrogate(item)
+            for key, item in value.items()
+        )
+    return False
+
+
 def _ollama_usage_line(usage: dict[str, int], num_ctx: int) -> str:
     """One line a person can read, and a later script can parse back out of the log."""
     prompt_tokens = usage.get("prompt_eval_count", 0)
@@ -6849,7 +6899,7 @@ class OllamaBookAnalyzer:
                 "Ollama analysis exhausted its output-token budget before completing the JSON response"
             )
         try:
-            return json.loads(response_text)
+            decoded = json.loads(response_text)
         except json.JSONDecodeError as exc:
             output_limit = int(request.get("options", {}).get("num_predict", 0))
             if output_limit > 0 and evaluation_count is not None and evaluation_count >= output_limit:
@@ -6857,6 +6907,19 @@ class OllamaBookAnalyzer:
                     "Ollama analysis exhausted its output-token budget before completing the JSON response"
                 ) from exc
             raise
+        # Dọn trước khi trả về, nên không có gì hạ nguồn phải biết chuyện này tồn tại.
+        if contains_lone_surrogate(decoded):
+            self.log(
+                "Model phân tích trả về nửa cặp surrogate lạc (emoji vỡ); đã bỏ chúng đi. "
+                "Không dọn thì `sha256_text` nổ và cả cuốn sách dừng."
+            )
+            self.db.event(
+                "warning",
+                "ANALYSIS_LONE_SURROGATE_STRIPPED",
+                "Bỏ nửa cặp surrogate lạc khỏi phản hồi phân tích",
+            )
+            decoded = strip_lone_surrogates(decoded)
+        return decoded
 
     def _request(
         self,

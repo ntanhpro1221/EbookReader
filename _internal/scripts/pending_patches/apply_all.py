@@ -69,6 +69,8 @@ APPLIED = (
     # thiếu ghim TTS sẽ báo thành lỗi perceptual. Bản sau có `voice_model_check` riêng.
     "patch_pin_voice_model.py",
     "patch_strip_zero_width.py",
+    # 2026-09-08 19:4x, sau khi lo 1 chet o doan 1.406/3.727 vi mot nua cap surrogate lac.
+    "patch_lone_surrogate.py",
 )
 
 
