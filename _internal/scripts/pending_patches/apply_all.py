@@ -29,12 +29,12 @@ LEASE_STALE_SECONDS = 180.0
 # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
 # hỏng gì.
 #
-# `ORDER` còn đúng MỘT cái, và nó có một điều kiện mà script này không tự kiểm được:
+# `ORDER` còn hai cái, và một trong hai có điều kiện mà script này KHÔNG tự kiểm được:
 # `patch_strip_zero_width.py` **đổi `text_sha256` của 15 đoạn** trên cả cuốn, nên phải áp
 # **giữa hai lô**, không phải giữa chừng một lô. Kiểm nhịp tim `worker_leases` ở dưới chặn được
 # "đang chạy", nhưng không chặn được "vừa chạy xong lô này, sắp `resume` lô ấy".
 #
-# Thời điểm đúng: ngay trước lô 1 của docs/PRODUCTION_PLAN.md, vì lô ấy sinh lại chương
+# Thời điểm đúng cho nó: ngay trước lô 1 của docs/PRODUCTION_PLAN.md, vì lô ấy sinh lại chương
 # 000–029 từ đầu nên cái hash đổi không làm mất gì. Lý do đầy đủ:
 # docs/THE_SOURCE_IS_WATERMARKED.md
 ORDER: tuple[str, ...] = (
