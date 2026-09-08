@@ -29,25 +29,10 @@ LEASE_STALE_SECONDS = 180.0
 # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
 # hỏng gì.
 #
-# `ORDER` còn hai cái, và một trong hai có điều kiện mà script này KHÔNG tự kiểm được:
-# `patch_strip_zero_width.py` **đổi `text_sha256` của 15 đoạn** trên cả cuốn, nên phải áp
-# **giữa hai lô**, không phải giữa chừng một lô. Kiểm nhịp tim `worker_leases` ở dưới chặn được
-# "đang chạy", nhưng không chặn được "vừa chạy xong lô này, sắp `resume` lô ấy".
-#
-# Thời điểm đúng cho nó: ngay trước lô 1 của docs/PRODUCTION_PLAN.md, vì lô ấy sinh lại chương
-# 000–029 từ đầu nên cái hash đổi không làm mất gì. Lý do đầy đủ:
-# docs/THE_SOURCE_IS_WATERMARKED.md
-ORDER: tuple[str, ...] = (
-    # Hai bản vá này KHÁC LOẠI nhau, và trộn chúng là hiểu sai cả hai:
-    #
-    #   patch_pin_voice_model  KHÔNG đổi audio. Nó chỉ biến một lần model tự đổi (đã xảy ra
-    #                          thật, 2026-09-08 10:45) từ im lặng thành một lỗi nói thành
-    #                          tiếng. Áp được bất cứ lúc nào máy rảnh, càng sớm càng tốt.
-    #   patch_strip_zero_width ĐỔI `text_sha256` của 15 đoạn, tức đổi audio của chúng một lần.
-    #                          Phải áp GIỮA HAI LÔ.
-    "patch_pin_voice_model.py",
-    "patch_strip_zero_width.py",
-)
+# Hàng chờ rỗng. Hai bản vá cuối áp 2026-09-08 17:5x, ngay tại ranh giới giữa alpha.62 và lô
+# 1 của kế hoạch sản xuất - đúng thời điểm mà `patch_strip_zero_width` cần, vì nó đổi
+# `text_sha256` của 15 đoạn và lô 1 sinh lại chương 000-029 từ đầu nên không mất gì.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -76,6 +61,14 @@ APPLIED = (
     "patch_machine_accept_pipeline.py",
     "patch_machine_accept_wiring.py",
     "patch_machine_accept_report.py",
+    # 2026-09-08 17:5x, tại ranh giới alpha.62 / lô 1.
+    #
+    # `patch_pin_voice_model` phải viết lại một lần: bản đầu nhét model giọng vào
+    # `perceptual_cache_check` và `test_perceptual_cache_marker_requires_locked_revision_and_
+    # checkpoint_hash` bắt ngay. Test ấy đúng - hàm kia đăng ký là `model:utmosv2_cache`, nên
+    # thiếu ghim TTS sẽ báo thành lỗi perceptual. Bản sau có `voice_model_check` riêng.
+    "patch_pin_voice_model.py",
+    "patch_strip_zero_width.py",
 )
 
 

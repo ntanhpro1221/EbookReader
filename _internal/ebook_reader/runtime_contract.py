@@ -21,6 +21,56 @@ WAV2VEC2_CACHE_REPOSITORY = "models--facebook--wav2vec2-base"
 WAV2VEC2_CACHE_REVISION = "0b5b8e868dd84f03fd87d01f9c4ff0f080fecfe8"
 TIMM_CACHE_REPOSITORY = "models--timm--tf_efficientnetv2_s.in21k_ft_in1k"
 TIMM_CACHE_REVISION = "ea9abc143ea2b9d8e1ec1de277bce02149b9cf0e"
+
+# Model **giọng**, tức thứ thật sự làm ra cuốn sách. Trước 2026-09-08 nó là model duy nhất
+# không được ghim, trong khi wav2vec2 và timm - hai model chỉ *chấm điểm* - thì có.
+#
+# Nó đã tự đổi: cache giữ ba revision, và `refs/main` chuyển sang bản mới lúc 10:45 ngày
+# 2026-09-08, giữa alpha.60 (07:06) và alpha.62 (13:46). Trọng số khác thật, cùng kích thước
+# 247.974.928 byte nhưng sha256 `82b24b3f…` so với `119003a9…`. Hậu quả đo được: 1.213 đoạn
+# có hạt giống và mọi đầu vào ghi lại giống hệt nhau, và **không đoạn nào** cho cùng bản thu.
+#
+# Vì sao đây là lỗi sản phẩm chứ không chỉ lỗi phương pháp: kế hoạch sản xuất là 16 lô trải
+# nhiều ngày (docs/PRODUCTION_PLAN.md). Upstream đẩy một revision ở giữa thì giọng người dẫn
+# chuyện **đổi giữa cuốn sách**, và mọi phép kiểm trong dự án đều mù với nó - mỗi chương được
+# chấm theo chính nó, không ai so chương 1 với chương 200.
+#
+# Ghim bản MỚI, không quay về bản cũ: kế hoạch chạy lại từ chương 000 nên không có audio nào
+# cần giữ liên tục, và chịu một lần đứt rồi ổn định thì rẻ hơn.
+#
+# **Đừng dọn cache.** `2da0efab…` là bản đã sinh ra mọi audio từ alpha.10 tới alpha.60, và là
+# thứ duy nhất tái tạo lại được chúng.
+VIENEU_CACHE_REPOSITORY = "models--pnnbao-ump--VieNeu-TTS-v3-Turbo"
+VIENEU_CACHE_REVISION = "8b7e9cffb4b41918cb638b9f62f0a751184d14a6"
+VIENEU_PREVIOUS_REVISION = "2da0efab622a1722125991736524f080b751ef5b"
+
+VOICE_MODEL_FILES: tuple[tuple[str, int, str], ...] = (
+    (
+        "config.json",
+        1_553,
+        "eee8e032cb936a60312f594a8156c086173a9c0255a545bd11a448f22a7c77ae",
+    ),
+    (
+        "denoiser.onnx",
+        42_661_414,
+        "b7621953291cfe05e695a9c0ff4255aa2f93239fc17c26627e18b7b6b8f72f0b",
+    ),
+    (
+        "speaker_encoder.onnx",
+        28_303_423,
+        "a6ac6a63997761ae2997373e2ee1c47040854b4b759ea41ec48e4e42df0f4d73",
+    ),
+    (
+        "update/model.safetensors",
+        247_974_928,
+        "119003a9e121760d1c3b9b50bd675bfde8d5f3de2b12641cf97a17d3883a5da7",
+    ),
+    (
+        "update/config.json",
+        2_152,
+        "a9f8d9c4b4736448ab355d1a98cfe48f5e39aecf2916c37b0806c228612e9a2d",
+    ),
+)
 UTMOS_MODEL_CONFIG = "fusion_stage3"
 UTMOS_MODEL_FOLD = 0
 UTMOS_MODEL_SEED = 42
@@ -371,6 +421,75 @@ def perceptual_settings_check(
     }
 
 
+def voice_model_check(runtime_root: Path) -> dict[str, Any]:
+    """Model giọng có đúng revision đã ghim không, và có đúng bytes không.
+
+    Phép kiểm **riêng**, không gộp vào `perceptual_cache_check`. Bản đầu tiên của bản vá này
+    gộp vào đấy và bộ test bắt ngay: hàm ấy đăng ký là `checks["model:utmosv2_cache"]`, nên
+    một lần thiếu ghim TTS sẽ báo thành lỗi perceptual - đúng lỗi, sai chỗ, và sai chỗ thì
+    người đọc đi tìm nhầm hướng.
+
+    Kiểm hai tầng như các model kia: `refs/main` cho danh tính, rồi kích thước + sha256 cho
+    nội dung. Revision là cái nhãn; hash là thứ không ai đổi được mà mình không biết - và
+    2026-09-08 cho thấy nhãn đổi được một cách hoàn toàn im lặng.
+    """
+    hub_root = runtime_root / "models" / "huggingface" / "hub"
+    repository_root = hub_root / VIENEU_CACHE_REPOSITORY
+    errors: list[str] = []
+
+    ref_path = repository_root / "refs" / "main"
+    actual_revision = ""
+    try:
+        actual_revision = ref_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as exc:
+        errors.append(f"voice cache ref unavailable ({ref_path}): {exc}")
+    else:
+        if actual_revision != VIENEU_CACHE_REVISION:
+            errors.append(
+                f"voice model revision={actual_revision!r}, "
+                f"expected {VIENEU_CACHE_REVISION!r}"
+            )
+
+    snapshot_root = repository_root / "snapshots" / VIENEU_CACHE_REVISION
+    for filename, expected_size, expected_sha256 in VOICE_MODEL_FILES:
+        snapshot_file = snapshot_root / filename
+        if not snapshot_file.is_file():
+            errors.append(f"missing pinned voice-model file: {snapshot_file}")
+            continue
+        try:
+            actual_size = snapshot_file.stat().st_size
+        except OSError as exc:
+            errors.append(f"voice-model file unavailable ({snapshot_file}): {exc}")
+            continue
+        if actual_size != expected_size:
+            errors.append(
+                f"voice-model size={actual_size} for {snapshot_file}, "
+                f"expected {expected_size}"
+            )
+            continue
+        try:
+            actual_sha256 = sha256_file(snapshot_file)
+        except OSError as exc:
+            errors.append(f"cannot hash voice-model file ({snapshot_file}): {exc}")
+            continue
+        if actual_sha256 != expected_sha256:
+            errors.append(
+                f"voice-model sha256={actual_sha256} for {snapshot_file}, "
+                f"expected {expected_sha256}"
+            )
+
+    return {
+        "ok": not errors,
+        "detail": (
+            f"VieNeu-TTS {VIENEU_CACHE_REVISION[:12]}"
+            if not errors
+            else "; ".join(errors)
+        ),
+        "revision": actual_revision,
+        "errors": errors,
+    }
+
+
 def runtime_contract_errors(
     runtime_root: Path,
     *,
@@ -380,6 +499,7 @@ def runtime_contract_errors(
     checks = {
         "setup_marker": setup_marker_check(runtime_root),
         "perceptual_cache": perceptual_cache,
+        "voice_model": voice_model_check(runtime_root),
         **{
             f"dependency:{name}": result
             for name, result in critical_dependency_checks().items()

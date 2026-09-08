@@ -42,6 +42,7 @@ from .project import create_or_open_project, infer_book_title
 from .runtime_contract import (
     critical_dependency_checks,
     perceptual_cache_check,
+    voice_model_check,
     setup_marker_check,
 )
 from .text_processing import build_chapter_manifest, input_manifest_hash
@@ -1238,6 +1239,7 @@ def _command_doctor(args: argparse.Namespace) -> CommandResult:
     runtime_root = Path(os.environ["EBOOK_READER_RUNTIME"]).resolve()
     checks["runtime:setup_marker"] = setup_marker_check(runtime_root)
     checks["model:utmosv2_cache"] = perceptual_cache_check(runtime_root)
+    checks["model:vieneu_voice"] = voice_model_check(runtime_root)
     deep_output = ""
     deep_returncode: int | None = None
     if args.deep:

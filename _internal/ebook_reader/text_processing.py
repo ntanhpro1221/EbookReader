@@ -313,7 +313,25 @@ MAX_VOCALIZATION_REPETITIONS = 4
 
 def normalize_text(text: str) -> str:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("\u00a0", " ").replace("\u200b", "")
+    text = text.replace("\u00a0", " ")
+    # Cả họ zero-width, không chỉ U+200B. Dòng cũ đã có đúng ý định này và chỉ bắt một trong
+    # bốn ký tự - đủ để đọc như đã xong.
+    #
+    # Nguồn có **thuỷ ấn ẩn**: 53 ký tự U+200C/U+200D xen kẽ nhau thành một dãy nhị phân,
+    # chèn vào một chỗ trong 15 file (015, 026, 038, 086, 092, 097, 114, 127, 140, 164, 176,
+    # 188, 229, 256, 278). Mắt không thấy, và không phép kiểm nào của dự án nhìn chúng.
+    #
+    # Chúng KHÔNG hại chất lượng - đo ở alpha.56: đoạn mang thuỷ ấn ra `verified`, sim 0,966,
+    # vì VieNeu đọc lướt qua và `speakable_chars` đếm `isalnum()`. Cái chúng hại là **tính
+    # tái lập**: `stable_id` là hash của văn bản, hạt giống sinh audio lấy từ `stable_id`, nên
+    # trang nguồn cấp lại một dãy nhị phân khác - đúng việc mà thuỷ ấn sinh ra để làm - sẽ đổi
+    # audio của một câu chữ y hệt, và mọi phán quyết của người nghe cho đoạn ấy lặng lẽ hết
+    # hiệu lực.
+    #
+    # ZWJ có nghĩa thật trong chuỗi emoji và trong Devanagari/Ả Rập. Trong văn xuôi tiếng Việt
+    # thì không, và nguồn này không có chữ nào ngoài Latin - đã quét cả 478 file.
+    for zero_width in ("\u200b", "\u200c", "\u200d", "\u2060", "\ufeff"):
+        text = text.replace(zero_width, "")
     text = INLINE_REFERENCE_MARKER_PATTERN.sub("", text)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n[ \t]+", "\n", text)
