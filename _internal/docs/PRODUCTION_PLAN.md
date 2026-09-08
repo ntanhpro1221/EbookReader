@@ -93,6 +93,16 @@ scripts/check_sources.py "D:/Novels/Tools/Text"
 478 chương chia đoạn được hết — 58,258 segment
 ```
 
+**Cách rà ấy mù một lớp, và lô 1 chứng minh.** Tôi tìm "cửa dừng cứng" bằng cách liệt kê mọi
+câu `raise` trong đường ống và xét từng cái. Phương pháp ấy tìm ra những lần dừng **có chủ ý**
+— và bỏ sót hoàn toàn những lần dừng **do tai nạn**: một `UnicodeEncodeError` từ thư viện
+chuẩn, ném ở một dòng không ai viết `raise`. Đó chính là thứ giết lô 1.
+
+Rà đúng phải hỏi ngược lại: *dữ liệu nào từ bên ngoài đi vào mà không qua chỗ nào làm sạch?*
+Có ba nguồn ngoài — file nguồn, phản hồi model, và cache model — và tính tới 2026-09-08 cả ba
+đều đã có một cửa dọn hoặc một phép ghim. Nhưng danh sách ấy là danh sách tôi tự nghĩ ra, nên
+nó cũng có thể thiếu.
+
 58.258 khớp đúng con số `plan_batches.py` đếm độc lập. Cú dừng vì ngoặc kép treo — thứ giết
 alpha.55 sau **bốn giây** và trước đây cần tám vòng sửa-tay-chạy-lại — không còn xảy ra ở chương
 nào. Hai cửa kia: cách đọc tên không giải được giờ ghi sự kiện rồi đọc nguyên văn thay vì `raise`,
