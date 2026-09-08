@@ -672,7 +672,7 @@ TỔNG: 2 ca / 38.520 đoạn  =  0,005%
 
 Hiếm — nhưng chữ ký thì **trùng khít**, và điều đó quan trọng hơn tỉ lệ:
 
-- cả hai đương nhiệm dài **đúng 1,92 giây**, tức **2 × trần khung 0,96s**;
+- cả hai đương nhiệm dài **đúng 1,92 giây**;
 - cả hai là câu rất ngắn (một tiếng thốt, một câu hai từ);
 - cả hai có ứng viên **tự kết thúc** ở 0,48–0,64 giây;
 - cả hai ứng viên ấy trượt bằng `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` — mã mà
@@ -687,6 +687,13 @@ phải một ca lẻ, nó là ca thứ hai trong một họ.
 
 (Ngoại suy này là ngoại suy, và tôi đã sai ba lần vì đúng loại phép tính ấy. Nó chỉ dùng để
 xếp ưu tiên, không dùng để khẳng định.)
+
+**Một phép tính đã viết ra rồi bị chính số liệu bác bỏ**, để lại đây vì nó cảnh báo cả một lớp
+sai: tôi viết "1,92 giây = 2 × trần khung 0,96 giây", nghe rất khớp. Truy `generation_frame_cap`
+thì ngược: đoạn 1,92 giây có `cap=12`, còn đoạn 0,96 giây **không đặt cap**. Hai con số đến từ
+hai đường khác nhau chứ không phải bội số của nhau. Cái đúng và cái đo được là hẹp hơn: trong
+bốn bản thu chạm trần của alpha.60, **ba** dừng ở đúng 1,92 giây và một ở 0,96 — trần khung tạo
+ra thời lượng lượng tử hoá, và 1,92 là mức hay gặp. Chữ ký vẫn chắc; số học thì không.
 
 ### Hình dạng bản vá, và cái bẫy của nó
 
