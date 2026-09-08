@@ -196,3 +196,52 @@ chạy.
 Hình dạng bản vá: không `raise`, mà ghi log to, phát `db.event`, đúc bằng câu trả lời tốt nhất
 còn lại, và liệt kê nhân vật ấy trong báo cáo để người nghe khoá lại sau bằng `cli cast`. Giống
 hệt cơ chế máy tự cho qua: **không đợi ai, nhưng không bao giờ im lặng.**
+
+## Cổng 5 cũng là một bức tường, và nó chặn vì một phép đo sát ngưỡng (2026-09-09)
+
+Chương đầu tiên của lô 1 hỏng ngay:
+
+```
+temporary MP3 requires review under high-quality policy: loudness delta 0.62 LU
+```
+
+Cả hai đoạn của nó đều `verified`. Cái chặn là QA tầng chương, và cụ thể là một **cờ review**
+chứ không phải lỗi cứng: `CHAPTER_LOUDNESS_REVIEW_TOLERANCE_LU = 0.30`,
+`CHAPTER_LOUDNESS_HARD_TOLERANCE_LU = 0.75`, và số đo là **0,62** — nằm giữa. Nghĩa đen của nó
+là *"có thể đáng nghe, hỏi một người"*, mà không có người nào.
+
+### Hai giả thuyết, cả hai chết khi đo
+
+**"Chương quá ngắn nên LUFS không đo nổi."** Chương 000 dài 7,5 giây. Nghe hợp lý — LUFS tích
+hợp cần vài giây. Đếm trên mọi bản đã lưu: **24 chương dưới 30 giây, chỉ 1 bị gắn cờ**. Không
+phải hiệu ứng độ dài.
+
+**"Nội dung này có gì đó bất thường."** Đếm kỹ hơn thì 24 chương ngắn ấy hoá ra là **cùng một
+chương 000**, chạy lại qua 24 phiên bản — và nó vượt ngưỡng **đúng một lần trong 24**. Cùng
+chữ, cùng giọng, 24 lần đúc, một lần rơi sang bên kia vạch.
+
+Đó là một **phép đo sát ngưỡng**, không phải một khiếm khuyết.
+
+### Vì sao đây vẫn là bức tường phải sửa
+
+Vì hậu quả không tương xứng với nguyên nhân: 0,62 LU là chênh lệch dưới hoặc quanh ngưỡng nghe
+thấy được của tai người, và nó làm một chương **không bao giờ xuất bản** khi không có ai để hỏi.
+Đúng hình dạng mà [cơ chế máy tự cho qua](SHIPPING_WITHOUT_A_LISTENER.md) sinh ra để phá, chỉ
+khác tầng.
+
+Và ở đây có sẵn một ranh giới **không phải do tôi bịa ra**: chính dự án đã đặt
+`CHAPTER_LOUDNESS_HARD_TOLERANCE_LU = 0.75` làm vạch "quá mức này thì chắc chắn có vấn đề".
+Một cờ review nằm dưới vạch cứng ấy là thứ chính phép kiểm tự nhận là chưa chắc — cùng lý lẽ
+với *"ASR là nhân chứng duy nhất"*, chỉ khác là ở đây nhân chứng thứ hai là **ngưỡng cứng của
+chính phép kiểm**.
+
+### Ngoài lề, nhưng đáng cho chủ sách biết
+
+Chương 000 **không phải nội dung sách**. Nó là ghi chú của người đăng:
+
+> *"Chuyên mục bổ mắt"* · *"Lưu ý: các bức ảnh trên đều là hàng fan art, do mình thấy đẹp và bổ
+> mắt…"*
+
+Bảy giây rưỡi nói về mấy tấm ảnh không tồn tại trong file text. Có nên nằm trong audiobook
+không là quyết định của chủ sách, không phải của máy — nên nó được ghi ở đây chứ không bị âm
+thầm bỏ.
