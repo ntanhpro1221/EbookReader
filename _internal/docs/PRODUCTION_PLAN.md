@@ -195,6 +195,21 @@ kế — *"Analysis/casting implementation changed after analysis started; creat
 project"*. Mất trọn 1,7 giờ phân tích, phải tạo project sạch (`lo01b`, cùng hash dải
 `768c98bb4f` nên chắc chắn cùng nguồn cùng dải).
 
+**Bản vá đã được chứng minh trên dữ liệu thật, trong vòng hai giờ.** `lo01b` chạy tới đoạn
+1.406 — đúng chỗ `lo01` chết — và log ghi:
+
+```
+Model phân tích trả về nửa cặp surrogate lạc (emoji vỡ); đã bỏ chúng đi.
+```
+
+rồi đi tiếp. Cùng nguồn, cùng dải, cùng điểm: một lượt chết, một lượt sống. Đó là loại bằng
+chứng mà [bản vá trần khung](WHAT_BLOCKS_A_CHAPTER.md) vẫn chưa có — và sự khác nhau không
+phải do bản vá nào tốt hơn, mà do lỗi này **tái diễn** còn lỗi kia thì không.
+
+Tần suất đo được: **1 lần trên 1.411 đoạn phân tích**. Ngoại suy thô sang 58.258 đoạn của cả
+cuốn ra khoảng **40 lần** — tức nếu không vá, cuốn sách sẽ chết khoảng bốn mươi lần, mỗi lần
+mất toàn bộ phần phân tích của lô đang chạy.
+
 **Bài học cho 15 lô còn lại:** một lỗi kiểu này giữa lô tốn **cả phần phân tích đã làm**, không
 chỉ phần còn lại. Chạy bộ test đầy đủ **trước** mỗi lô rẻ hơn sửa giữa chừng.
 
