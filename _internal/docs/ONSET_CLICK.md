@@ -286,3 +286,58 @@ giống nhau tới mức bước nhảy biên độ lớn nhất ở chỗ nối
 
 Bài học nhỏ: một con số lặp lại trông như hiện vật, mà trong một hệ tất định thì lặp lại **mới
 là điều phải xảy ra**. Tôi suýt để lại trong tài liệu một "bí ẩn" cho người sau đi truy.
+
+---
+
+## Không nhầm với `join discontinuity` — đó là lỗi khác, sinh ra ở khâu ghép (2026-09-09)
+
+Chương 003 của lô 1 hỏng vì `join discontinuity 0.219`, và phản xạ đầu tiên là quy về tiếng
+"tóp" đầu câu ghi ở trên. **Sai.** Chuỗi đo dẫn tới chỗ khác hẳn.
+
+### Phép kiểm không đo nhầm — đã thử bác bỏ và thất bại
+
+`_max_join_jump` lấy hiệu **hai mẫu liền nhau** lớn nhất trong ±1ms quanh chỗ nối. Ở 48 kHz,
+một tín hiệu to và nhiều tần số cao cũng cho hiệu mẫu đáng kể, nên nghi nó đang đo **độ to tại
+chỗ nối** chứ không đo đứt gãy. Đo chính thống kê ấy tại 360 vị trí **ngẫu nhiên** trong 60
+đoạn của chương:
+
+```
+trung vị 0,004   p90 0,023   p95 0,030   p99 0,045   cực đại 0,071
+vượt ngưỡng review 0,18:  0,0%
+```
+
+0,219 tại chỗ nối gấp **50 lần trung vị** và cao hơn mọi giá trị gặp ở audio bình thường. Phép
+kiểm bắt đúng một bất thường thật.
+
+### Nhưng nó KHÔNG đến từ đoạn
+
+Mọi ranh giới đoạn trong chương này đều có khoảng lặng chèn vào, nên bước nhảy tại chỗ nối chính
+là **biên độ mẫu đầu/cuối của đoạn**. Đo cả 121 đoạn:
+
+```
+biên độ mép lớn nhất trong toàn chương: 0,052   (ngưỡng review là 0,18)
+```
+
+Không đoạn nào tới gần ngưỡng. Đứt gãy 0,219 **sinh ra sau đó**, ở khâu ghép và master: đoạn
+được chuẩn hoá về **−25 LUFS**, chương được master về **−20 LUFS** bằng `loudnorm`, tức khuếch
+đại danh nghĩa +5 dB cộng thêm nén động — và phần yên tĩnh ở mép đoạn được nâng lên nhiều hơn
+hệ số danh nghĩa. (Số học không khớp chính xác 0,052 → 0,219 chỉ bằng +5 dB, nên phần nén động
+là ước đoán, không phải kết luận.)
+
+### Vì sao điều đó quan trọng hơn con số
+
+**Tầng segment không thể ngăn lỗi này.** Ở đó mép chỉ 0,052 — trong mọi giới hạn hợp lý — nên
+mọi phép kiểm segment đều đúng khi cho qua, và **sinh lại với seed khác là vô ích**. Khác hẳn
+tiếng "tóp" ở trên, thứ nằm trong đầu ra thô của model và chỉ chữa được bằng cách gieo lại.
+
+Hai lỗi, hai chỗ, hai cách chữa. Gộp chúng lại là đi sửa nhầm chỗ.
+
+### Hướng chữa, chưa làm
+
+Fade một mili-giây ở đầu và cuối mỗi đoạn **trước khi ghép**. Nó đưa bước nhảy về 0 theo định
+nghĩa, và 1ms thì không nghe thấy được. Đây là hậu xử lý *có tác dụng* — vì đối tượng là một
+bước nhảy biên độ, chứ không phải một xung năng lượng do model sinh ra.
+
+Chưa làm vì nó **đổi audio của mọi chương**, tức một sự kiện phiên bản, và phải làm ở ranh giới
+giữa hai lô cùng với những thay đổi đổi-hash khác. Cần đo trước: sau khi fade, `max_join_jump`
+của những chương từng hỏng còn bao nhiêu.
