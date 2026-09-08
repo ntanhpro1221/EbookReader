@@ -44,6 +44,9 @@ ORDER: tuple[str, ...] = (
     # tích. Đã kiểm hộp cát: 5 xanh sau vá, 2 đỏ trước vá. KHÔNG đổi audio của đoạn nào đã
     # đúc đúng; chỉ đổi hậu quả của một ca không phán xử được.
     "patch_casting_gate_no_halt.py",
+    # Cổng 5: lệch độ to dưới ngưỡng CỨNG không chặn nữa. Cố ý hẹp - `unexpected silence` và
+    # `join discontinuity` vẫn chặn, vì chúng nghe thấy được. 5 test, hộp cát xanh.
+    "patch_loudness_review_ships.py",
 )
 
 APPLIED = (
