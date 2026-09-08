@@ -138,7 +138,16 @@ def _chapter_level_failures(connection: sqlite3.Connection) -> dict[str, str]:
 def _report(root: Path, label: str) -> tuple[int, int, int]:
     connection = _open(root)
     try:
-        titles = [str(row["title"]) for row in connection.execute("SELECT title FROM chapters")]
+        chapter_rows = list(connection.execute("SELECT title, status FROM chapters"))
+        titles = [str(row["title"]) for row in chapter_rows]
+        # Chương chưa chạy thì chưa có mã cảnh báo nào, nên nó đọc thành "máy làm được" - và
+        # con số "công của máy" phồng lên đúng bằng số chương còn lại. Cùng cái bẫy đã bịt ở
+        # `compare_runs.py`, và tôi rơi vào nó một lần ở đây trước khi bịt.
+        unfinished = [
+            str(row["title"])
+            for row in chapter_rows
+            if str(row["status"]) in {"pending", "analyzing", "synthesizing", "verifying"}
+        ]
         with_verdicts = _blockers(connection, honour_verdicts=True)
         without = _blockers(connection, honour_verdicts=False)
         chapter_level = _chapter_level_failures(connection)
@@ -150,6 +159,12 @@ def _report(root: Path, label: str) -> tuple[int, int, int]:
         connection.close()
 
     _say(f"### {label}  ({len(titles)} chương, {verdicts} phán quyết trong database)")
+    if unfinished:
+        _say(
+            f"  CHƯA CHẠY XONG: {len(unfinished)}/{len(titles)} chương "
+            f"({', '.join(unfinished[:6])}...). Chương chưa chạy chưa có mã cảnh báo nào nên"
+        )
+        _say("   nó đọc thành 'máy làm được'; con số dưới đây phồng lên đúng bằng số ấy.")
     _say("  (Đây là trạng thái database LÚC NÀY, không phải kết cục lịch sử của lượt chạy:")
     _say("   phán quyết thêm vào SAU khi chạy vẫn nằm đây. alpha.55 thật ra chặn 4 chương,")
     _say("   rồi tôi mới nghe và chấp nhận, nên hôm nay nó chỉ còn 1.)")
