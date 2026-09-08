@@ -48,6 +48,42 @@ cd _internal
 Thứ tự có ý nghĩa: cách đọc phải vào trước, vì nó quyết định audio, còn audio quyết định
 checksum mà phán quyết bám vào.
 
+### Phân lô có làm hỏng phân tích không? — đo rồi: không
+
+Chủ sách hỏi thẳng chuyện này (2026-09-08: *"phân lô thế nào cũng được, đừng để phân tích bị
+sai do phân lô có vấn đề là được"*). Đếm thô làm người ta hoảng, và tôi đã hoảng một lần:
+
+```
+cùng dải 019..027:   alpha.57 = 38 nhân vật    alpha.60 = 24    alpha.62 = 17
+```
+
+Nhìn thế thì tưởng mỗi lô lại nghèo đi. Nhưng bóc ra thì gần như toàn bộ phần chênh là
+`NPC_LOCAL::C000xx::Rxxxx::NGƯỜI HẦU` và đồng bọn — nhân vật phụ vô danh gắn với **một cảnh
+của lô nguồn**. Đếm riêng nhân vật **có tên**:
+
+```
+nhân vật có tên:     alpha.57 = 16             alpha.60 = 17    alpha.62 = 17
+mất giữa 57 và 60:   chỉ ANONYMOUS_MALE (một xô đúc giọng, không phải người)
+thêm ở 60:           SỐ BA, SỐ NĂM
+alpha.62 mang sang:  đủ cả 17, không thiếu ai
+```
+
+Dàn nhân vật **tăng** qua từng lô chứ không giảm. Ba thứ bị `port_casting.py` bỏ lại đều là cố
+ý và đều có lý do ghi ngay tại chỗ lọc:
+
+| bỏ lại | vì sao |
+|---|---|
+| `NPC_LOCAL::C00001::…` | tên ấy trỏ vào chương của lô **nguồn**; sang lô sau nó không trỏ vào ai, và mang theo là đặt một người lạ lên đầu prompt |
+| `NARRATOR`, `UNKNOWN` | là **vai**, không phải người. Giọng của chúng vẫn được ghim riêng — lúc gieo alpha.62 có dòng `GHIM NARRATOR -> narrator` |
+| `ANONYMOUS_*` | xô đúc giọng cho người nói không tên, không phải nhân vật |
+
+Nên "mang sang 15" khi project nguồn có 17 nhân vật có tên là **đúng**: 17 − `NARRATOR` −
+`ANONYMOUS_UNKNOWN`. Con số ấy khớp không phải tình cờ.
+
+Cái *thật sự* làm hỏng phân tích khi phân lô là **quên một mắt xích gieo**, không phải chia lô
+sai chỗ — xem bảng ba script ở trên. Bỏ `port_casting.py` mất 80% dàn nhân vật lẽ ra đã biết;
+bỏ `port_pronunciations.py` thì audio đổi và mọi phán quyết cũ hết hiệu lực.
+
 **Gieo từ bản nào?** Bản có phán quyết của người, **không phải bản gần nhất**. Tính tới
 2026-09-06 đó là **alpha.47**: chỉ nó có `Theosbane = theo-bên` với `source=listener_choice`.
 alpha.48 và alpha.50 chỉ trùng nhờ may (`Theo-bên`, khác chữ hoa), alpha.49 thì lệch hẳn
