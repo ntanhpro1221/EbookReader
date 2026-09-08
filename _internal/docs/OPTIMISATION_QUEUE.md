@@ -659,6 +659,35 @@ Nói cách khác: bản bị vứt trượt vì một phép kiểm nói về **W
 một phép kiểm nói về **bản thu**. Chính sách đã tự xếp `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` vào
 nhóm "không mang thông tin" (`HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`) vì đúng lý do ấy.
 
+### Rộng bao nhiêu: 2 ca trên 38.520 đoạn, và cùng một chữ ký
+
+`scripts/discarded_cures.py` quét **mọi** project đã lưu tìm đúng mẫu ấy — đương nhiệm chạm
+trần, có ứng viên không chạm trần chỉ trượt bằng mã mà chính sách tự xếp là vô thông tin:
+
+```
+v0.2.0-alpha.25   ch005  '"Arghh..."'      đương nhiệm 1,92s;  cứu ở 0,48s và 0,64s
+v0.2.0-alpha.60   ch021  '"Tiếp theo."'    đương nhiệm 1,92s;  cứu ở 0,56s và 0,64s
+TỔNG: 2 ca / 38.520 đoạn  =  0,005%
+```
+
+Hiếm — nhưng chữ ký thì **trùng khít**, và điều đó quan trọng hơn tỉ lệ:
+
+- cả hai đương nhiệm dài **đúng 1,92 giây**, tức **2 × trần khung 0,96s**;
+- cả hai là câu rất ngắn (một tiếng thốt, một câu hai từ);
+- cả hai có ứng viên **tự kết thúc** ở 0,48–0,64 giây;
+- cả hai ứng viên ấy trượt bằng `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` — mã mà
+  `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS` **đã tự khai là không mang thông tin**.
+
+Cách đọc đúng con số này: hiếm tính theo **đoạn**, không hiếm tính theo **chương**, vì mỗi ca
+chặn nguyên một chương. Ngoại suy thô sang 478 chương (~72.000 đoạn) ra **khoảng bốn chương**
+bị chặn vĩnh viễn vì mẫu này. Bốn chương không phải là gấp, nhưng cũng không phải không đáng —
+và nó sửa lại câu tôi viết ở
+[SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md): chương 003 của alpha.60 không
+phải một ca lẻ, nó là ca thứ hai trong một họ.
+
+(Ngoại suy này là ngoại suy, và tôi đã sai ba lần vì đúng loại phép tính ấy. Nó chỉ dùng để
+xếp ưu tiên, không dùng để khẳng định.)
+
 ### Hình dạng bản vá, và cái bẫy của nó
 
 *Khi ngân sách cạn: nếu bản đương nhiệm chạm trần khung mà có ứng viên không chạm trần và chỉ
