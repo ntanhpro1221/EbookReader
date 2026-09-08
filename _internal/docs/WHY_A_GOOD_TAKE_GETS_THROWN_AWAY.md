@@ -236,3 +236,36 @@ thường mà ASR mù thì vẫn không, y như cũ.
 
 Con số biện minh: 2,1 ký tự/giây so với ~16 bình thường, tức chậm gấp **7,6 lần** — một câu hai
 từ kéo 1,9 giây. Và bốn trên năm lần gieo lại cho bản sạch.
+
+## Vì sao chạy lại một chương KHÔNG kiểm được bản vá này
+
+Hai bản vá trước — đếm chữ số và gấp `k`→`c` — được chứng minh bằng cách tạo project **một
+chương** rồi chạy lại. Rẻ, nhanh, và đủ. Với lỗi trần khung thì **không dùng được**, và lý do
+đáng ghi vì nó áp cho mọi lỗi cùng loại.
+
+Chạy `026` một mình (`v0.2.0-alpha.61-kiem-tran`): `"Gì cơ?"` ra **1,04 giây, không cảnh báo
+gì**, chương xuất bản. Bản lảm nhảm 1,92 giây **không tái hiện**, nên chẳng có gì để bản vá cứu.
+
+Seed sinh audio là:
+
+```python
+stable_int(f"segment::{row['stable_id']}::{profile['voice_key']}::{seed_salt}")
+```
+
+`stable_id` mang **số thứ tự chương**: ở alpha.60 chương 026 đứng thứ 8 nên id là `c00008_…`;
+tách ra chạy riêng thì thành `c00001_…`. Khác id ⇒ khác seed ⇒ khác audio. Và `voice_key` cũng
+vào seed, nên đổi casting cũng đủ đổi audio.
+
+### Quy tắc rút ra
+
+| loại lỗi | chạy lại một chương có kiểm được không |
+|---|---|
+| **tất định** — số học, so chính tả, phân nhánh mã | **có** — đó là cách hai bản vá trước được chứng minh |
+| **ngẫu nhiên theo seed** — mô hình thỉnh thoảng lảm nhảm | **không**, trừ khi chương nằm đúng vị trí cũ **và** nhân vật giữ đúng giọng cũ |
+
+Với loại thứ hai, muốn tái hiện thì phải dựng lại **cả lô** ở đúng thứ tự — và ngay cả thế,
+casting đổi một chút là seed lại lệch.
+
+Nên bản vá trần khung đứng bằng **test đơn vị** (ba cái, trong đó một cái ghim rằng hàm cũ vẫn
+từ chối đúng ca ấy), và bằng chứng trên audio thật sẽ tự đến ở lượt chạy lô kế tiếp — chỗ kiểm
+là `segment_candidates` của đoạn ấy phải **khác rỗng**.
