@@ -78,6 +78,18 @@ thuộc dải chứ không chỉ nguồn, nên chỉ so được giữa hai lư�
 Sau [cơ chế xuất bản khi không có ai để hỏi](SHIPPING_WITHOUT_A_LISTENER.md), không còn chỗ nào
 trong đường ống **dừng lại đợi người**. Chương hỏng thì hỏng riêng chương ấy và lô vẫn đi tiếp.
 
+Ba cửa dừng cứng đã đóng, và cửa thứ nhất vừa được xác nhận ở quy mô cả cuốn:
+
+```
+scripts/check_sources.py "D:/Novels/Tools/Text"
+478 chương chia đoạn được hết — 58,258 segment
+```
+
+58.258 khớp đúng con số `plan_batches.py` đếm độc lập. Cú dừng vì ngoặc kép treo — thứ giết
+alpha.55 sau **bốn giây** và trước đây cần tám vòng sửa-tay-chạy-lại — không còn xảy ra ở chương
+nào. Hai cửa kia: cách đọc tên không giải được giờ ghi sự kiện rồi đọc nguyên văn thay vì `raise`,
+và đoạn ASR không phán xử được giờ có cơ chế tự cho qua.
+
 Hai thứ còn lại có thể làm hỏng một chương, cả hai đã ghi:
 
 1. `"Tiếp theo."` — bản đương nhiệm chạm trần khung, ứng viên tốt hơn bị vứt vì luật giữ
