@@ -104,3 +104,42 @@ mấy bảng.
 **Máy không mở cổng 2 và cổng 5.** `SEGMENT_FAILED` (không có audio) và QA tầng chương nằm
 ngoài `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS` — cả hai đều là bằng chứng về chính file âm thanh,
 không phải về việc ASR đọc được hay không.
+
+## Bản vá trần khung vẫn chưa có bằng chứng trên audio thật (2026-09-08)
+
+alpha.62 chạy lại đúng dải 019..027 để đo bản vá `_segment_generation_hit_ceiling` — thứ cho
+phép thu lại một bản thu chạm trần khung dù ASR không phán xử được. Ca mục tiêu là `"Gì cơ?"`
+chương 026, đoạn có **0 ứng viên** ở alpha.60 vì đúng lỗ hổng ấy.
+
+Kết quả: **bản vá không được kích hoạt, vì lỗi không tái diễn.**
+
+```
+alpha.60: 1,92s  chạm trần  ->  failed,  0 ứng viên   (lỗ hổng)
+alpha.62: 0,56s  KHÔNG chạm ->  warning, 0 ứng viên   (không có gì để sửa)
+```
+
+Không chạm trần thì `_segment_generation_hit_ceiling` trả `False` và đường thu lại không mở —
+đúng như thiết kế. Lỗi biến mất vì **model giọng đã đổi**
+([AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md)), không vì bản vá.
+
+Nên bản vá vẫn chỉ có **ba unit test** đứng sau nó. Ghi lại đây thay vì để nó lẳng lặng được
+coi là đã chứng minh — một bản vá chưa bao giờ chạy thì không khác gì một bản vá chưa viết, và
+sự khác biệt ấy chỉ lộ ra khi lỗi tái diễn.
+
+Điều kiện để có bằng chứng thật: một lượt chạy nào đó sinh ra bản thu chạm trần **và** ASR
+không phán xử được. Đó là lỗi phụ thuộc seed, đo được **2 ca trên 38.520 đoạn**
+([OPTIMISATION_QUEUE.md](OPTIMISATION_QUEUE.md)), nên nó sẽ tự đến trong 16 lô sản xuất chứ
+không cần dựng riêng.
+
+### Whisper ảo giác câu mời đăng ký kênh, và nó lặp lại qua hai model
+
+Cùng đoạn `"Gì cơ?"` ấy, hai lượt chạy, hai model khác nhau:
+
+```
+alpha.60  "Các bạn hãy đăng ký kênh để ủng hộ kênh của mình nhé."          WER 6,5
+alpha.62  "Hãy subscribe cho kênh Ghiền Mì Gõ Để không bỏ lỡ những video"  WER 7,5
+```
+
+Một câu hai từ, 0,5–2 giây, và Whisper rơi vào cùng một hố cả hai lần — chỉ khác tên kênh. Đó
+là bằng chứng cho chính lý lẽ đặt `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` vào nhóm không chặn:
+transcript ấy nói về **Whisper**, không nói gì về bản thu.
