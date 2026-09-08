@@ -37,6 +37,8 @@ APPLIED = (
     "patch_name_no_halt_test.py",
     "patch_pace_digits.py",
     "patch_pace_digits_test.py",
+    "patch_ck_fold.py",
+    "patch_ck_fold_test.py",
     "patch_quote_recovery.py",
     "patch_quote_tests.py",
     "patch_test2.py",
