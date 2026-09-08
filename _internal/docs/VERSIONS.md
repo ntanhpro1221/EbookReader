@@ -135,7 +135,7 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
-## v0.2.0-alpha.62 — lượt đo cơ chế "xuất bản khi không có ai để hỏi" *(đang chạy)*
+## v0.2.0-alpha.62 — 9/9 chương, và chỉ một trong năm là công của mã
 
 Dải **019..027**, cùng nguồn và cùng dải với alpha.60 (`input_manifest_hash` bắt đầu bằng
 `7b4c5ae6cc` ở cả hai), gieo từ alpha.60. Cố ý lặp lại đúng dải ấy chứ không chạy dải mới: so
@@ -196,6 +196,51 @@ Hệ quả cho chính lượt đo này: **một chương chuyển từ `failed` 
 bản vá có tác dụng** — bản thu đã khác từ đầu thì nó có thể chỉ gặp một lần bốc thăm may hơn.
 Ba thứ vẫn kết luận được là: chương nào ra sản phẩm, máy tự cho qua đoạn nào, và `"Gì cơ?"` có
 được thu lại hay không — cái cuối là chuyện logic chứ không phải bốc thăm.
+
+### Kết quả cuối
+
+```
+9/9 chương xuất bản (alpha.60: 4/9)   ·   4,81 giờ   ·   0 chương hỏng thêm
+1.344 verified · 10 warning · 3 failed        asr similarity trung vị 1,0000, tb 0,9751
+```
+
+Năm chương từng hỏng nay đều ra MP3. **Nhưng chỉ một quy được về việc làm ở đây:**
+
+| chương | gỡ được nhờ |
+|---|---|
+| 019, 020, 024, 026 | **bốc thăm** — bản thu khác từ đầu vì model giọng đã đổi |
+| **021** | **cơ chế tự cho qua** — 3 đoạn vẫn `failed` với đúng mã cũ, không gì cứu chúng |
+
+`scripts/compare_runs.py` in thẳng ranh giới ấy ra dòng cuối: *"Gỡ được KHÔNG cần cho qua đoạn
+nào: 019, 020, 024, 026"*. Nó được viết đúng để nói câu đó, và câu đó là thứ ngăn một báo cáo
+sai gấp năm lần.
+
+**Tái lập audio: 0/1213 đoạn cùng hạt giống cho cùng bản thu.** Nguyên nhân tìm được giữa lượt
+chạy: [model giọng tự đổi revision lúc 10:45](THE_VOICE_MODEL_IS_NOT_PINNED.md), giữa alpha.60
+và alpha.62. Model mới **không tốt hơn** — đo trên 385 đoạn: 74 tốt lên, 73 xấu đi. Nó chỉ khác.
+
+### Ba thứ đã đo, và cái thứ ba là kết quả âm
+
+1. **Chương nào ra sản phẩm, nhờ đâu** — bảng trên. Đo được, và ranh giới rõ.
+2. **Máy tự cho qua đoạn nào** — 3 đoạn, đúng ba đoạn dự phóng từ bản chạy thử: tiếng Ả Rập,
+   `"Gia tộc Remis,"`, `"Golem Silian"`. Không một lượt cấp thừa nào, kể cả cho bốn đoạn
+   `warning` cùng chương vốn không chặn gì.
+3. **`"Gì cơ?"` có được thu lại không** — **không, và bản vá trần khung không hề được kích
+   hoạt**, vì lần này bản thu ra 0,56 giây và không chạm trần. Lỗi không tái diễn, nên bản vá
+   vẫn chỉ có ba unit test đứng sau nó. Xem
+   [WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md).
+
+### Bốn thứ lượt chạy này dạy được mà không nằm trong kế hoạch đo
+
+- **Model giọng không được ghim** trong khi các model *chấm điểm* thì có — lỗi sản phẩm thật,
+  vì 16 lô trải nhiều ngày thì giọng người dẫn chuyện có thể đổi giữa cuốn sách.
+  Bản vá đã viết, đang chờ. [THE_VOICE_MODEL_IS_NOT_PINNED.md](THE_VOICE_MODEL_IS_NOT_PINNED.md)
+- **Nguồn có thuỷ ấn ẩn** ở 15 file — vô hại về chất lượng, nguy hiểm về tái lập.
+  [THE_SOURCE_IS_WATERMARKED.md](THE_SOURCE_IS_WATERMARKED.md)
+- **Nhịp thật trên máy bận là 11,4 giây/segment**, không phải 7,78 — 128 giờ thành ~187.
+- **Whisper ảo giác câu mời đăng ký kênh YouTube** trên cùng một đoạn hai từ, qua **hai model
+  khác nhau**. Đó là bằng chứng sống cho lý lẽ đặt `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` vào
+  nhóm không chặn.
 
 ### Kết quả giữa chừng: cơ chế chạy đúng, và chương 021 là bằng chứng sạch
 
