@@ -335,3 +335,119 @@ def test_a_switch_you_can_only_turn_off_by_typing_the_right_type_is_not_a_switch
 
     settings["asr"]["ship_without_a_listener"] = False
     validate_settings(settings)
+
+
+# ------------------------------------------------------- ba cổng, trên ProjectDB thật
+
+
+def _db_with_a_failed_segment(tmp_path: Path):
+    """Một project thật, với một đoạn `failed` mang checksum.
+
+    Mọi test trên đây dùng DB giả và kiểm **quyết định** cấp phép. Cái chúng không kiểm được
+    là điều đã làm dự án mất chương sáu lần: cấp phép đúng rồi mà một cổng ở hạ nguồn không
+    biết hỏi bảng mới, nên chương vẫn chặn. Chỉ `ProjectDB` thật trả lời được câu ấy.
+    """
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    source = tmp_path / "001.txt"
+    paragraphs = [f"Doan van thu {index} du dai de tach ra segment." for index in range(1, 4)]
+    source.write_text((chr(10) + chr(10)).join(paragraphs), encoding="utf-8")
+    _paths, db, settings = create_or_open_project(
+        [source], tmp_path / "out", build_settings(), "Ba cong"
+    )
+    from ebook_reader.text_processing import load_and_segment_chapter
+
+    chapter = db.list_chapters()[0]
+    rows = load_and_segment_chapter(
+        dict(chapter), max_chars=int(settings["tts"]["max_segment_chars"])
+    )
+    db.replace_chapter_segments(int(chapter["id"]), rows)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET status='verified', wav_sha256='cafe', "
+            "wav_duration=1.0 WHERE 1=1"
+        )
+        conn.execute(
+            "UPDATE segments SET status='failed', warning_code=?, wav_sha256=? "
+            "WHERE id=(SELECT id FROM segments ORDER BY seq LIMIT 1)",
+            (ANCHOR, "abc123"),
+        )
+        row = conn.execute(
+            "SELECT stable_id, chapter_id FROM segments ORDER BY seq LIMIT 1"
+        ).fetchone()
+    return db, str(row["stable_id"]), int(row["chapter_id"])
+
+
+def test_the_publish_gate_opens_for_a_machine_acceptance(tmp_path) -> None:
+    """`chapter_is_publishable` đọc **trạng thái**, và trạng thái vẫn là `failed`.
+
+    Đây là cổng mà phương án đầu tiên của tôi bỏ sót. Tôi định làm cơ chế chỉ dập mã cảnh báo
+    và tuyệt đối không đụng tới trạng thái, vì như thế "sạch" hơn. Truy vấn alpha.60 thì thấy
+    **cả tám đoạn chặn đều `failed`** — nên cơ chế ấy sẽ chạy đúng, test xanh, và gỡ được đúng
+    **không** chương nào.
+    """
+    db, stable_id, chapter_id = _db_with_a_failed_segment(tmp_path)
+
+    assert not db.chapter_is_publishable(chapter_id), "chưa cho qua thì phải còn chặn"
+
+    db.accept_segment_audio_as_machine(
+        segment_stable_id=stable_id,
+        wav_sha256="abc123",
+        warning_code=ANCHOR,
+        reason="ASR là nhân chứng duy nhất",
+    )
+
+    assert db.chapter_is_publishable(chapter_id)
+
+
+def test_the_machine_keeps_its_verdict_on_the_row(tmp_path) -> None:
+    """Chương đi tiếp, nhưng đoạn vẫn `failed` và vẫn mang mã. Máy không đổi ý điều gì."""
+    db, stable_id, chapter_id = _db_with_a_failed_segment(tmp_path)
+    db.accept_segment_audio_as_machine(
+        segment_stable_id=stable_id, wav_sha256="abc123", warning_code=ANCHOR, reason="vì thế"
+    )
+
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT status, warning_code FROM segments WHERE stable_id=?", (stable_id,)
+        ).fetchone()
+
+    assert str(row["status"]) == "failed"
+    assert ANCHOR in str(row["warning_code"])
+
+
+def test_recutting_the_take_shuts_the_publish_gate_again(tmp_path) -> None:
+    """Chấp nhận là chấp nhận một bản thu. `retry` cắt lại thì nó hết hiệu lực ở mọi cổng."""
+    db, stable_id, chapter_id = _db_with_a_failed_segment(tmp_path)
+    db.accept_segment_audio_as_machine(
+        segment_stable_id=stable_id, wav_sha256="abc123", warning_code=ANCHOR, reason="vì thế"
+    )
+    assert db.chapter_is_publishable(chapter_id)
+
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE segments SET wav_sha256='banthumoi' WHERE stable_id=?", (stable_id,)
+        )
+
+    assert not db.chapter_is_publishable(chapter_id)
+
+
+def test_a_person_and_the_machine_open_the_same_gate_from_different_tables(tmp_path) -> None:
+    """Hai nguồn, một cổng — và cổng không cần biết nguồn nào.
+
+    Đây là lý do có `ruled_segment_takes()`: sáu cổng đã lần lượt đè lên phán quyết của người
+    nghe, mỗi lần vì một chỗ mới quên hỏi. Cổng thứ bảy gọi `ruled_` và không phải biết có mấy
+    bảng.
+    """
+    db, stable_id, chapter_id = _db_with_a_failed_segment(tmp_path)
+    db.accept_segment_audio(
+        segment_stable_id=stable_id, wav_sha256="abc123", warning_code=ANCHOR
+    )
+    assert db.chapter_is_publishable(chapter_id), "phán quyết của người vẫn phải mở cổng"
+
+    db2, stable_id2, chapter_id2 = _db_with_a_failed_segment(tmp_path / "khac")
+    db2.accept_segment_audio_as_machine(
+        segment_stable_id=stable_id2, wav_sha256="abc123", warning_code=ANCHOR, reason="vì thế"
+    )
+    assert db2.chapter_is_publishable(chapter_id2), "và chấp nhận của máy cũng thế"
+
+    assert db2.accepted_segment_warnings() == {}, "nhưng báo cáo vẫn phải nói chưa ai nghe"
