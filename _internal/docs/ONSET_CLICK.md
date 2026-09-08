@@ -338,6 +338,16 @@ Fade một mili-giây ở đầu và cuối mỗi đoạn **trước khi ghép**
 nghĩa, và 1ms thì không nghe thấy được. Đây là hậu xử lý *có tác dụng* — vì đối tượng là một
 bước nhảy biên độ, chứ không phải một xung năng lượng do model sinh ra.
 
+Đã kiểm là hiện **chưa có**: `audio_io.py` không có `fade`, `afade` hay `crossfade` ở đâu cả —
+các đoạn được nối thô với khoảng lặng chèn vào giữa. Nên đây là thứ thiếu, không phải thứ đã có
+mà chỉnh chưa đúng.
+
 Chưa làm vì nó **đổi audio của mọi chương**, tức một sự kiện phiên bản, và phải làm ở ranh giới
-giữa hai lô cùng với những thay đổi đổi-hash khác. Cần đo trước: sau khi fade, `max_join_jump`
-của những chương từng hỏng còn bao nhiêu.
+giữa hai lô cùng với những thay đổi đổi-hash khác.
+
+Và một điều đáng nói về chính đề xuất này: nó **đúng theo định nghĩa**, không cần đo để tin.
+Bước nhảy tại chỗ nối *là* biên độ mẫu mép; fade mép về 0 thì bước nhảy về 0, bất kể khâu master
+khuếch đại bao nhiêu. Cái cần đo không phải "có hiệu quả không" mà là "có làm hỏng gì không" —
+cụ thể là 1ms có ăn mất phụ âm đầu hay không. Âm tiết mở đầu rộng cỡ 10ms trở lên, còn xung
+"tóp" ghi ở đầu tài liệu này rộng 5–22ms, nên 1ms không chạm tới cả hai; nhưng đó là suy luận
+từ số đã đo, chưa phải phép đo riêng.
