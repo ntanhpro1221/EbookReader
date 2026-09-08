@@ -141,6 +141,26 @@ Ngoài lề: `"Tiếp theo."` lần này ra 0,48–0,56 giây, không chạm tr�
 `warning` không chặn và cơ chế đúng đắn không đụng tới. Nhưng đó là model khác chứ không phải
 bản vá — xem [AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md).
 
+## Phép thử tốt nhất cho quyết định trung tâm, gặp ở lô 1 (2026-09-09)
+
+Đoạn `c00003_s0000029` có **cả hai**: một phán quyết của người nghe mang sang từ lượt trước, và
+một chấp nhận của máy sinh ra ở lượt này. Khoá theo checksum cho thấy chúng nói về hai bản thu
+khác nhau:
+
+```
+phán quyết NGƯỜI  sha 3afb7b23…   ← bản thu họ thật sự đã nghe
+bản thu lượt này  sha a831a7a98…   ← model giọng đã đổi, audio khác hẳn
+chấp nhận MÁY     sha a831a7a98…   ← đúng bản đang có trong sách
+```
+
+Phán quyết của người **không** được mượn cho một bản thu họ chưa từng nghe — đúng như thiết kế
+khoá-theo-checksum — và `machine_acceptances.py` cũng không gắn nhãn *"sau đó đã có người
+nghe"* cho hai đoạn ấy, vì nhãn đó so cả `(đoạn, checksum)` chứ không chỉ so đoạn.
+
+Đây là ca khó nhất mà thiết kế phải qua: hai nguồn phán xử, cùng một đoạn, khác bản thu. Nếu
+lấy đoạn làm khoá thay vì lấy bản thu, báo cáo sẽ nói chủ sách đã nghe một thứ ông ấy chưa hề
+nghe — đúng lời nói dối mà cả cơ chế này được dựng để không bao giờ nói.
+
 ## Hướng đã loại: thăng bản thu "ít tệ nhất"
 
 Trong cả bốn ca thu lại, bản được giữ **không phải bản điểm cao nhất** máy đã tạo. Cám dỗ hiển
