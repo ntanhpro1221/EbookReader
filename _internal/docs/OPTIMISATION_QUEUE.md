@@ -695,16 +695,32 @@ hai đường khác nhau chứ không phải bội số của nhau. Cái đúng 
 bốn bản thu chạm trần của alpha.60, **ba** dừng ở đúng 1,92 giây và một ở 0,96 — trần khung tạo
 ra thời lượng lượng tử hoá, và 1,92 là mức hay gặp. Chữ ký vẫn chắc; số học thì không.
 
-### Hình dạng bản vá, và cái bẫy của nó
+### Hình dạng bản vá — và tôi đã mô tả sai nó một lần
 
-*Khi ngân sách cạn: nếu bản đương nhiệm chạm trần khung mà có ứng viên không chạm trần và chỉ
-trượt bằng mã thuộc `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`, thăng ứng viên ấy.*
+Lần đầu tôi viết ở đây rằng bản vá "hẹp đến mức không đụng vào luật giữ-bản-đương-nhiệm". Đọc
+code thì **không phải**, và cái sai ấy đáng để lại vì nó đổi cả độ khó.
 
-Hẹp đến mức không đụng vào luật giữ-bản-đương-nhiệm ở mọi ca khác. Nhưng **chưa được kiểm bằng
-tai** — không ai nghe cả bản 1,92s lẫn bản 0,64s, và cả lập luận này dựa trên việc đọc con số.
-Đêm 2026-09-07 tôi đã một lần chắc chắn như thế và sai (xem
-[WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md)), nên bản vá này
-cần một test đỏ-trước riêng và một lượt chạy thật, không phải một suy luận nữa.
+Thứ chặn không nằm ở điểm cạn ngân sách mà nằm sâu hơn hai tầng:
+`ProjectDB.promote_segment_candidate` chỉ nhận ứng viên ở trạng thái `dual_passed`, và ném
+`RuntimeError("segment candidate cannot be promoted before both ASR decodes pass")` với mọi
+trạng thái khác. Một ứng viên `dual_failed` **không thể** được thăng, ở tầng database, có chủ ý.
+
+Test tôi tưởng đang ghim quyết định này —
+`test_candidate_exhaustion_keeps_incumbent_and_uses_incumbent_evidence` — hoá ra nói về ứng
+viên **không sinh nổi audio** (`candidate_attempts` toàn `tts_failed`), tức một ca khác hẳn.
+Ràng buộc thật là câu `raise` ở trên.
+
+**Cách phát biểu đúng vấn đề:** không có chỗ nào trong hệ thống so *bản đương nhiệm đã được
+chứng minh là hỏng* với *ứng viên chưa chứng minh được là tốt*. Cổng thăng hạng hỏi "ứng viên
+có tốt không" và trả lời **không** — hoàn toàn đúng, vì không chứng minh được tốt thì không
+được thay. Nhưng không ai hỏi "bản đương nhiệm có hỏng không", mà với `"Tiếp theo."` thì nó
+**có**: `generation_ceiling_hit`.
+
+Nên bản vá không phải một phép so ở điểm cạn ngân sách. Nó phải là một đường riêng, và đường
+ấy cần được thiết kế chứ không phải chèn vào. Cộng thêm: **chưa ai nghe** cả bản 1,92s lẫn bản
+0,64s, và toàn bộ lập luận này dựa trên đọc con số. Đêm 2026-09-07 tôi đã một lần chắc chắn
+như thế và sai (xem
+[WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md)).
 
 ---
 
