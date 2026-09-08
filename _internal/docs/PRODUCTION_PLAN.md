@@ -58,6 +58,20 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Trước mỗi lô
+
+```bash
+python scripts/before_a_batch.py
+```
+
+Nó kiểm năm thứ và **từ chối** nếu có cái nào chưa đạt: có lô đang bay, cây git chưa sạch, bản
+vá còn trong hàng chờ, model giọng lệch revision đã ghim, bộ test đỏ.
+
+Kỷ luật này ra đời từ một cái giá thật (xem mục *"Lô 1 chết một lần"* bên dưới): sửa mã giữa lô
+làm `resume` bị từ chối, nên mất **toàn bộ** phần phân tích đã làm chứ không chỉ phần còn lại.
+Với lô 13 giờ thì mười phút kiểm trước rẻ hơn nhiều. Nhưng một kỷ luật chỉ nằm trong tài liệu
+là kỷ luật phụ thuộc trí nhớ, nên nó thành script.
+
 ## Đường đi mỗi lô, không được đổi thứ tự
 
 Nguyên văn ở [VERSIONS.md](VERSIONS.md); tóm tắt để khỏi phải mở hai file:
