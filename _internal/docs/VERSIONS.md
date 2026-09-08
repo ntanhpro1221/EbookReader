@@ -185,9 +185,17 @@ ch021 "Dịch câu này: Kalbi…"     Đoan Trang|0     ch024 "Tôi cười toe
 ch021 "Gia tộc Remis,"           Đoan Trang|0     ch026 "Gì cơ?"                    Thanh Bình|-7
 ```
 
-Cùng `stable_id`, cùng giọng ⇒ cùng hạt giống ⇒ cùng bản thu đầu tiên. Với đúng những đoạn
-đang được đo, đầu vào giống hệt nhau, nên mọi khác biệt về kết cục là **do mã**, không do bốc
-thăm.
+Cùng `stable_id`, cùng giọng ⇒ cùng hạt giống. **Nhưng cùng hạt giống KHÔNG ra cùng bản thu**,
+và tôi phát hiện điều đó ba tiếng sau khi viết câu ngược lại vào chính đoạn này.
+
+Đo trên 207 đoạn alpha.62 đã sinh: **189 đoạn cùng hạt giống, 0 đoạn cùng checksum**. Trong khi
+alpha.53↔54 và alpha.55↔56 giống nhau 100%. Chi tiết và ba nghi can đã loại:
+[AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md).
+
+Hệ quả cho chính lượt đo này: **một chương chuyển từ `failed` sang xuất bản không tự chứng minh
+bản vá có tác dụng** — bản thu đã khác từ đầu thì nó có thể chỉ gặp một lần bốc thăm may hơn.
+Ba thứ vẫn kết luận được là: chương nào ra sản phẩm, máy tự cho qua đoạn nào, và `"Gì cơ?"` có
+được thu lại hay không — cái cuối là chuyện logic chứ không phải bốc thăm.
 
 **Ba thứ phải đo khi xong, theo thứ tự:**
 
