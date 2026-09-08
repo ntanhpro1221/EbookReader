@@ -99,6 +99,41 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
+## v0.2.0-alpha.62 — lượt đo cơ chế "xuất bản khi không có ai để hỏi" *(đang chạy)*
+
+Dải **019..027**, cùng nguồn và cùng dải với alpha.60 (`input_manifest_hash` bắt đầu bằng
+`7b4c5ae6cc` ở cả hai), gieo từ alpha.60. Cố ý lặp lại đúng dải ấy chứ không chạy dải mới: so
+được với một baseline đã đo kỹ thì đáng hơn chín chương chưa ai biết gì.
+
+**alpha.60 làm baseline:** 4 chương xuất bản, **5 chương chặn** (019, 020, 021, 024, 026) do
+**8 đoạn**, tất cả đều ở trạng thái `failed`.
+
+**Ba thay đổi đang được đo cùng lúc:**
+
+| | |
+|---|---|
+| cơ chế máy tự cho qua | [SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md) |
+| bản vá trần khung (`repairable` khi chạm trần) | [WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md) |
+| 16 bản vá trước đó | [WORK_LOG.md](WORK_LOG.md) |
+
+**Ba thứ phải đo khi xong, theo thứ tự:**
+
+1. `scripts/compare_runs.py <alpha.60> <alpha.62>` — chương nào đổi kết cục. Nó **tách riêng**
+   chương gỡ được nhờ bản thu khá lên thật với chương gỡ được nhờ máy cho qua; gộp hai loại
+   lại là cách dễ nhất để tự khen nhầm.
+2. `scripts/machine_acceptances.py <alpha.62> --markdown` — danh sách đoạn chưa ai nghe kèm
+   mốc thời gian trong MP3.
+3. `segment_candidates` của `"Gì cơ?"` ở chương 026. Ở alpha.60 nó có **0 ứng viên** — đó là lỗ
+   hổng bản vá trần khung bịt. Có ứng viên nghĩa là bản vá ăn trên audio thật, thứ mà một lượt
+   chạy lại một chương không chứng minh được vì lỗi ấy phụ thuộc seed.
+
+**Dự phóng đã ghi trước khi chạy, để không tự sửa trí nhớ về sau:** chạy hàm cấp phép lên bản
+sao dữ liệu alpha.60 cho 6 cho qua / 2 từ chối, tức **5 chương chặn → 2**. Nếu vòng thu lại mới
+cứu được `"Gì cơ?"` thì còn **1**. Ba lần trước tôi ngoại suy và sai cả ba, nên con số này là
+thứ để bị bác bỏ, không phải thứ để tin.
+
+---
+
 ### Kết quả chạy alpha.10: cả hai fix đều xác nhận có tác dụng
 
 | | alpha.9 | alpha.10 |
