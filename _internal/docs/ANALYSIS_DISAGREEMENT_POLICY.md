@@ -145,3 +145,58 @@ thuyết là Ollama vẫn ôm 6 GB sau khi phân tích xong. **Không phải.** 
 theo `keep_alive` mặc định; kiểm tra lúc đó `/api/ps` trả `{"models":[]}` và GPU còn 6.159
 MiB. Cửa sổ bị siết chỉ kéo dài 20:34 → 20:36, tức khoảng 2,3 phút ở mức lợi 1,12× của
 pool — **mất chừng 15 giây**. Không đáng thêm một lời gọi unload vào ranh giới pha.
+
+## Gieo nhân vật vào prompt đổi 13% phân vai người nói — và tôi chưa biết đổi theo chiều nào
+
+alpha.60 chạy lại **đúng chín chương** của alpha.57, cùng nguồn, khác ở chỗ prompt phân tích
+giờ mở đầu bằng danh sách nhân vật mang từ lô trước (`patch_known_carry`, áp 2026-09-08 01:12).
+
+| | |
+|---|---|
+| segment có ở cả hai lượt | 1.351 |
+| **đổi người nói** | **177 = 13,1%** |
+| NPC cục bộ → nhân vật có tên | 12 |
+| nhân vật có tên → NPC cục bộ | 4 |
+| **đổi khác** | **161** |
+
+Nhân vật nhận thêm nhiều nhất: `NGƯỜI TRẢ LỜI` **+103**, `THỦ LÃNH` **+55**.
+
+### Cái biết chắc và cái không
+
+**Biết chắc:** 12 đoạn từ NPC cục bộ thành nhân vật có tên là **đúng hướng** — đó chính là điều
+cơ chế nhắm tới, và ví dụ cụ thể: `"Gì cơ?"` ở chương 026 chuyển từ
+`NPC_LOCAL::…::người liên lạc` sang `THỦ LÃNH`, vì prompt giờ nói cho mô hình biết THỦ LÃNH tồn
+tại và đã gặp 91 lần.
+
+**Không biết:** 161 đổi còn lại. `NGƯỜI TRẢ LỜI` nhận thêm 103 đoạn có thể là gom đúng về một
+vai, cũng có thể là gom **quá tay** — hai nhân vật khác nhau bị nhập một. Từ số liệu không phân
+biệt được, và tôi không có cách nào rẻ để phân biệt.
+
+### Điều đáng nói
+
+Tôi áp thay đổi này dựa trên một lập luận đúng — **80% tên riêng trong mỗi lô đã xuất hiện ở lô
+trước**, nên để prompt rỗng là vứt đi phần lớn dàn nhân vật. Lập luận ấy vẫn đứng. Nhưng tôi
+**không lường trước rằng nó đổi 13% phân vai**, và tôi không dựng sẵn cách đánh giá chiều của
+cái đổi ấy trước khi áp.
+
+Cách đánh giá cần có, chưa dựng: lấy mẫu ngẫu nhiên vài chục đoạn trong 161 cái, đọc đoạn văn
+quanh nó, và đếm xem người nói mới hay cũ khớp với văn bản hơn. Việc ấy cần đọc sách, không
+phải đọc số.
+
+### Một hệ quả dây chuyền, ghi lại vì nó minh hoạ cả chuỗi
+
+Chương 026 của alpha.60 **bị chặn** trong khi alpha.57 xuất bản được, và chuỗi nhân quả là:
+
+```
+gieo nhân vật  →  "Gì cơ?" đổi người nói sang THỦ LÃNH  →  đổi giọng
+               →  giọng mới chạm TRẦN KHUNG trên câu kết thúc bằng "?"
+               →  segment failed  →  chương chặn ở cổng bằng chứng
+```
+
+Mắt xích thứ tư là **lỗi trần khung đã biết** (xem
+[WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md)) — câu không hạ
+giọng thì mô hình không phát token kết thúc và sinh tới khi chạm trần. Một cải tiến ở tầng phân
+tích đã **phơi ra** một lỗi có sẵn ở tầng sinh audio, chứ không tạo ra nó.
+
+Điều này nâng độ ưu tiên của lỗi trần khung: nó không còn là chuyện lý thuyết mà đã ăn mất một
+chương. `scripts/probe_frame_cap.py` dựng sẵn để chốt, cần GPU rảnh.
