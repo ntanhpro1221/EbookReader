@@ -1,0 +1,66 @@
+# Mục lục: mở file nào cho câu hỏi nào
+
+Ba mươi tài liệu, sắp theo **câu hỏi chúng trả lời** chứ không theo chủ đề — vì lúc cần đọc thì
+người ta có một câu hỏi, không có một chủ đề.
+
+## Tôi sắp chạy một lượt
+
+| câu hỏi | file |
+|---|---|
+| Chạy cả cuốn thì tốn bao nhiêu, đi đường nào? | [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md) |
+| Lệnh cụ thể để tạo và chạy một phiên bản? | [VERSIONS.md](VERSIONS.md) |
+| Lượt chạy tốn thời gian vào đâu? | [WHERE_A_RUN_SPENDS_ITS_TIME.md](WHERE_A_RUN_SPENDS_ITS_TIME.md), [THROUGHPUT.md](THROUGHPUT.md) |
+| Máy có đủ VRAM không? | [VRAM_AND_CONTEXT.md](VRAM_AND_CONTEXT.md) |
+| Mất điện / bấm nhầm Ctrl-C thì sao? | [SURVIVING_AN_INTERRUPTION.md](SURVIVING_AN_INTERRUPTION.md) |
+
+## Có gì đó hỏng
+
+| câu hỏi | file |
+|---|---|
+| **Vì sao chương này không xuất bản được?** | [WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md) — bản đồ sáu cổng |
+| Chương bị chặn mà không ai để hỏi thì sao? | [SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md) |
+| Hai lượt chạy ra audio khác nhau, vì sao? | [AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md) |
+| Giọng đọc tự nhiên đổi giữa chừng? | [THE_VOICE_MODEL_IS_NOT_PINNED.md](THE_VOICE_MODEL_IS_NOT_PINNED.md) |
+| File nguồn giống hệt nhau mà hash khác? | [THE_SOURCE_IS_WATERMARKED.md](THE_SOURCE_IS_WATERMARKED.md) |
+| Bản thu tốt bị ném đi? | [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) |
+| Đầu đoạn có tiếng lách cách? | [ONSET_CLICK.md](ONSET_CLICK.md) |
+
+## Phép kiểm nói gì, và có tin được không
+
+| câu hỏi | file |
+|---|---|
+| Nhịp đọc đo cái gì, và nó từng đo nhầm gì? | [PACE_METRIC.md](PACE_METRIC.md), [PACE_COUNTS_THE_WRONG_STRING.md](PACE_COUNTS_THE_WRONG_STRING.md) |
+| Vì sao tên riêng bị chấm sai? | [LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md) |
+| Cách đọc tên tiếng Anh sinh ra thế nào? | [ENGLISH_TO_VIETNAMESE.md](ENGLISH_TO_VIETNAMESE.md), [SHORT_NAME_PRONUNCIATION.md](SHORT_NAME_PRONUNCIATION.md) |
+| Cùng một tên đọc hai kiểu? | [PRONUNCIATION_VARIANT_DRIFT.md](PRONUNCIATION_VARIANT_DRIFT.md) |
+| Phán quyết của người nghe hoạt động ra sao? | [LISTENER_VERDICTS.md](LISTENER_VERDICTS.md) |
+| Chấm cảm thụ (UTMOS) tốn bao nhiêu? | [PERCEPTUAL_QA_COST.md](PERCEPTUAL_QA_COST.md) |
+| Bộ test hiện ra sao? | [TEST_REPORT.md](TEST_REPORT.md) |
+
+## Phân tích và diễn xuất
+
+| câu hỏi | file |
+|---|---|
+| Model bất đồng với nhau thì xử thế nào? | [ANALYSIS_DISAGREEMENT_POLICY.md](ANALYSIS_DISAGREEMENT_POLICY.md) |
+| Thử lại phân tích tốn bao nhiêu? | [ANALYSIS_RETRY_COST.md](ANALYSIS_RETRY_COST.md) |
+| Cảm xúc có tới được audio không? | [EMOTION_IN_PRODUCTION.md](EMOTION_IN_PRODUCTION.md) |
+| Giọng trẻ em làm thế nào? | [CHILD_VOICE_TRANSFORM.md](CHILD_VOICE_TRANSFORM.md) |
+
+## Nền tảng
+
+| câu hỏi | file |
+|---|---|
+| Dự án phụ thuộc gì, đổi thì sao? | [DEPENDENCIES.md](DEPENDENCIES.md), [THIRD_PARTY.md](THIRD_PARTY.md) |
+| Việc gì đáng làm tiếp? | [OPTIMISATION_QUEUE.md](OPTIMISATION_QUEUE.md) |
+| Hôm qua đã xảy ra chuyện gì? | [WORK_LOG.md](WORK_LOG.md) |
+
+## Một lời về cách đọc những tài liệu này
+
+Nhiều file ở đây ghi cả những thứ **đã bị bác bỏ** — giả thuyết nghe rất hợp lý rồi chết khi
+đo, ngưỡng bịa ra rồi phải bỏ, câu tôi viết buổi sáng rồi tự sửa buổi chiều. Chúng nằm lại có
+chủ ý.
+
+Lý do: phần lớn thời gian trong dự án này không tiêu vào việc *sửa* mà vào việc *tìm đúng thứ
+cần sửa*, và một kết luận đúng không dạy được điều đó. Bốn giả thuyết chết trước khi tìm ra
+model giọng đã tự đổi thì đáng đọc hơn chính câu kết luận — vì lần sau, thứ hỏng sẽ khác, mà
+cách đi thì vẫn thế.
