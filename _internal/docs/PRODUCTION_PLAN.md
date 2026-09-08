@@ -106,10 +106,20 @@ Hai thứ còn lại có thể làm hỏng một chương, cả hai đã ghi:
 Resource mode: yield_heavy — foreground CPU 60%
 ```
 
-Nghe thì tử tế, nhưng nó có nghĩa là **giờ máy trong bảng trên tính cho một máy rảnh**. 60% CPU
-nền hôm ấy phần lớn là do chính tôi chạy các phép đo (pytest, quét nguồn, đọc sóng âm) trong lúc
-chờ. Với một lô 8 giờ thì vài phút không đáng kể; với 16 lô nối nhau thì nó cộng dồn thành nhiều
-giờ, và tệ hơn là làm bảng ước lượng sai mà không ai biết vì sao.
+Nghe thì tử tế, nhưng nó có nghĩa là **giờ máy trong bảng trên tính cho một máy rảnh**, và
+alpha.62 vừa cho con số của máy bận:
+
+```
+ước lượng (alpha.55, máy rảnh)  :  7,78 giây/segment
+đo trên alpha.62 (máy bận)       : 11,4  giây/segment   ← chậm hơn 47%
+```
+
+Với nhịp ấy, **128 giờ trong bảng thành ~187 giờ** — tức 7,8 ngày thay vì 5,3. Cái đắt không
+phải bản thân số giờ mà là bảng ước lượng sai gần một nửa mà không có gì chỉ ra vì sao.
+
+Nguồn chiếm RAM hôm ấy: Rider (~3,4 GB), hai Unity (~2,2 GB), và chính các phép đo tôi chạy
+trong lúc chờ. Với một lô 8 giờ thì vài phút không đáng kể; với 16 lô nối nhau thì nó cộng dồn
+thành nhiều ngày.
 
 Việc đọc-thuần trên project **đã lưu** thì vô hại. Thứ phải tránh là chạy bộ test, quét cả 478
 file, hay bất cứ thứ gì giữ một core trong nhiều phút.
