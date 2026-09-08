@@ -197,6 +197,35 @@ bản vá có tác dụng** — bản thu đã khác từ đầu thì nó có th
 Ba thứ vẫn kết luận được là: chương nào ra sản phẩm, máy tự cho qua đoạn nào, và `"Gì cơ?"` có
 được thu lại hay không — cái cuối là chuyện logic chứ không phải bốc thăm.
 
+### Kết quả giữa chừng: cơ chế chạy đúng, và chương 021 là bằng chứng sạch
+
+Ba chương đầu đều xuất bản, nhưng **chỉ một trong ba quy được về công việc này**:
+
+| chương | alpha.60 | alpha.62 | nhờ đâu |
+|---|---|---|---|
+| 019 | failed | completed | **bốc thăm** — bản thu khác từ đầu, 0 lượt cho qua |
+| 020 | failed | completed | **bốc thăm** — như trên |
+| 021 | failed | completed | **cơ chế** — 3 đoạn được máy cho qua |
+
+Chương 021 là ca sạch vì ba đoạn chặn của nó **vẫn `failed` với đúng mã cũ** ở lượt mới: tiếng
+Ả Rập, `"Gia tộc Remis,"`, `"Golem Silian"`. Chúng không được bốc thăm cứu; chúng được cho qua.
+Không có cơ chế thì `chapter_is_publishable` vẫn trả `False` và chương vẫn hỏng.
+
+Hai điều đáng ghi hơn cả con số:
+
+1. **Không có cổng thứ bảy.** Cả sáu cổng đều tôn trọng chấp nhận của máy, trên dữ liệu thật.
+   Đây là rủi ro lớn nhất của thiết kế — repo đã mất chương sáu lần vì thêm ngoại lệ ở một cổng
+   rồi quên cổng sau — và `ruled_segment_takes()` đã bịt nó.
+2. **Bốn đoạn `warning` không bị đụng tới.** Chương 021 còn bốn đoạn mang mã không chặn
+   (`"Tiếp theo."` ×3, `"Phải rồi,"`), và cơ chế bỏ qua đúng chúng. Đó là điều kiện "chỉ cấp
+   cho đoạn thật sự đang chặn" thêm vào sau khi chạy thử cho 13 lượt thay vì 6; thiếu nó, báo
+   cáo sẽ nói "7 đoạn chưa ai nghe" cho một chương chỉ cần 3.
+
+Ngoài lề nhưng đáng biết: `"Tiếp theo."` lần này ra 0,48–0,56 giây và **không chạm trần**, thay
+vì 1,92 giây chạy loạn ở alpha.60. Bức tường vĩnh viễn của chương 021 không tái diễn — nhưng đó
+là model khác chứ không phải bản vá, nên nó không nói gì về
+[thuốc chữa bị vứt đi](OPTIMISATION_QUEUE.md).
+
 **Ba thứ phải đo khi xong, theo thứ tự:**
 
 1. `scripts/compare_runs.py <alpha.60> <alpha.62>` — chương nào đổi kết cục. Nó **tách riêng**
