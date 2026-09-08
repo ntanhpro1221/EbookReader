@@ -32,7 +32,15 @@ LEASE_STALE_SECONDS = 180.0
 # Hàng chờ rỗng. Hai bản vá cuối áp 2026-09-08 17:5x, ngay tại ranh giới giữa alpha.62 và lô
 # 1 của kế hoạch sản xuất - đúng thời điểm mà `patch_strip_zero_width` cần, vì nó đổi
 # `text_sha256` của 15 đoạn và lô 1 sinh lại chương 000-029 từ đầu nên không mất gì.
-ORDER: tuple[str, ...] = ()
+ORDER: tuple[str, ...] = (
+    # Nguồn thứ tư: transcript của Whisper. `patch_lone_surrogate` đã dọn phản hồi Ollama,
+    # nhưng ASR cũng là văn bản do model sinh ra và sqlite từ chối nửa surrogate lạc y hệt
+    # `sha256_text`. Đã kiểm trong hộp cát, 4 test xanh. KHÔNG đổi audio.
+    #
+    # Chờ vì lô 1b đang chạy - và vì sửa `analysis.py`/`asr.py` giữa lô làm `resume` bị từ
+    # chối, tức mất trọn phần phân tích đã làm. Áp ở ranh giới giữa hai lô.
+    "patch_asr_surrogate.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
