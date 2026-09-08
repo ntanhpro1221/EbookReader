@@ -37,7 +37,17 @@ LEASE_STALE_SECONDS = 180.0
 # Thời điểm đúng: ngay trước lô 1 của docs/PRODUCTION_PLAN.md, vì lô ấy sinh lại chương
 # 000–029 từ đầu nên cái hash đổi không làm mất gì. Lý do đầy đủ:
 # docs/THE_SOURCE_IS_WATERMARKED.md
-ORDER: tuple[str, ...] = ("patch_strip_zero_width.py",)
+ORDER: tuple[str, ...] = (
+    # Hai bản vá này KHÁC LOẠI nhau, và trộn chúng là hiểu sai cả hai:
+    #
+    #   patch_pin_voice_model  KHÔNG đổi audio. Nó chỉ biến một lần model tự đổi (đã xảy ra
+    #                          thật, 2026-09-08 10:45) từ im lặng thành một lỗi nói thành
+    #                          tiếng. Áp được bất cứ lúc nào máy rảnh, càng sớm càng tốt.
+    #   patch_strip_zero_width ĐỔI `text_sha256` của 15 đoạn, tức đổi audio của chúng một lần.
+    #                          Phải áp GIỮA HAI LÔ.
+    "patch_pin_voice_model.py",
+    "patch_strip_zero_width.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
