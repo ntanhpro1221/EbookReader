@@ -58,32 +58,25 @@ và cả hai đều là khoá/nhãn nội bộ.
    đo: **alpha.53 và alpha.54 đều bị bóp nặng** (70 lần ở `gpu_scale 0.25`, 63 lần ở `0.6`) và
    vẫn giống nhau **948/948, 100%**. Bóp GPU không phá tính tái lập.
 
-## Nghi can còn lại, và tôi dừng ở mức nghi
+## Nguyên nhân, tìm được sau bốn lần đoán sai: model giọng đã đổi
 
-**Model TTS đã bị ghi lại lúc 10:45 hôm nay, giữa hai lượt chạy.** alpha.60 chạy 07:06, alpha.62
-chạy 13:46, và snapshot VieNeu mang mốc 8/9 10:45–10:46:
+Cache runtime giữ **ba** revision của `pnnbao-ump/VieNeu-TTS-v3-Turbo`, và `refs/main` chuyển
+sang bản mới lúc **10:45 hôm nay** — giữa alpha.60 (07:06) và alpha.62 (13:46):
 
 ```
-snapshots/8b7e9cff…/config.json           10:45
-snapshots/8b7e9cff…/denoiser.onnx         10:46   (42 MB)
-snapshots/8b7e9cff…/speaker_encoder.onnx  10:46   (28 MB)
-snapshots/8b7e9cff…/update/model.safetensors 10:45 (248 MB)
+2da0efab…  24/8         model.safetensors sha256 82b24b3f…   <- alpha.60 và mọi bản trước
+8b7e9cff…  8/9 10:46    model.safetensors sha256 119003a9…   <- alpha.62
 ```
 
-Gói `hf_xet` cũng mang đúng mốc 10:45, nên nhiều khả năng một lần cài đặt đã làm HuggingFace
-tải lại toàn bộ file qua giao thức Xet.
+Cùng kích thước 247.974.928 byte, **khác hash**. Trọng số đã đổi thật.
 
-**Nhưng tải lại cùng một revision thì ra cùng bytes.** `refs/main` vẫn trỏ `8b7e9cff…`, và
-thư mục `blobs/` rỗng nên không còn bản cũ để so. Tôi **không chứng minh được** trọng số đã
-đổi, và cũng không loại được khả năng ấy.
+Đó là toàn bộ lời giải. Bốn nghi can trên đều vô can, và bài học không phải "phải nghi model"
+mà là: **khi mọi đầu vào được ghi lại đều giống nhau mà kết quả khác, thứ đã đổi là thứ không
+được ghi lại.** Đúng câu ấy dẫn thẳng tới thư mục cache, và tôi đáng lẽ nên đi tới đó sớm hơn
+ba giả thuyết.
 
-Đến đây tôi dừng. Ba giả thuyết trước đều nghe hợp lý và đều chết khi đo, nên giả thuyết thứ tư
-không đáng được viết như một kết luận. Cái chắc chắn là **mọi đầu vào ghi lại đều giống nhau mà
-audio thì khác**, và cái đó đã đủ để không tin phép so audio giữa hai lượt.
-
-Cách kiểm rẻ nhất khi máy rảnh: sinh lại **một** đoạn đã biết bằng chính seed cũ và so checksum
-với bản trong alpha.60. Giống nhau ⇒ nguyên nhân nằm ở điều kiện lượt chạy; khác nhau ⇒ nằm ở
-model hoặc mã.
+Hệ quả rộng hơn chuyện tái lập — model giọng **không được ghim revision** trong khi các model
+chấm điểm thì có: [THE_VOICE_MODEL_IS_NOT_PINNED.md](THE_VOICE_MODEL_IS_NOT_PINNED.md).
 
 ## Hệ quả, và nó nghiêm trọng hơn nguyên nhân
 
@@ -110,8 +103,11 @@ sẽ có và không có.
 
 1. **Sửa ngay** câu trong [VERSIONS.md](VERSIONS.md) nói phép so là "có kiểm soát tới từng
    bit" — đã sửa cùng lúc với việc tạo file này.
-2. **Cân nhắc `torch.backends.cudnn.deterministic = True`.** Nó làm chậm, và nó đổi **toàn bộ**
-   audio một lần. Nếu làm thì làm ngay trước lô 1 của
+2. **Ghim revision model giọng** — khoản quan trọng nhất, xem
+   [THE_VOICE_MODEL_IS_NOT_PINNED.md](THE_VOICE_MODEL_IS_NOT_PINNED.md).
+
+3. **`cudnn.deterministic` giờ chỉ là chuyện phụ**, vì nguyên nhân đã tìm ra. Nếu vẫn muốn thì
+   nó làm chậm và đổi **toàn bộ** audio một lần; làm thì làm ngay trước lô 1 của
    [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), cùng lúc với
    [bản vá lọc thuỷ ấn](THE_SOURCE_IS_WATERMARKED.md) — hai thay đổi cùng đổi hash một lần thì
    trả giá một lần.
