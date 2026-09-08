@@ -2328,3 +2328,44 @@ nhân quả đã mô tả khi chẩn đoán, chạy ngược lại.
 
 Rẻ hơn hai mươi lần và trả lời đúng câu hỏi. Chương 023 mang **cả hai** lỗi cùng lúc, nên một
 chương đủ để kiểm cả hai bản vá; chạy chín chương chỉ thêm nhiễu từ những lỗi khác chưa sửa.
+
+## alpha.60: mười sáu bản vá, một đêm, **được thêm một chương**
+
+Chạy lại **đúng chín chương** của alpha.57 (019–027), cùng nguồn, khác mã.
+
+| | alpha.57 | alpha.60 |
+|---|---|---|
+| **công của máy** | **3/9** | **4/9** |
+| chương chặn | 6 | **5** |
+
+Dự đoán ghi trước khi chạy: "4–5 chương chặn". Đúng, ở đầu bi quan.
+
+### Cộng trừ từng chương, vì con số gộp giấu mất bốn thay đổi ngược chiều nhau
+
+| chương | alpha.57 | alpha.60 | vì sao |
+|---|---|---|---|
+| `023` | chặn | **xuất bản** | **bản vá đếm chữ số** — tiêu đề đo 17,79 kt/s thay vì 10,68 |
+| `022` | chặn (lỗi ghép 0,183) | **xuất bản** | audio đổi do casting đổi; **không phải công của bản vá nào**, chỉ là may |
+| `026` | xuất bản | **chặn** | chuỗi: gieo nhân vật → đổi người nói → đổi giọng → **chạm trần khung** |
+| `021` | chặn (1 đoạn) | chặn (3 đoạn) | hai lỗi neo tên **mới** trên giọng mới; hai lỗi cũ đã hết |
+| `019` `020` `024` | chặn | chặn | **đúng như dự đoán** — không bản vá nào nhắm tới chúng |
+
+**Cộng 2, trừ 1, ròng +1.** Và trong hai cái cộng, chỉ **một** là công của bản vá; cái kia là
+audio ngẫu nhiên đổi theo hướng có lợi.
+
+### Đọc con số này thế nào cho đúng
+
+Một chương trên chín, sau mười sáu bản vá, nghe như ít. Nhưng năm chương còn chặn **không phải
+những thứ đêm nay nhắm tới**: tiếng Ả Rập trong nguồn, một cái tên bị đánh vần phụ âm, một đoạn
+nghi đọc lặp, và trần khung. Bản vá đêm nay nhắm vào lớp ca của **alpha.55** — tên ngắn, tiếng
+cười — và lớp ấy đã sạch: không chương nào của alpha.60 còn chặn vì chúng.
+
+Giá trị thật của đêm không nằm ở +1 chương mà ở chỗ khác, và nên nói thẳng:
+
+- **Bản đồ sáu cổng chặn** ([WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md)) — trước đó
+  không ai biết có bao nhiêu.
+- **Năm phép kiểm đo nhầm thứ nó nói**, tìm ra bằng cùng một động tác: nhìn cái bị chặn rồi hỏi
+  chúng có gì chung.
+- **Hai bản vá chứng minh trên audio thật** với điều kiện phủ định ghi trước.
+- **Ba dự đoán của tôi bị dữ liệu bác**, cả ba cùng một sai lầm — ngoại suy từ mẫu nhỏ.
+- **Một bản vá tự rút** vì dựng trên nhân quả ngược chiều.
