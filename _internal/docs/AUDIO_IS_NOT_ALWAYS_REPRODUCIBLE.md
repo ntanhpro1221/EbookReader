@@ -27,30 +27,63 @@ Và mọi đầu vào **được ghi lại** đều giống nhau: `text_sha256`,
 `intensity`, `pace`, `volume`, `tts_delivery_mode`, `spoken_text_sha256`, `pitch_semitones`,
 `generation_frame_cap`. Chỉ `confidence` lệch (0,90 → 0,95) và đó là metadata, không vào TTS.
 
-## Ba nghi can đã loại
+## Mọi đầu vào ghi lại đều giống nhau — đo trên cả 189 đoạn
+
+Không phải một ca lẻ. Trong 189 đoạn cùng hạt giống:
+
+```
+lệch text_sha256          : 0
+lệch spoken_text_sha256   : 0
+lệch effective_pitch      : 0
+lệch tts_delivery_mode    : 0
+lệch pronunciation_variant: 0
+lệch generation_frame_cap : 0
+lệch CHECKSUM AUDIO       : 189   ← tất cả
+```
+
+Hồ sơ giọng cũng giống hệt ở mọi trường có nghĩa — `voice_key`, `engine`, `preset_name`,
+`seed` riêng của profile, `pitch_semitones`, `formant_ratio`; chỉ `id` và mốc thời gian khác,
+và cả hai đều là khoá/nhãn nội bộ.
+
+## Bốn nghi can đã loại, bằng đo chứ không bằng suy
 
 1. **Bản vá nhịp đọc.** `segment_duration_policy` dùng `spoken_speakable_chars` để tính ngân
-   sách khung, nên nghi ngay. Nhưng bản vá chỉ đổi cách đếm **chữ số**, và câu trên không có
-   chữ số nào — cùng con số, cùng ngân sách khung.
-2. **`gpu_scale`.** alpha.60 và alpha.62 đều chạy bị bóp. Nhưng `gpu_batch_scale` chỉ được
-   **ghi ra**, không có mã sinh nào đọc nó (`grep gpu_batch_scale`: chỉ `resource_manager.py`
-   đặt và `pipeline.py` log).
-3. **Trạng thái tiến trình trong pool.** `_set_generation_seed` gieo lại `random`,
-   `np.random`, `torch.manual_seed` và `torch.cuda.manual_seed_all` **trước từng lần sinh**
-   (`tts.py:547`), nên lịch sử của tiến trình không mang sang.
+   sách khung, nên nghi ngay. Nhưng bản vá chỉ đổi cách đếm **chữ số**, và các câu này không có
+   chữ số — cùng con số, cùng ngân sách khung. `generation_frame_cap` lệch 0/189 xác nhận.
+2. **`gpu_scale`.** `gpu_batch_scale` chỉ được **ghi ra**, không mã sinh nào đọc
+   (`resource_manager.py` đặt, `pipeline.py` log, hết).
+3. **Trạng thái tiến trình trong pool.** `_set_generation_seed` gieo lại `random`, `np.random`,
+   `torch.manual_seed`, `torch.cuda.manual_seed_all` **trước từng lần sinh** (`tts.py:547`).
+4. **Máy bị bóp bộ nhớ.** Đây là giả thuyết đầu tiên của tôi và nó nghe rất khớp — cho tới khi
+   đo: **alpha.53 và alpha.54 đều bị bóp nặng** (70 lần ở `gpu_scale 0.25`, 63 lần ở `0.6`) và
+   vẫn giống nhau **948/948, 100%**. Bóp GPU không phá tính tái lập.
 
-## Nghi can còn lại, chưa chứng minh
+## Nghi can còn lại, và tôi dừng ở mức nghi
 
-**Không có `torch.backends.cudnn.deterministic`.** Khi không đặt, cuDNN tự chọn thuật toán
-theo bộ nhớ trống và điều kiện máy lúc ấy, và hai thuật toán khác nhau cho kết quả dấu phẩy
-động lệch nhau chút ít. Lệch chút ít trong một mô hình tự hồi quy thì cộng dồn thành một câu
-dài ngắn khác hẳn — đúng dạng đã đo: 3,20→2,96s, 3,52→3,44s, 6,00→5,84s.
+**Model TTS đã bị ghi lại lúc 10:45 hôm nay, giữa hai lượt chạy.** alpha.60 chạy 07:06, alpha.62
+chạy 13:46, và snapshot VieNeu mang mốc 8/9 10:45–10:46:
 
-Khớp với cả bốn hàng của bảng: hai cặp **100%** đều chạy ở `gpu_scale 1.0` trên máy rảnh; cặp
-79% có một bên bị bóp; cặp 0% thì **cả hai** bị bóp nhưng theo chuỗi khác nhau.
+```
+snapshots/8b7e9cff…/config.json           10:45
+snapshots/8b7e9cff…/denoiser.onnx         10:46   (42 MB)
+snapshots/8b7e9cff…/speaker_encoder.onnx  10:46   (28 MB)
+snapshots/8b7e9cff…/update/model.safetensors 10:45 (248 MB)
+```
 
-Đây là **giả thuyết**, không phải kết luận. Chứng minh nó cần chạy cùng một đoạn hai lần dưới
-hai mức tải, và việc ấy phải đợi máy rảnh.
+Gói `hf_xet` cũng mang đúng mốc 10:45, nên nhiều khả năng một lần cài đặt đã làm HuggingFace
+tải lại toàn bộ file qua giao thức Xet.
+
+**Nhưng tải lại cùng một revision thì ra cùng bytes.** `refs/main` vẫn trỏ `8b7e9cff…`, và
+thư mục `blobs/` rỗng nên không còn bản cũ để so. Tôi **không chứng minh được** trọng số đã
+đổi, và cũng không loại được khả năng ấy.
+
+Đến đây tôi dừng. Ba giả thuyết trước đều nghe hợp lý và đều chết khi đo, nên giả thuyết thứ tư
+không đáng được viết như một kết luận. Cái chắc chắn là **mọi đầu vào ghi lại đều giống nhau mà
+audio thì khác**, và cái đó đã đủ để không tin phép so audio giữa hai lượt.
+
+Cách kiểm rẻ nhất khi máy rảnh: sinh lại **một** đoạn đã biết bằng chính seed cũ và so checksum
+với bản trong alpha.60. Giống nhau ⇒ nguyên nhân nằm ở điều kiện lượt chạy; khác nhau ⇒ nằm ở
+model hoặc mã.
 
 ## Hệ quả, và nó nghiêm trọng hơn nguyên nhân
 
