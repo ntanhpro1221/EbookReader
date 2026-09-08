@@ -160,8 +160,34 @@ stable_id          : 1.357 / 1.357 trùng nhau, tập hợp bằng nhau
 ```
 
 Quan trọng vì `stable_id` quyết định hạt giống sinh audio: cùng chia đoạn, cùng giọng, cùng
-cách đọc thì ra **cùng bản thu tới từng bit**. Nên mọi khác biệt giữa alpha.60 và alpha.62 quy
-được về những thay đổi trong mã, chứ không phải về việc phân tích trôi đi.
+cách đọc thì ra **cùng bản thu tới từng bit**.
+
+Nhưng hạt giống còn phụ thuộc **giọng**, nên phải kiểm nốt vế ấy sau khi đúc giọng xong. Con số
+thô lại suýt làm tôi hoảng lần nữa: 1.340/1.357 đoạn lệch `voice_profile_id`. Phân giải ra
+giọng thật (`preset_name` + `pitch_semitones`) thì `voice_profile_id` chỉ là khoá số **nội bộ
+từng project**, và lệch thật chỉ có:
+
+```
+39/1.357 đoạn (2,9%) đổi giọng — và chúng trùng với 36 đoạn bị gán NGƯỜI NÓI khác
+  NGƯỜI TRẢ LỜI -> THỦ LÃNH  ×11        THỦ LÃNH -> NGƯỜI TRẢ LỜI  ×6
+```
+
+Hai vai vô danh dễ lẫn, tức nhiễu của LLM lúc phân tích chứ không phải hỏng. **1.318 đoạn
+(97,1%) sẽ có bản thu giống hệt alpha.60 tới từng bit.**
+
+Và điều quyết định tính hợp lệ của cả thí nghiệm: **cả tám đoạn chặn của alpha.60 đều giữ
+nguyên giọng.**
+
+```
+ch019 "Khác gì ăn cướp không?"   Thanh Bình|-7    ch021 "Bụi đá của Golem Silian…"  Đoan Trang|0
+ch020 "Tên của cô là Selene…"    Phạm Tuyên|0     ch021 "Tiếp theo."                Thanh Bình|-7
+ch021 "Dịch câu này: Kalbi…"     Đoan Trang|0     ch024 "Tôi cười toe toét."        Phạm Tuyên|0
+ch021 "Gia tộc Remis,"           Đoan Trang|0     ch026 "Gì cơ?"                    Thanh Bình|-7
+```
+
+Cùng `stable_id`, cùng giọng ⇒ cùng hạt giống ⇒ cùng bản thu đầu tiên. Với đúng những đoạn
+đang được đo, đầu vào giống hệt nhau, nên mọi khác biệt về kết cục là **do mã**, không do bốc
+thăm.
 
 **Ba thứ phải đo khi xong, theo thứ tự:**
 
