@@ -1,4 +1,6 @@
-# Model giọng không được ghim, và nó đã tự đổi giữa hai lượt chạy
+# Model giọng đã tự đổi giữa hai lượt chạy — và giờ đã được ghim
+
+**Trạng thái: đã sửa 2026-09-08 17:5x.** Phần dưới giữ nguyên chuyện đã xảy ra và cách truy ra nó, vì cái đáng học không phải kết luận mà là đường đi tới đó.
 
 Tìm ra 2026-09-08 khi truy vì sao alpha.60 và alpha.62 cho audio khác nhau với **cùng hạt
 giống và mọi đầu vào ghi lại giống hệt nhau** — xem
@@ -73,9 +75,23 @@ mỗi chương được chấm **theo chính nó**, không ai so chương 1 vớ
 4. **Giữ cả `2da0efab…` trong cache.** Nó là bản đã sinh ra mọi audio từ alpha.10 tới alpha.60,
    và là thứ duy nhất tái tạo lại được chúng. Đừng dọn cache.
 
-## Một câu cho `AGENTS.md`
+## Đã làm, 2026-09-08 17:5x
 
-Cài đặt gói mới có thể kéo theo tải lại model — mốc 10:45 của snapshot trùng đúng mốc của gói
-`hf_xet`. Chủ sách đã cho phép *"cần cài gì thì cứ cài thoải mái"*, và điều đó vẫn đúng; cái
-phải thêm là **kiểm `refs/main` của VieNeu sau mỗi lần cài**, cho tới khi khoản 1 ở trên được
-làm.
+Khoản 1 và 2 xong: `runtime_contract.voice_model_check()` đối chiếu `refs/main` với
+`VIENEU_CACHE_REVISION`, rồi kiểm kích thước + sha256 của năm file
+(`config.json`, `denoiser.onnx`, `speaker_encoder.onnx`, `update/model.safetensors`,
+`update/config.json`). Đăng ký thành `checks["model:vieneu_voice"]` và nằm trong
+`runtime_contract_errors`. Sáu test ghim nó.
+
+**Bản vá đầu tiên sai chỗ và bộ test bắt được.** Tôi nhét model giọng vào
+`perceptual_cache_check`, và `test_perceptual_cache_marker_requires_locked_revision_and_checkpoint_hash`
+đỏ ngay. Test ấy đúng: hàm kia đăng ký là `checks["model:utmosv2_cache"]`, nên một lần thiếu
+ghim TTS sẽ báo thành lỗi perceptual — đúng lỗi, sai chỗ, và sai chỗ thì người đọc đi tìm nhầm
+hướng. Bản sau có phép kiểm riêng.
+
+Khoản 3 cũng xong: áp cùng lúc với [bản vá lọc thuỷ ấn](THE_SOURCE_IS_WATERMARKED.md), ngay tại
+ranh giới alpha.62 / lô 1, nên hai lần đổi hash trả giá một lần.
+
+Nghĩa là **không cần kiểm `refs/main` bằng tay sau mỗi lần cài gói nữa** — điều mà bản đầu của
+tài liệu này còn dặn. Chủ sách vẫn cứ *"cần cài gì thì cứ cài thoải mái"*; nếu một lần cài kéo
+theo model mới thì `cli check` sẽ nói ra, thay vì để nó lặng lẽ đổi giọng giữa cuốn sách.
