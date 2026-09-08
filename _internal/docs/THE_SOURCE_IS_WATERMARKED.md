@@ -68,10 +68,31 @@ Chưa làm vì hai lý do, và lý do thứ hai mới là lý do thật:
 Thời điểm tự nhiên: ngay trước lô 1 của [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), vì lô ấy chạy
 đè lên chương 000–029 nên chúng sẽ được sinh lại toàn bộ dù sao đi nữa.
 
-## Còn hai thứ nữa phép quét ấy tìm ra, chưa điều tra
+## Hai thứ nữa phép quét tìm ra — đã kiểm, cả hai đều không phải vấn đề
 
-- `『』` (11.txt) và `«»` (008, 011.txt) — dấu ngoặc kép mà bộ chia đoạn có thể không nhận là
-  ngoặc kép. Nếu không nhận thì lời thoại trong hai chương ấy bị gán nhầm cho người dẫn
-  chuyện. Chưa kiểm.
-- `⟨⟩` (077, 078.txt), `°` (407.txt), `↓` `←` — ký hiệu lọt vào văn bản đọc. Chưa kiểm TTS đọc
-  chúng ra cái gì.
+Ghi lại cả phần **không** hỏng, vì hai nghi ngờ này nghe rất hợp lý và người sau sẽ nghi lại
+đúng như thế.
+
+**`『』` không được bộ chia đoạn coi là ngoặc kép** — đúng, `text_processing.py` biết `«»`,
+`‹›`, `""`, `''` nhưng không biết corner bracket. Nghi ngờ là lời thoại bị gán nhầm cho người
+dẫn chuyện. Đo: **6 lần trong 3 file** (011, 367, 406), và không lần nào là lời thoại — chúng
+là chú thích trong bảng trạng thái kiểu game:
+
+```
+Cấp Linh Hồn: C 『Hấp thụ 300 Tinh Hoa Linh Hồn để thăng cấp』
+```
+
+Coi chúng là ngoặc kép mới **sai**. Hành vi hiện tại đúng, và không thêm rủi ro ngoặc treo vì
+chúng cân đối và bị bỏ qua.
+
+**772 dấu `•` đi thẳng vào văn bản TTS đọc** — đúng, bộ chia đoạn không lọc. Nghi ngờ là TTS
+đọc chúng thành tiếng. Đo trên mọi project đã lưu: **240 segment** chứa dấu bullet, trong đó
+175 `verified` và 2 `failed`. Whisper nghe ra câu **không có** bullet với sim tới 1,00:
+
+```
+văn bản : '• Hệ thống Sức mạnh'
+nghe ra : 'hệ thống sức mạnh.'          sim 1,00  wer 0,00
+```
+
+Model đọc lướt qua nó như với ký tự vô hình. `°`, `↓`, `⟨⟩` chưa có ca nào đủ nhiều để đo
+riêng, nhưng chúng cùng loại và tần suất thấp hơn hẳn (75, 6, 18 lần trên cả cuốn).
