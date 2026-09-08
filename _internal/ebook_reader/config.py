@@ -123,6 +123,18 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "max_wer": 0.58,
         "repair_rounds": 2,
         "failure_policy": "fail",
+        # Khi vòng sửa đã cạn và ASR vẫn không đọc được, ai quyết?
+        #
+        # Trước 2026-09-08 câu trả lời là "một người ngồi nghe", và khi không có người thì
+        # chương ấy không bao giờ xuất bản. Chủ sách ra lệnh 2026-09-07: *"tôi không muốn
+        # phải tự nghe, project phải hoạt động toàn bộ cho ra sản phẩm"*.
+        #
+        # Bật thì máy tự cho qua **những đoạn mà ASR là nhân chứng duy nhất** - xem
+        # `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS` và `_grant_machine_acceptances`. Nó không
+        # sửa điểm số, không đổi trạng thái, không thăng bản thu nào: chỉ ghi một hàng nói
+        # "chưa ai nghe cái này" rồi để chương đi tiếp. Tắt thì hành vi cũ trở lại nguyên
+        # vẹn, và đó là lý do có công tắc chứ không phải xoá hẳn nhánh kia.
+        "ship_without_a_listener": True,
     },
     "perceptual_qa": {
         "enabled": False,
@@ -601,6 +613,12 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Required ASR cannot be disabled")
     if asr.get("required") and asr.get("failure_policy") != "fail":
         raise ValueError("Required ASR must use failure_policy=fail")
+    # Kiểu, không chỉ giá trị. Đây là công tắc an toàn duy nhất của cơ chế tự cho qua, và
+    # `"ship_without_a_listener": "false"` viết tay trong JSON là một chuỗi - truthy - nên
+    # nó sẽ **bật** cái người ta vừa cố tắt, im lặng. Một công tắc chỉ tắt được khi gõ đúng
+    # kiểu thì không phải công tắc.
+    if not isinstance(asr.get("ship_without_a_listener", True), bool):
+        raise ValueError("asr.ship_without_a_listener must be a boolean")
     if settings.get("quality_profile") == "high_quality" and (
         not asr.get("enabled")
         or not asr.get("required")

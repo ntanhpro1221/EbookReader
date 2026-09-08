@@ -608,3 +608,99 @@ Ai muốn cắt thì cắt vòng 2 — vòng gieo-lại-thuần — đừng cắ
 **Bài học rộng hơn, đáng nhớ hơn con số:** khi đếm để quyết định bỏ một cơ chế, kiểm xem mẫu số
 có bị chính những ca thất bại nhồi lên không. Đếm theo *lượt* thì cơ chế nào cũng trông vô dụng,
 vì cái vô vọng bao giờ cũng chiếm nhiều lượt nhất.
+
+---
+
+## Máy tự sinh ra thuốc chữa rồi vứt đi — `"Tiếp theo."`, chương 003 alpha.60
+
+**Chưa sửa.** Đây là thứ chặn chương 003 vĩnh viễn sau khi
+[cơ chế tự cho qua](SHIPPING_WITHOUT_A_LISTENER.md) đã gỡ ba chương khác, nên nó là ứng viên
+tiếp theo rõ ràng nhất. Ghi kèm toàn bộ số liệu vì lập luận ở đây rất dễ trượt thành thứ tôi
+đã cố ý **từ chối** làm.
+
+### Số liệu
+
+Đoạn `c00003_s0000129`, chữ `"Tiếp theo."` (10 ký tự). Bản đương nhiệm và năm ứng viên:
+
+| | thời lượng | chạm trần | ASR beam nghe ra | sim |
+|---|---|---|---|---|
+| **đương nhiệm** | 1,92s | **có** | `"Tiếp theo. À xong."` | — |
+| vòng 0 | 0,96s | **có** | `"tiếp theo"` | 1,00 |
+| vòng 1 | 0,56s | không | `"Cảm ơn các bạn đã theo dõi."` | 0,00 |
+| vòng 2 | 0,96s | **có** | `"Cảm ơn các bạn đã theo dõi và hẹn gặp lại."` | 0,00 |
+| vòng 3 | 0,96s | **có** | `"Cảm ơn các bạn đã theo dõi và hẹn gặp lại."` | 0,00 |
+| **vòng 4** | **0,64s** | **không** | `"Tiếp theo. Tiếp theo. Tiếp theo."` | **1,00** |
+
+Ba bản 0,96s giống hệt nhau đến hai chữ số — đó là **trần khung**, không phải trùng hợp. Và
+1,92 = 2 × 0,96.
+
+"Không chạm trần" ở đây là kết luận chắc, không phải suy đoán từ giá trị vắng:
+`tts.py:1101` chỉ ghi `metrics["generation_ceiling_hit"] = 1.0` **khi thật sự chạm trần**, nên
+khoá vắng mặt nghĩa là bộ sinh tự kết thúc. Vòng 1 và vòng 4 vắng cả ba khoá
+`generation_*`; vòng 0, 2, 3 có đủ.
+
+### Vì sao đây **không** phải "thăng bản ít tệ nhất"
+
+Tôi đã cố ý từ chối luật ấy — xem [SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md)
+và `test_candidate_exhaustion_keeps_incumbent_and_uses_incumbent_evidence`. Lý lẽ: so hai con
+số mà **cả hai** đều dưới ngưỡng thì không nói lên gì.
+
+Ở đây không phải thế. Vòng 4 hơn bản đương nhiệm ở **đúng tín hiệu mà chính sách coi là bằng
+chứng về bản thu**:
+
+- bản đương nhiệm mang `generation_ceiling_hit` — bộ sinh tự khai nó chạy hết khung mà chưa
+  dừng, và ASR nghe ra thừa hẳn `"À xong"`, tức trong file **có tiếng thật sự thừa**;
+- vòng 4 không chạm trần, dài 0,64s — đúng dải 0,64–0,80s mà `scripts/probe_frame_cap.py` đo
+  được cho chính câu này ở năm trần khác nhau;
+- vòng 4 trượt vì `ASR_REPEATED_SHORT_PASS`: Whisper lặp lại chữ trên clip dưới một giây. Đó
+  là tật đã biết của Whisper trên clip ngắn, và `sim=1,00` nói nó nghe ra **đúng chữ**.
+
+Nói cách khác: bản bị vứt trượt vì một phép kiểm nói về **Whisper**, bản được giữ hỏng theo
+một phép kiểm nói về **bản thu**. Chính sách đã tự xếp `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` vào
+nhóm "không mang thông tin" (`HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`) vì đúng lý do ấy.
+
+### Hình dạng bản vá, và cái bẫy của nó
+
+*Khi ngân sách cạn: nếu bản đương nhiệm chạm trần khung mà có ứng viên không chạm trần và chỉ
+trượt bằng mã thuộc `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`, thăng ứng viên ấy.*
+
+Hẹp đến mức không đụng vào luật giữ-bản-đương-nhiệm ở mọi ca khác. Nhưng **chưa được kiểm bằng
+tai** — không ai nghe cả bản 1,92s lẫn bản 0,64s, và cả lập luận này dựa trên việc đọc con số.
+Đêm 2026-09-07 tôi đã một lần chắc chắn như thế và sai (xem
+[WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md)), nên bản vá này
+cần một test đỏ-trước riêng và một lượt chạy thật, không phải một suy luận nữa.
+
+---
+
+## Bộ test ngủ thật, và điều đó làm tôi chẩn đoán sai hai lần
+
+**Chưa sửa.** Chi phí là thời gian của người phát triển, không phải chất lượng sách — nhưng
+2026-09-08 nó đã ăn của tôi hai lượt chạy và khoảng ba mươi phút.
+
+`pipeline._process_segment_candidate` lùi dần giữa các lần thử lại bằng
+`time.sleep(min(8, 2**attempt))` (pipeline.py:3817). Đúng cho lượt chạy thật — máy TTS cần
+thời gian để hồi. Trong bộ test thì mọi giây ngủ ấy là giây thật.
+
+Đo được: `test_final_locked_name_round_uses_audited_clause_split_and_promotes` vượt **90 giây**
+mà chưa xong, và faulthandler dump ra đúng dòng `time.sleep`. Chạy trên cây đã vá và trên
+worktree HEAD sạch cho **kết quả y hệt**, nên đây là chi phí sẵn có chứ không phải hồi quy.
+
+### Vì sao đáng ghi chứ không chỉ đáng chịu
+
+Triệu chứng của "đang ngủ" và của "đã treo" giống hệt nhau nếu chỉ nhìn từ ngoài: không có
+dòng nào ra, và **CPU gần như không nhích** — tôi đo được 1 giây CPU trong 5 phút và kết luận
+là deadlock. Giết. Chạy lại. Giết lần nữa. Cả hai lượt ấy có thể đã xanh.
+
+Bài học rẻ hơn cho người sau: `time.sleep` không tốn CPU, nên **CPU phẳng không phải bằng chứng
+của treo**. Bằng chứng là `-o faulthandler_timeout=N`, nó in ra ngăn xếp của cái đang chạy chậm
+và trả lời trong một phút.
+
+### Hình dạng bản sửa
+
+Một fixture `autouse` trong `tests/conftest.py` monkeypatch `time.sleep` thành no-op cho những
+test không đo thời gian thật. Rủi ro thấp: không test nào ở đây khẳng định điều gì về *độ dài*
+của lần lùi, chúng khẳng định về **số lần thử** và **trạng thái ứng viên**.
+
+Chưa làm vì chưa đo tổng: cần biết bộ test mất bao nhiêu giây trong `time.sleep` trước khi nói
+sửa nó đáng bao nhiêu. Cách đo rẻ: `-o faulthandler_timeout=30` một lượt rồi đếm số dump rơi
+vào dòng 3817.

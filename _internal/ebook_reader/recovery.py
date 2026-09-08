@@ -38,12 +38,18 @@ def _perceptual_qa_enabled(settings: dict) -> bool:
 
 
 def _listener_accepted_takes(db: ProjectDB) -> set[tuple[str, str]]:
-    """(segment, checksum) pairs a person listened to and let stand.
+    """(segment, checksum) pairs somebody - a person or the machine - has ruled on.
 
     Loaded once per recovery scan rather than per segment: the scan walks every segment in
     the book and this is the same small table each time.
+
+    The sixth gate to consult an acceptance, and the last one to learn that the machine can
+    now issue them too. It reads `ruled_` rather than `accepted_` for the same reason the
+    other five do: the question here is whether anything still has to be re-decided, not who
+    decided it. The name is left alone because every caller reads it as "already settled",
+    which is still exactly what it means.
     """
-    return set(db.accepted_segment_warnings())
+    return db.ruled_segment_takes()
 
 
 def _segment_has_current_audio_qa(

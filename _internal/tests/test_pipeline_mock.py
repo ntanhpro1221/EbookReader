@@ -2897,15 +2897,20 @@ def test_high_quality_blocks_unreviewed_segment_warnings() -> None:
     pipeline = object.__new__(BookPipeline)
     pipeline.settings = {"quality_profile": "high_quality"}
 
-    class _NothingAccepted:
-        """The check now asks what a listener has accepted; nobody has accepted anything
-        here, which is the case this test has always been about."""
+    class _NothingRuledOn:
+        """Nobody - and nothing - has ruled on these takes, which is the case this test has
+        always been about.
+
+        The gate reads `ruled_segment_warnings` rather than `accepted_segment_warnings` since
+        2026-09-08: a take can now be let through by a listener who heard it *or* by the
+        machine when ASR is the only witness against it. The gate asks whether anything is
+        still to be decided; only the reports ask who decided."""
 
         @staticmethod
-        def accepted_segment_warnings() -> dict:
+        def ruled_segment_warnings() -> dict:
             return {}
 
-    pipeline.db = _NothingAccepted()
+    pipeline.db = _NothingRuledOn()
     rows = [
         {
             "id": 1,

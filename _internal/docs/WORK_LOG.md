@@ -912,3 +912,40 @@ lại": tên mới xuất hiện dày nhất ở đầu sách rồi thưa dần 
 nằm giữa "một nhúm" và "~50" — và điều đáng nói không phải độ lớn, mà là **mỗi cái trong số đó
 hôm nay là một lần dừng cứng cần người gõ tay mới đi tiếp được**.
 
+
+---
+
+## 2026-09-08 — Cơ chế xuất bản khi không có ai để hỏi
+
+Nửa còn lại của lệnh *"tôi không muốn phải tự nghe, project phải hoạt động toàn bộ cho ra sản
+phẩm"*. Thiết kế và số liệu đầy đủ ở
+[SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md); đây chỉ ghi ba lần bằng chứng
+lật ngược thứ tôi định làm, vì đó là phần một người sau tôi cần.
+
+**1. Định làm cơ chế không đụng tới trạng thái đoạn — nó sẽ vô dụng hoàn toàn.**
+Tôi cho rằng đoạn chặn mang trạng thái `warning` và chỉ vướng ở *mã cảnh báo*, nên cơ chế chỉ
+cần dập mã là đủ, "sạch" hơn. Truy vấn alpha.60: **cả tám đoạn chặn đều `failed`**. Cổng chặn
+chương đọc trạng thái, nên cơ chế ấy sẽ chạy đúng, test xanh, và không gỡ được **một chương
+nào**. Đo trước khi viết cứu đúng một ngày công.
+
+**2. Định thêm ngưỡng nhịp đọc làm nhân chứng thứ hai — phân bố chồng khít nhau.**
+`"Tiếp theo."` dài 1,92 giây là 4,7 ký tự/giây, quá chậm, chắc chạy loạn. Đo 205 đoạn ngắn
+`verified` của chính bản ấy: `"Tiếp theo!"` **sạch** nằm ở 4,76; p5 của cả nhóm là 4,76; thấp
+nhất `"À!"` ở 1,56. Bất kỳ ngưỡng nào ở đây cũng chỉ là con số tôi bịa. Thay bằng lời tự khai
+của bộ sinh (`generation_ceiling_hit`), và nó chia tám đoạn thành đúng 6 cho qua / 2 từ chối.
+
+**3. Chạy thử trên dữ liệu thật lộ ra một khiếm khuyết không test nào của tôi bắt được.**
+Cơ chế cấp 13 lượt, nhưng 7 trong đó là đoạn `warning` mang mã vốn **không chặn gì**. Chương
+007 và 009 đang xuất bản bình thường sẽ bỗng mang nhãn "3 đoạn chưa ai nghe". Cơ chế vẫn đúng;
+cái hỏng là **báo cáo**, và một con số kêu ở chỗ không có gì sai thì lần sau không ai đọc nó
+nữa. Thêm điều kiện "chỉ cấp cho đoạn thật sự đang chặn": còn 6 lượt.
+
+### Kết quả đo, không phải dự phóng
+
+Trên tám đoạn chặn của alpha.60: **cho qua 6, từ chối 2**. Hai đoạn bị từ chối (`"Tiếp theo."`
+chương 003, `"Gì cơ?"` chương 008) đúng là hai đoạn có `generation_ceiling_hit`, tức đúng hai
+đoạn bản vá trần khung vừa cho phép thu lại — cơ chế và bản vá khớp nhau. Số chương còn đoạn
+`failed`: **5 → 2**.
+
+Con số 5 → 2 là đo trên bảng dữ liệu cũ. Nó chưa tính bản vá trần khung sẽ làm gì với chương
+008 ở lượt chạy mới, nên vẫn phải chạy lại chín chương ấy mới biết kết quả thật.

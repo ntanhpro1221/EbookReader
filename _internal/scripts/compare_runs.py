@@ -1,130 +1,117 @@
-"""Did a change alter what the machine hears, or only how fast it heard it?
+"""So hai lượt chạy cùng dải chương: chương nào đổi kết cục, và vì sao.
 
-Every engine or model change in this project has to clear two bars, and the second is the
-one that is easy to skip. measure_batched_asr.py stated it: a decode that changes what the
-voice is heard saying is a different engine, not an optimisation - and a different engine
-costs a full re-verification of the book.
+    python scripts/compare_runs.py <project cũ> <project mới>
 
-This compares two preserved runs of the same book segment by segment: how many transcripts
-differ once normalised the way the pipeline normalises them, and whether each ASR warning
-class comes out at the same count. Warning counts matter as much as transcripts: a change
-that leaves the text alone but moves segments across a gate has still changed the book.
+Viết cho lượt đo cơ chế tự cho qua (alpha.60 → alpha.62), nhưng không có gì riêng cho nó:
+mọi so sánh đều theo **tiêu đề chương**, không theo `chapter_index`, vì hai lượt cùng dải vẫn
+có thể đánh số trong lô khác nhau nếu dải lệch một file.
 
-It compares only segments that both runs actually transcribed, so a run still in flight can
-be compared against a finished one - the coverage line says how much of the book that is.
-
-    python scripts/compare_runs.py <baseline_project_root> <candidate_project_root> [max_chapter]
-
-Read-only: opens both databases read-only and writes nothing.
+Cột `chưa ai nghe` là thứ đáng nhìn nhất khi so hai lượt quanh một thay đổi về cổng chặn: một
+chương chuyển từ `failed` sang `completed` mà mang theo con số ấy thì nó xuất bản **nhờ máy tự
+cho qua**, chứ không phải nhờ bản thu khá lên. Hai chuyện rất khác nhau và rất dễ lẫn.
 """
 from __future__ import annotations
 
-import collections
+import argparse
 import sqlite3
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from ebook_reader.asr import normalize_transcript  # noqa: E402
-
-FIELDS = (
-    "s.stable_id, s.status, s.warning_code, s.asr_text, s.text, s.wav_sha256, "
-    "s.asr_similarity, s.asr_wer, s.generation_delivery_mode, c.chapter_index"
-)
-
-
-def _load(root: Path, max_chapter: int | None) -> dict[str, sqlite3.Row]:
-    database = root / "project.sqlite3"
+def _open(project: Path) -> sqlite3.Connection:
+    database = project / "project.sqlite3"
     if not database.is_file():
-        raise SystemExit(f"không tìm thấy project: {database}")
-    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
-    connection.row_factory = sqlite3.Row
-    query = f"SELECT {FIELDS} FROM segments s JOIN chapters c ON c.id = s.chapter_id"
-    params: tuple = ()
-    if max_chapter is not None:
-        query += " WHERE c.chapter_index <= ?"
-        params = (max_chapter,)
-    rows = {row["stable_id"]: row for row in connection.execute(query, params)}
-    connection.close()
-    return rows
+        raise SystemExit(f"Không thấy {database}")
+    conn = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
-def _warning_counts(rows: dict, keys: list[str]) -> collections.Counter:
-    counter: collections.Counter = collections.Counter()
-    for key in keys:
-        for code in str(rows[key]["warning_code"] or "").split("|"):
-            if code:
-                counter[code] += 1
-    return counter
+def _chapters(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
+    return {str(row["title"]): row for row in conn.execute("SELECT * FROM chapters")}
 
 
-def main(baseline_root: str, candidate_root: str, max_chapter: int | None) -> int:
-    baseline = _load(Path(baseline_root), max_chapter)
-    candidate = _load(Path(candidate_root), max_chapter)
+def _machine_accepted(conn: sqlite3.Connection) -> set[tuple[str, str]]:
+    names = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "machine_audio_acceptances" not in names:
+        return set()
+    return {
+        (str(a), str(b))
+        for a, b in conn.execute(
+            "SELECT segment_stable_id, wav_sha256 FROM machine_audio_acceptances"
+        )
+    }
 
-    shared = [
-        key
-        for key in candidate
-        if key in baseline and candidate[key]["asr_text"] and baseline[key]["asr_text"]
-    ]
+
+def _unheard_per_chapter(conn: sqlite3.Connection) -> dict[str, int]:
+    accepted = _machine_accepted(conn)
+    if not accepted:
+        return {}
+    heard = {
+        (str(a), str(b))
+        for a, b in conn.execute(
+            "SELECT segment_stable_id, wav_sha256 FROM listener_audio_acceptances"
+        )
+    }
+    counts: dict[str, int] = {}
+    for row in conn.execute(
+        "SELECT ch.title t, s.stable_id, s.wav_sha256 FROM segments s "
+        "JOIN chapters ch ON ch.id = s.chapter_id"
+    ):
+        key = (str(row["stable_id"]), str(row["wav_sha256"] or ""))
+        if key in accepted and key not in heard:
+            counts[str(row["t"])] = counts.get(str(row["t"]), 0) + 1
+    return counts
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("before", type=Path)
+    parser.add_argument("after", type=Path)
+    args = parser.parse_args(argv)
+
+    before, after = _open(args.before), _open(args.after)
+    old, new = _chapters(before), _chapters(after)
+    unheard = _unheard_per_chapter(after)
+
+    shared = sorted(set(old) & set(new))
     if not shared:
-        print("không segment nào có bản ghi ASR ở cả hai lần chạy")
-        return 1
-    print(f"nền   : {Path(baseline_root).name}  ({len(baseline)} segment)")
-    print(f"thử   : {Path(candidate_root).name}  ({len(candidate)} segment)")
-    print(f"so được: {len(shared)} segment có bản ghi ở cả hai")
+        print("Hai project không có chương nào trùng tiêu đề - có phải cùng dải không?")
+        return 2
 
-    differing = [
-        key
-        for key in shared
-        if normalize_transcript(str(baseline[key]["asr_text"]))
-        != normalize_transcript(str(candidate[key]["asr_text"]))
-    ]
-    print(f"\nbản ghi khác nhau sau chuẩn hoá: {len(differing)}/{len(shared)} "
-          f"= {len(differing) / len(shared):.1%}")
-
-    before, after = _warning_counts(baseline, shared), _warning_counts(candidate, shared)
-    print("\nmã cảnh báo (chỉ trên các segment so được):")
-    moved = False
-    for code in sorted(set(before) | set(after)):
-        mark = "" if before.get(code, 0) == after.get(code, 0) else "   <-- ĐỔI"
-        if mark:
-            moved = True
-        print(f"  {before.get(code, 0):4d} -> {after.get(code, 0):4d}  {code}{mark}")
-
-    for key in differing[:8]:
-        left, right = baseline[key], candidate[key]
-        print(f"\n  {key}")
-        print(f"    văn bản: {str(left['text'])[:76]}")
-        print(f"    nền    : {str(left['asr_text'])[:76]}")
-        print(f"    thử    : {str(right['asr_text'])[:76]}")
-        print(f"    similarity {left['asr_similarity']} -> {right['asr_similarity']}"
-              f" | WER {left['asr_wer']} -> {right['asr_wer']}")
-        # A different checksum means the runs judged different audio, so any warning that
-        # moved with it belongs to the take rather than to the decode. Missing this is how
-        # a perceptual failure gets blamed on an ASR engine.
-        if str(left["wav_sha256"]) != str(right["wav_sha256"]):
-            print(f"    ÂM THANH KHÁC: {str(left['generation_delivery_mode'])}"
-                  f" -> {str(right['generation_delivery_mode'])}"
-                  " - khác biệt ở đây không quy cho engine được")
+    print(f"{'chương':10s} {'trước':11s} {'sau':11s} chưa ai nghe")
+    fixed = broke = same = 0
+    for title in shared:
+        a, b = str(old[title]["status"]), str(new[title]["status"])
+        n = unheard.get(title, 0)
+        mark = "  " if a == b else ("→✓" if b == "completed" else "→✗")
+        if a == b:
+            same += 1
+        elif b == "completed":
+            fixed += 1
+        else:
+            broke += 1
+        print(f"{title:10s} {a:11s} {b:11s} {n if n else '':>12} {mark}")
 
     print()
-    if differing or moved:
+    print(f"gỡ được: {fixed}   hỏng thêm: {broke}   giữ nguyên: {same}")
+    total_unheard = sum(unheard.values())
+    if total_unheard:
         print(
-            "Có thay đổi. Trước khi gọi đây là một tối ưu, hãy tách hai chuyện: bản ghi đổi "
-            "vì *giải mã* khác, hay vì *bản thu* khác (checksum khác). Chỉ chuyện đầu mới "
-            "nói về engine."
+            f"\n{total_unheard} đoạn vào sách mà chưa ai nghe, trên "
+            f"{len(unheard)} chương. Xem `scripts/machine_acceptances.py` để có mốc thời gian."
         )
-    else:
-        print("Không đổi bản ghi, không đổi lớp cảnh báo - thay đổi này chỉ động tới tốc độ.")
+    # Một chương gỡ được mà không mang đoạn nào chưa ai nghe thì nó xuất bản vì **bản thu khá
+    # lên thật** - đó là thắng lợi của bản vá, không phải của cơ chế tự cho qua. Tách hai loại
+    # ra ở đây, vì gộp lại là cách dễ nhất để tự khen nhầm.
+    earned = [t for t in shared
+              if str(old[t]["status"]) != "completed"
+              and str(new[t]["status"]) == "completed"
+              and not unheard.get(t)]
+    if earned:
+        print(f"\nGỡ được KHÔNG cần cho qua đoạn nào: {', '.join(earned)}")
     return 0
 
 
 if __name__ == "__main__":
-    if not 2 <= len(sys.argv) - 1 <= 3:
-        print(__doc__)
-        raise SystemExit(2)
-    raise SystemExit(
-        main(sys.argv[1], sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None)
-    )
+    raise SystemExit(main(sys.argv[1:]))

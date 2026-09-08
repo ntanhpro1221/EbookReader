@@ -107,10 +107,14 @@ def test_the_gate_stops_blocking_on_a_warning_that_was_accepted(monkeypatch) -> 
     ]
 
     class _DB:
+        # `ruled_`, không phải `accepted_`: cổng hỏi "còn phải quyết lại gì không", và câu
+        # trả lời gồm cả phán quyết của người nghe lẫn của máy. Test này vẫn nói về người
+        # nghe - `ProjectDB.ruled_segment_warnings` hợp hai bảng, và phán quyết của người
+        # đi vào đúng bằng đường cũ.
         def __init__(self, accepted):
             self._accepted = accepted
 
-        def accepted_segment_warnings(self):
+        def ruled_segment_warnings(self):
             return self._accepted
 
     pipeline.db = _DB({})
@@ -128,7 +132,7 @@ def test_an_acceptance_of_different_audio_does_not_clear_this_one(monkeypatch) -
     rows = [_Row(id=1, stable_id="c00003_s0000001", wav_sha256="new", warning_code=WARNING)]
 
     class _DB:
-        def accepted_segment_warnings(self):
+        def ruled_segment_warnings(self):
             return {("c00003_s0000001", "old"): {WARNING}}
 
     pipeline.db = _DB()

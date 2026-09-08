@@ -222,6 +222,13 @@ Người dùng bình thường không cần mở `_internal`. Tài liệu dành 
 - Khi beam và greedy đều đã xác nhận nội dung nhưng UTMOS vẫn yêu cầu nghe người, trạng thái cuối luôn là
   `PERCEPTUAL_NATURALNESS_REVIEW`, không bị gắn nhầm thành `ASR_MISMATCH_UNRESOLVED`. Lý do ban đầu kích hoạt repair
   vẫn được giữ riêng trong ledger để audit mà không làm sai nguyên nhân chặn cuối.
+- Khi vòng sửa đã cạn mà Whisper vẫn không đọc được, tool **tự cho segment ấy đi tiếp** thay vì giữ chapter lại
+  vĩnh viễn — nhưng chỉ khi Whisper là thứ duy nhất phàn nàn. Nếu bộ sinh tự khai chạm trần khung, hoặc UTMOS yêu cầu
+  nghe, hoặc segment không có WAV, tool từ chối và chapter vẫn bị giữ. Bản thu giữ nguyên trạng thái `failed` và mã
+  cảnh báo của nó: tool không đổi ý, nó chỉ được phép đi tiếp. Mỗi lần như vậy ghi vào bảng riêng
+  `machine_audio_acceptances` — không bao giờ trộn với phán quyết của người nghe — và hiện thành `unheard_segments`
+  trong report. `scripts/machine_acceptances.py` in danh sách kèm **mốc thời gian trong file MP3**, để nghe nếu muốn.
+  Tắt bằng `asr.ship_without_a_listener = false`.
 - `audiobook_quality_report.json` ghi final transcript/CER-WER, từng decode evidence, verdict, MOS, baseline, độ lệch,
   checksum và policy cho từng segment. Một chapter chỉ được tính đạt khi toàn bộ segment có evidence hiện hành,
   không còn warning chặn và MP3 qua mastering/decode/checksum.

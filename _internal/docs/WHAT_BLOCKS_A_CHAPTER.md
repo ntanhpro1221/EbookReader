@@ -70,3 +70,37 @@ _internal/.venv/Scripts/python.exe scripts/machine_credit.py <project> [--compar
 Nó tách **công của máy** khỏi **công của phán quyết cũ**, và đếm cả cổng 5. Con số so được giữa
 hai phiên bản là cột "công của máy"; con số chương xuất bản thì không, vì phán quyết tích luỹ
 làm nó tăng kể cả khi mã không đổi một dòng.
+
+## Cập nhật 2026-09-08: ai được mở cổng 3 và cổng 6
+
+Từ [cơ chế xuất bản khi không có ai để hỏi](SHIPPING_WITHOUT_A_LISTENER.md), **cổng 3 và cổng
+6 nhận phán quyết từ hai nguồn** thay vì một:
+
+| nguồn | bảng | khi nào |
+|---|---|---|
+| người nghe | `listener_audio_acceptances` | bất cứ lúc nào, qua `cli accept` |
+| **máy** | `machine_audio_acceptances` | sau khi vòng sửa cạn, và **chỉ** khi ASR là nhân chứng duy nhất |
+
+Cổng 4 (`_chapter_has_current_segment_audio_qa`) cũng đọc cả hai, vì nó vốn đã có ngoại lệ cho
+phán quyết người nghe và ngoại lệ ấy giờ rộng ra.
+
+**Đọc bảng nào ở đâu, và đừng nhầm:**
+
+- mọi **cổng** gọi `ProjectDB.ruled_segment_warnings()` / `ruled_segment_takes()` — hợp hai
+  nguồn, vì câu hỏi của cổng là *"còn phải quyết lại gì không"*;
+- mọi **báo cáo** gọi `accepted_segment_warnings()` — chỉ người nghe, vì câu hỏi của báo cáo là
+  *"cái này đã có tai người nào chưa"*.
+
+Trộn hai hàm là cách duy nhất cơ chế này có thể nói dối chủ sách, nên chúng cố ý mang hai cái
+tên và không hàm nào gọi hàm kia ngoài `ruled_`.
+
+Có **sáu** chỗ đọc phán quyết, không phải một, và đó là lý do phải có một accessor chung:
+`chapter_is_publishable`, `chapter_segments_have_current_audio_qa`,
+`pipeline._listener_ruled_on_this_take`, tiền điều kiện perceptual,
+`_high_quality_blocking_segment_warnings`, và bản quét trong `recovery.py`. Mỗi cái từng được
+vá riêng sau khi làm mất một chương. Cổng thứ bảy chỉ cần gọi `ruled_` và không phải biết có
+mấy bảng.
+
+**Máy không mở cổng 2 và cổng 5.** `SEGMENT_FAILED` (không có audio) và QA tầng chương nằm
+ngoài `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS` — cả hai đều là bằng chứng về chính file âm thanh,
+không phải về việc ASR đọc được hay không.

@@ -26,8 +26,7 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Tám bản vá đầu ĐÃ ÁP 2026-09-08 01:12; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ
-# không hỏng gì. Hai bản cuối đang chờ máy rảnh.
+# Toàn bộ hàng chờ ĐÃ ÁP hết; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không hỏng gì.
 ORDER: tuple[str, ...] = ()
 
 APPLIED = (
@@ -49,6 +48,14 @@ APPLIED = (
     "patch_laugh.py",
     "patch_known_carry.py",
     "patch_fakedb.py",
+    # Cơ chế xuất bản khi không có ai để hỏi, 2026-09-08 12:2x. Bốn cái này là **một** thay
+    # đổi và phải áp cùng nhau: bảng ở `_db`, cổng ở `_pipeline`, công tắc và cổng thứ sáu ở
+    # `_wiring`, con số cho báo cáo ở `_report`. Áp thiếu `_wiring` thì bản quét recovery
+    # không biết bảng mới và sẽ đánh hỏng lại đúng những đoạn vừa được cho qua.
+    "patch_machine_accept_db.py",
+    "patch_machine_accept_pipeline.py",
+    "patch_machine_accept_wiring.py",
+    "patch_machine_accept_report.py",
 )
 
 
