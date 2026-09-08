@@ -26,8 +26,18 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Toàn bộ hàng chờ ĐÃ ÁP hết; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không hỏng gì.
-ORDER: tuple[str, ...] = ()
+# `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
+# hỏng gì.
+#
+# `ORDER` còn đúng MỘT cái, và nó có một điều kiện mà script này không tự kiểm được:
+# `patch_strip_zero_width.py` **đổi `text_sha256` của 15 đoạn** trên cả cuốn, nên phải áp
+# **giữa hai lô**, không phải giữa chừng một lô. Kiểm nhịp tim `worker_leases` ở dưới chặn được
+# "đang chạy", nhưng không chặn được "vừa chạy xong lô này, sắp `resume` lô ấy".
+#
+# Thời điểm đúng: ngay trước lô 1 của docs/PRODUCTION_PLAN.md, vì lô ấy sinh lại chương
+# 000–029 từ đầu nên cái hash đổi không làm mất gì. Lý do đầy đủ:
+# docs/THE_SOURCE_IS_WATERMARKED.md
+ORDER: tuple[str, ...] = ("patch_strip_zero_width.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
