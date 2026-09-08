@@ -717,10 +717,53 @@ có tốt không" và trả lời **không** — hoàn toàn đúng, vì không 
 **có**: `generation_ceiling_hit`.
 
 Nên bản vá không phải một phép so ở điểm cạn ngân sách. Nó phải là một đường riêng, và đường
-ấy cần được thiết kế chứ không phải chèn vào. Cộng thêm: **chưa ai nghe** cả bản 1,92s lẫn bản
-0,64s, và toàn bộ lập luận này dựa trên đọc con số. Đêm 2026-09-07 tôi đã một lần chắc chắn
-như thế và sai (xem
-[WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md)).
+ấy cần được thiết kế chứ không phải chèn vào.
+
+### Không có tai người, nhưng có sóng âm
+
+Tôi đã viết ở đây rằng lập luận này "dựa trên đọc con số" và cần tai người mới xác nhận được.
+Không hẳn: câu hỏi thật hẹp hơn nhiều — *bản thu này có chứa tiếng lẽ ra không được có ở đó
+không?* — và sóng âm trả lời được. `scripts/burst_profile.py` chia bản thu thành ô 20ms và
+tách "cụm tiếng" bằng khoảng im từ 0,15 giây:
+
+```
+đương nhiệm  1,92s  2 cụm   ..#####.##########.............................####################...
+                            tiếng 0,04-0,36s   |   im 0,58s   |   tiếng 0,94-1,68s
+ứng viên v0  0,96s  1 cụm   tiếng 0,04-0,42s
+ứng viên v1  0,56s  1 cụm   tiếng 0,00-0,38s
+ứng viên v3  0,96s  1 cụm   tiếng 0,00-0,34s
+ứng viên v4  0,64s  1 cụm   tiếng 0,04-0,44s
+```
+
+Hai từ không nằm ở hai cụm cách nhau nửa giây. Và chi tiết đắt nhất: **mọi ứng viên đều dứt
+tiếng trước 0,44 giây**, đúng bằng cụm *đầu* của bản đương nhiệm. Câu `"Tiếp theo"` dài chừng
+0,35 giây; cụm thứ hai của bản đương nhiệm dài 0,74 giây — **gấp đôi cả câu**. Đó là tiếng
+thừa, đúng cái Whisper nghe ra thành "À xong".
+
+Cùng phép đo trên `"Gì cơ?"` chương 026: **ba cụm** cho một câu hai từ.
+
+### Và một kết quả âm, đáng bằng kết quả dương
+
+Cám dỗ tiếp theo là hiển nhiên: lấy **số cụm** làm phép kiểm mới, chặn mọi đoạn ngắn có ≥2 cụm.
+Đo trước khi làm, trên 205 đoạn ngắn `verified` của alpha.60:
+
+```
+verified:  1 cụm ×178    2 cụm ×26    3 cụm ×1
+failed  :  1 cụm ×3      2 cụm ×2     3 cụm ×1
+```
+
+**27 đoạn `verified` cũng có ≥2 cụm**, và nhìn nội dung thì chúng hoàn toàn bình thường:
+`"Sai bét. Tiếp theo!"`, `"Tốt! Tuyệt vời!"` có dấu câu bên trong; `"Tại sao ư?"` chỉ là một
+quãng ngập ngừng. Hai phân bố chồng nhau — **lần thứ hai** một đặc trưng âm học nghe rất hợp lý
+lại không tách được gì, sau nhịp đọc.
+
+Kết luận đứng vững: `burst_profile.py` là **kính lúp để nhìn một ca**, không phải cổng để chặn
+hàng loạt. Thứ duy nhất tách sạch được vẫn là lời tự khai của bộ sinh, `generation_ceiling_hit`
+— và cơ chế hiện tại đã dùng đúng nó.
+
+Cái thuyết phục ở ca này không phải một tín hiệu mà là **ba tín hiệu cùng chỉ một hướng**: bộ
+sinh khai chạm trần, sóng âm có cụm thừa dài gấp đôi câu thật, và ASR nghe ra chữ không có
+trong văn bản — trong khi bốn ứng viên bị vứt không có tín hiệu nào trong ba.
 
 ---
 
