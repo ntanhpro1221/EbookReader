@@ -237,3 +237,37 @@ Ba điều rút ra:
 
 Nếu muốn truy tiếp: câu này ngắn (hai chữ), và các lỗi lặp trước đây cũng nghiêng về câu
 ngắn. Kiểm phân bố độ dài của mọi lần dò được trước khi kết luận.
+
+## Cơ chế chặn thứ sáu: `max_join_jump`, và nó được hiệu chỉnh tốt
+
+alpha.57 chương 022 trượt ở `CHAPTER_QA_REVIEW_REQUIRED` với `join discontinuity 0.183` —
+một tầng chặn nằm hoàn toàn ngoài cổng cảnh báo segment, và là cơ chế duy nhất trong đêm
+2026-09-07/08 tôi chưa từng nhìn tới. `scripts/machine_credit.py` cũng mù với nó, đếm 5 chương
+chặn trong khi thật ra 6, cho tới khi được sửa.
+
+`_max_join_jump` đo **bước nhảy biên độ lớn nhất giữa hai mẫu liền kề** trong một cửa sổ quanh
+mỗi chỗ nối segment. Bước nhảy đột ngột ở chỗ nối chính là tiếng "click".
+
+### Phân bố, trên 107 phép đo gộp mọi phiên bản
+
+| | |
+|---|---|
+| trung vị | **0,0114** |
+| p90 | 0,111 |
+| p99 | 0,141 |
+| **lớn nhất** | **0,1835** |
+| vượt ngưỡng review 0,18 | **1/107** |
+| vượt ngưỡng hard 0,70 | 0/107 |
+
+**0,183 của chương 022 là chỗ nối tệ nhất từng đo được**, gấp 1,3 lần phân vị 99. Ngưỡng 0,18
+nằm ngay trên đỉnh phân bố quan sát được và bắn đúng một lần.
+
+Nói cách khác: **đây không phải phép kiểm đặt sai** như bốn cái khác tìm được cùng đêm. Nó bắn
+vào cực trị thật, và nhiều khả năng chương ấy có tiếng click nghe được. Ghi lại chính vì thế —
+để người sau không xếp nó chung rổ với những phép kiểm đo nhầm thứ.
+
+### Một quan sát chưa giải thích được
+
+Chín phép đo cho **đúng cùng một giá trị 0,111**. Một con số trùng khít qua nhiều chương gợi ý
+một hiện vật hệ thống — cùng một loại chỗ nối, hoặc cùng một đoạn — chứ không phải ngẫu nhiên.
+Chưa truy, ghi lại làm đầu mối.
