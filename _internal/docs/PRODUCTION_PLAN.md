@@ -227,6 +227,28 @@ mất toàn bộ phần phân tích của lô đang chạy.
 **Bài học cho 15 lô còn lại:** một lỗi kiểu này giữa lô tốn **cả phần phân tích đã làm**, không
 chỉ phần còn lại. Chạy bộ test đầy đủ **trước** mỗi lô rẻ hơn sửa giữa chừng.
 
+## Khi một lô có chương hỏng: chạy lô vá, đừng chạy lại cả lô
+
+Lô 1 hỏng 3 trong 8 chương đầu, cả ba vì lỗi đã có bản vá. Cám dỗ là dừng ngay để vá. Đừng —
+có đường rẻ hơn:
+
+| phương án | chi phí |
+|---|---|
+| dừng ngay, vá, chạy lại cả 30 chương | ~13 giờ, và vứt phần đã chạy |
+| để chạy hết, vá, chạy lại cả 30 chương | ~22 giờ |
+| **để chạy hết, vá, chạy lại CHỈ những chương hỏng** | **~9 + 4 giờ** |
+
+Lý do phương án ba dùng được: chương đã `completed` là sản phẩm hoàn chỉnh, và việc `resume` bị
+từ chối sau khi vá chỉ chặn **project ấy** — không chặn việc `create` một project mới bao đúng
+dải chương hỏng rồi gieo từ chính lô vừa chạy.
+
+Sản phẩm cuối là các file MP3 gộp từ hai project. Điều đó **không** làm hỏng tính nhất quán
+giọng, vì `port_casting` và `port_pronunciations` mang nguyên dàn giọng và cách đọc sang.
+
+Đổi lại, phải chấp nhận một điều và ghi rõ: những chương chạy lại dùng **mã mới hơn** các chương
+gốc. Với những bản vá chỉ đổi *cổng chặn* (độ to, nhãn nhịp) thì audio không đổi; với bản vá đổi
+*cách sinh* thì có. Ghi lô nào chạy mã nào vào VERSIONS.md, chứ đừng để phải đoán sau này.
+
 ## Sau mỗi lô
 
 ```bash
