@@ -40,6 +40,10 @@ ORDER: tuple[str, ...] = (
     # Chờ vì lô 1b đang chạy - và vì sửa `analysis.py`/`asr.py` giữa lô làm `resume` bị từ
     # chối, tức mất trọn phần phân tích đã làm. Áp ở ranh giới giữa hai lô.
     "patch_asr_surrogate.py",
+    # Cổng đúc giọng giết cả cuốn sách vì một nhân vật phụ hai câu thoại, sau 4 giờ phân
+    # tích. Đã kiểm hộp cát: 5 xanh sau vá, 2 đỏ trước vá. KHÔNG đổi audio của đoạn nào đã
+    # đúc đúng; chỉ đổi hậu quả của một ca không phán xử được.
+    "patch_casting_gate_no_halt.py",
 )
 
 APPLIED = (
