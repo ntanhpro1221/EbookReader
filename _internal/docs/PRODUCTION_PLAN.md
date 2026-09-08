@@ -114,6 +114,27 @@ giờ, và tệ hơn là làm bảng ước lượng sai mà không ai biết v�
 Việc đọc-thuần trên project **đã lưu** thì vô hại. Thứ phải tránh là chạy bộ test, quét cả 478
 file, hay bất cứ thứ gì giữ một core trong nhiều phút.
 
+## Làm sao biết lô đang chạy hay đã chết
+
+Đừng đoán qua log. Trong alpha.62 log im **14 phút** liền trong lúc mọi thứ hoàn toàn bình
+thường, vì đường ống đang sinh candidate với `gpu_scale` bị hạ xuống 0,25. Tôi suýt đọc im lặng
+thành chết — lần thứ hai trong ngày, sau khi cũng đọc "CPU phẳng" thành treo ở bộ test.
+
+Thước đo đúng là **nhịp tim của lease**, không phải log:
+
+```bash
+python -c "import sqlite3,time; c=sqlite3.connect('file:<project>/project.sqlite3?mode=ro',uri=True);   print([time.time()-r[0] for r in c.execute('SELECT heartbeat_at FROM worker_leases')])"
+```
+
+Dưới ~180 giây là sống. `apply_all.py` dùng đúng ngưỡng ấy để từ chối ghi khi có lượt đang bay.
+
+Kèm theo, để đọc đúng những gì thấy trong Task Manager: pool TTS chạy **ba tiến trình
+`pythonw` song song, mỗi cái giữ hơn 2 GB**. Cộng với supervisor và worker chính thì lúc cao
+điểm ngốn quãng 7–8 GB. Trên máy 31 GB đang mở Rider (~3,4 GB) và hai Unity (~2,2 GB), đường
+ống sẽ tự chuyển sang `yield_heavy` và chạy chậm hẳn — nó không hỏng, nó nhường. Nếu muốn lô
+chạy đúng số giờ trong bảng thì đóng bớt ứng dụng nặng, còn không thì cộng thêm giờ vào ước
+lượng thay vì ngạc nhiên.
+
 ## Sau mỗi lô
 
 ```bash
