@@ -99,6 +99,28 @@ Cách đọc kết quả alpha.62 phải sửa lại cho đúng:
 Ba dòng đầu vẫn đứng vững, và chúng là ba thứ đã ghi sẵn phải đo. Dòng thứ tư là thứ tôi tưởng
 sẽ có và không có.
 
+## Model mới không tốt hơn — nó chỉ khác
+
+Cám dỗ ngay sau khi tìm ra nguyên nhân: model đổi, và hai chương từng hỏng nay xuất bản, vậy
+bản mới hẳn tốt hơn. Đo trên **385 đoạn** của hai chương ấy, cùng `stable_id`, cùng giọng:
+
+```
+similarity   trung vị 1,0000 -> 1,0000     trung bình 0,9823 -> 0,9827
+WER          trung vị 0,0000 -> 0,0000     trung bình 0,0451 -> 0,0606
+đoạn tốt lên: 74     xấu đi: 73     không đổi: 238
+```
+
+74 lên / 73 xuống là hình dạng của **ngẫu nhiên**, không phải của cải thiện. WER trung bình còn
+nhích xấu đi.
+
+Nên kết luận đúng về chương 019 và 020: chúng được gỡ **không nhờ bản vá, cũng không nhờ model
+mới**, mà nhờ hai đoạn trong 385 tình cờ rơi đúng chiều. Cùng một câu ASR nghe ra
+`"Selenva L. Green"` ở lượt trước và `"Selene Valkrin"` ở lượt này — cùng model không thể, khác
+model thì mỗi lần một khác, và trung bình thì hoà.
+
+Đây là lý do phần "kết luận rút ra được" ở trên phải hẹp đến thế. Nếu không đào ra chuyện model
+đổi, tôi đã ghi hai chương này thành công của mình.
+
 ## Phải làm gì
 
 1. **Sửa ngay** câu trong [VERSIONS.md](VERSIONS.md) nói phép so là "có kiểm soát tới từng
