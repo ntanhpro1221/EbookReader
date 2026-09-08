@@ -64,9 +64,12 @@ mỗi chương được chấm **theo chính nó**, không ai so chương 1 vớ
    rồi ổn định mãi thì rẻ hơn quay về bản cũ để rồi vẫn phải đổi sau. alpha.62 cũng đã chạy
    trên bản mới rồi.
 
-   **Chưa biết bản mới tốt hay xấu hơn.** Một điểm dữ liệu mỏng nghiêng về "tốt hơn": đoạn
-   `"Khác gì ăn cướp không?"` của chương 019 trượt ASR ở alpha.60 sau năm vòng sửa, còn ở
-   alpha.62 nó đạt ngay lần đầu. Một đoạn không chứng minh được gì; đợi cả chín chương.
+   **Bản mới không tốt hơn — đã đo sau khi chín chương chạy xong.** Lúc viết dòng này tôi có
+   một điểm dữ liệu mỏng nghiêng về "tốt hơn" (`"Khác gì ăn cướp không?"` trượt ở alpha.60, đạt
+   ngay ở alpha.62) và đã cố ý không tin nó. Đúng là không nên: trên 385 đoạn của hai chương
+   đầu, **74 đoạn tốt lên, 73 xấu đi, 238 y nguyên**, WER trung bình còn nhích xấu. Nó chỉ
+   khác, không hơn — nên lý do ghim bản mới vẫn là "chịu một lần đứt rồi ổn định", không phải
+   "bản mới ngon hơn".
 
 3. **Áp cùng lúc với hai thay đổi đang chờ khác** — [lọc thuỷ ấn](THE_SOURCE_IS_WATERMARKED.md)
    và (nếu làm) `cudnn.deterministic`. Cả ba đều đổi audio một lần; gộp lại thì trả giá một
