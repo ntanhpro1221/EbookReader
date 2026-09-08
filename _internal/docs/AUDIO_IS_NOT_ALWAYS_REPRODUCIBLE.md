@@ -115,5 +115,10 @@ sẽ có và không có.
    [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), cùng lúc với
    [bản vá lọc thuỷ ấn](THE_SOURCE_IS_WATERMARKED.md) — hai thay đổi cùng đổi hash một lần thì
    trả giá một lần.
-3. **Đừng so hai lượt chạy trên máy có tải khác nhau** rồi kết luận về chất lượng mã. Bốn hàng
-   trong bảng trên là bằng chứng đủ để không tin phép so ấy nữa.
+3. **Đừng kết luận về chất lượng mã từ việc so audio hai lượt chạy** cho tới khi biết nguyên
+   nhân. Câu này trước đó tôi viết là "đừng so hai lượt trên máy có tải khác nhau" — sai, vì
+   chính alpha.53↔54 đều bị bóp mà vẫn giống nhau 100%. Điều kiện đúng để tin một phép so là
+   **kiểm nó**: đếm số đoạn cùng hạt giống mà cùng checksum, ngay đầu mỗi lần so, và chỉ tin
+   khi con số ấy cao.
+
+4. **Thêm phép đếm ấy vào `scripts/compare_runs.py`** để không ai phải nhớ làm nó bằng tay.

@@ -75,8 +75,16 @@ def _voice_drift(before: sqlite3.Connection, after: sqlite3.Connection) -> tuple
     Trả về (số đoạn so được, số đoạn lệch giọng, vài ví dụ).
     """
     def voices(conn: sqlite3.Connection) -> dict[str, str]:
+        # Phân giải ra `voice_key` chứ KHÔNG so `voice_profile_id`. Cột ấy là khoá số nội bộ
+        # từng project: so thẳng nó thì alpha.60 ↔ alpha.62 báo 1.340/1.357 "đổi giọng" trong
+        # khi giọng thật chỉ lệch 39. Tôi đã đọc nhầm đúng con số ấy một lần trước khi phân
+        # giải nó, và một cảnh báo sai ở đây thì tệ hơn không có cảnh báo nào.
+        profiles = {
+            row["id"]: str(row["voice_key"])
+            for row in conn.execute("SELECT id, voice_key FROM voice_profiles")
+        }
         return {
-            str(row["stable_id"]): f"{row['speaker']}|{row['voice_profile_id']}"
+            str(row["stable_id"]): f"{row['speaker']}|{profiles.get(row['voice_profile_id'], '?')}"
             for row in conn.execute(
                 "SELECT stable_id, speaker, voice_profile_id FROM segments"
             )
@@ -86,6 +94,33 @@ def _voice_drift(before: sqlite3.Connection, after: sqlite3.Connection) -> tuple
     shared = set(old_voices) & set(new_voices)
     drifted = sorted(k for k in shared if old_voices[k] != new_voices[k])
     return len(shared), len(drifted), drifted[:5]
+
+
+def _audio_reproducibility(before: sqlite3.Connection, after: sqlite3.Connection) -> tuple[int, int]:
+    """Trong những đoạn cùng hạt giống, bao nhiêu đoạn ra **cùng bản thu**?
+
+    Phải đếm trước khi tin bất cứ kết luận nào về mã. Cùng hạt giống lẽ ra là cùng audio, và
+    ba cặp lượt chạy đã cho 100% — nhưng alpha.60 ↔ alpha.62 cho **0/189** dù mọi đầu vào ghi
+    lại đều giống nhau, và tới giờ chưa ai biết vì sao
+    (docs/AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md).
+
+    Khi con số này thấp thì "chương X giờ xuất bản được" **không** chứng minh bản vá có tác
+    dụng: bản thu đã khác từ đầu, nên nó có thể chỉ là một lần bốc thăm may hơn. Cái vẫn kết
+    luận được là chương nào ra sản phẩm và máy tự cho qua đoạn nào.
+    """
+    def takes(conn: sqlite3.Connection) -> dict[str, tuple[str, object]]:
+        return {
+            str(row["stable_id"]): (str(row["wav_sha256"] or ""), row["generation_seed"])
+            for row in conn.execute(
+                "SELECT stable_id, wav_sha256, generation_seed FROM segments "
+                "WHERE wav_sha256 IS NOT NULL AND wav_sha256 <> ''"
+            )
+        }
+
+    old_takes, new_takes = takes(before), takes(after)
+    shared = [k for k in set(old_takes) & set(new_takes) if old_takes[k][1] == new_takes[k][1]]
+    identical = [k for k in shared if old_takes[k][0] == new_takes[k][0]]
+    return len(shared), len(identical)
 
 
 def main(argv: list[str]) -> int:
@@ -131,6 +166,17 @@ def main(argv: list[str]) -> int:
 
     print()
     print(f"gỡ được: {fixed}   hỏng thêm: {broke}   giữ nguyên: {same}")
+
+    seeded, identical = _audio_reproducibility(before, after)
+    if seeded:
+        share = 100 * identical / seeded
+        print()
+        print(f"tái lập audio: {identical}/{seeded} đoạn cùng hạt giống cho cùng bản thu ({share:.0f}%)")
+        if share < 90:
+            print("  THẤP. Bản thu đã khác từ đầu, nên một chương chuyển từ hỏng sang xuất bản")
+            print("  KHÔNG chứng minh bản vá có tác dụng — nó có thể chỉ là lần bốc thăm khác.")
+            print("  Vẫn kết luận được: chương nào ra sản phẩm, máy tự cho qua đoạn nào.")
+            print("  Xem docs/AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md")
 
     compared, drifted, examples = _voice_drift(before, after)
     print()
