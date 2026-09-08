@@ -114,7 +114,11 @@ def main(argv: list[str]) -> int:
             _checksum, metrics, _seed = coordinator.synthesize_atomic(
                 probe_row,
                 output,
-                seed_salt=f"frame_cap_probe_{cap}",
+                # MỘT seed cho mọi trần. Bản đầu đặt seed theo từng trần, tức đổi trần
+                # LẪN seed cùng lúc - và bảng đầu tiên nó in ra có trần 24 và trần-32-kẹp-về-24
+                # cho hai kết quả khác nhau, tức toàn bộ biến thiên quan sát được có thể chỉ là
+                # phương sai của seed. Muốn đo tác động của trần thì mọi thứ khác phải đứng yên.
+                seed_salt="frame_cap_probe",
                 repair_short_utterance=True,
             )
             duration = float(metrics.get("duration", 0.0)) or float(

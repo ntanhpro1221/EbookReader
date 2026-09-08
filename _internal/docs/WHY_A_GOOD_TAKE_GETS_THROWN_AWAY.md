@@ -184,3 +184,55 @@ Cần để đi tiếp — một trong hai, cái nào cũng được:
 
 Ghi lại theo đúng bài học của chính tài liệu này: một tương quan đẹp và một cơ chế nghe hợp lý
 đã dẫn tôi tới kết luận sai một lần đêm nay. Lần này dừng ở chỗ bằng chứng dừng.
+
+## Chốt bằng thí nghiệm: trần khung không chặt, mô hình thỉnh thoảng không chịu dừng
+
+`probe_frame_cap.py` chạy 2026-09-08 10:35 trên `"Gì cơ?"` của alpha.60 — câu đã chặn chương 026.
+
+**Lần chạy đầu vô nghĩa, và đáng ghi vì sao.** Bảng nó in ra có trần 24 và trần-32-kẹp-về-24
+cho hai kết quả khác nhau. Cùng một trần, hai kết quả — nghĩa là biến thiên quan sát được không
+đến từ trần. Nguyên nhân: script đặt `seed_salt` theo từng trần, nên tôi đổi **trần lẫn seed**
+cùng lúc. Đã sửa thành một seed duy nhất.
+
+Chạy lại, mọi thứ khác đứng yên:
+
+| trần | thời lượng | chạm trần | endpoint |
+|---|---|---|---|
+| 8 | 0,64s | **có** | không |
+| 12 | **0,80s** | không | không |
+| 16 | 0,80s | không | không |
+| 20 | 0,80s | không | không |
+| 24 | 0,80s | không | không |
+
+**Thời lượng dừng phẳng ở 0,80 giây từ trần 12 trở lên**, không chạm trần, endpoint tắt. Câu này
+cần 0,80 giây và trần 24 thừa sức chứa.
+
+Nhưng bản trong alpha.60 dài **1,92 giây và chạm trần** — cùng trần 24, khác seed. Nên:
+
+> **Giả thuyết 1 sai, giả thuyết 2 gần đúng hơn.** Trần không chặt. Mô hình **thỉnh thoảng
+> không tự dừng**, và khi ấy trần cắt nó — tức trần đang làm đúng việc.
+
+Bốn trên năm seed cho bản sạch. Đây là lỗi ngẫu nhiên theo seed, và **thuốc đúng là gieo lại**.
+
+## Lỗi thật: bản lảm nhảm ấy không được thu lại lần nào
+
+`segment_candidates` cho segment ấy **rỗng**. Nó lọt qua cả ba lưới:
+
+| lưới | vì sao lọt |
+|---|---|
+| phép kiểm nhịp | 4 ký tự, dưới ngưỡng `rate_check_min_chars = 24` nên **không chạy** |
+| `_ceiling_endpoint_requires_repair` | đòi **cả** chạm trần **lẫn** endpoint còn to; bản này tắt tiếng êm nên endpoint = 0 |
+| nhánh ASR không phán xử được | đặt `repairable: False` rồi đẩy sang `rejected` |
+
+Nhánh thứ ba có lý lẽ đúng — ASR mù trên câu ngắn thì thu lại cũng thế — nhưng nó bỏ qua rằng
+**bộ sinh đã tự khai bản thu hỏng**. `generation_ceiling_hit` là bằng chứng về bản thu, hoàn
+toàn độc lập với việc ASR đọc được hay không.
+
+### Đã sửa
+
+`_segment_generation_hit_ceiling` chỉ hỏi vế thứ nhất — có chạm trần không — và nhánh
+"không phán xử được" giờ đặt `repairable` theo nó. Bản thu chạm trần được thu lại; bản thu bình
+thường mà ASR mù thì vẫn không, y như cũ.
+
+Con số biện minh: 2,1 ký tự/giây so với ~16 bình thường, tức chậm gấp **7,6 lần** — một câu hai
+từ kéo 1,9 giây. Và bốn trên năm lần gieo lại cho bản sạch.
