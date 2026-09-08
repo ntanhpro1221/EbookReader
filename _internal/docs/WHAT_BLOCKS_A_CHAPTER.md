@@ -143,3 +143,56 @@ alpha.62  "Hãy subscribe cho kênh Ghiền Mì Gõ Để không bỏ lỡ nhữ
 Một câu hai từ, 0,5–2 giây, và Whisper rơi vào cùng một hố cả hai lần — chỉ khác tên kênh. Đó
 là bằng chứng cho chính lý lẽ đặt `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` vào nhóm không chặn:
 transcript ấy nói về **Whisper**, không nói gì về bản thu.
+
+## Cổng thứ bảy, và nó chặn cả CUỐN SÁCH chứ không chặn một chương (2026-09-08)
+
+Lô 1b chết lần thứ hai, sau **4 giờ phân tích trọn vẹn 3.727 đoạn**, ngay tại cổng đúc giọng:
+
+```
+RuntimeError: Casting input quality gate failed:
+gender conflicts={'SỐ SÁU': {'female': 1, 'male': 1, 'text_evidence': {'female': 3}}}
+```
+
+Một nhân vật **phụ, hai câu thoại**, model gán một câu nữ một câu nam. `resolve_gender` hỏi tới
+văn bản, văn bản trả lời **3 nữ / 0 nam** — nhất trí tuyệt đối — nhưng
+`GENDER_EVIDENCE_MINIMUM_HITS = 5` nên `_decisive` trả `None`, và cổng giết cả lượt chạy.
+
+Đọc sách thì chuyện rõ ràng:
+
+> *"…**người phụ nữ** đầu tiên bắt bẻ… Mang số sáu, **cô ta** cho rằng mình hoàn toàn có quyền
+> nhìn kẻ hậu bối bằng nửa con mắt."*
+
+`SỐ SÁU` là nữ, và nhãn `male` là model gán sai. Bằng chứng văn bản **đúng**; ngưỡng chặn một
+quyết định đúng.
+
+### Hạ ngưỡng là hướng sai — số liệu nói thế
+
+Cám dỗ hiển nhiên: 3 hit nhất trí thì cho quyết luôn. Đo trên **mọi project đã lưu**, so bằng
+chứng văn bản nhất trí (`loser = 0`) với những nhân vật mà model cũng nhất trí:
+
+```
+1 hit : khớp 17, lệch 18      ← đúng bằng tung đồng xu
+2 hit : khớp  6, lệch  0
+3 hit : khớp  8, lệch  5      ← lệch 38%
+4 hit : khớp  8, lệch  0
+5 hit : khớp  3, lệch  0      ← ngưỡng hiện tại
+```
+
+Ở 3 hit, bằng chứng văn bản **mâu thuẫn với model 5 lần trên 13**. Ngưỡng 5 không phải con số
+tuỳ tiện. Hạ nó là mua một lỗi im lặng để tránh một lỗi ồn ào.
+
+### Cách gỡ đã dùng, và cách sửa đúng
+
+**Gỡ ngay:** `cli cast --character "SỐ SÁU" --gender female`. Đó là **đọc sách**, không phải
+đoán — và quan trọng hơn, nó **không đổi mã**, nên `resume` giữ trọn 4 giờ phân tích. Thiệt hại
+thật của sự cố: ~20 phút.
+
+**Sửa đúng, chưa làm:** cổng này vi phạm chính nguyên tắc dự án đã chốt ở
+[SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md) — *một phép kiểm không phán xử
+được thì không được chặn*. Ở đây nó còn tệ hơn cổng cảnh báo segment: chương hỏng thì mất một
+chương, còn cổng này hỏng thì **mất cả cuốn sách**, sau khi đã tiêu hết phần đắt nhất của lượt
+chạy.
+
+Hình dạng bản vá: không `raise`, mà ghi log to, phát `db.event`, đúc bằng câu trả lời tốt nhất
+còn lại, và liệt kê nhân vật ấy trong báo cáo để người nghe khoá lại sau bằng `cli cast`. Giống
+hệt cơ chế máy tự cho qua: **không đợi ai, nhưng không bao giờ im lặng.**
