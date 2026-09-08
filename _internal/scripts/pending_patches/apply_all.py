@@ -50,6 +50,12 @@ ORDER: tuple[str, ...] = (
     # Cổng chương phủ nhận nhượng bộ mà chính đường ống vừa làm: `TTS_PACE_BAND_RELAXED` là
     # nhãn của một quyết định CHẤP NHẬN, không phải một lời than. 4 test, 3 đỏ trước vá.
     "patch_pace_relaxed_is_a_decision.py",
+    # Chỗ nối: vuốt 1ms hai mép đoạn trước khi ghép. Bước nhảy tại chỗ nối CHÍNH LÀ biên độ
+    # mẫu mép, nên vuốt mép về 0 thì bước nhảy về 0 - đúng theo định nghĩa. 4 test.
+    #
+    # ĐÂY là bản vá duy nhất trong hàng chờ ĐỔI AUDIO. Nó chỉ chép file cho những đoạn có mép
+    # thật sự lệch (đo được: 1/121), nhưng chương ghép ra sẽ khác byte. Áp ở ranh giới lô.
+    "patch_edge_fade.py",
 )
 
 APPLIED = (
