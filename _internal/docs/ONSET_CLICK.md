@@ -266,8 +266,23 @@ Nói cách khác: **đây không phải phép kiểm đặt sai** như bốn cá
 vào cực trị thật, và nhiều khả năng chương ấy có tiếng click nghe được. Ghi lại chính vì thế —
 để người sau không xếp nó chung rổ với những phép kiểm đo nhầm thứ.
 
-### Một quan sát chưa giải thích được
+### Đầu mối 0,111: truy ra, và lời giải nhàm — đó là tính tái lập
 
-Chín phép đo cho **đúng cùng một giá trị 0,111**. Một con số trùng khít qua nhiều chương gợi ý
-một hiện vật hệ thống — cùng một loại chỗ nối, hoặc cùng một đoạn — chứ không phải ngẫu nhiên.
-Chưa truy, ghi lại làm đầu mối.
+Tôi ghi lại "chín phép đo cho đúng cùng giá trị 0,111" như một hiện vật hệ thống đáng ngờ. Truy
+thì thấy nó chẳng bí ẩn gì: **cùng một chương, đo lại qua nhiều phiên bản**.
+
+| giá trị | số lần | ở đâu |
+|---|---|---|
+| `0,00014` | **29** | chương **000**, từ alpha.16 tới alpha.54 |
+| `0,110978` | 5 | chương **003** |
+| `0,077267` | 5 | chương **008** |
+
+Mỗi cụm là một chương duy nhất cho ra **đúng cùng con số** ở mọi lượt chạy. Đó là bằng chứng
+tái lập, không phải bất thường.
+
+Và nó là bằng chứng **mạnh hơn** phép đo 576/577 segment ghi ở `VERSIONS.md`: con số của chương
+000 giữ nguyên qua **29 lượt chạy trải hàng chục phiên bản**, tức chuỗi ghép audio cho ra file
+giống nhau tới mức bước nhảy biên độ lớn nhất ở chỗ nối không đổi một chữ số nào.
+
+Bài học nhỏ: một con số lặp lại trông như hiện vật, mà trong một hệ tất định thì lặp lại **mới
+là điều phải xảy ra**. Tôi suýt để lại trong tài liệu một "bí ẩn" cho người sau đi truy.
