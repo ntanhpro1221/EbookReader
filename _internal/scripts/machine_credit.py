@@ -7,7 +7,12 @@ con số ấy thành "máy khá lên". alpha.56 xuất 9/9 trong khi alpha.55 ch
 chênh lệch đi qua nhờ phán quyết chủ sách đã cho từ vòng trước, **bản thu vẫn mang trạng thái
 `failed`, máy không đổi ý điều gì**.
 
-Script này tách hai thứ ấy ra. Với mỗi chương nó hỏi: *nếu bỏ hết phán quyết mang sang, chương
+Từ 2026-09-08 có **loại thứ ba**, và nó không thuộc về bên nào trong hai bên trên: máy tự cho
+qua khi ASR là nhân chứng duy nhất (docs/SHIPPING_WITHOUT_A_LISTENER.md). Chương ấy xuất bản,
+nhưng **không phải vì phép kiểm nào tán thành** — chỉ vì không còn ai để hỏi. Gộp nó vào "công
+của máy" là đúng thứ nói dối mà cả file này sinh ra để chặn, nên nó được đếm riêng.
+
+Script này tách ba thứ ấy ra. Với mỗi chương nó hỏi: *nếu bỏ hết phán quyết mang sang, chương
 này còn xuất được không?* Trả lời bằng cách áp đúng luật của
 `_high_quality_blocking_segment_warnings` — hai mã chặn, năm mã cho qua — lên trạng thái segment,
 một lần có phán quyết và một lần không.
@@ -71,6 +76,33 @@ def _blockers(connection: sqlite3.Connection, *, honour_verdicts: bool) -> dict[
     return blocked
 
 
+def _machine_accepted_chapters(connection: sqlite3.Connection) -> dict[str, int]:
+    """Chương nào đi qua nhờ MÁY tự cho qua, và bao nhiêu đoạn.
+
+    Không phải công của máy theo nghĩa file này dùng - "công của máy" là *phép kiểm tán thành*,
+    còn đây là *không còn ai để hỏi*. Cũng không phải phán quyết của người. Cột riêng.
+    """
+    names = {r[0] for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "machine_audio_acceptances" not in names:
+        return {}
+    accepted = {
+        (str(a), str(b))
+        for a, b in connection.execute(
+            "SELECT segment_stable_id, wav_sha256 FROM machine_audio_acceptances"
+        )
+    }
+    if not accepted:
+        return {}
+    counts: dict[str, int] = {}
+    for row in connection.execute(
+        "SELECT c.title AS title, s.stable_id AS stable_id, s.wav_sha256 AS wav_sha256"
+        " FROM segments s JOIN chapters c ON c.id = s.chapter_id"
+    ):
+        if (str(row["stable_id"]), str(row["wav_sha256"] or "")) in accepted:
+            counts[str(row["title"])] = counts.get(str(row["title"]), 0) + 1
+    return counts
+
+
 def _chapter_level_failures(connection: sqlite3.Connection) -> dict[str, str]:
     """Chương bị chặn bởi thứ KHÔNG phải cảnh báo segment.
 
@@ -110,6 +142,7 @@ def _report(root: Path, label: str) -> tuple[int, int, int]:
         with_verdicts = _blockers(connection, honour_verdicts=True)
         without = _blockers(connection, honour_verdicts=False)
         chapter_level = _chapter_level_failures(connection)
+        machine_accepted = _machine_accepted_chapters(connection)
         verdicts = connection.execute(
             "SELECT COUNT(*) FROM listener_audio_acceptances"
         ).fetchone()[0]
@@ -124,8 +157,19 @@ def _report(root: Path, label: str) -> tuple[int, int, int]:
     _say(f"  chặn ở cổng cảnh báo segment, tính phán quyết : {len(with_verdicts)}")
     _say(f"  chặn ở cổng ấy nếu BỎ phán quyết              : {len(without)}")
     _say(f"  chặn ở TẦNG CHƯƠNG (ngoài cổng ấy)            : {extra_count}")
-    _say(f"  -> công của máy: {len(titles) - len(without) - extra_count}/{len(titles)} chương"
-         f"; phán quyết cứu thêm {len(without) - len(with_verdicts)}")
+    # Trừ cả chương đi qua nhờ máy tự cho qua. Chúng nằm trong `without` (mã cảnh báo vẫn còn
+    # trên segment - máy không đổi ý điều gì), nên không trừ ra là kể công cho phép kiểm về
+    # một chương mà không phép kiểm nào tán thành.
+    unheard = {t for t in machine_accepted if t in without}
+    earned = len(titles) - len(without) - extra_count
+    _say(f"  đi qua nhờ MÁY TỰ CHO QUA (chưa ai nghe)     : {len(unheard)}")
+    _say(f"  -> công của máy: {earned}/{len(titles)} chương"
+         f"; phán quyết cứu thêm {len(without) - len(with_verdicts)}"
+         f"; tự cho qua {len(unheard)}")
+    if unheard:
+        for title in sorted(unheard):
+            _say(f"       ch{title}: {machine_accepted[title]} đoạn chưa ai nghe")
+        _say("     (scripts/machine_acceptances.py in kèm mốc thời gian trong MP3)")
     for title in sorted(without):
         rescued = " (phán quyết cứu)" if title not in with_verdicts else ""
         _say(f"     {title}{rescued}: {'; '.join(without[title])}")
