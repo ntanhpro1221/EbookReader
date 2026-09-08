@@ -123,6 +123,24 @@ là hàm mọi **báo cáo** phải gọi. Cổng thứ bảy gọi `ruled_` mà
    nhất, vì có nó thì kiểm một đoạn mất năm giây, không có nó thì phải nghe cả chương, tức là
    không ai kiểm.
 
+## Chạy thật, alpha.62 chương 021 — cả ba ràng buộc đứng vững
+
+Lần đầu cơ chế nổ trên audio thật, 2026-09-08 16:24. Chương 021 có bốn đoạn `failed` ở
+alpha.60; ở lượt này ba trong bốn **vẫn `failed` với đúng mã cũ**, tức không được bốc thăm cứu.
+
+| ràng buộc | bằng chứng trên lượt chạy thật |
+|---|---|
+| chỉ khi ASR là nhân chứng duy nhất | cho qua 3 đoạn `failed` không tín hiệu bộ sinh; **bỏ qua** 4 đoạn `warning` mang mã vốn không chặn |
+| chỉ sau khi hết ngân sách sửa | cấp sau `_repair_chapter_perceptual_candidates`, và cả ba đoạn đã đi hết vòng sửa |
+| không im lặng | 3 dòng log, 3 `db.event`, `unheard_segments` liệt kê đúng 3 đoạn ấy trong báo cáo — và `[]` ở ba chương kia |
+
+Và thứ đáng lo nhất đã không xảy ra: **không có cổng thứ bảy.** Cả sáu cổng đều tôn trọng chấp
+nhận của máy. Chương ra MP3, mang theo ba đoạn chưa ai nghe, có mốc thời gian để nghe nếu muốn.
+
+Ngoài lề: `"Tiếp theo."` lần này ra 0,48–0,56 giây, không chạm trần, nên nó rơi vào nhóm
+`warning` không chặn và cơ chế đúng đắn không đụng tới. Nhưng đó là model khác chứ không phải
+bản vá — xem [AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md).
+
 ## Hướng đã loại: thăng bản thu "ít tệ nhất"
 
 Trong cả bốn ca thu lại, bản được giữ **không phải bản điểm cao nhất** máy đã tạo. Cám dỗ hiển
