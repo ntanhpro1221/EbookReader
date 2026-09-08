@@ -131,3 +131,42 @@ là còn trống.
 Sửa đúng là ở `character_registry.py`: reserve **mọi** `locked_voice_key` trong bảng
 `characters`, kể cả của nhân vật không nói câu nào ở lô này. Chưa làm vì file ấy bị khoá và
 alpha.57 đang chạy.
+
+## Nguồn va chạm giọng thứ ba: `reserve` giữ chỗ theo PRESET, va chạm xảy ra ở VOICE_KEY
+
+Đo trên alpha.60 (chạy lại chương 019–027 với bản vá giữ chỗ), so với alpha.57:
+
+| | giọng đang dùng | bị dùng chung | nhân vật dính |
+|---|---|---|---|
+| alpha.57 | 13 | **2** | 4 |
+| alpha.60 | 13 | **2** | 4 |
+
+**Số va chạm không giảm.** Bản vá `reserve_pinned_voices` giải quyết đúng cái nó nhắm — nhân vật
+đã ghim mà im lặng không còn để giọng mình trống — nhưng tổng số va chạm đứng yên, vì có một
+nguồn thứ ba.
+
+### Nguồn ấy
+
+alpha.60: `JAY` **được ghim** vào `preset_thai_son_f116_p+00`, và `SỐ SÁU` vẫn được bộ cấp phát
+giao đúng key ấy. Ghim có, giữ chỗ có, va chạm vẫn xảy ra.
+
+Vì `PresetAllocator.reserve(preset_name)` đếm theo **tên preset**, còn `voice_key` là
+`preset + formant + pitch`. Giữ chỗ một preset chỉ đẩy nó xuống cuối hàng xếp hạng; khi hàng
+cạn và nó được chọn lại, thang biến thể formant/pitch vẫn có thể rơi đúng vào tổ hợp đã có chủ.
+
+| tầng | ai biết | ai không |
+|---|---|---|
+| tên preset | `reserve` đếm ở đây | |
+| `preset + formant + pitch` | `assert_voice_stability` báo sau khi đã xảy ra | **bộ cấp phát không tra ở đây** |
+
+### Ba nguồn va chạm, theo thứ tự tìm ra
+
+1. **Ghim chỉ đếm một pool** — sửa trước 2026-09-07, `reserve` giờ đếm mọi pool.
+2. **Ghim của nhân vật im lặng bị rớt khi mang sang** — sửa 2026-09-08.
+3. **Giữ chỗ ở tầng preset, va chạm ở tầng voice_key** — **chưa sửa.**
+
+Hướng cho cái thứ ba: bộ cấp phát phải tra danh sách `voice_key` **đã có chủ** trước khi chốt,
+chứ không chỉ xếp hạng theo số lần dùng preset. Đó là đổi lõi phân vai, cần đo trên vài lô
+trước khi tin — và cần nhớ rằng ở một quy mô nào đó việc dùng chung là **không tránh được**,
+nên đích không phải số 0 mà là "không dùng chung giữa hai nhân vật có tên cùng xuất hiện gần
+nhau".
