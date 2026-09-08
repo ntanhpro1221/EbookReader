@@ -68,10 +68,28 @@ Chưa làm vì hai lý do, và lý do thứ hai mới là lý do thật:
 Thời điểm tự nhiên: ngay trước lô 1 của [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), vì lô ấy chạy
 đè lên chương 000–029 nên chúng sẽ được sinh lại toàn bộ dù sao đi nữa.
 
-## Hai thứ nữa phép quét tìm ra — đã kiểm, cả hai đều không phải vấn đề
+## Ba thứ nữa phép quét tìm ra — nghi cả ba, sai cả ba
 
-Ghi lại cả phần **không** hỏng, vì hai nghi ngờ này nghe rất hợp lý và người sau sẽ nghi lại
-đúng như thế.
+Ghi lại cả phần **không** hỏng, vì ba nghi ngờ này nghe rất hợp lý và người sau sẽ nghi lại
+đúng như thế. Chúng có chung một gốc, và đó mới là điều đáng nhớ: **sách này dùng `«»`, `『』`
+và `•` làm dấu hiệu kiểu chữ cho văn bản hệ thống game, không phải để trích lời hay nhấn
+mạnh.** Áp cách hiểu thông thường của ba ký hiệu ấy vào đây là làm hỏng, không phải sửa.
+
+### `«…»` bị xếp là narration chứ không phải dialogue
+
+Nghi ngờ nặng nhất, vì bộ chia đoạn **biết** `«»` mà vẫn không gán là thoại — 219 lần trong
+008.txt và 011.txt, tức khoảng trăm câu bị người dẫn chuyện đọc thay vì giọng nhân vật.
+
+Đo trên audio đã sinh (alpha.55, alpha.56): 14 segment mang `«»`, tất cả `kind=narration`,
+`speaker=NARRATOR`. Và nhìn nội dung thì hiểu ngay:
+
+```
+«Thẩm Định»
+Nghiến chặt hàm, tôi thu hồi «Thẩm Định» và triệu gọi hai Thẻ Vật phẩm của mình.
+```
+
+Đó là **tên kỹ năng**, không phải lời ai nói. Gán chúng cho một nhân vật sẽ khiến giọng đổi
+giữa câu mỗi lần nhắc tới một chiêu thức. Hành vi hiện tại đúng.
 
 **`『』` không được bộ chia đoạn coi là ngoặc kép** — đúng, `text_processing.py` biết `«»`,
 `‹›`, `""`, `''` nhưng không biết corner bracket. Nghi ngờ là lời thoại bị gán nhầm cho người
