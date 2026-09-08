@@ -47,6 +47,9 @@ ORDER: tuple[str, ...] = (
     # Cổng 5: lệch độ to dưới ngưỡng CỨNG không chặn nữa. Cố ý hẹp - `unexpected silence` và
     # `join discontinuity` vẫn chặn, vì chúng nghe thấy được. 5 test, hộp cát xanh.
     "patch_loudness_review_ships.py",
+    # Cổng chương phủ nhận nhượng bộ mà chính đường ống vừa làm: `TTS_PACE_BAND_RELAXED` là
+    # nhãn của một quyết định CHẤP NHẬN, không phải một lời than. 4 test, 3 đỏ trước vá.
+    "patch_pace_relaxed_is_a_decision.py",
 )
 
 APPLIED = (
