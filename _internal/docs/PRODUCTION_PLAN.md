@@ -118,12 +118,21 @@ Nghe thì tử tế, nhưng nó có nghĩa là **giờ máy trong bảng trên t
 alpha.62 vừa cho con số của máy bận:
 
 ```
-ước lượng (alpha.55, máy rảnh)  :  7,78 giây/segment
-đo trên alpha.62 (máy bận)       : 11,4  giây/segment   ← chậm hơn 47%
+ước lượng trong bảng (alpha.55)        :  7,78 giây/segment
+alpha.62, chỉ pha tổng hợp, máy bận    : 11,4  giây/segment
+alpha.62, ĐẦU-CUỐI (4,81 giờ / 1.357)  : 12,8  giây/segment   ← con số để lập kế hoạch
 ```
 
-Với nhịp ấy, **128 giờ trong bảng thành ~187 giờ** — tức 7,8 ngày thay vì 5,3. Cái đắt không
-phải bản thân số giờ mà là bảng ước lượng sai gần một nửa mà không có gì chỉ ra vì sao.
+Dòng thứ ba mới là dòng đúng, và tôi viết nhầm dòng thứ hai trước: nhịp pha tổng hợp bỏ qua
+pha phân tích, mà pha ấy chiếm gần một phần ba lượt chạy. Lập kế hoạch bằng nhịp một pha là
+tự hứa một thời hạn không thể giữ.
+
+Với 12,8 giây/segment đầu-cuối: **58.258 segment ≈ 207 giờ ≈ 8,6 ngày**, không phải 128 giờ /
+5,3 ngày. Lô 1 (3.727 segment) rơi vào khoảng **13 giờ**, không phải 8,1.
+
+Cái đắt không phải bản thân số giờ mà là một bảng ước lượng sai 60% và không có gì chỉ ra vì
+sao. Cột "giờ máy" trong bảng trên giữ nguyên vì nó là **đầu vào để chia lô cho cân**; nhân với
+12,8/7,78 = 1,65 để ra thời gian thật.
 
 Nguồn chiếm RAM hôm ấy: Rider (~3,4 GB), hai Unity (~2,2 GB), và chính các phép đo tôi chạy
 trong lúc chờ. Với một lô 8 giờ thì vài phút không đáng kể; với 16 lô nối nhau thì nó cộng dồn
