@@ -112,5 +112,26 @@ văn bản : '• Hệ thống Sức mạnh'
 nghe ra : 'hệ thống sức mạnh.'          sim 1,00  wer 0,00
 ```
 
-Model đọc lướt qua nó như với ký tự vô hình. `°`, `↓`, `⟨⟩` chưa có ca nào đủ nhiều để đo
-riêng, nhưng chúng cùng loại và tần suất thấp hơn hẳn (75, 6, 18 lần trên cả cuốn).
+Model đọc lướt qua nó như với ký tự vô hình.
+
+### Bảng khép kín: mọi ký tự lạ trong nguồn, và số phận của nó
+
+| ký tự | số lần | xử lý | bằng chứng |
+|---|---|---|---|
+| `—` `–` `…` | 3.262 | dấu câu thường | — |
+| ZWJ/ZWNJ | 800 | **chưa lọc** — xem trên | `verified`, sim 0,966 |
+| `•` | 772 | đọc lướt | 240 segment, 175 `verified`, sim tới 1,00 |
+| `»` `«` `›` `‹` | 219 | trong `SPOKEN_SEPARATORS` | 14 segment, tất cả `verified` |
+| `"` `'` | 321 | ngoặc kép, có nhận | — |
+| `°` | 75 | đọc lướt | cùng họ, chưa có ca riêng |
+| `⟨` `⟩` | 18 | đọc lướt | cùng họ, chưa có ca riêng |
+| `↓` `↑` | 6 | **đọc thành chữ**: "giảm" / "tăng" | 150 segment, 107 `verified`, sim 1,00 |
+| `『` `』` | 6 | đọc lướt | 2 segment, `verified`, sim 1,00 wer 0,00 |
+
+`↓` là chỗ dễ tưởng là lỗi nhất và lại là chỗ làm cẩn thận nhất: `text_processing.py` ánh xạ nó
+thành **"giảm"** với lý do ghi ngay tại chỗ — *"ký tự MANG NGHĨA phải thành CHỮ"*. Trong
+`↓ 1.000 Đơn vị Tinh hoa Linh hồn` thì bỏ mũi tên đi là mất nghĩa "giảm", còn đọc nó thành
+tiếng thì vô nghĩa. Whisper nghe ra `"giảm 1.000 đơn vị tinh hoa linh hồn"`, sim 1,00.
+
+Tức là **cả phép quét tìm ra đúng một thứ chưa được xử lý**: thuỷ ấn. Và nó không hại chất
+lượng, chỉ hại tính tái lập.
