@@ -629,3 +629,31 @@ Kiểm hồi quy, và ba cái đầu là những thứ dễ hỏng nhất:
 | `Kaizer` vs `kaiser` | vẫn khớp — ca cứu ban đầu không mất |
 | `ke`, `kê`, `ki`, `ky`, `kỳ` | **không bị đụng** — chính tả Việt hợp lệ |
 | bộ test đầy đủ | xanh |
+
+### Một kiểu hỏng khác, không phải `k`/`c`: phiên âm đánh vần phụ âm
+
+`Selene Valkryn` bị chặn ở alpha.60 chương 020, và phép gấp `k`→`c` **không cứu được**:
+
+```
+khoá : Xe-len  va-lờ-cờ-rin
+nghe : Selenva  L. Green
+```
+
+`Valkryn` được phiên âm thành **bốn âm tiết** `va-lờ-cờ-rin` — đánh vần từng phụ âm với nguyên
+âm đệm (`l` → `lờ`, `k` → `cờ`). Whisper nghe đúng cái đó rồi gom lại thành tên chữ cái:
+`lờ cờ rin` → `L. Green`. Và `Xe-len` + `va` bị dính thành `Selenva`.
+
+**Có thể giọng đọc không sai gì cả.** Cái sai là ở chỗ khác: một phiên âm đánh vần phụ âm tạo
+ra chuỗi âm mà Whisper diễn giải thành chữ cái, và không phép so chính tả hay âm vị nào bắc được
+cầu qua đó.
+
+Đây là **kiểu hỏng thứ hai** của cùng cơ chế, tách khỏi kiểu `k`/`c` đã sửa:
+
+| kiểu | ví dụ | sửa được chưa |
+|---|---|---|
+| chính tả cùng âm | `Xa-men` / `Sa-men`, `cai` / `Kai` | **rồi** — gấp `k`→`c`, và âm vị vốn đã gấp `x`/`s` |
+| phiên âm đánh vần phụ âm | `va-lờ-cờ-rin` → `L. Green` | **chưa**, và chưa rõ nên sửa ở đâu |
+
+Hướng đáng nghĩ, chưa đo: nếu chính **cách phiên âm** là thứ gây ra, thì sửa ở bảng cách đọc
+(`Valkryn` → một dạng ít đánh vần hơn) rẻ hơn nhiều so với dạy neo hiểu chữ cái. Nhưng đó là
+đổi thứ chủ sách duyệt, và mới có **một** ca — chưa đủ để động vào.
