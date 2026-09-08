@@ -98,6 +98,22 @@ Hai thứ còn lại có thể làm hỏng một chương, cả hai đã ghi:
 2. QA tầng chương (`_evaluate_chapter_quality`) — chỗ nối, im lặng, độ to. Máy không được phép
    tự cho qua cổng này, vì nó đo trên chính file âm thanh chứ không đo qua ASR.
 
+## Đừng làm việc nặng trên cùng máy trong lúc lô đang chạy
+
+Đường ống tự nhường CPU khi thấy nền bận — trong log alpha.62 là dòng:
+
+```
+Resource mode: yield_heavy — foreground CPU 60%
+```
+
+Nghe thì tử tế, nhưng nó có nghĩa là **giờ máy trong bảng trên tính cho một máy rảnh**. 60% CPU
+nền hôm ấy phần lớn là do chính tôi chạy các phép đo (pytest, quét nguồn, đọc sóng âm) trong lúc
+chờ. Với một lô 8 giờ thì vài phút không đáng kể; với 16 lô nối nhau thì nó cộng dồn thành nhiều
+giờ, và tệ hơn là làm bảng ước lượng sai mà không ai biết vì sao.
+
+Việc đọc-thuần trên project **đã lưu** thì vô hại. Thứ phải tránh là chạy bộ test, quét cả 478
+file, hay bất cứ thứ gì giữ một core trong nhiều phút.
+
 ## Sau mỗi lô
 
 ```bash
