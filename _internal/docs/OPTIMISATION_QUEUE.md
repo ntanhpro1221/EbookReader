@@ -813,11 +813,55 @@ Bài học rẻ hơn cho người sau: `time.sleep` không tốn CPU, nên **CPU
 của treo**. Bằng chứng là `-o faulthandler_timeout=N`, nó in ra ngăn xếp của cái đang chạy chậm
 và trả lời trong một phút.
 
-### Hình dạng bản sửa
+### Hình dạng bản sửa — **đã thử và bị chính phép đo bác bỏ** (2026-09-09)
 
-Một fixture `autouse` trong `tests/conftest.py` monkeypatch `time.sleep` thành no-op cho những
-test không đo thời gian thật. Rủi ro thấp: không test nào ở đây khẳng định điều gì về *độ dài*
-của lần lùi, chúng khẳng định về **số lần thử** và **trạng thái ứng viên**.
+Đề xuất cũ, giữ nguyên văn để thấy nó hợp lý đến mức nào: *"Một fixture `autouse` trong
+`tests/conftest.py` monkeypatch `time.sleep` thành no-op cho những test không đo thời gian
+thật. Rủi ro thấp: không test nào ở đây khẳng định điều gì về độ dài của lần lùi, chúng khẳng
+định về số lần thử và trạng thái ứng viên."*
+
+Tôi viết đúng fixture ấy rồi đo. Nó **làm bộ test chậm đi**:
+
+```
+test_successful_confirmation_decode_clears_initial_asr_false_negative
+   ngủ thật     5,09 giây
+   ngủ giả     89,65 giây          <- chậm gấp 17 lần
+   một module: 49.598.670 lần gọi time.sleep
+```
+
+Vì `pipeline._wait_for_resources` không ngủ để **nhường lượt**, nó ngủ để **đợi đồng hồ**: ngủ
+2 giây rồi hỏi lại bộ điều tiết, và bộ điều tiết chỉ nhả khi `stable_for` vượt
+`idle_seconds_before_ramp` (20 giây, đo bằng `time.monotonic()`). Bỏ ngủ không rút ngắn 20 giây
+ấy — nó biến vòng **chờ** thành vòng **quay tít**, đốt trọn một lõi để tới cùng một mốc.
+
+Nhưng kết luận không phải "đừng đụng vào": phép đo cho thấy **hai loại ngủ trộn lẫn**, và chúng
+nhìn từ ngoài giống hệt nhau.
+
+```
+_process_segment_candidate  time.sleep(min(8, 2**attempt))   ngủ để NHƯỜNG  -> bỏ được
+_wait_for_resources         time.sleep(2.0) rồi hỏi lại      ngủ để ĐỢI ĐỒNG HỒ -> không bỏ được
+```
+
+Cùng một test cho thấy cả hai chiều: `test_final_locked_name_round_uses_audited_clause_split_
+and_promotes` bỏ qua **220 giây** trong 36 lần ngủ và chạy trong 11,6 giây, tức nó thuộc loại
+thứ nhất và bỏ ngủ giúp rất nhiều. Thời lượng không tách được hai loại — cả hai đều gọi
+`sleep(2.0)` — nên muốn tách phải nhìn **hàm gọi**.
+
+**Chưa làm phần tách ấy**, và cố ý: lợi ích là thời gian của người phát triển, còn phép đo đòi
+chạy cả bộ test nhiều lần trong khi một lô đang tổng hợp — tức cướp CPU của chính thứ đang làm
+ra sản phẩm. Để dành cho lúc không có lô nào bay.
+
+### Cái đã làm: `tests/conftest.py` **đếm** chứ không bỏ
+
+Nó bọc `time.sleep`, cộng dồn, rồi ngủ thật — không đổi hành vi một chút nào — và in ở cuối:
+
+```
+[conftest] ngồi chờ 826 giây trong 11724 lần time.sleep.
+```
+
+Cái nó mua là **khả năng nhìn**, đúng thứ đã thiếu hôm 2026-09-08 khi tôi giết hai lượt chạy vì
+tưởng treo. `EBOOK_TESTS_REAL_SLEEP_OFF=1` bật lại chế độ bỏ ngủ, để đo lại kết luận trên chứ
+không phải để chạy nhanh hơn.
 
 Chưa làm vì chưa đo tổng: cần biết bộ test mất bao nhiêu giây trong `time.sleep` trước khi nói
 sửa nó đáng bao nhiêu. Cách đo rẻ: `-o faulthandler_timeout=30` một lượt rồi đếm số dump rơi
