@@ -137,6 +137,38 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
+## v0.2.0-lo01v — lô vá: 4/4 chương lấy lại, và hai bản vá được chứng minh
+
+Bốn chương lô 1 làm hỏng, chạy lại từng chương một trên cây đã có năm bản vá. **Cả bốn xuất bản
+được.**
+
+| ch | lô 1 hỏng vì | lô vá | `max_join_jump` |
+|---|---|---|---|
+| 000 | `loudness delta 0.62 LU` | ✅ | 0,0002 |
+| 003 | `join discontinuity 0.219` | ✅ | **0,0215** |
+| 007 | `TTS_PACE_BAND_RELAXED` | ✅ | 0,0031 |
+| 016 | `join discontinuity 0.216` | ✅ | **0,0019** |
+
+**`patch_edge_fade`: chứng minh hai lần, độc lập.** 0,219 → 0,0215 và 0,216 → 0,0019, trên vạch
+review 0,18. Log của cả hai chương ghi số đoạn được vuốt, và ở chương 003 nó bằng đúng con số
+bản vá dự đoán từ điều tra lô 1 (1 đoạn đi đường tắt trên 121).
+
+**`patch_loudness_review_ships`: chứng minh.** Chương 000 vẫn đo −20,62 LUFS, tức vẫn lệch 0,62
+LU và cờ review vẫn được ghi — nhưng chương xuất bản được. Đó đúng là điều bản vá nhắm tới: đừng
+giấu phép đo, chỉ đừng để nó chặn.
+
+**`patch_pace_relaxed_is_a_decision`: KHÔNG được chứng minh.** Đoạn nhịp của chương 007 lần này
+đọc 14,07 ký tự/giây, vừa qua sàn băng `fast` là 14,0, nên đường nới lỏng không mở lần nào. Một
+chương xanh không phải bằng chứng cho một bản vá chưa chạy.
+
+**Cơ chế xuất-bản-không-người-nghe ra tay đúng một lần**, ở chương 016: `'Tôi nhếch mép.'` bị
+Whisper nghe thành `'Tôi nhét mép.'` (sim 0,77), mã `ASR_MISMATCH_UNRESOLVED`, không chạm trần
+khung. Máy cho qua và **ghi sổ**, và báo cáo chương liệt kê đúng đoạn ấy trong `unheard_segments`
+— tức nó không nhận rằng có người đã nghe. Đó là chỗ thiết kế hai-bảng phải đúng, và nó đúng.
+
+Ba chương nhiều đoạn của lô này cũng cho một phép đo thông lượng sạch, chỉ dùng số tổng — xem
+[THE_MACHINE_IS_SHARED.md](THE_MACHINE_IS_SHARED.md).
+
 ## v0.2.0-lo01 — lô sản xuất đầu tiên: 26/30 chương, và cơ chế gánh 9 trong số đó
 
 Dải **000..029**, 3.727 đoạn, `lo01b_768c98bb4f`. Lô đầu tiên của
