@@ -102,12 +102,33 @@ def main(argv: list[str]) -> int:
         _say("Chưa có đủ thời gian ở chế độ maximum để so — chưa kết luận được gì.")
         return 0
     ideal = total_segments / best
+    ratio = (total_seconds / 60.0) / ideal
     _say("")
-    _say(
-        f"Ở tốc độ maximum ({best:.2f}/phút) thì {int(total_segments)} segment tốn"
-        f" {ideal:.1f} phút; thực tế {total_seconds / 60:.1f} phút"
-        f"  ->  chậm gấp {(total_seconds / 60) / ideal:.2f} lần."
-    )
+    if ratio < 1.05:
+        # Không thể chậm hơn 1,0 lần theo hướng ngược lại: "maximum" là tốc độ nhanh nhất mà
+        # lượt chạy đạt được, nên tỉ lệ dưới 1 nghĩa là phép gán segment-vào-chế-độ đã nhiễu
+        # tới mức đảo ngược, chứ không phải lô chạy nhanh hơn tốc độ tối đa của chính nó.
+        #
+        # Gán dựa trên mốc đổi chế độ gần nhất trước `updated_at`, nên một cụm segment hoàn
+        # thành ngay sau một lần đổi chế độ sẽ bị tính hết cho chế độ mới. Đo trên chương 016:
+        # `yield_light` ra 17,94/phút trong khi `maximum` ra 4,74 — không thể đúng.
+        #
+        # In ra sự thật ấy thay vì một con số nghe được mà sai.
+        _say(
+            f"Không kết luận được tỉ lệ: chế độ maximum đo ra {best:.2f}/phút, thấp hơn cả"
+            f" tốc độ chung {total_segments / (total_seconds / 60):.2f}/phút."
+        )
+        _say(
+            "  Phép gán segment vào chế độ nhiễu ở ranh giới đổi chế độ. Con số vẫn tin được"
+            " là tổng: "
+            f"{int(total_segments)} segment trong {total_seconds / 60:.1f} phút."
+        )
+    else:
+        _say(
+            f"Ở tốc độ maximum ({best:.2f}/phút) thì {int(total_segments)} segment tốn"
+            f" {ideal:.1f} phút; thực tế {total_seconds / 60:.1f} phút"
+            f"  ->  chậm gấp {ratio:.2f} lần."
+        )
     _say("")
     _say("Lý do được ghi lại, gần nhất trước:")
     for row in conn.execute(

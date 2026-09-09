@@ -13,6 +13,24 @@ chế độ         phút   segment   segment/phút
 Chạy hết tốc độ thì 121 segment tốn **9,2 phút**. Thực tế tốn **27,0 phút** — **chậm gấp 2,93
 lần**. Gần sáu mươi phần trăm thời gian nằm trong `yield_heavy`.
 
+### Bằng chứng vững hơn: ba chương, chỉ dùng số tổng
+
+Lô vá chạy ba chương có nhiều đoạn, trên cùng mã, cùng máy, cách nhau vài giờ. So chúng bằng
+**tổng thời gian và tổng segment** — không đụng tới phép gán segment-vào-chế-độ vốn nhiễu:
+
+| chương | segment | phút | segment/phút | % thời gian `yield_heavy` |
+|---|---|---|---|---|
+| 016 | 186 | 23,5 | **7,91** | 34% |
+| 003 | 121 | 27,0 | 4,48 | 58% |
+| 007 | 151 | 41,8 | **3,61** | 65% |
+
+Đơn điệu, không có ngoại lệ, và biên độ là **2,2 lần** giữa chương ít bị hãm nhất và chương bị
+hãm nhiều nhất. Nội suy về 0% cho khoảng 11–12 segment/phút, khớp với 13,13/phút đo trực tiếp ở
+chế độ `maximum` của chương 003 — hai đường đo độc lập gặp nhau.
+
+Đây là con số nên trích dẫn. Bảng chia theo chế độ bên dưới giữ lại vì nó chỉ ra *chế độ nào*,
+nhưng chỉ có tổng mới tin được:
+
 **Hai cột nào tin được và cột nào không.** Tổng (121 segment / 27 phút) và tốc độ `maximum`
 (113 segment trên 8,6 phút) đứng vững. Phần chia cho các chế độ *hiếm* thì không: hai lần chạy
 cách nhau vài phút cho `yield_heavy` lúc 2 segment lúc 8, vì việc gán segment vào chế độ dựa
