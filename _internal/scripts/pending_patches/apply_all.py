@@ -29,8 +29,16 @@ LEASE_STALE_SECONDS = 180.0
 # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
 # hỏng gì.
 #
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# 2026-09-09, viết trong lúc lô vá đang bay nên CHƯA áp. Áp ở ranh giới lô, trước lô 2.
+#
+# `patch_reserve_marks_the_slot` sửa một va chạm giọng **tránh được**: `reserve()` chỉ nhận tên
+# preset nên một giọng đã ghim nhích bộ đếm qua một bậc formant *bất kỳ* thay vì đánh dấu bậc
+# nó đang giữ. Lô 1: Thanh Bình có 7 người trên 7 bậc mà chỉ ra 6 giọng — bậc 0,898 bỏ phí
+# trong khi f104 phát cho cả CHA lẫn SỐ BA. Chạy thử trên bản sao: 103 test casting xanh.
+#
+# Nó KHÔNG đổi giọng của nhân vật đã được `port_casting` ghim (đường ghim không đi qua
+# `choose`), nên dây gieo giữa các lô không đứt.
+ORDER: tuple[str, ...] = ("patch_reserve_marks_the_slot.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
