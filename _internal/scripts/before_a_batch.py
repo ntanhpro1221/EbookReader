@@ -139,7 +139,19 @@ def main(argv: list[str]) -> int:
         _say(f"   không kiểm được: {exc}")
         problems.append("không chạy được kiểm model giọng")
 
-    if not args.skip_tests:
+    if live and not args.skip_tests:
+        # Bộ test mất vài phút và ăn CPU thật. Chạy nó **trong khi** một lô đang bay là lấy
+        # CPU của chính cái lô mình đang bảo vệ — và nó không đổi được câu trả lời, vì "có lô
+        # đang bay" đã là một lý do từ chối rồi.
+        #
+        # Đo ngày 2026-09-09: bộ điều tiết chuyển sang `yield_heavy` khi CPU tiền cảnh vượt
+        # 35%, và ở `yield_heavy` một chương của lô vá sinh ra 0 segment trong 25,8 phút. Một
+        # bộ canh khiến lô chậm lại là một bộ canh phản tác dụng.
+        _say("")
+        _say("=== 5. bộ test đầy đủ ===")
+        _say("   BỎ QUA: có lô đang bay, chạy test bây giờ là cướp CPU của nó.")
+        _say("   Chạy lại script này sau khi lô xong; câu trả lời đằng nào cũng đang là KHÔNG.")
+    elif not args.skip_tests:
         _say("")
         _say("=== 5. bộ test đầy đủ ===")
         tests = subprocess.run(
