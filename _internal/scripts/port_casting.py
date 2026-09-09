@@ -36,15 +36,19 @@ from scripts.port_listener_acceptances import _say_safely  # noqa: E402
 
 
 SPOKE_HERE_SQL = """
-    SELECT DISTINCT c.canonical_name AS canonical_name, v.*
+    SELECT c.canonical_name AS canonical_name, v.*,
+           sum(s.kind = 'dialogue') AS lines_here,
+           max(c.mention_count) AS mentions_here
     FROM characters c
     JOIN segments s ON s.canonical_character_id = c.id
     JOIN voice_profiles v ON v.id = s.voice_profile_id
+    GROUP BY c.id, v.id
     ORDER BY c.canonical_name
 """
 
 PINNED_SQL = """
-    SELECT DISTINCT c.canonical_name AS canonical_name, v.*
+    SELECT DISTINCT c.canonical_name AS canonical_name, v.*,
+           c.mention_count AS mentions_here
     FROM characters c
     JOIN voice_profiles v ON v.voice_key = c.locked_voice_key
     WHERE c.locked_voice_key <> ''
@@ -95,6 +99,26 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
 
     candidates: list[tuple[str, str, dict]] = []
     seen: set[str] = set()
+    # Số câu thoại mỗi người nói **trong lô nguồn**. Chỉ có ở các dòng từ SPOKE_HERE_SQL; dòng
+    # từ PINNED_SQL là người đã ghim mà im lặng ở lô này, và 0 câu là câu trả lời đúng cho họ.
+    spoken: dict[str, int] = {}
+    # Ai đang **giữ một pin** từ lô trước. Dòng nào không có `lines_here` là dòng từ PINNED_SQL,
+    # tức một quyết định đã có sẵn — có thể do chính chủ sách chọn. Nó xếp trên số câu thoại khi
+    # phải chọn ai giữ giọng; xem chỗ xử lý va chạm bên dưới.
+    pinned: set[str] = set()
+    # Bao nhiêu lần cả **cuốn sách** đã nhắc tới người này. Khác `lines_here` ở chỗ nó cộng dồn
+    # qua các lô (`read_known_characters` mang nó sang mỗi lần gieo), nên nó xấp xỉ được mức độ
+    # người nghe đã quen với giọng ấy — thứ duy nhất thật sự đáng cân khi phải đổi giọng ai đó.
+    mentions: dict[str, int] = {}
+    for row in rows:
+        keys = row.keys()
+        name_here = str(row["canonical_name"])
+        if "mentions_here" in keys and row["mentions_here"] is not None:
+            mentions[name_here] = max(mentions.get(name_here, 0), int(row["mentions_here"]))
+        if "lines_here" in keys and row["lines_here"] is not None:
+            spoken[name_here] = max(spoken.get(name_here, 0), int(row["lines_here"]))
+        else:
+            pinned.add(name_here)
     for row in rows:
         name = str(row["canonical_name"])
         # A chapter-local NPC is scoped to a chapter of the SOURCE batch; its id names
@@ -121,19 +145,73 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
     # same rule this script already applies to a character holding two voices. Both get a
     # fresh non-colliding voice in the target, and the collision ends here instead of
     # propagating to every later batch.
-    holders = Counter(voice_key for _name, voice_key, _profile in candidates)
+    holders: dict[str, list[str]] = {}
+    for name, voice_key, _profile in candidates:
+        holders.setdefault(voice_key, []).append(name)
+    lines = {name: int(spoken.get(name, 0)) for name, _k, _p in candidates}
+
     out: list[tuple[str, str, dict]] = []
     for name, voice_key, profile in candidates:
-        if holders[voice_key] > 1:
-            shared = sorted(
-                other for other, key, _p in candidates if key == voice_key and other != name
-            )
+        sharing = holders[voice_key]
+        if len(sharing) == 1:
+            out.append((name, voice_key, profile))
+            continue
+        # Người nói nhiều nhất giữ giọng; những người kia được đúc lại.
+        #
+        # Luật cũ ở đây là **bỏ cả**, với lý do "picking a winner has no evidence". Có bằng
+        # chứng: **số câu thoại**. Bỏ cả hai là đổi HAI giọng để chữa MỘT va chạm, còn bỏ người
+        # ít lời hơn là đổi một — và đổi đúng cái giọng ít người nghe hơn. Tổng thiệt hại không
+        # bao giờ lớn hơn, thường nhỏ hơn hẳn.
+        #
+        # Đo trên ranh giới lô 1 → lô 2: ba cặp va chạm làm **sáu** nhân vật mất giọng, trong
+        # đó có CHA (8 câu, main) và NOAH (8 câu, main). Với luật này chỉ ba người bị đúc lại,
+        # và cả ba là người ít lời hơn trong cặp của mình.
+        #
+        # Luật này chỉ an toàn nhờ `patch_reserve_marks_the_slot`: người thắng giữ giọng, và
+        # `reserve()` giờ đánh dấu **đúng bậc formant** ấy, nên người thua chắc chắn được cấp
+        # một bậc khác thay vì có thể quay vòng về đúng bậc vừa bị giữ.
+        # Thứ tự bằng chứng: **số lần được nhắc cả sách → số câu trong lô này → có pin hay
+        # không**.
+        #
+        # Bản đầu của luật này chỉ so số câu, và `test_two_characters_on_one_voice_are_both_
+        # left_behind` bắt ngay: ở ca alpha.56, THEOSBANE im lặng trong lô ấy nên 0 câu, còn
+        # SAMAEL nói 1 câu — luật chỉ-đếm-câu-trong-lô trao giọng cho SAMAEL và đúc lại
+        # THEOSBANE, đúng lỗ hổng mà `test_the_carry_keeps_a_pin_whose_character_never_spoke`
+        # tồn tại để chặn.
+        #
+        # Bản thứ hai xếp **pin lên trên số câu**, và nó cũng sai, chỉ theo hướng khác: chạy
+        # thử trên dữ liệu thật cho `SỐ BA` (phụ, 2 câu) thắng `CHA` (chính, 4 câu) chỉ vì SỐ BA
+        # tình cờ giữ pin từ lần chuyển trước. Không có cột nào phân biệt "người ghim" với
+        # "script ghim": `locked=1` đánh dấu **giới tính** do người chọn, không phải giọng.
+        #
+        # Thứ đáng cân là *người nghe đã quen giọng ấy tới mức nào*, và số đo sẵn có gần nhất là
+        # `mention_count` — nó cộng dồn qua các lô, nên THEOSBANE (156/478 chương) thắng SAMAEL
+        # mà không cần biết ai đang giữ pin, còn CHA thắng SỐ BA vì đúng lý do.
+        rank = {
+            other: (mentions.get(other, 0), lines.get(other, 0), other in pinned)
+            for other in sharing
+        }
+        best = max(rank.values())
+        winners = [other for other in sharing if rank[other] == best]
+        if len(winners) > 1:
+            # Hoà thì đúng là không có bằng chứng, và lúc ấy luật cũ mới đúng: bỏ cả.
             _say_safely(
-                f"  BỎ QUA {name}: giọng {voice_key} đang bị dùng chung với {', '.join(shared)}"
-                " — không mang giọng nào trong số đó, để bộ cấp phát chia lại"
+                f"  BỎ QUA {name}: giọng {voice_key} bị {', '.join(sorted(sharing))} dùng chung"
+                f" và ngang bằng nhau — hoà thì không có căn cứ chọn, bỏ cả để cấp phát chia lại"
             )
             continue
-        out.append((name, voice_key, profile))
+        if name == winners[0]:
+            others = sorted(other for other in sharing if other != name)
+            why = "đã ghim" if name in pinned else f"{lines.get(name, 0)} câu"
+            _say_safely(
+                f"  GIỮ   {name} ({why}) thắng {voice_key}; đúc lại {', '.join(others)}"
+            )
+            out.append((name, voice_key, profile))
+            continue
+        why = "đã ghim" if winners[0] in pinned else f"{lines.get(winners[0], 0)} câu"
+        _say_safely(
+            f"  BỎ QUA {name} ({lines.get(name, 0)} câu): {winners[0]} ({why}) giữ {voice_key}"
+        )
     return out
 
 

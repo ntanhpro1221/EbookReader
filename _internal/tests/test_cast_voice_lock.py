@@ -146,6 +146,8 @@ _sys.path.insert(0, str(SCRIPTS))
 
 import port_casting as porter  # noqa: E402
 
+from ebook_reader.character_registry import canonical_key  # noqa: E402
+
 
 def _cast_project(tmp_path: Path, *, name: str, voice_key: str):
     db = _project(tmp_path)
@@ -370,22 +372,83 @@ def test_the_carry_keeps_a_voice_allocated_but_never_pinned(tmp_path: Path) -> N
     assert target.locked_character_voices().get("ARTHUR") == KEY
 
 
-def test_two_characters_on_one_voice_are_both_left_behind(tmp_path: Path) -> None:
-    """Carrying a collision would make it permanent; picking a winner has no evidence.
+def test_the_more_heard_character_keeps_a_shared_voice(tmp_path: Path) -> None:
+    """One of two characters on a voice keeps it. That is a change of rule, with a reason.
 
-    So neither is carried and the allocator redistributes - the same rule this script already
-    applied to one character holding two voices.
+    The rule this replaces dropped **both**, on the grounds that "carrying a collision would
+    make it permanent; picking a winner has no evidence". The first half still holds. The
+    second does not: dropping both changes TWO voices to fix ONE collision, and there is
+    evidence about which one to change.
+
+    Measured at the batch 1 -> batch 2 boundary: three colliding pairs cost **six** characters
+    their voice, CHA and NOAH among them, both main. Under this rule three are recast, and each
+    is the quieter half of its pair.
+
+    The ranking took two tries to get right, and both wrong answers are worth keeping.
+
+    First it compared dialogue lines in this batch only. In alpha.56's case THEOSBANE was
+    silent that batch, so zero lines lost to SAMAEL's one - which is the leak
+    `test_the_carry_keeps_a_pin_whose_character_never_spoke` exists to stop.
+
+    Then it put "holds a pin" above line count. Run against the real batch 1 data that hands
+    SO BA (minor, 2 lines) the voice over CHA (main, 4) purely because SO BA happened to carry
+    a pin from the previous boundary. Nothing distinguishes a pin a person made from one this
+    script made last time: `locked=1` marks a **gender** a person chose, not a voice.
+
+    What actually matters is how used to that voice a listener is, and the nearest available
+    measure is `mention_count`, which accumulates across batches. THEOSBANE at 156 of 478
+    chapters beats SAMAEL without anyone consulting the pins, and CHA beats SO BA for the right
+    reason.
+
+    **The fixture gained a mention count with this change**, and that is worth saying out loud:
+    under the old drop-both rule nothing ever read it, so THEOSBANE was pinned with zero
+    mentions - a state that cannot occur for the character the docstring describes. Giving it
+    one makes the fixture match its own story rather than tuning it until the test passes.
+
+    Safe only because `reserve()` now marks the formant step the winner actually holds: the
+    loser is guaranteed a different step instead of possibly wrapping back onto the one just
+    kept.
     """
     source_db = _cast_project(tmp_path / "old", name="SAMAEL", voice_key=KEY)
-    # THEOSBANE pinned to the very voice SAMAEL is using: exactly alpha.56's state.
+    # THEOSBANE pinned to the very voice SAMAEL is using: exactly alpha.56's state - and
+    # present in 156 of the book's 478 chapters, which is the half the old fixture left out.
+    source_db.set_locked_character_voice("THEOSBANE", KEY)
+    source_db.upsert_character(
+        canonical_name="THEOSBANE",
+        display_name="THEOSBANE",
+        gender="male",
+        age="adult",
+        personality="",
+        mentions=156,
+        importance="main",
+        confidence=0.9,
+    )
+    target = _project(tmp_path / "new")
+
+    porter.port(source_db.project_root, target.project_root)
+
+    carried = target.locked_character_voices()
+    assert carried.get(canonical_key("THEOSBANE")) == KEY, "người được nghe nhiều hơn giữ giọng"
+    assert canonical_key("SAMAEL") not in carried, "người kia được đúc lại"
+
+
+def test_an_even_collision_still_drops_both(tmp_path: Path) -> None:
+    """Ngang bằng nhau thì luật cũ đúng: không có căn cứ chọn, nên bỏ cả.
+
+    Cả hai đều đã ghim, cùng 0 lần được nhắc và cùng 0 câu trong lô này, nên không có gì tách
+    được chúng. Giữ lại nhánh ấy chứ không ép một người thắng, vì ép nghĩa là đổi giọng một
+    người **trên không có bằng chứng nào** - đúng cái mà luật cũ cảnh báo và vẫn đúng ở đây.
+    """
+    source_db = _cast_project(tmp_path / "old", name="NOAH", voice_key="preset_thai_son_f100_p+00")
+    source_db.set_locked_character_voice("SAMAEL", KEY)
     source_db.set_locked_character_voice("THEOSBANE", KEY)
     target = _project(tmp_path / "new")
 
     porter.port(source_db.project_root, target.project_root)
 
     carried = target.locked_character_voices()
-    assert "SAMAEL" not in carried
-    assert "THEOSBANE" not in carried
+    assert canonical_key("SAMAEL") not in carried
+    assert canonical_key("THEOSBANE") not in carried
 
 
 def test_a_chapter_local_npc_is_not_carried(tmp_path: Path) -> None:

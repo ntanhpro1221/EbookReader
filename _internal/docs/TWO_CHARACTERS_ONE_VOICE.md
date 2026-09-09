@@ -126,7 +126,42 @@ lời để người nghe nghe, nên đổi một va chạm giọng lấy một 
 
 Ba hướng ấy đều nhắm vào "kho nhỏ quá". Kho không nhỏ.
 
-## Hướng đúng: cho bộ cấp phát biết ai cùng chương
+## Đã sửa một nửa: khi buộc phải chia lại, đừng đổi giọng cả hai người
+
+Luật cũ trong `port_casting.py`: hai nhân vật dùng chung một giọng thì **bỏ pin của cả hai**, vì
+*"picking a winner has no evidence"*. Nửa đầu của lý lẽ ấy vẫn đúng — mang cả hai sang là làm va
+chạm thành vĩnh viễn. Nửa sau thì không: bỏ cả hai là **đổi hai giọng để chữa một va chạm**.
+
+Đo tại ranh giới lô 1 → lô 2: ba cặp va chạm làm **sáu** nhân vật mất giọng, trong đó CHA và
+NOAH đều là nhân vật chính. Luật mới giữ người được nghe nhiều hơn, nên chỉ ba người bị đúc lại
+và cả ba là người ít lời hơn trong cặp của mình:
+
+```
+GIỮ   CHA (4 câu) thắng preset_thanh_binh_f104_p-04; đúc lại SỐ BA
+GIỮ   NOAH (8 câu) thắng preset_thai_son_f116_p+00; đúc lại SỐ BẢY
+GIỮ   SỐ BỐN (đã ghim) thắng preset_thai_son_f093_p+00; đúc lại SỐ NĂM
+```
+
+**Thứ hạng mất hai lần thử mới đúng, và cả hai lần sai đều đáng giữ lại.**
+
+Lần đầu chỉ so **số câu trong lô này**. Ca alpha.56 bác ngay: THEOSBANE im lặng ở lô ấy nên 0
+câu, thua SAMAEL 1 câu — đúng lỗ hổng mà một bài test khác tồn tại để chặn.
+
+Lần hai xếp **"có pin" lên trên số câu**. Chạy thử trên dữ liệu thật thì `SỐ BA` (phụ, 2 câu)
+thắng `CHA` (chính, 4 câu), chỉ vì SỐ BA tình cờ giữ pin từ lần chuyển trước. Không có cột nào
+phân biệt pin của **người** với pin của **script**: `locked=1` đánh dấu *giới tính* do người
+chọn, không phải giọng.
+
+Thứ đáng cân là *người nghe đã quen giọng ấy tới mức nào*, và số đo gần nhất là `mention_count`
+— nó cộng dồn qua các lô. THEOSBANE (156/478 chương) thắng SAMAEL mà không cần hỏi ai giữ pin,
+và CHA thắng SỐ BA vì đúng lý do. Hoà tuyệt đối thì quay về luật cũ: bỏ cả, vì lúc ấy đúng là
+không có bằng chứng.
+
+Luật này **chỉ an toàn nhờ bản vá `reserve()`**: người thắng giữ giọng, và `reserve()` giờ đánh
+dấu đúng bậc formant ấy, nên người thua chắc chắn được cấp bậc khác thay vì có thể quay vòng về
+đúng bậc vừa bị giữ.
+
+## Hướng còn lại: cho bộ cấp phát biết ai cùng chương
 
 Khi phải cho hai nhân vật dùng chung một giọng, chọn cặp **không cùng chương**. Đây là tô màu
 đồ thị đồng hiện, và dữ liệu đồng hiện đã có sẵn trong `segments` trước lúc đúc giọng, vì phân
