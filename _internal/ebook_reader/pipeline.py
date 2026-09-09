@@ -4114,7 +4114,7 @@ class BookPipeline:
         # this method's docstring promises cannot happen.
         workers = 0
         try:
-            from .tts_pool import SynthesisPool, workers_for_vram
+            from .tts_pool import SynthesisPool, workers_for_ram, workers_for_vram
 
             # Sized against the card that is actually here. The measurement behind the
             # default was taken on one 8151 MiB card; a smaller one cannot hold that many
@@ -4123,6 +4123,36 @@ class BookPipeline:
             workers = workers_for_vram(
                 ceiling, snapshot.gpu_free_mb, snapshot.gpu_total_mb
             )
+            # And against the machine, not only the card. `_synthesis_pool_ram_reserve`
+            # already knows what a synthesis worker costs in RAM - it hands that number to
+            # the *perceptual* pool so scoring leaves room for this one. Nothing pointed it
+            # the other way, so this pool could take the machine below the throttle's floor
+            # and then be stopped by the throttle it had just tripped.
+            #
+            # The floor is the throttle's own, read from settings rather than chosen here.
+            #
+            # This reading is clean, and that is worth checking rather than assuming: a pool
+            # sized while its own predecessor is still resident would under-read free RAM and
+            # shrink itself a little further every round. `SynthesisPool.close()` calls
+            # `pool.close()` then `pool.join()`, so the workers are gone before this returns,
+            # and the only path back into this sizing block is through a close - a live pool
+            # is returned above without re-sizing.
+            floor_ram_gb = float(
+                self.settings.get("resources", {}).get("min_free_ram_gb", 3.5)
+            )
+            by_ram = workers_for_ram(
+                ceiling,
+                float(snapshot.free_ram_gb),
+                floor_ram_gb,
+                PERCEPTUAL_WORKER_RAM_GB,
+            )
+            if by_ram < workers:
+                self.log(
+                    f"Pool TTS thu còn {by_ram}/{workers} worker: RAM trống "
+                    f"{snapshot.free_ram_gb:.1f} GB, sàn {floor_ram_gb:.1f} GB, "
+                    f"mỗi worker ~{PERCEPTUAL_WORKER_RAM_GB:.1f} GB."
+                )
+                workers = by_ram
             if workers < 2:
                 # Not latched, unlike the exception path below. Free VRAM is a reading of
                 # this instant, and the instant this is taken is a chapter boundary, where
@@ -4131,9 +4161,15 @@ class BookPipeline:
                 # not two - and synthesized chapters 3 to 10 serially because of it, about
                 # 2,037 seconds. The next chapter deserves to be asked again; a transient
                 # shortage is not a broken pool.
+                # Nói đúng cái đang thiếu. Bản trước luôn đổ cho VRAM, và từ khi RAM cũng
+                # có thể là ràng buộc thì một dòng log sai lý do sẽ gửi người đọc đi tìm
+                # nhầm chỗ - đúng chỗ mà chương 007 của lô vá đã làm tôi mất nửa giờ.
+                short = "RAM" if by_ram < 2 else "VRAM"
                 self.log(
-                    f"VRAM còn {snapshot.gpu_free_mb} MiB, không đủ cho pool TTS "
-                    f"({ceiling} worker mong muốn); tổng hợp tuần tự chương này."
+                    f"{short} không đủ cho pool TTS ({ceiling} worker mong muốn): "
+                    f"VRAM còn {snapshot.gpu_free_mb} MiB, RAM trống "
+                    f"{snapshot.free_ram_gb:.1f} GB trên sàn {floor_ram_gb:.1f} GB; "
+                    "tổng hợp tuần tự chương này."
                 )
                 return None
             if workers < ceiling:

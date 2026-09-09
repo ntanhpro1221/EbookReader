@@ -97,6 +97,53 @@ def workers_for_vram(
     return min(ceiling, affordable)
 
 
+def workers_for_ram(
+    ceiling: int,
+    free_ram_gb: float,
+    floor_gb: float,
+    worker_ram_gb: float,
+) -> int:
+    """How many workers the machine's RAM can hold above the throttle's own floor.
+
+    `workers_for_vram` above asks whether the card can hold them. Nothing asked whether the
+    machine could, and one synthesis worker costs about 2.3 GB of system RAM against roughly
+    900 MiB of VRAM - so on this box RAM binds first and the VRAM answer was the only one
+    anybody computed.
+
+    Measured mid-chapter on the 2026-09-09 repair batch: 2.85 GB free against a 3.5 GB floor,
+    the pool itself holding 7.63 GB, GPU at 0% and 4.6 W for over half an hour. Below the
+    floor `decide()` reports memory pressure and turns off **both** `allow_new_gpu_batch` and
+    `allow_cpu_heavy_work`, so the third worker is precisely what makes zero workers runnable.
+    Two workers would have left 5.39 GB free and run without stopping.
+
+    `floor_gb` is the throttle's own `resources.min_free_ram_gb`, passed in rather than read
+    here, for the reason `perceptual_qa.usable_for` gives for doing the same: a pool that
+    invents its own floor sizes itself into the band where the governor forbids its work. The
+    same argument applies to `worker_ram_gb`, which is why this takes it instead of defining a
+    second per-worker constant beside the one `perceptual_qa` already measured on peak RSS.
+
+    That reuse is measured, not assumed. Tracking peak RSS per pid over 25 minutes caught 14
+    synthesis workers at 2.68 GB max and 2.57 median, against the 2.68 max and 2.50 median
+    `perceptual_qa` recorded for 31 scoring workers - near-identical distributions, and 2.65
+    sits just under both maxima. The same window found free RAM below the 3.5 GB floor 36.5%
+    of the time.
+
+    Returns the ceiling untouched when RAM cannot be read as a positive number, matching
+    `workers_for_vram`'s rule that measurement may only lower a ceiling, never raise or
+    invent one.
+    """
+    ceiling = max(0, int(ceiling))
+    if ceiling < 2 or worker_ram_gb <= 0 or free_ram_gb <= 0:
+        return ceiling
+    spare = float(free_ram_gb) - max(0.0, float(floor_gb))
+    affordable = int(max(0.0, spare) // float(worker_ram_gb))
+    if affordable < 2:
+        # One worker in a pool is the sequential path with extra machinery around it - the
+        # same rule `workers_for_vram` applies, for the same reason.
+        return 0
+    return min(ceiling, affordable)
+
+
 TTS_POOL_WORKER_THREADS = 1
 """Torch claims one thread per core by default, so N workers ask for N x cores and spend the
 difference context switching. The perceptual pool measured 4 workers at 1.66x unpinned and

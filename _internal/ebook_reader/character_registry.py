@@ -386,6 +386,12 @@ class PresetAllocator:
             "npc": Counter(),
         }
         self.variant_usage: Counter[str] = Counter()
+        # Bậc formant nào của preset nào đã có chủ. `variant_usage` đếm *bao nhiêu lần*, cái
+        # này nhớ *bậc nào* - và chỉ cái sau mới trả lời được "bậc này còn trống không".
+        #
+        # Không gộp hai cái làm một: `variant_usage` vẫn cần cho đường quay vòng khi thang đã
+        # cạn thật, và lúc ấy hành vi phải y hệt trước.
+        self.taken_variants: dict[str, set[float]] = {}
 
     def choose(
         self,
@@ -502,11 +508,36 @@ class PresetAllocator:
             formant_ratio = age_ratio
         else:
             variants = formant_variants_for_preset(name)
-            formant_ratio = variants[self.variant_usage[name] % len(variants)]
+            # Bậc còn trống đầu tiên theo thứ tự thang, chứ không phải bậc mà bộ đếm đang
+            # chỉ vào. Hai cách chỉ khác nhau khi có bậc bị nhảy qua - và đúng chỗ ấy lô 1
+            # mất một giọng: Thanh Bình nhận 7 người trên 7 bậc mà chỉ ra 6 giọng, bậc 0,898
+            # bỏ phí trong khi f104 phát cho cả CHA lẫn SỐ BA.
+            #
+            # Thang bắt đầu ở 1,00 nên lần đúc đầu của một preset vẫn là giọng gốc không qua
+            # vocoder; thứ tự thang không đổi, chỉ có việc bỏ qua bậc đã có chủ là mới.
+            formant_ratio = self._first_free_variant(name, variants)
         self.variant_usage[name] += 1
+        self.taken_variants.setdefault(name, set()).add(round(float(formant_ratio), 3))
         return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
-    def reserve(self, preset_name: str) -> None:
+    def _first_free_variant(self, preset_name: str, variants: tuple[float, ...]) -> float:
+        """Bậc chưa ai giữ, theo thứ tự thang; cạn thật thì quay vòng như cũ.
+
+        Đường quay vòng giữ nguyên `variant_usage[name] % len(variants)` **có chủ ý**: khi mọi
+        bậc đã có chủ thì dùng lại là không tránh được, và lúc ấy đổi cách chọn chỉ đổi *ai*
+        trùng với ai mà không giảm số lần trùng. Câu hỏi ấy cần đồ thị đồng hiện và là một
+        thay đổi khác.
+
+        So sánh có dung sai vì bậc đi qua `round(..., 3)` và qua cột REAL của SQLite; 0,005 là
+        một nửa dung sai 0,01 mà chính `formant_variants_for_preset` dùng để khử trùng lặp.
+        """
+        taken = self.taken_variants.get(preset_name, set())
+        for ratio in variants:
+            if all(abs(ratio - held) > 0.005 for held in taken):
+                return ratio
+        return variants[self.variant_usage[preset_name] % len(variants)]
+
+    def reserve(self, preset_name: str, formant_ratio: float | None = None) -> None:
         """Record that a preset is taken, for a character this allocator never chose.
 
         A pinned voice is invisible to the ranking unless it is counted here, and an unused
@@ -526,6 +557,15 @@ class PresetAllocator:
         for pool in self.pool_usage.values():
             pool[name] += 1
         self.variant_usage[name] += 1
+        # Và đánh dấu **đúng** bậc đang bị giữ. Không có nó, `variant_usage` nhích lên một
+        # tức nhảy qua một bậc *bất kỳ*: bậc bị nhảy qua thành bỏ phí, còn bậc thật sự có chủ
+        # vẫn nằm trong vòng quay và được phát lại. Đo trên lô 1: đúng một va chạm sinh ra
+        # như thế (CHA và SỐ BA), và nó tránh được mà không cần thêm giọng nào.
+        #
+        # `formant_ratio` để mặc định None cho những chỗ gọi cũ không biết bậc; khi ấy hành vi
+        # y hệt trước bản vá này, tức chỉ nhích bộ đếm.
+        if formant_ratio is not None:
+            self.taken_variants.setdefault(name, set()).add(round(float(formant_ratio), 3))
 
 
 def _pinned_profile_id(
@@ -599,7 +639,9 @@ def reserve_pinned_voices(
                 " bỏ qua khi giữ chỗ."
             )
             continue
-        allocator.reserve(str(row["preset_name"]))
+        # `row` là cả dòng voice_profiles, nên bậc formant có sẵn ở đây. Bản đầu chỉ truyền
+        # tên preset đi và vứt nó, đó chính là chỗ hỏng.
+        allocator.reserve(str(row["preset_name"]), float(row["formant_ratio"]))
         reserved += 1
     return reserved
 

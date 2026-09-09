@@ -34,8 +34,14 @@ def _pipeline(free_mb: int) -> BookPipeline:
     pipeline._tts_pool = None
     pipeline._tts_pool_failed = False
     pipeline.log = _Recorder()
+    # `free_ram_gb` là trường thật của `ResourceSnapshot`, và từ khi pool cũng đếm RAM thì
+    # thiếu nó ở đây làm `_synthesis_pool` ném AttributeError bên trong `try` — tức biến một
+    # thiếu hụt nhất thời thành cái chốt vĩnh viễn mà chính file này cấm. Cho dư RAM, vì bài
+    # test này nói về VRAM.
     pipeline.resources = SimpleNamespace(
-        snapshot=lambda: SimpleNamespace(gpu_free_mb=free_mb, gpu_total_mb=8151)
+        snapshot=lambda: SimpleNamespace(
+            gpu_free_mb=free_mb, gpu_total_mb=8151, free_ram_gb=20.0
+        )
     )
     # The exception path records a warning event before giving up.
     pipeline.db = SimpleNamespace(event=lambda *args, **kwargs: None, path="/tmp/x.sqlite3")
@@ -67,6 +73,25 @@ def test_a_pool_that_cannot_be_built_does_latch() -> None:
 
 def _raise():
     raise RuntimeError("no CUDA here")
+
+
+def test_a_ram_shortage_does_not_latch_either() -> None:
+    """Thiếu RAM cũng là đọc một khoảnh khắc, y như thiếu VRAM — không được chốt.
+
+    Thêm cùng lúc với việc pool bắt đầu đếm RAM: nếu không có bài này thì đường mới sẽ là
+    đường duy nhất trong hàm chưa ai kiểm xem nó có chốt hay không, và chốt là thứ đã tốn
+    alpha.44 khoảng 2.037 giây.
+    """
+    pipeline = _pipeline(8000)
+    pipeline.resources = SimpleNamespace(
+        snapshot=lambda: SimpleNamespace(
+            gpu_free_mb=8000, gpu_total_mb=8151, free_ram_gb=3.6
+        )
+    )
+
+    assert pipeline._synthesis_pool() is None
+    assert pipeline._tts_pool_failed is False
+    assert any("RAM" in line for line in pipeline.log.lines)
 
 
 def test_parallel_workers_below_two_still_returns_none() -> None:
