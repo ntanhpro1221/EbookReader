@@ -13,6 +13,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | Máy có đủ VRAM không? | [VRAM_AND_CONTEXT.md](VRAM_AND_CONTEXT.md) |
 | Mất điện / bấm nhầm Ctrl-C thì sao? | [SURVIVING_AN_INTERRUPTION.md](SURVIVING_AN_INTERRUPTION.md) |
 | Lô chạy chậm hơn ước lượng nhiều? | [THE_MACHINE_IS_SHARED.md](THE_MACHINE_IS_SHARED.md) — nhường máy, không phải treo |
+| Lượt chạy đứng yên mà nhịp tim vẫn sống? | [A_POOL_THAT_FORBIDS_ITSELF.md](A_POOL_THAT_FORBIDS_ITSELF.md) |
 
 ## Có gì đó hỏng
 

@@ -45,6 +45,10 @@ trống dao động quanh đúng cái ngưỡng 3,5 GB.
 **Nhường như thế là đúng, không phải lỗi.** Người đang làm việc quan trọng hơn một lô chạy nền.
 Tài liệu này không đề nghị bỏ việc nhường.
 
+**Nhưng quy hết cho Unity và Rider là thiếu.** Đo sau đó: pool TTS tự giữ 7,63 GB, và trên máy
+31,3 GB thì hai bên cộng lại mới vượt ngưỡng — bỏ một trong hai là đủ. Xem
+[A_POOL_THAT_FORBIDS_ITSELF.md](A_POOL_THAT_FORBIDS_ITSELF.md).
+
 ## Nhưng "hãm" đang có nghĩa là "dừng"
 
 `yield_heavy` khai báo `gpu_batch_scale = 0,25` — nghe như chạy một phần tư tốc độ. Đo thật là
