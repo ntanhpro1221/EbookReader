@@ -255,7 +255,8 @@ def _validate_casting_inputs(
     minimum_named_mentions: int,
     log: Callable[[str], None] = lambda _message: None,
     locked: dict[str, str] | None = None,
-) -> None:
+) -> dict[str, dict[str, Any]]:
+    """Trả về những nhân vật không phán xử được giới tính. Không còn ném lỗi vì chúng."""
     rows_by_identity: dict[str, list[Any]] = defaultdict(list)
     for row in rows:
         speaker = str(row["speaker"])
@@ -319,15 +320,40 @@ def _validate_casting_inputs(
             f"đã xác định là {resolved} theo {reason}."
         )
 
+    # Mâu thuẫn giới tính **không** giết lượt chạy nữa.
+    #
+    # Nó đã giết lô 1b ngày 2026-09-08, sau **4 giờ phân tích trọn vẹn 3.727 đoạn**, vì một
+    # nhân vật phụ có đúng hai câu thoại mà model gán một nữ một nam. Văn bản trả lời rõ ràng
+    # (3 nữ / 0 nam, và narration viết thẳng *"người phụ nữ… cô ta"*) nhưng
+    # `GENDER_EVIDENCE_MINIMUM_HITS = 5` nên `_decisive` không dám quyết.
+    #
+    # Cổng này vi phạm nguyên tắc dự án đã chốt ở docs/SHIPPING_WITHOUT_A_LISTENER.md — *một
+    # phép kiểm không phán xử được thì không được chặn* — và vi phạm nặng hơn cổng cảnh báo
+    # segment: chương hỏng thì mất một chương, cổng này hỏng thì mất **cả cuốn sách**, ngay
+    # sau khi đã trả xong phần đắt nhất của lượt chạy.
+    #
+    # KHÔNG hạ `GENDER_EVIDENCE_MINIMUM_HITS`. Đã đo trên mọi project đã lưu: bằng chứng văn
+    # bản nhất trí ở 3 hit **mâu thuẫn với model 5 lần trên 13**, ở 1 hit thì đúng bằng tung
+    # đồng xu (17 khớp / 18 lệch). Ngưỡng 5 không tuỳ tiện; đổi nó là mua một lỗi im lặng để
+    # tránh một lỗi ồn ào.
+    #
+    # Nên: đúc bằng `unknown` (đường ống đã hỗ trợ - `casting_presets` nới rộng khi thiếu
+    # giọng), ghi log to, và trả danh sách ra cho chỗ gọi phát `db.event`. Người nghe sửa
+    # sau bằng một lệnh: `cli cast --character X --gender female`.
+    for identity, detail in sorted(gender_conflicts.items()):
+        log(
+            f"Giới tính của {identity} không phán xử được ({detail}); đúc bằng giọng "
+            f"trung tính và đi tiếp. Sửa bằng: cli cast --character {identity} --gender ..."
+        )
+
     issues: list[str] = []
-    if gender_conflicts:
-        issues.append(f"gender conflicts={gender_conflicts}")
     if missing_named_genders:
         issues.append(f"named speakers missing gender={missing_named_genders}")
     if identity_instability:
         issues.append(f"voice identity instability={identity_instability}")
     if issues:
         raise RuntimeError("Casting input quality gate failed: " + "; ".join(issues))
+    return gender_conflicts
 
 
 def _majority(rows: list[Any], column: str, default: str = "unknown") -> str:
@@ -1001,7 +1027,17 @@ def build_registry_and_cast(
     minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
     locked_genders = db.locked_character_genders()
     locked_voices = db.locked_character_voices()
-    _validate_casting_inputs(rows, minimum_main_mentions, log, locked_genders)
+    unresolved_genders = _validate_casting_inputs(
+        rows, minimum_main_mentions, log, locked_genders
+    )
+    for identity, detail in sorted(unresolved_genders.items()):
+        # Không im lặng: cùng khuôn với cơ chế máy tự cho qua. Chương vẫn ra sản phẩm, nhưng
+        # con số này phải nằm trong báo cáo để người nghe biết mà sửa nếu muốn.
+        db.event(
+            "warning",
+            "CASTING_GENDER_UNRESOLVED",
+            f"{identity}: {detail}",
+        )
     by_speaker: dict[str, list[Any]] = defaultdict(list)
     anonymous_by_gender: dict[str, list[Any]] = defaultdict(list)
     for row in rows:

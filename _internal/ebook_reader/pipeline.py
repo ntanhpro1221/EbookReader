@@ -154,7 +154,6 @@ CRITICAL_RAM_WAIT_TIMEOUT_SECONDS = 1800.0
 CRITICAL_RAM_WAIT_POLL_SECONDS = 15.0
 CRITICAL_RAM_WAIT_LOG_SECONDS = 120.0
 PACE_BAND_RELAXED_METRIC = "pace_band_relaxed"
-PACE_BAND_RELAXED_WARNING = "TTS_PACE_BAND_RELAXED"
 PACE_BAND_RELAX_ATTEMPTS = 4
 """Four takes at the relaxed band, not the full budget.
 
@@ -163,6 +162,8 @@ produced and judge them against the normal floor instead. If none of the first f
 it, the ones after will not either for a different reason - they are the same audio. Bounded
 so a doomed segment cannot spend the whole raised max_retries twice.
 """
+
+PACE_BAND_RELAXED_WARNING = "TTS_PACE_BAND_RELAXED"
 
 HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
     {
@@ -194,9 +195,10 @@ MACHINE_ACCEPTABLE_SEGMENT_WARNINGS = frozenset(
         ASR_LOCKED_NAME_ANCHOR_REVIEW,
         ASR_UNVERIFIABLE_SHORT_TEXT,
         ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
+        PACE_BAND_RELAXED_WARNING,
     }
 )
-"""Mã cảnh báo mà **chỉ ASR** kêu, nên máy được phép tự cho qua khi hết cách hỏi.
+"""Mã cảnh báo mà **không phép kiểm nào nói bản thu HỎNG**, nên máy được phép tự cho qua.
 
 Danh sách này toàn `ASR_*`, và đó là toàn bộ lý lẽ. Đo trên tám đoạn chặn của alpha.60:
 sáu đoạn không mang **một tín hiệu nào** từ bộ sinh nói bản thu hỏng - chỉ ASR không đọc
@@ -212,9 +214,68 @@ lỗi **đọc**, và năm vòng thu lại không đổi được gì vì chẳn
 
 Cố ý **không** có ở đây: `PERCEPTUAL_NATURALNESS_REVIEW` (một máy chấm khác, độc lập với
 ASR), `TTS_PACE_OUTLIER` (đo trên chính sóng âm), `SEGMENT_FAILED` (không có bản thu để
-ship), và `TTS_GENERATION_CEILING_REACHED` (bộ sinh tự khai nó chạy hết khung). Nguyên tắc:
-**máy chỉ được đè lên ASR khi ASR là nhân chứng duy nhất.**
+ship), và `TTS_GENERATION_CEILING_REACHED` (bộ sinh tự khai nó chạy hết khung).
+
+`TTS_PACE_BAND_RELAXED` là mã duy nhất ở đây **không** thuộc họ ASR, và nó buộc phải phát
+biểu lại nguyên tắc cho chính xác. Nguyên tắc **không** phải "chỉ đè lên ASR" mà là: **máy
+chỉ được đè lên một phép kiểm không nói rằng bản thu HỎNG.**
+
+Khác biệt ấy là thật. `TTS_PACE_OUTLIER` nghĩa là bản thu nằm ngoài **mọi** băng nhịp — một
+khuyết tật. `TTS_PACE_BAND_RELAXED` nghĩa là bản thu nằm **trong** băng `normal` nhưng ngoài
+băng mà phân tích đã xin: bản thu tốt, chỉ là diễn xuất nhạt hơn chỉ đạo. Người viết
+`_retry_in_normal_pace_band` gọi đúng tên nó: *"đánh mất một sắc thái diễn còn hơn đánh mất
+cả câu"* — một **đánh đổi**, không phải một lỗi.
+
+Và người ấy cố ý để nó chặn, với lý lẽ ghi trong test: *"một cái đánh đổi thì nên có người
+nghe trước khi nó lên sách"*. Lý lẽ ấy đúng, và nó giả định **có** một người. Chủ sách đã bỏ
+giả định ấy (2026-09-07: *"tôi không muốn phải tự nghe"*), nên cách giữ trọn cả hai là cho
+máy tự cho qua **có ghi sổ** — chứ không phải đưa vào `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`,
+vì làm thế là biến nó thành im lặng và vứt mất đúng cái tín hiệu người kia muốn giữ.
 """
+EDGE_FADE_SECONDS = 0.001
+EDGE_FADE_MIN_AMPLITUDE = 0.001
+"""Vuốt 1ms hai mép mỗi đoạn trước khi ghép, nhưng chỉ khi mép thật sự không ở gần 0.
+
+Lô 1 mất hai chương vì `join discontinuity` (chương 003: 0,219; chương 016: 0,216). Chuỗi đo
+đầy đủ ở docs/ONSET_CLICK.md; tóm tắt:
+
+  - Phép kiểm **đúng**: cùng thống kê ấy đo tại 360 vị trí ngẫu nhiên cho trung vị 0,004 và
+    cực đại 0,071, không giá trị nào chạm ngưỡng review 0,18.
+  - Đứt gãy **không đến từ đoạn**: mép lớn nhất trong cả 121 đoạn của chương 003 là 0,052.
+    Nó sinh ra ở khâu master, khi đoạn ở −25 LUFS được `loudnorm` kéo lên −20.
+  - Nên **sinh lại seed là vô ích** — khác hẳn tiếng "tóp" đầu câu, thứ nằm trong đầu ra thô
+    của model.
+
+Vì mọi ranh giới đều có khoảng lặng chèn vào, bước nhảy tại chỗ nối **chính là** biên độ mẫu
+mép. Vuốt mép về 0 thì bước nhảy về 0 — đúng theo định nghĩa, không cần đo để tin.
+
+`EDGE_FADE_MIN_AMPLITUDE` **không phải một ngưỡng phán xử**. Vuốt một mép vốn đã bằng 0 thì
+không đổi gì cả, nên nó chỉ quyết định *có bõ công chép file ra không*. Đo trên năm chương đầu
+lô 1: trung vị mép là 0,0000 ở mọi chương, bốn chương sạch có cực đại 0,0011–0,0076, chương
+hỏng có 0,0519. Với 0,001 thì gần như mọi đoạn vẫn đi đường tắt không chép.
+
+1ms là 48 mẫu ở 48 kHz. Âm tiết mở đầu rộng từ 10ms, và xung "tóp" đo được rộng 5–22ms, nên
+1ms không chạm tới cái nào.
+"""
+
+
+def fade_edges(audio, sample_rate: int):
+    """Vuốt tuyến tính `EDGE_FADE_SECONDS` ở đầu và cuối. Trả về chính mảng đã sửa tại chỗ."""
+    length = int(round(sample_rate * EDGE_FADE_SECONDS))
+    if length < 1 or audio.size < 2 * length:
+        return audio
+    ramp = np.linspace(0.0, 1.0, length, endpoint=False, dtype=np.float32)
+    audio[:length] *= ramp
+    audio[-length:] *= ramp[::-1]
+    return audio
+
+
+def edge_amplitude(audio) -> float:
+    if audio.size < 1:
+        return 0.0
+    return float(max(abs(float(audio[0])), abs(float(audio[-1]))))
+
+
 CHAPTER_REVIEW_STATUS = "warning"
 QUALITY_VERDICT_FAIL = "fail"
 CHAPTER_AUDIO_PIPELINE_FAILURE_CODE = "CHAPTER_AUDIO_PIPELINE_FAILED"
@@ -691,6 +752,7 @@ class BookPipeline:
         delivery_root = self.paths.work / "delivery" / f"chapter_{int(chapter['chapter_index']):05d}"
         rendered: list[tuple[Path, int]] = []
         transformed = 0
+        faded_edges = 0
         ordered = list(rows)
         for index, row in enumerate(ordered):
             source = Path(str(row["wav_path"]))
@@ -718,7 +780,22 @@ class BookPipeline:
                 and abs(formant_ratio - 1.0) <= 1e-6
                 and not expressive
             ):
-                rendered.append((source, break_ms))
+                # Đường tắt cũ dùng thẳng file gốc. Vẫn dùng thẳng - trừ khi mép của nó đủ
+                # lớn để thành một bước nhảy sau khi master kéo mức lên. Đo trên lô 1: đúng
+                # một đoạn trong 121 rơi vào diện này.
+                probe, probe_rate = sf.read(source, dtype="float32", always_2d=False)
+                probe = np.asarray(probe, dtype=np.float32).reshape(-1)
+                if edge_amplitude(probe) <= EDGE_FADE_MIN_AMPLITUDE:
+                    rendered.append((source, break_ms))
+                    continue
+                delivery_root.mkdir(parents=True, exist_ok=True)
+                destination = delivery_root / f"{int(row['seq']):07d}.wav"
+                faded = fade_edges(probe.copy(), int(probe_rate))
+                temp = destination.with_suffix(".part.wav")
+                sf.write(temp, faded, int(probe_rate), subtype="PCM_16")
+                os.replace(temp, destination)
+                rendered.append((destination, break_ms))
+                faded_edges += 1
                 continue
             delivery_root.mkdir(parents=True, exist_ok=True)
             destination = delivery_root / f"{int(row['seq']):07d}.wav"
@@ -738,6 +815,9 @@ class BookPipeline:
             shifted, _target = shape_segment(
                 shifted, int(sample_rate), emotion, intensity, kind, pitch_steps
             )
+            # Biến đổi âm sắc cũng có thể để lại mép không ở 0, nên vuốt ở đây luôn. Rẻ:
+            # bản sao đã được ghi ra rồi.
+            shifted = fade_edges(np.asarray(shifted, dtype=np.float32).reshape(-1), int(sample_rate))
             temp = destination.with_suffix(".part.wav")
             sf.write(temp, shifted, int(sample_rate), subtype="PCM_16")
             os.replace(temp, destination)
@@ -747,6 +827,12 @@ class BookPipeline:
             self.log(
                 f"Áp âm sắc nhân vật cho {transformed}/{len(rows)} segment của chapter "
                 f"{chapter['chapter_index']} trước khi ghép."
+            )
+        if faded_edges:
+            self.log(
+                f"Vuốt mép {faded_edges}/{len(rows)} segment của chapter "
+                f"{chapter['chapter_index']}: mép không ở 0 thành bước nhảy ở chỗ nối "
+                "sau khi master kéo mức lên."
             )
         return rendered
 

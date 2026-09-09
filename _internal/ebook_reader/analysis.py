@@ -6445,6 +6445,8 @@ def _check_prompt_fits(usage: dict[str, int], num_ctx: int, num_predict: int) ->
         )
 
 
+from .io_utils import strip_lone_surrogates as _strip_one_string
+
 LONE_SURROGATE_PATTERN = re.compile("[\ud800-\udfff]")
 
 
@@ -6468,7 +6470,7 @@ def strip_lone_surrogates(value: Any) -> Any:
     thành ký tự thật, nên thứ còn sót lại trong khoảng ấy chắc chắn là nửa lạc.
     """
     if isinstance(value, str):
-        return LONE_SURROGATE_PATTERN.sub("", value)
+        return _strip_one_string(value)
     if isinstance(value, list):
         return [strip_lone_surrogates(item) for item in value]
     if isinstance(value, tuple):

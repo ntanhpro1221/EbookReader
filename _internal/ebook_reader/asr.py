@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
+
+from .io_utils import strip_lone_surrogates
 import soundfile as sf
 from scipy.signal import resample_poly
 
@@ -1733,7 +1735,12 @@ class WhisperVerifier:
         if not confirmation and duration_seconds > self._beam_minimum_seconds():
             decode_options["beam_size"] = int(self.settings.get("beam_size", 5))
         if self.engine == "faster":
-            return self._transcribe_faster(audio, duration_seconds, decode_options)
+            # Dọn ở **cả hai** nhánh engine, tại chỗ transcript ra đời. `transcribe()` không
+            # phải nơi duy nhất gọi hàm này - còn một chỗ nữa ở nhánh lặp câu ngắn - nên bọc
+            # ở đây thay vì bọc chỗ gọi.
+            return strip_lone_surrogates(
+                self._transcribe_faster(audio, duration_seconds, decode_options)
+            )
         result = self.model.transcribe(audio, **decode_options)
         raw_segments = result.get("segments", [])
         segments = [item for item in raw_segments if isinstance(item, dict)]
@@ -1741,7 +1748,7 @@ class WhisperVerifier:
             segments,
             duration_seconds,
         )
-        return str(result.get("text", "")).strip()
+        return strip_lone_surrogates(str(result.get("text", "")).strip())
 
     def _transcribe_faster(
         self,

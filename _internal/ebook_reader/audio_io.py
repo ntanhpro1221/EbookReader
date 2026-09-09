@@ -49,6 +49,40 @@ class ChapterQualityError(AudioQualityError):
 CHAPTER_DURATION_HARD_TOLERANCE_SECONDS = 0.10
 CHAPTER_LOUDNESS_HARD_TOLERANCE_LU = 0.75
 CHAPTER_LOUDNESS_REVIEW_TOLERANCE_LU = 0.30
+LOUDNESS_REVIEW_FLAG_PREFIX = "loudness delta"
+
+
+def chapter_review_flags_that_block(review_flags) -> list:
+    """Cờ review nào thật sự phải chặn chương, khi không có ai để hỏi.
+
+    Trước 2026-09-09 mọi cờ review đều chặn dưới `high_quality`, và chương đầu tiên của lượt
+    sản xuất chết vì `loudness delta 0.62 LU`. Nghĩa đen của một cờ review là *"có thể đáng
+    nghe, hỏi một người"* — mà lệnh của chủ sách là **không phải nghe**
+    (docs/SHIPPING_WITHOUT_A_LISTENER.md).
+
+    **CHỌN HẸP, và đây là lý do.** Đếm trên mọi project đã lưu, chỉ ba loại cờ review tầng
+    chương từng xuất hiện:
+
+        4 lần   unexpected silence   vd 1,02s     <- NGHE THẤY, vẫn chặn
+        2 lần   join discontinuity   vd 0,183     <- NGHE THẤY, vẫn chặn
+        2 lần   loudness delta       vd 0,62 LU   <- không nghe thấy, cho qua
+
+    Một công tắc gộp sẽ đẩy cả **một giây mất tiếng** vào sách, và sẽ vô hiệu hoá
+    `join discontinuity` — phép kiểm mà chính dự án đã đo là hiệu chỉnh đúng (nổ 1/107 lần,
+    đúng vào cực đại thật). Chỉ mình độ to là đại lượng có ngưỡng nghe được rõ ràng, và
+    `CHAPTER_LOUDNESS_HARD_TOLERANCE_LU = 0.75` đã là vạch mà chính dự án đặt ra cho "quá mức
+    này thì chắc chắn có vấn đề". Một cờ độ to nằm dưới vạch ấy là phép kiểm tự nhận nó chưa
+    chắc — cùng lý lẽ với *"ASR là nhân chứng duy nhất"*, chỉ khác là nhân chứng thứ hai ở đây
+    là ngưỡng cứng của chính nó.
+
+    Chương vẫn đi tiếp **và vẫn kêu**: `pipeline` đã có sẵn sự kiện `CHAPTER_QA_REVIEW_FLAGS`
+    ghi mọi cờ, kể cả cờ được cho qua ở đây.
+    """
+    return [
+        flag
+        for flag in review_flags
+        if not str(flag).startswith(LOUDNESS_REVIEW_FLAG_PREFIX)
+    ]
 CHAPTER_TRUE_PEAK_HARD_MARGIN_DB = 0.50
 CHAPTER_TRUE_PEAK_REVIEW_MARGIN_DB = 0.15
 CHAPTER_CLIPPING_HARD_FRACTION = 0.0001
@@ -1463,10 +1497,11 @@ def assemble_chapter_atomic_with_metrics(
                     for item in trimmed_edges
                 ),
             )
-        if settings.get("quality_profile") == "high_quality" and quality.review_flags:
+        blocking_review_flags = chapter_review_flags_that_block(quality.review_flags)
+        if settings.get("quality_profile") == "high_quality" and blocking_review_flags:
             raise ChapterQualityError(
                 "temporary MP3 requires review under high-quality policy: "
-                + "; ".join(quality.review_flags),
+                + "; ".join(blocking_review_flags),
                 artifact_sha256=candidate_checksum,
                 metrics=quality.to_dict(),
                 failure_codes=("CHAPTER_QA_REVIEW_REQUIRED",),

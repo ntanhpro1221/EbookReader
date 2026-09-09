@@ -39,6 +39,30 @@ def test_the_warning_blocks_publication_so_a_person_hears_it() -> None:
     assert PACE_BAND_RELAXED_WARNING not in HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS
 
 
+def test_the_machine_may_let_it_through_but_only_on_the_record() -> None:
+    """Từ 2026-09-09: vẫn chặn một mình, nhưng máy được cho qua **có ghi sổ**.
+
+    Câu trên vẫn đúng và vẫn quan trọng — một cái đánh đổi thì nên có người nghe. Cái đã đổi
+    là giả định rằng **có** một người: chủ sách ra lệnh 2026-09-07 *"tôi không muốn phải tự
+    nghe, project phải hoạt động toàn bộ cho ra sản phẩm"*, nên "audio, cộng một quyết định"
+    trở thành "audio, cộng một quyết định không ai sẽ đưa ra" — tức chương không bao giờ lên.
+
+    Cách giữ trọn cả hai ý là cho máy tự cho qua qua `machine_audio_acceptances`: chương ra
+    sản phẩm, đoạn vẫn mang cảnh báo, và báo cáo vẫn nói *"chưa ai nghe cái này"* kèm mốc thời
+    gian trong MP3 để nghe nếu muốn.
+
+    Cái **không** được làm là đưa mã này vào `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS` — đã thử
+    và đã lùi lại. Làm thế là biến nó thành im lặng, tức vứt đúng cái tín hiệu mà test ở trên
+    được viết ra để giữ.
+    """
+    from ebook_reader.pipeline import MACHINE_ACCEPTABLE_SEGMENT_WARNINGS
+
+    assert PACE_BAND_RELAXED_WARNING in MACHINE_ACCEPTABLE_SEGMENT_WARNINGS
+    assert "TTS_PACE_OUTLIER" not in MACHINE_ACCEPTABLE_SEGMENT_WARNINGS, (
+        "ngoài MỌI băng là khuyết tật, không phải đánh đổi"
+    )
+
+
 def test_a_normal_segment_never_pays_for_this() -> None:
     """The common path: 98% of segments are already `normal` and must return at once."""
     pipeline = object.__new__(BookPipeline)

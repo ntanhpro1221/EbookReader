@@ -803,13 +803,34 @@ def test_relational_description_is_not_merged_with_named_character(tmp_path: Pat
     assert len({int(row["canonical_character_id"]) for row in rows}) == 2
 
 
-def test_gender_conflict_fails_before_voice_casting(tmp_path: Path) -> None:
+def test_gender_conflict_no_longer_fails_the_whole_book(tmp_path: Path) -> None:
+    """Cho tới 2026-09-09, chỗ này ném lỗi và **cả cuốn sách dừng**.
+
+    Lý lẽ cũ đúng theo nghĩa của nó: đừng đúc giọng khi còn chưa biết nhân vật là nam hay nữ.
+    Cái nó không lường là cái giá. Lô 1 chết ở đây **sau 4 giờ phân tích trọn vẹn 3.727 đoạn**,
+    vì một nhân vật phụ có đúng hai câu thoại mà model gán một nữ một nam — và vì `resume` bị
+    từ chối sau khi sửa mã, toàn bộ 4 giờ ấy mất trắng chứ không chỉ phần còn lại.
+
+    Đây là cổng đắt nhất trong dự án: chương hỏng thì mất một chương, cổng này hỏng thì mất cả
+    cuốn, ngay sau khi đã trả xong phần đắt nhất của lượt chạy. Và nó vi phạm nguyên tắc đã
+    chốt ở docs/SHIPPING_WITHOUT_A_LISTENER.md — *một phép kiểm không phán xử được thì không
+    được chặn*.
+
+    **Ngưỡng bằng chứng KHÔNG được hạ** để bù. Đo trên mọi project đã lưu, bằng chứng văn bản
+    nhất trí ở 3 hit mâu thuẫn với model 5 lần trên 13, ở 1 hit là 17 khớp / 18 lệch — tức tung
+    đồng xu. `GENDER_EVIDENCE_MINIMUM_HITS = 5` không tuỳ tiện; hạ nó là mua một lỗi im lặng để
+    tránh một lỗi ồn ào. Cái đổi là **hậu quả**, không phải ngưỡng.
+    """
+    said: list[str] = []
     db = _identity_db(tmp_path, [("CAMIL", "female"), ("Camil", "male")])
 
-    with pytest.raises(RuntimeError, match="gender conflicts"):
-        build_registry_and_cast(db, build_settings(), lambda _message: None)
+    build_registry_and_cast(db, build_settings(), said.append)
 
-    assert db.list_voice_profiles() == []
+    assert db.list_voice_profiles(), "phải đúc giọng và đi tiếp, không dừng cả cuốn sách"
+    assert any("CAMIL" in line for line in said), "và phải nói ra tên nhân vật ấy"
+    assert any("cli cast" in line for line in said), "kèm cách sửa"
+    codes = {str(row["code"]) for row in db.list_events()}
+    assert "CASTING_GENDER_UNRESOLVED" in codes, "không im lặng: phải có sự kiện để vào báo cáo"
 
 
 def test_recurring_named_speaker_without_gender_fails_before_voice_casting(

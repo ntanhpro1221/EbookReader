@@ -36,6 +36,23 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+LONE_SURROGATE_PATTERN = re.compile("[\ud800-\udfff]")
+
+
+def strip_lone_surrogates(text: str) -> str:
+    """Bỏ những code point là **một nửa** của cặp surrogate.
+
+    Đặt ở đây chứ không ở `analysis.py` vì đã có **hai** nguồn cần nó: phản hồi Ollama và
+    transcript của Whisper. Cả hai là văn bản do model sinh ra, và cả hai đều tạo ra được một
+    `str` hợp lệ trong bộ nhớ mà **không mã hoá UTF-8 được** - thứ giết lô 1 ngày 2026-09-08
+    ngay dưới đây ở `sha256_text`, và cũng bị chính sqlite từ chối lúc `INSERT`.
+
+    Xoá đúng khoảng D800-DFFF: mọi cặp hợp lệ đã được bộ giải mã ghép thành ký tự thật, nên
+    thứ còn sót trong khoảng ấy chắc chắn là nửa lạc.
+    """
+    return LONE_SURROGATE_PATTERN.sub("", text)
+
+
 def sha256_text(text: str) -> str:
     return sha256_bytes(text.encode("utf-8"))
 

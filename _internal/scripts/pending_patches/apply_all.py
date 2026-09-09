@@ -32,31 +32,8 @@ LEASE_STALE_SECONDS = 180.0
 # Hàng chờ rỗng. Hai bản vá cuối áp 2026-09-08 17:5x, ngay tại ranh giới giữa alpha.62 và lô
 # 1 của kế hoạch sản xuất - đúng thời điểm mà `patch_strip_zero_width` cần, vì nó đổi
 # `text_sha256` của 15 đoạn và lô 1 sinh lại chương 000-029 từ đầu nên không mất gì.
-ORDER: tuple[str, ...] = (
-    # Nguồn thứ tư: transcript của Whisper. `patch_lone_surrogate` đã dọn phản hồi Ollama,
-    # nhưng ASR cũng là văn bản do model sinh ra và sqlite từ chối nửa surrogate lạc y hệt
-    # `sha256_text`. Đã kiểm trong hộp cát, 4 test xanh. KHÔNG đổi audio.
-    #
-    # Chờ vì lô 1b đang chạy - và vì sửa `analysis.py`/`asr.py` giữa lô làm `resume` bị từ
-    # chối, tức mất trọn phần phân tích đã làm. Áp ở ranh giới giữa hai lô.
-    "patch_asr_surrogate.py",
-    # Cổng đúc giọng giết cả cuốn sách vì một nhân vật phụ hai câu thoại, sau 4 giờ phân
-    # tích. Đã kiểm hộp cát: 5 xanh sau vá, 2 đỏ trước vá. KHÔNG đổi audio của đoạn nào đã
-    # đúc đúng; chỉ đổi hậu quả của một ca không phán xử được.
-    "patch_casting_gate_no_halt.py",
-    # Cổng 5: lệch độ to dưới ngưỡng CỨNG không chặn nữa. Cố ý hẹp - `unexpected silence` và
-    # `join discontinuity` vẫn chặn, vì chúng nghe thấy được. 5 test, hộp cát xanh.
-    "patch_loudness_review_ships.py",
-    # Cổng chương phủ nhận nhượng bộ mà chính đường ống vừa làm: `TTS_PACE_BAND_RELAXED` là
-    # nhãn của một quyết định CHẤP NHẬN, không phải một lời than. 4 test, 3 đỏ trước vá.
-    "patch_pace_relaxed_is_a_decision.py",
-    # Chỗ nối: vuốt 1ms hai mép đoạn trước khi ghép. Bước nhảy tại chỗ nối CHÍNH LÀ biên độ
-    # mẫu mép, nên vuốt mép về 0 thì bước nhảy về 0 - đúng theo định nghĩa. 4 test.
-    #
-    # ĐÂY là bản vá duy nhất trong hàng chờ ĐỔI AUDIO. Nó chỉ chép file cho những đoạn có mép
-    # thật sự lệch (đo được: 1/121), nhưng chương ghép ra sẽ khác byte. Áp ở ranh giới lô.
-    "patch_edge_fade.py",
-)
+# Hàng chờ rỗng.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -93,8 +70,23 @@ APPLIED = (
     # thiếu ghim TTS sẽ báo thành lỗi perceptual. Bản sau có `voice_model_check` riêng.
     "patch_pin_voice_model.py",
     "patch_strip_zero_width.py",
-    # 2026-09-08 19:4x, sau khi lo 1 chet o doan 1.406/3.727 vi mot nua cap surrogate lac.
+    # 2026-09-08 19:4x, sau khi lô 1 chết ở đoạn 1.406/3.727 vì một nửa cặp surrogate lạc.
     "patch_lone_surrogate.py",
+    # 2026-09-09 ~05:00, tại ranh giới lô 1 / lô vá. Năm cái này ra đời từ bốn kiểu hỏng thật
+    # của lô 1, và bộ test bắt được HAI chỗ tôi đè lên quyết định cố ý của người trước:
+    #
+    #   - `patch_pace_relaxed_is_a_decision` ban đầu đưa `TTS_PACE_BAND_RELAXED` vào
+    #     HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS. `test_the_warning_blocks_publication_so_a_
+    #     person_hears_it` đỏ, và nó đúng: làm thế là biến mã ấy thành IM LẶNG, vứt mất tín
+    #     hiệu "nên có người nghe". Sửa lại: cho vào MACHINE_ACCEPTABLE (có ghi sổ) thay vì
+    #     ALLOWED (im lặng).
+    #   - `patch_casting_gate_no_halt` làm `test_gender_conflict_fails_before_voice_casting`
+    #     đỏ. Test ấy viết lại kèm lý do và cái giá, không xoá.
+    "patch_asr_surrogate.py",
+    "patch_casting_gate_no_halt.py",
+    "patch_loudness_review_ships.py",
+    "patch_pace_relaxed_is_a_decision.py",
+    "patch_edge_fade.py",
 )
 
 
