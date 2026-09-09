@@ -364,7 +364,7 @@ Cái giá của hướng này là **một ngưỡng mới**, và hôm nay đã c
 liệu bác bỏ. Số liệu ở đây nghiêng về nó (khoảng trống giữa 0,008 và 0,052 là rất rộng) nhưng
 mới trên **năm chương**. Phải đo rộng hơn trước khi chọn.
 
-### Hướng chữa, chưa làm
+### Hướng chữa — đã làm, và đã chứng minh trên audio thật
 
 Fade một mili-giây ở đầu và cuối mỗi đoạn **trước khi ghép**. Nó đưa bước nhảy về 0 theo định
 nghĩa, và 1ms thì không nghe thấy được. Đây là hậu xử lý *có tác dụng* — vì đối tượng là một
@@ -374,8 +374,33 @@ bước nhảy biên độ, chứ không phải một xung năng lượng do mod
 các đoạn được nối thô với khoảng lặng chèn vào giữa. Nên đây là thứ thiếu, không phải thứ đã có
 mà chỉnh chưa đúng.
 
-Chưa làm vì nó **đổi audio của mọi chương**, tức một sự kiện phiên bản, và phải làm ở ranh giới
-giữa hai lô cùng với những thay đổi đổi-hash khác.
+Làm ở ranh giới giữa lô 1 và lô vá, vì nó **đổi audio của mọi chương** — một sự kiện phiên bản,
+phải đi cùng những thay đổi đổi-hash khác.
+
+**Kết quả, chương 003 chạy lại ngày 2026-09-09:**
+
+```
+                    lô 1 (không vuốt)   lô vá (có vuốt)
+max_join_jump             0,219              0,0215
+                       ─────────────────────────────
+vạch review 0,18          VƯỢT               dưới xa
+kết cục chương            failed             completed, publishable
+```
+
+Giảm **mười lần**, và −33,4 dBFS thay vì −13,2. Log của lượt ấy:
+
+```
+Áp âm sắc nhân vật cho 52/121 segment của chapter 1 trước khi ghép.
+Vuốt mép 1/121 segment của chapter 1: mép không ở 0 thành bước nhảy ở chỗ nối
+sau khi master kéo mức lên.
+```
+
+Một đoạn đi qua đường tắt và cần vuốt — đúng bằng con số bản vá dự đoán từ lô 1. 52 đoạn kia đi
+qua đường biến đổi âm sắc, nơi mép được vuốt vô điều kiện vì bản sao dù sao cũng đã ghi ra rồi.
+
+Bước nhảy không về **đúng** 0 vì ngưỡng `EDGE_FADE_MIN_AMPLITUDE = 0,001` cho những đoạn mép
+vốn đã im lặng đi thẳng không chép; 0,0215 là phần còn lại của chúng sau khi master kéo mức lên,
+và nó nằm dưới vạch review tám lần.
 
 Và một điều đáng nói về chính đề xuất này: nó **đúng theo định nghĩa**, không cần đo để tin.
 Bước nhảy tại chỗ nối *là* biên độ mẫu mép; fade mép về 0 thì bước nhảy về 0, bất kể khâu master
