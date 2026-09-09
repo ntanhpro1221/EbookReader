@@ -84,13 +84,37 @@ pool còn 2 worker -> trống  ~5,4 GB   không hãm
 
 Cái thứ nhất là quyết định của chủ máy. Cái thứ hai là việc của mã.
 
+## Đã đo: đỉnh RSS của worker TTS, và hằng số mượn hoá ra đúng
+
+Theo dõi đỉnh RSS theo từng pid trong 25 phút, 422 lần lấy mẫu, bắt được **14 worker TTS** (pool
+được dựng lại nhiều lần trong một chương):
+
+```
+đỉnh mỗi worker (GB):  0,75  1,99  2,42  2,45  2,45  2,51  2,55
+                       2,57  2,58  2,64  2,67  2,68  2,68  2,68
+   cực đại 2,68   trung vị 2,57
+```
+
+(0,75 là một worker chỉ bị bắt gặp lúc đang nạp model rồi pool đóng — đỉnh của nó chưa từng tới.
+Giữ lại trong danh sách thay vì lọc đi, vì lọc theo "trông không hợp lý" là cách người ta bịa ra
+số liệu.)
+
+So với con số người trước đo cho worker **cảm thụ** — 2,68 cực đại, 2,50 trung vị, trên 31
+worker trong 15 phút — hai phân bố **gần như trùng nhau**. Nên quyết định "dùng chung
+`PERCEPTUAL_WORKER_RAM_GB = 2,65` cho cả hai loại thay vì đẻ thêm một số nữa không ai đo lại"
+không chỉ tiện, nó **đúng**: 2,65 nằm ngay dưới đỉnh 2,68 của worker TTS, đúng cái lề mà tác giả
+kia chọn cho worker cảm thụ.
+
+Cùng phép đo ấy cho một con số thứ hai: **36,5% thời gian, RAM trống nằm dưới sàn 3,5 GB.**
+
 ## Điều chưa đo, và đừng nói như đã đo
 
 Hai worker chạy liên tục **có** nhanh hơn ba worker đứng 60% thời gian không? Rất có khả năng,
 nhưng đó là dự đoán. Phép đo đúng là chạy cùng một chương hai lần với `pool_workers` 2 và 3
 trên cùng mức chiếm RAM, rồi so segment/phút — chứ không phải so hai chương khác nhau.
 
-Cũng chưa đo: **đỉnh** RSS của worker TTS. Con số 2,5 GB ở trên là ảnh chụp, và perceptual_qa
-đã ghi rõ ảnh chụp thấp hơn đỉnh khoảng 20%. Ngân sách phải dùng đỉnh.
+(Chỗ này trước ghi "chưa đo đỉnh RSS của worker TTS". Đã đo — xem mục trên. Ảnh chụp cho
+2,43–2,67 và đỉnh cho 2,68, tức chênh nhau ít hơn nhiều so với 20% mà perceptual_qa cảnh báo;
+lý do có lẽ là worker TTS nạp model xong thì gần như không phình thêm, khác worker chấm điểm.)
 
 Chưa vá. `tts_pool.py` và `pipeline.py` đều nằm trong `QUALITY_IMPLEMENTATION_FILES`.
