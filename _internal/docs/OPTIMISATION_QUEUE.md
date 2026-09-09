@@ -981,6 +981,12 @@ nam có tên, 14 chỗ cấp được) nhưng câu hỏi sai: người nghe nghe
 đồng hiện của lô 1 cần **7 giọng nam**, và 7 cũng là cận dưới (chương 023 có 7 người nam cùng
 nói). **Kho gấp đôi cái cần dùng; cả ba va chạm đều tránh được.**
 
+**Hai trong ba chỗ đã vá** (2026-09-09). Còn lại chỗ thứ ba, và nó **hạ ưu tiên**: sau khi
+`reserve()` đánh dấu đúng bậc, kho nam còn 6 chỗ trống lúc lô 2 bắt đầu, mà lô 1 (30 chương)
+chỉ sinh thêm **một** nhân vật nam có tên. Nên việc buộc phải cho hai người dùng chung giọng
+chưa xảy ra lại trong khoảng sáu lô nữa. Cái đáng canh vẫn là **chương đông nhất**, không phải
+tổng cast.
+
 Truy tiếp thì hỏng ở **ba chỗ chồng lên nhau**, và chỗ giữa là bug thật:
 
 1. Thang biến thể formant là vòng modulo — `variants[variant_usage[name] % len(variants)]` —
@@ -991,7 +997,12 @@ Truy tiếp thì hỏng ở **ba chỗ chồng lên nhau**, và chỗ giữa là
    `0,898` bỏ phí trong khi `f104` phát cho hai người. `_reserve_pinned_voices` cầm cả
    `formant_ratio` lẫn `voice_key` rồi vứt đi. Va chạm này **tránh được hoàn toàn**.
 3. Sau khi vá 1 và 2, 16 người đòi 14 chỗ vẫn còn hai lần phải dùng chung — và lúc ấy mới tới
-   câu hỏi *ai* dùng chung với ai, thứ cần đồ thị đồng hiện.
+   câu hỏi *ai* dùng chung với ai, thứ cần đồ thị đồng hiện. **Chưa vá**, và chưa cần: đo lúc
+   lô 2 khởi động, kho nam còn 6 chỗ.
+
+Chỗ 1 (`reserve()` đánh dấu đúng bậc) đã vào cây ở commit `bda3283`. Ngoài ra `port_casting.py`
+đổi luật khi buộc phải chia lại: giữ người được nghe nhiều hơn thay vì bỏ pin của cả hai — ba
+nhân vật bị đúc lại thay vì sáu ở ranh giới lô 1 → lô 2.
 
 Ba hướng nới kho — pitch, biên formant, trả giọng miền Trung cho NPC — đều đã bị đo bác bỏ, và
 [TWO_CHARACTERS_ONE_VOICE.md](TWO_CHARACTERS_ONE_VOICE.md) ghi từng cái kèm phép đo, vì cả ba
