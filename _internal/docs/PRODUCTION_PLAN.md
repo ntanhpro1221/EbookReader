@@ -58,6 +58,25 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Một chương không phải truyện, và đúng một chương thôi
+
+`000.txt` dài 137 ký tự và không phải nội dung tiểu thuyết — nó là ghi chú của người đăng về
+mấy tấm fan art ("các bức ảnh trên"), những tấm ảnh không có trong file text. Đường ống đọc nó
+thành 2 segment và xuất ra một MP3 191 KB, mất khoảng một phút.
+
+Tôi gắn cờ đây là "chủ sách phải quyết", rồi đo trước khi hỏi:
+
+```
+478 file       trung vị 10.504 ký tự     max 19.382
+ngắn nhất      000.txt      137
+ngắn nhì       277.txt    5.971          <- gấp 43 lần chương 000
+```
+
+Không có đám chương-không-phải-truyện nào ẩn trong nguồn; **000 là ngoại lệ duy nhất**, và cái
+giá của nó là một phút GPU. Nên không có gì để quyết ở quy mô sản xuất. Nếu chủ sách không muốn
+nghe ghi chú ấy ở đầu sách thì xoá `000.txt` khỏi thư mục nguồn là đủ — đó là quyết định biên
+tập, không phải quyết định kỹ thuật, và đường ống không nên tự đoán file nào "không đáng đọc".
+
 ## Mọi con số giờ ở trên là cho **máy rảnh**
 
 Đo ngày 2026-09-09 trên chương 003 của lô vá: 121 segment tốn 27,0 phút, trong khi ở tốc độ
