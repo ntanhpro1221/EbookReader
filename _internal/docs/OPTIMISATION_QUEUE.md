@@ -882,6 +882,30 @@ Một dải nhịp bị làm phẳng là một **đánh đổi**, không phải 
 hai bảng. Một `pace_outlier` thì ngược lại: phép kiểm nói bản thu hỏng, và máy không được tự
 cho qua.
 
+### Lô vá chạy lại chương 007, và bản vá **không** được chứng minh
+
+Cùng đoạn ấy, cùng dây gieo, chạy lại ngày 2026-09-09:
+
+```
+lô 1     chars_per_second 13,06   pace_band_relaxed 1   -> TTS_PACE_BAND_RELAXED, chặn chương
+lô vá    chars_per_second 14,07   (không có cờ nới)     -> verified, không cảnh báo nào
+```
+
+Sàn của băng `fast` là **14,0**. Hai lần thu cùng một câu rơi hai bên vạch: lần đầu hụt 0,94,
+lần sau vượt **0,07**. Nên chương 007 qua được lần này, và `patch_pace_relaxed_is_a_decision`
+**chưa hề chạy** — đường nới lỏng không được kích hoạt lần nào.
+
+Phải nói rõ như thế. Một chương xanh không phải bằng chứng cho bản vá nếu bản vá không chạy;
+nhầm hai thứ ấy là cách người ta tin vào một cơ chế chưa từng được thử.
+
+Hai điều phép đo này **có** nói:
+
+- Nó là ví dụ sạch cho [AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md):
+  cùng văn bản, cùng giọng, hai lần thu chênh nhau 7,7% nhịp đọc.
+- Với đoạn này, vạch 14,0 nằm **giữa** phân bố các lần thu của chính nó, nên mỗi lượt chạy là
+  một lần tung đồng xu. Đó vừa là lý do bản vá đáng tồn tại, vừa là lý do không nên chờ nó
+  chứng minh mình trong một lô — nó chỉ hiện ra ở khoảng một nửa số lượt.
+
 ### Chi tiết "chưa khớp" — đã kiểm, không phải lỗ hổng
 
 `segment_candidates` của đoạn này **rỗng** dù `PACE_BAND_RELAX_ATTEMPTS = 4`, và tôi ghi nó là
