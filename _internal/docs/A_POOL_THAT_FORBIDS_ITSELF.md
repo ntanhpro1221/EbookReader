@@ -25,8 +25,25 @@ affordable = (budget - TTS_POOL_BASE_VRAM_MB) // TTS_POOL_WORKER_VRAM_MB
 return min(ceiling, affordable)
 ```
 
-Ba hằng số, cả ba là VRAM. Trong cả file **không có một số hạng RAM hệ thống nào** — trong khi
-một worker TTS chiếm khoảng 2,5 GB RAM. Ba worker là ~7,6 GB mà phép tính trên không nhìn thấy.
+Ba hằng số, cả ba là VRAM. Trong cả `tts_pool.py` **không có một số hạng RAM hệ thống nào** —
+trong khi một worker TTS chiếm khoảng 2,5 GB RAM. Ba worker là ~7,6 GB mà phép tính trên không
+nhìn thấy.
+
+### Nhưng đường ống **biết** con số ấy — nó chỉ dùng theo một chiều
+
+`pipeline._synthesis_pool_ram_reserve()` có tồn tại, và chú thích của nó đã đo sẵn:
+
+> A synthesis worker measured 2.33 GB resident on alpha.47, the same order as a scoring one,
+> so the scoring constant stands in for both rather than inventing a second number nobody
+> re-measures.
+
+Nhưng hàm ấy chạy **ngược chiều**: nó trả về `ceiling × PERCEPTUAL_WORKER_RAM_GB` để đưa cho
+pool *cảm thụ* làm `reserve_ram_gb` — tức "pool TTS sắp đòi ngần này, đừng lấy". Nó bảo vệ pool
+TTS khỏi pool cảm thụ, và không có chiều ngược lại: không ai bảo vệ cỗ máy khỏi pool TTS.
+
+Nên bản vá **không cần phát minh hằng số mới**, và không nên: `PERCEPTUAL_WORKER_RAM_GB = 2,65`
+đã đo theo đỉnh, đã được chính tác giả tuyên bố là dùng cho cả hai loại worker, và thêm một số
+thứ hai chỉ tạo ra một số nữa không ai đo lại.
 
 ## Người trước đã sửa đúng lỗi này — ở pool bên cạnh
 
@@ -48,6 +65,11 @@ sống cho trung vị 2,16 — thấp hơn hẳn. Bài học ghi ngay trong file
 đỉnh, mà ảnh chụp thì không thấy đỉnh.
 
 Cách sửa đã tồn tại, đã đo, và nằm cách hai file. Nó chỉ chưa đi sang pool TTS.
+
+Nói cho công bằng: đây không phải chuyện quên. Bộ điều tiết ra đời để nhường máy cho **người
+khác**, và cả hai pool đều được dạy nhường cho nhau. Cái chưa ai viết là pool tự hỏi *chính tôi
+có làm cỗ máy tụt xuống dưới sàn không* — và câu hỏi ấy chỉ thành cấp bách khi có một lô 13 giờ
+chạy cạnh một phiên Unity, tức là chỉ từ hôm nay.
 
 ## Cái này không mâu thuẫn với [THE_MACHINE_IS_SHARED.md](THE_MACHINE_IS_SHARED.md), nó sửa nó
 
