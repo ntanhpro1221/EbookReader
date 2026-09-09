@@ -38,7 +38,14 @@ LEASE_STALE_SECONDS = 180.0
 #
 # Nó KHÔNG đổi giọng của nhân vật đã được `port_casting` ghim (đường ghim không đi qua
 # `choose`), nên dây gieo giữa các lô không đứt.
-ORDER: tuple[str, ...] = ("patch_reserve_marks_the_slot.py",)
+# `patch_pool_counts_its_own_ram` là cái đắt hơn trong hai cái. Đo giữa chương 007 của lô vá:
+# RAM trống 2,85 GB dưới sàn 3,5 GB, pool TTS giữ 7,63 GB, GPU 0% và 4,6 W hơn nửa giờ. Pool
+# định cỡ chỉ theo VRAM nên worker thứ ba là thứ đẩy lượt chạy vào trạng thái không worker nào
+# chạy được. Chạy thử trên bản sao: 169 test xanh, kể cả hai bài về chốt pool.
+ORDER: tuple[str, ...] = (
+    "patch_reserve_marks_the_slot.py",
+    "patch_pool_counts_its_own_ram.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
