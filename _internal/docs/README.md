@@ -24,6 +24,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | File nguồn giống hệt nhau mà hash khác? | [THE_SOURCE_IS_WATERMARKED.md](THE_SOURCE_IS_WATERMARKED.md) |
 | Bản thu tốt bị ném đi? | [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) |
 | Đầu đoạn có tiếng lách cách? | [ONSET_CLICK.md](ONSET_CLICK.md) |
+| Hai nhân vật nói cùng một giọng? | [THE_MALE_VOICE_POOL_IS_FULL.md](THE_MALE_VOICE_POOL_IS_FULL.md) |
 
 ## Phép kiểm nói gì, và có tin được không
 

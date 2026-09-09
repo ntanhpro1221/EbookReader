@@ -804,7 +804,9 @@ vào dòng 3817.
 
 ## `TTS_PACE_BAND_RELAXED` chặn chương, và cái tên gợi ý điều ngược lại
 
-**Chưa giải quyết.** Chương 007 của lô 1 hỏng vì:
+**Đã giải quyết** — `patch_pace_relaxed_is_a_decision`, commit `4d2d39a`. Mục này giữ lại vì
+kết luận đầu tiên của tôi ở đây **sai**, và cái sai ấy là một bài học về đo đạc chứ không phải
+về nhịp đọc. Chương 007 của lô 1 hỏng vì:
 
 ```
 High-quality policy requires repair or review for segment warnings:
@@ -812,9 +814,19 @@ c00008_s0000058_b47b5843ed04=TTS_PACE_BAND
 ```
 
 Đoạn ấy: `"C-Cái con ả này! Cô ta đang hả hê trước nỗi đau của tôi đấy à?!"` — phân tích gán
-nhịp **`fast`**, đọc ra **11,22 ký tự/giây**, tức chậm hơn cả **sàn của băng `normal`** (12,5).
-Model không giao đúng nhịp được yêu cầu, nên phép kiểm nổ **đúng**, và máy **không** được tự
-cho qua: nhịp đo trên sóng âm chứ không qua ASR, tức là nhân chứng thứ hai.
+nhịp **`fast`**.
+
+**Bản đầu của mục này viết 11,22 ký tự/giây. Con số ấy sai.** Tôi tính lại từ `signal_json` của
+chính đoạn ấy và ra:
+
+```
+chars_per_second 13,06   pace_outlier 0   pace_band_relaxed 1
+```
+
+Sai vì tôi coi `pause = 0` khi trường ấy **vắng mặt**, trong khi vắng mặt nghĩa là "không đo",
+không phải "bằng không" — và thời gian nghỉ nằm ở mẫu số. Chênh lệch nhỏ, nhưng nó **đảo ngược
+kết luận**: 11,22 nằm ngoài băng `normal`, còn 13,06 nằm trong ([12,5 – 24,5]). Đoạn ấy chỉ
+trượt **sàn của băng `fast`** (14,0).
 
 ### Chỗ chưa hiểu
 
@@ -829,8 +841,19 @@ Hai cách đọc, và chưa biết cách nào đúng:
   nhượng bộ ấy.
 - *"đã nới lỏng mà vẫn không đạt, đành giữ bản đang có"* → chặn là **nhất quán**.
 
-Đoạn này đo 11,22 < 12,5 nên nó **không** đạt cả băng nới lỏng, tức nghiêng về cách đọc thứ
-hai. Nhưng cần đọc chỗ đặt `pace_band_relaxed` mới chắc, và cái tên thì gợi ý cách đọc thứ nhất.
+Với con số đúng, **cách đọc thứ nhất thắng**: 13,06 ≥ 12,5, `pace_outlier = 0`,
+`pace_band_relaxed = 1` — đường ống đã thu lại bốn lần, không lần nào chạm 14,0, rồi tự nhượng
+bộ và chấp nhận bản trong băng `normal`. Cổng chương sau đó phủ nhận đúng cái nhượng bộ ấy.
+Cái tên gợi ý đúng ngay từ đầu; chỉ có phép đo của tôi là sai.
+
+Cách vá: đưa `TTS_PACE_BAND_RELAXED` vào `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS` — **không** vào
+`HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS`. Bản vá đầu của tôi làm đúng cái sau và bộ test bắt
+được: ALLOWED làm mã ấy **im lặng**, vứt mất tín hiệu "nên có người nghe"; MACHINE_ACCEPTABLE
+cho qua nhưng **ghi sổ**. Xem [SHIPPING_WITHOUT_A_LISTENER.md](SHIPPING_WITHOUT_A_LISTENER.md).
+
+Một dải nhịp bị làm phẳng là một **đánh đổi**, không phải một khuyết tật — đó là ranh giới giữa
+hai bảng. Một `pace_outlier` thì ngược lại: phép kiểm nói bản thu hỏng, và máy không được tự
+cho qua.
 
 ### Chi tiết "chưa khớp" — đã kiểm, không phải lỗ hổng
 
@@ -852,3 +875,34 @@ Còn lại một khoảng mù nhỏ và thật: `segment_candidate_attempt_summa
 nên nhìn vào lịch sử ứng viên thì một đoạn đã qua bốn vòng nới lỏng trông y hệt một đoạn chưa
 thử gì. Đó là chuyện quan sát được, không phải chuyện chất lượng — nhưng nó vừa làm tôi mất một
 lượt truy sai hướng.
+
+## Kho giọng nam đầy 14/14 ở lô 1 trên 16
+
+**Chưa vá.** Đo trên `lo01b`: 14 nhân vật nam có tên, và đúng 14 giọng nam có thể cấp cho nhân
+vật (2 preset × 7 bậc formant, sau khi trừ giọng người dẫn chuyện, miền Trung và Xuân Vĩnh).
+Kho nữ mới dùng 6/27 nên đây là chuyện riêng của giọng nam.
+
+Đồng nhất thức khép kín: 16 người đòi chỗ − 13 giọng được tạo = 3, và đo được đúng 3 cặp dùng
+chung `voice_key`. Chi tiết đầy đủ, kể cả hai hướng nới **đã bị đo bác bỏ** (pitch, và nới biên
+formant), ở [THE_MALE_VOICE_POOL_IS_FULL.md](THE_MALE_VOICE_POOL_IS_FULL.md).
+
+**Giá trị hiện tại nhỏ, và phải nói thẳng như thế.** Chỉ 1 trong 3 va chạm nằm trong cùng một
+chương (SỐ BỐN và SỐ NĂM, chương 023, tổng ba câu, cả hai đều phụ). Hai cặp còn lại không bao
+giờ gặp nhau nên người nghe không thể lẫn.
+
+**Giá trị tương lai thì không nhỏ**, và đó mới là lý do mục này tồn tại: kho đầy sau lô *đầu
+tiên* trong mười sáu. Từ lô 2 mọi nhân vật nam mới đều rơi vào chỗ đã có người.
+
+Hướng đáng làm, theo thứ tự:
+
+1. **Không cho `NPC_LOCAL` tranh chỗ với nhân vật có tên.** 2 trong 16 người đòi chỗ là NPC
+   sống đúng một chương. Người trước từng cho NPC một kho rộng hơn rồi bỏ, vì "nó không đổi gì
+   cả" — câu ấy đúng khi kho còn chỗ và sai từ bây giờ.
+2. **Cấp nốt bậc formant còn trống.** `Thanh Bình` có 7 bậc, lô 1 dùng 6; bậc `0,898` chưa
+   từng được cấp. Nhưng nó gỡ được nhiều nhất 1 trong 3: 16 người đòi 14 chỗ thì ít nhất hai
+   va chạm là không tránh được kể cả với bộ cấp phát hoàn hảo.
+3. **Ưu tiên theo tuổi thọ nhân vật.** Nếu buộc phải cho hai người dùng chung một giọng, hãy
+   chọn hai người **không cùng chương**. Lô 1 vô tình được như vậy 2/3 lần; không có gì trong
+   mã bảo đảm điều đó.
+
+Đo lại bằng `python scripts/voice_pool_pressure.py <project>`.
