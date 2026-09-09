@@ -719,6 +719,29 @@ có tốt không" và trả lời **không** — hoàn toàn đúng, vì không 
 Nên bản vá không phải một phép so ở điểm cạn ngân sách. Nó phải là một đường riêng, và đường
 ấy cần được thiết kế chứ không phải chèn vào.
 
+### Bước đã làm: cho mẫu tự lộ ra, thay vì vá vội trước lô 2
+
+**Chưa vá cơ chế.** Cân nhắc ngày 2026-09-09: mẫu này là 2 ca trên 38.520 đoạn, ngoại suy
+khoảng bốn chương trên 478 — nên lô 2 (30 chương) nhiều khả năng gặp **không lần nào**. Thêm
+một cơ chế mới chưa từng chạy thật ngay trước một lô 30 chương là tự chuốc rủi ro để đổi lấy
+một kỳ vọng dưới một ca. Cơ chế xuất-bản-không-người-nghe được thêm vào trước lô 1 và chạy tốt,
+nhưng nó **cộng thêm** (chỉ gỡ chặn); đường này **thay thế** một bản thu, và sai thì hỏng audio
+chứ không chỉ hỏng lịch.
+
+Việc làm được ngay mà không có rủi ro: `plan_repair_batch.py` giờ quét mẫu này trong những
+chương hỏng và **cảnh báo trước khi người ta chạy lại**. Vì chạy lại không chữa được nó — luật
+vứt ứng viên vẫn nguyên, nên thoát được chỉ là trúng một lần gieo khác.
+
+Kiểm cả hai chiều: im lặng trên bốn chương hỏng của lô 1 (loudness, hai join, một nhịp — không
+cái nào thuộc mẫu), và kêu đúng ca đã biết của alpha.60:
+
+```
+ch021  c00003_s0000129  '"Tiếp theo."'
+   đương nhiệm chạm trần khung ở 1.92s; 2 ứng viên bị vứt (0.56s, 0.64s)
+```
+
+Lô 2 sẽ cho thêm dữ liệu về tần suất, và thiết kế đường riêng nên đợi dữ liệu ấy.
+
 ### Không có tai người, nhưng có sóng âm
 
 Tôi đã viết ở đây rằng lập luận này "dựa trên đọc con số" và cần tai người mới xác nhận được.

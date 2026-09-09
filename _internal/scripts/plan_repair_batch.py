@@ -19,6 +19,10 @@ import sqlite3
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from scripts.discarded_cures import _scan as scan_discarded_cures  # noqa: E402
+
 
 def _say(line: str) -> None:
     try:
@@ -96,6 +100,34 @@ def main(argv: list[str]) -> int:
             f'  --range "{first:0{width}d}..{last:0{width}d}" --width {width} '
             f'--title "{args.tag}"'
         )
+
+    # Có chương nào hỏng vì cái mẫu mà chạy lại KHÔNG chữa được không.
+    #
+    # Lô vá chạy lại đúng như cũ, nên nó chỉ chữa được thứ hỏng vì ngẫu nhiên hoặc vì một bản
+    # vá đã vào cây. Mẫu "phương thuốc bị vứt" thì không: bản đương nhiệm chạm trần khung, các
+    # ứng viên cứu được lại bị vứt vì mã mà chính sách đã tự xếp là không mang thông tin — và
+    # luật ấy vẫn nguyên. Chạy lại có thể trúng một lần gieo khác và may mắn thoát, nhưng đó là
+    # may chứ không phải chữa.
+    #
+    # In ra ở đây vì lập lô vá là đúng lúc người ta muốn biết, chứ không phải sau khi lô vá
+    # thứ hai cũng hỏng ở cùng chỗ. Xem docs/OPTIMISATION_QUEUE.md, mục "phương thuốc bị vứt".
+    broken_titles = {str(row["title"]) for row in broken}
+    try:
+        cures = [c for c in scan_discarded_cures(args.project) if c["chapter"] in broken_titles]
+    except sqlite3.Error:
+        cures = []
+    if cures:
+        _say("")
+        _say(f"CẢNH BÁO: {len(cures)} đoạn hỏng theo mẫu mà chạy lại không chữa được:")
+        for cure in cures:
+            _say(f"  ch{cure['chapter']}  {cure['stable_id']}  {cure['text']!r}")
+            _say(
+                f"      đương nhiệm chạm trần khung ở {cure['incumbent_duration']}s;"
+                f" {len(cure['rescues'])} ứng viên bị vứt"
+                f" ({', '.join(str(r['duration']) + 's' for r in cure['rescues'])})"
+            )
+        _say("  Chạy lại vẫn nên làm — lần gieo khác có thể thoát — nhưng nếu chương ấy hỏng")
+        _say("  lại ở đúng đoạn ấy thì đừng chạy lần thứ ba, đó là luật chứ không phải xui.")
 
     _say("")
     _say("Trước khi chạy: `python scripts/before_a_batch.py`, và gieo từ chính project này")
