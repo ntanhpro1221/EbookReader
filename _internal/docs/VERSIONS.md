@@ -135,6 +135,60 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
+---
+
+## v0.2.0-lo01 — lô sản xuất đầu tiên: 26/30 chương, và cơ chế gánh 9 trong số đó
+
+Dải **000..029**, 3.727 đoạn, `lo01b_768c98bb4f`. Lô đầu tiên của
+[kế hoạch 16 lô](PRODUCTION_PLAN.md).
+
+```
+26/30 chương ra MP3   ·   8,54 giờ   ·   3.691 verified / 23 warning / 13 failed
+asr similarity: trung vị 1,0000, trung bình 0,9744 (n=3.727)
+```
+
+### Con số đáng kể nhất
+
+**9 trong 30 chương xuất bản được là nhờ máy tự cho qua** (13 đoạn). Không có cơ chế ấy, lô 1
+là **17/30**. Đó là bằng chứng sản xuất cho lệnh số 2 của chủ sách, không phải một phép thử
+dựng riêng.
+
+Mọi đoạn được cho qua đều nằm trong báo cáo kèm mốc thời gian trong MP3:
+`scripts/machine_acceptances.py <project> --markdown`.
+
+### Lô chết hai lần trước khi chạy được
+
+| lần | lý do | giá |
+|---|---|---|
+| `lo01` | nửa cặp surrogate lạc từ model phân tích | **4 giờ phân tích, mất trắng** — sửa mã làm `resume` bị từ chối |
+| `lo01b` lần 1 | cổng đúc giọng, một nhân vật phụ hai câu thoại | ~20 phút — gỡ bằng `cli cast`, **không đổi mã** nên `resume` giữ được 4 giờ |
+
+Khác biệt giữa hai dòng ấy là bài học đắt nhất của lô: **gỡ bằng dữ liệu thì rẻ, gỡ bằng mã thì
+đắt.** Đã thành script: `scripts/before_a_batch.py`.
+
+### Bốn kiểu chương hỏng, và cả bốn đã có bản vá
+
+| chương | lý do | bản vá |
+|---|---|---|
+| 000 | `loudness delta 0.62 LU` | `patch_loudness_review_ships` |
+| 003, 016 | `join discontinuity` 0,219 và 0,216 | `patch_edge_fade` |
+| 007 | nhãn `TTS_PACE_BAND_RELAXED` | `patch_pace_relaxed_is_a_decision` |
+
+Cả năm bản vá đã áp ở ranh giới lô, bộ test **2.509 xanh**, và bốn chương ấy đang chạy lại
+trong `v0.2.0-lo01v` — chỉ bốn chương, không phải cả lô. Lý do và số học ở
+[PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), mục *"Khi một lô có chương hỏng"*.
+
+### Bộ test bắt được hai chỗ tôi đè lên quyết định của người trước
+
+Đáng ghi vì cả hai lần **test đúng còn tôi sai**:
+
+- `TTS_PACE_BAND_RELAXED`: tôi đưa vào danh sách "được phép", tức làm nó **im lặng**.
+  `test_the_warning_blocks_publication_so_a_person_hears_it` đỏ, và lý lẽ của nó đứng vững —
+  *"một cái đánh đổi thì nên có người nghe"*. Cái đã đổi không phải lý lẽ mà là **giả định
+  rằng có một người**. Sửa lại: cho máy tự cho qua **có ghi sổ**, không phải cho qua im lặng.
+- Cổng giới tính: test cũ ghim *"không đúc giọng khi còn mâu thuẫn"*. Viết lại kèm cái giá đã
+  trả, không xoá.
+
 ## v0.2.0-alpha.62 — 9/9 chương, và chỉ một trong năm là công của mã
 
 Dải **019..027**, cùng nguồn và cùng dải với alpha.60 (`input_manifest_hash` bắt đầu bằng
