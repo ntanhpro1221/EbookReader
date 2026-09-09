@@ -404,7 +404,40 @@ và nó nằm dưới vạch review tám lần.
 
 Và một điều đáng nói về chính đề xuất này: nó **đúng theo định nghĩa**, không cần đo để tin.
 Bước nhảy tại chỗ nối *là* biên độ mẫu mép; fade mép về 0 thì bước nhảy về 0, bất kể khâu master
-khuếch đại bao nhiêu. Cái cần đo không phải "có hiệu quả không" mà là "có làm hỏng gì không" —
-cụ thể là 1ms có ăn mất phụ âm đầu hay không. Âm tiết mở đầu rộng cỡ 10ms trở lên, còn xung
-"tóp" ghi ở đầu tài liệu này rộng 5–22ms, nên 1ms không chạm tới cả hai; nhưng đó là suy luận
-từ số đã đo, chưa phải phép đo riêng.
+khuếch đại bao nhiêu. Cái cần đo không phải "có hiệu quả không" mà là "có làm hỏng gì không".
+
+### Nó ăn mất cái gì — đo trên 121 đoạn thật của chương 003
+
+```
+đỉnh TRONG cửa sổ vuốt (1ms = 48 mẫu)   trung vị 0,00009   cực đại 0,1166
+đỉnh NGOÀI cửa sổ                        trung vị 0,4419
+tỉ lệ cửa sổ / thân đoạn                 trung vị 0,021%    cực đại 40,4%
+
+số đoạn có đỉnh cửa sổ > 1% thân đoạn    5 / 121
+số đoạn có đỉnh cửa sổ > 5% thân đoạn    4 / 121
+```
+
+Với **117 trên 121 đoạn, cửa sổ vuốt là im lặng** — một phần năm nghìn biên độ của chính đoạn
+ấy. Không có phụ âm nào ở đó để ăn.
+
+Bốn đoạn còn lại có tín hiệu thật trong cửa sổ, một đoạn tới 40% đỉnh. Nhưng đó **chính xác là
+bốn đoạn bắt đầu giữa chừng sóng âm** — tức thứ mà phép vuốt sinh ra để chữa. Ở những đoạn ấy,
+cái bị làm nhỏ đi trong 1ms *là* chỗ đứt gãy. Đây là đánh đổi cố ý, không phải thiệt hại phụ.
+
+### Một phép so tôi làm sai, ghi lại để không ai làm lại
+
+Tôi định kiểm "vuốt có hại không" bằng cách so ASR similarity và WER của chương 003 giữa lô 1
+và lô vá. Phép so ấy **không trả lời gì cả**: vuốt mép chạy lúc **ghép chương**, còn ASR đọc
+các file WAV *đoạn* từ trước đó. ASR không bao giờ nhìn thấy audio đã vuốt. Thứ tự trong log của
+chính lượt chạy nói rõ:
+
+```
+Tạo audio chapter 1: 003
+Nạp faster-whisper turbo trên cuda        <- ASR doc WAV doan, chua vuot
+Áp âm sắc … / Vuốt mép 1/121 …            <- vuot, luc ghep
+Chapter MP3 đã hoàn tất
+```
+
+Chênh lệch WER 0,084 → 0,133 mà tôi đo được là dao động giữa hai lần thu, không phải hậu quả
+của phép vuốt — và audio vốn đã không tái lập được giữa hai lượt
+([AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md](AUDIO_IS_NOT_ALWAYS_REPRODUCIBLE.md)).
