@@ -949,3 +949,85 @@ chương 003, `"Gì cơ?"` chương 008) đúng là hai đoạn có `generation_
 
 Con số 5 → 2 là đo trên bảng dữ liệu cũ. Nó chưa tính bản vá trần khung sẽ làm gì với chương
 008 ở lượt chạy mới, nên vẫn phải chạy lại chín chương ấy mới biết kết quả thật.
+
+## 2026-09-09 — Lô vá đòi lại cả bốn chương, và bốn lần tôi tự bác bỏ
+
+**Lô vá xong 4/4.** Chương 000, 003, 007, 016 đều `completed` và `publishable`, nên chương
+000..029 đủ 30/30. Ba chứng cứ trên audio thật:
+
+```
+patch_edge_fade                  ch003  0,219 → 0,0215     ch016  0,216 → 0,0019
+patch_loudness_review_ships      ch000  vẫn lệch 0,62 LU, vẫn ghi cờ, vẫn xuất bản
+xuất-bản-không-người-nghe        ch016  'Tôi nhếch mép.' → Whisper nghe 'Tôi nhét mép.'
+```
+
+Ca cuối là ca khó nhất cho thiết kế hai bảng, và nó đứng: máy cho qua **có ghi sổ**, còn báo cáo
+chương liệt kê đúng đoạn ấy trong `unheard_segments` thay vì nhận là đã có người nghe.
+
+**`patch_pace_relaxed_is_a_decision` thì KHÔNG được chứng minh**, và điều đó phải nói ra: lần
+thu mới đọc 14,07 ký tự/giây, vừa qua sàn `fast` 14,0, nên đường nới lỏng không mở lần nào. Một
+chương xanh không phải bằng chứng cho một bản vá chưa chạy.
+
+### Nửa giờ tôi suýt đọc thành "treo"
+
+Chương 007 đứng im hơn nửa tiếng với nhịp tim 5 giây. Không phải treo: RAM trống 2,85 GB dưới
+sàn 3,5 GB nên bộ điều tiết tắt cả cấp việc GPU lẫn CPU, GPU đo 0% và 4,6 W. Thủ phạm không chỉ
+là Unity/Rider của chủ máy — **pool TTS tự giữ 7,63 GB**, và nó định cỡ **chỉ theo VRAM**.
+Worker thứ ba là thứ làm cho không worker nào chạy được; hai worker để lại 5,39 GB.
+
+Cách sửa nằm cách hai file: `perceptual_qa.usable_for` đã trừ đúng cái sàn ấy từ lâu, và chú
+thích của nó viết đúng câu tôi tự nghĩ ra — *"the pool would size itself into the state that
+forbids the work it was built for"*. Hằng số 2,65 GB cũng không phải số mới: theo dõi đỉnh RSS
+25 phút bắt được 14 worker TTS ở 2,68 cực đại / 2,57 trung vị, gần trùng phân bố worker cảm thụ.
+
+Ba chương của lô vá còn cho một phép đo thông lượng chỉ dùng số tổng, nên không dính cái nhiễu
+đã làm hỏng phép gán theo chế độ:
+
+```
+ch016  186 segment / 23,5 phút = 7,91/phút    34% thời gian yield_heavy
+ch003  121 segment / 27,0 phút = 4,48/phút    58%
+ch007  151 segment / 41,8 phút = 3,61/phút    65%
+```
+
+Đơn điệu, biên độ 2,2 lần, và nội suy về 0% cho ~11–12/phút — khớp với 13,13/phút đo trực tiếp
+ở chế độ `maximum`.
+
+### Bốn lần phép đo bác bỏ tôi
+
+| tôi định làm | phép đo nói | kết cục |
+|---|---|---|
+| tài liệu *"Kho giọng nam đã đầy 14/14"* | tô màu đồ thị đồng hiện chỉ cần **7** giọng | đổi tên file, viết lại từ đầu |
+| trả giọng miền Trung cho NPC để nới kho | miền Trung sai thanh điệu trên **từ thường** | bỏ đề xuất trước khi viết vá |
+| vô hiệu `time.sleep` cho bộ test nhanh hơn | cùng một test: 5,09s → **89,65s** | conftest viết lại thành chỉ **đếm** |
+| script chia lô bằng `(n−1)×30` | kế hoạch chia **theo số từ**: lô 3 là 32 chương | đọc dải từ chính bảng kế hoạch |
+
+Cái thứ ba đáng nói nhất vì hàng đợi tối ưu đã đề xuất nó từ hôm trước với lý lẽ rất thuyết
+phục. Nó sai vì có **hai loại `time.sleep` trộn lẫn**: ngủ để *nhường lượt* (bỏ được) và ngủ để
+*đợi đồng hồ* (bỏ đi thì thành quay tít). Nhìn từ ngoài hai loại giống hệt nhau. Số thật trên cả
+bộ: 2.521 test / 519 giây, trong đó 246 giây là ngồi chờ.
+
+Cái thứ tư nguy hiểm nhất vì nó im lặng: nếu không đối chiếu bảng, lô 3 sẽ chạy `060..089`, bỏ
+sót hai chương và làm lệch mọi lô còn lại.
+
+### Luật va chạm giọng: hai lần xếp hạng sai trước khi đúng
+
+`port_casting` cũ bỏ pin của **cả hai** người khi họ trùng giọng — đổi hai giọng để chữa một va
+chạm, và ở ranh giới lô 1 → lô 2 nó làm sáu nhân vật mất giọng, CHA và NOAH đều là chính.
+
+Lần đầu tôi so số câu trong lô: THEOSBANE im lặng lô ấy nên 0 câu, thua SAMAEL 1 câu — đúng lỗ
+hổng một bài test khác đang canh. Lần hai tôi xếp "có pin" lên trên: `SỐ BA` (phụ, 2 câu) thắng
+`CHA` (chính, 4 câu), vì không có cột nào phân biệt pin của **người** với pin của **script**
+(`locked=1` đánh dấu giới tính, không phải giọng). Thứ đúng là `mention_count` — cộng dồn qua
+các lô, nên nó xấp xỉ được người nghe đã quen giọng ấy tới mức nào. Kết quả: **ba** người bị đúc
+lại thay vì sáu, và cả ba là người ít lời hơn trong cặp.
+
+### Việc đã làm và đang chạy
+
+Hai bản vá tài nguyên vào cây ở ranh giới (`bda3283`), tag `v0.2.0-lo02`, và **lô 2 (030..059,
+3.762 segment) đang chạy**. Bốn script mới: `voice_pool_pressure.py`, `throttle_report.py`,
+`assemble_book.py`, `launch_batch.sh`.
+
+Chương 000..029 đã ghép thành `D:/Novels/Audiobooks/_book` kèm `manifest.json` ghi gốc gác từng
+chương — và chính `assemble_book.py` bắt được một lỗi im lặng lúc lô vá chưa xong: chương 016
+khi ấy rơi về `alpha.56`, chín phiên bản trước, với dàn giọng khác.
+
