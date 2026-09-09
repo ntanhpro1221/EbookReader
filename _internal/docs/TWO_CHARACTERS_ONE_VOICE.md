@@ -53,15 +53,64 @@ không cách tô nào dùng ít hơn bảy. Tham lam chạm đúng tối ưu.
 **Kho gấp đôi cái cần dùng.** Cả ba va chạm của lô 1 đều tránh được, không cần thêm một preset
 nào, không cần nới một biên nào.
 
-## Vậy hỏng ở đâu
+## Vậy hỏng ở đâu — hai chỗ, và chỗ thứ hai là bug
 
-Bộ cấp phát xếp hạng theo `usage[name]` trên **toàn project** — preset chưa dùng đứng trước —
-và không bao giờ hỏi *hai người này có cùng chương không*. Nó giải một bài toán toàn cục cho
-một ràng buộc cục bộ. Khi buộc phải cho hai người dùng chung, nó chọn ngẫu nhiên theo thứ tự
-xếp hạng chứ không chọn một cặp không gặp nhau.
+Đếm người trên từng preset của lô 1:
 
-Lô 1 được 2 trên 3 cặp "không cùng chương" — nhưng đó là **may**, không phải thiết kế: không có
-dòng nào trong `character_registry.py` biết chương nào có ai.
+```
+preset            người   bậc có sẵn   giọng đã dùng
+  Thái Sơn           9         7            7      <- quay vòng 2 lần
+  Thanh Bình         7         7            6      <- vừa đủ mà vẫn thiếu một
+  Đoan Trang         3         7            3
+  Trúc Ly            3         7            3
+  Ngọc Linh          2         6            2
+  Phạm Tuyên         1         7            1      (người dẫn chuyện)
+```
+
+### Chỗ thứ nhất: thang biến thể là một vòng modulo
+
+```python
+variants = formant_variants_for_preset(name)
+formant_ratio = variants[self.variant_usage[name] % len(variants)]
+self.variant_usage[name] += 1
+```
+
+Người thứ tám trên một preset bảy bậc **quay về bậc một**, và không có gì kiểm tra xem bậc ấy
+đã có chủ chưa. Thái Sơn nhận 9 người nên quay hai lần — hai va chạm.
+
+Chín người trên bảy bậc thì hai lần dùng lại là **không tránh được**, nên phần này của vấn đề
+không phải lỗi mà là hết chỗ trên preset ấy.
+
+### Chỗ thứ hai: `reserve()` đánh dấu nhầm ô
+
+Thanh Bình nhận đúng 7 người và có đúng 7 bậc, nhưng chỉ **6** giọng ra đời — một bậc (`0,898`)
+không bao giờ được cấp cho ai, trong khi `f104` được phát cho hai người (CHA và SỐ BA).
+
+Vì `reserve()` chỉ nhận **tên preset**:
+
+```python
+def reserve(self, preset_name: str) -> None:
+    for pool in self.pool_usage.values():
+        pool[name] += 1
+    self.variant_usage[name] += 1        # tăng bộ đếm, không đánh dấu bậc nào
+```
+
+Một giọng đã ghim làm bộ đếm nhích lên một, tức **nhảy qua một bậc bất kỳ** — không phải bậc
+mà nó thật sự đang giữ. Bậc bị nhảy qua thành bỏ phí, còn bậc nó đang giữ vẫn nằm trong vòng
+quay và được phát lại.
+
+Thông tin cần thiết **có sẵn ở chỗ gọi** và bị vứt đi: `_reserve_pinned_voices` cầm cả dòng
+`voice_profiles` — có `formant_ratio`, có `voice_key` — rồi gọi
+`allocator.reserve(str(row["preset_name"]))`.
+
+Đây là một va chạm **tránh được hoàn toàn**, không cần thêm giọng nào.
+
+### Và chỗ thứ ba, chỉ lộ ra sau khi vá hai chỗ trên
+
+Kể cả cấp phát hoàn hảo, 16 người đòi 14 chỗ vẫn còn **hai** lần phải dùng chung. Lúc ấy câu
+hỏi đúng không còn là "có dùng chung không" mà là "**ai** dùng chung với ai" — và bộ cấp phát
+không có dòng nào biết chương nào có ai. Lô 1 được 2 trên 3 cặp "không cùng chương" là **may**,
+không phải thiết kế.
 
 ## Hai hướng nới đã bị đo bác bỏ — đừng đi lại
 

@@ -886,8 +886,17 @@ nam có tên, 14 chỗ cấp được) nhưng câu hỏi sai: người nghe nghe
 đồng hiện của lô 1 cần **7 giọng nam**, và 7 cũng là cận dưới (chương 023 có 7 người nam cùng
 nói). **Kho gấp đôi cái cần dùng; cả ba va chạm đều tránh được.**
 
-Hỏng ở chỗ `usage[name]` xếp hạng trên toàn project và không có dòng nào biết chương nào có ai.
-Lô 1 được 2/3 cặp "không cùng chương" là **may**, không phải thiết kế.
+Truy tiếp thì hỏng ở **ba chỗ chồng lên nhau**, và chỗ giữa là bug thật:
+
+1. Thang biến thể formant là vòng modulo — `variants[variant_usage[name] % len(variants)]` —
+   nên người thứ 8 trên preset 7 bậc quay về bậc 1 mà không kiểm tra bậc ấy đã có chủ chưa.
+   Thái Sơn nhận 9 người, quay 2 lần. Chín trên bảy thì phải dùng lại; phần này không phải lỗi.
+2. **`reserve()` chỉ nhận tên preset**, nên một giọng đã ghim làm bộ đếm nhích một bậc *bất kỳ*
+   thay vì đánh dấu bậc nó đang giữ. Thanh Bình có 7 người, 7 bậc, mà chỉ ra 6 giọng: bậc
+   `0,898` bỏ phí trong khi `f104` phát cho hai người. `_reserve_pinned_voices` cầm cả
+   `formant_ratio` lẫn `voice_key` rồi vứt đi. Va chạm này **tránh được hoàn toàn**.
+3. Sau khi vá 1 và 2, 16 người đòi 14 chỗ vẫn còn hai lần phải dùng chung — và lúc ấy mới tới
+   câu hỏi *ai* dùng chung với ai, thứ cần đồ thị đồng hiện.
 
 Ba hướng nới kho — pitch, biên formant, trả giọng miền Trung cho NPC — đều đã bị đo bác bỏ, và
 [TWO_CHARACTERS_ONE_VOICE.md](TWO_CHARACTERS_ONE_VOICE.md) ghi từng cái kèm phép đo, vì cả ba
