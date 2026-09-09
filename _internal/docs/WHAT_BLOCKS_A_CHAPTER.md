@@ -61,6 +61,29 @@ Xem [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md),
 [LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md),
 [ONSET_CLICK.md](ONSET_CLICK.md).
 
+## Mọi nguyên nhân từng thấy, và cái gì đang đỡ nó (2026-09-09)
+
+Gộp `last_error` của hai lô đã chạy về **nguyên nhân** (`plan_repair_batch.py` in ra bảng này),
+rồi đối chiếu với những gì đã vào cây:
+
+| nguyên nhân | ở đâu | cái đỡ nó | đã chứng minh trên audio thật? |
+|---|---|---|---|
+| `ASR_MISMATCH_UNRESOLVED` | alpha.60 ch 019, 021, 024 | `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS` | **có** — lô 1, 13 lần cho qua có ghi sổ |
+| `ASR_LOCKED_NAME_ANCHOR_MISMATCH` | alpha.60 ch 020 | `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS` | **có** — cùng cơ chế |
+| chạm trần khung, 0 ứng viên | alpha.60 ch 026 (`"Gì cơ?"`) | `patch_ceiling_repairable` | **chưa** — lỗi không tái diễn |
+| `join discontinuity` | lô 1 ch 003, 016 | `patch_edge_fade` | **có** — 0,219 → 0,0215 ở lô vá |
+| `loudness delta` | lô 1 ch 000 | `patch_loudness_review_ships` | **có** — cờ vẫn ghi, chương vẫn xuất |
+| `TTS_PACE_BAND_RELAXED` | lô 1 ch 007 | `patch_pace_relaxed_is_a_decision` | **chưa** — lần chạy lại ra 14,07 nên đường nới không mở |
+| surrogate lạc giết cả cuốn | lô 1, lần chạy đầu | `patch_lone_surrogate` | **có** — lô1b qua đúng đoạn đã giết lần trước |
+| giới tính không phân giải được (cổng 7) | alpha.5x | `patch_casting_gate_no_halt` | **chưa** — chưa gặp lại |
+
+Sáu nguyên nhân ở tầng chương, hai ở tầng cuốn sách. **Bốn đã chứng minh trên audio thật, bốn
+chỉ có unit test đứng sau.**
+
+Điều bảng này *không* nói: rằng danh sách đã đủ. Nó là danh sách những nguyên nhân đã **xảy
+ra**, trên 39 chương đã chạy của một cuốn 478 chương. Lô 2 tồn tại một phần để hỏi xem cái đuôi
+ấy còn dài bao nhiêu — xem [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), mục dự đoán viết trước.
+
 ## Cách đo "chương nào chặn vì cái gì"
 
 ```bash
