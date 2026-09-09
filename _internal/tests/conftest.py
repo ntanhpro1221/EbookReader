@@ -22,8 +22,19 @@ hơn và ồn hơn. Nhìn từ ngoài hai chỗ giống hệt nhau.
 
 Nên fixture này chỉ **đếm rồi ngủ thật**. Cái nó mua không phải tốc độ mà là **khả năng nhìn**:
 ngày 2026-09-08 tôi giết hai lượt chạy vì tưởng bộ test treo — `time.sleep` không tốn CPU nên
-CPU phẳng trông y hệt deadlock. Một dòng tổng kết nói "đã ngồi chờ 826 giây" phân biệt được hai
-thứ ấy mà không phải đoán, và một con số nhảy vọt là dấu hiệu ai đó vừa thêm một vòng chờ mới.
+CPU phẳng trông y hệt deadlock. Một dòng tổng kết nói bộ test đã ngồi chờ bao lâu phân biệt được
+hai thứ ấy mà không phải đoán, và một con số nhảy vọt là dấu hiệu ai đó vừa thêm một vòng chờ.
+
+Số thật, đo trên cả bộ ngày 2026-09-09:
+
+```
+2.521 test xanh trong 519 giây;  ngồi chờ 246 giây trong 102 lần time.sleep   (47%)
+```
+
+**Đừng nhầm với con số của chế độ bỏ ngủ**: ở đó nó ra 826 giây trong 11.724 lần, gấp trăm lần
+số lượt gọi. Chênh lệch ấy không phải sai số đo — nó **chính là** bằng chứng cho kết luận ở
+trên: khi `sleep` là no-op, vòng `_wait_for_resources` quay tít và gọi `sleep` hàng nghìn lần
+để tới cùng một mốc đồng hồ mà một lần ngủ thật 2 giây đã tới.
 
 Đặt `EBOOK_TESTS_REAL_SLEEP_OFF=1` để thật sự bỏ ngủ — chỉ dùng khi muốn đo lại kết luận trên,
 đừng dùng để chạy bộ test nhanh hơn, vì nó không nhanh hơn.

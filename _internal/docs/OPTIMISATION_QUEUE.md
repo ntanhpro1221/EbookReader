@@ -856,8 +856,18 @@ ra sản phẩm. Để dành cho lúc không có lô nào bay.
 Nó bọc `time.sleep`, cộng dồn, rồi ngủ thật — không đổi hành vi một chút nào — và in ở cuối:
 
 ```
-[conftest] ngồi chờ 826 giây trong 11724 lần time.sleep.
+[conftest] ngồi chờ 246 giây trong 102 lần time.sleep.
+2521 test xanh trong 519 giây      ->  47% thời gian bộ test là ngồi chờ
 ```
+
+**Con số 826 giây / 11.724 lần mà tôi trích ở trên là của chế độ BỎ ngủ**, và chênh lệch trăm
+lần về *số lượt gọi* chính là bằng chứng cho kết luận: khi `sleep` là no-op, vòng chờ quay tít
+và gọi hàng nghìn lần để tới đúng cái mốc đồng hồ mà một lần ngủ 2 giây đã tới. Hai con số ấy
+không so sánh trực tiếp được với nhau, và tôi đã suýt trích nhầm cái sau như thể nó mô tả lượt
+chạy bình thường.
+
+Nên phần **thật sự** cắt được, nếu tách được ngủ-nhường khỏi ngủ-đợi-đồng-hồ, nhiều nhất là
+khoảng 4 phút mỗi lượt chạy — không phải 14.
 
 Cái nó mua là **khả năng nhìn**, đúng thứ đã thiếu hôm 2026-09-08 khi tôi giết hai lượt chạy vì
 tưởng treo. `EBOOK_TESTS_REAL_SLEEP_OFF=1` bật lại chế độ bỏ ngủ, để đo lại kết luận trên chứ
