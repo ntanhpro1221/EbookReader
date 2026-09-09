@@ -1,0 +1,97 @@
+# Hai nhân vật một giọng — và kho giọng **không** phải thủ phạm
+
+Lô 1 có ba cặp nhân vật có tên dùng chung đúng một `voice_key`:
+
+```
+preset_thanh_binh_f104_p-04   CHA     + SỐ BA     không cùng chương
+preset_thai_son_f116_p+00     NOAH    + SỐ BẢY    không cùng chương
+preset_thai_son_f093_p+00     SỐ BỐN  + SỐ NĂM    CÙNG CHƯƠNG 023
+```
+
+Chỉ cặp thứ ba là hỏng thật: người nghe nghe từng chương một, nên hai người không bao giờ gặp
+nhau mà trùng giọng thì không ai phân biệt được và cũng không ai cần phân biệt. Trong chương
+023, SỐ BỐN và SỐ NĂM nói bằng cùng một giọng, tổng ba câu.
+
+## Kết luận đầu tiên của tôi sai, và cái sai đáng giữ lại
+
+Tôi đo được "14 nhân vật nam có tên, đúng 14 chỗ có thể cấp" và đặt tên tài liệu này là *"Kho
+giọng nam đã đầy"*. Số học thì đúng:
+
+```
+14 preset trong catalog
+ −1  Xuân Vĩnh          EXCLUDED_PRESETS — một người nghe Việt phán, không bàn lại
+ −2  giọng miền Trung   CASTING_REGIONS — sai thanh điệu trên từ thường:
+                        "khốn kiếp" → "khôn kiêp", và thanh điệu mang nghĩa
+ −…  giọng tin tức      style != STYLE_NATURAL/STORY
+ =   nam 3 preset, nữ 4
+ −1  Phạm Tuyên         nhân vật không bao giờ dùng chung preset với người dẫn chuyện
+ =   nam 2 × 7 bậc formant = 14 giọng   |   nữ 4 preset = 27 giọng
+```
+
+Nhưng **"đầy" là kết luận sai từ số đúng**, vì nó so tổng cast với tổng kho, trong khi ràng
+buộc thật là theo chương.
+
+## Con số thật sự quyết định
+
+```
+nhân vật nam có tên, cả lô 1          : 17
+chương đông nhất có bao nhiêu người nam:  7   (chương 023)
+NPC_LOCAL nhiều nhất trong một chương  :  1 nam, 2 nữ
+```
+
+Dựng đồ thị đồng hiện — mỗi nhân vật một đỉnh, nối hai người nếu họ cùng nói trong một chương —
+rồi tô màu tham lam:
+
+```
+nam :  17 người, chương đông nhất 7  ->  cần  7 màu   (kho 14)
+nữ  :   8 người, chương đông nhất 3  ->  cần  3 màu   (kho 27)
+```
+
+Bảy cũng là **cận dưới**: chương 023 có 7 người nam cùng nói, tức một clique bảy đỉnh, nên
+không cách tô nào dùng ít hơn bảy. Tham lam chạm đúng tối ưu.
+
+**Kho gấp đôi cái cần dùng.** Cả ba va chạm của lô 1 đều tránh được, không cần thêm một preset
+nào, không cần nới một biên nào.
+
+## Vậy hỏng ở đâu
+
+Bộ cấp phát xếp hạng theo `usage[name]` trên **toàn project** — preset chưa dùng đứng trước —
+và không bao giờ hỏi *hai người này có cùng chương không*. Nó giải một bài toán toàn cục cho
+một ràng buộc cục bộ. Khi buộc phải cho hai người dùng chung, nó chọn ngẫu nhiên theo thứ tự
+xếp hạng chứ không chọn một cặp không gặp nhau.
+
+Lô 1 được 2 trên 3 cặp "không cùng chương" — nhưng đó là **may**, không phải thiết kế: không có
+dòng nào trong `character_registry.py` biết chương nào có ai.
+
+## Hai hướng nới đã bị đo bác bỏ — đừng đi lại
+
+**Pitch.** `CHARACTER_PITCH_VARIANTS = (0,−1,1,−2,2)` có sẵn và gần như không được dùng làm trục
+đa dạng. Một người nghe so cùng một câu từ −6 đến +6 nửa cung, F0 từ 106 Hz đến 206 Hz, và
+**nghe ra cùng một người suốt**.
+
+**Nới biên formant.** Bậc thật bị kẹp bởi `PRESET_VOCAL_TRACT_CM` đo bằng Praat trên chính clip
+preview của từng preset. Nới biên chung là kéo giọng ra ngoài dải người.
+
+**Trả giọng miền Trung lại cho NPC.** Tôi định đề xuất chính điều này rồi tự bác: NPC cũng có
+lời để người nghe nghe, nên đổi một va chạm giọng lấy một lỗi thanh điệu là đổi lỗ.
+
+Ba hướng ấy đều nhắm vào "kho nhỏ quá". Kho không nhỏ.
+
+## Hướng đúng: cho bộ cấp phát biết ai cùng chương
+
+Khi phải cho hai nhân vật dùng chung một giọng, chọn cặp **không cùng chương**. Đây là tô màu
+đồ thị đồng hiện, và dữ liệu đồng hiện đã có sẵn trong `segments` trước lúc đúc giọng, vì phân
+tích chạy xong cả sách rồi mới tới `build_registry_and_cast`.
+
+Chưa vá. `voice_catalog.py` và `character_registry.py` đều nằm trong
+`QUALITY_IMPLEMENTATION_FILES`, nên phải đợi ranh giới lô.
+
+**Cái sẽ bó trước, và cái đáng canh:** không phải tổng số nhân vật mà là **chương đông nhất**.
+Hôm nay là 7 trên 14. Nếu về sau có chương nào 15 người nam cùng nói thì lúc ấy kho mới thật sự
+hết, và lúc ấy ba hướng nới ở trên mới đáng bàn lại.
+
+## Cách đo lại
+
+```bash
+python scripts/voice_pool_pressure.py <project>
+```

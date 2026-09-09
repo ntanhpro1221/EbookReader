@@ -1,15 +1,18 @@
-"""Kho giọng còn bao nhiêu chỗ, và ai đang phải dùng chung giọng với ai.
+"""Kho giọng có thật sự chật không, và ai đang phải dùng chung giọng với ai.
 
     python scripts/voice_pool_pressure.py <project>
 
-Sinh ra từ một phép đo trên lô 1 (docs/THE_MALE_VOICE_POOL_IS_FULL.md): **14 nhân vật nam có
-tên, đúng 14 chỗ có thể cấp**, ở chương 029 của một cuốn 478 chương. Kho nam đầy từ lô đầu
-tiên trong mười sáu, còn kho nữ mới dùng 6/27.
+Sinh ra từ lô 1 (docs/TWO_CHARACTERS_ONE_VOICE.md), và **con số đáng đọc không phải cột "còn
+mấy chỗ"**. Tôi bắt đầu từ đúng cột ấy — 14 nhân vật nam có tên, đúng 14 chỗ — và kết luận sai
+rằng kho đã đầy. Ràng buộc thật là **theo chương**: người nghe nghe từng chương một, nên hai
+nhân vật trùng giọng mà không bao giờ gặp nhau thì không ai lẫn.
 
-Cột đáng nhìn nhất không phải số va chạm mà là cột cuối: **có cùng chương không**. Người nghe
-nghe từng chương một, nên hai nhân vật trùng giọng mà không bao giờ gặp nhau thì gần như vô
-hại; trùng giọng trong cùng một chương mới là chỗ người nghe không phân biệt được ai đang nói.
-Lô 1 có ba va chạm nhưng chỉ **một** nằm trong cùng chương.
+Nên script in thêm số màu cần cho **đồ thị đồng hiện**: nối hai nhân vật nếu họ cùng nói trong
+một chương, rồi tô màu tham lam. Trên lô 1 nó ra **7 màu cho nam** trong khi kho có 14 — kho
+gấp đôi cái cần dùng, và cả ba va chạm đều tránh được.
+
+Cận dưới của số màu là chương đông nhất (một clique), nên khi hai số ấy bằng nhau thì phép tô
+đã tối ưu và không cần nghi ngờ thuật toán tham lam.
 
 Chỉ đọc; mở read-only nên chạy được cả khi project đang tổng hợp.
 """
@@ -111,10 +114,11 @@ def main(argv: list[str]) -> int:
         real = [n for n in people if n not in extras]
         used = len(voices_by_gender.get(gender, ()))
         room = capacity.get(gender, 0)
-        bar = "ĐẦY" if len(real) >= room else f"còn {room - len(real)} chỗ"
+        # Cố ý KHÔNG phán "đầy" ở đây. So tổng cast với tổng kho là đúng phép trừ và sai
+        # câu hỏi — xem khối tô màu bên dưới, đó mới là số cần so với kho.
         _say(
             f"{gender:7s} người nói {len(people):3d} (có tên {len(real):3d}, NPC "
-            f"{len(people) - len(real):3d}) | giọng đã đúc {used:3d} / cấp được {room:3d}  {bar}"
+            f"{len(people) - len(real):3d}) | giọng đã đúc {used:3d} / cấp được {room:3d}"
         )
 
     # Cùng một voice_key, nhiều hơn một nhân vật. Đây là định nghĩa của va chạm; hai nhân vật
@@ -125,6 +129,38 @@ def main(argv: list[str]) -> int:
         for key in keys:
             holders.setdefault(key, []).append(name)
     clashes = {key: sorted(names) for key, names in holders.items() if len(names) > 1}
+
+    # Bao nhiêu giọng thật sự cần: tô màu đồ thị đồng hiện. Đây là con số đáng so với kho,
+    # chứ không phải tổng số nhân vật — hai người không bao giờ cùng chương thì dùng chung
+    # giọng cũng không ai lẫn.
+    _say("")
+    for gender in (vc.GENDER_MALE, vc.GENDER_FEMALE):
+        cast = [n for n, g in gender_of.items() if g == gender and n not in extras]
+        if not cast:
+            continue
+        adjacency = {name: set() for name in cast}
+        for chapter in {c for name in cast for c in where[name]}:
+            together = [name for name in cast if chapter in where[name]]
+            for name in together:
+                adjacency[name].update(other for other in together if other != name)
+        colour: dict[str, int] = {}
+        for name in sorted(cast, key=lambda n: -len(adjacency[n])):
+            taken = {colour[other] for other in adjacency[name] if other in colour}
+            index = 0
+            while index in taken:
+                index += 1
+            colour[name] = index
+        needed = max(colour.values()) + 1
+        busiest = max(
+            (len([n for n in cast if c in where[n]]) for c in {c for n in cast for c in where[n]}),
+            default=0,
+        )
+        room = capacity.get(gender, 0)
+        note = "tối ưu (chạm cận dưới)" if needed == busiest else f"cận dưới là {busiest}"
+        _say(
+            f"{gender:7s} cần {needed:2d} giọng để không ai trùng trong cùng một chương"
+            f" — kho có {room:2d}  [{note}]"
+        )
 
     _say("")
     if not clashes:
@@ -150,8 +186,8 @@ def main(argv: list[str]) -> int:
     if extras:
         _say("")
         _say(
-            f"{len(extras)} NPC theo chương đang giữ một chỗ trong kho, ngang hàng với một nhân"
-            " vật đi suốt cuốn sách:"
+            f"{len(extras)} NPC theo chương cũng cầm một giọng riêng (thông tin, không phải lỗi"
+            " — mỗi NPC chỉ sống một chương nên nó chỉ cần khác những ai có mặt ở đó):"
         )
         for name in sorted(extras):
             _say(f"  {name.split('::')[-1]}  (chương {', '.join(sorted(where[name]))})")

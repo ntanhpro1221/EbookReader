@@ -876,33 +876,22 @@ nên nhìn vào lịch sử ứng viên thì một đoạn đã qua bốn vòng 
 thử gì. Đó là chuyện quan sát được, không phải chuyện chất lượng — nhưng nó vừa làm tôi mất một
 lượt truy sai hướng.
 
-## Kho giọng nam đầy 14/14 ở lô 1 trên 16
+## Bộ cấp phát giọng không biết ai cùng chương
 
-**Chưa vá.** Đo trên `lo01b`: 14 nhân vật nam có tên, và đúng 14 giọng nam có thể cấp cho nhân
-vật (2 preset × 7 bậc formant, sau khi trừ giọng người dẫn chuyện, miền Trung và Xuân Vĩnh).
-Kho nữ mới dùng 6/27 nên đây là chuyện riêng của giọng nam.
+**Chưa vá.** Lô 1 có ba cặp nhân vật có tên dùng chung đúng một `voice_key`, và một cặp trong
+số đó nói **trong cùng chương 023** — chỗ duy nhất người nghe thật sự lẫn.
 
-Đồng nhất thức khép kín: 16 người đòi chỗ − 13 giọng được tạo = 3, và đo được đúng 3 cặp dùng
-chung `voice_key`. Chi tiết đầy đủ, kể cả hai hướng nới **đã bị đo bác bỏ** (pitch, và nới biên
-formant), ở [THE_MALE_VOICE_POOL_IS_FULL.md](THE_MALE_VOICE_POOL_IS_FULL.md).
+Tôi mở mục này với tiêu đề *"kho giọng nam đầy 14/14"* và nó **sai**. Phép trừ đúng (14 nhân vật
+nam có tên, 14 chỗ cấp được) nhưng câu hỏi sai: người nghe nghe từng chương một. Tô màu đồ thị
+đồng hiện của lô 1 cần **7 giọng nam**, và 7 cũng là cận dưới (chương 023 có 7 người nam cùng
+nói). **Kho gấp đôi cái cần dùng; cả ba va chạm đều tránh được.**
 
-**Giá trị hiện tại nhỏ, và phải nói thẳng như thế.** Chỉ 1 trong 3 va chạm nằm trong cùng một
-chương (SỐ BỐN và SỐ NĂM, chương 023, tổng ba câu, cả hai đều phụ). Hai cặp còn lại không bao
-giờ gặp nhau nên người nghe không thể lẫn.
+Hỏng ở chỗ `usage[name]` xếp hạng trên toàn project và không có dòng nào biết chương nào có ai.
+Lô 1 được 2/3 cặp "không cùng chương" là **may**, không phải thiết kế.
 
-**Giá trị tương lai thì không nhỏ**, và đó mới là lý do mục này tồn tại: kho đầy sau lô *đầu
-tiên* trong mười sáu. Từ lô 2 mọi nhân vật nam mới đều rơi vào chỗ đã có người.
+Ba hướng nới kho — pitch, biên formant, trả giọng miền Trung cho NPC — đều đã bị đo bác bỏ, và
+[TWO_CHARACTERS_ONE_VOICE.md](TWO_CHARACTERS_ONE_VOICE.md) ghi từng cái kèm phép đo, vì cả ba
+đều nhắm vào một vấn đề không tồn tại.
 
-Hướng đáng làm, theo thứ tự:
-
-1. **Không cho `NPC_LOCAL` tranh chỗ với nhân vật có tên.** 2 trong 16 người đòi chỗ là NPC
-   sống đúng một chương. Người trước từng cho NPC một kho rộng hơn rồi bỏ, vì "nó không đổi gì
-   cả" — câu ấy đúng khi kho còn chỗ và sai từ bây giờ.
-2. **Cấp nốt bậc formant còn trống.** `Thanh Bình` có 7 bậc, lô 1 dùng 6; bậc `0,898` chưa
-   từng được cấp. Nhưng nó gỡ được nhiều nhất 1 trong 3: 16 người đòi 14 chỗ thì ít nhất hai
-   va chạm là không tránh được kể cả với bộ cấp phát hoàn hảo.
-3. **Ưu tiên theo tuổi thọ nhân vật.** Nếu buộc phải cho hai người dùng chung một giọng, hãy
-   chọn hai người **không cùng chương**. Lô 1 vô tình được như vậy 2/3 lần; không có gì trong
-   mã bảo đảm điều đó.
-
-Đo lại bằng `python scripts/voice_pool_pressure.py <project>`.
+Cái đáng canh không phải tổng cast mà là **chương đông nhất**: hôm nay 7 trên 14.
+Đo bằng `python scripts/voice_pool_pressure.py <project>`.
