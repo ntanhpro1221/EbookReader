@@ -29,23 +29,8 @@ LEASE_STALE_SECONDS = 180.0
 # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
 # hỏng gì.
 #
-# 2026-09-09, viết trong lúc lô vá đang bay nên CHƯA áp. Áp ở ranh giới lô, trước lô 2.
-#
-# `patch_reserve_marks_the_slot` sửa một va chạm giọng **tránh được**: `reserve()` chỉ nhận tên
-# preset nên một giọng đã ghim nhích bộ đếm qua một bậc formant *bất kỳ* thay vì đánh dấu bậc
-# nó đang giữ. Lô 1: Thanh Bình có 7 người trên 7 bậc mà chỉ ra 6 giọng — bậc 0,898 bỏ phí
-# trong khi f104 phát cho cả CHA lẫn SỐ BA. Chạy thử trên bản sao: 103 test casting xanh.
-#
-# Nó KHÔNG đổi giọng của nhân vật đã được `port_casting` ghim (đường ghim không đi qua
-# `choose`), nên dây gieo giữa các lô không đứt.
-# `patch_pool_counts_its_own_ram` là cái đắt hơn trong hai cái. Đo giữa chương 007 của lô vá:
-# RAM trống 2,85 GB dưới sàn 3,5 GB, pool TTS giữ 7,63 GB, GPU 0% và 4,6 W hơn nửa giờ. Pool
-# định cỡ chỉ theo VRAM nên worker thứ ba là thứ đẩy lượt chạy vào trạng thái không worker nào
-# chạy được. Chạy thử trên bản sao: 169 test xanh, kể cả hai bài về chốt pool.
-ORDER: tuple[str, ...] = (
-    "patch_reserve_marks_the_slot.py",
-    "patch_pool_counts_its_own_ram.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -99,6 +84,22 @@ APPLIED = (
     "patch_loudness_review_ships.py",
     "patch_pace_relaxed_is_a_decision.py",
     "patch_edge_fade.py",
+    # 2026-09-09 ~10:50, tại ranh giới lô vá / lô 2. Hai bản vá **tài nguyên**, không phải chất
+    # lượng — chúng không đổi một mẫu audio nào, chỉ đổi việc máy có chạy hay không và ai được
+    # cấp giọng nào.
+    #
+    #   - `patch_pool_counts_its_own_ram`: pool TTS định cỡ chỉ theo VRAM. Đo giữa chương 007
+    #     của lô vá: RAM trống 2,85 GB dưới sàn 3,5 GB, pool tự giữ 7,63 GB, GPU 0% và 4,6 W
+    #     hơn nửa giờ với nhịp tim vẫn sống. Worker thứ ba là thứ làm cho không worker nào chạy
+    #     được. Hằng số 2,65 GB không phải số mới: theo dõi đỉnh RSS 25 phút bắt được 14 worker
+    #     TTS ở 2,68 cực đại / 2,57 trung vị, gần trùng phân bố worker cảm thụ mà người trước
+    #     đã đo. Bản vá còn sửa một fixture cũ vốn thiếu trường `free_ram_gb` — thiếu đúng chỗ
+    #     biến một hụt tài nguyên nhất thời thành cái chốt vĩnh viễn mà chính file test ấy cấm.
+    #   - `patch_reserve_marks_the_slot`: `reserve()` chỉ nhận tên preset nên một giọng đã ghim
+    #     nhích bộ đếm qua một bậc formant *bất kỳ*. Lô 1 mất bậc `0,898` của Thanh Bình trong
+    #     khi `f104` phát cho cả CHA lẫn SỐ BA — một va chạm giọng tránh được hoàn toàn.
+    "patch_reserve_marks_the_slot.py",
+    "patch_pool_counts_its_own_ram.py",
 )
 
 

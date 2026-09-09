@@ -182,6 +182,24 @@ làm `resume` bị từ chối, nên mất **toàn bộ** phần phân tích đ�
 Với lô 13 giờ thì mười phút kiểm trước rẻ hơn nhiều. Nhưng một kỷ luật chỉ nằm trong tài liệu
 là kỷ luật phụ thuộc trí nhớ, nên nó thành script.
 
+## Chạy một lô: một lệnh
+
+```bash
+bash scripts/launch_batch.sh 2      # lô 2
+bash scripts/launch_batch.sh 3      # lô 3
+```
+
+Nó làm đủ `before_a_batch` → `create` → ba bước gieo → `run`, đúng thứ tự dưới đây, và **đọc
+dải chương từ chính bảng ở đầu tài liệu này**.
+
+Điểm ấy quan trọng hơn nó nghe: bản đầu của script tính dải bằng `(n−1)×30`, và nó **đúng cho
+lô 1 và lô 2 rồi sai từ lô 3**, vì kế hoạch chia lô **theo số từ** chứ không theo số chương —
+lô 3 là 32 chương (060..091), lô 4 là 27 (092..118). Một script tự tính lại sẽ lặng lẽ phá đúng
+cái chỉ thị đã dựng nên bảng này. Nếu không tìm thấy dòng cho số lô, script **từ chối** thay vì
+đoán.
+
+Nó cũng tự tìm project của lô liền trước để gieo, nên dây gieo không đứt vì gõ nhầm đường dẫn.
+
 ## Đường đi mỗi lô, không được đổi thứ tự
 
 Nguyên văn ở [VERSIONS.md](VERSIONS.md); tóm tắt để khỏi phải mở hai file:
