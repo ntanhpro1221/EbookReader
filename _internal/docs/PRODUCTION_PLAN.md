@@ -25,7 +25,7 @@ một lô cuối 5,9 giờ.
 | lô | chương | số chương | segment | giờ máy | |
 |---|---|---|---|---|---|
 | 1 | 000..029 | 30 | 3.727 | 8,1 | ← `lo01b_768c98bb4f`, chạy lại 2026-09-08 19:45 |
-| 2 | 030..059 | 30 | 3.762 | 8,1 |
+| 2 | 030..059 | 30 | 3.762 | 8,1 |  <!-- giờ cho máy rảnh; xem THE_MACHINE_IS_SHARED.md -->
 | 3 | 060..091 | 32 | 3.675 | 7,9 |
 | 4 | 092..118 | 27 | 3.795 | 8,2 |
 | 5 | 119..144 | 26 | 3.720 | 8,0 |
@@ -57,6 +57,17 @@ Audio cũ **không sai ở chỗ nghe được** trong đa số trường hợp,
 phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên điều gì về bản hiện tại. Lô 1 của
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
+
+## Mọi con số giờ ở trên là cho **máy rảnh**
+
+Đo ngày 2026-09-09 trên chương 003 của lô vá: 121 segment tốn 27,0 phút, trong khi ở tốc độ
+`maximum` chỉ cần 9,2 — **chậm gấp 2,9 lần**, vì máy đang mở ba Unity.exe và Rider (~9,5 GB
+trên 31,3 GB) và bộ điều tiết nhường chỗ cho chúng.
+
+Nhường như thế là đúng. Nhưng nó nghĩa là lô 2 có thể mất ~23 giờ chứ không phải 8,1, và quan
+trọng hơn: **một lô chậm ba lần không phải một lô treo**. Phân biệt bằng nhịp tim và dòng
+`Resource mode:` trong `runtime_events`, không bằng cảm giác. Chi tiết và cách đo lại:
+[THE_MACHINE_IS_SHARED.md](THE_MACHINE_IS_SHARED.md).
 
 ## Trước mỗi lô
 
