@@ -14,6 +14,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | Mất điện / bấm nhầm Ctrl-C thì sao? | [SURVIVING_AN_INTERRUPTION.md](SURVIVING_AN_INTERRUPTION.md) |
 | Lô chạy chậm hơn ước lượng nhiều? | [THE_MACHINE_IS_SHARED.md](THE_MACHINE_IS_SHARED.md) — nhường máy, không phải treo |
 | Lượt chạy đứng yên mà nhịp tim vẫn sống? | [A_POOL_THAT_FORBIDS_ITSELF.md](A_POOL_THAT_FORBIDS_ITSELF.md) |
+| Ghép MP3 của 16 lô thành một cuốn thế nào? | [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md) — mục *"Ghép cuốn sách"* |
 
 ## Có gì đó hỏng
 

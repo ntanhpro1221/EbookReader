@@ -58,6 +58,34 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Ghép cuốn sách: theo số chương, KHÔNG theo tên file
+
+```bash
+python scripts/assemble_book.py                          # liệt kê, không chép
+python scripts/assemble_book.py --apply --out <thư mục>  # chép thật
+```
+
+Cái bẫy ở đây im lặng. Tên MP3 có dạng `00004_003.mp3`, và **tiền tố là số thứ tự trong
+project, không phải số chương**: chương 003 là `00004_003.mp3` ở lô 1 nhưng `00001_003.mp3` ở
+lô vá, vì tiền tố đếm theo dải chương mà project ấy bao. Gom 16 lô bằng cách sắp theo tên file
+là xáo trộn cả cuốn sách, và không ai nhận ra cho tới khi ngồi nghe.
+
+Nguồn sự thật là `chapters.title`. Khi một chương có ở nhiều lô, bản `completed_at` muộn nhất
+thắng, và script in ra mọi bản thua.
+
+**Cảnh báo quan trọng nhất của nó** là khi một chương phải **lùi về một lô cũ hơn**: nghĩa là
+một lô mới hơn đã chạy chương ấy và không cho ra MP3, nên bản đang dùng mang dàn giọng và cách
+đọc của phiên bản cũ. Đo lúc viết, trước khi lô vá xong:
+
+```
+CẢNH BÁO: 1 chương phải lùi về một lô CŨ HƠN lần chạy gần nhất.
+  chương 016: đang lấy v0.2.0-alpha.56
+```
+
+Chín phiên bản trước, dàn giọng khác. **Không cổng nào bắt được** — mỗi chương tự nó vẫn hợp
+lệ, chỉ có cuốn sách là không nhất quán. Đó là lý do phép kiểm này tồn tại ở tầng ghép chứ
+không ở tầng chương.
+
 ## Đĩa: không phải chuyện cần lo, đo một lần cho xong
 
 `min_free_disk_gb = 12` là một cửa chặn thật, nên đáng đo trước chứ không đáng gặp lúc lô 12
