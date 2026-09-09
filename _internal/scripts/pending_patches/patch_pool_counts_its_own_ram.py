@@ -99,6 +99,13 @@ NEW = '''            snapshot = self.resources.snapshot()
             # and then be stopped by the throttle it had just tripped.
             #
             # The floor is the throttle's own, read from settings rather than chosen here.
+            #
+            # This reading is clean, and that is worth checking rather than assuming: a pool
+            # sized while its own predecessor is still resident would under-read free RAM and
+            # shrink itself a little further every round. `SynthesisPool.close()` calls
+            # `pool.close()` then `pool.join()`, so the workers are gone before this returns,
+            # and the only path back into this sizing block is through a close - a live pool
+            # is returned above without re-sizing.
             floor_ram_gb = float(
                 self.settings.get("resources", {}).get("min_free_ram_gb", 3.5)
             )
