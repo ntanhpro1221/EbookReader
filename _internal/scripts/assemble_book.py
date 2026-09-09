@@ -21,6 +21,7 @@ Chỉ đọc SQLite; chỉ ghi khi có `--apply`, và chỉ ghi vào thư mục 
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sqlite3
 import sys
@@ -191,8 +192,38 @@ def main(argv: list[str]) -> int:
         shutil.copyfile(item["mp3"], temporary)
         temporary.replace(destination)
         copied += 1
+    # Gốc gác từng chương. Một cuốn 478 chương được ghép từ khoảng hai mươi project, và không
+    # có file này thì sáu tháng nữa không ai trả lời được "chương 137 ra từ lượt chạy nào" —
+    # câu hỏi đầu tiên người ta hỏi khi nghe thấy một chỗ lạ tai.
+    #
+    # Không tính sha256: 478 file nhân ~20 MB là mười gigabyte băm cho một câu hỏi về **nguồn
+    # gốc**, không phải về toàn vẹn. Kích thước và tên project đủ để truy ngược.
+    manifest = {
+        "chapters": [
+            {
+                "title": title,
+                "file": f"{title.zfill(width)}.mp3",
+                "version": item["version"],
+                "project": item["project"],
+                "source_file": item["mp3"].name,
+                "bytes": item["bytes"],
+            }
+            for title, item in sorted(winners.items())
+        ],
+        "chapters_expected": len(expected),
+        "chapters_present": len(winners),
+        "missing": [title for title in expected if title not in winners],
+        "fell_back_to_an_older_batch": [title for title, _item in stale],
+    }
+    path = args.out / "manifest.json"
+    temporary = path.with_suffix(".part")
+    io_text = json.dumps(manifest, ensure_ascii=False, indent=1)
+    temporary.write_text(io_text, encoding="utf-8")
+    temporary.replace(path)
+
     _say("")
     _say(f"Đã chép {copied} chương mới vào {args.out} ({len(winners)} chương tổng).")
+    _say(f"Gốc gác từng chương ghi ở {path.name}.")
     return 0
 
 
