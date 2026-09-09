@@ -58,6 +58,20 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Đĩa: không phải chuyện cần lo, đo một lần cho xong
+
+`min_free_disk_gb = 12` là một cửa chặn thật, nên đáng đo trước chứ không đáng gặp lúc lô 12
+đang chạy. Đo 2026-09-09:
+
+```
+D:  tổng 954 GB, còn trống 590 GB
+lô 1 (30 chương, cả WAV từng đoạn lẫn MP3)  =  3,35 GB
+16 lô  ->  ~54 GB
+```
+
+Còn dư hơn mười lần. Không cần dọn gì giữa các lô, và cũng **không nên** dọn: giữ WAV từng đoạn
+là thứ cho phép `compare_runs.py` và `discarded_cures.py` truy lại chuyện đã xảy ra.
+
 ## Dự đoán cho lô 2, viết TRƯỚC khi chạy
 
 Ghi ở đây để nó sai được. Giải thích sau khi biết kết quả thì lúc nào cũng khớp.
