@@ -58,6 +58,34 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Dự đoán cho lô 2, viết TRƯỚC khi chạy
+
+Ghi ở đây để nó sai được. Giải thích sau khi biết kết quả thì lúc nào cũng khớp.
+
+Lô 1 hỏng 4 trên 30 chương, và bốn nguyên nhân là bốn thứ khác nhau:
+
+```
+000  loudness delta 0,62 LU          -> patch_loudness_review_ships
+003  join discontinuity 0,219        -> patch_edge_fade
+016  join discontinuity 0,216        -> patch_edge_fade
+007  TTS_PACE_BAND_RELAXED           -> patch_pace_relaxed_is_a_decision
+```
+
+Cả bốn đã vào cây và ba đã được chứng minh trên audio thật ở lô vá. Nếu chúng đủ, **lô 2 phải
+hỏng 0–1 chương trên 30** — và bất kỳ chương nào hỏng cũng phải hỏng vì một nguyên nhân *chưa
+từng thấy*, không phải vì bốn cái trên.
+
+Hai kết cục và điều mỗi cái nói:
+
+- **Hỏng 0–1, nguyên nhân mới** → chiến lược "chạy một lô, vá theo cái nó hỏng" đúng, và đuôi
+  nguyên nhân đang cạn. Cứ thế đi tiếp mười bốn lô còn lại.
+- **Hỏng 3–5, toàn nguyên nhân mới** → đuôi **không** cạn: mỗi lô sẽ đẻ ra bốn nguyên nhân mới
+  vô hạn, và vá từng cái là đuổi theo chứ không phải về đích. Lúc ấy đáng dừng lại hỏi vì sao
+  chính sách high_quality lại có nhiều cửa chặn độc lập đến thế, thay vì vá cửa thứ tám.
+
+Con số đáng đếm là **số nguyên nhân khác nhau**, không phải số chương hỏng: một nguyên nhân
+đánh sáu chương thì rẻ hơn nhiều so với sáu nguyên nhân mỗi cái đánh một chương.
+
 ## Một chương không phải truyện, và đúng một chương thôi
 
 `000.txt` dài 137 ký tự và không phải nội dung tiểu thuyết — nó là ghi chú của người đăng về
