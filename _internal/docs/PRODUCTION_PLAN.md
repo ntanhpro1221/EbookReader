@@ -76,7 +76,8 @@ là thứ cho phép `compare_runs.py` và `discarded_cures.py` truy lại chuy�
 
 Ghi ở đây để nó sai được. Giải thích sau khi biết kết quả thì lúc nào cũng khớp.
 
-Lô 1 hỏng 4 trên 30 chương, và bốn nguyên nhân là bốn thứ khác nhau:
+Lô 1 hỏng 4 trên 30 chương vì **ba** nguyên nhân — `join discontinuity` đánh hai chương, và
+đó chính là hình dạng rẻ tiền mà mục này nói tới:
 
 ```
 000  loudness delta 0,62 LU          -> patch_loudness_review_ships
@@ -99,6 +100,15 @@ Hai kết cục và điều mỗi cái nói:
 
 Con số đáng đếm là **số nguyên nhân khác nhau**, không phải số chương hỏng: một nguyên nhân
 đánh sáu chương thì rẻ hơn nhiều so với sáu nguyên nhân mỗi cái đánh một chương.
+
+`python scripts/plan_repair_batch.py <project>` in thẳng con số ấy:
+
+```
+3 nguyên nhân khác nhau trên 4 chương:
+  2x  QA chương: join discontinuity   (003, 016)
+  1x  QA chương: loudness delta       (000)
+  1x  cảnh báo segment: TTS_PACE_BAND_RELAXED   (007)
+```
 
 ## Một chương không phải truyện, và đúng một chương thôi
 

@@ -15,6 +15,7 @@ Chỉ đọc; không tạo project, không chạy gì.
 from __future__ import annotations
 
 import argparse
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -29,6 +30,37 @@ def _say(line: str) -> None:
         print(line)
     except (UnicodeEncodeError, OSError, ValueError):
         sys.stdout.buffer.write(line.encode("utf-8", "replace") + b"\n")
+
+
+# Mã cảnh báo segment trông như `c00008_s0000058_b47b5843ed04=TTS_PACE_BAND_RELAXED`; phần
+# trước dấu `=` là danh tính của đoạn, khác nhau ở mọi chương, nên gộp theo nó thì mỗi chương
+# thành một nguyên nhân riêng và con số mất hết ý nghĩa.
+_SEGMENT_WARNING = re.compile(r"=([A-Z_]+)")
+# Cổng QA tầng chương nêu tên phép đo rồi tới con số; con số cũng khác nhau ở mọi chương.
+_CHAPTER_FLAG = re.compile(r"policy:\s*([a-z ]+?)\s*[-0-9]")
+
+
+def _cause(last_error: str) -> str:
+    """Gộp `last_error` về **nguyên nhân**, bỏ đi phần khác nhau ở mỗi chương.
+
+    Con số đáng đếm sau một lô không phải bao nhiêu chương hỏng mà bao nhiêu **nguyên nhân
+    khác nhau**: một nguyên nhân đánh sáu chương thì rẻ hơn hẳn sáu nguyên nhân mỗi cái đánh
+    một chương — cái đầu là một bản vá, cái sau là sáu. Xem docs/PRODUCTION_PLAN.md, mục dự
+    đoán cho lô 2.
+
+    Giữ nguyên chuỗi lạ thay vì nhét vào ô "khác": một nguyên nhân chưa từng thấy chính là
+    thứ đáng đọc nhất sau một lô, và gộp nó đi là giấu mất nó.
+    """
+    text = " ".join(str(last_error or "").split())
+    if not text:
+        return "(không ghi lý do)"
+    match = _SEGMENT_WARNING.search(text)
+    if match:
+        return f"cảnh báo segment: {match.group(1)}"
+    match = _CHAPTER_FLAG.search(text)
+    if match:
+        return f"QA chương: {match.group(1).strip()}"
+    return text[:70]
 
 
 def _runs(numbers: list[int]) -> list[tuple[int, int]]:
@@ -83,6 +115,14 @@ def main(argv: list[str]) -> int:
     _say("Chương hỏng, kèm lý do:")
     for row in broken:
         _say(f"  {row['title']}  {str(row['last_error'] or '')[:96]}")
+
+    causes: dict[str, list[str]] = {}
+    for row in broken:
+        causes.setdefault(_cause(str(row["last_error"] or "")), []).append(str(row["title"]))
+    _say("")
+    _say(f"{len(causes)} nguyên nhân khác nhau trên {len(broken)} chương:")
+    for cause, titles in sorted(causes.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        _say(f"  {len(titles)}x  {cause}   ({', '.join(titles)})")
 
     numbers: list[int] = []
     for row in broken:
