@@ -832,9 +832,23 @@ Hai cách đọc, và chưa biết cách nào đúng:
 Đoạn này đo 11,22 < 12,5 nên nó **không** đạt cả băng nới lỏng, tức nghiêng về cách đọc thứ
 hai. Nhưng cần đọc chỗ đặt `pace_band_relaxed` mới chắc, và cái tên thì gợi ý cách đọc thứ nhất.
 
-### Một chi tiết chưa khớp
+### Chi tiết "chưa khớp" — đã kiểm, không phải lỗ hổng
 
-`segment_candidates` của đoạn này **rỗng** — không có vòng thu lại nào được ghi, dù
-`PACE_BAND_RELAX_ATTEMPTS = 4` nói là có bốn lần thử. Hoặc bốn lần ấy đi đường khác không ghi
-vào bảng candidate, hoặc chúng không hề chạy. Đây là chỗ đáng đo đầu tiên, vì nó cùng hình dạng
-với lỗ hổng trần khung: *một đoạn đáng được thu lại mà không có ứng viên nào*.
+`segment_candidates` của đoạn này **rỗng** dù `PACE_BAND_RELAX_ATTEMPTS = 4`, và tôi ghi nó là
+"cùng hình dạng với lỗ hổng trần khung". **Sai.** Đọc code:
+
+```
+_retry_in_normal_pace_band  →  allocate_segment_candidate : KHÔNG
+                               mark_generating            : có
+                               synthesize_atomic          : có
+                               mark_signal_passed         : có
+```
+
+Nó ghi thẳng vào segment, không đi qua bảng candidate. Nên bốn lần thu lại **có xảy ra thật**;
+chúng chỉ không để lại dấu ở nơi tôi đi tìm. Khác hẳn lỗ hổng trần khung, nơi đoạn ấy **không
+được thu lại lần nào**.
+
+Còn lại một khoảng mù nhỏ và thật: `segment_candidate_attempt_summary` không thấy bốn lần ấy,
+nên nhìn vào lịch sử ứng viên thì một đoạn đã qua bốn vòng nới lỏng trông y hệt một đoạn chưa
+thử gì. Đó là chuyện quan sát được, không phải chuyện chất lượng — nhưng nó vừa làm tôi mất một
+lượt truy sai hướng.
