@@ -29,10 +29,7 @@ LEASE_STALE_SECONDS = 180.0
 # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
 # hỏng gì.
 #
-# Hàng chờ rỗng. Hai bản vá cuối áp 2026-09-08 17:5x, ngay tại ranh giới giữa alpha.62 và lô
-# 1 của kế hoạch sản xuất - đúng thời điểm mà `patch_strip_zero_width` cần, vì nó đổi
-# `text_sha256` của 15 đoạn và lô 1 sinh lại chương 000-029 từ đầu nên không mất gì.
-# Hàng chờ rỗng.
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
 ORDER: tuple[str, ...] = ()
 
 APPLIED = (
