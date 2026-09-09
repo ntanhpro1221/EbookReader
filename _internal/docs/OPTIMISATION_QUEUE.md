@@ -810,8 +810,12 @@ về nhịp đọc. Chương 007 của lô 1 hỏng vì:
 
 ```
 High-quality policy requires repair or review for segment warnings:
-c00008_s0000058_b47b5843ed04=TTS_PACE_BAND
+c00008_s0000058_b47b5843ed04=TTS_PACE_BAND_RELAXED
 ```
+
+(Bản đầu của mục này chép thiếu đuôi `_RELAXED`. Không phải chi tiết nhỏ: đọc `TTS_PACE_BAND`
+thì bản vá — vốn chỉ nhận `TTS_PACE_BAND_RELAXED` — trông như không khớp với chính chương nó
+sinh ra để cứu. `last_error` của chương 007 trong lô 1 ghi đủ đuôi.)
 
 Đoạn ấy: `"C-Cái con ả này! Cô ta đang hả hê trước nỗi đau của tôi đấy à?!"` — phân tích gán
 nhịp **`fast`**.
