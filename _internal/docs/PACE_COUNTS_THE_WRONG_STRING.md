@@ -179,5 +179,5 @@ chữ/từ của 17 cái ấy: 2,45 · 2,67 · 2,67 · 2,78 · 2,88 · 2,90 · 2
 · 3,21 · 3,25 · 3,33 · 3,44 · 3,52 — quá nửa dưới trung vị kho 3,33, và ba cái tốn nhiều lần
 thử nhất (11, 9, 4) đều ≤ 2,92. Tổng cộng ~38 lần sinh thừa cho một lớp lỗi mà seed không
 chữa được, cộng một chương mất. Với bản vá, câu 9 lần thử ("Thalia hừ mũi…", 11 từ, 32 ký tự
-đọc, 11,1 chars/s) đo 3,82 âm tiết/giây — vừa qua sàn 3,75; nó là ca **sát ngưỡng**, và nếu
+đọc, 11,1 chars/s) đo 3,81 âm tiết/giây — vừa qua sàn 3,75; nó là ca **sát ngưỡng**, và nếu
 lô 4 còn thấy nó thử lại vài lần thì sàn âm tiết đang đúng chỗ, không phải sai.

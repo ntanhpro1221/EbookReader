@@ -2682,3 +2682,39 @@ Giá trị thật của đêm không nằm ở +1 chương mà ở chỗ khác, 
 - **Hai bản vá chứng minh trên audio thật** với điều kiện phủ định ghi trước.
 - **Ba dự đoán của tôi bị dữ liệu bác**, cả ba cùng một sai lầm — ngoại suy từ mẫu nhỏ.
 - **Một bản vá tự rút** vì dựng trên nhân quả ngược chiều.
+
+## `v0.2.0-lo03` — 31/32 chương, và con số tốt nhất tới giờ
+
+Chương 060..091, 3.675 segment, gieo từ `lo02_4d783ac744`. Chạy 11:43 → 21:19 ngày 2026-09-10.
+
+| | lô 1 | lô 2 | **lô 3** |
+|---|---|---|---|
+| chương xuất bản được | 27/30 | 27/30 | **31/32** |
+| mất vì | 4 nguyên nhân | 2 nguyên nhân | **1** (nhịp đọc, chương 075) |
+| chấp nhận có ghi sổ (máy) | 13 | — | 13 |
+| phán quyết người nghe được gieo | 14 | — | 14 |
+
+**Một chương mất, một nguyên nhân:** 075, đoạn `Và Alice đã ở đó để tận dụng sơ hở ấy.` — 10/10
+lần thử ở 10,64–11,80 kt/s dưới sàn 12,5; câu 38 ký tự không chia được, dải đã `normal`, mọi
+đường cứu đóng. Không phải seed: câu toàn từ ngắn (2,25 chữ/từ so với trung vị kho 3,33). Đo
+theo âm tiết nó đọc 4,48/giây, gần trung vị kho 4,67 — bản thu **không** chậm.
+`patch_pace_counts_syllables_too` áp ở ranh giới này; kiểm lại bằng chính mã đã áp: cả bốn tốc
+độ ấy giờ **qua ngay lần đầu**, và ca sát ngưỡng nhất của lô (`Thalia hừ mũi…`, 9 lần thử) đo
+3,81 âm tiết/giây, vừa trên sàn 3,75.
+
+**Tốc độ:** 575,1 phút cho 3.674 segment (6,39/phút). Ở chế độ `maximum` là 7,24/phút, nên
+9,6 giờ thực so với 8,5 giờ nếu máy rảnh hẳn — **chậm gấp 1,13**. `yield_heavy` chiếm 65,6 phút
+và trong đó sinh được **17** segment (0,26/phút): nhường là *dừng*, không phải chậm lại.
+
+**Kho giọng nam chạm đáy:** 14 người có tên đòi 14 chỗ, đúng kín. 7 giọng bị dùng chung, **3
+trùng trong cùng một chương** (IGOR+THU LÃNH ở 062, KANG+SAMAEL ở 066 và 071, NGƯỜI TRẢ LỜI+SELNE
+VALKRYN ở 084 và 086). Hai trong ba là *cùng một người bị tách đôi* (THU LÃNH rơi dấu, SELNE
+VALKRYN họ bịa) và được ba bản vá nhận dạng ở ranh giới này xử; chỉ KANG+SAMAEL là hai người
+thật, nên **chỉ 066/071 là phép thử thật** của `patch_wrap_prefers_a_stranger`.
+
+**Thứ chưa ai nhìn:** 147 đoạn `ASR_LOCKED_NAME_ANCHOR_REVIEW` + 23 `_MISMATCH`, cả hai không
+chặn chương. Đo hết 3.923 phép kiểm neo cho thấy phần lớn là **cổng đếm chính tả của Whisper**
+(`Awakened` đọc giống nhau 66/66 lần mà trượt 68 lần; `Willem → Guy-lem` đọc đúng "gai-lem" mà
+cổng so một token với hai âm tiết) — nhưng **`Jake → Giếch` là lỗi thật**: 1.827 neo qua cả ba
+lô, 0% khớp ở cả ba, 89 dạng đọc khác nhau, và cùng một câu ra `Giật` rồi `Dịch`. Xem
+[A_NAME_READ_MANY_WAYS.md](A_NAME_READ_MANY_WAYS.md).

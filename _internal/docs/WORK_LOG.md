@@ -1069,3 +1069,17 @@ bản thu đã qua. Ranh giới tự chạy sẽ áp nó trước lô vá, và c
 phải qua lần đầu. Diễn tập ranh giới trên bản sao đủ bố cục: ba bản vá áp, hàng chờ tự rút,
 bộ test xanh, mã 0. `plan_repair_batch` giờ ghi "SEGMENT_FAILED — speech pace N chars/s" thay
 vì chỉ `SEGMENT_FAILED`, để log ranh giới đọc được nguyên nhân mà không phải mở SQLite.
+
+**Thêm lúc 21:30 — 170 cờ neo tên mỗi lô, và chỉ một là lỗi thật.** Lô 3 gắn cờ 147
+`ASR_LOCKED_NAME_ANCHOR_REVIEW` + 23 `_MISMATCH`, cả hai không chặn chương, nên chúng đi qua mà
+không ai nhìn. Đo hết 3.923 phép kiểm neo (`scripts/name_is_read_the_same_way.py`) và tách hai
+câu hỏi vốn bị trộn: *"có thoả cổng"* khác *"có được đọc giống nhau mỗi lần"*. Phần lớn là cổng
+đếm chính tả của Whisper — `Awakened` đọc **giống nhau 66/66 lần** mà trượt 68 lần. Nhưng
+`Jake → Giếch` là lỗi thật: **1.827 neo qua cả ba lô, 0% khớp ở cả ba, 89 dạng đọc**, và cùng
+một câu ra `Giật` rồi `Dịch`. Giá sửa hẳn: đọc lại 182 đoạn trên 18 chương. Ghi ở
+[A_NAME_READ_MANY_WAYS.md](A_NAME_READ_MANY_WAYS.md).
+
+Một giả thuyết của tôi bị bác trong lúc đo: dạng đọc chèm âm `ờ` trượt cổng 2,4% so với 27,4%
+nhưng **đọc ổn định ngang** (đỉnh 50,0% so với 51,9%) — chúng chỉ không bao giờ thoả cổng, và ca
+xấu nhất (`Giếch`) không chèm âm nào. Bài học cũ, hình dạng cũ: tôi gán cho giọng đọc một lỗi
+thuộc về phép đo.

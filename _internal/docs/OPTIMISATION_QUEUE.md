@@ -1259,3 +1259,40 @@ kiểm bốn điều kiện từ chính dữ liệu, ghi vào bảng riêng.
 
 Bản vá âm tiết đã đóng phần lớn lớp này (câu toàn từ ngắn) mà không cần tới đây. Cái này chỉ
 đáng làm nếu lô 4 vẫn mất chương vì "chậm" sau bản vá ấy — đếm trước, rồi mới viết.
+
+## 170 cờ neo tên mỗi lô, và chỉ một trong số đó là lỗi thật (2026-09-10, 21:30)
+
+`ASR_LOCKED_NAME_ANCHOR_REVIEW` (147 đoạn ở lô 3) và `_MISMATCH` (23) đều không chặn chương, nên
+170 đoạn mỗi lô đi qua mà không ai nhìn. Đo cả 3.923 phép kiểm neo bằng
+`scripts/name_is_read_the_same_way.py` và tách hai câu hỏi vốn bị trộn: *"có thoả cổng không"*
+khác *"có được đọc giống nhau mỗi lần không"*. Chi tiết ở
+[A_NAME_READ_MANY_WAYS.md](A_NAME_READ_MANY_WAYS.md); ba con số quyết định:
+
+- `Awakened` đọc **giống nhau 66/66 lần** mà trượt cổng 68 lần (Whisper viết `awaken`, cổng chờ
+  `awakened`). Cổng sai, audio đúng — không có gì để sửa ở giọng.
+- `Willem → Guy-lem`: `'lem'` chiếm 297/512, tức bộ ghép gán **một** token cho neo hai âm tiết
+  rồi so `guy-lem` với `lem`. Lỗi cửa sổ ghép, không phải lỗi đọc.
+- `Jake → Giếch`: **1.827 neo qua cả ba lô, 0% khớp ở cả ba, và `đỉnh%` tụt 33 → 15 → 13.** Cùng
+  một câu ra `Giật` rồi `Dịch` — hai âm khác nhau. Đây là lỗi thật, và nó là **cái duy nhất**
+  trong danh sách mà cổng đang nói đúng.
+
+Việc phải làm, và nó là **một dòng dữ liệu chứ không phải một dòng mã**: đổi `spoken_form` của
+`Jake` (bảng `pronunciations`, id 132, `Giếch`). Tôi đã viết sai một lần ở đây — rằng bảy cái
+tên có "hai dòng trong sổ" và chỉ cần bỏ dòng tệ hơn. Sổ có **một** dòng mỗi tên; cái thứ hai
+tôi đếm là `pronunciation_delivery_variant`, hai biến thể giao mà đường ống sinh cho mỗi đoạn —
+đọc theo dạng ghim (`locked_spoken_v1`) và đọc thẳng chữ viết gốc (`source_spelling_v1`), cả
+hai đều bị ASR chấm. Kiểm bằng `SELECT * FROM pronunciations WHERE surface='Jake'` trước khi
+viết mục này thì đã không sai; tôi kiểm sau.
+
+Tách theo biến thể thì số nói rõ hơn hẳn: `Jake` đọc theo dạng ghim `Giếch` cho `đỉnh` **13%**,
+còn đọc **thẳng chữ viết** `Jake` cho **44%** — dạng ghim làm giọng kém ổn định hơn cả khi không
+có nó. Ngược lại `Samael → Xa-men` khớp 69% so với 2% khi đọc thẳng chữ, tức dạng ghim ở đó làm
+đúng việc. Vậy ứng viên đầu tiên cho `Jake` không cần đoán: chính chữ viết gốc, đã đo trên cuốn
+sách này. Giá của việc sửa hẳn: **đọc lại 182 đoạn trên 18 chương** trong số 92 chương đã có.
+
+Thứ tự quan trọng: **đừng nới cổng trước khi sửa dạng đọc.** Nới trước là làm mất đúng cái cảnh
+báo đang nói thật về `Jake` — và nó đã nói thật 1.827 lần.
+
+Một giả thuyết của tôi bị bác trong lúc đo: các dạng chèm âm `ờ` (`I-xờ-hờ-ta-ra`, `Đờ-ra-kên`)
+trượt cổng 2,4% so với 27,4%, nhưng `đỉnh%` **giống nhau** (50,0 so với 51,9) — chúng đọc ổn định
+ngang các dạng khác, chỉ không bao giờ thoả cổng. Và ca xấu nhất, `Giếch`, không chèm âm nào.
