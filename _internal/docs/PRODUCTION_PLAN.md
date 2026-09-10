@@ -58,6 +58,22 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Khi một lô có chương hỏng: một lệnh nữa
+
+```bash
+bash scripts/launch_repair.sh 2      # lô vá cho lô 2
+```
+
+Nó đọc chương hỏng **từ chính SQLite của lô** chứ không từ danh sách người gõ lại, in cảnh báo
+của `plan_repair_batch.py` trước khi chạy, đi qua `before_a_batch`, rồi chạy **từng chương một**
+theo thứ tự — chúng tranh nhau cùng một GPU nên chạy song song không nhanh hơn.
+
+Nó **từ chối** khi lô chưa chạy xong, vì lúc ấy mọi chương chưa tới lượt đều đọc thành "cần vá",
+và một danh sách như thế là chạy lại thừa cả chục chương.
+
+Vì sao từng chương chứ không một dải: `--range` nhận một dải liên tục, còn chương hỏng thì rải
+rác. Đo trên lô 1: chạy lại cả lô ~13 giờ, chạy lại bốn chương hỏng ~4 giờ.
+
 ## Ghép cuốn sách: theo số chương, KHÔNG theo tên file
 
 ```bash
