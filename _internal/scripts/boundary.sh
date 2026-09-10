@@ -186,6 +186,8 @@ if [ -n "$RECAST" ]; then
     HURT="$(printf '%s\n' "$REPORT" | grep -oE '^[0-9]+/[0-9]+ va ch' | cut -d/ -f1)"
     if [ -z "$HURT" ] && printf '%s' "$REPORT" | grep -q "Không có giọng nào bị hai nhân vật dùng chung"; then HURT=0; fi
     say "  $(basename "$P"): ${HURT:-?} va cham cung chuong"
+    # Ma ay co xuat hien lai khong, va no di duong nao - cau dung de hoi sau mot lo va.
+    py scripts/prove_a_patch.py "$BATCH_PROJECT" "$P" >> "$LOG" 2>&1
   done
 fi
 
@@ -197,7 +199,10 @@ say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
 
 # ---- 7. ghep sach: moi chuong `completed` moi nhat len sach, ke ca chuong vua va / duc lai.
 # Chi doc cac project, nen chay canh lo N+1 dang bay la vo hai.
-if py scripts/assemble_book.py >> "$LOG" 2>&1; then
+# --apply, khong phai luot thu.  mac dinh CHI IN roi thoat 0, nen ban dau cua
+# buoc nay ghi "da ghep sach" vao log ma khong chep gi - do 23:24 ngay 2026-09-10: sach van 60
+# chuong trong khi da co 92. Mot dong log noi thanh cong cho mot luot thu la te hon khong log.
+if py scripts/assemble_book.py --apply >> "$LOG" 2>&1; then
   say "da ghep sach vao D:/Novels/Audiobooks/_book"
 else
   say "assemble_book thoat khac 0 - xem $LOG"

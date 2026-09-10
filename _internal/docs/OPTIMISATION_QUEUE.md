@@ -1406,3 +1406,68 @@ chọn người **không cùng chương 066** hay không.
 Nơi bản vá chắc chắn bị thử là **lô 4**, nơi 18+ người nam thật tranh 14 bậc. Lô đúc lại vẫn là
 chỗ tệ để chứng minh, và lần này lý do cụ thể hơn: pin lấp gần hết thang, nhưng "gần hết" khác
 "hết".
+
+## Lô đúc lại của lô 3: bản vá quay vòng chạy đúng một nửa (2026-09-10, 23:30)
+
+Ranh giới tự chạy xong lúc 23:24 — năm chương đúc lại, lô 4 khởi động, và đây là lần đầu
+`patch_wrap_prefers_a_stranger` chạy thật. Kết quả đo trên từng project:
+
+```
+lo03r_062  0 va chạm cùng chương
+lo03r_066  0
+lo03r_071  1        <- KANG + THẰNG ĐIÊN, cùng preset_thanh_binh_f100_p-04
+lo03r_084  0        (nhưng chương FAILED - xem dưới)
+lo03r_086  0
+```
+
+**Nửa đúng, và nó là bằng chứng thật cho bản vá.** Thang `Thanh Bình` có 7 bậc và cả 7 đã có chủ
+(pin gieo: IGOR 0,898 · SAMAEL 0,93 · SAMAELE 0,97 · VIKTOR 1,00 · THỦ LÃNH 1,00@-7 · DORON 1,04
+· JAKE 1,08 · JAY 1,16), nên KANG **buộc** phải dùng chung — và nó chọn bậc 1,00 của **VIKTOR**,
+người không nói câu nào trong chương 071. Đúng việc bản vá được viết ra để làm.
+
+**Nửa mù.** `holders` là `dict[float, str]` ghi bằng `setdefault`, nên một bậc chỉ nhớ **người
+đầu tiên**. Sau khi KANG vào bậc 1,00, `holders[1.0]` vẫn khai `VIKTOR`. Đến lượt THẰNG ĐIÊN
+(NPC sống đúng trong chương 071), nó đọc bậc ấy thành "người lạ đang giữ" → 0 chương chung →
+chọn luôn. KANG, kẻ đang ở cùng chương với nó, **vô hình**. Nên bản vá tránh được va chạm **đầu
+tiên** trên mỗi bậc rồi lại xếp người thứ ba vào đúng chỗ vừa bị chiếm — và làm thế một cách tự
+tin, vì cái tên nó đọc được là một người lạ thật.
+`patch_a_step_remembers_every_holder` (hàng chờ, thứ 2) cho một bậc nhớ **mọi** người giữ nó và
+tính giá trên hợp của họ.
+
+Và một phép đo của tôi sai, sửa ở đây: tôi viết rằng thang `Thanh Bình` **còn một bậc trống**
+(0,87) nên có thể bản vá không được thử. Sai vì tôi tra thang bằng slug `preset_thanh_binh`,
+trong khi tên trong catalog là `Thanh Bình` — slug rơi vào đường mặc định không kẹp, còn thang
+thật kẹp 0,87 thành **0,898**, đúng bậc IGOR đang giữ. Thang đã kín thật. Bài học nhỏ: tra một
+bảng bằng một cái khoá bịa ra thì nó trả lời, và câu trả lời ấy không phải về thứ mình hỏi.
+
+## Chương 084 mất vì bộ đếm âm tiết của CHÍNH TÔI, bốn tiếng sau khi nó vào cây
+
+Chương 084 đúc lại xong nhưng `failed`, nên `assemble_book` phải lùi nó về bản cũ của lô 3 — dàn
+giọng của một phiên bản khác, đúng cái cảnh báo mà script ấy in ra. Lý do:
+
+```
+Chúng tôi đang đến Thành phố I-xờ-hờ-ta-ra (I-xờ-hờ-ta-ra Xi-ti).
+
+đếm hiện tại   45 ký tự    9 âm tiết   ->  2,44 âm tiết/giây  -> DƯỚI sàn 3,75, gắn cờ
+đếm tách gạch  45 ký tự   18 âm tiết   ->  4,88 âm tiết/giây  -> trên sàn, lẽ ra QUA
+```
+
+`patch_pace_counts_syllables_too` đếm âm tiết bằng `text.split()`. Cách đọc tiếng Anh trong dự
+án này **luôn** viết bằng âm tiết nối gạch ngang (`Mai-cồ`, `A-ca-đe-mi`, `I-xờ-hờ-ta-ra`), nên
+mỗi cái tên thành một âm tiết. Bản thu bị từ 11 lần và chương mất.
+
+Trong docstring của bộ đếm ấy tôi viết rằng đếm thiếu âm tiết ở tên riêng là "chiều sai an
+toàn", vì nó chỉ **giữ nguyên cờ** chứ không tha thêm. Câu ấy đúng mà thiếu, và chỗ thiếu là chỗ
+đắt: an toàn trước việc **tha nhầm**, không an toàn trước việc **chặn nhầm** — và chặn nhầm thì
+mất cả chương. Lần sau viết "sai số một chiều" thì phải nói rõ **an toàn cho ai**.
+
+`patch_a_transliteration_is_many_syllables` (hàng chờ, thứ 3) tách âm tiết ở cả gạch ngang.
+Cùng họ với `patch_pace_digits` và với chính bản vá nó đang sửa: đếm cái giọng đọc **phát ra**,
+không đếm chữ viết.
+
+## `boundary.sh` báo "đã ghép sách" cho một lượt thử
+
+`assemble_book.py` mặc định **chỉ in rồi thoát 0**; phải có `--apply` mới chép. Bước 7 gọi nó
+không cờ, nên log ghi "da ghep sach vao _book" trong khi cuốn sách vẫn 60 chương giữa lúc đã có
+92. Một dòng log nói thành công cho một lượt thử tệ hơn không log dòng nào — nó làm người đọc
+log thôi kiểm. Đã sửa thành `--apply`.

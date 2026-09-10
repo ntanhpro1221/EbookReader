@@ -34,6 +34,7 @@ from ebook_reader.database import ProjectDB  # noqa: E402
 
 from scripts.port_listener_acceptances import _say_safely  # noqa: E402
 from scripts.name_marks import fold_dropped_marks  # noqa: E402
+from scripts.source_spellings import fold_to_source_spelling, source_text  # noqa: E402
 from scripts.backfill_exposure import copy_ledger, read_ledger  # noqa: E402
 
 
@@ -56,6 +57,34 @@ PINNED_SQL = """
     WHERE c.locked_voice_key <> ''
     ORDER BY c.canonical_name
 """
+
+
+def _fold_names(names: list[str], source: Path, weight: dict[str, int] | None = None) -> dict[str, str]:
+    """Gộp tên theo HAI luật, hợp thành: rơi dấu trước, rồi cách viết có trong nguồn.
+
+    Hai luật trả lời hai câu khác nhau và không tranh nhau. Rơi dấu có tín hiệu nội tại (bản
+    nhiều dấu hơn thắng) và dùng được cả khi nguồn không chứa chuỗi nào - đúng ca THỦ LÃNH, một
+    nhãn Ollama tự đặt. Nguồn văn bản là quan toà cho lớp sai một ký tự, nơi số câu thoại đã bị
+    vòng phản hồi làm nhiễm: lô 3 có `SELNE` 32 câu và `SELENE` 7 câu, mà nguồn ghi `Selene` 198
+    lần và `Selne` 0 lần - nhân vật thật tên Selene, và luật cũ chọn theo số câu nên chọn sai.
+
+    Hợp thành, không chỉ gộp hai dict: rơi dấu có thể nói A → B rồi nguồn nói B → C, và lúc ấy A
+    phải về C chứ không về B.
+    """
+    by_marks = fold_dropped_marks(names, weight)
+    survivors = [name for name in names if name not in by_marks]
+    by_source = fold_to_source_spelling(survivors, source_text(source), weight or {})
+    folded: dict[str, str] = {}
+    for name in names:
+        winner = name
+        for _ in range(len(names) + 1):
+            nxt = by_marks.get(winner) or by_source.get(winner)
+            if not nxt or nxt == winner:
+                break
+            winner = nxt
+        if winner != name:
+            folded[name] = winner
+    return folded
 
 
 def read_casting(source: Path) -> list[tuple[str, str, dict]]:
@@ -105,9 +134,9 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
     # bản rơi dấu là bản nhiều lần hơn. Bản chính của luật này vào registry ở
     # `patch_dropped_marks_are_the_same_name`; đây là bản dùng ngay cho gieo, ghim khớp nhau bằng
     # `tests/test_name_marks_agree.py`.
-    folded = fold_dropped_marks([str(row["canonical_name"]) for row in rows])
+    folded = _fold_names([str(row["canonical_name"]) for row in rows], source)
     for loser, winner in sorted(folded.items()):
-        _say_safely(f"  GỘP   {loser} -> {winner} (cùng tên, rơi dấu)")
+        _say_safely(f"  GỘP   {loser} -> {winner} (cùng một người)")
 
     candidates: list[tuple[str, str, dict]] = []
     seen: set[str] = set()
@@ -306,8 +335,9 @@ def read_known_characters(source: Path) -> list[dict]:
     # Gộp cách viết rơi dấu trước khi mang "đã biết" đi, cùng lý do như ở `read_casting`: đây
     # chính là danh sách `_known_summary` đưa vào prompt lô sau, tức chỗ cái sai tự củng cố.
     # Số lần nhắc của bản thua cộng vào bản thắng, để bản thắng không bị xếp dưới.
-    folded = fold_dropped_marks(
+    folded = _fold_names(
         [str(row["canonical_name"]) for row in rows],
+        source,
         {str(row["canonical_name"]): int(row["mention_count"] or 0) for row in rows},
     )
     extra_mentions: dict[str, int] = {}
