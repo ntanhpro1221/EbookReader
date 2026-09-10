@@ -72,6 +72,23 @@ def test_the_chain_ends_at_the_seed_and_lists_repairs_in_creation_order(tmp_path
     assert repairs(2, tmp_path) == links[2:]
 
 
+def test_newest_in_one_folder_is_by_created_at_not_by_name(tmp_path: Path, capsys) -> None:
+    """launch_repair.sh hỏi "project vừa tạo trong thư mục lô vá là cái nào" ngay sau `create`;
+    thư mục ấy còn chứa các chương chạy trước đó trong cùng lượt, và tên thì xếp theo số chương
+    chứ không theo thời gian."""
+    from scripts.seed_chain import main
+
+    made = _tree(tmp_path)
+    folder = tmp_path / "v0.2.0-lo02v"
+    # Tên "lo02v_010" xếp TRƯỚC "lo02v_031" theo alphabet nhưng được tạo SAU cùng.
+    latest = _project(tmp_path, "v0.2.0-lo02v", "lo02v_010_z", 7.0)
+
+    assert main(["--newest", str(folder)]) == 0
+    assert capsys.readouterr().out.strip() == latest.as_posix()
+    assert made["lo02v_043"] != latest
+    assert main(["--newest", str(tmp_path / "khong-co")]) == 1
+
+
 def test_a_batch_with_nothing_yet_has_no_seed(tmp_path: Path) -> None:
     _tree(tmp_path)
 

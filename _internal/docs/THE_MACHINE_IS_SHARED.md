@@ -114,3 +114,22 @@ Hai dấu ấy phân biệt "đang nhường" với "đã chết". Xem thêm
 ```bash
 python scripts/throttle_report.py <project>
 ```
+
+## "Tiền cảnh" nghĩa là cửa sổ đang có focus — không phải "mọi thứ ngoài đường ống" (2026-09-10)
+
+`resource_manager.py` lấy `GetForegroundWindow()`, hỏi tiến trình sở hữu cửa sổ ấy, và đo CPU
+của **đúng một tiến trình đó**. Hệ quả đo được tối 2026-09-10, trong khi lô 3 đang bay:
+
+- Ba lượt bộ test đầy đủ (18:31, 18:33, 18:50) chạy trong console nền — **không một dòng
+  `Resource mode:` nào**. Bộ điều tiết không thấy pytest, vì pytest không có cửa sổ tiền cảnh.
+  Giả định "chạy test là cướp CPU của lô" (lý do `before_a_batch` bỏ qua test khi có lô bay) là
+  đúng về CPU vật lý nhưng **sai về cái bộ điều tiết phản ứng**.
+- Ngược lại, 65,6 phút `yield_heavy` của lô 3 ("foreground CPU 81%", 17 segment) là của cửa sổ
+  ai đó đang mở — bộ điều tiết không ghi tên. `scripts/foreground_watch.py` đứng ngoài, đo cùng
+  cách, và ghi tên vào `runtime/foreground_watch.log`. Mười phút đầu: tiền cảnh là `claude.exe`
+  (ứng dụng hiển thị phiên làm việc này), chưa lần nào vượt 20%.
+
+Hai điều rút ra, chưa đổi mã vì file khoá: (1) nếu muốn bộ điều tiết bảo vệ lô khỏi công việc
+nền của chính tôi thì nó phải đo thứ khác, và (2) ngược lại, nó đang nhường cho bất kỳ cửa sổ
+nào có focus kể cả khi cửa sổ ấy chỉ vẽ lại màn hình — đọc log của watcher vài ngày rồi mới
+quyết.

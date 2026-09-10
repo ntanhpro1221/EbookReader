@@ -142,11 +142,10 @@ for CH in $BROKEN; do
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \
     --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json > /dev/null
-  # `-dt` chu khong phai `-d`: chay lo va lan thu hai se tao mot project thu hai cung tien to
-  # ten, va lay cai dau tien theo thu tu alphabet nghia la lay cai CU - roi doi mai mot lo da
-  # xong tu truoc.
-  PROJECT="$(ls -dt "$OUT"/${TITLE}_* 2>/dev/null | head -1)"
-  [ -n "$PROJECT" ] || { echo "  create that bai cho $CH"; continue; }
+  # Moi nhat theo book.created_at (seed_chain.py), khong theo ten hay mtime: chay lo va lan
+  # thu hai tao project thu hai cung tien to, lay cai dau theo alphabet la lay cai CU; con
+  # mtime thu muc thi doi moi lan ai do mo DB.
+  PROJECT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py --newest "$OUT")" || { echo "  create that bai cho $CH"; continue; }
   echo "  project: $(basename "$PROJECT")"
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_pronunciations.py       "$PREV" "$PROJECT" > /dev/null
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_casting.py              "$PREV" "$PROJECT" > /dev/null

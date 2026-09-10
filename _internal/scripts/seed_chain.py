@@ -4,6 +4,7 @@
     python scripts/seed_chain.py 3 --batch    # project lô (thư mục thường) - nơi đọc danh sách chương hỏng
     python scripts/seed_chain.py 3 --chain    # chuỗi cho backfill_exposure.py, kết thúc ở --seed
     python scripts/seed_chain.py 3 --repairs  # các project v/r của lô 3, theo thứ tự tạo
+    python scripts/seed_chain.py --newest <thư mục>   # project mới nhất trong một thư mục
 
 Vì sao có file này: từ lô 3 có project ĐÚC LẠI GIỌNG từng chương (`lo03r_066` ...). Chúng gieo
 từ lô và cấp giọng **mới** cho người thua khi hai người trùng giọng. Nếu lô 4 gieo từ chính lô 3
@@ -90,6 +91,15 @@ def chain(batch: int, root: Path = VERSIONS_ROOT) -> list[Path]:
 def main(argv: list[str]) -> int:
     positional = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}
+    if flags == {"--newest"} and len(positional) == 1:
+        # Project mới nhất trong MỘT thư mục bất kỳ - launch_repair.sh cần nó ngay sau `create`,
+        # vì thư mục lô vá chứa cả các chương đã chạy trước đó trong cùng lượt.
+        projects = projects_in(Path(positional[0]))
+        if not projects:
+            print(f"không có project nào trong {positional[0]}", file=sys.stderr)
+            return 1
+        print(projects[-1].as_posix())
+        return 0
     if len(positional) != 1 or len(flags) != 1 or not positional[0].isdigit():
         print(__doc__.split("\n\n")[1], file=sys.stderr)
         return 2
