@@ -56,8 +56,12 @@ LEASE_STALE_SECONDS = 180.0
 # chương chung nhất với người sắp cast; không biết ai đang cast thì quay vòng như cũ. Thử trên
 # bản sao: 294 test xanh, và hai bản vá áp được theo CẢ HAI thứ tự.
 ORDER: tuple[str, ...] = (
+    # Ba bản vá cùng sửa character_registry.py. Thứ tự này là thứ tự ĐÃ THỬ; thứ tự ngược
+    # (họ-bịa trước) cũng xanh sau khi neo của bản rơi dấu được thu hẹp ngày 2026-09-10 - nhưng
+    # "cũng xanh" là kết quả đo trên hai bản sao, không phải lời hứa. Đừng đổi mà không đo lại.
     "patch_dropped_marks_are_the_same_name.py",
     "patch_wrap_prefers_a_stranger.py",
+    "patch_stray_surname_is_the_same_name.py",
 )
 
 APPLIED = (

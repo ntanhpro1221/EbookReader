@@ -1163,10 +1163,18 @@ lô 3   3 cặp   ALICE (25)     <  ALICE DRACEN (0)
 
 Đang lớn, và `ALICE` có **ba** cách viết với hai họ khác nhau — model không chỉ thêm họ, nó bịa
 họ. Hướng gộp **ngược** với lớp rơi dấu: bản ngắn giữ gần hết câu, bản dài là nhãn lạc 0–3 câu.
-Rủi ro thật là JAKE / JAKE SMITH cha con, nên luật phải thận trọng: chỉ gộp khi cùng giới, bản
-dài ≤ 3 câu **và** bản ngắn ≥ 10 lần bản dài — bốn cặp trên đều lọt, một cặp cha con thật thì
-không (hai người thật đều có câu). `patch_stray_surname_is_the_same_name` (hàng chờ). Bản dài
-`ALICE VIC. DRAKEN` đã kịp va chạm giọng với THALIA ở lô 3.
+Rủi ro thật là JAKE / JAKE SMITH cha con, nên luật phải thận trọng: bản dài ≤ 3 câu **và** bản
+ngắn ≥ 10 lần bản dài — bốn cặp trên đều lọt, một cặp cha con thật thì không (hai người thật đều
+có câu). *Không* có điều kiện cùng giới: tầng chuẩn hoá tên chạy trước tầng phân giải giới, nên
+hai ngưỡng số câu là toàn bộ chốt chặn. `patch_stray_surname_is_the_same_name` (hàng chờ, thứ 3).
+Bản dài `ALICE VIC. DRAKEN` đã kịp va chạm giọng với THALIA ở lô 3.
+
+Một bài học nhỏ khi xếp nó vào hàng: bản vá này chèn một pass ngay trước dòng `aliases_by_target`,
+và neo của bản rơi dấu kéo từ khối chọn đại diện xuống đúng dòng ấy — áp họ-bịa trước là bản rơi
+dấu trượt neo (`khong khop pass chuan hoa`), dừng sạch, không ghi gì. Thu hẹp neo bên rơi dấu
+lại, đo lại cả hai thứ tự trên hai bản sao: cùng một `character_registry.py` byte-một, 52 bài
+registry xanh cả hai. Ghi lại vì docstring ban đầu tuyên bố "áp thứ tự nào cũng được" mà chưa
+thử — tuyên bố độc lập không phải phép đo.
 
 ## Nấc quay vòng của bộ cấp phát giọng mù-theo-chương — không còn hoãn được (2026-09-10)
 

@@ -130,13 +130,15 @@ assert OLD in s, "khong khop canonical_key"
 s = s.replace(OLD, NEW, 1)
 
 # ---------------------------------------------------------------- dung no trong pass chuan hoa
+# Neo CHỈ vào khối chọn đại diện, không kéo tới dòng `aliases_by_target` bên dưới: bản vá họ-bịa
+# chèn một pass ngay trước dòng ấy, và neo dài hơn sẽ trượt nếu bản kia áp trước. Bài học đo được
+# ngày 2026-09-10 - thứ tự ngược đỏ ngay lần thử đầu, và assert dừng đúng chỗ, không ghi gì.
 OLD = '''    for key, variants in variants_by_key.items():
         representatives[key] = min(
             variants,
             key=lambda candidate: (-variants[candidate], candidate.casefold(), candidate),
         )
-
-    aliases_by_target: dict[str, set[str]] = defaultdict(set)'''
+'''
 NEW = '''    for key, variants in variants_by_key.items():
         representatives[key] = min(
             variants,
@@ -147,8 +149,7 @@ NEW = '''    for key, variants in variants_by_key.items():
     # khác - không có đường riêng để quên.
     for loser_key, winner in merge_dropped_mark_variants(representatives, cleaned_counts).items():
         representatives[loser_key] = winner
-
-    aliases_by_target: dict[str, set[str]] = defaultdict(set)'''
+'''
 assert OLD in s, "khong khop pass chuan hoa"
 s = s.replace(OLD, NEW, 1)
 
