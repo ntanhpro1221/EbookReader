@@ -200,17 +200,35 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
                 f" và ngang bằng nhau — hoà thì không có căn cứ chọn, bỏ cả để cấp phát chia lại"
             )
             continue
+        def _why(who: str) -> str:
+            """Nói **thứ đã quyết**, không nói thứ tình cờ đúng.
+
+            Bản đầu ghi "đã ghim" cho bất kỳ ai đang giữ pin, kể cả khi thứ hạng được quyết
+            bằng `mention_count` từ trước đó - và pin chỉ là nấc thứ ba. Chạy trên lô 2 nó in
+            ra `JAKE (đã ghim) thắng ...` trong khi JAKE thắng vì được nhắc nhiều hơn. Một dòng
+            log nói sai lý do gửi người đọc sau đi tìm nhầm chỗ, đúng như hai chỗ cứng hoá tên
+            mã trong `pipeline` đã làm.
+            """
+            counted = (mentions.get(who, 0), lines.get(who, 0))
+            rivals = [rank[other] for other in sharing if other != who]
+            if all(counted[0] > other[0] for other in rivals):
+                return f"được nhắc {counted[0]} lần"
+            if all(counted[:2] >= other[:2] for other in rivals) and counted[1] > max(
+                (other[1] for other in rivals), default=-1
+            ):
+                return f"{counted[1]} câu"
+            return "đã ghim"
+
         if name == winners[0]:
             others = sorted(other for other in sharing if other != name)
-            why = "đã ghim" if name in pinned else f"{lines.get(name, 0)} câu"
             _say_safely(
-                f"  GIỮ   {name} ({why}) thắng {voice_key}; đúc lại {', '.join(others)}"
+                f"  GIỮ   {name} ({_why(name)}) thắng {voice_key}; đúc lại {', '.join(others)}"
             )
             out.append((name, voice_key, profile))
             continue
-        why = "đã ghim" if winners[0] in pinned else f"{lines.get(winners[0], 0)} câu"
         _say_safely(
-            f"  BỎ QUA {name} ({lines.get(name, 0)} câu): {winners[0]} ({why}) giữ {voice_key}"
+            f"  BỎ QUA {name} (được nhắc {mentions.get(name, 0)} lần,"
+            f" {lines.get(name, 0)} câu): {winners[0]} ({_why(winners[0])}) giữ {voice_key}"
         )
     return out
 
