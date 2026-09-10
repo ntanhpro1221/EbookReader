@@ -51,6 +51,14 @@ if [ "$STATUS" = "3" ]; then
   echo "  Lo $BATCH chua chay xong - doi no xong da." >&2
   exit 3
 fi
+# Chi tin `$BROKEN` khi ma thoat la 0. Vi co `2>&1` o tren, mot loi khac (SQLite hong, cot doi
+# ten) se do traceback vao dung bien nay, va script se coi tung dong traceback la mot so chuong
+# roi goi `create --range` voi chung. Kiem ma thoat truoc khi doc noi dung.
+if [ "$STATUS" != "0" ]; then
+  echo "  Khong doc duoc danh sach chuong hong (ma $STATUS):" >&2
+  echo "$BROKEN" | sed -n '1,6p' >&2
+  exit 2
+fi
 if [ -z "$BROKEN" ]; then
   echo "  Khong co chuong nao hong. Khong can lo va."
   exit 0
