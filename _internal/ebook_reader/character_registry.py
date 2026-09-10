@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import Counter, defaultdict
 from typing import Any, Callable
 
@@ -80,6 +81,86 @@ def canonical_key(name: str) -> str:
     return normalize_name(name).upper()
 
 
+def _stripped_and_marks(name: str) -> tuple[str, tuple[tuple[int, str], ...]]:
+    """Tên bỏ hết dấu, và danh sách (vị trí, dấu) đã bỏ - để so hai cách viết với nhau.
+
+    Chỉ so được hai tên khi phần chữ cái trần của chúng giống nhau; khi ấy các dấu là thứ duy
+    nhất khác, và câu hỏi thành: dấu của tên này có phải **tập con** dấu của tên kia không.
+    """
+    decomposed = unicodedata.normalize("NFD", normalize_name(name))
+    letters: list[str] = []
+    marks: list[tuple[int, str]] = []
+    for char in decomposed:
+        if unicodedata.combining(char):
+            marks.append((len(letters) - 1, char))
+        else:
+            letters.append(char)
+    return "".join(letters), tuple(marks)
+
+
+def dropped_marks_variant_of(loser: str, winner: str) -> bool:
+    """`loser` có phải `winner` bị rơi bớt dấu không - và chỉ rơi, không đổi.
+
+    Tiếng Việt phân biệt từ bằng dấu, nên gộp hai tên chỉ vì bỏ dấu ra giống nhau là sai:
+    "MÁ" và "MÀ" là hai từ. Luật hẹp hơn: `loser` được coi là biến thể rơi dấu của `winner` khi
+    chữ cái trần giống hệt **và** mọi dấu `loser` còn giữ đều nằm đúng vị trí trong `winner`
+    **và** `winner` có nhiều dấu hơn. "THU LÃNH" so với "THỦ LÃNH": chữ trần giống, dấu ngã
+    trên Ã có ở cả hai, `winner` thêm dấu hỏi - đúng là rơi. "MÁ" so với "MÀ": chữ trần giống,
+    nhưng dấu sắc của "MÁ" không có trong "MÀ" - không phải rơi, là khác từ.
+
+    Đo trên lô 2 và lô 3 (2026-09-10): hai cặp như thế, THỦ LÃNH / THU LÃNH và NGƯỜI TRẢ LỜI /
+    NGUOI TRA LOI, và nguồn văn bản không chứa chuỗi nào trong số ấy - là nhãn Ollama tự đặt và
+    rơi dấu ngẫu nhiên. Ở lô 3 bản rơi dấu đã thành bản trội (66 so với 32, 160 so với 46), vì
+    `_known_summary` đưa bản nhiều lần hơn vào prompt kế tiếp và cái sai tự củng cố.
+    """
+    stripped_loser, marks_loser = _stripped_and_marks(loser)
+    stripped_winner, marks_winner = _stripped_and_marks(winner)
+    if stripped_loser != stripped_winner:
+        return False
+    if len(marks_winner) <= len(marks_loser):
+        return False
+    return set(marks_loser) <= set(marks_winner)
+
+
+def merge_dropped_mark_variants(
+    representatives: dict[str, str],
+    counts: "Counter[str]",
+) -> dict[str, str]:
+    """Trỏ mọi cách viết rơi dấu về cách viết đủ dấu. Trả về {key thua: đại diện thắng}.
+
+    Người thắng là bản **nhiều dấu nhất**, không phải bản nhiều lần nhất - vì số lần đã bị vòng
+    phản hồi làm nhiễm: ở lô 3 NGUOI TRA LOI (rơi hết dấu) có 160 lần còn NGƯỜI TRẢ LỜI chỉ 46,
+    và nếu chọn theo số lần thì bản sai sẽ thắng, rồi lô 4 lại thấy nó trong danh sách "đã
+    biết" với số lớn hơn nữa. Số lần chỉ dùng để phá hoà giữa hai bản cùng số dấu.
+    """
+    by_stripped: dict[str, list[str]] = defaultdict(list)
+    for key, representative in representatives.items():
+        by_stripped[_stripped_and_marks(representative)[0]].append(key)
+    redirected: dict[str, str] = {}
+    for keys in by_stripped.values():
+        if len(keys) < 2:
+            continue
+        names = [representatives[key] for key in keys]
+        for key, name in zip(keys, names):
+            better = [
+                other
+                for other in names
+                if other != name and dropped_marks_variant_of(name, other)
+            ]
+            if not better:
+                continue
+            winner = max(
+                better,
+                key=lambda candidate: (
+                    len(_stripped_and_marks(candidate)[1]),
+                    counts.get(candidate, 0),
+                    candidate,
+                ),
+            )
+            redirected[key] = winner
+    return redirected
+
+
 def _looks_like_proper_name(value: str) -> bool:
     return ASCII_PROPER_NAME_PATTERN.fullmatch(value.strip()) is not None
 
@@ -90,6 +171,60 @@ def _honorific_target(value: str) -> str | None:
         return None
     candidate = match.group(1).strip()
     return candidate if _looks_like_proper_name(candidate) else None
+
+
+# Một nhãn dài là "tên ngắn + họ bịa" khi nó có tối đa ngần này câu...
+STRAY_SURNAME_MAX_LINES = 3
+# ...và tên ngắn có ít nhất ngần này lần số câu của nó. Hai ngưỡng cùng lúc, vì mỗi cái riêng lẻ
+# đều gộp nhầm được: chỉ "dài ≤ 3" thì gộp một nhân vật phụ thật vào một nhân vật chính tình cờ
+# trùng tên; chỉ "ngắn ≥ 10×" thì gộp JAKE SMITH (30 câu) vào JAKE (300 câu) - hai người thật.
+# Đo trên ba lô: bốn cặp nhãn lạc đều lọt cả hai ngưỡng; một cặp cha-con thật có cả hai bên nói
+# thì không lọt ngưỡng đầu.
+STRAY_SURNAME_MIN_RATIO = 10
+
+
+def merge_stray_surnames(
+    representatives: dict[str, str],
+    counts: "Counter[str]",
+) -> dict[str, str]:
+    """Trỏ "ALICE VIC. DRAKEN" (1 câu) về "ALICE" (25 câu). Trả về {key thua: đại diện thắng}.
+
+    Khác lớp rơi dấu ở hướng gộp: ở đây bản **ngắn** thắng, vì bản dài là nhãn lạc - model kể
+    chuyện về ALICE suốt rồi bỗng gọi cô là "ALICE VIC. DRAKEN" đúng một câu, với một cái họ nó
+    tự bịa (lô 2 gọi là DRACEN, lô 3 gọi là DRAKEN). Giữ nhãn ấy làm nhân vật riêng là cấp cho
+    một câu thoại một giọng riêng, chiếm một chỗ trong kho, và ở lô 3 chỗ ấy va chạm với THALIA.
+
+    Không có gender ở tầng này (gender được phân giải sau, trong vòng đúc giọng), nên hai ngưỡng
+    số câu là toàn bộ chốt chặn - và chúng được đặt để một cặp cha-con thật (hai người đều nói)
+    không bao giờ lọt.
+    """
+    names = list(representatives.values())
+    redirected: dict[str, str] = {}
+    for key, name in representatives.items():
+        words = normalize_name(name).split()
+        if len(words) < 2:
+            continue
+        long_lines = int(counts.get(name, 0))
+        if long_lines > STRAY_SURNAME_MAX_LINES:
+            continue
+        shorter = [
+            other
+            for other in names
+            if other != name
+            and len(normalize_name(other).split()) < len(words)
+            and words[: len(normalize_name(other).split())] == normalize_name(other).split()
+            and int(counts.get(other, 0)) >= max(1, long_lines) * STRAY_SURNAME_MIN_RATIO
+        ]
+        if not shorter:
+            continue
+        # Nhiều tên ngắn cùng là tiền tố (hiếm): lấy tên NGẮN NHẤT nhiều câu nhất - đó là nhân
+        # vật, những cái ở giữa cũng có thể là nhãn lạc và sẽ tự gộp về đúng chỗ ở lượt của nó.
+        winner = min(
+            shorter,
+            key=lambda other: (len(normalize_name(other).split()), -int(counts.get(other, 0)), other),
+        )
+        redirected[key] = winner
+    return redirected
 
 
 def _canonicalize_named_speakers(
@@ -120,6 +255,17 @@ def _canonicalize_named_speakers(
             variants,
             key=lambda candidate: (-variants[candidate], candidate.casefold(), candidate),
         )
+    # Pass thứ hai, sau khi mỗi key đã có đại diện: hai key mà một là bản rơi dấu của cái kia
+    # thì trỏ về cùng một đại diện. Làm ở đây để vòng viết lại bên dưới xử nó y như mọi alias
+    # khác - không có đường riêng để quên.
+    for loser_key, winner in merge_dropped_mark_variants(representatives, cleaned_counts).items():
+        representatives[loser_key] = winner
+
+    # Nhãn "tên + họ bịa" trỏ về tên ngắn. Đặt ngay trước vòng viết lại để nó được xử như mọi
+    # alias khác. Neo ở đây chứ không ở pass rơi dấu, để bản vá này và bản vá rơi dấu áp được
+    # theo thứ tự nào cũng được - hai lớp lỗi độc lập thì hai bản vá phải độc lập.
+    for loser_key, winner in merge_stray_surnames(representatives, cleaned_counts).items():
+        representatives[loser_key] = winner
 
     aliases_by_target: dict[str, set[str]] = defaultdict(set)
     rewritten_segments = 0
@@ -392,6 +538,21 @@ class PresetAllocator:
         # Không gộp hai cái làm một: `variant_usage` vẫn cần cho đường quay vòng khi thang đã
         # cạn thật, và lúc ấy hành vi phải y hệt trước.
         self.taken_variants: dict[str, set[float]] = {}
+        # Ai đang giữ bậc nào, và ai có mặt ở chương nào. `taken_variants` trả lời "bậc này còn
+        # trống không"; hai cái này trả lời câu hỏi kế tiếp, chỉ đặt ra khi không còn bậc trống:
+        # "dùng chung với ai thì ít hại nhất". Người nghe nghe từng chương một, nên hại đo bằng
+        # số chương hai người cùng có mặt.
+        self.holders: dict[str, dict[float, str]] = {}
+        self.chapters_of: dict[str, set[int]] = {}
+
+    def note_chapters(self, who: str, chapters: set[int]) -> None:
+        """Ghi lại nhân vật này nói ở những chương nào. Gọi cho mọi người TRƯỚC lần chọn đầu.
+
+        Một nhân vật đã ghim từ lô trước mà im lặng ở lô này thì không được ghi gì - tập rỗng -
+        và như thế là đúng: người ấy không cùng chương với ai, nên là người lý tưởng để dùng
+        chung giọng nếu buộc phải dùng chung.
+        """
+        self.chapters_of[str(who)] = set(int(c) for c in chapters)
 
     def choose(
         self,
@@ -400,6 +561,7 @@ class PresetAllocator:
         npc: bool,
         age: str = "unknown",
         prominent: bool = False,
+        who: str = "",
     ) -> tuple[dict[str, str], float, int]:
         """Pick a preset, the formant warp it needs, and the F0 offset its age implies.
 
@@ -515,12 +677,20 @@ class PresetAllocator:
             #
             # Thang bắt đầu ở 1,00 nên lần đúc đầu của một preset vẫn là giọng gốc không qua
             # vocoder; thứ tự thang không đổi, chỉ có việc bỏ qua bậc đã có chủ là mới.
-            formant_ratio = self._first_free_variant(name, variants)
+            formant_ratio = self._first_free_variant(name, variants, who=who)
         self.variant_usage[name] += 1
-        self.taken_variants.setdefault(name, set()).add(round(float(formant_ratio), 3))
+        step = round(float(formant_ratio), 3)
+        self.taken_variants.setdefault(name, set()).add(step)
+        if who:
+            self.holders.setdefault(name, {}).setdefault(step, str(who))
         return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
-    def _first_free_variant(self, preset_name: str, variants: tuple[float, ...]) -> float:
+    def _first_free_variant(
+        self,
+        preset_name: str,
+        variants: tuple[float, ...],
+        who: str = "",
+    ) -> float:
         """Bậc chưa ai giữ, theo thứ tự thang; cạn thật thì quay vòng như cũ.
 
         Đường quay vòng giữ nguyên `variant_usage[name] % len(variants)` **có chủ ý**: khi mọi
@@ -535,9 +705,33 @@ class PresetAllocator:
         for ratio in variants:
             if all(abs(ratio - held) > 0.005 for held in taken):
                 return ratio
-        return variants[self.variant_usage[preset_name] % len(variants)]
+        # Không còn bậc trống: PHẢI dùng chung. Đây là chỗ bản trước quay vòng mù -
+        # `variants[variant_usage % len]` - và lô 3 trả giá: 3 trong 7 va chạm nằm cùng chương,
+        # trong đó IGOR + THU LÃNH ở chương 062 (3 + 23 câu) đã vào audio trước khi ai kịp thấy.
+        #
+        # Chọn bậc mà người đang giữ nó có ÍT chương chung nhất với người sắp được cast; hoà
+        # thì bậc thấp hơn trên thang (tất định, tái lập được). Không biết gì về người sắp cast
+        # (không có `who`) hay không biết ai giữ bậc nào thì lùi về quay vòng cũ, để hành vi
+        # ngoài đường ống chính không đổi.
+        mine = self.chapters_of.get(str(who), set()) if who else None
+        holders = self.holders.get(preset_name, {})
+        if mine is None or not holders:
+            return variants[self.variant_usage[preset_name] % len(variants)]
+        ranked = sorted(
+            enumerate(variants),
+            key=lambda pair: (
+                len(mine & self.chapters_of.get(holders.get(round(pair[1], 3), ""), set())),
+                pair[0],
+            ),
+        )
+        return ranked[0][1]
 
-    def reserve(self, preset_name: str, formant_ratio: float | None = None) -> None:
+    def reserve(
+        self,
+        preset_name: str,
+        formant_ratio: float | None = None,
+        who: str | None = None,
+    ) -> None:
         """Record that a preset is taken, for a character this allocator never chose.
 
         A pinned voice is invisible to the ranking unless it is counted here, and an unused
@@ -565,7 +759,10 @@ class PresetAllocator:
         # `formant_ratio` để mặc định None cho những chỗ gọi cũ không biết bậc; khi ấy hành vi
         # y hệt trước bản vá này, tức chỉ nhích bộ đếm.
         if formant_ratio is not None:
-            self.taken_variants.setdefault(name, set()).add(round(float(formant_ratio), 3))
+            step = round(float(formant_ratio), 3)
+            self.taken_variants.setdefault(name, set()).add(step)
+            if who:
+                self.holders.setdefault(name, {}).setdefault(step, str(who))
 
 
 def _pinned_profile_id(
@@ -641,7 +838,7 @@ def reserve_pinned_voices(
             continue
         # `row` là cả dòng voice_profiles, nên bậc formant có sẵn ở đây. Bản đầu chỉ truyền
         # tên preset đi và vứt nó, đó chính là chỗ hỏng.
-        allocator.reserve(str(row["preset_name"]), float(row["formant_ratio"]))
+        allocator.reserve(str(row["preset_name"]), float(row["formant_ratio"]), who=canonical)
         reserved += 1
     return reserved
 
@@ -1134,6 +1331,15 @@ def build_registry_and_cast(
         by_speaker.items(),
         key=lambda item: (-len(item[1]), item[0].casefold()),
     )
+    # Ai có mặt ở chương nào - cho MỌI người, trước lần `choose()` đầu tiên. Ghi theo tên chuẩn
+    # vì đó là tên `choose()` và `reserve()` nhận. Thứ tự vòng lặp bên dưới là theo số câu giảm
+    # dần, nên nếu ghi ở trong vòng thì một nhân vật xử lý sau sẽ vô hình với lần chọn ép buộc
+    # của người xử lý trước - đúng lúc cần thấy nhất.
+    for speaker, speaker_rows in speaker_groups:
+        allocator.note_chapters(
+            canonical_key(speaker),
+            {int(row["chapter_id"]) for row in speaker_rows},
+        )
     local_count = 0
     for speaker, speaker_rows in speaker_groups:
         # The same resolver the gate used, so a character that passed the gate on text
@@ -1165,6 +1371,7 @@ def build_registry_and_cast(
                 npc=local,
                 age=age,
                 prominent=importance == "main",
+                who=canonical,
             )
             profile_id = _profile_for_preset(
                 db, preset, formant_ratio, profile_cache, age_pitch=age_pitch
@@ -1204,7 +1411,10 @@ def build_registry_and_cast(
         )
         if profile_id is None:
             preset, formant_ratio, age_pitch = allocator.choose(
-                gender, npc=True, age=_majority(anonymous_rows, "age")
+                gender,
+                npc=True,
+                age=_majority(anonymous_rows, "age"),
+                who=anonymous_canonical,
             )
             profile_id = _profile_for_preset(
                 db, preset, formant_ratio, profile_cache, age_pitch=age_pitch

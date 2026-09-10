@@ -184,6 +184,11 @@ LOUDNESS_EMOTION_OFFSETS_DB = {
 LOUDNESS_BLOCK_SECONDS = 0.4
 RATE_HARD_MIN_FACTOR = 0.55
 RATE_HARD_MAX_FACTOR = 1.50
+# Sàn nhịp theo ÂM TIẾT mỗi giây (từ = âm tiết), đo trên 8.301 bản thu đã qua của lô 1–3
+# (2026-09-10): p0.5 3,22 · p1 3,51 · p2 3,76 · p50 4,67 · p98 6,07. Lấy p2, cùng cách chọn
+# sàn 12,5 chars/s; slow/fast tỉ lệ theo dải chữ như cũ (7/12,5 và 14/12,5). Xem
+# `pace_is_outlier` cho lý do có hai thước.
+PACE_SYLLABLES_PER_SECOND_FLOOR = {"slow": 2.1, "normal": 3.75, "fast": 4.2}
 VIENEU_V3_CODEC_SAMPLE_RATE = 48_000
 VIENEU_V3_CODEC_SAMPLES_PER_FRAME = 3_840
 VIENEU_V3_FRAME_SECONDS = VIENEU_V3_CODEC_SAMPLES_PER_FRAME / VIENEU_V3_CODEC_SAMPLE_RATE
@@ -319,6 +324,44 @@ def _segment_value(segment: Any, key: str, default: Any) -> Any:
 
 
 _DIGIT_RUN = re.compile(r"\d+")
+
+
+def spoken_syllables(text: str) -> int:
+    """Số âm tiết đọc ra, xấp xỉ bằng số từ: tiếng Việt đơn âm, một từ là một âm tiết.
+
+    Xấp xỉ này đếm THIẾU ở tên nước ngoài ("Alice" hai âm tiết) và chữ số ("22" đọc ba âm
+    tiết), tức nhịp âm tiết đo ra thấp hơn thật. Đó là chiều sai an toàn cho việc nó được
+    dùng: một bản thu chỉ được tha khi nhịp âm tiết đủ cao, nên đếm thiếu chỉ làm giữ nguyên
+    cờ như cũ chứ không tha thêm.
+    """
+    return sum(1 for token in text.split() if any(char.isalnum() for char in token))
+
+
+def pace_is_outlier(
+    rate: float,
+    syllable_rate: float,
+    pace: str,
+    bounds: "tuple[float, float] | list[float]",
+) -> bool:
+    """Chậm chỉ khi chậm theo CẢ chữ lẫn âm tiết; nhanh vẫn xét theo chữ như cũ.
+
+    Chương 075 của lô 3 mất câu "Và Alice đã ở đó để tận dụng sơ hở ấy." sau 10/10 lần thử ở
+    10,64–11,80 chars/s, sàn 12,5. Câu ấy có 2,25 chữ mỗi từ (trung vị kho: 3,33): cùng một
+    tốc độ đọc thì câu toàn từ ngắn cho ra ít chữ mỗi giây hơn, và thước "chars/s" gọi nó là
+    chậm. Đo theo âm tiết: 4,48/giây, gần trung vị kho (4,67). Bản thu không chậm; thước chậm.
+
+    Cùng họ với `spoken_speakable_chars` (chữ số): thước chữ đếm sai cái nó nhận là đếm, và
+    cách sửa là thêm phép đếm thứ hai rồi chỉ kết tội khi cả hai cùng nói. Thay đổi một chiều:
+    chỉ bớt cờ, không thêm; bản thu được tha thêm phải có nhịp âm tiết trong dải bình thường
+    (`PACE_SYLLABLES_PER_SECOND_FLOOR`). Cận trên giữ nguyên theo chữ - chưa có ca nào đòi hơn.
+    """
+    lower_bound = float(bounds[0])
+    upper_bound = float(bounds[1])
+    syllable_floor = PACE_SYLLABLES_PER_SECOND_FLOOR.get(
+        pace, PACE_SYLLABLES_PER_SECOND_FLOOR["normal"]
+    )
+    too_slow = rate < lower_bound and syllable_rate < syllable_floor
+    return bool(too_slow or rate > upper_bound)
 
 
 def spoken_speakable_chars(text: str) -> int:
@@ -627,8 +670,10 @@ def validate_audio_array(
                 f"speech rate far outside {pace} safety range: {rate:.2f} chars/s not in "
                 f"[{hard_lower:.2f}, {hard_upper:.2f}]"
             )
+        syllable_rate = spoken_syllables(text) / speech_seconds
         metrics["chars_per_second"] = float(rate)
-        metrics["pace_outlier"] = float(rate < lower_bound or rate > upper_bound)
+        metrics["syllables_per_second"] = float(syllable_rate)
+        metrics["pace_outlier"] = float(pace_is_outlier(rate, syllable_rate, pace, bounds))
     score = repeated_utterance_score(array, sample_rate)
     if score is not None:
         metrics[REPEATED_UTTERANCE_METRIC] = float(score)

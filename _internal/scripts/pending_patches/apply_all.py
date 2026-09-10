@@ -27,48 +27,8 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
-# hỏng gì.
-#
-# 2026-09-10, viết trong lúc lô 2 chạy bốn chương cuối. Áp ở ranh giới lô, **trước** lô vá cho
-# lô 2 — nếu áp sau thì chương 031 và 043 lại hỏng đúng chỗ cũ.
-#
-# `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` là em ruột của `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE`:
-# `_evaluate_transcript_core` trả hai mã cạnh nhau với hình dạng y hệt (`ASR_INCONCLUSIVE`,
-# `repairable: False`, `severe: False`). Cái kia có chú thích ghi rõ nó "was a bare string in
-# three places" — tức đã được nâng thành hằng số và đưa vào danh sách không-chặn; cái này bị bỏ
-# sót trong đúng lần dọn ấy, vẫn là chuỗi trần ở một chỗ và không nằm trong danh sách nào.
-#
-# Lô 2 tính tiền hai chương cho chỗ bỏ sót ấy (031, 043), và cả hai đoạn là **tiếng cười**.
-# Chạy thử trên bản sao: 266 test asr/policy/quality xanh.
-# 2026-09-10, viết trong lúc lô 3 chạy. Áp ở ranh giới lô, TRƯỚC lô 4.
-#
-# `patch_dropped_marks_are_the_same_name`: cùng một nhân vật bị tách đôi vì Ollama rơi dấu ngẫu
-# nhiên trong nhãn nó tự đặt (THU LÃNH / THỦ LÃNH, NGUOI TRA LOI / NGƯỜI TRẢ LỜI - nguồn văn bản
-# không chứa chuỗi nào trong số ấy). Ở lô 3 bản rơi dấu đã thành bản trội (66 so với 32, 160
-# so với 46) vì `_known_summary` đưa bản nhiều lần hơn vào prompt kế tiếp. Mỗi bản tách một
-# chiếm một chỗ trong kho 14 giọng nam, và một người đọc bằng hai giọng. Luật gộp là "tập con
-# dấu", không phải "bỏ dấu ra giống nhau" - MÁ và MÀ vẫn là hai từ. Thử trên bản sao: 65 test
-# casting xanh.
-#
-# `patch_wrap_prefers_a_stranger`: nấc quay vòng của bộ cấp phát giọng biết ai cùng chương. Lô 3
-# có 18 người nam đòi 14 chỗ, nấc quay vòng mù chạy thật, 3 trong 7 va chạm nằm cùng chương
-# (IGOR + THU LÃNH ở 062 đã vào audio). Khi PHẢI dùng chung, chọn bậc mà người giữ nó có ít
-# chương chung nhất với người sắp cast; không biết ai đang cast thì quay vòng như cũ. Thử trên
-# bản sao: 294 test xanh, và hai bản vá áp được theo CẢ HAI thứ tự.
-ORDER: tuple[str, ...] = (
-    # Ba bản vá cùng sửa character_registry.py. Thứ tự này là thứ tự ĐÃ THỬ; thứ tự ngược
-    # (họ-bịa trước) cũng xanh sau khi neo của bản rơi dấu được thu hẹp ngày 2026-09-10 - nhưng
-    # "cũng xanh" là kết quả đo trên hai bản sao, không phải lời hứa. Đừng đổi mà không đo lại.
-    "patch_dropped_marks_are_the_same_name.py",
-    "patch_wrap_prefers_a_stranger.py",
-    "patch_stray_surname_is_the_same_name.py",
-    # Thứ tư, file khác (audio_io.py) nên không chạm neo ba bản trên: một bản thu chỉ "chậm"
-    # khi chậm theo cả chữ lẫn âm tiết. Chương 075 của lô 3 mất một câu 10/10 lần ở ~11 chars/s
-    # vì câu toàn từ ngắn (2,25 chữ/từ); theo âm tiết nó đọc gần trung vị kho. Áp trước lô vá
-    # của lô 3 để chính chương 075 là phép thử đầu tiên.
-    "patch_pace_counts_syllables_too.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -159,6 +119,48 @@ APPLIED = (
     #     chẳng cần thay. Chỉ 14 đoạn có đủ cả ba điều kiện.
     "patch_rate_impossible_is_the_same_family.py",
     "patch_finished_take_beats_a_cut_off_one.py",
+    # 2026-09-10: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
+    # hỏng gì.
+    #
+    # 2026-09-10, viết trong lúc lô 2 chạy bốn chương cuối. Áp ở ranh giới lô, **trước** lô vá cho
+    # lô 2 — nếu áp sau thì chương 031 và 043 lại hỏng đúng chỗ cũ.
+    #
+    # `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` là em ruột của `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE`:
+    # `_evaluate_transcript_core` trả hai mã cạnh nhau với hình dạng y hệt (`ASR_INCONCLUSIVE`,
+    # `repairable: False`, `severe: False`). Cái kia có chú thích ghi rõ nó "was a bare string in
+    # three places" — tức đã được nâng thành hằng số và đưa vào danh sách không-chặn; cái này bị bỏ
+    # sót trong đúng lần dọn ấy, vẫn là chuỗi trần ở một chỗ và không nằm trong danh sách nào.
+    #
+    # Lô 2 tính tiền hai chương cho chỗ bỏ sót ấy (031, 043), và cả hai đoạn là **tiếng cười**.
+    # Chạy thử trên bản sao: 266 test asr/policy/quality xanh.
+    # 2026-09-10, viết trong lúc lô 3 chạy. Áp ở ranh giới lô, TRƯỚC lô 4.
+    #
+    # `patch_dropped_marks_are_the_same_name`: cùng một nhân vật bị tách đôi vì Ollama rơi dấu ngẫu
+    # nhiên trong nhãn nó tự đặt (THU LÃNH / THỦ LÃNH, NGUOI TRA LOI / NGƯỜI TRẢ LỜI - nguồn văn bản
+    # không chứa chuỗi nào trong số ấy). Ở lô 3 bản rơi dấu đã thành bản trội (66 so với 32, 160
+    # so với 46) vì `_known_summary` đưa bản nhiều lần hơn vào prompt kế tiếp. Mỗi bản tách một
+    # chiếm một chỗ trong kho 14 giọng nam, và một người đọc bằng hai giọng. Luật gộp là "tập con
+    # dấu", không phải "bỏ dấu ra giống nhau" - MÁ và MÀ vẫn là hai từ. Thử trên bản sao: 65 test
+    # casting xanh.
+    #
+    # `patch_wrap_prefers_a_stranger`: nấc quay vòng của bộ cấp phát giọng biết ai cùng chương. Lô 3
+    # có 18 người nam đòi 14 chỗ, nấc quay vòng mù chạy thật, 3 trong 7 va chạm nằm cùng chương
+    # (IGOR + THU LÃNH ở 062 đã vào audio). Khi PHẢI dùng chung, chọn bậc mà người giữ nó có ít
+    # chương chung nhất với người sắp cast; không biết ai đang cast thì quay vòng như cũ. Thử trên
+    # bản sao: 294 test xanh, và hai bản vá áp được theo CẢ HAI thứ tự.
+    # Ba bản vá cùng sửa character_registry.py. Thứ tự này là thứ tự ĐÃ THỬ; thứ tự ngược
+    # (họ-bịa trước) cũng xanh sau khi neo của bản rơi dấu được thu hẹp ngày 2026-09-10 - nhưng
+    # "cũng xanh" là kết quả đo trên hai bản sao, không phải lời hứa. Đừng đổi mà không đo lại.
+    # Thứ tư, file khác (audio_io.py) nên không chạm neo ba bản trên: một bản thu chỉ "chậm"
+    # khi chậm theo cả chữ lẫn âm tiết. Chương 075 của lô 3 mất một câu 10/10 lần ở ~11 chars/s
+    # vì câu toàn từ ngắn (2,25 chữ/từ); theo âm tiết nó đọc gần trung vị kho. Áp trước lô vá
+    # của lô 3 để chính chương 075 là phép thử đầu tiên.
+    "patch_dropped_marks_are_the_same_name.py",
+    "patch_wrap_prefers_a_stranger.py",
+    "patch_stray_surname_is_the_same_name.py",
+    "patch_pace_counts_syllables_too.py",
 )
 
 
