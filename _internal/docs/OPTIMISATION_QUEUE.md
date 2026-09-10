@@ -778,6 +778,33 @@ chứng minh được"*. Mà là:
 đúng cái nguyên tắc mà `MACHINE_ACCEPTABLE` đứng trên. Ở đây có một phép kiểm nói đương nhiệm
 hỏng, và không phép kiểm nào nói ứng viên hỏng.
 
+### Cách chữa nhỏ hơn, và phép đo bác bỏ nó
+
+Trước khi dựng một đường thăng hạng mới, tôi thử tìm đường rẻ hơn: cái cớ văn-bản-quá-ngắn
+**đã tồn tại** ở tầng segment (`asr_verdict_is_unverifiable` → verdict `PASS` +
+`ASR_UNVERIFIABLE_SHORT_TEXT`), còn tầng ứng viên thì không áp nó. `database` quyết
+`dual_passed` thuần từ hai verdict ASR cộng cờ sóng âm. Nếu áp cùng cái cớ ấy cho ứng viên thì
+ứng viên thành `dual_passed`, `promote_segment_candidate` chạy nguyên như cũ, **không cần bảng
+mới, không cần nới bất biến nào**.
+
+Rất gọn, và **sai**. Đếm trên mọi project đã lưu:
+
+```
+2.884  văn bản DÀI,  có ứng viên
+  469  văn bản NGẮN, có ứng viên, đương nhiệm KHÔNG chạm trần
+   14  văn bản NGẮN, có ứng viên, đương nhiệm CHẠM TRẦN
+```
+
+Tôi đã suy luận rằng ứng viên chỉ sinh ra cho đoạn văn-bản-ngắn khi có bằng chứng ngoài-ASR,
+nên nới cái cớ ấy là vô hại. **469 dòng nói ngược**, và phần lớn chúng kết thúc `verified` —
+tức đương nhiệm vốn không sao. Nới cái cớ ở tầng ứng viên là trao quyền thay thế cho bốn trăm
+chỗ chẳng cần thay, dựa trên không bằng chứng nào ngoài sóng âm.
+
+Nên kết luận cũ của mục này đứng vững, và giờ có bằng chứng cho *vì sao*: nó phải là **một đường
+riêng**, với điều kiện tiên quyết là **đương nhiệm đã bị chứng minh hỏng**, chứ không phải một
+lần nới ở chỗ phán xử ứng viên. Con số 14 cũng nói đường ấy hẹp đến mức nào: nhiều nhất mười bốn
+lần trên năm mươi nghìn đoạn.
+
 ### Tần suất thật, sau khi nới bộ dò
 
 Bộ dò đầu tiên đòi mã của ứng viên nằm trong danh sách "vô thông tin", nên nó **bỏ sót** ca lô 2
