@@ -2718,3 +2718,56 @@ chặn chương. Đo hết 3.923 phép kiểm neo cho thấy phần lớn là **
 cổng so một token với hai âm tiết) — nhưng **`Jake → Giếch` là lỗi thật**: 1.827 neo qua cả ba
 lô, 0% khớp ở cả ba, 89 dạng đọc khác nhau, và cùng một câu ra `Giật` rồi `Dịch`. Xem
 [A_NAME_READ_MANY_WAYS.md](A_NAME_READ_MANY_WAYS.md).
+
+## `v0.2.0-lo03v` và `v0.2.0-lo03r` — lô vá và lô đúc lại giọng của lô 3
+
+Cả hai do `scripts/boundary.sh 3 --recast 062 066 071 084 086` chạy **không có ai ngồi cạnh**,
+21:12 → 23:24 ngày 2026-09-10. Log: `runtime/boundary_03.log`.
+
+### Lô vá: 1/1, và bản vá nhịp được chứng minh
+
+`lo03v_075`: chương 075, 106/106 segment, `completed`. Đoạn từng giết chương —
+`Và Alice đã ở đó để tận dụng sơ hở ấy.` — lần này:
+
+```
+                trước bản vá                  sau
+số lần thử      11 (10 sinh + 1 chia nhỏ)     1
+nhịp chữ        10,64 … 11,80 kt/s            10,64 kt/s
+nhịp âm tiết    (không đo)                    4,50 /giây   (sàn 3,75)
+kết cục         SEGMENT_FAILED, mất chương    signal_passed, không cờ
+```
+
+`10,64` là con số **thấp nhất** trong cả mười lần thử trước, nên sàn cũ 12,5 chắc chắn sẽ bắn.
+Cùng một con số, quyết định khác — dạng bằng chứng mà ba bản vá "chưa chứng minh" không có.
+
+### Lô đúc lại: 4/5, và bản vá quay vòng đúng một nửa
+
+| chương | segment | trạng thái | va chạm cùng chương |
+|---|---|---|---|
+| 062 | 217/217 | completed | 0 |
+| 066 | 145/145 | completed | 0 |
+| 071 | 117/117 | completed | **1** |
+| 084 | 106/107 | **failed** | 0 |
+| 086 | 126/126 | completed | 0 |
+
+Ba trong năm chương hết va chạm **nhờ gộp tên**, không nhờ bản vá quay vòng: THU LÃNH về THỦ
+LÃNH, SELNE VALKRYN về SELNE, ALICE VIC. DRAKEN về ALICE. Chỉ 066 và 071 có hai người thật
+(KANG + SAMAEL), và ở đó thang `Thanh Bình` đã kín cả 7 bậc nên KANG **buộc** phải dùng chung.
+Nó chọn bậc của **VIKTOR**, người không nói câu nào trong chương ấy — đúng việc bản vá được viết
+ra để làm, và là bằng chứng đầu tiên của nó trên audio thật.
+
+Chương 071 còn 1 va chạm vì `holders` chỉ nhớ **người giữ đầu tiên** của mỗi bậc: sau khi KANG
+vào bậc 1,00, bậc ấy vẫn khai `VIKTOR`, nên NPC kế tiếp đọc nó thành "người lạ" và xếp vào đúng
+chỗ. Chi tiết ở [OPTIMISATION_QUEUE.md](OPTIMISATION_QUEUE.md); bản vá trong hàng chờ.
+
+**Chương 084 mất vì bộ đếm âm tiết của chính bản vá nhịp**, bốn tiếng sau khi nó vào cây:
+`I-xờ-hờ-ta-ra` đếm 1 âm tiết thay vì 5, nên câu đo 2,44 âm tiết/giây thay vì 4,88 và bị chặn 11
+lần. Cuốn sách vì thế **vẫn dùng bản 084 của lô 3** (thấy được ở `manifest.json`), tức một chương
+mang dàn giọng của phiên bản trước — cảnh báo mà `assemble_book` in ra và không cổng nào bắt
+được. Đúc lại 084 sau khi `patch_a_transliteration_is_many_syllables` áp.
+
+### Cuốn sách: 92 chương, 1,4 GB
+
+`assemble_book.py --apply` chép 32 chương mới; 92/478 chương đã có MP3, 32 chương có nhiều hơn
+một bản và bản mới nhất thắng. Trước đó bước 7 của `boundary.sh` gọi script **không có `--apply`**
+nên nó chỉ in rồi thoát 0, và cuốn sách đứng ở 60 chương trong khi log ghi "đã ghép sách".
