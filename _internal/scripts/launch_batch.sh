@@ -38,15 +38,14 @@ TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
 TITLE="$(printf 'lo%02d' "$BATCH")"
 OUT="D:/Novels/Audiobooks/_versions/$TAG"
 
-# Project cua lo lien truoc: cai moi nhat trong thu muc phien ban cua no.
-PREV_TAG="$(printf 'v0.2.0-lo%02d' $((BATCH - 1)))"
-[ "$BATCH" = "2" ] && PREV_TAG="v0.2.0-lo01"
-PREV="$(ls -dt "D:/Novels/Audiobooks/_versions/$PREV_TAG"/*/ 2>/dev/null | head -1)"
-if [ -z "$PREV" ]; then
-  echo "Khong thay project cua lo truoc trong $PREV_TAG - day gieo se dut. Dung." >&2
+# Project gieo: cai CUOI chuoi cua lo truoc - lo, roi cac project va / duc lai giong cua no theo
+# thu tu tao (book.created_at, khong phai mtime). Tu lo 3 project duc lai cap giong MOI cho nguoi
+# thua khi trung giong; gieo tu lo thay vi tu cai cuoi la cap lai lan nua, doc lap, va mot nguoi
+# co the mang hai giong o hai lo. seed_chain.py giu mot cau tra loi cho ca ba script.
+PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --seed)" || {
+  echo "Khong thay project nao cua lo $((BATCH - 1)) - day gieo se dut. Dung." >&2
   exit 1
-fi
-PREV="${PREV%/}"
+}
 
 echo "=== lo $BATCH: chuong $RANGE (doc tu PRODUCTION_PLAN.md) ==="
 echo "  gieo tu: $PREV"
@@ -61,23 +60,18 @@ echo "=== 1. create ==="
   --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \
   --range "$RANGE" --width 3 --title "$TITLE" --profile high_quality --json
 
-PROJECT="$(ls -d "$OUT"/${TITLE}_* 2>/dev/null | head -1)"
-[ -n "$PROJECT" ] || { echo "create that bai" >&2; exit 1; }
+# Moi nhat theo book.created_at: chay lai lo se tao project thu hai cung tien to ten, va `ls -d`
+# lay cai dau theo alphabet - tuc cai CU.
+PROJECT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --batch)" || { echo "create that bai" >&2; exit 1; }
 echo "project: $PROJECT"
 
 
 # So cong don: `mention_count` bi ghi de moi lo, nen `port_casting` xep hang "ai giu giong khi
 # trung" theo so cua rieng lo truoc - do 2026-09-10: SAMAEL 10 -> 99 -> 19 trong khi thuc te da
 # noi 128 cau. Dung lai so tu ca chuoi lo da xong, ghi vao PREV, truoc khi gieo.
-CHAIN=""
-for T in $(ls -d "D:/Novels/Audiobooks/_versions"/v0.2.0-lo[0-9][0-9]/ 2>/dev/null | sort); do
-  T="${T%/}"
-  case "$T" in *v) continue ;; esac
-  P="$(ls -dt "$T"/*/ 2>/dev/null | head -1)"; P="${P%/}"
-  [ -n "$P" ] || continue
-  CHAIN="$CHAIN $P"
-  [ "$P" = "$PREV" ] && break
-done
+# Chuoi: project lo cua moi lo truoc, roi lo lien truoc va cac project va / duc lai cua no theo
+# thu tu tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
+CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --chain)"
 echo
 echo "=== so cong don qua chuoi lo ==="
 # shellcheck disable=SC2086

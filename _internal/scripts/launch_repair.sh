@@ -10,8 +10,12 @@
 # thuong rai rac. Ba project mot chuong chay nhanh hon mot dai bao ca nhung chuong da tot - do
 # tren lo 1: chay lai ca lo ~13 gio, chay lai bon chuong hong ~4.
 #
-# Chay TUAN TU, vi chung tranh nhau cung mot GPU. Gieo tu chinh project cua lo de giong va cach
-# doc khong doi.
+# Chay TUAN TU, vi chung tranh nhau cung mot GPU. Chuong dau gieo tu project moi nhat cua lo
+# (lo, hoac lo va / duc lai truoc do), moi chuong sau gieo tu chuong VUA XONG - noi duoi. Vi sao:
+# khi hai nguoi trung giong, port_casting bo ghim nguoi thua va registry cap giong moi; gieo moi
+# chuong doc lap tu lo la cap lai doc lap moi lan, va cung nguoi ay co the nhan hai giong o hai
+# chuong. Noi duoi thi giong cap o chuong dau di theo sang chuong sau, va lo ke tiep gieo tu
+# chuong cuoi (seed_chain.py) nen di tiep nua.
 set -uo pipefail
 
 BATCH="${1:?dung: launch_repair.sh <so lo, 1..16> [--chapters 062 066 ...]}"
@@ -33,21 +37,24 @@ TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
 # Lo va thuong la `...v`; luot duc lai giong la `...r` de hai loai project khong lan ten.
 if [ -n "$EXPLICIT" ]; then OUT_TAG="${TAG}r"; else OUT_TAG="${TAG}v"; fi
 OUT="D:/Novels/Audiobooks/_versions/$OUT_TAG"
-PREV="$(ls -dt "D:/Novels/Audiobooks/_versions/$TAG"/*/ 2>/dev/null | head -1)"
-if [ -z "$PREV" ]; then
+# Hai project khac nhau: BATCH_PROJECT la project LO - doc danh sach chuong hong tu no; PREV la
+# project GIEO - moi nhat tren ca ba thu muc lo / lo+v / lo+r theo book.created_at, khong theo
+# mtime (seed_chain.py noi vi sao). Lan dau hai cai la mot.
+BATCH_PROJECT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --batch)" || {
   echo "Khong thay project cua $TAG." >&2
   exit 2
-fi
-PREV="${PREV%/}"
+}
+PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --seed)" || exit 2
 
 echo "=== lo va cho lo $BATCH ==="
-echo "  gieo tu: $PREV"
+echo "  project lo: $BATCH_PROJECT"
+echo "  gieo tu:    $PREV"
 
 # Chuong hong doc tu SQLite. Loc ra nhung chuong CHUA CHAY XONG: chay giua lo thi moi chuong
 # chua toi luot deu doc thanh "can va", va mot danh sach nhu the la chay lai thua ca chuc chuong.
 BROKEN="$(PYTHONIOENCODING=utf-8 "$PY" -c "
 import sqlite3, sys
-c = sqlite3.connect(r'file:$PREV/project.sqlite3?mode=ro', uri=True)
+c = sqlite3.connect(r'file:$BATCH_PROJECT/project.sqlite3?mode=ro', uri=True)
 c.row_factory = sqlite3.Row
 unfinished = {'pending', 'analyzing', 'synthesizing', 'verifying'}
 rows = list(c.execute('SELECT title, status FROM chapters ORDER BY title'))
@@ -81,7 +88,7 @@ echo "  chuong can chay lai: $BROKEN"
 
 echo
 echo "=== canh bao truoc khi chay lai ==="
-PYTHONIOENCODING=utf-8 "$PY" scripts/plan_repair_batch.py "$PREV" --tag "$OUT_TAG" 2>&1 \
+PYTHONIOENCODING=utf-8 "$PY" scripts/plan_repair_batch.py "$BATCH_PROJECT" --tag "$OUT_TAG" 2>&1 \
   | sed -n '/nguyên nhân khác nhau/,$p' | sed -n '1,24p'
 
 echo
@@ -117,15 +124,9 @@ print(f\"{b['status']}|{b['stage']}|{'alive' if alive else 'dead'}\")
 # So cong don: `mention_count` bi ghi de moi lo, nen `port_casting` xep hang "ai giu giong khi
 # trung" theo so cua rieng lo truoc - do 2026-09-10: SAMAEL 10 -> 99 -> 19 trong khi thuc te da
 # noi 128 cau. Dung lai so tu ca chuoi lo da xong, ghi vao PREV, truoc khi gieo.
-CHAIN=""
-for T in $(ls -d "D:/Novels/Audiobooks/_versions"/v0.2.0-lo[0-9][0-9]/ 2>/dev/null | sort); do
-  T="${T%/}"
-  case "$T" in *v) continue ;; esac
-  P="$(ls -dt "$T"/*/ 2>/dev/null | head -1)"; P="${P%/}"
-  [ -n "$P" ] || continue
-  CHAIN="$CHAIN $P"
-  [ "$P" = "$PREV" ] && break
-done
+# Chuoi: project lo cua moi lo truoc, roi lo nay va cac project va / duc lai cua no theo thu tu
+# tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
+CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --chain)"
 echo
 echo "=== so cong don qua chuoi lo ==="
 # shellcheck disable=SC2086
@@ -152,6 +153,8 @@ for CH in $BROKEN; do
   PYTHONIOENCODING=utf-8 "$PY" scripts/seed_listener_acceptances.py "$PREV" "$PROJECT" > /dev/null
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli run "$PROJECT" --json > /dev/null
   wait_for_run "$PROJECT" "chuong $CH"
+  # Noi duoi: chuong ke tiep gieo tu project vua xong, de giong vua cap di tiep.
+  PREV="$PROJECT"
 done
 
 echo

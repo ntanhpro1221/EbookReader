@@ -124,6 +124,35 @@ theo thứ tự — chúng tranh nhau cùng một GPU nên chạy song song khô
 Nó **từ chối** khi lô chưa chạy xong, vì lúc ấy mọi chương chưa tới lượt đều đọc thành "cần vá",
 và một danh sách như thế là chạy lại thừa cả chục chương.
 
+## Ranh giới giữa hai lô: một lệnh, không cần người
+
+```bash
+bash scripts/boundary.sh 3 --recast 062 066 071 084 086   # đợi lô 3 xong rồi làm hết tới khi lô 4 chạy
+bash scripts/boundary.sh 3 --dry-run                       # chỉ in kế hoạch
+```
+
+Nó đợi lô xong (tiến trình chết giữa chừng thì `run` lại, tối đa hai lần), áp hàng chờ bản vá
+kèm bộ test (`apply_all --apply` giờ tự rút hàng chờ vào `APPLIED` **trước** bộ test, để cây
+được kiểm là cây được commit), commit và tag, chạy lô vá cho chương hỏng, đúc lại giọng các
+chương `--recast`, đo lại va chạm cùng chương trên từng project đúc lại, rồi khởi động lô kế
+tiếp. Mọi thứ ghi vào `runtime/boundary_NN.log`; đọc log là việc của nhịp 30 phút.
+
+Hai luật gieo mà nó dựa vào, cả hai mới từ 2026-09-10 và đều nằm trong `scripts/seed_chain.py`:
+
+- **Các project vá / đúc lại của một lô nối đuôi nhau**, mỗi cái gieo từ cái vừa xong, và **lô
+  kế tiếp gieo từ cái cuối chuỗi** chứ không từ project lô. Khi hai người trùng giọng,
+  `port_casting` bỏ ghim người thua và registry cấp giọng mới; gieo mỗi chương độc lập từ lô là
+  cấp lại độc lập mỗi lần — KANG có thể nhận một giọng ở `lo03r_066`, giọng khác ở `lo03r_071`,
+  rồi giọng thứ ba ở lô 4, và không cổng nào bắt vì từng project tự nó nhất quán. Nối đuôi thì
+  giọng cấp ở chương đầu đi theo tới hết cuốn.
+- **"Mới nhất" đo bằng `book.created_at`, không bằng mtime thư mục.** SQLite tạo và xoá
+  `-wal`/`-shm` mỗi lần ai đó mở DB, nên `ls -dt` xếp `lo02_4d783ac744` trước cả ba project vá
+  của nó chỉ vì tôi đọc nó sau. Một launcher tin `ls -dt` sẽ gieo lô 4 từ lô 3.
+
+Sổ cộng dồn đi theo chuỗi (`port_casting` chép nó sang project đích) và `backfill_exposure`
+đếm mỗi chương **một lần**, project đứng sau thắng — năm chương đúc lại không còn là năm chương
+đếm đôi.
+
 Vì sao từng chương chứ không một dải: `--range` nhận một dải liên tục, còn chương hỏng thì rải
 rác. Đo trên lô 1: chạy lại cả lô ~13 giờ, chạy lại bốn chương hỏng ~4 giờ.
 

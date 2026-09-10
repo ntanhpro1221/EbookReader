@@ -1184,3 +1184,44 @@ lô 1 chỉ thêm 1 nam". Lô 3 thêm **~7** nam mới; 18 người đòi 14 ch�
 audio: 3 + 23 câu). Ước lượng "6 lô nữa" sai vì nó ngoại suy từ một lô. Bản vá phần 3 viết trong
 `patch_wrap_prefers_a_stranger` (hàng chờ).
 
+
+## Ranh giới không người — ba thứ phải đúng trước khi nó tự chạy (2026-09-10, tối)
+
+Cả hai lần chủ sách hỏi "sao lại dừng?" đều rơi vào khoảng giữa hai lô. Lô 3 xong lúc nào không
+ai biết trước (nhịp đo 18:29→18:53 là 745 segment/giờ, trung bình cả lô là 208), và một ranh giới
+là năm lệnh nối tiếp — không lệnh nào cần người; cái cần người là **đọc** kết quả, và việc ấy làm
+sau cũng được. `scripts/boundary.sh` làm cả năm. Nhưng để nó chạy được không người, ba chỗ đang
+dựa vào tay phải đổi:
+
+1. **`apply_all --apply` tự rút hàng chờ.** Cửa số 3 của `before_a_batch` đọc chính `ORDER`;
+   hàng chờ còn tên là lô sau không bao giờ bắt đầu. Ở ranh giới lô 2 tôi rút tay *sau* khi vân
+   tay lượt xanh đã ghi, nên gate chạy lại cả bộ test trên một cây chỉ khác đúng chỗ hàng chờ.
+   Giờ rút **trước** bộ test: cây được kiểm là cây được commit. Bài kiểm chạy trên chính bố cục
+   file thật (bản sao) chứ không chỉ bản mẫu, và nó bắt ngay một lỗi: chuỗi `ORDER: ... = ()`
+   xuất hiện lần nữa *trong mã của chính hàm rút*, nên thay theo chuỗi là hỏng hàm — phải neo
+   cột 0.
+
+2. **Project đúc lại giọng phải nối đuôi, và lô sau gieo từ cái cuối.** `launch_repair.sh` gieo
+   mọi chương từ project lô — đúng khi mọi giọng đều ghim, sai ngay khi có người bị bỏ ghim vì
+   trùng giọng: mỗi chương cấp lại độc lập, KANG có thể ba giọng ở ba chỗ, và không cổng nào
+   bắt vì từng project tự nó nhất quán. Một luật cho cả ba script (`seed_chain.py`), cộng hai
+   thứ đi kèm: sổ cộng dồn được `port_casting` chép sang project đích (đo thật lô 2 → project
+   nháp: 36 tên = 36 tên), và `backfill_exposure` đếm mỗi chương **một lần** theo tiêu đề,
+   project sau thắng — năm chương đúc lại không còn là năm chương đếm đôi.
+
+3. **`ls -dt` nói dối.** Thư mục `lo02_4d783ac744` "trẻ" hơn cả ba project vá của nó, vì SQLite
+   tạo/xoá `-wal`/`-shm` mỗi lần ai đó mở DB và mtime thư mục đi theo. `book.created_at` thì
+   không đổi. Bài kiểm đặt mtime thư mục lô lên năm 2286 và đòi câu trả lời không đổi.
+
+Cái `boundary.sh` KHÔNG làm là đọc kết quả thay tôi: nó ghi số va chạm cùng chương của từng
+project đúc lại vào `runtime/boundary_03.log` — 0 ở 066/071 là bằng chứng của
+`patch_wrap_prefers_a_stranger` (062/084/086 hết va chạm nhờ gộp tên, không chứng minh gì) —
+và đi tiếp cả hai trường hợp, vì va chạm là lỗi chất lượng sửa được bằng một lô đúc lại nữa,
+không đáng để GPU ngồi không tới lúc có người nhìn.
+
+Một phép đo tiện thể, đáng ghi vì nó ngược với điều tôi tin: ba lượt bộ test đầy đủ (18:31,
+18:33, 18:50) trong khi lô 3 đang bay **không** làm bộ điều tiết đổi chế độ — không một dòng
+`Resource mode:` nào sau 17:48:33. Trước đó tôi giả định "chạy test là cướp CPU của lô" (và
+`before_a_batch` bỏ qua test vì thế). Vậy 65,6 phút `yield_heavy` của lô 3 ("foreground CPU
+81%", 17 segment) là của ai — và `foreground` đo cái gì mà không thấy pytest? Chưa trả lời;
+`resource_manager.py` là file khoá nên đọc thì được, đổi thì đợi ranh giới.

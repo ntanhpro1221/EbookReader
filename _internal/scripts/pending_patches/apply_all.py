@@ -19,6 +19,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -208,6 +209,58 @@ def _runs_in_flight() -> list[tuple[Path, str]]:
     return live
 
 
+def retire_queue(path: Path, names: Sequence[str], when: str) -> int:
+    """Rút `names` khỏi `ORDER` trong file `path` và ghi chúng vào cuối `APPLIED`. Trả về số rút.
+
+    Gọi ngay sau khi áp xong và **trước** bộ test, để cây được kiểm là cây sẽ được commit. Ở ranh
+    giới lô 2 việc này làm tay, sau khi `_remember_green` đã ghi vân tay - nên `before_a_batch`
+    chạy lại cả bộ test trên một cây chỉ khác đúng chỗ hàng chờ. Và một ranh giới không có ai
+    ngồi cạnh (`scripts/boundary.sh`) thì không có tay nào để làm: cửa số 3 của gate đọc chính
+    `ORDER`, hàng chờ còn tên là lô sau không bao giờ bắt đầu.
+
+    Khối chú thích đứng ngay trên `ORDER` (và những dòng chú thích nằm trong tuple) đi theo tên
+    xuống `APPLIED`, thụt vào bốn cách - đó là cách hồ sơ này vẫn được viết tay từ trước.
+    """
+    names = [name for name in names]
+    if not names:
+        return 0
+    raw = path.read_bytes()
+    newline = "\r\n" if b"\r\n" in raw else "\n"
+    lines = raw.decode("utf-8").replace("\r\n", "\n").split("\n")
+
+    start = next(i for i, line in enumerate(lines) if line.startswith("ORDER: tuple[str, ...] = ("))
+    end = next(i for i in range(start, len(lines)) if lines[i] == ")")
+    inner_comments = [line.strip() for line in lines[start + 1 : end] if line.strip().startswith("#")]
+    above = start
+    while above > 0 and lines[above - 1].startswith("#"):
+        above -= 1
+    above_comments = lines[above:start]
+
+    applied = next(i for i, line in enumerate(lines) if line.startswith("APPLIED = ("))
+    applied_end = next(i for i in range(applied, len(lines)) if lines[i] == ")")
+
+    record = [
+        f"    # {when}: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng",
+        "    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.",
+    ]
+    for line in above_comments + inner_comments:
+        record.append(("    #" + line.lstrip("#").rstrip()).rstrip())
+    record.extend(f'    "{name}",' for name in names)
+
+    new_lines = (
+        lines[:above]
+        + [
+            "# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.",
+            "ORDER: tuple[str, ...] = ()",
+        ]
+        + lines[end + 1 : applied_end]
+        + record
+        + lines[applied_end:]
+    )
+    path.write_bytes(newline.join(new_lines).encode("utf-8"))
+    return len(names)
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="Ghi thật thay vì chỉ liệt kê")
@@ -275,6 +328,11 @@ def main(argv: list[str]) -> int:
             _say(f"DỪNG ở {name}. Những bản vá trước nó ĐÃ được ghi - đừng chạy lại từ đầu,")
             _say("sửa cái này rồi áp nốt phần còn lại bằng tay.")
             return 1
+
+    retired = retire_queue(Path(__file__).resolve(), ORDER, time.strftime("%Y-%m-%d"))
+    _say("")
+    _say(f"Đã rút {retired} bản vá khỏi hàng chờ vào APPLIED - trước bộ test, để cây được kiểm")
+    _say("là cây sẽ được commit.")
 
     if args.skip_tests:
         _say("")

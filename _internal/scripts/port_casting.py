@@ -34,7 +34,7 @@ from ebook_reader.database import ProjectDB  # noqa: E402
 
 from scripts.port_listener_acceptances import _say_safely  # noqa: E402
 from scripts.name_marks import fold_dropped_marks  # noqa: E402
-from scripts.backfill_exposure import read_ledger  # noqa: E402
+from scripts.backfill_exposure import copy_ledger, read_ledger  # noqa: E402
 
 
 SPOKE_HERE_SQL = """
@@ -406,6 +406,15 @@ def port(source: Path, target: Path, *, dry_run: bool = False) -> tuple[int, int
         )
     if known:
         _say_safely(f"  mang sang {len(known)} nhân vật đã biết (tên, giới tính, số lần gặp)")
+
+    # Sổ cộng dồn đi theo chuỗi gieo. Không chép thì project đúc lại một chương (`lo03r_066`)
+    # không có sổ, và lô sau gieo từ nó phải lùi về `mention_count` của MỘT chương - đúng cái
+    # số sai mà sổ sinh ra để thay. `backfill_exposure.py` chạy trước lô vẫn tính lại từ đầu và
+    # ghi đè bản chép này; chép chỉ để không có project nào trên chuỗi thiếu sổ.
+    if database is not None:
+        carried = copy_ledger(source, target)
+        if carried:
+            _say_safely(f"  mang sang sổ cộng dồn: {carried} nhân vật")
     return pinned, skipped
 
 

@@ -1031,3 +1031,30 @@ Chương 000..029 đã ghép thành `D:/Novels/Audiobooks/_book` kèm `manifest.
 chương — và chính `assemble_book.py` bắt được một lỗi im lặng lúc lô vá chưa xong: chương 016
 khi ấy rơi về `alpha.56`, chín phiên bản trước, với dàn giọng khác.
 
+
+## 2026-09-10 (tối) — Bản vá thứ ba, một tuyên bố sai về thứ tự, và một ranh giới không cần người
+
+**Lô 3** đang chạy: 14/32 chương xong lúc 18:48, 1.405 segment có audio lúc 18:29, nhịp tim
+sống. Không có gì để nghe, nên tối nay là chuẩn bị cho ranh giới.
+
+**`patch_stray_surname_is_the_same_name`** xếp thứ ba vào hàng chờ (6b5c976). ALICE 25 câu còn
+có ALICE DRACEN (0) và ALICE VIC. DRAKEN (1); SELNE 32 còn có SELNE VALKRYN (3). Gộp khi bản dài
+≤ 3 câu **và** bản ngắn ≥ 10×; JAKE 300 / JAKE SMITH 30 là bài giữ. Docstring đầu tiên nói "áp
+thứ tự nào cũng được" — sai: áp nó trước là bản rơi dấu trượt neo. Thu hẹp neo, đo lại hai thứ
+tự trên hai bản sao: cùng một `character_registry.py` byte-một, 52 bài xanh cả hai. Tuyên bố
+độc lập không phải phép đo.
+
+**Ranh giới lô 3 → 4 tự chạy.** `scripts/boundary.sh 3 --recast 062 066 071 084 086` được thả
+tối nay, đợi lô xong rồi làm năm việc tới khi lô 4 chạy. Để nó chạy không người, ba thứ phải
+đổi — ghi ở [OPTIMISATION_QUEUE.md](OPTIMISATION_QUEUE.md): `apply_all` tự rút hàng chờ trước
+bộ test; project đúc lại nối đuôi và lô sau gieo từ cái cuối (`seed_chain.py`, sổ đi theo
+chuỗi, mỗi chương đếm một lần); và "mới nhất" theo `book.created_at` vì `ls -dt` xếp lô 2 trước
+ba project vá của nó. Bộ test đầy đủ xanh sau tất cả.
+
+Dự đoán cho sáng mai, ghi trước để không tự thuyết phục mình sau:
+
+- (a) 062, 084, 086 hết va chạm **không nhờ đúc lại** mà nhờ gộp tên — THU LÃNH về THỦ LÃNH,
+  SELNE VALKRYN về SELNE — nên chúng **không** chứng minh bản vá quay vòng;
+- (b) chỉ 066/071 (KANG + SAMAEL, hai người thật) cần một giọng mới, và đó là chỗ duy nhất
+  `patch_wrap_prefers_a_stranger` được thử;
+- (c) lô 4 sẽ thấy KANG mang đúng giọng ấy, không phải giọng thứ ba — nếu chuỗi gieo làm việc.
