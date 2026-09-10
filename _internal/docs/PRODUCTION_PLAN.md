@@ -58,6 +58,29 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Sau lô 3: năm chương cần ĐÚC LẠI GIỌNG, không phải chạy lại vì hỏng
+
+Lô 3 để lộ hai lỗi ở khâu đúc giọng, và cả hai đã vào audio của những chương `completed` — nên
+`launch_repair.sh` (chỉ chạy lại chương `failed`) không thấy chúng:
+
+| chương | ai trùng giọng | vì sao |
+|---|---|---|
+| 062 | IGOR + THU LÃNH (3 + 23 câu) | THU LÃNH là THỦ LÃNH rơi dấu, bị đúc giọng riêng; nấc quay vòng mù |
+| 066, 071 | KANG + SAMAEL | kho nam đầy, nấc quay vòng mù-theo-chương |
+| 084, 086 | NGƯỜI TRẢ LỜI + SELNE VALKRYN | như trên, phía nữ |
+
+Sau ranh giới lô 3 → 4 (hai bản vá `patch_dropped_marks_are_the_same_name` và
+`patch_wrap_prefers_a_stranger` vào cây, sổ `character_exposure` dựng xong), chạy lại năm chương
+ấy như một lô vá **gieo từ lô 3**: `port_casting` giờ bỏ carry của KANG (SAMAEL thắng theo sổ:
+109 câu) và của IGOR, bộ cấp phát mới chọn bậc của người không cùng chương, nên KANG và IGOR
+được đúc lại vào giọng khác. Khoảng hai giờ máy.
+
+`launch_repair.sh` cần thêm chế độ chỉ định chương (`--chapters 062 066 071 084 086`) vì luật
+"chỉ chương failed" của nó đúng cho mọi trường hợp khác. Chưa viết; viết lúc lô 3 xong.
+
+Trước khi đúc lại, đo bằng `voice_pool_pressure.py` trên project mới xem va chạm cùng-chương có
+thật sự về 0 — đó là bằng chứng cho bản vá phần 3, và nó chỉ có được ở đây chứ không ở unit test.
+
 ## Lô vá là chỗ TỆ để chứng minh một bản vá
 
 Ba bản vá giờ nằm ở đúng cùng một vị trí, vì đúng cùng một lý do:
