@@ -1505,3 +1505,47 @@ Hai chỗ thiếu lộ ra khi chuẩn bị thả ranh giới lô 4:
   thuộc lô 4 — `--recast 3:084` chạy nó qua `launch_repair.sh 3`.
 
 Đã thả: `bash scripts/boundary.sh 4 --recast auto 3:084`.
+
+## Câu ngược chưa ai hỏi: một người HAI giọng — 21 chương, 202 câu, đã lên sách (2026-09-11, 00:20)
+
+`voice_pool_pressure.py` hỏi *hai người có dùng chung một giọng không*. Câu ngược — **một người
+có mang hai giọng không** — chưa công cụ nào hỏi, và nó là câu đắt hơn: hai người giống giọng thì
+người nghe **lẫn** hai nhân vật; một người đổi giọng giữa chương thì người nghe **mất** nhân vật
+ấy.
+
+Đo lần đầu trên cuốn sách 90 chương đã ghép (`scripts/one_person_one_voice.py`):
+
+```
+21 chương có một người hai giọng NGAY TRONG cùng chương, 202 câu thoại
+   NGƯỜI TRẢ LỜI   19 chương    doan_trang_f100 (69 chương cả sách)  vs  ngoc_linh_f108 (26)
+   THỦ LÃNH         7 chương    thanh_binh_f100_p-07 (55)            vs  thanh_binh_f090_p-04 (20)
+8 trên 49 người có tên mang nhiều hơn một giọng qua cả cuốn sách
+```
+
+Chương 060 là ca đọc rõ nhất: `THU LÃNH` nói 7 câu bằng `f090_p-04` và `THỦ LÃNH` nói 5 câu bằng
+`f100_p-07` — **cùng một người, cùng một chương, hai giọng**.
+
+**Vì sao mọi cổng đều xanh.** `verify_casting` kiểm *một người nói ra một giọng*, và dưới mắt nó
+đây là **hai** người: hai dòng `characters` khác nhau, mỗi dòng một pin hợp lệ. Lớp tách danh
+tính do rơi dấu không chỉ ăn chỗ trong kho giọng (điều tôi đã ghi hôm qua) — nó **đã đi vào
+audio**, và đó là hậu quả tôi chưa đo. `patch_dropped_marks_are_the_same_name` chặn lớp ấy từ lô
+4 trở đi; 21 chương đã đúc thì vẫn mang hai giọng cho tới khi được đọc lại.
+
+**Và lô đúc lại tự sinh ra một dạng khác của cùng lỗi.** KANG mang `f093_p-04` ở sáu chương và
+`f100_p-04` ở đúng chương 071 — vì lô đúc lại 071 bỏ pin của KANG (nó thua SAMAEL) rồi cấp giọng
+mới. VIKTOR cũng thế (060 vs 062). Nghĩa là chữa một va chạm **trong** chương có thể tạo một
+đổi giọng **giữa** các chương, và cái sau khó nghe ra hơn nhưng tệ hơn cho người theo dõi nhân
+vật. Hướng sửa cho `port_casting`: khi phải bỏ pin của ai, ưu tiên giữ **giọng người ấy đang có ở
+các chương khác** trừ khi chính giọng ấy là va chạm — chưa làm, cần đo trước.
+
+**Việc phải làm:** đúc lại 21 chương ấy sau khi bản vá gộp tên đã áp:
+
+```bash
+bash scripts/launch_repair.sh <lô> --chapters $(python scripts/one_person_one_voice.py --chapters)
+# 007 054 056 059 060 061 063 064 065 073 074 076 077 078 079 083 084 085 088 090 091
+```
+
+Chúng rải trên ba lô (007 thuộc lô 1; 054–065 lô 2 và 3; 073–091 lô 3), nên cần
+`--recast <lô>:<chương>` của `boundary.sh` hoặc ba lượt `launch_repair.sh` riêng. Khoảng 2/3 khối
+lượng một lô, vài giờ GPU. Đáng: đây là 202 câu mà người nghe nghe thấy, không phải một cờ trong
+sổ.
