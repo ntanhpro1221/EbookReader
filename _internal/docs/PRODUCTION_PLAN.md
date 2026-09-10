@@ -58,6 +58,36 @@ phép kiểm đo nhầm thứ — nên "đã qua" ở bản cũ không nói lên
 kế hoạch này (`000..029`) chạy đè lên chúng, và đó là lý do bảng trên bắt đầu từ 000 chứ không
 từ 028.
 
+## Lô vá là chỗ TỆ để chứng minh một bản vá
+
+Ba bản vá giờ nằm ở đúng cùng một vị trí, vì đúng cùng một lý do:
+
+| bản vá | chạy lại ở | vì sao không chứng minh được |
+|---|---|---|
+| `patch_ceiling_repairable` | alpha.62 | đoạn `'"Gì cơ?"'` lần sau dài 0,56s, không chạm trần |
+| `patch_pace_relaxed_is_a_decision` | lô vá lô 1 | đoạn nhịp lần sau đọc 14,07 ký tự/giây, vừa qua sàn |
+| `patch_finished_take_beats_a_cut_off_one` | lô vá lô 2 | đoạn `'"Bất bại?"'` lần sau dài 1,36s, không chạm trần |
+
+Cả ba lỗi **phụ thuộc seed**: chúng là tính chất của một lần lấy mẫu cụ thể từ model, không phải
+của văn bản. Chạy lại là **rút một lá khác**, nên một lô vá ba chương cho ba lá — xác suất trúng
+lại đúng lá cũ rất thấp. Ba lần liên tiếp không trúng không phải trùng hợp; đó là điều đáng
+mong đợi.
+
+Chỗ chúng được chứng minh là **lô kế tiếp**: ba mươi chương mới cho ba mươi lá mới. Và điều ấy
+đã xảy ra thật hai lần:
+
+- `patch_edge_fade` + `patch_loudness_review_ships` được chứng minh trên lô vá (ba chương chạy
+  lại đều đo được số mới) **và** ở quy mô trên lô 2: 0 chương hỏng ở tầng QA chương so với 3.
+- `patch_rate_impossible_is_the_same_family` được chứng minh trên lô vá lô 2, chương 031: đoạn
+  tiếng cười **tái diễn** (Whisper phiên `'Há há há…'` 19 lần), mã vẫn nổ, nhưng giờ là `warning`
+  chứ không `failed` và chương xuất bản được. Chương 043 thì lỗi không tái diễn — chỉ 10 lần
+  "ah" nên không vượt ngưỡng — nên **043 không chứng minh gì**, và nói nó chứng minh là nhầm
+  một chương xanh với một bản vá đã chạy.
+
+Bài học thực dụng: sau một lô vá, đừng hỏi "chương xanh chưa?" mà hỏi **"mã ấy có xuất hiện lại
+không, và nó đi đường nào?"**. Với ba bản vá trên, câu trả lời là "chưa xuất hiện lại", và cột
+*đã chứng minh* trong [WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md) phải ghi "chưa".
+
 ## Khi một lô có chương hỏng: một lệnh nữa
 
 ```bash

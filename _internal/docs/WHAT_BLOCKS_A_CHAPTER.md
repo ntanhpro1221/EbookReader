@@ -74,11 +74,17 @@ rồi đối chiếu với những gì đã vào cây:
 | `join discontinuity` | lô 1 ch 003, 016 | `patch_edge_fade` | **có** — 0,219 → 0,0215 ở lô vá |
 | `loudness delta` | lô 1 ch 000 | `patch_loudness_review_ships` | **có** — cờ vẫn ghi, chương vẫn xuất |
 | `TTS_PACE_BAND_RELAXED` | lô 1 ch 007 | `patch_pace_relaxed_is_a_decision` | **chưa** — lần chạy lại ra 14,07 nên đường nới không mở |
+| `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` | lô 2 ch 031, 043 | `patch_rate_impossible_is_the_same_family` | **có** — ch031 chạy lại, Whisper vẫn lặp 19 lần, mã vẫn nổ, giờ là `warning` và chương xuất bản được |
+| trần khung + ASR không phán xử được | lô 2 ch 053 | `patch_finished_take_beats_a_cut_off_one` | **chưa** — lần chạy lại đoạn ấy dài 1,36s và không chạm trần |
 | surrogate lạc giết cả cuốn | lô 1, lần chạy đầu | `patch_lone_surrogate` | **có** — lô1b qua đúng đoạn đã giết lần trước |
 | giới tính không phân giải được (cổng 7) | alpha.5x | `patch_casting_gate_no_halt` | **chưa** — chưa gặp lại |
 
-Sáu nguyên nhân ở tầng chương, hai ở tầng cuốn sách. **Bốn đã chứng minh trên audio thật, bốn
+Tám nguyên nhân ở tầng chương, hai ở tầng cuốn sách. **Năm đã chứng minh trên audio thật, năm
 chỉ có unit test đứng sau.**
+
+Ba trong năm cái "chưa" nằm đó vì cùng một lý do, không phải vì ai lười: lỗi phụ thuộc seed thì
+một lô vá là chỗ **tệ** để chứng minh, vì chạy lại là rút một lá khác. Xem
+[PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), mục *"Lô vá là chỗ TỆ để chứng minh một bản vá"*.
 
 Điều bảng này *không* nói: rằng danh sách đã đủ. Nó là danh sách những nguyên nhân đã **xảy
 ra**, trên 39 chương đã chạy của một cuốn 478 chương. Lô 2 tồn tại một phần để hỏi xem cái đuôi
