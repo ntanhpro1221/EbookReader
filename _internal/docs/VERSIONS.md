@@ -137,6 +137,43 @@ Chấm giữa chừng, không cần đợi xong:
 
 ---
 
+## v0.2.0-lo02 — 27/30, và **không chương nào** hỏng ở tầng QA chương
+
+Chương 030..059, 3.762 segment, gieo từ `lo01b_768c98bb4f`.
+
+```
+                            lô 1      lô 2
+xuất bản được              26/30     27/30
+hỏng ở tầng QA chương          3         0     <- vuốt mép + loudness
+hỏng ở cổng cảnh báo segment    1         3
+máy tự cho qua (lần)          13        25
+chương máy gánh                9        14
+```
+
+**Dòng thứ hai là kết quả đáng giá nhất của lô này.** Lô 1 mất ba chương ở tầng QA chương — một
+vì `loudness delta 0,62 LU`, hai vì `join discontinuity` — và lô 2 mất **không chương nào**, trên
+ba mươi chương hoàn toàn mới. `patch_edge_fade` và `patch_loudness_review_ships` trước đó chỉ
+được chứng minh trên bốn chương chạy lại; giờ chúng được chứng minh ở quy mô.
+
+**Cơ chế xuất-bản-không-người-nghe gánh 14 trên 27 chương.** Không có nó, lô 2 xuất bản 13/30.
+Toàn bộ 25 lần cho qua là hai mã ASR: `ASR_MISMATCH_UNRESOLVED` và
+`ASR_LOCKED_NAME_ANCHOR_MISMATCH` — không lần nào là một phép kiểm nói bản thu hỏng.
+
+### Ba chương hỏng, hai nguyên nhân
+
+| ch | mã | bản vá |
+|---|---|---|
+| 031, 043 | `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` | `patch_rate_impossible_is_the_same_family` |
+| 053 | trần khung + ASR không phán xử được | `patch_finished_take_beats_a_cut_off_one` |
+
+Cả hai đoạn của 031 và 043 là **tiếng cười**, và Whisper lặp vòng: `'huff huff huff…'` mười lăm
+lần, `'ah ah ah…'` hai mươi sáu lần. Chi tiết ở
+[WHAT_BLOCKS_A_CHAPTER.md](WHAT_BLOCKS_A_CHAPTER.md).
+
+Dự đoán viết trước lô này — *"0–1 chương hỏng, và nếu hỏng phải vì nguyên nhân chưa từng thấy"* —
+**sai**, và lý do nó sai đã nằm trong tài liệu của chính tôi: bốn trong tám nguyên nhân đã biết
+chỉ có unit test đứng sau, và một trong bốn ấy nổ.
+
 ## v0.2.0-lo01v — lô vá: 4/4 chương lấy lại, và hai bản vá được chứng minh
 
 Bốn chương lô 1 làm hỏng, chạy lại từng chương một trên cây đã có năm bản vá. **Cả bốn xuất bản
