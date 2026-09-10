@@ -23,15 +23,31 @@
 # nam lenh khong can nguoi. Cai can nguoi la DOC ket qua, va viec ay lam sau cung duoc.
 set -uo pipefail
 
-BATCH="${1:?dung: boundary.sh <so lo vua chay> [--recast 062 066 ...] [--dry-run]}"
+BATCH="${1:?dung: boundary.sh <so lo> [--recast auto|062|3:084 ...] [--dry-run]}"
 shift
+# `--recast` nhan ba dang, va ca ba deu can:
+#   062     chuong cua chinh lo nay
+#   3:084   chuong cua lo KHAC - chuong 084 duc lai o ranh gioi lo 3 nhung THAT BAI, nen sach
+#           dang phat ban cu cua lo 3; cua so duy nhat de chay lai no la mot ranh gioi, va
+#           ranh gioi ke tiep thuoc lo 4.
+#   auto    lay danh sach tu `voice_pool_pressure` cua chinh lo vua xong - danh sach ay chi
+#           biet duoc SAU khi lo chay xong, nen no khong the go tay luc tha script.
 RECAST=""
+RECAST_OTHER=""
+RECAST_AUTO=0
 DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --recast)
       shift
-      while [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]{3}$ ]]; do RECAST="$RECAST $1"; shift; done
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          auto) RECAST_AUTO=1; shift ;;
+          [0-9][0-9][0-9]) RECAST="$RECAST $1"; shift ;;
+          [0-9]*:[0-9][0-9][0-9]) RECAST_OTHER="$RECAST_OTHER $1"; shift ;;
+          *) break ;;
+        esac
+      done
       ;;
     --dry-run) DRY=1; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
@@ -85,7 +101,8 @@ tag_here() {
 say "=== ranh gioi lo $BATCH -> $NEXT ==="
 say "  project lo:    $BATCH_PROJECT"
 say "  trang thai:    $(state)  $(chapter_statuses)"
-say "  duc lai giong:${RECAST:- (khong)}"
+say "  duc lai giong:${RECAST:- (khong)}${RECAST_AUTO:+  + tu tim (auto)}"
+say "  duc lai lo khac:${RECAST_OTHER:- (khong)}"
 say "  hang cho:      ${PENDING:=$(pending_patches)}"
 say "  tag da co:     $(git tag -l "$TAG*" "$NEXT_TAG" | tr '\n' ' ')"
 say "  gieo lo $NEXT tu: $(py scripts/seed_chain.py "$BATCH" --seed)   (hien tai; se la project cuoi cua buoc 4)"
@@ -125,6 +142,22 @@ say "lo $BATCH xong: $(chapter_statuses)"
   echo "--- voice_pool_pressure ---";  py scripts/voice_pool_pressure.py "$BATCH_PROJECT"
   echo "--- throttle_report ---";      py scripts/throttle_report.py "$BATCH_PROJECT"
 } >> "$LOG" 2>&1
+
+# `auto`: chuong nao co HAI nguoi mot giong TRONG CUNG MOT CHUONG. Doc tu chinh bao cao da ghi
+# o tren, nen khong co khoang cach giua cai duoc in va cai duoc chay. Khong tim thay gi thi noi
+# ra va di tiep - im lang o day se doc thanh "khong co va cham nao".
+if [ "$RECAST_AUTO" = 1 ]; then
+  FOUND="$(py scripts/voice_pool_pressure.py "$BATCH_PROJECT" 2>/dev/null \
+    | grep -oE 'CÙNG CHƯƠNG [0-9, ]+' | grep -oE '[0-9]{3}' | sort -u | tr '\n' ' ')"
+  if [ -n "$FOUND" ]; then
+    say "auto: chuong co hai nguoi mot giong cung chuong:$FOUND"
+    RECAST="$RECAST $FOUND"
+  else
+    say "auto: khong thay va cham cung chuong nao - khong duc lai gi."
+  fi
+fi
+# Bo trung lap, giu thu tu tang dan.
+RECAST="$(printf '%s\n' $RECAST | sort -u | tr '\n' ' ')"
 
 # ---- 1. ap hang cho + bo test
 PENDING="$(pending_patches)"
@@ -190,6 +223,16 @@ if [ -n "$RECAST" ]; then
     py scripts/prove_a_patch.py "$BATCH_PROJECT" "$P" >> "$LOG" 2>&1
   done
 fi
+
+# ---- 4b. duc lai chuong cua lo KHAC (dang 3:084). Sau buoc 4 nen chuoi gieo cua lo nay da
+# xong; moi chuong o day di qua launch_repair cua lo cua NO, va sach lay ban moi nhat.
+for ENTRY in $RECAST_OTHER; do
+  OTHER_BATCH="${ENTRY%%:*}"
+  OTHER_CH="${ENTRY##*:}"
+  say "duc lai chuong $OTHER_CH cua lo $OTHER_BATCH"
+  bash scripts/launch_repair.sh "$OTHER_BATCH" --chapters "$OTHER_CH" >> "$LOG" 2>&1 \
+    || say "launch_repair lo $OTHER_BATCH chuong $OTHER_CH thoat khac 0 - xem $LOG; di tiep."
+done
 
 # ---- 6. lo ke tiep
 tag_here "$NEXT_TAG"

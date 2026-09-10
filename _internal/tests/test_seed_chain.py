@@ -89,11 +89,41 @@ def test_newest_in_one_folder_is_by_created_at_not_by_name(tmp_path: Path, capsy
     assert main(["--newest", str(tmp_path / "khong-co")]) == 1
 
 
+def test_the_chain_keeps_repairs_of_earlier_batches_too(tmp_path: Path) -> None:
+    """Bản đầu bỏ project vá / đúc lại của các lô TRƯỚC, và sổ cộng dồn của lô sau vì thế đếm
+    những chương ấy theo bản trước khi đúc lại - tên chưa gộp, nên thuộc về ai thì sai.
+
+    Không đếm đôi: `backfill_exposure` lấy chương theo tiêu đề, project sau thắng."""
+    made = _tree(tmp_path)
+    lo03 = _project(tmp_path, "v0.2.0-lo03", "lo03_g", 7.0)
+
+    links = chain(3, tmp_path)
+
+    assert made["lo02v_031"] in links and made["lo02r_066"] in links, (
+        "project vá của lô 2 phải nằm trong chuỗi khi dựng chuỗi cho lô 3"
+    )
+    assert links[-1] == lo03 == seed_project(3, tmp_path)
+    assert links == [
+        made["lo01b"],
+        made["lo02"],
+        made["lo02v_031"],
+        made["lo02v_043"],
+        made["lo02r_066"],
+        lo03,
+    ]
+
+
 def test_a_batch_with_nothing_yet_has_no_seed(tmp_path: Path) -> None:
-    _tree(tmp_path)
+    made = _tree(tmp_path)
 
     assert seed_project(3, tmp_path) is None
+    # Chuỗi của một lô chưa tồn tại là **mọi** project của các lô trước nó - kể cả project vá.
+    # Bài này từng ghim bản cũ (chỉ project lô), tức ghim đúng cái lỗi đã làm sổ cộng dồn của
+    # lô 4 đếm sáu chương của lô 3 theo bản trước khi đúc lại.
     assert chain(3, tmp_path) == [
         batch_project(1, tmp_path),
         batch_project(2, tmp_path),
-    ], "chuỗi của lô chưa tồn tại là các lô trước nó - dùng để gieo lô ấy"
+        made["lo02v_031"],
+        made["lo02v_043"],
+        made["lo02r_066"],
+    ]

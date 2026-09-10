@@ -1471,3 +1471,37 @@ không đếm chữ viết.
 không cờ, nên log ghi "da ghep sach vao _book" trong khi cuốn sách vẫn 60 chương giữa lúc đã có
 92. Một dòng log nói thành công cho một lượt thử tệ hơn không log dòng nào — nó làm người đọc
 log thôi kiểm. Đã sửa thành `--apply`.
+
+## Chuỗi cộng dồn bỏ quên project vá của các lô TRƯỚC (2026-09-11, 00:05)
+
+`seed_chain.chain(batch)` lấy **project lô** của mọi lô trước cộng với project vá / đúc lại của
+**riêng lô hiện tại**. Đo trên chuỗi của lô 4:
+
+```
+truoc:  lo01b · lo02 · lo03 · lo04
+sau:    lo01b · lo02 · lo03 · lo03v_075 · lo03r_062 · lo03r_066 · lo03r_071 · lo03r_084 · lo03r_086 · lo04
+```
+
+Sáu project của lô 3 bị bỏ, nên sổ cộng dồn gieo cho lô 4 đếm sáu chương ấy theo bản **trước
+khi đúc lại** — tức theo cách viết tên trước khi gộp (THU LÃNH chưa về THỦ LÃNH). Số chương thì
+vẫn đủ, nhưng *thuộc về ai* thì sai, và sổ ấy chính là thứ quyết ai giữ giọng khi hai người
+trùng. Không đếm đôi khi thêm chúng vào: `backfill_exposure` lấy chương theo **tiêu đề** và
+project đứng sau thắng, nên một project đúc lại cùng chương chỉ **thay** bản cũ.
+
+Bài kiểm cũ `test_a_batch_with_nothing_yet_has_no_seed` ghim đúng hành vi sai này — nó khẳng
+định chuỗi của một lô chưa tồn tại là "các lô trước nó" và liệt kê chỉ project lô. Một bài kiểm
+ghim hành vi sai thì không phát hiện được gì; đã sửa cùng lúc.
+
+## `boundary.sh --recast` nhận thêm `auto` và `<lô>:<chương>`
+
+Hai chỗ thiếu lộ ra khi chuẩn bị thả ranh giới lô 4:
+
+- **`auto`**: danh sách chương cần đúc lại chỉ biết được **sau** khi lô chạy xong, nên không thể
+  gõ tay lúc thả script. `auto` đọc từ chính `voice_pool_pressure` của lô vừa xong (dòng
+  `CÙNG CHƯƠNG ...`), và nếu không tìm thấy gì thì **nói ra** rồi đi tiếp — im lặng ở đó sẽ đọc
+  thành "không có va chạm nào".
+- **`<lô>:<chương>`**: chương 084 đúc lại ở ranh giới lô 3 nhưng **thất bại**, nên cuốn sách đang
+  phát bản cũ của lô 3. Cửa sổ duy nhất để chạy lại nó là một ranh giới, và ranh giới kế tiếp
+  thuộc lô 4 — `--recast 3:084` chạy nó qua `launch_repair.sh 3`.
+
+Đã thả: `bash scripts/boundary.sh 4 --recast auto 3:084`.

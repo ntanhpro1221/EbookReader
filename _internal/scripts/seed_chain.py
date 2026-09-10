@@ -75,17 +75,28 @@ def seed_project(batch: int, root: Path = VERSIONS_ROOT) -> Path | None:
 
 
 def chain(batch: int, root: Path = VERSIONS_ROOT) -> list[Path]:
-    """Project lô của mọi lô trước, rồi lô này cùng các project v/r của nó theo thứ tự tạo.
+    """Mọi project của mọi lô tới `batch`, cũ trước mới sau - kể cả project vá / đúc lại.
+
+    Bản đầu chỉ lấy **project lô** của các lô trước và bỏ hết project vá / đúc lại của chúng.
+    Đo 2026-09-11 trên chuỗi của lô 4: sáu project của lô 3 (`lo03v_075` và năm `lo03r_*`) bị
+    bỏ, nên sổ cộng dồn gieo cho lô 4 đếm sáu chương ấy theo bản **trước** khi đúc lại - tức
+    theo cách viết tên trước khi gộp (THU LÃNH chưa về THỦ LÃNH). Chương thì vẫn đủ, nhưng
+    thuộc về ai thì sai.
+
+    Không sợ đếm đôi: `backfill_exposure` lấy chương theo **tiêu đề** và project đứng sau
+    thắng, nên thêm một project đúc lại cùng chương chỉ thay bản cũ chứ không cộng thêm.
 
     Kết thúc ở đúng `seed_project(batch)` theo cách dựng - cả hai xếp theo `created_at`.
     """
-    earlier = [p for i in range(1, batch) if (p := batch_project(i, root)) is not None]
-    own = repairs(batch, root)
-    head = batch_project(batch, root)
-    if head is not None:
-        own.append(head)
-    own.sort(key=lambda p: (created_at(p), p.name))
-    return earlier + own
+    links: list[Path] = []
+    for index in range(1, batch + 1):
+        own = repairs(index, root)
+        head = batch_project(index, root)
+        if head is not None:
+            own.append(head)
+        own.sort(key=lambda path: (created_at(path), path.name))
+        links.extend(own)
+    return links
 
 
 def main(argv: list[str]) -> int:
