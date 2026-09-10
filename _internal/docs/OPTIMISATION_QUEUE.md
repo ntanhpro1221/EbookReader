@@ -1360,3 +1360,15 @@ Giá của việc đợi: lô 4 mang `SELNE` thêm một lô nữa trong prompt 
 Ghi thêm một hệ quả nhỏ nhưng thật: `SELNE` đang giữ 32 câu thoại và một chỗ trong kho giọng
 dưới tên sai. Sửa nhãn **không** đổi audio (nhãn người nói không được đọc lên), nên đây là lỗi
 dữ liệu lan sang lô sau, không phải lỗi người nghe nghe được. Đừng đọc lại chương nào vì nó.
+
+### Nửa thứ hai đã viết, và cố ý CHƯA vào `ORDER` (21:58)
+
+`scripts/pending_patches/patch_the_book_decides_the_spelling.py` mang luật ấy vào registry, kèm
+`tests/test_the_book_decides_the_spelling.py` (5 bài) và `tests/test_source_spellings_agree.py`
+(6 bài, giữ hai bản không lệch — cùng cách `test_name_marks_agree.py` giữ luật rơi dấu). Áp thử
+trên bản sao: **11 bài xanh**.
+
+Nhưng nó **chưa** được xếp vào `ORDER`, và đây là lý do đáng ghi vì nó ngược với phản xạ: cửa số
+3 của `before_a_batch` **từ chối khi hàng chờ còn tên**. Xếp bản vá vào hàng chờ lúc này là làm
+`launch_batch.sh 4` ở bước 6 của ranh giới không bao giờ chạy được — tức tự chặn chính cái lô
+mình đang chờ. Xếp vào sau khi lô 4 đã bay.
