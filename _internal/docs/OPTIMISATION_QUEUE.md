@@ -1296,3 +1296,55 @@ báo đang nói thật về `Jake` — và nó đã nói thật 1.827 lần.
 Một giả thuyết của tôi bị bác trong lúc đo: các dạng chèm âm `ờ` (`I-xờ-hờ-ta-ra`, `Đờ-ra-kên`)
 trượt cổng 2,4% so với 27,4%, nhưng `đỉnh%` **giống nhau** (50,0 so với 51,9) — chúng đọc ổn định
 ngang các dạng khác, chỉ không bao giờ thoả cổng. Và ca xấu nhất, `Giếch`, không chèm âm nào.
+
+## Nguồn văn bản là quan toà, và tôi đã dùng số câu thay cho nó (2026-09-10, 21:40)
+
+`patch_stray_surname_is_the_same_name` vừa áp ở ranh giới lô 3 gộp `SELNE VALKRYN` → `SELNE`,
+chọn người thắng theo **số câu thoại** (32 so với 3). Đếm trong nguồn:
+
+```
+Selene   198 lần trong nguồn      SELENE   7 câu thoại
+Selne      0 lần                  SELNE   32 câu thoại   <- bản model viết sai, và nó ĐANG thắng
+```
+
+Nhân vật thật tên **Selene**. `SELNE` là lỗi chính tả của model phân tích, và nó thắng vì nó nói
+nhiều hơn — đúng cái vòng phản hồi tôi đã ghi cho lớp rơi dấu (`_known_summary` đưa bản nhiều lần
+hơn vào prompt lô sau, cái sai tự củng cố). Lớp rơi dấu có một tín hiệu nội tại để phá vòng ấy
+(bản nhiều dấu hơn thắng). Lớp sai một ký tự thì **không** có — nhưng nó không cần, vì có một
+quan toà tốt hơn số câu, và tôi đã không hỏi: **chính cuốn sách**.
+
+Đếm trên cả 30 nhân vật có tên của lô 3, so với 92 chương nguồn (bỏ dấu, không phân biệt hoa
+thường): **4 cái tên không xuất hiện lấy một lần**.
+
+```
+SELNE                32 câu thoại    0 lần trong nguồn
+SELNE VALKRYN         3              0
+SAMAELE               1              0        (Samael: 1.375 lần)
+NARRATOR              1              0        (vai, không phải người - lọt vào bảng characters)
+```
+
+Ba trong bốn là bản viết sai hoặc nhãn bịa; cái thứ tư là một vai bị lọt. Không một nhân vật
+thật nào có 0 lần. Đây là một phép phân biệt **dứt khoát**, rẻ, và đã nằm ngay trên đĩa.
+
+Luật đề nghị: **khi hai cách viết cạnh tranh, cách nào có trong nguồn thì thắng — số câu chỉ
+dùng khi cả hai đều có (hoặc cả hai đều không).** Nó làm đúng cả bốn ca đã đo:
+
+- `SELNE` (0 lần) → `SELENE` (198) — sửa đúng cái mà bản vá vừa gộp *ngược*;
+- `SAMAELE` (0) → `SAMAEL` (1.375);
+- `SỐ BA` (2 câu) và `SỐ BẢY` (7 câu) — **cả hai** có trong nguồn, nên **không gộp**. Đây là ca
+  mà một luật "lệch một ký tự thì gộp" sẽ nhập hai nhân vật thật làm một; ngưỡng tỉ lệ cứu được
+  (4×), nhưng nguồn văn bản cứu **chắc chắn**;
+- `THU LÃNH` / `THỦ LÃNH` — bỏ dấu thì cả hai trỏ về cùng một chuỗi trong nguồn, nên luật này
+  không can thiệp và luật rơi dấu vẫn quyết. Hai luật không tranh nhau.
+
+**Chỗ làm:** `scripts/` chứ không phải file khoá. `port_casting.read_casting` đã gộp rơi dấu ở
+thời điểm gieo; thêm một vòng gộp theo nguồn ở cùng chỗ là đủ để lô 4 thấy `SELENE` trong danh
+sách "đã biết" và dùng nó. Đường tới nguồn có sẵn trong chính project: `chapters.input_path`.
+
+**Chưa làm tối nay** vì ranh giới lô 3 đang chạy và nó gọi `port_casting.py` ở bước 4 — sửa một
+file đang được gọi là đúng thứ đã bị cấm. Viết và thử trên bản sao trước, cài sau khi ranh giới
+xong.
+
+Ghi thêm một hệ quả nhỏ nhưng thật: `SELNE` đang giữ 32 câu thoại và một chỗ trong kho giọng
+dưới tên sai. Sửa nhãn **không** đổi audio (nhãn người nói không được đọc lên), nên đây là lỗi
+dữ liệu lan sang lô sau, không phải lỗi người nghe nghe được. Đừng đọc lại chương nào vì nó.
