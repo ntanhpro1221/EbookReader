@@ -226,13 +226,22 @@ fi
 
 # ---- 4b. duc lai chuong cua lo KHAC (dang 3:084). Sau buoc 4 nen chuoi gieo cua lo nay da
 # xong; moi chuong o day di qua launch_repair cua lo cua NO, va sach lay ban moi nhat.
-for ENTRY in $RECAST_OTHER; do
-  OTHER_BATCH="${ENTRY%%:*}"
-  OTHER_CH="${ENTRY##*:}"
-  say "duc lai chuong $OTHER_CH cua lo $OTHER_BATCH"
-  bash scripts/launch_repair.sh "$OTHER_BATCH" --chapters "$OTHER_CH" >> "$LOG" 2>&1 \
-    || say "launch_repair lo $OTHER_BATCH chuong $OTHER_CH thoat khac 0 - xem $LOG; di tiep."
-done
+# Gom theo lo: mot lan `launch_repair.sh` cho moi lo, khong phai mot lan cho moi chuong -
+# moi lan goi keo theo before_a_batch, plan_repair_batch va backfill.
+#
+# `--seed-from` tro toi project MOI NHAT cua chuoi lo nay: mot chuong cu doc lai de sua giong
+# phai mang cach cast moi nhat, khong phai cach cast cua lo no thuoc ve. Gieo chuong 007 tu lo 1
+# la lay lai dung bo pin da sinh ra loi.
+if [ -n "$RECAST_OTHER" ]; then
+  SEED="$(py scripts/seed_chain.py "$BATCH" --seed)"
+  for OTHER_BATCH in $(printf '%s\n' $RECAST_OTHER | cut -d: -f1 | sort -un); do
+    CHS="$(printf '%s\n' $RECAST_OTHER | grep "^${OTHER_BATCH}:" | cut -d: -f2 | sort -u | tr '\n' ' ')"
+    say "duc lai lo $OTHER_BATCH chuong:$CHS  (gieo tu $(basename "$SEED"))"
+    # shellcheck disable=SC2086
+    bash scripts/launch_repair.sh "$OTHER_BATCH" --chapters $CHS --seed-from "$SEED" >> "$LOG" 2>&1 \
+      || say "launch_repair lo $OTHER_BATCH thoat khac 0 - xem $LOG; di tiep."
+  done
+fi
 
 # ---- 6. lo ke tiep
 tag_here "$NEXT_TAG"

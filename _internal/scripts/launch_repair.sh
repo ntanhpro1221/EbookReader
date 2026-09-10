@@ -24,10 +24,24 @@ shift
 # chuong hai nhan vat trung giong cung chuong (062, 066, 071, 084, 086), va luat "chi chuong
 # failed" ben duoi dung cho moi truong hop khac nen khong noi no ra.
 EXPLICIT=""
-if [ "${1:-}" = "--chapters" ]; then
-  shift
-  EXPLICIT="$*"
-fi
+SEED_FROM=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --chapters)
+      shift
+      while [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]{3}$ ]]; do EXPLICIT="$EXPLICIT $1"; shift; done
+      ;;
+    # Gieo tu MOT project chi dinh thay vi tu project moi nhat cua lo nay.
+    #
+    # Vi sao can: mot chuong cu duoc doc lai de sua GIONG - vi du 21 chuong co mot nguoi hai
+    # giong do lop tach danh tinh (do 2026-09-11) - phai mang cach cast MOI NHAT, khong phai
+    # cach cast cua lo no thuoc ve. Chuong 007 thuoc lo 1; gieo tu lo 1 la lay lai dung bo pin
+    # da sinh ra loi. Project moi nhat mang pin dut khoat cho moi nhan vat, va do la thu can.
+    --seed-from) shift; SEED_FROM="${1:?--seed-from can duong dan project}"; shift ;;
+    *) echo "tham so la: $1" >&2; exit 2 ;;
+  esac
+done
+EXPLICIT="${EXPLICIT# }"
 ROOT="D:/Novels/Ebook Reader/_internal"
 PY="$ROOT/runtime/.venv/Scripts/python.exe"
 cd "$ROOT"
@@ -44,7 +58,12 @@ BATCH_PROJECT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --b
   echo "Khong thay project cua $TAG." >&2
   exit 2
 }
-PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --seed)" || exit 2
+if [ -n "$SEED_FROM" ]; then
+  [ -f "$SEED_FROM/project.sqlite3" ] || { echo "--seed-from khong phai project: $SEED_FROM" >&2; exit 2; }
+  PREV="$SEED_FROM"
+else
+  PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --seed)" || exit 2
+fi
 
 echo "=== lo va cho lo $BATCH ==="
 echo "  project lo: $BATCH_PROJECT"
