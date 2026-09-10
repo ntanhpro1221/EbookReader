@@ -63,6 +63,11 @@ ORDER: tuple[str, ...] = (
     "patch_dropped_marks_are_the_same_name.py",
     "patch_wrap_prefers_a_stranger.py",
     "patch_stray_surname_is_the_same_name.py",
+    # Thứ tư, file khác (audio_io.py) nên không chạm neo ba bản trên: một bản thu chỉ "chậm"
+    # khi chậm theo cả chữ lẫn âm tiết. Chương 075 của lô 3 mất một câu 10/10 lần ở ~11 chars/s
+    # vì câu toàn từ ngắn (2,25 chữ/từ); theo âm tiết nó đọc gần trung vị kho. Áp trước lô vá
+    # của lô 3 để chính chương 075 là phép thử đầu tiên.
+    "patch_pace_counts_syllables_too.py",
 )
 
 APPLIED = (

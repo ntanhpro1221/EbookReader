@@ -1225,3 +1225,37 @@ Một phép đo tiện thể, đáng ghi vì nó ngược với điều tôi tin
 `before_a_batch` bỏ qua test vì thế). Vậy 65,6 phút `yield_heavy` của lô 3 ("foreground CPU
 81%", 17 segment) là của ai — và `foreground` đo cái gì mà không thấy pytest? Chưa trả lời;
 `resource_manager.py` là file khoá nên đọc thì được, đổi thì đợi ranh giới.
+
+## Chương 075: thước nhịp lệch lần thứ hai, và bản vá thứ tư vào hàng chờ (2026-09-10, 19:55)
+
+Chương hỏng đầu tiên của lô 3 là một câu dẫn 38 ký tự mất 10/10 lần ở 10,6–11,8 chars/s (sàn
+12,5), không chia được (< 100), dải đã `normal` — mọi đường cứu đóng. Không phải seed: câu toàn
+từ ngắn (2,25 chữ/từ, kho 3,33), và theo âm tiết nó đọc 4,48/giây, gần trung vị kho 4,67. Cùng
+họ với lỗi chữ số. `patch_pace_counts_syllables_too`: một bản thu chỉ chậm khi chậm theo **cả**
+chữ lẫn âm tiết; sàn âm tiết 3,75 là p2 của 8.301 bản thu đã qua. Chi tiết và số liệu ở
+[PACE_COUNTS_THE_WRONG_STRING.md](PACE_COUNTS_THE_WRONG_STRING.md) (chương hai).
+
+Xếp thứ tư — file khác (`audio_io.py`) nên không chạm neo ba bản registry. Ranh giới tự chạy
+sẽ áp nó trước lô vá của lô 3, và chương 075 chạy lại là phép thử: câu ấy phải qua **lần đầu**.
+
+Tổng diễn tập ranh giới trên bản sao đủ bố cục (`Ebook Reader.vbs`, `.lnk`): `apply_all
+--apply --force` áp ba bản, tự rút hàng chờ, bộ test đầy đủ xanh, mã thoát 0. Bốn bản áp chồng
+trên bản sao khác: test audio + registry xanh.
+
+## Hoãn: khi mọi lần thử chỉ hỏng vì "chậm", giữ bản thu gần dải nhất thay vì mất chương
+
+Ghi để không quên, không làm tối nay. Đường đi của chương 075 cho thấy một ngõ cụt cấu trúc:
+`pace_outlier` ở high_quality là **ném lỗi để thử lại** (`pipeline.py`, "high-quality TTS retry
+required"), mười lần rồi chia nhỏ, và câu dưới 100 ký tự thì không chia được. Mười bản thu ấy
+không được giữ làm ứng viên (`segment_candidates` của segment ấy: 0 dòng) — chúng bị ghi đè
+từng lần, nên lúc cạn không còn gì để đề cử.
+
+Nhưng "chậm" không phải "hỏng": `TTS_PACE_OUTLIER` đã nằm trong danh sách cảnh báo được phép
+của high_quality, và học thuyết của hai bảng chấp nhận là *chỉ những phép kiểm không nói bản
+thu hỏng*. Nếu mười lần đều chỉ hỏng vì chậm (không ASR, không lặp, không trần), bản gần dải
+nhất là một bản thu nghe được kèm một cảnh báo — tốt hơn hẳn một chương không xuất bản. Cùng
+hình dạng với `patch_finished_take_beats_a_cut_off_one`: đường ống chỉ đề nghị, tầng database
+kiểm bốn điều kiện từ chính dữ liệu, ghi vào bảng riêng.
+
+Bản vá âm tiết đã đóng phần lớn lớp này (câu toàn từ ngắn) mà không cần tới đây. Cái này chỉ
+đáng làm nếu lô 4 vẫn mất chương vì "chậm" sau bản vá ấy — đếm trước, rồi mới viết.

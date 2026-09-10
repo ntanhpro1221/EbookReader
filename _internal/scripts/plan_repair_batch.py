@@ -63,6 +63,31 @@ def _cause(last_error: str) -> str:
     return text[:70]
 
 
+_FAILED_SEGMENT = re.compile(r"(c\d{5}_s\d{7}_[0-9a-f]{12})=SEGMENT_FAILED")
+_NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _segment_failure_detail(conn: sqlite3.Connection, last_error: str) -> str | None:
+    """`SEGMENT_FAILED` nói "một đoạn chết", không nói vì sao; vì sao nằm ở `segments.error` của
+    chính đoạn ấy. Chương 075 lô 3: "speech pace 11.00 chars/s; split=segment too short to
+    split safely; pace_band=already normal". Lấy mệnh đề đầu và bỏ số, để hai chương cùng chết
+    vì nhịp gộp về một nguyên nhân thay vì hai — đó là con số cần đếm sau một lô."""
+    match = _FAILED_SEGMENT.search(last_error)
+    if not match:
+        return None
+    row = conn.execute(
+        "SELECT error FROM segments WHERE stable_id = ?", (match.group(1),)
+    ).fetchone()
+    if not row or not row[0]:
+        return None
+    text = " ".join(str(row[0]).split())
+    prefix = "high-quality TTS retry required:"
+    if text.startswith(prefix):
+        text = text[len(prefix):]
+    first = text.split(";", 1)[0].strip()
+    return _NUMBER.sub("N", first)[:60] or None
+
+
 def _runs(numbers: list[int]) -> list[tuple[int, int]]:
     """[0, 3, 7, 8, 9] -> [(0,0), (3,3), (7,9)]"""
     spans: list[tuple[int, int]] = []
@@ -118,7 +143,12 @@ def main(argv: list[str]) -> int:
 
     causes: dict[str, list[str]] = {}
     for row in broken:
-        causes.setdefault(_cause(str(row["last_error"] or "")), []).append(str(row["title"]))
+        last_error = str(row["last_error"] or "")
+        cause = _cause(last_error)
+        detail = _segment_failure_detail(conn, last_error)
+        if detail:
+            cause = f"{cause} — {detail}"
+        causes.setdefault(cause, []).append(str(row["title"]))
     _say("")
     _say(f"{len(causes)} nguyên nhân khác nhau trên {len(broken)} chương:")
     for cause, titles in sorted(causes.items(), key=lambda kv: (-len(kv[1]), kv[0])):

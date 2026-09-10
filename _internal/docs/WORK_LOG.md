@@ -1058,3 +1058,14 @@ Dự đoán cho sáng mai, ghi trước để không tự thuyết phục mình 
 - (b) chỉ 066/071 (KANG + SAMAEL, hai người thật) cần một giọng mới, và đó là chỗ duy nhất
   `patch_wrap_prefers_a_stranger` được thử;
 - (c) lô 4 sẽ thấy KANG mang đúng giọng ấy, không phải giọng thứ ba — nếu chuỗi gieo làm việc.
+
+**Thêm lúc 19:55 — chương 075 và thước nhịp lệch lần thứ hai.** Chương hỏng đầu tiên của lô 3
+mất một câu dẫn 38 ký tự 10/10 lần ở 10,6–11,8 chars/s; không chia được, dải đã `normal`. Đếm
+lại: câu có 2,25 chữ/từ (kho 3,33), và theo âm tiết nó đọc 4,48/giây, gần trung vị kho 4,67 —
+cùng họ với lỗi chữ số, thước đếm sai cái nó nhận là đếm. 22 segment của lô 3 chạm sàn, ~38
+lần sinh thừa, quá nửa phía chậm là câu từ ngắn. `patch_pace_counts_syllables_too` (thứ tư
+trong hàng chờ): chỉ chậm khi chậm theo **cả** chữ lẫn âm tiết, sàn âm tiết 3,75 = p2 của 8.301
+bản thu đã qua. Ranh giới tự chạy sẽ áp nó trước lô vá, và chương 075 chạy lại là phép thử —
+phải qua lần đầu. Diễn tập ranh giới trên bản sao đủ bố cục: ba bản vá áp, hàng chờ tự rút,
+bộ test xanh, mã 0. `plan_repair_batch` giờ ghi "SEGMENT_FAILED — speech pace N chars/s" thay
+vì chỉ `SEGMENT_FAILED`, để log ranh giới đọc được nguyên nhân mà không phải mở SQLite.

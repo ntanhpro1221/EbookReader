@@ -52,6 +52,7 @@ biệt ấy quan trọng hơn danh sách:
 | neo tên (`asr_only_failure`) | tên đọc sai | mọi đoạn **chỉ gồm** một tên ngắn | rồi |
 | `is_vocalization_only` | tiếng cười | tiếng cười — trừ khi viết `Ahaha` | rồi |
 | nhịp đọc | đọc quá chậm | **văn bản có chữ số** | rồi |
+| nhịp đọc | đọc quá chậm | **câu toàn từ ngắn** — 2,25 chữ/từ so với trung vị 3,33; theo âm tiết đọc gần trung vị kho | hàng chờ (`patch_pace_counts_syllables_too`) |
 | âm vị neo tên | cùng âm thì khớp | `k` và `c` bị coi là khác âm | rồi |
 | `repeated_utterance_score` | hai nửa giống nhau đến đâu | bị khoảng lặng **ngoài rìa** bóp méo | **chưa** |
 | `max_join_jump` | tiếng click ở chỗ nối | **đúng thế** — bắn 1/107, vào cực trị thật | không cần |
@@ -78,6 +79,7 @@ rồi đối chiếu với những gì đã vào cây:
 | trần khung + ASR không phán xử được | lô 2 ch 053 | `patch_finished_take_beats_a_cut_off_one` | **chưa** — lần chạy lại đoạn ấy dài 1,36s và không chạm trần |
 | surrogate lạc giết cả cuốn | lô 1, lần chạy đầu | `patch_lone_surrogate` | **có** — lô1b qua đúng đoạn đã giết lần trước |
 | giới tính không phân giải được (cổng 7) | alpha.5x | `patch_casting_gate_no_halt` | **chưa** — chưa gặp lại |
+| `SEGMENT_FAILED` — nhịp 10,6–11,8 chars/s 10/10 lần, câu 38 ký tự không chia được, dải đã `normal` | lô 3 ch 075 | `patch_pace_counts_syllables_too` | **chưa** — chương 075 chạy lại ở lô vá lô 3 là phép thử đầu tiên; câu ấy đọc 4,48 âm tiết/giây nên phải qua ngay lần đầu |
 
 Tám nguyên nhân ở tầng chương, hai ở tầng cuốn sách. **Năm đã chứng minh trên audio thật, năm
 chỉ có unit test đứng sau.**

@@ -131,3 +131,53 @@ Tiêu đề chương 023 giờ đo **17,78 kt/s** thay vì 10,68.
   phán quyết nào.
 - Ba test ghim: tiêu đề ch023 đếm 24→40 và vượt sàn; văn bản không có số đếm **y hệt như trước**;
   số quá lớn để đọc thành chữ thì để nguyên chứ không đoán.
+
+## Chương hai (2026-09-10): cùng thước, sai theo cách khác — từ ngắn
+
+Lô 3 mất chương 075 vì một câu dẫn truyện, 10/10 lần, mỗi lần một seed:
+
+```
+"Và Alice đã ở đó để tận dụng sơ hở ấy."   27 ký tự đọc · 11 từ · 1 chỗ nghỉ
+11,00  11,38  11,38  11,80  11,38  11,00  10,64  11,38  11,80  11,00 chars/s   (sàn 12,5)
+split     = segment too short to split safely   (38 < 100)
+pace_band = already normal
+```
+
+Mười con số trong một dải 1,2 chars/s không phải xui: là số học, lần thứ hai. Câu này có
+**2,25 chữ mỗi từ**; trung vị của 8.301 bản thu đã qua ở lô 1–3 là **3,33**. Cùng một tốc độ
+đọc — âm tiết mỗi giây — thì câu toàn từ ngắn ("ở đó để", "sơ hở ấy") cho ra ít chữ mỗi giây
+hơn, và thước "chars/s", vốn vay mượn cho "tốc độ đọc", gọi nó là chậm.
+
+Đo lại theo âm tiết (tiếng Việt đơn âm, từ = âm tiết): 11 / (27 / 11,00) = **4,48 âm tiết/giây**.
+Phân bố của kho: p0.5 3,22 · p1 3,51 · p2 3,76 · **p50 4,67** · p98 6,07. Bản thu ấy đọc ở
+nhịp bình thường của chính giọng này. Chỉ có thước chậm.
+
+Cả cuốn tới giờ chỉ **hai** bản thu đã qua có ≤ 2,3 chữ/từ — và chúng qua vì đọc **nhanh**
+(6,2 âm tiết/giây). Tức là câu toàn từ ngắn phải đọc nhanh hơn người khác mới được thước chữ
+công nhận là "không chậm". Đó là định nghĩa của một thước lệch.
+
+### Sửa thế nào, và vì sao không phải là hạ sàn
+
+Hạ sàn 12,5 là đổi một con số bịa lấy một con số bịa khác. Sửa đúng họ với chương một: thêm
+**phép đếm thứ hai** — âm tiết mỗi giây, sàn 3,75 (p2 của kho, cùng cách chọn 12,5) — và chỉ
+kết tội "chậm" khi **cả hai** cùng nói chậm (`pace_is_outlier` trong `audio_io.py`, hàng chờ
+`patch_pace_counts_syllables_too`). Cận trên giữ nguyên theo chữ.
+
+Thay đổi một chiều: chỉ **bớt** cờ, không thêm. Bản thu được tha thêm phải có nhịp âm tiết
+trong dải bình thường. Đếm từ thay cho âm tiết đếm **thiếu** ở tên nước ngoài ("Alice" hai âm
+tiết) và chữ số — tức nhịp âm tiết đo ra thấp hơn thật — nên sai số nghiêng về giữ cờ như cũ,
+không nghiêng về tha.
+
+Phép thử đầu tiên là chính chương 075, chạy lại ở lô vá lô 3: câu ấy ở 4,48 âm tiết/giây phải
+qua ngay lần đầu. Nếu nó vẫn thử mười lần thì bản vá sai, và số 10 sẽ nói thế trước khi ai
+kịp nghe.
+
+### Rộng bao nhiêu — đếm trước khi đoán, lần này
+
+Trong lô 3 tới 19:50 (20/32 chương), 22 segment chạm sàn nhịp; 17 ở phía chậm. Nhìn cột
+chữ/từ của 17 cái ấy: 2,45 · 2,67 · 2,67 · 2,78 · 2,88 · 2,90 · 2,92 · 2,93 · 3,00 · 3,10 · 3,10
+· 3,21 · 3,25 · 3,33 · 3,44 · 3,52 — quá nửa dưới trung vị kho 3,33, và ba cái tốn nhiều lần
+thử nhất (11, 9, 4) đều ≤ 2,92. Tổng cộng ~38 lần sinh thừa cho một lớp lỗi mà seed không
+chữa được, cộng một chương mất. Với bản vá, câu 9 lần thử ("Thalia hừ mũi…", 11 từ, 32 ký tự
+đọc, 11,1 chars/s) đo 3,82 âm tiết/giây — vừa qua sàn 3,75; nó là ca **sát ngưỡng**, và nếu
+lô 4 còn thấy nó thử lại vài lần thì sàn âm tiết đang đúng chỗ, không phải sai.

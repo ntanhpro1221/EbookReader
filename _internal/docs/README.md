@@ -15,6 +15,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | Lô chạy chậm hơn ước lượng nhiều? | [THE_MACHINE_IS_SHARED.md](THE_MACHINE_IS_SHARED.md) — nhường máy, không phải treo |
 | Lượt chạy đứng yên mà nhịp tim vẫn sống? | [A_POOL_THAT_FORBIDS_ITSELF.md](A_POOL_THAT_FORBIDS_ITSELF.md) |
 | Ghép MP3 của 16 lô thành một cuốn thế nào? | [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md) — mục *"Ghép cuốn sách"* |
+| Ranh giới giữa hai lô tự chạy thế nào, và lô sau gieo từ đâu? | [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md) — mục *"Ranh giới giữa hai lô"*; `scripts/boundary.sh`, `scripts/seed_chain.py` |
 
 ## Có gì đó hỏng
 
