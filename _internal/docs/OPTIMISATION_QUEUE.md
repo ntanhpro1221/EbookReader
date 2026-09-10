@@ -1372,3 +1372,37 @@ Nhưng nó **chưa** được xếp vào `ORDER`, và đây là lý do đáng gh
 3 của `before_a_batch` **từ chối khi hàng chờ còn tên**. Xếp bản vá vào hàng chờ lúc này là làm
 `launch_batch.sh 4` ở bước 6 của ranh giới không bao giờ chạy được — tức tự chặn chính cái lô
 mình đang chờ. Xếp vào sau khi lô 4 đã bay.
+
+## Sửa dự đoán trước khi có kết quả: lô đúc lại có thể KHÔNG thử được bản vá quay vòng (22:10)
+
+Tôi đã viết rằng trong năm chương đúc lại, "chỉ 066/071 là phép thử thật" của
+`patch_wrap_prefers_a_stranger`, vì KANG và SAMAEL là hai người thật. Đếm lại kho giọng trong
+chính project đúc lại thì câu ấy **chưa đủ**, và có thể sai hẳn.
+
+`CHARACTER_FORMANT_STEPS` có 7 bậc mỗi preset, hai preset nam nên 14 bậc. Project đúc lại được
+gieo 36 giọng ghim; trong đó các bậc nam đã có chủ:
+
+```
+Thái Sơn      0,87  0,93  0,97  1,00  1,04  1,08  1,16     -> ĐỦ 7 bậc
+Thanh Bình          0,93  0,97  1,00  1,04  1,08  1,16     -> 6 bậc, THIẾU 0,87
+```
+
+(`Thanh Bình 0,898` cũng có ghim nhưng đó là biến thể theo tuổi, không phải bậc trên thang; và
+`formant_ratio_bounds_for_preset` cho cả hai preset nam là 0,85–1,20 nên bậc 0,87 **không** bị
+kẹp vào 0,898 — đã tính, không đoán.)
+
+Vậy **13 trên 14 bậc nam đã có chủ, còn đúng một bậc trống**: Thanh Bình 0,87. KANG bị bỏ ghim
+khi thua SAMAEL, nên nó sẽ được đúc lại — và kết cục phụ thuộc allocator xếp preset nào trước:
+
+- xếp **Thái Sơn** trước (đủ 7 bậc) → không còn bậc trống → nấc quay vòng chạy → **đây mới là
+  phép thử**;
+- xếp **Thanh Bình** trước → thấy 0,87 trống → lấy luôn → bản vá **im lặng**, không thử gì.
+
+Cả hai nhánh đều chữa được va chạm của chương 066, nên "chương xanh" **không** phân biệt được
+chúng — đúng cái bẫy tài liệu này đã ghi. Thứ phân biệt là giọng KANG nhận: `f087` nghĩa là bậc
+trống, tức chưa thử; một bậc đã có chủ nghĩa là nấc quay vòng đã chạy, và lúc ấy mới đọc xem nó
+chọn người **không cùng chương 066** hay không.
+
+Nơi bản vá chắc chắn bị thử là **lô 4**, nơi 18+ người nam thật tranh 14 bậc. Lô đúc lại vẫn là
+chỗ tệ để chứng minh, và lần này lý do cụ thể hơn: pin lấp gần hết thang, nhưng "gần hết" khác
+"hết".
