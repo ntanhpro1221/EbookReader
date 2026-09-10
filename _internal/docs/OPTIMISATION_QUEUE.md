@@ -1123,3 +1123,43 @@ Ba hướng nới kho — pitch, biên formant, trả giọng miền Trung cho N
 
 Cái đáng canh không phải tổng cast mà là **chương đông nhất**: hôm nay 7 trên 14.
 Đo bằng `python scripts/voice_pool_pressure.py <project>`.
+
+## Một nhân vật bị tách đôi vì Ollama rơi dấu (2026-09-10)
+
+**Đã vá một nửa; nửa còn lại chờ ranh giới lô 3 → 4.** Lô 3 va chạm giọng gấp đôi lô 2, và truy
+ra thì kho giọng không phải thủ phạm chính:
+
+```
+            THỦ LÃNH   THU LÃNH        NGƯỜI TRẢ LỜI   NGUOI TRA LOI
+lô 2          111         14                185              37
+lô 3           32         66  <- trội        46             160  <- trội
+```
+
+Nguồn văn bản của 62 chương **không chứa** chuỗi nào trong số ấy: đó là nhãn Ollama tự đặt cho
+vai, và nó rơi dấu ngẫu nhiên. `_known_summary` đưa bản nhiều lần hơn vào prompt lô sau, nên cái
+sai tự củng cố và đến lô 3 thì bản sai thành bản trội. Hậu quả: một người hai giọng (THỦ LÃNH ghim
+f100_p-07 từ lô 1, THU LÃNH ghim f090_p-04 mới), và mỗi bản tách chiếm một chỗ trong kho 14 giọng
+nam — lô 3 hết kho sớm hơn dự đoán một phần vì thế.
+
+Luật gộp là **tập con dấu**, không phải "bỏ dấu ra giống nhau": MÁ và MÀ vẫn là hai từ. Người
+thắng là bản **nhiều dấu nhất**, không phải bản nhiều lần nhất — vì số lần đã bị vòng phản hồi
+làm nhiễm.
+
+- `scripts/name_marks.py` + `port_casting` gộp **ngay khi gieo** (đã vào cây; lô 4 gieo từ lô 3
+  sẽ mang 36 giọng ghim và THỦ LÃNH giữ f100_p-07 — giọng 321 câu qua ba lô, không phải f090).
+- `patch_dropped_marks_are_the_same_name` gộp **trong registry** (hàng chờ, áp trước lô 4), để
+  chính lô 4 không tách lại.
+- `tests/test_name_marks_agree.py` ghim hai bản không lệch nhau.
+
+Còn một họ khác lộ ra cùng lúc và **chưa** xử lý: `SELNE` (32 lần) và `SELNE VALKRYN` (3 lần) —
+tên ngắn / tên đầy đủ. Không gộp bằng luật dấu được, và gộp theo hậu tố thì rủi ro (JAKE / JAKE
+SMITH có thể là cha con). Để lại, đếm ở lô 4 xem nó có lan không.
+
+## Nấc quay vòng của bộ cấp phát giọng mù-theo-chương — không còn hoãn được (2026-09-10)
+
+Mục *"Bộ cấp phát giọng không biết ai cùng chương"* ở trên hạ ưu tiên chỗ này vì "kho còn 6 chỗ,
+lô 1 chỉ thêm 1 nam". Lô 3 thêm **~7** nam mới; 18 người đòi 14 chỗ, nấc quay vòng chạy thật, và
+3 trong 7 va chạm nằm cùng chương — `KANG + SAMAEL` (066, 071), `IGOR + THU LÃNH` (062, đã vào
+audio: 3 + 23 câu). Ước lượng "6 lô nữa" sai vì nó ngoại suy từ một lô. Bản vá phần 3 viết trong
+`patch_wrap_prefers_a_stranger` (hàng chờ).
+

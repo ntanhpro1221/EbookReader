@@ -152,10 +152,17 @@ thắng `CHA` (chính, 4 câu), chỉ vì SỐ BA tình cờ giữ pin từ lầ
 phân biệt pin của **người** với pin của **script**: `locked=1` đánh dấu *giới tính* do người
 chọn, không phải giọng.
 
-Thứ đáng cân là *người nghe đã quen giọng ấy tới mức nào*, và số đo gần nhất là `mention_count`
-— nó cộng dồn qua các lô. THEOSBANE (156/478 chương) thắng SAMAEL mà không cần hỏi ai giữ pin,
-và CHA thắng SỐ BA vì đúng lý do. Hoà tuyệt đối thì quay về luật cũ: bỏ cả, vì lúc ấy đúng là
-không có bằng chứng.
+Thứ đáng cân là *người nghe đã quen giọng ấy tới mức nào*. Bản đầu của mục này viết rằng số đo
+ấy là `mention_count` "vì nó cộng dồn qua các lô". **Sai.** `upsert_character` ghi đè nó bằng số
+câu của lô hiện tại — đo 2026-09-10: SAMAEL 10 → 99 → 19, THỦ LÃNH 178 → 111 → 32. Luật chạy
+đúng ở ranh giới lô 2 → 3 nhờ may; ở lô 3 → 4 thì KANG (19 câu, mới) **hoà** SAMAEL (19 theo sổ
+sai, 128 theo sự thật) và chỉ nấc phá hoà cuối cùng cứu nhân vật chính khỏi đổi giọng.
+
+Số đo đúng là **tổng câu thoại qua mọi lô**, giữ trong sổ `character_exposure` do
+`scripts/backfill_exposure.py` dựng lại từ cả chuỗi lô ở mỗi ranh giới (bảng nằm ngoài SCHEMA
+nên phân tích không ghi đè được). Với sổ ấy SAMAEL là 109 chứ không phải 19, và THỦ LÃNH là 303
+đã gộp cả bản rơi dấu. Không có sổ thì `port_casting` lùi về `mention_count` **và nói ra là đang
+lùi**. Hoà tuyệt đối thì quay về luật cũ: bỏ cả, vì lúc ấy đúng là không có bằng chứng.
 
 Luật này **chỉ an toàn nhờ bản vá `reserve()`**: người thắng giữ giọng, và `reserve()` giờ đánh
 dấu đúng bậc formant ấy, nên người thua chắc chắn được cấp bậc khác thay vì có thể quay vòng về

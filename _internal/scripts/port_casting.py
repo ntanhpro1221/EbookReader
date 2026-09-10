@@ -33,6 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ebook_reader.database import ProjectDB  # noqa: E402
 
 from scripts.port_listener_acceptances import _say_safely  # noqa: E402
+from scripts.name_marks import fold_dropped_marks  # noqa: E402
+from scripts.backfill_exposure import read_ledger  # noqa: E402
 
 
 SPOKE_HERE_SQL = """
@@ -97,6 +99,16 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
 
     from ebook_reader.analysis import is_local_speaker
 
+    # Hai cách viết của cùng một tên - THU LÃNH / THỦ LÃNH, NGUOI TRA LOI / NGƯỜI TRẢ LỜI - phải
+    # về một tên TRƯỚC khi lọc va chạm, nếu không hai "người" ấy sẽ được coi là hai giọng hợp lệ
+    # và mang cả hai sang. Đo lô 3 (2026-09-10): cả hai cặp đều có mặt trong `characters`, và
+    # bản rơi dấu là bản nhiều lần hơn. Bản chính của luật này vào registry ở
+    # `patch_dropped_marks_are_the_same_name`; đây là bản dùng ngay cho gieo, ghim khớp nhau bằng
+    # `tests/test_name_marks_agree.py`.
+    folded = fold_dropped_marks([str(row["canonical_name"]) for row in rows])
+    for loser, winner in sorted(folded.items()):
+        _say_safely(f"  GỘP   {loser} -> {winner} (cùng tên, rơi dấu)")
+
     candidates: list[tuple[str, str, dict]] = []
     seen: set[str] = set()
     # Số câu thoại mỗi người nói **trong lô nguồn**. Chỉ có ở các dòng từ SPOKE_HERE_SQL; dòng
@@ -106,21 +118,45 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
     # tức một quyết định đã có sẵn — có thể do chính chủ sách chọn. Nó xếp trên số câu thoại khi
     # phải chọn ai giữ giọng; xem chỗ xử lý va chạm bên dưới.
     pinned: set[str] = set()
-    # Bao nhiêu lần cả **cuốn sách** đã nhắc tới người này. Khác `lines_here` ở chỗ nó cộng dồn
-    # qua các lô (`read_known_characters` mang nó sang mỗi lần gieo), nên nó xấp xỉ được mức độ
-    # người nghe đã quen với giọng ấy — thứ duy nhất thật sự đáng cân khi phải đổi giọng ai đó.
+    # Bản đầu của chỗ này đọc `mention_count` và giải thích rằng nó "cộng dồn qua các lô". **Sai**:
+    # `upsert_character` ghi đè nó bằng số câu của lô hiện tại. Đo 2026-09-10: SAMAEL 10 → 99 →
+    # 19, THỦ LÃNH 178 → 111 → 32. Nó chỉ chạy đúng ở ranh giới lô 2 → 3 nhờ may, và ở ranh giới
+    # lô 3 → 4 thì KANG (19 câu, mới) HOÀ SAMAEL (19 theo sổ sai, 128 theo sự thật) — chỉ nấc
+    # phá hoà cuối cứu được nhân vật chính khỏi mất giọng.
+    #
+    # Thứ đáng cân là tổng số câu người nghe đã nghe **qua mọi lô**, và cái đó nằm trong sổ
+    # `character_exposure` do `backfill_exposure.py` dựng từ cả chuỗi (nó nằm ngoài SCHEMA nên
+    # phân tích không bao giờ ghi đè). Không có sổ thì lùi về `mention_count` - vẫn tốt hơn không
+    # có gì, nhưng phải nói ra là đang lùi.
+    ledger = read_ledger(source)
+    if ledger:
+        _say_safely(f"  sổ cộng dồn: {len(ledger)} nhân vật")
+    else:
+        _say_safely("  KHÔNG có sổ cộng dồn - xếp hạng theo mention_count của lô này, thứ bị ghi")
+        _say_safely("  đè mỗi lô; chạy scripts/backfill_exposure.py trên cả chuỗi trước khi gieo.")
     mentions: dict[str, int] = {}
     for row in rows:
         keys = row.keys()
         name_here = str(row["canonical_name"])
         if "mentions_here" in keys and row["mentions_here"] is not None:
             mentions[name_here] = max(mentions.get(name_here, 0), int(row["mentions_here"]))
+        # Sổ thắng `mention_count` khi có, vì nó là tổng thật; tra theo tên đã gộp rơi dấu.
+        target_name = folded.get(name_here, name_here)
+        if target_name in ledger:
+            mentions[name_here] = max(mentions.get(name_here, 0), int(ledger[target_name]))
         if "lines_here" in keys and row["lines_here"] is not None:
             spoken[name_here] = max(spoken.get(name_here, 0), int(row["lines_here"]))
         else:
             pinned.add(name_here)
+    # Dòng bị gộp (tên rơi dấu) xếp SAU dòng nguyên tên, để luật "dòng đầu thắng" bên dưới
+    # chọn giọng của cách viết đúng. Không có bước này, `ORDER BY canonical_name` đưa "THU LÃNH"
+    # lên trước "THỦ LÃNH" (U xếp trước Ủ) và giọng mà bản rơi dấu vừa được cấp ở lô này thắng
+    # giọng đã theo THỦ LÃNH từ lô 1 - đo lô 3: f090_p-04 (mới, chỉ có ở lô 3) sẽ đè lên
+    # f100_p-07 (lô 1, lô 2, và 32 câu của lô 3). Cách viết sai là cái bất thường; giọng của
+    # nó cũng là giọng bất thường.
+    rows = sorted(rows, key=lambda row: str(row["canonical_name"]) in folded)
     for row in rows:
-        name = str(row["canonical_name"])
+        name = folded.get(str(row["canonical_name"]), str(row["canonical_name"]))
         # A chapter-local NPC is scoped to a chapter of the SOURCE batch; its id names
         # nothing in the target and carrying it only litters the characters table.
         if is_local_speaker(name):
@@ -170,8 +206,8 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
         # Luật này chỉ an toàn nhờ `patch_reserve_marks_the_slot`: người thắng giữ giọng, và
         # `reserve()` giờ đánh dấu **đúng bậc formant** ấy, nên người thua chắc chắn được cấp
         # một bậc khác thay vì có thể quay vòng về đúng bậc vừa bị giữ.
-        # Thứ tự bằng chứng: **số lần được nhắc cả sách → số câu trong lô này → có pin hay
-        # không**.
+        # Thứ tự bằng chứng: **số câu cộng dồn cả sách (sổ) → số câu trong lô này → có pin hay
+        # không**. Khi không có sổ, nấc đầu lùi về `mention_count` của lô này.
         #
         # Bản đầu của luật này chỉ so số câu, và `test_two_characters_on_one_voice_are_both_
         # left_behind` bắt ngay: ở ca alpha.56, THEOSBANE im lặng trong lô ấy nên 0 câu, còn
@@ -267,9 +303,28 @@ def read_known_characters(source: Path) -> list[dict]:
         connection.close()
     from ebook_reader.analysis import RESERVED_SPEAKERS, is_local_speaker
 
+    # Gộp cách viết rơi dấu trước khi mang "đã biết" đi, cùng lý do như ở `read_casting`: đây
+    # chính là danh sách `_known_summary` đưa vào prompt lô sau, tức chỗ cái sai tự củng cố.
+    # Số lần nhắc của bản thua cộng vào bản thắng, để bản thắng không bị xếp dưới.
+    folded = fold_dropped_marks(
+        [str(row["canonical_name"]) for row in rows],
+        {str(row["canonical_name"]): int(row["mention_count"] or 0) for row in rows},
+    )
+    extra_mentions: dict[str, int] = {}
+    for loser, winner in folded.items():
+        for row in rows:
+            if str(row["canonical_name"]) == loser:
+                extra_mentions[winner] = extra_mentions.get(winner, 0) + int(row["mention_count"] or 0)
+
+    # Số câu cộng dồn thật từ sổ, nếu có: đưa vào `mentions` để danh sách "đã biết" của lô sau
+    # thấy con số đúng, chứ không thấy số của riêng lô này.
+    ledger = read_ledger(source)
+
     kept = []
     for row in rows:
         name = str(row["canonical_name"])
+        if name in folded:
+            continue
         # The same two filters _known_summary applies, for the same reasons. NARRATOR and
         # UNKNOWN are roles rather than people. A chapter-local NPC is scoped to a chapter of
         # the SOURCE batch - "NPC_LOCAL::C00001::..." names nothing in the next batch, and
@@ -279,7 +334,12 @@ def read_known_characters(source: Path) -> list[dict]:
         # ANONYMOUS_MALE and friends are casting buckets, not characters.
         if name.upper().startswith("ANONYMOUS"):
             continue
-        kept.append({key: row[key] for key in row.keys()})
+        record = {key: row[key] for key in row.keys()}
+        if name in extra_mentions:
+            record["mention_count"] = int(record["mention_count"] or 0) + extra_mentions[name]
+        if name in ledger:
+            record["mention_count"] = max(int(record["mention_count"] or 0), int(ledger[name]))
+        kept.append(record)
     return kept
 
 

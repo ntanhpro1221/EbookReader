@@ -40,8 +40,16 @@ LEASE_STALE_SECONDS = 180.0
 #
 # Lô 2 tính tiền hai chương cho chỗ bỏ sót ấy (031, 043), và cả hai đoạn là **tiếng cười**.
 # Chạy thử trên bản sao: 266 test asr/policy/quality xanh.
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# 2026-09-10, viết trong lúc lô 3 chạy. Áp ở ranh giới lô, TRƯỚC lô 4.
+#
+# `patch_dropped_marks_are_the_same_name`: cùng một nhân vật bị tách đôi vì Ollama rơi dấu ngẫu
+# nhiên trong nhãn nó tự đặt (THU LÃNH / THỦ LÃNH, NGUOI TRA LOI / NGƯỜI TRẢ LỜI - nguồn văn bản
+# không chứa chuỗi nào trong số ấy). Ở lô 3 bản rơi dấu đã thành bản trội (66 so với 32, 160
+# so với 46) vì `_known_summary` đưa bản nhiều lần hơn vào prompt kế tiếp. Mỗi bản tách một
+# chiếm một chỗ trong kho 14 giọng nam, và một người đọc bằng hai giọng. Luật gộp là "tập con
+# dấu", không phải "bỏ dấu ra giống nhau" - MÁ và MÀ vẫn là hai từ. Thử trên bản sao: 65 test
+# casting xanh.
+ORDER: tuple[str, ...] = ("patch_dropped_marks_are_the_same_name.py",)
 
 APPLIED = (
     "patch_reserve_all.py",

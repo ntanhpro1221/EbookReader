@@ -99,6 +99,26 @@ print(f\"{b['status']}|{b['stage']}|{'alive' if alive else 'dead'}\")
   done
 }
 
+
+# So cong don: `mention_count` bi ghi de moi lo, nen `port_casting` xep hang "ai giu giong khi
+# trung" theo so cua rieng lo truoc - do 2026-09-10: SAMAEL 10 -> 99 -> 19 trong khi thuc te da
+# noi 128 cau. Dung lai so tu ca chuoi lo da xong, ghi vao PREV, truoc khi gieo.
+CHAIN=""
+for T in $(ls -d "D:/Novels/Audiobooks/_versions"/v0.2.0-lo[0-9][0-9]/ 2>/dev/null | sort); do
+  T="${T%/}"
+  case "$T" in *v) continue ;; esac
+  P="$(ls -dt "$T"/*/ 2>/dev/null | head -1)"; P="${P%/}"
+  [ -n "$P" ] || continue
+  CHAIN="$CHAIN $P"
+  [ "$P" = "$PREV" ] && break
+done
+echo
+echo "=== so cong don qua chuoi lo ==="
+# shellcheck disable=SC2086
+PYTHONIOENCODING=utf-8 "$PY" scripts/backfill_exposure.py $CHAIN || {
+  echo "backfill that bai - gieo se lui ve mention_count cua rieng lo truoc." >&2
+}
+
 for CH in $BROKEN; do
   echo
   echo "=== chuong $CH ==="
