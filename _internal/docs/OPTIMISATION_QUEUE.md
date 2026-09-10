@@ -688,12 +688,35 @@ phải một ca lẻ, nó là ca thứ hai trong một họ.
 (Ngoại suy này là ngoại suy, và tôi đã sai ba lần vì đúng loại phép tính ấy. Nó chỉ dùng để
 xếp ưu tiên, không dùng để khẳng định.)
 
-**Một phép tính đã viết ra rồi bị chính số liệu bác bỏ**, để lại đây vì nó cảnh báo cả một lớp
-sai: tôi viết "1,92 giây = 2 × trần khung 0,96 giây", nghe rất khớp. Truy `generation_frame_cap`
-thì ngược: đoạn 1,92 giây có `cap=12`, còn đoạn 0,96 giây **không đặt cap**. Hai con số đến từ
-hai đường khác nhau chứ không phải bội số của nhau. Cái đúng và cái đo được là hẹp hơn: trong
-bốn bản thu chạm trần của alpha.60, **ba** dừng ở đúng 1,92 giây và một ở 0,96 — trần khung tạo
-ra thời lượng lượng tử hoá, và 1,92 là mức hay gặp. Chữ ký vẫn chắc; số học thì không.
+**Cùng một sự thật, ba lần sửa** — để lại cả ba vì mỗi lần đều dựa trên bằng chứng tốt hơn lần
+trước, và lần cuối mới là một đồng nhất thức.
+
+*Lần một* tôi viết "1,92 giây = 2 × trần khung 0,96 giây", nghe rất khớp và không có gì chống đỡ.
+
+*Lần hai* tôi truy `generation_frame_cap` và thấy đoạn 1,92 giây có `cap=12` còn đoạn 0,96 giây
+**không đặt cap**, nên kết luận "hai con số đến từ hai đường khác nhau chứ không phải bội số của
+nhau". Đúng về chỗ **ghi**, sai về kết luận.
+
+*Lần ba* (2026-09-10) đo trên **mọi** project đã lưu:
+
+```
+segments   cap=12  dur=1,92s   7 lần   ->  0,1600 giây/khung, chính xác
+candidates         dur=0,96s  36 lần   (bảng candidate không ghi cap)
+candidates         dur=1,92s  52 lần
+candidates         dur=1,84s   2 lần
+```
+
+Một khung là **đúng 160 ms**, và hai hằng số trong `tts.py` là:
+
+```
+MICRO_UTTERANCE_REPAIR_MAX_FRAMES  =  6   ->  0,96 s
+SHORT_UTTERANCE_REPAIR_MAX_FRAMES  = 12   ->  1,92 s
+```
+
+Nên 0,96 và 1,92 **là** 6:12 trên cùng một lưới — trực giác lần một đúng số nhưng sai lý do, và
+"hai đường khác nhau" của lần hai sai: cùng một lưới, hai hằng số trần, và bảng candidate chỉ
+không ghi lại cap. Chữ ký 1,92 giây không còn là "mức hay gặp" mà là **giá trị duy nhất** mà một
+đoạn ngắn chạm trần có thể dừng ở.
 
 ### Hình dạng bản vá — và tôi đã mô tả sai nó một lần
 

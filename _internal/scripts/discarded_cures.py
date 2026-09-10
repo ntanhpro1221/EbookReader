@@ -45,6 +45,22 @@ UNINFORMATIVE_AT_TIME_OF_WRITING = frozenset(
 )
 
 
+# Dưới ngưỡng này ASR không phán xử được, và dự án đã **đo** chứ không đoán: tham chiếu ngắn
+# hơn cho tương đồng trung vị 0,27 so với 0,94 của một câu bình thường, trượt ngưỡng 75% số lần
+# so với 0,2%. Giữ bản sao ở đây cùng lý do như danh sách trên.
+MIN_VERIFIABLE_CHARS_AT_TIME_OF_WRITING = 10
+
+# Mọi mã ASR đều **vô thông tin trên văn bản quá ngắn**, không chỉ những mã trong danh sách
+# trên. Đó là chỗ bộ dò đầu tiên quá hẹp: nó đòi mã của ứng viên phải nằm trong
+# `UNINFORMATIVE_AT_TIME_OF_WRITING`, nên nó bỏ sót ca `"Bất bại?"` của lô 2 — sáu ký tự
+# chữ-số, năm ứng viên, hai trong số đó không chạm trần, tất cả bị xử bằng `ASR_MISMATCH`.
+ASR_CODE_PREFIX = "ASR_"
+
+
+def _too_short_for_asr(text: str | None) -> bool:
+    return sum(ch.isalnum() for ch in str(text or "")) < MIN_VERIFIABLE_CHARS_AT_TIME_OF_WRITING
+
+
 def _hit_ceiling(signal_json: str | None) -> bool:
     try:
         metrics = json.loads(str(signal_json or "{}"))
@@ -91,12 +107,29 @@ def _scan(project: Path) -> list[dict]:
             if cand["state"] == "promoted" or _hit_ceiling(cand["signal_json"]):
                 continue
             codes = _failure_codes(cand["failure_reason"])
-            if codes and codes <= UNINFORMATIVE_AT_TIME_OF_WRITING:
+            if not codes:
+                continue
+            # Hai đường vào cùng một kết luận "ứng viên này bị vứt trên bằng chứng vô nghĩa".
+            #
+            # Đường thứ nhất là bản gốc: mọi mã đều nằm trong danh sách mà chính sách đã tự
+            # khai là không mang thông tin.
+            #
+            # Đường thứ hai thêm sau khi lô 2 lộ ra bộ dò cũ quá hẹp: nếu **văn bản tham chiếu
+            # ngắn hơn ngưỡng ASR phán xử được** thì *mọi* mã ASR đều vô thông tin ở đó, kể cả
+            # `ASR_MISMATCH`. `"Bất bại?"` có sáu ký tự chữ-số trên ngưỡng mười; năm ứng viên,
+            # hai cái không chạm trần, tất cả bị xử bằng `ASR_MISMATCH` — một phép kiểm mà dự
+            # án đã đo là trượt 75% số lần ở độ dài ấy.
+            uninformative = codes <= UNINFORMATIVE_AT_TIME_OF_WRITING
+            asr_only_on_short_text = _too_short_for_asr(row["text"]) and all(
+                code.startswith(ASR_CODE_PREFIX) for code in codes
+            )
+            if uninformative or asr_only_on_short_text:
                 rescues.append(
                     {
                         "round": cand["repair_round"],
                         "duration": cand["wav_duration"],
                         "codes": sorted(codes),
+                        "why": "vô thông tin" if uninformative else "ASR trên văn bản quá ngắn",
                     }
                 )
         if rescues:

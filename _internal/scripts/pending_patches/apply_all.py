@@ -29,8 +29,18 @@ LEASE_STALE_SECONDS = 180.0
 # `APPLIED` bên dưới ĐÃ vào cây thật; chúng assert chuỗi gốc nên chạy lại sẽ dừng chứ không
 # hỏng gì.
 #
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# 2026-09-10, viết trong lúc lô 2 chạy bốn chương cuối. Áp ở ranh giới lô, **trước** lô vá cho
+# lô 2 — nếu áp sau thì chương 031 và 043 lại hỏng đúng chỗ cũ.
+#
+# `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` là em ruột của `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE`:
+# `_evaluate_transcript_core` trả hai mã cạnh nhau với hình dạng y hệt (`ASR_INCONCLUSIVE`,
+# `repairable: False`, `severe: False`). Cái kia có chú thích ghi rõ nó "was a bare string in
+# three places" — tức đã được nâng thành hằng số và đưa vào danh sách không-chặn; cái này bị bỏ
+# sót trong đúng lần dọn ấy, vẫn là chuỗi trần ở một chỗ và không nằm trong danh sách nào.
+#
+# Lô 2 tính tiền hai chương cho chỗ bỏ sót ấy (031, 043), và cả hai đoạn là **tiếng cười**.
+# Chạy thử trên bản sao: 266 test asr/policy/quality xanh.
+ORDER: tuple[str, ...] = ("patch_rate_impossible_is_the_same_family.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
