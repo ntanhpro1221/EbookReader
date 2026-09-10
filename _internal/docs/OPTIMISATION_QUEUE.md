@@ -1151,9 +1151,22 @@ làm nhiễm.
   chính lô 4 không tách lại.
 - `tests/test_name_marks_agree.py` ghim hai bản không lệch nhau.
 
-Còn một họ khác lộ ra cùng lúc và **chưa** xử lý: `SELNE` (32 lần) và `SELNE VALKRYN` (3 lần) —
-tên ngắn / tên đầy đủ. Không gộp bằng luật dấu được, và gộp theo hậu tố thì rủi ro (JAKE / JAKE
-SMITH có thể là cha con). Để lại, đếm ở lô 4 xem nó có lan không.
+Còn một họ khác lộ ra cùng lúc: tên ngắn / tên đầy đủ. Đếm ngay thay vì đợi lô 4:
+
+```
+lô 1   0 cặp
+lô 2   1 cặp   ALICE (3 câu)  <  ALICE DRACEN (2)
+lô 3   3 cặp   ALICE (25)     <  ALICE DRACEN (0)
+                ALICE (25)     <  ALICE VIC. DRAKEN (1)
+                SELNE (32)     <  SELNE VALKRYN (3)
+```
+
+Đang lớn, và `ALICE` có **ba** cách viết với hai họ khác nhau — model không chỉ thêm họ, nó bịa
+họ. Hướng gộp **ngược** với lớp rơi dấu: bản ngắn giữ gần hết câu, bản dài là nhãn lạc 0–3 câu.
+Rủi ro thật là JAKE / JAKE SMITH cha con, nên luật phải thận trọng: chỉ gộp khi cùng giới, bản
+dài ≤ 3 câu **và** bản ngắn ≥ 10 lần bản dài — bốn cặp trên đều lọt, một cặp cha con thật thì
+không (hai người thật đều có câu). `patch_stray_surname_is_the_same_name` (hàng chờ). Bản dài
+`ALICE VIC. DRAKEN` đã kịp va chạm giọng với THALIA ở lô 3.
 
 ## Nấc quay vòng của bộ cấp phát giọng mù-theo-chương — không còn hoãn được (2026-09-10)
 

@@ -14,14 +14,24 @@
 # doc khong doi.
 set -uo pipefail
 
-BATCH="${1:?dung: launch_repair.sh <so lo, 1..16>}"
+BATCH="${1:?dung: launch_repair.sh <so lo, 1..16> [--chapters 062 066 ...]}"
+shift
+# Che do chi dinh chuong: cho nhung chuong `completed` nhung phai DUC LAI GIONG - lo 3 co nam
+# chuong hai nhan vat trung giong cung chuong (062, 066, 071, 084, 086), va luat "chi chuong
+# failed" ben duoi dung cho moi truong hop khac nen khong noi no ra.
+EXPLICIT=""
+if [ "${1:-}" = "--chapters" ]; then
+  shift
+  EXPLICIT="$*"
+fi
 ROOT="D:/Novels/Ebook Reader/_internal"
 PY="$ROOT/runtime/.venv/Scripts/python.exe"
 cd "$ROOT"
 
 TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
 [ "$BATCH" = "1" ] && TAG="v0.2.0-lo01"
-OUT_TAG="${TAG}v"
+# Lo va thuong la `...v`; luot duc lai giong la `...r` de hai loai project khong lan ten.
+if [ -n "$EXPLICIT" ]; then OUT_TAG="${TAG}r"; else OUT_TAG="${TAG}v"; fi
 OUT="D:/Novels/Audiobooks/_versions/$OUT_TAG"
 PREV="$(ls -dt "D:/Novels/Audiobooks/_versions/$TAG"/*/ 2>/dev/null | head -1)"
 if [ -z "$PREV" ]; then
@@ -58,6 +68,10 @@ if [ "$STATUS" != "0" ]; then
   echo "  Khong doc duoc danh sach chuong hong (ma $STATUS):" >&2
   echo "$BROKEN" | sed -n '1,6p' >&2
   exit 2
+fi
+if [ -n "$EXPLICIT" ]; then
+  BROKEN="$EXPLICIT"
+  echo "  che do chi dinh: duc lai giong cho $BROKEN"
 fi
 if [ -z "$BROKEN" ]; then
   echo "  Khong co chuong nao hong. Khong can lo va."
@@ -122,7 +136,8 @@ PYTHONIOENCODING=utf-8 "$PY" scripts/backfill_exposure.py $CHAIN || {
 for CH in $BROKEN; do
   echo
   echo "=== chuong $CH ==="
-  TITLE="$(printf 'lo%02dv_%s' "$BATCH" "$CH")"
+  if [ -n "$EXPLICIT" ]; then SUFFIX=r; else SUFFIX=v; fi
+  TITLE="$(printf 'lo%02d%s_%s' "$BATCH" "$SUFFIX" "$CH")"
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \
     --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json > /dev/null
