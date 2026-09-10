@@ -181,3 +181,21 @@ thử nhất (11, 9, 4) đều ≤ 2,92. Tổng cộng ~38 lần sinh thừa cho
 chữa được, cộng một chương mất. Với bản vá, câu 9 lần thử ("Thalia hừ mũi…", 11 từ, 32 ký tự
 đọc, 11,1 chars/s) đo 3,81 âm tiết/giây — vừa qua sàn 3,75; nó là ca **sát ngưỡng**, và nếu
 lô 4 còn thấy nó thử lại vài lần thì sàn âm tiết đang đúng chỗ, không phải sai.
+
+### Chứng minh trên audio thật, 21:38 ngày 2026-09-10
+
+Chương 075 chạy lại ở lô vá, cùng một đoạn (cùng hash văn bản `2dd21f158c6c`):
+
+```
+              trước bản vá                    sau bản vá
+số lần thử    11 (10 lần sinh + 1 chia nhỏ)   1
+nhịp chữ      10,64 … 11,80 kt/s              10,64 kt/s
+nhịp âm tiết  (không đo)                      4,50 /giây   (sàn 3,75)
+pace_outlier  1                               0
+kết cục       SEGMENT_FAILED, mất chương       signal_passed, không cờ nào
+```
+
+Đây là dạng bằng chứng tốt nhất mà một lô vá cho được, và nó khác hẳn ba bản vá "chưa chứng
+minh": phép đo từng chặn **đã tái diễn** — 10,64 kt/s là con số *thấp nhất* trong cả mười lần
+thử trước, tức sàn cũ 12,5 chắc chắn sẽ bắn — nhưng lần này nó đi đường khác. Không phải "chạy
+lại thì xanh"; là "cùng một con số, quyết định khác".
