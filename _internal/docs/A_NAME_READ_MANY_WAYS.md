@@ -155,7 +155,11 @@ cho tới khi nghe thử**. Thứ tự đề nghị:
 1. **Đổi `spoken_form` của `Jake`** (dòng id 132, `Giếch`). Ứng viên đầu tiên không cần đoán:
    chữ viết gốc `Jake` đã được đo trên chính cuốn sách này và ổn định gấp ba (`đỉnh` 44% so với
    13%). Đây là thay đổi một dòng dữ liệu, không phải một dòng mã.
-2. **Nếu 44% vẫn chưa đủ thì mới thí nghiệm**: sinh cùng một câu với 4–6 dạng ứng viên
+2. **Nếu 44% vẫn chưa đủ thì mới thí nghiệm** — công cụ đã có:
+   `python scripts/try_a_pronunciation.py Jake Giếch Giếc Giết "Giây-cơ" Jake --takes 10`.
+   Nó **từ chối chạy khi có lô đang bay** (sinh audio thật thì lấy GPU của lô), dựng một project
+   một chương cho mỗi ứng viên rồi chạy qua đúng đường ống thật, và in `đỉnh%` cho từng dạng.
+   Nói cách khác: sinh cùng một câu với 4–6 dạng ứng viên
    (`Giếch`, `Giêch`, `Giây-cơ`, `Jếch`, `Jake`...), mỗi dạng 10 seed, rồi đo `đỉnh%` bằng chính
    ASR. Chọn theo số, không theo tai tôi. Chỉ tên nào có `đỉnh%` thấp mới cần bước này —
    `Samael` và `Michael` thì đừng chạm.
