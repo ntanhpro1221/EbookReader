@@ -49,7 +49,16 @@ LEASE_STALE_SECONDS = 180.0
 # chiếm một chỗ trong kho 14 giọng nam, và một người đọc bằng hai giọng. Luật gộp là "tập con
 # dấu", không phải "bỏ dấu ra giống nhau" - MÁ và MÀ vẫn là hai từ. Thử trên bản sao: 65 test
 # casting xanh.
-ORDER: tuple[str, ...] = ("patch_dropped_marks_are_the_same_name.py",)
+#
+# `patch_wrap_prefers_a_stranger`: nấc quay vòng của bộ cấp phát giọng biết ai cùng chương. Lô 3
+# có 18 người nam đòi 14 chỗ, nấc quay vòng mù chạy thật, 3 trong 7 va chạm nằm cùng chương
+# (IGOR + THU LÃNH ở 062 đã vào audio). Khi PHẢI dùng chung, chọn bậc mà người giữ nó có ít
+# chương chung nhất với người sắp cast; không biết ai đang cast thì quay vòng như cũ. Thử trên
+# bản sao: 294 test xanh, và hai bản vá áp được theo CẢ HAI thứ tự.
+ORDER: tuple[str, ...] = (
+    "patch_dropped_marks_are_the_same_name.py",
+    "patch_wrap_prefers_a_stranger.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
