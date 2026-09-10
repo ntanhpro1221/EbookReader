@@ -40,7 +40,19 @@ LEASE_STALE_SECONDS = 180.0
 #
 # Lô 2 tính tiền hai chương cho chỗ bỏ sót ấy (031, 043), và cả hai đoạn là **tiếng cười**.
 # Chạy thử trên bản sao: 266 test asr/policy/quality xanh.
-ORDER: tuple[str, ...] = ("patch_rate_impossible_is_the_same_family.py",)
+# `patch_finished_take_beats_a_cut_off_one` là bản vá lớn hơn, và là bản đầu tiên trong dự án
+# **thay** một bản thu chứ chỉ **gỡ chặn**. Nó đóng họ "phương thuốc bị vứt": ba ca trên 50.196
+# đoạn, cả ba có đương nhiệm dài đúng 1,92 giây (12 khung × 160 ms) với `generation_ceiling_hit`
+# và văn bản dưới ngưỡng ASR phán xử được.
+#
+# Bốn điều kiện nằm ở tầng database và được kiểm từ chính dữ liệu, không từ lời khai của người
+# gọi; đường ống chỉ đề nghị. Bất biến `dual_passed` được nới **đúng một** chỗ và mọi chốt chặn
+# toàn vẹn khác vẫn chạy. Chạy thử trên bản sao: 830 test database/candidate/promote/asr xanh,
+# 11 test mới xanh, và hai bản vá áp được theo **cả hai** thứ tự.
+ORDER: tuple[str, ...] = (
+    "patch_rate_impossible_is_the_same_family.py",
+    "patch_finished_take_beats_a_cut_off_one.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
