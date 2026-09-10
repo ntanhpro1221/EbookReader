@@ -1341,9 +1341,21 @@ dùng khi cả hai đều có (hoặc cả hai đều không).** Nó làm đúng
 thời điểm gieo; thêm một vòng gộp theo nguồn ở cùng chỗ là đủ để lô 4 thấy `SELENE` trong danh
 sách "đã biết" và dùng nó. Đường tới nguồn có sẵn trong chính project: `chapters.input_path`.
 
-**Chưa làm tối nay** vì ranh giới lô 3 đang chạy và nó gọi `port_casting.py` ở bước 4 — sửa một
-file đang được gọi là đúng thứ đã bị cấm. Viết và thử trên bản sao trước, cài sau khi ranh giới
-xong.
+**Module đã vào cây** (`scripts/source_spellings.py`, 7 bài kiểm) và đã thử end-to-end trên bản
+sao `port_casting` với chính project lô 3: danh sách "đã biết" ra `SELENE` thay cho `SELNE`,
+không còn `SAMAELE`, `THỦ LÃNH` giữ dấu, và `SỐ BA` / `SỐ BẢY` **cả hai còn nguyên**.
+
+**Nhưng chưa nối vào `port_casting`**, và lý do đáng ghi vì nó không phải "sợ sửa file đang chạy"
+— chuyện ấy giải được bằng ghi nguyên tử. Ranh giới gọi `port_casting` ở bước 4 cho từng chương
+đúc lại, và **gộp tên ở thời điểm gieo đổi cả cái pin**: `SELNE VALKRYN` sẽ được ghim dưới tên
+`SELENE`, rồi phân tích của chương đúc lại — registry chưa mang luật nguồn — lại sinh ra `SELNE`,
+không khớp pin, và nhân vật ấy bị đúc **giọng mới**. Hai trong năm chương đúc lại (084, 086) có
+đúng nhân vật ấy. Nối vào giữa ranh giới là đổi kết cục của chính phép thử đang chạy, theo một
+đường tôi chưa lần hết.
+
+Nối ở ranh giới lô 4 → 5, cùng lúc với bản chính của luật vào registry, và thử như một đơn vị.
+Giá của việc đợi: lô 4 mang `SELNE` thêm một lô nữa trong prompt "đã biết" — nhãn người nói không
+được đọc lên, nên không có gì người nghe nghe thấy.
 
 Ghi thêm một hệ quả nhỏ nhưng thật: `SELNE` đang giữ 32 câu thoại và một chỗ trong kho giọng
 dưới tên sai. Sửa nhãn **không** đổi audio (nhãn người nói không được đọc lên), nên đây là lỗi
