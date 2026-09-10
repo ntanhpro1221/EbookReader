@@ -29,6 +29,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | Bản thu tốt bị ném đi? | [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) |
 | Đầu đoạn có tiếng lách cách? | [ONSET_CLICK.md](ONSET_CLICK.md) |
 | Hai nhân vật nói cùng một giọng? | [TWO_CHARACTERS_ONE_VOICE.md](TWO_CHARACTERS_ONE_VOICE.md) |
+| **Một nhân vật nói bằng hai giọng?** | [OPTIMISATION_QUEUE.md](OPTIMISATION_QUEUE.md) — mục *"Câu ngược chưa ai hỏi"*; `scripts/one_person_one_voice.py` |
 
 ## Phép kiểm nói gì, và có tin được không
 

@@ -1083,3 +1083,37 @@ Một giả thuyết của tôi bị bác trong lúc đo: dạng đọc chèm â
 nhưng **đọc ổn định ngang** (đỉnh 50,0% so với 51,9%) — chúng chỉ không bao giờ thoả cổng, và ca
 xấu nhất (`Giếch`) không chèm âm nào. Bài học cũ, hình dạng cũ: tôi gán cho giọng đọc một lỗi
 thuộc về phép đo.
+
+## 2026-09-11 (khuya) — Ranh giới tự chạy xong, và câu ngược chưa ai hỏi
+
+**Ranh giới lô 3 → 4 chạy hết chuỗi không ai ngồi cạnh** (21:12 → 23:24): áp bốn bản vá, commit,
+tag, lô vá 075, đúc lại năm chương, đo va chạm, khởi động lô 4, ghép sách. Chương 075 xuất bản
+được nên lô 3 thành **32/32**. Cuốn sách từ 60 lên **92 chương, 1,4 GB**.
+
+**Bản vá nhịp được chứng minh trên audio thật**: đoạn từng chết 11 lần giờ qua ở lần thử **đầu
+tiên**, tại 10,64 kt/s — con số *thấp nhất* trong cả mười lần trước, nên sàn cũ chắc chắn sẽ bắn.
+Cùng một con số, quyết định khác.
+
+**Bản vá quay vòng chạy đúng một nửa.** KANG dùng chung bậc của VIKTOR — người không có trong
+chương 071 — đúng việc nó được viết ra để làm. Rồi `holders` chỉ nhớ người giữ **đầu tiên** nên
+NPC kế tiếp đọc bậc ấy thành "người lạ" và xếp vào đúng chỗ KANG vừa chiếm.
+
+**Ba lỗi của chính tôi, tìm ra bằng cách chạy thứ mình vừa viết:**
+
+1. Bộ đếm âm tiết (thêm lúc 21:19) tách theo khoảng trắng, nên `I-xờ-hờ-ta-ra` đếm 1 thay vì 5 —
+   **chương 084 mất vì nó, bốn tiếng sau**. Docstring của tôi gọi việc đếm thiếu là "chiều sai an
+   toàn"; an toàn trước việc *tha nhầm*, không an toàn trước việc *chặn nhầm*, và chặn nhầm thì
+   mất cả chương.
+2. `prove_a_patch` gọi một chương còn `verifying` là "VẪN CHẶN" — trộn *chưa xong* với *hỏng*.
+3. `boundary.sh` gọi `assemble_book` **không có `--apply`**, nên nó ghi "đã ghép sách" cho một
+   lượt thử và cuốn sách đứng ở 60 chương suốt.
+
+Và một phép đo sai: tôi tra thang formant bằng slug `preset_thanh_binh` trong khi tên catalog là
+`Thanh Bình`; slug rơi vào đường mặc định không kẹp nên tôi kết luận "còn một bậc trống" và suýt
+báo rằng bản vá không được thử. Tra một bảng bằng một cái khoá bịa ra thì nó vẫn trả lời.
+
+**Việc lớn nhất tìm được trong đêm** là câu chưa ai hỏi: `voice_pool_pressure` hỏi *hai người một
+giọng*, còn *một người hai giọng* thì không công cụ nào hỏi. Đo trên sách: **21 chương, 202 câu
+thoại**, một người nói hai giọng ngay trong cùng chương — chương 060 có THỦ LÃNH nói 7 câu giọng
+này, 5 câu giọng kia. Mọi cổng xanh vì `verify_casting` thấy **hai** người. Lớp tách danh tính do
+rơi dấu không chỉ ăn chỗ trong kho giọng; nó đã đi vào audio, và hôm qua tôi chỉ đo nửa đầu.
