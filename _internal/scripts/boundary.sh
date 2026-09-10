@@ -47,6 +47,10 @@ say() { printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" | tee -a "$LOG"; }
 py() { PYTHONIOENCODING=utf-8 "$PY" "$@"; }
 TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
 NEXT_TAG="$(printf 'v0.2.0-lo%02d' "$NEXT")"
+# Dong Co-Authored-By cua commit script nay tao. Doi theo phien lam viec, nen de o MOT cho
+# va ghi ra log: mot dong ghi cong sai trong mot commit khong ai xem luc tao ra thi khong ai
+# sua. Ghi de bang EBOOK_COAUTHOR khi phien sau dung model khac.
+COAUTHOR="${EBOOK_COAUTHOR:-Claude Opus 5 <noreply@anthropic.com>}"
 
 BATCH_PROJECT="$(py scripts/seed_chain.py "$BATCH" --batch)" || { say "khong thay project lo $BATCH"; exit 2; }
 
@@ -86,6 +90,7 @@ say "  hang cho:      ${PENDING:=$(pending_patches)}"
 say "  tag da co:     $(git tag -l "$TAG*" "$NEXT_TAG" | tr '\n' ' ')"
 say "  gieo lo $NEXT tu: $(py scripts/seed_chain.py "$BATCH" --seed)   (hien tai; se la project cuoi cua buoc 4)"
 say "  chuoi cong don: $(py scripts/seed_chain.py "$BATCH" --chain | tr ' ' '\n' | sed 's|.*/||' | tr '\n' ' ')"
+say "  ghi cong:      $COAUTHOR"
 if [ "$DRY" = 1 ]; then
   say "dry-run: khong lam gi."
   exit 0
@@ -143,7 +148,7 @@ APPLIED before that run, so the tree that was tested is the tree in this
 commit. Each patch's reasoning is in its own docstring under
 scripts/pending_patches/.
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Co-Authored-By: $COAUTHOR
 EOF_MSG
   say "commit: $(git log --oneline -1)"
 else
