@@ -268,6 +268,31 @@ def test_a_new_code_in_the_repair_is_surfaced(tmp_path: Path) -> None:
     ]
 
 
+def test_a_chapter_still_running_is_not_reported_as_blocked(tmp_path: Path) -> None:
+    """Chạy công cụ trong khi chương đúc lại còn `verifying` thì mười đoạn đọc thành "VẪN CHẶN" -
+    tức báo một chương đang chạy là đã thất bại. Đúng lỗi tôi mắc lúc 21:45 ngày 2026-09-10."""
+    batch = _project(
+        tmp_path,
+        "lo03",
+        {"075": ("failed", [{"hash": "2dd21f158c6c", "warning_code": "ASR_MISMATCH_UNRESOLVED"}])},
+    )
+    repair = _project(
+        tmp_path,
+        "lo03v_075",
+        {
+            "075": (
+                "verifying",
+                [{"hash": "2dd21f158c6c", "warning_code": "ASR_MISMATCH_UNRESOLVED"}],
+            )
+        },
+    )
+
+    watched, _fresh = compare(batch, repair)
+
+    assert [row["verdict"] for row in watched] == ["CHƯA XONG"]
+    assert "hỏi lại khi nó xong" in str(watched[0]["why"])
+
+
 def test_verdict_without_a_new_row_is_a_lost_segment() -> None:
     label, why = verdict({"warning_code": "X", "status": "failed"}, None)
     assert label == "MẤT ĐOẠN" and "project mới" in why

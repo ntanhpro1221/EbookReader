@@ -22,6 +22,10 @@ import sys
 from pathlib import Path
 
 PUBLISHED = "completed"
+# Chương chưa chạy xong KHÁC chương bị chặn, và trộn hai thứ ấy là lỗi tôi vừa mắc: chạy công cụ
+# này lúc chương đúc lại còn `verifying` thì mười đoạn đọc thành "VẪN CHẶN", tức báo một chương
+# đang chạy là đã thất bại. `plan_repair_batch._cause` tách hai thứ ấy từ đầu vì cùng lý do.
+UNFINISHED_CHAPTER_STATES = frozenset({"pending", "analyzing", "synthesizing", "verifying"})
 
 
 def _warning_classes() -> tuple[frozenset[str], frozenset[str]]:
@@ -131,6 +135,7 @@ def verdict(old: dict[str, object], new: dict[str, object] | None) -> tuple[str,
       người-nghe, thứ gánh 14/27 chương của lô 2. Nhãn riêng vì bản đầu của hàm này kiểm
       `failed` TRƯỚC rồi trả "VẪN CHẶN", và nói một chương đã lên sách là bị chặn.
     - `VẪN CHẶN`: mã nổ lại và chương không xuất bản được. Bản vá không làm việc, hoặc chưa áp.
+    - `CHƯA XONG`: chương vẫn đang chạy. Không phải một kết cục, chỉ là "hỏi quá sớm".
     - `MẤT ĐOẠN`: không tìm thấy đoạn cùng văn bản trong project mới (văn bản đổi, hoặc chương
       chưa chạy) - không phải "đã sửa".
     """
@@ -138,8 +143,11 @@ def verdict(old: dict[str, object], new: dict[str, object] | None) -> tuple[str,
         return "MẤT ĐOẠN", "không có đoạn nào cùng văn bản trong project mới"
     old_code = str(old.get("warning_code") or "")
     new_code = str(new["warning_code"])
-    published = str(new["chapter_status"]) == PUBLISHED
-    where = "chương xuất bản được" if published else f"chương {new['chapter_status']}"
+    chapter_status = str(new["chapter_status"])
+    if chapter_status in UNFINISHED_CHAPTER_STATES:
+        return "CHƯA XONG", f"chương còn {chapter_status} - hỏi lại khi nó xong"
+    published = chapter_status == PUBLISHED
+    where = "chương xuất bản được" if published else f"chương {chapter_status}"
     if str(new["status"]) == "failed" or new_code == "SEGMENT_FAILED":
         why = f"đoạn vẫn failed sau {new['attempts']} lần thử: {str(new['error'])[:70]}"
         return ("HỎNG, CHƯƠNG VẪN XUẤT" if published else "VẪN CHẶN"), f"{why}; {where}"
