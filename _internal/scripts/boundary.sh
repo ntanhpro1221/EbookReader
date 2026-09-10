@@ -112,6 +112,14 @@ while :; do
   sleep 60
 done
 say "lo $BATCH xong: $(chapter_statuses)"
+# Bang chung cua lo, ghi truoc khi dong vao gi: ban va nao ban, chuong nao hong vi sao, ai
+# trung giong. Day la nhung cau nhip 30 phut se hoi, va tra loi san thi no doc thay vi chay.
+{
+  echo "--- machine_acceptances ---";  py scripts/machine_acceptances.py "$BATCH_PROJECT"
+  echo "--- plan_repair_batch ---";    py scripts/plan_repair_batch.py "$BATCH_PROJECT"
+  echo "--- voice_pool_pressure ---";  py scripts/voice_pool_pressure.py "$BATCH_PROJECT"
+  echo "--- throttle_report ---";      py scripts/throttle_report.py "$BATCH_PROJECT"
+} >> "$LOG" 2>&1
 
 # ---- 1. ap hang cho + bo test
 PENDING="$(pending_patches)"
@@ -181,4 +189,12 @@ tag_here "$NEXT_TAG"
 say "khoi dong lo $NEXT (gieo tu $(py scripts/seed_chain.py "$BATCH" --seed | sed 's|.*/||'))"
 bash scripts/launch_batch.sh "$NEXT" >> "$LOG" 2>&1 || { say "launch_batch $NEXT that bai - xem $LOG"; exit 1; }
 say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
+
+# ---- 7. ghep sach: moi chuong `completed` moi nhat len sach, ke ca chuong vua va / duc lai.
+# Chi doc cac project, nen chay canh lo N+1 dang bay la vo hai.
+if py scripts/assemble_book.py >> "$LOG" 2>&1; then
+  say "da ghep sach vao D:/Novels/Audiobooks/_book"
+else
+  say "assemble_book thoat khac 0 - xem $LOG"
+fi
 exit 0
