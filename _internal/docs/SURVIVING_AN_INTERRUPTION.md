@@ -379,3 +379,33 @@ liền mạch. Test thứ hai chỉ cần sửa mock; test thứ nhất cần đ
 kèm ghi chú vì sao — ba khẳng định thật của nó vẫn xanh.
 
 **Chưa gộp**: `analysis.py` là file khoá, và alpha.52 đang chạy. Chờ bản đó xong.
+
+## Dừng một task của harness KHÔNG dừng script nó đã thả (2026-09-11)
+
+Ranh giới lô 4 được thả rồi cần thả lại với danh sách chương khác. `TaskStop` báo thành công,
+nhưng nó chỉ giết **lớp bọc** của harness; `scripts/boundary.sh` mà lớp ấy sinh ra vẫn chạy. Đo
+lúc 00:27:
+
+```
+pid 28560   boundary.sh 4 --recast auto 3:084                 <- tưởng đã dừng
+pid 25272   boundary.sh 4 --recast auto 1:007 2:054 ...        <- vừa thả
+```
+
+**Hai ranh giới cùng chờ một lô.** Khi lô 4 xong, cả hai sẽ áp bản vá, commit, tag và khởi động
+lô 5 — hai lần. Không cổng nào chặn: mỗi tiến trình tự nó làm đúng thứ nó được bảo.
+
+Cách kiểm, và nó là cách duy nhất đáng tin:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='bash.exe'" |
+  Where-Object { $_.CommandLine -like '*boundary.sh*' } |
+  Select-Object ProcessId, CommandLine
+```
+
+Đếm phải ra **một** dòng có `boundary.sh <số>` là *câu lệnh* của nó. Những dòng `bash -c "source
+... snapshot ..."` là lớp bọc của harness và chứa cùng chuỗi ấy trong command line — đừng đếm
+chúng thành ranh giới thứ hai; xem `ParentProcessId` để phân biệt.
+
+Giết cả hai rồi thả lại đúng một cái. Giết `boundary.sh` **không** ảnh hưởng lô đang chạy: lô là
+một tiến trình `ebook_reader.cli run` riêng, và nhịp tim của nó vẫn 3,8 giây sau khi giết ba
+tiến trình bash (đã kiểm, không đoán).
