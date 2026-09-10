@@ -40,19 +40,8 @@ LEASE_STALE_SECONDS = 180.0
 #
 # Lô 2 tính tiền hai chương cho chỗ bỏ sót ấy (031, 043), và cả hai đoạn là **tiếng cười**.
 # Chạy thử trên bản sao: 266 test asr/policy/quality xanh.
-# `patch_finished_take_beats_a_cut_off_one` là bản vá lớn hơn, và là bản đầu tiên trong dự án
-# **thay** một bản thu chứ chỉ **gỡ chặn**. Nó đóng họ "phương thuốc bị vứt": ba ca trên 50.196
-# đoạn, cả ba có đương nhiệm dài đúng 1,92 giây (12 khung × 160 ms) với `generation_ceiling_hit`
-# và văn bản dưới ngưỡng ASR phán xử được.
-#
-# Bốn điều kiện nằm ở tầng database và được kiểm từ chính dữ liệu, không từ lời khai của người
-# gọi; đường ống chỉ đề nghị. Bất biến `dual_passed` được nới **đúng một** chỗ và mọi chốt chặn
-# toàn vẹn khác vẫn chạy. Chạy thử trên bản sao: 830 test database/candidate/promote/asr xanh,
-# 11 test mới xanh, và hai bản vá áp được theo **cả hai** thứ tự.
-ORDER: tuple[str, ...] = (
-    "patch_rate_impossible_is_the_same_family.py",
-    "patch_finished_take_beats_a_cut_off_one.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -122,6 +111,27 @@ APPLIED = (
     #     khi `f104` phát cho cả CHA lẫn SỐ BA — một va chạm giọng tránh được hoàn toàn.
     "patch_reserve_marks_the_slot.py",
     "patch_pool_counts_its_own_ram.py",
+    # 2026-09-10, tại ranh giới lô 2 / lô vá cho lô 2. Hai nguyên nhân lô 2 hỏng, hai bản vá.
+    #
+    #   - `patch_rate_impossible_is_the_same_family`: `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` là em
+    #     ruột của `ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE` — `_evaluate_transcript_core` trả hai mã
+    #     cạnh nhau với hình dạng y hệt. Chú thích của mã kia ghi rõ nó "was a bare string in
+    #     three places", tức đã được nâng thành hằng số và đưa vào danh sách không-chặn; mã này
+    #     bị bỏ sót trong đúng lần dọn ấy. Lô 2 tính tiền hai chương (031, 043), cả hai đoạn là
+    #     tiếng cười mà Whisper lặp vòng. Bản vá còn sửa hai chỗ **cứng hoá tên mã**: cho RATE
+    #     đi qua đường ấy mà không sửa thì báo cáo đổ cho mốc-thời-gian trong khi thủ phạm là
+    #     số-từ.
+    #   - `patch_finished_take_beats_a_cut_off_one`: bản vá **đầu tiên thay audio** chứ không chỉ
+    #     gỡ chặn, nên nó được dựng để mặc định từ chối. Bốn điều kiện ở tầng database, kiểm từ
+    #     chính hai dòng dữ liệu; đường ống chỉ đề nghị; bất biến `dual_passed` nới đúng một chỗ.
+    #     Ba ca trên 50.196 đoạn, cả ba đương nhiệm dài đúng 1,92s = 12 khung × 160 ms.
+    #
+    #     Một cách chữa rẻ hơn đã bị phép đo bác bỏ trước khi viết: nới cái cớ văn-bản-ngắn ở
+    #     chỗ phán xử ứng viên. Đếm thì 469 đoạn văn-bản-ngắn có ứng viên mà đương nhiệm KHÔNG
+    #     chạm trần, phần lớn đã `verified` — làm thế là trao quyền thay thế cho bốn trăm chỗ
+    #     chẳng cần thay. Chỉ 14 đoạn có đủ cả ba điều kiện.
+    "patch_rate_impossible_is_the_same_family.py",
+    "patch_finished_take_beats_a_cut_off_one.py",
 )
 
 

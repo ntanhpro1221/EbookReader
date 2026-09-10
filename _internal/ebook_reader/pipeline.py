@@ -19,6 +19,7 @@ from .asr import (
     ASR_LOCKED_NAME_ANCHOR_MISMATCH,
     ASR_MISMATCH,
     ASR_PASS,
+    ASR_TRANSCRIPT_RATE_IMPOSSIBLE,
     ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
     ASR_UNVERIFIABLE_SHORT_TEXT,
     LOCKED_NAME_ANCHOR_METRICS_KEY,
@@ -186,6 +187,13 @@ HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS = frozenset(
         # lại" from two separately generated takes. That is evidence about Whisper, not
         # about the reading.
         ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
+        # And a fourth, which is the third one's sibling rather than a new idea: the
+        # transcript holds more words than the duration can contain. Batch 2 charged two
+        # chapters for it and both segments were laughter - Whisper loops on non-lexical
+        # vocalisation, and a loop is longer than the audio. Same verdict
+        # (`ASR_INCONCLUSIVE`), same `repairable: False`, same `severe: False`; it was simply
+        # left out when the timeline code was promoted from a bare string into this list.
+        ASR_TRANSCRIPT_RATE_IMPOSSIBLE,
     }
 )
 MACHINE_ACCEPTABLE_SEGMENT_WARNINGS = frozenset(
@@ -195,6 +203,7 @@ MACHINE_ACCEPTABLE_SEGMENT_WARNINGS = frozenset(
         ASR_LOCKED_NAME_ANCHOR_REVIEW,
         ASR_UNVERIFIABLE_SHORT_TEXT,
         ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
+        ASR_TRANSCRIPT_RATE_IMPOSSIBLE,
         PACE_BAND_RELAXED_WARNING,
     }
 )
@@ -2364,6 +2373,82 @@ class BookPipeline:
                 ).encode("utf-8")
             )
         return digest.hexdigest()
+
+    def _promote_a_finished_take_over_a_cut_off_one(
+        self,
+        item: Any,
+        segment_id: int,
+        chapter_title: str,
+    ) -> bool:
+        """Thay một bản thu bị cắt giữa câu bằng một ứng viên đã nói xong. True nếu thay.
+
+        Chỉ chạy ở điểm **cạn ứng viên**, tức khi mọi vòng thu lại đã tiêu và đường ống sắp chốt
+        lại đoạn này là hỏng. Ba ca trong 50.196 đoạn đã lưu rơi vào đây, và cả ba cùng một
+        hình: đương nhiệm dài đúng 1,92 giây (12 khung x 160 ms) với `generation_ceiling_hit`,
+        văn bản dưới ngưỡng ASR phán xử được, và trong số ứng viên bị vứt có bản **tự kết thúc**.
+
+        Bốn điều kiện nằm ở `database`, không ở đây, và hàm tìm không ném. Đường ống chỉ **đề
+        nghị**; tầng dữ liệu mới là nơi phán, và nó phán lại một lần nữa lúc thăng hạng.
+
+        Mã cảnh báo ghi ra là `ASR_UNVERIFIABLE_SHORT_TEXT` - đó là sự thật về bản thu mới: nó
+        hoàn chỉnh, sóng âm sạch, và **không ai xác minh được**. Mã ấy nằm trong
+        `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS` nên nó không chặn chương, còn việc thay được ghi
+        riêng vào `machine_take_substitutions` để báo cáo không im lặng về nó.
+        """
+        candidate = self.db.find_finished_take_over_a_cut_off_incumbent(
+            segment_id,
+            self.quality_policy_hash,
+        )
+        if candidate is None:
+            return False
+        segment = dict(self.db.get_segment(segment_id))
+        candidate_item = self._segment_candidate_item(segment, candidate)
+        signal_valid, _metrics = self._inspect_existing_segment(candidate_item)
+        if not signal_valid:
+            self.db.mark_segment_candidate_invalid(
+                int(candidate["id"]),
+                expected_wav_sha256=str(candidate["wav_sha256"]),
+                reason="candidate failed signal validation immediately before substitution",
+            )
+            return False
+        signal = self._segment_signal_provenance(candidate_item)
+        codes = list(
+            self._signal_warning_codes(
+                signal,
+                split_recovery=bool(signal.get("split_parts")),
+            )
+        )
+        if ASR_UNVERIFIABLE_SHORT_TEXT not in codes:
+            codes.append(ASR_UNVERIFIABLE_SHORT_TEXT)
+        promoted = self.db.promote_segment_candidate(
+            int(candidate["id"]),
+            validated_wav_sha256=str(candidate["wav_sha256"]),
+            repair_action="promote_finished_take_over_cut_off_incumbent",
+            attempt=self._next_segment_quality_attempt(segment_id),
+            warning_code="|".join(codes) or None,
+            over_a_cut_off_incumbent=True,
+        )
+        if str(promoted["state"]) != SEGMENT_CANDIDATE_PROMOTED:
+            return False
+        self.log(
+            f"Thay bản thu bị cắt của {item['stable_id']} bằng ứng viên vòng "
+            f"{candidate['repair_round']} ({candidate['wav_duration']}s tự kết thúc); "
+            "ASR không phán xử được văn bản này nên nó không xếp hạng được hai bản."
+        )
+        self.db.event(
+            "warning",
+            "SEGMENT_TAKE_SUBSTITUTED",
+            f"Cut-off take replaced by a finished candidate for {item['stable_id']}",
+            {
+                "chapter": chapter_title,
+                "segment_id": segment_id,
+                "candidate_id": int(candidate["id"]),
+                "repair_round": int(candidate["repair_round"]),
+                "incumbent_duration": segment["wav_duration"],
+                "candidate_duration": candidate["wav_duration"],
+            },
+        )
+        return True
 
     def _segment_has_non_asr_failure_evidence(self, item: Any) -> bool:
         """Whether anything other than ASR already says this take is wrong.
@@ -5447,6 +5532,19 @@ class BookPipeline:
                         (item, self.db.get_segment_candidate(int(plan["candidate_id"])))
                     )
                 elif action == "exhausted":
+                    # Trước khi chốt đoạn này là hỏng: có ứng viên nào bộ sinh đã **nói xong**
+                    # không? Nhánh bên dưới lý luận đúng rằng trần khung là bằng chứng thật về
+                    # đương nhiệm và văn bản ngắn không bào chữa được cho nó - nhưng nó không
+                    # bao giờ hỏi câu ngược lại. Bốn điều kiện ở `database`; đây chỉ là một lần
+                    # hỏi, và một lần hỏi ở đúng chỗ ba ca trong 50.196 đoạn đã dừng lại.
+                    if self._promote_a_finished_take_over_a_cut_off_one(
+                        item,
+                        segment_id,
+                        str(chapter["title"]),
+                    ):
+                        repair_targets.pop(segment_id, None)
+                        progressed = True
+                        continue
                     candidate_attempts = self.db.segment_candidate_attempt_summary(
                         segment_id,
                         self.quality_policy_hash,
@@ -5521,11 +5619,18 @@ class BookPipeline:
                     elif asr_only_failure and asr_answer_is_about_other_audio(
                         str(reason)
                     ):
-                        # Whisper's own timestamps ran past the end of the file, so its
-                        # answer is not about this audio and carries no verdict either way.
+                        # Whisper's answer is not about this audio and carries no verdict
+                        # either way - either its own timestamps ran past the end of the
+                        # file, or the transcript holds more words than the duration can.
                         # Another repair round cannot help: the same transcript came back
                         # from two separately generated takes with different seeds.
-                        warning = ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
+                        #
+                        # Label it with **the reason that actually fired**, not with one of
+                        # the two hardcoded. `_evaluate_transcript_core` puts the code itself
+                        # in `reason`, so this stays correct when a third member joins the
+                        # family - and a report that blamed the timestamps for a rate failure
+                        # would send the next reader to the wrong check.
+                        warning = str(reason).strip()
                         error = (
                             "ASR transcribed something other than this audio; needs a "
                             "listen rather than another repair round"
@@ -5827,8 +5932,12 @@ class BookPipeline:
                     or asr_answer_is_about_other_audio(str(reason))
                 )
             ):
+                # Cùng lý do như chỗ trên: mã thật nằm trong `reason`, nên đừng cứng hoá
+                # một trong hai. Nhánh còn lại vẫn phải là hằng số, vì ở đó `reason` nói về
+                # một chuyện khác - văn bản quá ngắn để Whisper phán xử, không phải phiên bản
+                # bất khả.
                 unanswerable_warning = (
-                    ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
+                    str(reason).strip()
                     if asr_answer_is_about_other_audio(str(reason))
                     else ASR_UNVERIFIABLE_SHORT_TEXT
                 )

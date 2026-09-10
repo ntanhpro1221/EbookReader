@@ -15,6 +15,7 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 from .asr_contract import (
+    ASR_MIN_VERIFIABLE_CHARS,
     ASR_LOCKED_NAME_ANCHOR_REVIEW,
     COLLAPSED_SHORT_CONTEXT_EFFECTIVE_REPEAT_COUNT,
     LOCKED_NAME_ANCHOR_METRICS_VERSION,
@@ -64,11 +65,29 @@ ASR_INCONCLUSIVE = "inconclusive"
 #
 # This does not excuse the audio. It marks the ASR verdict as evidence nobody can collect,
 # so it cannot block a chapter; every other check still applies.
-ASR_MIN_VERIFIABLE_CHARS = 10
+# `ASR_MIN_VERIFIABLE_CHARS` đã chuyển sang `asr_contract` để `database` dùng được cùng một
+# con số; phép đo đứng sau nó ghi ở đó. Tên vẫn xuất ra từ module này để mọi chỗ gọi cũ không
+# phải đổi.
 ASR_UNVERIFIABLE_SHORT_TEXT = "ASR_UNVERIFIABLE_SHORT_TEXT"
 # Whisper's own timestamps ran past the end of the file, which it can only do by
 # wandering off the audio. Was a bare string in three places.
 ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE = "ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE"
+# And the same conclusion from different evidence: the transcript holds more words than the
+# duration can physically contain. `_evaluate_transcript_core` returns the two side by side
+# with an identical shape - `ASR_INCONCLUSIVE`, `repairable: False`, `severe: False` - so they
+# are one family, and the comment above says what happened to the other one: it was promoted
+# out of being a bare string and into the non-blocking lists. This one was left behind in that
+# cleanup, still a bare string in one place, still in neither list.
+#
+# Batch 2 charged two chapters for it, and both segments were **laughter**:
+#
+#   '"Ahaha! Hahahaha! Ahahahaha!"'  ->  'huff huff huff huff ...'  fifteen times
+#   '"Aaahahahaha! Hahahahaha!"'     ->  'ah ah ah ah ah ...'       twenty-six times
+#
+# Whisper loops on non-lexical vocalisation, and a loop is longer than the audio - so the
+# check fires **correctly** and says something true about the transcript. It says nothing at
+# all about the take.
+ASR_TRANSCRIPT_RATE_IMPOSSIBLE = "ASR_TRANSCRIPT_RATE_IMPOSSIBLE"
 
 
 def asr_verdict_is_unverifiable(text: str) -> bool:
@@ -88,8 +107,18 @@ def asr_answer_is_about_other_audio(reason: str) -> bool:
     "Mẹ kiếp! A a a! Khốn nạn!" came back as "Cảm ơn các bạn đã theo dõi và hẹn gặp lại"
     twice, from two separately generated takes with different seeds. Whisper is deterministic
     about it, so another repair round cannot rescue a verdict that was never available.
+
+    The rate check establishes the same thing from the other direction: the transcript holds
+    more words than the duration can hold, which the decoder can only produce by looping.
+    Batch 2 lost chapters 031 and 043 to it on two laughter lines. This function's own second
+    paragraph already argued for exactly this - "the same unanswerable question, established
+    by different evidence, and it deserves the same treatment" - it just said it about the
+    short-reference case and not about this one.
     """
-    return str(reason).strip() == ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
+    return str(reason).strip() in {
+        ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE,
+        ASR_TRANSCRIPT_RATE_IMPOSSIBLE,
+    }
 ASR_LOCKED_NAME_ANCHOR_MISMATCH = "ASR_LOCKED_NAME_ANCHOR_MISMATCH"
 ASR_LOCKED_NAME_CANONICAL_PASS = "ASR_LOCKED_NAME_CANONICAL_PASS"
 LOCKED_NAME_ANCHOR_METRICS_KEY = "locked_name_anchor_metrics"
@@ -1862,7 +1891,7 @@ class WhisperVerifier:
                 "transcript": transcript,
                 "similarity": similarity,
                 "wer": wer,
-                "reason": "ASR_TRANSCRIPT_RATE_IMPOSSIBLE",
+                "reason": ASR_TRANSCRIPT_RATE_IMPOSSIBLE,
                 "repairable": False,
                 "severe": False,
             }
