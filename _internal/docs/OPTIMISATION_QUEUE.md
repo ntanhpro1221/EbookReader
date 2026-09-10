@@ -742,7 +742,60 @@ có tốt không" và trả lời **không** — hoàn toàn đúng, vì không 
 Nên bản vá không phải một phép so ở điểm cạn ngân sách. Nó phải là một đường riêng, và đường
 ấy cần được thiết kế chứ không phải chèn vào.
 
-### Bước đã làm: cho mẫu tự lộ ra, thay vì vá vội trước lô 2
+### Lô 2 trả lời, và câu trả lời đổi cả cách phát biểu vấn đề (2026-09-10)
+
+Lô 2 mất chương 053 vì đoạn `'"Bất bại?"'`, và ca này khác hai ca trước ở chỗ **quan trọng
+nhất**: `patch_ceiling_repairable` **đã chạy**. Đoạn ấy có đủ năm ứng viên, vòng 0 tới 4 — lần
+đầu bản vá trần khung được thực thi ngoài unit test. Nên nó không phải "một lỗ hổng chưa vá".
+
+```
+đương nhiệm  1,92s  chạm trần            <- bị CẮT giữa câu, bộ sinh tự khai
+vòng 0       0,96s  chạm trần            ASR_MISMATCH / ASR_MISMATCH
+vòng 1       0,80s  KHÔNG chạm trần      ASR_REPEATED_SHORT_PASS / ASR_MISMATCH
+vòng 2       0,96s  chạm trần
+vòng 3       0,72s  KHÔNG chạm trần      ASR_MISMATCH / ASR_MISMATCH
+vòng 4       0,96s  chạm trần
+```
+
+**`'"Bất bại?"'` có sáu ký tự chữ-số, trên ngưỡng `ASR_MIN_VERIFIABLE_CHARS = 10.**` Dự án đã
+**đo** rằng dưới ngưỡng ấy ASR không phán xử được: tương đồng trung vị 0,27 so với 0,94, trượt
+75% số lần so với 0,2%. Vậy "cả năm ứng viên trượt ASR" **không phải bằng chứng** rằng chúng
+tệ — nó là kết quả của việc hỏi một phép kiểm câu hỏi mà chính dự án biết nó không trả lời được.
+
+Và `_segment_has_non_asr_failure_evidence` từ chối cái cớ văn-bản-ngắn cho **đương nhiệm** một
+cách đúng đắn, với lý do ghi ngay trong docstring: *"Short text excuses only the transcriber. If
+the generator itself reported that it ran out of frames … a short reference is no defence."*
+Nhưng vòng 1 và vòng 3 **không** chạm trần — bộ sinh không khai gì về chúng — nên cái cớ ấy vẫn
+còn nguyên hiệu lực cho chúng.
+
+**Phát biểu đúng, gọn hơn bản cũ nhiều:** không phải *"so đương nhiệm hỏng với ứng viên chưa
+chứng minh được"*. Mà là:
+
+> Khi ASR không thể làm trọng tài, hãy giữ bản thu mà bộ sinh **nói xong**, đừng giữ bản mà bộ
+> sinh **cắt giữa câu**.
+
+Đó không phải nhận một ứng viên chưa chứng minh — đó là dùng nhân chứng **duy nhất có ý kiến**,
+đúng cái nguyên tắc mà `MACHINE_ACCEPTABLE` đứng trên. Ở đây có một phép kiểm nói đương nhiệm
+hỏng, và không phép kiểm nào nói ứng viên hỏng.
+
+### Tần suất thật, sau khi nới bộ dò
+
+Bộ dò đầu tiên đòi mã của ứng viên nằm trong danh sách "vô thông tin", nên nó **bỏ sót** ca lô 2
+(mã là `ASR_MISMATCH`). Nới thêm một đường: *mọi* mã ASR đều vô thông tin khi văn bản ngắn hơn
+ngưỡng. Quét lại toàn bộ:
+
+```
+3 ca / 50.196 đoạn  =  0,006%
+  alpha.25  ch005  '"Arghh..."'      đương nhiệm 1,92s
+  alpha.60  ch021  '"Tiếp theo."'    đương nhiệm 1,92s
+  lo02      ch053  '"Bất bại?"'      đương nhiệm 1,92s
+```
+
+Hiếm theo **đoạn**, không hiếm theo **chương**: lô 1 gặp 0/30, lô 2 gặp 1/30. Ngoại suy thô sang
+478 chương ra khoảng **tám chương** bị chặn vĩnh viễn, tức chừng ba giờ audio. Ngoại suy vẫn là
+ngoại suy, và tôi đã sai ba lần vì đúng loại phép tính ấy — nó chỉ dùng để xếp ưu tiên.
+
+### Bước đã làm trước đó: cho mẫu tự lộ ra, thay vì vá vội trước lô 2
 
 **Chưa vá cơ chế.** Cân nhắc ngày 2026-09-09: mẫu này là 2 ca trên 38.520 đoạn, ngoại suy
 khoảng bốn chương trên 478 — nên lô 2 (30 chương) nhiều khả năng gặp **không lần nào**. Thêm
