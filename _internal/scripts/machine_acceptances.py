@@ -9,6 +9,15 @@ và cái thứ hai là chỗ cơ chế này có thể trở thành nói dối n�
 
 Cột đáng giá nhất là `mốc`: giây thứ mấy trong MP3 của chương. Với nó, muốn kiểm một đoạn
 thì tua thẳng tới đó mất năm giây; không có nó thì phải nghe cả chương, tức là không ai kiểm.
+
+File này báo cáo **hai** loại quyết định của máy, ở hai mục riêng:
+
+- *cho qua* (`machine_audio_acceptances`) — audio giữ nguyên, chỉ cái chốt chương được mở;
+- *thay* (`machine_take_substitutions`) — audio trong sách **không còn** là bản đường ống chọn
+  lúc đầu, vì bản ấy bị cắt giữa câu và có một ứng viên đã nói xong.
+
+Không trộn hai loại: khác biệt giữa "máy để nguyên và ghi sổ" với "máy đổi audio" là chính cái
+người đọc báo cáo cần thấy.
 """
 from __future__ import annotations
 
@@ -67,14 +76,32 @@ def main(argv: list[str]) -> int:
     conn = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     names = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "machine_audio_acceptances" not in names:
+    if "machine_audio_acceptances" not in names and "machine_take_substitutions" not in names:
         print("Project này có trước cơ chế tự cho qua - không có gì để báo cáo.")
         return 0
 
-    rows = list(
-        conn.execute(
-            "SELECT * FROM machine_audio_acceptances ORDER BY segment_stable_id, warning_code"
+    rows = (
+        list(
+            conn.execute(
+                "SELECT * FROM machine_audio_acceptances "
+                "ORDER BY segment_stable_id, warning_code"
+            )
         )
+        if "machine_audio_acceptances" in names
+        else []
+    )
+    # Việc **thay** một bản thu là loại quyết định khác với việc **cho qua** một bản thu, nên nó
+    # có mục riêng chứ không trộn vào danh sách trên. Cho qua nghĩa là "audio giữ nguyên, chỉ
+    # cái chốt chương được mở"; thay nghĩa là "audio trong sách không còn là bản đường ống chọn
+    # lúc đầu". Gộp hai loại vào một danh sách là làm mất đúng cái khác biệt ấy.
+    substitutions = (
+        list(
+            conn.execute(
+                "SELECT * FROM machine_take_substitutions ORDER BY segment_stable_id"
+            )
+        )
+        if "machine_take_substitutions" in names
+        else []
     )
     heard_by_a_person = {
         (str(r[0]), str(r[1]))
@@ -83,7 +110,33 @@ def main(argv: list[str]) -> int:
         )
     }
 
+    def _report_substitutions() -> None:
+        if not substitutions:
+            return
+        print()
+        print("# Những bản thu máy đã thay" if args.markdown else "=== Bản thu máy đã thay")
+        print()
+        print(
+            f"{len(substitutions)} lần máy bỏ một bản thu **bị cắt giữa câu** và dùng một ứng "
+            "viên đã nói xong. Đương nhiệm chạm trần khung, tức bộ sinh tự khai nó chưa dứt "
+            "câu; ứng viên tự kết thúc; và văn bản quá ngắn để ASR xếp hạng được hai bản."
+        )
+        for row in substitutions:
+            placement = _offset(conn, str(row["segment_stable_id"]))
+            at = _timestamp(placement[1]) if placement else "?"
+            where = placement[0] if placement else "?"
+            if args.markdown:
+                print(f"- **Chương {where} {at}** `{row['segment_stable_id']}`")
+                print(f"  - {row['reason']}")
+            else:
+                print(f"  ch{where} {at}  {row['segment_stable_id']}")
+                print(f"        {row['reason']}")
+
     if not rows:
+        if substitutions:
+            print("Máy chưa tự cho qua đoạn nào.")
+            _report_substitutions()
+            return 0
         print("Máy chưa tự cho qua đoạn nào. Mọi thứ trong sách đều qua được phép kiểm.")
         return 0
 
@@ -113,6 +166,7 @@ def main(argv: list[str]) -> int:
                 print(f"  {at}  {row['warning_code']}{seen}")
                 print(f"        {row['reason']}")
     print(f"\nTổng: {len(rows)} đoạn.")
+    _report_substitutions()
     return 0
 
 
