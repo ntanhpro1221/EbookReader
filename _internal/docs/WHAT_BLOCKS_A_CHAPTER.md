@@ -84,6 +84,40 @@ chỉ có unit test đứng sau.**
 ra**, trên 39 chương đã chạy của một cuốn 478 chương. Lô 2 tồn tại một phần để hỏi xem cái đuôi
 ấy còn dài bao nhiêu — xem [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md), mục dự đoán viết trước.
 
+## Lô 2 thêm hai nguyên nhân vào bảng, và một cái đã ở đó rồi (2026-09-10)
+
+Lô 2 mất **ba** chương trên ba mươi, vì **hai** nguyên nhân:
+
+| ch | mã | là gì |
+|---|---|---|
+| 031, 043 | `ASR_TRANSCRIPT_RATE_IMPOSSIBLE` | **mới** — nhưng là em ruột của một mã đã có trong danh sách không-chặn, bị bỏ sót khi mã kia được nâng từ chuỗi trần thành hằng số |
+| 053 | trần khung + ASR không phán xử được | **đã có trong bảng trên**, ở dòng ghi "chưa chứng minh" |
+
+Cả hai đoạn của 031 và 043 là **tiếng cười**: `'"Ahaha! Hahahaha!"'` và
+`'"Aaahahahaha! Hahahahaha!"'`. Whisper rơi vào vòng lặp, phiên ra `'huff huff huff…'` mười lăm
+lần và `'ah ah ah…'` hai mươi sáu lần — dài hơn thứ mà 2,3 giây audio chứa được, nên phép kiểm
+nổ **đúng** và nói một điều thật về *phiên bản*. Nó không nói gì về *bản thu*.
+
+Còn chương 053 là ca thứ ba của một họ đã biết, và nó **minh oan cho `patch_ceiling_repairable`**:
+đoạn `'"Bất bại?"'` có đủ năm ứng viên, tức đường thu lại **đã mở** — lần đầu bản vá ấy chạy
+ngoài unit test. Vấn đề nằm sau đó: hai ứng viên tự kết thúc bị xử bằng `ASR_MISMATCH` trên một
+văn bản sáu ký tự chữ-số, tức bằng một phép kiểm mà dự án đã đo là trượt 75% số lần ở độ dài ấy.
+
+## Dự đoán viết trước lô 2, và nó **sai**
+
+[PRODUCTION_PLAN.md](PRODUCTION_PLAN.md) ghi trước khi chạy: *"lô 2 phải hỏng 0–1 chương, và bất
+kỳ chương nào hỏng cũng phải hỏng vì một nguyên nhân chưa từng thấy"*. Kết quả: **3 chương, 2
+nguyên nhân, và một trong hai đã từng thấy**.
+
+Cả hai cách đọc tôi đăng ký trước đều không khớp: không phải "0–1 nên đuôi đang cạn", cũng không
+phải "3–5 toàn nguyên nhân mới nên đuôi vô hạn". Cách đọc đúng là cái thứ ba tôi không viết ra:
+
+> Tôi ngầm coi "đã có bản vá" là "sẽ không tái diễn", trong khi **chính bảng ở trên** đã ghi rõ
+> bốn trong tám nguyên nhân chỉ có unit test đứng sau. Một trong bốn ấy nổ.
+
+Bài học cụ thể: cột "đã chứng minh trên audio thật?" trong bảng trên không phải để trang trí.
+Khi nó ghi "chưa", con số phải được đếm vào dự đoán chứ không được trừ ra.
+
 ## Cách đo "chương nào chặn vì cái gì"
 
 ```bash
