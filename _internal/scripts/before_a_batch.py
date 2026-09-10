@@ -15,6 +15,8 @@ Chỉ đọc và chạy test; không sửa gì, không khởi động lô nào.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import sqlite3
 import subprocess
@@ -33,6 +35,56 @@ def _say(line: str) -> None:
         print(line)
     except (UnicodeEncodeError, OSError, ValueError):
         sys.stdout.buffer.write(line.encode("utf-8", "replace") + b"\n")
+
+
+TEST_CACHE = ROOT / "runtime" / "last_green_suite.json"
+
+
+def _source_fingerprint() -> str:
+    """Vân tay của **mọi thứ bộ test có thể đọc**: mã, test, và script.
+
+    Không dùng `quality_implementation_hash()`: nó chỉ băm 22 file bị khoá, còn bộ test còn đọc
+    `tests/`, `scripts/` (có bài import `port_casting`) và cả những module không nằm trong danh
+    sách ấy. Một vân tay hẹp hơn phạm vi nó bảo chứng là một vân tay nói dối.
+
+    Sắp theo đường dẫn để hai lượt chạy cho cùng một chuỗi, và băm cả tên file để việc **thêm**
+    một file cũng đổi vân tay.
+    """
+    digest = hashlib.sha256()
+    for folder in ("ebook_reader", "tests", "scripts"):
+        base = ROOT / folder
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*.py"), key=lambda item: str(item).casefold()):
+            digest.update(str(path.relative_to(ROOT)).encode("utf-8"))
+            digest.update(b"|-|")
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _read_green_fingerprint() -> str:
+    try:
+        return str(json.loads(TEST_CACHE.read_text(encoding="utf-8")).get("fingerprint", ""))
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def _remember_green(fingerprint: str) -> None:
+    """Ghi lại rằng bộ test đã xanh cho **cây này**.
+
+    Nằm trong `runtime/`, thư mục đã bị gitignore, nên một bản clone mới sẽ chạy lại bộ test -
+    đúng như phải thế: cái được ghi nhớ là một phép đo trên một máy, không phải một sự thật về
+    mã nguồn.
+    """
+    try:
+        TEST_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        TEST_CACHE.write_text(
+            json.dumps({"fingerprint": fingerprint, "at": time.time()}, indent=1),
+            encoding="utf-8",
+        )
+    except OSError:
+        # Không ghi được thì lần sau chạy lại bộ test. Đắt, nhưng không sai.
+        pass
 
 
 def _runs_in_flight() -> list[str]:
@@ -151,6 +203,19 @@ def main(argv: list[str]) -> int:
         _say("=== 5. bộ test đầy đủ ===")
         _say("   BỎ QUA: có lô đang bay, chạy test bây giờ là cướp CPU của nó.")
         _say("   Chạy lại script này sau khi lô xong; câu trả lời đằng nào cũng đang là KHÔNG.")
+    elif not args.skip_tests and _source_fingerprint() == _read_green_fingerprint():
+        # Bộ test đã xanh cho **đúng cây này**, nên chạy lại là kiểm một thứ đã biết trong khi
+        # GPU ngồi không mười tám phút. Đây không phải một cờ bỏ-qua: câu hỏi của cửa số 5 là
+        # "bộ test có xanh cho mã này không", và một bản ghi khoá theo vân tay trả lời được câu
+        # ấy mà không phải chạy lại.
+        #
+        # Thêm sau khi hai lần chạy liên tiếp ở ranh giới lô 2 kiểm cùng một cây: `apply_all
+        # --apply` chạy cả bộ rồi `launch_repair.sh` gọi lại ngay, và giữa hai lần chỉ có một
+        # file Markdown đổi.
+        _say("")
+        _say("=== 5. bộ test đầy đủ ===")
+        _say("   BỎ QUA: đã xanh cho đúng vân tay mã này (runtime/last_green_suite.json).")
+        _say("   Sửa bất kỳ file .py nào trong ebook_reader/, tests/ hay scripts/ là nó chạy lại.")
     elif not args.skip_tests:
         _say("")
         _say("=== 5. bộ test đầy đủ ===")
@@ -166,6 +231,8 @@ def main(argv: list[str]) -> int:
         _say(f"   {tail[0]}")
         if tests.returncode != 0:
             problems.append("bộ test đỏ")
+        else:
+            _remember_green(_source_fingerprint())
 
     _say("")
     if problems:

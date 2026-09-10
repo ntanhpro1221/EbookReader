@@ -267,6 +267,19 @@ def main(argv: list[str]) -> int:
         _say("")
         _say("TEST ĐỎ. Đừng chạy lượt nào cho tới khi xanh lại.")
         return 1
+    # Ghi lại rằng bộ test đã xanh cho **cây này**, để `before_a_batch.py` không chạy lại cùng
+    # một bộ test trên cùng một cây ngay sau đây. Ở ranh giới lô 2 hai lượt chạy liên tiếp kiểm
+    # đúng một cây và giữa chúng chỉ có một file Markdown đổi - mười tám phút GPU ngồi không.
+    #
+    # Bản ghi do **người đã thấy** lượt xanh viết, không phải một lời khẳng định của người khác:
+    # đó là khác biệt giữa việc ghi sổ và việc thêm một cờ bỏ-qua.
+    try:
+        sys.path.insert(0, str(HERE.parent))
+        from before_a_batch import _remember_green, _source_fingerprint
+
+        _remember_green(_source_fingerprint())
+    except Exception as exc:  # noqa: BLE001
+        _say(f"(không ghi được vân tay lượt xanh: {exc!r} - lần sau chạy lại bộ test)")
     _say("")
     _say("Xanh hết. Giờ mới được chạy lượt mới.")
     return 0
