@@ -1675,3 +1675,36 @@ tách thành hàm, hai người gọi chung một thân. Lượt thử chỉ-đ�
 trong 102 chương** sẽ được chữa; 411 đoạn vẫn phát bản gốc được để yên (không có bằng chứng xếp
 hạng bản gốc với bản rõ tiếng); 33 chương đã bị bản đúc lại thay được bỏ qua — không lọc thì
 chương cũ ghép lại sẽ đoạt lại chỗ trong sách vì `assemble_book` chọn `completed_at` mới nhất.
+
+## Bản vá: một con số được đọc trọn vẹn, kể cả từ 1000 (2026-09-11, 19:05 — xếp hàng 5 → 6)
+
+`scripts/pending_patches/patch_a_number_is_read_in_full.py`, sau `patch_keep_the_locked_reading`
+trong `ORDER`. Chương 106 của lô 4 chết vì **một** đoạn, 10/10 lần thử:
+
+    Tôi bắt đầu thử những mật khẩu dễ đoán nhất như, "password", "123456", thậm chí là "qwerty1234".
+
+    thước chữ      70 ký tự đọc được ở 12,35 kt/s  → dưới sàn 12,5 đúng 0,15
+    thước âm tiết  17 âm tiết         ở ~3,0 at/s   → dưới sàn 3,75
+
+Cả hai thước cùng sai một kiểu: `123456` đếm là sáu ký tự và **một** âm tiết, trong khi giọng
+đọc phát ra ít nhất "một hai ba bốn năm sáu". `spoken_speakable_chars` đã nở số ra chữ từ
+alpha.57, nhưng `vietnamese_number_words` chỉ tới 999 và docstring gọi phần còn lại là "cố ý
+không lấp bằng phỏng đoán". Đúng ở chỗ không bịa hệ số; sai ở chỗ có một cách đếm không phải
+phỏng đoán: (1) đọc trọn vẹn tới dưới 10^12 theo **ngữ pháp số đếm** — nhóm ba chữ số, "không
+trăm" / "lẻ" cho nhóm giữa: 2.024 là "hai nghìn không trăm hai mươi tư"; (2) cho phép đo nhịp,
+một dãy từ 1000 lấy **cận dưới** của hai cách đọc có thể (như một số, hay từng chữ số) theo âm
+tiết — "123456" trong mật khẩu và "2024" trong một năm không đọc giống nhau, chưa đo VieNeu chọn
+cách nào, và lấy cách ngắn hơn thì đếm thiếu chỉ giữ cờ, đếm thừa mới tha nhầm; (3)
+`spoken_syllables` đếm trên cùng văn bản đã nở số, nên "22" là ba âm tiết. ASR **không đổi**:
+`_fold_number_digits` vẫn dừng ở `NUMBER_FOLD_CEILING = 999`, năm tháng trong bản ghi giữ nguyên.
+
+Đoạn của 106 sau bản vá, cùng thời lượng ~5,67 giây: 88 ký tự (15,5 kt/s), 26 âm tiết (4,6 at/s)
+— giữa dải. Bài thử: `tests/test_a_number_is_read_in_full.py` (ngữ pháp tới tỷ; cận dưới; đoạn
+106; bản chậm thật vẫn bị bắt; ASR giữ nguyên); bài cũ ghim "đếm thiếu chữ số có chủ ý" được
+đổi tên và đổi số. 187 bài liên quan xanh trên cây tạm có cả hai bản vá.
+
+**Dự đoán ghi trước:** ranh giới 5 → 6 với `--recast auto 4:106` đúc lại 106 và đoạn ấy qua ở lần
+đầu (không còn `SEGMENT_FAILED` vì nhịp); lô 6 không mất chương nào vì số ≥ 1000 (năm tháng, số
+tiền). Nếu một chương vẫn mất vì nhịp ở câu có số dài, nhìn `_digit_run_spoken`: cận dưới có thể
+vẫn thấp hơn cách VieNeu đọc thật — lúc ấy đo bằng `try_a_pronunciation.py` với "123456" và
+"2024" rồi thay cận dưới bằng cách đọc đo được.

@@ -15,6 +15,7 @@ là lý do giữ lại `APPLIED` thay vì xoá.
 from __future__ import annotations
 
 import argparse
+import ast
 import sqlite3
 import subprocess
 import sys
@@ -35,7 +36,15 @@ LEASE_STALE_SECONDS = 180.0
 #   sách - 48% - đọc `Jake`/`Ishtara` thay vì `Giếch`/`I-xờ-hờ-ta-ra`). Đã thử trên bản sao
 #   lo03r_084b: 10/10 đoạn, chương ghép lại trong 38 giây không GPU. Sau khi vào cây, ranh giới
 #   chạy `scripts/keep_the_locked_reading.py --book --apply` cho các chương đã lên sách.
-ORDER: tuple[str, ...] = ("patch_keep_the_locked_reading.py",)
+# - patch_a_number_is_read_in_full: `vietnamese_number_words` đọc trọn vẹn tới dưới 10^12 theo
+#   ngữ pháp số đếm, và hai thước nhịp (ký tự, âm tiết) đếm dãy chữ số như đọc ra - từ 1000 lấy
+#   cận dưới của hai cách đọc. Chương 106 của lô 4 mất vì "123456" đếm là một âm tiết / sáu
+#   ký tự (10/10 lần ở 12,35 kt/s, sàn 12,5). ASR không đổi. Sau khi vào cây: ranh giới 5 → 6
+#   đúc lại 106 bằng `--recast 4:106`.
+ORDER: tuple[str, ...] = (
+    "patch_keep_the_locked_reading.py",
+    "patch_a_number_is_read_in_full.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -248,6 +257,22 @@ def _runs_in_flight() -> list[tuple[Path, str]]:
     return live
 
 
+def _assignment_span(lines: Sequence[str], name: str) -> tuple[int, int]:
+    """(dòng đầu, dòng cuối) - chỉ số 0 - của phép gán cấp module cho `name`."""
+    tree = ast.parse("\n".join(lines))
+    for node in tree.body:
+        target = None
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target = node.target.id
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(
+            node.targets[0], ast.Name
+        ):
+            target = node.targets[0].id
+        if target == name:
+            return node.lineno - 1, int(node.end_lineno or node.lineno) - 1
+    raise ValueError(f"không thấy phép gán {name} ở cấp module")
+
+
 def retire_queue(path: Path, names: Sequence[str], when: str) -> int:
     """Rút `names` khỏi `ORDER` trong file `path` và ghi chúng vào cuối `APPLIED`. Trả về số rút.
 
@@ -267,16 +292,21 @@ def retire_queue(path: Path, names: Sequence[str], when: str) -> int:
     newline = "\r\n" if b"\r\n" in raw else "\n"
     lines = raw.decode("utf-8").replace("\r\n", "\n").split("\n")
 
-    start = next(i for i, line in enumerate(lines) if line.startswith("ORDER: tuple[str, ...] = ("))
-    end = next(i for i in range(start, len(lines)) if lines[i] == ")")
+    # Tìm hai phép gán bằng `ast`, không bằng "dòng chỉ có `)`": một hàng chờ MỘT tên viết gọn
+    # `ORDER: tuple[str, ...] = ("patch_x.py",)` không có dòng `)` riêng, và bản đầu của hàm này
+    # nhảy tới dấu `)` kế tiếp - là dấu đóng của `APPLIED` - rồi ghi ra một file không import
+    # được (đo 19:10 2026-09-11 trên cây tạm, đúng dạng hàng chờ mà cây thật đã mang hai giờ
+    # trước đó). Ranh giới tự chạy không có ai sửa tay file hỏng ấy.
+    start, end = _assignment_span(lines, "ORDER")
     inner_comments = [line.strip() for line in lines[start + 1 : end] if line.strip().startswith("#")]
     above = start
     while above > 0 and lines[above - 1].startswith("#"):
         above -= 1
     above_comments = lines[above:start]
 
-    applied = next(i for i, line in enumerate(lines) if line.startswith("APPLIED = ("))
-    applied_end = next(i for i in range(applied, len(lines)) if lines[i] == ")")
+    applied, applied_end = _assignment_span(lines, "APPLIED")
+    if lines[applied_end] != ")":
+        raise ValueError("APPLIED phải đóng bằng một dòng `)` riêng để ghi thêm vào cuối")
 
     record = [
         f"    # {when}: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng",

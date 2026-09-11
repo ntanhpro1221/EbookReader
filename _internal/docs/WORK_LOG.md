@@ -1178,3 +1178,40 @@ luật: chỉ chương manifest ghi (33 chương đã bị bản đúc lại tha
 cũ đoạt lại chỗ trong sách, vì `assemble_book` chọn `completed_at` mới nhất) và chỉ đoạn đang
 phát bản đọc-theo-chữ-viết (411 đoạn vẫn phát bản gốc: không có bằng chứng xếp hạng). Còn lại
 **452 đoạn trong 102 chương**, ~70 phút ở bước 6b.
+
+## 2026-09-11, 18:55–19:05 — chương 106 chết vì "123456" đếm là một âm tiết
+
+Sau khi lượt đề cử lại xếp hàng xong, nhìn lại chương 106 (lô 4, chưa có bản nào trong sách):
+đúng **một** đoạn hỏng, 10/10 lần ở 12,35 kt/s — sàn 12,5, thiếu 0,15 — và thước âm tiết cũng
+gọi nó chậm (~3,0 at/s). Câu chứa "password", "123456", "qwerty1234": `123456` đếm sáu ký tự và
+một âm tiết vì `vietnamese_number_words` dừng ở 999 và bộ đếm âm tiết không nở số. Viết
+`patch_a_number_is_read_in_full`: đọc trọn vẹn tới dưới 10^12 theo ngữ pháp số đếm; thước nhịp
+lấy cận dưới của hai cách đọc cho dãy từ 1000; `spoken_syllables` đếm trên văn bản đã nở số.
+Đoạn ấy đo lại 88 ký tự / 26 âm tiết — giữa dải. ASR không đổi. Xếp hàng sau bản vá giữ cách
+đọc ghim; ranh giới 5 → 6 thả bằng `--recast auto 4:106` thay vì `--skip 106`.
+
+Bộ test đầy đủ trên cây tạm có cả hai bản vá bắt thêm một bẫy không thuộc bản vá nào:
+`retire_queue` (apply_all) tìm dấu `)` đứng riêng một dòng để kết thúc `ORDER`, nên với hàng chờ
+MỘT tên viết gọn `("patch_x.py",)` nó nhảy tới dấu đóng của `APPLIED` và ghi ra một file không
+import được — đúng dạng cây thật mang lúc 18:35, và ranh giới tự chạy không có ai sửa tay. Đổi
+sang tìm phép gán bằng `ast`; thêm bài thử tuple một dòng. Hai bài cũ ghim "số > 999 để nguyên"
+đổi theo bản vá số.
+
+## 2026-09-11, 23:12 (giờ thật) — đồng hồ máy chạy chậm 4 giờ 17 phút cả ngày, vừa được chỉnh
+
+Nhật ký hệ thống (Kernel-General, Id 1): 23:12:55 đồng hồ nhảy từ 11:56:06Z lên 16:12:55Z —
+**+4 h 16 m 49 s**, lý do 2 (đồng bộ giờ). Header `Date` của một request HTTPS khớp giờ MỚI. Nghĩa
+là mọi mốc giờ ghi hôm nay trước lúc ấy — `completed_at`, `created_at`, sổ chất lượng, giờ
+commit git (45d0f1e "18:39", e8a7c0a "18:44"), và mọi con số giờ trong các ghi chú ở trên — đều
+**sớm hơn giờ thật 4 h 17 m**, nhưng nhất quán với nhau. Nhảy TIẾN nên thứ tự không đảo:
+`assemble_book` chọn bản `completed_at` mới nhất và `seed_chain` xếp theo `book.created_at` vẫn
+đúng; nhịp tim lease chỉ trông "chết" trong đúng một khoảng ghi. Lô 5 đi tiếp không gián đoạn
+(1.143 đoạn phân tích lúc 23:14, 1.214 lúc 23:19 — cùng nhịp ~15 đoạn/phút như trước). Nếu có
+lúc nào đồng hồ bị chỉnh LÙI thì mới nguy: "mới nhất" và "còn sống" đều so bằng giờ tường.
+Dấu vết duy nhất của cú nhảy trong lô: 23:14:18 `ANALYSIS_CRITIC_TRANSPORT_FAULT` — một request
+Ollama "Read timed out" ngay khi hạn chót tính theo giờ tường nhảy qua; thử lại sau 2 giây và
+được chấp nhận. Đúng kiểu lỗi mà đường thử lại có sẵn để nuốt.
+
+Cùng nhật ký ấy còn cho thấy lý do lô 5 chậm lại vài phút quanh "18:49–18:51": governor báo
+`yield_heavy — foreground CPU 102%` — bộ test và ffmpeg của tôi chạy dưới cửa sổ đang có focus,
+nên bị coi là việc tiền cảnh và lô nhường máy cho chúng (`THE_MACHINE_IS_SHARED.md`).

@@ -71,6 +71,30 @@ def test_names_and_their_comment_move_from_order_to_applied(tmp_path: Path, newl
     assert (b"\r\n" in copy.read_bytes()) is (newline == "\r\n"), "giữ nguyên kiểu xuống dòng"
 
 
+def test_a_one_line_queue_round_trips(tmp_path: Path) -> None:
+    """Hàng chờ MỘT tên hay được viết gọn trên một dòng: `ORDER: tuple[str, ...] = ("x.py",)`.
+
+    Bản đầu của `retire_queue` tìm dấu `)` đứng riêng một dòng, nhảy qua tuple một dòng tới dấu
+    đóng của `APPLIED`, và ghi ra một file không import được - đúng dạng hàng chờ cây thật mang
+    lúc 18:35 ngày 2026-09-11. Ranh giới tự chạy không có ai sửa tay.
+    """
+    copy = tmp_path / "apply_all_copy.py"
+    one_line = SAMPLE.replace(
+        'ORDER: tuple[str, ...] = (\n    # chú thích nằm trong tuple\n    "patch_one.py",\n    "patch_two.py",\n)',
+        'ORDER: tuple[str, ...] = ("patch_one.py",)',
+    )
+    assert one_line != SAMPLE
+    copy.write_text(one_line, encoding="utf-8")
+    apply_all = _load(APPLY_ALL, "apply_all_under_test_one_line")
+
+    assert apply_all.retire_queue(copy, ["patch_one.py"], "2026-09-11") == 1
+
+    module = _load(copy, "apply_all_one_line_retired")
+    assert module.ORDER == ()
+    assert module.APPLIED == ("patch_zero.py", "patch_one.py")
+    assert "Lý do của nhóm đang chờ" in copy.read_text(encoding="utf-8").split("APPLIED = (")[1]
+
+
 def test_an_empty_queue_is_left_untouched(tmp_path: Path) -> None:
     copy = tmp_path / "apply_all_copy.py"
     copy.write_text(SAMPLE, encoding="utf-8")
