@@ -23,12 +23,22 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import subprocess
 import sqlite3
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from ebook_reader.io_utils import ffmpeg_executable, run_hidden  # noqa: E402
+
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 SOURCE = Path(r"D:\Novels\Tools\Text")
+
+# Tên "đĩa" của cả cuốn sách. Mặc định là một chỗ giữ chỗ: tên thật của truyện KHÔNG có ở đâu
+# trong dữ liệu - `book.title` của mỗi project là slug của lô (`lo01b`, `lo05`), và dòng đầu của
+# file nguồn là lời tán chuyện của người đăng. Đặt bằng `--album "Tên truyện"` khi biết.
+DEFAULT_ALBUM = "Sách nói"
 
 
 def _say(line: str) -> None:
@@ -114,6 +124,94 @@ def _attempts() -> dict[str, float]:
     return latest
 
 
+def wanted_tags(title: str, album: str, chapters_expected: int) -> dict[str, str]:
+    """Thẻ mà một chương của CUỐN SÁCH phải có.
+
+    Đo 01:30 ngày 2026-09-12 trên sách 118 chương: `album` là **38 giá trị khác nhau**, mỗi giá
+    trị là slug của một project (`lo01b`, `lo03r_060`), và `track` là số thứ tự **trong project**
+    nên 36 file cùng mang `track=1`. Máy nghe nhạc nào sắp theo thẻ - tức gần hết, khi cả thư
+    mục được coi là một album - sẽ thấy 38 "đĩa" và trộn thứ tự chương. Sách chỉ nghe đúng thứ
+    tự nếu người nghe sắp theo TÊN FILE.
+
+    Không phải lỗi của đường ống: `assemble_chapter_atomic_with_metrics` ghi `album=book_title`
+    và `track=chapter_index`, cả hai đúng ở tầng **một lô**. Cuốn sách mới là chỗ biết mình là
+    một cuốn, nên nó là chỗ sửa.
+
+    `track` = số chương thật kèm tổng số chương của nguồn (chương 000 thành track 0 - trung thực
+    hơn là cộng một, và vẫn sắp đúng thứ tự).
+    """
+    numbered = f"{int(title)}/{chapters_expected}" if chapters_expected else str(int(title))
+    return {"album": str(album), "title": str(title), "track": numbered}
+
+
+def retag(path: Path, tags: dict[str, str]) -> bool:
+    """Ghi lại thẻ, giữ nguyên audio (`-c copy`). True nếu đã ghi.
+
+    Không sinh lại audio nên không đổi một mẫu nào; chỉ header ID3 đổi - tức kích thước file
+    đích đổi vài trăm byte, và đó là lý do luật "chép khi khác kích thước" phải đi (xem
+    `copy_needed`).
+    """
+    ffmpeg = ffmpeg_executable()
+    temporary = path.with_suffix(".retag.mp3")
+    command = [ffmpeg, "-v", "error", "-y", "-i", str(path), "-map", "0", "-c", "copy"]
+    for key, value in sorted(tags.items()):
+        command += ["-metadata", f"{key}={value}"]
+    command.append(str(temporary))
+    try:
+        run_hidden(command, timeout=300.0)
+        temporary.replace(path)
+        return True
+    except (OSError, subprocess.SubprocessError):
+        temporary.unlink(missing_ok=True)
+        return False
+
+
+def previous_manifest(out: Path) -> dict[str, dict]:
+    """{chương: hàng manifest} của lần ghép trước; rỗng nếu chưa có."""
+    try:
+        payload = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+    return {str(item.get("title")): item for item in entries if item.get("title")}
+
+
+def copy_needed(destination: Path, item: dict, before: dict | None) -> bool:
+    """Có phải chép lại chương này không - hỏi theo GỐC GÁC, không theo kích thước file đích.
+
+    Luật cũ so `destination.stat().st_size` với `item["bytes"]`. Nó đúng cho tới khi có bước ghi
+    lại thẻ: ghi thẻ đổi kích thước file đích, nên lần ghép sau thấy "khác kích thước" và chép
+    lại cả 119 file (~2 GB) mỗi lần, rồi ghi thẻ, rồi lại khác. Câu hỏi thật không phải "file
+    đích có bằng nguồn không" mà **"file đích có phải đúng bản này không"**, và manifest đã ghi
+    đủ để trả lời: version, project, bytes.
+    """
+    if not destination.is_file() or destination.stat().st_size <= 0:
+        return True
+    if not before:
+        return True
+    return (
+        str(before.get("version") or "") != str(item["version"])
+        or str(before.get("project") or "") != str(item["project"])
+        or int(before.get("bytes") or -1) != int(item["bytes"])
+    )
+
+
+def retag_needed(copied_now: bool, want: dict[str, str], before: dict | None) -> bool:
+    """Có phải ghi lại thẻ không, hỏi bằng MANIFEST chứ không đọc file.
+
+    Đọc thẻ thật thì cần `ffprobe`, mà bản ffmpeg dự án dùng (`imageio_ffmpeg`) chỉ có `ffmpeg`.
+    Manifest là sổ của chính bước này: nó ghi thẻ đã viết, nên so với thẻ muốn viết là đủ. Một
+    bản vừa được chép về thì đang mang thẻ của LÔ, nên luôn phải ghi lại.
+
+    Giới hạn, nói ra: ai sửa thẻ bằng công cụ khác thì bước này không biết. Manifest của lần
+    ghép đầu tiên chưa có mục `tags`, nên lần chạy đầu sau bản vá sẽ ghi lại thẻ cho mọi chương
+    - đúng điều cần, vì cả 118 chương đang mang album là slug của lô.
+    """
+    if copied_now:
+        return True
+    return dict((before or {}).get("tags") or {}) != dict(want)
+
+
 def _expected() -> list[str]:
     if not SOURCE.is_dir():
         return []
@@ -124,6 +222,12 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", type=Path, default=Path(r"D:\Novels\Audiobooks\_book"))
     parser.add_argument("--apply", action="store_true", help="Chép thật thay vì chỉ liệt kê")
+    parser.add_argument(
+        "--album",
+        default=DEFAULT_ALBUM,
+        help=f"Tên đĩa ghi vào mọi chương (mặc định {DEFAULT_ALBUM!r}; tên thật của truyện"
+        " không có ở đâu trong dữ liệu)",
+    )
     args = parser.parse_args(argv)
 
     found = _candidates()
@@ -183,15 +287,28 @@ def main(argv: list[str]) -> int:
     # có chạy lại theo thứ tự nào.
     args.out.mkdir(parents=True, exist_ok=True)
     width = max((len(title) for title in winners), default=3)
-    copied = 0
+    before = previous_manifest(args.out)
+    written_tags: dict[str, dict[str, str]] = {}
+    copied = tagged = 0
     for title, item in sorted(winners.items()):
         destination = args.out / f"{title.zfill(width)}.mp3"
-        if destination.is_file() and destination.stat().st_size == item["bytes"]:
-            continue
-        temporary = destination.with_suffix(".part")
-        shutil.copyfile(item["mp3"], temporary)
-        temporary.replace(destination)
-        copied += 1
+        copied_now = copy_needed(destination, item, before.get(title))
+        if copied_now:
+            temporary = destination.with_suffix(".part")
+            shutil.copyfile(item["mp3"], temporary)
+            temporary.replace(destination)
+            copied += 1
+        # Thẻ của CUỐN SÁCH, không phải thẻ của lô. Xét từng chương chứ không chỉ chương vừa
+        # chép: 118 chương đã lên sách trước bước này đều mang album là slug của lô nó ra đời.
+        want = wanted_tags(title, str(args.album), len(expected))
+        if retag_needed(copied_now, want, before.get(title)):
+            if retag(destination, want):
+                tagged += 1
+                written_tags[title] = want
+            else:
+                _say(f"  KHÔNG ghi được thẻ cho {destination.name} - audio vẫn đúng, thẻ vẫn cũ")
+        else:
+            written_tags[title] = dict((before.get(title) or {}).get("tags") or want)
     # Gốc gác từng chương. Một cuốn 478 chương được ghép từ khoảng hai mươi project, và không
     # có file này thì sáu tháng nữa không ai trả lời được "chương 137 ra từ lượt chạy nào" —
     # câu hỏi đầu tiên người ta hỏi khi nghe thấy một chỗ lạ tai.
@@ -207,6 +324,9 @@ def main(argv: list[str]) -> int:
                 "project": item["project"],
                 "source_file": item["mp3"].name,
                 "bytes": item["bytes"],
+                # Thẻ bước này đã ghi, để lần sau biết có phải ghi lại không mà không cần đọc
+                # file (bản ffmpeg của dự án không kèm `ffprobe`).
+                "tags": written_tags.get(title, {}),
             }
             for title, item in sorted(winners.items())
         ],
@@ -223,6 +343,10 @@ def main(argv: list[str]) -> int:
 
     _say("")
     _say(f"Đã chép {copied} chương mới vào {args.out} ({len(winners)} chương tổng).")
+    if tagged:
+        _say(f"Đã ghi lại thẻ cho {tagged} chương: album {args.album!r}, track = số chương thật.")
+        if str(args.album) == DEFAULT_ALBUM:
+            _say('  (tên đĩa đang là chỗ giữ chỗ; đặt tên thật bằng --album "Tên truyện")')
     _say(f"Gốc gác từng chương ghi ở {path.name}.")
     return 0
 
