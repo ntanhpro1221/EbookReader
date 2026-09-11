@@ -1649,3 +1649,13 @@ giờ thuộc về bản đọc-theo-chữ-viết; đường mới phải đặt
 từ ~48% về **~0** cho các ca chỉ-neo-tên; `python scripts/one_person_one_voice.py` không đổi
 (đây là chuyện cách đọc, không phải giọng); và số neo tên `matched=False` không đổi — vì cổng
 vẫn nói điều nó thấy, chỉ quyết định là khác.
+
+Đọc thêm mã (16:45), sửa một chỗ trong đặc tả trên: "mốc tín hiệu bền" trong
+`promote_segment_candidate` chỉ là `candidate.wav_sha256` so với checksum người gọi truyền vào —
+không có bảng mốc riêng, nên (d) là đủ. Chốt chặn thật cho lượt đề cử lại là
+`_require_candidate_incumbent_conn`: ứng viên nhớ **đương nhiệm nó đã đấu với** (`incumbent_
+sha256`), và khi bản đọc-theo-chữ-viết được đề cử thì checksum của đoạn đổi — đúng lý do 307 bản
+bị đánh dấu `invalid: incumbent checksum changed`. Vậy đường mới cần **điều kiện thứ năm**, kiểm
+từ dữ liệu: đương nhiệm *hiện tại* của đoạn phải là anh em `source_spelling_v1` của chính ứng
+viên ấy (cùng `segment_id`, cùng chuỗi sửa). Trạng thái vào: `dual_failed` hoặc `invalid` với lý
+do ấy; ra: `promoted`. Không đường nào khác được đi qua đây.
