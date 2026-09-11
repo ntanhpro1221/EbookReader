@@ -1806,6 +1806,28 @@ máy"*. Tuổi thì không ghim được, mà tuổi mới chọn **họ giọng
 4. Chỉ SAU ĐÓ mới đúc lại: `python scripts/voice_matches_the_person.py --recast` (hiện in `3:062`).
    Đúc lại trước khi ghim chỉ tốn GPU — công cụ đã in đúng câu cảnh báo ấy.
 
+**Hai sự thật đọc thêm lúc 01:15 ngày 2026-09-12, đổi thiết kế bản vá — ghi ra vì chúng là chỗ
+một bản vá "hiển nhiên" sẽ hỏng:**
+
+- **Cột `locked` là của PHÁI.** `locked_character_genders()` lọc `WHERE locked=1 AND gender IN
+  ('male','female')`. Nếu việc ghim tuổi cũng đặt `locked=1` thì mọi nhân vật được ghim tuổi bỗng
+  có phái "do người quyết", kể cả khi chưa ai nói gì về phái — và `_validate_casting_inputs` sẽ
+  thôi báo mâu thuẫn phái cho họ. Vậy tuổi phải có **cột riêng** (`locked_age TEXT NOT NULL
+  DEFAULT ''`), đúng khuôn `locked_voice_key` đã thêm bằng `ALTER TABLE` ở `database.py:2335`.
+- **Phái đã ghim cũng KHÔNG đi sang lô sau.** `port_casting` mang nhân vật đã biết bằng
+  `upsert_character(...)` và docstring nói rõ "Deliberately NOT locked", còn `read_known_characters`
+  chỉ đọc `canonical_name, display_name, gender, age, personality`. Nên lời hứa của `cast`
+  ("người quyết, và outrank mô hình **vĩnh viễn**") hiện chỉ đúng trong MỘT project: lô sau phân
+  tích lại và có thể đổi ý. Bản vá phải mang cả hai thuộc tính đã ghim đi theo chuỗi gieo, như
+  `port_pronunciations` mang cách đọc.
+
+**Chỗ đặt luật "đã ghim thắng ported":** `build_registry_and_cast` (`character_registry.py:1413`),
+nơi đã đọc cả `locked_character_genders()` lẫn `locked_character_voices()`. Nếu tuổi/phái đã ghim
+không khớp họ giọng của `locked_voice_key` (tra bằng `voice_catalog`: preset nữ kéo cao = họ trẻ
+con; preset nam = người lớn nam), bỏ pin ấy cho nhân vật đó, ghi một dòng `runtime_events`, để
+allocator cấp lại. Không đặt ở `port_casting`: project đích lúc ấy chưa có thuộc tính nào được
+ghim, nên nó không có gì để so.
+
 **Dự đoán ghi trước:** sau bản vá và một lần `cast --character IVAN --age adult`, đúc lại 062 cho
 IVAN giọng nam; `voice_matches_the_person.py` về 0 dòng lệch phái; `one_person_one_voice --across`
 mất IVAN khỏi danh sách (3 chương của anh ta về một giọng). EVERAN **không** đổi: nó là trẻ con
