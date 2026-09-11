@@ -25,6 +25,7 @@ shift
 # failed" ben duoi dung cho moi truong hop khac nen khong noi no ra.
 EXPLICIT=""
 SEED_FROM=""
+AS_REPAIR=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --chapters)
@@ -38,6 +39,10 @@ while [ $# -gt 0 ]; do
     # cach cast cua lo no thuoc ve. Chuong 007 thuoc lo 1; gieo tu lo 1 la lay lai dung bo pin
     # da sinh ra loi. Project moi nhat mang pin dut khoat cho moi nhan vat, va do la thu can.
     --seed-from) shift; SEED_FROM="${1:?--seed-from can duong dan project}"; shift ;;
+    # Chi dinh chuong nhung van la LO VA (thu muc `v`, tieu de `loNNv_`): boundary.sh dung no de
+    # chay lai chi nhung chuong hong CHUA co ban va hoan thanh. Khong co co nay thi `--chapters`
+    # luon la duc lai giong (`r`), va hai loai project se lan ten.
+    --as-repair) AS_REPAIR=1; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
   esac
 done
@@ -49,7 +54,7 @@ cd "$ROOT"
 TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
 [ "$BATCH" = "1" ] && TAG="v0.2.0-lo01"
 # Lo va thuong la `...v`; luot duc lai giong la `...r` de hai loai project khong lan ten.
-if [ -n "$EXPLICIT" ]; then OUT_TAG="${TAG}r"; else OUT_TAG="${TAG}v"; fi
+if [ -n "$EXPLICIT" ] && [ "$AS_REPAIR" != 1 ]; then OUT_TAG="${TAG}r"; else OUT_TAG="${TAG}v"; fi
 OUT="D:/Novels/Audiobooks/_versions/$OUT_TAG"
 # Hai project khac nhau: BATCH_PROJECT la project LO - doc danh sach chuong hong tu no; PREV la
 # project GIEO - moi nhat tren ca ba thu muc lo / lo+v / lo+r theo book.created_at, khong theo
@@ -146,6 +151,9 @@ print(f\"{b['status']}|{b['stage']}|{'alive' if alive else 'dead'}\")
 # Chuoi: project lo cua moi lo truoc, roi lo nay va cac project va / duc lai cua no theo thu tu
 # tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
 CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --chain)"
+# `backfill_exposure` ghi so vao project CUOI chuoi, va `port_casting` doc so tu project GIEO.
+# Gieo tu noi khac (--seed-from) thi hai cai ay phai la mot: noi PREV vao cuoi chuoi.
+case " $CHAIN " in *" $PREV "*) ;; *) CHAIN="$CHAIN $PREV" ;; esac
 echo
 echo "=== so cong don qua chuoi lo ==="
 # shellcheck disable=SC2086
@@ -156,7 +164,7 @@ PYTHONIOENCODING=utf-8 "$PY" scripts/backfill_exposure.py $CHAIN || {
 for CH in $BROKEN; do
   echo
   echo "=== chuong $CH ==="
-  if [ -n "$EXPLICIT" ]; then SUFFIX=r; else SUFFIX=v; fi
+  if [ -n "$EXPLICIT" ] && [ "$AS_REPAIR" != 1 ]; then SUFFIX=r; else SUFFIX=v; fi
   TITLE="$(printf 'lo%02d%s_%s' "$BATCH" "$SUFFIX" "$CH")"
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \

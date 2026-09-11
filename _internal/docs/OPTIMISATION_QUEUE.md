@@ -1549,3 +1549,26 @@ Chúng rải trên ba lô (007 thuộc lô 1; 054–065 lô 2 và 3; 073–091 l
 `--recast <lô>:<chương>` của `boundary.sh` hoặc ba lượt `launch_repair.sh` riêng. Khoảng 2/3 khối
 lượng một lô, vài giờ GPU. Đáng: đây là 202 câu mà người nghe nghe thấy, không phải một cờ trong
 sổ.
+
+## Sửa một lớp lỗi làm đổi hình dạng lớp ấy: `NGUOI_TRA_LOI` (2026-09-11, 09:05)
+
+Trước 07:25 hôm nay, **không** project nào trong 100 project có một tên mang gạch dưới. Sau khi
+ba bản vá của ranh giới lô 4 áp (trong đó có gộp rơi dấu), bốn project tạo sau đó có
+`NGUOI_TRA_LOI` — 45 câu. Cơ chế: danh sách "đã biết" giờ đưa `NGƯỜI TRẢ LỜI` **đủ dấu** vào
+prompt (đúng), và Ollama thỉnh thoảng trả về bản ASCII nối bằng gạch dưới. Trước đó nó trả về
+`NGUOI TRA LOI` (khoảng trắng) và fold rơi dấu bắt được; gạch dưới thì `normalize_name` không
+gộp, `_stripped_and_marks` thấy chữ trần khác nhau, và không pass nào bắt.
+
+Hậu quả đã vào audio: chương 104 **đúc lại** — chính chương được đúc lại để xoá va chạm — có
+người ấy nói 10 câu bằng `doan_trang_f115` (giọng mới) và 1 câu bằng giọng ghim `f100`.
+`voice_pool_pressure` báo 0 vì nó hỏi câu ngược; `one_person_one_voice` sẽ báo sau khi
+`name_marks` cũng biết gạch dưới.
+
+`patch_an_underscore_is_a_space` (hàng chờ, áp ở bước 1 của ranh giới chạy lại): `identity_key`
+= `normalize_name` sau khi thay `_` bằng khoảng trắng, dùng **chỉ** ở hai chỗ gom danh tính —
+không đổi `normalize_name` chung vì `NPC_LOCAL::`/`ANONYMOUS_*` mang gạch dưới theo thiết kế.
+78 bài xanh trên bản sao, kể cả bài giữ NPC không bị gộp.
+
+Bài học đáng giữ: một bản vá đúng có thể **đổi phân bố lỗi** thay vì xoá lỗi. Đo lại lớp ấy
+sau mỗi lô — `one_person_one_voice.py` là cái đo — chứ đừng coi "đã vá" là "đã hết".
+Ba chương đã đúc với bản lệch (097, 104, và 007 đang dở) cần đúc lại lần nữa sau bản vá.

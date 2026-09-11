@@ -19,7 +19,18 @@
 # hai lo - mot loi IM LANG, khong cong nao bat duoc vi moi lo tu no deu nhat quan.
 set -euo pipefail
 
-BATCH="${1:?dung: launch_batch.sh <so lo, 2..16>}"
+BATCH="${1:?dung: launch_batch.sh <so lo, 2..16> [--seed-from <project>]}"
+shift || true
+SEED_FROM=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    # Gieo tu project chi dinh - boundary.sh truyen project CUOI chuoi sau khi da duc lai giong
+    # cac chuong cua lo khac o buoc 4b; `seed_chain.py N --seed` chi nhin thu muc cua lo N nen
+    # khong thay chung.
+    --seed-from) shift; SEED_FROM="${1:?--seed-from can duong dan project}"; shift ;;
+    *) echo "tham so la: $1" >&2; exit 2 ;;
+  esac
+done
 ROOT="D:/Novels/Ebook Reader/_internal"
 PY="$ROOT/runtime/.venv/Scripts/python.exe"
 PLAN="$ROOT/docs/PRODUCTION_PLAN.md"
@@ -42,10 +53,15 @@ OUT="D:/Novels/Audiobooks/_versions/$TAG"
 # thu tu tao (book.created_at, khong phai mtime). Tu lo 3 project duc lai cap giong MOI cho nguoi
 # thua khi trung giong; gieo tu lo thay vi tu cai cuoi la cap lai lan nua, doc lap, va mot nguoi
 # co the mang hai giong o hai lo. seed_chain.py giu mot cau tra loi cho ca ba script.
-PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --seed)" || {
-  echo "Khong thay project nao cua lo $((BATCH - 1)) - day gieo se dut. Dung." >&2
-  exit 1
-}
+if [ -n "$SEED_FROM" ]; then
+  [ -f "$SEED_FROM/project.sqlite3" ] || { echo "--seed-from khong phai project: $SEED_FROM" >&2; exit 2; }
+  PREV="$SEED_FROM"
+else
+  PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --seed)" || {
+    echo "Khong thay project nao cua lo $((BATCH - 1)) - day gieo se dut. Dung." >&2
+    exit 1
+  }
+fi
 
 echo "=== lo $BATCH: chuong $RANGE (doc tu PRODUCTION_PLAN.md) ==="
 echo "  gieo tu: $PREV"
@@ -72,6 +88,8 @@ echo "project: $PROJECT"
 # Chuoi: project lo cua moi lo truoc, roi lo lien truoc va cac project va / duc lai cua no theo
 # thu tu tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
 CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --chain)"
+# So phai nam o project GIEO (port_casting doc tu do); gieo tu noi khac thi noi no vao cuoi.
+case " $CHAIN " in *" $PREV "*) ;; *) CHAIN="$CHAIN $PREV" ;; esac
 echo
 echo "=== so cong don qua chuoi lo ==="
 # shellcheck disable=SC2086

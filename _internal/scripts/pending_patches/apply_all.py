@@ -27,8 +27,12 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Một bản vá, áp ở bước 1 của ranh giới lô 4 chạy LẠI (ranh gioi chet 08:45 vi phien Claude Code
+# thoat). NGUOI_TRA_LOI - gạch dưới - xuất hiện 45 câu trong bốn project tạo sau 07:25, và chương
+# 104 đúc lại có người ấy nói bằng hai giọng. Phải áp TRƯỚC các chương đúc lại còn lại và lô 5.
+ORDER: tuple[str, ...] = (
+    "patch_an_underscore_is_a_space.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",

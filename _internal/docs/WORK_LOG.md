@@ -1117,3 +1117,19 @@ giọng*, còn *một người hai giọng* thì không công cụ nào hỏi. �
 thoại**, một người nói hai giọng ngay trong cùng chương — chương 060 có THỦ LÃNH nói 7 câu giọng
 này, 5 câu giọng kia. Mọi cổng xanh vì `verify_casting` thấy **hai** người. Lớp tách danh tính do
 rơi dấu không chỉ ăn chỗ trong kho giọng; nó đã đi vào audio, và hôm qua tôi chỉ đo nửa đầu.
+
+## 2026-09-11 (sáng) — Ranh giới chết theo phiên, và bản vá đổi hình dạng lỗi
+
+Lô 4 xong **25/27** (097, 106 hỏng — cùng nhãn `speech pace`, hai ca khác nhau). Ranh giới tự
+chạy áp ba bản vá, vá 097 (**qua ngay lần đầu** ở 10,74 kt/s — dự đoán đúng), không cứu 106
+(dự đoán đúng), đúc lại 104 (0 va chạm), rồi **chết lúc 08:45 vì phiên Claude Code thoát** — giữa
+lúc đúc lại chương 007. Lô 007 tự nó vẫn chạy tiếp (supervisor riêng), đủ 151/151.
+
+Sáu tiếng heartbeat không nổ (01:01 → 07:03), rồi phiên thoát. Chủ sách hỏi hai lần. Từ giờ
+nhịp 30 phút và luôn có một waiter nền song song với wakeup.
+
+Làm trong buổi sáng: `boundary.sh` chạy lại được (bỏ qua việc đã xong, đợi GPU, nối `SEED` qua
+mọi bước, `launch_batch.sh --seed-from`); phát hiện `NGUOI_TRA_LOI` — bản vá gộp rơi dấu làm
+Ollama đổi sang gạch dưới, 45 câu trong 4 project, một người hai giọng ngay trong chương 104
+vừa đúc lại; bản vá `identity_key` xếp hàng chờ, 78 bài xanh trên bản sao. Dừng 007 đang dở (nó
+mang lỗi ấy) để ranh giới chạy lại đúc nó dưới bản vá.

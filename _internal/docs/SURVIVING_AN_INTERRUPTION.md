@@ -425,3 +425,24 @@ commit mà tôi viết cho chúng — với lý do, số đo và dự đoán —
 Không sửa lịch sử vì ranh giới đang chạy bảy tiếng nữa và `git add -A` của nó có thể đụng index
 giữa lúc amend. Luật từ giờ, và nó rẻ: khi một ranh giới đang bay, **stage từng đường dẫn cụ
 thể** (`git add docs/X.md`), đừng bao giờ `-A`. Cây làm việc không phải của riêng ai lúc ấy.
+
+## Phiên Claude Code thoát thì ranh giới chết, còn lô thì KHÔNG (2026-09-11, 08:45 → 09:10)
+
+Phiên trước thoát lúc ~08:45 trong khi `boundary.sh 4` đang ở bước 4b (đúc lại chương 007).
+Sáng ra: **0** tiến trình `boundary.sh`/`launch_repair.sh`, nhưng project `lo01r_007` vẫn chạy
+tiếp — lúc 08:48 nó ở 63/151, lúc 08:56 đủ 151/151 và đang `verifying`. Khác `TaskStop` (chỉ
+giết lớp bọc), việc phiên thoát giết cả cây shell của harness; còn `cli run` có supervisor riêng
+(`supervisor_pid`) không thuộc cây ấy nên sống sót. Hai hành vi ngược nhau của hai cách dừng, và
+cả hai đều đã đo.
+
+Hậu quả thật của lần này: ranh giới chết giữa chừng, và `boundary.sh` cũ **không chạy lại được**
+— bước 3 sẽ vá lại 097/106 (lô 4 vẫn ghi chúng `failed`), bước 4 đúc lại 104 lần nữa, 4b tạo
+project 007 thứ hai cạnh cái đang chạy. Nên nó được làm cho **chạy lại được**: mỗi bước hỏi
+"chương này đã có một project HOÀN THÀNH trong thư mục đích chưa?" (có → bỏ qua; hỏng → chạy
+lại, đúng cái 084 cần), đợi GPU rảnh trước mỗi lần tạo project và trước cả bước 1 (`apply_all`
+từ chối khi còn lượt bay — đúng), bỏ qua bước 6 nếu lô kế đã có project. Kiểm trên dữ liệu thật
+trước khi tin: 097/104/062 → bỏ qua, 106/007/084/054 → chạy.
+
+Cũng nối lại chuỗi gieo qua các bước: `SEED` chạy từ project lô → lô vá → đúc lại (kể cả của lô
+khác) → lô kế tiếp (`launch_batch.sh --seed-from`). Bản trước gieo lô 5 từ `seed_chain 4 --seed`,
+tức bỏ qua mọi giọng vừa cấp ở 4b — một người hai giọng, lần nữa, ở tầng khác.

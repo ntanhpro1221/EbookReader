@@ -66,7 +66,7 @@ NEXT_TAG="$(printf 'v0.2.0-lo%02d' "$NEXT")"
 # Dong Co-Authored-By cua commit script nay tao. Doi theo phien lam viec, nen de o MOT cho
 # va ghi ra log: mot dong ghi cong sai trong mot commit khong ai xem luc tao ra thi khong ai
 # sua. Ghi de bang EBOOK_COAUTHOR khi phien sau dung model khac.
-COAUTHOR="${EBOOK_COAUTHOR:-Claude Opus 5 <noreply@anthropic.com>}"
+COAUTHOR="${EBOOK_COAUTHOR:-Claude Fable 5.1 <noreply@anthropic.com>}"
 
 BATCH_PROJECT="$(py scripts/seed_chain.py "$BATCH" --batch)" || { say "khong thay project lo $BATCH"; exit 2; }
 
@@ -89,6 +89,36 @@ print(dict(collections.Counter(r[0] for r in c.execute('SELECT status FROM chapt
 }
 pending_patches() {
   py -c 'import sys; sys.path.insert(0, "scripts/pending_patches"); import apply_all; print(" ".join(apply_all.ORDER))' 2>/dev/null
+}
+# Chay lai duoc. Ranh gioi lo 4 chet luc 08:45 ngay 2026-09-11 vi tien trinh Claude Code thoat
+# va keo ca cay tien trinh con theo (khac TaskStop, vong ay giet ca script). Chay lai script cu
+# thi buoc 3 lam lai 097/106, buoc 4 duc lai 104 lan nua, 4b tao project 007 thu hai canh cai
+# dang chay do. Nen moi buoc hoi truoc: "chuong nay da co mot project HOAN THANH trong thu muc
+# dich chua?" - co thi bo qua, hong thi chay lai (084 hong o lo03r la dung cai can chay lai),
+# va truoc khi tao gi thi doi cho khong con `run` nao dang bay.
+already_done() {  # $1 = thu muc phien ban (vd .../v0.2.0-lo03r), $2 = so chuong
+  py -c "
+import sqlite3, sys
+from pathlib import Path
+for p in Path(r'$1').glob('*/project.sqlite3'):
+    try:
+        c = sqlite3.connect(f'file:{p}?mode=ro', uri=True)
+        if any(str(t) == '$2' and s == 'completed' for t, s in c.execute('SELECT title, status FROM chapters')):
+            sys.exit(0)
+    except sqlite3.Error:
+        pass
+sys.exit(1)
+" 2>/dev/null
+}
+wait_gpu_free() {
+  while :; do
+    LIVE="$(py -c '
+import sys; sys.path.insert(0, "scripts/pending_patches"); import apply_all
+print(" ".join(p.name for p, _why in apply_all._runs_in_flight()))' 2>/dev/null)"
+    [ -z "$LIVE" ] && return 0
+    say "  doi GPU: dang bay $LIVE"
+    sleep 60
+  done
 }
 tag_here() {
   if git tag -l "$1" | grep -q .; then
@@ -159,7 +189,9 @@ fi
 # Bo trung lap, giu thu tu tang dan.
 RECAST="$(printf '%s\n' $RECAST | sort -u | tr '\n' ' ')"
 
-# ---- 1. ap hang cho + bo test
+# ---- 1. ap hang cho + bo test. Doi GPU ranh TRUOC: apply_all tu choi khi con luot chay (dung),
+# va mot ranh gioi chay lai sau khi chet co the gap mot project duc lai con dang bay.
+wait_gpu_free
 PENDING="$(pending_patches)"
 if [ -n "$PENDING" ]; then
   say "ap: $PENDING"
@@ -198,20 +230,38 @@ FAILED="$(py -c "
 import sqlite3
 c = sqlite3.connect(r'file:$BATCH_PROJECT/project.sqlite3?mode=ro', uri=True)
 print(' '.join(str(t) for (t, s) in c.execute('SELECT title, status FROM chapters ORDER BY title') if s != 'completed'))")"
-if [ -n "$FAILED" ]; then
+TODO=""
+for CH in $FAILED; do
+  if already_done "D:/Novels/Audiobooks/_versions/${TAG}v" "$CH"; then say "  $CH da co ban va hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
+done
+SEED="$(py scripts/seed_chain.py "$BATCH" --seed)"
+if [ -n "$TODO" ]; then
   tag_here "${TAG}v"
-  say "lo va cho: $FAILED"
-  bash scripts/launch_repair.sh "$BATCH" >> "$LOG" 2>&1 || say "launch_repair (chuong hong) thoat khac 0 - xem $LOG; di tiep."
+  say "lo va cho:$TODO"
+  wait_gpu_free
+  # shellcheck disable=SC2086
+  bash scripts/launch_repair.sh "$BATCH" --chapters $TODO --seed-from "$SEED" --as-repair >> "$LOG" 2>&1 || say "launch_repair (chuong hong) thoat khac 0 - xem $LOG; di tiep."
+  SEED="$(py scripts/seed_chain.py --newest "D:/Novels/Audiobooks/_versions/${TAG}v" 2>/dev/null || echo "$SEED")"
+elif [ -n "$FAILED" ]; then
+  say "moi chuong hong da co ban va hoan thanh."
 else
   say "khong co chuong hong."
 fi
 
 # ---- 4. duc lai giong, noi duoi
-if [ -n "$RECAST" ]; then
+TODO=""
+for CH in $RECAST; do
+  if already_done "D:/Novels/Audiobooks/_versions/${TAG}r" "$CH"; then say "  $CH da duc lai hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
+done
+if [ -n "$TODO" ]; then
   tag_here "${TAG}r"
-  say "duc lai giong:$RECAST"
+  say "duc lai giong:$TODO  (gieo tu $(basename "$SEED"))"
+  wait_gpu_free
   # shellcheck disable=SC2086
-  bash scripts/launch_repair.sh "$BATCH" --chapters $RECAST >> "$LOG" 2>&1 || say "launch_repair (duc lai) thoat khac 0 - xem $LOG; di tiep."
+  bash scripts/launch_repair.sh "$BATCH" --chapters $TODO --seed-from "$SEED" >> "$LOG" 2>&1 || say "launch_repair (duc lai) thoat khac 0 - xem $LOG; di tiep."
+  SEED="$(py scripts/seed_chain.py --newest "D:/Novels/Audiobooks/_versions/${TAG}r" 2>/dev/null || echo "$SEED")"
+fi
+if [ -n "$RECAST" ]; then
   # ---- 5. bang chung: va cham cung chuong tren tung project duc lai
   for P in $(py scripts/seed_chain.py "$BATCH" --repairs); do
     case "$P" in *"/${TAG}r/"*) ;; *) continue ;; esac
@@ -233,21 +283,33 @@ fi
 # phai mang cach cast moi nhat, khong phai cach cast cua lo no thuoc ve. Gieo chuong 007 tu lo 1
 # la lay lai dung bo pin da sinh ra loi.
 if [ -n "$RECAST_OTHER" ]; then
-  SEED="$(py scripts/seed_chain.py "$BATCH" --seed)"
   for OTHER_BATCH in $(printf '%s\n' $RECAST_OTHER | cut -d: -f1 | sort -un); do
-    CHS="$(printf '%s\n' $RECAST_OTHER | grep "^${OTHER_BATCH}:" | cut -d: -f2 | sort -u | tr '\n' ' ')"
+    OTHER_TAG="$(printf 'v0.2.0-lo%02d' "$OTHER_BATCH")"
+    CHS=""
+    for CH in $(printf '%s\n' $RECAST_OTHER | grep "^${OTHER_BATCH}:" | cut -d: -f2 | sort -u); do
+      if already_done "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" "$CH"; then say "  lo $OTHER_BATCH chuong $CH da duc lai hoan thanh - bo qua"; else CHS="$CHS $CH"; fi
+    done
+    [ -n "$CHS" ] || continue
+    # SEED la project vua xong o buoc truoc (ke ca lo khac): giong vua cap di tiep, khong cap lai.
     say "duc lai lo $OTHER_BATCH chuong:$CHS  (gieo tu $(basename "$SEED"))"
+    wait_gpu_free
     # shellcheck disable=SC2086
     bash scripts/launch_repair.sh "$OTHER_BATCH" --chapters $CHS --seed-from "$SEED" >> "$LOG" 2>&1 \
       || say "launch_repair lo $OTHER_BATCH thoat khac 0 - xem $LOG; di tiep."
+    SEED="$(py scripts/seed_chain.py --newest "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" 2>/dev/null || echo "$SEED")"
   done
 fi
 
 # ---- 6. lo ke tiep
-tag_here "$NEXT_TAG"
-say "khoi dong lo $NEXT (gieo tu $(py scripts/seed_chain.py "$BATCH" --seed | sed 's|.*/||'))"
-bash scripts/launch_batch.sh "$NEXT" >> "$LOG" 2>&1 || { say "launch_batch $NEXT that bai - xem $LOG"; exit 1; }
-say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
+if py scripts/seed_chain.py "$NEXT" --batch >/dev/null 2>&1; then
+  say "lo $NEXT da co project - khong khoi dong lai: $(py scripts/seed_chain.py "$NEXT" --batch)"
+else
+  tag_here "$NEXT_TAG"
+  wait_gpu_free
+  say "khoi dong lo $NEXT (gieo tu $(basename "$SEED") - cuoi chuoi, ke ca cac lan duc lai o buoc 4b)"
+  bash scripts/launch_batch.sh "$NEXT" --seed-from "$SEED" >> "$LOG" 2>&1 || { say "launch_batch $NEXT that bai - xem $LOG"; exit 1; }
+  say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
+fi
 
 # ---- 7. ghep sach: moi chuong `completed` moi nhat len sach, ke ca chuong vua va / duc lai.
 # Chi doc cac project, nen chay canh lo N+1 dang bay la vo hai.
