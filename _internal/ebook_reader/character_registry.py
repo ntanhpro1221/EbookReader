@@ -82,13 +82,28 @@ def canonical_key(name: str) -> str:
     return normalize_name(name).upper()
 
 
+def identity_key(name: str) -> str:
+    """Key để hỏi "hai cách viết này có phải một người không": gạch dưới là khoảng trắng.
+
+    Đo 2026-09-11: `NGUOI_TRA_LOI` xuất hiện 45 câu trong bốn project, tất cả tạo sau khi danh
+    sách "đã biết" bắt đầu đưa `NGƯỜI TRẢ LỜI` đủ dấu vào prompt - Ollama thỉnh thoảng trả về
+    bản ASCII nối bằng gạch dưới. `normalize_name` gộp khoảng trắng chứ không gộp gạch dưới, nên
+    nó thành một người thứ hai với một giọng mới, ngay trong chương đúc lại để xoá đúng lỗi ấy.
+
+    Cố ý KHÔNG đổi `normalize_name`: `NPC_LOCAL::...` và `ANONYMOUS_MALE` mang gạch dưới theo
+    thiết kế, và `is_local_speaker` kiểm tiền tố `NPC_LOCAL::`. Chỉ hai chỗ gom danh tính dùng
+    key này.
+    """
+    return normalize_name(name.replace("_", " "))
+
+
 def _stripped_and_marks(name: str) -> tuple[str, tuple[tuple[int, str], ...]]:
     """Tên bỏ hết dấu, và danh sách (vị trí, dấu) đã bỏ - để so hai cách viết với nhau.
 
     Chỉ so được hai tên khi phần chữ cái trần của chúng giống nhau; khi ấy các dấu là thứ duy
     nhất khác, và câu hỏi thành: dấu của tên này có phải **tập con** dấu của tên kia không.
     """
-    decomposed = unicodedata.normalize("NFD", normalize_name(name))
+    decomposed = unicodedata.normalize("NFD", identity_key(name))
     letters: list[str] = []
     marks: list[tuple[int, str]] = []
     for char in decomposed:
@@ -351,7 +366,7 @@ def _canonicalize_named_speakers(
     representatives: dict[str, str] = {}
     variants_by_key: dict[str, Counter[str]] = defaultdict(Counter)
     for cleaned, count in cleaned_counts.items():
-        variants_by_key[normalize_name(cleaned)][cleaned] += count
+        variants_by_key[identity_key(cleaned)][cleaned] += count
     for key, variants in variants_by_key.items():
         representatives[key] = min(
             variants,
@@ -387,7 +402,7 @@ def _canonicalize_named_speakers(
     aliases_by_target: dict[str, set[str]] = defaultdict(set)
     rewritten_segments = 0
     for original, cleaned in cleaned_by_original.items():
-        normalized = normalize_name(cleaned)
+        normalized = identity_key(cleaned)
         if (
             is_local_speaker(cleaned)
             or cleaned.casefold() in RESERVED_SPEAKERS
@@ -397,7 +412,7 @@ def _canonicalize_named_speakers(
         target_key = normalized
         honorific_target = _honorific_target(cleaned)
         if honorific_target is not None:
-            honorific_key = normalize_name(honorific_target)
+            honorific_key = identity_key(honorific_target)
             if honorific_key in representatives:
                 target_key = honorific_key
         target = representatives[target_key]

@@ -15,7 +15,9 @@ import unicodedata
 
 
 def _normalize(name: str) -> str:
-    return " ".join(str(name).strip().casefold().split())
+    # Gạch dưới là khoảng trắng - cùng luật với `character_registry.identity_key`; xem
+    # `patch_an_underscore_is_a_space` cho số đo (NGUOI_TRA_LOI, 45 câu, 4 project).
+    return " ".join(str(name).replace("_", " ").strip().casefold().split())
 
 
 def stripped_and_marks(name: str) -> tuple[str, tuple[tuple[int, str], ...]]:

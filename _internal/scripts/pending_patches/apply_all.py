@@ -27,12 +27,8 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Một bản vá, áp ở bước 1 của ranh giới lô 4 chạy LẠI (ranh gioi chet 08:45 vi phien Claude Code
-# thoat). NGUOI_TRA_LOI - gạch dưới - xuất hiện 45 câu trong bốn project tạo sau 07:25, và chương
-# 104 đúc lại có người ấy nói bằng hai giọng. Phải áp TRƯỚC các chương đúc lại còn lại và lô 5.
-ORDER: tuple[str, ...] = (
-    "patch_an_underscore_is_a_space.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -184,6 +180,12 @@ APPLIED = (
     "patch_the_book_decides_the_spelling.py",
     "patch_a_step_remembers_every_holder.py",
     "patch_a_transliteration_is_many_syllables.py",
+    # 2026-09-11: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Một bản vá, áp ở bước 1 của ranh giới lô 4 chạy LẠI (ranh gioi chet 08:45 vi phien Claude Code
+    # thoat). NGUOI_TRA_LOI - gạch dưới - xuất hiện 45 câu trong bốn project tạo sau 07:25, và chương
+    # 104 đúc lại có người ấy nói bằng hai giọng. Phải áp TRƯỚC các chương đúc lại còn lại và lô 5.
+    "patch_an_underscore_is_a_space.py",
 )
 
 

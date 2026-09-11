@@ -23,6 +23,9 @@ PAIRS = [
     ("MÀ", "MÁ", False),
     ("SAMAEL", "SAMAELE", False),
     ("SAMAEL", "SAMAEL", False),
+    # Gạch dưới là khoảng trắng: bản ASCII nối gạch của một tên đủ dấu là bản rơi dấu của nó.
+    ("NGUOI_TRA_LOI", "NGƯỜI TRẢ LỜI", True),
+    ("NGƯỜI_TRẢ_LỜI", "NGƯỜI TRẢ LỜI", False),
 ]
 
 
