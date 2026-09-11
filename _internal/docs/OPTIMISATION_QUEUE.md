@@ -1584,3 +1584,14 @@ tiêu đề. Sửa: bước 3 dùng phép kiểm không-ép (chương có bản 
 
 Cái đúng trong cùng log: mỗi `=== chuong ===` giờ có dòng `project:` theo sau, và lần thứ hai
 mang hậu tố `b` — hai lỗi sáng nay không tái diễn.
+
+### Bằng chứng cho `patch_an_underscore_is_a_space` (09:58) — chương 097 vá lại
+
+```
+lo04v_097   (07:34, trước bản vá)   NGƯỜI TRẢ LỜI 23 câu @doan_trang_f100   NGUOI_TRA_LOI 11 câu @doan_trang_f115
+lo04v_097b  (09:47, sau bản vá)     NGƯỜI TRẢ LỜI 37 câu @doan_trang_f100   (không còn dòng gạch dưới)
+```
+
+Cùng chương, cùng nguồn, cùng cách gieo; khác duy nhất là bản vá. Người ấy về **một** giọng, và
+là giọng ghim (`f100`, giọng của 69 chương trước đó), không phải giọng mới `f115`. Đây là dạng
+bằng chứng "cùng đầu vào, quyết định khác" mà tài liệu này đòi — không phải "chương xanh".
