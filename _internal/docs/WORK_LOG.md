@@ -1338,3 +1338,22 @@ chương từ `failed` sang `completed`** (003, 007, 016) — `_publish_verified
 chương qua được ba cổng chặn. Nguy vì `completed_at` mới nhất thắng ở bước 7: một chương hỏng cũ
 sẽ đoạt chỗ của bản đúc lại vừa xong. Giờ lượt này bỏ qua và nói ra mọi chương không `completed`.
 Ước lượng lại cho ranh giới: ~41 giây/chương, tức 1,5–2 giờ cho 102 chương, không phải 70 phút.
+
+## 2026-09-12, 01:30–01:45 — viết bản vá ghim tuổi, và cố ý KHÔNG xếp hàng đêm nay
+
+`patch_a_pinned_person_outranks_a_ported_voice`: cột `locked_age` riêng (+ migration), `cast --age`,
+`port_casting` mang thuộc tính đã ghim theo chuỗi gieo, và `_drop_pins_that_contradict_a_person`
+bỏ giọng ported khi nó trái thứ người đã ghim. Một luật duy nhất, và là luật duy nhất dữ liệu
+chứng minh được: *preset phải đúng phái, trừ trẻ con*. Không bịa luật "giọng trẻ con cho người
+lớn": nhìn `voice_key` không phân biệt được preset nữ dành cho một đứa trẻ với preset nữ dành cho
+một phụ nữ trưởng thành, và đoán chính là thứ đã tạo ra cả lớp lỗi này.
+
+Không vào `ORDER` đêm nay. Ba bản vá kia đã chứng minh trên dữ liệu thật; đây là tầng casting, nơi
+một lỗi hỏng dàn giọng cả lô chứ không hỏng một đoạn. Đợi lô 6 chạy xong rồi xếp ở ranh giới 6 → 7.
+
+Hai lần tự đâm vào bẫy của chính mình trong nửa giờ này, ghi lại vì cả hai đều đã nằm trong bộ
+nhớ: (1) dùng `strip().upper()` thay `_character_key` — chính docstring của nó nói hai phép ấy
+đồng ý cho "Noah" và khác nhau cho "Lê  Văn  A", tức người nghe ghim được rồi lượt chạy bỏ qua
+trong im lặng; (2) viết `
+` trong heredoc bash của tool và bị ăn dấu gạch chéo, đúng dòng đã ghi
+trong memory. Cách chữa cho (2) vẫn là: script sửa file thì viết bằng Write tool.

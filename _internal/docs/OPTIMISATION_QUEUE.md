@@ -1828,6 +1828,17 @@ con; preset nam = người lớn nam), bỏ pin ấy cho nhân vật đó, ghi m
 allocator cấp lại. Không đặt ở `port_casting`: project đích lúc ấy chưa có thuộc tính nào được
 ghim, nên nó không có gì để so.
 
+**Trạng thái 01:45 — mã đã viết, 10 bài thử xanh, CỐ Ý chưa xếp hàng.**
+`scripts/pending_patches/patch_a_pinned_person_outranks_a_ported_voice.py`. Nó không vào `ORDER`
+đêm nay: ba bản vá kia đã chứng minh trên dữ liệu thật, còn đây là thay đổi ở tầng **casting** -
+tầng đắt nhất của dự án, nơi một lỗi không hỏng một đoạn mà hỏng dàn giọng của cả lô. Xếp ở ranh
+giới 6 → 7, sau khi lô 6 cho thấy ba bản vá kia chạy đúng. Bốn việc nó làm: cột `locked_age` (+
+migration cho project cũ), `lock_character_age` / `locked_character_ages`, `cast --age` (và
+`--gender` thành không bắt buộc, cần ít nhất một trong hai), `port_casting` mang cả hai thuộc
+tính đã ghim theo chuỗi gieo, và `_drop_pins_that_contradict_a_person` ở
+`build_registry_and_cast`. Bài thử ghim chặt hai điều dễ trôi: `LOCKABLE_AGES ⊆ ALLOWED_AGES` (hai
+module, hai danh sách), và **ghim tuổi KHÔNG được ghim phái** (cột `locked` là của phái).
+
 **Dự đoán ghi trước:** sau bản vá và một lần `cast --character IVAN --age adult`, đúc lại 062 cho
 IVAN giọng nam; `voice_matches_the_person.py` về 0 dòng lệch phái; `one_person_one_voice --across`
 mất IVAN khỏi danh sách (3 chương của anh ta về một giọng). EVERAN **không** đổi: nó là trẻ con
