@@ -1133,3 +1133,21 @@ mọi bước, `launch_batch.sh --seed-from`); phát hiện `NGUOI_TRA_LOI` — 
 Ollama đổi sang gạch dưới, 45 câu trong 4 project, một người hai giọng ngay trong chương 104
 vừa đúc lại; bản vá `identity_key` xếp hàng chờ, 78 bài xanh trên bản sao. Dừng 007 đang dở (nó
 mang lỗi ấy) để ranh giới chạy lại đúc nó dưới bản vá.
+
+## 2026-09-11 (chiều) — Chuỗi tám tiếng rưỡi không người, và câu ngược về 0
+
+Ranh giới lô 4 → 5 chạy lại xong lúc 17:40: 24 chương đúc lại, tất cả một giọng một người; lô 5
+khởi động gieo từ cuối chuỗi; sách 118 chương. **`one_person_one_voice` trên sách: 0** — hôm qua
+21 chương, 202 câu. Ba bản vá được chứng minh trên audio thật trong ngày: âm tiết nối gạch (097
+qua lần đầu), gạch dưới (097 vá lại 37 câu một giọng; 104b), và đúc lại giọng (060 về giọng đa
+số).
+
+Lỗi tự tìm ra bằng cách chạy thứ mình viết: tên project là địa chỉ nội dung nên lần thứ hai mở
+lại project cũ và `run` từ chối trong im lặng (sửa: hậu tố `b`, in lỗi); `!` ép cả bước 3 (sửa:
+chỉ bước đúc lại); công cụ đếm giọng đọc cả bản bị bỏ cùng thư mục (sửa: đọc đúng project trong
+manifest); sổ cộng dồn ghi vào phần tử cuối chuỗi thay vì project gieo (sửa: gieo luôn đứng
+cuối). Một kết luận sai được rút lại cùng buổi: giết `launch_repair.sh` **không** giết lượt chạy.
+
+Phát hiện lớn nhất: **48% đoạn được sửa trong sách đọc tên theo chữ viết** thay vì cách đọc
+ghim, cả 348 bản đọc-ghim thua chỉ vì bài chính tả neo tên, WAV còn. Đặc tả bản vá đã ghi, áp ở
+ranh giới lô 5 → 6; viết và thử trên bản sao trong lúc lô 5 chạy.

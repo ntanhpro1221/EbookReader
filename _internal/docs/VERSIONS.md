@@ -2771,3 +2771,47 @@ mang dàn giọng của phiên bản trước — cảnh báo mà `assemble_book
 `assemble_book.py --apply` chép 32 chương mới; 92/478 chương đã có MP3, 32 chương có nhiều hơn
 một bản và bản mới nhất thắng. Trước đó bước 7 của `boundary.sh` gọi script **không có `--apply`**
 nên nó chỉ in rồi thoát 0, và cuốn sách đứng ở 60 chương trong khi log ghi "đã ghép sách".
+
+## `v0.2.0-lo04v`, `v0.2.0-lo04r`, `v0.2.0-lo05` — ranh giới lô 4 chạy lại, và lô 5
+
+Ranh giới lô 4 → 5 chết lúc 08:45 ngày 2026-09-11 (phiên Claude Code thoát), được làm cho
+**chạy lại được** rồi thả lại 09:17 với `--recast auto 1:007 2:054 2:056 2:059 3:060 … 3:091
+4:097! 4:104! --skip 106`. Chuỗi xong 17:40 — tám tiếng rưỡi, không ai ngồi cạnh.
+
+### Lô vá lô 4
+
+| chương | kết cục | ghi chú |
+|---|---|---|
+| 097 | `completed` | qua **ngay lần đầu** ở 10,74 kt/s, 4,73 âm tiết/giây — bản vá âm tiết nối gạch chứng minh |
+| 106 | `failed` | 11 lần ở 12,35 kt/s; chữ số + tiếng Anh chưa có cách đọc; `--skip` từ lần thả lại; **chưa có bản nào trong sách** |
+
+### Đúc lại giọng: 24 chương, 24/24 hoàn thành, 0 chương có một người hai giọng
+
+`auto` tìm ra 104 (8 người một bậc giọng ở lô 4); ép thêm 097/104 (mang `NGUOI_TRA_LOI`, xong
+trước bản vá gạch dưới); 21 chương một-người-hai-giọng đo hôm qua (007, 054, 056, 059, 060 … 091,
+kể cả 084 hỏng lần đầu vì đếm âm tiết). Tất cả nối đuôi nhau: 104b ← 097 ← 104 ← … ; 007b ←
+104b; 054/056/059 ← 007b; lô 3 ← 059; **lô 5 ← 091**. Mỗi project: `one_person_one_voice` sạch.
+
+Bằng chứng riêng của lần này: chương 060 (THỦ LÃNH 7+5 câu hai giọng, NGƯỜI TRẢ LỜI 7+2) giờ mỗi
+người một giọng **và là giọng đa số của cả sách**; chương 097 vá lại: NGƯỜI TRẢ LỜI 37 câu một
+giọng thay vì 23+11 (bản vá gạch dưới); chương 084b: bản đọc-ghim qua nhịp ở 12,47 kt/s / 4,99
+âm tiết/giây rồi chết ở neo tên — bản lên sách đọc theo chữ viết (xem A_NAME_READ_MANY_WAYS).
+
+### Cuốn sách: 118 chương, và câu ngược về 0
+
+```
+one_person_one_voice (sách 116 chương có thoại):  hôm qua 21 chương / 202 câu  →  hôm nay 0
+```
+
+Đọc đúng project manifest ghi (công cụ từng đọc cả bản bị bỏ cùng thư mục và báo 2 chương giả).
+
+### Lô 5: 119..144, 26 chương, 3.720 segment — khởi động 17:40, gieo từ `lo03r_091`
+
+Đầu tiên `launch_batch.sh --seed-from` chạy thật. Lỗi tìm thấy ngay: sổ cộng dồn ghi vào phần tử
+cuối chuỗi (`lo04r_104b`) trong khi `port_casting` đọc từ project gieo (`lo03r_091`, bản chép cũ
+21 tên). Va chạm duy nhất lúc gieo (KANG/SAMAEL) cho cùng kết quả với số đúng nên lô 5 không bị
+ảnh hưởng; launcher đã sửa để project gieo luôn đứng cuối chuỗi.
+
+Hàng chờ cho ranh giới lô 5 → 6: đặc tả "giữ cách đọc ghim khi chỉ neo tên phàn nàn" — 348/716
+đoạn được sửa trong sách (48%) đọc tên theo chữ viết, cả 348 chỉ hỏng vì
+`ASR_LOCKED_NAME_ANCHOR_MISMATCH`, WAV còn nguyên.
