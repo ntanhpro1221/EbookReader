@@ -492,6 +492,7 @@ trước khi ghép sách, chạy `python scripts/keep_the_locked_reading.py --bo
 lại bản đọc-ghim cho những đoạn đã lên sách mà chỉ thua bài chính tả neo tên (48% đoạn được
 sửa trong sách 92 chương đọc tên theo chữ viết — `KEEP_THE_LOCKED_READING.md`) rồi ghép lại
 chương bằng đuôi của `_process_chapter`; không GPU, ~40 giây một chương, nên chạy cạnh lô đang
-bay là vô hại. Trước khi `patch_keep_the_locked_reading` vào cây thì script tự từ chối và ranh
-giới đi tiếp. Kiểm sau lượt ấy: đếm lại bản `source_spelling_v1` được đề cử trong sách phải về
+bay là vô hại. Lần đầu (ranh giới 5 → 6) chạm 452 đoạn trong 102 chương, chừng 70 phút; các lô
+sau chỉ còn chương chưa đi qua bản vá. Trước khi `patch_keep_the_locked_reading` vào cây thì
+script tự từ chối và ranh giới đi tiếp. Kiểm sau lượt ấy: đếm lại bản `source_spelling_v1` được đề cử trong sách phải về
 gần 0; những ca còn lại là đoạn thua thêm mã khác ngoài neo tên.

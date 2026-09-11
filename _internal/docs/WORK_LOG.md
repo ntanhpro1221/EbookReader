@@ -1172,3 +1172,9 @@ lượng mang `implementation_hash`, nên phải ghép lại chương dưới ch
 phải của cây mã. Kết quả: 10/10 đoạn, 38 giây, `cli validate` qua. Bộ test đầy đủ xanh trên cây
 đã vá (trừ `test_doctor…` chỉ hỏng vì cây tạm không có `runtime/models`). Xếp vào `ORDER`, bước
 6b của ranh giới. Lô 5 đang phân tích: 816/3.720 lúc 18:34, ~15 đoạn/phút.
+
+Lượt thử chỉ-đọc trên cả sách (18:50) đếm 1.127 đoạn, không phải 348, và ép script thêm hai
+luật: chỉ chương manifest ghi (33 chương đã bị bản đúc lại thay — ghép lại chúng là để chương
+cũ đoạt lại chỗ trong sách, vì `assemble_book` chọn `completed_at` mới nhất) và chỉ đoạn đang
+phát bản đọc-theo-chữ-viết (411 đoạn vẫn phát bản gốc: không có bằng chứng xếp hạng). Còn lại
+**452 đoạn trong 102 chương**, ~70 phút ở bước 6b.

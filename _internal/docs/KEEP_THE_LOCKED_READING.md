@@ -133,13 +133,37 @@ chép MP3 mới (nó chép khi kích thước đổi). Các project vừa vá / 
 mã mới nên đã tự giữ cách đọc ghim; `--book` chỉ chạm các chương trong manifest của lần ghép
 trước.
 
+## Lượt thử trên cả cuốn sách, và hai luật nó ép script phải có
+
+Lượt thử chỉ-đọc trên 36 project của manifest (18:50) đếm **1.127** đoạn có bản đọc-ghim chỉ
+thua bài chính tả — không phải 348. Hai lý do, và mỗi lý do thành một luật của script:
+
+1. **Chỉ chương manifest ghi, không phải cả project.** Một project lô có 31 chương nhưng sách
+   chỉ lấy vài chương từ nó; phần còn lại đã bị bản đúc lại thay. Không lọc thì lượt này chạm
+   142 chương-project cho một cuốn sách 116 chương — phí, và tệ hơn phí: `assemble_book` chọn
+   bản có `completed_at` mới nhất, nên một chương cũ vừa ghép lại sẽ **đoạt lại chỗ** của bản
+   đúc lại, và dàn giọng cũ quay về sách. `--book` giờ mang theo tập chương của từng project;
+   33 chương bị bản khác thay được bỏ qua và nói ra.
+
+2. **Chỉ đoạn đang phát bản đọc-theo-chữ-viết.** Trong 1.127 có 597 đoạn đang phát `Jake` — lỗi
+   người nghe nghe thấy — và 530 đoạn vẫn phát bản gốc (`failed`, máy đã cấp phép) nhưng có bản
+   đọc-ghim rõ tiếng chỉ thua bài chính tả. Hai bản ấy cùng đọc ghim, cùng thua cùng một bài;
+   không có bằng chứng nào xếp hạng chúng, và đổi audio đã lên sách mà không có lý do người
+   nghe cảm được là đổi cho có. Mặc định để yên; `--also-unchanged` mở nếu có ngày cần. (Vòng
+   sửa đã vá vẫn đề cử bản rõ tiếng ở lô mới — ở đó chưa có gì lên sách để mà giữ.)
+
+Sau hai luật: **452 đoạn trong 102 chương** sẽ được chữa, 411 để yên, 33 chương bỏ qua. Ở ~40
+giây một chương, bước 6b mất chừng 70 phút — chạy cạnh lô 6 vừa khởi động, không GPU. Thử lại
+trên bản sao 084b với luật mới: 7/7 đoạn, 3 để yên, MP3 mới `9a4a30…`, `cli validate` qua.
+
 ## Dự đoán ghi trước (kiểm ở lô 6 và sau lượt đề cử lại)
 
 - Lô 6: tỉ lệ ứng viên `source_spelling_v1` được đề cử về **~0** cho các ca chỉ-neo-tên; số
   neo tên `matched=False` không đổi (cổng vẫn nói điều nó thấy); `one_person_one_voice.py`
   không đổi (đây là chuyện cách đọc, không phải giọng).
-- Sau `--book --apply`: `A_NAME_READ_MANY_WAYS`-style đếm lại phải cho gần **0** bản
-  `source_spelling_v1` được đề cử trong sách; những ca còn lại là các đoạn thua thêm mã khác
-  ngoài neo tên — chúng đúng là bản thu hỏng, và đổi cách đọc ở đó không phải lỗi.
+- Sau `--book --apply`: lượt thử chỉ-đọc chạy lại phải in "không đoạn nào đang phát bản
+  đọc-theo-chữ-viết" cho cả 36 project (để yên 411); đếm bản `source_spelling_v1` được đề cử
+  trong sách giảm đúng 452; những ca còn lại là đoạn thua thêm mã khác ngoài neo tên — chúng
+  đúng là bản thu hỏng, và đổi cách đọc ở đó không phải lỗi.
 - Nếu một chương ghép lại không được, script in "CHƯA ghép lại" với lý do; artifact đã đánh
   dấu hết hiệu lực nên `cli run` (GPU) sẽ tự ghép lại khi được gọi.

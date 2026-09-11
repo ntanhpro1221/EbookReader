@@ -220,8 +220,35 @@ def reassemble(pipeline: BookPipeline, chapter: Any) -> tuple[bool, str]:
     return True, f"MP3 mới {sha}… {size / 2**20:.1f} MB"
 
 
-def run_project(root: Path, *, apply: bool) -> int:
-    """0 = xong (hoặc không có gì); 1 = có chương ghép lại không được; 2 = từ chối."""
+def _spelling_take_is_playing(segment: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    """Đoạn đang phát bản đọc-theo-chữ-viết (khác đương nhiệm mà bản đọc-ghim đã đấu với)?"""
+    return str(segment["wav_sha256"] or "").casefold() != str(
+        candidate["incumbent_sha256"] or ""
+    ).casefold()
+
+
+def run_project(
+    root: Path,
+    *,
+    apply: bool,
+    only_titles: set[str] | None = None,
+    include_unchanged: bool = False,
+) -> int:
+    """0 = xong (hoặc không có gì); 1 = có chương ghép lại không được; 2 = từ chối.
+
+    `only_titles`: chỉ những chương này (từ manifest). Một project lô có 31 chương nhưng sách
+    chỉ lấy vài chương từ nó - phần còn lại đã bị bản đúc lại thay. Ghép lại một chương đã bị
+    thay là phí, và tệ hơn phí: `assemble_book` chọn bản `completed_at` mới nhất, nên chương cũ
+    vừa ghép lại sẽ đoạt lại chỗ của bản đúc lại - dàn giọng cũ quay về sách. Đo 18:50
+    2026-09-11: không lọc thì lượt này chạm 142 chương-project cho một cuốn sách 116 chương.
+
+    `include_unchanged`: mặc định chỉ chữa đoạn **đang phát bản đọc-theo-chữ-viết** - đó là lỗi
+    người nghe nghe thấy (597 đoạn, đo cùng lúc). Đoạn vẫn phát bản gốc (`failed`, máy đã cấp
+    phép) mà có bản đọc-ghim rõ tiếng chỉ thua bài chính tả (530 đoạn) thì để yên: hai bản cùng
+    đọc ghim, cùng thua cùng một bài, không có bằng chứng nào xếp hạng chúng, và đổi audio đã
+    lên sách mà không có lý do người nghe cảm được là đổi cho có. Vòng sửa đã vá sẽ đề cử bản
+    ấy ở lô mới (ở đó chưa có gì lên sách); ở đây phải mở bằng cờ.
+    """
     if not (root / "project.sqlite3").is_file():
         _say(f"{root.name}: không phải project")
         return 2
@@ -239,32 +266,44 @@ def run_project(root: Path, *, apply: bool) -> int:
         _say("cây mã chưa có bản vá patch_keep_the_locked_reading - không có gì để gọi")
         return 2
     pipeline = bare_pipeline(paths, db, settings)
-    found = survey(db, pipeline.quality_policy_hash)
     chapters = {int(row["id"]): row for row in db.list_chapters()}
+    found = survey(db, pipeline.quality_policy_hash)
+    superseded = 0
+    if only_titles is not None:
+        before = len(found)
+        found = {
+            chapter_id: items
+            for chapter_id, items in found.items()
+            if str(chapters[chapter_id]["title"]) in only_titles
+        }
+        superseded = before - len(found)
+    left_alone = 0
+    if not include_unchanged:
+        kept_only = {
+            chapter_id: [pair for pair in items if _spelling_take_is_playing(*pair)]
+            for chapter_id, items in found.items()
+        }
+        left_alone = sum(len(items) for items in found.values()) - sum(
+            len(items) for items in kept_only.values()
+        )
+        found = {chapter_id: items for chapter_id, items in kept_only.items() if items}
     total = sum(len(items) for items in found.values())
+    notes = []
+    if left_alone:
+        notes.append(f"để yên {left_alone} đoạn vẫn phát bản gốc")
+    if superseded:
+        notes.append(f"{superseded} chương đã bị bản khác thay trong sách")
+    note = f" ({'; '.join(notes)})" if notes else ""
     if not found:
-        _say(f"{root.name}: không đoạn nào có bản đọc-ghim chỉ thua bài chính tả.")
+        _say(f"{root.name}: không đoạn nào đang phát bản đọc-theo-chữ-viết{note}.")
         return 0
-    # Hai loại, đếm riêng vì chúng kể hai chuyện khác nhau: đoạn đang mang bản đọc-theo-chữ-viết
-    # (người nghe đang nghe `Jake`), và đoạn vẫn mang bản gốc `failed` được máy cấp phép, nhưng
-    # có bản đọc-ghim rõ tiếng chỉ thua bài chính tả - vòng sửa đã vá sẽ đề cử bản ấy.
-    def _spelling_take_is_playing(segment: dict[str, Any], candidate: dict[str, Any]) -> bool:
-        return str(segment["wav_sha256"] or "").casefold() != str(
-            candidate["incumbent_sha256"] or ""
-        ).casefold()
-
-    swapped = sum(
-        1 for items in found.values() for segment, candidate in items
-        if _spelling_take_is_playing(segment, candidate)
-    )
     _say(
-        f"{root.name}: {total} đoạn trong {len(found)} chương có bản đọc-ghim chỉ thua bài chính tả"
-        f" ({swapped} đang phát bản đọc-theo-chữ-viết, {total - swapped} vẫn phát bản gốc):"
+        f"{root.name}: {total} đoạn trong {len(found)} chương đang phát bản đọc-theo-chữ-viết"
+        f" dù có bản đọc-ghim chỉ thua bài chính tả{note}:"
     )
     for chapter_id, items in sorted(found.items()):
         chapter = chapters[chapter_id]
-        swapped_here = sum(1 for s_, c_ in items if _spelling_take_is_playing(s_, c_))
-        _say(f"  chương {chapter['title']}: {len(items)} đoạn ({swapped_here} đọc theo chữ viết)")
+        _say(f"  chương {chapter['title']}: {len(items)} đoạn")
         for segment, candidate in items[:3]:
             text = " ".join(str(segment["text"]).split())[:64]
             _say(
@@ -297,22 +336,22 @@ def run_project(root: Path, *, apply: bool) -> int:
     return 1 if failures else 0
 
 
-def shipped_projects(book: Path = BOOK, versions: Path = VERSIONS) -> list[Path]:
+def shipped_projects(book: Path = BOOK, versions: Path = VERSIONS) -> dict[Path, set[str]]:
+    """{project: {chương sách lấy từ nó}} theo `manifest.json` - đúng chương, không phải cả project."""
     try:
         payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return []
+        return {}
     entries = payload if isinstance(payload, list) else payload.get("chapters", [])
-    roots: list[Path] = []
+    roots: dict[Path, set[str]] = {}
     for item in entries:
         version = str(item.get("version") or "")
         project = str(item.get("project") or "")
-        if not version or not project:
+        title = str(item.get("title") or "")
+        if not version or not project or not title:
             _say(f"manifest: chương {item.get('title')} không ghi project - bỏ qua")
             continue
-        root = versions / version / project
-        if root not in roots:
-            roots.append(root)
+        roots.setdefault(versions / version / project, set()).add(title)
     return roots
 
 
@@ -321,15 +360,28 @@ def main(argv: list[str]) -> int:
     parser.add_argument("projects", nargs="*", type=Path)
     parser.add_argument("--book", action="store_true", help="mọi project manifest.json của sách ghi")
     parser.add_argument("--apply", action="store_true", help="đề cử lại và ghép lại chương (mặc định chỉ liệt kê)")
+    parser.add_argument(
+        "--also-unchanged",
+        action="store_true",
+        help="chữa cả đoạn vẫn phát bản gốc (mặc định để yên - xem run_project)",
+    )
     args = parser.parse_args(argv)
-    roots = list(args.projects)
+    targets: list[tuple[Path, set[str] | None]] = [(root, None) for root in args.projects]
     if args.book:
-        roots.extend(shipped_projects())
-    if not roots:
+        targets.extend(sorted(shipped_projects().items()))
+    if not targets:
         parser.error("cần ít nhất một project, hoặc --book")
     worst = 0
-    for root in roots:
-        worst = max(worst, run_project(root.expanduser().resolve(), apply=args.apply))
+    for root, titles in targets:
+        worst = max(
+            worst,
+            run_project(
+                root.expanduser().resolve(),
+                apply=args.apply,
+                only_titles=titles,
+                include_unchanged=args.also_unchanged,
+            ),
+        )
     return worst
 
 

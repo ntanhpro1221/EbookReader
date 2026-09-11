@@ -1671,4 +1671,7 @@ nhiệm *hiện tại* và tự hạ anh em đọc-theo-chữ-viết; CAS trạn
 `machine_take_substitutions` trên 47 project) không bao giờ đi qua được; và lượt đề cử lại không
 chạy lại cả `_process_chapter` (một chương xong vẫn có đoạn `failed` được máy cấp phép, và bước
 tổng hợp sẽ gọi Whisper cho nó) mà gọi `_publish_verified_chapter` — đuôi của `_process_chapter`
-tách thành hàm, hai người gọi chung một thân.
+tách thành hàm, hai người gọi chung một thân. Lượt thử chỉ-đọc trên cả sách (18:55): **452 đoạn
+trong 102 chương** sẽ được chữa; 411 đoạn vẫn phát bản gốc được để yên (không có bằng chứng xếp
+hạng bản gốc với bản rõ tiếng); 33 chương đã bị bản đúc lại thay được bỏ qua — không lọc thì
+chương cũ ghép lại sẽ đoạt lại chỗ trong sách vì `assemble_book` chọn `completed_at` mới nhất.
