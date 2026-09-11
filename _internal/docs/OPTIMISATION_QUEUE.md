@@ -1764,3 +1764,49 @@ luật dựa vào kỷ luật của người, đúng kiểu luật sẽ hỏng l
 `apply_all --apply` in ra danh sách file nó đã ghi (nó biết chính xác: `ebook_reader/*`, `tests/*`,
 `scripts/pending_patches/apply_all.py`), và bước 2 stage đúng danh sách ấy. Không sửa được lúc
 này vì `boundary.sh` đang chạy (bash đọc script theo từng khúc).
+
+## Đặc tả: ghim TUỔI như đang ghim phái, và một thuộc tính đã ghim phải thắng giọng ported (2026-09-12, 01:20)
+
+Bằng chứng, đo bằng `scripts/voice_matches_the_person.py` trên sách 116 chương (451 dòng chương ×
+nhân vật × giọng, 61 tên):
+
+    lệch phái, đếm thô                    11 dòng / 5 tên
+    trừ luật giọng trẻ con                 1 dòng / 1 tên  <- con số thật
+    người đổi tuổi giữa các lô             5 tên, 3 trong đó đổi cả giọng
+
+Con số thật là **IVAN**: `male`, `age=unknown`, 17 câu ở chương 062 đọc bằng `ngoc_linh_f107_p+02`
+— preset **nữ** kéo cao, thứ dự án dành cho trẻ con (`AGE_TARGET_PITCH_HZ`: preset nam dừng cách
+ống âm một đứa trẻ 0,8 cm). Đường đi của lỗi:
+
+    lô 3, chương 072   `characters.age = child`   (mọi `segments.age` của anh ta: `unknown`)
+    lô 3, chương 062   `age = unknown`, giọng đã ghim là giọng trẻ con -> 17 câu giọng nữ
+    lô 3, chương 060   `age = unknown`, 3 câu, `thai_son_f100_p+00` — giọng nam, đúng
+    lô 4               `age = unknown`, `locked_voice_key = ngoc_linh_f107_p+02` — port mang theo
+
+Thoại: *"T-Tôi tên là Ivan,"*, *"cậu đã m-mượn một ít t-tiền của bọn tôi…"*, *"Khỏe không, người
+anh em?"* — một thanh niên hay lắp, không phải một đứa trẻ. Một lần phân loại sai đã theo anh ta
+sang mọi lô sau, vì `port_casting` mang `locked_voice_key` đi cùng danh tính. Đúng cơ chế giữ nhất
+quán; nó giữ nguyên cả cái sai.
+
+**Chưa có cách sửa.** `cli cast --character X --gender male|female` ghim được phái — docstring của
+nó nói đúng lý do tồn tại: *"một lỗi mô hình mà người nghe trả lời trong một giây lại tốn một giờ
+máy"*. Tuổi thì không ghim được, mà tuổi mới chọn **họ giọng**, nên lỗ này đắt hơn lỗ mà `cast`
+được viết ra để bịt.
+
+**Bản vá đề xuất (file khoá: `cli.py`, `database.py`, `character_registry.py`), áp ở ranh giới 6 → 7:**
+
+1. `cli cast --character X --age adult|teen|child|young|unknown` ghim tuổi, cùng bảng và cùng cách
+   với phái đã ghim (`lock_character_gender` → thêm `lock_character_age`). Đọc được trước khi
+   casting chạy, như `cast --gender`.
+2. `build_registry_and_cast` đọc tuổi đã ghim **trước** tuổi phân tích, y như nó làm với phái.
+3. **Thuộc tính đã ghim thắng giọng ported.** Khi tuổi (hoặc phái) đã ghim không còn khớp họ giọng
+   của `locked_voice_key` mà `port_casting` mang sang, bỏ giọng ấy và cấp lại — có ghi một dòng
+   `runtime_events` nói rõ vì sao, vì đây là chỗ duy nhất "nhất quán" phải nhường "đúng". Không có
+   điều 3 thì điều 1 và 2 vô dụng cho mọi lô sau: port vẫn mang giọng cũ.
+4. Chỉ SAU ĐÓ mới đúc lại: `python scripts/voice_matches_the_person.py --recast` (hiện in `3:062`).
+   Đúc lại trước khi ghim chỉ tốn GPU — công cụ đã in đúng câu cảnh báo ấy.
+
+**Dự đoán ghi trước:** sau bản vá và một lần `cast --character IVAN --age adult`, đúc lại 062 cho
+IVAN giọng nam; `voice_matches_the_person.py` về 0 dòng lệch phái; `one_person_one_voice --across`
+mất IVAN khỏi danh sách (3 chương của anh ta về một giọng). EVERAN **không** đổi: nó là trẻ con
+thật, và luật giọng trẻ con đúng.

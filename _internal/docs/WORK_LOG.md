@@ -1314,3 +1314,27 @@ thước nhịp không xét âm tiết — một câu dày chữ số đọc nha
 settings của từng project: 217 đoạn đổi số đếm, **0 bị gắn cờ mới, 0 được tha thêm**, biên lùi xa
 trần nhỏ nhất là 2,1 kt/s. Không hồi quy, nhưng biên mỏng — ghi vào hàng chờ kèm cách chữa nếu
 ngày nào nó bật: cho cận trên xét cả âm tiết, đừng nới trần.
+
+## 2026-09-12, 00:55–01:25 — một câu chưa ai hỏi: giọng ấy có ĐÚNG không
+
+Hai công cụ đang có đều hỏi về tính nhất quán (`voice_pool_pressure`: hai người chung một giọng;
+`one_person_one_voice --across`: một người hai giọng). Không ai hỏi *giọng ấy có đúng không* — và
+một cuốn sách hoàn toàn nhất quán vẫn có thể đọc một người đàn ông bằng giọng con gái ở mọi chương.
+Viết `scripts/voice_matches_the_person.py` (+ 8 bài thử) để hỏi hai câu: lệch phái, và đổi tuổi
+giữa các lô.
+
+Lần đo thô báo 11 dòng / 5 tên, và **cái bẫy nằm ngay đó**: luật giọng trẻ con là có thật và có
+chủ ý — preset nam dừng cách ống âm một đứa trẻ 0,8 cm, nên trẻ trai được đọc bằng preset nữ kéo
+cao formant/pitch, có đo và có xếp hạng của người nghe trong `voice_catalog`. Trừ luật ấy ra, con
+số thật là **1 dòng**: IVAN, `age=unknown`, 17 câu ở chương 062 bằng giọng trẻ con nữ, vì lô 3 gọi
+anh ta là `child` một lần và `port_casting` mang `locked_voice_key` ấy sang mọi lô sau. Không có
+lệnh nào ghim được tuổi (`cast` chỉ ghim phái), nên đúc lại bây giờ chỉ tốn GPU — đặc tả bản vá
+cho ranh giới 6 → 7 đã ghi, kèm điều 3 là điều khó: *một thuộc tính đã ghim phải thắng giọng
+ported*, tức chỗ duy nhất "nhất quán" phải nhường "đúng".
+
+Cùng buổi, diễn tập bước 6b ở quy mô thật trên bản sao `lo01b`: 25 chương ghép lại, 0 thất bại,
+17 phút 16 giây, project thật không đổi một byte. Diễn tập ấy lại phát hiện lượt này **đưa ba
+chương từ `failed` sang `completed`** (003, 007, 016) — `_publish_verified_chapter` xuất bản mọi
+chương qua được ba cổng chặn. Nguy vì `completed_at` mới nhất thắng ở bước 7: một chương hỏng cũ
+sẽ đoạt chỗ của bản đúc lại vừa xong. Giờ lượt này bỏ qua và nói ra mọi chương không `completed`.
+Ước lượng lại cho ranh giới: ~41 giây/chương, tức 1,5–2 giờ cho 102 chương, không phải 70 phút.

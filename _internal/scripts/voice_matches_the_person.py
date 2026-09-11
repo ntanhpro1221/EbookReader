@@ -1,0 +1,278 @@
+"""Giọng có đúng là giọng của người ấy không — phái, và tuổi, trên cả cuốn sách đã ghép.
+
+    python scripts/voice_matches_the_person.py                 # báo cáo
+    python scripts/voice_matches_the_person.py --recast         # in `B:NNN` cho boundary.sh
+    python scripts/voice_matches_the_person.py <project>        # một project
+
+Hai công cụ đã có đều hỏi về **tính nhất quán**: `voice_pool_pressure` hỏi "hai người có chung
+một giọng không", `one_person_one_voice --across` hỏi "một người có hai giọng không". Không ai
+hỏi câu đơn giản hơn: *giọng ấy có đúng không*. Một cuốn sách hoàn toàn nhất quán vẫn có thể đọc
+một người đàn ông bằng giọng con gái ở mọi chương.
+
+Đo lần đầu 23:00 ngày 2026-09-11 trên sách 116 chương: 451 dòng (chương × nhân vật × giọng), 61
+tên. Kết quả và cái bẫy trong nó:
+
+    lệch phái, thô               11 dòng / 5 tên
+    trừ luật giọng trẻ con        1 dòng / 1 tên   <- con số thật
+    đổi tuổi giữa các chương      5 tên, 3 trong đó đổi cả giọng
+
+**Luật giọng trẻ con là có thật và có chủ ý** (`voice_catalog.AGE_TARGET_PITCH_HZ`,
+`child_voice_preference`): preset nam không với tới được ống âm của một đứa trẻ — chúng dừng
+cách 0,8 cm — nên một đứa trẻ trai được đọc bằng preset **nữ** kéo cao formant và pitch. Vậy
+"nam đọc bằng giọng nữ" chỉ là lỗi khi `age` không phải `child`. Một công cụ không biết luật ấy
+sẽ báo EVERAN (nam, `child`, 36 câu) là lỗi và làm người đọc báo cáo mất niềm tin vào chín con
+số còn lại.
+
+Con số thật: **IVAN**, `male`, `age=unknown`, 17 câu ở chương 062 đọc bằng `ngoc_linh_f107_p+02`
+— giọng nữ kéo cao dành cho trẻ con. Đường đi của lỗi ấy, đọc từ dữ liệu:
+
+    lô 3, chương 072   registry nói `age=child`  (mọi `segments.age` của anh ta: `unknown`)
+    lô 3, chương 062   `age=unknown`, nhưng giọng ghim đã là giọng trẻ con -> 17 câu giọng nữ
+    lô 3, chương 060   `age=unknown`, 3 câu, `thai_son_f100_p+00` — giọng nam, đúng
+    lô 4               `age=unknown`, `locked_voice_key=ngoc_linh_f107_p+02` — port mang theo
+
+Thoại của IVAN đọc như một thanh niên hay lắp: *"T-Tôi tên là Ivan,"*, *"cậu đã m-mượn một ít
+t-tiền của bọn tôi…"*, *"Khỏe không, người anh em?"*. Một lần phân loại sai `child` ở lô 3 đã
+theo anh ta sang mọi lô sau, vì `port_casting` mang `locked_voice_key` đi cùng danh tính — đúng
+cơ chế giữ nhất quán, và nó giữ nguyên cả cái sai.
+
+**Chưa có cách sửa.** `cli cast --character X --gender male` ghim được PHÁI (viết cho alpha.30,
+khi một lỗi mô hình mà người nghe trả lời trong một giây lại tốn một giờ máy). Không có
+`--age`. Tuổi mới là thứ chọn **họ giọng** (trẻ con: preset nữ kéo cao; nam trưởng thành: preset
+nam), nên lỗ này đắt hơn lỗ mà `--age` được copy từ. Đặc tả bản vá ở
+`docs/OPTIMISATION_QUEUE.md`; đúc lại 062 và 072 chỉ có nghĩa **sau** khi ghim được tuổi, vì
+đúc lại mà port vẫn mang giọng cũ thì chỉ tốn GPU.
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import json
+import re
+import sqlite3
+import sys
+import unicodedata
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from ebook_reader.voice_catalog import VIENEU_PRESETS  # noqa: E402
+from scripts.name_marks import fold_dropped_marks  # noqa: E402
+
+BOOK = Path("D:/Novels/Audiobooks/_book")
+VERSIONS = Path("D:/Novels/Audiobooks/_versions")
+
+VOICES_SQL = """
+SELECT ch.title AS chapter, c.canonical_name AS name, c.gender AS gender, c.age AS age,
+       v.voice_key AS voice_key, count(*) AS lines
+FROM segments s
+  JOIN characters c ON c.id = s.canonical_character_id
+  JOIN voice_profiles v ON v.id = s.voice_profile_id
+  JOIN chapters ch ON ch.id = s.chapter_id
+WHERE s.kind = 'dialogue' AND v.voice_key <> 'narrator'
+  AND c.canonical_name NOT LIKE 'NPC/_%' ESCAPE '/'
+  AND upper(c.canonical_name) NOT LIKE 'ANONYMOUS%'
+GROUP BY ch.id, c.id, v.id
+"""
+
+
+def _say(line: str) -> None:
+    try:
+        print(line)
+    except (UnicodeEncodeError, OSError, ValueError):
+        sys.stdout.buffer.write(line.encode("utf-8", "replace") + b"\n")
+
+
+def _slug(name: str) -> str:
+    plain = unicodedata.normalize("NFD", str(name))
+    plain = "".join(ch for ch in plain if not unicodedata.combining(ch))
+    return "_".join(plain.replace("Đ", "D").replace("đ", "d").lower().split())
+
+
+PRESET_GENDER: dict[str, str] = {_slug(p["name"]): str(p["gender"]) for p in VIENEU_PRESETS}
+
+
+def preset_gender(voice_key: str) -> str | None:
+    """Phái của preset đứng sau một `voice_key`, hoặc None nếu không tra được.
+
+    `voice_key` là `preset_<slug>_f<formant>_p<pitch>`; so tiền tố dài trước để `thanh_binh`
+    không bị `thanh` (nếu có ngày thêm preset ấy) nhận nhầm.
+    """
+    key = str(voice_key)
+    key = key[len("preset_") :] if key.startswith("preset_") else key
+    for slug, gender in sorted(PRESET_GENDER.items(), key=lambda kv: -len(kv[0])):
+        if key.startswith(slug):
+            return gender
+    return None
+
+
+def read_rows(project: Path) -> list[dict]:
+    """[{chapter, name, gender, age, voice, lines}] của một project; rỗng nếu không đọc được."""
+    try:
+        conn = sqlite3.connect(f"file:{project / 'project.sqlite3'}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return []
+    try:
+        conn.row_factory = sqlite3.Row
+        found = conn.execute(VOICES_SQL).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()
+    return [
+        {
+            "chapter": str(r["chapter"]),
+            "name": str(r["name"]),
+            "gender": str(r["gender"] or ""),
+            "age": str(r["age"] or ""),
+            "voice": str(r["voice_key"]),
+            "lines": int(r["lines"]),
+            "project": project.name,
+        }
+        for r in found
+    ]
+
+
+def shipped_rows(book: Path = BOOK, versions: Path = VERSIONS) -> list[dict]:
+    """Các dòng của những chương ĐÃ LÊN SÁCH, theo `manifest.json` (đúng project nó ghi)."""
+    try:
+        payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+    want: dict[str, tuple[str, str]] = {}
+    for item in entries:
+        title = str(item.get("title") or "")
+        if title:
+            want[title] = (str(item.get("version") or ""), str(item.get("project") or ""))
+    rows: list[dict] = []
+    for version, project in sorted(set(want.values())):
+        folder = versions / version / project
+        if not (folder / "project.sqlite3").is_file():
+            continue
+        rows.extend(r for r in read_rows(folder) if want.get(r["chapter"]) == (version, project))
+    return rows
+
+
+def fold_names(rows: list[dict]) -> list[dict]:
+    """Gộp cách viết rơi dấu, như `one_person_one_voice` - không gộp thì mỗi cách viết là một người."""
+    folded = fold_dropped_marks(sorted({r["name"] for r in rows}))
+    return [{**r, "name": folded.get(r["name"], r["name"])} for r in rows]
+
+
+def wrong_gender(rows: list[dict]) -> list[dict]:
+    """Dòng có giọng khác phái mà **luật giọng trẻ con không giải thích**.
+
+    `age == "child"` được miễn: đó là cách dự án đọc trẻ con, có đo và có xếp hạng của người
+    nghe (`voice_catalog`). Phái `unknown` cũng được miễn - không biết thì không kết tội.
+    """
+    return [
+        r
+        for r in rows
+        if r["gender"] in ("male", "female")
+        and r["age"] != "child"
+        and preset_gender(r["voice"]) is not None
+        and preset_gender(r["voice"]) != r["gender"]
+    ]
+
+
+def age_drift(rows: list[dict]) -> dict[str, dict]:
+    """{tên: {ages: {tuổi: {chương}}, voices: {giọng: {chương}}}} cho người bị đổi tuổi giữa các chương.
+
+    Đổi tuổi là đổi cả **họ giọng**, nên nó nặng hơn đổi formant: người nghe mất nhân vật y như
+    lớp tách danh tính do rơi dấu. Chỉ báo khi có ít nhất hai giá trị tuổi khác rỗng.
+    """
+    ages: dict[str, dict[str, set[str]]] = collections.defaultdict(lambda: collections.defaultdict(set))
+    voices: dict[str, dict[str, set[str]]] = collections.defaultdict(lambda: collections.defaultdict(set))
+    for r in rows:
+        ages[r["name"]][r["age"]].add(r["chapter"])
+        voices[r["name"]][r["voice"]].add(r["chapter"])
+    return {
+        name: {"ages": dict(buckets), "voices": dict(voices[name])}
+        for name, buckets in ages.items()
+        if len([age for age in buckets if age]) > 1
+    }
+
+
+def chapter_batches(book: Path = BOOK) -> dict[str, int]:
+    """{chương: số lô} theo tên phiên bản trong manifest (`v0.2.0-lo03r` → 3)."""
+    try:
+        payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+    out: dict[str, int] = {}
+    for item in entries:
+        match = re.search(r"lo(\d+)", str(item.get("version") or ""))
+        title = str(item.get("title") or "")
+        if match and title:
+            out[title] = int(match.group(1))
+    return out
+
+
+def recast_arguments(rows: list[dict], batches: dict[str, int]) -> list[str]:
+    """`B:NNN` cho các chương có giọng sai phái. Không gộp chương của `age_drift`.
+
+    Vì sao chỉ lấy nhóm sai phái: một người đổi tuổi mà giọng vẫn nhất quán thì không có gì để
+    đúc lại, và một người đổi cả giọng đã nằm trong danh sách của `one_person_one_voice
+    --across`. Hai công cụ không nên đề nghị cùng một chương hai lần.
+    """
+    titles = sorted({r["chapter"] for r in rows})
+    return [f"{batches[title]}:{title}" for title in titles if title in batches]
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("project", nargs="?", type=Path, default=None)
+    parser.add_argument("--recast", action="store_true", help="chỉ in `B:NNN` cho boundary.sh")
+    args = parser.parse_args(argv)
+
+    rows = fold_names(read_rows(args.project) if args.project else shipped_rows())
+    where = args.project.name if args.project else "cuốn sách đã ghép"
+    if not rows:
+        _say(f"không đọc được giọng nào từ {where}")
+        return 2
+
+    bad = wrong_gender(rows)
+    if args.recast:
+        _say(" ".join(recast_arguments(bad, chapter_batches())))
+        return 0
+
+    chapters = {r["chapter"] for r in rows}
+    _say(f"{where}: {len(rows)} dòng (chương × nhân vật × giọng), {len(chapters)} chương,"
+         f" {len({r['name'] for r in rows})} tên.")
+    _say("")
+    excused = [r for r in rows if r["age"] == "child" and preset_gender(r["voice"]) != r["gender"]]
+    if not bad:
+        _say("Không nhân vật nào bị đọc bằng giọng khác phái (ngoài luật giọng trẻ con).")
+    else:
+        _say(f"{len(bad)} dòng GIỌNG SAI PHÁI, {len({r['name'] for r in bad})} tên,"
+             f" {sum(r['lines'] for r in bad)} câu thoại:")
+        for r in sorted(bad, key=lambda r: -r["lines"]):
+            _say(f"  chương {r['chapter']}  {r['name']:20s} {r['gender']:6s} age={r['age']:8s}"
+                 f" đọc bằng {r['voice'].replace('preset_', ''):26s} {r['lines']:3d} câu")
+        _say("")
+        _say("Đúc lại: bash scripts/boundary.sh <lô> --recast auto $(python"
+             " scripts/voice_matches_the_person.py --recast)")
+        _say("  NHƯNG chỉ sau khi ghim được tuổi/giọng cho những cái tên ấy: `port_casting` mang"
+             " `locked_voice_key` theo danh tính, nên đúc lại trước khi ghim chỉ tốn GPU.")
+    if excused:
+        _say(f"  (luật giọng trẻ con giải thích {len(excused)} dòng:"
+             f" {', '.join(sorted({r['name'] for r in excused}))})")
+
+    drift = age_drift(rows)
+    if drift:
+        _say("")
+        _say(f"{len(drift)} người ĐỔI TUỔI giữa các chương (tuổi chọn họ giọng, nên nó đắt):")
+        for name, detail in sorted(drift.items(), key=lambda kv: -sum(len(c) for c in kv[1]["ages"].values())):
+            ages = "  ".join(
+                f"{age or '?'}={len(chs)}ch"
+                for age, chs in sorted(detail["ages"].items(), key=lambda kv: -len(kv[1]))
+            )
+            changed = "GIỌNG CŨNG ĐỔI" if len(detail["voices"]) > 1 else "giọng vẫn một"
+            _say(f"  {name:20s} {ages:34s} {changed}")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

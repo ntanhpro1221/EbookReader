@@ -231,3 +231,24 @@ gì** (`segments.wav_sha256` y nguyên).
 Đường "bản hoàn chỉnh thắng bản bị cắt" (`_promote_a_finished_take_over_a_cut_off_one`) có cùng
 chỗ hở và chưa được bọc — nó chưa từng chạy thật (0 dòng sổ trên 47 project), nên để nguyên và ghi
 vào `OPTIMISATION_QUEUE.md` thay vì sửa mù.
+
+## Lượt này chỉ chữa chương ĐANG trong sách, và nó đã thử vượt ra ngoài
+
+Diễn tập ở quy mô thật, 01:00 ngày 2026-09-12: bản sao của `lo01b` (26/30 chương `completed`,
+3.727 đoạn), chạy `--apply` trên toàn project. Kết quả: **25 chương ghép lại, 0 thất bại, 17 phút
+16 giây** (gồm cả lượt quét 3.727 đoạn), và project thật không đổi một byte nào (`project.sqlite3`
+cùng mtime nano-giây, MP3 cùng sha). Bất biến giữ: 205 bản `promoted`, **0** đoạn có hai bản.
+
+Nhưng so trạng thái chương trước/sau thì thấy một việc không ai đặt hàng: **ba chương 003, 007,
+016 đi từ `failed` sang `completed`**. `_publish_verified_chapter` xuất bản bất cứ chương nào qua
+được ba cổng chặn, kể cả chương chưa từng lên sách. Nghe thì tốt; thực ra nguy: một chương `failed`
+cũ bỗng có `completed_at` **mới nhất**, và bước 7 của ranh giới chọn theo `completed_at` — nên nó
+sẽ lấy chương cũ ấy thay cho bản đúc lại vừa xong ở bước 4b. Đường `--book` không gặp (nó chỉ nhận
+chương sách đang lấy), đường một-project thì gặp.
+
+Sửa: lượt này bỏ qua và nói ra mọi chương không ở `completed`. Xuất bản một chương hỏng là việc
+của `cli run` — nó có GPU và có vòng sửa. Bài thử đặt cả project sang `failed` rồi đòi: không
+chương nào được xuất bản, không đoạn nào được đề cử lại.
+
+Con số thời gian để tính cho ranh giới: ~41 giây mỗi chương kể cả quét, nên 102 chương trên 36
+project là **khoảng 1,5–2 giờ**, không phải 70 phút như ước lượng đầu.

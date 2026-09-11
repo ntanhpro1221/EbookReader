@@ -342,6 +342,25 @@ def run_project(
     pipeline = bare_pipeline(paths, db, settings)
     chapters = {int(row["id"]): row for row in db.list_chapters()}
     found = survey(db, pipeline.quality_policy_hash)
+    # CHỈ chương đang `completed`. Đo 01:15 ngày 2026-09-12 trên bản sao `lo01b`: lượt này đã
+    # đưa ba chương từ `failed` sang `completed` (003, 007, 016) - `_publish_verified_chapter`
+    # xuất bản bất cứ chương nào qua được ba cổng chặn, kể cả chương chưa từng lên sách. Nghe
+    # thì tốt, nhưng nó không phải việc của lượt này và nó nguy: một chương `failed` cũ bỗng có
+    # `completed_at` MỚI NHẤT, và bước 7 của ranh giới sẽ lấy nó thay cho bản đúc lại vừa xong ở
+    # bước 4b. Đường `--book` không gặp vì nó chỉ nhận chương mà sách đang lấy; đường một
+    # project thì gặp. Việc xuất bản một chương hỏng là việc của `cli run`, có GPU, có vòng sửa.
+    not_shipped = {
+        chapter_id
+        for chapter_id in found
+        if str(chapters[chapter_id]["status"]) != ChapterStatus.COMPLETED.value
+    }
+    if not_shipped:
+        _say(
+            f"{root.name}: bỏ qua {len(not_shipped)} chương chưa lên sách"
+            f" ({', '.join(sorted(str(chapters[c]['title']) for c in not_shipped))})"
+            " - xuất bản một chương hỏng là việc của `cli run`"
+        )
+        found = {c: items for c, items in found.items() if c not in not_shipped}
     superseded = 0
     if only_titles is not None:
         before = len(found)
