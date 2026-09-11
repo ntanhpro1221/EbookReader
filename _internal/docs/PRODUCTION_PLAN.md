@@ -171,6 +171,35 @@ là xáo trộn cả cuốn sách, và không ai nhận ra cho tới khi ngồi 
 Nguồn sự thật là `chapters.title`. Khi một chương có ở nhiều lô, bản `completed_at` muộn nhất
 thắng, và script in ra mọi bản thua.
 
+### Và cuốn sách phải là MỘT đĩa
+
+Cùng bước ấy ghi lại thẻ ID3 cho mọi chương đã lên sách: `album` giống nhau cho cả cuốn, `track`
+là **số chương thật** kèm tổng số chương của nguồn, `title` là số chương. Đo 01:30 ngày
+2026-09-12, trước bản sửa: `album` mang **38 giá trị**, mỗi giá trị là slug của một project
+(`lo01b`, `lo03r_060`), và `track` là số thứ tự trong project nên **36 file cùng mang `track=1`**.
+Máy nghe nhạc nào sắp theo thẻ - tức gần hết, khi cả thư mục được coi là một album - thấy 38 đĩa
+và trộn thứ tự chương. Cùng một cái bẫy im lặng như tên file ở trên, chỉ ở tầng thẻ.
+
+Không cổng nào bắt được, vì ở tầng **một lô** thì thẻ ấy đúng:
+`assemble_chapter_atomic_with_metrics` ghi `album=book_title` và `track=chapter_index`, mà
+`book.title` của một project chính là slug của lô. Chỉ cuốn sách mới là chỗ biết mình là một cuốn.
+
+**Tên đĩa là thứ duy nhất chỉ chủ sách biết.** Tên thật của truyện không có ở đâu trong dữ liệu:
+`book.title` là slug lô, dòng đầu của file nguồn là lời tán chuyện của người đăng. Mặc định là chỗ
+giữ chỗ `"Sách nói"`; đặt tên thật một lần là xong, và nó chỉ ghi lại những chương còn khác:
+
+```bash
+python scripts/assemble_book.py --apply --album "Tên truyện"
+```
+
+Ghi thẻ dùng `ffmpeg -c copy` nên không đổi một mẫu audio nào (bài thử giải mã hai lần và so từng
+byte PCM). 118 chương ghi lại trong 11,7 giây. Một lỗi ghi thẻ chỉ in một dòng rồi đi tiếp: thẻ
+sai thì audio vẫn nghe được, còn làm chết bước ghép sách thì cả cuốn không được cập nhật.
+
+Vì có bước này, luật "chép khi khác kích thước" phải đi: ghi thẻ đổi kích thước file đích, nên
+luật cũ sẽ chép lại cả 119 file (~2 GB) mỗi lần ghép. Giờ quyết định chép hỏi theo **gốc gác** -
+manifest đã ghi `version`, `project`, `bytes` của bản đang nằm đó.
+
 **Cảnh báo quan trọng nhất của nó** là khi một chương phải **lùi về một lô cũ hơn**: nghĩa là
 một lô mới hơn đã chạy chương ấy và không cho ra MP3, nên bản đang dùng mang dàn giọng và cách
 đọc của phiên bản cũ. Đo lúc viết, trước khi lô vá xong:

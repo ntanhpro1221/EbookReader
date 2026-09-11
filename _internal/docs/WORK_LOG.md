@@ -1377,3 +1377,26 @@ bác vẫn là kết quả, và vì lần sau tôi sẽ lại nghĩ ra đúng gi
 `f100_p-04` (8 chương). Quyết định sau khi lô 5 khoá dàn giọng: đúc lại 5 chương ấy về f100, trừ
 khi lô 5 cấp cho KANG một giọng thứ ba và số chương của nó lớn hơn 8. Sổ của lô 6 sẽ đủ 62 tên
 (launcher chạy backfill với luật gieo-đứng-cuối đã sửa).
+
+## 2026-09-12, 01:30–01:40 — cuốn sách đã ghép không tự biết nó là một cuốn
+
+Hỏi một câu về **sản phẩm**, không về đường ống: máy nghe nhạc thấy gì khi mở thư mục `_book`?
+Đọc thẻ ID3 của 118 file: `album` **38 giá trị khác nhau**, mỗi giá trị là slug project, và
+`track` là số thứ tự trong project nên **36 file cùng mang `track=1`**. Player nào sắp theo thẻ
+thì thấy 38 đĩa và trộn thứ tự chương. Không cổng nào bắt được, vì ở tầng một lô thì thẻ ấy đúng
+(`book.title` của project chính là slug lô) - chỉ cuốn sách mới là chỗ biết mình là một cuốn.
+
+Sửa trong `assemble_book.py`: ghi lại thẻ bằng `ffmpeg -c copy` (bài thử giải mã trước/sau và so
+từng byte PCM), `album` một giá trị, `track` = số chương thật kèm tổng của nguồn. 118 chương trong
+11,7 giây. Kiểm sau khi chạy: 1 album, 0 track trùng, 118/118 track khớp số chương, thứ tự tăng
+dần. Tên đĩa thật là thứ duy nhất chỉ chủ sách biết (không có ở đâu trong dữ liệu), nên mặc định
+là chỗ giữ chỗ và có `--album`.
+
+Bước này ép sửa thêm một luật: "chép khi khác kích thước file đích" không dùng được nữa (ghi thẻ
+đổi kích thước → chép lại 2 GB mỗi lần ghép). Giờ hỏi theo gốc gác trong manifest.
+
+Hai câu hỏi phụ, cùng lượt đo, cùng trả lời "không có gì sai": chương 000 chỉ 7,9 giây **không**
+bị cắt (nguồn của nó là một mẩu 183 byte về ảnh fan art), và trên 117 chương có nguồn ≥200 ký tự,
+tỉ lệ ký-tự-nguồn trên giây audio nằm trong dải **11,4–13,3** quanh trung vị 12,4 - không chương
+nào bị cắt hay phình. Giọng người kể cũng một giọng duy nhất (Phạm Tuyên, cùng seed) trên cả 118
+chương.
