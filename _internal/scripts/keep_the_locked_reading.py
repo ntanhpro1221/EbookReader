@@ -2,7 +2,7 @@
 
     python scripts/keep_the_locked_reading.py <project> [<project> ...]   # thử: chỉ liệt kê
     python scripts/keep_the_locked_reading.py <project> --apply           # làm thật
-    python scripts/keep_the_locked_reading.py --book [--apply]            # mọi project manifest.json của sách ghi
+    python scripts/keep_the_locked_reading.py --book [--apply]            # mọi chương sách sẽ lấy (người thắng theo completed_at)
 
 Vì sao có script này. Đo 2026-09-11 trên cuốn sách 92 chương đã ghép: 716 đoạn đi qua vòng sửa
 ASR, và **348 (48%) được đề cử bản đọc tên theo chữ viết** (`Jake`, `Ishtara`) thay vì cách đọc
@@ -336,22 +336,27 @@ def run_project(
     return 1 if failures else 0
 
 
-def shipped_projects(book: Path = BOOK, versions: Path = VERSIONS) -> dict[Path, set[str]]:
-    """{project: {chương sách lấy từ nó}} theo `manifest.json` - đúng chương, không phải cả project."""
+def shipped_projects(versions: Path = VERSIONS) -> dict[Path, set[str]]:
+    """{project: {chương sách SẼ lấy từ nó}} - người thắng theo `completed_at`, đúng luật `assemble_book`.
+
+    Không đọc `manifest.json`: manifest là sách của lần ghép TRƯỚC. Ở ranh giới, bước 4b đúc lại
+    031 043 … xong rồi bước 6b mới chạy lượt này; manifest vẫn trỏ về `lo02v_031` cũ, và ghép lại
+    chương cũ ấy sẽ đóng cho nó một `completed_at` mới hơn bản đúc lại vừa xong - bước 7 lấy nhầm
+    chương cũ, dàn giọng cũ quay về sách. Hỏi thẳng câu mà bước 7 sẽ hỏi (`assemble_book._candidates`,
+    bản `completed` có MP3, mới nhất thắng) thì hai bước không thể cãi nhau.
+    """
+    import scripts.assemble_book as assemble_book
+
+    previous = assemble_book.VERSIONS
+    assemble_book.VERSIONS = versions
     try:
-        payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-    entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+        found = assemble_book._candidates()
+    finally:
+        assemble_book.VERSIONS = previous
     roots: dict[Path, set[str]] = {}
-    for item in entries:
-        version = str(item.get("version") or "")
-        project = str(item.get("project") or "")
-        title = str(item.get("title") or "")
-        if not version or not project or not title:
-            _say(f"manifest: chương {item.get('title')} không ghi project - bỏ qua")
-            continue
-        roots.setdefault(versions / version / project, set()).add(title)
+    for title, options in found.items():
+        winner = max(options, key=lambda item: item["completed_at"])
+        roots.setdefault(versions / winner["version"] / winner["project"], set()).add(title)
     return roots
 
 

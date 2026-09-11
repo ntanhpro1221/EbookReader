@@ -1260,3 +1260,10 @@ Dừng và thả lại ranh giới lần ba (vẫn ở bước 0):
 `--recast auto 2:031 2:043 2:051 2:053 2:054! 2:055 2:056! 3:072 3:080 3:081 3:089 4:106` — 054 và
 056 cần `!` vì `lo02r_054/056` đã hoàn thành. Nối `--across` vào `boundary.sh --recast auto` để ở
 điểm yên tĩnh kế (không sửa script đang chạy).
+
+Một bẫy nữa của bước 6b, thấy khi nhìn thứ tự các bước: 4b đúc lại 031 043 … xong rồi 6b mới
+chạy, mà `--book` đọc manifest của lần ghép TRƯỚC — vẫn trỏ về `lo02v_031` cũ. Ghép lại chương cũ
+ấy là đóng cho nó `completed_at` mới hơn bản đúc lại vừa xong, và bước 7 lấy nhầm chương cũ.
+`shipped_projects()` giờ hỏi thẳng câu bước 7 hỏi (`assemble_book._candidates`: bản `completed` có
+MP3, mới nhất thắng) thay vì đọc manifest; hai bài thử ở `tests/test_keep_the_locked_reading_
+targets.py`. Ranh giới đang chờ không cần thả lại: script được đọc lúc bước 6b gọi.
