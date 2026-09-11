@@ -1400,3 +1400,35 @@ bị cắt (nguồn của nó là một mẩu 183 byte về ảnh fan art), và 
 tỉ lệ ký-tự-nguồn trên giây audio nằm trong dải **11,4–13,3** quanh trung vị 12,4 - không chương
 nào bị cắt hay phình. Giọng người kể cũng một giọng duy nhất (Phạm Tuyên, cùng seed) trên cả 118
 chương.
+
+## 2026-09-12, 02:04 — lô 5 khoá dàn giọng: bốn dự đoán, bốn lần đúng, một lần tôi nói chưa chính xác
+
+Lô 5 phân tích xong 3.720 đoạn lúc 02:03 và khoá dàn giọng lúc 02:04 (26 chương, 25 nhân vật đối
+thoại). Đây là phép thử của `patch_a_step_remembers_every_holder` ở quy mô thật — lô 4 từng có
+**tám** người trên một bậc formant trước bản vá ấy.
+
+| Dự đoán | Kết quả |
+|---|---|
+| không bậc nào quá 2–3 người | **4 giọng bị dùng chung, nhiều nhất 3 người**, trong đó có NPC |
+| không va chạm trong cùng chương | **0/4** va chạm nằm trong cùng một chương |
+| một người một giọng trong chương | **0 chương** có một người hai giọng |
+| giọng đúng phái/tuổi | **0 dòng** lệch (97 dòng chương × nhân vật × giọng) |
+| KANG không có giọng thứ ba | được cấp `thanh_binh_f100_p-04` — **đúng giọng đa số** của anh ta |
+
+Chỗ tôi nói chưa chính xác: dự đoán ghi là "không có dòng `CẢNH BÁO: nhiều nhân vật dùng chung một
+giọng` trong runtime_events". Dòng ấy **có** — lúc 02:03:49, liệt kê đúng bốn giọng trên. Nó
+không sai: cảnh báo ấy đếm người dùng chung một `voice_profile_id`, không hỏi họ có gặp nhau trong
+chương nào không. Câu hỏi có ý nghĩa là câu `voice_pool_pressure` hỏi tiếp — **cùng chương hay
+không** — và câu ấy trả về 0. Dự đoán đúng phải là "cảnh báo có thể vẫn in ra, nhưng số va chạm
+cùng chương phải là 0", và lần sau tôi viết dự đoán theo con số chứ không theo sự có mặt của một
+dòng log.
+
+KANG được cấp đúng giọng đa số nên quyết định đúc lại thành sạch: 5 chương mang giọng của SAMAEL
+(066, 067, 087, 090, 091) là thiểu số, đúc lại về `f100_p-04`. Và nó **đáng tin** chứ không phải
+xổ số: KANG nói 2 câu trong lô 5 với f100, nên `port_casting` của bước 4b (gieo từ lô 5) sẽ ghim
+f100 cho anh ta trước khi chương được đúc lại — SAMAEL đang ở f093 nên không va chạm.
+
+Thả lại ranh giới lần thứ tư (vẫn ở bước 0, lô 5 vừa bắt đầu tổng hợp chương đầu) với danh sách
+cuối cùng: **16 chương giọng-thiểu-số + chương 106**, và `EBOOK_COAUTHOR` đặt về Claude Opus 5 để
+commit tự động đêm nay ghi đúng người. Danh sách khớp chính xác đầu ra của
+`one_person_one_voice.py --across --min-chapters 5`.
