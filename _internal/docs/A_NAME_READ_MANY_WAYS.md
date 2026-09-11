@@ -168,3 +168,29 @@ cho tới khi nghe thử**. Thứ tự đề nghị:
    bước 1–2 trước, vì sửa cổng khi dạng đọc còn tệ là làm mất chính cái cảnh báo đang đúng.
 
 Đừng làm bước 3 trước bước 1. `Jake` là ca mà cổng nói **thật**.
+
+## Nửa số đoạn được sửa trong sách đọc tên theo CHỮ VIẾT, không theo cách đọc đã ghim (2026-09-11, 16:45)
+
+Đo trên chính cuốn sách đã ghép (92 chương, theo `manifest.json`):
+
+```
+ứng viên được đề cử (đoạn đã qua sửa):   716
+  đọc theo cách đọc ghim  (locked_spoken_v1)   368
+  đọc theo CHỮ VIẾT       (source_spelling_v1) 348   = 48%
+tên bị đổi cách đọc nhiều nhất:  Jake 79 · Michael 35 · Spirit 31 · Will 20 · Apex 19 · Willem 16 · Alice 13
+```
+
+Cơ chế, đọc từ chương 084 đúc lại: bản thu đầu đọc `I-xờ-hờ-ta-ra` (cách đọc ghim), **qua** cổng
+nhịp (12,47 kt/s — dưới sàn chữ, 4,99 âm tiết/giây — bản vá âm tiết cứu đúng như dự đoán), rồi
+chết ở cổng **neo tên** trên cả hai đường phiên; vòng sửa "rõ tiếng" sinh một ứng viên đọc theo
+chữ viết `Ishtara`, Whisper nghe được, và ứng viên ấy được đề cử. Chương lên sách với thành phố
+đọc khác mọi chương kia.
+
+Đây là *cùng một* hiện tượng với 89 dạng nghe của `Jake` hôm qua, nhìn từ phía đề cử: cổng neo
+tên là một bài **chính tả** mà cách đọc chuyển tự không bao giờ đậu
+([LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md)), nên
+vòng sửa đổi cách đọc để đậu — và làm thế ở **gần một nửa** số đoạn nó chạm tới. Người nghe nghe
+`Giếch` ở đoạn này và `Jake` ở đoạn kế, tuỳ Whisper trượt ở đâu.
+
+Trong 348 đoạn ấy, **41** có bản anh em đọc-theo-ghim chỉ hỏng vì neo tên và **còn nguyên file
+WAV** — đổi lại đề cử được ngay, không cần GPU. 307 đoạn còn lại: xem mục kế, đang đếm lý do.
