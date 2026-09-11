@@ -114,8 +114,10 @@ pending_patches() {
 # va truoc khi tao gi thi doi cho khong con `run` nao dang bay.
 forced() { case " $FORCE " in *" $1 "*) return 0 ;; esac; return 1; }
 skipped() { case " $SKIP " in *" $1 "*) return 0 ;; esac; return 1; }
-already_done() {  # $1 = thu muc phien ban (vd .../v0.2.0-lo03r), $2 = so chuong
-  forced "$2" && return 1
+# `$3` = "force-aware": chi buoc duc lai (4/4b) truyen no; buoc 3 khong - mot chuong da co ban
+# hoan thanh thi khong bao gio can VA lai, du co `!` (do 2026-09-11: 097 bi va lai roi duc lai).
+already_done() {  # $1 = thu muc phien ban (vd .../v0.2.0-lo03r), $2 = so chuong, $3 = "recast" neu la buoc duc lai
+  if [ "${3:-}" = "recast" ] && forced "$2"; then return 1; fi
   py -c "
 import sqlite3, sys
 from pathlib import Path
@@ -273,7 +275,7 @@ fi
 TODO=""
 for CH in $RECAST; do
   if skipped "$CH"; then say "  $CH nam trong --skip - khong dung toi"; continue; fi
-  if already_done "D:/Novels/Audiobooks/_versions/${TAG}r" "$CH"; then say "  $CH da duc lai hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
+  if already_done "D:/Novels/Audiobooks/_versions/${TAG}r" "$CH" recast; then say "  $CH da duc lai hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
 done
 if [ -n "$TODO" ]; then
   tag_here "${TAG}r"
@@ -310,7 +312,7 @@ if [ -n "$RECAST_OTHER" ]; then
     CHS=""
     for CH in $(printf '%s\n' $RECAST_OTHER | grep "^${OTHER_BATCH}:" | cut -d: -f2 | sort -u); do
       if skipped "$CH"; then say "  lo $OTHER_BATCH chuong $CH nam trong --skip - khong dung toi"; continue; fi
-      if already_done "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" "$CH"; then say "  lo $OTHER_BATCH chuong $CH da duc lai hoan thanh - bo qua"; else CHS="$CHS $CH"; fi
+      if already_done "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" "$CH" recast; then say "  lo $OTHER_BATCH chuong $CH da duc lai hoan thanh - bo qua"; else CHS="$CHS $CH"; fi
     done
     [ -n "$CHS" ] || continue
     # SEED la project vua xong o buoc truoc (ke ca lo khac): giong vua cap di tiep, khong cap lai.
