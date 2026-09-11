@@ -116,10 +116,15 @@ NEW = '''            # MỘT đoạn, nhiều nhất MỘT ứng viên `promoted
                     int(candidate["id"]),
                 ),
             )
-            if keeping_the_locked_reading and incumbent_moved and demoted.rowcount != 1:
-                raise RuntimeError(
-                    "keeping the locked reading found no promoted spelling take to supersede"
-                )'''
+            # Hai `if` lồng nhau chứ không phải một `if` ba mệnh đề: `test_no_new_blind_compound_
+            # check_is_added` đếm đúng hình dạng ấy và không cho tăng, vì một lời từ chối gộp ba
+            # điều kiện sau một thông điệp thì không nói được mệnh đề nào vỡ. `require_all` không
+            # dùng được ở đây - nó ném khi MỘT mệnh đề đúng, còn chỗ này chỉ ném khi CẢ BA đúng.
+            if keeping_the_locked_reading and incumbent_moved:
+                if demoted.rowcount != 1:
+                    raise RuntimeError(
+                        "keeping the locked reading found no promoted spelling take to supersede"
+                    )'''
 assert s.count(OLD) == 1, "khong khop khoi ha anh em (can patch_keep_the_locked_reading truoc)"
 s = s.replace(OLD, NEW, 1)
 
