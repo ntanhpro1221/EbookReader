@@ -1884,13 +1884,27 @@ giọng **qua cả sách**.
 chương 023 — đã thêm `1:023` vào ranh giới), **2 cặp** mà cả hai đều ≥5 chương với giọng ấy
 (SAMAEL+KANG trên f093, KANG+BOWDEN trên f100).
 
-**Chưa làm thành công cụ, và lý do:** 92 cặp là **đúng** với một pool 14 preset × 7 bậc cho 61 cái
-tên; một công cụ in 92 dòng mỗi lần chạy sẽ bị bỏ qua sau hai lần. Ngưỡng đáng báo phải là "cả hai
-đều nhiều chương" *và* "không bao giờ cùng chương" — tức đúng hai cặp trên, và cả hai đều xoay
-quanh việc pool giọng nam thanh_binh đang gánh 7 người ở bậc f100 và 6 người ở bậc f093. Cần trả
-lời trước: **pool còn chỗ không?** Nếu không, một công cụ báo "hai người nhiều chương chung giọng"
-chỉ báo một sự thật không sửa được, và lúc ấy câu đúng là mở rộng pool (thêm preset hoặc thêm bậc
-formant), không phải đúc lại.
+**KHÔNG làm thành công cụ, và lý do — câu này đã có câu trả lời từ lô 1.** Tôi đo lại kho giọng
+lúc 03:40 ngày 2026-09-12 và tưởng mình tìm ra gốc rễ: 39 nhân vật trên **14 slot nam** (2 preset
+× 7 bậc), 22 trên 27 slot nữ; bốn preset nam không gánh ai (hai giọng tin tức, một miền Trung, một
+bị loại). Nhưng `TWO_CHARACTERS_ONE_VOICE.md` đã đi đúng con đường ấy ở lô 1, **và đã tự bác kết
+luận "kho giọng nam đã đầy"**: ràng buộc thật không phải tổng nhân vật trên tổng kho, mà là
+**số người nam nói trong CHƯƠNG đông nhất**, vì người nghe nghe từng chương một.
+
+Đo lại con số ấy ở quy mô sách (118 chương) — nó vẫn là con số quyết định, và nó vẫn thoải mái:
+
+    nam:  chương đông nhất 7 người (chương 023)  | kho 14 slot  -> còn chỗ
+    nữ :  chương đông nhất 5 người (065, 078)    | kho 27 slot  -> còn chỗ
+
+Và ba lần loại preset đều có lý do, hai trong ba là **tính đúng đắn chứ không phải thị hiếu**:
+giọng miền Trung đọc sai thanh điệu trên từ thường ("khốn kiếp" → "khôn kiêp", mà thanh điệu mang
+nghĩa), giọng tin tức sai văn phong, và Xuân Vĩnh bị một người nghe Việt phán. Nên **đừng mở rộng
+pool để chữa việc dùng chung qua sách**: nó không phải thứ cần chữa, và hai trong ba cửa mở ra đều
+dẫn tới lỗi phát âm.
+
+Cái còn lại đáng theo: 7 người trên một bậc `f100_p-04` là con số cao, và nếu có ngày một chương
+có hơn 14 người nam nói thì lúc ấy pool mới thật sự bó. Theo bằng `voice_pool_pressure` (nó hỏi
+đúng câu cùng-chương) chứ không cần công cụ mới.
 
 **Cái bẫy của phép đo, ghi để người sau không đạp lại:** phải giao hai tập *"chương mà người ấy
 dùng CHÍNH GIỌNG ẤY"*, không phải *"chương mà người ấy có mặt"*. Bản đầu của tôi giao sai và báo

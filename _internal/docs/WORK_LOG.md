@@ -1486,3 +1486,37 @@ KANG có MỘT giọng (người nghe không mất nhân vật), không phải g
 
 Danh sách đúc lại cuối cùng của ranh giới: **18 chương** (1:023 · 2:031 043 051 053 054! 055 056! ·
 3:066 067 072 080 081 087 089 090 091 · 4:106), khoảng 7,5 giờ GPU ở bước 4b.
+
+## 2026-09-12, 03:25–03:45 — đi tìm gốc rễ, và tìm thấy tài liệu của chính dự án đã ở đó
+
+Nối tiếp câu hỏi thứ năm: nếu 92 cặp dùng chung giọng là do **pool hết chỗ**, thì đúc lại vô
+nghĩa và câu đúng là mở rộng pool. Đo ba bước:
+
+1. **26 trong 61 người đã nói trong sách KHÔNG có pin giọng** trong lô 5 — KANG dẫn đầu (13
+   chương, 41 câu). Mỗi lô sau là một lần rút thăm lại giọng của họ. Viết
+   `scripts/pin_the_book_cast.py` để ghim theo **giọng đa số trên cả sách** (nguồn: cuốn sách đã
+   ghép, chứ không phải một project gieo), chỉ thêm cho người chưa có pin, và giải quyết va chạm
+   bằng luật "nhiều chương hơn thì giữ".
+2. Lượt thử của nó lộ ra thứ khác: **5 người được ghim mà im lặng trong lô 5 đã bị người khác
+   lấy slot** (BOWDEN → KANG, JAKE → VINCE + REINER, ALVARA → REVISIA, TIS → LIA, VALE → LEON +
+   AARAV). Tưởng là lỗ trong `reserve_pinned_voices`, nhưng đọc mã thì nó giữ chỗ đúng cho cả
+   người im lặng; thật ra **ladder của preset ấy đã cạn** nên `_first_free_variant` buộc phải
+   chia, và nó chia cho người ít chương chung nhất — đúng luật của nó.
+3. Vậy pool có hết chỗ không? Kho dùng được cho nhân vật: **nam đúng 2 preset × 7 bậc = 14 slot**
+   (cả hai preset đều bị đánh dấu "giáng cấp", mà chẳng còn gì ở trên), nữ 4 preset = 27 slot.
+   39 nhân vật nam trên 14 slot.
+
+**Và đây là chỗ tài liệu của dự án đã đứng sẵn.** `TWO_CHARACTERS_ONE_VOICE.md` đi đúng con đường
+này ở lô 1, đặt tên file là "Kho giọng nam đã đầy", rồi **tự bác kết luận ấy**: ràng buộc thật là
+số người nam nói trong **chương đông nhất**, vì người nghe nghe từng chương một. Đo lại ở quy mô
+sách: chương đông nhất có **7** người nam (kho 14) và **5** người nữ (kho 27). Vẫn còn chỗ gấp đôi.
+
+Nên tôi **không** mở rộng pool, và ghi rõ lý do vào hàng chờ để người sau không mở lại vụ này:
+hai trong ba cửa mở ra dẫn tới lỗi phát âm thật — giọng miền Trung đọc sai thanh điệu trên từ
+thường ("khốn kiếp" → "khôn kiêp", thanh điệu mang nghĩa), giọng tin tức sai văn phong — còn cửa
+thứ ba (Xuân Vĩnh) đã bị một người nghe Việt phán.
+
+`pin_the_book_cast.py` vẫn giữ: nó chữa đúng thứ nó chữa (26 người không pin), độc lập với câu
+hỏi pool. Nhưng lượt thử cho thấy nó chỉ ghim thêm được **4 người** (KANG, LYLE, SỐ SÁU, SỐ MỘT),
+vì luật va chạm nhường slot cho người nhiều chương hơn *đã được ghim*. Thứ tự đúng phải là: tôn
+trọng pin đã có trước, rồi mới xét va chạm giữa các đề nghị mới — sửa trước khi dùng thật.

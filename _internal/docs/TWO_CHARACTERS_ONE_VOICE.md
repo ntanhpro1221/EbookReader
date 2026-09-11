@@ -186,3 +186,26 @@ hết, và lúc ấy ba hướng nới ở trên mới đáng bàn lại.
 ```bash
 python scripts/voice_pool_pressure.py <project>
 ```
+
+## Đo lại ở quy mô cuốn sách (2026-09-12, 03:45)
+
+Tài liệu này viết khi mới có lô 1 (17 nhân vật nam). Sách giờ 118 chương, 61 cái tên — và **con số
+quyết định vẫn là con số này nói**, không phải tổng kho:
+
+    nhân vật trên preset nam, cả sách     : 39      (kho 14 slot)
+    nhân vật trên preset nữ               : 23      (kho 27 slot)
+    chương đông nhất, người nam           :  7      chương 023
+    chương đông nhất, người nữ            :  5      chương 065 và 078
+
+Tổng vượt kho gần ba lần, nhưng ràng buộc theo chương vẫn còn chỗ gấp đôi. Đúng như tài liệu này
+kết luận từ đầu: *"đầy" là kết luận sai từ số đúng*.
+
+Kiểm lại việc dùng chung trên toàn sách, bằng phép giao ĐÚNG (chương mà mỗi người dùng **chính
+giọng ấy**, không phải chương mà họ có mặt — bản đo đầu của tôi sai đúng chỗ này và báo sáu cặp giả):
+
+    92  cặp hai người dùng chung một giọng qua cả sách
+     1  cặp cùng chương: SỐ BỐN + SỐ NĂM, chương 023 — vẫn đúng cặp tài liệu này chỉ ra ở lô 1
+
+Cặp ấy chưa từng được đúc lại vì ranh giới lô 1 → 2 chưa có `--recast auto`. Đã thêm `1:023` vào
+ranh giới lô 5 → 6 (2026-09-12 02:56), nên sau đêm ấy cuốn sách không còn va chạm cùng chương nào
+mà ta biết mà vẫn để đó.
