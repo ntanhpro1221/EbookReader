@@ -1557,3 +1557,21 @@ Một bài học về công cụ, không về giọng: lần thả lại này t�
 compound và tiến trình chết theo shell cha — ranh giới biến mất, không ai thấy. Phải thả bằng
 `run_in_background` của tool, và **luôn đếm lại tiến trình sau khi thả**. Đếm mới là thứ cứu, chứ
 không phải cách thả.
+
+## 2026-09-12, 04:55–05:03 — chạy trước bộ test mà ranh giới sẽ chạy, và đo cái giá của việc ấy
+
+Bước 1 của ranh giới chạy `apply_all --apply`, và bên trong nó là bộ test đầy đủ **trên cây
+thật**. Cả đêm tôi chỉ chứng minh bộ test xanh trên các cây tạm, nơi hai bài phụ thuộc môi trường
+(`test_doctor…`, `test_one_click_startup_contract`) luôn đỏ vì thư mục tạm không có
+`runtime/models`. Nên tôi chạy đúng lượt ấy trên cây thật: **0 lỗi, exit 0, 8 phút**. Giờ biết
+chắc bước 1 sẽ đi qua, thay vì suy ra.
+
+`before_a_batch.py` khuyên đừng chạy test giữa lô ("chạy test bây giờ là cướp CPU của nó"), nên
+tôi đo luôn cái giá: **0 lần nhường máy** trong suốt tám phút ấy (`Resource mode: yield%` trong
+`runtime_events`). Lần nhường duy nhất của ba mươi phút trước đó xảy ra lúc 04:39:20 vì "system
+CPU 100%" và hồi lại sau 29 giây — trước khi bộ test bắt đầu. Thời gian mỗi chương của lô 5 dao
+động **5,3 đến 19,8 phút** theo độ dài chương, nên một mẫu đơn không đủ để nói việc đo đạc ở nền
+có làm chậm lô hay không; điều đo được là governor **không** coi việc ở nền là tải tiền cảnh.
+
+Một mẫu, không phải một định luật: lời khuyên của cổng vẫn là mặc định đúng, và tôi phá nó một
+lần có chủ đích để đổi lấy sự chắc chắn về bước chạy một mình.
