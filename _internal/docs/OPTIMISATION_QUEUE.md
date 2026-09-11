@@ -1951,3 +1951,28 @@ Việc ấy thuộc chủ sách. Số liệu đã đủ để quyết trong mộ
 
 Công cụ đã có để dùng khi quyết: `scripts/pin_the_book_cast.py` (ghim theo giọng đa số của cả
 sách, tôn trọng pin đã có — hôm nay ghim được 0 người, đúng vì kho nam đã kín).
+
+## Hai bản sửa cho cổng nhịp, từ ca chương 140 (2026-09-12, 06:05 — đo rồi, chưa vá)
+
+Ca đầy đủ ở `docs/A_BAND_IN_THE_VALLEY.md`. Tóm: một đoạn 24 ký tự của lô 5 thử 10 lần, ra đúng
+**4 giá trị lặp lại** (24,79 · 27,03 · 29,70 · 12,45 kt/s) nằm **hai bên** dải [12,5 .. 24,5],
+không giá trị nào bên trong; hai lần gần nhất trượt 1,2% và 0,4%.
+
+**1. `pace_retry_reachability.py` báo "trong tầm với" cho một ca không tới được.** Nó ước lượng
+38,9% mỗi lần thử và 99% cho 10 lần; thực tế 0/10. Nguyên nhân: nó khớp một phân bố **liên tục,
+một đỉnh** vào các giá trị quan sát, còn dữ liệu là hai cực. Sửa: in thêm **số giá trị PHÂN BIỆT**
+và **khoảng trống lớn nhất** giữa chúng, rồi gọi một ca là "không tới được" khi cả dải nằm trong
+một khoảng trống. Không cần giả định phân bố, và câu "10 lần, 4 giá trị, khoảng trống 0,96 s chứa
+cả dải" là câu người đọc tin được.
+
+**2. Đường tempo không với tới chỗ cần.** `POSTPROCESS_PROFILE_TEMPO` (atempo 0,94, không đổi cao
+độ) biến đúng lần thử gần trần nhất — 24,79 → **23,30 kt/s, QUA** — và lần ấy xuất hiện 4/10 lượt.
+Nhưng ứng viên tempo chỉ nằm trong thang sửa của **ASR** (`repair_round == max`), còn đoạn này chết
+ở vòng thử lại **TTS** nên không bao giờ tới. Sửa: khi vòng TTS cạn lượt vì **pace** (không phải
+vì cờ chặn nào khác) và bản thu gần nhất chỉ trượt **cận trên**, áp tempo 0,94 lên chính bản ấy
+rồi cho nó đi qua cổng nhịp một lần nữa. Chỉ một chiều (làm chậm), chỉ cho cận trên, và chỉ khi
+`split` đã từ chối — ba điều kiện kiểm được từ dữ liệu.
+
+**Vì sao chưa vá:** cả hai đều là thay đổi ở tầng quyết định xuất bản, và ranh giới đang chờ chạy
+một mình với ba bản vá đã chứng minh. Bước 3 của ranh giới sẽ vá lại chương 140; **dự đoán ghi
+trước: nó trượt tiếp**. Nếu trượt, đó là ca đo được để áp bản vá tempo ở ranh giới 6 → 7.
