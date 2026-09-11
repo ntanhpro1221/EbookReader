@@ -1659,3 +1659,16 @@ bị đánh dấu `invalid: incumbent checksum changed`. Vậy đường mới c
 từ dữ liệu: đương nhiệm *hiện tại* của đoạn phải là anh em `source_spelling_v1` của chính ứng
 viên ấy (cùng `segment_id`, cùng chuỗi sửa). Trạng thái vào: `dual_failed` hoặc `invalid` với lý
 do ấy; ra: `promoted`. Không đường nào khác được đi qua đây.
+
+**Trạng thái 18:45 — mã đã viết, thử trên bản sao project thật, xếp hàng cho ranh giới 5 → 6.**
+`scripts/pending_patches/patch_keep_the_locked_reading.py` (kèm `tests/test_keep_the_locked_
+reading.py` chép `lo03r_084b` vào thư mục tạm), `scripts/keep_the_locked_reading.py` (lượt đề
+cử lại, không GPU), bước 6b của `boundary.sh`. Kết quả trên bản sao 084b: 10/10 đoạn giữ cách
+đọc ghim, chương ghép lại trong 38 giây, `cli validate` qua hết. Ba điều khác đặc tả, đều do bài
+thử trên dữ liệu thật bắt được, ghi ở `KEEP_THE_LOCKED_READING.md`: CAS cuối phải so với đương
+nhiệm *hiện tại* và tự hạ anh em đọc-theo-chữ-viết; CAS trạng thái ứng viên so với hằng số
+`dual_passed` làm đường "bản hoàn chỉnh thắng bản bị cắt" (có sẵn, chưa từng chạy thật — 0 dòng
+`machine_take_substitutions` trên 47 project) không bao giờ đi qua được; và lượt đề cử lại không
+chạy lại cả `_process_chapter` (một chương xong vẫn có đoạn `failed` được máy cấp phép, và bước
+tổng hợp sẽ gọi Whisper cho nó) mà gọi `_publish_verified_chapter` — đuôi của `_process_chapter`
+tách thành hàm, hai người gọi chung một thân.

@@ -486,3 +486,12 @@ scripts/audit_audiobook.py <lô này>                # kiểm tổng thể
 Cột đáng nhìn nhất ở `compare_runs.py` là chỗ nó **tách riêng** chương gỡ được nhờ bản thu khá
 lên thật với chương gỡ được nhờ máy tự cho qua. Gộp hai loại lại là cách dễ nhất để tự khen
 nhầm, và tôi viết nó ra vì đã suýt làm thế.
+
+Từ ranh giới lô 5 → 6, `boundary.sh` có thêm **bước 6b**: sau khi lô kế tiếp đã khởi động và
+trước khi ghép sách, chạy `python scripts/keep_the_locked_reading.py --book --apply`. Nó đề cử
+lại bản đọc-ghim cho những đoạn đã lên sách mà chỉ thua bài chính tả neo tên (48% đoạn được
+sửa trong sách 92 chương đọc tên theo chữ viết — `KEEP_THE_LOCKED_READING.md`) rồi ghép lại
+chương bằng đuôi của `_process_chapter`; không GPU, ~40 giây một chương, nên chạy cạnh lô đang
+bay là vô hại. Trước khi `patch_keep_the_locked_reading` vào cây thì script tự từ chối và ranh
+giới đi tiếp. Kiểm sau lượt ấy: đếm lại bản `source_spelling_v1` được đề cử trong sách phải về
+gần 0; những ca còn lại là đoạn thua thêm mã khác ngoài neo tên.

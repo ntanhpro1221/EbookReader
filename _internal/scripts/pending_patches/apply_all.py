@@ -27,8 +27,15 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Xếp hàng cho ranh giới lô 5 → 6 (2026-09-11 18:35). Xem `APPLIED` cho thứ tự và lý do các
+# nhóm đã vào cây.
+#
+# - patch_keep_the_locked_reading: vòng sửa ASR giữ cách đọc ghim khi bản đọc-ghim chỉ thua
+#   bài chính tả neo tên, thay vì đề cử bản đọc theo chữ viết (348/716 đoạn được sửa trong
+#   sách - 48% - đọc `Jake`/`Ishtara` thay vì `Giếch`/`I-xờ-hờ-ta-ra`). Đã thử trên bản sao
+#   lo03r_084b: 10/10 đoạn, chương ghép lại trong 38 giây không GPU. Sau khi vào cây, ranh giới
+#   chạy `scripts/keep_the_locked_reading.py --book --apply` cho các chương đã lên sách.
+ORDER: tuple[str, ...] = ("patch_keep_the_locked_reading.py",)
 
 APPLIED = (
     "patch_reserve_all.py",

@@ -38,6 +38,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | Một cái tên có được đọc giống nhau mỗi lần không? | [A_NAME_READ_MANY_WAYS.md](A_NAME_READ_MANY_WAYS.md) — 170 cờ neo tên mỗi lô, và cái nào là lỗi thật |
 | Nhịp đọc đo cái gì, và nó từng đo nhầm gì? | [PACE_METRIC.md](PACE_METRIC.md), [PACE_COUNTS_THE_WRONG_STRING.md](PACE_COUNTS_THE_WRONG_STRING.md) |
 | Vì sao tên riêng bị chấm sai? | [LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md) |
+| Vì sao 48% đoạn được sửa đọc tên theo chữ viết, và sửa thế nào không cần GPU? | [KEEP_THE_LOCKED_READING.md](KEEP_THE_LOCKED_READING.md) — bản vá giữ cách đọc ghim, lượt đề cử lại, ba điều bất ngờ |
 | Cách đọc tên tiếng Anh sinh ra thế nào? | [ENGLISH_TO_VIETNAMESE.md](ENGLISH_TO_VIETNAMESE.md), [SHORT_NAME_PRONUNCIATION.md](SHORT_NAME_PRONUNCIATION.md) |
 | Cùng một tên đọc hai kiểu? | [PRONUNCIATION_VARIANT_DRIFT.md](PRONUNCIATION_VARIANT_DRIFT.md) |
 | Phán quyết của người nghe hoạt động ra sao? | [LISTENER_VERDICTS.md](LISTENER_VERDICTS.md) |

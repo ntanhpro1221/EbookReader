@@ -1151,3 +1151,24 @@ cuối). Một kết luận sai được rút lại cùng buổi: giết `launch
 Phát hiện lớn nhất: **48% đoạn được sửa trong sách đọc tên theo chữ viết** thay vì cách đọc
 ghim, cả 348 bản đọc-ghim thua chỉ vì bài chính tả neo tên, WAV còn. Đặc tả bản vá đã ghi, áp ở
 ranh giới lô 5 → 6; viết và thử trên bản sao trong lúc lô 5 chạy.
+
+## 2026-09-11, 17:50–18:45 — giữ cách đọc ghim: viết, thử trên bản sao, xếp hàng
+
+Bản vá `patch_keep_the_locked_reading` xong và thử trên bản sao của `lo03r_084b` (bài thử chép
+project thật vào thư mục tạm — đồ thị ứng viên với đủ provenance không dựng tay được). Ba lần
+bài thử ấy bắt lỗi thiết kế: CAS cuối của `promote_segment_candidate` so với đương nhiệm cũ
+(sửa: so với đương nhiệm hiện tại, tự hạ anh em đọc-theo-chữ-viết trong cùng giao dịch, ràng
+buộc CHECK đòi `promoted_at IS NULL`); CAS trạng thái ứng viên so với hằng số `dual_passed` —
+và nhờ thế thấy đường "bản hoàn chỉnh thắng bản bị cắt" có sẵn chưa từng chạy thật, 0 dòng sổ
+trên 47 project (sửa: so với trạng thái đã đọc); `_validated_promoted_candidate_conn` ném cho
+bản vừa giữ cách đọc ghim (sửa: đọc lý do từ dòng check cuối). Rồi `test_no_new_blind_compound_
+check_is_added` bắt thêm một `if` ba mệnh đề — đổi sang `require_all`.
+
+Lượt đề cử lại cho 348 đoạn đã lên sách: `scripts/keep_the_locked_reading.py`. Thử đầu gọi
+`_process_chapter` và nó nạp Whisper: chương 084 mang `Selene Valkryn.` `failed` được máy cấp
+phép, bước tổng hợp đặt lại thành `signal_passed`. Tách đuôi của `_process_chapter` thành
+`_publish_verified_chapter` (cắt đúng văn bản, hai người gọi). Bài học thứ hai: chính sách chất
+lượng mang `implementation_hash`, nên phải ghép lại chương dưới chính sách *của project*, không
+phải của cây mã. Kết quả: 10/10 đoạn, 38 giây, `cli validate` qua. Bộ test đầy đủ xanh trên cây
+đã vá (trừ `test_doctor…` chỉ hỏng vì cây tạm không có `runtime/models`). Xếp vào `ORDER`, bước
+6b của ranh giới. Lô 5 đang phân tích: 816/3.720 lúc 18:34, ~15 đoạn/phút.

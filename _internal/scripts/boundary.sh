@@ -336,6 +336,19 @@ else
   say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
 fi
 
+# ---- 6b. giu cach doc ghim cho nhung doan DA LEN SACH - khong GPU, nen chay canh lo N+1 vua
+# khoi dong la vo hai. Do 2026-09-11: 348/716 doan duoc sua trong sach doc ten theo chu viet vi
+# ban doc-ghim thua CHI bai chinh ta neo ten. Script de cu lai ban doc-ghim (cung duong voi vong
+# sua sau patch_keep_the_locked_reading) roi ghep lai chuong bang duoi cua _process_chapter
+# (084 tren ban sao: 10/10 doan, 38 giay, chi ffmpeg). `--book` doc manifest.json cua lan ghep
+# truoc: cac project vua va / duc lai o buoc 3-4b chay bang ma moi nen da tu giu cach doc ghim.
+# Truoc khi ban va vao cay (buoc 1) script tu tu choi (thoat 2) - khong sao, di tiep.
+if py scripts/keep_the_locked_reading.py --book --apply >> "$LOG" 2>&1; then
+  say "da giu cach doc ghim cho cac doan da len sach (chi tiet trong $LOG)"
+else
+  say "keep_the_locked_reading thoat khac 0 - xem $LOG; di tiep."
+fi
+
 # ---- 7. ghep sach: moi chuong `completed` moi nhat len sach, ke ca chuong vua va / duc lai.
 # Chi doc cac project, nen chay canh lo N+1 dang bay la vo hai.
 # --apply, khong phai luot thu.  mac dinh CHI IN roi thoat 0, nen ban dau cua
