@@ -1572,3 +1572,15 @@ không đổi `normalize_name` chung vì `NPC_LOCAL::`/`ANONYMOUS_*` mang gạch
 Bài học đáng giữ: một bản vá đúng có thể **đổi phân bố lỗi** thay vì xoá lỗi. Đo lại lớp ấy
 sau mỗi lô — `one_person_one_voice.py` là cái đo — chứ đừng coi "đã vá" là "đã hết".
 Ba chương đã đúc với bản lệch (097, 104, và 007 đang dở) cần đúc lại lần nữa sau bản vá.
+
+## `!` ép cả bước 3, nên 097 được làm hai lần (2026-09-11, 09:55)
+
+`4:097!` được viết để ép **đúc lại** một chương đã hoàn thành. Nhưng `forced()` bỏ qua
+`already_done` ở *mọi* bước gọi nó, kể cả bước 3 (vá chương hỏng): lô 4 vẫn ghi 097 `failed`, nên
+bước 3 vá lại 097 thành `lo04v_097b` (09:25 → 09:47), rồi bước 4 đúc lại nó lần nữa thành
+`lo04r_097` — hai mươi phút GPU cho cùng một chương, và hai project mới cùng ngày cho cùng một
+tiêu đề. Sửa: bước 3 dùng phép kiểm không-ép (chương có bản hoàn thành thì thôi, bất kể `!`);
+`!` chỉ có nghĩa ở bước 4/4b. Một dòng, nhưng `boundary.sh` đang chạy nên đợi điểm lặng.
+
+Cái đúng trong cùng log: mỗi `=== chuong ===` giờ có dòng `project:` theo sau, và lần thứ hai
+mang hậu tố `b` — hai lỗi sáng nay không tái diễn.
