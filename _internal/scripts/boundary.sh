@@ -32,9 +32,17 @@ shift
 #           ranh gioi ke tiep thuoc lo 4.
 #   auto    lay danh sach tu `voice_pool_pressure` cua chinh lo vua xong - danh sach ay chi
 #           biet duoc SAU khi lo chay xong, nen no khong the go tay luc tha script.
+#   4:097!  dau `!` = EP duc lai du da co project hoan thanh. Can vi "da hoan thanh" khong co
+#           nghia "da dung": 097 va 104 hoan thanh SAU khi ba ban va ap nhung TRUOC ban va gach
+#           duoi, nen ca hai mang NGƯỜI TRẢ LỜI hai giong (11 va 10 cau). Khong co `!` thi buoc
+#           bo-qua-viec-da-xong, vien ra de chay lai duoc, lai giu dung cai loi can sua.
+# `--skip 106`: khong dung toi chuong ay trong lan nay - 106 hong vi chu so + tieng Anh chua co
+#           cach doc, chua co ban va, va moi lan chay lai ranh gioi la mot lan vá lai vo ich.
 RECAST=""
 RECAST_OTHER=""
 RECAST_AUTO=0
+FORCE=""
+SKIP=""
 DRY=0
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -44,10 +52,18 @@ while [ $# -gt 0 ]; do
         case "$1" in
           auto) RECAST_AUTO=1; shift ;;
           [0-9][0-9][0-9]) RECAST="$RECAST $1"; shift ;;
-          [0-9]*:[0-9][0-9][0-9]) RECAST_OTHER="$RECAST_OTHER $1"; shift ;;
+          [0-9][0-9][0-9]!) RECAST="$RECAST ${1%!}"; FORCE="$FORCE ${1%!}"; shift ;;
+          # `B:NNN` ma B la chinh lo nay thi la mot muc cua buoc 4, khong phai 4b - neu de o 4b, `auto`
+          # cung tim ra chuong ay va no bi duc lai HAI lan.
+          [0-9]*:[0-9][0-9][0-9]) if [ "${1%%:*}" = "$BATCH" ]; then RECAST="$RECAST ${1#*:}"; else RECAST_OTHER="$RECAST_OTHER $1"; fi; shift ;;
+          [0-9]*:[0-9][0-9][0-9]!) X="${1%!}"; FORCE="$FORCE ${X#*:}"; if [ "${X%%:*}" = "$BATCH" ]; then RECAST="$RECAST ${X#*:}"; else RECAST_OTHER="$RECAST_OTHER $X"; fi; shift ;;
           *) break ;;
         esac
       done
+      ;;
+    --skip)
+      shift
+      while [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]{3}$ ]]; do SKIP="$SKIP $1"; shift; done
       ;;
     --dry-run) DRY=1; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
@@ -96,7 +112,10 @@ pending_patches() {
 # dang chay do. Nen moi buoc hoi truoc: "chuong nay da co mot project HOAN THANH trong thu muc
 # dich chua?" - co thi bo qua, hong thi chay lai (084 hong o lo03r la dung cai can chay lai),
 # va truoc khi tao gi thi doi cho khong con `run` nao dang bay.
+forced() { case " $FORCE " in *" $1 "*) return 0 ;; esac; return 1; }
+skipped() { case " $SKIP " in *" $1 "*) return 0 ;; esac; return 1; }
 already_done() {  # $1 = thu muc phien ban (vd .../v0.2.0-lo03r), $2 = so chuong
+  forced "$2" && return 1
   py -c "
 import sqlite3, sys
 from pathlib import Path
@@ -133,6 +152,7 @@ say "  project lo:    $BATCH_PROJECT"
 say "  trang thai:    $(state)  $(chapter_statuses)"
 say "  duc lai giong:${RECAST:- (khong)}${RECAST_AUTO:+  + tu tim (auto)}"
 say "  duc lai lo khac:${RECAST_OTHER:- (khong)}"
+say "  ep duc lai:    ${FORCE:- (khong)}   bo qua:${SKIP:- (khong)}"
 say "  hang cho:      ${PENDING:=$(pending_patches)}"
 say "  tag da co:     $(git tag -l "$TAG*" "$NEXT_TAG" | tr '\n' ' ')"
 say "  gieo lo $NEXT tu: $(py scripts/seed_chain.py "$BATCH" --seed)   (hien tai; se la project cuoi cua buoc 4)"
@@ -232,6 +252,7 @@ c = sqlite3.connect(r'file:$BATCH_PROJECT/project.sqlite3?mode=ro', uri=True)
 print(' '.join(str(t) for (t, s) in c.execute('SELECT title, status FROM chapters ORDER BY title') if s != 'completed'))")"
 TODO=""
 for CH in $FAILED; do
+  if skipped "$CH"; then say "  $CH nam trong --skip - khong dung toi"; continue; fi
   if already_done "D:/Novels/Audiobooks/_versions/${TAG}v" "$CH"; then say "  $CH da co ban va hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
 done
 SEED="$(py scripts/seed_chain.py "$BATCH" --seed)"
@@ -251,6 +272,7 @@ fi
 # ---- 4. duc lai giong, noi duoi
 TODO=""
 for CH in $RECAST; do
+  if skipped "$CH"; then say "  $CH nam trong --skip - khong dung toi"; continue; fi
   if already_done "D:/Novels/Audiobooks/_versions/${TAG}r" "$CH"; then say "  $CH da duc lai hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
 done
 if [ -n "$TODO" ]; then
@@ -287,6 +309,7 @@ if [ -n "$RECAST_OTHER" ]; then
     OTHER_TAG="$(printf 'v0.2.0-lo%02d' "$OTHER_BATCH")"
     CHS=""
     for CH in $(printf '%s\n' $RECAST_OTHER | grep "^${OTHER_BATCH}:" | cut -d: -f2 | sort -u); do
+      if skipped "$CH"; then say "  lo $OTHER_BATCH chuong $CH nam trong --skip - khong dung toi"; continue; fi
       if already_done "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" "$CH"; then say "  lo $OTHER_BATCH chuong $CH da duc lai hoan thanh - bo qua"; else CHS="$CHS $CH"; fi
     done
     [ -n "$CHS" ] || continue

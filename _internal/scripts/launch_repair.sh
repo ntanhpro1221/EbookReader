@@ -166,6 +166,18 @@ for CH in $BROKEN; do
   echo "=== chuong $CH ==="
   if [ -n "$EXPLICIT" ] && [ "$AS_REPAIR" != 1 ]; then SUFFIX=r; else SUFFIX=v; fi
   TITLE="$(printf 'lo%02d%s_%s' "$BATCH" "$SUFFIX" "$CH")"
+  # Ten project la noi dung-dia-chi theo (tieu de, nguon): cung chuong, cung tieu de -> cung thu
+  # muc. Lan thu HAI cho mot chuong (084 hong o lo03r; 106; 007 bi dung do) vi the mo lai project
+  # cu thay vi tao moi, roi `run` tu choi resume vi hash ma da doi sau ban va, va ca chuoi ghi
+  # "xong" ma khong lam gi - do sang 2026-09-11, 106 va 007 "xong" trong hai phut. Them mot chu
+  # cai vao tieu de cho toi khi chua co project nao mang no: lo04v_106 -> lo04v_106b -> ...c.
+  ATTEMPT=""
+  for LETTER in "" b c d e f g h; do
+    if ls -d "$OUT"/"${TITLE}${LETTER}"_* >/dev/null 2>&1; then continue; fi
+    ATTEMPT="$LETTER"; break
+  done
+  [ -n "$ATTEMPT" ] && echo "  chuong $CH da co project truoc - tieu de lan nay: ${TITLE}${ATTEMPT}"
+  TITLE="${TITLE}${ATTEMPT}"
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \
     --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json > /dev/null
@@ -177,7 +189,14 @@ for CH in $BROKEN; do
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_pronunciations.py       "$PREV" "$PROJECT" > /dev/null
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_casting.py              "$PREV" "$PROJECT" > /dev/null
   PYTHONIOENCODING=utf-8 "$PY" scripts/seed_listener_acceptances.py "$PREV" "$PROJECT" > /dev/null
-  PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli run "$PROJECT" --json > /dev/null
+  # `run` tra JSON; `ok: false` (vi du resume bi tu choi vi hash ma doi) tung bi do vao /dev/null
+  # va vong doi ben duoi thay lease chet + chuong khong "chua xong" nen coi la xong. Noi ra.
+  RUN_OUT="$(PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli run "$PROJECT" --json 2>&1)"
+  if ! printf '%s' "$RUN_OUT" | grep -q '"ok": true'; then
+    echo "  run KHONG khoi dong duoc cho chuong $CH:"
+    printf '%s\n' "$RUN_OUT" | grep -oE '"error": "[^"]{0,200}' | head -2
+    continue
+  fi
   wait_for_run "$PROJECT" "chuong $CH"
   # Noi duoi: chuong ke tiep gieo tu project vua xong, de giong vua cap di tiep.
   PREV="$PROJECT"
