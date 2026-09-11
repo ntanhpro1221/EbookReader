@@ -13,7 +13,14 @@ import json
 import sqlite3
 from pathlib import Path
 
-from scripts.one_person_one_voice import read_voices, shipped_voices, split_voices
+from scripts.one_person_one_voice import (
+    chapter_batches,
+    minority_chapters,
+    read_voices,
+    recast_arguments,
+    shipped_voices,
+    split_voices,
+)
 
 
 def _project(root: Path, name: str, rows: list[tuple[str, str, str, int]]) -> Path:
@@ -165,3 +172,33 @@ def test_a_superseded_sibling_in_the_same_folder_is_not_counted(tmp_path: Path) 
 def test_a_missing_book_reads_as_nothing(tmp_path: Path) -> None:
     assert shipped_voices(book=tmp_path / "khong-co", versions=tmp_path) == []
     assert read_voices(tmp_path / "khong-co") == []
+
+
+def test_the_minority_side_of_a_frequent_speaker_becomes_recast_arguments(tmp_path: Path) -> None:
+    """NGƯỜI TRẢ LỜI: 90 chương một giọng, 6 chương giọng khác - sáu chương ấy đúc lại, dạng `B:NNN`."""
+    versions = tmp_path / "_versions"
+    many = [(f"{n:03d}", "NGƯỜI TRẢ LỜI", "preset_doan_trang_f100", 3) for n in range(1, 8)]
+    _project(versions / "v0.2.0-lo01", "lo01_x", many)
+    _project(versions / "v0.2.0-lo02r", "lo02r_031_x", [("031", "NGUOI TRA LOI", "preset_ngoc_linh_f108", 3)])
+    _project(versions / "v0.2.0-lo03", "lo03_x", [("081", "NGUOI TRA LOI", "preset_ngoc_linh_f108", 2), ("082", "IVAN", "preset_a", 1)])
+    _project(versions / "v0.2.0-lo03r", "lo03r_083_x", [("083", "IVAN", "preset_b", 1)])
+    book = tmp_path / "_book"
+    book.mkdir()
+    entries = [{"title": f"{n:03d}", "version": "v0.2.0-lo01", "project": "lo01_x"} for n in range(1, 8)]
+    entries += [
+        {"title": "031", "version": "v0.2.0-lo02r", "project": "lo02r_031_x"},
+        {"title": "081", "version": "v0.2.0-lo03", "project": "lo03_x"},
+        {"title": "082", "version": "v0.2.0-lo03", "project": "lo03_x"},
+        {"title": "083", "version": "v0.2.0-lo03r", "project": "lo03r_083_x"},
+    ]
+    (book / "manifest.json").write_text(json.dumps({"chapters": entries}), encoding="utf-8")
+
+    _inside, across = split_voices(shipped_voices(book=book, versions=versions))
+    minority = minority_chapters(across, min_chapters=5)
+
+    assert set(minority) == {"NGƯỜI TRẢ LỜI"}, "IVAN có hai chương: đa số là đồng xu, không đúc lại"
+    majority, voices = minority["NGƯỜI TRẢ LỜI"]
+    assert majority == "preset_doan_trang_f100"
+    assert voices == {"preset_ngoc_linh_f108": {"031", "081"}}
+    assert recast_arguments(minority, chapter_batches(book=book)) == ["2:031", "3:081"]
+    assert chapter_batches(book=book)["083"] == 3, "lo03r vẫn là lô 3"

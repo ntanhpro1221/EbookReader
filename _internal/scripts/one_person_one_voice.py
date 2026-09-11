@@ -3,6 +3,9 @@
     python scripts/one_person_one_voice.py                    # cuốn sách đã ghép (manifest.json)
     python scripts/one_person_one_voice.py <project>          # một project
     python scripts/one_person_one_voice.py --chapters         # chỉ in danh sách chương cần đúc lại
+    python scripts/one_person_one_voice.py --across [--min-chapters 5]
+                                                              # in `B:NNN` cho boundary.sh --recast:
+                                                              # chương mang giọng THIỂU SỐ của một người
 
 `voice_pool_pressure.py` hỏi **hai người có dùng chung một giọng không**. Câu ngược lại — *một
 người có mang hai giọng không* — chưa ai hỏi, và nó là câu đắt hơn: hai người giống giọng thì
@@ -23,12 +26,20 @@ vẫn mang hai giọng cho tới khi được đọc lại.
 
 Vì sao phải so **sau khi gộp tên**: nếu không gộp thì công cụ này thấy hai cái tên, mỗi tên một
 giọng, và báo "không có gì". Đúng cái mù đã để 202 câu đi vào sách.
+
+Mặt còn lại của cùng lớp lỗi, đo 23:30 ngày 2026-09-11 trên sách 116 chương: **một người một
+giọng trong mỗi chương, nhưng giọng khác nhau giữa các chương** — NGƯỜI TRẢ LỜI doan_trang_f100 ở
+90 chương và ngoc_linh_f108 ở 6, THỦ LÃNH f100 ở 83 và f090 ở 7; giọng thứ hai luôn nằm ở dòng
+viết rơi dấu trong project đúc trước bản vá gộp tên. `--across` in ra đúng những chương ấy dưới
+dạng `B:NNN` để `boundary.sh --recast` đúc lại; luật là phía **ít chương hơn** đúc lại theo phía
+nhiều hơn, và chỉ với người có đủ chương (`--min-chapters`) để "đa số" có nghĩa.
 """
 from __future__ import annotations
 
 import argparse
 import collections
 import json
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -152,6 +163,57 @@ def split_voices(
     return inside, across
 
 
+def chapter_batches(book: Path = BOOK) -> dict[str, int]:
+    """{chương: số lô} theo `manifest.json` - lô đọc từ tên phiên bản (`v0.2.0-lo03r` → 3)."""
+    try:
+        payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+    batches: dict[str, int] = {}
+    for item in entries:
+        match = re.search(r"lo(\d+)", str(item.get("version") or ""))
+        title = str(item.get("title") or "")
+        if match and title:
+            batches[title] = int(match.group(1))
+    return batches
+
+
+def minority_chapters(
+    across: dict[str, dict[str, set[str]]],
+    *,
+    min_chapters: int,
+) -> dict[str, tuple[str, dict[str, set[str]]]]:
+    """{tên: (giọng đa số, {giọng thiểu số: {chương}})} cho người có ít nhất `min_chapters` chương.
+
+    Đa số = giọng có nhiều chương nhất; hoà thì lấy giọng đứng trước theo bảng chữ, để hai lần
+    chạy cho cùng một câu trả lời. Người dưới `min_chapters` bỏ qua: với hai chương thì "đa số"
+    là một đồng xu, và đúc lại một chương vì đồng xu là phí GPU.
+    """
+    result: dict[str, tuple[str, dict[str, set[str]]]] = {}
+    for name, voices in across.items():
+        total = sum(len(chapters) for chapters in voices.values())
+        if total < min_chapters:
+            continue
+        majority = sorted(voices.items(), key=lambda kv: (-len(kv[1]), kv[0]))[0][0]
+        minority = {voice: set(chapters) for voice, chapters in voices.items() if voice != majority}
+        if minority:
+            result[name] = (majority, minority)
+    return result
+
+
+def recast_arguments(
+    minority: dict[str, tuple[str, dict[str, set[str]]]],
+    batches: dict[str, int],
+) -> list[str]:
+    """`B:NNN` cho từng chương thiểu số, không trùng, theo thứ tự chương; chương không rõ lô bị bỏ."""
+    seen: set[str] = set()
+    for _majority, voices in minority.values():
+        for chapters in voices.values():
+            seen |= set(chapters)
+    return [f"{batches[chapter]}:{chapter}" for chapter in sorted(seen) if chapter in batches]
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("project", nargs="?", type=Path, default=None)
@@ -159,6 +221,17 @@ def main(argv: list[str]) -> int:
         "--chapters",
         action="store_true",
         help="chỉ in số chương cần đúc lại, cách nhau bằng dấu cách",
+    )
+    parser.add_argument(
+        "--across",
+        action="store_true",
+        help="in `B:NNN` cho boundary.sh --recast: chương mang giọng thiểu số của một người",
+    )
+    parser.add_argument(
+        "--min-chapters",
+        type=int,
+        default=5,
+        help="chỉ xét người có ít nhất bấy nhiêu chương (mặc định 5)",
     )
     args = parser.parse_args(argv)
 
@@ -175,6 +248,10 @@ def main(argv: list[str]) -> int:
     inside, across = split_voices(rows)
     if args.chapters:
         _say(" ".join(sorted(inside)))
+        return 0
+    if args.across:
+        minority = minority_chapters(across, min_chapters=args.min_chapters)
+        _say(" ".join(recast_arguments(minority, chapter_batches())))
         return 0
 
     chapters = {chapter for chapter, _name, _voice, _lines in rows}
@@ -208,6 +285,14 @@ def main(argv: list[str]) -> int:
                 shown = ", ".join(sorted(in_chapters)[:6])
                 more = " ..." if len(in_chapters) > 6 else ""
                 _say(f"      {voice:34s} {len(in_chapters):3d} chương: {shown}{more}")
+        minority = minority_chapters(across, min_chapters=args.min_chapters)
+        arguments = recast_arguments(minority, chapter_batches())
+        if arguments:
+            _say("")
+            _say(
+                f"Đúc lại phía thiểu số của người có ≥ {args.min_chapters} chương ở ranh giới: "
+                f"bash scripts/boundary.sh <lô> --recast auto {' '.join(arguments)}"
+            )
     return 0
 
 

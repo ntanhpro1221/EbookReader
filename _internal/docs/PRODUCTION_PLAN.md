@@ -493,6 +493,12 @@ lại bản đọc-ghim cho những đoạn đã lên sách mà chỉ thua bài 
 sửa trong sách 92 chương đọc tên theo chữ viết — `KEEP_THE_LOCKED_READING.md`) rồi ghép lại
 chương bằng đuôi của `_process_chapter`; không GPU, ~40 giây một chương, nên chạy cạnh lô đang
 bay là vô hại. Lần đầu (ranh giới 5 → 6) chạm 452 đoạn trong 102 chương, chừng 70 phút; các lô
-sau chỉ còn chương chưa đi qua bản vá. Trước khi `patch_keep_the_locked_reading` vào cây thì
+sau chỉ còn chương chưa đi qua bản vá.
+
+Trước khi thả ranh giới, hỏi thêm câu ngược của `voice_pool_pressure`:
+`python scripts/one_person_one_voice.py --across` in `B:NNN` cho những chương mà một người nói
+nhiều chương mang giọng thiểu số; dán vào `--recast auto ...`. Chương đã có bản đúc lại hoàn thành
+trong thư mục `r` cần `!`. Đọc phần "qua các chương" của báo cáo trước khi dán: một người mà "đa số"
+còn có thể đổi chiều sau lô đang chạy (KANG đêm 2026-09-11) thì để sau. Trước khi `patch_keep_the_locked_reading` vào cây thì
 script tự từ chối và ranh giới đi tiếp. Kiểm sau lượt ấy: đếm lại bản `source_spelling_v1` được đề cử trong sách phải về
 gần 0; những ca còn lại là đoạn thua thêm mã khác ngoài neo tên.

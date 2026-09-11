@@ -1716,10 +1716,12 @@ chỉ hỏi `voice_pool_pressure` (hai người chung giọng **trong cùng chư
 người mang hai giọng ở hai chương — phải tự tay đọc rồi gõ `B:NNN`, như đã làm cho chín chương
 của NGƯỜI TRẢ LỞI / THỦ LÃNH đêm 2026-09-11.
 
-**Đề xuất:** `one_person_one_voice.py --across --min-chapters N` in ra danh sách `B:NNN` của những
-chương mang giọng **thiểu số** của một người có ≥ N chương (mặc định N = 5, để không đúc lại vì
-một cái tên hai chương), tra lô của chương từ manifest; `boundary.sh --recast auto` gộp thêm danh
-sách ấy. Luật chọn phía nào đúc lại: phía **ít chương hơn** đúc lại theo phía nhiều hơn, trừ khi
+**Đã làm phần script (23:40):** `one_person_one_voice.py --across --min-chapters N` in ra danh sách
+`B:NNN` của những chương mang giọng **thiểu số** của một người có ≥ N chương (mặc định N = 5, để
+không đúc lại vì một cái tên hai chương), tra lô của chương từ manifest; hoà thì giọng đứng trước
+theo bảng chữ là đa số, cho hai lần chạy cùng câu trả lời. Trên sách 116 chương nó đề nghị 16
+chương; ranh giới 5 → 6 nhận 11 (bỏ 5 chương KANG — xem dưới). **Còn phải làm:** `boundary.sh
+--recast auto` gộp thêm danh sách ấy — sửa ở điểm yên tĩnh kế, vì script đang chạy. Luật chọn phía nào đúc lại: phía **ít chương hơn** đúc lại theo phía nhiều hơn, trừ khi
 phía nhiều hơn là giọng cũ của một lớp lỗi đã biết (như `NGUOI TRA LOI`) — khi ấy chính bản gộp
 tên mới là phía đúng. Ghi cả hai con số vào log để người sau kiểm.
 

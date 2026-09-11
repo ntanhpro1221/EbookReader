@@ -1250,3 +1250,13 @@ lô 5 gieo từ `lo03r_091`, nên lô 5 có thể thêm f093; quyết sau khi l�
 đúc lại), và mười cái tên 1–3 chương. Sổ `character_exposure` trong lô 5 là bản cũ 21 tên
 (NGƯỞI TRẢ LỞI 320 thay vì 955, KANG không có) — KANG đụng giọng trong lô 5 sẽ là người nhường.
 Không sửa DB của lô đang bay; ghi để kiểm sau. Việc dài hơi ghi ở OPTIMISATION_QUEUE.
+
+Viết luôn chế độ `one_person_one_voice.py --across [--min-chapters 5]` (23:40): in `B:NNN` cho những
+chương mang giọng thiểu số của người có đủ chương, lô tra từ manifest. Trên sách thật nó đề nghị 16
+chương: chín chương trên, cộng 051 và 054 (THALIA ba giọng trong sáu chương, WILLEM một chương lệch)
+và năm chương f093 của KANG. Nhận 051 + 054 (thêm ~50 phút GPU), **hoãn KANG**: lô 5 gieo từ phía
+f093 nên "đa số" của KANG có thể đổi chiều sau lô 5 — đúc lại bây giờ là đúc lại có thể sai chiều.
+Dừng và thả lại ranh giới lần ba (vẫn ở bước 0):
+`--recast auto 2:031 2:043 2:051 2:053 2:054! 2:055 2:056! 3:072 3:080 3:081 3:089 4:106` — 054 và
+056 cần `!` vì `lo02r_054/056` đã hoàn thành. Nối `--across` vào `boundary.sh --recast auto` để ở
+điểm yên tĩnh kế (không sửa script đang chạy).
