@@ -186,7 +186,60 @@ def mark_chapter_stale(db: Any, chapter: Any, *, kept: int) -> bool:
     return True
 
 
-def reassemble(pipeline: BookPipeline, chapter: Any) -> tuple[bool, str]:
+def shipped_state(db: Any, chapter: Any) -> dict[str, Any]:
+    """Ảnh của những gì đang LÊN SÁCH cho chương này: dòng `chapters` và artifact MP3."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT status, completed_at, last_error FROM chapters WHERE id=?",
+            (int(chapter["id"]),),
+        ).fetchone()
+    artifact = db.artifact_by_key(f"chapter_mp3:{int(chapter['chapter_index'])}")
+    try:
+        metadata = json.loads(str(artifact["metadata_json"] or "{}")) if artifact else {}
+    except (TypeError, ValueError):
+        metadata = {}
+    return {
+        "status": str(row["status"]) if row else None,
+        "completed_at": row["completed_at"] if row else None,
+        "last_error": row["last_error"] if row else None,
+        "artifact": None
+        if artifact is None
+        else {
+            "path": Path(str(artifact["path"])),
+            "sha256": artifact["sha256"],
+            "verified": bool(artifact["verified"]),
+            "metadata": metadata if isinstance(metadata, dict) else {},
+        },
+    }
+
+
+def restore_shipped_state(db: Any, chapter: Any, state: dict[str, Any]) -> None:
+    """Đặt lại đúng ảnh ấy. Một lượt CẢI THIỆN thất bại không được gỡ chương khỏi sách.
+
+    `assemble_book._candidates()` chỉ nhận dòng `completed`; một chương bị bỏ ở trạng thái
+    `failed` hay `verifying` sẽ **rơi khỏi cuốn sách** dù MP3 cũ vẫn nằm nguyên trên đĩa, và
+    bước 7 của ranh giới chỉ báo "thiếu 1 chương" giữa một log dài. Dòng `quality_checks` FAIL
+    của lần thử vẫn giữ (lịch sử thật, và nó khoá theo checksum bằng chứng khác nên không làm
+    bản PASS của MP3 cũ hết hiệu lực).
+    """
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE chapters SET status=?, completed_at=?, last_error=? WHERE id=?",
+            (state["status"], state["completed_at"], state["last_error"], int(chapter["id"])),
+        )
+    artifact = state["artifact"]
+    if artifact is not None:
+        db.register_artifact(
+            artifact_key=f"chapter_mp3:{int(chapter['chapter_index'])}",
+            kind="chapter_mp3",
+            path=artifact["path"],
+            sha256=artifact["sha256"],
+            verified=artifact["verified"],
+            metadata=artifact["metadata"],
+        )
+
+
+def reassemble(pipeline: BookPipeline, chapter: Any, *, kept: int) -> tuple[bool, str]:
     """Ghép lại chương bằng chính đuôi của `_process_chapter`; (thành công?, lời).
 
     Không gọi cả `_process_chapter`: một chương đã hoàn thành vẫn có thể mang đoạn `failed`
@@ -198,22 +251,43 @@ def reassemble(pipeline: BookPipeline, chapter: Any) -> tuple[bool, str]:
     """
     db = pipeline.db
     chapter_id = int(chapter["id"])
+    # Chụp ảnh TRƯỚC khi đánh dấu artifact hết hiệu lực, và làm cả hai việc trong cùng hàm này:
+    # bản đầu để việc đánh dấu ở `run_project`, nên ảnh chụp bên trong đây đã là ảnh *đã bị
+    # đánh dấu*, và một lượt thất bại "khôi phục" về một artifact `verified=0` - chương vẫn
+    # trong sách nhưng bằng chứng QA của MP3 đang chạy thì bị xoá, không vì lý do gì. Bài thử
+    # bắt được đúng chỗ ấy.
+    before = shipped_state(db, chapter)
+    if not mark_chapter_stale(db, chapter, kept=kept):
+        pipeline.log(f"chương {chapter['title']}: không có artifact MP3 để đánh dấu hết hiệu lực")
     # Đang ghép lại: nếu bị ngắt giữa chừng thì chương không còn `completed` và artifact đã
     # hết hiệu lực, `cli run` sẽ tự ghép lại.
     db.update_chapter_status(chapter_id, ChapterStatus.VERIFYING.value)
+    word = ""
     try:
         pipeline._publish_verified_chapter(chapter)
     except AudioQualityError as exc:
         pipeline._record_chapter_quality_failure(chapter, exc)
-        return False, f"cổng chất lượng chương từ chối: {exc}"
+        word = f"cổng chất lượng chương từ chối: {exc}"
+    except Exception as exc:  # noqa: BLE001 - xem docstring của `restore_shipped_state`
+        # Mọi loại lỗi, không chỉ cổng chất lượng: nguồn chương đổi checksum
+        # (`_validate_chapter_source`), ffmpeg chết, hay hàng rào tổng hợp của script này bắt
+        # được một đoạn cần thu lại. Lượt này là một lượt CẢI THIỆN chương đã lên sách - không
+        # có lỗi nào ở đây đáng để gỡ chương khỏi sách, và một ngoại lệ thoát ra còn giết cả
+        # vòng `--book`, bỏ luôn những project sau nó.
+        word = f"{type(exc).__name__}: {exc}"
     fresh = next(
         (row for row in db.list_chapters() if int(row["id"]) == int(chapter["id"])),
         None,
     )
     if fresh is None or str(fresh["status"]) != ChapterStatus.COMPLETED.value:
-        return False, f"chương không về `completed` (đang {fresh['status'] if fresh else '?'})"
+        restore_shipped_state(db, chapter, before)
+        detail = word or f"chương không về `completed` (đang {fresh['status'] if fresh else '?'})"
+        return False, f"{detail}; đã đặt lại trạng thái đã lên sách ({before['status']})"
+    if word:
+        # Đã `completed` mà vẫn có lỗi: MP3 mới nằm trên đĩa rồi, đặt lại là nói sai. Báo to.
+        return False, f"{word} (chương vẫn `completed` với MP3 vừa ghép - kiểm tay)"
     if not db.chapter_artifact_is_current_qa_verified(int(chapter["chapter_index"])):
-        return False, "MP3 mới không có bằng chứng QA hiện hành"
+        return False, "MP3 mới không có bằng chứng QA hiện hành (chương vẫn `completed`)"
     artifact = db.artifact_by_key(f"chapter_mp3:{int(chapter['chapter_index'])}")
     size = Path(str(artifact["path"])).stat().st_size if artifact is not None else 0
     sha = str(artifact["sha256"] or "")[:12] if artifact is not None else "?"
@@ -326,9 +400,7 @@ def run_project(
         _say(f"  chương {chapter['title']}: giữ cách đọc ghim cho {kept}/{len(items)} đoạn")
         if kept == 0:
             continue
-        if not mark_chapter_stale(db, chapter, kept=kept):
-            _say("     không có artifact MP3 để đánh dấu - chương chưa từng ghép?")
-        ok, word = reassemble(pipeline, chapter)
+        ok, word = reassemble(pipeline, chapter, kept=kept)
         _say(f"     {'ghép lại xong' if ok else 'CHƯA ghép lại'}: {word}")
         if not ok:
             failures += 1
@@ -378,15 +450,19 @@ def main(argv: list[str]) -> int:
         parser.error("cần ít nhất một project, hoặc --book")
     worst = 0
     for root, titles in targets:
-        worst = max(
-            worst,
-            run_project(
+        # Mỗi project độc lập: `--book` chạm 36 project ở bước 6b của ranh giới, và một project
+        # nổ (chính sách lệch phiên bản, DB khoá, đĩa đầy) không được làm 35 project kia mất lượt.
+        try:
+            code = run_project(
                 root.expanduser().resolve(),
                 apply=args.apply,
                 only_titles=titles,
                 include_unchanged=args.also_unchanged,
-            ),
-        )
+            )
+        except Exception as exc:  # noqa: BLE001
+            _say(f"{root.name}: {type(exc).__name__}: {exc} - bỏ qua project này, đi tiếp")
+            code = 2
+        worst = max(worst, code)
     return worst
 
 

@@ -165,5 +165,69 @@ trên bản sao 084b với luật mới: 7/7 đoạn, 3 để yên, MP3 mới `9
   đọc-theo-chữ-viết" cho cả 36 project (để yên 411); đếm bản `source_spelling_v1` được đề cử
   trong sách giảm đúng 452; những ca còn lại là đoạn thua thêm mã khác ngoài neo tên — chúng
   đúng là bản thu hỏng, và đổi cách đọc ở đó không phải lỗi.
-- Nếu một chương ghép lại không được, script in "CHƯA ghép lại" với lý do; artifact đã đánh
-  dấu hết hiệu lực nên `cli run` (GPU) sẽ tự ghép lại khi được gọi.
+- Nếu một chương ghép lại không được, script in "CHƯA ghép lại" với lý do **và đặt lại đúng
+  trạng thái đã lên sách** — xem mục dưới.
+
+## Một lượt cải thiện thất bại không được gỡ chương khỏi cuốn sách
+
+Tìm ra 00:30 ngày 2026-09-12, trước khi bước 6b chạy lần đầu, bằng cách đọc lại thứ tự các bước.
+
+`assemble_book._candidates()` chỉ nhận dòng `chapters` có `status='completed'` (và MP3 tồn tại).
+Bản đầu của `reassemble` đặt chương sang `verifying` trước khi ghép, và **mọi** đường lỗi để nó ở
+đó: `AudioQualityError` thì `_record_chapter_quality_failure` đặt `failed`, còn một ngoại lệ khác
+(nguồn chương đổi checksum, ffmpeg chết, hàng rào tổng hợp của script bắt được một đoạn cần thu
+lại) thì thoát thẳng ra và giết luôn vòng `--book`, bỏ mọi project sau nó. Hậu quả: một chương
+**đang nằm trong sách** rơi ra, dù MP3 cũ còn nguyên trên đĩa — và bước 7 chỉ báo "thiếu 1 chương"
+giữa một log dài, lúc 4 giờ sáng, không ai đọc.
+
+Hình dạng lỗi đáng ghi lại: lượt này là một lượt **cải thiện** một thứ đã tốt. Khi nó thất bại,
+trạng thái đúng không phải "hỏng" mà là "y như trước". Cổng chất lượng chương được viết cho lần
+xuất bản ĐẦU (chưa có gì để mất, `failed` là đúng), và dùng lại nó ở đây là dùng đúng mã cho sai
+hoàn cảnh.
+
+Sửa: `reassemble` chụp ảnh trạng thái đã lên sách (`chapters.status`, `completed_at`, `last_error`,
+và cả hàng artifact: `verified`, `sha256`, `metadata_json`), rồi mới đánh dấu artifact hết hiệu
+lực; bắt **mọi** ngoại lệ; nếu sau đó chương không về `completed` thì đặt lại đúng ảnh ấy và nói
+ra trong một dòng. `main()` cũng bọc từng project, vì `--book` chạm 36 project và một project nổ
+không được làm 35 project kia mất lượt. Dòng `quality_checks` FAIL của lần thử vẫn giữ — lịch sử
+thật, và nó khoá theo checksum bằng chứng khác nên bản PASS của MP3 đang chạy không hết hiệu lực.
+
+**Bài thử bắt được lỗi của chính bản sửa.** Bản sửa đầu để việc đánh dấu artifact ở `run_project`,
+nên ảnh chụp bên trong `reassemble` đã là ảnh *đã bị đánh dấu*, và "khôi phục" trả về một artifact
+`verified=0`: chương vẫn trong sách nhưng bằng chứng QA của MP3 đang chạy bị xoá không vì lý do gì.
+Chụp-rồi-đánh-dấu giờ nằm trong cùng một hàm, cạnh nhau, không thể trôi khỏi nhau.
+
+Chứng minh trên project THẬT, không chỉ bằng stub: hai bản sao của `lo03r_084b`, một bản bị trỏ
+`chapters.input_path` sang file không tồn tại để `_validate_chapter_source` ném thật.
+
+| | bản lỗi (`klr_fail`) | bản sạch (`klr_ok`) |
+|---|---|---|
+| kết quả | `RuntimeError: Source chapter is missing…; đã đặt lại trạng thái đã lên sách (completed)`, thoát 1 | `MP3 mới ad1a6a28… 14,4 MB`, thoát 0 |
+| `chapters` | `completed`, `completed_at` y nguyên, `last_error` NULL | `completed`, mốc mới |
+| artifact | sha cũ, `verified=1`, không còn ghi chú `stale` | sha mới, `verified=1` |
+| MP3 trên đĩa | không đổi (`87ec291b9fd6`) | đổi |
+| đoạn đã đề cử lại | 9 bản đọc-ghim, 7 dòng sổ thay thế — **giữ** | 9 / 7 |
+| `assemble_book` | vẫn thấy chương 084 | thấy, và mới hơn nên thắng |
+
+Hàng "đoạn đã đề cử lại" là điều cố ý: việc đề cử lại đã xong và đúng, nên không hoàn nguyên. Cái
+lệch lại là MP3 cũ không còn khớp các đoạn nó được ghép từ — `cli run` trên project ấy sẽ ghép lại
+và lần ấy có GPU. Đổi một chương "cũ nhưng nghe được" lấy một chương biến mất là đổi có lợi.
+
+## Móc trong vòng sửa cũng vậy: mọi lỗi của nó là "thôi không giữ"
+
+Cùng buổi, cùng hình dạng, chỗ khác: `_keep_the_locked_reading` gọi `_segment_candidate_item`,
+và hàm ấy **ném thật** khi checksum văn bản đọc trôi ("segment candidate pronunciation variant or
+spoken-text checksum drifted") — chuyện đã xảy ra ở alpha.47 khi một cách đọc được ghim giữa lượt
+chạy. Bản vá đầu chỉ bọc lời gọi `promote_segment_candidate`, nên ngoại lệ ấy thoát ra khỏi
+`_verify_chapter_audio` và **giết chương đang phiên**: đổi một cơ hội nhất quán tên riêng lấy cả
+một chương. Móc này chạy ở mọi chương của mọi lô từ đây về sau, nên đó không phải khả năng lý
+thuyết.
+
+Sửa: `_keep_the_locked_reading` giờ là một lớp bọc bắt **mọi** ngoại lệ, ghi một dòng log, trả về
+`False`; thân hàm cũ đổi tên thành `_keep_the_locked_reading_if_it_wins`. Bài thử mới trong bản vá
+làm trôi checksum thật trên bản sao `lo03r_084b` rồi đòi hai điều: móc trả `False`, và **không đổi
+gì** (`segments.wav_sha256` y nguyên).
+
+Đường "bản hoàn chỉnh thắng bản bị cắt" (`_promote_a_finished_take_over_a_cut_off_one`) có cùng
+chỗ hở và chưa được bọc — nó chưa từng chạy thật (0 dòng sổ trên 47 project), nên để nguyên và ghi
+vào `OPTIMISATION_QUEUE.md` thay vì sửa mù.

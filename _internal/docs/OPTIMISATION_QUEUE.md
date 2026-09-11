@@ -1731,3 +1731,20 @@ Mười tên 1–3 chương (THALIA 3 giọng, SAMAELE 3, WILLEM, IVAN, ROB, NOA
 mỗi tên một quyết định nhỏ, tổng ~12 chương-GPU. Sổ `character_exposure` của lô 5 là bản cũ 21
 tên (sửa đường ghi sổ sau khi lô 5 đã khởi động) — hạng "ai giữ giọng khi trùng" trong lô 5 lệch;
 lô 6 sẽ có sổ đúng vì launcher ghi vào phần tử cuối chuỗi.
+
+## Hai chỗ hở cùng hình dạng, ghi để sửa ở điểm yên tĩnh (2026-09-12, 01:00)
+
+**1. `_promote_a_finished_take_over_a_cut_off_one` không được bọc.** Nó gọi
+`_segment_candidate_item` như `_keep_the_locked_reading` từng gọi, và hàm ấy ném khi checksum văn
+bản đọc trôi; một ngoại lệ ở đấy giết chương đang phiên. Đường này chưa từng chạy thật (0 dòng
+`machine_take_substitutions` trên 47 project lô, đo 17:59 ngày 2026-09-11 — và CAS trạng thái ứng
+viên là lý do nó không chạy được, đã sửa trong `patch_keep_the_locked_reading`). Sau ranh giới
+5 → 6 nó sẽ chạy được lần đầu; bọc nó bằng cùng lớp bọc "mọi lỗi là thôi không thay" trước khi lô
+nào đụng phải một bản thu bị cắt.
+
+**2. Bước 2 của `boundary.sh` dùng `git add -A "$ROOT"`.** Đã một lần cuốn công việc đang dở của
+tôi vào commit của ranh giới (7e5e4bd). Luật hiện tại là "giữ cây sạch khi ranh giới bay" — một
+luật dựa vào kỷ luật của người, đúng kiểu luật sẽ hỏng lúc 4 giờ sáng. Sửa đúng:
+`apply_all --apply` in ra danh sách file nó đã ghi (nó biết chính xác: `ebook_reader/*`, `tests/*`,
+`scripts/pending_patches/apply_all.py`), và bước 2 stage đúng danh sách ấy. Không sửa được lúc
+này vì `boundary.sh` đang chạy (bash đọc script theo từng khúc).

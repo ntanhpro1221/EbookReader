@@ -429,6 +429,25 @@ t = t.replace(OLD, NEW, 1)
 
 OLD = "    def _promote_a_finished_take_over_a_cut_off_one(\n"
 NEW = '''    def _keep_the_locked_reading(self, item: Any) -> bool:
+        """Giữ cách đọc ghim nếu được, và **không bao giờ** làm hỏng chương nếu không được.
+
+        Đường này là một CẢI THIỆN đặt giữa vòng sửa ASR: nếu nó không làm được việc của nó thì
+        vòng sửa phải đi tiếp y như trước khi có nó. Vậy mọi ngoại lệ ở đây là "thôi không giữ",
+        không phải "chương hỏng" - `_segment_candidate_item` ném thật khi checksum văn bản đọc
+        trôi (`pronunciation variant or spoken-text checksum drifted`, chuyện đã xảy ra ở
+        alpha.47 khi một cách đọc được ghim giữa lượt chạy), và một ngoại lệ thoát ra từ đây sẽ
+        giết chương đang phiên - đổi một cơ hội nhất quán tên riêng lấy cả một chương.
+
+        Cùng hình dạng với `restore_shipped_state` của `scripts/keep_the_locked_reading.py`:
+        khi một lượt cải thiện thất bại, trạng thái đúng là "y như trước", không phải "hỏng".
+        """
+        try:
+            return self._keep_the_locked_reading_if_it_wins(item)
+        except Exception as exc:  # noqa: BLE001 - xem docstring
+            self.log(f"Segment {item['stable_id']}: không giữ được cách đọc ghim - {exc}")
+            return False
+
+    def _keep_the_locked_reading_if_it_wins(self, item: Any) -> bool:
         """Đề cử bản đọc-ghim đã trượt **chỉ** bài chính tả neo tên, thay vì đổi cách đọc.
 
         Đo 2026-09-11 trên sách 92 chương: 348/716 đoạn được sửa (48%) đọc tên theo chữ viết,
@@ -473,20 +492,14 @@ NEW = '''    def _keep_the_locked_reading(self, item: Any) -> bool:
         for code in anchor_codes:
             if code not in codes:
                 codes.append(code)
-        try:
-            promoted = self.db.promote_segment_candidate(
-                int(candidate["id"]),
-                validated_wav_sha256=str(candidate["wav_sha256"]),
-                repair_action=KEEP_LOCKED_READING_ACTION,
-                attempt=self._next_segment_quality_attempt(segment_id),
-                warning_code="|".join(codes) or None,
-                keeping_the_locked_reading=True,
-            )
-        except (RuntimeError, ValueError, KeyError) as exc:
-            self.log(
-                f"Segment {item['stable_id']}: không giữ được cách đọc ghim - {exc}"
-            )
-            return False
+        promoted = self.db.promote_segment_candidate(
+            int(candidate["id"]),
+            validated_wav_sha256=str(candidate["wav_sha256"]),
+            repair_action=KEEP_LOCKED_READING_ACTION,
+            attempt=self._next_segment_quality_attempt(segment_id),
+            warning_code="|".join(codes) or None,
+            keeping_the_locked_reading=True,
+        )
         if str(promoted["state"]) != SEGMENT_CANDIDATE_PROMOTED:
             return False
         reason = (
@@ -959,6 +972,42 @@ def test_a_missing_wav_refuses(tmp_path: Path) -> None:
     assert db.find_locked_reading_that_lost_only_the_spelling_test(
         int(segment["id"]), str(segment["generation_policy_hash"])
     ) is None
+
+
+def test_a_drifted_spoken_text_checksum_is_skipped_not_raised(tmp_path: Path) -> None:
+    """Checksum văn bản đọc trôi là lỗi thật của `_segment_candidate_item`; ở đây nó chỉ là "thôi".
+
+    Đường ống chạy móc này giữa vòng sửa của MỌI chương, nên một ngoại lệ thoát ra sẽ giết chương
+    đang phiên. alpha.47 cho thấy checksum ấy trôi được thật: ghim một cách đọc giữa lượt chạy.
+    """
+    if not (REAL / "book_settings.json").is_file():
+        pytest.skip(f"không có project thật {REAL.name} trên máy này")
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from scripts.keep_the_locked_reading import bare_pipeline
+
+    from ebook_reader.cli import _open_project
+
+    shutil.copyfile(REAL / "project.sqlite3", tmp_path / "project.sqlite3")
+    shutil.copyfile(REAL / "book_settings.json", tmp_path / "book_settings.json")
+    with sqlite3.connect(str(tmp_path / "project.sqlite3")) as conn:
+        conn.row_factory = sqlite3.Row
+        segment = conn.execute(
+            "SELECT * FROM segments WHERE stable_id LIKE ?", (f"%{LOST_LINE_SUFFIX}",)
+        ).fetchone()
+        conn.execute(
+            "UPDATE segment_candidates SET expected_spoken_text_sha256=? "
+            "WHERE segment_id=? AND pronunciation_delivery_variant=?",
+            ("0" * 64, int(segment["id"]), PRONUNCIATION_DELIVERY_LOCKED),
+        )
+    paths, db, settings = _open_project(tmp_path)
+    pipeline = bare_pipeline(paths, db, settings)
+
+    assert pipeline._keep_the_locked_reading(dict(db.get_segment(int(segment["id"])))) is False
+    assert str(db.get_segment(int(segment["id"]))["wav_sha256"]) == str(segment["wav_sha256"]), (
+        "không giữ được thì không được đổi gì"
+    )
 '''
 write_atomic(root / "tests" / "test_keep_the_locked_reading.py", TEST.lstrip())
 print("da tao", root / "tests" / "test_keep_the_locked_reading.py")

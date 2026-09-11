@@ -1267,3 +1267,22 @@ chạy, mà `--book` đọc manifest của lần ghép TRƯỚC — vẫn trỏ 
 `shipped_projects()` giờ hỏi thẳng câu bước 7 hỏi (`assemble_book._candidates`: bản `completed` có
 MP3, mới nhất thắng) thay vì đọc manifest; hai bài thử ở `tests/test_keep_the_locked_reading_
 targets.py`. Ranh giới đang chờ không cần thả lại: script được đọc lúc bước 6b gọi.
+
+## 2026-09-12, 00:20–00:50 — bước 6b có thể gỡ một chương khỏi sách; sửa trước khi nó chạy
+
+Chủ sách chuyển sang Opus 5 và nạp tài liệu workflow. Lệnh vĩnh viễn "cấm chia subagent" vẫn
+đứng cho tới khi có câu cho phép rõ ràng, nên vẫn tự làm trong vòng lặp chính (và lúc này fan-out
+còn làm governor nhường máy, làm chậm lô 5 — đo 18:49–18:51 hôm qua).
+
+Đọc lại thứ tự các bước của ranh giới và tìm ra một lỗ: `reassemble` của bước 6b đặt chương sang
+`verifying` rồi ghép; mọi đường lỗi để nó ở `verifying`/`failed`, mà `assemble_book` chỉ nhận
+`completed` — nên một chương **đang trong sách** sẽ rơi ra, im lặng, và một ngoại lệ không phải
+`AudioQualityError` còn giết cả vòng `--book`. Sửa: chụp ảnh trạng thái đã lên sách (chương +
+artifact) rồi mới đánh dấu hết hiệu lực, bắt mọi ngoại lệ, thất bại thì đặt lại đúng ảnh ấy và nói
+ra; `main()` bọc từng project. Bài thử bắt được lỗi của bản sửa đầu (ảnh chụp sau khi đã đánh dấu
+→ "khôi phục" về `verified=0`). Chứng minh trên hai bản sao `lo03r_084b`, một bản bị trỏ nguồn sang
+file không tồn tại: chương giữ `completed` + mốc cũ + artifact cũ + MP3 cũ, 9 đoạn đề cử lại vẫn
+giữ, `assemble_book` vẫn thấy nó. Chi tiết và bảng đo ở `KEEP_THE_LOCKED_READING.md`.
+
+Lô 5: 2.152/3.720 đoạn phân tích lúc 00:19, nhịp ~16 đoạn/phút, lease sống, không lần nhường máy
+nào trong 30 phút. Ranh giới vẫn chờ ở bước 0 với đúng một tiến trình script.
