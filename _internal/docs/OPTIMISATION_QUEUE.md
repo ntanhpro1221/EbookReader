@@ -1911,3 +1911,43 @@ dùng CHÍNH GIỌNG ẤY"*, không phải *"chương mà người ấy có mặ
 NGƯỜI TRẢ LỜI + THALIA cùng chương ở sáu chương, trong khi họ chỉ chung giọng `f115` ở hai chương
 khác nhau. Cùng lớp lỗi với `one_person_one_voice` trước khi gộp tên: chọn đúng hai tập để giao
 mới là câu hỏi.
+
+## Xếp hạng pin theo mức đã nghe: 8 slot nam đang do người 1–2 chương giữ (2026-09-12, 04:20)
+
+Đo trên lô 5 sau khi nó khoá dàn giọng. Kho giọng dùng được cho nhân vật **nam** là 14 slot
+(2 preset × 7 bậc; xem `TWO_CHARACTERS_ONE_VOICE.md` về vì sao chỉ hai preset và vì sao không mở
+rộng). Tình trạng sở hữu:
+
+    pin trên preset nam: 16 (hai slot mang hai pitch khác nhau nên 16 > 14)
+    trống: 0
+
+    người giữ pin, xếp theo số chương:
+      THỦ LÃNH 90 · MICHAEL 42 · SAMAEL 29 · JAKE 9 · BOWDEN 6 · WILLEM 6 · CÔNG TƯỚC 3 · RAY 3
+      ARTHUR 2 · JAY 2 · SAM 2 · ĐẠI TƯ TẾ 2 · DORON STORMWATCH 1 · IGOR 1 · REICHARDT 1 · VALE 1
+
+    người ≥3 chương KHÔNG có pin:
+      KANG 13 · SAMAELE 3 · IVAN 3 · ROB 3 · LYLE 3
+
+**Tám slot đang do người 1–2 chương giữ, còn KANG với 13 chương thì không có gì.** Đó là thứ tự
+ngược, và nó là gốc của cả họ lỗi "một người hai giọng qua các chương": người không có pin bị rút
+thăm lại giọng ở **mọi** lô sau, còn người có pin thì giữ mãi dù chỉ nói ba câu trong một chương
+cách đây một trăm chương.
+
+`port_casting` **đã** có đúng học thuyết này — luật va chạm xếp hạng theo sổ cộng dồn rồi số câu —
+nhưng nó chỉ áp khi hai người **cùng đòi một slot lúc chuyển lô**, không bao giờ áp cho việc sở
+hữu đang đứng. Một người giữ pin mà im lặng thì không va chạm với ai, nên không bao giờ bị xét
+lại.
+
+**Đề xuất, và cái giá của nó:** một bước "xếp lại pin" ở ranh giới, đọc sổ cộng dồn đủ 62 tên,
+và chuyển pin từ người ít chương sang người nhiều chương khi slot khan. Giá: mỗi lần chuyển pin
+đòi **đúc lại những chương của người mất pin** (1–2 chương mỗi người, ~25 phút GPU một chương),
+vì giọng của họ đổi. Với tám slot đang bị giữ bởi người 1–2 chương, đổi năm slot cho năm người
+≥3 chương tốn khoảng 6–8 chương đúc lại (~3 giờ GPU) và cho KANG, LYLE, ROB, IVAN, SAMAELE một
+giọng ổn định vĩnh viễn.
+
+**Chưa làm, và lý do:** đây là thay đổi ở tầng casting kèm chi phí GPU thật và một quyết định
+đánh đổi (đổi giọng của bốn nhân vật một chương để bốn nhân vật ba-mười-ba chương được ổn định).
+Việc ấy thuộc chủ sách. Số liệu đã đủ để quyết trong một phút.
+
+Công cụ đã có để dùng khi quyết: `scripts/pin_the_book_cast.py` (ghim theo giọng đa số của cả
+sách, tôn trọng pin đã có — hôm nay ghim được 0 người, đúng vì kho nam đã kín).

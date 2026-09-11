@@ -32,6 +32,23 @@ thứ người nghe đã nghe nhiều nhất, và nó không phụ thuộc vào 
 nào. Nó chỉ **thêm** pin cho người chưa có; không bao giờ đè lên quyết định của `port_casting`
 hay `cli cast`, vì hai đường ấy biết những điều script này không biết (người nghe vừa chọn, hay
 lô vừa đúc lại).
+
+**Trên dữ liệu hôm nay nó ghim được ĐÚNG 0 người, và đó là câu trả lời chứ không phải lỗi.**
+Lượt thử 04:15 ngày 2026-09-12 trên bản sao lô 5: cả 26 người bị bỏ quên đều có giọng đa số
+**đã thuộc về một người đang giữ pin** — ROB và JONES và MARK muốn `thanh_binh_f100_p-04` mà
+BOWDEN giữ; LYLE và VICTOR và CHUA TÔ muốn `thai_son_f100_p+00` mà VALE giữ; IVAN muốn
+`ngoc_linh_f107_p+02` mà EVERAN giữ. Đếm slot: **nam 14/14 đã có chủ, trống 0**; nữ 21/27, trống
+6 (tất cả trên Thục Đoan, preset bị giáng cấp nên không ai dùng).
+
+Nên script này hôm nay chỉ để **ghi lại một sự thật**: người bị bỏ quên không lấy lại được giọng
+cũ của mình, vì giọng ấy giờ là của người khác. Nó sẽ ghim được thật vào ngày một slot trống ra
+(một pin bị bỏ, hoặc pool rộng thêm), và lúc ấy nó ghim đúng người đúng giọng mà không cần ai nhớ.
+
+Việc đáng làm hơn, đã ghi ở `docs/OPTIMISATION_QUEUE.md`: **xếp hạng pin theo mức người nghe đã
+nghe.** 8 trong 16 pin nam đang do người **1–2 chương** giữ (IGOR 1 chương/3 câu giữ
+`thanh_binh_f090_p-04`, VALE 1 chương giữ `thai_son_f100_p+00`, REICHARDT, DORON STORMWATCH,
+SAM, JAY, ARTHUR, ĐẠI TƯ TẾ), trong khi 5 người **3–13 chương** không có pin nào: KANG (13),
+SAMAELE, IVAN, ROB, LYLE (3 mỗi người). Đó là đúng thứ tự ngược.
 """
 from __future__ import annotations
 
@@ -78,28 +95,45 @@ def majority_voices(rows: list[dict]) -> dict[str, tuple[str, int, int]]:
 
 def resolve_collisions(
     wanted: dict[str, tuple[str, int, int]],
+    owned: dict[str, str] | None = None,
 ) -> tuple[dict[str, tuple[str, int, int]], list[str]]:
-    """Hai người mà giọng đa số trùng nhau: người nhiều chương hơn giữ, người kia KHÔNG được ghim.
+    """Ai được ghim, sau khi tôn trọng pin ĐÃ CÓ rồi mới xử va chạm giữa các đề nghị mới.
 
-    Cùng học thuyết với `port_casting`: một pin sai còn tệ hơn không pin, vì nó đóng đinh việc
-    hai người dùng chung một giọng vào mọi lô sau. Người thua để allocator cấp giọng mới — nó
-    biết bậc nào còn trống trong lô ấy, còn script này không.
+    Thứ tự quan trọng, và bản đầu của hàm này làm sai: nó xử va chạm giữa **mọi** giọng đa số
+    trước, rồi mới lọc người đã có pin — nên nó "cho" KANG (13 chương) cái slot mà BOWDEN (6
+    chương) **đang giữ pin**, và báo BOWDEN là người nhường. Ngược hẳn: một pin đã có là quyết
+    định của `port_casting` hoặc của người nghe, và script này không có quyền lật.
+
+    `owned` = {giọng: người đang giữ pin}. Đề nghị nào rơi vào giọng đã có chủ thì bỏ, nói ra.
+    Còn lại mới so với nhau: người nhiều chương hơn giữ, người kia để allocator cấp giọng mới —
+    nó biết bậc nào còn trống trong lô ấy, còn script này không.
     """
-    by_voice: dict[str, list[str]] = collections.defaultdict(list)
-    for name, (voice, _here, _total) in wanted.items():
-        by_voice[voice].append(name)
+    owned = owned or {}
     kept: dict[str, tuple[str, int, int]] = {}
     dropped: list[str] = []
+    free: dict[str, tuple[str, int, int]] = {}
+    for name, detail in wanted.items():
+        holder = owned.get(detail[0])
+        if holder is not None and holder != name:
+            dropped.append(
+                f"{name} ({detail[2]} chương) không ghim được"
+                f" {detail[0].replace('preset_', '')}: slot đã thuộc {holder}"
+            )
+            continue
+        free[name] = detail
+    by_voice: dict[str, list[str]] = collections.defaultdict(list)
+    for name, (voice, _here, _total) in free.items():
+        by_voice[voice].append(name)
     for voice, names in by_voice.items():
         if len(names) == 1:
-            kept[names[0]] = wanted[names[0]]
+            kept[names[0]] = free[names[0]]
             continue
-        ranked = sorted(names, key=lambda n: (-wanted[n][2], -wanted[n][1], n))
-        kept[ranked[0]] = wanted[ranked[0]]
+        ranked = sorted(names, key=lambda n: (-free[n][2], -free[n][1], n))
+        kept[ranked[0]] = free[ranked[0]]
         for loser in ranked[1:]:
             dropped.append(
-                f"{loser} ({wanted[loser][2]} chương) nhường {voice.replace('preset_', '')}"
-                f" cho {ranked[0]} ({wanted[ranked[0]][2]} chương)"
+                f"{loser} ({free[loser][2]} chương) nhường {voice.replace('preset_', '')}"
+                f" cho {ranked[0]} ({free[ranked[0]][2]} chương)"
             )
     return kept, dropped
 
@@ -131,17 +165,21 @@ def pin(target: Path, *, apply: bool, book: Path = BOOK, versions: Path = VERSIO
     if not rows:
         _say("không đọc được cuốn sách đã ghép - không có gì để ghim")
         return 0
-    wanted, dropped = resolve_collisions(majority_voices(rows))
     database = ProjectDB(target / "project.sqlite3")
-    already = set(database.locked_character_voices())
+    pins = database.locked_character_voices()
     from ebook_reader.character_registry import canonical_key
 
-    todo = {
-        name: detail for name, detail in wanted.items() if canonical_key(name) not in already
+    # Pin đã có thắng trước: {giọng: người giữ}. Phải khoá tên theo đúng `canonical_key` vì
+    # `locked_character_voices` khoá như thế, còn tên từ cuốn sách thì chưa.
+    owned = {voice: name for name, voice in pins.items()}
+    majority = majority_voices(rows)
+    unpinned = {
+        name: detail for name, detail in majority.items() if canonical_key(name) not in pins
     }
+    todo, dropped = resolve_collisions(unpinned, owned)
     _say(
-        f"sách có {len(wanted)} người đáng ghim; {len(already)} đã được ghim trong"
-        f" {target.name}; còn {len(todo)} người."
+        f"sách có {len(majority)} người có giọng đa số; {len(pins)} đã được ghim trong"
+        f" {target.name}; {len(unpinned)} chưa; ghim được {len(todo)}."
     )
     for line in dropped:
         _say(f"  VA CHẠM {line}")
