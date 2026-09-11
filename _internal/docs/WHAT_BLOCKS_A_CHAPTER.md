@@ -79,7 +79,9 @@ rồi đối chiếu với những gì đã vào cây:
 | trần khung + ASR không phán xử được | lô 2 ch 053 | `patch_finished_take_beats_a_cut_off_one` | **chưa** — lần chạy lại đoạn ấy dài 1,36s và không chạm trần |
 | surrogate lạc giết cả cuốn | lô 1, lần chạy đầu | `patch_lone_surrogate` | **có** — lô1b qua đúng đoạn đã giết lần trước |
 | giới tính không phân giải được (cổng 7) | alpha.5x | `patch_casting_gate_no_halt` | **chưa** — chưa gặp lại |
-| `SEGMENT_FAILED` — nhịp 10,6–11,8 chars/s 10/10 lần, câu 38 ký tự không chia được, dải đã `normal` | lô 3 ch 075 | `patch_pace_counts_syllables_too` | **chưa** — chương 075 chạy lại ở lô vá lô 3 là phép thử đầu tiên; câu ấy đọc 4,48 âm tiết/giây nên phải qua ngay lần đầu |
+| `SEGMENT_FAILED` — nhịp 10,6–11,8 chars/s 10/10 lần, câu 38 ký tự không chia được, dải đã `normal` | lô 3 ch 075 | `patch_pace_counts_syllables_too` | **có** — ch075 chạy lại qua lần đầu ở 10,64 kt/s, 4,50 âm tiết/giây |
+| `SEGMENT_FAILED` — cách đọc nối gạch đếm 1 âm tiết (`I-xờ-hờ-ta-ra`, `A-lờ-va-ra`) | lô 3 ch 084, lô 4 ch 097 | `patch_a_transliteration_is_many_syllables` | **có** — ch097 chạy lại qua lần đầu ở 10,74 kt/s, 4,73 âm tiết/giây; 084 đang chờ đúc lại |
+| `SEGMENT_FAILED` — chữ số dài + tiếng Anh chưa có cách đọc (`password`, `123456`, `qwerty`) | lô 4 ch 106 | (chưa có) | **chưa** — 11 lần ở 12,35 kt/s, chương chưa có bản nào trong sách |
 
 Tám nguyên nhân ở tầng chương, hai ở tầng cuốn sách. **Năm đã chứng minh trên audio thật, năm
 chỉ có unit test đứng sau.**

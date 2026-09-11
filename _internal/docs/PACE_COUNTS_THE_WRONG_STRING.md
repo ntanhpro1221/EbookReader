@@ -228,3 +228,19 @@ lẽ không chậm, chỉ thước vẫn đếm thiếu.
 con số ấy là đúng thứ đã sinh ra cả hai lỗi trước. Hướng đo được: cho `password`/`qwerty` một
 cách đọc trong sổ (máy phát âm vốn để làm việc ấy) và đếm số dài theo từng chữ số — nhưng phải
 **nghe** hoặc đo trước, không sửa mù.
+
+### Kết quả (2026-09-11, 08:50): cả hai dự đoán đúng
+
+```
+097  lô vá lo04v_097   đoạn f9cddb6f5e55   status=verified   thử = 1   10,74 kt/s   4,73 âm tiết/giây   pace_outlier = 0
+106  lô vá lo04v_106   đoạn 27897bc6ba64   status=failed     thử = 11  12,35 kt/s   (không cứu)
+```
+
+097 qua **ngay lần thử đầu** ở 10,74 kt/s — thấp hơn cả 11,53 của mười một lần thử hôm qua, tức sàn
+chữ cũ chắc chắn sẽ bắn. Cùng một con số, quyết định khác: `patch_a_transliteration_is_many_
+syllables` được chứng minh trên audio thật, đúng dạng bằng chứng mà tài liệu này đòi.
+
+106 vẫn mất sau 11 lần, đúng như đã ghi: chữ số sáu chữ số và hai từ tiếng Anh chưa có cách đọc
+trong sổ. Chương 106 hiện **không có bản nào** trong sách (bản lô 4 hỏng, bản vá hỏng). Việc tiếp
+theo là đo, không đoán: cho `password`/`qwerty` một cách đọc, và đếm số dài theo từng chữ số
+**sau khi** nghe giọng đọc phát ra nó thành mấy âm.
