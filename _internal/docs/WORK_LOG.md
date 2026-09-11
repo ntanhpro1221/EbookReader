@@ -1286,3 +1286,24 @@ giữ, `assemble_book` vẫn thấy nó. Chi tiết và bảng đo ở `KEEP_THE
 
 Lô 5: 2.152/3.720 đoạn phân tích lúc 00:19, nhịp ~16 đoạn/phút, lease sống, không lần nhường máy
 nào trong 30 phút. Ranh giới vẫn chờ ở bước 0 với đúng một tiến trình script.
+
+## 2026-09-12, 01:00–01:20 — bản vá thứ ba: một đoạn một bản được đề cử, và một cách thất bại
+
+Việc sửa CAS trạng thái ứng viên (bản vá thứ nhất) làm đường `over_a_cut_off_incumbent` chạy được
+lần đầu kể từ khi nó được viết — 0 dòng `machine_take_substitutions` trên 47 project lô là bằng
+chứng nó chưa từng đi qua. Một đường vừa được mở thì phải đọc nó như đọc mã mới, và nó mang hai
+chỗ hở:
+
+- **Hai bản `promoted` cho một đoạn.** Việc hạ bản `promoted` cũ chỉ chạy khi giữ cách đọc ghim.
+  Đường cut-off không hạ gì, nên nếu đương nhiệm của đoạn lại là một ứng viên đã được đề cử vòng
+  trước thì sau khi thay sẽ có hai dòng `promoted`, và `segment_candidate_resume_plan` ném ở lần
+  ĐỌC sau — lúc resume hoặc lúc lắp ráp chương, xa chỗ gây ra lỗi. Bốn điều kiện của
+  `_require_candidate_beats_a_cut_off_incumbent` không nói gì về việc đương nhiệm là ai.
+  Sửa: hạ vô điều kiện, nên bất biến phát biểu được thành một câu — *một đoạn, nhiều nhất một
+  ứng viên `promoted`* — và nó đúng cho cả ba đường thăng hạng. Đường thường khớp 0 dòng.
+- **Một ngoại lệ giết cả chương**, đúng hình dạng đã sửa cho `_keep_the_locked_reading` ba mươi
+  phút trước: `_segment_candidate_item` ném thật khi checksum văn bản đọc trôi.
+
+Bài thử kiểm bất biến trên cả project thật sau khi đề cử lại (mọi đoạn: đúng một bản `promoted`,
+và `segment_candidate_resume_plan` dựng được cho từng đoạn), và kiểm lớp bọc bằng cách cho hàm tìm
+ném thật. Ba bản vá áp theo thứ tự trên một cây sạch: ok, 8 bài của hai file mới xanh.

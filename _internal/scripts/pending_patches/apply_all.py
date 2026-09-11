@@ -41,9 +41,18 @@ LEASE_STALE_SECONDS = 180.0
 #   cận dưới của hai cách đọc. Chương 106 của lô 4 mất vì "123456" đếm là một âm tiết / sáu
 #   ký tự (10/10 lần ở 12,35 kt/s, sàn 12,5). ASR không đổi. Sau khi vào cây: ranh giới 5 → 6
 #   đúc lại 106 bằng `--recast 4:106`.
+# - patch_one_promoted_take_and_one_way_to_fail: **sau** hai bản vá trên (nó vá đúng đoạn mã
+#   bản vá thứ nhất thêm). Hai chỗ hở của đường `over_a_cut_off_incumbent` - đường mà bản vá
+#   thứ nhất vừa làm cho chạy được lần đầu: (a) việc hạ bản `promoted` cũ trở thành vô điều
+#   kiện, nên "một đoạn, nhiều nhất một ứng viên được đề cử" đúng cho cả ba đường thăng hạng
+#   (nếu không, `segment_candidate_resume_plan` sẽ ném ở lần đọc sau, xa chỗ gây ra lỗi);
+#   (b) `_promote_a_finished_take_over_a_cut_off_one` bọc mọi ngoại lệ thành "thôi không thay",
+#   vì `_segment_candidate_item` ném thật khi checksum văn bản đọc trôi và một ngoại lệ ở đấy
+#   giết chương đang phiên.
 ORDER: tuple[str, ...] = (
     "patch_keep_the_locked_reading.py",
     "patch_a_number_is_read_in_full.py",
+    "patch_one_promoted_take_and_one_way_to_fail.py",
 )
 
 APPLIED = (
