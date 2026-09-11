@@ -1520,3 +1520,40 @@ thứ ba (Xuân Vĩnh) đã bị một người nghe Việt phán.
 hỏi pool. Nhưng lượt thử cho thấy nó chỉ ghim thêm được **4 người** (KANG, LYLE, SỐ SÁU, SỐ MỘT),
 vì luật va chạm nhường slot cho người nhiều chương hơn *đã được ghim*. Thứ tự đúng phải là: tôn
 trọng pin đã có trước, rồi mới xét va chạm giữa các đề nghị mới — sửa trước khi dùng thật.
+
+## 2026-09-12, 03:50 — bỏ 5 chương KANG khỏi ranh giới: đúc lại chúng KHÔNG đạt mục tiêu
+
+Trước khi để ranh giới tiêu 2 giờ GPU, tôi truy xem việc đúc lại 5 chương f093 của KANG sẽ cho
+anh ta giọng nào. Chuỗi lý luận, đọc từ dữ liệu chứ không từ ý định:
+
+1. Project đúc lại gieo từ lô 5. Ở lô 5, KANG **nói** 2 câu bằng `thanh_binh_f100_p-04`, còn
+   BOWDEN **giữ pin** đúng giọng ấy (im lặng cả lô).
+2. `port_casting` lấy cả hai (một từ `SPOKE_HERE`, một từ `PINNED`) → **va chạm cùng một
+   `voice_key`** → luật "người nhiều lời hơn giữ giọng" xử.
+3. Hạng đầu tiên là **sổ cộng dồn**, và launcher chạy `backfill_exposure` trước mỗi lần đúc lại
+   nên sổ sẽ đủ 62 tên. Trong sổ đúng: **BOWDEN 68 câu, KANG 41 câu**. BOWDEN giữ f100 — và giữ
+   **đúng**.
+4. Nên KANG bị bỏ pin, allocator cấp cho anh ta một bậc còn trống → 5 chương ấy nhận **giọng
+   thứ ba**, không phải giọng đa số.
+
+Kết quả nếu cứ chạy: KANG vẫn hai giọng (8 chương f100 + 5 chương giọng mới), chỉ khác là 5
+chương kia thôi trùng giọng với SAMAEL. Mà theo học thuyết của chính dự án (`TWO_CHARACTERS_ONE_
+VOICE.md`) việc trùng giọng **khác chương** không phải lỗi — KANG và SAMAEL không bao giờ nói
+cùng một chương trên giọng ấy. Vậy 2 giờ GPU mua một thứ không phải lỗi, và không mua thứ là lỗi
+(người nghe mất nhân vật vì KANG đổi giọng giữa sách).
+
+**Bỏ 5 chương ấy.** Danh sách ranh giới còn **13 chương**: `1:023 2:031 2:043 2:051 2:053 2:054!
+2:055 2:056! 3:072 3:080 3:081 3:089 4:106`. Mười ba chương này thì đúc lại **có** đạt mục tiêu,
+và tôi kiểm bằng pin trong lô 5 trước khi để yên: THỦ LÃNH `thanh_binh_f100_p-07`, NGƯỜI TRẢ LỜI
+`doan_trang_f100_p+00`, THALIA `doan_trang_f104_p+00`, WILLEM `thai_son_f104_p+00` — cả bốn pin
+đều **chính giọng đa số**, nên port mang pin ấy sang và chương đúc lại sẽ về đúng giọng.
+
+Việc của KANG cần một dụng cụ khác, ghi vào hàng chờ: **ghim anh ta vào một bậc còn trống rồi đúc
+lại cả 13 chương** (~5,5 giờ GPU) — cách duy nhất cho anh ta MỘT giọng — hoặc chấp nhận hai giọng
+cho một nhân vật 13 chương / 41 câu. Đây là quyết định đánh đổi, không phải bug, nên nó thuộc chủ
+sách.
+
+Một bài học về công cụ, không về giọng: lần thả lại này tôi dùng `bash ... &` trong một lệnh
+compound và tiến trình chết theo shell cha — ranh giới biến mất, không ai thấy. Phải thả bằng
+`run_in_background` của tool, và **luôn đếm lại tiến trình sau khi thả**. Đếm mới là thứ cứu, chứ
+không phải cách thả.
