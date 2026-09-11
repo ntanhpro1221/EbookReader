@@ -1737,7 +1737,36 @@ của NGƯỜI TRẢ LỞI / THỦ LÃNH đêm 2026-09-11.
 không đúc lại vì một cái tên hai chương), tra lô của chương từ manifest; hoà thì giọng đứng trước
 theo bảng chữ là đa số, cho hai lần chạy cùng câu trả lời. Trên sách 116 chương nó đề nghị 16
 chương; ranh giới 5 → 6 nhận 11 (bỏ 5 chương KANG — xem dưới). **Còn phải làm:** `boundary.sh
---recast auto` gộp thêm danh sách ấy — sửa ở điểm yên tĩnh kế, vì script đang chạy. Luật chọn phía nào đúc lại: phía **ít chương hơn** đúc lại theo phía nhiều hơn, trừ khi
+--recast auto` gộp thêm danh sách ấy — sửa ở điểm yên tĩnh kế, vì script đang chạy.
+
+**Sửa ở đâu và sửa gì, viết sẵn để sau chỉ việc dán** (01:55 ngày 2026-09-12). Khối `auto` hiện
+tại chỉ hỏi `voice_pool_pressure` (va chạm **cùng chương**) và chỉ thêm vào `$RECAST`, tức chỉ
+chương của lô này. Hai công cụ mới in `B:NNN` cho **lô khác**, nên chúng phải đi vào
+`$RECAST_OTHER`. Chèn ngay sau khối `if [ -n "$FOUND" ] ... fi`, trước dòng bỏ trùng lặp:
+
+```bash
+  # Hai cau nguoc lai, cho LO KHAC: mot nguoi hai giong qua cac chuong, va giong sai phai/tuoi.
+  # Ca hai in dang `B:NNN` va di vao RECAST_OTHER; chuong cua chinh lo nay thi ve RECAST, dung
+  # luat nhu tham so dong lenh. Chuong da co ban duc lai hoan thanh se bi `already_done` bo qua
+  # (khong co `!`), nen dan them la an toan.
+  for TOKEN in $(py scripts/one_person_one_voice.py --across 2>/dev/null)                $(py scripts/voice_matches_the_person.py --recast 2>/dev/null); do
+    case "$TOKEN" in
+      [0-9]*:[0-9][0-9][0-9])
+        if [ "${TOKEN%%:*}" = "$BATCH" ]; then RECAST="$RECAST ${TOKEN#*:}"
+        else RECAST_OTHER="$RECAST_OTHER $TOKEN"; fi ;;
+    esac
+  done
+  RECAST_OTHER="$(printf '%s
+' $RECAST_OTHER | sort -u | tr '
+' ' ')"
+  say "auto: qua cac chuong + sai phai/tuoi:$RECAST_OTHER"
+```
+
+**Một cái bẫy phải nhớ khi dán:** `voice_matches_the_person --recast` in chương của người bị sai
+phái, mà sửa được nó **đòi ghim tuổi trước** (`patch_a_pinned_person_outranks_a_ported_voice`,
+chưa áp). Dán khối này trước khi bản vá ấy vào cây thì ranh giới sẽ đúc lại `3:062` mỗi lần và
+port vẫn mang giọng cũ sang — tốn GPU, không sửa được gì. Thứ tự đúng: áp bản vá ghim tuổi ở ranh
+giới 6 → 7, chạy `cast --age` cho IVAN, **rồi** mới dán khối này. Luật chọn phía nào đúc lại: phía **ít chương hơn** đúc lại theo phía nhiều hơn, trừ khi
 phía nhiều hơn là giọng cũ của một lớp lỗi đã biết (như `NGUOI TRA LOI`) — khi ấy chính bản gộp
 tên mới là phía đúng. Ghi cả hai con số vào log để người sau kiểm.
 
