@@ -199,3 +199,32 @@ kết cục       SEGMENT_FAILED, mất chương       signal_passed, không c�
 minh": phép đo từng chặn **đã tái diễn** — 10,64 kt/s là con số *thấp nhất* trong cả mười lần
 thử trước, tức sàn cũ 12,5 chắc chắn sẽ bắn — nhưng lần này nó đi đường khác. Không phải "chạy
 lại thì xanh"; là "cùng một con số, quyết định khác".
+
+### Dự đoán ghi TRƯỚC khi ranh giới lô 4 chạy (2026-09-11, 07:05)
+
+Lô 4 hỏng đúng 2 chương, **cùng một nguyên nhân** theo nhãn mới (`SEGMENT_FAILED — speech pace N
+chars/s`), nhưng hai ca khác hẳn nhau, và chỉ một cái được bản vá trong hàng chờ cứu:
+
+```
+097  'Sơ A-lờ-va-ra sững sờ, hai mắt mở to.'          11 lần thử, 11,53 kt/s
+     25 ký tự đọc · âm tiết: đếm nay 8 -> 3,69/giây (DƯỚI sàn 3,75)
+                              tách gạch 11 -> 5,07/giây      => bản vá CỨU ĐƯỢC
+106  '... như, "password", "123456", thậm chí là "qwerty"'   11 lần thử, 12,35 kt/s
+     70 ký tự đọc · âm tiết: đếm nay 17 -> 3,00/giây
+                              tách gạch 17 -> 3,00/giây      => bản vá KHÔNG cứu
+```
+
+097 là đúng lớp đã làm mất chương 084: một cách đọc nối gạch (`A-lờ-va-ra`) đếm thành một âm
+tiết. `patch_a_transliteration_is_many_syllables` áp ở bước 1 của ranh giới, trước lô vá ở bước
+3, nên **097 phải qua ngay lần thử đầu**. Nếu nó vẫn thử mười một lần thì bản vá sai.
+
+106 thì rơi vào đúng **hai giới hạn còn lại** mà docstring của bộ đếm đã nói ra: chữ số và tên
+tiếng Anh **chưa có cách đọc trong sổ**. `password` đếm 1 âm tiết (đọc ra 2), `qwerty` đếm 1,
+`123456` đếm 1 — `vietnamese_number_words` chỉ nở tới 999 nên số sáu chữ số để nguyên. Nếu số ấy
+được đọc từng chữ số thì câu có ~26 âm tiết, tức 4,6/giây và hoàn toàn bình thường; bản thu có
+lẽ không chậm, chỉ thước vẫn đếm thiếu.
+
+**Chưa vá 106**, và cố ý: tôi không biết giọng đọc phát ra `123456` thành mấy âm tiết, và đoán
+con số ấy là đúng thứ đã sinh ra cả hai lỗi trước. Hướng đo được: cho `password`/`qwerty` một
+cách đọc trong sổ (máy phát âm vốn để làm việc ấy) và đếm số dài theo từng chữ số — nhưng phải
+**nghe** hoặc đo trước, không sửa mù.
