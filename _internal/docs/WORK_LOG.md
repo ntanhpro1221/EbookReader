@@ -1432,3 +1432,24 @@ Thả lại ranh giới lần thứ tư (vẫn ở bước 0, lô 5 vừa bắt 
 cuối cùng: **16 chương giọng-thiểu-số + chương 106**, và `EBOOK_COAUTHOR` đặt về Claude Opus 5 để
 commit tự động đêm nay ghi đúng người. Danh sách khớp chính xác đầu ra của
 `one_person_one_voice.py --across --min-chapters 5`.
+
+## 2026-09-12, 02:25 — hai chương đầu của lô 5, và một phân biệt quan trọng
+
+Lô 5 tổng hợp ~9,5 phút một chương (119 và 120 xong, 121 đang chạy → 26 chương xong khoảng 06:10).
+Chương 119 `completed` **với 3 đoạn `failed`**, và cả ba đều là loại máy tự cho qua: hai
+`ASR_LOCKED_NAME_ANCHOR_MISMATCH` (Bowden, Aurieth) và một `ASR_MISMATCH_UNRESOLVED`
+(`"Wheee! Whooohooo! Booyaaa!"` — ASR không phiên được tiếng reo).
+
+Phân biệt đáng ghi, vì nó đổi cả kỳ vọng cho bước 6b: hai đoạn neo tên ấy **vẫn đang phát bản
+gốc**, tức chính cách đọc ghim. Năm ứng viên của mỗi đoạn đều `dual_failed`, không bản nào được
+đề cử, nên đương nhiệm chưa bao giờ đổi. Người nghe nghe đúng cách đọc; chỉ ASR là không xác nhận
+được. 6b để yên chúng, và đúng như thế.
+
+Lớp **thật sự** hỏng thì đã thấy ngay trong hai chương đầu: **4 ứng viên `source_spelling_v1`
+được đề cử** (so với 4 `locked_spoken_v1`). Tức lô 5 vẫn sinh ra tỉ lệ ~50/50 của phát hiện
+348/716, vì bản vá chỉ vào cây ở ranh giới **sau** lô 5. Ngoại suy: ~50 đoạn cho 26 chương, và
+bước 6b sẽ chữa chúng (nó đọc người thắng theo `completed_at`, nên chương của lô 5 cũng nằm
+trong đó) — thêm khoảng 18 phút ffmpeg cho ~26 chương của lô 5.
+
+Lô 6 mới là phép thử thật của bản vá giữ cách đọc ghim: ở đó móc chạy **trong** vòng sửa và con
+số `source_spelling_v1` được đề cử phải về gần 0.
