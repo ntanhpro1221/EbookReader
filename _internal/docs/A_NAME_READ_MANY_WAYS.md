@@ -194,3 +194,26 @@ vòng sửa đổi cách đọc để đậu — và làm thế ở **gần mộ
 
 Trong 348 đoạn ấy, **41** có bản anh em đọc-theo-ghim chỉ hỏng vì neo tên và **còn nguyên file
 WAV** — đổi lại đề cử được ngay, không cần GPU. 307 đoạn còn lại: xem mục kế, đang đếm lý do.
+
+### Đếm xong: cả 348 bản đọc-theo-ghim chỉ hỏng vì neo tên, và còn nguyên file (17:00)
+
+```
+348 bản đọc-theo-ghim thua bản đọc-theo-chữ-viết trong sách
+  → 696 phép kiểm ASR (beam + greedy), verdict = fail, mã duy nhất: ASR_LOCKED_NAME_ANCHOR_MISMATCH
+  → 348 / 348 chỉ hỏng vì neo tên; nhịp qua, phiên bản khớp phần còn lại
+  → 348 / 348 còn file WAV (307 bị "invalid: incumbent checksum changed" khi bản kia được đề cử,
+     41 còn "dual_failed")
+```
+
+Nghĩa là cách đọc ghim **đúng và dùng được ở mọi trường hợp**; nó thua một bài chính tả mà
+Whisper không bao giờ chấm đậu cho chuyển tự, rồi vòng sửa đổi cách đọc để đậu. Học thuyết của
+dự án đã nói `ASR_LOCKED_NAME_ANCHOR_MISMATCH` là mã máy được chấp nhận có ghi sổ *ở tầng đoạn* —
+nhưng ở tầng ứng viên, vòng sửa "rõ tiếng" chạy **trước** và thay cách đọc, nên đường chấp nhận
+không bao giờ tới lượt.
+
+**Hướng sửa (bản vá cho ranh giới kế, file khoá):** khi ứng viên đọc-theo-ghim chỉ hỏng vì họ neo
+tên, **đề cử nó kèm phán quyết máy** thay vì sinh ứng viên đọc-theo-chữ-viết. Neo tên không nói
+bản thu hỏng; đổi cách đọc thì làm người nghe mất tên nhân vật. Và một lượt **đề cử lại** cho 348
+đoạn đã lên sách — không cần GPU, cả hai đường phiên đã có sẵn — rồi ghép lại các chương chạm
+tới. `promote_segment_candidate` hiện chỉ nhận `dual_passed`/`promoted`, nên cần một đường mới ở
+tầng database, kiểm bốn điều kiện từ chính dữ liệu như `patch_finished_take_beats_a_cut_off_one`.
