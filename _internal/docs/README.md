@@ -40,6 +40,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | Vì sao tên riêng bị chấm sai? | [LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md](LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md) |
 | Vì sao 48% đoạn được sửa đọc tên theo chữ viết, và sửa thế nào không cần GPU? | [KEEP_THE_LOCKED_READING.md](KEEP_THE_LOCKED_READING.md) — bản vá giữ cách đọc ghim, lượt đề cử lại, ba điều bất ngờ |
 | Giọng ấy có đúng là giọng của người ấy không (phái, tuổi)? | `scripts/voice_matches_the_person.py` — docstring kể luật giọng trẻ con và ca IVAN |
+| Ranh giới chạy xong đêm qua, giờ đọc log thế nào? | [READING_A_BOUNDARY_LOG.md](READING_A_BOUNDARY_LOG.md) — tám bước, câu đáng lo của từng bước, và bốn câu hỏi khác nhau về giọng |
 | Cách đọc tên tiếng Anh sinh ra thế nào? | [ENGLISH_TO_VIETNAMESE.md](ENGLISH_TO_VIETNAMESE.md), [SHORT_NAME_PRONUNCIATION.md](SHORT_NAME_PRONUNCIATION.md) |
 | Cùng một tên đọc hai kiểu? | [PRONUNCIATION_VARIANT_DRIFT.md](PRONUNCIATION_VARIANT_DRIFT.md) |
 | Phán quyết của người nghe hoạt động ra sao? | [LISTENER_VERDICTS.md](LISTENER_VERDICTS.md) |
