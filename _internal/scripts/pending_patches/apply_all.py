@@ -28,32 +28,8 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Xếp hàng cho ranh giới lô 5 → 6 (2026-09-11 18:35). Xem `APPLIED` cho thứ tự và lý do các
-# nhóm đã vào cây.
-#
-# - patch_keep_the_locked_reading: vòng sửa ASR giữ cách đọc ghim khi bản đọc-ghim chỉ thua
-#   bài chính tả neo tên, thay vì đề cử bản đọc theo chữ viết (348/716 đoạn được sửa trong
-#   sách - 48% - đọc `Jake`/`Ishtara` thay vì `Giếch`/`I-xờ-hờ-ta-ra`). Đã thử trên bản sao
-#   lo03r_084b: 10/10 đoạn, chương ghép lại trong 38 giây không GPU. Sau khi vào cây, ranh giới
-#   chạy `scripts/keep_the_locked_reading.py --book --apply` cho các chương đã lên sách.
-# - patch_a_number_is_read_in_full: `vietnamese_number_words` đọc trọn vẹn tới dưới 10^12 theo
-#   ngữ pháp số đếm, và hai thước nhịp (ký tự, âm tiết) đếm dãy chữ số như đọc ra - từ 1000 lấy
-#   cận dưới của hai cách đọc. Chương 106 của lô 4 mất vì "123456" đếm là một âm tiết / sáu
-#   ký tự (10/10 lần ở 12,35 kt/s, sàn 12,5). ASR không đổi. Sau khi vào cây: ranh giới 5 → 6
-#   đúc lại 106 bằng `--recast 4:106`.
-# - patch_one_promoted_take_and_one_way_to_fail: **sau** hai bản vá trên (nó vá đúng đoạn mã
-#   bản vá thứ nhất thêm). Hai chỗ hở của đường `over_a_cut_off_incumbent` - đường mà bản vá
-#   thứ nhất vừa làm cho chạy được lần đầu: (a) việc hạ bản `promoted` cũ trở thành vô điều
-#   kiện, nên "một đoạn, nhiều nhất một ứng viên được đề cử" đúng cho cả ba đường thăng hạng
-#   (nếu không, `segment_candidate_resume_plan` sẽ ném ở lần đọc sau, xa chỗ gây ra lỗi);
-#   (b) `_promote_a_finished_take_over_a_cut_off_one` bọc mọi ngoại lệ thành "thôi không thay",
-#   vì `_segment_candidate_item` ném thật khi checksum văn bản đọc trôi và một ngoại lệ ở đấy
-#   giết chương đang phiên.
-ORDER: tuple[str, ...] = (
-    "patch_keep_the_locked_reading.py",
-    "patch_a_number_is_read_in_full.py",
-    "patch_one_promoted_take_and_one_way_to_fail.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -211,6 +187,32 @@ APPLIED = (
     # thoat). NGUOI_TRA_LOI - gạch dưới - xuất hiện 45 câu trong bốn project tạo sau 07:25, và chương
     # 104 đúc lại có người ấy nói bằng hai giọng. Phải áp TRƯỚC các chương đúc lại còn lại và lô 5.
     "patch_an_underscore_is_a_space.py",
+    # 2026-09-12: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Xếp hàng cho ranh giới lô 5 → 6 (2026-09-11 18:35). Xem `APPLIED` cho thứ tự và lý do các
+    # nhóm đã vào cây.
+    #
+    # - patch_keep_the_locked_reading: vòng sửa ASR giữ cách đọc ghim khi bản đọc-ghim chỉ thua
+    #   bài chính tả neo tên, thay vì đề cử bản đọc theo chữ viết (348/716 đoạn được sửa trong
+    #   sách - 48% - đọc `Jake`/`Ishtara` thay vì `Giếch`/`I-xờ-hờ-ta-ra`). Đã thử trên bản sao
+    #   lo03r_084b: 10/10 đoạn, chương ghép lại trong 38 giây không GPU. Sau khi vào cây, ranh giới
+    #   chạy `scripts/keep_the_locked_reading.py --book --apply` cho các chương đã lên sách.
+    # - patch_a_number_is_read_in_full: `vietnamese_number_words` đọc trọn vẹn tới dưới 10^12 theo
+    #   ngữ pháp số đếm, và hai thước nhịp (ký tự, âm tiết) đếm dãy chữ số như đọc ra - từ 1000 lấy
+    #   cận dưới của hai cách đọc. Chương 106 của lô 4 mất vì "123456" đếm là một âm tiết / sáu
+    #   ký tự (10/10 lần ở 12,35 kt/s, sàn 12,5). ASR không đổi. Sau khi vào cây: ranh giới 5 → 6
+    #   đúc lại 106 bằng `--recast 4:106`.
+    # - patch_one_promoted_take_and_one_way_to_fail: **sau** hai bản vá trên (nó vá đúng đoạn mã
+    #   bản vá thứ nhất thêm). Hai chỗ hở của đường `over_a_cut_off_incumbent` - đường mà bản vá
+    #   thứ nhất vừa làm cho chạy được lần đầu: (a) việc hạ bản `promoted` cũ trở thành vô điều
+    #   kiện, nên "một đoạn, nhiều nhất một ứng viên được đề cử" đúng cho cả ba đường thăng hạng
+    #   (nếu không, `segment_candidate_resume_plan` sẽ ném ở lần đọc sau, xa chỗ gây ra lỗi);
+    #   (b) `_promote_a_finished_take_over_a_cut_off_one` bọc mọi ngoại lệ thành "thôi không thay",
+    #   vì `_segment_candidate_item` ném thật khi checksum văn bản đọc trôi và một ngoại lệ ở đấy
+    #   giết chương đang phiên.
+    "patch_keep_the_locked_reading.py",
+    "patch_a_number_is_read_in_full.py",
+    "patch_one_promoted_take_and_one_way_to_fail.py",
 )
 
 

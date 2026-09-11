@@ -127,6 +127,8 @@ ROMAN_NUMERAL_VALUES = {
 VIETNAMESE_UNITS = (
     "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín",
 )
+# Bậc của từng nhóm ba chữ số, từ phải sang: nhóm 0 không có tên.
+VIETNAMESE_SCALES = ("", "nghìn", "triệu", "tỷ")
 
 
 # Ký tự sách có mà giọng đọc không đọc được. Chúng đi thẳng tới TTS và không tạo ra khoảng
@@ -307,6 +309,32 @@ def vietnamese_number_words(value: int) -> str:
         if rest < 10:
             return f"{head} lẻ {VIETNAMESE_UNITS[rest]}"
         return f"{head} {vietnamese_number_words(rest)}"
+    if value < 1_000_000_000_000:
+        # Nhóm ba chữ số từ phải sang: nghìn, triệu, tỷ. Nhóm giữa mà dưới 100 đọc "không
+        # trăm" (và "lẻ" nếu dưới 10): 1.005 là "một nghìn không trăm lẻ năm", 2.024 là "hai
+        # nghìn không trăm hai mươi tư"; nhóm bằng 0 bỏ hẳn. Đây là ngữ pháp số đếm, không phải
+        # ước lượng - và `asr.py` vẫn dừng ở `NUMBER_FOLD_CEILING`, vì năm tháng trong bản ghi
+        # không có một dạng nói duy nhất để gộp.
+        groups: list[int] = []
+        remaining = value
+        while remaining:
+            remaining, group = divmod(remaining, 1000)
+            groups.append(group)
+        words: list[str] = []
+        for index in range(len(groups) - 1, -1, -1):
+            group = groups[index]
+            if group == 0:
+                continue
+            if index == len(groups) - 1:
+                spoken = vietnamese_number_words(group)
+            elif group < 10:
+                spoken = f"không trăm lẻ {VIETNAMESE_UNITS[group]}"
+            elif group < 100:
+                spoken = f"không trăm {vietnamese_number_words(group)}"
+            else:
+                spoken = vietnamese_number_words(group)
+            words.append(spoken if index == 0 else f"{spoken} {VIETNAMESE_SCALES[index]}")
+        return " ".join(words)
     raise ValueError(f"number beyond what a book numbers things with: {value}")
 MAX_VOCALIZATION_REPETITIONS = 4
 

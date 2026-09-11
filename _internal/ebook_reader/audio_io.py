@@ -22,7 +22,7 @@ from .audio_transform_contract import (
     POSTPROCESS_TEMPO_FACTOR,
 )
 from .io_utils import atomic_write_text, ffmpeg_executable, run_hidden, sha256_file
-from .text_processing import vietnamese_number_words
+from .text_processing import VIETNAMESE_UNITS, vietnamese_number_words
 
 
 class AudioQualityError(RuntimeError):
@@ -331,6 +331,31 @@ _DIGIT_RUN = re.compile(r"\d+")
 _SYLLABLE_SPLIT = re.compile(r"[\s\-–—]+")
 
 
+def _digit_run_spoken(digits: str) -> str:
+    """Cách đọc một dãy chữ số, cho phép đo nhịp: cận dưới của những cách đọc có thể.
+
+    Tới 999: đọc như một số ("22" → "hai mươi hai") - đo được ở alpha.57, giữ nguyên. Từ 1000:
+    VieNeu có thể đọc như một số ("một nghìn hai trăm ba mươi tư") hoặc từng chữ số ("một hai
+    ba bốn") - "123456" trong một mật khẩu và "2024" trong một năm không đọc giống nhau, và chưa
+    đo nó chọn cách nào. Lấy cách NGẮN HƠN theo âm tiết: đếm thiếu chỉ giữ cờ, đếm thừa mới tha
+    nhầm. Chương 106 của lô 4 mất vì "123456" đếm là một âm tiết và sáu ký tự.
+    """
+    value = int(digits)
+    if value <= 999:
+        return vietnamese_number_words(value)
+    by_digit = " ".join(VIETNAMESE_UNITS[int(digit)] for digit in digits)
+    try:
+        as_number = vietnamese_number_words(value)
+    except (ValueError, OverflowError):
+        return by_digit
+    return min((as_number, by_digit), key=lambda form: len(form.split()))
+
+
+def _spoken_form(text: str) -> str:
+    """Văn bản như giọng đọc phát ra: mọi dãy chữ số nở thành chữ, tách khỏi chữ đứng cạnh."""
+    return _DIGIT_RUN.sub(lambda match: f" {_digit_run_spoken(match.group())} ", text)
+
+
 def spoken_syllables(text: str) -> int:
     """Số âm tiết đọc ra: tiếng Việt đơn âm, nên mỗi âm tiết là một cụm chữ giữa hai dấu tách.
 
@@ -345,11 +370,14 @@ def spoken_syllables(text: str) -> int:
     tha thêm. Câu ấy đúng mà thiếu: an toàn trước việc **tha nhầm**, không an toàn trước việc
     **chặn nhầm** - và chặn nhầm thì mất cả chương. Một sai số một chiều vẫn là sai số.
 
-    Vẫn còn đếm thiếu ở chữ số (`22` đọc ba âm tiết mà viết là một cụm) và ở tên chưa có cách
-    đọc trong sổ. Cả hai đều đo được và sửa được; không lấp bằng phỏng đoán ở đây.
+    Chữ số đếm như đọc ra (`22` là ba âm tiết; từ 1000 lấy cận dưới của hai cách đọc - xem
+    `_digit_run_spoken`). Còn đếm thiếu ở tên chưa có cách đọc trong sổ ("password" là một):
+    đo được, và chỉ giữ cờ chứ không tha thêm.
     """
     return sum(
-        1 for token in _SYLLABLE_SPLIT.split(text) if any(char.isalnum() for char in token)
+        1
+        for token in _SYLLABLE_SPLIT.split(_spoken_form(text))
+        if any(char.isalnum() for char in token)
     )
 
 
@@ -395,17 +423,12 @@ def spoken_speakable_chars(text: str) -> int:
     `asr.py` đã gọi `vietnamese_number_words` từ lâu, vì so bản ghi với văn bản cũng đòi nở số
     ra chữ trước. Đây là cùng một sự thật, áp cho phép đo nhịp.
 
-    **Giới hạn còn lại, cố ý không lấp bằng phỏng đoán:** `vietnamese_number_words` chỉ nở tới
-    999 và ném lỗi trên số lớn hơn. Số từ 1000 trở lên vẫn được đếm theo chữ viết, tức vẫn bị
-    tính thiếu. Bịa một hệ số ước cho chúng sẽ là đoán, và đoán chính là thứ đã tạo ra lỗi này.
+    Từ 1000 trở lên: bản đầu để nguyên chữ viết ("cố ý không lấp bằng phỏng đoán"), và chương
+    106 của lô 4 mất vì "123456" đếm sáu ký tự trong khi giọng đọc phát ra ít nhất mười bảy.
+    Giờ nở bằng ngữ pháp số đếm (`vietnamese_number_words` tới dưới 10^12) và lấy cận dưới của
+    hai cách đọc có thể - xem `_digit_run_spoken`. Không phải hệ số ước.
     """
-    def expand(match: "re.Match[str]") -> str:
-        try:
-            return vietnamese_number_words(int(match.group()))
-        except (ValueError, OverflowError):
-            return match.group()
-
-    return sum(char.isalnum() for char in _DIGIT_RUN.sub(expand, text))
+    return sum(char.isalnum() for char in _spoken_form(text))
 
 
 def is_short_utterance(text: str) -> bool:

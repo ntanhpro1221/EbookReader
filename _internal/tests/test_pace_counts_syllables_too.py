@@ -50,8 +50,12 @@ def test_bands_scale_like_the_character_bands() -> None:
     assert pace_is_outlier(13.0, 4.0, "fast", (14.0, 30.0))
 
 
-def test_syllables_are_counted_short_on_names_and_digits_on_purpose() -> None:
-    """Đếm thiếu là chiều an toàn: nhịp âm tiết đo thấp hơn thật thì chỉ giữ cờ, không tha."""
+def test_syllables_are_counted_short_on_names_without_a_reading_on_purpose() -> None:
+    """Đếm thiếu là chiều an toàn: nhịp âm tiết đo thấp hơn thật thì chỉ giữ cờ, không tha.
+
+    Chữ số thì không còn đếm thiếu - `patch_a_number_is_read_in_full`: "22" đọc "hai mươi hai",
+    ba âm tiết, và chương 106 mất vì "123456" từng đếm là một.
+    """
     assert spoken_syllables("Alice") == 1
-    assert spoken_syllables("Chương 22") == 2
+    assert spoken_syllables("Chương 22") == 4
     assert spoken_syllables("— …") == 0

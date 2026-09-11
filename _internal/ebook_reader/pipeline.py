@@ -63,8 +63,11 @@ from .asr_contract import (
     LOCKED_NAME_ANCHOR_UNMATCHED_STATUSES,
 )
 from .character_registry import build_registry_and_cast
+from .database import _asr_only_failure_codes
 from .database import (
     GENERATION_STRATEGY_DIRECT,
+    KEEP_LOCKED_READING_ACTION,
+    LOCKED_NAME_ANCHOR_CODES,
     GENERATION_STRATEGY_SPLIT,
     QUALITY_SCOPE_CHAPTER,
     QUALITY_SCOPE_SEGMENT,
@@ -2374,7 +2377,124 @@ class BookPipeline:
             )
         return digest.hexdigest()
 
+    def _keep_the_locked_reading(self, item: Any) -> bool:
+        """Giữ cách đọc ghim nếu được, và **không bao giờ** làm hỏng chương nếu không được.
+
+        Đường này là một CẢI THIỆN đặt giữa vòng sửa ASR: nếu nó không làm được việc của nó thì
+        vòng sửa phải đi tiếp y như trước khi có nó. Vậy mọi ngoại lệ ở đây là "thôi không giữ",
+        không phải "chương hỏng" - `_segment_candidate_item` ném thật khi checksum văn bản đọc
+        trôi (`pronunciation variant or spoken-text checksum drifted`, chuyện đã xảy ra ở
+        alpha.47 khi một cách đọc được ghim giữa lượt chạy), và một ngoại lệ thoát ra từ đây sẽ
+        giết chương đang phiên - đổi một cơ hội nhất quán tên riêng lấy cả một chương.
+
+        Cùng hình dạng với `restore_shipped_state` của `scripts/keep_the_locked_reading.py`:
+        khi một lượt cải thiện thất bại, trạng thái đúng là "y như trước", không phải "hỏng".
+        """
+        try:
+            return self._keep_the_locked_reading_if_it_wins(item)
+        except Exception as exc:  # noqa: BLE001 - xem docstring
+            self.log(f"Segment {item['stable_id']}: không giữ được cách đọc ghim - {exc}")
+            return False
+
+    def _keep_the_locked_reading_if_it_wins(self, item: Any) -> bool:
+        """Đề cử bản đọc-ghim đã trượt **chỉ** bài chính tả neo tên, thay vì đổi cách đọc.
+
+        Đo 2026-09-11 trên sách 92 chương: 348/716 đoạn được sửa (48%) đọc tên theo chữ viết,
+        và cả 348 bản đọc-ghim thua chỉ vì `ASR_LOCKED_NAME_ANCHOR_MISMATCH` - Jake 79 lần,
+        Michael 35, Spirit 31. Người nghe nghe `Giếch` ở đoạn này và `Jake` ở đoạn kế, tuỳ
+        Whisper trượt ở đâu. Neo tên là bài chính tả, không phải bằng chứng bản thu hỏng
+        (docs/LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md); đổi cách đọc để đậu nó là đổi thứ
+        người nghe nghe.
+
+        Gọi ở vòng sửa ASR, **trước** khi cấp phát ứng viên vòng lẻ - vòng mà biến thể đọc theo
+        chữ viết được yêu cầu. Năm điều kiện nằm ở `database`; đây chỉ đề nghị. Phán quyết máy
+        ghi cho từng mã neo tên, với lý do, để báo cáo không im lặng về nó.
+        """
+        segment_id = int(item["id"])
+        candidate = self.db.find_locked_reading_that_lost_only_the_spelling_test(
+            segment_id,
+            self.quality_policy_hash,
+        )
+        if candidate is None:
+            return False
+        segment = dict(self.db.get_segment(segment_id))
+        candidate_item = self._segment_candidate_item(segment, candidate)
+        signal_valid, _metrics = self._inspect_existing_segment(candidate_item)
+        if not signal_valid:
+            self.db.mark_segment_candidate_invalid(
+                int(candidate["id"]),
+                expected_wav_sha256=str(candidate["wav_sha256"]),
+                reason="candidate failed signal validation immediately before keeping its reading",
+            )
+            return False
+        signal = self._segment_signal_provenance(candidate_item)
+        codes = list(
+            self._signal_warning_codes(
+                signal,
+                split_recovery=bool(signal.get("split_parts")),
+            )
+        )
+        anchor_codes = sorted(
+            LOCKED_NAME_ANCHOR_CODES
+            & set(str(c) for c in _asr_only_failure_codes(str(candidate["failure_reason"] or "")) or ())
+        ) or ["ASR_LOCKED_NAME_ANCHOR_MISMATCH"]
+        for code in anchor_codes:
+            if code not in codes:
+                codes.append(code)
+        promoted = self.db.promote_segment_candidate(
+            int(candidate["id"]),
+            validated_wav_sha256=str(candidate["wav_sha256"]),
+            repair_action=KEEP_LOCKED_READING_ACTION,
+            attempt=self._next_segment_quality_attempt(segment_id),
+            warning_code="|".join(codes) or None,
+            keeping_the_locked_reading=True,
+        )
+        if str(promoted["state"]) != SEGMENT_CANDIDATE_PROMOTED:
+            return False
+        reason = (
+            "neo tên là bài chính tả; giữ cách đọc ghim để nhất quán toàn sách. "
+            f"bản thu vòng {candidate['repair_round']} chỉ trượt {', '.join(anchor_codes)}"
+        )
+        for code in anchor_codes:
+            self.db.accept_segment_audio_as_machine(
+                segment_stable_id=str(item["stable_id"]),
+                wav_sha256=str(candidate["wav_sha256"]),
+                warning_code=code,
+                reason=reason,
+            )
+        self.log(
+            f"Giữ cách đọc ghim cho {item['stable_id']}: đề cử bản thu vòng "
+            f"{candidate['repair_round']} thay vì đổi sang đọc theo chữ viết "
+            f"({', '.join(anchor_codes)} - đã ghi phán quyết máy)."
+        )
+        return True
+
     def _promote_a_finished_take_over_a_cut_off_one(
+        self,
+        item: Any,
+        segment_id: int,
+        chapter_title: str,
+    ) -> bool:
+        """Thay nếu được, và **không bao giờ** làm hỏng chương nếu không được.
+
+        Đây là một CẢI THIỆN ở điểm cạn ứng viên: nếu nó không làm được việc của nó thì đường
+        ống phải chốt lại đoạn này y như trước khi có nó. `_segment_candidate_item` ném thật khi
+        checksum văn bản đọc trôi (alpha.47: ghim một cách đọc giữa lượt chạy), và một ngoại lệ
+        thoát ra từ đây giết chương đang phiên - đổi một bản thu cứu được lấy cả một chương.
+
+        Đường này chạy được lần đầu từ lô 6 (CAS trạng thái ứng viên vừa được sửa trong
+        `patch_keep_the_locked_reading`), nên lớp bọc này không phải đề phòng lý thuyết: trước
+        đó mọi lần gọi đều chết ở CAS và cuộn lại, sau đó thì không.
+        """
+        try:
+            return self._promote_a_finished_take_if_it_wins(item, segment_id, chapter_title)
+        except Exception as exc:  # noqa: BLE001 - xem docstring
+            self.log(
+                f"Segment {item['stable_id']}: không thay được bản thu bị cắt - {exc}"
+            )
+            return False
+
+    def _promote_a_finished_take_if_it_wins(
         self,
         item: Any,
         segment_id: int,
@@ -2921,6 +3041,23 @@ class BookPipeline:
             perceptual_reviews,
         )
 
+        self._publish_verified_chapter(chapter)
+
+    def _publish_verified_chapter(self, chapter: Any) -> None:
+        """Đuôi của `_process_chapter`, sau mọi đường thu lại: cấp phép máy, ba cổng chặn, ghép
+        MP3, ghi sổ chất lượng chương, đăng ký artifact, đánh dấu hoàn thành.
+
+        Tách ra thành một hàm vì có hai người gọi. Đường ống gọi nó ở cuối `_process_chapter`.
+        `scripts/keep_the_locked_reading.py` gọi nó để ghép lại một chương ĐÃ LÊN SÁCH sau khi
+        đề cử lại bản đọc-ghim cho các đoạn của chương ấy - không thu lại đoạn nào, không
+        nạp model nào. Chạy lại cả `_process_chapter` cho việc ấy là không được: một chương
+        đã hoàn thành vẫn có thể mang đoạn `failed` được máy cấp phép (084: `Selene Valkryn.`
+        thua neo tên qua năm vòng), và bước tổng hợp coi đoạn ấy là chưa có bằng chứng hiện
+        hành, đặt lại thành `signal_passed` rồi gọi Whisper - đo 18:25 2026-09-11. Cùng một
+        thân hàm, không chép: cổng nào thêm sau này thì cả hai người gọi cùng đi qua.
+        """
+        chapter_id = int(chapter["id"])
+        output = Path(str(chapter["output_mp3"]))
         # Sau mọi đường thu lại, trước mọi cổng chặn: đây là chỗ duy nhất "hết ngân sách
         # sửa" là đúng theo cấu trúc chứ không phải theo một biến đếm ai đó phải nhớ tăng.
         self._grant_machine_acceptances(chapter)
@@ -5471,6 +5608,12 @@ class BookPipeline:
                 )
                 action = str(plan["action"])
                 if action == "allocate":
+                    # Vòng lẻ là vòng biến thể đọc-theo-chữ-viết được yêu cầu. Trước khi cấp
+                    # phát nó: nếu bản đọc-ghim vừa trượt CHỈ vì bài chính tả neo tên, giữ nó.
+                    if int(plan["repair_round"]) % 2 == 1 and self._keep_the_locked_reading(item):
+                        completed_ids.append(segment_id)
+                        progressed = True
+                        continue
                     repair_item = self._checkpoint_short_ceiling_repair(item)
                     # The plan says which kind of candidate the segment is owed. This loop
                     # ignored it and always asked for the standard gate, so a segment whose

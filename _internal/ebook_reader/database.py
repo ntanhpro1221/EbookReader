@@ -98,6 +98,14 @@ GENERATION_STRATEGIES = frozenset(
 )
 PRONUNCIATION_DELIVERY_LOCKED = "locked_spoken_v1"
 PRONUNCIATION_DELIVERY_SOURCE = "source_spelling_v1"
+# Họ mã của **bài chính tả neo tên**: Whisper viết một cách đọc chuyển tự thành gì, so với chữ
+# viết. Chúng nói về phiên bản, không nói bản thu hỏng - và cách đọc ghim không bao giờ đậu bài
+# này (đo 2026-09-11: 348/348 bản đọc-ghim thua chỉ vì mã đầu tiên). Xem
+# docs/LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md.
+LOCKED_NAME_ANCHOR_CODES = frozenset(
+    {"ASR_LOCKED_NAME_ANCHOR_MISMATCH", "ASR_LOCKED_NAME_ANCHOR_REVIEW"}
+)
+KEEP_LOCKED_READING_ACTION = "keep_locked_reading_over_spelling_take"
 PRONUNCIATION_DELIVERY_VARIANTS = frozenset(
     {PRONUNCIATION_DELIVERY_LOCKED, PRONUNCIATION_DELIVERY_SOURCE}
 )
@@ -9881,8 +9889,34 @@ class ProjectDB:
             str(beam_check["verdict"]) != QUALITY_VERDICT_PASS
             or str(greedy_check["verdict"]) != QUALITY_VERDICT_PASS
         ):
-            raise RuntimeError(
-                "promoted candidate dual-decode ledger is not passing"
+            # Bản được đề cử để GIỮ cách đọc ghim mang sổ phiên trượt - và chỉ được trượt ở
+            # bài chính tả neo tên. Lý do nằm ở chính dòng check cuối của nó; đọc từ đó chứ
+            # không nới cho mọi bản.
+            final_action = (
+                conn.execute(
+                    "SELECT repair_action FROM quality_checks WHERE id=?",
+                    (int(candidate["final_check_id"]),),
+                ).fetchone()
+                if candidate["final_check_id"] is not None
+                else None
+            )
+            ledger_codes = (
+                self._check_failure_codes_conn(conn, candidate["beam_check_id"]) or set()
+            ) | (self._check_failure_codes_conn(conn, candidate["greedy_check_id"]) or set())
+            require_all(
+                "promoted candidate dual-decode ledger is not passing",
+                (
+                    "final_action_is_not_keep_locked_reading",
+                    final_action is None
+                    or str(final_action[0] or "") != KEEP_LOCKED_READING_ACTION,
+                ),
+                ("no_failure_codes_recorded", not ledger_codes),
+                (
+                    "failure_codes_outside_the_locked_name_anchor",
+                    bool(ledger_codes - LOCKED_NAME_ANCHOR_CODES),
+                ),
+                candidate_id=int(candidate["id"]),
+                failure_codes=sorted(ledger_codes),
             )
         if bool(candidate["perceptual_required"]):
             if candidate["perceptual_check_id"] is None:
@@ -12326,6 +12360,143 @@ class ProjectDB:
             f"chữ-số (ngưỡng ASR {ASR_MIN_VERIFIABLE_CHARS})"
         )
 
+    def _check_failure_codes_conn(
+        self,
+        conn: sqlite3.Connection,
+        quality_check_id: Any,
+    ) -> set[str] | None:
+        """Mã trượt của một check ASR, hoặc None nếu không có check / không đọc được."""
+        if quality_check_id is None:
+            return None
+        row = conn.execute(
+            "SELECT verdict, failure_codes_json FROM quality_checks WHERE id=?",
+            (int(quality_check_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        try:
+            codes = json.loads(row["failure_codes_json"] or "[]")
+        except ValueError:
+            return None
+        if not isinstance(codes, list):
+            return None
+        if str(row["verdict"]) == QUALITY_VERDICT_PASS and not codes:
+            return set()
+        return {str(code) for code in codes}
+
+    def _require_locked_reading_lost_only_the_spelling_test(
+        self,
+        conn: sqlite3.Connection,
+        candidate: sqlite3.Row,
+        segment: sqlite3.Row,
+    ) -> str:
+        """Năm điều kiện phải đúng cùng lúc mới được đề cử một bản đọc-ghim đã trượt ASR.
+
+        Kiểm ở tầng này, từ **chính các dòng dữ liệu**, không từ lời khai người gọi - cùng
+        lý do với `_require_candidate_beats_a_cut_off_incumbent`.
+
+        1. Ứng viên đọc theo **cách đọc ghim** (`locked_spoken_v1`). Bản đọc theo chữ viết không
+           có gì để "giữ".
+        2. Cả hai đường phiên đều có check, và mọi mã trượt của cả hai ⊆ họ neo tên. Một mã
+           khác - `ASR_MISMATCH_UNRESOLVED`, trần khung, cờ sóng âm - nói bản thu **hỏng**, và
+           lúc ấy bài chính tả không phải lý do duy nhất.
+        3. Tín hiệu sạch: không cờ chặn, không chạm trần, không lệch nhịp. (Nhịp đã được kiểm
+           lúc sinh; kiểm lại ở đây vì đây là chỗ quyết.)
+        4. File WAV còn trên đĩa và checksum khớp. 307 trong 348 ca đo được đã bị đánh dấu
+           `invalid` chỉ vì đương nhiệm đổi; file của chúng còn nguyên.
+        5. Đương nhiệm hiện tại của đoạn hoặc là đúng đương nhiệm ứng viên đã đấu với (ca đang
+           bay), hoặc là một anh em `source_spelling_v1` của **cùng đoạn** (ca đề cử lại) - tức
+           chính bản thu đã thắng nhờ đổi cách đọc. Không đề cử đè lên thứ gì khác.
+
+        Đo trước khi viết: 348 đoạn trong sách đủ cả năm; không đoạn nào có mã khác.
+        """
+        signal = self._json_object(candidate["signal_json"], "candidate signal metrics")
+        beam_codes = self._check_failure_codes_conn(conn, candidate["beam_check_id"])
+        greedy_codes = self._check_failure_codes_conn(conn, candidate["greedy_check_id"])
+        codes = (beam_codes or set()) | (greedy_codes or set())
+        current = str(segment["wav_sha256"] or "").casefold()
+        incumbent_unchanged = current == str(candidate["incumbent_sha256"] or "").casefold()
+        spelling_sibling = conn.execute(
+            "SELECT id FROM segment_candidates WHERE segment_id=? AND "
+            "pronunciation_delivery_variant=? AND state=? AND lower(wav_sha256)=?",
+            (
+                int(candidate["segment_id"]),
+                PRONUNCIATION_DELIVERY_SOURCE,
+                SEGMENT_CANDIDATE_PROMOTED,
+                current,
+            ),
+        ).fetchone()
+        require_all(
+            "không giữ được cách đọc ghim: điều kiện chưa đủ",
+            (
+                "ứng viên không đọc theo cách đọc ghim",
+                str(candidate["pronunciation_delivery_variant"] or "")
+                != PRONUNCIATION_DELIVERY_LOCKED,
+            ),
+            ("thiếu check ASR của một đường phiên", beam_codes is None or greedy_codes is None),
+            ("cả hai đường phiên đều qua - không có gì để giữ", not codes),
+            (
+                "có mã trượt ngoài họ neo tên",
+                bool(codes - LOCKED_NAME_ANCHOR_CODES),
+            ),
+            ("tín hiệu mang cờ chặn", bool(self._candidate_blocking_signal_flags(signal))),
+            (
+                "ứng viên chạm trần khung",
+                bool(float(signal.get(SEGMENT_CEILING_METRIC_KEY, 0.0) or 0.0)),
+            ),
+            ("ứng viên lệch nhịp", bool(float(signal.get("pace_outlier", 0.0) or 0.0))),
+            ("file WAV thiếu hoặc checksum lệch", self._candidate_file_error(candidate) is not None),
+            (
+                "đương nhiệm hiện tại không phải bản đã đấu, cũng không phải anh em đọc-theo-chữ-viết",
+                not incumbent_unchanged and spelling_sibling is None,
+            ),
+            segment_stable_id=str(segment["stable_id"]),
+            candidate_id=int(candidate["id"]),
+        )
+        where = (
+            "đương nhiệm chưa đổi"
+            if incumbent_unchanged
+            else f"đương nhiệm là anh em đọc-theo-chữ-viết (ứng viên #{int(spelling_sibling['id'])})"
+        )
+        return (
+            f"giữ cách đọc ghim: bản thu vòng {candidate['repair_round']} chỉ trượt "
+            f"{', '.join(sorted(codes))} - bài chính tả neo tên, không phải bằng chứng bản thu "
+            f"hỏng; {where}"
+        )
+
+    def find_locked_reading_that_lost_only_the_spelling_test(
+        self,
+        segment_id: int,
+        policy_hash: str,
+    ) -> sqlite3.Row | None:
+        """Ứng viên đọc-ghim mới nhất của đoạn đủ năm điều kiện trên, hoặc None. Không ném."""
+        with self.connect() as conn:
+            segment = conn.execute(
+                "SELECT * FROM segments WHERE id=?", (int(segment_id),)
+            ).fetchone()
+            if segment is None:
+                return None
+            rows = conn.execute(
+                "SELECT * FROM segment_candidates WHERE segment_id=? AND policy_hash=? "
+                "AND pronunciation_delivery_variant=? AND state IN (?, ?) ORDER BY id DESC",
+                (
+                    int(segment_id),
+                    str(policy_hash),
+                    PRONUNCIATION_DELIVERY_LOCKED,
+                    SEGMENT_CANDIDATE_DUAL_FAILED,
+                    SEGMENT_CANDIDATE_INVALID,
+                ),
+            ).fetchall()
+            for candidate in rows:
+                try:
+                    self._require_locked_reading_lost_only_the_spelling_test(
+                        conn, candidate, segment
+                    )
+                except (RuntimeError, ValueError, KeyError):
+                    continue
+                return candidate
+        return None
+
     def find_finished_take_over_a_cut_off_incumbent(
         self,
         segment_id: int,
@@ -12381,6 +12552,7 @@ class ProjectDB:
         attempt: int,
         warning_code: str | None = None,
         over_a_cut_off_incumbent: bool = False,
+        keeping_the_locked_reading: bool = False,
     ) -> sqlite3.Row:
         normalized_sha256 = self._normalized_sha256(
             validated_wav_sha256,
@@ -12420,6 +12592,19 @@ class ProjectDB:
                     segment,
                 )
                 promotable = promotable | {SEGMENT_CANDIDATE_DUAL_FAILED}
+            if keeping_the_locked_reading:
+                # Nới BA bất biến - tập trạng thái, hai check ASR phải PASS, checksum đương
+                # nhiệm - và chỉ sau khi năm điều kiện được kiểm từ dữ liệu. Cùng một hàm, cùng
+                # lý do với `over_a_cut_off_incumbent`: mọi chốt chặn toàn vẹn khác vẫn chạy.
+                substitution_reason = self._require_locked_reading_lost_only_the_spelling_test(
+                    conn,
+                    candidate,
+                    segment,
+                )
+                promotable = promotable | {
+                    SEGMENT_CANDIDATE_DUAL_FAILED,
+                    SEGMENT_CANDIDATE_INVALID,
+                }
             if candidate_state not in promotable:
                 raise RuntimeError("segment candidate cannot be promoted before both ASR decodes pass")
             if substitution_reason is not None:
@@ -12472,7 +12657,16 @@ class ProjectDB:
                 str(beam_check["verdict"]) != QUALITY_VERDICT_PASS
                 or str(greedy_check["verdict"]) != QUALITY_VERDICT_PASS
             ):
-                raise RuntimeError("candidate dual-decode ledger does not contain two passing checks")
+                if not keeping_the_locked_reading:
+                    raise RuntimeError("candidate dual-decode ledger does not contain two passing checks")
+                # Kiểm lại ngay tại chỗ nới, từ chính hai dòng check: mã trượt chỉ được là neo tên.
+                ledger_codes = (
+                    self._check_failure_codes_conn(conn, candidate["beam_check_id"]) or set()
+                ) | (self._check_failure_codes_conn(conn, candidate["greedy_check_id"]) or set())
+                if not ledger_codes or ledger_codes - LOCKED_NAME_ANCHOR_CODES:
+                    raise RuntimeError(
+                        "candidate dual-decode ledger fails on more than the locked-name spelling test"
+                    )
             if bool(candidate["perceptual_required"]):
                 if candidate["perceptual_check_id"] is None:
                     raise RuntimeError(
@@ -12519,7 +12713,10 @@ class ProjectDB:
                     ):
                         return candidate
                 raise RuntimeError("segment candidate promotion replay does not match the committed result")
-            if str(segment["wav_sha256"] or "").casefold() != str(candidate["incumbent_sha256"]):
+            if (
+                not keeping_the_locked_reading
+                and str(segment["wav_sha256"] or "").casefold() != str(candidate["incumbent_sha256"])
+            ):
                 raise RuntimeError("segment candidate incumbent checksum changed")
             file_error = self._candidate_file_error(candidate)
             if file_error:
@@ -12588,11 +12785,61 @@ class ProjectDB:
                     merged_warning,
                     now,
                     int(candidate["segment_id"]),
-                    str(candidate["incumbent_sha256"]),
+                    # Khi giữ cách đọc ghim, đương nhiệm hiện tại là anh em đọc-theo-chữ-viết
+                    # (điều kiện 5 đã kiểm), không phải bản ứng viên đã đấu với. CAS phải so
+                    # với đúng nó - nếu không thì "thắng" đọc thành "mất đương nhiệm".
+                    str(segment["wav_sha256"] or "")
+                    if keeping_the_locked_reading
+                    else str(candidate["incumbent_sha256"]),
                 ),
             )
             if segment_cursor.rowcount != 1:
                 raise RuntimeError("segment candidate promotion lost the incumbent CAS")
+            # MỘT đoạn, nhiều nhất MỘT ứng viên `promoted`. Hạ bản `promoted` đang giữ đúng
+            # checksum đương nhiệm CŨ, không điều kiện: `_invalidate_candidate_conn` cố ý không
+            # hạ bản đã đề cử, và `segment_candidate_resume_plan` nem khi thấy hai bản - tức
+            # lỗi nổ ở lần ĐỌC sau, xa chỗ gây ra nó. Đường thường không có anh em như thế nên
+            # câu lệnh khớp 0 dòng và vô hại; đường "giữ cách đọc ghim" đòi đúng một dòng (điều
+            # kiện 5 của nó đã kiểm rằng anh em ấy tồn tại); đường "bản hoàn chỉnh thắng bản bị
+            # cắt" - chạy được lần đầu từ lô 6 - hạ anh em nếu đương nhiệm của nó tình cờ cũng
+            # là một ứng viên đã đề cử. Ràng buộc CHECK của bảng đòi `promoted_at IS NULL` khi
+            # không còn `promoted`; giữ `final_check_id` để sổ vẫn kể được bản ấy từng qua cổng
+            # cuối.
+            old_incumbent = str(segment["wav_sha256"] or "")
+            incumbent_moved = (
+                old_incumbent.casefold() != str(candidate["incumbent_sha256"] or "").casefold()
+            )
+            demoted = conn.execute(
+                """
+                UPDATE segment_candidates
+                SET state=?,failure_reason=?,updated_at=?,promoted_at=NULL
+                WHERE segment_id=? AND state=? AND lower(wav_sha256)=lower(?) AND id<>?
+                """,
+                (
+                    SEGMENT_CANDIDATE_INVALID,
+                    (
+                        "superseded: "
+                        + str(
+                            substitution_reason
+                            or "another candidate was promoted for this segment"
+                        )
+                    )[-8000:],
+                    now,
+                    int(candidate["segment_id"]),
+                    SEGMENT_CANDIDATE_PROMOTED,
+                    old_incumbent,
+                    int(candidate["id"]),
+                ),
+            )
+            # Hai `if` lồng nhau chứ không phải một `if` ba mệnh đề: `test_no_new_blind_compound_
+            # check_is_added` đếm đúng hình dạng ấy và không cho tăng, vì một lời từ chối gộp ba
+            # điều kiện sau một thông điệp thì không nói được mệnh đề nào vỡ. `require_all` không
+            # dùng được ở đây - nó ném khi MỘT mệnh đề đúng, còn chỗ này chỉ ném khi CẢ BA đúng.
+            if keeping_the_locked_reading and incumbent_moved:
+                if demoted.rowcount != 1:
+                    raise RuntimeError(
+                        "keeping the locked reading found no promoted spelling take to supersede"
+                    )
             candidate_cursor = conn.execute(
                 """
                 UPDATE segment_candidates
@@ -12605,7 +12852,11 @@ class ProjectDB:
                     now,
                     now,
                     int(candidate_id),
-                    SEGMENT_CANDIDATE_DUAL_PASSED,
+                    # Trạng thái ĐÃ ĐỌC ở đầu giao dịch, không phải hằng số: đường "giữ cách đọc
+                    # ghim" và đường "bản hoàn chỉnh thắng bản bị cắt" đề cử ứng viên
+                    # `dual_failed`/`invalid`, và với hằng số DUAL_PASSED thì cả hai không bao
+                    # giờ đi qua được dòng dưới.
+                    candidate_state,
                 ),
             )
             if candidate_cursor.rowcount != 1:

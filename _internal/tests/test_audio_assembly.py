@@ -678,15 +678,17 @@ def test_text_without_digits_is_counted_exactly_as_before() -> None:
         assert spoken_speakable_chars(text) == sum(char.isalnum() for char in text)
 
 
-def test_a_number_too_large_to_spell_is_left_alone_rather_than_guessed() -> None:
-    """vietnamese_number_words stops at 999 and raises above it.
+def test_a_number_from_a_thousand_up_is_counted_as_it_is_read() -> None:
+    """vietnamese_number_words used to stop at 999; the digits above it were counted as written.
 
-    Those stay counted as written, so they are still undercounted - a known and deliberate
-    gap. Inventing a multiplier for them would be guessing, and guessing is what produced
-    this bug in the first place.
+    Chapter 106 of batch 4 died on "123456" counted as six characters and one syllable. The
+    speller now reaches below 10^12 by the grammar of counting, and a digit run from 1000 up
+    counts the shorter of its two possible readings - never a made-up multiplier.
     """
     from ebook_reader.audio_io import spoken_speakable_chars
 
     text = "Chương 1000 - 1000: xa quá"
+    spoken = "Chương một nghìn - một nghìn: xa quá"
 
-    assert spoken_speakable_chars(text) == sum(char.isalnum() for char in text)
+    assert spoken_speakable_chars(text) == sum(char.isalnum() for char in spoken)
+    assert spoken_speakable_chars(text) > sum(char.isalnum() for char in text)
