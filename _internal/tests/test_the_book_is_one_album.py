@@ -117,3 +117,39 @@ def test_a_tag_failure_does_not_raise(tmp_path: Path) -> None:
 
     assert retag(missing, {"album": "X"}) is False
     assert not (tmp_path / "khong-co.retag.mp3").exists()
+
+
+def test_verify_says_what_is_wrong_and_what_it_could_not_check(tmp_path: Path) -> None:
+    """`--verify` trả lời "cuốn sách có đúng là thứ manifest nói không", và nói cả khi không đo được.
+
+    Manifest ghi gốc gác nhưng chưa ai kiểm rằng file trong sách thật là chương ấy. Một lần chép
+    sai, hay một project bị xoá sau khi ghép, đều im lặng: tên file đúng, thẻ đúng, người nghe
+    mới là người phát hiện.
+    """
+    from scripts.assemble_book import verify
+
+    checked, complaints = verify(tmp_path / "nowhere")
+    assert checked == 0 and "manifest" in complaints[0]
+
+    (tmp_path / "manifest.json").write_text(
+        json.dumps(
+            {
+                "chapters": [
+                    {
+                        "title": "000",
+                        "file": "000.mp3",
+                        "version": "v0.2.0-lo01",
+                        "project": "khong-co-project",
+                        "source_file": "00001_000.mp3",
+                        "bytes": 10,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    checked, complaints = verify(tmp_path)
+
+    assert checked == 0
+    assert len(complaints) == 1
+    assert "thiếu 000.mp3" in complaints[0] or "ffprobe" in complaints[0]

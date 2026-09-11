@@ -124,6 +124,92 @@ def _attempts() -> dict[str, float]:
     return latest
 
 
+def probe_audio(path: Path) -> tuple[float, int | None, int | None] | None:
+    """(giây, số kênh, sample rate) của một file, hoặc None nếu không đo được.
+
+    Dùng `ffprobe` của hệ thống: bản ffmpeg dự án nhúng (`imageio_ffmpeg`) chỉ có `ffmpeg`, nên
+    hàm này có thể trả None trên một máy không cài ffmpeg đầy đủ - và `--verify` nói ra điều đó
+    thay vì báo cuốn sách hỏng.
+    """
+    probe = shutil.which("ffprobe")
+    if not probe or not path.is_file():
+        return None
+    try:
+        done = run_hidden(
+            [
+                probe, "-v", "error", "-show_entries",
+                "format=duration:stream=channels,sample_rate", "-of", "json", str(path),
+            ],
+            timeout=120.0,
+        )
+        payload = json.loads(done.stdout or "{}")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    duration = float((payload.get("format") or {}).get("duration") or 0.0)
+    stream = (payload.get("streams") or [{}])[0]
+    channels = int(stream["channels"]) if stream.get("channels") is not None else None
+    sample_rate = int(stream["sample_rate"]) if stream.get("sample_rate") is not None else None
+    return duration, channels, sample_rate
+
+
+def verify(out: Path) -> tuple[int, list[str]]:
+    """Cuốn sách có đúng là thứ manifest nói không. (số chương đã kiểm, danh sách lời phàn nàn).
+
+    Manifest ghi **gốc gác** (version, project, source_file) nhưng chưa ai kiểm rằng file trong
+    sách thật sự là chương ấy. Một lần chép sai, hay một project bị xoá sau khi ghép, đều im
+    lặng: tên file vẫn đúng, thẻ vẫn đúng, và người nghe mới là người phát hiện.
+
+    So thời lượng (±0,05 giây), số kênh và sample rate giữa file trong sách và file gốc trong
+    project. Không so byte: ghi lại thẻ đổi header, và giải mã 118 chương để so PCM là hai giờ
+    máy cho một câu hỏi mà thời lượng đã trả lời.
+
+    Đo lần đầu 01:45 ngày 2026-09-12 trên 118 chương: 0 lệch, 0 nguồn mất, 0 thời lượng trùng
+    khít nhau (một cặp trùng khít là dấu hiệu của chép sai chương).
+    """
+    complaints: list[str] = []
+    before = previous_manifest(out)
+    if not before:
+        return 0, [f"không đọc được manifest ở {out}"]
+    if not shutil.which("ffprobe"):
+        return 0, ["không có `ffprobe` trong PATH - không kiểm được thời lượng"]
+    durations: dict[float, list[str]] = {}
+    checked = 0
+    for title, item in sorted(before.items()):
+        destination = out / str(item.get("file") or "")
+        source = (
+            VERSIONS
+            / str(item.get("version") or "")
+            / str(item.get("project") or "")
+            / "output"
+            / "chapters"
+            / str(item.get("source_file") or "")
+        )
+        if not destination.is_file():
+            complaints.append(f"chương {title}: thiếu {destination.name} trong sách")
+            continue
+        if not source.is_file():
+            complaints.append(f"chương {title}: project gốc không còn {source.name}")
+            continue
+        here, there = probe_audio(destination), probe_audio(source)
+        if here is None or there is None:
+            complaints.append(f"chương {title}: không đo được thời lượng")
+            continue
+        checked += 1
+        if abs(here[0] - there[0]) > 0.05:
+            complaints.append(
+                f"chương {title}: {here[0]:.2f}s trong sách so với {there[0]:.2f}s ở project"
+            )
+        if here[1:] != there[1:]:
+            complaints.append(f"chương {title}: {here[1:]} kênh/tần số, project có {there[1:]}")
+        durations.setdefault(round(here[0], 2), []).append(title)
+    for _duration, titles in sorted(durations.items()):
+        if len(titles) > 1:
+            complaints.append(
+                f"thời lượng trùng khít: {', '.join(titles)} - có thể là chép sai chương"
+            )
+    return checked, complaints
+
+
 def wanted_tags(title: str, album: str, chapters_expected: int) -> dict[str, str]:
     """Thẻ mà một chương của CUỐN SÁCH phải có.
 
@@ -223,12 +309,26 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--out", type=Path, default=Path(r"D:\Novels\Audiobooks\_book"))
     parser.add_argument("--apply", action="store_true", help="Chép thật thay vì chỉ liệt kê")
     parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Chỉ kiểm cuốn sách đã ghép so với manifest (chỉ đọc), rồi thoát",
+    )
+    parser.add_argument(
         "--album",
         default=DEFAULT_ALBUM,
         help=f"Tên đĩa ghi vào mọi chương (mặc định {DEFAULT_ALBUM!r}; tên thật của truyện"
         " không có ở đâu trong dữ liệu)",
     )
     args = parser.parse_args(argv)
+
+    if args.verify:
+        checked, complaints = verify(args.out)
+        _say(f"kiểm {checked} chương của {args.out} so với manifest:")
+        for line in complaints:
+            _say(f"  {line}")
+        if not complaints:
+            _say("  không có gì lệch: đúng thời lượng, đúng kênh/tần số, không trùng khít.")
+        return 1 if complaints else 0
 
     found = _candidates()
     expected = _expected()

@@ -200,6 +200,24 @@ Vì có bước này, luật "chép khi khác kích thước" phải đi: ghi th
 luật cũ sẽ chép lại cả 119 file (~2 GB) mỗi lần ghép. Giờ quyết định chép hỏi theo **gốc gác** -
 manifest đã ghi `version`, `project`, `bytes` của bản đang nằm đó.
 
+### Kiểm cuốn sách so với manifest
+
+```bash
+python scripts/assemble_book.py --verify     # chỉ đọc; thoát 1 nếu có gì lệch
+```
+
+Manifest ghi **gốc gác** (version, project, source_file) nhưng trước đây chưa ai kiểm rằng file
+trong sách thật sự là chương ấy. Một lần chép sai, hay một project bị xoá sau khi ghép, đều im
+lặng: tên file vẫn đúng, thẻ vẫn đúng, và **người nghe mới là người phát hiện**. `--verify` so
+thời lượng (±0,05 giây), số kênh và sample rate giữa file trong sách và file gốc trong project,
+rồi báo cả những cặp chương **trùng khít thời lượng** - dấu hiệu của chép sai chương.
+
+Không so từng byte: ghi thẻ đổi header, và giải mã 118 chương để so PCM là hai giờ máy cho một
+câu hỏi mà thời lượng đã trả lời. Cần `ffprobe` trong PATH (bản ffmpeg nhúng của dự án không kèm
+nó); không có thì `--verify` nói ra chứ không báo sách hỏng.
+
+Đo lần đầu 01:45 ngày 2026-09-12 trên 118 chương, 11,3 giây: **0 lệch, 0 nguồn mất, 0 trùng khít**.
+
 **Cảnh báo quan trọng nhất của nó** là khi một chương phải **lùi về một lô cũ hơn**: nghĩa là
 một lô mới hơn đã chạy chương ấy và không cho ra MP3, nên bản đang dùng mang dàn giọng và cách
 đọc của phiên bản cũ. Đo lúc viết, trước khi lô vá xong:
