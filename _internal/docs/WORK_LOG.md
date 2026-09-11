@@ -1453,3 +1453,36 @@ trong đó) — thêm khoảng 18 phút ffmpeg cho ~26 chương của lô 5.
 
 Lô 6 mới là phép thử thật của bản vá giữ cách đọc ghim: ở đó móc chạy **trong** vòng sửa và con
 số `source_spelling_v1` được đề cử phải về gần 0.
+
+## 2026-09-12, 02:40–02:56 — câu hỏi thứ năm về giọng, và một phép đo tôi phải làm lại
+
+`voice_pool_pressure` hỏi va chạm **trong một chương của một lô**. Câu chưa ai hỏi: trên **cả
+cuốn sách**, có hai người nào dùng chung một giọng không, và họ có bao giờ cùng nói trong một
+chương không? Đo trên 118 chương (451 dòng chương × nhân vật × giọng, 61 tên):
+
+    92  cặp hai người dùng chung một giọng
+     1  cặp CÙNG CHƯƠNG: `thai_son_f093_p+00` — SỐ BỐN và SỐ NĂM, chương 023
+     2  cặp mà cả hai đều ≥5 chương với giọng ấy (không bao giờ cùng chương):
+        SAMAEL (29ch) + KANG (5ch) trên f093 · KANG (8ch) + BOWDEN (6ch) trên f100
+
+**Phép đo đầu của tôi sai và tôi phải làm lại.** Bản đầu giao hai tập "chương mà người ấy có
+mặt", nên nó báo NGƯỜI TRẢ LỜI và THALIA "cùng chương" ở sáu chương — trong khi hai người chỉ
+dùng chung giọng `f115` ở **hai chương khác nhau** (056 và 054) và ở sáu chương kia mỗi người
+mang giọng riêng. Câu đúng là giao hai tập "chương mà người ấy dùng **chính giọng ấy**". Sau khi
+sửa: 6 cặp giả biến mất, còn đúng một cặp thật. Ghi lại vì con số sai ấy suýt vào báo cáo, và vì
+nó là cùng một lớp lỗi với `one_person_one_voice` trước khi gộp tên — **giao đúng hai tập mới là
+câu hỏi**.
+
+Cặp cùng chương duy nhất ấy **chính công cụ của dự án đã báo từ lô 1**: `voice_pool_pressure` trên
+`lo01b` in "CÙNG CHƯƠNG 023 — người nghe lẫn". Nó chưa từng được đúc lại, vì ranh giới lô 1 → 2
+chưa có `--recast auto`. Giờ thêm `1:023` vào ranh giới: 25 phút GPU để cuốn sách không còn va
+chạm cùng chương nào mà ta biết mà vẫn để đó.
+
+Hai cặp còn lại là **tái dùng bình thường của một pool hữu hạn** (14 preset × 7 bậc formant cho 61
+cái tên) và không bao giờ gặp nhau trong một chương. Nhưng đáng ghi một điều về kế hoạch KANG: đúc
+lại 5 chương f093 của anh ta về f100 **không giảm** việc dùng chung qua sách, nó **chuyển** —
+KANG(13) + BOWDEN(6) trên f100 thay vì SAMAEL(29) + KANG(5) trên f093. Vẫn nên làm, vì mục tiêu là
+KANG có MỘT giọng (người nghe không mất nhân vật), không phải giảm tổng số cặp.
+
+Danh sách đúc lại cuối cùng của ranh giới: **18 chương** (1:023 · 2:031 043 051 053 054! 055 056! ·
+3:066 067 072 080 081 087 089 090 091 · 4:106), khoảng 7,5 giờ GPU ở bước 4b.

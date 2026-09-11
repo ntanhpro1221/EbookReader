@@ -1872,3 +1872,28 @@ module, hai danh sách), và **ghim tuổi KHÔNG được ghim phái** (cột `
 IVAN giọng nam; `voice_matches_the_person.py` về 0 dòng lệch phái; `one_person_one_voice --across`
 mất IVAN khỏi danh sách (3 chương của anh ta về một giọng). EVERAN **không** đổi: nó là trẻ con
 thật, và luật giọng trẻ con đúng.
+
+## Câu hỏi thứ năm: hai người chung một giọng QUA CẢ SÁCH (2026-09-12, 02:50 — đo rồi, chưa thành công cụ)
+
+Bốn câu đã có công cụ: hai người chung giọng **trong một chương** (`voice_pool_pressure`), một
+người hai giọng **trong một chương** và **qua các chương** (`one_person_one_voice`, `--across`),
+giọng có đúng phái/tuổi (`voice_matches_the_person`). Câu thứ năm chưa có: hai người chung một
+giọng **qua cả sách**.
+
+Đo tay trên 118 chương: **92 cặp** dùng chung giọng, **1 cặp cùng chương** (SỐ BỐN + SỐ NĂM,
+chương 023 — đã thêm `1:023` vào ranh giới), **2 cặp** mà cả hai đều ≥5 chương với giọng ấy
+(SAMAEL+KANG trên f093, KANG+BOWDEN trên f100).
+
+**Chưa làm thành công cụ, và lý do:** 92 cặp là **đúng** với một pool 14 preset × 7 bậc cho 61 cái
+tên; một công cụ in 92 dòng mỗi lần chạy sẽ bị bỏ qua sau hai lần. Ngưỡng đáng báo phải là "cả hai
+đều nhiều chương" *và* "không bao giờ cùng chương" — tức đúng hai cặp trên, và cả hai đều xoay
+quanh việc pool giọng nam thanh_binh đang gánh 7 người ở bậc f100 và 6 người ở bậc f093. Cần trả
+lời trước: **pool còn chỗ không?** Nếu không, một công cụ báo "hai người nhiều chương chung giọng"
+chỉ báo một sự thật không sửa được, và lúc ấy câu đúng là mở rộng pool (thêm preset hoặc thêm bậc
+formant), không phải đúc lại.
+
+**Cái bẫy của phép đo, ghi để người sau không đạp lại:** phải giao hai tập *"chương mà người ấy
+dùng CHÍNH GIỌNG ẤY"*, không phải *"chương mà người ấy có mặt"*. Bản đầu của tôi giao sai và báo
+NGƯỜI TRẢ LỜI + THALIA cùng chương ở sáu chương, trong khi họ chỉ chung giọng `f115` ở hai chương
+khác nhau. Cùng lớp lỗi với `one_person_one_voice` trước khi gộp tên: chọn đúng hai tập để giao
+mới là câu hỏi.
