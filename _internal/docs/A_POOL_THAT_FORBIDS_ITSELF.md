@@ -118,3 +118,52 @@ trên cùng mức chiếm RAM, rồi so segment/phút — chứ không phải so
 lý do có lẽ là worker TTS nạp model xong thì gần như không phình thêm, khác worker chấm điểm.)
 
 Chưa vá. `tts_pool.py` và `pipeline.py` đều nằm trong `QUALITY_IMPLEMENTATION_FILES`.
+
+## Lô 4: kho nam KÍN HẲN, và bộ cấp phát dồn tám người vào một bậc (2026-09-11, 07:30)
+
+Lô 4 xong 25/27. Đo kho giọng, và đây là bằng chứng ở quy mô cho
+`patch_a_step_remembers_every_holder` — đo **trước** khi nó được áp:
+
+```
+Thanh Bình  thang [0,898 0,93 0,97 1,00 1,04 1,08 1,16]   -> ĐỦ 7 bậc đã có chủ
+Thái Sơn    thang [0,87  0,93 0,97 1,00 1,04 1,08 1,16]   -> ĐỦ 7 bậc đã có chủ
+```
+
+Cả hai thang nam **kín hẳn** (37 giọng được giữ chỗ trước khi phân vai), nên mọi người nam mới
+đều đi vào đường quay vòng. Kết quả:
+
+```
+preset_thanh_binh_f100_p-04   8 người: BOWDEN(68 câu) KANG(24) ROB(8) JONES(3) MARK(1) + 3 NPC
+preset_thai_son_f100_p+00     5 người: CHUA TÔ, LYLE, ĐẠI TƯ TẾ + 2 NPC
+```
+
+Tám người một bậc, và bậc ấy là **1,00 — nấc số 0 của thang**. Đúng cơ chế đã phân tích đêm qua
+trên chương 071: `holders` chỉ nhớ **người giữ đầu tiên**, nên người thứ hai trở đi đọc bậc 1,00
+thành "chỉ có KANG" (rồi "chỉ có KANG" mãi), thấy 0 chương chung, và xếp vào. Không ai thấy bảy
+bậc kia trống hơn vì **chúng không trống** — tất cả đều có chủ; câu hỏi duy nhất là *dùng chung
+với ai*, và câu trả lời bị đóng băng ở người đầu tiên. Hoà thì lấy nấc thấp nhất, tức 1,00, mãi
+mãi.
+
+**Dự đoán cho lô 5, ghi trước:** với bản vá, giá phải trả tính trên **hợp** của mọi người giữ
+bậc, nên người thứ hai vào bậc 1,00 sẽ thấy cả BOWDEN lẫn KANG và đi tìm bậc khác. Không bậc nào
+được mang quá hai, ba người, và số va chạm cùng chương phải về 0. Nếu lô 5 vẫn có một bậc mang
+tám người thì bản vá sai — và con số ấy đọc được bằng một lệnh:
+`python scripts/voice_pool_pressure.py <project lô 5>`.
+
+## Chính registry đã cảnh báo, và không ai đọc
+
+Trong `runtime_events` của lô 4:
+
+```
+CẢNH BÁO: nhiều nhân vật dùng chung một giọng, người nghe sẽ tưởng là cùng một người:
+{22: [22, 45, 54, 61, 62, 64, 67, 69], 35: [57, 59, 63, 66, 68]}
+```
+
+Tám id nhân vật trên một profile, năm trên một profile khác — **đúng con số ở trên**, ghi ngay
+lúc phân vai, hai mươi bốn giờ trước khi tôi tìm ra nó bằng cách khác. Nó nằm trong bảng
+`runtime_events` và không chỗ nào nổi lên: không vào báo cáo chương, không vào log ranh giới,
+không ai `SELECT` nó.
+
+Một cảnh báo đúng mà không ai đọc thì rẻ hơn không có: nó tạo cảm giác hệ thống đang trông. Bước
+0 của `boundary.sh` phải đổ những dòng `CẢNH BÁO` của lô vừa xong vào log ranh giới — thêm ở
+ranh giới sau, vì `boundary.sh` đang chạy và sửa file đang chạy là đúng thứ đã bị cấm.

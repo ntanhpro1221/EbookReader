@@ -326,15 +326,31 @@ def _segment_value(segment: Any, key: str, default: Any) -> Any:
 _DIGIT_RUN = re.compile(r"\d+")
 
 
-def spoken_syllables(text: str) -> int:
-    """Số âm tiết đọc ra, xấp xỉ bằng số từ: tiếng Việt đơn âm, một từ là một âm tiết.
+# Âm tiết tách nhau bằng khoảng trắng **hoặc gạch ngang**: cách đọc tiếng Anh trong dự án này
+# luôn viết bằng âm tiết nối bằng gạch - `Mai-cồ`, `A-ca-đe-mi`, `I-xờ-hờ-ta-ra`.
+_SYLLABLE_SPLIT = re.compile(r"[\s\-–—]+")
 
-    Xấp xỉ này đếm THIẾU ở tên nước ngoài ("Alice" hai âm tiết) và chữ số ("22" đọc ba âm
-    tiết), tức nhịp âm tiết đo ra thấp hơn thật. Đó là chiều sai an toàn cho việc nó được
-    dùng: một bản thu chỉ được tha khi nhịp âm tiết đủ cao, nên đếm thiếu chỉ làm giữ nguyên
-    cờ như cũ chứ không tha thêm.
+
+def spoken_syllables(text: str) -> int:
+    """Số âm tiết đọc ra: tiếng Việt đơn âm, nên mỗi âm tiết là một cụm chữ giữa hai dấu tách.
+
+    Tách ở **cả gạch ngang lẫn khoảng trắng**. Bản đầu chỉ tách khoảng trắng, và mọi cách đọc
+    tên nước ngoài thành một âm tiết - `I-xờ-hờ-ta-ra` đếm 1 thay vì 5. Chương 084 của lô 3 mất
+    vì đúng điều đó, bốn tiếng sau khi bộ đếm ấy vào cây: câu
+    `Chúng tôi đang đến Thành phố I-xờ-hờ-ta-ra (I-xờ-hờ-ta-ra Xi-ti).` đếm 9 âm tiết thay vì
+    18, ra 2,44 âm tiết/giây thay vì 4,88, và bị chặn dưới sàn 3,75 dù đọc hoàn toàn bình
+    thường.
+
+    Docstring cũ gọi việc đếm thiếu là "chiều sai an toàn" vì nó chỉ giữ nguyên cờ chứ không
+    tha thêm. Câu ấy đúng mà thiếu: an toàn trước việc **tha nhầm**, không an toàn trước việc
+    **chặn nhầm** - và chặn nhầm thì mất cả chương. Một sai số một chiều vẫn là sai số.
+
+    Vẫn còn đếm thiếu ở chữ số (`22` đọc ba âm tiết mà viết là một cụm) và ở tên chưa có cách
+    đọc trong sổ. Cả hai đều đo được và sửa được; không lấp bằng phỏng đoán ở đây.
     """
-    return sum(1 for token in text.split() if any(char.isalnum() for char in token))
+    return sum(
+        1 for token in _SYLLABLE_SPLIT.split(text) if any(char.isalnum() for char in token)
+    )
 
 
 def pace_is_outlier(

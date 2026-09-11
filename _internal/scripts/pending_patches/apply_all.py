@@ -27,25 +27,8 @@ ROOT = HERE.parent.parent
 VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
-# Hai bản vá cho ranh giới lô 4 -> 5. Cả hai sửa `character_registry.py` nhưng ở hai vùng khác
-# nhau (một ở `_canonicalize_named_speakers`, một ở `PresetAllocator`), và đã đo: áp theo **cả
-# hai** thứ tự cho ra cùng một file byte-một.
-#
-# `patch_the_book_decides_the_spelling` phải áp **cùng lúc** với việc nối
-# `scripts/source_spellings.py` vào `port_casting` - nửa gieo một mình sẽ ghim `SELNE VALKRYN`
-# dưới tên `SELENE`, rồi phân tích lại sinh `SELNE`, không khớp pin, và cấp một giọng mới.
-#
-# `patch_a_step_remembers_every_holder` sinh ra từ lô đúc lại của lô 3: `patch_wrap_prefers_a_
-# stranger` chạy đúng cho KANG (dùng chung với VIKTOR, người không có trong chương 071) rồi mù
-# với người kế tiếp, vì một bậc chỉ nhớ người giữ **đầu tiên**.
-ORDER: tuple[str, ...] = (
-    "patch_the_book_decides_the_spelling.py",
-    "patch_a_step_remembers_every_holder.py",
-    # Thu ba, file khac (audio_io.py): sua mot loi CHINH TOI dua vao 21:19 cung ngay. Bo dem am
-    # tiet tach theo khoang trang, nen moi cach doc noi bang gach ngang thanh MOT am tiet, va
-    # chuong 084 mat vi the trong vong bon tieng.
-    "patch_a_transliteration_is_many_syllables.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -178,6 +161,25 @@ APPLIED = (
     "patch_wrap_prefers_a_stranger.py",
     "patch_stray_surname_is_the_same_name.py",
     "patch_pace_counts_syllables_too.py",
+    # 2026-09-11: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Hai bản vá cho ranh giới lô 4 -> 5. Cả hai sửa `character_registry.py` nhưng ở hai vùng khác
+    # nhau (một ở `_canonicalize_named_speakers`, một ở `PresetAllocator`), và đã đo: áp theo **cả
+    # hai** thứ tự cho ra cùng một file byte-một.
+    #
+    # `patch_the_book_decides_the_spelling` phải áp **cùng lúc** với việc nối
+    # `scripts/source_spellings.py` vào `port_casting` - nửa gieo một mình sẽ ghim `SELNE VALKRYN`
+    # dưới tên `SELENE`, rồi phân tích lại sinh `SELNE`, không khớp pin, và cấp một giọng mới.
+    #
+    # `patch_a_step_remembers_every_holder` sinh ra từ lô đúc lại của lô 3: `patch_wrap_prefers_a_
+    # stranger` chạy đúng cho KANG (dùng chung với VIKTOR, người không có trong chương 071) rồi mù
+    # với người kế tiếp, vì một bậc chỉ nhớ người giữ **đầu tiên**.
+    # Thu ba, file khac (audio_io.py): sua mot loi CHINH TOI dua vao 21:19 cung ngay. Bo dem am
+    # tiet tach theo khoang trang, nen moi cach doc noi bang gach ngang thanh MOT am tiet, va
+    # chuong 084 mat vi the trong vong bon tieng.
+    "patch_the_book_decides_the_spelling.py",
+    "patch_a_step_remembers_every_holder.py",
+    "patch_a_transliteration_is_many_syllables.py",
 )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any, Callable
 
 from .analysis import (
@@ -227,6 +228,107 @@ def merge_stray_surnames(
     return redirected
 
 
+def _folded_source_text(db: ProjectDB) -> str:
+    """Văn bản nguồn của chính project, bỏ dấu và hạ chữ, để đếm một cái tên trong đó.
+
+    Đọc **mọi** file .txt cùng thư mục với các chương của project, không chỉ những chương
+    project ấy chạy: một project vá một chương chỉ trỏ tới một file, và hỏi "cái tên này có
+    trong sách không" bằng một chương thì gần như luôn trả lời "không" - tức luật sẽ gộp bừa
+    đúng lúc nó có ít bằng chứng nhất.
+
+    Không đọc được gì thì trả về "" và luật tự tắt. Nó phải tắt được: một cái tên bị gộp sai là
+    hai nhân vật nhập làm một, tệ hơn hẳn việc không gộp.
+    """
+    try:
+        paths = {
+            Path(str(row["input_path"]))
+            for row in db.list_chapters()
+            if row["input_path"]
+        }
+    except Exception:  # noqa: BLE001
+        return ""
+    folders = {path.parent for path in paths if path.parent.is_dir()}
+    files = sorted({found for folder in folders for found in folder.glob("*.txt")})
+    chunks: list[str] = []
+    for path in files or sorted(path for path in paths if path.is_file()):
+        try:
+            chunks.append(path.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    return fold_for_source_search("\n".join(chunks))
+
+
+def fold_for_source_search(text: str) -> str:
+    """Chữ thường, bỏ hết dấu - để so một cái tên với văn xuôi viết hoa/thường tuỳ chỗ."""
+    lowered = unicodedata.normalize("NFD", text.lower())
+    return "".join(char for char in lowered if not unicodedata.combining(char))
+
+
+def source_occurrences(name: str, folded_source: str) -> int:
+    """Số lần một cái tên xuất hiện trong nguồn đã bỏ dấu."""
+    needle = fold_for_source_search(name).strip()
+    if not needle or not folded_source:
+        return 0
+    return len(re.findall(re.escape(needle), folded_source))
+
+
+def _within_one_edit(left: str, right: str) -> bool:
+    """Hai chuỗi lệch nhau đúng một ký tự (thay, thêm, hoặc bớt). Bằng nhau thì KHÔNG tính."""
+    if left == right or abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) == len(right):
+        return sum(a != b for a, b in zip(left, right)) == 1
+    longer, shorter = (left, right) if len(left) > len(right) else (right, left)
+    return any(longer[:i] + longer[i + 1 :] == shorter for i in range(len(longer)))
+
+
+def fold_to_source_spelling(
+    names: "Sequence[str]",
+    folded_source: str,
+    counts: "Counter[str] | dict[str, int] | None" = None,
+) -> dict[str, str]:
+    """Trỏ cách viết KHÔNG có trong nguồn về cách viết CÓ. Trả về {tên thua: tên thắng}.
+
+    Chỉ những tên vắng mặt hẳn (0 lần) mới được xét, và chỉ được trỏ về một tên **có mặt** mà
+    lệch nó đúng một ký tự - hoặc lệch một ký tự với **từ đầu** của nó, để `SELNE VALKRYN` về
+    được `SELENE` mà không cần biết `VALKRYN` là họ bịa.
+
+    Người thắng là tên xuất hiện **nhiều nhất trong nguồn**; `counts` chỉ phá hoà - số câu thoại
+    là đúng thứ đã bị vòng phản hồi làm nhiễm, nên nó không được quyết. Không bao giờ trỏ một
+    tên có mặt về đâu cả: cuốn sách nói nó tồn tại thì nó tồn tại.
+    """
+    if not folded_source:
+        return {}
+    counted = {name: source_occurrences(name, folded_source) for name in names}
+    present = [name for name, hits in counted.items() if hits > 0]
+    if not present:
+        return {}
+    counts = counts or {}
+    redirected: dict[str, str] = {}
+    for name, hits in counted.items():
+        if hits:
+            continue
+        folded_name = fold_for_source_search(name).strip()
+        words = folded_name.split()
+        first_word = words[0] if words else ""
+        candidates = [
+            other
+            for other in present
+            if _within_one_edit(folded_name, fold_for_source_search(other).strip())
+            or (
+                first_word
+                and _within_one_edit(first_word, fold_for_source_search(other).strip())
+            )
+        ]
+        if not candidates:
+            continue
+        redirected[name] = max(
+            candidates,
+            key=lambda other: (counted[other], int(counts.get(other, 0)), other),
+        )
+    return redirected
+
+
 def _canonicalize_named_speakers(
     db: ProjectDB,
     log: Callable[[str], None],
@@ -266,6 +368,21 @@ def _canonicalize_named_speakers(
     # theo thứ tự nào cũng được - hai lớp lỗi độc lập thì hai bản vá phải độc lập.
     for loser_key, winner in merge_stray_surnames(representatives, cleaned_counts).items():
         representatives[loser_key] = winner
+
+    # Pass cuối trong ba pass nhận dạng, và cố ý cuối: hai pass trên có thể đã trỏ một key về
+    # `SELNE`, và pass này trỏ **giá trị** `SELNE` sang `SELENE`, nên nó dọn cả những key vừa
+    # được trỏ tới - không cần đi vòng nào để nối hai luật lại.
+    source_folded = fold_to_source_spelling(
+        sorted(set(representatives.values())),
+        _folded_source_text(db),
+        cleaned_counts,
+    )
+    if source_folded:
+        for key, name in list(representatives.items()):
+            if name in source_folded:
+                representatives[key] = source_folded[name]
+        for loser, winner in sorted(source_folded.items()):
+            log(f"  Tên {loser} không có trong sách; đọc thành {winner}.")
 
     aliases_by_target: dict[str, set[str]] = defaultdict(set)
     rewritten_segments = 0
@@ -542,7 +659,12 @@ class PresetAllocator:
         # trống không"; hai cái này trả lời câu hỏi kế tiếp, chỉ đặt ra khi không còn bậc trống:
         # "dùng chung với ai thì ít hại nhất". Người nghe nghe từng chương một, nên hại đo bằng
         # số chương hai người cùng có mặt.
-        self.holders: dict[str, dict[float, str]] = {}
+        # Bậc -> **mọi** người đang giữ nó, không chỉ người đầu tiên. Bản đầu là
+        # `dict[float, str]` ghi bằng `setdefault`, và lô đúc lại của lô 3 trả giá: sau khi
+        # KANG vào bậc 1,00 của Thanh Bình, `holders[1.0]` vẫn là VIKTOR, nên NPC kế tiếp đọc
+        # bậc ấy thành "người lạ đang giữ" và xếp vào đúng chỗ vừa bị chiếm - trong khi KANG,
+        # kẻ đang ở cùng chương với nó, vô hình.
+        self.holders: dict[str, dict[float, set[str]]] = {}
         self.chapters_of: dict[str, set[int]] = {}
 
     def note_chapters(self, who: str, chapters: set[int]) -> None:
@@ -682,7 +804,7 @@ class PresetAllocator:
         step = round(float(formant_ratio), 3)
         self.taken_variants.setdefault(name, set()).add(step)
         if who:
-            self.holders.setdefault(name, {}).setdefault(step, str(who))
+            self.holders.setdefault(name, {}).setdefault(step, set()).add(str(who))
         return selected, formant_ratio, age_pitch_semitones(age, gender, name)
 
     def _first_free_variant(
@@ -717,12 +839,21 @@ class PresetAllocator:
         holders = self.holders.get(preset_name, {})
         if mine is None or not holders:
             return variants[self.variant_usage[preset_name] % len(variants)]
+        def shared_chapters(ratio: float) -> int:
+            """Bao nhiêu chương của tôi có **một người nào đó** đang giữ bậc này cũng có mặt.
+
+            Hợp của mọi người giữ bậc, không phải người đầu tiên: một bậc đã bị dùng chung thì
+            người thứ ba phải thấy cả hai người kia. Đo trên lô đúc lại của lô 3 - THẰNG ĐIÊN
+            xếp vào đúng bậc KANG vừa chiếm vì bậc ấy vẫn khai tên VIKTOR.
+            """
+            occupied: set[int] = set()
+            for holder in holders.get(round(ratio, 3), set()):
+                occupied |= self.chapters_of.get(holder, set())
+            return len(mine & occupied)
+
         ranked = sorted(
             enumerate(variants),
-            key=lambda pair: (
-                len(mine & self.chapters_of.get(holders.get(round(pair[1], 3), ""), set())),
-                pair[0],
-            ),
+            key=lambda pair: (shared_chapters(pair[1]), pair[0]),
         )
         return ranked[0][1]
 
@@ -762,7 +893,7 @@ class PresetAllocator:
             step = round(float(formant_ratio), 3)
             self.taken_variants.setdefault(name, set()).add(step)
             if who:
-                self.holders.setdefault(name, {}).setdefault(step, str(who))
+                self.holders.setdefault(name, {}).setdefault(step, set()).add(str(who))
 
 
 def _pinned_profile_id(

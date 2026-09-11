@@ -40,7 +40,7 @@ def test_a_forced_reuse_picks_someone_from_another_chapter() -> None:
 
     step = allocator._first_free_variant(name, variants, who="NEWCOMER")
 
-    assert allocator.holders[name][round(step, 3)] == stranger, (
+    assert allocator.holders[name][round(step, 3)] == {stranger}, (
         "phải rơi vào bậc của người duy nhất không cùng chương"
     )
     assert not (allocator.chapters_of["NEWCOMER"] & stranger_chapters)
@@ -60,7 +60,7 @@ def test_the_real_lo03_shape_no_longer_lands_on_a_scene_partner() -> None:
 
     step = allocator._first_free_variant(name, variants, who="KANG")
 
-    assert allocator.holders[name][round(step, 3)] != samael
+    assert samael not in allocator.holders[name][round(step, 3)]
 
 
 def test_a_silent_pinned_character_is_the_ideal_partner() -> None:
@@ -77,7 +77,7 @@ def test_a_silent_pinned_character_is_the_ideal_partner() -> None:
 
     step = allocator._first_free_variant(name, variants, who="NEWCOMER")
 
-    assert allocator.holders[name][round(step, 3)] == quiet
+    assert allocator.holders[name][round(step, 3)] == {quiet}
 
 
 def test_without_a_name_it_wraps_exactly_as_before() -> None:
