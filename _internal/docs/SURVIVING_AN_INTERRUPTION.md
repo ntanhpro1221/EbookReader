@@ -409,3 +409,19 @@ chúng thành ranh giới thứ hai; xem `ParentProcessId` để phân biệt.
 Giết cả hai rồi thả lại đúng một cái. Giết `boundary.sh` **không** ảnh hưởng lô đang chạy: lô là
 một tiến trình `ebook_reader.cli run` riêng, và nhịp tim của nó vẫn 3,8 giây sau khi giết ba
 tiến trình bash (đã kiểm, không đoán).
+
+## Đừng `git add -A` khi một ranh giới tự chạy đang bay (2026-09-11, 07:30)
+
+Commit `7e5e4bd` mang thông điệp về chuyện tám người một bậc giọng, nhưng nội dung của nó gồm
+**cả ba bản vá** mà `boundary.sh` vừa áp ở bước 1: `audio_io.py`, `character_registry.py`, bốn
+file test mới, và việc rút hàng chờ. Lý do: tôi chạy `git add -A .` đúng lúc bước 1 vừa ghi xong
+và bước 2 chưa commit.
+
+Hậu quả **không** phải lỗi chức năng — bản vá đã áp, hàng chờ rỗng, cây sạch, và bước 2 của
+ranh giới chỉ thấy "không có gì để commit" rồi đi tiếp. Hậu quả là **hồ sơ sai**: người đọc
+`git log` sau này sẽ thấy ba bản vá vào cây dưới một commit nói về chuyện khác, và thông điệp
+commit mà tôi viết cho chúng — với lý do, số đo và dự đoán — thì không tồn tại.
+
+Không sửa lịch sử vì ranh giới đang chạy bảy tiếng nữa và `git add -A` của nó có thể đụng index
+giữa lúc amend. Luật từ giờ, và nó rẻ: khi một ranh giới đang bay, **stage từng đường dẫn cụ
+thể** (`git add docs/X.md`), đừng bao giờ `-A`. Cây làm việc không phải của riêng ai lúc ấy.
