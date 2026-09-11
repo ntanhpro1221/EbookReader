@@ -1708,3 +1708,24 @@ cách nào, và lấy cách ngắn hơn thì đếm thiếu chỉ giữ cờ, đ
 tiền). Nếu một chương vẫn mất vì nhịp ở câu có số dài, nhìn `_digit_run_spoken`: cận dưới có thể
 vẫn thấp hơn cách VieNeu đọc thật — lúc ấy đo bằng `try_a_pronunciation.py` với "123456" và
 "2024" rồi thay cận dưới bằng cách đọc đo được.
+
+## Một người một giọng QUA CÁC CHƯƠNG: chế độ `--across` cho ranh giới (2026-09-11, 23:35 — chưa làm)
+
+`one_person_one_voice.py` đã có phần "qua các chương" nhưng chỉ in; `boundary.sh --recast auto`
+chỉ hỏi `voice_pool_pressure` (hai người chung giọng **trong cùng chương**). Câu ngược lại — một
+người mang hai giọng ở hai chương — phải tự tay đọc rồi gõ `B:NNN`, như đã làm cho chín chương
+của NGƯỜI TRẢ LỞI / THỦ LÃNH đêm 2026-09-11.
+
+**Đề xuất:** `one_person_one_voice.py --across --min-chapters N` in ra danh sách `B:NNN` của những
+chương mang giọng **thiểu số** của một người có ≥ N chương (mặc định N = 5, để không đúc lại vì
+một cái tên hai chương), tra lô của chương từ manifest; `boundary.sh --recast auto` gộp thêm danh
+sách ấy. Luật chọn phía nào đúc lại: phía **ít chương hơn** đúc lại theo phía nhiều hơn, trừ khi
+phía nhiều hơn là giọng cũ của một lớp lỗi đã biết (như `NGUOI TRA LOI`) — khi ấy chính bản gộp
+tên mới là phía đúng. Ghi cả hai con số vào log để người sau kiểm.
+
+**Còn mở, có bằng chứng:** KANG f100 (8 chương: 065, 071, 092, 096, 107, 109, …) vs f093 (5: 066,
+067, 087, 090, 091); hai lần đúc lại 090/091 mang f093 và lô 5 gieo từ 091. Đo lại sau lô 5.
+Mười tên 1–3 chương (THALIA 3 giọng, SAMAELE 3, WILLEM, IVAN, ROB, NOAH, CHA, VIKTOR, ĐẠI TƯ TẾ):
+mỗi tên một quyết định nhỏ, tổng ~12 chương-GPU. Sổ `character_exposure` của lô 5 là bản cũ 21
+tên (sửa đường ghi sổ sau khi lô 5 đã khởi động) — hạng "ai giữ giọng khi trùng" trong lô 5 lệch;
+lô 6 sẽ có sổ đúng vì launcher ghi vào phần tử cuối chuỗi.

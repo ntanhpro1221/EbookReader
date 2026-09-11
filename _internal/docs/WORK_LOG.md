@@ -1215,3 +1215,38 @@ Ollama "Read timed out" ngay khi hạn chót tính theo giờ tường nhảy qu
 Cùng nhật ký ấy còn cho thấy lý do lô 5 chậm lại vài phút quanh "18:49–18:51": governor báo
 `yield_heavy — foreground CPU 102%` — bộ test và ffmpeg của tôi chạy dưới cửa sổ đang có focus,
 nên bị coi là việc tiền cảnh và lô nhường máy cho chúng (`THE_MACHINE_IS_SHARED.md`).
+
+## 2026-09-11, 23:27 (giờ thật) — thả ranh giới lô 5 → 6
+
+Bộ test đầy đủ xanh trên cây tạm mang cả hai bản vá; commit 3288b1e; cây sạch. Thả
+`bash scripts/boundary.sh 5 --recast auto 4:106` — chờ bước 0 cho lô 5 xong (1.237/3.720 đoạn phân
+tích lúc 23:22, ~15 đoạn/phút → phân tích xong ~02:10, rồi tổng hợp và phiên nhiều giờ). Bước 1 áp
+hai bản vá và chạy bộ test trên cây thật; 4b đúc lại 106 dưới mã mới; 6b đề cử lại 452 đoạn của
+102 chương đã lên sách; 7 ghép sách. Đếm tiến trình: một ranh giới là HAI bash (lớp bọc của harness
++ script) — nhịp tim đếm dòng lệnh `bash.exe" scripts/boundary.sh`, không đếm lớp bọc.
+
+## 2026-09-11, 23:33 (giờ thật) — thả lại ranh giới với chín chương di sản của lớp rơi dấu
+
+Trong lúc chờ lô 5, đọc phần "qua các chương" của `one_person_one_voice.py`: **12 người mang hơn
+một giọng qua cả sách**. Hai cái tên đứng đầu là hai vai nói nhiều nhất cuốn sách:
+
+    NGƯỜI TRẢ LỜI   90 chương doan_trang_f100 · 6 chương ngoc_linh_f108 (031 043 053 055 081 089) · 1 chương f115 (056)
+    THỦ LÃNH        83 chương thanh_binh_f100_p-07 · 7 chương thanh_binh_f090_p-04 (031 043 053 055 072 080 081)
+
+Truy từng chương: giọng thứ hai luôn nằm ở dòng `characters` viết **rơi dấu** — `NGUOI TRA LOI`,
+`THU LÃNH` — trong những project đúc trước `patch_dropped_marks_are_the_same_name` (ranh giới
+3 → 4): lô 2, các lần vá lô 2 (`lo02v_031`, `lo02r_056`), lô 3. Cùng lớp lỗi đã đo 21 chương
+"một người hai giọng trong cùng chương"; đây là mặt còn lại của nó — trong mỗi chương ấy chỉ có
+một giọng, nhưng là giọng khác 83–90 chương kia. Người nghe mất hai nhân vật xuyên suốt ở chín
+chương. Mã hiện tại gộp tên nên đúc lại là hết: cast lại ports `NGƯỜI TRẢ LỜI` → doan_trang_f100.
+
+Ranh giới đang chờ ở bước 0, chưa làm gì, nên dừng nó (taskkill ba tiến trình bash) và thả lại
+với `--recast auto 2:031 2:043 2:053 2:055 2:056! 3:072 3:080 3:081 3:089 4:106` (056 cần `!` vì
+`lo02r_056` đã hoàn thành). Giá: ~10 chương × 25 phút GPU ở bước 4b, trước khi lô 6 khởi động.
+Thứ đổi lấy là hai vai chính của cả cuốn sách chỉ còn một giọng mỗi vai.
+
+Chưa động tới: KANG (8 chương f100, 5 chương f093 — hai bản đúc lại `lo03r_090/091` mang f093 và
+lô 5 gieo từ `lo03r_091`, nên lô 5 có thể thêm f093; quyết sau khi lô 5 xong, phía ít hơn sẽ
+đúc lại), và mười cái tên 1–3 chương. Sổ `character_exposure` trong lô 5 là bản cũ 21 tên
+(NGƯỞI TRẢ LỞI 320 thay vì 955, KANG không có) — KANG đụng giọng trong lô 5 sẽ là người nhường.
+Không sửa DB của lô đang bay; ghi để kiểm sau. Việc dài hơi ghi ở OPTIMISATION_QUEUE.
