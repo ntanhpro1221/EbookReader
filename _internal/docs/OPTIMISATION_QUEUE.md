@@ -1599,3 +1599,18 @@ bằng chứng "cùng đầu vào, quyết định khác" mà tài liệu này �
 Và trên đường **đúc lại** (10:26), không chỉ đường vá: `lo04r_097` — NGƯỜI TRẢ LỜI 38 câu, một giọng
 `f100`, 0 tên gạch dưới; `lo04r_104b` — 11 câu, một giọng `f100`, 0 tên gạch dưới (sáng nay 104
 là 10 câu `f115` + 1 câu `f100`). Hai đường gieo, cùng kết quả.
+
+### Đúc lại cho "một người hai giọng" — bằng chứng trên chương 060 (12:30)
+
+Chương 060 là ca đọc rõ nhất hôm qua: THỦ LÃNH 7 câu `f090_p-04` + 5 câu `f100_p-07`, NGƯỜI TRẢ
+LỜI 7 câu `ngoc_linh_f108` + 2 câu `doan_trang_f100`. Đúc lại sáng nay (gieo từ cuối chuỗi, sau
+bản vá rơi dấu và gạch dưới):
+
+```
+lo03r_060   THỦ LÃNH        8 câu   thanh_binh_f100_p-07    (giọng của 55 chương — đúng bản trội)
+            NGƯỜI TRẢ LỜI   5 câu   doan_trang_f100         (giọng của 69 chương — đúng bản trội)
+            one_person_one_voice: "Không chương nào có một người hai giọng trong cùng chương."
+```
+
+Một giọng mỗi người, **và là giọng đa số của cả sách** — không phải giọng thiểu số như đã lo
+trước khi kiểm `port_casting`. 061 cùng kết quả. Mười lăm chương còn lại đang đi cùng đường.
