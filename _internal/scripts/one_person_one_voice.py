@@ -90,17 +90,30 @@ def shipped_voices(book: Path = BOOK, versions: Path = VERSIONS) -> list[tuple[s
     except (OSError, ValueError):
         return []
     entries = payload if isinstance(payload, list) else payload.get("chapters", [])
-    wanted = {str(item["title"]): str(item["version"]) for item in entries if item.get("title")}
+    # Đúng PROJECT manifest ghi, không phải "mọi project trong thư mục phiên bản". Một thư mục
+    # có thể chứa hai bản của cùng chương - `lo01r_007` bị dừng dở và `lo01r_007b` lên sách - và
+    # bản đầu của hàm này đọc cả hai, cộng 12 câu `f115` của bản bỏ đi vào chương đã sạch, rồi
+    # báo "một người hai giọng" cho đúng hai chương vừa được đúc lại để xoá lỗi ấy (đo 17:41
+    # ngày 2026-09-11). Manifest có cột `project` từ khi `assemble_book` ghi gốc gác; dùng nó.
+    wanted: dict[str, tuple[str, str]] = {}
+    for item in entries:
+        title = str(item.get("title") or "")
+        if title:
+            wanted[title] = (str(item.get("version") or ""), str(item.get("project") or ""))
     found: list[tuple[str, str, str, int]] = []
-    for version in sorted(set(wanted.values())):
+    for version, project_name in sorted(set(wanted.values())):
         folder = versions / version
         if not folder.is_dir():
             continue
-        for project in sorted(folder.iterdir()):
+        candidates = (
+            [folder / project_name] if project_name and (folder / project_name).is_dir()
+            else sorted(p for p in folder.iterdir() if (p / "project.sqlite3").is_file())
+        )
+        for project in candidates:
             if not (project / "project.sqlite3").is_file():
                 continue
             for chapter, name, voice_key, lines in read_voices(project):
-                if wanted.get(chapter) == version:
+                if wanted.get(chapter) == (version, project_name if project_name else wanted[chapter][1]):
                     found.append((chapter, name, voice_key, lines))
     return found
 

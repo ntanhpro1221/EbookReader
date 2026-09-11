@@ -142,6 +142,26 @@ def test_the_book_is_read_through_the_manifest(tmp_path: Path) -> None:
     assert rows == [("062", "IGOR", "preset_new_f100_p+00", 3)]
 
 
+def test_a_superseded_sibling_in_the_same_folder_is_not_counted(tmp_path: Path) -> None:
+    """`lo01r_007` (bị dừng dở, còn 12 câu giọng lệch) và `lo01r_007b` (lên sách) nằm cùng thư
+    mục. Đọc cả hai là cộng bản bỏ đi vào chương sạch - đúng lỗi đo 17:41 ngày 2026-09-11."""
+    versions = tmp_path / "_versions"
+    _project(versions / "v0.2.0-lo01r", "lo01r_007_x", [("007", "NGƯỜI TRẢ LỜI", "preset_f115", 12)])
+    _project(versions / "v0.2.0-lo01r", "lo01r_007b_x", [("007", "NGƯỜI TRẢ LỜI", "preset_f100", 15)])
+    book = tmp_path / "_book"
+    book.mkdir()
+    (book / "manifest.json").write_text(
+        json.dumps({"chapters": [{"title": "007", "version": "v0.2.0-lo01r", "project": "lo01r_007b_x"}]}),
+        encoding="utf-8",
+    )
+
+    rows = shipped_voices(book=book, versions=versions)
+
+    assert rows == [("007", "NGƯỜI TRẢ LỜI", "preset_f100", 15)]
+    inside, _across = split_voices(rows)
+    assert inside == {}, "bản bị bỏ không được làm chương sạch đọc thành hai giọng"
+
+
 def test_a_missing_book_reads_as_nothing(tmp_path: Path) -> None:
     assert shipped_voices(book=tmp_path / "khong-co", versions=tmp_path) == []
     assert read_voices(tmp_path / "khong-co") == []

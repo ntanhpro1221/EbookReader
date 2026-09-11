@@ -89,7 +89,11 @@ echo "project: $PROJECT"
 # thu tu tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
 CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --chain)"
 # So phai nam o project GIEO (port_casting doc tu do); gieo tu noi khac thi noi no vao cuoi.
-case " $CHAIN " in *" $PREV "*) ;; *) CHAIN="$CHAIN $PREV" ;; esac
+# PREV phai la phan tu CUOI: backfill ghi so vao chain[-1]. "Them neu thieu" khong du - khi PREV
+# la mot project duc lai cua lo TRUOC (lo 5 gieo tu lo03r_091) thi no da nam GIUA chuoi, so ghi
+# vao lo04r_104b, va port_casting doc tu lo03r_091 chi thay ban chep cu 21 ten (do 17:40
+# 2026-09-11: KANG=None, NGƯỜI TRẢ LỜI=320 thay vi 955). Bo no ra roi noi lai vao cuoi.
+CHAIN="$(printf '%s\n' $CHAIN | grep -vxF "$PREV" | tr '\n' ' ') $PREV"
 echo
 echo "=== so cong don qua chuoi lo ==="
 # shellcheck disable=SC2086
