@@ -1703,6 +1703,22 @@ cách nào, và lấy cách ngắn hơn thì đếm thiếu chỉ giữ cờ, đ
 106; bản chậm thật vẫn bị bắt; ASR giữ nguyên); bài cũ ghim "đếm thiếu chữ số có chủ ý" được
 đổi tên và đổi số. 187 bài liên quan xanh trên cây tạm có cả hai bản vá.
 
+**Đo trước khi tin, trên dữ liệu thật (01:30 ngày 2026-09-12).** Nở chữ số làm số ký tự TĂNG, và
+cận trên của thước nhịp (24,5 kt/s cho `normal`) **không** xét âm tiết - nên bản vá này mở ra một
+cách trượt mới: một đoạn dày chữ số đọc nhanh có thể vượt trần. Đo bằng chính
+`chars_per_second` đã lưu (suy ra `speech_seconds = ký_tự_cũ / cps`, đúng công thức
+`validate_audio_array` dùng) trên mọi đoạn có chữ số của các project lô, với dải nhịp đọc từ
+settings của từng project:
+
+    321 đoạn có chữ số và có tín hiệu đã lưu
+    217 trong đó đổi số đếm sau bản vá
+      0 bị gắn cờ MỚI   ·   0 được tha thêm
+    2,1 kt/s là biên lùi xa trần nhỏ nhất (22,4 so với trần 24,5, `normal`)
+
+Không có hồi quy trên dữ liệu đã có. Nhưng 2,1 kt/s là biên mỏng, nên **việc cần theo**: nếu một
+lô về sau mất chương vì `pace` ở một câu dày chữ số, đọc lại con số này trước khi nghi bản vá nào
+khác — cách chữa lúc ấy là cho cận trên xét cả âm tiết như cận dưới đã làm, không phải nới trần.
+
 **Dự đoán ghi trước:** ranh giới 5 → 6 với `--recast auto 4:106` đúc lại 106 và đoạn ấy qua ở lần
 đầu (không còn `SEGMENT_FAILED` vì nhịp); lô 6 không mất chương nào vì số ≥ 1000 (năm tháng, số
 tiền). Nếu một chương vẫn mất vì nhịp ở câu có số dài, nhìn `_digit_run_spoken`: cận dưới có thể

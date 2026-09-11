@@ -1307,3 +1307,10 @@ chỗ hở:
 Bài thử kiểm bất biến trên cả project thật sau khi đề cử lại (mọi đoạn: đúng một bản `promoted`,
 và `segment_candidate_resume_plan` dựng được cho từng đoạn), và kiểm lớp bọc bằng cách cho hàm tìm
 ném thật. Ba bản vá áp theo thứ tự trên một cây sạch: ok, 8 bài của hai file mới xanh.
+
+Rồi tự hỏi bản vá số có mở ra cách trượt nào mới không: nở chữ số làm ký tự TĂNG, mà cận trên của
+thước nhịp không xét âm tiết — một câu dày chữ số đọc nhanh có thể vượt trần 24,5 kt/s. Đo trên
+321 đoạn có chữ số của các project lô, bằng chính `chars_per_second` đã lưu và dải nhịp trong
+settings của từng project: 217 đoạn đổi số đếm, **0 bị gắn cờ mới, 0 được tha thêm**, biên lùi xa
+trần nhỏ nhất là 2,1 kt/s. Không hồi quy, nhưng biên mỏng — ghi vào hàng chờ kèm cách chữa nếu
+ngày nào nó bật: cho cận trên xét cả âm tiết, đừng nới trần.
