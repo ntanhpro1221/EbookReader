@@ -446,3 +446,29 @@ trước khi tin: 097/104/062 → bỏ qua, 106/007/084/054 → chạy.
 Cũng nối lại chuỗi gieo qua các bước: `SEED` chạy từ project lô → lô vá → đúc lại (kể cả của lô
 khác) → lô kế tiếp (`launch_batch.sh --seed-from`). Bản trước gieo lô 5 từ `seed_chain 4 --seed`,
 tức bỏ qua mọi giọng vừa cấp ở 4b — một người hai giọng, lần nữa, ở tầng khác.
+
+## Lần thứ hai cho một chương mở lại project cũ, và `run` từ chối trong im lặng (2026-09-11, 09:15)
+
+Tên project vá / đúc lại là **địa chỉ theo nội dung** của (tiêu đề, nguồn): cùng chương, cùng
+tiêu đề → cùng thư mục. Lần thứ hai cho một chương — 106 sau khi lần đầu hỏng, 007 sau khi bị
+dừng dở, 084 hỏng ở lô 3 — vì thế **mở lại** project cũ thay vì tạo mới; rồi `run` từ chối resume
+vì hash mã đã đổi sau bản vá; rồi `launch_repair.sh` đổ JSON ấy vào `/dev/null`; rồi vòng đợi
+thấy lease chết và chương không "chưa xong" nên coi là xong. Log ghi `=== xong ca lo va ===` sau
+hai phút, không có dòng `project:` nào. Ba tầng, mỗi tầng hợp lý một mình, cộng lại thành một
+lần chạy không làm gì mà báo là xong.
+
+Sửa ở hai tầng: tiêu đề thêm một chữ cái cho tới khi chưa có project nào mang nó
+(`lo04v_106` → `lo04v_106b`), và `run` trả `"ok": false` thì in lỗi ra rồi đi tiếp thay vì im.
+Kiểm cách rẻ nhất: sau mỗi `=== chuong NNN ===` phải có một dòng `project:`; không có là không
+làm gì.
+
+**Sửa một kết luận sai của tôi cùng buổi sáng:** tôi giết `launch_repair.sh 2` lúc nó đang đợi
+chương 054 và viết rằng "lần này giết cả lượt chạy". Sai — `cli run` trả lời `Project đã có
+background supervisor: 33256` và nhịp tim 4 giây; bộ lọc tiến trình của tôi không khớp dòng lệnh
+của supervisor. Kết luận đúng vẫn là kết luận cũ: **giết shell không giết lượt chạy**, dù shell ấy
+là `launch_batch.sh` đã tách ra hay `launch_repair.sh` đang đợi. Đo bằng nhịp tim, đừng đo bằng
+danh sách tiến trình.
+
+Và hai cờ mới của `boundary.sh` sinh ra từ lần chạy lại này: `4:097!` **ép** đúc lại chương đã
+có project hoàn thành (hoàn thành ≠ đúng — 097/104 xong trước bản vá gạch dưới và mang một người
+hai giọng), `--skip 106` để một chương chưa có bản vá không bị vá lại vô ích ở mỗi lần thả.
