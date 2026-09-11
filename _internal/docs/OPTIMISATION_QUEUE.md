@@ -1614,3 +1614,38 @@ lo03r_060   THỦ LÃNH        8 câu   thanh_binh_f100_p-07    (giọng của 5
 
 Một giọng mỗi người, **và là giọng đa số của cả sách** — không phải giọng thiểu số như đã lo
 trước khi kiểm `port_casting`. 061 cùng kết quả. Mười lăm chương còn lại đang đi cùng đường.
+
+## Đặc tả bản vá: giữ cách đọc ghim khi chỉ neo tên phàn nàn (2026-09-11, 17:05 — chưa viết mã)
+
+**Vì sao đường chấp nhận hiện có không cứu được.** `_grant_machine_acceptances` chạy ở cuối
+chương, *sau* `_verify_chapter_audio` và các vòng sửa (ràng buộc số 2 của nó: "chỉ sau khi hết
+ngân sách sửa"). Nhưng vòng sửa ASR, khi bản đọc-ghim trượt neo tên, đã sinh và đề cử bản
+đọc-theo-chữ-viết **trước** khi tới lượt chấp nhận — lúc ấy đoạn không còn gì "outstanding".
+Ràng buộc đúng cho trần khung và ASR-không-phán-xử-được lại thành **sai** cho neo tên: neo tên
+không phải "vòng sửa còn cứu được", vì cứu bằng cách đổi cách đọc là đổi thứ người nghe nghe.
+Đo: 348/348 bản đọc-ghim thua chỉ vì `ASR_LOCKED_NAME_ANCHOR_MISMATCH`.
+
+**Bản vá (file khoá — `pipeline.py` + `database.py`), áp ở ranh giới lô 5 → 6:**
+
+1. Trong vòng sửa ASR, khi ứng viên `locked_spoken_v1` có **cả hai** đường phiên hỏng và hợp mã
+   lỗi ⊆ {`ASR_LOCKED_NAME_ANCHOR_MISMATCH`, `ASR_LOCKED_NAME_ANCHOR_REVIEW`}: **không** yêu cầu
+   biến thể đọc-theo-chữ-viết; đề cử ứng viên đọc-ghim kèm phán quyết máy cho mã ấy.
+2. Tầng database: một đường đề cử có bảo vệ, theo mẫu `_require_candidate_beats_a_cut_off_
+   incumbent` — bốn điều kiện kiểm từ chính dữ liệu, không từ lời khai người gọi:
+   (a) hai check ASR tồn tại và mã lỗi ⊆ họ neo tên; (b) `pronunciation_delivery_variant` =
+   `locked_spoken_v1`; (c) `signal_json` không có `pace_outlier` và không chạm trần khung;
+   (d) checksum WAV khớp file trên đĩa. Ghi vào `machine_audio_acceptances` với lý do nêu rõ
+   "neo tên là bài chính tả; giữ cách đọc ghim để nhất quán toàn sách".
+3. Đường ống chỉ *đề nghị*; database quyết. Không nới `dual_passed` ở chỗ nào khác.
+
+**Lượt đề cử lại 348 đoạn đã lên sách (không cần GPU):** `scripts/keep_the_locked_reading.py
+<project>` — với mỗi bản đọc-theo-chữ-viết đang được đề cử mà có anh em đọc-ghim đạt (a)–(d):
+đề cử lại anh em ấy, rồi ghép lại chương. Chỗ khó, ghi trước để không giả vờ dễ:
+`promote_segment_candidate` so checksum ứng viên với **mốc tín hiệu bền** của đoạn, mà mốc ấy
+giờ thuộc về bản đọc-theo-chữ-viết; đường mới phải đặt lại mốc từ `signal_json` của ứng viên
+đọc-ghim một cách có kiểm chứng (checksum file). Thử trên bản sao của project thật (084b) trước.
+
+**Dự đoán ghi trước:** sau bản vá, tỉ lệ ứng viên đọc-theo-chữ-viết được đề cử trong lô 6 phải
+từ ~48% về **~0** cho các ca chỉ-neo-tên; `python scripts/one_person_one_voice.py` không đổi
+(đây là chuyện cách đọc, không phải giọng); và số neo tên `matched=False` không đổi — vì cổng
+vẫn nói điều nó thấy, chỉ quyết định là khác.
