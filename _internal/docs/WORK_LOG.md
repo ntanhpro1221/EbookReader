@@ -1357,3 +1357,23 @@ nhớ: (1) dùng `strip().upper()` thay `_character_key` — chính docstring c�
 trong im lặng; (2) viết `
 ` trong heredoc bash của tool và bị ăn dấu gạch chéo, đúng dòng đã ghi
 trong memory. Cách chữa cho (2) vẫn là: script sửa file thì viết bằng Write tool.
+
+## 2026-09-12, 01:50 — KANG: một giả thuyết đẹp, và dữ liệu bác nó
+
+Lô 5 không mang pin nào cho KANG (`locked_voice_key` rỗng), nên casting sắp cấp cho anh ta một
+giọng MỚI — giọng thứ ba trên cả sách. Truy ra: ở project gieo `lo03r_091`, KANG dùng
+`thanh_binh_f093_p-04` **chung với SAMAEL**, và luật va chạm của `port_casting` bỏ pin của người
+ít lời hơn. Giả thuyết đầu của tôi: lỗi là do sổ cộng dồn của lô 5 bị cũ (21 tên, không có KANG),
+nên KANG vào cuộc với 0 câu và thua SAMAEL 10-0 — tức chính cái sổ sinh ra để chặn loại lỗi này
+lại gây ra nó.
+
+Dựng lại sổ đúng trên 46 project của chuỗi (chỉ đọc, không ghi vào lô đang bay): **62 nhân vật,
+117 chương**, và con số quyết định là SAMAEL **152** câu so với KANG **41**. SAMAEL thắng, và
+thắng đúng. Giả thuyết sai; sổ cũ không đổi kết quả này. Ghi lại vì một giả thuyết đẹp bị dữ liệu
+bác vẫn là kết quả, và vì lần sau tôi sẽ lại nghĩ ra đúng giả thuyết ấy.
+
+Điều còn lại đúng: `f093_p-04` là giọng của SAMAEL, nên 5 chương KANG mang f093 (066, 067, 087,
+090, 091) là dấu vết của lớp va chạm cũ (tám người trên một bậc, đã vá), và giọng đúng của KANG là
+`f100_p-04` (8 chương). Quyết định sau khi lô 5 khoá dàn giọng: đúc lại 5 chương ấy về f100, trừ
+khi lô 5 cấp cho KANG một giọng thứ ba và số chương của nó lớn hơn 8. Sổ của lô 6 sẽ đủ 62 tên
+(launcher chạy backfill với luật gieo-đứng-cuối đã sửa).
