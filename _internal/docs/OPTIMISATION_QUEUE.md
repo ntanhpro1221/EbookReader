@@ -1595,3 +1595,7 @@ lo04v_097b  (09:47, sau bản vá)     NGƯỜI TRẢ LỜI 37 câu @doan_trang_
 Cùng chương, cùng nguồn, cùng cách gieo; khác duy nhất là bản vá. Người ấy về **một** giọng, và
 là giọng ghim (`f100`, giọng của 69 chương trước đó), không phải giọng mới `f115`. Đây là dạng
 bằng chứng "cùng đầu vào, quyết định khác" mà tài liệu này đòi — không phải "chương xanh".
+
+Và trên đường **đúc lại** (10:26), không chỉ đường vá: `lo04r_097` — NGƯỜI TRẢ LỜI 38 câu, một giọng
+`f100`, 0 tên gạch dưới; `lo04r_104b` — 11 câu, một giọng `f100`, 0 tên gạch dưới (sáng nay 104
+là 10 câu `f115` + 1 câu `f100`). Hai đường gieo, cùng kết quả.
