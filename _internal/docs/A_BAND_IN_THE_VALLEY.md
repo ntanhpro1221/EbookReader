@@ -1,4 +1,10 @@
-# Một dải nhịp nằm đúng chỗ trũng, và một công cụ nói ngược
+# Một dải nhịp nằm đúng chỗ trũng — và lượt vá kế tiếp bác bỏ tôi
+
+> **Đọc mục cuối trước.** Tên tài liệu này là kết luận đầu tiên của tôi, và nó **sai**. Lượt vá
+> của bước 3 chạy xong 06:54 ngày 2026-09-12: đoạn ấy **qua ngay lần thử đầu**, 1,68 giây,
+> 21,28 kt/s. Công cụ của dự án nói "trong tầm với" và nó đúng; tôi nói "không tới được" và tôi
+> sai. Phần đo vẫn giữ nguyên giá trị, phần suy luận thì không — giữ cả hai ở đây vì cái sai này
+> dạy được nhiều hơn cái đúng.
 
 Chương 140 của lô 5 hỏng lúc 05:51 ngày 2026-09-12 vì **một** đoạn trong 196 đoạn — 195 đoạn kia
 `verified`. Đoạn ấy chưa từng tới cổng ASR: nó chết ở cổng **nhịp**, trong vòng thử lại TTS.
@@ -75,3 +81,44 @@ thời lượng của câu ấy vẫn hai cực như mười lần vừa rồi t
 25 phút GPU. Sáng ra kiểm đúng chỗ này: `runtime/boundary_05.log` bước 3, và
 `pace_retry_reachability.py` trên project `lo05v_140`. Nếu nó trượt, đây là ca thật để áp bản vá
 tempo ở ranh giới 6 → 7 — và lúc ấy đã có một ca đo được thay vì một giả thuyết.
+
+## Kết luận đầu tiên của tôi sai, và đây là vì sao
+
+Bước 3 của ranh giới vá chương 140 thành project `lo05v_140_8c58fd5165`, xong lúc 06:54 — **26
+phút** kể từ lúc khởi động. Chương `completed`. Đoạn từng hỏng:
+
+    trước:  10 lần thử, 24.79 / 27.03 / 29.70 / 12.45 kt/s, không lần nào trong dải -> failed
+    sau :   qua ngay lần thử ĐẦU, 1.68 s, 21.28 kt/s, 6.21 âm tiết/giây -> verified
+
+Thứ đổi không phải hạt giống, mà là **phiếu diễn**: lượt vá **phân tích lại** chương, và đạo diễn
+cho `intensity = 0` thay vì `1` (emotion `neutral` và pace `normal` giữ nguyên). Cùng một câu,
+cùng một giọng, cường độ thấp hơn một bậc, và bản thu dài gấp **2,1 lần** bản nhanh nhất của lượt
+trước.
+
+Sai của tôi nằm ở một giả định tôi không nói ra: rằng "cùng văn bản, cùng giọng" thì phân bố thời
+lượng là cố định, nên mười mẫu của một lượt nói được về mọi lượt. Không phải: **một lượt vá thay
+cả phiếu diễn**, và phiếu diễn là một tham số của phân bố ấy. Mười mẫu của tôi mô tả đúng một
+lượt, không mô tả câu ấy.
+
+Và `pace_retry_reachability.py` — cái công cụ tôi vừa chê là "nói ngược" — nói **38,9% mỗi lần
+thử**. Lượt sau đạt ngay lần đầu. Lời chê vẫn còn đúng một nửa (bộ ước lượng thật sự khớp một
+phân bố liên tục vào dữ liệu rời rạc), nhưng **ca tôi dùng để chứng minh nó sai thì nó lại đúng**.
+Một bộ ước lượng lạc quan mà đúng thì tốt hơn một lý thuyết bi quan mà sai.
+
+## Cái gì còn lại sau khi trừ đi phần sai
+
+- **Đo được và vẫn đúng:** trong MỘT lượt, mười lần thử cho đúng bốn giá trị lặp lại, ba giá trị
+  nhanh cách nhau 80 ms. Phương sai trong một lượt nhỏ và rời rạc; đừng chờ nó tự bò vào dải.
+- **Đường cứu thật của ca này không phải tempo, mà là phân tích lại.** Nó đã có sẵn trong bước 3
+  của ranh giới, và nó chữa xong trong 26 phút mà không ai chạm vào.
+- **Bản vá tempo: hạ xuống "theo dõi", không phải "có ca rồi".** Tôi chưa có ca nào chứng minh
+  retry không tới được; ca duy nhất tôi tưởng là nó thì đã tự khỏi. Muốn áp tempo thì phải có một
+  đoạn trượt nhịp **qua ít nhất hai lượt vá** (tức hai phiếu diễn khác nhau). Chưa có.
+- **Bản sửa bộ ước lượng vẫn đáng làm**, nhưng vì lý do khác lý do tôi viết lúc đầu: nó nên nói
+  **"phương sai trong một lượt"** khác **"cơ hội qua sau khi phân tích lại"**, vì hai con số ấy
+  trả lời hai câu và chỉ con số thứ hai mới quyết định có nên vá lại chương hay không.
+
+Bài học chung, đắt hơn cả ba gạch đầu dòng trên: **tôi đặt tên tài liệu theo kết luận trước khi
+lượt chạy kế tiếp kịp nói.** `TWO_CHARACTERS_ONE_VOICE.md` từng làm đúng việc phải làm trong ca
+tương tự — giữ lại kết luận sai kèm lý do — nên tài liệu này giữ nguyên cái tên sai ấy, có cảnh
+báo ở đầu.

@@ -1973,6 +1973,16 @@ vì cờ chặn nào khác) và bản thu gần nhất chỉ trượt **cận tr
 rồi cho nó đi qua cổng nhịp một lần nữa. Chỉ một chiều (làm chậm), chỉ cho cận trên, và chỉ khi
 `split` đã từ chối — ba điều kiện kiểm được từ dữ liệu.
 
-**Vì sao chưa vá:** cả hai đều là thay đổi ở tầng quyết định xuất bản, và ranh giới đang chờ chạy
-một mình với ba bản vá đã chứng minh. Bước 3 của ranh giới sẽ vá lại chương 140; **dự đoán ghi
-trước: nó trượt tiếp**. Nếu trượt, đó là ca đo được để áp bản vá tempo ở ranh giới 6 → 7.
+**CẬP NHẬT 06:55 — dự đoán của tôi sai, và mục này hạ cấp.** Bước 3 vá chương 140 xong trong 26
+phút và đoạn ấy **qua ngay lần thử đầu**: 1,68 s, 21,28 kt/s. Thứ đổi là **phiếu diễn** —
+`intensity` từ 1 xuống 0 sau khi lượt vá phân tích lại chương — không phải hạt giống. Nên:
+
+- **Bản sửa (2) đường tempo: hạ xuống "theo dõi".** Chưa có ca nào chứng minh retry không tới
+  được; ca duy nhất tưởng là nó thì đã tự khỏi bằng đường có sẵn (phân tích lại ở bước 3). Điều
+  kiện để áp: một đoạn trượt nhịp qua **ít nhất hai lượt vá** với hai phiếu diễn khác nhau.
+- **Bản sửa (1) bộ ước lượng vẫn đáng làm, nhưng vì lý do khác:** nó nên tách **"phương sai trong
+  một lượt"** (mười lần thử cho bốn giá trị, cách nhau 80 ms — đo được và vẫn đúng) khỏi **"cơ hội
+  qua sau khi phân tích lại"** (thứ thật sự quyết định có nên vá lại chương). Con số 38,9% của nó
+  hoá ra lạc quan mà ĐÚNG cho câu thứ hai.
+
+Chi tiết và phần tự bác bỏ ở `docs/A_BAND_IN_THE_VALLEY.md`.
