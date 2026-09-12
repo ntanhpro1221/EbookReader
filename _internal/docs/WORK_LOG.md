@@ -1824,3 +1824,32 @@ NPC CON TRAI (cả hai nam, trẻ con) cùng `ngoc_linh_f107_p+02`. Sau:
 (`auto: chuong co hai nguoi mot giong cung chuong:186`) và tự sửa; không cần ai gõ số chương.
 
 4b đang chạy: 062 (ép, `lo03r_062b`) rồi 071 (ép); sau đó bước 6 khởi động lô 8.
+
+## 2026-09-13, 03:00–03:10 — ranh giới 7 → 8 xong; sách 193 chương, 0 va chạm cùng chương; và giới hạn của luật bỏ pin
+
+Ranh giới thoát mã 0 lúc 03:00: 062b (IVAN **giọng nam** `thanh_binh_f100_p-04`, 25 câu, 0 dùng chung),
+071b (KANG `thanh_binh_f108_p-04`, 0 dùng chung), lô 8 khởi động 02:59 (29 chương 193..221), 6b không
+còn gì, sách **193 chương** (000–192), 3,0 GB. Ranh giới 8 → 9 thả 03:02 với hàng rỗng và `--recast auto`.
+
+Kiểm trên sách mới:
+
+    một người hai giọng trong CÙNG chương          0
+    va chạm cùng chương trên 193 chương thắng       0   (071 và 186 đã sửa — lần đầu cả sách về 0)
+    giọng sai phái                                  1   NICAN, 062, 4 câu — xem dưới
+    assemble_book --verify                          0 lệch
+    người mang >1 giọng qua sách                    15  (REXERD 3 giọng / 15 chương; KANG 3 giọng / 15 chương)
+
+**NICAN, và giới hạn thật của luật bỏ-pin-trái-giới.** Luật ấy so preset với **giới người nghe đã
+ghim** (`locked_character_genders`, tức `cast --gender`), đúng như docstring: "trái với thứ NGƯỜI đã
+ghim". Chưa ai ghim giới cho NICAN, nên luật không có gì để so. Truy vết 57 project: lô 3 phân tích
+NICAN là **nữ** và cấp `ngoc_linh_f104`; pin ấy đi theo mọi lô; lô 7 phân tích thành `unknown`; 062b
+và lô 8 phân tích thành **nam**. Cái tên "Nican" làm LLM đoán mỗi lần một khác, và dùng giới-theo-phân-
+tích để bỏ pin sẽ cũng nhiễu y như thế. IVAN ở 062b có giọng nam **không phải nhờ luật này** mà vì
+chuỗi gieo lô 7 không còn mang pin nữ của anh ta. Luật chưa từng được kích trên dữ liệu thật.
+
+Kết luận: không vá. Nguồn chân lý cho giới là người nghe; nếu chủ sách biết Nican là ai thì
+`cast --character NICAN --gender male` (hoặc `female`) và pin sai sẽ bị bỏ đúng ở lô sau. 4 câu.
+
+**Mười lăm người mang nhiều hơn một giọng** (từ 11 lên 15 sau lô 7): người không có pin bị rút thăm
+lại mỗi lô. REXERD giờ 3 giọng trên 15 chương, KANG 3 giọng (thêm f108 ở 071b). Số liệu cho quyết
+định xếp-lại-pin của chủ sách đã ghi ở OPTIMISATION_QUEUE; mỗi lô trôi qua nó đắt thêm một chút.
