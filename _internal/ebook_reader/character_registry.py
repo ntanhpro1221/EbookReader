@@ -648,6 +648,27 @@ def _majority(rows: list[Any], column: str, default: str = "unknown") -> str:
     return ranked[0][0]
 
 
+def preset_gender_of_voice_key(voice_key: str) -> str | None:
+    """Phái của preset đứng sau một `voice_key`, hoặc None nếu không tra được.
+
+    `voice_key` là `preset_<slug>_f<formant>_p<pitch>`. So tiền tố DÀI trước, để một preset có
+    tên là tiền tố của preset khác không nhận nhầm. Cùng phép tra với
+    `scripts/voice_matches_the_person.py` - công cụ ấy báo đúng thứ luật này cấm.
+    """
+    key = str(voice_key)
+    key = key[len("preset_") :] if key.startswith("preset_") else key
+    for preset in sorted(VIENEU_PRESETS, key=lambda p: -len(_preset_slug(str(p["name"])))):
+        if key.startswith(_preset_slug(str(preset["name"]))):
+            return str(preset["gender"])
+    return None
+
+
+def _preset_slug(name: str) -> str:
+    plain = unicodedata.normalize("NFD", str(name))
+    plain = "".join(char for char in plain if not unicodedata.combining(char))
+    return "_".join(plain.replace("Đ", "D").replace("đ", "d").lower().split())
+
+
 def _preset_by_name(name: str) -> dict[str, str]:
     try:
         return preset_by_name(name)
@@ -1384,6 +1405,51 @@ def _characters_by_profile(
     return inverted
 
 
+def _drop_pins_that_contradict_a_person(
+    db: Any,
+    locked_voices: dict[str, str],
+    locked_genders: dict[str, str],
+    locked_ages: dict[str, str],
+    log: Any,
+) -> dict[str, str]:
+    """Bỏ giọng đã ghim khi nó trái với thứ NGƯỜI đã ghim. Trả về bản đã lọc.
+
+    Đây là chỗ duy nhất "nhất quán" phải nhường "đúng". `port_casting` mang `locked_voice_key`
+    đi theo danh tính để người nghe không mất nhân vật giữa các lô - đúng, và nó cũng mang
+    nguyên một lần đoán sai đi mãi: IVAN bị gọi là `child` một lần ở lô 3, được cấp giọng nữ
+    kéo cao, và mang nó sang mọi lô sau (17 câu ở chương 062).
+
+    MỘT luật, và là luật duy nhất dữ liệu chứng minh được: **preset phải đúng phái, trừ trẻ
+    con.** Trẻ con được đọc bằng preset nữ kéo cao dù là con trai (`AGE_TARGET_PITCH_HZ`), nên
+    ở đó lệch phái là đúng. Không bịa luật thứ hai kiểu "giọng trẻ con cho người lớn": nhìn
+    `voice_key` không phân biệt được preset nữ dành cho một đứa trẻ với preset nữ dành cho một
+    phụ nữ trưởng thành, và đoán chính là thứ đã tạo ra cả lớp lỗi này.
+    """
+    kept: dict[str, str] = {}
+    for key, voice_key in locked_voices.items():
+        gender = locked_genders.get(key)
+        age = locked_ages.get(key)
+        preset = preset_gender_of_voice_key(voice_key)
+        contradicts = bool(
+            gender and preset and preset != gender and (age or "") != "child"
+        )
+        if not contradicts:
+            kept[key] = voice_key
+            continue
+        log(
+            f"Bỏ giọng ghim của {key}: {voice_key} là preset {preset}, còn người nghe đã ghim"
+            f" {gender}" + (f"/{age}" if age else "") + " - cấp lại giọng."
+        )
+        db.event(
+            "warning",
+            "CASTING_PIN_CONTRADICTS_A_PERSON",
+            f"{key}: dropped ported voice {voice_key}",
+            {"character": key, "voice_key": voice_key, "preset_gender": preset,
+             "locked_gender": gender, "locked_age": age},
+        )
+    return kept
+
+
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
@@ -1411,7 +1477,11 @@ def build_registry_and_cast(
     voice_cfg = settings["voices"]
     minimum_main_mentions = int(voice_cfg["minimum_named_character_mentions"])
     locked_genders = db.locked_character_genders()
+    locked_ages = db.locked_character_ages()
     locked_voices = db.locked_character_voices()
+    locked_voices = _drop_pins_that_contradict_a_person(
+        db, locked_voices, locked_genders, locked_ages, log
+    )
     unresolved_genders = _validate_casting_inputs(
         rows, minimum_main_mentions, log, locked_genders
     )

@@ -23,7 +23,7 @@ from ebook_reader.database import (
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-REAL = Path("D:/Novels/Audiobooks/_versions/v0.2.0-lo03r/lo03r_084b_9455372a18")
+REAL = Path("D:/Novels/Audiobooks/_fixtures/lo03r_084b_pre6b")
 LOST_LINE_SUFFIX = "feeb9dd9dda2"
 
 

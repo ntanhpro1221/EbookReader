@@ -219,7 +219,7 @@ def test_a_chapter_that_never_shipped_is_left_to_cli_run(tmp_path: Path) -> None
     from ebook_reader.cli import _open_project
     from scripts.keep_the_locked_reading import run_project
 
-    real = Path("D:/Novels/Audiobooks/_versions/v0.2.0-lo03r/lo03r_084b_9455372a18")
+    real = Path("D:/Novels/Audiobooks/_fixtures/lo03r_084b_pre6b")
     if not (real / "project.sqlite3").is_file() or not (real / "book_settings.json").is_file():
         pytest.skip(f"không có project thật {real.name} trên máy này")
     import shutil

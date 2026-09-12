@@ -319,7 +319,7 @@ def read_known_characters(source: Path) -> list[dict]:
     try:
         rows = connection.execute(
             """
-            SELECT canonical_name, display_name, gender, age, personality,
+            SELECT canonical_name, display_name, gender, age, personality, locked, locked_age,
                    importance, mention_count, confidence
             FROM characters
             WHERE mention_count > 0 AND gender IN ('male','female')
@@ -434,6 +434,23 @@ def port(source: Path, target: Path, *, dry_run: bool = False) -> tuple[int, int
             importance=str(character["importance"] or "minor"),
             confidence=float(character["confidence"] or 0.5),
         )
+        # Thuộc tính NGƯỜI đã ghim thì đi theo chuỗi gieo, khác với thứ máy vừa học ở trên.
+        # `cast` hứa trong docstring của nó rằng câu trả lời của người nghe outrank mô hình
+        # **vĩnh viễn**; trước bản vá này lời hứa ấy chỉ đúng trong MỘT project, vì `port` mang
+        # nhân vật sang "deliberately NOT locked" và lô sau phân tích lại rồi đổi ý.
+        try:
+            if int(character["locked"] or 0) and str(character["gender"]) in ("male", "female"):
+                database.lock_character_gender(
+                    str(character["canonical_name"]), str(character["gender"])
+                )
+            if str(character["locked_age"] or ""):
+                database.lock_character_age(
+                    str(character["canonical_name"]), str(character["locked_age"])
+                )
+        except (KeyError, IndexError, ValueError, AttributeError):
+            # Project nguồn cũ hơn cột `locked_age`, hoặc một giá trị không ghim được: mang
+            # được gì thì mang, đừng làm cả lượt port chết vì một hàng.
+            pass
     if known:
         _say_safely(f"  mang sang {len(known)} nhân vật đã biết (tên, giới tính, số lần gặp)")
 

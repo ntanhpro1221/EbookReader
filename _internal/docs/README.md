@@ -74,3 +74,5 @@ Lý do: phần lớn thời gian trong dự án này không tiêu vào việc *s
 cần sửa*, và một kết luận đúng không dạy được điều đó. Bốn giả thuyết chết trước khi tìm ra
 model giọng đã tự đổi thì đáng đọc hơn chính câu kết luận — vì lần sau, thứ hỏng sẽ khác, mà
 cách đi thì vẫn thế.
+
+- **Fixture cho test:** `D:/Novels/Audiobooks/_fixtures/` (ngoài repo). Test không được trỏ vào project sống; xem `_fixtures/*/README.md` và WORK_LOG 2026-09-12 18:07.

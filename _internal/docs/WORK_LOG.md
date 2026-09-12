@@ -1731,3 +1731,28 @@ Bản vá `patch_a_tie_goes_to_the_emptier_step.py`: chèn "số người đang 
 — khoá đầu (không cùng chương) không đổi, chỉ rải người lạ ra các bậc trống-như-nhau. Hai test:
 ba người lạ phải ở ba bậc; và một bậc đông-mà-lạ vẫn thắng một bậc vắng-mà-có-bạn-diễn. Áp thử
 sạch trên bản sao cùng bản vá tuổi; test casting hiện có xanh. Chưa xếp hàng, ranh giới 7 → 8.
+
+## 2026-09-12, 18:07–18:25 — ranh giới 6 → 7 dừng ở bước 1: bảy test đỏ, và cả bảy đỏ vì bước 6b của
+## ranh giới TRƯỚC đã sửa đúng cái ca mà test dựa vào
+
+Lô 6 xong 18:07 (22/22, 0 hỏng). Bước 1 áp bản vá tuổi sạch, rồi bộ test đầy đủ đỏ **7 bài**, không
+bài nào thuộc bản vá tuổi: 5 ở `test_keep_the_locked_reading`, 1 ở `test_one_promoted_take…`, 1 ở
+`test_a_failed_reassembly…`. Cả ba file **trỏ thẳng vào project sống** `lo03r_084b` làm "ca gốc":
+đoạn 107 đang phát bản đọc-theo-chữ-viết dù có bản đọc-ghim chỉ trượt bài chính tả. Lúc 11:30,
+bước 6b của ranh giới 5 → 6 đã **sửa đúng ca ấy trên project thật** (7 đoạn của 084), và lô 6 chạy
+với bản vá 1 nên không bao giờ sinh ra ca ấy nữa. Bộ test xanh lúc 10:40 trên bản sao và đỏ lúc
+18:07 trên cùng mã: dữ liệu đổi, không phải mã.
+
+Không còn bản sao nào trước 6b trên đĩa (ba bản `klr_*` trong scratchpad đều đã bị diễn tập áp lên).
+Nên dựng lại: lấy DB thật sau 6b và **đảo đúng những gì 6b ghi**, theo sổ cái nó để lại
+(`machine_take_substitutions` 7 dòng → ứng viên ghim về `invalid`, chữ-viết về `promoted` với
+`promoted_at`/`final_check_id` lấy lại từ dòng check đã đề cử nó; xoá 8 `quality_checks`
+`keep_locked_reading_over_spelling_take`, 7 chấp nhận máy, 10 `runtime_events`). Tự kiểm bằng ba
+con số độc lập, cả ba đúng: ghim promoted **2** (test cũ chờ 2), chữ-viết promoted **7** (đúng số
+đoạn 6b đổi), finder(107) → **#13**. Lần đầu vấp CHECK của bảng (promoted phải có `promoted_at` và
+`final_check_id`) — ràng buộc ấy chính là thứ bắt bản dựng phải trung thực.
+
+Fixture đóng băng ở `D:/Novels/Audiobooks/_fixtures/lo03r_084b_pre6b/` (ngoài repo, 4,3 MB, kèm
+README và script dựng), ba file test trỏ sang đó; 25 bài của bốn file xanh trên cây thật, bộ test
+đầy đủ đang chạy. **Luật:** test không được trỏ vào project sống — pipeline có quyền sửa nó, và đã
+sửa. Cái giá: GPU nghỉ từ 18:07 tới khi ranh giới được thả lại.

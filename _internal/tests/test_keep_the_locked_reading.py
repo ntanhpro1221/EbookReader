@@ -24,7 +24,7 @@ from ebook_reader.database import (
     ProjectDB,
 )
 
-REAL = Path("D:/Novels/Audiobooks/_versions/v0.2.0-lo03r/lo03r_084b_9455372a18")
+REAL = Path("D:/Novels/Audiobooks/_fixtures/lo03r_084b_pre6b")
 LOST_LINE_SUFFIX = "feeb9dd9dda2"  # 'Chúng tôi đang đến Thành phố Ishtara (Ishtara City).'
 
 

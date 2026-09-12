@@ -30,6 +30,8 @@ from .config import (
     validate_settings,
 )
 from .database import (
+    LOCKABLE_AGES,
+    _character_key,
     LISTENER_PRONUNCIATION_SOURCE,
     SEGMENT_AUDIO_QUALITY_STAGE,
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
@@ -975,30 +977,55 @@ def _command_cast(args: argparse.Namespace) -> CommandResult:
     This is `pronounce` for casting: locked, so nothing downstream asks again, and readable
     before casting has ever run so the answer can be given ahead of the failure rather than
     only after it.
+
+    `--age` joined it for the same reason, one class of error later: the model called IVAN a
+    child once in batch 3 and `port_casting` carried the resulting girl's voice into every
+    batch after, 17 lines of it in chapter 062 alone. Age is the more expensive guess of the
+    two, because it picks the voice **family** rather than a variant within one. Either flag
+    may be given alone; both write a pin that travels along the seed chain.
     """
     paths = _existing_project_paths(args.project_root)
     character = str(args.character).strip()
-    gender = str(args.gender).strip().casefold()
+    gender = str(getattr(args, "gender", "") or "").strip().casefold()
+    age = str(getattr(args, "age", "") or "").strip().casefold()
     if not character:
         return CommandResult(data={}, exit_code=EXIT_USAGE, error="--character must not be empty")
-    if gender not in {"male", "female"}:
+    if not gender and not age:
+        return CommandResult(
+            data={}, exit_code=EXIT_USAGE, error="cần --gender hoặc --age (hoặc cả hai)"
+        )
+    if gender and gender not in {"male", "female"}:
         return CommandResult(
             data={}, exit_code=EXIT_USAGE, error="--gender must be male or female"
         )
-    database = ProjectDB(paths.db)
-    database.lock_character_gender(character, gender)
-    stored = database.locked_character_genders().get(character.strip().upper())
-    if stored != gender:
-        # Reporting a write that did not happen is worse than failing.
+    if age and age not in LOCKABLE_AGES:
         return CommandResult(
-            data={"character": character, "requested": gender, "stored": stored},
-            exit_code=EXIT_VALIDATION_FAILED,
-            error="Không ghi được giới tính đã ghim",
+            data={}, exit_code=EXIT_USAGE, error=f"--age phải là một trong {sorted(LOCKABLE_AGES)}"
         )
-    return CommandResult(
-        data={"character": character, "gender": gender, "locked": True},
-        exit_code=EXIT_OK,
-    )
+    database = ProjectDB(paths.db)
+    data: dict[str, Any] = {"character": character, "locked": True}
+    if gender:
+        database.lock_character_gender(character, gender)
+        stored = database.locked_character_genders().get(_character_key(character))
+        if stored != gender:
+            # Reporting a write that did not happen is worse than failing.
+            return CommandResult(
+                data={"character": character, "requested": gender, "stored": stored},
+                exit_code=EXIT_VALIDATION_FAILED,
+                error="Không ghi được giới tính đã ghim",
+            )
+        data["gender"] = gender
+    if age:
+        database.lock_character_age(character, age)
+        stored_age = database.locked_character_ages().get(_character_key(character))
+        if stored_age != age:
+            return CommandResult(
+                data={"character": character, "requested": age, "stored": stored_age},
+                exit_code=EXIT_VALIDATION_FAILED,
+                error="Không ghi được tuổi đã ghim",
+            )
+        data["age"] = age
+    return CommandResult(data=data, exit_code=EXIT_OK)
 
 
 def _command_pronounce(args: argparse.Namespace) -> CommandResult:
@@ -1414,11 +1441,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     cast = subparsers.add_parser(
         "cast",
-        help="Pin a character's gender, as a listener decision rather than a model guess",
+        help="Pin a character's gender or age, as a listener decision rather than a model guess",
     )
     cast.add_argument("project_root", type=Path)
     cast.add_argument("--character", required=True, help="The character's name as cast")
-    cast.add_argument("--gender", required=True, choices=("male", "female"))
+    cast.add_argument("--gender", choices=("male", "female"))
+    cast.add_argument(
+        "--age",
+        choices=tuple(sorted(LOCKABLE_AGES)),
+        help="Tuổi, thứ chọn họ giọng (trẻ con đọc bằng preset nữ kéo cao)",
+    )
     _add_json_argument(cast)
     cast.set_defaults(handler=_command_cast)
 

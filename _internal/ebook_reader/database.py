@@ -1854,6 +1854,10 @@ CREATE TABLE IF NOT EXISTS characters (
     -- (preset::formant::pitch). Empty means the allocator decides, which is every character
     -- until somebody pins one.
     locked_voice_key TEXT NOT NULL DEFAULT '',
+    -- Tuổi người nghe đã ghim, rỗng nghĩa là chưa ai nói gì. Cột RIÊNG, không dùng `locked`:
+    -- `locked` là của phái (`locked_character_genders` lọc theo nó), nên ghim tuổi qua đó sẽ
+    -- cho nhân vật một cái phái "do người quyết" mà chưa ai quyết.
+    locked_age TEXT NOT NULL DEFAULT '',
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
@@ -2222,6 +2226,12 @@ CREATE INDEX IF NOT EXISTS idx_analysis_critic_attempts_candidate
 """
 
 
+# Tuổi ghim được. `unknown` cố ý không có: xem `lock_character_age`. Danh sách này là tập con
+# của `analysis.ALLOWED_AGES`; không import để `database` không phụ thuộc `analysis`, và bài thử
+# `test_a_pinned_person_outranks_a_ported_voice` giữ hai bên không trôi khỏi nhau.
+LOCKABLE_AGES = frozenset({"child", "teen", "young", "adult", "elderly"})
+
+
 def _character_key(name: str) -> str:
     """The one way a character name becomes a key, borrowed rather than re-implemented.
 
@@ -2343,6 +2353,10 @@ class ProjectDB:
         if "locked_voice_key" not in character_columns:
             conn.execute(
                 "ALTER TABLE characters ADD COLUMN locked_voice_key TEXT NOT NULL DEFAULT ''"
+            )
+        if "locked_age" not in character_columns:
+            conn.execute(
+                "ALTER TABLE characters ADD COLUMN locked_age TEXT NOT NULL DEFAULT ''"
             )
         book_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(book)")}
         if "casting_finalized" not in book_columns:
@@ -8245,6 +8259,52 @@ class ProjectDB:
                 "WHERE locked=1 AND gender IN ('male','female')"
             ).fetchall()
         return {_character_key(str(row["canonical_name"])): str(row["gender"]) for row in rows}
+
+    def lock_character_age(self, canonical_name: str, age: str) -> None:
+        """Ghi câu trả lời của người nghe về tuổi một nhân vật, và thôi hỏi nữa.
+
+        `cast --gender` tồn tại vì mô hình đoán sai phái. Nó đoán sai TUỔI theo cùng một kiểu,
+        và tuổi đắt hơn: tuổi chọn **họ giọng** (trẻ con được đọc bằng preset nữ kéo cao, vì
+        preset nam dừng cách ống âm một đứa trẻ 0,8 cm - `voice_catalog.AGE_TARGET_PITCH_HZ`).
+        Đo 2026-09-12: IVAN bị gọi là `child` một lần ở lô 3 và đọc bằng giọng con gái 17 câu
+        ở chương 062, trong khi mọi `segments.age` của anh ta là `unknown` và thoại của anh ta
+        là của một thanh niên hay lắp. Không lệnh nào sửa được điều đó cho tới bản vá này.
+
+        `unknown` **không** ghim được: ghim một cái không-biết thì họ giọng vẫn không xác định,
+        và một cột nói "người đã quyết" mà nội dung là "không biết" sẽ làm mọi người đọc sau
+        hiểu sai. Muốn gỡ ghim thì xoá cột, chưa có lệnh, và chưa có ai cần.
+        """
+        normalized = str(age).strip().casefold()
+        if normalized not in LOCKABLE_AGES:
+            raise ValueError(f"age must be one of {sorted(LOCKABLE_AGES)}")
+        key = _character_key(canonical_name)
+        if not key:
+            raise ValueError("canonical_name must not be empty")
+        now = time.time()
+        with self.transaction() as conn:
+            # Ghi cả `age` lẫn `locked_age`: `age` là thứ mọi đường đọc sẵn, `locked_age` là thứ
+            # nói rằng người đã quyết - và chỉ nó mới đi theo chuỗi gieo.
+            updated = conn.execute(
+                "UPDATE characters SET age=?, locked_age=?, updated_at=? WHERE canonical_name=?",
+                (normalized, normalized, now, key),
+            ).rowcount
+            if not updated:
+                conn.execute(
+                    """
+                    INSERT INTO characters
+                        (canonical_name, display_name, age, locked_age, created_at, updated_at)
+                    VALUES (?,?,?,?,?,?)
+                    """,
+                    (key, canonical_name.strip(), normalized, normalized, now, now),
+                )
+
+    def locked_character_ages(self) -> dict[str, str]:
+        """Mọi tuổi người nghe đã ghim, khoá theo đúng cách casting khoá nhân vật."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT canonical_name, locked_age FROM characters WHERE locked_age <> ''"
+            ).fetchall()
+        return {_character_key(str(row["canonical_name"])): str(row["locked_age"]) for row in rows}
 
     def locked_character_voices(self) -> dict[str, str]:
         """Every voice pinned to a character, keyed the way casting keys characters.
