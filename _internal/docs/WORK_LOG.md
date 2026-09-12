@@ -1771,3 +1771,10 @@ giới trước (`lo03r_062`, `lo03r_071`), nên luật chạy-lại-thì-bỏ-q
 đêm qua và quên ở đây. Lô 7 đang bay nên không chen đúc lại được nữa (`before_a_batch` từ chối khi
 có lô đang chạy). **Ranh giới 7 → 8 phải thả với `--recast auto 3:071! 3:062!`**, cùng hai bản vá
 đang chờ. Cái giá: va chạm 071 và giọng nữ của IVAN ở 062 ở lại trong sách thêm một lô.
+
+## 2026-09-12, 18:44 — bộ test đầy đủ xanh trên bản sao có cả ba bản vá của ranh giới 7 → 8
+
+Bản sao cây (`scratchpad/age_tree`) mang bản vá tuổi (đã vào cây thật ở `b1aa363`) cộng hai bản vá
+đang chờ (supervisor không `DETACHED`, hoà-thì-chọn-bậc-ít-người) và ba file test trỏ fixture: **0
+lỗi**, 8 phút, trừ hai bài phụ thuộc môi trường vốn chỉ xanh trên cây thật. Bước 1 của ranh giới
+7 → 8 (quãng 02:30 sáng 13-09) giờ là thứ đã biết — lần này kiểm cả phần dữ liệu, không chỉ phần mã.
