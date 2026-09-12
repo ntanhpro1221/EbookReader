@@ -1663,3 +1663,6 @@ casting** (bài của bản vá + `test_cast_*`, `test_character_casting`, `test
 `test_pin_the_book_cast`, `test_voice_matches_the_person`) xanh trên bản sao đã vá. Bản vá sẵn sàng
 để xếp hàng **sau khi** ranh giới 5 → 6 chạy xong bước 7 — xếp sớm hơn thì `before_a_batch` từ
 chối khởi động lô 6 vì "còn bản vá chưa áp".
+
+10:40: **bộ test đầy đủ** trên bản sao đã vá (trừ hai bài phụ thuộc môi trường, vốn chỉ xanh trên cây
+thật): 0 lỗi, 8 phút. Bước 1 của ranh giới 6 → 7 giờ là thứ đã biết.
