@@ -816,7 +816,25 @@ class PresetAllocator:
                 *casting_preset_priority(preset),
             )
 
-        selected = min(candidates, key=rank)
+        ranked_presets = sorted(candidates, key=rank)
+        selected = ranked_presets[0]
+        if who and abs(formant_ratio_for_age(str(selected["name"]), age, gender) - 1.0) > 1e-6:
+            # Tuổi ấn định bậc formant, nên với trẻ con preset là trục đa dạng DUY NHẤT — và
+            # `usage` đếm theo pool (có tên / NPC), nên một đứa trẻ có tên và một NPC trẻ con
+            # cùng chương đều thấy Ngọc Linh "chưa ai dùng". Lô 7, chương 186: AEREN (3 câu)
+            # và NPC CON TRAI (1 câu) cùng `ngoc_linh_f107_p+02` - người nghe lẫn. Cùng lớp với
+            # CÔNG TƯỚC/ÔNG LÃO ở alpha.55: hai sổ, một giọng. Ở đây hỏi thẳng sổ người giữ -
+            # cùng sổ mà `_first_free_variant` hỏi: preset hạng đầu mà bậc-theo-tuổi của nó đã
+            # có người CÙNG CHƯƠNG giữ thì lấy preset kế tiếp; không preset nào rảnh thì về
+            # hạng đầu như cũ. Đứa trẻ đầu tiên vẫn nhận đúng giọng người nghe ưa thích.
+            mine = self.chapters_of.get(str(who), set())
+            for preset in ranked_presets:
+                preset_name = str(preset["name"])
+                step = round(float(formant_ratio_for_age(preset_name, age, gender)), 3)
+                held = self.holders.get(preset_name, {}).get(step, set())
+                if not any(self.chapters_of.get(holder, set()) & mine for holder in held):
+                    selected = preset
+                    break
         name = str(selected["name"])
         usage[name] += 1
         # Formant, not pitch, is what makes a reused preset sound like a different
@@ -868,7 +886,8 @@ class PresetAllocator:
         # trong đó IGOR + THU LÃNH ở chương 062 (3 + 23 câu) đã vào audio trước khi ai kịp thấy.
         #
         # Chọn bậc mà người đang giữ nó có ÍT chương chung nhất với người sắp được cast; hoà
-        # thì bậc thấp hơn trên thang (tất định, tái lập được). Không biết gì về người sắp cast
+        # thì bậc ÍT người giữ hơn, rồi mới tới bậc thấp hơn trên thang (tất định, tái lập
+        # được). Không biết gì về người sắp cast
         # (không có `who`) hay không biết ai giữ bậc nào thì lùi về quay vòng cũ, để hành vi
         # ngoài đường ống chính không đổi.
         mine = self.chapters_of.get(str(who), set()) if who else None
@@ -887,9 +906,19 @@ class PresetAllocator:
                 occupied |= self.chapters_of.get(holder, set())
             return len(mine & occupied)
 
+        def crowd(ratio: float) -> int:
+            return len(holders.get(round(ratio, 3), ()))
+
+        # Hoà về chương chung (thường là 0: người mới chưa gặp ai) thì chọn bậc ÍT người giữ
+        # hơn, rồi mới tới thứ tự thang. Bản trước hoà là lấy bậc thấp nhất, nên lô 6 xếp sáu
+        # nhân vật phụ (KAIN REICHARDT, ERWIN, DAMIAN, LEON, GÃ, DORON) chồng lên đúng một bậc
+        # thai_son_f100 trong khi bốn bậc khác cùng 0 chương chung chỉ có một người giữ. Không
+        # ai cùng chương nên người nghe không lẫn trong lô ấy, nhưng sáu người một giọng là
+        # mười lăm cặp có thể gặp nhau ở lô sau, và cảnh báo "nhiều nhân vật dùng chung một
+        # giọng" đã bật. Đo 2026-09-12 15:27 trên lo06_99a908b8f8.
         ranked = sorted(
             enumerate(variants),
-            key=lambda pair: (shared_chapters(pair[1]), pair[0]),
+            key=lambda pair: (shared_chapters(pair[1]), crowd(pair[1]), pair[0]),
         )
         return ranked[0][1]
 

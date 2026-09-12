@@ -367,12 +367,27 @@ def _default_python_executable() -> Path:
 
 
 def _detached_creation_flags() -> int:
+    """A supervisor with a hidden console of its own - never one with no console at all.
+
+    The old value added DETACHED_PROCESS, and on Windows that flag cancels CREATE_NO_WINDOW:
+    a detached process has no console, so every console program it starts gets a brand-new
+    one, and Windows 11 opens a terminal window to show it. The watchdog had the same flags
+    and flashed three windows per model load from 2026-09-11 23:14 until 9c5b123 fixed it.
+
+    Harmless here today only because the supervisor is pythonw.exe, which never has a
+    console, and its children are pythonw or CREATE_NO_WINDOW. But _default_python_executable
+    falls back to python.exe when the venv has no pythonw, and then the multiprocessing
+    worker (spawned with flags 0) would open a console window for the life of the run.
+
+    Surviving the parent's exit never needed DETACHED_PROCESS - a Windows child outlives its
+    parent unless a job object says otherwise. CREATE_NEW_PROCESS_GROUP keeps a Ctrl+C in the
+    parent's terminal away from the supervisor; CREATE_NO_WINDOW gives it a console of its
+    own, so closing that terminal cannot reach it either. Both things "detached" was for.
+    """
     if os.name != "nt":
         return 0
-    return (
-        getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-        | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
-        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | getattr(
+        subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
     )
 
 

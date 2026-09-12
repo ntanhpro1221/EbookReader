@@ -29,11 +29,7 @@ VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
 # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = (
-    "patch_a_supervisor_with_a_console_of_its_own.py",
-    "patch_a_tie_goes_to_the_emptier_step.py",
-    "patch_two_children_in_one_chapter_get_two_voices.py",
-)
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -221,6 +217,12 @@ APPLIED = (
     # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
     # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
     "patch_a_pinned_person_outranks_a_ported_voice.py",
+    # 2026-09-13: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+    "patch_a_supervisor_with_a_console_of_its_own.py",
+    "patch_a_tie_goes_to_the_emptier_step.py",
+    "patch_two_children_in_one_chapter_get_two_voices.py",
 )
 
 
