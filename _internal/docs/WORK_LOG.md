@@ -1778,3 +1778,24 @@ Bản sao cây (`scratchpad/age_tree`) mang bản vá tuổi (đã vào cây th�
 đang chờ (supervisor không `DETACHED`, hoà-thì-chọn-bậc-ít-người) và ba file test trỏ fixture: **0
 lỗi**, 8 phút, trừ hai bài phụ thuộc môi trường vốn chỉ xanh trên cây thật. Bước 1 của ranh giới
 7 → 8 (quãng 02:30 sáng 13-09) giờ là thứ đã biết — lần này kiểm cả phần dữ liệu, không chỉ phần mã.
+
+## 2026-09-12, 22:30–22:50 — lô 7 khoá dàn giọng: va chạm cùng chương đầu tiên sau bản vá holder, và nó là một lớp mới
+
+Lô 7: 17 người nam trên 7 giọng, 9 nữ trên 7, 6 giọng dùng chung, **1/6 va chạm nằm trong cùng
+chương** — chương 186: AEREN (nam, trẻ con, 3 câu) và NPC CON TRAI (nam, trẻ con, 1 câu) cùng
+`ngoc_linh_f107_p+02`. Lô 5 và 6 đều 0 nên đây không phải bản vá holder hỏng, mà là chỗ nó không
+với tới: **tuổi ấn định bậc formant**, nên `_first_free_variant` (nơi luật tránh-cùng-chương sống)
+không được gọi cho trẻ con. Với trẻ con preset là trục đa dạng duy nhất, mà khoá xếp hạng
+`usage[name]` đếm theo pool có-tên / NPC — đứa có tên và NPC đều thấy Ngọc Linh "chưa ai dùng".
+Cùng lớp với CÔNG TƯỚC/ÔNG LÃO ở alpha.55: hai sổ, một giọng.
+
+Bản vá `patch_two_children_in_one_chapter_get_two_voices.py`: sau khi xếp hạng, nếu tuổi ấn định
+bậc thì hỏi thẳng sổ người giữ — preset hạng đầu mà bậc-theo-tuổi đã có người cùng chương giữ thì
+lấy preset kế tiếp; không ai rảnh thì về hạng đầu. Ba test: hai đứa trẻ cùng chương → hai giọng;
+đứa đầu vẫn nhận Ngọc Linh; hai đứa khác chương vẫn được dùng chung giọng ưa thích. Áp thử sạch
+trên bản sao đã có ba bản vá kia, test casting xanh; xếp vào hàng ranh giới 7 → 8 (ba bản vá).
+
+Cũng ở lô 7: IVAN không có pin (chuỗi gieo lô 7 không mang pin nữ của `lo03r_062`), được cấp
+`thanh_binh_f100_p-04` — giọng nam — 65 câu ở 188–192. Chương 186 sẽ được đúc lại ở ranh giới
+7 → 8 sau khi bản vá này áp; thêm `3:186!`? Không: 186 thuộc lô 7 (`7:186`), và bước 4 `--recast
+auto` của ranh giới 7 tự thấy va chạm cùng chương ấy và đúc lại — đó chính là việc của bước 4.

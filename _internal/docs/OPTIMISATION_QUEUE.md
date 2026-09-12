@@ -2017,3 +2017,6 @@ sửa file đang chạy là hỏng nó.
 1. `patch_a_supervisor_with_a_console_of_its_own.py` — bỏ `DETACHED_PROCESS` ở supervisor (bẫy tiềm ẩn).
 2. `patch_a_tie_goes_to_the_emptier_step.py` — hoà về chương chung thì chọn bậc ít người giữ hơn
    (lô 6: sáu người chồng một bậc). Cả hai nhỏ, tất định, có test; xếp cùng lúc cho đỡ một lượt test.
+3. `patch_two_children_in_one_chapter_get_two_voices.py` — hai đứa trẻ cùng chương phải là hai giọng (lô 7, chương 186).
+
+**22:50: cả ba đã xếp vào ORDER** (ranh giới 7 → 8 đang chờ lô 7).

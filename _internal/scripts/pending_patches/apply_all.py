@@ -32,6 +32,7 @@ LEASE_STALE_SECONDS = 180.0
 ORDER: tuple[str, ...] = (
     "patch_a_supervisor_with_a_console_of_its_own.py",
     "patch_a_tie_goes_to_the_emptier_step.py",
+    "patch_two_children_in_one_chapter_get_two_voices.py",
 )
 
 APPLIED = (
