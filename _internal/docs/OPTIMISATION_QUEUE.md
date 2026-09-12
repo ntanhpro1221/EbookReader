@@ -1998,7 +1998,9 @@ Chi tiết và phần tự bác bỏ ở `docs/A_BAND_IN_THE_VALLEY.md`.
 gọi qua `CREATE_NO_WINDOW`. Nhưng nếu một ngày `pythonw.exe` không có trong venv,
 `_default_python_executable` rơi về `python.exe`, và khi ấy worker `multiprocessing` sẽ mở
 một cửa sổ console **sống suốt lượt chạy**. Sửa đúng là bỏ `DETACHED_PROCESS` như watchdog;
-file này bị khoá nên đi qua `pending_patches` ở ranh giới sau. Không gấp.
+file này bị khoá nên đi qua `pending_patches`. **Bản vá đã viết 13:15 ngày 12-09:**
+`patch_a_supervisor_with_a_console_of_its_own.py`, áp thử sạch trên bản sao, test của nó + `test_background_runner`
+xanh. CHƯA xếp hàng — xếp ở ranh giới 7 → 8 hoặc sau, cùng lúc với bản vá khác cho đỡ một lượt test. Không gấp.
 
 ## `boundary.sh` bước 1 ghi "bo test: (khong thay dong tong ket)" dù test xanh (2026-09-12)
 
