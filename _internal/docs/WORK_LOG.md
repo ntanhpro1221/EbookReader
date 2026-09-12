@@ -1623,3 +1623,19 @@ Ba sửa trong `scripts/ollama_watchdog.py` + 4 test mới + docs, một commit,
 trong cùng một lệnh để cây không bẩn lúc ranh giới kiểm. Xem `SURVIVING_AN_INTERRUPTION.md`.
 Hai lần probe thật của tôi cũng làm nháy cửa sổ thêm hai đợt — cái giá của việc đo trên server
 đang chạy sai cờ, ghi lại để không ai tưởng bản sửa chưa ăn.
+
+## 2026-09-12, 08:50–09:10 — đổi ollama lúc an toàn, rồi chứng minh bằng đúng phép đo đã bắt lỗi
+
+Không giết ollama giữa lúc chương 056 đang phân tích. Một task nền chờ ba điều kiện cùng đúng —
+ollama không giữ model, không còn `llama-server` nào, project mới nhất đã sang `chapter_synthesis`
+— rồi gọi đúng `restart_ollama()` vừa sửa: **08:50:34**, pid 36944 → 14188, cờ `0x8000200`.
+
+Rồi nó đứng chờ lần nạp model kế tiếp và đếm cửa sổ, cùng cách đo đã bắt được ba phát nháy lúc
+08:27:
+
+    08:27 (cờ cũ)   llama-server ×2 + gpu-discover  ->  3 cửa sổ Windows Terminal, 0,4–0,6 s mỗi cái
+    09:09 (cờ mới)  llama-server ×3 + gpu-discover  ->  0 cửa sổ trong 19 phút, 0 trong 5 s quanh runner
+
+Cùng bộ ba tiến trình con, cùng máy, cùng bộ lấy mẫu; khác đúng một cờ. "Hết nháy" là con số đo,
+không phải lời hứa. Watchdog chạy mỗi 5 phút theo Scheduled Task, đã đọc file mới; lần khởi động
+lại sau nếu có sẽ dùng cờ mới và probe mới.

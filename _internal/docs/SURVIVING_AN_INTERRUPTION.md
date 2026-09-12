@@ -288,6 +288,9 @@ có job object; (2) probe gửi `think: false` và đếm `eval_count`, nên mod
 trả về nhanh thì ghi log và không giết. Cú nhảy đồng hồ vẫn lừa được cổng một; việc của cổng
 hai là không bị lừa cùng lúc, và giờ nó có thể nói "có" với một server khoẻ.
 
+Đo lại sau sửa, 09:09:51 cùng ngày: ollama mới (cờ mới) nạp model, sinh `llama-server` ×3 +
+`gpu-discover`, **0 cửa sổ** trong 19 phút theo dõi — cùng bộ lấy mẫu đã bắt ba phát nháy lúc 08:27.
+
 Bài học đắt hơn cả ba sửa: test của watchdog chỉ khoá **những lần nó từ chối**, và probe được
 mock trong mọi test, nên một probe không bao giờ nói "có" đã sống qua cả bộ test xanh. Bài
 test mới đưa đúng payload đo được của qwen3 vào probe thật.
