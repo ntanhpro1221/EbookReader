@@ -1756,3 +1756,18 @@ Fixture đóng băng ở `D:/Novels/Audiobooks/_fixtures/lo03r_084b_pre6b/` (ngo
 README và script dựng), ba file test trỏ sang đó; 25 bài của bốn file xanh trên cây thật, bộ test
 đầy đủ đang chạy. **Luật:** test không được trỏ vào project sống — pipeline có quyền sửa nó, và đã
 sửa. Cái giá: GPU nghỉ từ 18:07 tới khi ranh giới được thả lại.
+
+## 2026-09-12, 18:32–18:35 — thả lại ranh giới 6 → 7, và một lỗi cú pháp của tôi làm 071/062 bị bỏ qua
+
+Bộ test đầy đủ xanh 18:32 → commit `b1aa363` (bản vá tuổi + test trỏ fixture + docs), tag
+`v0.2.0-lo06v`, ghi vân tay xanh cho đúng cây ấy, thả lại ranh giới 18:33:16. Nó chạy đúng thứ tự:
+hàng chờ rỗng → không chương hỏng → **"lô 3 chương 062 đã đúc lại hoàn thành - bỏ qua"**, 071 cũng
+vậy → tag `v0.2.0-lo07` → khởi động lô 7 (26 chương 167..192, gieo từ lô 6, `before_a_batch` nhận
+vân tay xanh nên không chạy lại bộ test) → 6b (không còn gì để giữ) → ghép sách.
+
+Lỗi là của tôi, không phải của ranh giới: 062 và 071 **đã có** bản đúc lại hoàn thành từ các ranh
+giới trước (`lo03r_062`, `lo03r_071`), nên luật chạy-lại-thì-bỏ-qua (`already_done … recast`) làm
+đúng việc của nó. Muốn ép làm lại phải đánh dấu `!` — tôi đã dùng đúng dấu ấy cho `2:054! 2:056!`
+đêm qua và quên ở đây. Lô 7 đang bay nên không chen đúc lại được nữa (`before_a_batch` từ chối khi
+có lô đang chạy). **Ranh giới 7 → 8 phải thả với `--recast auto 3:071! 3:062!`**, cùng hai bản vá
+đang chờ. Cái giá: va chạm 071 và giọng nữ của IVAN ở 062 ở lại trong sách thêm một lô.
