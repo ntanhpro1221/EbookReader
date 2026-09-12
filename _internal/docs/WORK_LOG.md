@@ -1666,3 +1666,17 @@ chối khởi động lô 6 vì "còn bản vá chưa áp".
 
 10:40: **bộ test đầy đủ** trên bản sao đã vá (trừ hai bài phụ thuộc môi trường, vốn chỉ xanh trên cây
 thật): 0 lỗi, 8 phút. Bước 1 của ranh giới 6 → 7 giờ là thứ đã biết.
+
+## 2026-09-12, 10:45 — IVAN không cần `cast --age`: giọng con gái của anh ta là một pin bị mang sang
+
+Đọc lại 062 trước khi lên kế hoạch ranh giới 6 → 7. IVAN ở đó `gender=male`, `age=unknown`, và
+**`locked_voice_key = ngoc_linh_f107_p+02`** — một preset nữ warp lên kiểu trẻ con (formant 107,
+pitch +2). Tức giọng con gái không phải allocator chọn lúc ấy, mà là **pin từ một project trước**
+(nơi phân tích từng gọi anh ta là trẻ con) được `port_casting` mang sang nguyên vẹn. Văn bản 062
+không có dấu hiệu trẻ con nào ("tôi không uống rượu", "gãi cổ, bất an", "lắp bắp").
+
+Đó chính là ca của `_drop_pins_that_contradict_a_person` trong bản vá tuổi: nam + tuổi không phải
+trẻ con + pin trỏ vào preset nữ → bỏ pin, cấp giọng nam. Nên kế hoạch ranh giới 6 → 7 gọn lại:
+xếp bản vá tuổi vào ORDER **sau khi ranh giới 5 thoát**, rồi thả `--recast auto 3:071 3:062`;
+không cần bước `cast --age` xen giữa bước 1 và 4b (vốn không có chỗ để xen). `cast --age` chỉ
+cần nếu chủ sách biết tuổi thật của IVAN và muốn ghim.
