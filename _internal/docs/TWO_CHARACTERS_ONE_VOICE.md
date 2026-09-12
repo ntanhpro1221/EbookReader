@@ -206,6 +206,14 @@ giọng ấy**, không phải chương mà họ có mặt — bản đo đầu c
     92  cặp hai người dùng chung một giọng qua cả sách
      1  cặp cùng chương: SỐ BỐN + SỐ NĂM, chương 023 — vẫn đúng cặp tài liệu này chỉ ra ở lô 1
 
+**Sửa lại 10:00 ngày 12-09: là 2, không phải 1.** Phép đo trên chỉ đếm 61 cái *tên* và bỏ NPC theo
+chương. Quét lại 118 chương đang ghép bằng chính `voice_pool_pressure` trên 38 project thắng, chỉ giữ
+chương mà project ấy là bản thắng: **2** va chạm cùng chương — 023 (SỐ BỐN + SỐ NĂM) và **071 (KANG +
+NPC THẰNG ĐIÊN, cùng `thanh_binh_f100_p-04`, mỗi người một câu)**. Bản 071 đúc lại 22:52 ngày 10-09,
+trước bản vá 'một bậc nhớ mọi người giữ nó', và KANG không có pin nên bị rút thăm trúng đúng bậc của
+NPC. 023 đang được đúc lại đêm nay; 071 vào danh sách ranh giới 6 → 7. Bài học: người nghe không phân
+biệt tên với NPC — đếm va chạm thì phải đếm cả hai, và công cụ của dự án đã làm đúng từ đầu.
+
 Cặp ấy chưa từng được đúc lại vì ranh giới lô 1 → 2 chưa có `--recast auto`. Đã thêm `1:023` vào
 ranh giới lô 5 → 6 (2026-09-12 02:56), nên sau đêm ấy cuốn sách không còn va chạm cùng chương nào
 mà ta biết mà vẫn để đó.

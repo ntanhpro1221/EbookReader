@@ -1639,3 +1639,17 @@ Rồi nó đứng chờ lần nạp model kế tiếp và đếm cửa sổ, cù
 Cùng bộ ba tiến trình con, cùng máy, cùng bộ lấy mẫu; khác đúng một cờ. "Hết nháy" là con số đo,
 không phải lời hứa. Watchdog chạy mỗi 5 phút theo Scheduled Task, đã đọc file mới; lần khởi động
 lại sau nếu có sẽ dùng cờ mới và probe mới.
+
+## 2026-09-12, 09:56–10:05 — kiểm các chương đúc lại, và tìm thấy va chạm thứ hai mình đã bỏ sót
+
+Chạy `voice_pool_pressure` trên **mọi** project đúc lại (41 project, kể cả của các ranh giới
+trước): 40 sạch, **1 có va chạm cùng chương — 071**: KANG + NPC THẰNG ĐIÊN cùng `thanh_binh_f100_p-04`,
+mỗi người một câu. Bản ấy làm 22:52 ngày 10-09, trước bản vá holder, và KANG không có pin.
+
+Vì sao hôm qua tôi nói "cả sách chỉ còn một va chạm cùng chương (023)": phép đo ấy gấp tên và
+đếm 61 cái *tên*, bỏ NPC theo chương. Người nghe không biết NPC là gì; họ nghe hai người một giọng.
+Quét lại đúng cách — `voice_pool_pressure` trên 38 project thắng của 118 chương, chỉ giữ chương
+mà project ấy là bản thắng: **2** va chạm đang được ghép, 023 và 071. Đêm nay 023 được sửa; 071 ghi
+vào danh sách ranh giới 6 → 7 (`3:071`). Sau đó, con số đo được sẽ là 0, và lần này đếm cả NPC.
+
+Cũng kiểm 072 và 080 vừa đúc lại: MICHAEL, JAKE, SAM, NGƯỜI TRẢ LỜI, THỦ LÃNH đều về đúng giọng đa số.
