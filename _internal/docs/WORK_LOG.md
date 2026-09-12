@@ -1699,3 +1699,16 @@ Dự đoán ghi trước — kết quả đo trên sách mới:
 Năm dự đoán, năm đúng. THỦ LÃNH, NGƯỜI TRẢ LỜI, THALIA, WILLEM đã rời danh sách nhiều-giọng; 023 hết
 va chạm. Ranh giới 6 → 7 thả 12:06 với bản vá tuổi trong hàng và `--recast auto 3:071 3:062`; sau nó,
 hai dòng cuối của bảng trên về 0.
+
+## 2026-09-12, 13:00 — bảng nhịp nói thêm hình dạng dữ liệu, không chỉ một cái chuông
+
+Làm mục đã xếp hàng từ ca chương 140: `pace_retry_reachability.py` giờ in cạnh `p/lần` hai cột
+**giá trị** (số giá trị phân biệt trong các lần thử) và **trống** (khoảng trống rộng nhất), đánh
+dấu `*` khi không lần nào rơi vào dải *và* cả dải nằm trọn trong một khoảng trống. Cái chuông
+được giữ nguyên — nó nói 38,9% và lượt sau chứng minh nó đúng — nhưng bảng nói rõ nó khớp vào
+dữ liệu gì, và ghi chú kết luận đúng: "trong tầm với" là câu hỏi của **một lượt**, lượt vá đổi
+phiếu diễn nên đừng nới cận vì bảng này, hãy để bước 3 phân tích lại.
+
+Năm test, kể cả một test chạy `main()` trên log giả có đúng mười lần thử của 140 và đọc dòng
+`4  12.34*` ra khỏi bảng. Script không bị khoá; commit cùng lệnh với test để cây không bẩn lúc
+ranh giới 6 → 7 kiểm.

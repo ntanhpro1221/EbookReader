@@ -1983,7 +1983,7 @@ phút và đoạn ấy **qua ngay lần thử đầu**: 1,68 s, 21,28 kt/s. Th�
 - **Bản sửa (2) đường tempo: hạ xuống "theo dõi".** Chưa có ca nào chứng minh retry không tới
   được; ca duy nhất tưởng là nó thì đã tự khỏi bằng đường có sẵn (phân tích lại ở bước 3). Điều
   kiện để áp: một đoạn trượt nhịp qua **ít nhất hai lượt vá** với hai phiếu diễn khác nhau.
-- **Bản sửa (1) bộ ước lượng vẫn đáng làm, nhưng vì lý do khác:** nó nên tách **"phương sai trong
+- **Bản sửa (1) — ĐÃ LÀM 13:05 ngày 12-09** (`_shape`: cột "giá trị" phân biệt và "trống" rộng nhất, dấu `*` khi cả dải nằm trong một khoảng trống, và ghi chú rằng đó là câu hỏi của một lượt; test với đúng dữ liệu 140). Lý do gốc vẫn đúng: nó nên tách **"phương sai trong
   một lượt"** (mười lần thử cho bốn giá trị, cách nhau 80 ms — đo được và vẫn đúng) khỏi **"cơ hội
   qua sau khi phân tích lại"** (thứ thật sự quyết định có nên vá lại chương). Con số 38,9% của nó
   hoá ra lạc quan mà ĐÚNG cho câu thứ hai.

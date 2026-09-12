@@ -77,6 +77,32 @@ def _chance_per_attempt(paces: list[float], bound: float, too_fast: bool) -> flo
     return 1.0 - tail if too_fast else tail
 
 
+def _shape(paces: list[float], lower: float, upper: float) -> tuple[int, float, bool]:
+    """How many distinct values the attempts took, the widest gap between them, and whether
+    the whole band sits inside one of those gaps with no attempt ever landing in it.
+
+    `_chance_per_attempt` fits a continuous bell to the attempts, and on 2026-09-12 that
+    bell said 38.9% per attempt for chapter 140's segment - ten attempts, four distinct
+    values (24.79, 27.03, 29.70 and once 12.45 chars/s), none inside [12.5, 24.5], the
+    three fast ones exactly 80 ms apart in duration and then a 0.96 s jump. A bell has
+    mass in the band; the data had none. This function says so without assuming a shape.
+
+    It is a statement about ONE run, and that is the caveat that matters: the repair of
+    chapter 140 re-analysed the chapter, the director lowered the intensity from 1 to 0,
+    and the same line passed on the first attempt at 21.28 chars/s. The delivery note is a
+    parameter of the distribution, so a gap measured in one run says nothing about the
+    run after a re-analysis - which is exactly what a repair is.
+    """
+    distinct = sorted({round(value, 2) for value in paces})
+    gaps = [later - earlier for earlier, later in zip(distinct, distinct[1:])]
+    widest = max(gaps) if gaps else 0.0
+    inside = any(lower <= value <= upper for value in paces)
+    straddles = any(
+        earlier < lower and later > upper for earlier, later in zip(distinct, distinct[1:])
+    )
+    return len(distinct), widest, (not inside and straddles)
+
+
 def _bands(root: Path) -> dict[str, tuple[float, float]]:
     settings = root / "book_settings.json"
     if not settings.is_file():
@@ -134,8 +160,12 @@ def main(project_root: str) -> int:
     print(f"{len(retried_then_passed)} segment chạm cổng rồi qua - không tính ở đây")
     print()
     header = "  ".join(f"{value:>4}" for value in BUDGETS)
-    print(f"{'segment':<30} {'các lần thử':<26} {'dải':>6} {'phía':>6} {'p/lần':>7}   {header}")
+    print(
+        f"{'segment':<30} {'các lần thử':<26} {'dải':>6} {'phía':>6} {'p/lần':>7}"
+        f" {'giá trị':>7} {'trống':>7}   {header}"
+    )
     reachable: list[str] = []
+    band_in_gap: list[str] = []
     for segment, by_attempt in sorted(attempts.items()):
         paces = [by_attempt[key] for key in sorted(by_attempt)]
         band = segment_band.get(segment, "normal")
@@ -148,11 +178,28 @@ def main(project_root: str) -> int:
         )
         shown = " ".join(f"{value:5.2f}" for value in paces)
         side = "nhanh" if too_fast else "chậm"
-        print(f"{segment[:30]:<30} {shown:<26} {band:>6} {side:>6} {chance:7.1%}   {cells}")
+        distinct, widest, in_gap = _shape(paces, lower, upper)
+        if in_gap:
+            band_in_gap.append(segment)
+        print(
+            f"{segment[:30]:<30} {shown:<26} {band:>6} {side:>6} {chance:7.1%}"
+            f" {distinct:>7} {widest:>6.2f}{'*' if in_gap else ' '}   {cells}"
+        )
         if chance >= 0.05:
             reachable.append(segment)
 
     print()
+    if band_in_gap:
+        print(
+            f"* {len(band_in_gap)} segment: trong LƯỢT NÀY không lần thử nào rơi vào dải, và cả "
+            "dải nằm trọn trong một khoảng trống giữa các giá trị đã thấy. Con số p/lần ở "
+            "trên khớp một phân bố liên tục vào dữ liệu ấy, nên với dữ liệu rời rạc như thế nó "
+            "lạc quan. Nhưng \"trong tầm với\" là câu hỏi của một lượt: lượt vá phân tích lại "
+            "chương và đổi phiếu diễn, và phân bố đổi theo - chương 140 ngày 2026-09-12: 10 "
+            "lần, 4 giá trị, 0 trong dải, rồi lượt vá kế tiếp qua ngay lần đầu. Đừng nới cận "
+            "vì bảng này; hãy để bước 3 của ranh giới phân tích lại."
+        )
+        print()
     if reachable:
         print(
             f"{len(reachable)}/{len(attempts)} segment nằm trong tầm với: chúng trượt vì "
