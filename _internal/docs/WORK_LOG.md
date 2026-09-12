@@ -1680,3 +1680,22 @@ trẻ con + pin trỏ vào preset nữ → bỏ pin, cấp giọng nam. Nên k�
 xếp bản vá tuổi vào ORDER **sau khi ranh giới 5 thoát**, rồi thả `--recast auto 3:071 3:062`;
 không cần bước `cast --age` xen giữa bước 1 và 4b (vốn không có chỗ để xen). `cast --age` chỉ
 cần nếu chủ sách biết tuổi thật của IVAN và muốn ghim.
+
+## 2026-09-12, 12:04–12:08 — ranh giới 5 → 6 kết thúc; đối chiếu từng dự đoán ghi trước
+
+Ranh giới thoát mã 0 lúc 12:04:35. Bước 6b giữ cách đọc ghim cho **111 chương**, ghép lại đủ 111,
+0 lỗi, 0 khôi phục (một dòng khớp "thất bại" là văn bản của đoạn, không phải thông báo). Bước 7 chép
+128 chương mới, sách **145 chương (000–144), 2,21 GB**, thẻ đủ, tên đĩa vẫn là chỗ giữ chỗ.
+
+Dự đoán ghi trước — kết quả đo trên sách mới:
+
+    một người hai giọng trong CÙNG chương          dự đoán 0      đo 0
+    --across --min-chapters 5                       chỉ còn KANG   đúng: 3:066 3:067 3:087 3:090 3:091 (5 chương f093 của KANG)
+    keep_the_locked_reading --book (thử khan)       không còn gì   đúng: mọi project "không đoạn nào đang phát bản đọc-theo-chữ-viết"
+    giọng sai phái                                  chỉ IVAN       đúng: 1 dòng, IVAN 062, ngoc_linh_f107_p+02 (ranh giới 6 → 7 sửa)
+    va chạm cùng chương trên 145 chương thắng       chỉ 071        đúng: 1, KANG + NPC THẰNG ĐIÊN (ranh giới 6 → 7 sửa)
+    assemble_book --verify                          0 lệch         đúng: đúng thời lượng, kênh, tần số, không trùng khít
+
+Năm dự đoán, năm đúng. THỦ LÃNH, NGƯỜI TRẢ LỜI, THALIA, WILLEM đã rời danh sách nhiều-giọng; 023 hết
+va chạm. Ranh giới 6 → 7 thả 12:06 với bản vá tuổi trong hàng và `--recast auto 3:071 3:062`; sau nó,
+hai dòng cuối của bảng trên về 0.
