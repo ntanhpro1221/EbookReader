@@ -2011,3 +2011,9 @@ quyết tiếng Việt của chính nó. Không nguy hiểm — nếu test đỏ
 giới dừng ở đó — nhưng commit tự động mất con số. Sửa: bắt cả `Xanh hết` (và `TEST ĐỎ`) làm
 dòng tổng kết. **Chỉ sửa khi không có ranh giới nào đang chạy**: bash đọc script theo từng đoạn,
 sửa file đang chạy là hỏng nó.
+
+## Hàng cho ranh giới 7 → 8 (2026-09-12, 15:45) — hai bản vá đã viết, đã áp thử, CHƯA xếp
+
+1. `patch_a_supervisor_with_a_console_of_its_own.py` — bỏ `DETACHED_PROCESS` ở supervisor (bẫy tiềm ẩn).
+2. `patch_a_tie_goes_to_the_emptier_step.py` — hoà về chương chung thì chọn bậc ít người giữ hơn
+   (lô 6: sáu người chồng một bậc). Cả hai nhỏ, tất định, có test; xếp cùng lúc cho đỡ một lượt test.

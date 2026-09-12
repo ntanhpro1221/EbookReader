@@ -1712,3 +1712,22 @@ phiếu diễn nên đừng nới cận vì bảng này, hãy để bước 3 ph
 Năm test, kể cả một test chạy `main()` trên log giả có đúng mười lần thử của 140 và đọc dòng
 `4  12.34*` ra khỏi bảng. Script không bị khoá; commit cùng lệnh với test để cây không bẩn lúc
 ranh giới 6 → 7 kiểm.
+
+## 2026-09-12, 15:27–15:45 — lô 6 khoá dàn giọng: một dự đoán đúng, một dự đoán sai, và bản vá thứ ba
+
+Dàn giọng lô 6 (`lo06_99a908b8f8`): 20 người nam trên 10 giọng (kho 14), 7 nữ trên 5, 5 giọng bị
+dùng chung, **0/5 va chạm nằm trong cùng chương** — dự đoán "0 va chạm cùng chương" đúng lần thứ
+hai liên tiếp ở quy mô thật. Dự đoán "không bậc nào quá 3 người" **sai**: `thai_son_f100_p+00`
+gánh **6** nhân vật phụ (KAIN REICHARDT 8 câu, ERWIN 6, DAMIAN 4, LEON 2, GÃ 1, DORON 1), và cảnh
+báo "nhiều nhân vật dùng chung một giọng" bật một lần.
+
+Nguyên nhân nằm đúng một dòng: hết bậc trống thì `_first_free_variant` xếp theo (số chương
+chung, chỉ số bậc). Người mới chưa gặp ai thì mọi bậc đều 0 chương chung, và hoà thì lấy bậc
+**thấp nhất** — nên tất cả cùng rơi về một bậc, trong khi bốn bậc khác cũng 0 chương chung chỉ có
+một người giữ. Không ai trong sáu người cùng chương nên người nghe lô 6 không lẫn, nhưng sáu
+người một giọng là mười lăm cặp có thể gặp nhau ở lô sau.
+
+Bản vá `patch_a_tie_goes_to_the_emptier_step.py`: chèn "số người đang giữ bậc" vào giữa hai khoá
+— khoá đầu (không cùng chương) không đổi, chỉ rải người lạ ra các bậc trống-như-nhau. Hai test:
+ba người lạ phải ở ba bậc; và một bậc đông-mà-lạ vẫn thắng một bậc vắng-mà-có-bạn-diễn. Áp thử
+sạch trên bản sao cùng bản vá tuổi; test casting hiện có xanh. Chưa xếp hàng, ranh giới 7 → 8.
