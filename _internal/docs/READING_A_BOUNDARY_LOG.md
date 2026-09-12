@@ -104,3 +104,21 @@ Cả ba đều từ cùng một câu: **một lượt cải thiện thất bại
    kia mất lượt.
 
 Chi tiết và bảng đo ở `KEEP_THE_LOCKED_READING.md`.
+
+## "đã đúc lại hoàn thành - bỏ qua" và dấu `!`
+
+Bước 3, 4 và 4b **bỏ qua** chương đã có bản hoàn thành ở phía đích (`already_done`): bước 3 xét
+`…v` (vá), 4/4b xét `…r` (đúc lại). Đó là thứ làm lệnh thả lại **idempotent** — ranh giới chết
+giữa chừng thì chạy lại đúng lệnh cũ, nó không làm lại chương đã xong. Hệ quả ngược: một chương
+**đã từng** được đúc lại ở ranh giới trước sẽ bị bỏ qua mãi, dù lý do đúc lại lần này khác hẳn.
+
+    09-12 18:33:20   lo 3 chuong 062 da duc lai hoan thanh - bo qua
+    09-12 18:33:20   lo 3 chuong 071 da duc lai hoan thanh - bo qua
+
+Hai dòng ấy là ranh giới 6 → 7 làm đúng luật, còn tôi thì sai cú pháp: `lo03r_062` và `lo03r_071`
+có từ các ranh giới trước, và lần này muốn làm lại chúng (va chạm KANG + NPC ở 071; pin nữ của IVAN
+ở 062). Muốn ép thì đánh dấu `!`: `--recast auto "3:071!" "3:062!"` — dòng `ep duc lai: 071 062`
+ở đầu log xác nhận ranh giới đã hiểu. Dấu `!` cần ngoặc kép trong bash vì `!` là ký tự lịch sử.
+
+Khi thả lại một ranh giới đã chạy dở, **bỏ** dấu `!` của chương đã xong ở lần trước (ví dụ `054!`
+sau khi `lo02r_054b` hoàn thành), nếu không nó bị đúc lại lần nữa.
