@@ -122,3 +122,19 @@ Bài học chung, đắt hơn cả ba gạch đầu dòng trên: **tôi đặt t
 lượt chạy kế tiếp kịp nói.** `TWO_CHARACTERS_ONE_VOICE.md` từng làm đúng việc phải làm trong ca
 tương tự — giữ lại kết luận sai kèm lý do — nên tài liệu này giữ nguyên cái tên sai ấy, có cảnh
 báo ở đầu.
+
+## Ca thứ hai, chương 175 (2026-09-13 01:5x): lượt vá đổi cả NGƯỜI NÓI
+
+Lô 7, chương 175, câu "Nghiên cứu… nghiên cứu kiểu gì cơ?": 10 lần thử, 4 giá trị, 25,7–33,7 kt/s,
+tất cả trên trần — cùng lớp với 140. Bước 3 vá lại: **qua ngay lần thử đầu**, 2,16 s, 19,5 kt/s,
+với **cùng phiếu diễn** (normal/neutral/1). Lần này không phải đạo diễn đổi ý. Thứ đổi là người nói:
+
+    lô 7     speaker='BẢN LINH'                       canonical=BẢN LINH (male)  giọng=thanh_binh_f100_p-04
+    vá 175   speaker='JULIANA'                        canonical=JULIANA (female)  giọng=ngoc_linh_f100_p+00
+
+Phân tích lại gán câu ấy cho một người khác, người ấy có giọng khác, và giọng khác đọc với nhịp
+khác. Vậy phân bố thời lượng thuộc về **(văn bản, người nói → giọng, phiếu diễn)**, và một lượt vá
+đổi được cả ba. Kết luận của mục trước đứng vững và mạnh hơn: "trong tầm với" là câu hỏi của một
+lượt; hai lượt là hai phân bố. Tempo vẫn ở mức "theo dõi" — hai ca, hai lần lượt vá tự chữa.
+
+Câu gán cho ai mới đúng thì tài liệu này không phán: cả hai lượt đều là LLM đọc cùng một đoạn.

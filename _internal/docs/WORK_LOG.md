@@ -1799,3 +1799,13 @@ Cũng ở lô 7: IVAN không có pin (chuỗi gieo lô 7 không mang pin nữ c�
 `thanh_binh_f100_p-04` — giọng nam — 65 câu ở 188–192. Chương 186 sẽ được đúc lại ở ranh giới
 7 → 8 sau khi bản vá này áp; thêm `3:186!`? Không: 186 thuộc lô 7 (`7:186`), và bước 4 `--recast
 auto` của ranh giới 7 tự thấy va chạm cùng chương ấy và đúc lại — đó chính là việc của bước 4.
+
+## 2026-09-13, 02:01–02:10 — ranh giới 7 → 8 đi đúng, và 175 dạy thêm một biến
+
+Lô 7 xong 01:34 (25 chương + 175 hỏng). Bước 1 áp ba bản vá, bộ test xanh, commit `f08435a`, tag
+`v0.2.0-lo07v`. Bước 3 vá 175 → completed; bước 4 tự thấy va chạm cùng chương ở 186 và đang đúc lại
+(`lo07r_186`, lần đầu chạy với bản vá hai-đứa-trẻ); rồi 4b ép 071 và 062, bước 6 lô 8.
+
+175 qua ngay lần thử đầu với cùng phiếu diễn — nhưng phân tích lại gán câu cho người nói khác
+(BẢN LINH → JULIANA), giọng khác, nhịp khác. Ghi vào `A_BAND_IN_THE_VALLEY.md` làm ca thứ hai:
+phân bố nhịp thuộc về (văn bản, người nói → giọng, phiếu diễn); lượt vá đổi được cả ba.
