@@ -1868,6 +1868,9 @@ tính đã ghim theo chuỗi gieo, và `_drop_pins_that_contradict_a_person` ở
 `build_registry_and_cast`. Bài thử ghim chặt hai điều dễ trôi: `LOCKABLE_AGES ⊆ ALLOWED_AGES` (hai
 module, hai danh sách), và **ghim tuổi KHÔNG được ghim phái** (cột `locked` là của phái).
 
+*(Sửa 10:50 ngày 12-09: không cần `cast --age` — luật bỏ pin của bản vá áp cho mọi tuổi khác `child`,
+kể cả `unknown`, và pin của IVAN ở 062 là `ngoc_linh_f107_p+02` mang sang; xem WORK_LOG 10:45.)*
+
 **Dự đoán ghi trước:** sau bản vá và một lần `cast --character IVAN --age adult`, đúc lại 062 cho
 IVAN giọng nam; `voice_matches_the_person.py` về 0 dòng lệch phái; `one_person_one_voice --across`
 mất IVAN khỏi danh sách (3 chương của anh ta về một giọng). EVERAN **không** đổi: nó là trẻ con
