@@ -1996,3 +1996,13 @@ gọi qua `CREATE_NO_WINDOW`. Nhưng nếu một ngày `pythonw.exe` không có 
 `_default_python_executable` rơi về `python.exe`, và khi ấy worker `multiprocessing` sẽ mở
 một cửa sổ console **sống suốt lượt chạy**. Sửa đúng là bỏ `DETACHED_PROCESS` như watchdog;
 file này bị khoá nên đi qua `pending_patches` ở ranh giới sau. Không gấp.
+
+## `boundary.sh` bước 1 ghi "bo test: (khong thay dong tong ket)" dù test xanh (2026-09-12)
+
+Ranh giới 5→6 lúc 06:20:04 ghi dòng ấy vào log và vào commit `054a0d1`, trong khi `apply_all`
+in rõ *"Xanh hết. Giờ mới được chạy lượt mới."* Nguyên nhân: ranh giới tìm chuỗi tổng kết tiếng
+Anh của pytest (`N passed`) trong output, còn `apply_all` chạy pytest với `-q` và chỉ in phán
+quyết tiếng Việt của chính nó. Không nguy hiểm — nếu test đỏ, `apply_all` trả mã khác 0 và ranh
+giới dừng ở đó — nhưng commit tự động mất con số. Sửa: bắt cả `Xanh hết` (và `TEST ĐỎ`) làm
+dòng tổng kết. **Chỉ sửa khi không có ranh giới nào đang chạy**: bash đọc script theo từng đoạn,
+sửa file đang chạy là hỏng nó.
