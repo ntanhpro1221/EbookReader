@@ -1809,3 +1809,18 @@ Lô 7 xong 01:34 (25 chương + 175 hỏng). Bước 1 áp ba bản vá, bộ te
 175 qua ngay lần thử đầu với cùng phiếu diễn — nhưng phân tích lại gán câu cho người nói khác
 (BẢN LINH → JULIANA), giọng khác, nhịp khác. Ghi vào `A_BAND_IN_THE_VALLEY.md` làm ca thứ hai:
 phân bố nhịp thuộc về (văn bản, người nói → giọng, phiếu diễn); lượt vá đổi được cả ba.
+
+## 2026-09-13, 02:31 — bản vá hai-đứa-trẻ chứng minh ở quy mô thật trên chính chương đã bắt lỗi
+
+Bước 4 của ranh giới 7 → 8 đúc lại 186 (`lo07r_186_227f268641`) với bản vá vừa áp. Trước: AEREN và
+NPC CON TRAI (cả hai nam, trẻ con) cùng `ngoc_linh_f107_p+02`. Sau:
+
+    AEREN            male    child   ngoc_linh_f107_p+02   4 câu   (giữ đúng giọng người nghe ưa thích)
+    NPC TRẺ CON #1   male    child   doan_trang_f113_p+01  2 câu
+    NPC TRẺ CON #2   unknown child   truc_ly_f114_p+02     1 câu
+
+`voice_pool_pressure`: "Không có giọng nào bị hai nhân vật dùng chung." Ba đứa trẻ, ba giọng, đứa
+đầu không bị đẩy khỏi giọng ưa thích — đúng ba điều ba bài test khoá. Bước 4 tự thấy va chạm
+(`auto: chuong co hai nguoi mot giong cung chuong:186`) và tự sửa; không cần ai gõ số chương.
+
+4b đang chạy: 062 (ép, `lo03r_062b`) rồi 071 (ép); sau đó bước 6 khởi động lô 8.
