@@ -1575,3 +1575,25 @@ có làm chậm lô hay không; điều đo được là governor **không** coi
 
 Một mẫu, không phải một định luật: lời khuyên của cổng vẫn là mặc định đúng, và tôi phá nó một
 lần có chủ đích để đổi lấy sự chắc chắn về bước chạy một mình.
+
+## 2026-09-12, 07:25 — hai chương đúc lại đầu tiên chứng minh cả kế hoạch
+
+Bước 4b đang chạy. Hai chương xong, và chúng là hai phép thử tôi thả ranh giới để làm.
+
+**Chương 023 — va chạm cùng chương duy nhất còn lại của cuốn sách.** `voice_pool_pressure` trên
+`lo01r_023_c45ff27cc2`: *"Không có giọng nào bị hai nhân vật dùng chung."* Tám người nam cần tám
+giọng trong kho mười bốn, và báo cáo ghi **"tối ưu (chạm cận dưới)"**. SỐ BỐN và SỐ NĂM giờ là hai
+giọng khác nhau — cặp mà `voice_pool_pressure` đã chỉ ra từ lô 1 và không ai đúc lại suốt mười một
+tuần chương.
+
+**Chương 031 — hai vai nói nhiều nhất cuốn sách về giọng đa số.** So trước/sau:
+
+    trước (lo02v_031)   NGUOI TRA LOI   ngoc_linh_f108_p+00     THU LÃNH    thanh_binh_f090_p-04
+    sau   (lo02r_031)   NGƯỜI TRẢ LỜI   doan_trang_f100_p+00    THỦ LÃNH    thanh_binh_f100_p-07
+
+Hai việc xảy ra cùng lúc, và cả hai đều do bản vá: **cách viết tên** hết rơi dấu (bản vá gộp tên
+của ranh giới 3 → 4 nay áp cho chương cũ), và **giọng** về đúng bản 90 chương / 83 chương mà port
+mang sang. Người nghe chương 031 giờ nghe đúng hai nhân vật ấy như ở 89 chương kia.
+
+Còn mười một chương nữa cùng loại (043 051 053 054 055 056 072 080 081 089) và chương 106. Nhịp
+~10 phút/chương ở bước 4b.
