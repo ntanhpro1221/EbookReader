@@ -1597,3 +1597,29 @@ mang sang. Người nghe chương 031 giờ nghe đúng hai nhân vật ấy nh�
 
 Còn mười một chương nữa cùng loại (043 051 053 054 055 056 072 080 081 089) và chương 106. Nhịp
 ~10 phút/chương ở bước 4b.
+
+## 2026-09-12, 08:20–08:45 — "cửa sổ terminal nháy liên tục": đo, tìm, sửa
+
+Chủ sách báo lúc 08:2x: *"cứ chạy một lúc là lại có vài cái cửa sổ terminal pop ra rồi biến
+mất liên tục"*, rồi *"đấy vừa mới nháy 3 4 phát lên"*. Không đoán: viết một bộ lấy mẫu
+(`scratchpad/win_sampler.py`) ghi mọi cửa sổ top-level và mọi tiến trình mới mỗi 100 ms trong
+5 phút. Ba cửa sổ hiện lúc **08:27:24, :25, :26**, sống 0,4–0,6 s, đúng lúc ba con của
+`ollama.exe (36944)` ra đời. Heartbeat của tôi (gọi PowerShell từ Bash) thử ngay lúc 08:28:14:
+**không** sinh cửa sổ — vô can.
+
+Ollama 36944 khởi động **23:14:23 ngày 11-09** bởi watchdog (log của nó nói rõ), 90 giây sau
+khi đồng hồ được chỉnh nhảy 4h17m. Cờ khởi động `CREATE_NO_WINDOW | DETACHED_PROCESS`; đo bốn
+tổ hợp trên máy này, chỉ tổ hợp ấy làm cháu bật cửa sổ. Kể từ đó mỗi lần nạp model (mỗi chương
+đúc lại, vì model bị dỡ sau phân tích để nhường VRAM cho TTS) là ba phát nháy.
+
+Đang sửa thì bộ test đỏ một bài, và bài đỏ ấy dẫn tới gốc rễ thật: bài test cũ mock
+`can_generate`, mã mới gọi `probe_verdict` thật, và probe thật vào Ollama đang khoẻ trả về
+*"HTTP 200 nhưng response rỗng"*. `qwen3:8b` là model **suy nghĩ** — bốn token đi vào
+`thinking`, `response` rỗng — nên probe cũ **không bao giờ** nói "có" với model này. Từ ngày đổi
+model, mỗi lần cổng im-lặng trượt là một lần khởi động lại chắc chắn. Đo lại 08:41: mặc định
+`thinking='Okay,' eval_count=4`; `think: false` → `response='1 + 1'`.
+
+Ba sửa trong `scripts/ollama_watchdog.py` + 4 test mới + docs, một commit, chạy test và commit
+trong cùng một lệnh để cây không bẩn lúc ranh giới kiểm. Xem `SURVIVING_AN_INTERRUPTION.md`.
+Hai lần probe thật của tôi cũng làm nháy cửa sổ thêm hai đợt — cái giá của việc đo trên server
+đang chạy sai cờ, ghi lại để không ai tưởng bản sửa chưa ăn.

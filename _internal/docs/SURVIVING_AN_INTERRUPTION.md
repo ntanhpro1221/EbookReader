@@ -259,6 +259,39 @@ Chạy chung Scheduled Task với phần 1, là action thứ hai — cùng ba tr
 ghi log khi thật sự làm gì (`_ollama_watchdog.log` không tồn tại nghĩa là chưa phải
 can thiệp lần nào).
 
+### Lần khởi động lại ngày 2026-09-11 23:14 — đúng chỗ, sai cách, và cái giá là cửa sổ nháy
+
+Đêm 11-09 đồng hồ hệ thống được chỉnh **nhảy 4h17m** lúc 23:12:55. 73 giây sau, watchdog
+thấy log lô 5 "im 258,3 phút" — không phải im, là mtime của dòng log cuối còn mang giờ cũ.
+Cổng một bị lừa. Cổng hai đáng lẽ phải đỡ, nhưng nó **đã hỏng từ khi model thành `qwen3:8b`**:
+đó là model *suy nghĩ*, bốn token probe xin đi hết vào trường `thinking`, `response` rỗng, và
+bản `can_generate` cũ đọc một server khoẻ thành "không sinh nổi token" — mọi lần. Đo lại 08:41
+ngày 12-09 trên server đang khoẻ: mặc định `response=''`, `thinking='Okay,'`, `eval_count=4`;
+với `think: false` thì `response='1 + 1'`. Mười lăm giây ở 23:14 chỉ là thời gian nạp model
+và trả lời. Nên từ ngày đổi model, **mỗi lần cổng một trượt là một lần khởi động lại chắc chắn**
+— và cổng một chỉ cần một cú nhảy đồng hồ. Nó giết một Ollama khoẻ đang bận với request phân
+tích thật; lô 5 sống sót vì pipeline thử lại.
+
+Cái giá lộ ra chín tiếng sau: chủ sách thấy **"vài cái cửa sổ terminal pop ra rồi biến mất
+liên tục"**. Bộ lấy mẫu cửa sổ ghi lúc 08:27:24, :25, :26 ba cửa sổ Windows Terminal sống
+0,4–0,6 giây, mỗi cái đúng lúc một tiến trình con của `ollama.exe` ra đời (`llama-server.exe`
+×2, `ollama gpu-discover`). Watchdog đã khởi động ollama bằng `CREATE_NO_WINDOW |
+DETACHED_PROCESS`, và trên Windows cờ thứ hai **vô hiệu hoá** cờ thứ nhất: server không có
+console, nên mỗi lần nạp model, con của nó phải mở console mới — một cửa sổ. Đo bốn tổ hợp
+cờ trên chính máy này: chỉ tổ hợp ấy làm cháu bật cửa sổ; `analysis.py` (chỉ
+`CREATE_NO_WINDOW`) không bao giờ nháy, và đó là lý do trước 23:14 không ai thấy gì.
+
+Ba sửa, một commit: (1) cờ mới `CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP` — sống sót sau
+khi watchdog thoát chưa bao giờ cần `DETACHED_PROCESS`, con Windows sống lâu hơn cha trừ khi
+có job object; (2) probe gửi `think: false` và đếm `eval_count`, nên model suy nghĩ được đọc
+đúng; (3) `probe_verdict` trả về **cách** thất bại, và chỉ `timeout` mới là chữ ký treo — lỗi
+trả về nhanh thì ghi log và không giết. Cú nhảy đồng hồ vẫn lừa được cổng một; việc của cổng
+hai là không bị lừa cùng lúc, và giờ nó có thể nói "có" với một server khoẻ.
+
+Bài học đắt hơn cả ba sửa: test của watchdog chỉ khoá **những lần nó từ chối**, và probe được
+mock trong mọi test, nên một probe không bao giờ nói "có" đã sống qua cả bộ test xanh. Bài
+test mới đưa đúng payload đo được của qwen3 vào probe thật.
+
 ## Còn thiếu gì
 
 Nói thẳng, vì chỗ này dễ tưởng là đã xong hơn thực tế:

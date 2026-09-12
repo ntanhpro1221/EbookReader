@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import subprocess
 import sys
 import time
@@ -61,6 +62,10 @@ STALL_SECONDS = 600
 PROBE_TIMEOUT_SECONDS = 120
 PROBE_PROMPT = "1+1="
 RESTART_SETTLE_SECONDS = 90
+# Ba câu trả lời của probe. Chỉ TIMEOUT là chữ ký treo; xem probe_verdict.
+PROBE_OK = "ok"
+PROBE_TIMEOUT = "timeout"
+PROBE_ERROR = "error"
 
 
 def _log_line(root: Path, line: str) -> None:
@@ -124,14 +129,41 @@ def loaded_models() -> list[str]:
     return [str(entry.get("model") or entry.get("name") or "") for entry in models]
 
 
-def can_generate(model: str, timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
-    """The only question worth asking: does a token come out?"""
+def probe_verdict(model: str, timeout: float = PROBE_TIMEOUT_SECONDS) -> tuple[str, str]:
+    """Does a token come out - and if not, HOW did it fail. The how is the whole point.
+
+    The wedge this watchdog exists for has exactly one signature, measured on 2026-09-05:
+    the request *hangs*. Nothing after 20 s, nothing after 120 s. A probe that comes back
+    in fifteen seconds with an HTTP error or a reset connection is a different animal - a
+    server that is busy, restarting, or refusing - and none of those is cured by killing
+    it. The old boolean version folded every failure into "no token", and on 2026-09-11 at
+    23:14:08 it answered "no token" after 15 s (the log shows the restart 15 s after the
+    probe began, not 120) and restarted a healthy Ollama that was busy with batch 5's real
+    analysis. The silence gate had already been fooled: the system clock had just been
+    corrected forward by 4 h 17 min, so a log written 55 s earlier looked 258 min old.
+    Two gates exist so that one fooled gate is not enough; this makes the second gate
+    actually ask its question.
+
+    And the second gate had been broken since the model became qwen3:8b, a *thinking*
+    model: its first tokens go into the `thinking` field, `response` stays empty, and the
+    old probe read a healthy server as "no token" every single time - the 15 s at 23:14
+    was simply the model loading and answering. So every trip of the silence gate was a
+    guaranteed restart. The probe now sends think=false and counts eval_count.
+
+    Returns (verdict, detail): PROBE_OK, PROBE_TIMEOUT (the signature), or PROBE_ERROR
+    with what actually happened.
+    """
     body = json.dumps(
         {
             "model": model,
             "prompt": PROBE_PROMPT,
             "stream": False,
             "options": {"num_predict": 4},
+            # qwen3 is a thinking model: without this, all four tokens go into the
+            # `thinking` field and `response` stays empty. Measured 2026-09-12 08:41 on a
+            # healthy server - default: response '' thinking 'Okay,' eval_count 4;
+            # think false: response '1 + 1'. The old probe read the first as "no token".
+            "think": False,
         }
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -139,14 +171,32 @@ def can_generate(model: str, timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
         data=body,
         headers={"Content-Type": "application/json"},
     )
+    started = time.monotonic()
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
-                return False
+                return PROBE_ERROR, f"HTTP {response.status} sau {time.monotonic() - started:.0f}s"
             payload = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
-        return False
-    return bool(str(payload.get("response", "")))
+    except TimeoutError:
+        return PROBE_TIMEOUT, f"im lặng {time.monotonic() - started:.0f}s"
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        if isinstance(reason, TimeoutError):
+            return PROBE_TIMEOUT, f"im lặng {time.monotonic() - started:.0f}s (kết nối)"
+        return PROBE_ERROR, f"{type(exc).__name__}: {reason} sau {time.monotonic() - started:.0f}s"
+    except (OSError, ValueError) as exc:
+        return PROBE_ERROR, f"{type(exc).__name__}: {exc} sau {time.monotonic() - started:.0f}s"
+    # A token is a token wherever the server put it. eval_count is the honest counter;
+    # response and thinking are the two places the text can land.
+    tokens = int(payload.get("eval_count") or 0)
+    if tokens > 0 or str(payload.get("response") or "") or str(payload.get("thinking") or ""):
+        return PROBE_OK, f"có chữ ({tokens} token)"
+    return PROBE_ERROR, "HTTP 200 nhưng không có token nào"
+
+
+def can_generate(model: str, timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
+    """The yes/no form, kept for callers that only want the yes."""
+    return probe_verdict(model, timeout)[0] == PROBE_OK
 
 
 def _ollama_processes():
@@ -162,11 +212,43 @@ def _ollama_processes():
     return found
 
 
+def _hidden_creation_flags() -> int:
+    """A server with a hidden console of its own - never a server with no console at all.
+
+    The old value was CREATE_NO_WINDOW | DETACHED_PROCESS, and on Windows the second flag
+    cancels the first: a detached process has no console, so every console program it
+    starts gets a brand-new one, and Windows 11 opens Windows Terminal to show it. Ollama
+    starts a runner (llama-server.exe) plus a gpu-discover helper every time it loads a
+    model, so from the restart of 2026-09-11 23:14 until this fix every model load flashed
+    three terminal windows at the owner, 0.4-0.6 s apiece - measured with a window sampler
+    on 2026-09-12 at 08:27:24, :25 and :26, one window per Ollama child.
+
+    Measured on this machine from a parent with no console, cmd /c (cmd /c exit), does the
+    grandchild open a visible window:
+
+        CREATE_NO_WINDOW | DETACHED_PROCESS | NEW_PROCESS_GROUP   YES   (the old flags)
+        CREATE_NO_WINDOW | NEW_PROCESS_GROUP                      no    (these flags)
+        CREATE_NO_WINDOW                                          no    (what analysis.py uses)
+        no flags at all                                           no
+
+    Surviving the watchdog's exit never needed DETACHED_PROCESS: a Windows child outlives
+    its parent unless a job object says otherwise, and the 23:14 server outlived its parent
+    by nine hours. CREATE_NEW_PROCESS_GROUP stays so a Ctrl+C aimed at the watchdog cannot
+    reach the server.
+    """
+    if os.name != "nt":
+        return 0
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | getattr(
+        subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
+    )
+
+
 def restart_ollama() -> bool:
     """Kill the wedged server and start a new one, which is the only thing that helps.
 
     The context is gone for the lifetime of that process; there is no in-process cure to
-    try first. Started detached so it outlives this short-lived watchdog run.
+    try first. Started with a hidden console of its own - see _hidden_creation_flags for
+    why "detached" was the wrong word and what it cost.
     """
     processes = _ollama_processes()
     executable = OLLAMA_EXE_FALLBACK
@@ -188,11 +270,7 @@ def restart_ollama() -> bool:
 
     if not executable.is_file():
         return False
-    creation_flags = 0
-    if hasattr(subprocess, "CREATE_NO_WINDOW"):
-        creation_flags |= subprocess.CREATE_NO_WINDOW
-    if hasattr(subprocess, "DETACHED_PROCESS"):
-        creation_flags |= subprocess.DETACHED_PROCESS
+    creation_flags = _hidden_creation_flags()
     try:
         subprocess.Popen(  # noqa: S603 - fixed argv, no shell
             [str(executable), "serve"],
@@ -256,13 +334,19 @@ def main(argv: list[str]) -> int:
         return 0
 
     model = models[0]
-    if can_generate(model):
+    verdict, detail = probe_verdict(model)
+    if verdict == PROBE_OK:
         say(f"Ollama vẫn sinh được chữ với {model}; đứng im là do việc khác")
+        return 0
+    if verdict != PROBE_TIMEOUT:
+        # Một lỗi trả về NHANH không phải chữ ký treo: treo là im lặng đủ 120 giây. Ollama
+        # đang bận, đang khởi động lại, hay từ chối - không cái nào chữa được bằng giết nó.
+        say(f"Ollama giữ {model}, probe lỗi ({detail}) - không phải kiểu treo, không khởi động lại")
         return 0
 
     say(
         f"Ollama giữ {model} nhưng không sinh nổi một token trong "
-        f"{PROBE_TIMEOUT_SECONDS}s - đúng kiểu treo sau khi máy ngủ"
+        f"{PROBE_TIMEOUT_SECONDS}s ({detail}) - đúng kiểu treo sau khi máy ngủ"
     )
     if dry_run:
         say("  (thử khan, không khởi động lại)")

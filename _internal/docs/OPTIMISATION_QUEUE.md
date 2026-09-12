@@ -1986,3 +1986,13 @@ phút và đoạn ấy **qua ngay lần thử đầu**: 1,68 s, 21,28 kt/s. Th�
   hoá ra lạc quan mà ĐÚNG cho câu thứ hai.
 
 Chi tiết và phần tự bác bỏ ở `docs/A_BAND_IN_THE_VALLEY.md`.
+
+## Cùng tổ hợp cờ ấy còn nằm ở `background_runner._detached_creation_flags` (2026-09-12)
+
+`CREATE_NO_WINDOW | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` — y hệt cờ watchdog vừa sửa
+(xem `SURVIVING_AN_INTERRUPTION.md`, mục 23:14). Hôm nay **vô hại** vì supervisor là
+`pythonw.exe` (GUI subsystem, không bao giờ có console) và mọi con của nó đều `pythonw` hoặc
+gọi qua `CREATE_NO_WINDOW`. Nhưng nếu một ngày `pythonw.exe` không có trong venv,
+`_default_python_executable` rơi về `python.exe`, và khi ấy worker `multiprocessing` sẽ mở
+một cửa sổ console **sống suốt lượt chạy**. Sửa đúng là bỏ `DETACHED_PROCESS` như watchdog;
+file này bị khoá nên đi qua `pending_patches` ở ranh giới sau. Không gấp.
