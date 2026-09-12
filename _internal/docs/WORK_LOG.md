@@ -1653,3 +1653,13 @@ mà project ấy là bản thắng: **2** va chạm đang được ghép, 023 v�
 vào danh sách ranh giới 6 → 7 (`3:071`). Sau đó, con số đo được sẽ là 0, và lần này đếm cả NPC.
 
 Cũng kiểm 072 và 080 vừa đúc lại: MICHAEL, JAKE, SAM, NGƯỜI TRẢ LỜI, THỦ LÃNH đều về đúng giọng đa số.
+
+## 2026-09-12, 10:26–10:32 — bản vá tuổi vẫn khớp cây sau ba bản vá đêm qua
+
+`patch_a_pinned_person_outranks_a_ported_voice.py` được viết trước khi ranh giới 5 → 6 áp ba bản vá
+vào `database.py` và `pipeline.py`. Thay vì để bước 1 của ranh giới sau phát hiện neo trôi lúc sáu
+giờ sáng, áp thử lên một bản sao cây hiện tại: bốn file vá sạch, một test tạo, và **105 bài test
+casting** (bài của bản vá + `test_cast_*`, `test_character_casting`, `test_port_*`,
+`test_pin_the_book_cast`, `test_voice_matches_the_person`) xanh trên bản sao đã vá. Bản vá sẵn sàng
+để xếp hàng **sau khi** ranh giới 5 → 6 chạy xong bước 7 — xếp sớm hơn thì `before_a_batch` từ
+chối khởi động lô 6 vì "còn bản vá chưa áp".
