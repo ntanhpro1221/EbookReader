@@ -1957,3 +1957,26 @@ của luật hỏi-sổ-người-giữ cho hai đứa trẻ **đều không pin*
 chứng chính của bản vá ấy.
 
 Tổng hợp từ 21:4x, 4 chương xong, 0 hỏng; xong quãng 00:45, rồi ranh giới 10 → 11 tự chạy (hàng rỗng).
+
+## 2026-09-13, 22:25–22:45 — lô 10 chết vì thư mục nguồn bị xoá; ranh giới dừng đúng luật; tôi dừng đúng chỗ
+
+Lô 10 đang ở 8/26 thì worker báo `Source chapter is missing: D:\Novels\Tools\Text\261.txt` (22:26:21).
+Ranh giới 10 → 11 thấy mất nhịp tim, chạy lại lô hai lần (22:26, 22:31), cả hai vấp ở khởi động
+supervisor "Source chapter không còn tồn tại", rồi **dừng cả chuỗi với mã 4 — "cần người nhìn"** (22:36).
+Đúng thiết kế: ba lần chết là ngưỡng, và đây không phải lỗi máy có thể tự chữa.
+
+Truy vết trên đĩa, không đoán:
+
+    22:25:50   D:\Novels\Tools\Text (478 .txt) vào Thùng rác — còn nguyên ở $RECYCLE.BIN/…/$RVDLKSP, metadata $IVDLKSP
+    22:38:06   D:\Novels\Tools\Text_Tmp được tạo — 60 .txt, bộ KHÁC (có 000, không có 261/478)
+    (D:\Novels\Ebook Reader\Text_Tmp là bản cũ từ tháng 8, 915 file — không liên quan)
+
+Tức chủ sách đang sắp xếp lại nguồn ngay lúc ấy. Tôi có thể nối lại đường dẫn trong một giây (junction
+`Tools\Text` → thư mục khác, hoặc khôi phục thùng rác) và lô 10 sẽ chạy tiếp — nhưng đó là đụng vào việc
+chủ sách đang làm trên chính file của họ, và tôi không biết ý định: đổi nguồn, dọn chỗ, hay dừng sách.
+**Không làm.** Gửi push cho chủ sách với hai đường: khôi phục `Text` từ Thùng rác (một cú nhấn, 478 file
+còn nguyên) thì tôi thả lại ranh giới và lô 10 tiếp tục từ 8/26; hoặc cho đường dẫn mới thì tôi trỏ lại.
+
+Trạng thái để yên: lô 10 `unrecoverable_error` 8 completed / 18 pending (dữ liệu nguyên, `cli run` tiếp
+được khi nguồn về); sách 253 chương không đổi; không ranh giới nào chạy; cây sạch. Mỗi nhịp tim tôi kiểm
+`D:\Novels\Tools\Text` có trở lại không — có là thả lại `boundary.sh 10 --recast auto` (nó tự "run lai").
