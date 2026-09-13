@@ -1925,3 +1925,19 @@ khung), tức có nhân chứng ngoài ASR nói bản thu hỏng:
 Cả hai áp thử sạch trên bản sao có bốn bản vá trước, test liên quan xanh, xếp vào hàng ranh giới
 9 → 10 (bước 1 quãng 19:00, trước bước 3 vá 223). Dự đoán ghi trước: lượt vá 223 sau bản vá sẽ
 đề cử ứng viên tự kết thúc cho "Gục đi!" và không còn chạy tới trần với "Á... a!!"; chương lên sách.
+
+## 2026-09-13, 16:59–17:25 — ranh giới 9 → 10 xong sạch; hai bản vá gặp ca thật ngay ở bước 3
+
+Lô 9 xong 16:59 (30 chương + 223 hỏng). Bước 1 áp hai bản vá, bộ test xanh, commit `7c3d5ca`, tag
+`v0.2.0-lo09v`. Bước 4 không thấy va chạm cùng chương. Bước 3 vá 223 (`lo09v_223_5e51d4448b`): **ba
+đoạn từng hỏng đều `verified`**.
+
+    "Gục đi!"                   trước: 1,92 s chạm trần, ASR "Đi. Assalamualaikum."   sau: 0,80 s, ASR "Gục đi Gục đi Gục đi", qua
+    "ÁAAAAA!!"                  trước: 1,92 s chạm trần, ASR bịa câu chào cuối video  sau: 1,04 s (dạng "Á... a!!"), ASR "À? À?", qua
+    Không không không không—    trước: máy cho qua                                    sau: verified thẳng, 1,28 s
+
+Bản vá tiếng-hét-có-dấu chứng minh ngay: không còn chạy tới trần. Bản vá đề-cử-bản-bị-cắt **chưa
+cần dùng** ở lượt này (0 sự kiện `SEGMENT_TAKE_SUBSTITUTED`) vì bản thu mới qua ASR thẳng; bằng
+chứng của nó là test end-to-end trên fixture `_fixtures/lo09_223_cut_off`. Lô 10 khởi động 17:22
+(26 chương 253..278), 6b không còn gì, sách **253 chương**, 3,79 GB, 223 lấy từ bản vá. Ranh giới
+10 → 11 thả 17:25 với hàng rỗng và `--recast auto`.
