@@ -1853,3 +1853,18 @@ Kết luận: không vá. Nguồn chân lý cho giới là người nghe; nếu 
 **Mười lăm người mang nhiều hơn một giọng** (từ 11 lên 15 sau lô 7): người không có pin bị rút thăm
 lại mỗi lô. REXERD giờ 3 giọng trên 15 chương, KANG 3 giọng (thêm f108 ở 071b). Số liệu cho quyết
 định xếp-lại-pin của chủ sách đã ghi ở OPTIMISATION_QUEUE; mỗi lô trôi qua nó đắt thêm một chút.
+
+## 2026-09-13, 07:03 — lô 8 khoá dàn giọng: lô đông nhất tới nay, và bản vá hoà-thì-chọn-bậc-ít-người rải đúng
+
+Lô 8 (29 chương 193..221): **38 người nam** (20 có tên, 18 NPC) trên 15 giọng của kho 14 nam,
+14 nữ trên 12 giọng. Hai mươi giọng bị dùng chung — bắt buộc, vì 38 > 14 — và **0/20 va chạm nằm
+trong cùng chương**. Ba lô liên tiếp (5, 6, 8) về 0 sau bản vá holder; lô 7 có một ca trẻ con và đã
+có bản vá riêng.
+
+Dự đoán "bậc đông nhất thấp hơn 5" **đúng**: bậc đông nhất **4 người**, và ba bậc đông nhất đều 4 —
+38 người trên 14 bậc trung bình 2,7, nghĩa là bản vá `patch_a_tie_goes_to_the_emptier_step` rải người
+lạ ra gần đều thay vì chồng 6 lên một bậc như lô 6 (khi lô 6 chỉ có 20 người nam). Cùng một luật
+tránh-cùng-chương, chỉ đổi cách hoà.
+
+Lô 8 không có trẻ con nào nên dự đoán thứ ba chưa kiểm được ở đây. Cảnh báo "nhiều nhân vật dùng
+chung một giọng" bật một lần, đúng vì dùng chung là bắt buộc; con số quyết định là 0 cùng chương.
