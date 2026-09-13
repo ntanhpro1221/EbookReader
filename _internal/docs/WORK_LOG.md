@@ -2099,3 +2099,32 @@ GPU rảnh — giữa hai lô, hoặc chèn một cửa sổ trước bước 6)
 Điểm ghi cho hàng tối ưu: tỷ lệ Qwen trượt (25/105 = 24%) cao hơn cuốn 1; lỗi phổ biến là âm cuối `r`/`l` và
 cụm phụ âm — có thể thêm ví dụ vào prompt hoặc chạy `_repair_vietnamese_syllable_boundaries` trước khi từ
 chối. Để đo trước khi sửa.
+
+## 2026-09-14, 04:00 — lô 1 cuốn 2 khoá dàn giọng: bể nam quá tải, ba va chạm cùng chương đều là nhân vật chính
+
+Dàn giọng khoá ~03:55, tổng hợp bắt đầu (3 chương xong lúc 04:00). Số liệu đo trên `segments`
+(`canonical_character_id` × `voice_profile_id`; `characters.locked_voice_key` trống ở cuốn này — phép đo
+cũ theo cột ấy cho 0 giọng và phải tính lại từ đoạn):
+
+- **74 nhân vật có lời trên 37 giọng**; 22 giọng một người, 1 giọng hai, 6 giọng ba, **8 giọng bốn** — bậc
+  đông nhất 4, cao hơn 3–4 của các lô cuốn 1. Không nhân vật nào nói bằng hai giọng.
+- Giới tính: 55 nam, 14 nữ, 5 chưa rõ. Bể nam là chỗ tắc: LLM gán `importance = main` cho hơn ba mươi nam,
+  kể cả người bốn lời (`Herodotus`, `GEORGE`, `Douglas`), nên "ưu tiên người chính" hết nghĩa khi ai cũng chính.
+- **3 va chạm cùng chương / 49 chương**, và cả ba là **một cặp**: `Lucien` (nhân vật chính, 307 lời, giọng
+  Thanh Bình) và `NPC vô danh nam` (10 lời) ở chương 23, 24, 33. Bậc của Lucien còn `Aaron` (2 lời) và
+  `NPC giám mục` (1 lời) — hai người này không chung chương với anh ta, đúng luật holder.
+
+Vì sao NPC rơi vào giọng nhân vật chính: khi tới lượt anh ta, mọi bậc nam đều đã có người chung chương
+23/24/33 (Lucien nói trong gần hết 49 chương), tie-break "ít chương chung → ít người → chỉ số" chọn đúng
+luật mà vẫn sai tai: người nghe sẽ thấy Lucien tự nói với mình ba lần. Luật hiện tại đếm **số chương chung**,
+không đếm **người kia nói bao nhiêu**; đâm vào một người 307 lời và đâm vào một người 2 lời là cùng giá.
+
+**Không sửa lúc lô bay.** Bước 4 ranh giới (`--recast auto`) sinh ra cho đúng ca này: đúc lại người ít lời
+hơn trong các chương va chạm. Dự đoán ghi trước: bước 4 đúc lại `NPC vô danh nam` ở 23/24/33 sang một
+giọng nam không ai dùng trong ba chương ấy; `one_person_one_voice.py` sau đó về 0. Ghi vào hàng tối ưu:
+(1) khi bắt buộc chia sẻ, trọng số va chạm nên nhân với số lời của người đang giữ bậc (đâm vào NPC 1 lời rẻ
+hơn đâm vào nhân vật chính); (2) `importance` của LLM lạm phát — xếp hạng lại theo `mention_count`/số lời
+trước khi cấp giọng thì thứ tự cấp mới có nghĩa.
+
+Cảnh báo cũ "CẢNH BÁO: nhiều nhân vật dùng chung một giọng" liệt kê 15 nhóm — nó báo mọi bậc có ≥2 người, tức
+báo cả 12 nhóm không hề chung chương; con số đáng đọc là 3 va chạm cùng chương ở trên.

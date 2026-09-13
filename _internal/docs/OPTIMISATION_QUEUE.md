@@ -2055,3 +2055,9 @@ bốn bài test đều xanh và chương vẫn hỏng.
 - **Cổng nên biết mọi gốc sách**, không chỉ tiến trình: `_supervisors_elsewhere` bắt lô đang bay, nhưng một lô
   *chết dở* của cuốn kia (lease cũ, không supervisor) vẫn vô hình. Một danh mục gốc (`runtime/books.json`) để
   `_runs_in_flight` quét hết là bước tiếp.
+
+- **Va chạm có trọng số lời** (2026-09-14, 04:00, lô 1 cuốn 2): khi bể giọng cạn, `_first_free_variant` đếm số
+  chương chung với người giữ bậc nhưng không đếm người ấy nói bao nhiêu → NPC 10 lời rơi vào giọng nhân vật chính
+  307 lời ở 3 chương. Đề xuất: chi phí va chạm = Σ (số lời của người giữ bậc trong các chương chung), chọn bậc
+  chi phí nhỏ nhất; và xếp thứ tự cấp giọng theo số lời thật thay vì `importance` của LLM (hơn 30 nam được gán
+  "main"). Vào `character_registry.py` (file khoá) → bản vá qua hàng chờ, đo trước trên lô 1 cuốn 2 với 55 nam.
