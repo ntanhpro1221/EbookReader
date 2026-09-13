@@ -2128,3 +2128,31 @@ trước khi cấp giọng thì thứ tự cấp mới có nghĩa.
 
 Cảnh báo cũ "CẢNH BÁO: nhiều nhân vật dùng chung một giọng" liệt kê 15 nhóm — nó báo mọi bậc có ≥2 người, tức
 báo cả 12 nhóm không hề chung chương; con số đáng đọc là 3 va chạm cùng chương ở trên.
+
+## 2026-09-14, 06:32–07:00 — đoạn hỏng đầu tiên của cuốn 2 là một công thức giả kim đọc ĐÚNG mà thước đo sai
+
+Lô 1 cuốn 2, chương 025 (chapter_index 26), đoạn c00026_s0000015: `“Nấm xác chết + Mô não thủy quỷ + Bụi oán
+linh + Bụi hoa hồng ánh trăng = Linh Hồn Than Khóc”`. Whisper nghe ra *"…cộng mô não thủy quỷ, cộng bụi oán
+linh cộng bụi hoa hồng ánh, trăng bằng linh hồn thàn khóc"* — tức giọng đọc "+" là **cộng** và "=" là **bằng**,
+đúng như người Việt đọc công thức. Nhưng chuỗi đối chiếu (`spoken_symbols_to_words` trong tts.py) còn giữ
+nguyên ký hiệu vì `SPOKEN_SYMBOL_WORDS` chỉ biết ↓ và ↑; độ giống 0,73, năm ứng viên sửa cùng trượt
+`beam=ASR_MISMATCH; greedy=ASR_MISMATCH`, ngân sách hết, đoạn `failed` rồi máy cho qua không người nghe
+(`MACHINE_ACCEPTED_WITHOUT_LISTENER`). Chương vẫn `completed` 56 verified / 18 warning / 1 failed.
+
+Đo trước khi sửa, không đoán:
+- Nguồn cuốn 2: 40 dấu "+", 26 dấu "=", trên 28 dòng của 20 chương — công thức giả kim (025, 122), Goldbach
+  "1+1"/"9+9"/"4 = 2 + 2" (717), "E = mc^2" (496, 515), "N ≥ 3" (655), "3+1 chiều" (823); "=>" làm mũi tên 3
+  lần, hai lần đầu dòng. Ngữ cảnh khác của "+" chỉ là "Trans+Edit: Lắc" (ghi công dịch giả) — đọc "cộng" vô hại.
+- "%" (76 lần trong nguồn) **không cần sửa**: cuốn 1 có 6 đoạn "25%" đều verified, Whisper viết lại đúng ký hiệu.
+- Cuốn 1, lô 1–10, 30.926 đoạn có ASR: **không một dấu "+" hay "=" nào** — vì sao lỗi này chưa từng lộ.
+- Trong lô 1 cuốn 2 chỉ đúng một đoạn có ký hiệu toán, và nó hỏng. Tỷ lệ 1/1.
+
+Bản vá `patch_a_formula_is_read_as_words.py`: thêm "+", "=", "≥", "≤", "^", "×", "÷" vào `SPOKEN_SYMBOL_WORDS`;
+"=>" đổi thành "→" trước mọi bước khác để luật `SPOKEN_SEPARATORS` sẵn có lo (đầu dòng cắt, giữa câu phẩy).
+Hàm vẫn ổn định trên output của nó. Sáu test dùng đúng các câu trong nguồn; áp thử trên bản sao cách ly: 24
+test xanh (kể cả 18 test ký hiệu cũ), áp lần hai tự dừng ở `assert`. Xếp `ORDER` cho ranh giới 1 → 2.
+
+Vì sao đáng vá dù chỉ ~28 đoạn/915 chương: mỗi đoạn tốn năm ứng viên sửa vô ích (~2 phút GPU) và một lá cờ
+"chưa ai nghe" trên một bản thu vốn đúng; tệ hơn, ở đúng chỗ ấy một bản thu hỏng thật sẽ không bị bắt, vì
+thước đo đã sai sẵn. Dự đoán ghi trước: chương có công thức kế tiếp là 111/113/122 (lô 3) — sau bản vá, các
+đoạn ấy qua ASR ở lần đầu, không tốn ứng viên sửa.
