@@ -2010,3 +2010,26 @@ viết tắt — có thể đáng chuyển giữa các cuốn; hôm nay chưa t�
 Kế hoạch cuốn 2 tính từ số từ thật (lô theo số từ, không theo chương — luật chủ sách): 23 lô, lô 1 = 000..048
 (3.705 đoạn, ~8 giờ). Watchdog Ollama và `resume_interrupted.py` trong Scheduled Task chạy không tham số nên tự
 theo mặc định mới. Bộ test đầy đủ chạy trên cây đã sửa trước khi commit; kết quả ghi ở mục kế.
+
+## 2026-09-13, 23:00–23:15 — cuốn 2, lô 1 bay; commit 1872f54, tag v0.3.0-lo00
+
+Bộ test đầy đủ trên cây đã tham số hoá: **mã thoát 0** (file bắt output chỉ giữ đuôi nên không có dòng
+"N passed"; mã thoát của pytest là bằng chứng). `before_a_batch.py` sửa muộn hơn bộ test một nhịp nên chạy
+riêng test của nó (5 xanh). Commit `1872f54` (20 file, stage từng đường dẫn), tag `v0.3.0-lo00` = mã lúc cuốn 2
+khởi động; vân tay xanh ghi lại; cổng trước lô qua cả năm mục.
+
+`launch_batch.sh 1 --no-seed` lúc 23:06: `create` đọc 49 chương từ `Text_Tmp` → project
+`D:/Novels/Audiobooks/book2/_versions/v0.3.0-lo01/lo01_c0d8c42dfe` (3.705 đoạn), `run` giao cho supervisor
+`pythonw` (ẩn, không cửa sổ — kiểm bằng danh sách tiến trình: hai `pythonw` supervise, không console). Một phút
+sau: phân tích 5/3.705, Ollama sinh 56 tok/s, nhịp tim `worker_leases` sống. Ranh giới 1 → 2 thả ngay sau
+commit này: `EBOOK_COAUTHOR="Claude Fable 5.1 <noreply@anthropic.com>" bash scripts/boundary.sh 1 --recast auto`,
+log `runtime/boundary_01.log`.
+
+Dọn chỗ cho log: `boundary_NN.log` đặt tên theo số lô, không theo cuốn, nên lô 3 của cuốn 2 sẽ nối vào log lô 3
+của cuốn 1. Không script nào đọc log cũ → dời cả tám file `boundary_03..10.log` của cuốn 1 vào `runtime/book1/`
+(ngoài git). Ba vết nhỏ để sửa ở cửa sổ ranh giới, không đáng làm bẩn cây lúc lô bay: chữ "(doc tu
+PRODUCTION_PLAN.md)" trong `launch_batch.sh` và "Xem docs/PRODUCTION_PLAN.md" cuối `before_a_batch.py` còn chép
+tay tên kế hoạch cuốn 1; output của `before_a_batch.py` qua ống của `launch_batch.sh` bị lỗi mã hoá
+("kh�ng c�." — thiếu `PYTHONIOENCODING=utf-8` ở lệnh gọi).
+
+Điều còn treo với chủ sách: cuốn 1 (253/478) có khôi phục sau không — nguồn vẫn nằm trong Thùng rác.

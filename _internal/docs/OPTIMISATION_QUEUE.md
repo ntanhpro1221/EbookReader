@@ -2041,3 +2041,9 @@ bốn bài test đều xanh và chương vẫn hỏng.
   ghim — thì lô đầu của cuốn sau gieo được lớp chung mà không mang theo tên riêng. Hôm nay `--no-seed` để trống cả hai.
 - **Kế hoạch lô sinh tự động.** `PRODUCTION_PLAN_book2.md` được tính tay từ số từ; một `plan_a_book.py` đọc
   `EBOOK_SOURCE_DIR` và in bảng lô theo ngưỡng từ sẽ bỏ được bước chép tay cho cuốn thứ ba.
+
+- **Ba vết chép tay còn lại sau tham số hoá (sửa ở cửa sổ ranh giới):** `launch_batch.sh` in "(doc tu
+  PRODUCTION_PLAN.md)" → in `$PLAN`; `before_a_batch.py` kết bằng "Xem docs/PRODUCTION_PLAN.md" → `book_paths.PLAN`;
+  `launch_batch.sh` gọi `before_a_batch.py` không có `PYTHONIOENCODING=utf-8` nên log bị "kh�ng c�.".
+- **Log ranh giới theo cuốn:** `runtime/boundary_NN.log` trùng tên giữa hai cuốn; hôm nay dời log cuốn 1 vào
+  `runtime/book1/`; bền hơn là đặt `runtime/<TAG_PREFIX>/boundary_NN.log` (đổi một dòng 83 của boundary.sh + heartbeat).
