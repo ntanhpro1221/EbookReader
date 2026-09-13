@@ -1945,3 +1945,15 @@ chứng của nó là test end-to-end trên fixture `_fixtures/lo09_223_cut_off`
 Kiểm trên sách 253 chương (17:25): một-người-hai-giọng-cùng-chương **0**; va chạm cùng chương trên 55
 project thắng **0** (lần thứ ba liên tiếp); sai phái **1** (vẫn NICAN 062); `--verify` 0 lệch. Danh sách
 `--across ≥5` tiếp tục dài ra theo từng lô — đường cong của quyết định xếp-lại-pin chưa được đưa ra.
+
+## 2026-09-13, 21:52 — lô 10 khoá dàn giọng: ba dự đoán, ba đúng (với một chú thích)
+
+Lô 10 (26 chương 253..278): 25 người nam trên 15 giọng, 9 nữ trên 9; 7 giọng dùng chung, **0/7 va
+chạm cùng chương** — lô thứ năm liên tiếp về 0 (5, 6, 8, 9, 10; lô 7 có ca trẻ con đã vá). Bậc đông
+nhất **3**. Trẻ con: MICHAEL (`thai_son_f108_p+07`, pin) và LILY (`doan_trang_f097_p+00`) cùng có mặt
+ở 257 và 258 với **hai giọng** — dự đoán thứ ba lần đầu có ca thật để đối chiếu, nhưng chú thích
+cho đúng: MICHAEL mang pin từ trước nên hai giọng ở đây do pin bảo đảm, chưa phải phép thử sạch
+của luật hỏi-sổ-người-giữ cho hai đứa trẻ **đều không pin**. Ca 186 (AEREN + hai NPC) vẫn là bằng
+chứng chính của bản vá ấy.
+
+Tổng hợp từ 21:4x, 4 chương xong, 0 hỏng; xong quãng 00:45, rồi ranh giới 10 → 11 tự chạy (hàng rỗng).
