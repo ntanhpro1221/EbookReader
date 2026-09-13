@@ -1890,3 +1890,38 @@ Cơ chế không đổi từ hôm qua: người không có pin bị rút thăm l
 của quyết định chưa được đưa ra (xếp lại pin theo mức đã nghe, `OPTIMISATION_QUEUE`); mỗi lô nó
 đắt thêm chừng 3–6 người. Người nghe không lẫn trong bất kỳ chương nào — nhưng một nhân vật phụ
 quay lại sau mười chương có thể mang giọng khác.
+
+## 2026-09-13, 14:06–15:20 — lô 9 khoá dàn giọng sạch; chương 223 hỏng và lộ ra hai lỗi, một cũ một mới
+
+Dàn giọng lô 9: 22 người nam trên 15 giọng, 6 giọng dùng chung, **0/6 va chạm cùng chương**, bậc
+đông nhất **3** — bốn lô liên tiếp về 0 va chạm sau bản vá holder; bản vá hoà-thì-chọn-bậc-ít-người
+giữ bậc đông nhất ở 3–4 hai lô liền. Không có trẻ con trong lô, dự đoán thứ ba vẫn chờ.
+
+**Chương 223 hỏng** lúc 14:0x với ba đoạn `ASR_MISMATCH_UNRESOLVED`: "Không không không không—"
+(máy cho qua đúng luật), và hai đoạn bị từ chối cho qua vì **bộ sinh chạm trần khung** (1,92 s = 12
+khung), tức có nhân chứng ngoài ASR nói bản thu hỏng:
+
+1. `"Gục đi!"` — ứng viên #11 (vòng 0, 0,64 s, tự kết thúc) đủ bốn điều kiện, **finder chọn nó**,
+   hook bản-hoàn-chỉnh-thay-bản-bị-cắt đã chạy, và `promote_segment_candidate(...,
+   over_a_cut_off_incumbent=True)` **từ chối**: *"candidate dual-decode ledger does not contain two
+   passing checks"*. Cờ ấy nới tập trạng thái nhưng chốt "hai đường phiên đều qua" ở dưới chỉ nới
+   cho `keeping_the_locked_reading`. Hai đường phiên trượt lại chính là **định nghĩa** của ca này
+   (văn bản dưới ngưỡng ASR phán xử). Bản vá 3 (ranh giới 5 → 6) mâu thuẫn với chính nó ở một dòng,
+   và sống qua bộ test xanh vì test chỉ kiểm bốn điều kiện và finder bằng row giả, chưa bao giờ gọi
+   đề cử thật với cờ ấy. Lô 9 là ca thật đầu tiên.
+   → `patch_a_finished_take_is_promoted_without_two_passing_checks.py`: chốt nới cho cả hai cờ;
+   phần kiểm "mã trượt chỉ là neo tên" vẫn chỉ thuộc ca giữ-cách-đọc-ghim. Test end-to-end gọi
+   đề cử thật trên fixture đóng băng từ chính lô 9 (`_fixtures/lo09_223_cut_off`, backup sqlite
+   nhất quán) — xanh; và một test khẳng định không có cờ thì cửa vẫn đóng (đóng ngay ở tập trạng
+   thái, trước cả chốt kia — hai thông điệp, một nghĩa).
+
+2. `"ÁAAAAA!!"` — năm ứng viên 0,96 s, bản cuối chạm trần, ASR bịa ra câu chào cuối video. Bộ
+   chuẩn hoá `normalize_vocalizations_for_tts` **có** luật nguyên-âm-kéo-dài ("aaaa" → "A... a")
+   nhưng mẫu đòi token chỉ gồm một nguyên âm lặp; Á đứng trước làm nó không khớp, chuỗi đi nguyên
+   vào TTS — cùng hình với "Argh" mà đầu file đã kể.
+   → `patch_a_stretched_cry_with_an_accent_is_still_a_cry.py`: mẫu nhận một nguyên âm dẫn đầu có
+   dấu thanh cùng chữ cái gốc; "ÁAAAAA" → "Á... a", "Ôaaa" giữ nguyên, "Khôôôông" vẫn là việc khác.
+
+Cả hai áp thử sạch trên bản sao có bốn bản vá trước, test liên quan xanh, xếp vào hàng ranh giới
+9 → 10 (bước 1 quãng 19:00, trước bước 3 vá 223). Dự đoán ghi trước: lượt vá 223 sau bản vá sẽ
+đề cử ứng viên tự kết thúc cho "Gục đi!" và không còn chạy tới trần với "Á... a!!"; chương lên sách.

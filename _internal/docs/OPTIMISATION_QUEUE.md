@@ -2023,3 +2023,13 @@ sửa file đang chạy là hỏng nó.
 3. `patch_two_children_in_one_chapter_get_two_voices.py` — hai đứa trẻ cùng chương phải là hai giọng (lô 7, chương 186).
 
 **22:50: cả ba đã xếp vào ORDER** (ranh giới 7 → 8 đang chờ lô 7).
+
+## Hàng cho ranh giới 9 → 10 (2026-09-13, 15:20) — hai bản vá đã xếp
+
+1. `patch_a_finished_take_is_promoted_without_two_passing_checks.py` — chốt "hai đường phiên đều
+   qua" phải nới cho `over_a_cut_off_incumbent` (bản vá 3 mâu thuẫn với chính nó; lô 9 ch 223).
+2. `patch_a_stretched_cry_with_an_accent_is_still_a_cry.py` — "ÁAAAAA" là một tiếng hét.
+
+Bài học ghi thêm vào luật test: **một luật nới ở tầng dữ liệu phải có ít nhất một test gọi đúng
+hàm đề cử với đúng cờ**, không chỉ kiểm điều kiện vào. Bốn điều kiện đúng mà cửa vẫn đóng thì
+bốn bài test đều xanh và chương vẫn hỏng.
