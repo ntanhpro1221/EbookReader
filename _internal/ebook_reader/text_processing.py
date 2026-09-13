@@ -73,10 +73,25 @@ STANDALONE_GASP_PATTERN = re.compile(
     r"^(?P<prefix>\s*[“\"'‘—–-]?\s*)ha(?:…|\.{2,})(?P<suffix>\s*[”\"'’]?\s*)$",
     re.IGNORECASE,
 )
+# Một nguyên âm dẫn đầu CÓ DẤU THANH được phép: "ÁAAAAA" là một tiếng hét chứ không phải hai.
+# Bản trước đòi token chỉ gồm một nguyên âm lặp, nên Á (một ký tự khác A) đứng trước làm
+# `(?<!\w)` thất bại và cả chuỗi đi nguyên vào TTS - lô 9 chương 223: năm ứng viên 0,96 s rồi
+# bản cuối chạm trần khung, cùng hình với "Argh" ở đầu file. Hàm thay kiểm chữ cái gốc của
+# nguyên âm dẫn đầu (bỏ dấu thanh, giữ mũ/móc/trăng) có trùng nguyên âm kéo dài không.
 STRETCHED_OPEN_VOWEL_PATTERN = re.compile(
-    r"(?<!\w)(?P<vowel>[aeiouyưăâêôơ])(?P=vowel){2,}h*(?!\w)",
+    r"(?<!\w)(?P<lead>[À-ỹ])?(?P<vowel>[aeiouyưăâêôơ])(?P=vowel){2,}h*(?!\w)",
     re.IGNORECASE,
 )
+_TONE_MARKS = frozenset({"\u0300", "\u0301", "\u0303", "\u0309", "\u0323"})
+
+
+def _without_tone_marks(letter: str) -> str:
+    """Chữ cái gốc: bỏ dấu thanh (huyền, sắc, ngã, hỏi, nặng), giữ mũ, móc và trăng."""
+    import unicodedata
+
+    decomposed = unicodedata.normalize("NFD", letter)
+    kept = "".join(ch for ch in decomposed if ch not in _TONE_MARKS)
+    return unicodedata.normalize("NFC", kept).casefold()
 SPOKEN_WORD_PATTERN = re.compile(r"[A-Za-zÀ-ỹĐđ]+")
 SPEAKABLE_TOKEN_PATTERN = re.compile(r"[^\W_]+", re.UNICODE)
 # The r/g cries of pain and effort - argh, aargh, ugh - which the vowel-and-h forms above
@@ -548,6 +563,13 @@ def normalize_vocalizations_for_tts(text: str) -> str:
 
     def separate_stretched_vowel(match: re.Match[str]) -> str:
         vowel = match.group("vowel").casefold()
+        lead = match.group("lead") or ""
+        if lead:
+            # "ÁAAAAA" là một tiếng hét: giữ nguyên âm có dấu làm đầu tiếng. "Ôaaa" thì không
+            # phải một âm kéo dài - để yên, đừng đoán.
+            if _without_tone_marks(lead) != vowel:
+                return match.group(0)
+            return f"{lead}... {vowel}"
         return f"{vowel.upper()}... {vowel}"
 
     gasp = STANDALONE_GASP_PATTERN.fullmatch(text)

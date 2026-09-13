@@ -12717,16 +12717,25 @@ class ProjectDB:
                 str(beam_check["verdict"]) != QUALITY_VERDICT_PASS
                 or str(greedy_check["verdict"]) != QUALITY_VERDICT_PASS
             ):
-                if not keeping_the_locked_reading:
+                if not keeping_the_locked_reading and not over_a_cut_off_incumbent:
                     raise RuntimeError("candidate dual-decode ledger does not contain two passing checks")
-                # Kiểm lại ngay tại chỗ nới, từ chính hai dòng check: mã trượt chỉ được là neo tên.
-                ledger_codes = (
-                    self._check_failure_codes_conn(conn, candidate["beam_check_id"]) or set()
-                ) | (self._check_failure_codes_conn(conn, candidate["greedy_check_id"]) or set())
-                if not ledger_codes or ledger_codes - LOCKED_NAME_ANCHOR_CODES:
-                    raise RuntimeError(
-                        "candidate dual-decode ledger fails on more than the locked-name spelling test"
-                    )
+                if keeping_the_locked_reading:
+                    # Kiểm lại ngay tại chỗ nới, từ chính hai dòng check: mã trượt chỉ được là
+                    # neo tên.
+                    ledger_codes = (
+                        self._check_failure_codes_conn(conn, candidate["beam_check_id"]) or set()
+                    ) | (self._check_failure_codes_conn(conn, candidate["greedy_check_id"]) or set())
+                    if not ledger_codes or ledger_codes - LOCKED_NAME_ANCHOR_CODES:
+                        raise RuntimeError(
+                            "candidate dual-decode ledger fails on more than the locked-name spelling test"
+                        )
+                # `over_a_cut_off_incumbent`: hai đường phiên trượt là ĐỊNH NGHĨA của ca này -
+                # văn bản ngắn hơn ngưỡng ASR phán xử được, nên ASR không có ý kiến - và đó là
+                # điều kiện 3 của `_require_candidate_beats_a_cut_off_incumbent`, vừa kiểm lại ở
+                # trên trong cùng hàm. Đòi hai check PASS ở đây là đòi bằng chứng mà điều kiện
+                # vào đã nói là không thể có. Lô 9 chương 223, "Gục đi!": finder chọn ứng viên
+                # #11 (0,64 s tự kết thúc), chốt này từ chối, chương hỏng - ca thật đầu tiên,
+                # sống qua bộ test xanh vì test chỉ kiểm bốn điều kiện bằng row giả.
             if bool(candidate["perceptual_required"]):
                 if candidate["perceptual_check_id"] is None:
                     raise RuntimeError(
