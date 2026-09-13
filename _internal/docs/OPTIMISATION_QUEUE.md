@@ -1948,6 +1948,9 @@ vì giọng của họ đổi. Với tám slot đang bị giữ bởi người 1
 ≥3 chương tốn khoảng 6–8 chương đúc lại (~3 giờ GPU) và cho KANG, LYLE, ROB, IVAN, SAMAELE một
 giọng ổn định vĩnh viễn.
 
+**Đường cong (2026-09-13 10:00):** người mang >1 giọng qua sách: 11 sau lô 5 → 15 sau lô 7 → 21 sau lô 8;
+`--across ≥5` từ 5 chương lên 22 chương. Mỗi lô chưa quyết là thêm 3–6 người và ~2–4 chương đúc lại sau này.
+
 **Chưa làm, và lý do:** đây là thay đổi ở tầng casting kèm chi phí GPU thật và một quyết định
 đánh đổi (đổi giọng của bốn nhân vật một chương để bốn nhân vật ba-mười-ba chương được ổn định).
 Việc ấy thuộc chủ sách. Số liệu đã đủ để quyết trong một phút.

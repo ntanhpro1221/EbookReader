@@ -1868,3 +1868,25 @@ tránh-cùng-chương, chỉ đổi cách hoà.
 
 Lô 8 không có trẻ con nào nên dự đoán thứ ba chưa kiểm được ở đây. Cảnh báo "nhiều nhân vật dùng
 chung một giọng" bật một lần, đúng vì dùng chung là bắt buộc; con số quyết định là 0 cùng chương.
+
+## 2026-09-13, 09:56–10:00 — ranh giới 8 → 9 xong sạch; sách 222 chương; và một đường cong đang đi lên
+
+Lô 8 xong 09:56, cả 29 chương, không chương nào hỏng. Ranh giới: hàng rỗng, không chương hỏng, bước 4
+không thấy va chạm nào ("khong thay va cham cung chuong nao"), lô 9 khởi động 09:56 (31 chương
+222..252), 6b không còn gì, sách **222 chương**, 3,39 GB. Ranh giới 9 → 10 thả 09:58.
+
+Kiểm trên sách 222 chương: một-người-hai-giọng-cùng-chương **0**; va chạm cùng chương trên 53
+project thắng **0** (lần thứ hai liên tiếp cả sách về 0); sai phái **1** (vẫn NICAN 062, chờ chủ sách
+ghim giới); `--verify` 0 lệch.
+
+Con số đi lên: người mang **hơn một giọng qua cả sách**
+
+    sau lô 5   11
+    sau lô 7   15
+    sau lô 8   21      (--across ≥5 chương: 22 chương đáng đúc lại)
+
+Cơ chế không đổi từ hôm qua: người không có pin bị rút thăm lại giọng ở mỗi lô, và kho nam 14 slot
+đã có chủ hết nên `pin_the_book_cast` không ghim thêm được ai. Đây không phải lỗi mới, là cái giá
+của quyết định chưa được đưa ra (xếp lại pin theo mức đã nghe, `OPTIMISATION_QUEUE`); mỗi lô nó
+đắt thêm chừng 3–6 người. Người nghe không lẫn trong bất kỳ chương nào — nhưng một nhân vật phụ
+quay lại sau mười chương có thể mang giọng khác.
