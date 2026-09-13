@@ -1941,3 +1941,7 @@ cần dùng** ở lượt này (0 sự kiện `SEGMENT_TAKE_SUBSTITUTED`) vì b�
 chứng của nó là test end-to-end trên fixture `_fixtures/lo09_223_cut_off`. Lô 10 khởi động 17:22
 (26 chương 253..278), 6b không còn gì, sách **253 chương**, 3,79 GB, 223 lấy từ bản vá. Ranh giới
 10 → 11 thả 17:25 với hàng rỗng và `--recast auto`.
+
+Kiểm trên sách 253 chương (17:25): một-người-hai-giọng-cùng-chương **0**; va chạm cùng chương trên 55
+project thắng **0** (lần thứ ba liên tiếp); sai phái **1** (vẫn NICAN 062); `--verify` 0 lệch. Danh sách
+`--across ≥5` tiếp tục dài ra theo từng lô — đường cong của quyết định xếp-lại-pin chưa được đưa ra.
