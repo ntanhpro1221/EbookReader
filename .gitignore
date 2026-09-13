@@ -38,3 +38,6 @@ output/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Nguon .txt cua cac cuon (co watermark, khong bao gio vao repo). Cuon 1 = Text/, cuon 2 = Text_Tmp/ (2026-09-13).
+/Text/

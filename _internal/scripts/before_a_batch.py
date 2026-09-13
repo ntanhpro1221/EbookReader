@@ -120,6 +120,44 @@ def _runs_in_flight() -> list[str]:
     return live
 
 
+def _supervisors_elsewhere() -> list[str]:
+    """Supervisor nào đang chạy cho một project NGOÀI gốc `_versions` của cuốn này.
+
+    Từ 2026-09-13 máy có hai cuốn (`scripts/book_paths.py`): `_runs_in_flight` chỉ nhìn `_versions`
+    của cuốn đang chọn, nên một lô của cuốn kia đang bay là vô hình với nó - và hai lô trên một GPU
+    là cả hai cùng chậm, hoặc một cái hết bộ nhớ. Nhìn tiến trình thì không cần biết cuốn kia nằm
+    đâu: mọi lô đều là `pythonw -m ebook_reader.background_runner supervise --project-root <dir>`.
+
+    Project trong gốc của cuốn này thì để `_runs_in_flight` phán bằng nhịp tim như cũ: một supervisor
+    vừa xong việc còn sống thêm vài giây không được làm cổng đóng nhầm ngay trước bước 6 của ranh giới.
+    """
+    try:
+        import psutil  # noqa: PLC0415
+    except ImportError:
+        return []
+    mine = str(VERSIONS.resolve()).lower()
+    found: list[str] = []
+    for process in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            cmdline = list(process.info.get("cmdline") or [])
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+        if "ebook_reader.background_runner" not in cmdline or "supervise" not in cmdline:
+            continue
+        root = ""
+        if "--project-root" in cmdline:
+            index = cmdline.index("--project-root")
+            root = cmdline[index + 1] if index + 1 < len(cmdline) else ""
+        try:
+            resolved = str(Path(root).resolve()).lower() if root else ""
+        except OSError:
+            resolved = root.lower()
+        if resolved.startswith(mine):
+            continue
+        found.append(f"pid {process.info['pid']}: {root or '(không rõ project)'}")
+    return found
+
+
 def _pending_patches() -> list[str]:
     sys.path.insert(0, str(HERE / "pending_patches"))
     try:
@@ -148,6 +186,11 @@ def main(argv: list[str]) -> int:
         problems.append("có lô đang bay - đừng bắt đầu lô mới, và đừng vá gì")
     else:
         _say("   không có.")
+    elsewhere = _supervisors_elsewhere()
+    if elsewhere:
+        for line in elsewhere:
+            _say(f"   ĐANG CHẠY (cuốn khác): {line}")
+        problems.append("một cuốn khác đang bay trên máy này - một GPU, một lô; chờ nó xong")
 
     _say("")
     _say("=== 2. cây git sạch chưa ===")

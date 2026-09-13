@@ -2047,3 +2047,11 @@ bốn bài test đều xanh và chương vẫn hỏng.
   `launch_batch.sh` gọi `before_a_batch.py` không có `PYTHONIOENCODING=utf-8` nên log bị "kh�ng c�.".
 - **Log ranh giới theo cuốn:** `runtime/boundary_NN.log` trùng tên giữa hai cuốn; hôm nay dời log cuốn 1 vào
   `runtime/book1/`; bền hơn là đặt `runtime/<TAG_PREFIX>/boundary_NN.log` (đổi một dòng 83 của boundary.sh + heartbeat).
+
+- **Nguồn nên là tương đối với một gốc ghi trong `book`** (2026-09-13, 23:40): `chapters.input_path` tuyệt đối
+  + hash khoá băm cả đường là lý do phải viết `repoint_the_source.py`. Một cột `book.source_root` + tên file trong
+  `chapters` thì dời thư mục chỉ là đổi một ô. Đụng schema `database.py` (file khoá) → bản vá qua hàng chờ, chỉ khi
+  có cuốn mới `create`; project cũ giữ đường tuyệt đối và công cụ trỏ lại vẫn cần cho chúng.
+- **Cổng nên biết mọi gốc sách**, không chỉ tiến trình: `_supervisors_elsewhere` bắt lô đang bay, nhưng một lô
+  *chết dở* của cuốn kia (lease cũ, không supervisor) vẫn vô hình. Một danh mục gốc (`runtime/books.json`) để
+  `_runs_in_flight` quét hết là bước tiếp.

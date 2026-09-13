@@ -2033,3 +2033,45 @@ tay tên kế hoạch cuốn 1; output của `before_a_batch.py` qua ống của
 ("kh�ng c�." — thiếu `PYTHONIOENCODING=utf-8` ở lệnh gọi).
 
 Điều còn treo với chủ sách: cuốn 1 (253/478) có khôi phục sau không — nguồn vẫn nằm trong Thùng rác.
+
+## 2026-09-13, 23:15–23:40 — khôi phục nguồn cuốn 1 vào thư mục project; 109 project trỏ lại có kiểm hash; cổng biết nhìn cuốn khác
+
+Chủ sách: *"khoi phuc di nhung chuyen no vao trong folder cua project"*. Làm đúng thứ tự: `undelete` qua Shell
+API (mục Thùng rác trả về `D:/Novels/Tools/Text`, 478 file), `Move-Item` sang `D:/Novels/Ebook Reader/Text`, xoá
+bản ghi chỉ mục `$I` mồ côi (70 byte) mà `undelete` để lại. Không đụng gì khác trong `Tools/` — chủ sách đang
+đặt lại tên các thư mục ở đó theo tựa sách.
+
+**Điều lộ ra ngay:** `git status` báo `?? ../Text/` — thư mục project là gốc repo, nên 478 file nguồn (có
+watermark, không bao giờ được vào repo) đứng ngay trước mũi `git add -A` của bước 2 ranh giới. Thêm `/Text/`
+vào `.gitignore` trước mọi việc khác.
+
+**118 project của cuốn 1 trỏ vào chỗ trống.** `chapters.input_path` là đường tuyệt đối, `book.input_manifest_hash`
+băm cả đường ấy; `character_registry` đọc *thư mục* của input_path để lấy bằng chứng "tên này có trong sách" và
+tự tắt khi không thấy — tức cuốn 1 nối lại mà không trỏ lại thì luật gộp tên chạy mù. Viết
+`scripts/repoint_the_source.py` (docstring kể đủ): xem trước, `--apply`, `--undo` theo sổ; **không tin tên file**
+— chương chỉ đổi khi file mới có đúng `sha256` + `size` đã khoá, một chương lệch là bỏ qua cả project; hash khoá
+băm lại bằng chính `text_processing.input_manifest_hash`. Không dùng `ProjectDB` để không kéo di trú schema lên
+DB alpha cũ. Bốn test dựng project thật trong thư mục tạm (`create_or_open_project`), dời thư mục, kiểm
+`cli.validate_project` đỏ rồi xanh lại ở cả hai kiểm, từ chối file cùng tên khác nội dung, hoàn tác, và từ chối
+hoàn tác khi DB đã trôi.
+
+Kết quả thật: 118 quét, **109 ghi, 701 chương đổi đường, 9 bỏ qua đúng** (alpha.10–15, alpha.46-nguon-sai: đọc
+`Text_Tmp` tháng 8, `000.txt` 20.247 byte so với 183 byte của cuốn 1 — khác sách). Bằng chứng sau khi ghi:
+`cli validate` lô 9 và lô 10 `ok`, `input_manifest_hash = True`, `source_files = True`; thư mục bằng chứng của
+registry giải ra `D:/Novels/Ebook Reader/Text` → 478 file; `assemble_book.py --verify` dưới `book1.env`: 253
+chương không lệch. `book1.env` trỏ `EBOOK_SOURCE_DIR` sang chỗ mới.
+
+**Lỗ thứ hai do chính việc có hai cuốn:** `before_a_batch` chỉ nhìn `_versions` của cuốn đang chọn, nên từ
+`book1.env` nó nói "không có lô nào bay" trong khi lô 1 cuốn 2 đang chạy trên cùng GPU. Thêm
+`_supervisors_elsewhere()` (psutil, tìm `background_runner supervise --project-root` ngoài gốc cuốn này) → mục 1
+báo "một cuốn khác đang bay" và từ chối. Kiểm sống: nhìn từ cuốn 1 thấy hai `pythonw` của `lo01_c0d8c42dfe`; nhìn
+từ cuốn 2 rỗng và in-flight = lo01. Project trong gốc cuốn này vẫn do nhịp tim phán, để supervisor vừa xong việc
+còn sống vài giây không đóng cổng nhầm ngay trước bước 6.
+
+**Không khởi động lại lô 10 bây giờ**: một GPU, cuốn 2 đang bay (cổng giờ cũng từ chối). Lệnh nối lại cuốn 1 khi
+đến lượt: `source scripts/book1.env && EBOOK_COAUTHOR="Claude Fable 5.1 <noreply@anthropic.com>" bash
+scripts/boundary.sh 10 --recast auto` — nó tự "run lai" lô 10 từ 8/26 rồi đi tiếp tới lô 16. Thứ tự hai cuốn là
+việc chủ sách quyết; mặc định cuốn 2 trước vì đó là lệnh mới nhất.
+
+Bộ test đầy đủ chưa chạy lại trên cây này (lô đang bay, không cướp CPU); các file mới lint sạch và test riêng
+xanh. Dự đoán ghi trước: bước 1 ranh giới 1 → 2 (khoảng 07:00 ngày 14) xanh và ghi vân tay.
