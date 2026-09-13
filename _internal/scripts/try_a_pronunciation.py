@@ -32,6 +32,10 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+try:
+    from scripts.book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / "runtime" / ".venv" / "Scripts" / "python.exe"
@@ -199,7 +203,7 @@ def main(argv: list[str]) -> int:
 
     running = [
         path
-        for path in Path("D:/Novels/Audiobooks/_versions").glob("*/*/project.sqlite3")
+        for path in _BOOK_VERSIONS.glob("*/*/project.sqlite3")
         if _alive(path.parent)
     ]
     if running:

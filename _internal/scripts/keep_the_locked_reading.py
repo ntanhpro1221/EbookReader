@@ -57,8 +57,10 @@ from ebook_reader.quality_policy import QUALITY_POLICY_VERSION, quality_policy_h
 from ebook_reader.resource_manager import AdaptiveResourceManager  # noqa: E402
 from ebook_reader.tts import TTSCoordinator  # noqa: E402
 
-BOOK = Path("D:/Novels/Audiobooks/_book")
-VERSIONS = Path("D:/Novels/Audiobooks/_versions")
+try:
+    from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import BOOK, VERSIONS  # noqa: E402
 
 
 def _say(line: str) -> None:

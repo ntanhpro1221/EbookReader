@@ -61,6 +61,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_reader.database import ProjectDB  # noqa: E402
+from scripts.book_paths import TAG_PREFIX  # noqa: E402
 from scripts.voice_matches_the_person import BOOK, VERSIONS, fold_names, shipped_rows  # noqa: E402
 
 
@@ -144,7 +145,7 @@ def voice_profile(voice_key: str, versions: Path = VERSIONS) -> dict | None:
     Cần cả preset, seed, pitch và formant: `voice_key` mã hoá ba thứ nhưng `seed` thì không, và
     `seed` là thứ quyết định giọng nghe ra sao ở cùng một preset.
     """
-    for db in sorted(versions.glob("v0.2.0-lo0*/*/project.sqlite3")):
+    for db in sorted(versions.glob(f"{TAG_PREFIX}-lo*/*/project.sqlite3")):
         try:
             conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row

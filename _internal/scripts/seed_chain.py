@@ -23,11 +23,15 @@ import sqlite3
 import sys
 from pathlib import Path
 
-VERSIONS_ROOT = Path("D:/Novels/Audiobooks/_versions")
+try:
+    from scripts.book_paths import VERSIONS as _BOOK_VERSIONS, TAG_PREFIX  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/seed_chain.py
+    from book_paths import VERSIONS as _BOOK_VERSIONS, TAG_PREFIX  # noqa: E402
+VERSIONS_ROOT = _BOOK_VERSIONS
 
 
 def tag_of(batch: int) -> str:
-    return f"v0.2.0-lo{int(batch):02d}"
+    return f"{TAG_PREFIX}-lo{int(batch):02d}"
 
 
 def created_at(project: Path) -> float:

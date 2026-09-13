@@ -37,7 +37,11 @@ import sqlite3
 import sys
 from pathlib import Path
 
-VERSIONS_ROOT = Path("D:/Novels/Audiobooks/_versions")
+try:
+    from scripts.book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+VERSIONS_ROOT = _BOOK_VERSIONS
 DEFAULT_VERSIONS = [
     "v0.2.0-alpha.43",
     "v0.2.0-alpha.44",

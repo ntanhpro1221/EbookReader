@@ -19,7 +19,7 @@
 # hai lo - mot loi IM LANG, khong cong nao bat duoc vi moi lo tu no deu nhat quan.
 set -euo pipefail
 
-BATCH="${1:?dung: launch_batch.sh <so lo, 2..16> [--seed-from <project>]}"
+BATCH="${1:?dung: launch_batch.sh <so lo> [--seed-from <project>] [--no-seed]}"
 shift || true
 SEED_FROM=""
 while [ $# -gt 0 ]; do
@@ -28,13 +28,20 @@ while [ $# -gt 0 ]; do
     # cac chuong cua lo khac o buoc 4b; `seed_chain.py N --seed` chi nhin thu muc cua lo N nen
     # khong thay chung.
     --seed-from) shift; SEED_FROM="${1:?--seed-from can duong dan project}"; shift ;;
+    # Lo DAU cua mot cuon: khong co lo truoc de gieo. Bo sung 2026-09-13 khi bat dau cuon 2.
+    --no-seed) SEED_FROM="__none__"; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
   esac
 done
 ROOT="D:/Novels/Ebook Reader/_internal"
 PY="$ROOT/runtime/.venv/Scripts/python.exe"
-PLAN="$ROOT/docs/PRODUCTION_PLAN.md"
 cd "$ROOT"
+# Goc CUON SACH dang san xuat - cung mot cau tra loi voi scripts/book_paths.py (xem docstring o do).
+AUDIOBOOKS_ROOT="${EBOOK_AUDIOBOOKS_ROOT:-D:/Novels/Audiobooks/book2}"
+VERSIONS="$AUDIOBOOKS_ROOT/_versions"
+TAG_PREFIX="${EBOOK_TAG_PREFIX:-v0.3.0}"
+SOURCE_DIR="${EBOOK_SOURCE_DIR:-D:/Novels/Ebook Reader/Text_Tmp}"
+PLAN="${EBOOK_PLAN:-$ROOT/docs/PRODUCTION_PLAN_book2.md}"
 
 # Dong bang co dang:  | 3 | 060..091 | 32 | 3.675 | 7,9 |
 RANGE="$(grep -oE "^\| *$BATCH \| *[0-9]{3}\.\.[0-9]{3} *\|" "$PLAN" | grep -oE '[0-9]{3}\.\.[0-9]{3}' | head -1 || true)"
@@ -45,17 +52,17 @@ if [ -z "$RANGE" ]; then
 fi
 FIRST="${RANGE%%..*}"
 LAST="${RANGE##*..}"
-TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
+TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$BATCH")"
 TITLE="$(printf 'lo%02d' "$BATCH")"
-OUT="D:/Novels/Audiobooks/_versions/$TAG"
+OUT="$VERSIONS/$TAG"
 
 # Project gieo: cai CUOI chuoi cua lo truoc - lo, roi cac project va / duc lai giong cua no theo
 # thu tu tao (book.created_at, khong phai mtime). Tu lo 3 project duc lai cap giong MOI cho nguoi
 # thua khi trung giong; gieo tu lo thay vi tu cai cuoi la cap lai lan nua, doc lap, va mot nguoi
 # co the mang hai giong o hai lo. seed_chain.py giu mot cau tra loi cho ca ba script.
 if [ -n "$SEED_FROM" ]; then
-  [ -f "$SEED_FROM/project.sqlite3" ] || { echo "--seed-from khong phai project: $SEED_FROM" >&2; exit 2; }
-  PREV="$SEED_FROM"
+  [ "$SEED_FROM" = "__none__" ] || [ -f "$SEED_FROM/project.sqlite3" ] || { echo "--seed-from khong phai project: $SEED_FROM" >&2; exit 2; }
+  PREV="$SEED_FROM"; [ "$PREV" = "__none__" ] && PREV=""
 else
   PREV="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --seed)" || {
     echo "Khong thay project nao cua lo $((BATCH - 1)) - day gieo se dut. Dung." >&2
@@ -64,7 +71,7 @@ else
 fi
 
 echo "=== lo $BATCH: chuong $RANGE (doc tu PRODUCTION_PLAN.md) ==="
-echo "  gieo tu: $PREV"
+echo "  gieo tu: ${PREV:-(khong - lo dau cua cuon)}"
 echo
 
 echo "=== 0. kiem truoc lo ==="
@@ -73,7 +80,7 @@ echo "=== 0. kiem truoc lo ==="
 echo
 echo "=== 1. create ==="
 "$PY" -m ebook_reader.cli create \
-  --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \
+  --output-root "$OUT" --source-dir "$SOURCE_DIR" \
   --range "$RANGE" --width 3 --title "$TITLE" --profile high_quality --json
 
 # Moi nhat theo book.created_at: chay lai lo se tao project thu hai cung tien to ten, va `ls -d`
@@ -87,6 +94,7 @@ echo "project: $PROJECT"
 # noi 128 cau. Dung lai so tu ca chuoi lo da xong, ghi vao PREV, truoc khi gieo.
 # Chuoi: project lo cua moi lo truoc, roi lo lien truoc va cac project va / duc lai cua no theo
 # thu tu tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
+if [ -n "$PREV" ]; then
 CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --chain)"
 # So phai nam o project GIEO (port_casting doc tu do); gieo tu noi khac thi noi no vao cuoi.
 # PREV phai la phan tu CUOI: backfill ghi so vao chain[-1]. "Them neu thieu" khong du - khi PREV
@@ -106,6 +114,7 @@ echo "=== 2. gieo, dung thu tu ==="
 "$PY" scripts/port_pronunciations.py       "$PREV" "$PROJECT"
 "$PY" scripts/port_casting.py              "$PREV" "$PROJECT"
 "$PY" scripts/seed_listener_acceptances.py "$PREV" "$PROJECT"
+fi
 
 echo
 echo "=== 3. run ==="

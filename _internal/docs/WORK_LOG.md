@@ -1980,3 +1980,33 @@ còn nguyên) thì tôi thả lại ranh giới và lô 10 tiếp tục từ 8/2
 Trạng thái để yên: lô 10 `unrecoverable_error` 8 completed / 18 pending (dữ liệu nguyên, `cli run` tiếp
 được khi nguồn về); sách 253 chương không đổi; không ranh giới nào chạy; cây sạch. Mỗi nhịp tim tôi kiểm
 `D:\Novels\Tools\Text` có trở lại không — có là thả lại `boundary.sh 10 --recast auto` (nó tự "run lai").
+
+## 2026-09-13, 22:45–23:15 — chủ sách chỉ sang cuốn khác; gốc sách thành tham số; cuốn 2 (915 chương) khởi động từ lô 1
+
+Chủ sách trả lời push bằng một đường dẫn và một câu: `D:/Novels/Ebook Reader/Text_Tmp` — *"lay tai lieu o day
+ma dev"*. Thư mục ấy có **915 chương** (000..914, 2.417.255 từ, 84.211 đoạn), không chung một byte với cuốn cũ.
+Tức là: cuốn 1 tạm dừng ở 253/478 (nguồn trong Thùng rác, lô 10 chết 8/26), và máy phải sản xuất một cuốn mới.
+
+**Cái lộ ra khi thử làm:** mười ba script cột chặt vào cuốn 1 bằng chữ chép tay — `D:/Novels/Audiobooks/_versions`,
+`_book`, `v0.2.0-lo`, `PRODUCTION_PLAN.md`, `D:/Novels/Tools/Text` — ở mười ba chỗ khác nhau, ba script shell và
+mười script Python. Đổi cuốn bằng cách sửa mười ba chỗ là cách chắc chắn để quên một chỗ (và `before_a_batch.py`
+là chỗ bị quên thật: nó vẫn trỏ `_versions` của cuốn 1 sau lượt sửa đầu, chỉ lộ khi grep lại theo dạng backslash).
+Chủ sách đã dặn từ trước: *"nhỡ sách khác cũng gặp chuyện thế này thì project phải tự xử lý được chứ?"*
+
+**Làm:** một chỗ duy nhất, `scripts/book_paths.py`, đọc bốn biến môi trường `EBOOK_AUDIOBOOKS_ROOT`,
+`EBOOK_TAG_PREFIX`, `EBOOK_SOURCE_DIR`, `EBOOK_PLAN`; mặc định là cuốn **đang** chạy (cuốn 2:
+`D:/Novels/Audiobooks/book2`, `v0.3.0`, `Text_Tmp`, `PRODUCTION_PLAN_book2.md`) — một lệnh quên đặt biến phải
+rơi vào cuốn đang sản xuất chứ không rơi vào cuốn đã dừng. Ba script shell có cùng khối biến ngay sau `cd "$ROOT"`,
+tag ghép bằng `printf '%s-lo%02d' "$TAG_PREFIX"`. Mười một script Python import theo mẫu `try: from
+scripts.book_paths … except ImportError: from book_paths …` để cả `python scripts/x.py` lẫn test theo gói đều sống.
+`scripts/book1.env` là đường quay lại cuốn 1 (`source` rồi gọi script như cũ); cuốn 1 không dời một file nào —
+`_versions`, `_book`, tag, fixture (đường dẫn wav tuyệt đối) giữ nguyên chỗ, nên không có gì để hỏng.
+
+`launch_batch.sh` thêm `--no-seed`: lô đầu của một cuốn không có gì để gieo — không dàn giọng, không phiên âm,
+không ưng thuận của người nghe — và gieo từ cuốn khác là mang tên riêng đọc-ghim của cuốn kia sang. Chuỗi gieo
+`seed_chain.py` chỉ chạy từ lô 2. (Ghi vào hàng tối ưu: một lớp phiên âm *không thuộc cuốn nào* — từ ngoại lai,
+viết tắt — có thể đáng chuyển giữa các cuốn; hôm nay chưa tách được khỏi tên riêng nên chưa mang.)
+
+Kế hoạch cuốn 2 tính từ số từ thật (lô theo số từ, không theo chương — luật chủ sách): 23 lô, lô 1 = 000..048
+(3.705 đoạn, ~8 giờ). Watchdog Ollama và `resume_interrupted.py` trong Scheduled Task chạy không tham số nên tự
+theo mặc định mới. Bộ test đầy đủ chạy trên cây đã sửa trước khi commit; kết quả ghi ở mục kế.

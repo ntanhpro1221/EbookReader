@@ -2033,3 +2033,11 @@ sửa file đang chạy là hỏng nó.
 Bài học ghi thêm vào luật test: **một luật nới ở tầng dữ liệu phải có ít nhất một test gọi đúng
 hàm đề cử với đúng cờ**, không chỉ kiểm điều kiện vào. Bốn điều kiện đúng mà cửa vẫn đóng thì
 bốn bài test đều xanh và chương vẫn hỏng.
+
+## Từ lúc đổi cuốn (2026-09-13, 23:10)
+
+- **Lớp phiên âm không thuộc cuốn nào.** Từ điển phiên âm của cuốn 1 trộn tên riêng (chỉ đúng cho cuốn 1) với
+  từ ngoại lai / viết tắt (đúng cho mọi cuốn). Tách hai lớp — ví dụ đánh dấu nguồn của mỗi mục khi `try_a_pronunciation`
+  ghim — thì lô đầu của cuốn sau gieo được lớp chung mà không mang theo tên riêng. Hôm nay `--no-seed` để trống cả hai.
+- **Kế hoạch lô sinh tự động.** `PRODUCTION_PLAN_book2.md` được tính tay từ số từ; một `plan_a_book.py` đọc
+  `EBOOK_SOURCE_DIR` và in bảng lô theo ngưỡng từ sẽ bỏ được bước chép tay cho cuốn thứ ba.

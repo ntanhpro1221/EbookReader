@@ -59,8 +59,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ebook_reader.voice_catalog import VIENEU_PRESETS  # noqa: E402
 from scripts.name_marks import fold_dropped_marks  # noqa: E402
 
-BOOK = Path("D:/Novels/Audiobooks/_book")
-VERSIONS = Path("D:/Novels/Audiobooks/_versions")
+try:
+    from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import BOOK, VERSIONS  # noqa: E402
 
 VOICES_SQL = """
 SELECT ch.title AS chapter, c.canonical_name AS name, c.gender AS gender, c.age AS age,

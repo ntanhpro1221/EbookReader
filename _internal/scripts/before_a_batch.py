@@ -26,7 +26,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
+try:
+    from book_paths import VERSIONS  # noqa: E402
+except ImportError:  # import theo gói (apply_all, test)
+    from scripts.book_paths import VERSIONS  # noqa: E402
 LEASE_STALE_SECONDS = 180.0
 
 

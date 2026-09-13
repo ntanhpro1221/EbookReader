@@ -8,6 +8,7 @@ người ta có một câu hỏi, không có một chủ đề.
 | câu hỏi | file |
 |---|---|
 | Chạy cả cuốn thì tốn bao nhiêu, đi đường nào? | [PRODUCTION_PLAN.md](PRODUCTION_PLAN.md) |
+| Đang sản xuất CUỐN NÀO, đổi cuốn / quay lại cuốn cũ thế nào? | [`scripts/book_paths.py`](../scripts/book_paths.py) (docstring) — gốc sách là tham số `EBOOK_*`; cuốn 2 (915 chương) theo [PRODUCTION_PLAN_book2.md](PRODUCTION_PLAN_book2.md); `source scripts/book1.env` để quay lại cuốn 1 |
 | Lệnh cụ thể để tạo và chạy một phiên bản? | [VERSIONS.md](VERSIONS.md) |
 | Lượt chạy tốn thời gian vào đâu? | [WHERE_A_RUN_SPENDS_ITS_TIME.md](WHERE_A_RUN_SPENDS_ITS_TIME.md), [THROUGHPUT.md](THROUGHPUT.md) |
 | Máy có đủ VRAM không? | [VRAM_AND_CONTEXT.md](VRAM_AND_CONTEXT.md) |

@@ -47,7 +47,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_reader.background_runner import get_status  # noqa: E402
 
-DEFAULT_VERSIONS_ROOT = Path("D:/Novels/Audiobooks/_versions")
+try:
+    from scripts.book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+DEFAULT_VERSIONS_ROOT = _BOOK_VERSIONS
 LOG_NAME = "_ollama_watchdog.log"
 OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 OLLAMA_EXE_FALLBACK = Path(

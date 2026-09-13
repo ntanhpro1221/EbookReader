@@ -50,12 +50,18 @@ EXPLICIT="${EXPLICIT# }"
 ROOT="D:/Novels/Ebook Reader/_internal"
 PY="$ROOT/runtime/.venv/Scripts/python.exe"
 cd "$ROOT"
+# Goc CUON SACH dang san xuat - cung mot cau tra loi voi scripts/book_paths.py (xem docstring o do).
+AUDIOBOOKS_ROOT="${EBOOK_AUDIOBOOKS_ROOT:-D:/Novels/Audiobooks/book2}"
+VERSIONS="$AUDIOBOOKS_ROOT/_versions"
+TAG_PREFIX="${EBOOK_TAG_PREFIX:-v0.3.0}"
+SOURCE_DIR="${EBOOK_SOURCE_DIR:-D:/Novels/Ebook Reader/Text_Tmp}"
+PLAN="${EBOOK_PLAN:-$ROOT/docs/PRODUCTION_PLAN_book2.md}"
 
-TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
-[ "$BATCH" = "1" ] && TAG="v0.2.0-lo01"
+TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$BATCH")"
+[ "$BATCH" = "1" ] && TAG="${TAG_PREFIX}-lo01"
 # Lo va thuong la `...v`; luot duc lai giong la `...r` de hai loai project khong lan ten.
 if [ -n "$EXPLICIT" ] && [ "$AS_REPAIR" != 1 ]; then OUT_TAG="${TAG}r"; else OUT_TAG="${TAG}v"; fi
-OUT="D:/Novels/Audiobooks/_versions/$OUT_TAG"
+OUT="$VERSIONS/$OUT_TAG"
 # Hai project khac nhau: BATCH_PROJECT la project LO - doc danh sach chuong hong tu no; PREV la
 # project GIEO - moi nhat tren ca ba thu muc lo / lo+v / lo+r theo book.created_at, khong theo
 # mtime (seed_chain.py noi vi sao). Lan dau hai cai la mot.
@@ -183,7 +189,7 @@ for CH in $BROKEN; do
   [ -n "$ATTEMPT" ] && echo "  chuong $CH da co project truoc - tieu de lan nay: ${TITLE}${ATTEMPT}"
   TITLE="${TITLE}${ATTEMPT}"
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
-    --output-root "$OUT" --source-dir "D:/Novels/Tools/Text" \
+    --output-root "$OUT" --source-dir "$SOURCE_DIR" \
     --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json > /dev/null
   # Moi nhat theo book.created_at (seed_chain.py), khong theo ten hay mtime: chay lo va lan
   # thu hai tao project thu hai cung tien to, lay cai dau theo alphabet la lay cai CU; con

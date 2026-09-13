@@ -32,7 +32,11 @@ import datetime as _dt  # noqa: E402
 
 from ebook_reader.background_runner import get_status, start_background  # noqa: E402
 
-DEFAULT_VERSIONS_ROOT = Path("D:/Novels/Audiobooks/_versions")
+try:
+    from scripts.book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import VERSIONS as _BOOK_VERSIONS  # noqa: E402
+DEFAULT_VERSIONS_ROOT = _BOOK_VERSIONS
 LOG_NAME = "_auto_resume.log"
 
 # Two different interruptions, and the state file distinguishes them.

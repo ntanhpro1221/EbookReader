@@ -32,7 +32,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_reader.io_utils import ffmpeg_executable, run_hidden  # noqa: E402
 
-VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
+try:
+    from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
+except ImportError:  # chạy trực tiếp: python scripts/x.py
+    from book_paths import BOOK, VERSIONS  # noqa: E402
 SOURCE = Path(r"D:\Novels\Tools\Text")
 
 # Tên "đĩa" của cả cuốn sách. Mặc định là một chỗ giữ chỗ: tên thật của truyện KHÔNG có ở đâu
@@ -306,7 +309,7 @@ def _expected() -> list[str]:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--out", type=Path, default=Path(r"D:\Novels\Audiobooks\_book"))
+    parser.add_argument("--out", type=Path, default=BOOK)
     parser.add_argument("--apply", action="store_true", help="Chép thật thay vì chỉ liệt kê")
     parser.add_argument(
         "--verify",

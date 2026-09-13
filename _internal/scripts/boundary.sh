@@ -73,12 +73,18 @@ NEXT=$((BATCH + 1))
 ROOT="D:/Novels/Ebook Reader/_internal"
 PY="$ROOT/runtime/.venv/Scripts/python.exe"
 cd "$ROOT"
+# Goc CUON SACH dang san xuat - cung mot cau tra loi voi scripts/book_paths.py (xem docstring o do).
+AUDIOBOOKS_ROOT="${EBOOK_AUDIOBOOKS_ROOT:-D:/Novels/Audiobooks/book2}"
+VERSIONS="$AUDIOBOOKS_ROOT/_versions"
+TAG_PREFIX="${EBOOK_TAG_PREFIX:-v0.3.0}"
+SOURCE_DIR="${EBOOK_SOURCE_DIR:-D:/Novels/Ebook Reader/Text_Tmp}"
+PLAN="${EBOOK_PLAN:-$ROOT/docs/PRODUCTION_PLAN_book2.md}"
 mkdir -p "$ROOT/runtime"
 LOG="$ROOT/runtime/boundary_$(printf '%02d' "$BATCH").log"
 say() { printf '%s %s\n' "$(date '+%m-%d %H:%M:%S')" "$*" | tee -a "$LOG"; }
 py() { PYTHONIOENCODING=utf-8 "$PY" "$@"; }
-TAG="$(printf 'v0.2.0-lo%02d' "$BATCH")"
-NEXT_TAG="$(printf 'v0.2.0-lo%02d' "$NEXT")"
+TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$BATCH")"
+NEXT_TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$NEXT")"
 # Dong Co-Authored-By cua commit script nay tao. Doi theo phien lam viec, nen de o MOT cho
 # va ghi ra log: mot dong ghi cong sai trong mot commit khong ai xem luc tao ra thi khong ai
 # sua. Ghi de bang EBOOK_COAUTHOR khi phien sau dung model khac.
@@ -255,7 +261,7 @@ print(' '.join(str(t) for (t, s) in c.execute('SELECT title, status FROM chapter
 TODO=""
 for CH in $FAILED; do
   if skipped "$CH"; then say "  $CH nam trong --skip - khong dung toi"; continue; fi
-  if already_done "D:/Novels/Audiobooks/_versions/${TAG}v" "$CH"; then say "  $CH da co ban va hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
+  if already_done "$VERSIONS/${TAG}v" "$CH"; then say "  $CH da co ban va hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
 done
 SEED="$(py scripts/seed_chain.py "$BATCH" --seed)"
 if [ -n "$TODO" ]; then
@@ -264,7 +270,7 @@ if [ -n "$TODO" ]; then
   wait_gpu_free
   # shellcheck disable=SC2086
   bash scripts/launch_repair.sh "$BATCH" --chapters $TODO --seed-from "$SEED" --as-repair >> "$LOG" 2>&1 || say "launch_repair (chuong hong) thoat khac 0 - xem $LOG; di tiep."
-  SEED="$(py scripts/seed_chain.py --newest "D:/Novels/Audiobooks/_versions/${TAG}v" 2>/dev/null || echo "$SEED")"
+  SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${TAG}v" 2>/dev/null || echo "$SEED")"
 elif [ -n "$FAILED" ]; then
   say "moi chuong hong da co ban va hoan thanh."
 else
@@ -275,7 +281,7 @@ fi
 TODO=""
 for CH in $RECAST; do
   if skipped "$CH"; then say "  $CH nam trong --skip - khong dung toi"; continue; fi
-  if already_done "D:/Novels/Audiobooks/_versions/${TAG}r" "$CH" recast; then say "  $CH da duc lai hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
+  if already_done "$VERSIONS/${TAG}r" "$CH" recast; then say "  $CH da duc lai hoan thanh - bo qua"; else TODO="$TODO $CH"; fi
 done
 if [ -n "$TODO" ]; then
   tag_here "${TAG}r"
@@ -283,7 +289,7 @@ if [ -n "$TODO" ]; then
   wait_gpu_free
   # shellcheck disable=SC2086
   bash scripts/launch_repair.sh "$BATCH" --chapters $TODO --seed-from "$SEED" >> "$LOG" 2>&1 || say "launch_repair (duc lai) thoat khac 0 - xem $LOG; di tiep."
-  SEED="$(py scripts/seed_chain.py --newest "D:/Novels/Audiobooks/_versions/${TAG}r" 2>/dev/null || echo "$SEED")"
+  SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${TAG}r" 2>/dev/null || echo "$SEED")"
 fi
 if [ -n "$RECAST" ]; then
   # ---- 5. bang chung: va cham cung chuong tren tung project duc lai
@@ -308,11 +314,11 @@ fi
 # la lay lai dung bo pin da sinh ra loi.
 if [ -n "$RECAST_OTHER" ]; then
   for OTHER_BATCH in $(printf '%s\n' $RECAST_OTHER | cut -d: -f1 | sort -un); do
-    OTHER_TAG="$(printf 'v0.2.0-lo%02d' "$OTHER_BATCH")"
+    OTHER_TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$OTHER_BATCH")"
     CHS=""
     for CH in $(printf '%s\n' $RECAST_OTHER | grep "^${OTHER_BATCH}:" | cut -d: -f2 | sort -u); do
       if skipped "$CH"; then say "  lo $OTHER_BATCH chuong $CH nam trong --skip - khong dung toi"; continue; fi
-      if already_done "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" "$CH" recast; then say "  lo $OTHER_BATCH chuong $CH da duc lai hoan thanh - bo qua"; else CHS="$CHS $CH"; fi
+      if already_done "$VERSIONS/${OTHER_TAG}r" "$CH" recast; then say "  lo $OTHER_BATCH chuong $CH da duc lai hoan thanh - bo qua"; else CHS="$CHS $CH"; fi
     done
     [ -n "$CHS" ] || continue
     # SEED la project vua xong o buoc truoc (ke ca lo khac): giong vua cap di tiep, khong cap lai.
@@ -321,7 +327,7 @@ if [ -n "$RECAST_OTHER" ]; then
     # shellcheck disable=SC2086
     bash scripts/launch_repair.sh "$OTHER_BATCH" --chapters $CHS --seed-from "$SEED" >> "$LOG" 2>&1 \
       || say "launch_repair lo $OTHER_BATCH thoat khac 0 - xem $LOG; di tiep."
-    SEED="$(py scripts/seed_chain.py --newest "D:/Novels/Audiobooks/_versions/${OTHER_TAG}r" 2>/dev/null || echo "$SEED")"
+    SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${OTHER_TAG}r" 2>/dev/null || echo "$SEED")"
   done
 fi
 
@@ -355,7 +361,7 @@ fi
 # buoc nay ghi "da ghep sach" vao log ma khong chep gi - do 23:24 ngay 2026-09-10: sach van 60
 # chuong trong khi da co 92. Mot dong log noi thanh cong cho mot luot thu la te hon khong log.
 if py scripts/assemble_book.py --apply >> "$LOG" 2>&1; then
-  say "da ghep sach vao D:/Novels/Audiobooks/_book"
+  say "da ghep sach vao $AUDIOBOOKS_ROOT/_book"
 else
   say "assemble_book thoat khac 0 - xem $LOG"
 fi
