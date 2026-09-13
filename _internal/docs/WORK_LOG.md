@@ -2075,3 +2075,27 @@ việc chủ sách quyết; mặc định cuốn 2 trước vì đó là lệnh 
 
 Bộ test đầy đủ chưa chạy lại trên cây này (lô đang bay, không cướp CPU); các file mới lint sạch và test riêng
 xanh. Dự đoán ghi trước: bước 1 ranh giới 1 → 2 (khoảng 07:00 ngày 14) xanh và ghi vân tay.
+
+## 2026-09-14, 03:30 — lô 1 cuốn 2: phân tích xong, bước tên tiếng Anh lộ ra cuốn này nhiều tên Tây
+
+Phân tích 3.705/3.705 lúc 03:29 (4 giờ 20, ~14 đoạn/phút, nhanh hơn cuốn 1 vì không có bước gieo). Bước
+chuẩn hoá tên tiếng Anh ngay sau đó: **105 tên** trong 49 chương (cuốn 1 quãng 110 tên cho cả 478 chương),
+Qwen đặt được 80 (độ tin 0,9–0,98), **25 rơi về từ điển CMU hoặc bộ chuyển cục bộ** (0,88) sau ba lần thử —
+`Alterna`, `Anhadur`, `Antiffler`, `Cristofori`, `Herodotus`… — vì dạng Qwen đưa có âm cuối không Việt
+(`A-lêr-nha`) hay không đổi gì (`Gaya`).
+
+Nhìn bằng mắt: tên tần suất cao nhất đều do Qwen đặt và tự nhiên — `Lucien → Lu-si-en` (1.475 lần),
+`John → Giôn`, `Jackson → Giách-xon`, `Benjamin → Ben-gia-min`, `Wayne → Uên`. Bộ chuyển cục bộ đánh vần
+cụm phụ âm bằng âm đệm "ờ" (`Cristofori → Cờ-ri-xờ-tô-phô-ri`, `Banster → Ban-xờ-tờ`), 16 mục có dạng ấy, tất
+cả dưới 40 lần trong lô. Vài dạng CMU khả nghi: `Fell → Pheo`, `Nar → Nan`, `Mag → Mạc`.
+
+**Không vá.** "Dạng nào đọc tốt hơn" là câu hỏi về âm thanh và tôi không có tai
+(docs/A_NAME_READ_MANY_WAYS.md); cuốn 1 đã dạy rằng dạng trông tự nhiên trên giấy (`Jake → Giếch`) có thể
+0% khớp khi phát. Đường đúng đã có sẵn: sau khi lô 1 tổng hợp, chạy `scripts/name_is_read_the_same_way.py`
+trên project để đo `đỉnh%` từng tên; tên nào bất ổn thật mới đem `try_a_pronunciation.py` so dạng thay (cần
+GPU rảnh — giữa hai lô, hoặc chèn một cửa sổ trước bước 6). Cách đọc đã khoá trong lô 1 sẽ được
+`port_pronunciations.py` mang sang lô 2 nguyên vẹn, nên sửa một lần là sửa cho cả cuốn.
+
+Điểm ghi cho hàng tối ưu: tỷ lệ Qwen trượt (25/105 = 24%) cao hơn cuốn 1; lỗi phổ biến là âm cuối `r`/`l` và
+cụm phụ âm — có thể thêm ví dụ vào prompt hoặc chạy `_repair_vietnamese_syllable_boundaries` trước khi từ
+chối. Để đo trước khi sửa.
