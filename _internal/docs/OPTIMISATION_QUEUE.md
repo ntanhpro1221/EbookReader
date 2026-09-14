@@ -2118,3 +2118,13 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **1,84 s, không cờ sóng âm**, chương xong 46/20/0, đoạn Pierre được `machine_audio_acceptances` nhận theo
   đúng lý do "neo tên là bài chính tả". Điều kiện để vá không xảy ra; chốt chặn giữ nguyên câu chữ. Giữ mục
   này làm hồ sơ, đừng mở lại trừ khi có ca mà **project vá cũng** hỏng đúng hình ấy.
+
+- **Cách đọc `Pierre` (đo 2026-09-14 16:05, ưu tiên thấp, cần GPU rảnh).** `Pi-e`: 257 neo, khớp 14%,
+  21 dạng, đỉnh 46% — bất ổn thật. Chỉ còn ~31/72 lần trong sách chưa thu, nên đây là việc "nếu rảnh",
+  không phải việc chặn. Khi có cửa sổ giữa hai lô:
+
+        python scripts/try_a_pronunciation.py Pierre "Pi-e" "Pi-e-rơ" "Pi-e-rờ" "Pi-ơ" --takes 10
+        python scripts/name_is_read_the_same_way.py <project vừa sinh> --min 5
+
+  Dạng nào có `đỉnh%` cao nhất thì ghim bằng `cli pronounce`; `port_pronunciations.py` mang sang mọi lô sau.
+  Đừng thu lại lô 1 vì nó: 41 lần đã lên sách và đã được máy cho qua, đổi cách đọc giữa sách còn tệ hơn.

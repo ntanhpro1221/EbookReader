@@ -2497,3 +2497,26 @@ và bước 7 ghép lại sách. `!` là bắt buộc vì chương ấy đã có
 Dự đoán ghi trước: sau bản vá, nhóm `NPC vô danh nam` của lô 2 (và của project đúc lại 022) nhận một bậc
 **không** ai cùng chương đang giữ; va chạm cùng chương của sách về **0**; và `assert_voice_stability` không
 báo gì mới.
+
+## 2026-09-14, 16:05 — đo độ ổn định cách đọc tên trên lô 1 cuốn 2 (việc đã hứa lúc 03:30)
+
+`name_is_read_the_same_way.py` trên `lo01_c0d8c42dfe`, 33 tên có ≥20 lần neo. Đọc hai cột cùng nhau như
+tài liệu của chính công cụ dặn: `khớp%` là cổng neo tên có nhận không, `đỉnh%` là trong những lần KHÔNG
+khớp thì dạng hay gặp nhất chiếm bao nhiêu — đỉnh% thấp **và** neo nhiều mới là "mỗi lần một kiểu".
+
+**Một tên đáng sửa:** `Pierre → Pi-e` — 257 neo, khớp 14%, **21 dạng khác nhau**, đỉnh chỉ **46%**
+(Whisper viết `'e'`×93, `'pia'`×14, `'ế'`×13). Cùng hình với `Jake → Giếch` của cuốn 1 (1.827 neo, 89 dạng).
+
+**Những tên trông tệ mà thật ra lành** (đỉnh% cao = đọc ổn định, chỉ cổng không nhận): `Joel → Giô-en`
+673 neo, khớp 0%, **đỉnh 83%** (Whisper luôn viết `joanne`); `George → Gióch` đỉnh 88%; `Smile → Xờ-mai`
+88%; `Mekanzi` 93%; `Corella → Cơ-re-la` đỉnh 59% với `curella`×225. Đây đúng kết luận cuốn 1 đã ghi: cách
+đọc ghim **không bao giờ** đậu bài chính tả, và điều đó tự nó không phải lỗi.
+
+**Nhóm giữa** (đỉnh 49–53%, neo 130–280): `Cohn → Côn`, `Nar → Nan`, `Howson → Hau-xon`,
+`Felicia → Phe-li-sơ`, `Syracuse → Xi-rơ-ki-út`. Đáng nhìn nếu có lúc rảnh, không đáng dừng gì.
+
+**Cân nhắc trước khi tiêu GPU:** `Pierre` chỉ xuất hiện **72 lần trong cả 915 chương**, 41 trong số đó ở
+lô 1 (đã lên sách, đã được máy cho qua). Tức sửa cách đọc chỉ còn kịp cho ~31 lần ở các lô sau. Thêm nữa,
+257 "neo" gồm cả các vòng thu lại, không phải 257 lần người nghe nghe — nên "21 dạng" nói về quá trình
+nhiều hơn về sản phẩm. Vì vậy: **không chạy `try_a_pronunciation.py` bây giờ** (nó sinh audio thật, sẽ
+giành GPU với lô 2); xếp vào hàng cho một cửa sổ giữa hai lô, kèm các dạng ứng viên.
