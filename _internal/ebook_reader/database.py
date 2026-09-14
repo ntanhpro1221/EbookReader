@@ -106,6 +106,12 @@ LOCKED_NAME_ANCHOR_CODES = frozenset(
     {"ASR_LOCKED_NAME_ANCHOR_MISMATCH", "ASR_LOCKED_NAME_ANCHOR_REVIEW"}
 )
 KEEP_LOCKED_READING_ACTION = "keep_locked_reading_over_spelling_take"
+# Đặc cách thứ hai của một ứng viên đã thăng mà sổ phiên không đạt: bản thu tự kết thúc thay bản
+# bị cắt giữa câu (`promote_segment_candidate(..., over_a_cut_off_incumbent=True)`). Hai đường
+# phiên trượt là ĐỊNH NGHĨA của ca ấy, nên bộ kiểm không được đòi chúng đạt - cuốn 2 lô 1 chết
+# 30/49 vì bộ kiểm lúc xuất báo cáo chỉ biết đặc cách trên. pipeline.py ghi chuỗi này làm
+# `repair_action` của check cuối.
+PROMOTE_FINISHED_TAKE_ACTION = "promote_finished_take_over_cut_off_incumbent"
 PRONUNCIATION_DELIVERY_VARIANTS = frozenset(
     {PRONUNCIATION_DELIVERY_LOCKED, PRONUNCIATION_DELIVERY_SOURCE}
 )
@@ -9963,21 +9969,43 @@ class ProjectDB:
             ledger_codes = (
                 self._check_failure_codes_conn(conn, candidate["beam_check_id"]) or set()
             ) | (self._check_failure_codes_conn(conn, candidate["greedy_check_id"]) or set())
-            require_all(
-                "promoted candidate dual-decode ledger is not passing",
-                (
-                    "final_action_is_not_keep_locked_reading",
-                    final_action is None
-                    or str(final_action[0] or "") != KEEP_LOCKED_READING_ACTION,
-                ),
-                ("no_failure_codes_recorded", not ledger_codes),
-                (
-                    "failure_codes_outside_the_locked_name_anchor",
-                    bool(ledger_codes - LOCKED_NAME_ANCHOR_CODES),
-                ),
-                candidate_id=int(candidate["id"]),
-                failure_codes=sorted(ledger_codes),
-            )
+            action = str(final_action[0] or "") if final_action is not None else ""
+            if action == PROMOTE_FINISHED_TAKE_ACTION:
+                # Bản tự kết thúc thay bản bị cắt: hai đường phiên trượt là định nghĩa của ca
+                # (văn bản dưới ngưỡng ASR phán xử), cùng lý do đã ghi ở `promote_segment_candidate`.
+                # Bằng chứng bền của lượt thăng ấy là dòng `machine_take_substitutions` nó ghi
+                # trong cùng transaction; không có dòng ấy thì đây không phải ca ấy.
+                substitution = conn.execute(
+                    "SELECT 1 FROM machine_take_substitutions "
+                    "WHERE segment_stable_id=? AND candidate_wav_sha256=?",
+                    (str(segment["stable_id"]), str(candidate["wav_sha256"] or "")),
+                ).fetchone()
+                require_all(
+                    "promoted finished take lacks its substitution evidence",
+                    ("no_failure_codes_recorded", not ledger_codes),
+                    (
+                        "failure_codes_outside_asr",
+                        _asr_only_failure_codes(str(candidate["failure_reason"] or "")) is None,
+                    ),
+                    ("no_machine_take_substitution_row", substitution is None),
+                    candidate_id=int(candidate["id"]),
+                    failure_codes=sorted(ledger_codes),
+                )
+            else:
+                require_all(
+                    "promoted candidate dual-decode ledger is not passing",
+                    (
+                        "final_action_is_not_keep_locked_reading",
+                        action != KEEP_LOCKED_READING_ACTION,
+                    ),
+                    ("no_failure_codes_recorded", not ledger_codes),
+                    (
+                        "failure_codes_outside_the_locked_name_anchor",
+                        bool(ledger_codes - LOCKED_NAME_ANCHOR_CODES),
+                    ),
+                    candidate_id=int(candidate["id"]),
+                    failure_codes=sorted(ledger_codes),
+                )
         if bool(candidate["perceptual_required"]):
             if candidate["perceptual_check_id"] is None:
                 raise RuntimeError(

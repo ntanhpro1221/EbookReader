@@ -29,10 +29,7 @@ VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
 # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = (
-    "patch_a_formula_is_read_as_words.py",
-    "patch_a_finished_take_survives_the_report.py",
-)
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -231,6 +228,11 @@ APPLIED = (
     # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
     "patch_a_finished_take_is_promoted_without_two_passing_checks.py",
     "patch_a_stretched_cry_with_an_accent_is_still_a_cry.py",
+    # 2026-09-14: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+    "patch_a_formula_is_read_as_words.py",
+    "patch_a_finished_take_survives_the_report.py",
 )
 
 

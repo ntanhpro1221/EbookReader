@@ -2156,3 +2156,63 @@ Vì sao đáng vá dù chỉ ~28 đoạn/915 chương: mỗi đoạn tốn năm 
 "chưa ai nghe" trên một bản thu vốn đúng; tệ hơn, ở đúng chỗ ấy một bản thu hỏng thật sẽ không bị bắt, vì
 thước đo đã sai sẵn. Dự đoán ghi trước: chương có công thức kế tiếp là 111/113/122 (lô 3) — sau bản vá, các
 đoạn ấy qua ASR ở lần đầu, không tốn ứng viên sửa.
+
+## 2026-09-14, 06:55–07:40 — lô 1 cuốn 2 chết ở 30/49: bản-hoàn-chỉnh-thay-bản-bị-cắt được thăng đúng luật rồi bị bộ kiểm báo cáo giết
+
+**Diễn biến.** 06:55:57 worker ném `UNRECOVERABLE_PIPELINE_ERROR`: *promoted candidate dual-decode ledger
+is not passing: final_action_is_not_keep_locked_reading, failure_codes_outside_the_locked_name_anchor;
+candidate_id=778*. Ranh giới thấy mất nhịp tim, `run lai` lúc 06:56 và 07:02, cả hai chết ngay ở cùng dòng
+(lỗi nằm trong `refresh_terminal_reports` → `_export_reports` → `segment_candidate_attempt_summary`, tức
+chạy lại là gặp lại), rồi thoát mã 4 lúc ~07:07. 30 chương xong, 18 chờ, 1 đang kiểm; máy rảnh.
+
+**Ứng viên 778** là gì: chương 029, đoạn `“M… Ma!”` (0,64 s), đường ống thay bản thu chạm trần khung bằng
+bản tự kết thúc — đúng cơ chế của bản vá lô 9 (`promote_segment_candidate(..., over_a_cut_off_incumbent=True)`),
+ghi check cuối `repair_action = promote_finished_take_over_cut_off_incumbent` và một dòng
+`machine_take_substitutions`. Sổ phiên của nó trượt `ASR_MISMATCH` cả hai đường — **theo định nghĩa** của ca
+(văn bản dưới ngưỡng ASR phán xử). Rồi `_validated_promoted_candidate_conn` — bộ kiểm chạy sau khi thăng, ở
+ba chỗ: tổng hợp báo cáo, `reconcile_segment_candidate_artifacts` lúc recovery, `segment_candidate_resume_plan`
+— chỉ biết **một** đặc cách (giữ cách đọc ghim, mã trượt chỉ neo tên) và từ chối đặc cách thứ hai mà chính
+hàm thăng vừa cho phép. Bài học của lô 9 lặp lại ở tầng dưới: nới ở chỗ thăng, không nới ở chỗ kiểm. Vì
+sao lô 9 không lộ: chương 223 được vá trong project riêng một chương và lên sách; cuốn 1 chưa từng có ca thay
+bản bị cắt trong một lô đang chạy tới lúc xuất báo cáo tăng dần.
+
+**Sửa** (`patch_a_finished_take_survives_the_report.py`, `database.py`): đặc cách thứ hai trong bộ kiểm, cột
+chặt vào bằng chứng lượt thăng để lại — action đúng tên, mọi mã trượt là mã ASR (điều kiện 4 của
+`_require_candidate_beats_a_cut_off_incumbent`, đọc lại từ `failure_reason`), và **có** dòng
+`machine_take_substitutions` cho (đoạn, wav ứng viên). Thiếu một là từ chối như cũ; đặc cách giữ-cách-đọc-ghim
+không đổi. Bốn test trên fixture đóng băng lô 9 (`_fixtures/lo09_223_cut_off`): đề cử thật rồi gọi đủ ba đường
+kiểm; xoá dòng thay thế → từ chối; đổi action → từ chối như cũ; chuỗi action trong pipeline.py trùng hằng.
+
+**Quyết định chạy tiếp thế nào — đọc mã trước khi chọn.** `database.py` nằm trong 22 file của
+`implementation_hash`, mà hash ấy nằm trong `quality_policy` → `policy_hash` của project đổi khi vá. Hai điều
+được kiểm từ mã: (1) `database.py` KHÔNG nằm trong vân tay `analysis_casting` / `text_segmentation`, nên
+`run` không từ chối resume và 4 giờ 20 phân tích + dàn giọng được giữ; (2) recovery dưới policy mới **không
+tổng hợp lại**: đoạn verified/warning giữ WAV và được `requeue_segment_for_asr` ("Recovery requires ASR and
+perceptual QA under the current locked quality policy"), chương completed bị đánh "MP3 must be rebuilt: artifact
+has no passing QA record for the current locked quality policy" và dựng lại từ WAV. Ứng viên 778 thuộc policy
+cũ nên vô hình với bộ kiểm dưới policy mới; đoạn của nó đi lại đường ASR bình thường. Giá: phiên âm lại ~2.900
+đoạn (ước ~1,5 giờ GPU) + dựng lại 30 MP3, so với phương án mổ tay sổ ứng viên để mã cũ chấp nhận — phương
+án ấy tạo một trạng thái mà mã không bao giờ sinh ra (bản thu sống là của một ứng viên "dual_failed"), tức
+nói dối trong sổ, và lỗi sẽ trở lại ở ca kế tiếp. Chọn vá thật và trả giá phiên âm lại. Đây là lần đầu một lô
+resume qua một lần đổi policy trong sản xuất; dự đoán ghi trước: recovery báo `requeued_asr ≈ 2.900`,
+`invalid_mp3 = 30`, không `reset_missing_or_corrupt`, không tổng hợp lại chương nào đã xong.
+
+Cả hai bản vá trong hàng (công thức "+"/"=", và bản này) áp bằng `apply_all.py` lúc 07:40 với bộ test đầy đủ;
+rồi thả lại `boundary.sh 1 --recast auto` (nó tự `run lai`).
+
+**07:25 — `apply_all.py --apply` áp cả hai bản vá rồi báo TEST ĐỎ: năm test `test_seed_chain.py`.** Không phải
+bản vá: các test ấy dựng cây giả với tên thư mục cứng `v0.2.0-lo…`, còn `seed_chain.tag_of` theo `TAG_PREFIX`
+(mặc định v0.3.0 từ commit tham số hoá `1872f54` tối qua). Tức chúng đã đỏ từ tối qua — và tôi đã ghi vân tay
+xanh lúc 23:06 theo **mã thoát 0** của lượt 22:55–22:58, mà file bắt output chỉ giữ chín dòng đuôi. Đo lại sáng
+nay: `seed_chain.py` ghi lúc 22:52, `book_paths.py` 22:50, tức lượt ấy chạy trên đúng mã hôm nay đỏ — và vẫn
+thoát 0. Không dựng lại được vì sao; ghi thẳng là **không giải thích được**, không bịa. Điều chắc: với
+`addopts = -q` cộng `-q` của tôi, pytest không in dòng "N passed", nên mã thoát cộng **đếm dòng FAILED trong log
+đầy đủ** mới là bằng chứng — không phải một cái đuôi chín dòng. Luật từ giờ: log bộ test ghi ra file trong
+`runtime/`, xanh = exit 0 **và** `grep -c FAILED` = 0 trên file ấy; vân tay ghi ngay sau, trước khi sửa thêm gì.
+Sửa test theo tiền tố cấu hình (`f"{TAG_PREFIX}-lo…"`, nhập từ `scripts.seed_chain`) — một test cứng tên cuốn 1
+đỏ ở mọi cuốn khác. Hai file test khác (`test_keep_the_locked_reading_targets`, `test_one_person_one_voice`)
+cũng ghi `v0.2.0` nhưng xanh vì script của chúng khớp `*-lo*` bất kể tiền tố; để nguyên. Bộ đầy đủ chạy lại
+07:27; vân tay chỉ ghi khi thấy "passed".
+
+**07:31 — bộ đầy đủ xanh trên cây đã vá** (`runtime/suite_after_patches_0725.log`: exit 0, 0 FAILED, 246 giây
+`time.sleep` bị conftest chặn). Vân tay `325d59709e5d…` ghi. Commit rồi thả lại `boundary.sh 1 --recast auto`.

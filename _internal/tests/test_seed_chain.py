@@ -11,7 +11,10 @@ import os
 import sqlite3
 from pathlib import Path
 
-from scripts.seed_chain import batch_project, chain, repairs, seed_project
+from scripts.seed_chain import TAG_PREFIX, batch_project, chain, repairs, seed_project
+
+# Tên thư mục theo tiền tố của CUỐN đang cấu hình (scripts/book_paths.py), không cứng v0.2.0:
+# từ 2026-09-13 tiền tố mặc định là của cuốn 2, và một test cứng tên cuốn 1 đỏ ở mọi cuốn khác.
 
 
 def _project(root: Path, tag: str, name: str, created: float) -> Path:
@@ -29,12 +32,12 @@ def _project(root: Path, tag: str, name: str, created: float) -> Path:
 
 def _tree(root: Path) -> dict[str, Path]:
     made = {
-        "lo01": _project(root, "v0.2.0-lo01", "lo01_a", 1.0),
-        "lo01b": _project(root, "v0.2.0-lo01", "lo01b_b", 2.0),
-        "lo02": _project(root, "v0.2.0-lo02", "lo02_c", 3.0),
-        "lo02v_031": _project(root, "v0.2.0-lo02v", "lo02v_031_d", 4.0),
-        "lo02v_043": _project(root, "v0.2.0-lo02v", "lo02v_043_e", 5.0),
-        "lo02r_066": _project(root, "v0.2.0-lo02r", "lo02r_066_f", 6.0),
+        "lo01": _project(root, f"{TAG_PREFIX}-lo01", "lo01_a", 1.0),
+        "lo01b": _project(root, f"{TAG_PREFIX}-lo01", "lo01b_b", 2.0),
+        "lo02": _project(root, f"{TAG_PREFIX}-lo02", "lo02_c", 3.0),
+        "lo02v_031": _project(root, f"{TAG_PREFIX}-lo02v", "lo02v_031_d", 4.0),
+        "lo02v_043": _project(root, f"{TAG_PREFIX}-lo02v", "lo02v_043_e", 5.0),
+        "lo02r_066": _project(root, f"{TAG_PREFIX}-lo02r", "lo02r_066_f", 6.0),
     }
     # Thư mục lô 2 "trẻ" nhất theo mtime - đúng cái bẫy đã đo - và không được tính.
     os.utime(made["lo02"], (9_999_999_999, 9_999_999_999))
@@ -79,9 +82,9 @@ def test_newest_in_one_folder_is_by_created_at_not_by_name(tmp_path: Path, capsy
     from scripts.seed_chain import main
 
     made = _tree(tmp_path)
-    folder = tmp_path / "v0.2.0-lo02v"
+    folder = tmp_path / f"{TAG_PREFIX}-lo02v"
     # Tên "lo02v_010" xếp TRƯỚC "lo02v_031" theo alphabet nhưng được tạo SAU cùng.
-    latest = _project(tmp_path, "v0.2.0-lo02v", "lo02v_010_z", 7.0)
+    latest = _project(tmp_path, f"{TAG_PREFIX}-lo02v", "lo02v_010_z", 7.0)
 
     assert main(["--newest", str(folder)]) == 0
     assert capsys.readouterr().out.strip() == latest.as_posix()
@@ -95,7 +98,7 @@ def test_the_chain_keeps_repairs_of_earlier_batches_too(tmp_path: Path) -> None:
 
     Không đếm đôi: `backfill_exposure` lấy chương theo tiêu đề, project sau thắng."""
     made = _tree(tmp_path)
-    lo03 = _project(tmp_path, "v0.2.0-lo03", "lo03_g", 7.0)
+    lo03 = _project(tmp_path, f"{TAG_PREFIX}-lo03", "lo03_g", 7.0)
 
     links = chain(3, tmp_path)
 

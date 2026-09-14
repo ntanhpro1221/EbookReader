@@ -158,6 +158,18 @@ VIETNAMESE_SCALES = ("", "nghìn", "triệu", "tỷ")
 SPOKEN_SYMBOL_WORDS = {
     "↓": "giảm",
     "↑": "tăng",
+    # Ký hiệu toán trong một công thức: giọng đọc phát ra CHỮ và Whisper viết lại CHỮ ("cộng",
+    # "bằng"), nên chuỗi đối chiếu cũng phải là chữ - cuốn 2 lô 1 chương 025, "Nấm xác chết + Mô
+    # não thủy quỷ + … = Linh Hồn Than Khóc" đo 0,73 với bản thu hoàn toàn đúng, năm ứng viên
+    # sửa đều trượt cùng một cách, và đoạn bị đánh hỏng vì thước đo chứ không vì giọng.
+    # "%" cố ý KHÔNG có ở đây: Whisper viết lại "25%" đúng ký hiệu (6/6 đoạn cuốn 1 verified).
+    "+": "cộng",
+    "=": "bằng",
+    "≥": "lớn hơn hoặc bằng",
+    "≤": "nhỏ hơn hoặc bằng",
+    "^": "mũ",
+    "×": "nhân",
+    "÷": "chia",
 }
 # Ngoặc và mũi tên ngăn cách: thành dấu phẩy để giọng nghỉ đúng một nhịp trước và sau phần
 # được ngăn. `,` và `()` đều đã nằm trong PAUSE_GROUP_PATTERN của audio_io nên số nhóm nghỉ
@@ -242,7 +254,9 @@ def spoken_symbols_to_words(text: str) -> str:
     conversion instead, which reaches the same tidy result - a fragment of converted text has
     no separators left in it, so that rule cannot fire twice.
     """
-    source = str(text)
+    # "=>" là một mũi tên, không phải "bằng" rồi "lớn hơn": đổi thành → trước mọi bước khác, để
+    # luật sẵn có của SPOKEN_SEPARATORS lo phần còn lại (đầu dòng thì cắt, giữa câu thì phẩy).
+    source = str(text).replace("=>", "→")
     spans: list[tuple[str, bool]] = []
     position = 0
     for match in VOCAL_CUE_PATTERN.finditer(source):
