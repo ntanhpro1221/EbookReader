@@ -2300,3 +2300,42 @@ DB khi lô đang bay.
 
 Tiến độ 09:27: 9/49 chương kiểm lại xong, 11,8 chương/giờ (máy đang bị chủ sách dùng — "foreground CPU 317%",
 đường ống nhường), 22 chương chờ kiểm lại + 18 chương mới; ước xong ~13:30. 0 sự kiện critical.
+
+## 2026-09-14, 10:26–10:41 — bản vá của tôi giết lô: đổi VĂN BẢN NÓI làm mọi bản thu cũ của đoạn ấy hết hiệu lực
+
+Lô 1 chết lần nữa lúc 10:26:47, `UNRECOVERABLE_PIPELINE_ERROR: spoken-text checksum drifted before
+candidate or final verification`, đúng lúc đang thu lại chương 26 ở đoạn thứ 15 — tức
+`c00026_s0000015`, chính đoạn công thức mà bản vá "+" nhắm vào. Ranh giới `run lai` và chết lại cùng chỗ.
+
+**Nguyên nhân là bản vá của tôi, và cổng kiểm thì đúng.** Chuỗi giao cho TTS là **một phần của bằng
+chứng**: mỗi bản thu ghi `signal_json.spoken_text_sha256`, và trước khi dùng lại bản thu ấy,
+`pipeline._spoken_text_and_anchors` băm lại chuỗi từ mã **hiện tại** rồi so. Sau khi
+`spoken_symbols_to_words` học đọc "+" thành "cộng", bản thu cũ của đoạn ấy không còn là bản thu của
+văn bản này nữa. Tôi đã đo trước rằng lô 1 có đúng một đoạn mang ký hiệu ấy, và đã ghi đúng rằng bản vá
+"không tự chữa đoạn đã hỏng" — nhưng bỏ sót hệ quả thứ hai: nó cũng làm đoạn ấy **không dùng lại được**,
+và đường ống coi đó là lỗi không phục hồi. Một bản vá đổi chuỗi nói không phải chuyện của riêng đoạn chưa
+thu; nó vô hiệu hoá mọi bản thu đã có của những đoạn nó đổi.
+
+**Chữa dữ liệu, không nới cổng** (nới cổng là dạy máy tin một bản thu của văn bản khác): dừng ranh giới
+(TaskStop không đủ — tiến trình `bash scripts/boundary.sh` vẫn sống, phải `Stop-Process` theo PID), `cli
+stop` project (worker nhận và dừng sạch trong 20 giây), rồi `reset_segment_pending` đúng một đoạn — mất
+WAV, `signal_json`, kết quả ASR, mã cảnh báo; giữ nguyên văn bản, dàn giọng, phiên âm. Năm ứng viên cũ của
+nó thuộc policy đã hết hiệu lực nên vô hình. Chương 26 về `failed_segments = 0`. Thả lại ranh giới 10:35,
+recovery xong 10:40:58, **0 sự kiện critical** từ lúc ấy.
+
+**Rồi làm cái gốc, vì chủ sách đã dặn "nhỡ sách khác cũng gặp chuyện thế này thì project phải tự xử lý
+được chứ?":** `scripts/resync_spoken_text.py` — tìm mọi đoạn có bản thu mà chuỗi nói của mã hiện tại không
+còn khớp checksum, `--apply` thì đặt chúng về chờ thu. Nó **gọi đúng `_spoken_text_and_anchors` của đường
+ống** (dựng pipeline không runtime theo lối `refresh_terminal_reports_without_runtime`, cộng một
+`TTSCoordinator` — engine nạp lười nên không chạm GPU), chứ không chép lại luật băm: một bản sao sẽ lệch
+khỏi bản thật đúng vào ngày có bản vá kế tiếp. Phạm vi cố ý là **một project**, không phải cả cuốn: lô đã
+tag và ghép rồi thì bản thu là bằng chứng đã đóng, đặt lại ở đó chỉ làm chương mất tư cách xuất bản mà
+không ai thu lại. Bốn test trên project thật trong thư mục tạm (đoạn đặt vào bằng `replace_chapter_segments`,
+vì project mới chưa có đoạn nào): tìm đúng một đoạn lệch; không báo gì khi mọi checksum còn khớp; `--apply`
+chỉ xoá bằng chứng của đoạn lệch và chạy lại thì im; đoạn chưa thu không bao giờ bị báo.
+
+Chạy thử trên project đang bay (chỉ xem, read-only): 0 đoạn lệch — khớp với việc tôi vừa đặt lại đoạn duy
+nhất. Còn một việc chưa làm được lúc này: **gọi nó trong `boundary.sh` ngay sau bước 1** (áp bản vá) cho
+project lô sắp chạy tiếp — không sửa được `boundary.sh` khi chính nó đang chạy, nên xếp vào hàng với đúng
+chỗ chèn. Dự đoán ghi trước: lượt thu lại của `c00026_s0000015` qua ASR ở vòng 0 (0,73 → > 0,9) và chương
+26 kết thúc không đoạn hỏng.

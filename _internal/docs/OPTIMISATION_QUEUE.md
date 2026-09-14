@@ -2084,3 +2084,22 @@ bốn bài test đều xanh và chương vẫn hỏng.
 
    Dự đoán ghi trước: lần thu lại ấy qua ASR ngay vòng 0 (độ giống từ 0,73 lên > 0,9) và chương 26 về
    `failed_segments=0`. Nếu chương vào `failed` thì bước 3 ranh giới tự lo, không cần lệnh trên.
+
+## Hàng sau cú chết 10:26 ngày 14-09 (lệch chuỗi nói)
+
+- **Việc 2 của mục trước ĐÃ LÀM, theo cách khác**: không phải "nếu chương 26 lại completed thì thu lại một
+  đoạn" — đoạn ấy làm chết cả lô nên đã `reset_segment_pending` ngay lúc 10:34, và công cụ chung là
+  `scripts/resync_spoken_text.py`. Bỏ qua lệnh thủ công ghi ở mục trước.
+- **CHÈN VÀO `boundary.sh` (làm khi không có ranh giới nào đang chạy):** ngay sau bước 1 (`apply_all.py --apply`
+  thành công) và trước bước 3, gọi cho project lô hiện tại:
+
+        py scripts/resync_spoken_text.py "$BATCH_PROJECT" --apply >> "$LOG" 2>&1 || say "resync chuoi noi that bai - xem $LOG"
+
+  Lý do đặt ở đấy: bản vá vừa vào cây, lô chưa chạy lại, và đây là project duy nhất sắp chạy tiếp. Cũng nên
+  gọi cho project vá / đúc lại mà bước 3 và 4 tạo ra — chúng `create` mới nên không lệch, trừ khi **mở lại**
+  một project cũ (chuyện đã xảy ra với 106/007/084), nên gọi sau khi chọn project và trước `cli run`.
+- **Sâu hơn (bản vá qua hàng chờ, `recovery.py` — file khoá):** recovery đã đặt lại đoạn khi WAV mất/hỏng
+  hoặc QA hết hiệu lực; lệch chuỗi nói cùng một họ ("bằng chứng không còn nói về văn bản này") và nên được
+  chữa ở đó, để cả `cli run` gọi trực tiếp cũng tự lành mà không cần ai nhớ chạy script. Cần đo trước: một
+  vòng recovery thêm phép dẫn chuỗi cho ~3.700 đoạn tốn bao lâu (script chạy trên lô 1 mất ~40 giây, nên
+  quãng ấy là chấp nhận được so với 6,8 phút recovery hiện tại).
