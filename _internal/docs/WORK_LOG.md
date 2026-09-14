@@ -2452,3 +2452,48 @@ sửa một script bash đang chạy). Sau bước 2 và trước bước 3, ran
 giây cho 3.705 đoạn, và chỉ trên project lô: một lô đã tag và ghép thì bản thu là bằng chứng đã đóng.
 `launch_repair.sh` **không** cần: nó luôn `create` project mới (tiêu đề thêm chữ cái nếu đã có), nên không
 có bản thu nào để lệch. `bash -n` sạch, tập test tài liệu/script xanh.
+
+## 2026-09-14, 15:00–15:40 — theo dấu một va chạm còn sót: nhóm NPC vô danh không khai nó nói ở chương nào
+
+Sách lô 1 còn **đúng 1 va chạm cùng chương** (đo trên 49 chương mà sách thật sự dùng, theo `manifest.json`):
+chương 022, `LUCIEN` (7 câu) và `NPC vô danh nam` (6 câu) cùng một `voice_profile_id`. Trước đúc lại là 3,
+sau còn 1 — và cái còn lại tái diễn y nguyên trong project đúc lại.
+
+Truy từng bước, mỗi bước một phép đo, không đoán:
+
+1. **Bộ cấp giọng không sai.** Dựng lại đúng hình bằng `PresetAllocator` thật: Lucien giữ Thanh Bình 1,00,
+   Victor giữ Thái Sơn 1,00, rồi `choose(..., npc=True, who="NPC vô danh nam")` → nhận **0,93**, khác Lucien.
+   Vậy lỗi không ở phép chọn.
+2. **Cũng không phải thứ tự ghim.** Log project đúc lại: *"Giữ chỗ 25 giọng đã ghim trước khi phân vai"* —
+   pin được giữ chỗ trước, đúng như `patch_reserve_all` đã làm.
+3. **Log nói ra chỗ hỏng ở dòng kế:** *"1 nhóm NPC generic theo giới tính"*, và cảnh báo va chạm
+   `{3: [3, 51]}` — nhân vật 51 là nhóm `ANONYMOUS_MALE`, tạo lúc 13:52:04, sau tất cả những người có tên.
+4. **Đọc mã thì thấy hợp đồng bị vỡ ở đúng một dòng.** `character_registry` ghi `note_chapters` cho
+   `speaker_groups` kèm chú thích *"Ai có mặt ở chương nào — **cho MỌI người**, trước lần `choose()` đầu
+   tiên"*. Ba nhóm vô danh không nằm trong `speaker_groups`; chúng được cast ở khối riêng bên dưới và
+   **không bao giờ** được khai chương. Nên với chúng `chapters_of` rỗng → `shared_chapters` trả 0 cho mọi
+   bậc → khi thang bậc đã cạn chỗ trống (Thanh Bình có 7 bậc, 8 người ghim), tie-break lùi về "bậc thấp
+   nhất trên thang" = 1,00 = giọng của nhân vật chính. Luật sinh ra để tránh va chạm cùng chương thì mù
+   với đúng nhóm hay va chạm nhất.
+
+**Đo mức ảnh hưởng trước khi vá, trên 14 project của cả hai cuốn:** 12 va chạm cùng chương, **4 có nhóm
+vô danh**, và cả 4 đều ở cuốn 2 (3 ở lô 1, 1 ở project đúc lại 022). Cuốn 1 không có ca nào thuộc lớp này
+— tám va chạm của nó đều giữa người có tên, và các bản vá trước đã chữa. Đây **không** phải 1/34.000 như
+ca "Pierre" hôm qua: nó sẽ tái diễn ở mọi chương có người đàn ông vô danh nói cùng chương với người đang
+giữ bậc thấp nhất, tức hàng chục lần trong 915 chương.
+
+**Bản vá `patch_the_nameless_crowd_says_where_it_speaks.py`** (file khoá → qua hàng chờ): ghi
+`note_chapters` cho ba nhóm vô danh, ngay sau khối của người có tên và **trước** `choose()` đầu tiên, lấy
+chương từ chính `anonymous_by_gender` (hàng của chúng là hàng segment, đã có `chapter_id`). Không đổi phép
+chọn, không đổi thứ tự cast. Ba test: nhóm có khai chương thì **tránh** bậc của người cùng chương; nhóm
+không khai thì rơi đúng vào bậc ấy (giữ lại chứng cứ của lỗi); và chỗ ghi phải nằm trước `choose()` đầu
+tiên. Áp thử trên bản sao cách ly: **87 test dàn giọng xanh**, kể cả `test_cast_voice_lock`,
+`test_wrap_prefers_a_stranger`, `test_reserve_marks_the_slot_it_holds`.
+
+**Xếp cho ranh giới 2 → 3**, và đổi tham số ranh giới thành `--recast auto "1:022!"`: bước 1 áp bản vá,
+bước 4 đúc lại — nên chương 022 của lô 1 (đã lên sách với va chạm) được thu lại **sau khi** bản vá vào cây,
+và bước 7 ghép lại sách. `!` là bắt buộc vì chương ấy đã có một project đúc lại hoàn thành.
+
+Dự đoán ghi trước: sau bản vá, nhóm `NPC vô danh nam` của lô 2 (và của project đúc lại 022) nhận một bậc
+**không** ai cùng chương đang giữ; va chạm cùng chương của sách về **0**; và `assert_voice_stability` không
+báo gì mới.
