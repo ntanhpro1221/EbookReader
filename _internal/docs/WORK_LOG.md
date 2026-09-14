@@ -2162,8 +2162,8 @@ thước đo đã sai sẵn. Dự đoán ghi trước: chương có công thức
 **Diễn biến.** 06:55:57 worker ném `UNRECOVERABLE_PIPELINE_ERROR`: *promoted candidate dual-decode ledger
 is not passing: final_action_is_not_keep_locked_reading, failure_codes_outside_the_locked_name_anchor;
 candidate_id=778*. Ranh giới thấy mất nhịp tim, `run lai` lúc 06:56 và 07:02, cả hai chết ngay ở cùng dòng
-(lỗi nằm trong `refresh_terminal_reports` → `_export_reports` → `segment_candidate_attempt_summary`, tức
-chạy lại là gặp lại), rồi thoát mã 4 lúc ~07:07. 30 chương xong, 18 chờ, 1 đang kiểm; máy rảnh.
+(ngăn xếp chết: `_process_chapter` → `_verify_chapter_audio` → `reconcile_segment_candidate_artifacts` → cùng bộ
+kiểm; xuất báo cáo cũng ném cùng lỗi nhưng chỉ best-effort — chạy lại là gặp lại ngay ở chương kế), rồi thoát mã 4 lúc ~07:07. 30 chương xong, 18 chờ, 1 đang kiểm; máy rảnh.
 
 **Ứng viên 778** là gì: chương 029, đoạn `“M… Ma!”` (0,64 s), đường ống thay bản thu chạm trần khung bằng
 bản tự kết thúc — đúng cơ chế của bản vá lô 9 (`promote_segment_candidate(..., over_a_cut_off_incumbent=True)`),
@@ -2216,3 +2216,29 @@ cũng ghi `v0.2.0` nhưng xanh vì script của chúng khớp `*-lo*` bất kể
 
 **07:31 — bộ đầy đủ xanh trên cây đã vá** (`runtime/suite_after_patches_0725.log`: exit 0, 0 FAILED, 246 giây
 `time.sleep` bị conftest chặn). Vân tay `325d59709e5d…` ghi. Commit rồi thả lại `boundary.sh 1 --recast auto`.
+
+## 2026-09-14, 07:33–07:50 — resume qua đổi policy: số đo so với dự đoán, và một cảnh báo báo cáo tự hết
+
+Thả lại ranh giới 07:33, `run lai` lần 1. `run` nhận: *"Text segmentation fingerprint changed, but the current
+parser reproduced every checkpointed segment exactly; safe resume allowed"* (bản vá "+"/"=" đổi `text_processing.py`
+nhưng không đổi cách chia đoạn — đúng như thiết kế của cổng ấy). Policy mới `31668897…` active, policy cũ giữ lại
+inactive. Quét recovery 07:39:19, mất 5,5 phút cho ~2.900 WAV (checksum + sóng âm):
+
+| dự đoán (07:40) | đo được |
+|---|---|
+| requeued_asr ≈ 2.900 | **2.035** requeue + **514** recovered_verified (giữ QA, không cần phiên lại) |
+| invalid_mp3 = 30 | **30** ("MP3 must be rebuilt: no passing QA record for the current locked quality policy") |
+| reset_missing_or_corrupt = 0 | **0**; không tổng hợp lại chương nào |
+| — | stale_candidates = 113 (ứng viên policy cũ, đứng ngoài tầm nhìn từ giờ) |
+
+Kiểm lại + dựng lại: chương 1 xong 07:41:54, chương 2 07:44:56 — ~2,5–3 phút/chương → 30 chương ≈ 1,3 giờ,
+rồi 19 chương mới ≈ 2,2 giờ; lô xong quãng 11:30 thay vì 09:30. Giá của bản vá thật, đã tính trước.
+
+**Cảnh báo mới ở xuất báo cáo** (`QUALITY_REPORT_EXPORT_FAILED: promoted candidate warning provenance differs from
+the live segment`, 07:39:22 và 07:41:56) — đo trước khi lo: 671 ứng viên đã thăng (645 policy cũ, 26 mới); lệch
+provenance đúng **12**, tất cả policy cũ và đoạn ở `signal_passed` — tức recovery đã requeue đoạn (xoá
+`warning_code`) trong khi ứng viên cũ còn ghi `promotion_warning_code`. Báo cáo dùng policy của check mới nhất từng
+chương (46/49 còn là cũ) nên còn nhìn thấy chúng; đường **chết** (reconcile ở `_verify_chapter_audio`) chỉ nhìn
+policy hiện hành → 26 ứng viên mới, 0 lệch. Xuất báo cáo là best-effort (`worker._refresh_terminal_reports_best_effort`,
+`_safe_export_reports`) nên không giết lượt chạy; cảnh báo tự hết khi chương cuối cùng có check mới. Không đụng.
+Kiểm ở nhịp tim sau: số lệch giảm về 0 khi 30 chương kiểm xong; không `UNRECOVERABLE` mới.
