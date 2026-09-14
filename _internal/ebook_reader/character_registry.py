@@ -575,6 +575,11 @@ def _validate_casting_inputs(
             len(identity_rows) >= minimum_named_mentions
             and not gender_counts
             and not is_local_speaker(str(identity_rows[0]["speaker"]))
+            # Giới tính do NGƯỜI ghim (`cli cast --character X --gender ...`) là bằng chứng, và là
+            # bằng chứng mạnh nhất có thể có. Không đọc nó thì chính cách chữa mà thông điệp lỗi
+            # mách - và mà `_command_cast` tồn tại vì nó, "readable before casting has ever run" -
+            # không mở được cổng: người nghe trả lời đúng câu hỏi ấy mà cổng vẫn chặn.
+            and not str((locked or {}).get(identity, "")).strip()
         ):
             missing_named_genders[identity] = len(identity_rows)
 
@@ -624,13 +629,32 @@ def _validate_casting_inputs(
             f"trung tính và đi tiếp. Sửa bằng: cli cast --character {identity} --gender ..."
         )
 
-    issues: list[str] = []
-    if missing_named_genders:
-        issues.append(f"named speakers missing gender={missing_named_genders}")
+    # Thiếu bằng chứng giới tính cũng **không** giết lượt chạy nữa, vì đúng lý lẽ đã viết ở trên
+    # cho ca mâu thuẫn - và ca này còn nhẹ hơn: mâu thuẫn là model nói hai điều, thiếu là model
+    # không nói gì. Cuốn 2 lô 2 chết ở đây lúc 19:30 ngày 14-09 sau 5,5 giờ phân tích trọn 3.749
+    # đoạn, vì hai cái tên bảy câu thoại: `Luke` (người thật, model không đoán được) và `Nghe`
+    # (không phải người - chữ mở đầu câu tường thuật ngay sau lời thoại bị nhận thành tên).
+    #
+    # Đường ra vẫn như ca mâu thuẫn: đúc bằng giọng trung tính, log to, và trả về cho chỗ gọi
+    # phát `CASTING_GENDER_UNRESOLVED` để nó nằm trong báo cáo. Người nghe sửa bằng một lệnh.
+    for identity, mention_count in sorted(missing_named_genders.items()):
+        detail = {
+            "gender_evidence": "none",
+            "mentions": int(mention_count),
+            "cast_as": "unknown",
+        }
+        log(
+            f"Giới tính của {identity} không có bằng chứng nào ({mention_count} câu); đúc bằng "
+            f"giọng trung tính và đi tiếp. Sửa bằng: cli cast --character {identity} --gender ..."
+        )
+        gender_conflicts.setdefault(identity, detail)
+    # Một danh tính mang hai voice profile thì VẪN ném: đó là dữ liệu tự mâu thuẫn, không phải
+    # một câu hỏi không trả lời được, và đi tiếp là xuất bản hai giọng cho một người.
     if identity_instability:
-        issues.append(f"voice identity instability={identity_instability}")
-    if issues:
-        raise RuntimeError("Casting input quality gate failed: " + "; ".join(issues))
+        raise RuntimeError(
+            "Casting input quality gate failed: voice identity instability="
+            f"{identity_instability}"
+        )
     return gender_conflicts
 
 
@@ -1584,6 +1608,19 @@ def build_registry_and_cast(
         allocator.note_chapters(
             canonical_key(speaker),
             {int(row["chapter_id"]) for row in speaker_rows},
+        )
+    # Cả ba nhóm NPC vô danh cũng phải khai, vì chúng cũng được `choose()` - ở khối riêng bên
+    # dưới - và "cho MỌI người" ở trên phải đúng nghĩa. Không khai thì `chapters_of` của chúng
+    # rỗng, `shared_chapters` trả 0 cho mọi bậc, và khi thang bậc đã cạn chỗ trống thì tie-break
+    # lùi về bậc thấp nhất - đúng bậc người đông lời nhất đang giữ. Cuốn 2 lô 1: nhóm "NPC vô
+    # danh nam" rơi vào bậc 1,00 của Thanh Bình, tức giọng của LUCIEN, ở ba chương 022/023/032;
+    # chương 022 đã lên sách với nhân vật chính tự nói với mình 6 câu.
+    for anonymous_gender, anonymous_gender_rows in anonymous_by_gender.items():
+        if not anonymous_gender_rows:
+            continue
+        allocator.note_chapters(
+            f"ANONYMOUS_{anonymous_gender.upper()}",
+            {int(row["chapter_id"]) for row in anonymous_gender_rows},
         )
     local_count = 0
     for speaker, speaker_rows in speaker_groups:

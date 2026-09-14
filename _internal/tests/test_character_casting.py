@@ -833,15 +833,47 @@ def test_gender_conflict_no_longer_fails_the_whole_book(tmp_path: Path) -> None:
     assert "CASTING_GENDER_UNRESOLVED" in codes, "không im lặng: phải có sự kiện để vào báo cáo"
 
 
-def test_recurring_named_speaker_without_gender_fails_before_voice_casting(
+def test_recurring_named_speaker_without_gender_no_longer_fails_the_whole_book(
     tmp_path: Path,
 ) -> None:
+    """Cho tới 2026-09-14 chỗ này ném lỗi, và bản trước của bài này khẳng định nó phải ném.
+
+    Bài ấy không có một dòng lý lẽ nào — khác hẳn `test_gender_conflict_no_longer_fails_the_whole_book`
+    ngay bên trên, nơi lập luận được viết đủ. Và lập luận ấy áp vào đây còn mạnh hơn: **mâu thuẫn là
+    model nói hai điều, thiếu là model không nói gì**. Nếu một câu hỏi không phán xử được thì không
+    được chặn, thì một câu hỏi *không có dữ liệu nào để phán xử* càng không được chặn.
+
+    Cái giá đã trả bằng tiền thật: cuốn 2 lô 2 chết 19:30 ngày 14-09 sau **5 giờ 30 phút** phân tích
+    trọn 3.749 đoạn, vì `Luke` (4 câu) và `Nghe` (3 câu) — cái thứ hai còn không phải người.
+    """
+    said: list[str] = []
     db = _identity_db(tmp_path, [("Mag", "unknown")] * 3)
 
-    with pytest.raises(RuntimeError, match="named speakers missing gender"):
-        build_registry_and_cast(db, build_settings(), lambda _message: None)
+    build_registry_and_cast(db, build_settings(), said.append)
 
-    assert db.list_voice_profiles() == []
+    assert db.list_voice_profiles(), "phải đúc giọng và đi tiếp, không dừng cả cuốn sách"
+    assert any("MAG" in line and "cli cast" in line for line in said), "phải nói ra tên và cách sửa"
+    codes = {str(row["code"]) for row in db.list_events()}
+    assert "CASTING_GENDER_UNRESOLVED" in codes, "không im lặng: phải có sự kiện để vào báo cáo"
+
+
+def test_a_listener_locked_gender_opens_the_gate(tmp_path: Path) -> None:
+    """`cli cast` là cách chữa mà thông điệp lỗi mách; nó phải thật sự chữa được.
+
+    Cổng cũ tính "thiếu giới tính" chỉ từ dữ liệu của model và không đọc `locked`, nên người nghe trả
+    lời đúng câu hỏi được hỏi mà cổng vẫn chặn — và `_command_cast` tồn tại chính để trả lời **trước**
+    khi cast chạy ("readable before casting has ever run").
+    """
+    said: list[str] = []
+    db = _identity_db(tmp_path, [("Mag", "unknown")] * 3)
+    db.lock_character_gender("Mag", "male")
+
+    build_registry_and_cast(db, build_settings(), said.append)
+
+    assert db.list_voice_profiles()
+    assert not any("không có bằng chứng nào" in line for line in said), (
+        "đã ghim thì không còn là 'thiếu bằng chứng'"
+    )
 
 
 def test_existing_voice_identity_instability_fails_before_recasting(tmp_path: Path) -> None:
