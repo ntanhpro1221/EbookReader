@@ -2128,3 +2128,13 @@ bốn bài test đều xanh và chương vẫn hỏng.
 
   Dạng nào có `đỉnh%` cao nhất thì ghim bằng `cli pronounce`; `port_pronunciations.py` mang sang mọi lô sau.
   Đừng thu lại lô 1 vì nó: 41 lần đã lên sách và đã được máy cho qua, đổi cách đọc giữa sách còn tệ hơn.
+
+- **Tên người nói bịa từ chữ mở đầu câu tường thuật** (2026-09-14, ca thật `Nghe`): nguồn
+  `“Là tôi, Victor.” Nghe giọng của Victor…` cho ra một "nhân vật" tên `Nghe` giữ 3 câu thực ra của Victor
+  và Nam tước Othello. Hai hệ quả: lời bị gán sai giọng, và cổng dàn giọng chặn cả lô vì cái tên ấy không
+  có giới tính. Đề xuất **đo trước**: đếm trong mọi project đã lưu những speaker mà (a) chỉ xuất hiện
+  ngay sau một dấu đóng ngoặc kép, và (b) là từ chức năng / động từ tiếng Việt thường gặp
+  (`Nghe`, `Thấy`, `Nhìn`, `Khi`, `Sau`, `Trong`, `Vừa`, `Đúng`…). Nếu nhiều, thêm một chốt trong
+  `analysis` từ chối speaker thuộc danh sách ấy và trả lời thoại về NARRATOR hoặc về người nói gần nhất.
+  Đừng lọc bằng "từ có nghĩa tiếng Việt" nói chung: `Mật Ong Trắng`, `Triết Gia`, `Thủy Ngân`, `Hạ Phong`
+  đều là tên nhân vật thật trong cuốn này.

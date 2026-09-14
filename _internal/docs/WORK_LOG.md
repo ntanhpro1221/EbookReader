@@ -2520,3 +2520,53 @@ lô 1 (đã lên sách, đã được máy cho qua). Tức sửa cách đọc ch
 257 "neo" gồm cả các vòng thu lại, không phải 257 lần người nghe nghe — nên "21 dạng" nói về quá trình
 nhiều hơn về sản phẩm. Vì vậy: **không chạy `try_a_pronunciation.py` bây giờ** (nó sinh audio thật, sẽ
 giành GPU với lô 2); xếp vào hàng cho một cửa sổ giữa hai lô, kèm các dạng ứng viên.
+
+## 2026-09-14, 19:30–19:45 — cổng dàn giọng giết lô 2 sau 5,5 giờ phân tích, vì hai cái tên bảy câu thoại
+
+19:30:53, ngay khi phân tích xong trọn **3.749 đoạn**:
+
+    Casting input quality gate failed: named speakers missing gender={'LUKE': 4, 'NGHE': 3}
+
+Đây là **cổng đắt nhất của dự án** — tài liệu của chính nó nói thế — và nó vừa làm đúng điều mà bản vá
+2026-09-09 sinh ra để chặn: chết sau khi đã trả xong phần đắt nhất. Bản vá ấy chỉ nới ca "giới tính **mâu
+thuẫn**"; ca "**thiếu** giới tính" vẫn ném, và test khẳng định điều đó
+(`test_recurring_named_speaker_without_gender_fails_before_voice_casting`) **không có một dòng lý lẽ nào**,
+khác hẳn test ngay bên trên nó.
+
+**Hai cái tên, và cái thứ hai mới là chuyện đáng kể:**
+
+- `Luke` — người thật, 4 câu ở chương 4: *"Đi mà bắt chuột đi!"*, *"Vâng thưa ngài."*, *"Xin mời ngài."* Một
+  người hầu; model không đoán được giới tính.
+- `Nghe` — **không phải người**. Nguồn viết: `“Là tôi, Victor.” Nghe giọng của Victor bây giờ có vẻ…` và
+  `“…Ta là giám đốc của hiệp hội, Nam tước Othello.” Nghe thấy tiếng ồn, Othello bước ra…` Chữ **"Nghe"** mở
+  đầu câu tường thuật ngay sau lời thoại bị nhận thành **tên người nói**. Ba câu ấy thực ra của Victor và
+  Nam tước Othello — tức ngoài việc chặn cả lô, nó còn gán lời của hai nhân vật thật cho một cái tên bịa.
+
+**Lỗ thứ hai, lộ ra khi tôi viết test:** cổng **không đọc `locked`**, nên `cli cast --character X --gender
+male` — đúng cách chữa mà thông điệp lỗi mách, và là lý do `_command_cast` tồn tại ("readable before casting
+has ever run") — **không mở được cổng**. Người nghe trả lời đúng câu hỏi được hỏi mà cổng vẫn chặn.
+
+**Quyết định khó, và lý do:** vá `character_registry.py` **ngay** thì `resume` bị từ chối
+(`character_registry.py` nằm trong `ANALYSIS_CASTING_IMPLEMENTATION_FILES`, và vân tay ấy đổi là
+*"Analysis/casting implementation changed after analysis started; create a clean project"*) → mất trắng 5,5
+giờ phân tích, đúng cái giá mà lô 1 đã trả ngày 08-09. Nên:
+
+1. **Không** áp bản vá lúc này. Hai bản vá nằm trong hàng chờ, sẽ vào cây ở **ranh giới 2 → 3**, lúc không
+   project nào đang dở phân tích — và từ đó mọi lô sau được hưởng.
+2. Mở đường cho lô 2 bằng **API được hỗ trợ, không sửa file khoá**: `cli cast --character Luke/Nghe --gender
+   male` (ghim bền, đi theo chuỗi gieo) **cộng** `db.update_analysis(segment_id, {"gender": "male"})` cho
+   đúng 7 đoạn — cùng API mà đường phân tích dùng, nên không đụng vân tay nào.
+   Bằng chứng cho "male": `Luke` là tên nam và nói giọng người hầu với "ngài"; ba câu của `Nghe` thuộc về
+   Victor và Nam tước Othello, cả hai là nam. Male gần đúng hơn giọng trung tính.
+3. **Thử cổng trước khi tiêu một lần chạy lại**: gọi `_validate_casting_inputs` đọc-không-ghi trên chính
+   dữ liệu ấy → *"CỔNG QUA"*. Chỉ sau đó mới thả lại ranh giới (19:43).
+
+**Bản vá `patch_no_gender_evidence_does_not_kill_the_book.py`** (đã xếp hàng): thiếu giới tính đi vào cùng
+đường với mâu thuẫn (log to + `CASTING_GENDER_UNRESOLVED`, đúc giọng trung tính, đi tiếp); `locked` được
+tính là bằng chứng; `identity_instability` **vẫn** ném vì đó là dữ liệu tự mâu thuẫn. Nó cũng **viết lại
+test cũ** kèm lý lẽ mà bản trước thiếu. 116 test dàn giọng + giới tính xanh trên bản sao cách ly.
+
+**Một sai phương pháp của tôi, ghi lại để không lặp:** lần chạy test đầu tiên trên bản sao dùng
+`PYTHONPATH=$S` mà cwd vẫn là cây thật, nên `python -m pytest` nhập `ebook_reader` **từ cây thật** — test
+xanh mà chẳng kiểm bản vá. Phải `cd` vào bản sao, và kiểm bằng
+`python -c "import ebook_reader; print(...__file__)"` trước khi tin con số.
