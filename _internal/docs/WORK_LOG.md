@@ -2339,3 +2339,24 @@ nhất. Còn một việc chưa làm được lúc này: **gọi nó trong `boun
 project lô sắp chạy tiếp — không sửa được `boundary.sh` khi chính nó đang chạy, nên xếp vào hàng với đúng
 chỗ chèn. Dự đoán ghi trước: lượt thu lại của `c00026_s0000015` qua ASR ở vòng 0 (0,73 → > 0,9) và chương
 26 kết thúc không đoạn hỏng.
+
+## 2026-09-14, 10:58 — dự đoán đúng, và con số nói rõ ai sai: thước đo, không phải bản thu
+
+Đoạn công thức `c00026_s0000015` sau khi thu lại:
+
+| | trước bản vá | sau bản vá |
+|---|---|---|
+| trạng thái | `failed` (`ASR_MISMATCH_UNRESOLVED`) | **`verified`**, không mã cảnh báo |
+| độ giống ASR | 0,728 | **0,951** |
+| WER | 0,368 | 0,130 |
+| ứng viên sửa đã tiêu | 5 (hết ngân sách) | 0 (qua ngay) |
+
+Chương 26: `completed`, 57 verified / 18 warning / **0 failed**. Cả lô 1 giờ **0 đoạn hỏng**. 29/49 chương xong,
+18 chương mới còn lại, 0 sự kiện critical từ 10:35.
+
+**Điều đáng ghi nhất nằm ở dòng phiên âm**: Whisper vẫn viết y như lần trước — *"Đâm sát chết cộng mô não
+thủy quỷ, cộng bụi oán linh…"* — và bản thu mới dài đúng 4,88 giây như bản cũ. Tức giọng đọc **vẫn luôn**
+đọc "+" thành "cộng"; cái đổi là chuỗi đem ra so. Bản thu chưa từng hỏng; thước đo hỏng, và nó hỏng theo
+cách tốn 5 ứng viên sửa vô ích rồi dán nhãn "chưa ai nghe" lên một bản thu đúng. Đúng cái hình mà tài liệu
+đã kể ở "tên đọc-ghim thua bài chính tả neo tên": khi phiên âm và văn bản nói không nói cùng một ngôn ngữ,
+kẻ bị kết án là bản thu.
