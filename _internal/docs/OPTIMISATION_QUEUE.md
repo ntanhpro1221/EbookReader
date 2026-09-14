@@ -2158,3 +2158,13 @@ bốn bài test đều xanh và chương vẫn hỏng.
   là ngoặc đơn lồng trong ngoặc kép (`‘xoay’`) làm ngữ điệu hỏng, không phải con số ngưỡng.
 - **Cập nhật lớp "số viết chữ vs chữ số"**: thêm một ca lô 2 (`lúc mười giờ ba mươi` → `10h30`, sim 0,70,
   chương 028). Tổng trong lô 2: 3 ca. Vẫn xếp cho một ranh giới như mục trên đã ghi.
+
+- **Xin giọng đọc CHẬM trước khi bỏ một đoạn vì nhịp** (đo 2026-09-15 02:10; ưu tiên trung).
+  7/7 đoạn chưa bao giờ có bản thu trong cả hai cuốn đều chết vì cận trên nhịp sau 10 seed, và cả 7 là câu
+  ngắn nên bộ chia từ chối. Đường ống nới *dải chấp nhận* (`pace_band=already normal`) nhưng chưa bao giờ
+  đổi *yêu cầu*: `delivery_note.pace` vẫn là `normal` ở cả 10 lần. Đề xuất: sau khi hết 10 lần vì
+  `speech pace` **và** trước khi thử chia nhỏ, sinh thêm 1–2 lần với `pace="slow"`; nếu đạt thì ghi mã
+  cảnh báo riêng (`TTS_SLOWED_TO_FIT_PACE`) để báo cáo không im lặng. Cái giá hiện tại của mỗi ca là một
+  project vá ~12 phút; ước ~17 ca cho cả cuốn 2. **Không** nới cận trên và **không** thêm thước thứ hai:
+  đo được nhịp âm tiết của hai ca đêm nay là 7,2 và 7,3 (trung vị kho 4,7) — giọng đọc vội thật.
+  Chạm `pipeline.py` (file khoá) → qua hàng chờ, và test phải dùng hai đoạn thật ghi ở WORK_LOG 02:10.

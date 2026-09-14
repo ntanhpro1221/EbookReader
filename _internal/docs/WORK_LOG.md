@@ -2602,3 +2602,33 @@ similarity thấp: chúng vẫn qua nhưng tiêu thêm vòng thu lại. Đườn
 Xếp hàng cho **một ranh giới** (không phải giữa lô): ở đó bản vá vào cây trước khi lô sau được `create`,
 nên lô sau sinh ra đã mang policy mới và **không phải kiểm lại gì** — khác hẳn cái giá sáng nay (2.035 đoạn
 requeue + 30 MP3 dựng lại) khi policy đổi giữa một lô đang chạy.
+
+## 2026-09-15, 02:10 — hai chương của lô 2 mất vì nhịp; đo cả hai cuốn: 7 đoạn, cả 7 cùng một nguyên nhân
+
+Lô 2 mất chương **082** và **090**, mỗi chương vì đúng một đoạn không bao giờ có bản thu:
+
+| đoạn | văn bản | kt/s | âm tiết/giây |
+|---|---|---|---|
+| `c00034_s0000041` | `“Tôi không biết ‘xoay’ đâu, Felicia.”` | 31,25 (10/10 lần) | **7,21** |
+| `c00042_s0000076` | `“Cảm ơn người rất nhiều, thưa Điện hạ.”` | 25,64 (10/10 lần) | **7,33** |
+
+Cả hai: 10 lần thu đều vượt cận trên 24,5 kt/s, bộ chia từ chối (*"segment too short to split safely"*),
+nới dải nhịp cũng không được (*"pace_band=already normal"*) → không có bản thu → chương không lên sách.
+
+**Đo trên 16 project của cả hai cuốn:** đúng **7 đoạn** chưa bao giờ có bản thu, và **cả 7 đều vì nhịp**
+(5 ở cuốn 1: lô 3, 4, 4, 5, 7; 2 ở cuốn 2 đêm nay). Tỷ lệ ~1/5.000 đoạn. Cả 7 đều là **câu ngắn**
+(26–46 ký tự).
+
+**Một kết quả âm đáng ghi, để không ai vá sai về sau:** cách chữa đã dùng cho cận *dưới* — đòi cả hai
+thước (chữ/giây **và** âm tiết/giây) cùng vượt mới kết tội — **sẽ không cứu** hai ca này: nhịp âm tiết của
+chúng là 7,2 và 7,3 trên trung vị kho 4,7, tức giọng đọc vội **thật**. Cận trên đúng; đừng nới nó, và đừng
+thêm thước thứ hai với hy vọng nó tha.
+
+**Đề xuất có căn cứ (xếp hàng, chưa vá):** đường ống hiện thử 10 seed khác nhau **với cùng một yêu cầu
+nhịp**, rồi thử chia nhỏ, rồi bỏ. Cái nó chưa thử là **xin giọng đọc chậm lại**: `delivery_note` có trường
+`pace`, và log tự nói `pace_band=already normal` — tức nó đi nới *dải chấp nhận* thay vì đổi *yêu cầu*.
+Với một câu ngắn mà 10/10 lần đọc vội, thử lại với `pace: "slow"` là một lượt sinh nữa, rẻ hơn hẳn một
+project vá (~12 phút GPU) và không đụng vào bất kỳ ngưỡng phán xử nào. Nếu đúng, 7/7 ca này lên sách ngay
+trong lô của chúng.
+
+Hiện tại: bước 3 ranh giới sẽ thu lại cả hai chương với seed mới (đúng đường đã cứu chương 035 hôm 14-09).
