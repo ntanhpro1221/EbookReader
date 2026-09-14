@@ -2272,3 +2272,31 @@ trong log project (nhịp tim ngừng, không lời từ biệt) và chỉ phân
 Ranh giới thả lại 08:57:20 (ghi công đổi sang `Claude Opus 5 <noreply@anthropic.com>` theo phiên mới).
 Ước lại: 27 chương còn phải kiểm lại ~2,5–3 phút/chương ≈ 1,2 giờ, rồi 18 chương mới ~7 phút/chương
 ≈ 2,2 giờ → lô 1 xong quãng **12:20**.
+
+## 2026-09-14, 09:30 — hai dự đoán của tôi, một sai một chưa tới; và vì sao đoạn công thức vẫn hỏng
+
+**Sai: "lệch provenance sẽ về 0".** Đo lại 09:30: 671 ứng viên đã thăng, **31 lệch** — lúc 07:50 là 12, tức
+nó **tăng**. Cơ chế: mỗi chương được kiểm lại làm `segments.warning_code` đổi, còn ứng viên đã thăng dưới
+policy CŨ vẫn giữ `promotion_warning_code` của nó, nên số lệch lớn dần theo số chương đi qua. Con số ấy
+không phải thước đo đúng; thước đo đúng là **xuất báo cáo có ném hay không**, và cái đó hết khi không còn
+chương nào có check mới nhất thuộc policy cũ (báo cáo hỏi sổ ứng viên theo policy của check mới nhất TỪNG
+chương). Phải kiểm ở cuối lô: nếu `_export_reports(incremental=False)` vẫn ném thì không có `quality_report.json`
+cho bước 5 của ranh giới, và lúc ấy cần một bản vá — so provenance với một ứng viên thuộc policy **không còn
+hiệu lực** là so với một đời trước, không mang nghĩa gì.
+
+**Chưa tới: "đoạn công thức sẽ qua ASR sau bản vá".** Chuỗi đối chiếu bây giờ đúng rồi (`spoken_symbols_to_words`
+cho *"Nấm xác chết cộng … bằng Linh Hồn Than Khóc"*), nhưng đoạn `c00026_s0000015` **vẫn `failed` với bản thu
+cũ**, và sẽ không tự thu lại trong lượt này. Đọc mã mới thấy vì sao (`pipeline._process_chapter`, giai đoạn 1):
+WAV còn hợp lệ trên đĩa **và** trạng thái nằm trong tập `{signal_passed, asr_passed, verified, warning, failed}`
+→ nó chỉ `_recheckpoint_segment_for_current_audio_qa` rồi **đi tiếp**; cổng nội dung (ASR) không chạy lại. Thiết
+kế ấy đúng cho việc nối lại sau gián đoạn (đừng thu lại cái đã có), nhưng nó cũng nghĩa là **một bản vá đổi chuỗi
+đối chiếu không tự chữa đoạn đã hỏng** — chỉ chữa đoạn chưa thu.
+
+Đường chữa đã có sẵn và không cần mã mới: chương 26 giờ ở `warning` (phải dựng lại), nếu nó kết thúc `failed`
+thì **bước 3 của ranh giới** vá nó trong một project riêng, thu lại từ đầu, và bản vá áp vào đó. Nếu nó lại
+`completed` với `failed_segments=1` (máy cho qua như 06:31) thì bản vá không tới được đoạn ấy, và lúc đó việc
+đúng là yêu cầu thu lại đúng một đoạn — ghi lệnh vào docs/OPTIMISATION_QUEUE.md. Kiểm ở ranh giới, đừng đụng
+DB khi lô đang bay.
+
+Tiến độ 09:27: 9/49 chương kiểm lại xong, 11,8 chương/giờ (máy đang bị chủ sách dùng — "foreground CPU 317%",
+đường ống nhường), 22 chương chờ kiểm lại + 18 chương mới; ước xong ~13:30. 0 sự kiện critical.

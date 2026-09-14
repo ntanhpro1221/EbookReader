@@ -2061,3 +2061,26 @@ bốn bài test đều xanh và chương vẫn hỏng.
   307 lời ở 3 chương. Đề xuất: chi phí va chạm = Σ (số lời của người giữ bậc trong các chương chung), chọn bậc
   chi phí nhỏ nhất; và xếp thứ tự cấp giọng theo số lời thật thay vì `importance` của LLM (hơn 30 nam được gán
   "main"). Vào `character_registry.py` (file khoá) → bản vá qua hàng chờ, đo trước trên lô 1 cuốn 2 với 55 nam.
+
+## Việc phải kiểm ở ranh giới 1 → 2 của cuốn 2 (2026-09-14, 09:30)
+
+1. **Xuất báo cáo còn ném không.** Nếu cuối lô `quality_report.json` không có / log còn
+   `QUALITY_REPORT_EXPORT_FAILED: promoted candidate warning provenance differs`, thì vá: bộ kiểm
+   (`_validated_promoted_candidate_conn`) so `promotion_warning_code` của ứng viên với `segments.warning_code`
+   **sống**, kể cả khi ứng viên thuộc policy đã hết hiệu lực (31 ca lúc 09:30, tất cả policy cũ). Đề xuất: bỏ phép
+   so ấy khi `sc.policy_hash` không phải policy active (ứng viên ấy đã ngoài vòng phán xử), hoặc `_export_reports`
+   hỏi sổ theo policy active thay vì policy của check mới nhất từng chương. Đo trước: đếm ca lệch theo policy.
+2. **Đoạn công thức `c00026_s0000015`** (`“Nấm xác chết + … = Linh Hồn Than Khóc”`). Bản vá đã sửa chuỗi đối
+   chiếu nhưng đoạn đã `failed` giữ bản thu cũ (xem WORK_LOG 09:30). Nếu chương 26 kết thúc `completed` với
+   `failed_segments=1` thì bắt nó thu lại đúng một đoạn — khi **không có lô nào bay**:
+
+       python - <<'X'
+       from ebook_reader.database import ProjectDB
+       db = ProjectDB(r"D:/Novels/Audiobooks/book2/_versions/v0.3.0-lo01/lo01_c0d8c42dfe/project.sqlite3")
+       seg = [r for r in db.list_segments(chapter_id=26) if str(r["stable_id"]).endswith("1e32f852fb08")][0]
+       db.reset_segment_pending(int(seg["id"]), "bản vá công thức: thu lại với chuỗi đối chiếu đã sửa")
+       X
+       python -m ebook_reader.cli run <project> --json
+
+   Dự đoán ghi trước: lần thu lại ấy qua ASR ngay vòng 0 (độ giống từ 0,73 lên > 0,9) và chương 26 về
+   `failed_segments=0`. Nếu chương vào `failed` thì bước 3 ranh giới tự lo, không cần lệnh trên.
