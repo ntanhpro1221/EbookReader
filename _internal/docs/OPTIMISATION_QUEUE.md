@@ -2103,3 +2103,13 @@ bốn bài test đều xanh và chương vẫn hỏng.
   chữa ở đó, để cả `cli run` gọi trực tiếp cũng tự lành mà không cần ai nhớ chạy script. Cần đo trước: một
   vòng recovery thêm phép dẫn chuỗi cho ~3.700 đoạn tốn bao lâu (script chạy trên lô 1 mất ~40 giây, nên
   quãng ấy là chấp nhận được so với 6,8 phút recovery hiện tại).
+
+- **CHỜ BẰNG CHỨNG (2026-09-14, 11:59): bản-hoàn-chỉnh-thay-bản-bị-cắt và bài chính tả neo tên.**
+  `_require_candidate_beats_a_cut_off_incumbent` điều kiện 3 từ chối khi văn bản ≥ `ASR_MIN_VERIFIABLE_CHARS`
+  (=10), kể cả khi phán quyết ASR duy nhất là họ `ASR_LOCKED_NAME_ANCHOR_*` — thứ mà dự án đã đo là không
+  bao giờ đậu với cách đọc ghim (348/348), và không nói gì về việc bản thu có bị cắt. Ca thật: lô 1 cuốn 2,
+  `c00036_s0000025` (`“Pierre, Pierre…”`, 12 ký tự), đương nhiệm 1,92 s chạm trần, 2/5 ứng viên hoàn chỉnh
+  chỉ trượt bài chính tả → chương 035 hỏng. Tần suất đo được: **1 / 33.953 đoạn có bản thu**.
+  **Chưa vá**: ranh giới bước 3 tự thu lại chương ấy, và đó là cái giá nhỏ hơn việc nới một chốt chặn dữ liệu.
+  Vá **chỉ khi** project vá của chương 035 cũng hỏng đúng hình này; nội dung bản vá khi ấy: điều kiện 3 thành
+  "văn bản đủ dài để ASR phán xử **và** mã trượt của ứng viên không nằm gọn trong `LOCKED_NAME_ANCHOR_CODES`".

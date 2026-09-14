@@ -2360,3 +2360,40 @@ thủy quỷ, cộng bụi oán linh…"* — và bản thu mới dài đúng 4,
 cách tốn 5 ứng viên sửa vô ích rồi dán nhãn "chưa ai nghe" lên một bản thu đúng. Đúng cái hình mà tài liệu
 đã kể ở "tên đọc-ghim thua bài chính tả neo tên": khi phiên âm và văn bản nói không nói cùng một ngôn ngữ,
 kẻ bị kết án là bản thu.
+
+## 2026-09-14, 11:59 — chương 035 hỏng vì "Pierre, Pierre…": hai cơ chế cứu đều từ chối, và tôi quyết KHÔNG vá
+
+Chương 036 (tiêu đề `035`) không lên sách: `CHAPTER_QA_REVIEW_REQUIRED` vì đoạn `c00036_s0000025` =
+`“Pierre, Pierre…”` mang `ASR_LOCKED_NAME_ANCHOR_MISMATCH`. Dữ liệu của đoạn ấy:
+
+- **Đương nhiệm**: 1,92 giây, `generation_ceiling_hit = 1` — bị cắt giữa câu; Whisper viết ra `"V.A."`,
+  độ giống 0,27. Bản thu này hỏng thật.
+- **Năm ứng viên** đều 0,96 giây (tự kết thúc, không chạm trần). Hai trong số đó (vòng 1 và 3) trượt
+  **chỉ bằng** `ASR_LOCKED_NAME_ANCHOR_MISMATCH` ở cả hai đường phiên, không cờ chặn. Ba cái còn lại
+  thêm `blocking_signal=generation_endpoint_active`.
+- Cách đọc ghim: `Pierre → Pi-e` (0,98, locked). Văn bản 12 ký tự chữ-số.
+
+Vì sao cả hai cơ chế cứu đứng ngoài:
+1. **Bản-hoàn-chỉnh-thay-bản-bị-cắt** đòi văn bản **ngắn hơn** `ASR_MIN_VERIFIABLE_CHARS` (= 10) để coi
+   phán quyết ASR là vô nghĩa. Ở đây 12 ≥ 10 → điều kiện 3 từ chối. Nhưng phán quyết ASR duy nhất ở đây
+   **là bài chính tả neo tên**, mà chính tài liệu của dự án đã đo: cách đọc ghim **không bao giờ** đậu bài
+   ấy (348/348). Bài chính tả không nói gì về việc bản thu có bị cắt hay không.
+2. **Giữ-cách-đọc-ghim** đòi tín hiệu ứng viên sạch *và* đương nhiệm hiện tại là bản nó đã đấu (hoặc anh
+   em đọc-theo-chữ-viết đã thắng). Ở đây đương nhiệm là một bản chạm trần — không thuộc hai hình ấy.
+
+**Đo trước khi vá, trên 33.953 đoạn có bản thu (10 lô cuốn 1 + lô 1 cuốn 2):** 5 đoạn có đương nhiệm chạm
+trần; **đúng 1** trong số ấy có ứng viên hoàn chỉnh chỉ trượt bài chính tả — chính ca này. Tần suất ~1/34.000.
+
+**Quyết định: KHÔNG vá bây giờ.** Cái giá của việc không vá là một project vá cho một chương, và ranh giới
+bước 3 làm việc ấy **tự động**; ước còn 2–3 ca nữa trong cả cuốn 2 (84.211 đoạn). Cái giá của việc vá là sửa
+chốt chặn an toàn nhất của tầng dữ liệu cho một ca mỗi 34.000 đoạn. Sai số đúng hướng là để máy tốn thêm một
+project, không phải để tôi nới một chốt chặn theo linh cảm.
+
+**Phép thử ghi trước:** bước 3 của ranh giới sẽ thu lại chương 035 trong project riêng với seed mới. Nếu bản
+thu đầu hoàn chỉnh và chỉ trượt bài chính tả thì `keeping_the_locked_reading` đề cử nó (đúng đường 348 ca) và
+chương lên sách — hệ thống đúng như thiết kế, không cần mã mới. Nếu project vá **cũng** kết thúc hỏng vì đúng
+hình này thì lúc ấy bằng chứng đã đủ cho bản vá: nới điều kiện 3 thành "văn bản đủ dài **và** mã trượt của ứng
+viên không phải chỉ có họ neo tên". Ghi vào hàng chờ với đúng câu ấy.
+
+Bên lề, cùng nhịp tim: pool TTS thu còn 0/2 worker lúc 11:59 ("RAM trống 8,7 GB trên sàn 3,5 GB", VRAM còn
+5.223 MiB) — chủ sách đang dùng máy, đường ống nhường đúng luật; tốc độ 9,7 chương/giờ thay vì ~12.
