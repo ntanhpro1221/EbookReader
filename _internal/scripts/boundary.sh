@@ -253,6 +253,23 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   exit 1
 fi
 
+# ---- 2b. dong bo chuoi noi cua project lo.
+# Mot ban va doi `spoken_symbols_to_words` / chuan hoa tieng / phien am lam MOI BAN THU DA CO cua nhung
+# doan bi doi tro thanh ban thu cua mot van ban khac: `pipeline._spoken_text_and_anchors` bam lai chuoi tu
+# ma hien tai, so voi checksum ghi kem ban thu, va nem `spoken-text checksum drifted` - khong phuc hoi
+# duoc. Lo 1 cuon 2 chet dung nhu the luc 10:26 ngay 14-09 (doan cong thuc chuong 025) va ranh gioi chay
+# lai cung chet lai. Dat lai dung nhung doan ay ve cho thu; cong kiem van nguyen (mot ban thu cua van ban
+# khac KHONG duoc dung lai).
+#
+# Chay VO DIEU KIEN, khong chi khi vua ap ban va: mot ranh gioi chay lai sau khi chet co hang cho rong
+# (apply_all da tu rut) ma project van con lech. Toan ky: khong lech thi khong ghi gi, ~40 giay cho 3.705
+# doan. Chi project lo - mot lo da tag va ghep roi thi ban thu la bang chung da dong.
+py scripts/resync_spoken_text.py "$BATCH_PROJECT" --apply >> "$LOG" 2>&1 || {
+  say "resync chuoi noi that bai - xem $LOG. Dung ca chuoi."
+  exit 1
+}
+say "dong bo chuoi noi: $(tail -1 "$LOG" | sed 's/^ *//')"
+
 # ---- 3. lo va cho chuong hong
 FAILED="$(py -c "
 import sqlite3

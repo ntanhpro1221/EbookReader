@@ -2421,3 +2421,34 @@ chương, 12 phút, tự động, không ai nhìn. So với việc nới một c
 
 Mục "CHỜ BẰNG CHỨNG" trong hàng tối ưu vì thế **đóng lại: không vá**. Điều kiện đã ghi ("chỉ vá nếu project
 vá cũng hỏng đúng hình này") đã được kiểm và **không** xảy ra.
+
+## 2026-09-14, 14:31–14:45 — LÔ 1 CUỐN 2 ĐÃ LÊN SÁCH (49 chương); ranh giới tự chạy trọn chuỗi; vá boundary.sh trong cửa sổ rảnh
+
+Ranh giới 1 → 2 kết thúc **mã 0** lúc 14:30:45, tự làm hết: hàng chờ rỗng → tag `v0.3.0-lo01v` → vá chương
+035 (12 phút, sạch) → tag `v0.3.0-lo01r` → đúc lại giọng 022/023/032 (gieo nối tiếp từ project vá) →
+tag `v0.3.0-lo02` → khởi động lô 2 (`lo02_8c5dd7ed96`, 50 chương, gieo từ `lo01r_032_90d0ade748` là cuối
+chuỗi) → bước 6b giữ cách đọc ghim cho các đoạn đã lên sách → ghép sách.
+
+Kiểm ngay, không tin log:
+
+- `assemble_book.py --verify`: **49 chương** trong `book2/_book`, *"không có gì lệch: đúng thời lượng, đúng
+  kênh/tần số, không trùng khít"*.
+- `one_person_one_voice.py`: **không chương nào có một người hai giọng** (47 chương có lời, 48 cách viết tên).
+- Lô 2 đã thừa hưởng **117 cách đọc ghim** và **50 nhân vật** từ chuỗi gieo — tức `port_pronunciations` /
+  `port_casting` chạy đúng qua cả project vá và project đúc lại.
+
+**Một vết còn lại, ghi thẳng:** project đúc lại chương 022 vẫn báo `1 va cham cung chuong` — LUCIEN (7 câu
+trong chương ấy) và `NPC vô danh nam` (6 câu) vẫn chung giọng *Thanh Bình*, trong khi project ấy chỉ dùng 4
+trên 25 profile và còn nhiều giọng rảnh. 023 và 032 về 0, nên cơ chế đúc lại **có** làm được việc; riêng 022
+thì không. Chưa biết vì sao — chưa đo — nên chỉ ghi, chưa kết luận, và điều tra khi lô 2 đang phân tích.
+
+**Vá `boundary.sh` (bước 2b mới) — chỉ làm được lúc này**, khi không ranh giới nào đang chạy (luật: không
+sửa một script bash đang chạy). Sau bước 2 và trước bước 3, ranh giới gọi:
+
+    py scripts/resync_spoken_text.py "$BATCH_PROJECT" --apply
+
+**Vô điều kiện**, không chỉ khi vừa áp bản vá: một ranh giới chạy lại sau khi chết có hàng chờ rỗng
+(`apply_all` đã tự rút) mà project vẫn còn lệch — đúng cái bẫy đã giết lô 1 hai lần sáng nay. Toàn kỳ, ~40
+giây cho 3.705 đoạn, và chỉ trên project lô: một lô đã tag và ghép thì bản thu là bằng chứng đã đóng.
+`launch_repair.sh` **không** cần: nó luôn `create` project mới (tiêu đề thêm chữ cái nếu đã có), nên không
+có bản thu nào để lệch. `bash -n` sạch, tập test tài liệu/script xanh.
