@@ -537,3 +537,23 @@ untracked, và `git add -A` của ranh giới sẽ nuốt chúng; `.gitignore` p
 đã có sẵn). (2) Tên thư mục project mang 10 ký tự đầu của hash khoá **lúc tạo** (`lo10_24893cbe8c`); sau khi
 trỏ lại, hash trong DB đổi nhưng tên thư mục giữ nguyên — cố ý, vì mọi tag, log, ledger đều gọi tên ấy. Sổ ghi
 cả hash cũ và mới.
+
+## Máy tắt, không phải shell bị giết (2026-09-14, 07:51)
+
+Trong log project hai chuyện này giống nhau: nhịp tim ngừng giữa câu, không có dòng từ biệt. Chúng khác
+nhau ở nguyên nhân và ở việc phải làm gì.
+
+- **Giết shell / kết thúc phiên Claude Code** — `cli run` có supervisor riêng đã tách khỏi cây tiến trình
+  của harness, nên lượt chạy **sống sót**; chỉ script đang đợi (`boundary.sh`, `launch_repair.sh`) chết.
+  Việc phải làm: thả lại ranh giới, đừng chạm vào lượt chạy.
+- **Máy tắt / mất điện** — chết tất, kể cả supervisor. Việc phải làm: không làm gì, để Scheduled Task
+  `EbookReaderAutoResume` (5 phút một lần, gọi `resume_interrupted.py`) khởi động lại; nó đã làm đúng
+  việc ấy 2 phút 19 giây sau khi boot, và recovery giữ nguyên 2.549 đoạn đã có bằng chứng QA.
+
+Phân biệt bằng hai câu lệnh, không bằng phỏng đoán:
+
+    powershell -NoProfile -Command "(Get-CimInstance Win32_OperatingSystem).LastBootUpTime"
+    powershell -NoProfile -Command "Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='Microsoft-Windows-Kernel-Power'} | Select-Object -First 5 TimeCreated,Id"
+
+`LastBootUpTime` muộn hơn dòng log cuối của worker → máy đã tắt. Kernel-Power id 109 là "bắt đầu tắt
+máy", 107 là "thức lại từ sleep", 41 là mất điện đột ngột.

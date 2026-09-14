@@ -2242,3 +2242,33 @@ chương (46/49 còn là cũ) nên còn nhìn thấy chúng; đường **chết*
 policy hiện hành → 26 ứng viên mới, 0 lệch. Xuất báo cáo là best-effort (`worker._refresh_terminal_reports_best_effort`,
 `_safe_export_reports`) nên không giết lượt chạy; cảnh báo tự hết khi chương cuối cùng có check mới. Không đụng.
 Kiểm ở nhịp tim sau: số lệch giảm về 0 khi 30 chương kiểm xong; không `UNRECOVERABLE` mới.
+
+## 2026-09-14, 07:51–08:57 — MÁY TẮT giữa lô, và watchdog tự cứu: lần đầu nó đáng tiền
+
+Phiên làm việc của tôi kết thúc quãng 07:50, và mọi tiến trình nền trong đó chết theo — ranh giới
+`boundary.sh` là một trong số ấy. Nhưng lượt chạy cũng chết, và đó là chuyện khác: **máy tắt**.
+Bằng chứng trên đĩa, không suy đoán:
+
+    07:50:57   dòng log cuối của worker (đang xác nhận clarity chương 4)
+    07:51:15   System / Kernel-Power id 109: "the kernel power manager has initiated a shutdown transition"
+    08:47:43   LastBootUpTime
+    08:50:02   hai `pythonw -m ebook_reader.background_runner supervise` mới ra đời
+    08:55:01   Scheduled Task EbookReaderAutoResume, LastTaskResult 0 (chạy mỗi 5 phút)
+    08:56:49   RECOVERY_SCAN: recovered_verified=2.549, stale_leases=1, stale_candidates=150, requeue 0, reset 0
+    08:57:01   "Tạo audio chapter 4: 003" — đúng chương đang dở lúc máy tắt
+
+Tức `resume_interrupted.py` trong Scheduled Task đã khởi động lại lô **2 phút 19 giây sau khi máy
+boot**, không cần ai gõ gì. Đây là lần đầu bộ canh ấy cứu một lượt chạy thật (từ 2026-09-12 nó chỉ
+từng khởi động lại Ollama). Giá phải trả: ~56 phút đồng hồ máy nằm im, cộng 6 phút 47 quét recovery —
+và **không mất một giây GPU nào**: 2.549 đoạn còn đủ bằng chứng QA dưới policy hiện hành nên không phải
+phiên âm lại, không đoạn nào hỏng phải thu lại, chương đang dở làm lại từ đầu chỉ một mình nó.
+
+**Một phân biệt phải giữ cho đúng** (docs/SURVIVING_AN_INTERRUPTION.md nói "giết shell không giết lượt
+chạy" — câu ấy vẫn đúng): giết một tác vụ của harness, hay kết thúc cả phiên Claude Code, **không** giết
+supervisor vì nó đã tách khỏi cây tiến trình ấy. Máy tắt thì giết tất. Hai nguyên nhân trông giống nhau
+trong log project (nhịp tim ngừng, không lời từ biệt) và chỉ phân biệt được bằng `Kernel-Power` +
+`LastBootUpTime`. Nhìn sai thì đi sửa một cái không hỏng.
+
+Ranh giới thả lại 08:57:20 (ghi công đổi sang `Claude Opus 5 <noreply@anthropic.com>` theo phiên mới).
+Ước lại: 27 chương còn phải kiểm lại ~2,5–3 phút/chương ≈ 1,2 giờ, rồi 18 chương mới ~7 phút/chương
+≈ 2,2 giờ → lô 1 xong quãng **12:20**.
