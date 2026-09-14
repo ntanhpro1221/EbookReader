@@ -2146,3 +2146,15 @@ bốn bài test đều xanh và chương vẫn hỏng.
   lên **phía ASR** trước khi tính similarity/WER; thêm `h` → `giờ`, `%` → `phần trăm` nếu đo thấy cần.
   **Chỉ áp ở một ranh giới** — `asr.py` nằm trong `QUALITY_IMPLEMENTATION_FILES`, đổi giữa lô là kiểm lại
   cả lô (sáng nay: 2.035 requeue + 30 MP3). Test dùng đúng bốn ca thật đã ghi trong WORK_LOG 21:05.
+
+- **Cận TRÊN của thước nhịp gặp ca thật đầu tiên** (2026-09-15, 00:35, lô 2 cuốn 2). Đoạn
+  `c00034_s0000041` = `“Tôi không biết ‘xoay’ đâu, Felicia.”` thất bại **10/10 lần thu** với 29,0–33,9
+  kt/s (cận trên 24,5), rồi bộ chia từ chối ("segment too short to split safely") → không có bản thu nào
+  → chương 082 không lên sách. Tài liệu của `pace_is_outlier` ghi *"Cận trên giữ nguyên theo chữ — chưa có
+  ca nào đòi hơn"*; **giờ có một ca**. Nhưng đo lại thì **cận trên đúng**: 26 ký tự đọc được / 0,83 giây =
+  **7,2 âm tiết/giây** (trung vị kho 4,7), tức giọng đọc vội thật, không phải thước sai. Nên **không nới
+  cận trên**. Việc cần theo: bước 3 ranh giới thu lại chương ấy với seed mới (đúng đường đã cứu chương 035
+  hôm 14-09). Nếu project vá **cũng** 10/10 vượt nhịp thì lúc ấy mới là chuyện của mã — hướng nhìn đầu tiên
+  là ngoặc đơn lồng trong ngoặc kép (`‘xoay’`) làm ngữ điệu hỏng, không phải con số ngưỡng.
+- **Cập nhật lớp "số viết chữ vs chữ số"**: thêm một ca lô 2 (`lúc mười giờ ba mươi` → `10h30`, sim 0,70,
+  chương 028). Tổng trong lô 2: 3 ca. Vẫn xếp cho một ranh giới như mục trên đã ghi.
