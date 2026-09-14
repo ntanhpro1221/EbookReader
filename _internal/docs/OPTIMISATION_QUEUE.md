@@ -2113,3 +2113,8 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **Chưa vá**: ranh giới bước 3 tự thu lại chương ấy, và đó là cái giá nhỏ hơn việc nới một chốt chặn dữ liệu.
   Vá **chỉ khi** project vá của chương 035 cũng hỏng đúng hình này; nội dung bản vá khi ấy: điều kiện 3 thành
   "văn bản đủ dài để ASR phán xử **và** mã trượt của ứng viên không nằm gọn trong `LOCKED_NAME_ANCHOR_CODES`".
+
+  **ĐÓNG 13:44 ngày 14-09 — KHÔNG VÁ.** Project vá `lo01v_035_bcb1b7c088` (13:31–13:43) cho bản thu mới
+  **1,84 s, không cờ sóng âm**, chương xong 46/20/0, đoạn Pierre được `machine_audio_acceptances` nhận theo
+  đúng lý do "neo tên là bài chính tả". Điều kiện để vá không xảy ra; chốt chặn giữ nguyên câu chữ. Giữ mục
+  này làm hồ sơ, đừng mở lại trừ khi có ca mà **project vá cũng** hỏng đúng hình ấy.

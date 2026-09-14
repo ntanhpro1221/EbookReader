@@ -2397,3 +2397,27 @@ viên không phải chỉ có họ neo tên". Ghi vào hàng chờ với đúng 
 
 Bên lề, cùng nhịp tim: pool TTS thu còn 0/2 worker lúc 11:59 ("RAM trống 8,7 GB trên sàn 3,5 GB", VRAM còn
 5.223 MiB) — chủ sách đang dùng máy, đường ống nhường đúng luật; tốc độ 9,7 chương/giờ thay vì ~12.
+
+## 2026-09-14, 13:19–13:44 — lô 1 cuốn 2 xong; hai dự đoán khớp, và quyết định KHÔNG vá được chứng minh đúng
+
+**Lô 1 xong 13:19:37: 48 chương lên sách, 1 chương lỗi.** Rồi ranh giới đi tiếp, và hai điều tôi ghi
+trước đều gặp đúng số:
+
+1. **Va chạm cùng chương** (ghi 04:00, đo bằng `segments`): Lucien × NPC vô danh nam ở ba chương. Bước 4
+   tự tìm và in: `auto: chuong co hai nguoi mot giong cung chuong: 022 023 032` — đúng ba chương ấy, không
+   thừa không thiếu. Đang đúc lại, project đầu `lo01r_022_bf0ff5c6e5`.
+2. **Chương 035 và ca "Pierre, Pierre…"** (ghi 11:59, quyết không vá): project vá `lo01v_035_bcb1b7c088`
+   chạy 13:31 → 13:43 và **xong sạch**: 46 verified / 20 warning / **0 failed**. Đoạn Pierre lần này dài
+   **1,84 giây, không cờ sóng âm nào** — tức tự kết thúc, không chạm trần (bản cũ 1,92 giây = 12 khung).
+   Nó vẫn trượt `ASR_LOCKED_NAME_ANCHOR_MISMATCH` (độ giống 0,818, đúng bản chất bài chính tả), và
+   `machine_audio_acceptances` ghi đúng lý do: *"neo tên là bài chính tả; giữ cách đọc ghim để nhất quán
+   toàn sách"* — 19 đoạn trong chương ấy đi qua cùng cửa đó.
+
+**Vậy hệ thống đúng như thiết kế, và cái hỏng ban đầu chỉ là một bản thu bị cắt.** Chốt chặn từ chối thay
+một bản bị cắt bằng ứng viên "chỉ trượt bài chính tả" **không phải** lỗi cần vá: thu lại với seed mới cho
+ra bản hoàn chỉnh ngay lần đầu, và lúc ấy cơ chế giữ-cách-đọc-ghim nhận nó. Giá thật: một project một
+chương, 12 phút, tự động, không ai nhìn. So với việc nới một chốt chặn của tầng dữ liệu cho tần suất
+1/33.953 — quyết định lúc 11:59 là đúng, và giờ có bằng chứng chứ không phải lý lẽ.
+
+Mục "CHỜ BẰNG CHỨNG" trong hàng tối ưu vì thế **đóng lại: không vá**. Điều kiện đã ghi ("chỉ vá nếu project
+vá cũng hỏng đúng hình này") đã được kiểm và **không** xảy ra.
