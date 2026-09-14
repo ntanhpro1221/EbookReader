@@ -2138,3 +2138,11 @@ bốn bài test đều xanh và chương vẫn hỏng.
   `analysis` từ chối speaker thuộc danh sách ấy và trả lời thoại về NARRATOR hoặc về người nói gần nhất.
   Đừng lọc bằng "từ có nghĩa tiếng Việt" nói chung: `Mật Ong Trắng`, `Triết Gia`, `Thủy Ngân`, `Hạ Phong`
   đều là tên nhân vật thật trong cuốn này.
+
+- **Số viết bằng chữ so với chữ số trong phép so ASR** (đo 2026-09-14 21:05; ưu tiên thấp–trung).
+  Whisper chuẩn hoá số tiếng Việt thành chữ số (`mười giờ` → `10h`, `hai mươi lăm phần trăm` → `25%`), còn
+  tham chiếu giữ nguyên chữ → similarity tụt oan. **829/35.612** đoạn có hình này, **55** dưới 0,90, **4**
+  bị đánh hỏng hoặc cảnh báo ASR. Sửa: áp `audio_io._spoken_form` (đã nở chữ số thành chữ cho thước nhịp)
+  lên **phía ASR** trước khi tính similarity/WER; thêm `h` → `giờ`, `%` → `phần trăm` nếu đo thấy cần.
+  **Chỉ áp ở một ranh giới** — `asr.py` nằm trong `QUALITY_IMPLEMENTATION_FILES`, đổi giữa lô là kiểm lại
+  cả lô (sáng nay: 2.035 requeue + 30 MP3). Test dùng đúng bốn ca thật đã ghi trong WORK_LOG 21:05.

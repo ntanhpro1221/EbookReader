@@ -2570,3 +2570,35 @@ test cũ** kèm lý lẽ mà bản trước thiếu. 116 test dàn giọng + gi�
 `PYTHONPATH=$S` mà cwd vẫn là cây thật, nên `python -m pytest` nhập `ebook_reader` **từ cây thật** — test
 xanh mà chẳng kiểm bản vá. Phải `cd` vào bản sao, và kiểm bằng
 `python -c "import ebook_reader; print(...__file__)"` trước khi tin con số.
+
+## 2026-09-14, 21:05 — ba đoạn hỏng đầu của lô 2: hai cái là số viết bằng chữ, và giọng đọc không sai
+
+| văn bản | Whisper viết | similarity |
+|---|---|---|
+| `Mười giờ sáng. Phòng tập của Victor.` | `10h sáng, phòng tập của Victor.` | 0,63 |
+| `Bây giờ đã là mười hai giờ ba mươi lăm phút chiều.` | `Bây giờ đã là 12h35 phút chiều.` | 0,53 |
+| `“Thầy Victor...”` | `Hãy vít tờ.` | 0,67 |
+
+Hai ca đầu: bản thu **đọc đúng**, Whisper chỉ viết số bằng **chữ số** trong khi văn bản viết bằng **chữ**.
+Cùng một hình với ca công thức "+/=" sáng nay: thước đo và người phiên âm không nói cùng một thứ tiếng, và
+kẻ bị kết án là bản thu. Ca thứ ba là ASR nghe sai thật trên 0,8 giây (`Thầy` → `Hãy`, cách đọc ghim
+`Vích-tờ` → `vít tờ`) — không liên quan số.
+
+**Đo trên 35.612 đoạn có ASR của cả hai cuốn:**
+
+| | |
+|---|---|
+| văn bản viết số bằng chữ, ASR viết chữ số | **829** |
+| trong đó similarity < 0,90 | **55** |
+| và bị đánh hỏng / cảnh báo ASR | **4** |
+| chiều ngược lại (văn bản chữ số, ASR viết chữ) | 18 |
+
+**Quyết định: chưa vá.** 4 ca trên 35.612 đoạn là thưa, và chỗ phải sửa là **phép so ASR** — thứ phán
+xử mọi đoạn trong sách; một lỗi ở đó cho lọt lỗi thật, chứ không chỉ tốn GPU. Cái đáng lấy là 55 ca
+similarity thấp: chúng vẫn qua nhưng tiêu thêm vòng thu lại. Đường sửa rẻ và đã có sẵn máy móc:
+`audio_io._spoken_form` / `_digit_run_spoken` (đang dùng cho thước nhịp) nở chữ số thành chữ tiếng Việt —
+áp đúng nó lên **phía ASR** trước khi so là một lời gọi hàm, không phải một luật mới.
+
+Xếp hàng cho **một ranh giới** (không phải giữa lô): ở đó bản vá vào cây trước khi lô sau được `create`,
+nên lô sau sinh ra đã mang policy mới và **không phải kiểm lại gì** — khác hẳn cái giá sáng nay (2.035 đoạn
+requeue + 30 MP3 dựng lại) khi policy đổi giữa một lô đang chạy.
