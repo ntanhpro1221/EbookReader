@@ -29,7 +29,10 @@ VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
 # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ("patch_a_formula_is_read_as_words.py",)
+ORDER: tuple[str, ...] = (
+    "patch_a_formula_is_read_as_words.py",
+    "patch_a_finished_take_survives_the_report.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
