@@ -155,6 +155,23 @@ fi
 "$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply
 
 echo
+# Đồng bộ chuỗi nói, cùng lý do như bước 2b của `boundary.sh`. Ở ĐÂY nó không phải thừa: tên
+# project là nội-dung-địa-chỉ theo (tiêu đề, nguồn), nên **chạy lại cùng một lô** mở lại đúng
+# project cũ cùng mọi bản thu của nó. Nếu giữa hai lần có một bản vá đổi `spoken_symbols_to_words`
+# / chuẩn hoá tiếng / phiên âm - và đó chính là việc bước 1 của mỗi ranh giới làm trước khi bước 6
+# thả lô kế - thì bản thu cũ trở thành bản thu của một văn bản khác, `cli run` ném
+# `spoken-text checksum drifted` và chết lại đúng chỗ ấy (lô 1 cuốn 2, 10:26 ngày 14-09).
+#
+# Toàn kỳ và rẻ: project vừa `create` chưa có bản thu nào nên không có gì để so; lô chạy lại thì
+# ~40 giây cho 3.705 đoạn, đổi lấy việc không mất cả lượt chạy.
+echo "=== 2b. dong bo chuoi noi ==="
+"$PY" scripts/resync_spoken_text.py "$PROJECT" --apply || {
+  # Dau nguoc trong nhay kep la THAY THE LENH, khong phai chu - noi khong co no.
+  echo "resync chuoi noi that bai. Dung, khong chay run len ban thu lech." >&2
+  exit 1
+}
+
+echo
 echo "=== 3. run ==="
 "$PY" -m ebook_reader.cli run "$PROJECT" --json
 echo

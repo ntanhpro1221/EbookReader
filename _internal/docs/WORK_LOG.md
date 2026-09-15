@@ -3572,3 +3572,34 @@ tới lô của nó chỉ cần một dòng trong sổ cách đọc.
 
 Và một lỗi của chính script đo: tokenizer của tôi lấy cả dấu sở hữu, nên `Evans’` thành một token khác
 `Evans` và nó **tự tạo 8 cặp giả** trong danh sách 30 dòng. Đã sửa (30 → 20 dòng), lý do ghi cạnh regex.
+
+### 03:40 — bốn đường vào `cli run`, ba trong đó chạy được lên bản thu đã lệch chuỗi nói
+
+Mục hàng chờ *"CHÈN VÀO `boundary.sh`"* mới làm **một nửa** hôm 14-09: bước 2b của `boundary.sh` resync
+project lô, nhưng còn ba đường khác dẫn tới `cli run`, và cả ba đều đi thẳng.
+
+Đọc lại từng đường thay vì tin nửa mục đã đóng:
+
+| đường | có mở lại project đã có bản thu không |
+|---|---|
+| `boundary.sh` bước 2b → bước 3 | có, và đã resync từ 14-09 |
+| `boundary.sh` bước 0, `run lai` khi lô mất nhịp tim | **có** — và đây là chỗ đau nhất |
+| `launch_batch.sh` bước 3 | **có**: tên project là nội-dung-địa-chỉ theo (tiêu đề, nguồn), nên chạy lại cùng một lô mở lại đúng project cũ |
+| `launch_repair.sh` trước `cli run` | **có**, nhưng chỉ một đường hẹp — xem dưới |
+
+Chỗ đau nhất là bước 0. Một trong những lý do một lô **chết giữa chừng** chính là lệch chuỗi nói (lô 1
+cuốn 2 chết ở 25/49 lúc 10:26 ngày 14-09), và `run lai` không sửa được gì: nó chết lại đúng đoạn ấy, ba
+lần, rồi ranh giới `exit 4` và đợi người nhìn. Đúng thứ chủ sách đã dặn phải tự xử lý được. Giờ bước 0
+resync trước mỗi lần `run lai` — runtime đã chết nên không ai tranh khoá DB, và resync thất bại thì vẫn
+`run lai` như cũ (không dừng cả chuỗi vì một phép dọn dẹp).
+
+`launch_repair.sh`: project vá là `create` **mới** nên thường không có bản thu nào để lệch. Trừ một
+đường, và nó đã im lặng: vòng chữ cái chống trùng tên (`""` rồi `b`..`h`) khi **cạn** thì để `ATTEMPT` ở
+lại rỗng — không phân biệt được với "lần đầu" — nên tiêu đề không đổi và `create` **mở lại project đầu
+tiên**. Đó đúng là chuyện đã xảy ra với 106/007/084 sáng 11-09. Thêm cờ `FREE` để nói ra, và resync để
+dọn.
+
+Ghim thành bài thay vì tin vào ký ức: `tests/test_no_run_over_a_drifted_recording.py` đọc ba script, bỏ
+dòng chú thích, và đòi lần gọi `resync_spoken_text.py` **đầu tiên** đứng trước lần gọi `cli run` **cuối
+cùng**, kèm `--apply`. Thô, nhưng bắt đúng lớp lỗi duy nhất ở đây: ai đó thêm một đường `run` mới mà
+quên resync.

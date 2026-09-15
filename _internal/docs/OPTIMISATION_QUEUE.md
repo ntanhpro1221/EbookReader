@@ -2090,14 +2090,20 @@ bốn bài test đều xanh và chương vẫn hỏng.
 - **Việc 2 của mục trước ĐÃ LÀM, theo cách khác**: không phải "nếu chương 26 lại completed thì thu lại một
   đoạn" — đoạn ấy làm chết cả lô nên đã `reset_segment_pending` ngay lúc 10:34, và công cụ chung là
   `scripts/resync_spoken_text.py`. Bỏ qua lệnh thủ công ghi ở mục trước.
-- **CHÈN VÀO `boundary.sh` (làm khi không có ranh giới nào đang chạy):** ngay sau bước 1 (`apply_all.py --apply`
-  thành công) và trước bước 3, gọi cho project lô hiện tại:
+- **~~CHÈN VÀO `boundary.sh`~~ XONG CẢ BỐN CHỖ (03:40 ngày 2026-09-16).** Luật đã ghim thành bài:
+  `tests/test_no_run_over_a_drifted_recording.py` — trong mỗi script, lần gọi `resync_spoken_text.py` đầu
+  tiên phải đứng **trước** lần gọi `cli run` cuối cùng, và phải có `--apply`.
 
-        py scripts/resync_spoken_text.py "$BATCH_PROJECT" --apply >> "$LOG" 2>&1 || say "resync chuoi noi that bai - xem $LOG"
+  | chỗ gọi | vì sao chỗ ấy |
+  |---|---|
+  | `boundary.sh` bước 2b (đã có từ 14-09) | bản vá vừa vào cây, lô chưa chạy lại |
+  | `boundary.sh` bước 0, **trước `run lai`** (mới) | một trong những lý do lô chết giữa chừng **là** lệch chuỗi nói (lô 1 cuốn 2, 25/49); `run lai` không sửa được gì nên nó chết lại ba lần rồi ranh giới bỏ tay đợi người |
+  | `launch_batch.sh` trước bước 3 (mới) | tên project là nội-dung-địa-chỉ, nên **chạy lại cùng một lô mở lại project cũ cùng mọi bản thu**; giữa hai lần thường có đúng một bản vá |
+  | `launch_repair.sh` sau khi chọn project (mới) | project vá là `create` mới, TRỪ khi vòng chữ cái cạn (`""`, `b`..`h` đều có) — khi ấy `ATTEMPT` ở lại rỗng, tiêu đề không đổi và `create` mở lại project đầu tiên (106/007/084) |
 
-  Lý do đặt ở đấy: bản vá vừa vào cây, lô chưa chạy lại, và đây là project duy nhất sắp chạy tiếp. Cũng nên
-  gọi cho project vá / đúc lại mà bước 3 và 4 tạo ra — chúng `create` mới nên không lệch, trừ khi **mở lại**
-  một project cũ (chuyện đã xảy ra với 106/007/084), nên gọi sau khi chọn project và trước `cli run`.
+  Ba cái mới đều **không dừng cả chuỗi** khi resync thất bại, trừ `launch_batch.sh`: ở đấy lô sắp chạy 13
+  giờ nên thà dừng còn hơn `run` lên bản thu lệch. `launch_repair.sh` bỏ **chương** ấy chứ không bỏ vòng.
+  Nhân đây: vòng chữ cái cạn thì trước đây **im lặng** mở lại project cũ — giờ có cờ `FREE` và một dòng log.
 - **Sâu hơn (bản vá qua hàng chờ, `recovery.py` — file khoá):** recovery đã đặt lại đoạn khi WAV mất/hỏng
   hoặc QA hết hiệu lực; lệch chuỗi nói cùng một họ ("bằng chứng không còn nói về văn bản này") và nên được
   chữa ở đó, để cả `cli run` gọi trực tiếp cũng tự lành mà không cần ai nhớ chạy script. Cần đo trước: một

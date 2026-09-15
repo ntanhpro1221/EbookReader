@@ -185,6 +185,14 @@ while :; do
     fi
     RESTARTS=$((RESTARTS + 1))
     say "lo $BATCH khong con nhip tim ma con $left chuong - run lai (lan $RESTARTS)"
+    # Dong bo chuoi noi TRUOC khi run lai, khong chi o buoc 2b. Mot trong nhung ly do mot lo chet
+    # giua chung LA lech chuoi noi (lo 1 cuon 2, 10:26 ngay 14-09, chet o 25/49), va khi ay `run
+    # lai` khong sua duoc gi: no chet lai dung doan ay, ba lan, roi ranh gioi bo tay va doi nguoi
+    # nhin. Dat lai doan lech thi lan run thu hai co viec de lam. Runtime da chet nen khong ai
+    # tranh khoa DB; khong lech thi khong ghi gi. That bai thi cu run lai nhu truoc - khong dung
+    # ca chuoi vi mot phep don dep.
+    py scripts/resync_spoken_text.py "$BATCH_PROJECT" --apply >> "$LOG" 2>&1 \
+      || say "  resync truoc khi run lai that bai - xem $LOG; van run lai."
     py -m ebook_reader.cli run "$BATCH_PROJECT" --json >> "$LOG" 2>&1
     sleep 300
     continue

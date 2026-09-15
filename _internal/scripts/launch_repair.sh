@@ -182,11 +182,19 @@ for CH in $BROKEN; do
   # "xong" ma khong lam gi - do sang 2026-09-11, 106 va 007 "xong" trong hai phut. Them mot chu
   # cai vao tieu de cho toi khi chua co project nao mang no: lo04v_106 -> lo04v_106b -> ...c.
   ATTEMPT=""
+  FREE=0
   for LETTER in "" b c d e f g h; do
     if ls -d "$OUT"/"${TITLE}${LETTER}"_* >/dev/null 2>&1; then continue; fi
-    ATTEMPT="$LETTER"; break
+    ATTEMPT="$LETTER"; FREE=1; break
   done
-  [ -n "$ATTEMPT" ] && echo "  chuong $CH da co project truoc - tieu de lan nay: ${TITLE}${ATTEMPT}"
+  # Het chu cai thi ATTEMPT o lai rong - khong phan biet duoc voi "lan dau", nen phai co co rieng:
+  # tieu de khong doi, `create` MO LAI project dau tien, va do la duong dan toi lech chuoi noi.
+  # Noi ra thay vi de no im: resync ben duoi don duoc, nhung nguoi doc log phai biet vi sao.
+  if [ "$FREE" = 0 ]; then
+    echo "  chuong $CH da co 8 project - HET chu cai, se MO LAI ${TITLE}"
+  elif [ -n "$ATTEMPT" ]; then
+    echo "  chuong $CH da co project truoc - tieu de lan nay: ${TITLE}${ATTEMPT}"
+  fi
   TITLE="${TITLE}${ATTEMPT}"
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "$SOURCE_DIR" \
@@ -203,6 +211,25 @@ for CH in $BROKEN; do
   # người chưa từng được ghim bị rút thăm lại giọng - kể cả trong một project vá một chương, nơi
   # nó quyết giọng cho chính chương sắp lên sách. Ghim theo giọng đa số trên cuốn sách đã ghép.
   PYTHONIOENCODING=utf-8 "$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply > /dev/null
+  # Đồng bộ chuỗi nói trước khi thu, cùng lý do như bước 2b của `boundary.sh`: một bản vá đổi
+  # `spoken_symbols_to_words` / chuẩn hoá tiếng / phiên âm làm bản thu ĐÃ CÓ của những đoạn ấy
+  # thành bản thu của một văn bản khác, và cổng kiểm ném `spoken-text checksum drifted` - không
+  # phục hồi được.
+  #
+  # Project vá thường là `create` MỚI nên không có bản thu nào để lệch. Trừ một đường: vòng chữ
+  # cái ở trên cạn (`""` rồi `b`..`h` đều đã có project) thì `ATTEMPT` ở lại rỗng, tiêu đề không
+  # đổi, và `create` MỞ LẠI project đầu tiên - đúng chuyện đã xảy ra với 106/007/084 sáng
+  # 2026-09-11, khi cả chuỗi ghi "xong" trong hai phút mà không thu gì. Toàn kỳ: chưa lệch thì
+  # không ghi gì, và một project một chương thì tốn dưới một giây.
+  #
+  # Lệch mà không đặt lại được thì bỏ CHƯƠNG, không bỏ cả vòng: những chương còn lại không liên
+  # quan gì tới bản thu cũ của chương này.
+  RESYNC_OUT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/resync_spoken_text.py "$PROJECT" --apply 2>&1)" || {
+    echo "  resync chuoi noi that bai cho chuong $CH - bo qua chuong nay:"
+    printf '%s\n' "$RESYNC_OUT" | tail -3
+    continue
+  }
+  printf '%s\n' "$RESYNC_OUT" | tail -1 | sed 's/^ */  /'
   # `run` tra JSON; `ok: false` (vi du resume bi tu choi vi hash ma doi) tung bi do vao /dev/null
   # va vong doi ben duoi thay lease chet + chuong khong "chua xong" nen coi la xong. Noi ra.
   RUN_OUT="$(PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli run "$PROJECT" --json 2>&1)"
