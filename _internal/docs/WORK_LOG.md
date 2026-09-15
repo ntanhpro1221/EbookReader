@@ -3533,3 +3533,42 @@ bằng cách tắt nó.
 một phép kiểm chính tả áp lên bản ghi của Whisper. Hai kiểu hỏng thật của cơ chế ấy đã có tài liệu riêng
 (gấp `k`→`c` đã sửa; phiên âm đánh vần phụ âm còn mở, mới **một** ca). Muốn giảm số dòng sổ thì đó là việc
 của báo cáo, không phải việc của phép kiểm.
+
+### 02:55 — một đoạn thất bại trong lô 4, và lớp lỗi phía sau nó chỉ có 2 ca trên 915 chương
+
+Lô 4 (11 chương xong, 1.133 đoạn) có **1 đoạn thất bại**, chương 148:
+
+    van ban : “Heartmeer? Đó là cái gì?”
+    Whisper : Admir à, đó là cái gì?        (do giong 0,67, ma ASR_MISMATCH_UNRESOLVED)
+
+Chương vẫn `completed` — mã ấy thuộc `MACHINE_ACCEPTABLE` nên máy nhận và ghi sổ, không chặn sách.
+
+**Nguyên nhân:** sổ cách đọc có `Hearthmeer` → `Hát-me-ờ` (khoá), còn văn bản ở **chính chương ấy** viết
+`Heartmeer` — thiếu chữ `h`. Cách viết sai không có cách đọc nào nên giọng đọc tự xử.
+
+**Vì sao nó không được sinh cách đọc như mọi tên mới khác** — `analysis.py:3152`:
+
+```python
+if (key not in speaker_keys and key not in isolated_dialogue_keys
+        and mid_sentence_occurrences[key] == 0):
+    continue
+```
+
+`Heartmeer` xuất hiện **đúng một lần**, ở **đầu** một câu thoại, và không phải người nói → bị bỏ. Luật ấy
+có chủ ý: nó là thứ ngăn dự án bịa cách đọc cho những chữ thường mở đầu câu (cùng họ với phép chặn phantom
+tôi làm tối qua).
+
+**Đo lớp lỗi trước khi nghĩ tới việc vá** (`scripts/measure_a_name_spelled_two_ways.py`, mới): luật rộng cho
+30 cặp nhưng đọc ra thì phần lớn **không phải lỗi** — `Francis`/`Francois` (297 lần), `Lauren`/`Laurent`
+(233), `Simeon`/`Simon`, `Andrei`/`Andre` là **người khác nhau**, còn lại nằm ở chương 466+, 633+, 839+ chưa
+sản xuất (cách đọc chỉ sinh khi phân tích tới đó). Xiết thành luật chặt — lạ xuất hiện **1 lần**, tên đã ghim
+có trong **chính chương ấy**, cách **1** phép sửa:
+
+    chuong 148  'Heartmeer' (1 lan)  <->  'Hearthmeer' (2 lan, 'Hát-me-ờ')   <- da that bai
+    chuong 296  'Gosset'    (1 lan)  <->  'Gossett'    (13 lan, 'Go-xét')    <- chua san xuat
+
+**2 ca trên 915 chương → không viết mã.** Một luật lỏng hơn sẽ gán sai ngay (`Simon`/`Simeon`). Ca 296 khi
+tới lô của nó chỉ cần một dòng trong sổ cách đọc.
+
+Và một lỗi của chính script đo: tokenizer của tôi lấy cả dấu sở hữu, nên `Evans’` thành một token khác
+`Evans` và nó **tự tạo 8 cặp giả** trong danh sách 30 dòng. Đã sửa (30 → 20 dòng), lý do ghi cạnh regex.
