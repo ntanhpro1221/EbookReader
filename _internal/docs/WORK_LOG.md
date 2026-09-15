@@ -2679,3 +2679,31 @@ các đoạn đã lưu, đọc WAV, so khoảng lặng thật với ngân sách 
 Hiện tại: ranh giới 2 → 3 đã thả lại 08:45, đang ở bước 3 (vá 082 và 090 — **sẽ hỏng lại**, vì mã chưa
 đổi), sau đó đúc lại chương 022 của lô 1 với bản vá nhóm NPC vô danh, rồi phóng lô 3 và ghép sách. Sách
 lô 2 sẽ thiếu hai chương cho tới khi thước nhịp được sửa; một ranh giới sau đó vá lại là đủ.
+
+## 2026-09-15, 09:39–09:55 — ranh giới 2 → 3 xong: 090 cứu được, 082 không; sách 98 chương, 0 va chạm giọng
+
+Ranh giới chạy trọn chuỗi sau khi được thả lại 08:45:
+
+- **Chương 090: vá THÀNH CÔNG** (`lo02v_090_eba06b9ccc`, 0 đoạn hỏng). Dự đoán của tôi lúc 02:10 nói cả
+  hai chương sẽ hỏng lại — **sai một nửa**. Nhịp của nó là 25,64 kt/s, chỉ nhích trên cận 24,5, nên một
+  seed mới đủ để rơi xuống dưới; còn 082 ở 31–32,5 thì không seed nào cứu được. Ranh giới khác ngưỡng ở
+  chỗ ấy: cách nhau 4% thì seed giải quyết được, cách nhau 30% thì không.
+- **Chương 082: hỏng lần thứ ba** (`lo02v_082` và `lo02v_082b`) — đúng như đã ghi, vì thước nhịp chưa sửa.
+- **Chương 022 của lô 1: đúc lại xong** (`lo01r_022b`) với bản vá nhóm NPC vô danh trong cây. Lần phân tích
+  này không sinh ra nhóm vô danh nào, nên nó **không chứng minh** bản vá; nhưng va chạm thì hết thật.
+- Tag `v0.3.0-lo03`, **lô 3 chạy** (`lo03_fcb3d3ed1e`, gieo từ `lo01r_022b`), bước 6b, ghép sách 09:39:26.
+
+**Kiểm sách, không tin log:** 98 chương / 98 MP3 / 1,2 GB, `--verify` sạch, và **0 va chạm cùng chương**
+trên toàn bộ 98 chương (trước đó là 1). Thiếu đúng một chương: 082.
+
+**Một báo động giả đã sửa luôn.** `--verify` báo *"thời lượng trùng khít: 050, 086 - có thể là chép sai
+chương"*. Kiểm: hai file **cùng 9.476.447 byte** (MP3 CBR cùng thời lượng thì cùng cỡ) nhưng **khác
+sha256**, khác `source_file`, và hai chương nguồn khác nhau hẳn (6.760 so với 6.708 ký tự). Với 915 chương
+~6 phút, trùng ở mức 10 ms là xác suất, không phải lỗi — và một lời phàn nàn kêu suốt là lời phàn nàn bị
+bỏ qua đúng lúc nó cần được tin. Sửa: chỉ băm **những file đã trùng thời lượng** (không phải cả sách, đúng
+lý do docstring từ chối băm toàn bộ) và chỉ gọi "CHÉP SAI CHƯƠNG" khi sha256 cũng trùng. Hai test: trùng
+thời lượng khác nội dung → im; cùng một file ở hai chỗ → vẫn kêu.
+
+**Việc còn treo, đã có số:** `one_person_one_voice.py` báo `DURAGO` mang 2 giọng ở 2 chương (034, 092) và
+gợi ý lệnh đúc lại cho những người ≥5 chương: `--recast auto 1:017 1:020 1:022 1:047 1:048 2:056 2:060
+2:061 2:062 2:092`. Xếp cho ranh giới 3 → 4 sau khi đọc kỹ danh sách ấy.

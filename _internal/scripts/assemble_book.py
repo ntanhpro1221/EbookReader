@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_reader.io_utils import ffmpeg_executable, run_hidden  # noqa: E402
+from ebook_reader.text_processing import sha256_file  # noqa: E402
 
 try:
     from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
@@ -167,7 +168,9 @@ def verify(out: Path) -> tuple[int, list[str]]:
     máy cho một câu hỏi mà thời lượng đã trả lời.
 
     Đo lần đầu 01:45 ngày 2026-09-12 trên 118 chương: 0 lệch, 0 nguồn mất, 0 thời lượng trùng
-    khít nhau (một cặp trùng khít là dấu hiệu của chép sai chương).
+    khít nhau. Từ 09-15: trùng thời lượng **không** còn là lời phàn nàn - nó xảy ra do xác suất
+    (98 chương của cuốn 2 đã có một cặp) - nên chỉ những file trùng thời lượng mới bị băm, và
+    chỉ khi sha256 cũng trùng thì đó mới là chép sai chương.
     """
     complaints: list[str] = []
     before = previous_manifest(out)
@@ -206,10 +209,32 @@ def verify(out: Path) -> tuple[int, list[str]]:
             complaints.append(f"chương {title}: {here[1:]} kênh/tần số, project có {there[1:]}")
         durations.setdefault(round(here[0], 2), []).append(title)
     for _duration, titles in sorted(durations.items()):
-        if len(titles) > 1:
-            complaints.append(
-                f"thời lượng trùng khít: {', '.join(titles)} - có thể là chép sai chương"
-            )
+        if len(titles) < 2:
+            continue
+        # Trùng thời lượng KHÔNG phải bằng chứng chép sai - và đây là báo động giả đầu tiên
+        # nó gây ra: 09-15 09:49, sách cuốn 2 có 98 chương và cặp 050/086 trùng khít ở 0,01
+        # giây. Hai file cùng 9.476.447 byte (MP3 CBR cùng thời lượng thì cùng cỡ) nhưng
+        # **khác sha256**, khác `source_file`, và hai chương nguồn khác nhau hẳn (6.760 so với
+        # 6.708 ký tự). Với 915 chương ~6 phút, trùng ở mức 10 ms là chuyện xác suất, không
+        # phải chuyện lỗi - cứ để nguyên thì lời phàn nàn này kêu suốt và người đọc học cách
+        # bỏ qua nó, đúng lúc nó cần được tin.
+        #
+        # Nên hỏi thêm một câu, và chỉ hỏi cho những file đã trùng: **nội dung có giống nhau
+        # không?** Băm cả file, nhưng chỉ vài file trong một cặp - không phải cả sách, đúng
+        # lý do docstring nêu khi từ chối băm toàn bộ.
+        digests: dict[str, list[str]] = {}
+        for title in titles:
+            path = out / str(before[title].get("file") or "")
+            try:
+                digests.setdefault(sha256_file(path), []).append(title)
+            except OSError:
+                complaints.append(f"chương {title}: không đọc được để băm kiểm trùng")
+        for digest, same in sorted(digests.items()):
+            if len(same) > 1:
+                complaints.append(
+                    f"CHÉP SAI CHƯƠNG: {', '.join(same)} là cùng một file "
+                    f"(sha {digest[:12]}…) - một chương đang nằm ở hai chỗ"
+                )
     return checked, complaints
 
 
