@@ -3722,3 +3722,38 @@ chúng chia làm hai loại khác nhau về bản chất:
 chương khác. 10 ca trên 478 chương, và một luật chung làm sai 4 trong 10 → không viết mã. Chứng cứ phụ
 cho thấy nhãn ấy là ngẫu nhiên chứ không phải sự thật về văn bản: cùng chương 012, `lo01` khai `CHA`
 còn `alpha55` khai `Công tước`.
+
+### 04:20 — chương 082 là lỗ duy nhất của cuốn 2, và bản vá nhịp đọc đã hứa chữa được nó
+
+Chuẩn bị cho ranh giới 4 bằng cách đo thay vì nhớ. Sách cuốn 2 hiện có **139 chương, 000..139, đúng
+một lỗ: 082** (`assemble_book.py --verify`: không gì lệch; đếm khoảng trống: `['082']`).
+
+082 đã **hỏng ba lần** — trong project lô 2 và trong hai project vá (`lo02v_082`, rồi `lo02v_082b`:
+vòng chữ cái chống trùng tên đã làm việc của nó) — và cả ba lần cùng một đoạn, cùng một lý do:
+
+    c00001_s0000041  lan thu 11  "Tôi không biết 'xoay' đâu, Felicia."
+    SEGMENT_FAILED: speech pace 32.50 chars/s; split=segment too short to split safely
+
+**32,50** là đúng con số mà `measure_pause_budget_vs_silence.py` đã đo trên 12 bản thu thật của
+chính câu ấy, và với khoảng lặng ĐO ĐƯỢC thay cho ngân sách phỏng đoán thì cả 12 nằm ở **14,05–16,46
+kt/s**, giữa dải 12,5–24,5. Bản vá ấy đã vào cây ở ranh giới 3 và đã cứu chương 131 ngay lần thu đầu
+(tính theo ngân sách 25,57 > 24,5; nghe thật 13,50).
+
+**Dự đoán ghi trước khi chạy:** ở ranh giới 4, `2:082` qua ngay lần thu đầu, và `signal_json` của đoạn
+ấy sẽ có `chars_per_second_heard` trong khoảng 14–17 trong khi `chars_per_second` vẫn ~29–32. Nếu nó
+hỏng lần thứ tư thì bản vá chưa chạm được lớp lỗi này và phải mở lại phép đo, đừng thử lần thứ năm.
+
+Lệnh ranh giới 4 (đã kiểm từng phần: 082 là chương thiếu duy nhất; danh sách đúc lại do
+`one_person_one_voice.py` tự in ra; lô 2/3 đi qua bước 4b, lô 1 qua `launch_repair` của lô 1):
+
+    bash scripts/boundary.sh 4 --recast auto 2:082 1:017 1:020 1:022 1:047 1:048 2:062 2:090 3:114
+
+Sau đó, cuốn 1 (sau khi bốn bản vá đã vào cây — `EBOOK_FIRST_PERSON` cần bản vá thứ tư):
+
+    source scripts/book1.env && bash scripts/launch_batch.sh 10 --range 261..278 \
+      --seed-from "D:/Novels/Audiobooks/_versions/v0.2.0-lo10/lo10_24893cbe8c"
+
+Trạng thái dàn giọng của cuốn 2 lúc này, để so sau: **0 va chạm cùng chương** trên cả 136 chương có
+người nói; 24 người mang hơn một giọng qua cả cuốn (cross-chapter, không phải khuyết tật cùng chương);
+13 chương **không đúc lại được** vì đúc lại chỉ tái tạo đúng cái đánh đổi cũ (CORELLA/WOLF ở lô 1-2 và
+CHRISTOPHER/SHARON ở lô 3 là những ca đã biết).
