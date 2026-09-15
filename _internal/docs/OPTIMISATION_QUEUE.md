@@ -2139,6 +2139,42 @@ bốn bài test đều xanh và chương vẫn hỏng.
   Đừng lọc bằng "từ có nghĩa tiếng Việt" nói chung: `Mật Ong Trắng`, `Triết Gia`, `Thủy Ngân`, `Hạ Phong`
   đều là tên nhân vật thật trong cuốn này.
 
+- **ĐÃ ĐO 16:50–17:10 ngày 15-09** phần "đo trước" của mục trên: `scripts/measure_phantom_speakers.py`
+  (chỉ đọc, 129 project của cả hai cuốn). Phép đo **không dùng từ điển** — đúng điều mục trên dặn — nó dùng
+  ba con số của chính văn bản: (1) số đoạn tường thuật **mở đầu** bằng chữ ấy, (2) trong đó bao nhiêu đoạn
+  liền trước kết thúc bằng `”`, (3) số lần chữ ấy viết hoa **giữa** một câu, và (4) số lần chính chữ ấy
+  **viết thường** ở đâu đó trong sách.
+
+  | tên | câu | mở câu tường thuật | ngay sau `”` | viết hoa giữa câu | viết thường |
+  |---|---|---|---|---|---|
+  | `Tôi` | **70** | 396 | 126 | 0 | 2494 |
+  | `Mình` | 10 | 11 | 1 | 0 | 493 |
+  | `Nghe` | 4 | 15 | 9 | 0 | 191 |
+  | `Giai` | 2 | 2 | 2 | 0 | 22 |
+  | `Tin` | 1 | 1 | 1 | 0 | 124 |
+  | — đối chứng — | | | | | |
+  | `Lucien` | 1047 | 1219 | 822 | **3236** | **0** |
+  | `Juliana` | 711 | 262 | 109 | 392 | 0 |
+  | `Ivan` | 165 | 89 | 67 | 62 | 0 |
+
+  Hai cột cuối tách sạch: tên người thật viết hoa giữa câu hàng trăm tới hàng nghìn lần và **không bao giờ**
+  viết thường; năm nghi can thì ngược lại hoàn toàn. **87 câu** bị gán sai trong cả hai cuốn, và nó đã tới
+  audio: `Tôi` có một `voice_profiles` riêng (`preset_thai_son_f104_p+00`, "Thái Sơn", locked) và đọc **33
+  câu trong 5 chương** của cuốn 1 (alpha55/56).
+
+  Hai chỗ bẫy đã gặp khi làm phép đo, ghi lại vì cả hai đều làm phép đo **bỏ sót đúng ca đã sinh ra nó**:
+  (a) "không ở đầu đoạn" không đủ để gọi là "giữa câu" — một đoạn có nhiều câu, và cả 13 lần `Nghe` viết hoa
+  đều đứng ngay sau `.`, `?`, `!`; (b) tên **hiếm** cũng có "viết hoa giữa câu = 0" chỉ vì nó xuất hiện đúng
+  một lần: `Thompson` (lính gác thật, Benjamin gọi tên ở chương 3 cuốn 1) bị gắn cờ cho tới khi thêm cột
+  "viết thường".
+
+  **Chưa vá.** `analysis.py` nằm trong `ANALYSIS_CASTING_IMPLEMENTATION_FILES`: đổi sau khi phân tích đã bắt
+  đầu thì lượt ấy **mất phân tích**, nên bản vá phải áp ở ranh giới **trước** khi một lô bắt đầu phân tích.
+  Và câu khó chưa có câu trả lời đo được: bỏ pin thì gán lời ấy cho ai? `“Là tôi, Victor.”` là của Victor
+  (người nói tự khai tên), `Mình` là một lá thư đọc lên, `Tin` là một tờ tin nhắn. "Người nói gần nhất" đúng
+  cho ca 1, chưa rõ cho ca 2–3. Đo tiếp trước khi viết: với mỗi trong 87 câu, so "người nói gần nhất trước
+  đó" với người đúng đọc bằng tay trên 10 ca.
+
 - **Số viết bằng chữ so với chữ số trong phép so ASR** (đo 2026-09-14 21:05; ưu tiên thấp–trung).
   Whisper chuẩn hoá số tiếng Việt thành chữ số (`mười giờ` → `10h`, `hai mươi lăm phần trăm` → `25%`), còn
   tham chiếu giữ nguyên chữ → similarity tụt oan. **829/35.612** đoạn có hình này, **55** dưới 0,90, **4**
