@@ -27,9 +27,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 try:
-    from book_paths import VERSIONS  # noqa: E402
+    from book_paths import PLAN, VERSIONS  # noqa: E402
 except ImportError:  # import theo gói (apply_all, test)
-    from scripts.book_paths import VERSIONS  # noqa: E402
+    from scripts.book_paths import PLAN, VERSIONS  # noqa: E402
 LEASE_STALE_SECONDS = 180.0
 
 
@@ -286,7 +286,9 @@ def main(argv: list[str]) -> int:
         for item in problems:
             _say(f"  - {item}")
         return 1
-    _say("Đủ điều kiện bắt đầu lô. Xem docs/PRODUCTION_PLAN.md cho dải chương và thứ tự gieo.")
+    # Tên kế hoạch đọc từ `book_paths`, không chép tay: cuốn 2 dùng `PRODUCTION_PLAN_book2.md`,
+    # và một thông điệp chỉ sang kế hoạch của cuốn 1 là chỉ sang dải chương của một cuốn khác.
+    _say(f"Đủ điều kiện bắt đầu lô. Xem {PLAN} cho dải chương và thứ tự gieo.")
     return 0
 
 

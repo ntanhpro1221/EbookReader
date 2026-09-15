@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Khoi dong mot lo bat ky cua docs/PRODUCTION_PLAN.md.
+# Khoi dong mot lo bat ky cua ke hoach lo (EBOOK_PLAN, xem scripts/book_paths.py).
 #
 #     bash launch_batch.sh 2      # lo 2, dai chuong doc TU KE HOACH
 #     bash launch_batch.sh 3
@@ -7,7 +7,7 @@
 # Thay cho launch_lo02.sh: 15 lo con lai chi khac nhau vai con so, va chep tay chung 15 lan la
 # 15 co hoi go nham.
 #
-# **Dai chuong doc tu bang trong PRODUCTION_PLAN.md, khong tinh bang phep nhan.** Ban dau cua
+# **Dai chuong doc tu bang trong ke hoach ($PLAN), khong tinh bang phep nhan.** Ban dau cua
 # script nay lay FIRST=(n-1)*30 vi lo 1 va lo 2 deu la 30 chuong. Sai tu lo 3: ke hoach chia lo
 # **theo so tu**, khong theo so chuong, nen lo 3 la 060..091 (32 chuong) va lo 4 la 092..118
 # (27). Do la chinh chi thi cua chu sach - "lo phai theo so tu chu sao lai theo chuong?" - va
@@ -70,7 +70,7 @@ else
   }
 fi
 
-echo "=== lo $BATCH: chuong $RANGE (doc tu PRODUCTION_PLAN.md) ==="
+echo "=== lo $BATCH: chuong $RANGE (doc tu $(basename "$PLAN")) ==="
 echo "  gieo tu: ${PREV:-(khong - lo dau cua cuon)}"
 echo
 
