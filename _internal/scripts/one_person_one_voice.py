@@ -42,6 +42,7 @@ import json
 import re
 import sqlite3
 import sys
+import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -52,6 +53,8 @@ try:
     from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
 except ImportError:  # chạy trực tiếp: python scripts/x.py
     from book_paths import BOOK, VERSIONS  # noqa: E402
+
+_PRESET_GENDER_BY_SLUG: dict[str, str] | None = None
 
 VOICES_SQL = """
 SELECT ch.title AS chapter, c.canonical_name AS name, v.voice_key AS voice_key,
@@ -90,6 +93,53 @@ def read_voices(project: Path) -> list[tuple[str, str, str, int]]:
     return [
         (str(r["chapter"]), str(r["name"]), str(r["voice_key"]), int(r["lines"])) for r in rows
     ]
+
+
+def read_genders(project: Path) -> dict[str, set[str]]:
+    """{tên: {phái}} theo bảng `characters` của một project. Rỗng nếu không đọc được."""
+    try:
+        conn = sqlite3.connect(f"file:{project / 'project.sqlite3'}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return {}
+    try:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT canonical_name, gender FROM characters").fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        conn.close()
+    out: dict[str, set[str]] = {}
+    for row in rows:
+        gender = str(row["gender"] or "")
+        if gender in {"male", "female"}:
+            out.setdefault(str(row["canonical_name"]), set()).add(gender)
+    return out
+
+
+def shipped_genders(book: Path = BOOK, versions: Path = VERSIONS) -> dict[str, set[str]]:
+    """{tên: {phái}} gom từ đúng những project mà `manifest.json` nói là nguồn của cuốn sách.
+
+    Cùng cách chọn project với `shipped_voices`: hỏi "cuốn sách có nhất quán không" thì phải hỏi
+    trên những bản **đang trong sách**, không phải trên mọi bản từng được đúc.
+    """
+    try:
+        payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+    wanted = {
+        (str(item.get("version") or ""), str(item.get("project") or ""))
+        for item in entries
+        if item.get("title")
+    }
+    out: dict[str, set[str]] = {}
+    for version, project_name in sorted(wanted):
+        folder = versions / version / project_name
+        if not (folder / "project.sqlite3").is_file():
+            continue
+        for name, genders in read_genders(folder).items():
+            out.setdefault(name, set()).update(genders)
+    return out
 
 
 def shipped_voices(book: Path = BOOK, versions: Path = VERSIONS) -> list[tuple[str, str, str, int]]:
@@ -131,15 +181,112 @@ def shipped_voices(book: Path = BOOK, versions: Path = VERSIONS) -> list[tuple[s
     return found
 
 
+def preset_gender_of_voice(voice_key: str) -> str:
+    """`preset_ngoc_linh_f093_p+00` -> `female`. Không nhận ra thì trả `unknown`.
+
+    Slug trong `voice_key` là tên preset bỏ dấu, hạ hoa-thường, khoảng trắng thành gạch dưới.
+    """
+    global _PRESET_GENDER_BY_SLUG
+    if _PRESET_GENDER_BY_SLUG is None:
+        try:
+            import ebook_reader.voice_catalog as catalogue
+        except ImportError:
+            _PRESET_GENDER_BY_SLUG = {}
+        else:
+            table: dict[str, str] = {}
+            for preset in catalogue.VIENEU_PRESETS:
+                name = str(preset.get("name") or "")
+                decomposed = unicodedata.normalize("NFD", name.casefold().replace("đ", "d"))
+                slug = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+                table["_".join(slug.split())] = str(preset.get("gender") or "unknown")
+            _PRESET_GENDER_BY_SLUG = table
+    text = str(voice_key)
+    if not text.startswith("preset_"):
+        return "unknown"
+    body = text[len("preset_") :]
+    for slug, gender in _PRESET_GENDER_BY_SLUG.items():
+        if body.startswith(f"{slug}_"):
+            return gender
+    return "unknown"
+
+
+def folds_that_cross_a_gender(
+    folded: dict[str, str],
+    genders: dict[str, set[str]] | None,
+    voices: dict[str, set[str]] | None = None,
+) -> set[str]:
+    """Những cách viết KHÔNG được gộp, vì `characters` ghi chúng khác phái.
+
+    `fold_dropped_marks` gộp cách viết rơi dấu, và nó đúng cho `THU LÃNH`/`THỦ LÃNH` hay
+    `NGUOI TRA LOI`/`NGƯỜI TRẢ LỜI`. Nhưng bỏ dấu thì **`MẸ` thành `ME`**, và đó là hai người
+    khác nhau: đo 00:55 ngày 2026-09-16 trên cuốn 1, `ME` là nhãn của **nhân vật chính** (nam,
+    94 câu — xem `character_registry.PRONOUNS`) còn `MẸ` là mẹ cậu ta (nữ, 3 câu), và
+    `characters` ghi rõ hai giới khác nhau.
+
+    Cái giá nếu không chặn: báo cáo gọi đó là "một người ba giọng / 25 chương" và **đề nghị đúc
+    lại 9 chương** để hợp nhất giọng của nhân vật chính với giọng của mẹ cậu ta — ~2,3 giờ GPU
+    để tạo ra một khuyết tật. Đo trên cả hai cuốn: đúng **một** nhóm bị gộp sai (cuốn 1), ba
+    nhóm còn lại cùng phái và gộp đúng, cuốn 2 không có nhóm nào.
+
+    Luật không đổi ở đây, chỉ chặn ở tầng đo: `fold_dropped_marks` là bản song sinh của
+    `character_registry.dropped_marks_variant_of` và `tests/test_name_marks_agree.py` ghim hai
+    bản phải khớp — nên chỗ để nói "hai người khác phái không phải một người" là chỗ gọi, nơi
+    có sẵn dữ liệu `characters.gender`.
+    """
+    # `fold_dropped_marks` chỉ trả về những cách viết **bị đổi** (`{"ME": "MẸ"}`), nên bên
+    # thắng phải được thêm vào nhóm bằng tay - bản đầu của hàm này không làm thế, nhóm chỉ có
+    # một thành viên, và phép chặn không bao giờ nổ.
+    members: dict[str, list[str]] = collections.defaultdict(list)
+    for name, target in folded.items():
+        members[target].append(name)
+        if target not in members[target]:
+            members[target].append(target)
+    keep_apart: set[str] = set()
+    for _target, group in members.items():
+        if len(group) < 2:
+            continue
+        recorded = {
+            g
+            for name in group
+            for g in (genders or {}).get(name, set())
+            if g in {"male", "female"}
+        }
+        # Bằng chứng thứ hai, mạnh hơn và luôn có: phái của PRESET đang đọc họ. Trong các
+        # project đã lên sách, `MẸ` được ghi phái `unknown` (chỉ một project cũ ghi `female`),
+        # nên phép so theo `characters.gender` một mình không đủ - nhưng cô ấy được đọc bằng
+        # `ngoc_linh` (nữ) còn `ME` bằng `thanh_binh`/`thai_son` (nam). Một giọng nam và một
+        # giọng nữ không bao giờ đọc cùng một người: đó là luật dàn giọng của chính dự án.
+        heard = {
+            preset_gender_of_voice(voice)
+            for name in group
+            for voice in (voices or {}).get(name, set())
+        } - {"unknown"}
+        if len(recorded) > 1 or len(heard) > 1:
+            keep_apart.update(group)
+    return keep_apart
+
+
 def split_voices(
     rows: list[tuple[str, str, str, int]],
+    genders: dict[str, set[str]] | None = None,
 ) -> tuple[dict[str, dict[str, dict[str, int]]], dict[str, dict[str, set[str]]]]:
     """(một người hai giọng **trong cùng chương**, một người hai giọng **qua các chương**).
 
     Gộp cách viết rơi dấu trước khi so - xem docstring của module.
+
+    Nhưng **không gộp hai người khác phái**: bỏ dấu thì `MẸ` thành `ME`, và đó là mẹ với con
+    trai. `genders` (tuỳ chọn, {tên: {phái}} theo `characters`) là bằng chứng thứ nhất; bằng
+    chứng thứ hai - **phái của preset đang đọc họ** - hàm này tự lấy từ `rows`, nên phép chặn
+    hoạt động kể cả khi chỗ gọi không đưa gì. Nó chỉ **tách** những nhóm không thể là một
+    người, nên nó không cần ai bật. Xem `folds_that_cross_a_gender`.
     """
     names = sorted({name for _chapter, name, _voice, _lines in rows})
     folded = fold_dropped_marks(names)
+    voices_by_name: dict[str, set[str]] = collections.defaultdict(set)
+    for _chapter, name, voice_key, _lines in rows:
+        voices_by_name[name].add(voice_key)
+    for name in folds_that_cross_a_gender(folded, genders, dict(voices_by_name)):
+        folded.pop(name, None)
 
     per_chapter: dict[str, dict[str, dict[str, int]]] = collections.defaultdict(
         lambda: collections.defaultdict(lambda: collections.defaultdict(int))
@@ -330,15 +477,17 @@ def main(argv: list[str]) -> int:
 
     if args.project is not None:
         rows = read_voices(args.project)
+        genders = read_genders(args.project)
         where = args.project.name
     else:
         rows = shipped_voices()
+        genders = shipped_genders()
         where = "cuốn sách đã ghép"
     if not rows:
         _say(f"không đọc được giọng nào từ {where}")
         return 2
 
-    inside, across = split_voices(rows)
+    inside, across = split_voices(rows, genders)
     if args.chapters:
         _say(" ".join(sorted(inside)))
         return 0

@@ -3419,3 +3419,43 @@ Và 18 file sắp đọc đều có mặt, kích thước 7,9–24,5 KB, tiêu �
 (`261 → "Chương 260: Đền Thờ Cuộc Nổi Dậy Đầu Tiên"`, `278 → "Chương 277: Lửa Trại [II]"`).
 
 Nên cuốn 1 chạy tiếp được, và nó sẽ đọc **đúng** văn bản mà 261 chương trước đã đọc.
+
+### 01:05 — `MẸ` bỏ dấu thành `ME`, và phép đo của tôi gộp mẹ với con trai
+
+Cuốn 1 quay lại sản xuất nên tôi chạy `one_person_one_voice.py` cho nó — phép đo này chưa ai chạy trên cuốn
+1. Kết quả: **255 chương, 0 va chạm cùng chương**, nhưng **26 người mang nhiều hơn một giọng**, và người
+đứng thứ hai trong danh sách là `MẸ` với **3 giọng / 25 chương**, giọng đa số là `thai_son_f093` — một
+preset **NAM** đọc cho "mẹ". Tưởng là khuyết tật nặng nhất trong ngày.
+
+Không phải. Đọc dữ liệu thật thì đó là **lỗi của chính phép đo**:
+
+    ME   24 chuong  thai_son_f093 + thanh_binh_f108  (NAM)   <- nhan cua NHAN VAT CHINH
+    ME   1 chuong   ngoc_linh_f093                    (NU)   <- me cau ta
+    fold_dropped_marks:  ME -> MẸ        (bo dau thi "MẸ" thanh "ME")
+
+`fold_dropped_marks` gộp cách viết **rơi dấu** — đúng cho `THU LÃNH`/`THỦ LÃNH`, `NGUOI TRA LOI`/`NGƯỜI TRẢ
+LỜI` — nhưng `MẸ` rơi dấu **cũng** thành `ME`, và hai thứ ấy là hai người. Cái giá nếu để nguyên: báo cáo
+đưa chương 003 vào danh sách đúc lại, tức **đốt GPU để bắt mẹ đọc bằng giọng nam của con trai**. Một phép
+"sửa" tự tạo khuyết tật.
+
+**Sửa ở tầng đo, không sửa luật gộp** — `fold_dropped_marks` là bản song sinh của
+`character_registry.dropped_marks_variant_of` và `tests/test_name_marks_agree.py` ghim hai bản phải khớp.
+Thêm `folds_that_cross_a_gender`: hai cách viết không được gộp nếu khác phái, với hai bằng chứng:
+
+1. `characters.gender` khác nhau — **một mình không đủ**: trong project đã lên sách, `MẸ` được ghi
+   `unknown`, nên phép so im.
+2. **Phái của preset đang đọc họ** (`preset_ngoc_linh_…` là nữ, `preset_thai_son_…` là nam) — luôn có, và
+   `split_voices` tự lấy từ chính `rows`, nên phép chặn không cần ai bật.
+
+Đo trên cả hai cuốn: **đúng một** nhóm bị gộp sai (cuốn 1: `ME`+`MẸ`); ba nhóm còn lại cùng phái nên gộp
+đúng (`NGƯỜI TRẢ LỜI` + 2 biến thể ASCII, `NGƯỜI_CHÍNH`, `THỦ LÃNH`); cuốn 2 không có nhóm nào. Danh sách
+đúc lại của cuốn 1: **42 → 41 chương**, và chương bị loại đúng là chương 003 của mẹ.
+
+Hai lần tôi tự mắc trong lúc làm, đều ghi vào test: (a) `fold_dropped_marks` chỉ trả về **cặp bị đổi**
+(`{"ME": "MẸ"}`) nên nhóm của tôi chỉ có một thành viên và phép chặn không bao giờ nổ — phải tự thêm bên
+thắng vào nhóm; (b) tôi viết một bài test đòi "không truyền phái thì gộp y như cũ", và nó đỏ — đúng ra nên
+đỏ, vì bằng chứng giọng nằm sẵn trong dữ liệu và **phải** chặn kể cả khi chỗ gọi không đưa gì.
+
+`ME` vẫn còn khuyết tật thật của nó: 24 chương, **hai** giọng nam (`thai_son_f093` 16 chương,
+`thanh_binh_f108` 8) — và nó sẽ hết khi `patch_a_pronoun_is_not_a_character` vào cây ở ranh giới 4, vì lúc
+ấy `ME` không còn là một nhân vật nữa.
