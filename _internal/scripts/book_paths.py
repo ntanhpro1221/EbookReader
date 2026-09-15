@@ -5,6 +5,7 @@
     EBOOK_SOURCE_DIR        thư mục nguồn .txt                                   mặc định D:/Novels/Ebook Reader/Text_Tmp
     EBOOK_PLAN              kế hoạch lô (bảng `| lô | 000..048 | ...`)           mặc định docs/PRODUCTION_PLAN_book2.md
     EBOOK_ALBUM             tên đĩa ghi vào thẻ ID3 của mọi chương                mặc định Throne of Magical Arcana
+    EBOOK_FIRST_PERSON      "tôi" trong cuốn này là ai (rỗng = kể ngôi thứ ba)   mặc định rỗng
 
 Vì sao có file này (2026-09-13, 22:25–23:30): thư mục nguồn của cuốn 1 (`D:\\Novels\\Tools\\Text`, 478
 chương) bị xoá giữa lô 10, và chủ sách chỉ sang một cuốn khác — `Text_Tmp`, 915 chương, không
@@ -50,6 +51,16 @@ PLAN = Path(os.environ.get("EBOOK_PLAN", "docs/PRODUCTION_PLAN_book2.md"))
 #   cuon 2 = 奥术神座 / Throne of Magical Arcana (nguon la ban dich tren ln.hako.vn)
 #   cuon 1 = Young Master's PoV: Woke Up As A Villain In A Game One Day  (xem scripts/book1.env)
 ALBUM = os.environ.get("EBOOK_ALBUM", "Throne of Magical Arcana")
+# "Tôi" trong cuốn này LÀ AI - rỗng nghĩa là cuốn kể ở ngôi thứ ba (cuốn 2), và khi rỗng thì
+# không script nào truyền gì và hành vi không đổi một chút nào. Khi có, `launch_batch.sh` /
+# `launch_repair.sh` truyền `--first-person` cho `cli create`, project GHI nó vào settings, và
+# `character_registry.resolve_first_person_labels` gán những câu mang nhãn `tôi`/`ta`/`me` về
+# đúng danh tính ấy thay vì về nhóm vô danh.
+#
+# Đo 04:00 ngày 2026-09-16: cuốn 1 có 129 câu như thế (ba cách viết) và tất cả là lời nhân vật
+# chính; cuốn 2 có 10 câu và **cả 10 là nhật ký của một người thứ ba** - nên đây là công tắc của
+# từng cuốn, không phải một luật chung.
+FIRST_PERSON = os.environ.get("EBOOK_FIRST_PERSON", "")
 
 
 def tag_of(batch: int) -> str:
@@ -61,6 +72,7 @@ def describe() -> str:
     return (
         f"cuốn: root={AUDIOBOOKS_ROOT} tag={TAG_PREFIX} nguồn={SOURCE_DIR} kế hoạch={PLAN}"
         f" đĩa={ALBUM!r}"
+        + (f" tôi={FIRST_PERSON!r}" if FIRST_PERSON else "")
     )
 
 

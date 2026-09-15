@@ -291,6 +291,53 @@ def _fold_number_digits(text: str) -> str:
     return " ".join(folded)
 
 
+# Số dính đơn vị: `10h`, `10h30`, `25%`, `12kg`. Whisper viết thế còn sách viết bằng chữ, và
+# `_fold_number_digits` không chạm tới chúng vì token không phải toàn chữ số. Đo trên 75.881 đoạn
+# có bản ghi ASR của cả hai cuốn: 126 đoạn có hình này, 36 đang dưới 0,90 và 19 được cứu.
+#
+# `%` là ca âm thầm nhất: `normalize_transcript` thay mọi ký tự không phải chữ/số bằng dấu cách,
+# nên `25%` thành `25` rồi nở thành `hai mươi lăm`, và chữ "phần trăm" của sách không có gì để
+# khớp - hai bên đọc giống nhau mà vẫn bị trừ điểm.
+UNIT_NUMBER_PATTERN = re.compile(
+    r"(?<![0-9A-Za-zÀ-ỹ])([0-9]{1,3})\s*(h|%|kg|km|cm|m|°)(?![0-9A-Za-zÀ-ỹ])"
+)
+HOUR_MINUTE_PATTERN = re.compile(
+    r"(?<![0-9A-Za-zÀ-ỹ])([0-9]{1,2})\s*h\s*([0-9]{1,2})(?![0-9A-Za-zÀ-ỹ])"
+)
+NUMBER_UNIT_WORDS = {
+    "h": "giờ",
+    "%": "phần trăm",
+    "kg": "ki lô gam",
+    "km": "ki lô mét",
+    "cm": "xen ti mét",
+    "m": "mét",
+    "°": "độ",
+}
+
+
+def has_unit_number(text: str) -> bool:
+    """Một trong hai bên có số dính đơn vị không? Không có thì khỏi tính cách đọc thứ hai."""
+    return bool(UNIT_NUMBER_PATTERN.search(text) or HOUR_MINUTE_PATTERN.search(text))
+
+
+def fold_number_units(text: str) -> str:
+    """`10h30` → `mười giờ ba mươi`, `25%` → `hai mươi lăm phần trăm`.
+
+    Giờ-phút xét trước, vì `10h30` cũng khớp mẫu một-đơn-vị và nếu để mẫu kia chạy trước thì
+    `30` còn lại sẽ thành một con số lạc.
+    """
+
+    def _hour_minute(match: "re.Match[str]") -> str:
+        hour, minute = int(match.group(1)), int(match.group(2))
+        return f"{vietnamese_number_words(hour)} giờ {vietnamese_number_words(minute)}"
+
+    def _unit(match: "re.Match[str]") -> str:
+        value, unit = int(match.group(1)), match.group(2)
+        return f"{vietnamese_number_words(value)} {NUMBER_UNIT_WORDS[unit]}"
+
+    return UNIT_NUMBER_PATTERN.sub(_unit, HOUR_MINUTE_PATTERN.sub(_hour_minute, text))
+
+
 def normalize_transcript(text: str) -> str:
     text = text.casefold().replace("đ", "d")
     text = re.sub(r"[^0-9a-zà-ỹ\s]", " ", text)
@@ -1532,6 +1579,28 @@ def tone_folded_transcript_metrics(
 
 
 def transcript_metrics(expected: str, actual: str) -> tuple[float, float]:
+    """Độ giống và WER, lấy **cách đọc tốt hơn** khi một bên viết số dính đơn vị.
+
+    Whisper viết `12h35` còn sách viết `mười hai giờ ba mươi lăm`; cùng một câu đọc ra, mà phép
+    so cho 0,53. Nở đơn vị ra chữ rồi so lần nữa, và giữ cái tốt hơn của hai lần: đo trên
+    75.881 đoạn có bản ghi ASR thì 19 đoạn đi từ dưới 0,90 lên trên, và **0 đoạn tệ hơn**.
+
+    Vì sao không thay thẳng bản nở vào: thế thì 5 đoạn tệ hơn, cả 5 là một câu thật - `Sau chín
+    rưỡi` gặp `Sau 9h30` tụt từ 0,9286 xuống 0,9196, vì "chín rưỡi" không phải "chín giờ ba
+    mươi". Một phép chuẩn hoá chỉ được thêm cơ hội khớp, không được lấy đi - cùng lý lẽ mà
+    `_content_metrics_ignoring_tone` đã ghi cho phép gộp thanh điệu.
+    """
+    similarity, wer = _transcript_metrics_once(expected, actual)
+    if has_unit_number(expected) or has_unit_number(actual):
+        spoken_similarity, spoken_wer = _transcript_metrics_once(
+            fold_number_units(expected), fold_number_units(actual)
+        )
+        similarity = max(similarity, spoken_similarity)
+        wer = min(wer, spoken_wer)
+    return float(similarity), float(wer)
+
+
+def _transcript_metrics_once(expected: str, actual: str) -> tuple[float, float]:
     normalized_expected = normalize_transcript(expected)
     normalized_actual = normalize_transcript(actual)
     expected_characters = list(normalized_expected)

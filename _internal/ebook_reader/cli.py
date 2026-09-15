@@ -37,7 +37,7 @@ from .database import (
     SEGMENT_PERCEPTUAL_QUALITY_STAGE,
     ProjectDB,
 )
-from .character_registry import normalize_name
+from .character_registry import PRONOUNS, normalize_name
 from .io_utils import natural_key, sha256_file, slugify
 from .models import BookStatus, ChapterStatus, ProjectPaths
 from .project import create_or_open_project, infer_book_title
@@ -746,9 +746,25 @@ def run_project_foreground(project_root: Path | str, *, echo: bool = True) -> Co
 
 
 def _settings_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    first_person = str(getattr(args, "first_person", "") or "").strip()
     if args.settings_file is not None:
+        if first_person:
+            raise CliUsageError(
+                "--first-person cannot be combined with --settings-file: put "
+                "voices.first_person_identity in that file instead"
+            )
         return load_settings(Path(args.settings_file).expanduser().resolve())
-    return build_settings(str(args.profile))
+    if first_person and normalize_name(first_person) in PRONOUNS:
+        raise CliUsageError(
+            f"--first-person {first_person!r} is a pronoun, not a character: name whoever "
+            '"I" is (for example --first-person SAMAEL)'
+        )
+    # Chỉ ghi khoá này khi cuốn sách NÓI RA nó. Nếu nó nằm trong `DEFAULT_SETTINGS` với giá trị
+    # rỗng thì `settings_hash` của mọi project đổi, và `preview_project_creation` sẽ coi mọi
+    # project đã có là "khác cấu hình" rồi tạo thư mục mới có hậu tố hash - tức một lượt
+    # `launch_batch.sh N` chạy lại sẽ THU LẠI cả lô thay vì tiếp tục lô đang có.
+    overrides = {"voices": {"first_person_identity": first_person}} if first_person else None
+    return build_settings(str(args.profile), overrides)
 
 
 def _command_create(args: argparse.Namespace) -> CommandResult:
@@ -1384,6 +1400,14 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--width", type=int, help="Optional zero-padding width for numeric ranges")
     create.add_argument("--title")
     create.add_argument("--profile", choices=tuple(PROFILE_OVERRIDES), default="high_quality")
+    create.add_argument(
+        "--first-person",
+        default="",
+        help=(
+            "Who 'I' is, for a book told in the first person: pronoun-labelled lines "
+            "(tôi/ta/mình/me) are attributed to this character instead of an anonymous voice"
+        ),
+    )
     create.add_argument("--settings-file", type=Path, help="Use a fully validated settings JSON instead")
     create.add_argument("--dry-run", action="store_true", help="Hash and preview without writing anything")
     create.add_argument("--start", action="store_true", help="Start the new project in the background")

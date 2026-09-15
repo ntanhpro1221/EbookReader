@@ -32,25 +32,8 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Xếp cho RANH GIỚI 4, không phải ranh giới 3: `analysis.py` nằm trong
-# `ANALYSIS_CASTING_IMPLEMENTATION_FILES`, nên nó chỉ được đổi ở một ranh giới TRƯỚC khi một lô
-# bắt đầu phân tích. Lô 4 đã bay lúc 20:55 ngày 15-09 nên tên này vào hàng sau đó: `before_a_batch`
-# từ chối khởi động khi hàng chờ còn tên, và xếp sớm hơn sẽ chặn đúng bước 6 của ranh giới 3.
-ORDER: tuple[str, ...] = (
-    "patch_a_pronoun_is_not_a_character.py",
-    # `asr.py` cũng là file khoá (họ chất lượng), và bản vá này sửa hai file khác nhau so với
-    # cái trên (`analysis.py`), nên thứ tự giữa chúng không quan trọng.
-    "patch_a_number_with_a_unit_is_read_out.py",
-    # `pipeline.py` + `recovery.py`: hai file khoá nữa, không chạm gì hai bản vá trên. Nó cũng sửa
-    # `scripts/resync_spoken_text.py` và một con số sai trong chú thích `boundary.sh` - hai file
-    # KHÔNG khoá, nên nếu bản vá dừng giữa đường thì `git diff` sẽ có chúng: `assert` của nó chạy
-    # trước mọi phép ghi trong cùng một file, nhưng không có giao dịch nào bắc qua bốn file.
-    "patch_a_recording_of_another_text_is_not_evidence.py",
-    # PHẢI sau `patch_a_pronoun_is_not_a_character.py`: bản vá ấy thêm `me` vào `PRONOUNS`, và
-    # bản vá này `assert` rằng nó đã vào cây rồi mới ghi (`FIRST_PERSON_PRONOUNS` là tập con).
-    # Nó cũng sửa `cli.py` (CRLF - tự giữ nguyên kiểu xuống dòng) và bốn file script không khoá.
-    "patch_a_first_person_book_knows_who_i_is.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -266,6 +249,25 @@ APPLIED = (
     # giữa chúng không quan trọng; giữ theo thứ tự xếp hàng.
     "patch_two_pins_do_not_share_a_chapter.py",
     "patch_the_pause_budget_cannot_exceed_the_silence.py",
+    # 2026-09-16: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Xếp cho RANH GIỚI 4, không phải ranh giới 3: `analysis.py` nằm trong
+    # `ANALYSIS_CASTING_IMPLEMENTATION_FILES`, nên nó chỉ được đổi ở một ranh giới TRƯỚC khi một lô
+    # bắt đầu phân tích. Lô 4 đã bay lúc 20:55 ngày 15-09 nên tên này vào hàng sau đó: `before_a_batch`
+    # từ chối khởi động khi hàng chờ còn tên, và xếp sớm hơn sẽ chặn đúng bước 6 của ranh giới 3.
+    # `asr.py` cũng là file khoá (họ chất lượng), và bản vá này sửa hai file khác nhau so với
+    # cái trên (`analysis.py`), nên thứ tự giữa chúng không quan trọng.
+    # `pipeline.py` + `recovery.py`: hai file khoá nữa, không chạm gì hai bản vá trên. Nó cũng sửa
+    # `scripts/resync_spoken_text.py` và một con số sai trong chú thích `boundary.sh` - hai file
+    # KHÔNG khoá, nên nếu bản vá dừng giữa đường thì `git diff` sẽ có chúng: `assert` của nó chạy
+    # trước mọi phép ghi trong cùng một file, nhưng không có giao dịch nào bắc qua bốn file.
+    # PHẢI sau `patch_a_pronoun_is_not_a_character.py`: bản vá ấy thêm `me` vào `PRONOUNS`, và
+    # bản vá này `assert` rằng nó đã vào cây rồi mới ghi (`FIRST_PERSON_PRONOUNS` là tập con).
+    # Nó cũng sửa `cli.py` (CRLF - tự giữ nguyên kiểu xuống dòng) và bốn file script không khoá.
+    "patch_a_pronoun_is_not_a_character.py",
+    "patch_a_number_with_a_unit_is_read_out.py",
+    "patch_a_recording_of_another_text_is_not_evidence.py",
+    "patch_a_first_person_book_knows_who_i_is.py",
 )
 
 

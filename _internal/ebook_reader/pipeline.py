@@ -296,6 +296,11 @@ ACTIVE_CEILING_ENDPOINT_REPAIR_REASON = "TTS_ACTIVE_ENDPOINT_AT_FRAME_CEILING"
 ASR_CLARITY_REPAIR_ROUND_METRIC = "asr_clarity_repair_round"
 PITCH_VARIANT_SKIPPED_WARNING = "TTS_PITCH_VARIANT_SKIPPED"
 QUALITY_VERDICT_REPAIR = "repair"
+# Một cái tên cho lời của phép kiểm chuỗi nói, vì hai chỗ khác phải NHẬN RA nó: `_spoken_text_drifted`
+# ở dưới, và `scripts/resync_spoken_text.py`. Một bản sao chuỗi ký tự ở mỗi chỗ là ba chỗ để lệch.
+SPOKEN_TEXT_DRIFT_MESSAGE = (
+    "spoken-text checksum drifted before candidate or final verification"
+)
 SEGMENT_CANDIDATE_DIRECTORY = "candidates"
 TTS_SIGNAL_PROVENANCE_FIELDS = (
     "tts_delivery_mode",
@@ -866,17 +871,24 @@ class BookPipeline:
             policy_version=QUALITY_POLICY_VERSION,
             policy=self.quality_policy,
         )
-        report = recover_project(self.paths, self.db, self.settings)
+        report = recover_project(
+            self.paths,
+            self.db,
+            self.settings,
+            spoken_text_drifted=self._spoken_text_drifted,
+        )
         self._completed_noop = report.completed_verified
         if (
             report.reset_in_progress
             or report.reset_missing_or_corrupt
+            or report.reset_spoken_text_drift
             or report.removed_part_files
         ):
             self.log(
                 "Recovery: "
                 f"giữ {report.recovered_verified} đoạn; "
                 f"reset {report.reset_in_progress + report.reset_missing_or_corrupt} đoạn; "
+                f"đặt lại {report.reset_spoken_text_drift} đoạn lệch chuỗi nói; "
                 f"xóa {report.removed_part_files} file tạm."
             )
             if self.settings["safety"].get("notify_on_recovery", True):
@@ -5061,10 +5073,41 @@ class BookPipeline:
             or ""
         )
         if expected_sha256 and spoken_text_sha256 != expected_sha256:
-            raise RuntimeError(
-                "spoken-text checksum drifted before candidate or final verification"
-            )
+            raise RuntimeError(SPOKEN_TEXT_DRIFT_MESSAGE)
         return spoken_text, anchors
+
+    def _spoken_text_drifted(self, row: Any) -> bool:
+        """Bản thu của đoạn này có còn là bản thu của CHUỖI NÓI hiện tại không?
+
+        Cùng một câu hỏi mà recovery đã hỏi ba lần (WAV còn đó, checksum còn khớp, QA còn hiệu
+        lực), và recovery gọi hàm này để hỏi lần thứ tư - xem `recover_project`. Nó gọi thẳng
+        `_spoken_text_and_anchors`, tức đúng phép dẫn chuỗi mà đường ống dùng: một bản sao của
+        luật băm ở tầng recovery sẽ lệch khỏi bản thật đúng vào ngày có bản vá kế tiếp.
+
+        Lỗi KHÁC thì trả `False` và ghi sổ. Một cách đọc thiếu hay một dữ liệu lạ không được phép
+        làm cả lô không khởi động được; đường ống vẫn xử lý nó từng đoạn như trước.
+        """
+        item = dict(row)
+        try:
+            self._spoken_text_and_anchors(item)
+        except RuntimeError as exc:
+            if SPOKEN_TEXT_DRIFT_MESSAGE in str(exc):
+                return True
+            self._report_spoken_text_check_error(item, exc)
+        except Exception as exc:  # noqa: BLE001 - xem docstring: không được nổ ở đây
+            self._report_spoken_text_check_error(item, exc)
+        return False
+
+    def _report_spoken_text_check_error(self, item: dict[str, Any], exc: Exception) -> None:
+        self.db.event(
+            "warning",
+            "SPOKEN_TEXT_DRIFT_CHECK_FAILED",
+            "Recovery could not derive the spoken text for this segment; left it untouched",
+            {
+                "stable_id": str(item.get("stable_id") or ""),
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
 
     def _decode_audio_candidate(
         self,

@@ -55,6 +55,17 @@ TAG_PREFIX="${EBOOK_TAG_PREFIX:-v0.3.0}"
 SOURCE_DIR="${EBOOK_SOURCE_DIR:-D:/Novels/Ebook Reader/Text_Tmp}"
 PLAN="${EBOOK_PLAN:-$ROOT/docs/PRODUCTION_PLAN_book2.md}"
 
+# "Toi" trong cuon nay la ai (EBOOK_FIRST_PERSON, xem scripts/book_paths.py). Rong = ke ngoi thu
+# ba: khong truyen gi, `settings_hash` khong doi, va mot luot chay lai van MO LAI project cu thay
+# vi tao project moi. Vi the la mot mang, khong phai mot chuoi rong ghep vao dong lenh.
+FIRST_PERSON="${EBOOK_FIRST_PERSON:-}"
+FP_ARGS=()
+# `if` chu khong `[ ... ] && ...`: duoi `set -e` mot phep thu that bai o cuoi dong lam
+# ca script thoat, nen dang `&&` se giet moi luot phong lo cua cuon KE NGOI THU BA.
+if [ -n "$FIRST_PERSON" ]; then
+  FP_ARGS=(--first-person "$FIRST_PERSON")
+fi
+
 # Dong bang co dang:  | 3 | 060..091 | 32 | 3.675 | 7,9 |
 if [ -n "$RANGE_OVERRIDE" ]; then
   case "$RANGE_OVERRIDE" in
@@ -108,7 +119,8 @@ echo
 echo "=== 1. create ==="
 "$PY" -m ebook_reader.cli create \
   --output-root "$OUT" --source-dir "$SOURCE_DIR" \
-  --range "$RANGE" --width 3 --title "$TITLE" --profile high_quality --json
+  --range "$RANGE" --width 3 --title "$TITLE" --profile high_quality --json \
+  ${FP_ARGS[@]+"${FP_ARGS[@]}"}
 
 # Moi nhat theo book.created_at: chay lai lo se tao project thu hai cung tien to ten, va `ls -d`
 # lay cai dau theo alphabet - tuc cai CU.

@@ -61,10 +61,37 @@ LEGACY_PERSONALITY_PREFIX_PATTERN = re.compile(
 )
 
 
+# Một đại từ không phải một nhân vật: `build_registry_and_cast` đẩy mọi dòng có tên là đại từ
+# vào nhóm vô danh thay vì cast như một người. Nó làm việc ấy đúng - `Tôi` ở alpha55 **không**
+# có dòng `characters` nào, 33 câu của nó đọc bằng giọng nhóm vô danh.
+#
+# `me` thêm vào 2026-09-15 vì đúng cái lỗ ấy: cuốn 1 kể ở ngôi thứ nhất và mô hình khai người
+# nói là `ME` (tiếng Anh) cho **94 câu** thoại của chính nhân vật chính. "me" không nằm ở đây
+# nên `ME` thành một nhân vật đầy đủ - `characters` có dòng riêng, `importance='main'`, 54 lần
+# nhắc - và ở lô 8 nó còn **chia giọng với JAKE**. Đo trên cả hai cuốn: thêm những mục dưới đây
+# chặn đúng **một** cái tên, `ME`; `tao`, `tui`, `tớ`, `chúng tôi`, `chúng mình` không khớp gì
+# hôm nay và ở đây để lần sau khỏi phải sửa lại.
+#
+# `me` là tiếng Anh, nhưng một nhãn **toàn bộ** là "me" thì không bao giờ là tên người trong một
+# cuốn tiếng Việt, và phép so này chỉ so với toàn bộ nhãn (`normalize_name`).
+#
+# Tiếng xưng hô ngôi thứ ba tiếng Việt (`bà`, `ông`, `cha`, `mẹ`) **không** ở đây: chúng là một
+# NGƯỜI THẬT chưa được gọi tên - đọc ca thật, `BÀ` ở chương 21 cuốn 1 là người đàn bà giả làm
+# mẹ và 3 câu ấy đúng là lời của bà - nên chỗ của chúng là `GENERIC_SPEAKER_TRAITS` +
+# `NPC_LOCAL:`, sau một phép đo còn thiếu (xem docs/OPTIMISATION_QUEUE.md).
 PRONOUNS = {
     "hắn", "nàng", "cô ấy", "anh ấy", "ông ấy", "bà ấy", "người đó", "kẻ đó",
     "ta", "tôi", "mình", "chúng ta", "bọn họ",
+    "me", "tao", "tui", "tớ", "chúng tôi", "chúng mình",
 }
+# Đại từ ngôi thứ nhất SỐ ÍT, tập con của `PRONOUNS`. Một cuốn kể ngôi thứ nhất có thể nói cho
+# dự án biết "tôi" là ai (`voices.first_person_identity`), và khi ấy những nhãn này là lời của
+# CHÍNH người ấy - xem `resolve_first_person_labels`.
+#
+# Số nhiều không ở đây: một câu mang nhãn `chúng ta` / `chúng tôi` / `bọn họ` không phải lời của
+# một người, nên viết lại nó về một danh tính là sai. Ngôi thứ ba (`hắn`, `nàng`, `cô ấy`) càng
+# không: đó là người khác, và chỗ của chúng vẫn là nhóm vô danh.
+FIRST_PERSON_PRONOUNS = {"tôi", "ta", "mình", "tớ", "tao", "tui", "me"}
 RESERVED_SPEAKERS = {"narrator": "NARRATOR", "unknown": "UNKNOWN"}
 HONORIFIC_PREFIX_PATTERN = re.compile(
     r"^(?:anh|chị|cô|dì|chú|bác|ông|bà|ngài|quý cô|quý ông|bá tước|công tước|đức ngài)\s+(.+)$",
@@ -1571,6 +1598,76 @@ def _drop_pins_that_contradict_a_person(
     return kept
 
 
+def resolve_first_person_labels(
+    db: ProjectDB,
+    settings: dict[str, Any],
+    log: Callable[[str], None],
+) -> int:
+    """Một cuốn kể ngôi thứ nhất: nhãn `tôi` / `ta` / `me` là lời của CHÍNH người kể.
+
+    Không có `voices.first_person_identity` thì hàm này không làm gì - và đó là mặc định, vì
+    "tôi là ai" là **một sự thật về cuốn sách**, không phải thứ máy suy ra được. Cùng họ với
+    `EBOOK_SOURCE_DIR`, `EBOOK_PLAN`, `EBOOK_ALBUM`: chủ sách nói, dự án ghi vào project.
+
+    Đo lúc 04:00 ngày 2026-09-16 trên dữ liệu thật của hai cuốn, và hai cuốn cho hai câu trả lời
+    trái nhau - đó là lý do phải có công tắc thay vì một luật chung:
+
+    - **Cuốn 1** (kể ngôi thứ nhất): 129 câu mang nhãn ngôi thứ nhất, ba cách viết (`ME` 94,
+      `Tôi` 34, `TÔI` 1), tất cả là lời của nhân vật chính. Trước bản vá chúng bị cast thành
+      **hai giọng nam khác** anh ta; sau `patch_a_pronoun_is_not_a_character` chúng về nhóm vô
+      danh - một giọng sai nhưng nhất quán; với `first_person_identity=SAMAEL` chúng về đúng
+      giọng mà 451 câu khác của anh ta đang dùng.
+    - **Cuốn 2** (kể ngôi thứ ba): 10 câu mang nhãn `Mình`, và **cả 10 là nhật ký của nữ phù
+      thủy** mà Lucien đang đọc (chương 022/023/032) - tức lời của người thứ ba, không phải của
+      người kể. Nếu luật này tự bật thì nó sẽ gán nhật ký ấy cho một danh tính sai. Cuốn 2 để
+      trống công tắc và không đổi một chút nào.
+
+    Viết lại nhãn trong SQLite (`rewrite_speaker`) chứ không chỉ đổi lúc phân vai: sau đó mọi
+    tầng dưới - báo cáo, `one_person_one_voice`, số lần nhắc, pin - đều thấy cùng một người, và
+    đó chính là lối `RESERVED_SPEAKERS` ở trên đã đi cho `NARRATOR`/`UNKNOWN`.
+    """
+    identity = str(settings.get("voices", {}).get("first_person_identity", "")).strip()
+    if not identity:
+        return 0
+    if normalize_name(identity) in PRONOUNS:
+        # Một đại từ không thể là câu trả lời cho "tôi là ai": phép so ở `build_registry_and_cast`
+        # gấp chữ, nên dù có viết lại nhãn thành `TÔI` thì nó vẫn khớp `PRONOUNS` và vẫn về nhóm
+        # vô danh - công tắc sẽ im lặng vô dụng. `cli create --first-person` từ chối thẳng; ở đây
+        # thì nói ra rồi không làm gì, vì nổ giữa lúc phân tích là làm chết cả lô.
+        log(f'"{identity}" là một đại từ, không phải một danh tính - bỏ qua first_person_identity.')
+        db.event(
+            "warning",
+            "FIRST_PERSON_IDENTITY_IS_A_PRONOUN",
+            f"voices.first_person_identity={identity!r} is a pronoun, not a character",
+            {"identity": identity},
+        )
+        return 0
+    canonical = canonical_key(identity)
+    moved = 0
+    labels: list[str] = []
+    for speaker in sorted({str(row["speaker"]) for row in db.list_segments()}):
+        if normalize_name(speaker) not in FIRST_PERSON_PRONOUNS:
+            continue
+        if canonical_key(speaker) == canonical:
+            continue
+        rewritten = db.rewrite_speaker(speaker, canonical)
+        if rewritten:
+            moved += rewritten
+            labels.append(f"{speaker}={rewritten}")
+    if moved:
+        log(
+            f"{moved} câu mang nhãn đại từ ngôi thứ nhất về {canonical} "
+            f"({', '.join(labels)}): cuốn này kể ở ngôi thứ nhất."
+        )
+        db.event(
+            "info",
+            "FIRST_PERSON_LABELS_RESOLVED",
+            f"{moved} first-person pronoun lines were attributed to {canonical}",
+            {"identity": canonical, "labels": labels},
+        )
+    return moved
+
+
 def build_registry_and_cast(
     db: ProjectDB,
     settings: dict[str, Any],
@@ -1587,6 +1684,8 @@ def build_registry_and_cast(
         reserved = RESERVED_SPEAKERS.get(speaker.casefold())
         if reserved and speaker != reserved:
             db.rewrite_speaker(speaker, reserved)
+
+    resolve_first_person_labels(db, settings, log)
 
     _repair_cross_batch_dialogue_continuations(db, log)
     _repair_crowd_dialogue_blocks(db, log)

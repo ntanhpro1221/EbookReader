@@ -57,6 +57,17 @@ TAG_PREFIX="${EBOOK_TAG_PREFIX:-v0.3.0}"
 SOURCE_DIR="${EBOOK_SOURCE_DIR:-D:/Novels/Ebook Reader/Text_Tmp}"
 PLAN="${EBOOK_PLAN:-$ROOT/docs/PRODUCTION_PLAN_book2.md}"
 
+# "Toi" trong cuon nay la ai (EBOOK_FIRST_PERSON, xem scripts/book_paths.py). Rong = ke ngoi thu
+# ba: khong truyen gi, `settings_hash` khong doi, va mot luot chay lai van MO LAI project cu thay
+# vi tao project moi. Vi the la mot mang, khong phai mot chuoi rong ghep vao dong lenh.
+FIRST_PERSON="${EBOOK_FIRST_PERSON:-}"
+FP_ARGS=()
+# `if` chu khong `[ ... ] && ...`: duoi `set -e` mot phep thu that bai o cuoi dong lam
+# ca script thoat, nen dang `&&` se giet moi luot phong lo cua cuon KE NGOI THU BA.
+if [ -n "$FIRST_PERSON" ]; then
+  FP_ARGS=(--first-person "$FIRST_PERSON")
+fi
+
 TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$BATCH")"
 [ "$BATCH" = "1" ] && TAG="${TAG_PREFIX}-lo01"
 # Lo va thuong la `...v`; luot duc lai giong la `...r` de hai loai project khong lan ten.
@@ -198,7 +209,8 @@ for CH in $BROKEN; do
   TITLE="${TITLE}${ATTEMPT}"
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "$SOURCE_DIR" \
-    --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json > /dev/null
+    --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json \
+    ${FP_ARGS[@]+"${FP_ARGS[@]}"} > /dev/null
   # Moi nhat theo book.created_at (seed_chain.py), khong theo ten hay mtime: chay lo va lan
   # thu hai tao project thu hai cung tien to, lay cai dau theo alphabet la lay cai CU; con
   # mtime thu muc thi doi moi lan ai do mo DB.

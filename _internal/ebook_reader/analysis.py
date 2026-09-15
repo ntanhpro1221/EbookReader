@@ -579,9 +579,19 @@ LATIN_PROPER_NAME_SURFACE_PATTERN = re.compile(
     r"[A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]*(?:['’-][A-Za-z]+)*)*"
 )
 CORRUPTED_NAME_JOINERS = frozenset(",;:")
+# Khoá của `_name_candidate_key` bỏ dấu từ 2026-09-15, nên danh sách này viết dạng bỏ dấu.
+# Viết có dấu như trước là viết một danh sách không bao giờ khớp.
+#
+# Bốn mục cuối là ca thật: `Nghe`, `Tin`, `Giai`, `Im` từng thành "nhân vật" vì chúng mở một
+# câu tường thuật ngay sau dấu đóng ngoặc kép và `_leading_proper_name` lấy chữ đầu ấy làm tên
+# (8 câu trong hai cuốn; `Nghe` giữ 3 câu của Victor và Othello, và góp một va chạm cùng chương
+# ở lô 3). Đã kiểm trên 565 tên người nói: không tên nhân vật thật nào có từ đầu bỏ dấu trùng
+# bốn mục này. Chúng **chỉ** vào danh sách mở-đầu-câu, không vào `NAME_CANDIDATE_EXCLUSIONS`:
+# mục "tim" trong danh sách toàn cục đã chặn mất `Tim`, một tên người Anh có thật.
 ATTRIBUTION_SENTENCE_START_EXCLUSIONS = {
-    "ban", "cùng", "dù", "khi", "lúc", "nếu", "ngoài", "sau", "suy", "thay",
-    "theo", "trong", "trước", "tuy", "vì",
+    "ban", "cung", "du", "khi", "luc", "neu", "ngoai", "sau", "suy", "thay",
+    "theo", "trong", "truoc", "tuy", "vi",
+    "giai", "im", "nghe", "tin",
 }
 SPEECH_ATTRIBUTION_PATTERN = re.compile(
     rf"(?P<speaker>{LATIN_PROPER_NAME_SURFACE_PATTERN.pattern})\s+"
@@ -2946,7 +2956,21 @@ def _name_pronunciation_id(index: int) -> str:
 
 
 def _name_candidate_key(value: str) -> str:
-    return value.replace("’", "'").casefold()
+    """Khoá so tên với các danh sách loại trừ: hạ hoa-thường **và bỏ dấu**.
+
+    Bản trước chỉ `casefold()`, trong khi `NAME_CANDIDATE_EXCLUSIONS` viết không dấu ("toi",
+    "minh", "nguoi", "khong", "tieng"…) — nên những mục ấy không bao giờ khớp một tên tiếng
+    Việt có dấu. Đo trên 565 tên người nói của cả hai cuốn (17.461 câu): danh sách 105 mục ấy
+    chặn được **đúng hai** tên, `CHA` và `TIM`. Bỏ dấu ở đây chặn thêm đúng năm tên — `Tôi`,
+    `TÔI`, `Mình`, `MÌNH`, `BÀ` — và **cả năm là người không tồn tại**, không một tên nhân vật
+    thật nào (`scripts/measure_the_dead_exclusions.py`).
+
+    `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` vì thế được viết lại dạng bỏ dấu: nó vốn viết CÓ
+    dấu, nên phép gộp này sẽ giết nó nếu để nguyên.
+    """
+    lowered = value.replace("’", "'").casefold().replace("đ", "d")
+    decomposed = unicodedata.normalize("NFD", lowered)
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
 def _latin_character_count(value: str) -> int:

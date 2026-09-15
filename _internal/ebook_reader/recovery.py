@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,6 +28,7 @@ class RecoveryReport:
     candidate_resume_plans: list[dict] = field(default_factory=list)
     stale_candidates: int = 0
     invalidated_candidates: int = 0
+    reset_spoken_text_drift: int = 0
 
 
 class RecoveryError(RuntimeError):
@@ -116,7 +118,13 @@ def _validate_chapter_source_for_completed_fast_path(chapter, settings: dict) ->
         raise RecoveryError(f"Source chapter content changed after project creation: {source}")
 
 
-def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> RecoveryReport:
+def recover_project(
+    paths: ProjectPaths,
+    db: ProjectDB,
+    settings: dict,
+    *,
+    spoken_text_drifted: Callable[[dict], bool] | None = None,
+) -> RecoveryReport:
     errors = db.integrity_check()
     if errors:
         raise RecoveryError("SQLite integrity check failed: " + "; ".join(errors[:10]))
@@ -193,7 +201,20 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
                 checksum_ok = True
             signal_ok, _, _ = inspect_wav(wav, str(row["text"]), settings, segment=row)
             valid = checksum_ok and signal_ok
-        if valid:
+        if valid and spoken_text_drifted is not None and spoken_text_drifted(row):
+            # Bản thu còn nguyên, checksum còn khớp - nhưng nó được làm từ một CHUỖI NÓI khác
+            # (một bản vá đã đổi `spoken_symbols_to_words` / chuẩn hoá tiếng / phiên âm). Cùng
+            # một họ với "WAV mất" ở dưới: bằng chứng không còn nói về văn bản này.
+            #
+            # `reset_segment_pending` chứ không `requeue_segment_for_asr`: requeue giữ bản thu và
+            # bắt ASR đọc lại nó, tức đi thẳng vào đúng `RuntimeError` ấy lần nữa - và lần này ở
+            # giữa lô, sau hàng giờ GPU. Xem `pipeline._spoken_text_drifted`.
+            db.reset_segment_pending(
+                int(row["id"]),
+                "Recovery found a recording made from a different spoken text",
+            )
+            report.reset_spoken_text_drift += 1
+        elif valid:
             status = str(row["status"])
             quality_ok = _segment_has_current_audio_qa(
                 db,
@@ -269,6 +290,7 @@ def recover_project(paths: ProjectPaths, db: ProjectDB, settings: dict) -> Recov
             "candidate_resume_plans": report.candidate_resume_plans,
             "stale_candidates": report.stale_candidates,
             "invalidated_candidates": report.invalidated_candidates,
+            "reset_spoken_text_drift": report.reset_spoken_text_drift,
         },
     )
     return report
