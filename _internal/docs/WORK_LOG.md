@@ -3012,3 +3012,24 @@ Lô 3 xong lúc ~19:18 (40/41 chương; 131 hỏng). Ranh giới tự đi tiếp
 26 kt/s, nhịp *nghe* trong dải 12,5–24,5, khoảng lặng đo được 0,3–0,6 giây, và `pace_outlier = 0`. Nếu nó
 **vẫn** trượt thì nguyên nhân không phải thước nhịp, và chỗ nhìn tiếp là ngoặc đơn lồng trong ngoặc kép
 làm ngữ điệu hỏng — đúng câu tôi đã ghi trong hàng chờ trước khi có bản vá.
+
+### 19:53 — chương 131 vào sách, **lần thu đầu**, và dự đoán đúng gần hết
+
+`lo03v_131_f55c81d760`: chương **131 completed**. Đoạn đã trượt 11/11 lần trước đó:
+
+| | trước bản vá | sau bản vá |
+|---|---|---|
+| trạng thái | `failed`, 11 lần thử, **không có bản thu** | `verified`, **lần 1** |
+| nhịp tính bằng ngân sách | 26,37 kt/s (cận trên 24,5) | 25,57 kt/s — **vẫn ngoài cận trên** |
+| nhịp tính bằng khoảng lặng đo được | — | **13,50 kt/s** (giữa dải 12,5–24,5) |
+| khoảng lặng đo được | — | 0,64 giây |
+| `pace_outlier` | 1 | **0** |
+
+Dòng thứ hai là chỗ đáng nhìn: con số cũ **vẫn** kết tội bản thu này. Chỉ vì cận trên giờ hỏi thước thứ hai
+mà chương ấy có bản thu — và có ngay lần thử đầu, không phải sau mười lần cầu may.
+
+Dự đoán ghi lúc 19:35 đúng bốn trong năm con số (nhịp charged ~26 → 25,57; nhịp nghe trong dải → 13,50;
+`pace_outlier = 0`; đạt ở một hai lần đầu → lần 1). Sai một: tôi đoán khoảng lặng 0,3–0,6 giây, thực tế
+**0,64** — hơi cao hơn dải tôi đoán, và lệch về phía làm bản vá dễ hơn chứ không khó hơn.
+
+Ranh giới đi tiếp lúc 19:40 sang bước 4: đúc lại 110 112 114 130 134 (nối đuôi, gieo từ project 131).

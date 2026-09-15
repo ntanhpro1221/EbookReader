@@ -673,3 +673,16 @@ cùng một kết luận về những câu đang bị mất, nên chọn cái �
 
 Phép kiểm vẫn đóng với bản thu thật sự nhanh: cùng câu ấy đọc trong 1,00 giây cho nhịp_nghe
 27,4 kt/s, trên cận 24,5, và vẫn bị từ chối. Bài test giữ đúng ca ấy.
+
+### Xác nhận trên sản xuất, 19:53 ngày 15-09
+
+Bản vá vào cây ở ranh giới lô 3 (`3443758`, tag `v0.3.0-lo03v`), và bước 3 của ranh giới đúc lại chương
+131 — chương đã mất bản thu vì đúng cơ chế này. Đoạn `“Chà… Cậu ‘nếu’ nhiều thật đấy, Lucien.”` đạt ở
+**lần thu đầu tiên** sau 11 lần trượt trước đó:
+
+    nhịp tính bằng ngân sách nghỉ   25,57 kt/s   -> VẪN ngoài cận trên 24,5
+    nhịp tính bằng khoảng lặng thật 13,50 kt/s   -> giữa dải 12,5-24,5
+    khoảng lặng đo được             0,64 giây
+    pace_outlier                    0
+
+Con số cũ vẫn kết tội bản thu ấy. Chương vào được sách chỉ vì cận trên hỏi thước thứ hai.
