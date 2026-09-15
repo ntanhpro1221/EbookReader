@@ -41,6 +41,11 @@ ORDER: tuple[str, ...] = (
     # `asr.py` cũng là file khoá (họ chất lượng), và bản vá này sửa hai file khác nhau so với
     # cái trên (`analysis.py`), nên thứ tự giữa chúng không quan trọng.
     "patch_a_number_with_a_unit_is_read_out.py",
+    # `pipeline.py` + `recovery.py`: hai file khoá nữa, không chạm gì hai bản vá trên. Nó cũng sửa
+    # `scripts/resync_spoken_text.py` và một con số sai trong chú thích `boundary.sh` - hai file
+    # KHÔNG khoá, nên nếu bản vá dừng giữa đường thì `git diff` sẽ có chúng: `assert` của nó chạy
+    # trước mọi phép ghi trong cùng một file, nhưng không có giao dịch nào bắc qua bốn file.
+    "patch_a_recording_of_another_text_is_not_evidence.py",
 )
 
 APPLIED = (

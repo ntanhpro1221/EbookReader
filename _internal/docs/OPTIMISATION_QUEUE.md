@@ -2104,11 +2104,22 @@ bốn bài test đều xanh và chương vẫn hỏng.
   Ba cái mới đều **không dừng cả chuỗi** khi resync thất bại, trừ `launch_batch.sh`: ở đấy lô sắp chạy 13
   giờ nên thà dừng còn hơn `run` lên bản thu lệch. `launch_repair.sh` bỏ **chương** ấy chứ không bỏ vòng.
   Nhân đây: vòng chữ cái cạn thì trước đây **im lặng** mở lại project cũ — giờ có cờ `FREE` và một dòng log.
-- **Sâu hơn (bản vá qua hàng chờ, `recovery.py` — file khoá):** recovery đã đặt lại đoạn khi WAV mất/hỏng
-  hoặc QA hết hiệu lực; lệch chuỗi nói cùng một họ ("bằng chứng không còn nói về văn bản này") và nên được
-  chữa ở đó, để cả `cli run` gọi trực tiếp cũng tự lành mà không cần ai nhớ chạy script. Cần đo trước: một
-  vòng recovery thêm phép dẫn chuỗi cho ~3.700 đoạn tốn bao lâu (script chạy trên lô 1 mất ~40 giây, nên
-  quãng ấy là chấp nhận được so với 6,8 phút recovery hiện tại).
+- **~~Sâu hơn (bản vá qua hàng chờ, `recovery.py` — file khoá)~~ ĐÃ VIẾT, đang chờ ranh giới 4**:
+  `scripts/pending_patches/patch_a_recording_of_another_text_is_not_evidence.py`, thứ ba trong `ORDER`.
+  Recovery đã đặt lại đoạn khi WAV mất/hỏng hoặc QA hết hiệu lực; lệch chuỗi nói cùng một họ ("bằng chứng
+  không còn nói về văn bản này") nên nó được chữa ở đó — để cả `cli run` gõ tay cũng tự lành, không chỗ nào
+  phải nhớ gọi script. Recovery nhận một **hàm hỏi** do `pipeline._recover` truyền vào, trỏ thẳng tại
+  `_spoken_text_and_anchors`; không có bản sao nào của luật băm ở tầng recovery.
+
+  **Con số "~40 giây" ghi ở đây trước kia là phỏng đoán của tôi, không phải đo — và nó SAI.** Đo lúc 03:50
+  ngày 16-09 trên đúng 3.705 đoạn của lô 1: cả script 2,54 giây, riêng import 1,15 giây → phép quét **~1,4
+  giây**, ~0,38 ms mỗi đoạn, tức **~0,3%** của 6,8 phút recovery. Một con số sai gấp 30 lần để nằm trong
+  hàng chờ chính là lý do một người sau này không dám đặt phép kiểm vào đúng chỗ của nó. Đã sửa cả ở đây và
+  trong chú thích bước 2b của `boundary.sh` (chú thích ấy do bản vá sửa, vì nó là cùng một câu chuyện).
+
+  Bằng chứng ngoài bộ test: gọi chính hàm mới trên **3.705 đoạn thật** của lô 1 (bản sao đã vá,
+  `scratchpad/probe_the_helper_on_real_data.py`) → 0 lệch, **0 lỗi khác**, ~1 giây. Cái nó chứng minh mà
+  mock không chứng minh được: phép dẫn chuỗi chạy được trong hoàn cảnh recovery, không cần nạp model.
 
 - **CHỜ BẰNG CHỨNG (2026-09-14, 11:59): bản-hoàn-chỉnh-thay-bản-bị-cắt và bài chính tả neo tên.**
   `_require_candidate_beats_a_cut_off_incumbent` điều kiện 3 từ chối khi văn bản ≥ `ASR_MIN_VERIFIABLE_CHARS`

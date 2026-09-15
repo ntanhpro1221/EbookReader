@@ -3603,3 +3603,44 @@ Ghim thành bài thay vì tin vào ký ức: `tests/test_no_run_over_a_drifted_r
 dòng chú thích, và đòi lần gọi `resync_spoken_text.py` **đầu tiên** đứng trước lần gọi `cli run` **cuối
 cùng**, kèm `--apply`. Thô, nhưng bắt đúng lớp lỗi duy nhất ở đây: ai đó thêm một đường `run` mới mà
 quên resync.
+
+### 04:05 — recovery học lấy câu hỏi thứ tư, và một con số sai gấp 30 lần trong hàng chờ
+
+Bốn chỗ gọi `resync_spoken_text.py` là bốn chỗ có thể quên, và `cli run` gõ tay không đi qua chỗ nào
+trong số ấy. Nửa sau của mục hàng chờ 14-09 nói đúng chỗ phải chữa: **`recovery.recover_project`**, thứ
+chạy ở MỌI lượt `run`, và thứ đã hỏi ba câu cùng một họ cho từng đoạn có bản thu — WAV còn đó? checksum
+còn khớp? có bản ghi QA theo policy đang hiệu lực? Tất cả đều là một câu: *bằng chứng này còn nói về văn
+bản này không?* Lệch chuỗi nói là câu thứ tư, và cùng một cách chữa.
+
+Bản vá `patch_a_recording_of_another_text_is_not_evidence.py` (thứ ba trong `ORDER`, chờ ranh giới 4):
+
+- `recovery` nhận `spoken_text_drifted` — một **hàm hỏi**, do `pipeline._recover` truyền vào, trỏ thẳng
+  tại `_spoken_text_and_anchors`. Không có bản sao nào của luật băm ở tầng recovery: một bản sao sẽ lệch
+  khỏi bản thật đúng vào ngày có bản vá kế tiếp, tức đúng ngày phép kiểm này cần đúng.
+- `reset_segment_pending` chứ không `requeue_segment_for_asr`: requeue GIỮ bản thu và bắt ASR đọc lại nó,
+  tức đi thẳng vào đúng `RuntimeError` ấy lần nữa, lần này ở giữa lô.
+- Lỗi KHÁC (thiếu cách đọc, dữ liệu lạ) trả `False` và ghi `SPOKEN_TEXT_DRIFT_CHECK_FAILED`. Không nổ —
+  một cách đọc thiếu không được phép làm cả lô không khởi động được. Nhưng cũng không im.
+- Đường tắt "project đã completed và MP3 đã thẩm tra" **để nguyên**, có ý: một lô đã tag, đã ghép thì bản
+  thu là bằng chứng đã đóng, và đặt lại một đoạn ở đó làm chương mất tư cách xuất bản mà chẳng ai thu lại.
+
+**Và một con số của chính tôi bị bác bỏ.** Hàng chờ ghi "script chạy trên lô 1 mất ~40 giây" — tôi chưa
+bao giờ đo nó. Đo đúng 3.705 đoạn của lô 1:
+
+    ca script            2,54 giay
+    rieng import         1,15 giay
+    -> phep quet        ~1,4 giay   (~0,38 ms moi doan, ~0,3% cua 6,8 phut recovery)
+
+Sai gấp gần 30 lần, và sai theo hướng nguy hiểm: một con số như thế nằm trong hàng chờ chính là lý do một
+người sau này không dám đặt phép kiểm vào đúng chỗ của nó. Đã sửa ở hàng chờ và trong chú thích bước 2b
+của `boundary.sh` — bản vá tự sửa chú thích ấy, vì nó là cùng một câu chuyện.
+
+Bằng chứng ngoài bộ test (8 bài mới, cộng 15 bài `test_recovery` cũ vẫn xanh): gọi chính hàm mới trên
+**3.705 đoạn thật** của lô 1 trên bản sao đã vá → 0 lệch, **0 lỗi khác**, ~1 giây. Bộ test dùng pipeline
+giả nên nó không trả lời được câu "phép dẫn chuỗi có chạy nổi trong hoàn cảnh recovery không" — nếu nó cần
+model đã nạp thì mọi đoạn sẽ rơi vào nhánh "lỗi khác" và phép kiểm im lặng thành vô dụng. Phép thử trên
+dữ liệu thật là chỗ trả lời câu ấy.
+
+Bộ test đầy đủ trên bản sao đã vá: **2.819 xanh**, 2 đỏ và cả hai đỏ vì bản sao thiếu `Ebook Reader.vbs`
+/ `Ebook Reader.lnk` (một-cú-nhấp và `doctor`) — đã kiểm bằng cách chạy đúng hai bài ấy trên một bản sao
+**chưa vá**: đỏ y như thế. Cây thật thì xanh cả (2.821 + 8 bài mới sẽ vào lúc áp vá).
