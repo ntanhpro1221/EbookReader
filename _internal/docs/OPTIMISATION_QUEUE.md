@@ -2335,6 +2335,39 @@ bốn bài test đều xanh và chương vẫn hỏng.
   người **chưa được ghim** có thể đổi giọng ở lô sau — đúng cái vòng mà pin đang dập. Thứ tự đúng: ghim
   xong đã (đang làm), rồi mới mở kho.
 
+- **Một cuốn kể ngôi thứ nhất cần biết "tôi" LÀ AI** (đo 01:25 ngày 2026-09-16; ưu tiên **cao cho cuốn 1**,
+  không áp cho cuốn 2; cần một ranh giới vì `character_registry.py` là file khoá).
+
+  Đo trên sách cuốn 1 (255 chương đã ghép):
+
+  | người nói | câu | chương | giọng |
+  |---|---|---|---|
+  | `SAMAEL` (tên thật) | 451 | 88 | **1** — `thanh_binh_f093` |
+  | `ME` (nhãn đại từ tiếng Anh) | 54 | 24 | **2** — `thai_son_f093` (16 ch) + `thanh_binh_f108` (8 ch) |
+
+  Samael là **người kể ngôi thứ nhất**, và nguồn nói thẳng ra: *"Samael — tức là tôi —"*. Nên 54 câu kia là
+  lời của chính anh ta, phát ra bằng giọng của **hai người đàn ông khác**. Không cổng nào bắt được: dưới mắt
+  mọi phép kiểm, `ME` là một nhân vật và nó nhất quán trong từng chương.
+
+  **Bản vá đang trong hàng chờ (`patch_a_pronoun_is_not_a_character`) chữa được một nửa.** Nó thêm `me` vào
+  `PRONOUNS`, nên `build_registry_and_cast` đẩy những dòng ấy vào **nhóm vô danh** thay vì cast như một nhân
+  vật: 2 giọng sai → **1 giọng sai nhưng nhất quán**, và trả lại một chỗ pin. Đúng hướng, chưa tới đích.
+
+  **Nửa còn lại:** một cuốn kể ngôi thứ nhất cần một câu trả lời cho "tôi là ai", và đó là **một sự thật về
+  cuốn sách**, không phải thứ máy suy ra được — đúng họ với `EBOOK_SOURCE_DIR`, `EBOOK_PLAN`, `EBOOK_ALBUM`.
+  Đề xuất: `EBOOK_FIRST_PERSON` (mặc định rỗng). Khi có, registry gán nhãn đại từ ngôi thứ nhất về **đúng
+  danh tính ấy** thay vì về nhóm vô danh; khi rỗng (cuốn 2, kể ngôi thứ ba) hành vi không đổi một chút nào.
+  Cuốn 1: `EBOOK_FIRST_PERSON=SAMAEL` → 54 câu về đúng giọng `thanh_binh_f093` mà 451 câu kia đang dùng.
+
+  **Đo trước khi viết:** với mỗi trong 54 câu, kiểm xem ngữ cảnh có phải Samael nói không (đọc tay 8 ca là
+  đủ — đã đọc 3 ca ở lô 8/9, cả 3 đúng: `NARRATOR "…tôi đều giọng."` rồi câu kế mang nhãn `ME`). Và đếm
+  xem có cuốn nào dùng nhãn ngôi thứ nhất cho **nhiều hơn một** người (nếu có thì một biến môi trường là
+  không đủ).
+
+  **Thứ tự việc, quan trọng:** **đừng** đúc lại 24 chương của `ME` cho tới khi câu này được quyết. Danh sách
+  `one_person_one_voice` của cuốn 1 đang đề nghị 41 chương, trong đó 8 chương là phía thiểu số của `ME` —
+  đúc lại bây giờ là trả tiền GPU cho giọng nhóm vô danh, rồi trả lần nữa khi `EBOOK_FIRST_PERSON` vào cây.
+
 - **Nhãn xưng hô ngôi thứ ba dùng làm tên nhân vật** (đo 19:55 ngày 15-09; ưu tiên trung, **cuốn 1 nặng
   hơn cuốn 2**). Cùng họ với mục phantom ở trên nhưng **không** cùng cách chữa, nên tách ra:
 
