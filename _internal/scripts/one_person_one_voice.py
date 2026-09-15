@@ -246,15 +246,64 @@ def minority_chapters(
     return result
 
 
+def voice_holders(rows: list[tuple[str, str, str, int]]) -> dict[str, dict[str, set[str]]]:
+    """{chương: {giọng: {tên}}} theo cuốn sách đã ghép - ai đang dùng giọng nào ở chương nào."""
+    holders: dict[str, dict[str, set[str]]] = collections.defaultdict(
+        lambda: collections.defaultdict(set)
+    )
+    for chapter, name, voice, _lines in rows:
+        holders[str(chapter)][str(voice)].add(str(name))
+    return {chapter: dict(voices) for chapter, voices in holders.items()}
+
+
 def recast_arguments(
     minority: dict[str, tuple[str, dict[str, set[str]]]],
     batches: dict[str, int],
+    holders: dict[str, dict[str, set[str]]] | None = None,
+    skipped: list[str] | None = None,
 ) -> list[str]:
-    """`B:NNN` cho từng chương thiểu số, không trùng, theo thứ tự chương; chương không rõ lô bị bỏ."""
-    seen: set[str] = set()
-    for _majority, voices in minority.values():
+    """`B:NNN` cho từng chương thiểu số, không trùng, theo thứ tự chương; chương không rõ lô bị bỏ.
+
+    `holders` = {chương: {giọng: {tên}}} theo sách. Có nó thì **bỏ những chương không đúc lại
+    được**: nếu giọng đa số của người ấy đang do **người khác** dùng trong chính chương đó thì
+    đúc lại không thể trả giọng ấy về — luật của dự án cấm hai người cùng chương dùng một giọng
+    (`_first_free_variant` → `shared_chapters`, và `_drop_pins_that_share_a_chapter` ở tầng pin).
+
+    Ca thật, đo 21:20 ngày 2026-09-15: CHRISTOPHER mang `thai_son_f104` ở chương 110, 112, 114
+    còn đa số của anh ta là `thanh_binh_f090`. Ở 114 đúc lại là đúng (VERDI không nói ở đó),
+    nhưng ở **110 và 112 thì VERDI đang dùng `f090` ngay trong chương ấy** — đúc lại hai chương
+    này chỉ tái tạo đúng cái đánh đổi cũ, hết ~24 phút GPU mà sách không nhất quán hơn một chút
+    nào. Đúng hình chương 022 hôm 14-09, đã trả tiền một lần rồi.
+
+    Chương bị bỏ **được nói ra** qua `skipped` (chỗ gọi in nó): một danh sách âm thầm ngắn đi là
+    một danh sách nói dối.
+    """
+    wanted: dict[str, set[str]] = collections.defaultdict(set)
+    for name, (majority, voices) in minority.items():
         for chapters in voices.values():
-            seen |= set(chapters)
+            for chapter in chapters:
+                wanted[str(chapter)].add(name)
+    seen: set[str] = set()
+    for chapter, names in wanted.items():
+        if holders is None:
+            seen.add(chapter)
+            continue
+        here = holders.get(chapter, {})
+        reducible = []
+        for name in sorted(names):
+            majority = minority[name][0]
+            others = here.get(majority, set()) - {name}
+            if others:
+                if skipped is not None:
+                    skipped.append(
+                        f"chương {chapter}: {name} không lấy lại được"
+                        f" {majority.replace('preset_', '')} - {', '.join(sorted(others))}"
+                        " đang dùng giọng ấy trong chính chương này"
+                    )
+                continue
+            reducible.append(name)
+        if reducible:
+            seen.add(chapter)
     return [f"{batches[chapter]}:{chapter}" for chapter in sorted(seen) if chapter in batches]
 
 
@@ -299,7 +348,7 @@ def main(argv: list[str]) -> int:
             min_chapters=args.min_chapters,
             lines=lines_by_name_voice(rows),
         )
-        _say(" ".join(recast_arguments(minority, chapter_batches())))
+        _say(" ".join(recast_arguments(minority, chapter_batches(), voice_holders(rows))))
         return 0
 
     chapters = {chapter for chapter, _name, _voice, _lines in rows}
@@ -338,7 +387,15 @@ def main(argv: list[str]) -> int:
             min_chapters=args.min_chapters,
             lines=lines_by_name_voice(rows),
         )
-        arguments = recast_arguments(minority, chapter_batches())
+        skipped: list[str] = []
+        arguments = recast_arguments(
+            minority, chapter_batches(), voice_holders(rows), skipped
+        )
+        if skipped:
+            _say("")
+            _say(f"{len(skipped)} chương KHÔNG đúc lại được (đúc lại chỉ tái tạo đánh đổi cũ):")
+            for line in skipped:
+                _say(f"  {line}")
         if arguments:
             _say("")
             _say(
