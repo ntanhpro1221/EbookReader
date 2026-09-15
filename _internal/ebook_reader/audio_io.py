@@ -261,6 +261,60 @@ MIN_SPEECH_SECONDS = 0.05
 # whose actual fault is that it is barely speaking at all.
 MAX_PAUSE_FRACTION = 0.60
 
+# Đo khoảng lặng có thật để chặn ngân sách nghỉ ở cận TRÊN. Xem `measured_silence_seconds`.
+PACE_SILENCE_FRAME_SECONDS = 0.010
+# Ngưỡng so với ĐỈNH của chính bản thu, không phải dBFS tuyệt đối: `atomic_write_wav` gọi
+# `validate_audio_array` hai lần, một lần trước khi cân âm lượng và một lần sau, và phép đo
+# phải cho cùng một câu trả lời ở cả hai lần - nếu không, cùng một bản thu sẽ đạt ở lần này
+# và trượt ở lần kia. Nhân một hệ số vào toàn sóng âm không đổi tỉ số rms/đỉnh.
+#
+# -35 dB dưới đỉnh: đo trên 3000 đoạn đã chốt, ngưỡng này cắt ngân sách của 274 đoạn còn -30
+# cắt 140 và -40 cắt 389. Ba ngưỡng cho cùng một kết luận về những câu đang bị mất (khoảng
+# lặng thật 0,39-0,53 giây ở chỗ ngân sách đòi 1,20-1,34), nên chọn cái ở giữa.
+PACE_SILENCE_FLOOR_BELOW_PEAK_DB = -35.0
+# Ngắn hơn thế không phải một lần nghỉ mà là một khe giữa hai âm trong cùng một từ.
+PACE_SILENCE_MIN_GAP_SECONDS = 0.05
+
+
+def measured_silence_seconds(audio: Any, sample_rate: int) -> float:
+    """Số giây giọng đọc thật sự im trong bản thu này.
+
+    Thước thứ hai của phép kiểm nhịp, cho riêng cận TRÊN. Ngân sách nghỉ theo dấu câu là một
+    phỏng đoán chỉnh chuẩn trên câu dài; ở câu thoại ngắn nó chạm trần `MAX_PAUSE_FRACTION`,
+    ăn 60% thời lượng và thổi nhịp từ ~16 lên ~30 kt/s. Ba đoạn của cuốn 2 mất hẳn bản thu vì
+    thế (chương 082, 131, 090), sau 11-22 lần thử đều cho cùng một con số - không phải xui mà
+    là số học.
+
+    Tổng các quãng liên tiếp nằm dưới `PACE_SILENCE_FLOOR_BELOW_PEAK_DB` so với đỉnh và dài
+    hơn `PACE_SILENCE_MIN_GAP_SECONDS`. Tính cả khoảng lặng ở hai đầu: chặn chỉ được phép nới
+    tay, nên đo rộng là đo an toàn.
+    """
+    array = np.asarray(audio, dtype=np.float32)
+    if array.ndim == 2 and 1 in array.shape:
+        array = array.reshape(-1)
+    if array.ndim != 1 or array.size == 0 or sample_rate <= 0:
+        return 0.0
+    peak = float(np.max(np.abs(array)))
+    if peak <= 0.0:
+        return float(array.size / sample_rate)
+    hop = max(1, int(round(sample_rate * PACE_SILENCE_FRAME_SECONDS)))
+    usable = array.size - array.size % hop
+    if usable < hop:
+        return 0.0
+    frames = array[:usable].reshape(-1, hop).astype(np.float64)
+    rms = np.sqrt(np.maximum((frames**2).mean(axis=1), 1e-20))
+    quiet = 20.0 * np.log10(rms / peak) < PACE_SILENCE_FLOOR_BELOW_PEAK_DB
+    if not bool(quiet.any()):
+        return 0.0
+    padded = np.concatenate(([False], quiet, [False]))
+    edges = np.flatnonzero(padded[1:] != padded[:-1])
+    runs = edges[1::2] - edges[0::2]
+    frame_seconds = hop / sample_rate
+    # So bằng SỐ KHUNG, không bằng giây: 5 x 0.01 không đúng bằng 0.05 trong số thực nhị phân,
+    # và một quãng đúng bằng ngưỡng thì được tính hay không sẽ tùy vào lỗi làm tròn.
+    min_frames = max(1, int(round(PACE_SILENCE_MIN_GAP_SECONDS / frame_seconds)))
+    return float(runs[runs >= min_frames].sum() * frame_seconds)
+
 
 def pause_group_count(text: str) -> int:
     """How many separate silences the punctuation in this text asks for.
@@ -386,6 +440,7 @@ def pace_is_outlier(
     syllable_rate: float,
     pace: str,
     bounds: "tuple[float, float] | list[float]",
+    fast_rate: float | None = None,
 ) -> bool:
     """Chậm chỉ khi chậm theo CẢ chữ lẫn âm tiết; nhanh vẫn xét theo chữ như cũ.
 
@@ -405,7 +460,11 @@ def pace_is_outlier(
         pace, PACE_SYLLABLES_PER_SECOND_FLOOR["normal"]
     )
     too_slow = rate < lower_bound and syllable_rate < syllable_floor
-    return bool(too_slow or rate > upper_bound)
+    # Cận trên xét bằng nhịp đo với khoảng lặng CÓ THẬT khi chỗ gọi đưa nó tới. Cùng một hình
+    # với phép đếm âm tiết ở trên: thước thứ hai chỉ được bớt lời kết tội, không được thêm -
+    # `fast_rate` luôn nhỏ hơn hoặc bằng `rate`, nên "nhanh" giờ đòi cả hai thước đồng ý.
+    too_fast = (rate if fast_rate is None else fast_rate) > upper_bound
+    return bool(too_slow or too_fast)
 
 
 def spoken_speakable_chars(text: str) -> int:
@@ -699,20 +758,38 @@ def validate_audio_array(
         )
         speech_seconds = max(metrics["duration"] - pause_seconds, MIN_SPEECH_SECONDS)
         rate = speakable_chars / speech_seconds
+        # Ngân sách trên là một phỏng đoán, và ở câu thoại ngắn nó đòi nhiều hơn số giây giọng
+        # thật sự im: đo trên 12 bản thu thật của câu chương 082 - câu đã mất sau 22 lần thử -
+        # ngân sách đòi 1,20-1,34 giây ở chỗ chỉ có 0,39-0,53 giây khoảng lặng, và nhịp bị thổi
+        # từ 14-16 lên 29-32 kt/s. Nên cận TRÊN xét thêm bằng khoảng lặng đo được.
+        #
+        # `heard_rate` luôn nhỏ hơn hoặc bằng `rate`, nên đây là thay đổi MỘT CHIỀU: chỉ bớt
+        # lời kết tội "đọc quá nhanh", không thêm được lời nào. Cận DƯỚI giữ nguyên thước cũ,
+        # vì ngân sách sinh ra để bảo vệ đúng chỗ ấy - đo trên 3000 đoạn đã chốt, chặn cả hai
+        # cận sẽ biến 2 đoạn đang đạt thành ngoài băng ở cận dưới.
+        silence_seconds = measured_silence_seconds(array, sample_rate)
+        heard_pause_seconds = min(pause_seconds, silence_seconds)
+        heard_speech_seconds = max(metrics["duration"] - heard_pause_seconds, MIN_SPEECH_SECONDS)
+        heard_rate = speakable_chars / heard_speech_seconds
         metrics["pause_group_count"] = float(pause_group_count(text))
+        metrics["measured_silence_seconds"] = float(silence_seconds)
         lower_bound = float(bounds[0])
         upper_bound = float(bounds[1])
         hard_lower = lower_bound * RATE_HARD_MIN_FACTOR
         hard_upper = upper_bound * RATE_HARD_MAX_FACTOR
-        if rate < hard_lower or rate > hard_upper:
+        if rate < hard_lower or heard_rate > hard_upper:
             raise AudioQualityError(
-                f"speech rate far outside {pace} safety range: {rate:.2f} chars/s not in "
+                f"speech rate far outside {pace} safety range: {rate:.2f} chars/s "
+                f"({heard_rate:.2f} với khoảng lặng đo được) not in "
                 f"[{hard_lower:.2f}, {hard_upper:.2f}]"
             )
         syllable_rate = spoken_syllables(text) / speech_seconds
         metrics["chars_per_second"] = float(rate)
+        metrics["chars_per_second_heard"] = float(heard_rate)
         metrics["syllables_per_second"] = float(syllable_rate)
-        metrics["pace_outlier"] = float(pace_is_outlier(rate, syllable_rate, pace, bounds))
+        metrics["pace_outlier"] = float(
+            pace_is_outlier(rate, syllable_rate, pace, bounds, fast_rate=heard_rate)
+        )
     score = repeated_utterance_score(array, sample_rate)
     if score is not None:
         metrics[REPEATED_UTTERANCE_METRIC] = float(score)

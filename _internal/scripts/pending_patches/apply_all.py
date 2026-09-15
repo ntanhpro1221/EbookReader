@@ -33,12 +33,7 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 LEASE_STALE_SECONDS = 180.0
 
 # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = (
-    "patch_two_pins_do_not_share_a_chapter.py",
-    # Hai bản vá này sửa hai file khác nhau (character_registry.py, audio_io.py) nên thứ tự
-    # giữa chúng không quan trọng; giữ theo thứ tự xếp hàng.
-    "patch_the_pause_budget_cannot_exceed_the_silence.py",
-)
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -247,6 +242,13 @@ APPLIED = (
     # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
     "patch_the_nameless_crowd_says_where_it_speaks.py",
     "patch_no_gender_evidence_does_not_kill_the_book.py",
+    # 2026-09-15: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+    # Hai bản vá này sửa hai file khác nhau (character_registry.py, audio_io.py) nên thứ tự
+    # giữa chúng không quan trọng; giữ theo thứ tự xếp hàng.
+    "patch_two_pins_do_not_share_a_chapter.py",
+    "patch_the_pause_budget_cannot_exceed_the_silence.py",
 )
 
 

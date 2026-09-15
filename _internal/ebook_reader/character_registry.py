@@ -1458,6 +1458,74 @@ def _characters_by_profile(
     return inverted
 
 
+def _drop_pins_that_share_a_chapter(
+    rows: list[Any],
+    locked_voices: dict[str, str],
+    log: Any,
+) -> dict[str, str]:
+    """Bỏ pin của người ít câu hơn khi hai người CÙNG GHIM một giọng và CÙNG NÓI một chương.
+
+    `_pinned_profile_id` tôn trọng pin vô điều kiện, và điều đó đúng cho tới khi pin được phép
+    dùng chung: từ 11:00 ngày 2026-09-15 `pin_the_book_cast` cho hai người **chưa từng cùng
+    chương** chia một giọng (đúng luật holder của bộ cấp giọng). Ở lô sau họ có thể gặp nhau, và
+    lô 3 cuốn 2 gặp ngay: **5 va chạm cùng chương, cả 5 là pin gặp pin** — Verdi + Christopher ở
+    chương 12 và 14, Rhine + ORVARIT ở 16, SMILE + SARD ở 32, Camil + Nghe ở 36.
+
+    Doanh nghĩa của dự án xếp "hai người một giọng trong cùng chương" **nặng hơn** "một người đổi
+    giọng giữa các chương" (người nghe tưởng là cùng một người, ngay trong một cảnh). Nên ở đúng
+    chỗ hai điều ấy xung đột, nhất quán phải nhường.
+
+    Ai giữ: người **nhiều câu hơn trong cả lô** - đổi giọng của họ gây chú ý hơn. Người kia mất
+    pin và đi qua `allocator.choose()`, thứ đã tránh người cùng chương sẵn.
+    """
+    if not locked_voices:
+        return locked_voices
+    chapters: dict[str, set[int]] = {}
+    lines: dict[str, int] = {}
+    for row in rows:
+        speaker = str(row["speaker"])
+        if speaker.casefold() in RESERVED_SPEAKERS:
+            continue
+        identity = canonical_key(speaker)
+        if identity not in locked_voices:
+            continue
+        chapters.setdefault(identity, set()).add(int(row["chapter_id"]))
+        lines[identity] = lines.get(identity, 0) + 1
+    by_voice: dict[str, list[str]] = {}
+    for identity, voice in locked_voices.items():
+        if identity in chapters:
+            by_voice.setdefault(voice, []).append(identity)
+    dropped: set[str] = set()
+    for voice, identities in sorted(by_voice.items()):
+        if len(identities) < 2:
+            continue
+        # Người nhiều câu trước; ai đã giữ thì người sau chỉ mất pin nếu CHẠM chương của họ.
+        ranked = sorted(identities, key=lambda name: (-lines.get(name, 0), name))
+        holders: list[str] = []
+        for identity in ranked:
+            clash = next(
+                (
+                    holder
+                    for holder in holders
+                    if chapters[identity] & chapters[holder]
+                ),
+                None,
+            )
+            if clash is None:
+                holders.append(identity)
+                continue
+            dropped.add(identity)
+            shared = sorted(chapters[identity] & chapters[clash])
+            log(
+                f"Bỏ giọng đã ghim của {identity} ({lines.get(identity, 0)} câu): trùng "
+                f"{voice} với {clash} ({lines.get(clash, 0)} câu) ở chương {shared}. "
+                "Hai người một giọng trong cùng chương nặng hơn một người đổi giọng."
+            )
+    if not dropped:
+        return locked_voices
+    return {name: voice for name, voice in locked_voices.items() if name not in dropped}
+
+
 def _drop_pins_that_contradict_a_person(
     db: Any,
     locked_voices: dict[str, str],
@@ -1535,6 +1603,10 @@ def build_registry_and_cast(
     locked_voices = _drop_pins_that_contradict_a_person(
         db, locked_voices, locked_genders, locked_ages, log
     )
+    # Sau khi pin đã qua phép kiểm "đúng phái", tới phép kiểm "không hai người một giọng trong
+    # một chương". Thứ tự này có chủ ý: một pin sai phái thì bỏ dù có va chạm hay không, còn
+    # phép kiểm dưới đây chỉ nói về những pin còn lại.
+    locked_voices = _drop_pins_that_share_a_chapter(rows, locked_voices, log)
     unresolved_genders = _validate_casting_inputs(
         rows, minimum_main_mentions, log, locked_genders
     )
