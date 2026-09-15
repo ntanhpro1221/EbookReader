@@ -3166,3 +3166,41 @@ hôm nay chỉ chặn được 2 tên), và bốn chữ `nghe`/`tin`/`giai`/`im`
 sách cho một câu hỏi là hai chỗ để lệch nhau — và hôm nay đã có đúng một ví dụ ngay cạnh:
 `NAME_CANDIDATE_EXCLUSIONS` viết **không dấu** nằm cạnh `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` viết **có
 dấu**, và cái thứ nhất vì thế chỉ chặn được 2 trong 565 tên.
+
+### 23:00 — giải phẫu thời gian phân tích, và một đòn "bóp máy" mà số liệu nói ĐỪNG kéo
+
+Lô 4 đang phân tích, nên thời gian của nó là dữ liệu sẵn có. Ba câu hỏi, đo trên `runtime_events` và
+`analysis_critic_attempts` của chính lô 4 (1.647/3.680 đoạn, 115,4 phút đầu):
+
+**1. Xen kẽ phân tích với tổng hợp? KHÔNG — đó là thiết kế.** `run()` đi
+`analyze_all` → `reconcile_local_speaker_identities` → `build_registry_and_cast` → tổng hợp, và bộ cấp
+giọng **phải** biết mọi người nói của mọi chương mới tránh được "hai người một giọng cùng chương". Xen kẽ
+là phá đúng cái luật tôi vá cả ngày nay. Ghi lại để lần sau khỏi ai (kể cả tôi) "tối ưu" nó.
+
+**2. Thời gian phân tích nằm ở đâu:** 830 lời gọi Ollama trong 114,8 phút, và **95%** khoảng ấy là thời
+gian model theo chính số Ollama báo. Chia ra:
+
+| | |
+|---|---|
+| nạp prompt (3.098 tok trung bình, 8.141 tok/s) | 7,8 phút — **7%** |
+| **sinh token** (409 tok trung bình, 55,8 tok/s) | **100,8 phút — 93%** |
+
+Nên **không có đòn "gộp lô"** ở đây: gộp lô chỉ bớt phí nạp prompt, tức 7%. Khác hẳn ASR, nơi 46% là phí
+cố định mỗi lời gọi. Muốn nhanh hơn thì phải **sinh ít token hơn** hoặc sinh nhanh hơn — không phải song
+song hoá, không phải gộp.
+
+**3. Lượt phản biện đạo diễn tốn 65% thời gian phân tích — và nó xứng đáng.** 414 lượt đã xong, tổng
+**75,5 phút** (trung vị 11,1s/lượt) trên 115,4 phút phân tích. Kết quả: 378 chấp nhận, **36 từ chối**.
+Nhưng nó bắt được **gì** mới là câu trả lời:
+
+    32 lan  DIRECTOR_FIELD_MISMATCH fields=speaker
+     6 lan  ... fields co ca speaker (speaker,intensity / kind,speaker / speaker,emotion,...)
+     5 lan  chi emotion / intensity / pace / kind / volume
+
+**38 trong 43 (88%) dính trường `speaker`** — đúng lớp khuyết tật đắt nhất của dự án: sai người nói là sai
+giọng, và người nghe mất nhân vật chứ không chỉ lẫn nhân vật. Đó cũng đúng doanh nghĩa "hai thước phải
+đồng ý" mà dự án dùng ở mọi chỗ khác (chữ + âm tiết cho nhịp; ngân sách + khoảng lặng cho cận trên).
+
+Ước cái giá nếu cắt: tiết kiệm ~2,8 giờ mỗi lô × 19 lô còn lại ≈ **1,5 ngày**, đổi lấy khoảng **2.000 câu
+sai người nói** trên cả cuốn 2 (38 lỗi/1.650 đoạn × 87.000 đoạn). **Đừng cắt.** Ghi con số ở đây vì người
+đọc bảng thời gian sẽ thấy "65% cho một lượt kiểm" và muốn cắt — số liệu nói ngược.
