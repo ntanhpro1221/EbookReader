@@ -19,9 +19,10 @@
 # hai lo - mot loi IM LANG, khong cong nao bat duoc vi moi lo tu no deu nhat quan.
 set -euo pipefail
 
-BATCH="${1:?dung: launch_batch.sh <so lo> [--seed-from <project>] [--no-seed]}"
+BATCH="${1:?dung: launch_batch.sh <so lo> [--seed-from <project>] [--no-seed] [--range NNN..NNN]}"
 shift || true
 SEED_FROM=""
+RANGE_OVERRIDE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     # Gieo tu project chi dinh - boundary.sh truyen project CUOI chuoi sau khi da duc lai giong
@@ -30,6 +31,17 @@ while [ $# -gt 0 ]; do
     --seed-from) shift; SEED_FROM="${1:?--seed-from can duong dan project}"; shift ;;
     # Lo DAU cua mot cuon: khong co lo truoc de gieo. Bo sung 2026-09-13 khi bat dau cuon 2.
     --no-seed) SEED_FROM="__none__"; shift ;;
+    # Dai chuong CHI DINH, de lam PHAN CON LAI cua mot lo da chay do. Bo sung 01:55 ngay
+    # 2026-09-16: lo 10 cuon 1 dung o 8/26 chuong va **khong resume duoc** (van tay
+    # analysis_casting doi sau ban va toi 15-09, `_validate_resume_stage_fingerprints` bao
+    # "create a clean project"). Con 18 chuong 261..278; hai duong co san deu sai:
+    #   - `launch_batch.sh 10` chay lai CA 26 chuong, tra tien GPU cho 8 chuong da xong;
+    #   - `launch_repair.sh 10 --chapters 261 ... 278` tao **18 project mot chuong**, tuc 18
+    #     lan phan tich rieng va 18 lan cap giong rieng.
+    # Mot project cho dung 18 chuong la dung. Dai chuong van phai GO TAY o day chu khong tinh
+    # tu ke hoach - chi thi cua chu sach "lo phai theo so tu chu sao lai theo chuong?" noi ve
+    # viec CHIA lo, va `--range` khong chia lo nao ca, no chay lai mot phan cua lo da chia.
+    --range) shift; RANGE_OVERRIDE="${1:?--range can dang NNN..NNN}"; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
   esac
 done
@@ -44,11 +56,22 @@ SOURCE_DIR="${EBOOK_SOURCE_DIR:-D:/Novels/Ebook Reader/Text_Tmp}"
 PLAN="${EBOOK_PLAN:-$ROOT/docs/PRODUCTION_PLAN_book2.md}"
 
 # Dong bang co dang:  | 3 | 060..091 | 32 | 3.675 | 7,9 |
-RANGE="$(grep -oE "^\| *$BATCH \| *[0-9]{3}\.\.[0-9]{3} *\|" "$PLAN" | grep -oE '[0-9]{3}\.\.[0-9]{3}' | head -1 || true)"
-if [ -z "$RANGE" ]; then
-  echo "Khong tim thay dai chuong cho lo $BATCH trong $PLAN." >&2
-  echo "Bang lo nam o muc dau tai lieu; dung tu bia ra dai chuong." >&2
-  exit 2
+if [ -n "$RANGE_OVERRIDE" ]; then
+  case "$RANGE_OVERRIDE" in
+    [0-9][0-9][0-9]..[0-9][0-9][0-9]) : ;;
+    *) echo "--range phai co dang NNN..NNN (vd 261..278), nhan duoc: $RANGE_OVERRIDE" >&2; exit 2 ;;
+  esac
+  PLAN_RANGE="$(grep -oE "^\| *$BATCH \| *[0-9]{3}\.\.[0-9]{3} *\|" "$PLAN" | grep -oE '[0-9]{3}\.\.[0-9]{3}' | head -1 || true)"
+  RANGE="$RANGE_OVERRIDE"
+  echo "=== DAI CHUONG CHI DINH BANG TAY: $RANGE  (ke hoach cho lo $BATCH la ${PLAN_RANGE:-khong co}) ==="
+  echo "    Chi dung cho PHAN CON LAI cua mot lo khong resume duoc. Dung dung de chia lo."
+else
+  RANGE="$(grep -oE "^\| *$BATCH \| *[0-9]{3}\.\.[0-9]{3} *\|" "$PLAN" | grep -oE '[0-9]{3}\.\.[0-9]{3}' | head -1 || true)"
+  if [ -z "$RANGE" ]; then
+    echo "Khong tim thay dai chuong cho lo $BATCH trong $PLAN." >&2
+    echo "Bang lo nam o muc dau tai lieu; dung tu bia ra dai chuong." >&2
+    exit 2
+  fi
 fi
 FIRST="${RANGE%%..*}"
 LAST="${RANGE##*..}"
@@ -70,7 +93,11 @@ else
   }
 fi
 
-echo "=== lo $BATCH: chuong $RANGE (doc tu $(basename "$PLAN")) ==="
+if [ -n "$RANGE_OVERRIDE" ]; then
+  echo "=== lo $BATCH: chuong $RANGE (GO TAY bang --range, khong doc tu ke hoach) ==="
+else
+  echo "=== lo $BATCH: chuong $RANGE (doc tu $(basename "$PLAN")) ==="
+fi
 echo "  gieo tu: ${PREV:-(khong - lo dau cua cuon)}"
 echo
 

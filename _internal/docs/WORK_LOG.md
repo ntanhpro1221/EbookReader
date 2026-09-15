@@ -3370,3 +3370,32 @@ cho một lần.
 Giữ lại `PLACEHOLDER_ALBUM = "Sách nói"` chỉ để một việc: nhận ra một cuốn **chưa** có tên. Vì mặc định của
 `book_paths` là cuốn đang chạy, một cuốn thứ ba mà ai đó quên viết `book3.env` sẽ lặng lẽ mang tên cuốn 2 —
 lời nhắc ấy là chỗ duy nhất nói ra.
+
+### 02:00 — `launch_batch.sh --range`, để 18 chương còn lại của cuốn 1 chỉ cần MỘT project
+
+Lô 10 cuốn 1 dừng ở 8/26 chương và **không resume được**: vân tay `analysis_casting` đổi sau bản vá tối
+15-09, và `_validate_resume_stage_fingerprints` nói thẳng *"create a clean project"*. Còn 18 chương
+(261..278), mà hai đường có sẵn đều sai:
+
+    launch_batch.sh 10                      -> chay lai CA 26 chuong, tra tien GPU cho 8 chuong da xong
+    launch_repair.sh 10 --chapters 261 ...   -> 18 project MOT chuong: 18 lan phan tich, 18 lan cap giong
+
+Nên thêm `--range NNN..NNN` vào `launch_batch.sh`: một project cho đúng 18 chương ấy. Nó **không** phá chỉ
+thị "lô phải theo số từ chứ sao lại theo chương?" — chỉ thị ấy nói về việc **chia** lô, còn `--range` không
+chia lô nào cả, nó chạy lại **một phần của lô đã chia**. Và nó nói ra điều đó: in kèm dải chương mà kế
+hoạch ghi cho lô ấy, và ghi rõ header là "GÕ TAY bằng `--range`, không đọc từ kế hoạch".
+
+Đã thử cả hai nhánh (không chạm GPU, vì cổng chặn đúng chỗ):
+
+    --range 261-278    -> tu choi: "phai co dang NNN..NNN"
+    --range 261..278   -> dung dai chuong, gieo tu lo10_24893cbe8c, roi DUNG o cong before_a_batch:
+                          "DANG CHAY (cuon khac): pid 29656 ... v0.3.0-lo04"  + 2 ban va trong hang cho
+
+Dòng "ĐANG CHẠY (cuốn khác)" là phép kiểm `_supervisors_elsewhere()` thêm sáng 15-09 làm việc đúng: nó
+thấy lô của **cuốn 2** đang bay và không cho khởi động cuốn 1. Một cuốn một lúc, tự động.
+
+**Lệnh cho cuốn 1 khi GPU rảnh** (sau ranh giới 4, trước lô 5 cuốn 2 — mặc định tôi giữ):
+
+    source scripts/book1.env
+    bash scripts/launch_batch.sh 10 --range 261..278 \
+         --seed-from "D:/Novels/Audiobooks/_versions/v0.2.0-lo10/lo10_24893cbe8c"
