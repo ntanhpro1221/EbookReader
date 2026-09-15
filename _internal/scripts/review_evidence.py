@@ -27,7 +27,11 @@ from ebook_reader.pipeline import HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS  # noqa:
 
 INTERESTING_METRICS = (
     "score", "baseline_score", "baseline_delta", "duration_seconds", "reason",
-    "chars_per_second", "similarity", "wer", "pace_outlier", "policy_exemption",
+    # `chars_per_second` là nhịp tính với ngân sách nghỉ ĐOÁN; `chars_per_second_heard` là nhịp
+    # tính với khoảng lặng ĐO ĐƯỢC, và từ 15-09 cận trên xét con số thứ hai (PACE_METRIC.md,
+    # mục "Thước thứ hai"). Khi một câu hỏi về nhịp quay lại, người đọc báo cáo cần cả hai.
+    "chars_per_second", "chars_per_second_heard", "measured_silence_seconds",
+    "similarity", "wer", "pace_outlier", "policy_exemption",
 )
 
 
