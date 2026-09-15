@@ -2707,3 +2707,37 @@ thời lượng khác nội dung → im; cùng một file ở hai chỗ → vẫ
 **Việc còn treo, đã có số:** `one_person_one_voice.py` báo `DURAGO` mang 2 giọng ở 2 chương (034, 092) và
 gợi ý lệnh đúc lại cho những người ≥5 chương: `--recast auto 1:017 1:020 1:022 1:047 1:048 2:056 2:060
 2:061 2:062 2:092`. Xếp cho ranh giới 3 → 4 sau khi đọc kỹ danh sách ấy.
+
+## 2026-09-15, 10:20–10:45 — mười người mang hai giọng qua cả sách; phá hoà bằng bằng chứng trước khi tiêu 2 giờ GPU
+
+`one_person_one_voice.py` trên sách 96 chương có lời: **0 va chạm trong cùng chương** (tốt), nhưng **10
+người mang nhiều hơn một giọng qua cả cuốn** — CORELLA, ATHY, OTHELLO, HERODOTUS, IVEN (3 giọng), WOLF,
+MEKANZI, CAMIL, EVANS, DURAGO. Người nghe sẽ thấy một nhân vật đổi giọng giữa các chương.
+
+Công cụ in ra lệnh đúc lại phía thiểu số cho người có ≥5 chương — **10 chương, ~2 giờ GPU**. Trước khi trả
+tiền ấy tôi đọc luật chọn "phía nào thắng", và nó tuỳ tiện: `sorted(voices.items(), key=(-số chương, tên
+giọng))` — hoà về số chương thì **bảng chữ** quyết, và `preset_thai_son…` luôn đứng trước
+`preset_thanh_binh…`. Hai thế hoà 3–3 thật trong sách (CORELLA, ATHY) đều được quyết như thế.
+
+**Sửa bằng bằng chứng đã có sẵn trong dữ liệu** (`read_voices` vẫn trả về số câu, chỉ là `split_voices` bỏ
+nó đi ở khung nhìn toàn sách): thứ tự **số chương → số câu → chương sớm nhất → tên giọng**. Thêm
+`lines_by_name_voice()` (gộp cách viết rơi dấu như `split_voices`), và `lines=` là tuỳ chọn nên chỗ gọi cũ
+không đổi hành vi. Năm test, trong đó một bài dựng thế hoà mà bảng chữ và số câu **không** cùng ý.
+
+Đo lại trên sách thật:
+
+| người | giọng A | giọng B | ai thắng |
+|---|---|---|---|
+| CORELLA | thai_son f100: 3 chương, **9 câu** | thanh_binh f104: 3 chương, 5 câu | A |
+| ATHY | thai_son f108: 3 chương, **8 câu** | thanh_binh f097: 3 chương, 6 câu | A |
+
+Bằng chứng **cùng kết quả** với bảng chữ ở cả hai ca, nên danh sách đúc lại không đổi:
+`1:017 1:020 1:022 1:047 1:048 2:056 2:060 2:061 2:062 2:092`. Không đổi, nhưng giờ nó **có lý do** thay
+vì có may mắn — và lần sau hoà mà lệch nhau thì máy chọn đúng phía.
+
+**Chưa chạy đúc lại.** Một điều cần nhìn trước, và nó có thể làm cả 2 giờ kia thành vô ích: mỗi lần đúc lại
+là một lần **phân tích lại** chương ấy, và phân tích lại đổi cả cách gán người nói (chương 022 vừa chứng
+minh: lần đúc lại sinh ra một tập người nói khác). Nếu người bị lệch giọng là người mà `pin_the_book_cast`
+chưa ghim, thì đúc lại chương này rồi chương sau lại lệch — đuổi theo mãi. Việc phải làm trước: xem các
+người này đã có pin chưa; nếu chưa, ghim (không tốn GPU) rồi mới đúc lại **những chương còn lệch sau khi
+ghim**. Ghi vào hàng cho ranh giới 3 → 4.

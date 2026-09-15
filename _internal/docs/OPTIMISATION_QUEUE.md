@@ -2190,3 +2190,11 @@ bốn bài test đều xanh và chương vẫn hỏng.
   với ngân sách; đếm lại số đoạn đổi phán quyết ở CẢ HAI cận. Chỉ vá khi số liệu nói nó chỉ cứu chứ không
   giết. `audio_io.py` là file khoá → qua hàng chờ; áp ở một ranh giới rồi cho `boundary.sh N --recast`
   vá lại 082/090.
+
+- **Mười người hai giọng qua cả sách (đo 2026-09-15 10:45) — GHIM trước, ĐÚC LẠI sau.**
+  Danh sách đúc lại đã có: `--recast auto 1:017 1:020 1:022 1:047 1:048 2:056 2:060 2:061 2:062 2:092`
+  (phía thiểu số của 6 người ≥5 chương; ~2 giờ GPU). **Nhưng kiểm `pin_the_book_cast` trước**: đúc lại là
+  phân tích lại, và nếu người ấy chưa được ghim book-wide thì chương sau vẫn lệch — đuổi theo vô hạn.
+  Thứ tự đúng: (1) `pin_the_book_cast.py --apply` cho các tên trên (không GPU), (2) đúc lại chỉ những
+  chương còn lệch, (3) đo lại bằng `one_person_one_voice.py`. Bốn người dưới 5 chương (MEKANZI, CAMIL,
+  EVANS, DURAGO) để pin lo, đừng đốt project cho một đồng xu.

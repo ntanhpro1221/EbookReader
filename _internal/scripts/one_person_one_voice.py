@@ -165,6 +165,24 @@ def split_voices(
     return inside, across
 
 
+def lines_by_name_voice(
+    rows: list[tuple[str, str, str, int]],
+) -> dict[str, dict[str, int]]:
+    """{tên: {giọng: tổng số câu}} - bằng chứng phá hoà cho `minority_chapters`.
+
+    Gộp cách viết rơi dấu giống `split_voices`, nếu không thì hai cách viết của một người cho
+    hai khoá khác nhau và phép phá hoà nhìn vào nửa dữ liệu.
+    """
+    names = sorted({name for _chapter, name, _voice, _lines in rows})
+    folded = fold_dropped_marks(names)
+    totals: dict[str, dict[str, int]] = collections.defaultdict(
+        lambda: collections.defaultdict(int)
+    )
+    for _chapter, name, voice_key, lines in rows:
+        totals[folded.get(name, name)][voice_key] += int(lines)
+    return {name: dict(voices) for name, voices in totals.items()}
+
+
 def chapter_batches(book: Path = BOOK) -> dict[str, int]:
     """{chương: số lô} theo `manifest.json` - lô đọc từ tên phiên bản (`v0.2.0-lo03r` → 3)."""
     try:
@@ -185,19 +203,43 @@ def minority_chapters(
     across: dict[str, dict[str, set[str]]],
     *,
     min_chapters: int,
+    lines: dict[str, dict[str, int]] | None = None,
 ) -> dict[str, tuple[str, dict[str, set[str]]]]:
     """{tên: (giọng đa số, {giọng thiểu số: {chương}})} cho người có ít nhất `min_chapters` chương.
 
-    Đa số = giọng có nhiều chương nhất; hoà thì lấy giọng đứng trước theo bảng chữ, để hai lần
-    chạy cho cùng một câu trả lời. Người dưới `min_chapters` bỏ qua: với hai chương thì "đa số"
-    là một đồng xu, và đúc lại một chương vì đồng xu là phí GPU.
+    Đa số = giọng có nhiều chương nhất. **Hoà thì phá bằng bằng chứng, không bằng bảng chữ.**
+    Bản trước xếp theo `(-số chương, tên giọng)`, nên một thế hoà 3–3 được quyết bởi chuỗi
+    `preset_thai_son...` đứng trước `preset_thanh_binh...` — tuỳ tiện, và tuỳ tiện một cách có
+    hệ thống: đo trên sách cuốn 2 lúc 09:55 ngày 2026-09-15, CORELLA và ATHY đều hoà 3–3 và cả
+    hai lần "thai_son" thắng chỉ vì chữ t-h-a. Chọn sai phía thì đúc lại **nhiều** chương hơn
+    cần thiết, và mỗi chương là ~12 phút GPU.
+
+    Thứ tự bằng chứng: **số chương** (người nghe gặp giọng ấy ở bao nhiêu chỗ) → **số câu**
+    (gặp bao nhiêu lâu) → **chương sớm nhất** (giọng người nghe làm quen trước) → tên giọng
+    (để hai lần chạy cho cùng một câu trả lời). `lines` là tuỳ chọn: thiếu nó thì hành vi lùi về
+    đúng như cũ, nên chỗ gọi nào chưa có số câu vẫn chạy.
+
+    Người dưới `min_chapters` bỏ qua: với hai chương thì "đa số" là một đồng xu, và đúc lại một
+    chương vì đồng xu là phí GPU.
     """
     result: dict[str, tuple[str, dict[str, set[str]]]] = {}
+    line_totals = lines or {}
     for name, voices in across.items():
         total = sum(len(chapters) for chapters in voices.values())
         if total < min_chapters:
             continue
-        majority = sorted(voices.items(), key=lambda kv: (-len(kv[1]), kv[0]))[0][0]
+        per_voice_lines = line_totals.get(name, {})
+
+        def _rank(item: tuple[str, set[str]]) -> tuple[int, int, str, str]:
+            voice, chapters = item
+            return (
+                -len(chapters),
+                -int(per_voice_lines.get(voice, 0)),
+                min(chapters) if chapters else "",
+                voice,
+            )
+
+        majority = sorted(voices.items(), key=_rank)[0][0]
         minority = {voice: set(chapters) for voice, chapters in voices.items() if voice != majority}
         if minority:
             result[name] = (majority, minority)
@@ -252,7 +294,11 @@ def main(argv: list[str]) -> int:
         _say(" ".join(sorted(inside)))
         return 0
     if args.across:
-        minority = minority_chapters(across, min_chapters=args.min_chapters)
+        minority = minority_chapters(
+            across,
+            min_chapters=args.min_chapters,
+            lines=lines_by_name_voice(rows),
+        )
         _say(" ".join(recast_arguments(minority, chapter_batches())))
         return 0
 
@@ -287,7 +333,11 @@ def main(argv: list[str]) -> int:
                 shown = ", ".join(sorted(in_chapters)[:6])
                 more = " ..." if len(in_chapters) > 6 else ""
                 _say(f"      {voice:34s} {len(in_chapters):3d} chương: {shown}{more}")
-        minority = minority_chapters(across, min_chapters=args.min_chapters)
+        minority = minority_chapters(
+            across,
+            min_chapters=args.min_chapters,
+            lines=lines_by_name_voice(rows),
+        )
         arguments = recast_arguments(minority, chapter_batches())
         if arguments:
             _say("")
