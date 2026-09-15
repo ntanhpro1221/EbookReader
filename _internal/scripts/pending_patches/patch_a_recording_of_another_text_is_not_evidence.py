@@ -255,29 +255,10 @@ s = s.replace(OLD_PIPELINE_IMPORT, NEW_PIPELINE_IMPORT, 1)
 io.open(p, "w", encoding="utf-8", newline="\n").write(s)
 print(f"da va {p}")
 
-# ---------------------------------------------------------------- 4. so lieu sai trong chu thich
-p = root / "scripts" / "boundary.sh"
-s = io.open(p, encoding="utf-8").read()
-OLD_COST = '''# duoc. Lo 1 cuon 2 chet dung nhu the luc 10:26 ngay 14-09 (doan cong thuc chuong 025) va ranh gioi chay
-# lai cung chet lai. Dat lai dung nhung doan ay ve cho thu; cong kiem van nguyen (mot ban thu cua van ban
-# khac KHONG duoc dung lai).
-#
-# Chay VO DIEU KIEN, khong chi khi vua ap ban va: mot ranh gioi chay lai sau khi chet co hang cho rong
-# (apply_all da tu rut) ma project van con lech. Toan ky: khong lech thi khong ghi gi, ~40 giay cho 3.705
-# doan. Chi project lo - mot lo da tag va ghep roi thi ban thu la bang chung da dong.'''
-NEW_COST = '''# duoc. Lo 1 cuon 2 chet dung nhu the luc 10:26 ngay 14-09 (doan cong thuc chuong 025) va ranh gioi chay
-# lai cung chet lai. Dat lai dung nhung doan ay ve cho thu; cong kiem van nguyen (mot ban thu cua van ban
-# khac KHONG duoc dung lai).
-#
-# Chay VO DIEU KIEN, khong chi khi vua ap ban va: mot ranh gioi chay lai sau khi chet co hang cho rong
-# (apply_all da tu rut) ma project van con lech. Toan ky: khong lech thi khong ghi gi, va DO duoc 03:50
-# ngay 16-09: 2,54 giay ca script cho 3.705 doan, trong do 1,15 giay la import - tuc phep quet ~1,4 giay,
-# ~0,38 ms moi doan. (Con so "~40 giay" o day truoc kia la phong doan cua toi, khong phai do.)
-# Chi project lo - mot lo da tag va ghep roi thi ban thu la bang chung da dong.'''
-assert s.count(OLD_COST) == 1, "khong khop chu thich buoc 2b"
-s = s.replace(OLD_COST, NEW_COST, 1)
-io.open(p, "w", encoding="utf-8", newline="\n").write(s)
-print(f"da sua so lieu trong {p}")
+# Phan sua chu thich `boundary.sh` DA BI RUT khoi ban va nay (05:55 ngay 16-09): chinh
+# `boundary.sh` la thu chay `apply_all.py`, va bash doc script dan dan theo offset file - sua mot
+# .sh dang chay co the lam lech offset va cat mot dong lam hai. Con so da duoc sua bang mot commit
+# binh thuong luc khong co ranh gioi nao chay. Dung them lai vao day.
 
 # ---------------------------------------------------------------- 5. bai kiem
 TEST = '''"""Một bản thu được làm từ chuỗi nói KHÁC thì recovery phải đặt lại, không giữ.

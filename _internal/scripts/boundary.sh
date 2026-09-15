@@ -283,8 +283,10 @@ fi
 # khac KHONG duoc dung lai).
 #
 # Chay VO DIEU KIEN, khong chi khi vua ap ban va: mot ranh gioi chay lai sau khi chet co hang cho rong
-# (apply_all da tu rut) ma project van con lech. Toan ky: khong lech thi khong ghi gi, ~40 giay cho 3.705
-# doan. Chi project lo - mot lo da tag va ghep roi thi ban thu la bang chung da dong.
+# (apply_all da tu rut) ma project van con lech. Toan ky: khong lech thi khong ghi gi, va DO duoc 03:50
+# ngay 16-09: 2,54 giay ca script cho 3.705 doan, trong do 1,15 giay la import - tuc phep quet ~1,4 giay,
+# ~0,38 ms moi doan. (Con so "~40 giay" o day truoc kia la phong doan cua toi, khong phai do.)
+# Chi project lo - mot lo da tag va ghep roi thi ban thu la bang chung da dong.
 py scripts/resync_spoken_text.py "$BATCH_PROJECT" --apply >> "$LOG" 2>&1 || {
   say "resync chuoi noi that bai - xem $LOG. Dung ca chuoi."
   exit 1
