@@ -34,10 +34,15 @@ from ebook_reader.io_utils import ffmpeg_executable, run_hidden  # noqa: E402
 from ebook_reader.text_processing import sha256_file  # noqa: E402
 
 try:
-    from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
+    from scripts.book_paths import BOOK, SOURCE_DIR as SOURCE, VERSIONS  # noqa: E402
 except ImportError:  # chạy trực tiếp: python scripts/x.py
-    from book_paths import BOOK, VERSIONS  # noqa: E402
-SOURCE = Path(r"D:\Novels\Tools\Text")
+    from book_paths import BOOK, SOURCE_DIR as SOURCE, VERSIONS  # noqa: E402
+# `SOURCE` từng ghim cứng `D:/Novels/Tools/Text` - thư mục nguồn CŨ của cuốn 1, bị xoá ngày
+# 13-09 và khôi phục sang `Ebook Reader/Text`. Hệ quả im lặng: `_expected()` đọc một thư mục
+# không tồn tại nên trả về rỗng, và phép kiểm "nguồn có N chương, **thiếu M**" chưa bao giờ
+# chạy cho cuốn nào - kể cả cuốn 2, vốn chưa từng dùng đường dẫn ấy. Tìm ra 00:15 ngày
+# 2026-09-16, cùng họ với `before_a_batch._versions` và bộ canh của `apply_all` đã sửa cùng
+# ngày: mỗi lần `book_paths` dẹp một đường dẫn chép tay, phải đi tìm những chỗ còn lại.
 
 # Tên "đĩa" của cả cuốn sách. Mặc định là một chỗ giữ chỗ: tên thật của truyện KHÔNG có ở đâu
 # trong dữ liệu - `book.title` của mỗi project là slug của lô (`lo01b`, `lo05`), và dòng đầu của
@@ -326,10 +331,42 @@ def retag_needed(copied_now: bool, want: dict[str, str], before: dict | None) ->
     return dict((before or {}).get("tags") or {}) != dict(want)
 
 
+NOT_A_CHAPTER_FILE = "not_a_chapter.txt"
+
+
+def not_a_chapter(source: Path = None) -> set[str]:
+    """Những file nguồn KHÔNG phải chương truyện, đọc từ `<nguồn>/not_a_chapter.txt`.
+
+    Nguồn của một bộ truyện đăng mạng có lẫn thứ không phải truyện, và không cổng nào bắt được
+    vì mỗi file tự nó là một file .txt hợp lệ. Ca thật, tìm ra 00:10 ngày 2026-09-16 trên cuốn
+    1: `000.txt` là một bài **"Chuyên mục bổ mắt"** dài 183 byte nói về fan art, và nó đã thành
+    `000.mp3` dài **6 giây** — tức thứ **đầu tiên** người nghe mở cuốn sách ra là lời nhắn về
+    ảnh fan art. Cuốn 2 có bốn file cuối (911–914) là **hồ sơ nhân vật** ("01 - John",
+    "02 - Maskelyne"…), chưa tới lượt sản xuất.
+
+    Danh sách nằm **cạnh nguồn**, không nằm trong mã: nó là một câu về bộ truyện ấy, và mỗi
+    cuốn có câu trả lời riêng. Một dòng một số chương (đúng tên file không đuôi); `#` là chú
+    thích. Không có file thì không loại gì.
+    """
+    folder = SOURCE if source is None else source
+    listing = folder / NOT_A_CHAPTER_FILE
+    if not listing.is_file():
+        return set()
+    out: set[str] = set()
+    for line in listing.read_text(encoding="utf-8").splitlines():
+        text = line.split("#", 1)[0].strip()
+        if text:
+            out.add(text)
+    return out
+
+
 def _expected() -> list[str]:
     if not SOURCE.is_dir():
         return []
-    return sorted(path.stem for path in SOURCE.glob("*.txt"))
+    # Chính file danh sách cũng là một `.txt` trong thư mục nguồn, nên nó phải tự loại mình -
+    # bản đầu đếm nó thành chương và cuốn 1 báo "nguồn có 478 chương" thay vì 477.
+    skip = not_a_chapter() | {Path(NOT_A_CHAPTER_FILE).stem}
+    return sorted(path.stem for path in SOURCE.glob("*.txt") if path.stem not in skip)
 
 
 def main(argv: list[str]) -> int:
@@ -363,6 +400,20 @@ def main(argv: list[str]) -> int:
     if not found:
         _say("Không tìm thấy chương nào đã xuất bản.")
         return 2
+
+    # Loại những file nguồn không phải chương truyện, và **nói ra** cái bị loại: một cuốn sách
+    # âm thầm ngắn đi là một cuốn sách không giải thích được. Xem `not_a_chapter`.
+    skip = not_a_chapter()
+    dropped = sorted(title for title in found if title in skip)
+    for title in dropped:
+        _say(f"bỏ chương {title}: nguồn khai trong {NOT_A_CHAPTER_FILE} rằng đây không phải chương")
+        found.pop(title, None)
+    orphans = sorted(
+        path.name for path in args.out.glob("*.mp3") if path.stem in skip
+    ) if args.out.is_dir() else []
+    if orphans:
+        _say(f"CÒN TRONG SÁCH {len(orphans)} file của những chương vừa bị loại: {', '.join(orphans)}")
+        _say("  Script này không xoá file trong sách; xoá tay rồi ghép lại, hoặc để nguyên nếu muốn giữ.")
 
     winners: dict[str, dict] = {}
     contested = 0

@@ -3204,3 +3204,79 @@ giọng, và người nghe mất nhân vật chứ không chỉ lẫn nhân vậ
 Ước cái giá nếu cắt: tiết kiệm ~2,8 giờ mỗi lô × 19 lô còn lại ≈ **1,5 ngày**, đổi lấy khoảng **2.000 câu
 sai người nói** trên cả cuốn 2 (38 lỗi/1.650 đoạn × 87.000 đoạn). **Đừng cắt.** Ghi con số ở đây vì người
 đọc bảng thời gian sẽ thấy "65% cho một lượt kiểm" và muốn cắt — số liệu nói ngược.
+
+## 2026-09-16, 00:00–00:40 — ba câu trả lời của chủ sách, và thứ ĐẦU TIÊN người nghe cuốn 1 mở ra là một lời nhắn về fan art
+
+Chủ sách trả lời ba câu đang chờ: **(1)** tên đĩa — "chỉ là bản test, dựa vào nội dung mà tự tìm, không tìm
+được thì thôi"; **(2)** giọng miền Trung cho nhân vật phụ — **không**; **(3)** cuốn 1 quay lại sản xuất — **có**.
+
+### Tên truyện cuốn 2: tìm ra từ chính văn bản
+
+| dấu hiệu | số file |
+|---|---|
+| `Lucien Evans` | 266 |
+| `Arcana` | 271 |
+| `Aalto` | 230 |
+| `Hiệp hội Nhạc sĩ` | 45 |
+| `Hạ Phong` (chương 000, 024, 056, 123…) | 10 |
+
+Chương 000 mở bằng **Hạ Phong** chết trong giàn hỏa thiêu rồi tỉnh lại — đó là tên gốc (夏风) trước khi xuyên
+không thành **Lucien Evans**. Bộ ấy là 《奥术神座》, tiếng Việt **"Ma Pháp Thần Toạ"**. Đã ghi thẻ `album` cho
+cả **139 chương**, kiểm lại sạch. Cuốn 1 thì **không** nhận ra được (manh mối: "Học viện Apex", nhân vật game
+"Michael Godswill", người kể là Juliana) nên để nguyên `"Sách nói"` — đúng lệnh "không tìm được thì thôi".
+
+### Kho giọng: đóng mục, không mở vùng Trung
+
+Chủ sách trả lời **không**, nên `CASTING_REGIONS` giữ nguyên `{Nam, Bắc}` và kho nam vẫn 14 bậc cho 55 người
+nam có tên. Mục hàng chờ đã đóng bằng quyết định ấy; cái giá đã ghi ở đó (3,9 người một giọng) là cái giá
+được chấp nhận, không phải một việc chưa làm.
+
+### Khuyết tật nặng nhất tìm được hôm nay: `000.mp3` của cuốn 1
+
+`Text/000.txt` là một bài **"Chuyên mục bổ mắt"** dài 183 byte nói về ảnh fan art. Nó đã thành một chương
+audio dài **6 giây**, và vì đánh số theo file nguồn, nó là **thứ đầu tiên người nghe mở cuốn sách ra**.
+Không cổng nào bắt được: file `.txt` hợp lệ, chương `completed`, MP3 đúng thời lượng so với nguồn của nó.
+Cùng thư mục còn `001.txt` = bảng "Hệ Thống Sức Mạnh" (7,2 phút) — nội dung thật, không phải chương; để lại.
+
+**Cơ chế sửa, dùng được cho cả hai cuốn:** `not_a_chapter.txt` nằm **cạnh nguồn** (một câu về bộ truyện ấy,
+không phải một hằng số trong mã), một dòng một số chương, `#` là chú thích. `assemble_book.py` đọc nó, loại
+những chương ấy, và **nói ra** cả cái bị loại lẫn file mồ côi còn nằm trong sách — nó không tự xoá file
+trong sách. Nội dung hai file (để dựng lại được, vì `/Text/` và `/Text_Tmp/` bị gitignore):
+
+    Text/not_a_chapter.txt       ->  000            (001 để lại, có ghi lý do)
+    Text_Tmp/not_a_chapter.txt   ->  (không loại gì; 911-914 là hồ sơ nhân vật, ghi dạng chú thích)
+
+Cuốn 1 giờ **260 chương** (thêm 8 chương 253–260 mà lô 10 đã làm xong từ trước), `000.mp3` đã ra khỏi sách
+(bản gốc vẫn còn trong project `v0.2.0-lo01v`), và `--verify` sạch.
+
+### Và một lưới an toàn đã tắt từ 13-09 mà không ai biết
+
+`assemble_book.py:40` ghim cứng `SOURCE = D:/Novels/Tools/Text` — thư mục nguồn **cũ** của cuốn 1, bị xoá
+ngày 13-09. Nên `_expected()` đọc một thư mục không tồn tại, trả về rỗng, và phép kiểm **"nguồn có N chương,
+thiếu M"** chưa bao giờ chạy cho cuốn nào — kể cả cuốn 2, vốn chưa từng dùng đường dẫn ấy. Sửa để lấy từ
+`book_paths`, và nó nói ngay:
+
+    cuon 1:  nguồn có 477 chương; thiếu 217
+    cuon 2:  nguồn có 915 chương; thiếu 776   -> thiếu: 082, 140, 141, ...
+
+`082` là chương chưa bao giờ có bản thu. Lưới này lẽ ra phải nói câu ấy từ hôm 14-09.
+
+Đây là **chỗ thứ ba** cùng họ trong một ngày (`before_a_batch._versions`, bộ canh của `apply_all`, và đây).
+Bài học đã ghi hai lần và giờ ghi lần thứ ba: **mỗi lần `book_paths` dẹp một đường dẫn chép tay, phải đi tìm
+những chỗ còn lại ngay hôm ấy** — chúng không tự hiện ra, chúng chỉ im lặng.
+
+### Cuốn 1 quay lại: lô 10 KHÔNG resume được nữa, và đó là đúng
+
+`_validate_resume_stage_fingerprints` chặn đúng như thiết kế: vân tay `analysis_casting_v27` của lô 10
+(`77314576…`) đã khác cây hiện tại (`3c65f42a…`) vì `character_registry.py` bị vá tối nay, và thông điệp của
+nó nói thẳng cách đi tiếp: *"create a clean project so stale speaker and voice assignments cannot be
+republished"*. Nên đường đi của cuốn 1 là:
+
+1. **xong** — ghép 8 chương lô 10 đã làm (253–260) vào sách: 253 → 260 chương.
+2. project mới cho **261..278** (18 chương, ~5 giờ GPU). `pin_the_book_cast` giữ giọng theo sách 260 chương,
+   nên đúc lại không làm ai đổi giọng.
+3. rồi lô 11–16 theo `docs/PRODUCTION_PLAN.md` (chương 279..477).
+
+Một cuốn một lúc, nên bước 2 phải chờ một cửa sổ GPU: lô 4 cuốn 2 đang bay tới ~11:00 rồi ranh giới 4. Mặc
+định tôi giữ: ranh giới 4 chạy xong thì **chạy 261..278 của cuốn 1 trước** rồi mới tới lô 5 cuốn 2 — nó nhỏ
+nhất và nó là thứ chặn cuốn 1.
