@@ -2993,3 +2993,22 @@ phân tích thì lô ấy **mất phân tích**. Lô 4 khởi động ở bướ
 Bộ test đầy đủ đã chạy trên một bản sao có **cả hai** bản vá của hàng chờ cùng áp (`patch_two_pins…` +
 `patch_the_pause_budget…`) — đúng trạng thái cây mà `apply_all --apply` sẽ kiểm ở bước 1. Bản vá ghim trước
 đó chỉ được kiểm bằng 90 test dàn giọng, không bằng cả bộ.
+
+## 2026-09-15, 19:18–19:24 — ranh giới 3 áp cả hai bản vá, và một dự đoán ghi trước khi biết kết quả
+
+Lô 3 xong lúc ~19:18 (40/41 chương; 131 hỏng). Ranh giới tự đi tiếp, không cần ai:
+
+- **bước 1:** áp `patch_two_pins_do_not_share_a_chapter` + `patch_the_pause_budget_cannot_exceed_the_silence`,
+  **bộ test đầy đủ xanh** (0 dòng `FAILED` trong log ranh giới).
+- **bước 2b:** `resync_spoken_text` — *"không đoạn nào lệch chuỗi nói"*. Đúng như phải thế: bản vá nhịp
+  không chạm vào chuỗi nói, khác bản vá công thức hôm qua.
+- **bước 2:** commit `3443758`, tag `v0.3.0-lo03v`.
+- **bước 3:** đang đúc lại chương **131** (`lo03v_131_f55c81d760`) — đây là phép thử GPU thật của bản vá,
+  vì 131 là chương đã mất bản thu đúng vì cận trên của thước nhịp.
+- **bước 4** sẽ đúc lại 5 chương va chạm pin: **110 112 114 130 134** (đúng 5 chương đã đo lúc 14:23).
+
+**Dự đoán, ghi lúc 19:35 khi chương 131 mới phân tích được 23/126 đoạn:** đoạn
+`“Chà… Cậu ‘nếu’ nhiều thật đấy, Lucien.”` sẽ có bản thu ở một hai lần thử đầu, với nhịp *charged* quanh
+26 kt/s, nhịp *nghe* trong dải 12,5–24,5, khoảng lặng đo được 0,3–0,6 giây, và `pace_outlier = 0`. Nếu nó
+**vẫn** trượt thì nguyên nhân không phải thước nhịp, và chỗ nhìn tiếp là ngoặc đơn lồng trong ngoặc kép
+làm ngữ điệu hỏng — đúng câu tôi đã ghi trong hàng chờ trước khi có bản vá.
