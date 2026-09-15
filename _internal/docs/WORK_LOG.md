@@ -3487,3 +3487,24 @@ nhận đúng tính chất một chiều của nó:
 
 Tức phép chặn chỉ cắn ở chỗ ngân sách đòi quá (câu thoại ngắn, như chương 082/131), còn câu dài thì không
 đổi một chút nào — đúng như 3.000 đoạn đã đo trước khi vá.
+
+### 01:55 — bản vá nhịp cứu 1 trên 290 đoạn, đo trên sản xuất thật
+
+Lô 4 đang tổng hợp (3 chương xong, 347 đoạn có bản thu, 0 thất bại, 0 ngoài băng nhịp). Đếm trên 290 đoạn
+đầu đã có số đo:
+
+    ngan sach bi khoang lang cat bot:       29  (10%)
+    CUU  (thuoc cu ket toi, thuoc moi tha):  1
+    ca hai thuoc deu noi qua nhanh:          0
+
+Đoạn được cứu: `“Hai người là gia đình nhà Hunt đến từ Bonn sao?”` — **26,40 → 20,24 kt/s**, khoảng lặng đo
+được 0,16 giây. Thước cũ (26,40 > cận trên 24,5) sẽ từ chối nó, thu lại tới 10 lần với 10 seed khác, và nếu
+cả 10 lần vẫn ~26 kt/s thì bộ chia từ chối ("câu quá ngắn để chia an toàn") và **chương mất một câu** —
+đúng con đường đã giết chương 082 và 131.
+
+Tỉ lệ 1/290 (0,34%) khớp với phép đo trước khi vá: 274/3.000 đoạn bị cắt ngân sách (9%) nhưng chỉ ít đoạn
+thực sự vượt cận. Quy ra: ~13 đoạn mỗi lô, và ~250 đoạn cho 800 chương còn lại của cuốn 2 — mỗi đoạn ấy
+trước đây là 10 lần thu lại cộng một nguy cơ mất chương.
+
+Và `0` ở dòng cuối là điều kiện an toàn: không đoạn nào được tha trong khi **cả hai** thước đều nói nó
+nhanh. Cửa vẫn đóng với bản thu thật sự vội.
