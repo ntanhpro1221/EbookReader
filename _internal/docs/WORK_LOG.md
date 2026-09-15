@@ -3298,3 +3298,28 @@ dựng lại.
 **Phần giữ lại** là chỗ sửa thật và không liên quan tới biên tập: `SOURCE` lấy từ `book_paths` thay vì ghim
 cứng `D:/Novels/Tools/Text`. Lưới "nguồn có N chương, thiếu M" đã tắt từ 13-09 và giờ chạy cho cả hai cuốn —
 cuốn 2 lập tức chỉ ra `082`. Bốn test mới khoá cả hai điều: đường dẫn từ `book_paths`, và **không lọc gì**.
+
+### 01:10 — tên hai cuốn, tìm bằng nội dung chứ không bằng phỏng đoán
+
+Chủ sách dặn: chương 000 không phải nội dung thì **dựa vào chương khác** mà tìm. Làm lại, và lần này có kết quả.
+
+**Cuốn 2 — tìm ra tên thật.** `Lucien Evans` (266 file), `Arcana` (271), `Aalto` (230), `Hiệp hội Nhạc sĩ`
+(45), và mảnh quyết định: chương 000 mở bằng **Hạ Phong** chết trong giàn hỏa thiêu rồi tỉnh lại — tên gốc
+(夏风) trước khi xuyên không thành Lucien Evans. Bộ ấy là 《奥术神座》 → **"Ma Pháp Thần Toạ"**. Đã ghi thẻ
+cho cả 139 chương.
+
+**Cuốn 1 — nguồn KHÔNG có tên bộ ở đâu.** Đã soát: tiêu đề chương ở 7 mốc (`002, 050, 120, 200, 300, 400,
+477`) đều chỉ là `Chương N: …`; grep `tác giả|dịch giả|nguồn:|tên truyện|nguyên tác|translator|author` trên
+cả 478 file không ra dòng siêu dữ liệu nào (chỉ ra những câu trong truyện có chữ "tác giả"); không có
+`Volume|Quyển|Arc` nào mang tên bộ. Nhưng **nội dung** thì khai rất rõ:
+
+    nguoi ke        Samael Kaizer Theosbane  (227 file)
+    game trong truyen  "Bien nien su Linh Gioi (Spirit Realm Chronicles)" - 20 tuyen chinh, 41 cai ket
+    nhan vat chinh cua game  Michael Godswill  (34 file)
+    boi canh        Hoc vien Apex  (74 file);  Juliana Vox (27), nha Draken (15), The Trieu Hoi (15)
+    tien de         "toi chet, chuyen sinh vao chinh tua game do, thanh ke da bat nay nhan vat chinh"
+
+Tôi **không** map được bộ ấy sang một tên xuất bản nào mà dám chắc, nên không bịa. Thay vào đó đặt tên đĩa
+bằng thứ **suy ra được từ nội dung**: **"Biên niên sử Linh Giới"** — tên tựa game mà cả câu chuyện xảy ra
+bên trong. Đã ghi cho 261 chương. Sai thì một lệnh là đổi:
+`source scripts/book1.env && python scripts/assemble_book.py --apply --album "Tên thật"`.
