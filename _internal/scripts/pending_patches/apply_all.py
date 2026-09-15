@@ -32,8 +32,11 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Xếp cho RANH GIỚI 4, không phải ranh giới 3: `analysis.py` nằm trong
+# `ANALYSIS_CASTING_IMPLEMENTATION_FILES`, nên nó chỉ được đổi ở một ranh giới TRƯỚC khi một lô
+# bắt đầu phân tích. Lô 4 đã bay lúc 20:55 ngày 15-09 nên tên này vào hàng sau đó: `before_a_batch`
+# từ chối khởi động khi hàng chờ còn tên, và xếp sớm hơn sẽ chặn đúng bước 6 của ranh giới 3.
+ORDER: tuple[str, ...] = ("patch_a_pronoun_is_not_a_character.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
