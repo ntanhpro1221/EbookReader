@@ -3399,3 +3399,23 @@ thấy lô của **cuốn 2** đang bay và không cho khởi động cuốn 1. 
     source scripts/book1.env
     bash scripts/launch_batch.sh 10 --range 261..278 \
          --seed-from "D:/Novels/Audiobooks/_versions/v0.2.0-lo10/lo10_24893cbe8c"
+
+### 00:35 — nguồn khôi phục của cuốn 1 có đúng là thứ 261 chương đã đọc không? Có, từng byte
+
+Trước khi cho cuốn 1 chạy tiếp, một rủi ro chưa ai kiểm: nguồn của nó bị **xoá** ngày 13-09 và khôi phục từ
+Thùng rác sang `Ebook Reader/Text`. Nếu bản khôi phục lệch dù một ký tự thì 18 chương mới sẽ được đọc từ
+một văn bản khác với 261 chương cũ, và không cổng nào bắt được — chương nào tự nó cũng hợp lệ.
+
+Đối chiếu `chapters.input_sha256` + `input_size` đã lưu trong project với file nguồn hiện tại:
+
+    755 dong chuong co sha256 da luu   ->  701 khop,  0 thieu file,  54 lech
+    261 chuong DANG TRONG SACH         ->  261 khop tung byte,  0 lech,  0 thieu sha256
+
+54 dòng lệch **toàn bộ** nằm trong các project thí nghiệm cũ (`alpha10`, `alpha11`, `alpha12`) và **không**
+có chương nào trong sách — khớp đúng với việc `repoint_the_source.py` hôm 13-09 bỏ qua cả project khi thấy
+một file lệch (109/118 project, 701 chương được trỏ lại).
+
+Và 18 file sắp đọc đều có mặt, kích thước 7,9–24,5 KB, tiêu đề đúng dạng chương
+(`261 → "Chương 260: Đền Thờ Cuộc Nổi Dậy Đầu Tiên"`, `278 → "Chương 277: Lửa Trại [II]"`).
+
+Nên cuốn 1 chạy tiếp được, và nó sẽ đọc **đúng** văn bản mà 261 chương trước đã đọc.
