@@ -2632,3 +2632,50 @@ project vá (~12 phút GPU) và không đụng vào bất kỳ ngưỡng phán x
 trong lô của chúng.
 
 Hiện tại: bước 3 ranh giới sẽ thu lại cả hai chương với seed mới (đúng đường đã cứu chương 035 hôm 14-09).
+
+## 2026-09-15, 08:30–08:50 — bảy đoạn "đọc vội" chưa bao giờ đọc vội: thước nhịp tính dấu ngoặc là khoảng lặng
+
+Project vá chương 082 chạy lúc 03:37 và **hỏng lại**: thu thêm 10 lần nữa (tổng 22 lần), 31–32,5 kt/s.
+Đó đúng là điều kiện tôi tự đặt lúc 02:10 để được sửa mã. Nhưng trước khi sửa, GPU đang rảnh nên tôi
+làm phép thử — và nó đảo ngược toàn bộ chẩn đoán.
+
+`scripts/probe_a_rushed_line.py` sinh lại đúng đoạn ấy với bốn dạng văn bản, cùng tập seed:
+
+| văn bản | thời lượng (3–4 lần) | kt/s | phán quyết |
+|---|---|---|---|
+| `“Tôi không biết ‘xoay’ đâu, Felicia.”` (gốc) | 2,16 / 2,16 / 2,24 / 2,00 | 29,0–32,5 | NGOÀI BĂNG |
+| `“Tôi không biết xoay đâu, Felicia.”` | **2,16 / 2,16 / 2,24 / 2,00** | 18,4–22,2 | đạt |
+| `Tôi không biết xoay đâu, Felicia.` | **2,16 / 2,16 / 2,24** | 15,4–16,2 | đạt |
+| `Tôi không biết ‘xoay’ đâu, Felicia.` | **2,16 / 2,16 / 2,24** | 22,9–24,6 | 1/3 đạt |
+
+**Thời lượng giống hệt nhau ở mọi dạng.** Giọng đọc phát ra đúng một âm thanh; dấu ngoặc không tốn
+một giây nào. Cái đổi là **con số**, và số học khớp chính xác tới hai chữ số thập phân:
+
+    pause_seconds = min(0,276 × số nhóm dấu câu, 0,60 × thời lượng)
+    rate = ký_tự / (thời_lượng − pause_seconds)
+
+    gốc:        5 nhóm (`“` `‘` `’` `,` `.”`) → 1,38 s, bị kẹp ở 0,60×2,16 = 1,296 → 26/0,864 = 30,09 ✓
+    bỏ ngoặc:   2 nhóm (`,` `.`)             → 0,552 s                        → 26/1,608 = 16,17 ✓
+
+Tức với một câu thoại hai giây, thước đo **giả định 60% thời lượng là khoảng lặng** vì đếm cả bốn dấu
+ngoặc. Bảy đoạn chưa bao giờ có bản thu trong cả hai cuốn đều là câu thoại **ngắn** — và tất cả đều bị
+kết tội bởi khoảng lặng không tồn tại. Bản thu vốn không hỏng; chương 082 và 090 mất vì một phép tính.
+
+**Rút lại đề xuất tôi đã xếp hàng lúc 02:10** ("xin giọng đọc chậm lại"): `row["pace"]` **không** tới bộ
+sinh — `_retry_in_normal_pace_band` nói rõ *"the take is the same, only the floor it is judged against
+moves"*, và ba băng (`slow` 7–19, `normal` 12,5–24,5, `fast` 14–30) chỉ là cửa sổ chấp nhận. Xin `slow`
+còn **thu hẹp** cận trên xuống 19. Đề xuất ấy sai vì tôi chưa đọc đủ; nó đã bị gạch trong hàng.
+
+**Và cách vá hiển nhiên cũng sai — đo trước mới thấy.** Bỏ dấu ngoặc khỏi `PAUSE_GROUP_PATTERN`, tính
+lại trên **30.474 đoạn** đã lưu: **248 đoạn chuyển từ đạt sang NGOÀI BĂNG** (chúng thành "quá chậm" vì
+ngân sách nghỉ co lại) và chỉ **3 đoạn** được cứu. Ngân sách nghỉ được chỉnh chuẩn *cùng với* dấu ngoặc,
+nên rút chúng ra làm lệch cận dưới trên mọi câu thoại dài. Không làm.
+
+**Hướng đúng, và nó cần phép đo riêng trước khi thành mã:** chặn ngân sách nghỉ bằng **khoảng lặng có
+thật trong sóng âm** — `pause = min(0,276 × nhóm, khoảng_lặng_đo_được)`. Câu dài nghỉ thật thì không đổi
+gì; câu ngắn bị tính oan thì ngân sách về gần 0 và nhịp tụt xuống trong băng. Phép đo cần làm: lấy mẫu
+các đoạn đã lưu, đọc WAV, so khoảng lặng thật với ngân sách theo từng dải thời lượng. Xếp hàng, chưa vá.
+
+Hiện tại: ranh giới 2 → 3 đã thả lại 08:45, đang ở bước 3 (vá 082 và 090 — **sẽ hỏng lại**, vì mã chưa
+đổi), sau đó đúc lại chương 022 của lô 1 với bản vá nhóm NPC vô danh, rồi phóng lô 3 và ghép sách. Sách
+lô 2 sẽ thiếu hai chương cho tới khi thước nhịp được sửa; một ranh giới sau đó vá lại là đủ.

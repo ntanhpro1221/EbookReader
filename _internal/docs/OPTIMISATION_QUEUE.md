@@ -2168,3 +2168,25 @@ bốn bài test đều xanh và chương vẫn hỏng.
   project vá ~12 phút; ước ~17 ca cho cả cuốn 2. **Không** nới cận trên và **không** thêm thước thứ hai:
   đo được nhịp âm tiết của hai ca đêm nay là 7,2 và 7,3 (trung vị kho 4,7) — giọng đọc vội thật.
   Chạm `pipeline.py` (file khoá) → qua hàng chờ, và test phải dùng hai đoạn thật ghi ở WORK_LOG 02:10.
+
+## Thước nhịp và dấu ngoặc (2026-09-15, 08:50) — GẠCH một mục cũ, thêm một mục đúng
+
+- ~~"Xin giọng đọc CHẬM trước khi bỏ một đoạn vì nhịp"~~ (xếp 02:10) — **SAI, RÚT LẠI**. `row["pace"]`
+  không tới bộ sinh; nó chỉ chọn cửa sổ chấp nhận (`slow` 7–19 / `normal` 12,5–24,5 / `fast` 14–30), nên
+  "xin chậm" chỉ **thu hẹp** cận trên. Xem WORK_LOG 08:50.
+- ~~"nới cận trên"~~ — cũng không, nhưng lý do đổi: không phải vì bản thu vội thật (nó **không** vội), mà
+  vì chỗ sai nằm ở ngân sách nghỉ, không ở ngưỡng.
+- **CHẶN NGÂN SÁCH NGHỈ BẰNG KHOẢNG LẶNG CÓ THẬT** (ưu tiên cao — đang làm mất chương).
+  `audio_io`: `pause_seconds = min(PAUSE_GROUP_SECONDS × pause_group_count(text), duration × MAX_PAUSE_FRACTION)`
+  đếm cả `" ' “ ” ‘ ’` là nhóm nghỉ, nhưng phép thử GPU cho thấy giọng đọc **không nghỉ** ở dấu ngoặc:
+  bốn dạng văn bản khác nhau cho **cùng một thời lượng** tới hai chữ số thập phân. Với câu thoại 2 giây,
+  ngân sách ăn 60% thời lượng (bị kẹp bởi `MAX_PAUSE_FRACTION`) và nhịp bị thổi từ 16,17 lên 30,09 kt/s.
+  Hậu quả đã trả: **7 đoạn** trong cả hai cuốn chưa bao giờ có bản thu, **cả 7 là câu thoại ngắn**, và
+  chương 082 + 090 của lô 2 không lên sách.
+  **Không** bỏ dấu ngoặc khỏi mẫu: đo trên 30.474 đoạn thì 248 đoạn thành "quá chậm", chỉ 3 được cứu.
+  Đề xuất: thêm phép đo khoảng lặng thật (audio_io đã có sóng âm trong tay, và đã đo im lặng cho
+  `repeated_utterance_score`) rồi `pause = min(ngân_sách, khoảng_lặng_đo_được)`.
+  **Phép đo phải làm trước khi viết mã:** lấy mẫu đoạn đã lưu theo dải thời lượng, so khoảng lặng thật
+  với ngân sách; đếm lại số đoạn đổi phán quyết ở CẢ HAI cận. Chỉ vá khi số liệu nói nó chỉ cứu chứ không
+  giết. `audio_io.py` là file khoá → qua hàng chờ; áp ở một ranh giới rồi cho `boundary.sh N --recast`
+  vá lại 082/090.
