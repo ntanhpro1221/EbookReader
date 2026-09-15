@@ -54,9 +54,16 @@ def test_a_silent_crowd_lands_exactly_on_the_protagonist() -> None:
 
 
 def test_the_registry_notes_the_anonymous_groups_before_it_casts_them() -> None:
-    """Chỗ ghi phải nằm TRƯỚC lần `choose()` đầu tiên, không phải cạnh khối cast nhóm vô danh."""
+    """Chỗ ghi phải nằm TRƯỚC lần `choose()` đầu tiên, không phải cạnh khối cast nhóm vô danh.
+
+    Tìm **lời gọi** thật, không tìm chuỗi `allocator.choose(`: bản đầu của bài này dùng
+    `source.index("allocator.choose(")` và vỡ ngay khi một docstring mới nhắc tên hàm ấy (bản vá
+    `patch_two_pins_do_not_share_a_chapter` viết "đi qua `allocator.choose()`"), tức bài test
+    báo đỏ về một thứ hoàn toàn không đổi. Lời gọi thật xuống dòng ngay sau dấu mở ngoặc.
+    """
     source = (ROOT / "ebook_reader" / "character_registry.py").read_text(encoding="utf-8")
     note = source.index('f"ANONYMOUS_{anonymous_gender.upper()}"')
-    first_choose = source.index("allocator.choose(")
-    assert note < first_choose, "ghi chương cho nhóm vô danh phải đứng trước choose() đầu tiên"
+    call = re.search(r"allocator\.choose\($", source, re.MULTILINE)
+    assert call is not None, "không tìm thấy lời gọi allocator.choose(...) nhiều dòng"
+    assert note < call.start(), "ghi chương cho nhóm vô danh phải đứng trước choose() đầu tiên"
     assert re.search(r"for anonymous_gender, anonymous_gender_rows in anonymous_by_gender", source)

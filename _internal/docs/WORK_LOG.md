@@ -2784,3 +2784,49 @@ thăm ở lô 3, và bước 4 ranh giới sẽ thấy nếu nó thành va chạ
 
 Bốn test mới/đổi trong `test_pin_the_book_cast` (chia được khi không gặp; không chia được khi gặp; hai đề
 nghị mới cùng chia; pin cũ vẫn không bị lật), 135 test liên quan xanh.
+
+## 2026-09-15, 14:23–15:00 — pin giữ đúng giọng, nhưng đổi lấy 5 va chạm: cái giá của thay đổi 11:00, và bản vá cho nó
+
+Lô 3 khoá dàn giọng lúc ~14:1x. Đo ngay hai thứ:
+
+**Pin có hiệu lực, không cái nào bị lệch: 27 tôn trọng / 0 lệch.** Năm trong 10 người từng mang hai giọng
+có nói ở lô 3, và cả bốn người đã được ghim đều nhận **đúng** giọng đã ghim (OTHELLO, IVEN, CAMIL, EVANS);
+người thứ năm im lặng. CORELLA và WOLF vẫn chưa ghim được — đúng luật, vì người giữ giọng đa số của họ có
+cùng chương với họ.
+
+**Nhưng lô 3 có 5 va chạm cùng chương — cao nhất từ đầu cuốn (lô 1: 3, lô 2: 0) — và cả 5 là PIN GẶP PIN:**
+
+| chương | giọng | hai người |
+|---|---|---|
+| 12 | thanh_binh_f090 | Verdi (5 câu) + Christopher (2) |
+| 14 | thanh_binh_f090 | Verdi (3) + Christopher (10) |
+| 16 | thai_son_f087 | Rhine (6) + ORVARIT (1) |
+| 32 | thai_son_f108 | SMILE (1) + SARD (6) |
+| 36 | thai_son_f093 | Camil (2) + Nghe (1) |
+
+Đây là hệ quả trực tiếp của thay đổi 11:00 của tôi: `pin_the_book_cast` cho hai người **chưa từng cùng
+chương** chia một giọng, và lô mới là đúng nơi họ gặp nhau. Doanh nghĩa dự án xếp "hai người một giọng cùng
+chương" **nặng hơn** "một người đổi giọng giữa các chương", nên đặt như thế là **lỗ**: được 4, mất 5.
+
+**Và nó còn tệ hơn nếu để nguyên:** bước 4 ranh giới sẽ đúc lại 5 chương ấy, nhưng `launch_repair.sh` bây
+giờ **cũng** ghim (cùng thay đổi 11:00) → project đúc lại ghim y như cũ và **tái tạo đúng va chạm** ấy, đốt
+~12 phút GPU mỗi chương mà không sửa được gì. Đúng hình chương 022 hôm 14-09.
+
+**Chỗ hỏng thật:** `_pinned_profile_id` tôn trọng pin **vô điều kiện** — nó không hỏi "có ai khác cũng ghim
+giọng này và cũng nói trong chương này không". Ở thời điểm cast, phân tích đã xong nên bản đồ
+người-nói-theo-chương **có sẵn**; thiếu chỉ là một phép hỏi.
+
+**Bản vá `patch_two_pins_do_not_share_a_chapter.py`** (đã xếp hàng cho ranh giới 3 → 4): trước khi cast, bỏ
+pin của người **ít câu hơn trong cả lô** ở mỗi cặp (giọng, chương) có hai người ghim; người mất pin đi qua
+`allocator.choose()`, thứ đã tránh người cùng chương sẵn. Đặt sau phép kiểm "pin phải đúng phái" — một pin
+sai phái thì bỏ dù có va chạm hay không. Sáu test (người ít câu mất pin; hai pin không gặp nhau thì giữ cả;
+khác giọng cùng chương không đụng tới; người im lặng giữ pin để sang lô sau; ba pin một giọng giữ hai người
+không gặp nhau; không pin thì không làm gì). **90 test dàn giọng xanh** trên bản sao cách ly.
+
+Thứ tự ranh giới làm việc này đúng chiều: bước 1 áp bản vá → bước 4 đúc lại 5 chương **với** luật mới, nên
+lần đúc lại ấy sửa được thật.
+
+**Một test của tôi vỡ vì giòn, đã sửa:** `test_the_registry_notes_the_anonymous_groups_before_it_casts_them`
+so vị trí bằng `source.index("allocator.choose(")`, nên nó báo đỏ ngay khi docstring của bản vá mới nhắc tên
+hàm ấy. Giờ nó tìm **lời gọi thật** (`allocator.choose($` nhiều dòng, `re.MULTILINE`). Bài học: một test đọc
+mã nguồn phải neo vào thứ chỉ lời gọi mới có.
