@@ -2191,6 +2191,15 @@ bốn bài test đều xanh và chương vẫn hỏng.
   giết. `audio_io.py` là file khoá → qua hàng chờ; áp ở một ranh giới rồi cho `boundary.sh N --recast`
   vá lại 082/090.
 
+- **ĐÃ LÀM 15:00–16:20 ngày 15-09** mục trên, nhưng **không** theo đề xuất nguyên văn: chặn ngân sách ở cả
+  hai cận thì trên 3000 đoạn đã chốt có 274 đoạn bị cắt ngân sách và **2 đoạn "đạt → ngoài băng" ở cận
+  dưới**, nên bản vá chỉ dùng khoảng lặng đo được cho **cận TRÊN**; cận dưới giữ nguyên ngân sách.
+  `patch_the_pause_budget_cannot_exceed_the_silence.py` (hàng chờ ranh giới 3): `measured_silence_seconds`
+  (−35 dB **so với đỉnh**, quãng ≥ 50 ms) + `pace_is_outlier(..., fast_rate=)`. Đo trên 12 bản thu THẬT của
+  câu chương 082: **12/12 ngoài băng → 0/12**, nhịp 29–32,50 về 14,05–16,46. Xem PACE_METRIC.md mục
+  "Thước thứ hai" và WORK_LOG 15:00. Còn lại: sau ranh giới chạy
+  `bash scripts/launch_repair.sh 2 --chapters 082` (chương 131 do bước 3 tự lo).
+
 - **Mười người hai giọng qua cả sách (đo 2026-09-15 10:45) — GHIM trước, ĐÚC LẠI sau.**
   Danh sách đúc lại đã có: `--recast auto 1:017 1:020 1:022 1:047 1:048 2:056 2:060 2:061 2:062 2:092`
   (phía thiểu số của 6 người ≥5 chương; ~2 giờ GPU). **Nhưng kiểm `pin_the_book_cast` trước**: đúc lại là

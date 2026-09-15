@@ -2830,3 +2830,78 @@ lần đúc lại ấy sửa được thật.
 so vị trí bằng `source.index("allocator.choose(")`, nên nó báo đỏ ngay khi docstring của bản vá mới nhắc tên
 hàm ấy. Giờ nó tìm **lời gọi thật** (`allocator.choose($` nhiều dòng, `re.MULTILINE`). Bài học: một test đọc
 mã nguồn phải neo vào thứ chỉ lời gọi mới có.
+
+
+## 2026-09-15, 15:00–16:20 — ngân sách nghỉ đòi nhiều hơn khoảng lặng có thật: bản vá cứu 12/12 bản thu, giết 0
+
+Mục ưu tiên cao của hàng chờ tối ưu ("CHẶN NGÂN SÁCH NGHỈ BẰNG KHOẢNG LẶNG CÓ THẬT") đã làm xong, và làm
+đúng thứ tự hàng chờ đòi: **đo trước, vá sau**.
+
+### Chứng cứ cứu: 12 bản thu THẬT, qua đúng cửa thật
+
+`work/rushed_line_probe` của `lo02v_082` còn giữ 12 bản thu mà phép thử GPU sáng nay sinh ra cho đúng câu
+đã mất — `“Tôi không biết ‘xoay’ đâu, Felicia.”`, 22 lần thử, không lần nào có bản thu. Cho cả 12 đi qua
+`validate_audio_array` của **chính cây mã** (không phải mô phỏng lại phép tính):
+
+| | cây hiện tại | cây đã vá |
+|---|---|---|
+| ngoài băng | **12/12** | **0/12** |
+| nhịp | 29,02–32,50 kt/s | 14,05–16,46 kt/s (dải normal 12,5–24,5) |
+| ngân sách đòi | 1,20–1,34 s | — |
+| khoảng lặng đo được | — | 0,39–0,53 s |
+
+Con số 32,50 trùng khít từng chữ số với lời ghi `speech pace 32.50 chars/s` trong database của project ấy,
+nên phép tính này là phép tính của chính máy.
+
+### Chứng cứ không giết: 3000 đoạn đã chốt, và một phiên bản bản vá bị chính số liệu loại
+
+Bản đầu tôi định chặn ngân sách ở **cả hai** cận. `measure_a_silence_capped_pace.py` (mới, chỉ đọc) đo trên
+3000 đoạn đã chốt: 274 đoạn bị cắt ngân sách, 0 đoạn vượt dải an toàn, **2 đoạn "đạt → ngoài băng" ở cận
+dưới** (`“Chào, Felicia. Và… cậu ở đây sao, Lucien!”` 13,75 → 10,27 với sàn 12,5). Nên bản vá cuối **chỉ**
+dùng thước mới cho cận TRÊN; cận dưới giữ nguyên ngân sách, thứ sinh ra để bảo vệ đúng hai đoạn ấy.
+
+Vì `nhịp_nghe ≤ nhịp_cũ` luôn luôn, thay đổi là **một chiều**: chỉ bớt lời kết tội "đọc quá nhanh", không
+thêm được lời nào. Đó là đúng doanh nghĩa `pace_is_outlier` đã có (kết tội "chậm" chỉ khi cả chữ lẫn âm tiết
+cùng nói) và đúng họ với `spoken_speakable_chars`.
+
+Cần nói rõ một chỗ mà số liệu **không** nói được: cột "cứu" trên 3000 đoạn ấy là 0, và nó phải là 0 —
+kho bản thu đã lưu chính là tập **đã qua cửa**; đoạn bị ngân sách giết không còn WAV nào để đếm (đo thử:
+11.250 bản thu của cuốn 2, `pace_outlier=1` đúng 0 cái). Chứng cứ cứu chỉ có thể lấy từ bản thu bị từ chối,
+và 12 bản thu của phép thử GPU là chỗ duy nhất còn giữ chúng.
+
+### Bản vá
+
+`patch_the_pause_budget_cannot_exceed_the_silence.py` (xếp hàng thứ hai cho ranh giới 3 → 4):
+
+- `measured_silence_seconds(audio, sample_rate)` — tổng các quãng dưới **−35 dB so với đỉnh của chính bản
+  thu**, mỗi quãng ≥ 50 ms, cửa sổ 10 ms. Ngưỡng so với đỉnh chứ không phải dBFS tuyệt đối vì
+  `atomic_write_wav` gọi `validate_audio_array` **hai lần**, trước và sau khi cân âm lượng, và phép đo phải
+  cho cùng một câu trả lời ở cả hai lần — nếu không, cùng một bản thu đạt ở lần này rồi trượt ở lần kia.
+  Có test riêng cho tính bất biến ấy.
+- `pace_is_outlier(..., fast_rate=None)` — cận trên xét `fast_rate` khi chỗ gọi đưa tới.
+- `validate_audio_array` — tính `heard_rate` và đưa nó vào cận trên (cả cửa mềm lẫn dải an toàn cứng), ghi
+  thêm `measured_silence_seconds` + `chars_per_second_heard` vào `signal_json` để lần sau còn số mà đo.
+  `chars_per_second` giữ nguyên nghĩa cũ, nên thông điệp log và sàn/cận vẫn so cùng một thước.
+- So quãng bằng **số khung**, không bằng giây: 5 × 0,01 không đúng bằng 0,05 trong số thực nhị phân, nên một
+  quãng đúng bằng ngưỡng sẽ được tính hay không tùy lỗi làm tròn. `measure_a_silence_capped_pace.py` đã sửa
+  theo để phép đo là đúng phép đo mà mã dùng.
+
+11 test mới, trong đó 4 bài giữ đúng những ca thật: câu chương 082 (30,09 → 15,29), câu `“Chào, Felicia…”`
+ở cận dưới, bản thu **thật sự nhanh** vẫn bị từ chối (1,00 giây → 27,4 kt/s > 24,5), và phép đo bất biến
+với phép nhân âm lượng.
+
+**Bộ test đầy đủ trên bản sao cách ly: xanh, trừ 2 bài đo HÌNH CÂY** —
+`test_one_click_startup_contract` (cần `Ebook Reader.vbs`) và `test_doctor_...runtime_contract_checks` (cần
+`runtime/`), cả hai không được chép sang bản sao. Đã dựng **bản sao đối chứng chưa vá**: đúng 2 bài ấy cũng
+đỏ ở đó. Không phải do bản vá.
+
+Và một lần nữa đúng cái bẫy tôi tự ghi hôm qua: lần chạy đầu của bộ test trả **exit 0** trong khi pytest
+chưa chạy một bài nào (`--timeout=900` không có plugin, `echo exit=$?` lại đọc mã của `tail`). Xanh =
+exit 0 **và** `grep -c FAILED` = 0 trên log đầy đủ — và phải xem log, không chỉ xem mã trả về.
+
+### Còn phải làm sau khi ranh giới 3 áp bản vá
+
+- Chương **131** của lô 3: bước 3 của ranh giới tự đúc lại, và giờ nó có đường qua cửa.
+- Chương **082** của lô 2: không thuộc lô đang chạy nên ranh giới không tự lo. Sau ranh giới:
+  `bash scripts/launch_repair.sh 2 --chapters 082`.
+- Kiểm lại chương 090 của lô 2 đã có bản thu chưa (lần trước chữa bằng `lo02v_090`).

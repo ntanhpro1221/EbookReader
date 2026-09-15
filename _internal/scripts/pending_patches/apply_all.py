@@ -29,7 +29,12 @@ VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
 LEASE_STALE_SECONDS = 180.0
 
 # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ("patch_two_pins_do_not_share_a_chapter.py",)
+ORDER: tuple[str, ...] = (
+    "patch_two_pins_do_not_share_a_chapter.py",
+    # Hai bản vá này sửa hai file khác nhau (character_registry.py, audio_io.py) nên thứ tự
+    # giữa chúng không quan trọng; giữ theo thứ tự xếp hàng.
+    "patch_the_pause_budget_cannot_exceed_the_silence.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",

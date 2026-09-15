@@ -578,3 +578,98 @@ Trả lời dứt điểm câu hỏi của chủ sách: **không phải chấp n
 Và nó xác nhận điều đã ghi ở mục trên: bộ dò im suốt alpha.45 và alpha.46 **không phải vì
 ngưỡng đặt sai** mà vì hai lần chạy ấy không có đoạn nào đọc lặp. Khoảng cách
 `0,244 → 0,35 → 0,441` giữ nguyên ý nghĩa qua ba lần chạy.
+
+
+## Thước thứ hai: ngân sách nghỉ không được đòi nhiều hơn khoảng lặng CÓ THẬT (15/09/2026)
+
+Bù nghỉ ở trên cứu những câu đọc đúng dấu câu khỏi bị gọi là chậm, và nó đã cứu thật. Nhưng
+ngân sách ấy là một **phỏng đoán chỉnh chuẩn trên câu dài**, và ở câu thoại ngắn nó quay lại
+kết tội oan theo chiều ngược: "đọc quá nhanh".
+
+Ba đoạn của cuốn 2 **mất hẳn bản thu** vì đúng cơ chế đó:
+
+| chương | câu | lần thử | nhịp bị tính |
+|---|---|---|---|
+| 082 | `“Tôi không biết ‘xoay’ đâu, Felicia.”` | 22 | 29,02–32,50 kt/s |
+| 131 | `“Chà… Cậu ‘nếu’ nhiều thật đấy, Lucien.”` | 11 | 26,37 kt/s |
+| 090 | (cùng hình) | — | — |
+
+Hai mươi hai lần thử đều cho cùng một con số không phải là xui, mà là số học.
+
+### Phép thử GPU: giọng đọc không nghỉ ở dấu ngoặc
+
+`probe_a_rushed_line.py` sinh lại đúng đoạn ấy với bốn dạng văn bản (có/không nháy đơn,
+có/không ngoặc kép) bằng cùng một seed salt. Kết quả: **cùng một thời lượng tới hai chữ số
+thập phân**. Giọng đọc không nghỉ ở những dấu ấy, trong khi ngân sách vẫn tính 0,276 giây cho
+mỗi nhóm. Với câu 2,16 giây, ngân sách chạm trần `MAX_PAUSE_FRACTION` và đòi 1,296 giây —
+**60% thời lượng** — nên nhịp bị thổi từ 15,29 lên 30,09 kt/s.
+
+Chú thích của `MAX_PAUSE_FRACTION` nói ngân sách cao nhất chỉ chạm 58,5% "trên 3803 đoạn đã
+chốt". Đúng, và đó chính là chỗ bẫy: 3803 đoạn ấy là những đoạn **sống sót**. Đoạn bị ngân
+sách ăn hết không còn trong bảng để đếm.
+
+### Hai cách chữa hiển nhiên đều bị số liệu bác bỏ
+
+| cách | đoạn "đạt → ngoài băng" | cứu được |
+|---|---|---|
+| bỏ mọi dấu ngoặc khỏi mẫu đếm | 248 | 3 |
+| bỏ riêng nháy đơn / ngoặc kép | 12 | 3 |
+
+Vì ngân sách được **chỉnh chuẩn cùng với** những dấu ấy: rút chúng ra thì nhịp tụt và cận
+**dưới** bắt đầu kết tội. Giữ lại cả hai phép đo trong `measure_pause_budget_vs_silence.py`.
+
+### Cách chữa: đo khoảng lặng thật, và chỉ dùng nó cho cận trên
+
+`audio_io.measured_silence_seconds` đo tổng các quãng dưới −35 dB so với **đỉnh của chính bản
+thu**, mỗi quãng dài hơn 50 ms, trên cửa sổ 10 ms:
+
+```
+pause_nghe = min(ngân sách, khoảng lặng đo được)     <= ngân sách, luôn luôn
+nhịp_nghe  = ký tự đọc được / (thời lượng - pause_nghe)   <= nhịp cũ, luôn luôn
+
+cận DƯỚI (chậm)  : vẫn xét bằng nhịp cũ, y nguyên
+cận TRÊN (nhanh) : xét bằng nhịp_nghe → chỉ kết tội khi CẢ HAI thước đồng ý
+```
+
+Ngưỡng so với đỉnh chứ không phải dBFS tuyệt đối vì `atomic_write_wav` gọi
+`validate_audio_array` **hai lần** — trước và sau khi cân âm lượng — và phép đo phải cho cùng
+một câu trả lời ở cả hai lần. Nhân một hệ số vào toàn sóng âm không đổi tỉ số rms/đỉnh.
+
+Đây là đúng doanh nghĩa đã có trong file ấy: `pace_is_outlier` kết tội "chậm" chỉ khi **cả**
+chữ lẫn âm tiết cùng nói, và `spoken_speakable_chars` sinh ra vì "thước chữ đếm sai cái nó
+nhận là đếm". Thay đổi một chiều: chỉ bớt cờ, không thêm cờ.
+
+### Số liệu
+
+**Cứu** — 12 bản thu THẬT của câu chương 082 (`work/rushed_line_probe`), cho đi qua
+`validate_audio_array` của chính cây mã:
+
+| | trước vá | sau vá |
+|---|---|---|
+| ngoài băng | **12/12** | **0/12** |
+| nhịp | 29,02–32,50 kt/s | 14,05–16,46 kt/s |
+| ngân sách đòi | 1,20–1,34 s | — |
+| khoảng lặng thật | — | 0,39–0,53 s |
+
+Con số 32,50 trùng khít từng chữ số với lời ghi trong database, nên phép tính này là phép
+tính của chính máy, không phải phép tính mô phỏng.
+
+**Giết** — 0, theo định nghĩa: cận dưới không đổi. Con số ấy không phải may: bản đầu của bản vá
+chặn ngân sách ở **cả hai** cận, và `measure_a_silence_capped_pace.py` đo trên 3000 đoạn đã
+chốt cho thấy như thế thì 274 đoạn bị cắt ngân sách và **2 đoạn đang đạt thành ngoài băng** ở
+cận dưới:
+
+```
+“Chào, Felicia. Và… cậu ở đây sao, Lucien!”   13,75 -> 10,27 kt/s   (sàn 12,5)
+“Lucien, hiện giờ em có việc làm chưa?”       12,66 -> 12,17 kt/s
+```
+
+Hai đoạn ấy là lý do cận dưới giữ nguyên thước cũ — ngân sách sinh ra để bảo vệ đúng chúng.
+
+Ba ngưỡng −30 / −35 / −40 dB cắt ngân sách của 140 / 274 / 389 đoạn trong 3000, và cả ba cho
+cùng một kết luận về những câu đang bị mất, nên chọn cái ở giữa.
+
+### Cái vẫn phải giữ
+
+Phép kiểm vẫn đóng với bản thu thật sự nhanh: cùng câu ấy đọc trong 1,00 giây cho nhịp_nghe
+27,4 kt/s, trên cận 24,5, và vẫn bị từ chối. Bài test giữ đúng ca ấy.
