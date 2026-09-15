@@ -2311,6 +2311,38 @@ bốn bài test đều xanh và chương vẫn hỏng.
   nếu có thì nhãn chung chung là **sai** và phải gán về tên ấy; ca `BÀ` là ca "không có tên", chưa biết 94
   câu của `ME` thuộc loại nào. **Không** chặn `Anh`, `Em`, `Cô` như tên: chúng là tên người Việt thật.
 
+- **SỬA LẠI HAI MỤC TRÊN (22:30 ngày 15-09) — `ME` là "me" TIẾNG ANH, không phải "mẹ", và bản vá tôi xếp
+  hàng đã sai chỗ.** Hai cái sai, cả hai do tôi, cả hai đã đo lại:
+
+  **(a) `ME` 94 câu không phải nhãn xưng hô ngôi thứ ba.** Tôi gộp nó vào nhóm `mẹ`/`cha`/`bà` vì khoá bỏ
+  dấu của "mẹ" cũng là "me". Đọc ca thật (cuốn 1, lô 8/9/10) thì `ME` là **"me" tiếng Anh**: cuốn 1 kể ở
+  ngôi thứ nhất, và mô hình khai người nói là `ME` cho chính lời của **nhân vật chính**:
+
+        seq 127 [NARRATOR] "Cảm ơn vì lời cảnh báo," tôi đều giọng.
+        seq 128 [ME      ] "Các người đã chuẩn bị rất kỹ lưỡng. Tôi công nhận điều đó."
+
+  Nên nhóm xưng hô ngôi thứ ba thật chỉ còn **16 câu** (`CHA` 9, `BÀ` 4, `MẸ` 3), không phải 110. `MẸ`
+  (id 21, minor, có pin) và `ME` (id 41, **main**, 54 lần nhắc) là **hai dòng `characters` khác nhau**
+  trong cùng một project — chứng cứ dứt điểm rằng chúng không cùng một thứ.
+
+  **(b) Chỗ sửa nằm ở `character_registry.PRONOUNS`, không phải ở một danh sách mới trong `analysis.py`.**
+  Dự án **đã có** đúng khái niệm ấy từ 2026-08-02, dùng ở sáu chỗ, và `build_registry_and_cast` đẩy mọi
+  dòng có tên là đại từ vào **nhóm vô danh** thay vì cast như một nhân vật. Nó làm việc ấy đúng:
+
+        Tôi (alpha55):  KHÔNG có dòng `characters` nào; 33 câu đọc bằng giọng nhóm vô danh
+        ME  (lô 10):    CÓ dòng `characters`, importance='main', 54 lần nhắc,
+                        và ở lô 8 nó còn **chia giọng với JAKE**
+
+  Tức phần 3 của bản vá tôi viết lúc 18:20 (một danh sách `FIRST_PERSON_SPEAKER_EXCLUSIONS` mới +
+  trả `UNKNOWN`) là **dư thừa** cho `tôi`/`mình`/`ta` — chúng đã được chặn — và **bỏ sót** đúng cái tên
+  đang hỏng. Bản vá đã viết lại: thêm `me` (và `tao`, `tui`, `tớ`, `chúng tôi`, `chúng mình` cho lần sau)
+  vào chính `PRONOUNS`. Đo trên cả hai cuốn: chặn thêm **đúng một** tên, `ME`, 94 câu, có dòng
+  `characters` ở 4 project.
+
+  Bài học ghi để khỏi lặp: **trước khi thêm một danh sách, tìm xem dự án đã có danh sách ấy chưa.** Hai
+  danh sách cho một câu hỏi là hai chỗ để lệch nhau, và hôm nay đã có đúng một ví dụ ngay cạnh —
+  `NAME_CANDIDATE_EXCLUSIONS` viết không dấu bên cạnh `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` viết có dấu.
+
 - **Số viết bằng chữ so với chữ số trong phép so ASR** (đo 2026-09-14 21:05; ưu tiên thấp–trung).
   Whisper chuẩn hoá số tiếng Việt thành chữ số (`mười giờ` → `10h`, `hai mươi lăm phần trăm` → `25%`), còn
   tham chiếu giữ nguyên chữ → similarity tụt oan. **829/35.612** đoạn có hình này, **55** dưới 0,90, **4**

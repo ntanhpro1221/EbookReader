@@ -3111,3 +3111,58 @@ Lệnh ranh giới 4, gồm cả những chương cần đúc lại **đã lọc
   `one_person_one_voice` từng đề nghị đã bị lọc ra vì đúc lại không cứu được gì (giọng đa số của người
   ấy đang do người khác dùng ngay trong chương đó).
 - `3:114` sẽ được `pin_the_book_cast` sửa pin về `thanh_binh_f090` khi đúc lại, vì VERDI không nói ở 114.
+
+## 2026-09-15, 22:00–23:00 — bản vá phantom viết lại: dự án đã có danh sách ấy, và tôi xếp `ME` sai nhóm
+
+Lô 4 đang phân tích (1232/3680 lúc 22:19, nhịp tim 0s, không lệch `wav`/`sha256`). Ba việc không cần GPU.
+
+### Kho giọng nam: tôi nghi có lỗi, và tôi sai
+
+Cả sách đọc nhân vật nam bằng đúng **hai** preset, cả hai nằm trong `LAST_RESORT_PRESETS` — danh sách mà
+người nghe xếp là *"đủ tốt để giữ, không đủ tốt để với tới"*. Trông như ngược. Không phải: `casting_presets`
+đã giải thích sẵn. Bảy preset nam, năm bị loại **có lý do**: Phạm Tuyên là giọng người dẫn chuyện, Xuân Vĩnh
+bị chặn hẳn, Minh Đức + Minh Triết là giọng **đọc bản tin**, Quang Sơn là vùng **Trung** mà
+`CASTING_REGIONS` chỉ cho Nam + Bắc. Còn đúng hai cái — nên nhãn "giáng cấp" trên thực tế vô nghĩa.
+
+Kết quả: **14 giọng nam cho 55 người nam có tên**, 3,9 người một giọng, 19 giọng bị dùng chung (một bậc 6
+người). Kho **không** phải nguyên nhân va chạm cùng chương (chương đông nhất cần 8, kho có 14); nó là
+nguyên nhân **gián tiếp**: càng nhiều người chung một bậc thì hai người trong số họ càng dễ gặp nhau ở lô
+sau, và mỗi lần gặp là một lần bỏ pin. Một đòn duy nhất có thể kéo và nó là chuyện **gu**: cho vùng Trung
+vào thì kho 14 → 21. Đã ghi thành câu hỏi cho chủ sách kèm số liệu, không tự quyết.
+
+### `ME` là "me" tiếng Anh, không phải "mẹ" — 94 câu của nhân vật chính
+
+Tôi đã ghi `ME` (94 câu) vào nhóm "nhãn xưng hô ngôi thứ ba" cùng `mẹ`/`cha`/`bà`, vì khoá bỏ dấu của "mẹ"
+cũng là "me". Đọc ca thật thì sai hẳn: cuốn 1 kể ở **ngôi thứ nhất**, và `ME` là lời của **chính nhân vật
+chính**:
+
+    seq 127 [NARRATOR] "Cảm ơn vì lời cảnh báo," tôi đều giọng.
+    seq 128 [ME      ] "Các người đã chuẩn bị rất kỹ lưỡng. Tôi công nhận điều đó."
+
+Và `MẸ` (id 21, minor, có pin) với `ME` (id 41, **main**, 54 lần nhắc) là **hai dòng `characters` khác
+nhau** trong cùng một project — chứng cứ dứt điểm. Nhóm xưng hô ngôi thứ ba thật chỉ còn **16 câu**
+(`CHA` 9, `BÀ` 4, `MẸ` 3), không phải 110.
+
+### Và bản vá tôi xếp hàng lúc 18:20 đã sai chỗ
+
+Nó thêm một danh sách đại từ **mới** vào `analysis.py` rồi trả `UNKNOWN`. Nhưng dự án **đã có** đúng khái
+niệm ấy: `character_registry.PRONOUNS`, có từ 2026-08-02, dùng ở sáu chỗ, và `build_registry_and_cast` đẩy
+mọi dòng có tên là đại từ vào **nhóm vô danh** thay vì cast như một nhân vật. Nó làm việc ấy đúng:
+
+| | dòng `characters` | giọng |
+|---|---|---|
+| `Tôi` (alpha55) | **không có** | giọng nhóm vô danh, 33 câu |
+| `ME` (lô 10) | **có**, `importance='main'`, 54 lần nhắc | giọng riêng; ở lô 8 **chia với JAKE** |
+
+Vì "tôi"/"mình"/"ta" **đã** nằm trong `PRONOUNS` còn "me" thì không. Nên phần 3 của bản vá vừa **dư thừa**
+cho đúng những tên đã được chặn, vừa **bỏ sót** đúng cái tên đang hỏng.
+
+Viết lại: thêm `me` (và `tao`, `tui`, `tớ`, `chúng tôi`, `chúng mình` cho lần sau) vào chính `PRONOUNS`.
+Đo trên cả hai cuốn: chặn thêm **đúng một** tên — `ME`, 94 câu, có dòng `characters` ở 4 project. Hai phần
+còn lại giữ nguyên vì chúng độc lập và đã có số liệu: khoá `_name_candidate_key` bỏ dấu (danh sách 105 mục
+hôm nay chỉ chặn được 2 tên), và bốn chữ `nghe`/`tin`/`giai`/`im` vào danh sách **mở đầu câu**.
+
+**Bài học, ghi để khỏi lặp: trước khi thêm một danh sách, tìm xem dự án đã có danh sách ấy chưa.** Hai danh
+sách cho một câu hỏi là hai chỗ để lệch nhau — và hôm nay đã có đúng một ví dụ ngay cạnh:
+`NAME_CANDIDATE_EXCLUSIONS` viết **không dấu** nằm cạnh `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` viết **có
+dấu**, và cái thứ nhất vì thế chỉ chặn được 2 trong 565 tên.
