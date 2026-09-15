@@ -2209,6 +2209,43 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **ranh giới 4** (áp trước khi lô 5 phân tích), không nhắm ranh giới 3: file nguy hiểm nhất trong cây không
   được vá gấp trong nửa giờ.
 
+- **ĐÃ TÌM RA ĐƯỜNG SINH 17:50–18:20 ngày 15-09 — và nó KHÔNG phải `_leading_proper_name`.**
+  Bản vá phải nhắm đúng chỗ, nên đây là chỗ:
+
+  `analysis.py:1762` — `speaker = _canonical_speaker(item.get("speaker"))`. Tên người nói **do mô hình tự
+  khai**, đi thẳng vào hàng, không qua một phép kiểm "cái này có phải tên người không" nào. Còn
+  `_leading_proper_name` (chỗ tôi đoán ban đầu) khớp bằng `LATIN_PROPER_NAME_SURFACE_PATTERN` =
+  `[A-Z][A-Za-z]*…`, tức **chỉ ASCII**, nên nó không thể sinh ra `Tôi` hay `Mình` được. Nó chỉ sinh được
+  `Nghe`, `Tin`, `Giai`, `Im` — bốn tên ASCII, 8 câu; 79 câu còn lại đến từ mô hình.
+
+  **Và một lỗ im lặng nằm ngay cạnh:** `_name_candidate_key(v) = v.replace("’","'").casefold()` — **không
+  bỏ dấu** — trong khi `NAME_CANDIDATE_EXCLUSIONS` viết **không dấu** (`"toi"`, `"minh"`, `"nguoi"`,
+  `"khong"`, `"tieng"`…). Đo trên 565 tên người nói của cả hai cuốn (17.461 câu): danh sách 105 mục ấy hôm
+  nay chặn được **đúng 2 tên** (`CHA` 9 câu, `TIM` 1 câu). Gộp dấu sẽ chặn thêm `Tôi` (70), `Mình` (10),
+  `MÌNH` (6), `BÀ` (4), `TÔI` (1) — **cả 5 đều là phantom, 0 tên nhân vật thật**. Lưu ý ngược lại:
+  `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` lại viết **có dấu** (`"cùng"`, `"nếu"`), nên gộp dấu ở khoá mà
+  không viết lại danh sách ấy sẽ **giết** nó — hai danh sách cạnh nhau, hai giả định trái nhau.
+
+  Và `TIM` cho thấy cái giá của danh sách không dấu: `Tim` là một tên người Anh có thật; nó bị chặn vì mục
+  `"tim"` (nghĩa là "tìm"/"tim" tiếng Việt). Nên **đừng** thêm `nghe`/`tin`/`giai` vào
+  `NAME_CANDIDATE_EXCLUSIONS` (chặn ở mọi chỗ); thêm vào `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` (chỉ chặn ở
+  đúng chỗ "chữ mở đầu câu tường thuật").
+
+  **Thiết kế bản vá (cho ranh giới 4), ba phần nhỏ, mỗi phần có số liệu:**
+  1. `_name_candidate_key` gộp dấu (và `đ`→`d`); viết lại `ATTRIBUTION_SENTENCE_START_EXCLUSIONS` dạng gộp
+     dấu để nó không chết. Chặn 91 câu phantom, 0 tên thật (đã đo).
+  2. Thêm `nghe`, `tin`, `giai`, `im` vào `ATTRIBUTION_SENTENCE_START_EXCLUSIONS`. Đã kiểm: không tên nhân
+     vật thật nào trong kho có **từ đầu** gộp dấu trùng bốn mục ấy, ngoài chính bốn phantom.
+  3. Một cổng ở `analysis.py:1762` cho tên **do mô hình khai**: tên một-từ mà gộp dấu rơi vào danh sách đại
+     từ / từ chức năng thì **không nhận**, trả về đường sửa sẵn có thay vì bịa một người. Chỉ khớp **toàn
+     bộ** tên, không khớp từ đầu — `NGƯỜI TRẢ LỜI` (2168 câu) và `BA TƯỚC ELEIJAH` là tên thật nhiều từ và
+     phải sống.
+
+  **Không tự bịa người chủ.** Bỏ tên phantom rồi để **chuỗi sửa đã có** quyết (`_explicit_speaker_attribution`
+  → `_leading_proper_name` nhìn vào câu tường thuật liền sau, khoá đoạn, khoá thoại tiếp diễn). Phantom sống
+  được chính vì nó **trông như** một cái tên hợp lệ nên chuỗi ấy không bao giờ chạy. Đó cũng là lý do bảng
+  "lấy tên trong câu tường thuật: 4/4" ở trên là chứng cứ cho chuỗi sẵn có, không phải cho một luật mới.
+
 - **Số viết bằng chữ so với chữ số trong phép so ASR** (đo 2026-09-14 21:05; ưu tiên thấp–trung).
   Whisper chuẩn hoá số tiếng Việt thành chữ số (`mười giờ` → `10h`, `hai mươi lăm phần trăm` → `25%`), còn
   tham chiếu giữ nguyên chữ → similarity tụt oan. **829/35.612** đoạn có hình này, **55** dưới 0,90, **4**
