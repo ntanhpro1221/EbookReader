@@ -218,6 +218,10 @@ def main(argv: list[str] | None = None) -> int:
         "Nghi can = mở một câu tường thuật NGAY SAU ngoặc kép, không bao giờ viết hoa giữa câu, "
         "và chính chữ ấy có viết thường ở đâu đó trong sách."
     )
+    _say(
+        "Thước này đọc CẢ CUỐN; tầng phân tích chỉ thấy MỘT chương. "
+        "`measure_a_phantom_by_its_own_chapter.py` đo xem một chương có tự đủ bằng chứng không."
+    )
     return 0
 
 

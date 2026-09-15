@@ -3757,3 +3757,35 @@ Trạng thái dàn giọng của cuốn 2 lúc này, để so sau: **0 va chạm
 người nói; 24 người mang hơn một giọng qua cả cuốn (cross-chapter, không phải khuyết tật cùng chương);
 13 chương **không đúc lại được** vì đúc lại chỉ tái tạo đúng cái đánh đổi cũ (CORELLA/WOLF ở lô 1-2 và
 CHRISTOPHER/SHARON ở lô 3 là những ca đã biết).
+
+### 04:55 — thước phantom một-chương: đối chứng bắt được một thước gắn cờ chính nhân vật chính
+
+Bản vá phantom trong hàng chờ chặn bằng một **danh sách từ tiếng Việt chép tay**. Chủ sách đã dặn
+*"nhỡ sách khác cũng gặp chuyện thế này thì project phải tự xử lý được chứ?"*, nên đi thử một luật
+dựa-trên-dữ-liệu: trong **chính chương ấy**, chữ ấy có viết thường ở đâu đó không, và có bao giờ viết
+hoa **giữa câu** không (`của Trang`, `nhìn Lucien` — tên thật luôn có; chữ thường bị viết hoa vì mở
+đầu câu tường thuật thì không bao giờ).
+
+Thử trên 25 nghi can trước: **25/25 đều đúng**. Nếu tin con số ấy rồi vá thì đã xong một bản vá sai.
+
+Đối chứng — áp thước cho **mọi** nhãn một-từ — cho thấy bản đầu gắn cờ `LUCIEN` **378 câu**, cùng
+FELIPE, FELICIA, NATASHA, VICTOR: **67 trên 191 nhãn**. Lỗi trong chính thước của tôi: nhãn trong
+SQLite là dạng chuẩn hoá HOA (`LUCIEN`) còn văn bản viết `Lucien`, nên phép "số khớp không phân biệt
+hoa thường **trừ** số khớp đúng dạng nhãn" cho ra *toàn bộ* số lần xuất hiện là "viết thường", và cột
+"hoa giữa câu" cũng so với `LUCIEN` nên bằng 0. Sửa: phân loại **từng lần xuất hiện theo dạng viết
+thật trong văn bản**.
+
+Bản đã sửa, đối chứng **sạch trên cả hai cuốn** — 0 trong 292 nhãn một-từ bị oan (`Lucien` 1.073 câu,
+`MICHAEL` 1.152, `SAMAEL` 619 đều sạch ở **mọi** chương):
+
+    cuon 2  7/191 nhan:  Nghe 6 cau, Giai 4, Minh, Tin, Im, Tay, Cho
+    cuon 1  7/101 nhan:  Toi 70, ME 94 (1/36 chuong), CHA 9, BA 4, MẸ 3, GÃ 1, TÔI 1
+
+**Và vẫn KHÔNG vá**, vì thước là một phép *phát hiện* tốt nhưng **hành động** phải khác theo lớp:
+`Nghe`/`Giai`/`Tin`/`Im`/`Tay`/`Cho` → `UNKNOWN` (không có ai ở đó); `Tôi`/`ME` → nhóm vô danh hoặc
+`EBOOK_FIRST_PERSON`; `CHA`/`MẸ`/`BÀ`/`GÃ` → `NPC_LOCAL:` vì đó là **người thật chưa có tên**. Hai lớp
+sau đã có đường chữa riêng, nên giá trị thêm trên hai cuốn đang có chỉ là **3 câu** (`Tay`, `Cho`,
+`GÃ`) — và gửi `CHA` về `UNKNOWN` thì **tệ hơn hiện tại**: lời người cha sẽ do người dẫn chuyện đọc.
+
+Thước ở lại thành `scripts/measure_a_phantom_by_its_own_chapter.py` (kèm cả câu chuyện LUCIEN), để
+nếu một cuốn sau cho con số lớn thì công cụ quyết định đã có sẵn, không phải viết lại.
