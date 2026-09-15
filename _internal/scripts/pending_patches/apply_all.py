@@ -36,7 +36,12 @@ LEASE_STALE_SECONDS = 180.0
 # `ANALYSIS_CASTING_IMPLEMENTATION_FILES`, nên nó chỉ được đổi ở một ranh giới TRƯỚC khi một lô
 # bắt đầu phân tích. Lô 4 đã bay lúc 20:55 ngày 15-09 nên tên này vào hàng sau đó: `before_a_batch`
 # từ chối khởi động khi hàng chờ còn tên, và xếp sớm hơn sẽ chặn đúng bước 6 của ranh giới 3.
-ORDER: tuple[str, ...] = ("patch_a_pronoun_is_not_a_character.py",)
+ORDER: tuple[str, ...] = (
+    "patch_a_pronoun_is_not_a_character.py",
+    # `asr.py` cũng là file khoá (họ chất lượng), và bản vá này sửa hai file khác nhau so với
+    # cái trên (`analysis.py`), nên thứ tự giữa chúng không quan trọng.
+    "patch_a_number_with_a_unit_is_read_out.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
