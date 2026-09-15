@@ -3280,3 +3280,21 @@ republished"*. Nên đường đi của cuốn 1 là:
 Một cuốn một lúc, nên bước 2 phải chờ một cửa sổ GPU: lô 4 cuốn 2 đang bay tới ~11:00 rồi ranh giới 4. Mặc
 định tôi giữ: ranh giới 4 chạy xong thì **chạy 261..278 của cuốn 1 trước** rồi mới tới lô 5 cuốn 2 — nó nhỏ
 nhất và nó là thứ chặn cuốn 1.
+
+### 00:55 — chủ sách gỡ cơ chế "file này không phải chương", và ông đúng
+
+Nguyên văn: *"chương có phải nội dung sách để đọc hay không không phải vấn đề mà project này cần xử lý, ném
+vào là nó đọc thôi."*
+
+Đã tháo sạch trong vòng nửa giờ sau khi dựng: bỏ `not_a_chapter()`, bỏ khối loại trừ và lời cảnh báo file mồ
+côi trong `assemble_book.main`, xoá hai file `not_a_chapter.txt` cạnh hai thư mục nguồn, xoá bài test của cơ
+chế ấy, và **ghép lại cuốn 1 để chương 000 trở về** — sách về **261 chương**, `--verify` sạch.
+
+Doanh nghĩa ấy rõ và có lý hơn cái tôi làm: cái gì nằm trong thư mục nguồn là cái người ta muốn đọc, còn một
+cơ chế đoán "file nào đáng đọc" là một cơ chế sẽ bỏ oan hoặc bỏ sót — và nó đặt một quyết định biên tập vào
+tay máy. `_expected()` giờ đếm **mọi** `.txt`, và docstring của nó ghi lại quyết định này để lần sau không ai
+dựng lại.
+
+**Phần giữ lại** là chỗ sửa thật và không liên quan tới biên tập: `SOURCE` lấy từ `book_paths` thay vì ghim
+cứng `D:/Novels/Tools/Text`. Lưới "nguồn có N chương, thiếu M" đã tắt từ 13-09 và giờ chạy cho cả hai cuốn —
+cuốn 2 lập tức chỉ ra `082`. Bốn test mới khoá cả hai điều: đường dẫn từ `book_paths`, và **không lọc gì**.
