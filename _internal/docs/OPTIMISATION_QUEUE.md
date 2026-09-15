@@ -2175,6 +2175,40 @@ bốn bài test đều xanh và chương vẫn hỏng.
   cho ca 1, chưa rõ cho ca 2–3. Đo tiếp trước khi viết: với mỗi trong 87 câu, so "người nói gần nhất trước
   đó" với người đúng đọc bằng tay trên 10 ca.
 
+- **ĐÃ ĐO TIẾP 17:10–17:35 ngày 15-09 — "người nói gần nhất" là **cách chữa sai**, và có hai bộ sinh lỗi
+  chứ không phải một.** Đọc bằng tay 7 ca (4 của `Nghe`, 3 của `Mình`, 3 của `Tôi` cuốn 1 — cùng một đoạn
+  ở ba lần chạy):
+
+  **Bộ sinh (a): chữ đầu của câu TƯỜNG THUẬT ngay sau dấu đóng ngoặc kép** — `Nghe`, `Tin`, `Giai`, `Tôi`.
+  Và điều quan trọng: **tên người nói thật nằm ngay trong chính câu tường thuật ấy**, chỉ khác là ở giữa
+  câu chứ không ở đầu:
+
+  | câu bị gán sai | câu tường thuật liền sau | chủ thật | "gần nhất trước đó" |
+  |---|---|---|---|
+  | `“Là tôi, Victor.”` | `Nghe giọng của **Victor**…` | Victor | Victor ✔ |
+  | `“Ta là giám đốc của hiệp hội, Nam tước Othello…”` | `Nghe thấy tiếng ồn, **Othello** bước ra…` | Othello | Victor ✘ |
+  | `“Lucien vừa hoàn thành tác phẩm…”` | `Dù **Othello** không thích phong cách…` | Othello | Victor ✘ |
+  | `“Ta không thấy sự sám hối của người.”` | `Nghe tin thủ lĩnh…, **Sard** không thể hiện…` | Sard | Natasha ✘ |
+
+  Nên: **lấy tên nhân vật xuất hiện trong chính câu tường thuật ấy** — 4/4 đúng — còn "người nói gần nhất"
+  1/4 (và lần đúng ấy là ngẫu nhiên). Đề xuất cũ của mục trên ("trả về người nói gần nhất") phải sửa theo.
+  Hợp lý: lỗi sinh ra vì bộ phân tích lấy **chữ đầu** của câu ấy thay vì lấy **cái tên** trong nó, nên cách
+  chữa nằm đúng ở chỗ hỏng.
+
+  **Bộ sinh (b): chữ đầu của chính câu THOẠI** — `Mình`, và nó là một lớp khác hẳn: chương 23 cuốn 1 đọc
+  **những trang ghi chép của người khác** (`Các ghi chép vẫn tiếp tục:`), nên câu thoại mở bằng `“Mình tìm
+  thấy…”` và không có câu tường thuật nào nêu tên ai. Ở lớp này cả hai luật trên đều không áp được; mặc định
+  an toàn là NARRATOR (giọng đang đọc tài liệu). Chú ý thêm: chính `seq 45` cùng cảnh ấy được gán cho
+  `Lucien` — cũng sai, vì Lucien đang **đọc**, không phải đang nói.
+
+  **Một chứng cứ phụ, đáng ghi:** cùng một đoạn ở ba lần chạy cuốn 1 (alpha21/22/23) cho ba kết quả gán khác
+  nhau cho câu liền sau (`Juliana` / `HOÀNG TỬ QUỶ THỨ MƯỜI`), nên vùng văn bản này vốn đã không ổn định.
+
+  **Thời điểm áp:** `analysis.py` thuộc `ANALYSIS_CASTING_IMPLEMENTATION_FILES` — áp giữa lúc một lô đang
+  phân tích thì **mất phân tích** của lô ấy. Lô 4 khởi động ở bước 6 của ranh giới 3, nên bản vá này nhắm
+  **ranh giới 4** (áp trước khi lô 5 phân tích), không nhắm ranh giới 3: file nguy hiểm nhất trong cây không
+  được vá gấp trong nửa giờ.
+
 - **Số viết bằng chữ so với chữ số trong phép so ASR** (đo 2026-09-14 21:05; ưu tiên thấp–trung).
   Whisper chuẩn hoá số tiếng Việt thành chữ số (`mười giờ` → `10h`, `hai mươi lăm phần trăm` → `25%`), còn
   tham chiếu giữ nguyên chữ → similarity tụt oan. **829/35.612** đoạn có hình này, **55** dưới 0,90, **4**
