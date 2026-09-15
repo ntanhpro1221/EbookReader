@@ -4,6 +4,7 @@
     EBOOK_TAG_PREFIX        tiền tố tag git / tên phiên bản (`<prefix>-loNN`)    mặc định v0.3.0
     EBOOK_SOURCE_DIR        thư mục nguồn .txt                                   mặc định D:/Novels/Ebook Reader/Text_Tmp
     EBOOK_PLAN              kế hoạch lô (bảng `| lô | 000..048 | ...`)           mặc định docs/PRODUCTION_PLAN_book2.md
+    EBOOK_ALBUM             tên đĩa ghi vào thẻ ID3 của mọi chương                mặc định Throne of Magical Arcana
 
 Vì sao có file này (2026-09-13, 22:25–23:30): thư mục nguồn của cuốn 1 (`D:\\Novels\\Tools\\Text`, 478
 chương) bị xoá giữa lô 10, và chủ sách chỉ sang một cuốn khác — `Text_Tmp`, 915 chương, không
@@ -39,6 +40,16 @@ BOOK = AUDIOBOOKS_ROOT / "_book"
 TAG_PREFIX = os.environ.get("EBOOK_TAG_PREFIX", "v0.3.0")
 SOURCE_DIR = Path(os.environ.get("EBOOK_SOURCE_DIR", "D:/Novels/Ebook Reader/Text_Tmp"))
 PLAN = Path(os.environ.get("EBOOK_PLAN", "docs/PRODUCTION_PLAN_book2.md"))
+# Ten dia ghi vao the ID3 cua moi chuong. Thuoc ve CUON, khong thuoc ve lan ghep, va phai o
+# day chu khong o `assemble_book.py`: buoc 7 cua `boundary.sh` goi `assemble_book.py --apply`
+# **khong** truyen `--album`, nen mot ten dat bang tay se bi lan ghep ke tiep ghi de bang mac
+# dinh. Tim ra 01:40 ngay 2026-09-16, ngay sau khi dat ten that cho ca hai cuon.
+#
+# Ten tra tu internet, khong tu ky uc (chu sach: *"ban phai dung internet de tra cuu chu?"*),
+# va chu sach chon **ten tieng Anh**: *"khong can ten tieng viet, co ten tieng anh con tot hon"*.
+#   cuon 2 = 奥术神座 / Throne of Magical Arcana (nguon la ban dich tren ln.hako.vn)
+#   cuon 1 = Young Master's PoV: Woke Up As A Villain In A Game One Day  (xem scripts/book1.env)
+ALBUM = os.environ.get("EBOOK_ALBUM", "Throne of Magical Arcana")
 
 
 def tag_of(batch: int) -> str:
@@ -49,6 +60,7 @@ def tag_of(batch: int) -> str:
 def describe() -> str:
     return (
         f"cuốn: root={AUDIOBOOKS_ROOT} tag={TAG_PREFIX} nguồn={SOURCE_DIR} kế hoạch={PLAN}"
+        f" đĩa={ALBUM!r}"
     )
 
 

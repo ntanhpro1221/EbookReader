@@ -3350,3 +3350,23 @@ và cuối cùng là cuộc chiến với Spirit King.
 **Bài học, và nó là bài học về bản thân tôi:** tôi có internet mà lại trả lời bằng ký ức, rồi bịa một tên từ
 nội dung khi ký ức không đủ. Hai lần trong một đêm. Việc "định danh một tác phẩm" **phải** đi qua tra cứu,
 vì một cái tên sai thì không có cổng nào trong dự án bắt được — nó chỉ nằm trong thẻ của 400 file MP3.
+
+### 01:45 — tên tiếng Anh, và một cái bẫy đã chờ sẵn ở bước 7
+
+Chủ sách: *"không cần tên tiếng việt, có tên tiếng anh còn tốt hơn"*. Nên:
+
+    cuon 1 (261 chuong)  Young Master's PoV: Woke Up As A Villain In A Game One Day
+    cuon 2 (139 chuong)  Throne of Magical Arcana
+
+Và ngay khi đặt xong tôi thấy cái bẫy: **bước 7 của `boundary.sh` gọi `assemble_book.py --apply` KHÔNG kèm
+`--album`**, nên ranh giới 4 sẽ ghi lại thẻ cho cả 139 chương bằng mặc định — tức xoá sạch cái tên vừa đặt,
+im lặng, và không ai biết cho tới khi mở máy nghe. Một cái tên đặt bằng tay chỉ sống tới lần ghép sau.
+
+Sửa đúng chỗ: tên đĩa **thuộc về cuốn**, nên nó vào `book_paths` (`EBOOK_ALBUM`, mặc định là tên cuốn đang
+sản xuất) và `book1.env` mang tên cuốn 1 — cùng hình với `EBOOK_AUDIOBOOKS_ROOT`, `EBOOK_SOURCE_DIR`,
+`EBOOK_PLAN` đã làm từ 13-09. `assemble_book.DEFAULT_ALBUM` giờ **là** giá trị ấy, và `--album` vẫn đè được
+cho một lần.
+
+Giữ lại `PLACEHOLDER_ALBUM = "Sách nói"` chỉ để một việc: nhận ra một cuốn **chưa** có tên. Vì mặc định của
+`book_paths` là cuốn đang chạy, một cuốn thứ ba mà ai đó quên viết `book3.env` sẽ lặng lẽ mang tên cuốn 2 —
+lời nhắc ấy là chỗ duy nhất nói ra.

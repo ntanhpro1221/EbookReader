@@ -34,9 +34,9 @@ from ebook_reader.io_utils import ffmpeg_executable, run_hidden  # noqa: E402
 from ebook_reader.text_processing import sha256_file  # noqa: E402
 
 try:
-    from scripts.book_paths import BOOK, SOURCE_DIR as SOURCE, VERSIONS  # noqa: E402
+    from scripts.book_paths import ALBUM, BOOK, SOURCE_DIR as SOURCE, VERSIONS  # noqa: E402
 except ImportError:  # chạy trực tiếp: python scripts/x.py
-    from book_paths import BOOK, SOURCE_DIR as SOURCE, VERSIONS  # noqa: E402
+    from book_paths import ALBUM, BOOK, SOURCE_DIR as SOURCE, VERSIONS  # noqa: E402
 # `SOURCE` từng ghim cứng `D:/Novels/Tools/Text` - thư mục nguồn CŨ của cuốn 1, bị xoá ngày
 # 13-09 và khôi phục sang `Ebook Reader/Text`. Hệ quả im lặng: `_expected()` đọc một thư mục
 # không tồn tại nên trả về rỗng, và phép kiểm "nguồn có N chương, **thiếu M**" chưa bao giờ
@@ -44,10 +44,19 @@ except ImportError:  # chạy trực tiếp: python scripts/x.py
 # 2026-09-16, cùng họ với `before_a_batch._versions` và bộ canh của `apply_all` đã sửa cùng
 # ngày: mỗi lần `book_paths` dẹp một đường dẫn chép tay, phải đi tìm những chỗ còn lại.
 
-# Tên "đĩa" của cả cuốn sách. Mặc định là một chỗ giữ chỗ: tên thật của truyện KHÔNG có ở đâu
-# trong dữ liệu - `book.title` của mỗi project là slug của lô (`lo01b`, `lo05`), và dòng đầu của
-# file nguồn là lời tán chuyện của người đăng. Đặt bằng `--album "Tên truyện"` khi biết.
-DEFAULT_ALBUM = "Sách nói"
+# Tên "đĩa" của cả cuốn sách, và nó thuộc về CUỐN nên nó ở `book_paths` (đọc từ `EBOOK_ALBUM`),
+# không phải một hằng số ở đây. Bước 7 của `boundary.sh` gọi script này **không** kèm
+# `--album`, nên một hằng số ở đây là một cái tên bị mọi lần ghép sau ghi đè - đúng cái bẫy đã
+# chờ sẵn lúc 01:40 ngày 2026-09-16, ngay sau khi hai cuốn vừa có tên thật.
+#
+# Tên ấy không có ở đâu trong dữ liệu (`book.title` của mỗi project là slug của lô, và dòng đầu
+# file nguồn là lời tán chuyện của người đăng) — nó được **tra từ internet** bằng tên nhân vật
+# trong truyện, không phải đoán từ ký ức. `--album` vẫn đè được khi cần một lần.
+DEFAULT_ALBUM = ALBUM
+# Chỗ giữ chỗ cũ, giữ lại chỉ để nhận ra một cuốn CHƯA có tên: `EBOOK_ALBUM` không đặt thì
+# `book_paths` trả tên của cuốn đang sản xuất, nên một cuốn thứ ba sẽ mang tên cuốn 2 nếu ai đó
+# quên `book<N>.env` - và lời nhắc dưới đây là chỗ duy nhất nói ra điều ấy.
+PLACEHOLDER_ALBUM = "Sách nói"
 
 
 def _say(line: str) -> None:
@@ -489,8 +498,12 @@ def main(argv: list[str]) -> int:
     _say(f"Đã chép {copied} chương mới vào {args.out} ({len(winners)} chương tổng).")
     if tagged:
         _say(f"Đã ghi lại thẻ cho {tagged} chương: album {args.album!r}, track = số chương thật.")
-        if str(args.album) == DEFAULT_ALBUM:
-            _say('  (tên đĩa đang là chỗ giữ chỗ; đặt tên thật bằng --album "Tên truyện")')
+        # Lời nhắc này chỉ đúng khi tên đĩa vẫn là chỗ giữ chỗ cũ. Từ 01:40 ngày 2026-09-16
+        # `DEFAULT_ALBUM` là tên THẬT (tra từ internet, đặt trong `book_paths`), nên so với
+        # `DEFAULT_ALBUM` là in ra lời nhắc sai mỗi lần ghép đúng.
+        if str(args.album) == PLACEHOLDER_ALBUM:
+            _say('  (tên đĩa đang là chỗ giữ chỗ; đặt tên thật bằng --album "Tên truyện"'
+                 " hoặc EBOOK_ALBUM)")
     _say(f"Gốc gác từng chương ghi ở {path.name}.")
     return 0
 
