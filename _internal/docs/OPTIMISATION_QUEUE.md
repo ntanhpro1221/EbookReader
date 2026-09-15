@@ -2169,6 +2169,26 @@ bốn bài test đều xanh và chương vẫn hỏng.
   đo được nhịp âm tiết của hai ca đêm nay là 7,2 và 7,3 (trung vị kho 4,7) — giọng đọc vội thật.
   Chạm `pipeline.py` (file khoá) → qua hàng chờ, và test phải dùng hai đoạn thật ghi ở WORK_LOG 02:10.
 
+- **SỬA LẠI HAI MỤC TRÊN (16:30 ngày 15-09) — con số "7,2 âm tiết/giây" là một phép tính VÒNG TRÒN.**
+  Hai mục trên kết luận "cận trên đúng, giọng đọc vội thật" bằng nhịp âm tiết 7,2–7,3/giây so với trung vị
+  kho 4,7. Nhưng nhịp ấy chia cho **đúng cái thời gian nói đã bị ngân sách nghỉ trừ sai** (2,16 − 1,296 =
+  0,86 giây), nên nó thừa hưởng nguyên lỗi mà nó được dùng để bác bỏ. Đo lại trên 12 bản thu thật của câu
+  chương 082, lấy thời gian nói bằng khoảng lặng ĐO ĐƯỢC:
+
+      âm tiết/giây (ngân sách):  6,70 – 7,50      "vội hơn kho"
+      âm tiết/giây (lặng thật):  3,24 – 3,80      dưới trung vị kho 4,7, phần lớn dưới cả sàn "chậm" 3,75
+
+  Giọng đọc **không vội**; nếu lệch thì lệch về phía chậm. Nên:
+  (a) câu "không nới cận trên" vẫn đúng — nhưng vì thước sai chỗ khác, không vì bản thu vội;
+  (b) mục **"Xin giọng đọc CHẬM trước khi bỏ một đoạn vì nhịp"** mất chỗ dựa chính của nó: xin đọc chậm hơn
+  một bản thu vốn đã chậm là chữa sai bệnh. Hạ mục ấy xuống **ưu tiên thấp** và **chờ số liệu mới**: cả 7 ca
+  chưa bao giờ có bản thu đều chết ở cận trên với câu ngắn, tức đúng lớp mà
+  `patch_the_pause_budget_cannot_exceed_the_silence` chữa. Phép thử thật là hai lần đúc lại sắp tới (131 ở
+  bước 3 ranh giới, 082 bằng `launch_repair.sh 2 --chapters 082`). Chỉ quay lại mục ấy nếu chúng **vẫn**
+  trượt sau khi bản vá đã vào cây.
+  Bài học ghi để khỏi lặp: khi kiểm một thước bằng một thước thứ hai, thước thứ hai không được dùng chung
+  mẫu số với thước đang bị nghi.
+
 ## Thước nhịp và dấu ngoặc (2026-09-15, 08:50) — GẠCH một mục cũ, thêm một mục đúng
 
 - ~~"Xin giọng đọc CHẬM trước khi bỏ một đoạn vì nhịp"~~ (xếp 02:10) — **SAI, RÚT LẠI**. `row["pace"]`

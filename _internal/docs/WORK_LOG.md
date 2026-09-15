@@ -2905,3 +2905,24 @@ exit 0 **và** `grep -c FAILED` = 0 trên log đầy đủ — và phải xem lo
 - Chương **082** của lô 2: không thuộc lô đang chạy nên ranh giới không tự lo. Sau ranh giới:
   `bash scripts/launch_repair.sh 2 --chapters 082`.
 - Kiểm lại chương 090 của lô 2 đã có bản thu chưa (lần trước chữa bằng `lo02v_090`).
+
+### 16:30 — và con số tôi dùng để bác bỏ chính hướng này đêm qua là một phép tính vòng tròn
+
+Đêm 00:35 và 02:10 tôi đã **bác bỏ** hướng "thước sai" bằng nhịp âm tiết: *"26 ký tự / 0,83 giây = 7,2 âm
+tiết/giây, trung vị kho 4,7, tức giọng đọc vội thật, không phải thước sai"*, và ghi vào hàng chờ hai lần.
+Con số ấy chia cho **đúng cái thời gian nói mà ngân sách nghỉ đã trừ sai** (2,16 − 1,296 = 0,86 giây), nên
+nó thừa hưởng nguyên lỗi mà nó được dùng để bác bỏ. Đo lại trên 12 bản thu thật, lấy thời gian nói bằng
+khoảng lặng đo được:
+
+| | ngân sách đoán | khoảng lặng thật |
+|---|---|---|
+| âm tiết/giây | 6,70 – 7,50 | **3,24 – 3,80** |
+
+Trung vị kho là 4,7 và sàn "chậm" là 3,75. Nghĩa là giọng đọc **không vội**; nếu lệch thì lệch về phía
+**chậm**. Hai kết luận đêm qua phải sửa: "không nới cận trên" vẫn đúng nhưng vì lý do khác, và mục **"xin
+giọng đọc chậm hơn"** mất chỗ dựa chính — xin một bản thu vốn đã chậm đọc chậm thêm là chữa sai bệnh. Đã hạ
+mục ấy xuống ưu tiên thấp trong hàng chờ và ghi rõ phép thử thật là hai lần đúc lại sắp tới.
+
+Bài học, ghi để khỏi lặp: **khi kiểm một thước bằng một thước thứ hai, thước thứ hai không được dùng chung
+mẫu số với thước đang bị nghi.** Cả hai lần đo đêm qua đều "xác nhận" thước cũ vì cả hai đều chia cho
+`thời lượng − ngân sách`.
