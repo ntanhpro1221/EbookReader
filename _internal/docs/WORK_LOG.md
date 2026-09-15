@@ -2926,3 +2926,70 @@ mục ấy xuống ưu tiên thấp trong hàng chờ và ghi rõ phép thử th
 Bài học, ghi để khỏi lặp: **khi kiểm một thước bằng một thước thứ hai, thước thứ hai không được dùng chung
 mẫu số với thước đang bị nghi.** Cả hai lần đo đêm qua đều "xác nhận" thước cũ vì cả hai đều chia cho
 `thời lượng − ngân sách`.
+
+## 2026-09-15, 16:40–17:50 — bộ canh bản vá soi sai cuốn suốt ba lô, và 87 câu thuộc về một người không tồn tại
+
+Lô 3 còn hai chương nên GPU vẫn kín; ba việc dưới đây đều không cần GPU và không chạm vào project đang bay.
+
+### `apply_all` hỏi "có lượt nào đang chạy" ở gốc của cuốn 1
+
+`apply_all._runs_in_flight()` đọc nhịp tim `worker_leases` để không bao giờ ghi vào file khoá giữa một lượt,
+và `boundary.sh` dùng **chính** hàm ấy cho `wait_gpu_free`. Nó glob `D:\Novels\Audiobooks\_versions` — gốc
+của **cuốn 1**. Cuốn 2 sản xuất ở `.../book2/_versions` từ 13-09, nên suốt ba lô bộ canh soi một thư mục
+không có gì: đo lúc 16:45, lô 3 đang chạy với nhịp tim cách 4 giây và `apply_all` vẫn trả lời *"Không có
+lượt nào đang chạy"*. Cùng họ với lỗi `before_a_batch.py` đã sửa sáng nay — và cùng một bài học: mỗi lần
+`book_paths` ra đời để dẹp một đường dẫn chép tay, phải đi tìm những chỗ còn lại, không chờ chúng tự hiện.
+
+Gốc quét giờ lấy từ `book_paths` và quét **mọi** `_versions` bên cạnh, vì một lượt của cuốn nào cũng làm bản
+vá hỏng như nhau. Kiểm ngay trên lô đang chạy: bộ canh thấy nó và từ chối ghi. Và kiểm cả chiều ngược lại -
+project đã xong **xoá** dòng lease (10/10 project cuốn 2 không còn dòng nào), nên đây không thành một bộ
+canh lúc nào cũng kêu. Sáu test mới.
+
+### 87 câu của cả hai cuốn thuộc về một "nhân vật" là chữ đầu một câu tường thuật
+
+Hàng chờ đòi đo trước khi vá, và đòi đo **không dùng từ điển** — `Mật Ong Trắng`, `Triết Gia`, `Thủy Ngân`,
+`Hạ Phong` đều là tên nhân vật thật. `scripts/measure_phantom_speakers.py` đo bằng hình của văn bản, trên
+129 project:
+
+| tên | câu | viết hoa giữa câu | viết thường trong sách |
+|---|---|---|---|
+| `Tôi` | 70 | 0 | 2494 |
+| `Mình` | 10 | 0 | 493 |
+| `Nghe` | 4 | 0 | 191 |
+| `Giai` | 2 | 0 | 22 |
+| `Tin` | 1 | 0 | 124 |
+| `Lucien` (đối chứng) | 1047 | **3236** | **0** |
+
+Hai cột cuối tách sạch. Và nó đã tới audio: `Tôi` có `voice_profiles` riêng (`preset_thai_son_f104_p+00`,
+locked) đọc 33 câu trong 5 chương cuốn 1.
+
+Hai lần phép đo **bỏ sót đúng ca đã sinh ra nó**, cả hai đều đáng ghi: (a) "không ở đầu đoạn" không phải là
+"giữa câu" — một đoạn có nhiều câu, và cả 13 lần `Nghe` viết hoa đứng ngay sau `.`, `?`, `!`; (b) một tên
+**hiếm** cũng có "giữa câu = 0" vì nó chỉ xuất hiện một lần — `Thompson`, lính gác thật mà Benjamin gọi tên
+ở chương 3 cuốn 1, bị gắn cờ cho tới khi thêm cột "viết thường".
+
+### Và cách chữa tôi tự đề xuất trong hàng chờ là cách chữa sai
+
+Hàng chờ ghi "trả lời thoại về NARRATOR hoặc **về người nói gần nhất**". Đọc bằng tay 7 ca thì "người nói
+gần nhất" đúng 1/4 cho `Nghe`, và lần đúng ấy là ngẫu nhiên. Tên người nói thật nằm **ngay trong chính câu
+tường thuật** bị lấy chữ đầu:
+
+    “Ta là giám đốc của hiệp hội, Nam tước Othello…”   →  Nghe thấy tiếng ồn, **Othello** bước ra…
+    “Ta không thấy sự sám hối của người.”              →  Nghe tin thủ lĩnh…, **Sard** không thể hiện…
+
+Lấy **cái tên** trong câu ấy: 4/4. Đúng chỗ hỏng, vì lỗi sinh ra do bộ phân tích lấy chữ đầu thay vì lấy tên.
+
+Và họ lỗi này có **hai** bộ sinh, không phải một: `Mình` đến từ chữ đầu của chính câu **thoại** — chương 23
+cuốn 1 đọc ghi chép của người khác (`Các ghi chép vẫn tiếp tục:`), không có câu tường thuật nào nêu tên ai,
+nên mặc định an toàn là NARRATOR. Ở đúng cảnh ấy câu liền trước được gán cho `Lucien`, cũng sai: Lucien đang
+**đọc**, không phải đang nói.
+
+**Chưa vá, và có chủ ý:** `analysis.py` thuộc `ANALYSIS_CASTING_IMPLEMENTATION_FILES` — vá sau khi một lô đã
+phân tích thì lô ấy **mất phân tích**. Lô 4 khởi động ở bước 6 của ranh giới 3, nên bản vá nhắm **ranh giới
+4**. File nguy hiểm nhất trong cây không được vá gấp trong nửa giờ.
+
+### Kiểm trước cái mà ranh giới sẽ kiểm
+
+Bộ test đầy đủ đã chạy trên một bản sao có **cả hai** bản vá của hàng chờ cùng áp (`patch_two_pins…` +
+`patch_the_pause_budget…`) — đúng trạng thái cây mà `apply_all --apply` sẽ kiểm ở bước 1. Bản vá ghim trước
+đó chỉ được kiểm bằng 90 test dàn giọng, không bằng cả bộ.
