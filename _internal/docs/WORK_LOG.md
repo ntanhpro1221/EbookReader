@@ -3091,3 +3091,23 @@ một danh sách nói dối. 6 test.
 - Chương **082** của lô 2 vẫn chưa có bản thu: `bash scripts/boundary.sh 4 --recast auto 2:082` (thêm 8
   chương đúc lại ở trên nếu muốn làm cùng lượt).
 - Hàng chờ có `patch_a_pronoun_is_not_a_character.py` cho ranh giới 4.
+
+### 22:10 — lệnh cho ranh giới 4, viết ra để không mất
+
+Sách 139 chương **kiểm sạch** (`assemble_book.py --verify`: đúng thời lượng, đúng kênh/tần số, không
+trùng khít bản nào). Hàng chờ có **hai** bản vá, cả hai chỉ được áp ở ranh giới:
+
+    patch_a_pronoun_is_not_a_character.py      (analysis.py - vá giữa lô là MẤT phân tích của lô ấy)
+    patch_a_number_with_a_unit_is_read_out.py  (asr.py      - vá giữa lô là kiểm lại cả lô)
+
+Lệnh ranh giới 4, gồm cả những chương cần đúc lại **đã lọc** (8 chương, không phải 15):
+
+    bash scripts/boundary.sh 4 --recast auto 2:082 1:017 1:020 1:022 1:047 1:048 2:062 2:090 3:114
+
+- `2:082` là chương **chưa bao giờ có bản thu** (cận trên nhịp, 22 lần thử). Bản vá nhịp đã vào cây ở
+  ranh giới 3 và đã cứu 131 ngay lần thu đầu, nên 082 giờ có đường qua cửa. Không cần dấu `!`: hai
+  project cũ của nó (`lo02v_082`, `lo02v_082b`) đều `failed`, nên `already_done` không tính là đã xong.
+- Tám chương còn lại là phía thiểu số **sửa được** của người mang hai giọng. Bảy chương mà
+  `one_person_one_voice` từng đề nghị đã bị lọc ra vì đúc lại không cứu được gì (giọng đa số của người
+  ấy đang do người khác dùng ngay trong chương đó).
+- `3:114` sẽ được `pin_the_book_cast` sửa pin về `thanh_binh_f090` khi đúc lại, vì VERDI không nói ở 114.
