@@ -3323,3 +3323,30 @@ Tôi **không** map được bộ ấy sang một tên xuất bản nào mà dá
 bằng thứ **suy ra được từ nội dung**: **"Biên niên sử Linh Giới"** — tên tựa game mà cả câu chuyện xảy ra
 bên trong. Đã ghi cho 261 chương. Sai thì một lệnh là đổi:
 `source scripts/book1.env && python scripts/assemble_book.py --apply --album "Tên thật"`.
+
+### 01:30 — tra internet, và tên tôi tự suy ra SAI một chữ
+
+Chủ sách: *"biên niên sử linh giới là sao? bạn phải dùng internet để tra cứu chứ?"* — đúng. Tôi đã đặt tên
+cuốn 1 bằng tên **tựa game trong truyện** (một thứ suy ra được, không phải tên bộ), và đặt tên cuốn 2 từ **ký
+ức** mà không kiểm. Tra xong thì:
+
+| | tôi tự đặt | tra ra | nguồn |
+|---|---|---|---|
+| cuốn 1 | "Biên niên sử Linh Giới" ✗ (đó là tên tựa game **trong** truyện) | **Young Master's PoV: Woke Up As A Villain In A Game One Day** (tác giả `The_one_who_was`) | tìm `"Samael Kaizer Theosbane"` → wiki Fandom + WebNovel |
+| cuốn 2 | "Ma Pháp Thần Toạ" ✗ (sai chữ) | **Áo Thuật Thần Tọa** (奥术神座 / *Throne of Magical Arcana*) | vidian.vn; ln.hako.vn |
+
+Cuốn 2: `奥术` là **áo thuật**, không phải *ma pháp* — tôi nhận đúng tác phẩm nhưng gọi sai tên. Và xác nhận
+được nguồn của ông là **bản dịch nào**: tên chương khớp từng chữ với bản trên ln.hako.vn (`106 Thành phố âm
+nhạc trong mơ`, `115 Tới lúc hạ màn rồi`, `124 Pháp sư Lucien`), bản ấy để tiêu đề tiếng Anh *Throne of
+Magical Arcana*, còn tên tiếng Việt cùng tác phẩm là *Áo Thuật Thần Tọa* — chọn tên tiếng Việt cho một cuốn
+sách nói tiếng Việt.
+
+Cuốn 1: không có tên tiếng Việt nào tra được, nên dùng tên gốc. Chi tiết trong truyện khớp đúng với trang
+giới thiệu: **41 cái kết** ("bốn mươi mốt cái kết" trong nguồn), Samael là kẻ bắt nạt chính nhân vật chính,
+và cuối cùng là cuộc chiến với Spirit King.
+
+Đã ghi thẻ: 139 chương cuốn 2, 261 chương cuốn 1.
+
+**Bài học, và nó là bài học về bản thân tôi:** tôi có internet mà lại trả lời bằng ký ức, rồi bịa một tên từ
+nội dung khi ký ức không đủ. Hai lần trong một đêm. Việc "định danh một tác phẩm" **phải** đi qua tra cứu,
+vì một cái tên sai thì không có cổng nào trong dự án bắt được — nó chỉ nằm trong thẻ của 400 file MP3.
