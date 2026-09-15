@@ -2376,14 +2376,48 @@ bốn bài test đều xanh và chương vẫn hỏng.
   danh tính ấy** thay vì về nhóm vô danh; khi rỗng (cuốn 2, kể ngôi thứ ba) hành vi không đổi một chút nào.
   Cuốn 1: `EBOOK_FIRST_PERSON=SAMAEL` → 54 câu về đúng giọng `thanh_binh_f093` mà 451 câu kia đang dùng.
 
-  **Đo trước khi viết:** với mỗi trong 54 câu, kiểm xem ngữ cảnh có phải Samael nói không (đọc tay 8 ca là
-  đủ — đã đọc 3 ca ở lô 8/9, cả 3 đúng: `NARRATOR "…tôi đều giọng."` rồi câu kế mang nhãn `ME`). Và đếm
-  xem có cuốn nào dùng nhãn ngôi thứ nhất cho **nhiều hơn một** người (nếu có thì một biến môi trường là
-  không đủ).
+  **~~Đo trước khi viết~~ ĐÃ ĐO (04:00 ngày 2026-09-16), và bản vá đã viết:**
+  `scripts/pending_patches/patch_a_first_person_book_knows_who_i_is.py`, thứ tư trong `ORDER`.
 
-  **Thứ tự việc, quan trọng:** **đừng** đúc lại 24 chương của `ME` cho tới khi câu này được quyết. Danh sách
-  `one_person_one_voice` của cuốn 1 đang đề nghị 41 chương, trong đó 8 chương là phía thiểu số của `ME` —
-  đúc lại bây giờ là trả tiền GPU cho giọng nhóm vô danh, rồi trả lần nữa khi `EBOOK_FIRST_PERSON` vào cây.
+  Hai câu hỏi phải trả lời, và cả hai đều đã trả lời trên **dữ liệu thật của cả hai cuốn**, không phải trên
+  54 câu của một lần ghép:
+
+  | cuốn | câu mang nhãn ngôi thứ nhất | là ai |
+  |---|---|---|
+  | 1 (kể ngôi thứ nhất) | **129** — `ME` 94, `Tôi` 34, `TÔI` 1 | nhân vật chính, cả 129 |
+  | 2 (kể ngôi thứ ba) | **10** — `Mình` | **nhật ký của nữ phù thủy** Lucien đang đọc (ch. 022/023/032) |
+
+  1. *Ngữ cảnh có phải người kể nói không?* Thước sàng `scripts/measure_the_first_person_labels.py` lấy cụm
+     "đọc hộ" (nhật ký, ghi chép, bản thảo, lá thư) quanh mỗi ca. **Cuốn 2 là mẫu dương** — 9/10 ca sáng, và
+     một thước không bắt được mẫu dương thì kết luận "cuốn 1 sạch" vô giá trị. Cuốn 1 sáng đúng **1** ca, và
+     đọc tay thì ca ấy là `"Sao thế, Juli?"` của chính người kể: sáng chỉ vì chuỗi `di thư` nằm trong chữ
+     `midi thướt tha`. Đọc thêm 9 ca nữa (cả `Tôi` lẫn `ME`, lô alpha21/alpha55/lo09/lo10): tất cả là người
+     kể tự nói, tường thuật quanh nó đều ở ngôi thứ nhất (`tôi quát lên`, `Tôi dừng lại`).
+  2. *Có cuốn nào dùng nhãn ngôi thứ nhất cho nhiều hơn một người?* **Có — cuốn 2.** Nên một biến môi trường
+     là đủ, nhưng **chỉ vì nó mặc định RỖNG**: nếu luật tự bật, 10 câu nhật ký của cuốn 2 sẽ bị gán cho một
+     danh tính sai, tức bịa ra một người. Đây là công tắc của từng cuốn, không phải một luật chung.
+
+  Ba điểm thiết kế đáng nhớ (chi tiết trong docstring bản vá):
+
+  - Khoá `voices.first_person_identity` **chỉ tồn tại khi cuốn sách nói ra nó**. Để nó trong `DEFAULT_SETTINGS`
+    với giá trị rỗng là đổi `settings_hash` của mọi project → `preview_project_creation` coi project đang có
+    là "khác cấu hình" và tạo thư mục mới có hậu tố hash → một lượt `launch_batch.sh N` chạy lại sẽ **thu lại
+    cả lô**. Đã đo: không có khoá thì hash y như cũ.
+  - Ghi vào **settings trong SQLite** chứ không đọc `os.environ` trong gói: một lệnh `run` ở shell khác không
+    thể im lặng đổi hành vi của project.
+  - `--first-person "Tôi"` bị **từ chối**: phép so ở `build_registry_and_cast` gấp chữ, nên nhãn `TÔI` vẫn
+    khớp `PRONOUNS` và vẫn về nhóm vô danh — công tắc sẽ im lặng vô dụng. Tầng phân tích thì ghi sổ
+    `FIRST_PERSON_IDENTITY_IS_A_PRONOUN` rồi không làm gì; nó không được phép nổ giữa lúc phân tích.
+
+  **Thứ tự việc, quan trọng:** **đừng** đúc lại 24 chương của `ME` cho tới khi bản vá này vào cây (ranh giới
+  4). Danh sách `one_person_one_voice` của cuốn 1 đang đề nghị 41 chương, trong đó 8 chương là phía thiểu số
+  của `ME` — đúc lại trước đó là trả tiền GPU cho giọng nhóm vô danh, rồi trả lần nữa sau.
+
+  **Còn mở, và là câu của chủ sách:** cuốn 1 kể ngôi thứ nhất, nên **tường thuật cũng là lời của Samael** —
+  nhưng nó đọc bằng giọng người dẫn chuyện, còn thoại của anh ta đọc bằng `thanh_binh_f093`. Một người, hai
+  giọng, theo đúng định nghĩa của `one_person_one_voice`. Sách hữu thanh kể ngôi thứ nhất thường cho **một**
+  người đọc cả hai. Không tự đổi: 261 chương đã lên sách với cách hiện tại, và đổi bây giờ làm cuốn sách
+  không nhất quán với chính nó.
 
 - **Nhãn xưng hô ngôi thứ ba dùng làm tên nhân vật** (đo 19:55 ngày 15-09; ưu tiên trung, **cuốn 1 nặng
   hơn cuốn 2**). Cùng họ với mục phantom ở trên nhưng **không** cùng cách chữa, nên tách ra:

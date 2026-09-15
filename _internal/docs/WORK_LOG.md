@@ -3644,3 +3644,50 @@ dữ liệu thật là chỗ trả lời câu ấy.
 Bộ test đầy đủ trên bản sao đã vá: **2.819 xanh**, 2 đỏ và cả hai đỏ vì bản sao thiếu `Ebook Reader.vbs`
 / `Ebook Reader.lnk` (một-cú-nhấp và `doctor`) — đã kiểm bằng cách chạy đúng hai bài ấy trên một bản sao
 **chưa vá**: đỏ y như thế. Cây thật thì xanh cả (2.821 + 8 bài mới sẽ vào lúc áp vá).
+
+### 04:15 — "tôi" là ai: hai cuốn, hai câu trả lời trái nhau, nên nó là công tắc chứ không phải luật
+
+Nửa còn lại của mục hàng chờ 01:25: `patch_a_pronoun_is_not_a_character` đẩy nhãn `ME` về nhóm vô
+danh (2 giọng sai → 1 giọng sai nhưng nhất quán), và nửa sau là **nói cho dự án biết "tôi" là ai**.
+
+Đo trước khi viết, trên dữ liệu thật của **cả hai cuốn** (`scripts/measure_the_first_person_labels.py`,
+mới, đã commit — không để trong scratchpad, vì một phép đo không chạy lại được thì không phải bằng chứng):
+
+| cuốn | câu mang nhãn ngôi thứ nhất | là ai |
+|---|---|---|
+| 1 (kể ngôi thứ nhất) | **129** — `ME` 94, `Tôi` 34, `TÔI` 1 | nhân vật chính, cả 129 |
+| 2 (kể ngôi thứ ba) | **10** — `Mình` | **nhật ký của nữ phù thủy** Lucien đang đọc (022/023/032) |
+
+Cuốn 2 giết ngay ý tưởng "một luật chung": nếu nhãn ngôi thứ nhất tự động về người kể thì 10 câu nhật
+ký ấy bị gán cho một danh tính sai — bịa ra một người. Nên đây là **một sự thật về cuốn sách**, cùng họ
+với `EBOOK_SOURCE_DIR` / `EBOOK_PLAN` / `EBOOK_ALBUM`: `EBOOK_FIRST_PERSON`, mặc định rỗng.
+
+Thước sàng lấy cụm "đọc hộ" (nhật ký, ghi chép, bản thảo, lá thư) quanh mỗi ca, và **cuốn 2 là mẫu
+dương**: 9/10 ca sáng. Một thước không bắt được mẫu dương thì kết luận "cuốn 1 sạch" vô giá trị. Cuốn 1
+sáng đúng **1** ca — `"Sao thế, Juli?"` của chính người kể, sáng chỉ vì chuỗi `di thư` nằm trong chữ
+`midi thướt tha`. Đọc tay 10 ca trải bốn lô (alpha21, alpha55, lo08, lo09/lo10): tất cả là người kể tự
+nói, tường thuật quanh nó đều ở ngôi thứ nhất. Hai thước cùng nói thì mới kết luận.
+
+Và hai cái bẫy bắt được **trong lúc thử, trước khi ship**:
+
+1. **`[ -n "$X" ] && arr=(...)` dưới `set -e`.** `launch_batch.sh` chạy `set -euo pipefail`. Khi
+   `EBOOK_FIRST_PERSON` rỗng — tức cuốn 2, tức mặc định — phép thử trả 1, cả dòng trả 1, và script
+   **thoát ngay trước cả bước 0**. Mọi lượt phóng lô của cuốn đang sản xuất sẽ chết. Đổi sang `if`.
+2. **Một khoá mặc định trong `DEFAULT_SETTINGS` là một lần thu lại cả lô.** Nếu
+   `voices.first_person_identity` có mặt với giá trị rỗng thì `settings_hash` của mọi project đổi, và
+   `preview_project_creation` coi project đang có là "khác cấu hình" rồi tạo thư mục mới có hậu tố hash —
+   `launch_batch.sh 4` chạy lại sẽ thu lại 49 chương thay vì tiếp tục. Nên khoá ấy **chỉ tồn tại khi cuốn
+   sách nói ra nó**; đã đo: không có khoá thì `settings_hash` y như cũ.
+
+Thêm: `ebook_reader/cli.py` là file **CRLF** duy nhất trong số các file bị sửa, và bản vá ghi bằng
+`newline="\n"` sẽ đổi cả 1.565 dòng của nó. Hàm `edit()` của bản vá đọc bằng `newline=""`, nhớ kiểu cũ,
+rồi ghi lại đúng kiểu ấy.
+
+Bộ test: 8 bài mới. Bốn bản vá trong `ORDER` áp liên tiếp lên một cây sạch rồi chạy cả bộ:
+**2.843 xanh, 2 đỏ**, và cả hai đỏ vì bản sao thiếu `Ebook Reader.vbs`/`.lnk` (đã kiểm trên bản sao
+**chưa vá**: đỏ y như thế).
+
+**Còn mở, câu của chủ sách:** cuốn 1 kể ngôi thứ nhất, nên tường thuật cũng là lời Samael — mà nó đọc
+bằng giọng người dẫn chuyện, còn thoại của anh ta đọc bằng `thanh_binh_f093`. Một người, hai giọng, theo
+đúng định nghĩa `one_person_one_voice`. Sách hữu thanh ngôi thứ nhất thường cho một người đọc cả hai.
+Không tự đổi: 261 chương đã lên sách với cách hiện tại.

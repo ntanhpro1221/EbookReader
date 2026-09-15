@@ -46,6 +46,10 @@ ORDER: tuple[str, ...] = (
     # KHÔNG khoá, nên nếu bản vá dừng giữa đường thì `git diff` sẽ có chúng: `assert` của nó chạy
     # trước mọi phép ghi trong cùng một file, nhưng không có giao dịch nào bắc qua bốn file.
     "patch_a_recording_of_another_text_is_not_evidence.py",
+    # PHẢI sau `patch_a_pronoun_is_not_a_character.py`: bản vá ấy thêm `me` vào `PRONOUNS`, và
+    # bản vá này `assert` rằng nó đã vào cây rồi mới ghi (`FIRST_PERSON_PRONOUNS` là tập con).
+    # Nó cũng sửa `cli.py` (CRLF - tự giữ nguyên kiểu xuống dòng) và bốn file script không khoá.
+    "patch_a_first_person_book_knows_who_i_is.py",
 )
 
 APPLIED = (
