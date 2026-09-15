@@ -3459,3 +3459,31 @@ thắng vào nhóm; (b) tôi viết một bài test đòi "không truyền phái
 `ME` vẫn còn khuyết tật thật của nó: 24 chương, **hai** giọng nam (`thai_son_f093` 16 chương,
 `thanh_binh_f108` 8) — và nó sẽ hết khi `patch_a_pronoun_is_not_a_character` vào cây ở ranh giới 4, vì lúc
 ấy `ME` không còn là một nhân vật nữa.
+
+### 01:35 — lô 4 vào tổng hợp: dàn giọng sạch, và bản vá nhịp đang chạy thật
+
+Lô 4 xong phân tích (3.680 đoạn, ~2,5 giờ), khoá dàn giọng, và bắt đầu tổng hợp.
+
+**Dàn giọng:** `6/14 preset, 33 biến thể, 17 NPC có danh tính cục bộ, 0 nhóm NPC generic`, 67 pin được giữ
+chỗ trước khi phân vai, **0 lần bỏ pin cùng chương** (bản vá 15-09 không phải nổ — không có va chạm pin nào).
+
+    male    66 nguoi noi (54 co ten, 12 NPC) | 14 giong da duc / 14 cap duoc   <- kho nam DUNG HET
+    female  17 nguoi noi (15 co ten,  2 NPC) | 15 / 27
+    male can 8 giong cho chuong dong nhat; female can 4
+    17 giong bi dung chung  ->  **0/17 va cham that su nam trong cung mot chuong**
+
+**Một chỗ danh sách kiểm của nhịp tim nói quá chặt:** nó yêu cầu `runtime_events` **không** có dòng
+`CẢNH BÁO: nhiều nhân vật dùng chung một giọng`. Dòng ấy **có**, và nó sẽ luôn có: 54 người nam có tên trên
+14 bậc giọng thì chia giọng là **bắt buộc**, không phải khuyết tật. Tiêu chí có nghĩa là dòng
+`0/17 va chạm thật sự nằm trong cùng một chương` của `voice_pool_pressure` — đúng doanh nghĩa dự án: hai
+người một giọng chỉ là lỗi khi họ **gặp nhau trong một chương**.
+
+**Bản vá nhịp đang chạy trong sản xuất** — mọi `signal_json` mới đều có hai trường mới, và số liệu sống xác
+nhận đúng tính chất một chiều của nó:
+
+    nhip 17.24  nghe 17.24  lang 3.58s      cau dai: khoang lang LON HON ngan sach -> min() khong doi gi
+    nhip 15.08  nghe 15.08  lang 3.19s
+    nhip 16.94  nghe 16.94  lang 0.80s
+
+Tức phép chặn chỉ cắn ở chỗ ngân sách đòi quá (câu thoại ngắn, như chương 082/131), còn câu dài thì không
+đổi một chút nào — đúng như 3.000 đoạn đã đo trước khi vá.
