@@ -3033,3 +3033,61 @@ Dự đoán ghi lúc 19:35 đúng bốn trong năm con số (nhịp charged ~26 
 **0,64** — hơi cao hơn dải tôi đoán, và lệch về phía làm bản vá dễ hơn chứ không khó hơn.
 
 Ranh giới đi tiếp lúc 19:40 sang bước 4: đúc lại 110 112 114 130 134 (nối đuôi, gieo từ project 131).
+
+## 2026-09-15, 20:55–22:00 — lô 4 bay, và phép đo sau đúc lại tìm ra khuyết tật của chính bản vá pin hôm nay
+
+Ranh giới 3 xong sạch (exit 0, cả 7 bước): 131 đúc lại được, 5 chương va chạm pin đúc lại xong, lô 4 khởi
+động (chương 140..179, 40 chương), sách ghép lại còn **139 chương / 1,62 GB**. Tag `v0.3.0-lo03v`,
+`v0.3.0-lo03r`, `v0.3.0-lo04`.
+
+### Điều tốt và điều xấu, đo trên sách 139 chương
+
+    va chạm "hai người một giọng CÙNG CHƯƠNG":  0 trên cả 139 chương     (lô 3 trước đó: 5)
+    người mang hai giọng qua cả sách:           24                        (sau lô 2: 10)
+
+Số 24 ấy không phải ngẫu nhiên: phía thiểu số của mười người rơi **đúng** vào 6 chương vừa đúc lại.
+
+### Khuyết tật: một quyết định cục bộ một chương trôi thành danh tính cả chuỗi
+
+```
+VERDI        10 chương, TẤT CẢ thanh_binh_f090      (nhất quán tuyệt đối)
+CHRISTOPHER   9 chương: f090 ở 6 chương / thai_son_f104 ở 110, 112, 114
+```
+
+Hai người **chỉ gặp nhau ở 110 và 112**. Bản vá `patch_two_pins_do_not_share_a_chapter` bỏ pin của
+CHRISTOPHER ở 110 — đúng doanh nghĩa, vì hai người một giọng trong một chương nặng hơn. Nhưng
+`port_casting` mang giọng mới xuống project kế tiếp **như một pin**, và `pin_the_book_cast` không bao giờ
+xét lại pin đã có, nên **chương 114 đổi giọng mà không mua được gì**. Cùng cơ chế ấy đánh cả người chưa
+từng được ghim: SHARON mang pin `ngoc_linh_f087` trong khi đa số trên sách của cô là `truc_ly_f100`
+(4 chương) — giọng bị rút thăm lại ở một project đúc lại rồi trôi xuống theo chuỗi.
+
+**Sửa 1 — `pin_the_book_cast.py` sửa pin đã trôi, trong một khe hẹp.** Chỉ khi cuốn sách nói rõ pin sai
+(giọng đang ghim ít chương **hơn hẳn** giọng đa số; hoà thì giữ) **và** việc sửa không thể gây va chạm
+cùng chương trong lô này (người đang giữ giọng đa số không cùng chương nào với người này **trong phạm vi
+chương của chính project**). Lượt thử trên project 114 đã xong: sửa đúng CHRISTOPHER và SHARON; lấy cả lô
+40 chương làm phạm vi thì **không** sửa ai, vì 110 nằm trong đó. 10 test.
+
+Câu cũ trong docstring của script — *"không bao giờ đè lên quyết định của `port_casting`"* — đã phải trả
+giá và giờ được viết lại kèm lý do. Lo ngại "cli cast biết điều script này không biết" không áp cho cột
+này: `locked_voice_key` chỉ có **hai** chỗ ghi trong cả cây (`port_casting.py` và script này, qua đúng một
+hàm `set_locked_character_voice`), còn người nghe nói bằng `listener_audio_acceptances` và các khoá
+phái/tuổi.
+
+**Sửa 2 — `one_person_one_voice.py` không đề nghị đúc lại những chương đúc lại không cứu được.** Nếu giọng
+đa số của người ấy đang do người khác dùng **ngay trong chương đó** thì đúc lại chỉ tái tạo đánh đổi cũ.
+
+    danh sách đề nghị trước:  15 chương
+    sau phép lọc:              8 chương  (1:017 1:020 1:022 1:047 1:048 2:062 2:090 3:114)
+    nói rõ không sửa được:    13 cặp (người, chương)
+
+Bảy chương ấy là **~1,5–2,5 giờ GPU** để không đổi được gì — đúng hình chương 022 hôm 14-09 mà dự án đã
+trả tiền một lần. Chương bị bỏ được **in ra**, không âm thầm ngắn đi: một danh sách âm thầm ngắn lại là
+một danh sách nói dối. 6 test.
+
+### Còn lại
+
+- Lô 4 đang bay với **pin cũ** (đã khởi động 20:55, trước hai bản sửa trên). Phép sửa pin chỉ có hiệu lực
+  ở lần khởi động **sau**, và tôi không ghi vào project đang chạy — `pin_the_book_cast` tự từ chối, đúng.
+- Chương **082** của lô 2 vẫn chưa có bản thu: `bash scripts/boundary.sh 4 --recast auto 2:082` (thêm 8
+  chương đúc lại ở trên nếu muốn làm cùng lượt).
+- Hàng chờ có `patch_a_pronoun_is_not_a_character.py` cho ranh giới 4.
