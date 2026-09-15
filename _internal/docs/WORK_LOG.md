@@ -3691,3 +3691,34 @@ Bộ test: 8 bài mới. Bốn bản vá trong `ORDER` áp liên tiếp lên m�
 bằng giọng người dẫn chuyện, còn thoại của anh ta đọc bằng `thanh_binh_f093`. Một người, hai giọng, theo
 đúng định nghĩa `one_person_one_voice`. Sách hữu thanh ngôi thứ nhất thường cho một người đọc cả hai.
 Không tự đổi: 261 chương đã lên sách với cách hiện tại.
+
+### 04:25 — 14 chương của cuốn 1 có nhân vật chính nói bằng hai–ba giọng trong CÙNG một chương
+
+Đi đo mục "nhãn xưng hô ngôi thứ ba" (16 câu), và tìm được một thứ nặng hơn ở ngay cạnh: đếm theo
+**chương** thay vì theo câu thì cuốn 1 có **14 chương** mà `SAMAEL`, `ME`, `TÔI` cùng xuất hiện:
+
+    da len sach (7):  018  210  214  231  250  254  255
+    chua len  (6):    264  271  272  273  275  278       <- lo10, 261..278
+    nang nhat:        273  ME=9, SAMAEL=1, TÔI=1  (ca ba nhan)
+
+`SAMAEL` nhận giọng đã ghim, `ME` nhận giọng nhóm vô danh, `TÔI` nhận giọng thứ ba — cùng một người,
+cùng một chương, cách nhau vài phút trong tai người nghe. **Không cổng nào thấy được**: với mọi phép
+kiểm, đó là ba nhân vật khác nhau và mỗi người nhất quán. `one_person_one_voice.py` đi tìm đúng lớp
+khuyết tật này nhưng nó so theo TÊN, nên ba cái tên khác nhau thì nó im.
+
+Bản vá ngôi thứ nhất gộp cả ba **ngay từ lúc phân tích**, nên 6 chương chưa lên sách được chữa miễn
+phí. 7 chương đã lên sách cần đúc lại sau ranh giới 4 — đúng lý do đã dặn *đừng* đúc lại trước.
+
+Còn mục xưng hô thì đo ra một câu trả lời **"không vá"**, và bảng cũ của nó đếm sai: `ME` là nhãn ngôi
+thứ nhất chứ không phải xưng hô. Gạn ra và gộp trùng theo (chương, seq) thì cuốn 1 còn **10 ca**, và
+chúng chia làm hai loại khác nhau về bản chất:
+
+| ca | người ấy có tên ở đâu đó không | chỗ đúng |
+|---|---|---|
+| `MẸ` 003, `CHA` 003, `BÀ` ×4 ở 273 | không — một cảnh, không tên | `NPC_LOCAL:` + `GENERIC_SPEAKER_TRAITS` |
+| `CHA` ×4 ở 012 | **có** — là Công tước / THEOSBANE, nói ở hàng chục chương | gán về tên thật |
+
+Đóng Công tước thành một NPC cục bộ của chương 012 là **cắt ông ta khỏi danh tính của mình** ở mọi
+chương khác. 10 ca trên 478 chương, và một luật chung làm sai 4 trong 10 → không viết mã. Chứng cứ phụ
+cho thấy nhãn ấy là ngẫu nhiên chứ không phải sự thật về văn bản: cùng chương 012, `lo01` khai `CHA`
+còn `alpha55` khai `Công tước`.

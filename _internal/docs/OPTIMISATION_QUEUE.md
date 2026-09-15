@@ -2441,13 +2441,47 @@ bốn bài test đều xanh và chương vẫn hỏng.
   3. `CHA` (9 câu) tồn tại **dù** `"cha"` đã nằm trong `NAME_CANDIDATE_EXCLUSIONS`, một chứng cứ nữa rằng
      danh sách ấy không hề áp cho tên **do mô hình khai** (xem mục trên).
 
-  Đề xuất (chưa làm): thêm tiếng đơn xưng hô vào `GENERIC_SPEAKER_TRAITS` kèm giới tính/tuổi
-  (`mẹ`→(female, adult), `cha`/`bố`→(male, adult), `bà`→(female, elderly), `ông`→(male, elderly)…) và cho
-  tên **do mô hình khai** thuộc nhóm ấy đi qua `NPC_LOCAL:` thay vì vào hàng như tên riêng. Như thế gộp
-  được hai cách viết, và người nghe được một giọng ổn định trong cảnh mà không có ai bị bịa ra.
-  **Đo trước khi viết:** với mỗi trong 110 câu, kiểm xem cảnh ấy có nêu tên người nói ở đâu gần đó không —
-  nếu có thì nhãn chung chung là **sai** và phải gán về tên ấy; ca `BÀ` là ca "không có tên", chưa biết 94
-  câu của `ME` thuộc loại nào. **Không** chặn `Anh`, `Em`, `Cô` như tên: chúng là tên người Việt thật.
+  ~~Đề xuất: thêm tiếng đơn xưng hô vào `GENERIC_SPEAKER_TRAITS`~~ **ĐÃ ĐO, VÀ CỐ Ý KHÔNG VÁ**
+  (04:25 ngày 2026-09-16, `scratchpad/read_the_kinship_labels.py`).
+
+  Trước hết, **bảng ở trên đếm sai**: `ME` là nhãn **ngôi thứ nhất**, không phải xưng hô ngôi thứ ba, và nó
+  đã có đường chữa riêng (hai mục trên). Gạn `ME` ra và gộp trùng theo (chương, seq) — project vá / đúc lại
+  lặp lại cùng một chương — thì cuốn 1 còn **10 ca thật**:
+
+  | ca | chương | người ấy có tên ở đâu đó không |
+  |---|---|---|
+  | `MẸ` ×1 | 003 | **không** — "người mẹ ấy", "bà ta"; một cảnh, một lần |
+  | `CHA` ×1 | 003 | **không** — "Cha của Noah" |
+  | `BÀ` ×4 | 273 | **không** — ảo ảnh người mẹ đã mất; cả cảnh gọi "bà"/"mẹ" |
+  | `CHA` ×4 | 012 | **CÓ** — đó là cha của Samael, tức **Công tước / THEOSBANE**, người nói ở hàng chục chương khác (và chính chương 012 khi `alpha55` phân tích lại được khai là `Công tước`) |
+
+  Nên nhãn xưng hô chia làm **hai loại khác nhau về bản chất**, và đề xuất cũ đúng cho loại đầu, **có hại**
+  cho loại sau:
+
+  - **một người của một cảnh, không có tên ở đâu cả** (6 ca): `NPC_LOCAL:` + `GENERIC_SPEAKER_TRAITS` đúng
+    là chỗ của họ — một giọng ổn định trong cảnh, không ai bị bịa ra.
+  - **một nhân vật chính đang được gọi bằng vai vế trong chương này** (4 ca): đóng anh ta thành NPC cục bộ
+    là **cắt anh ta khỏi danh tính của mình** ở mọi chương khác — Công tước sẽ đọc bằng một giọng lạ đúng
+    trong chương 012. Câu trả lời đúng là gán về tên thật, mà muốn thế phải biết cả cuốn sách, thứ tầng
+    phân tích một-chương không có.
+
+  **10 ca trên 478 chương, và một luật chung sẽ làm sai 4 trong 10 → không viết mã.** Cái đáng làm nếu có
+  ai quay lại: hỏi `pin_the_book_cast` (nó *có* cái nhìn cả cuốn) xem một nhãn xưng hô trong chương N có
+  người nào mang nó ở chương khác không — nhưng đó là một phép đo mới, không phải bản vá này.
+  **Không** chặn `Anh`, `Em`, `Cô` như tên: chúng là tên người Việt thật.
+
+- **CUỐN 1: 14 chương có nhân vật chính mang HAI–BA nhãn trong CÙNG một chương** (đo 04:25 ngày
+  2026-09-16). Đây là hệ quả nặng nhất của nhãn ngôi thứ nhất, và nó **vô hình với mọi cổng**: `SAMAEL`
+  nhận giọng đã ghim, `ME` nhận giọng nhóm khác, `TÔI` nhận giọng thứ ba — cùng một người, cùng một
+  chương, cách nhau vài phút trong tai người nghe.
+
+      da len sach (7):  018  210  214  231  250  254  255
+      chua len  (6):    264  271  272  273  275  278      <- lo10, 261..278
+      nang nhat:        273 co CA BA nhan (ME=9, SAMAEL=1, TÔI=1)
+
+  `patch_a_first_person_book_knows_who_i_is` (hàng chờ, ranh giới 4) gộp cả ba về `SAMAEL` **ngay từ lúc
+  phân tích**, nên 6 chương chưa lên sách được chữa miễn phí. 7 chương đã lên sách thì cần đúc lại — và
+  đây chính là lý do mục trên dặn **đừng** đúc lại trước khi bản vá vào cây.
 
 - **SỬA LẠI HAI MỤC TRÊN (22:30 ngày 15-09) — `ME` là "me" TIẾNG ANH, không phải "mẹ", và bản vá tôi xếp
   hàng đã sai chỗ.** Hai cái sai, cả hai do tôi, cả hai đã đo lại:
