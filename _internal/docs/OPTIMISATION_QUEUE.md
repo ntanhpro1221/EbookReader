@@ -2291,6 +2291,15 @@ bốn bài test đều xanh và chương vẫn hỏng.
   46/509 = 9,0%), các trường bị bắt (đang 88% dính `speaker`), và thời gian. Chỉ vá nếu tỉ lệ bắt giữ
   nguyên và thời gian giảm. `analysis.py` là file khoá họ dàn giọng → qua hàng chờ, áp ở ranh giới.
 
+- **ĐÃ QUYẾT 00:05 ngày 16-09 — CHỦ SÁCH TRẢ LỜI "KHÔNG".** Mục ngay dưới đây hỏi: một nhân vật phụ nói
+  giọng **miền Trung** có chấp nhận được không (để kho nam đi 14 → 21). Câu trả lời là **không**, nên
+  `CASTING_REGIONS` giữ nguyên `{Nam, Bắc}` và **mục ấy đóng**. Cái giá ghi trong mục — 14 bậc cho 55 người
+  nam có tên, 3,9 người một giọng, 19 giọng bị dùng chung — từ giờ là cái giá **được chấp nhận**, không phải
+  một việc chưa làm. Đừng mở lại mà không hỏi lại.
+
+  Hai đòn còn lại của cùng mục vẫn còn giá trị vì chúng không đụng tới gu: ghim cho đúng người (đang làm) và
+  không đúc lại những chương đúc lại không cứu được gì (đã làm 21:20).
+
 - **Kho giọng NAM cho nhân vật chỉ có 14 bậc, và cái chặn là một CHÍNH SÁCH chứ không phải một khuyết
   tật** (đo 22:20 ngày 15-09; **cần chủ sách quyết một câu**, không phải việc của máy).
 
