@@ -2246,6 +2246,41 @@ bốn bài test đều xanh và chương vẫn hỏng.
   được chính vì nó **trông như** một cái tên hợp lệ nên chuỗi ấy không bao giờ chạy. Đó cũng là lý do bảng
   "lấy tên trong câu tường thuật: 4/4" ở trên là chứng cứ cho chuỗi sẵn có, không phải cho một luật mới.
 
+- **Kho giọng NAM cho nhân vật chỉ có 14 bậc, và cái chặn là một CHÍNH SÁCH chứ không phải một khuyết
+  tật** (đo 22:20 ngày 15-09; **cần chủ sách quyết một câu**, không phải việc của máy).
+
+  Nghi vấn ban đầu của tôi — *"cả sách đang đọc bằng đúng hai preset bị giáng cấp, chắc có lỗi"* — **sai**,
+  và lý do đã nằm sẵn trong `casting_presets`. Bảy preset nam trong catalogue, sáu bị loại **có lý do**:
+
+  | preset | vùng / kiểu | vì sao không cấp cho nhân vật |
+  |---|---|---|
+  | Phạm Tuyên | Bắc, tự nhiên | là giọng **người dẫn chuyện**; nhân vật không dùng chung |
+  | Thanh Bình | Bắc, đọc truyện | **đang dùng** (nằm trong `LAST_RESORT_PRESETS`) |
+  | Thái Sơn | Nam, đọc truyện | **đang dùng** (nằm trong `LAST_RESORT_PRESETS`) |
+  | Xuân Vĩnh | Nam, tự nhiên | `EXCLUDED_PRESETS` — bị chặn hẳn |
+  | **Quang Sơn** | **Trung**, tự nhiên | `CASTING_REGIONS = {Nam, Bắc}` — **chặn theo vùng** |
+  | Minh Đức | Bắc, **tin tức** | `style != STYLE_NEWS` — giọng đọc bản tin |
+  | Minh Triết | Nam, **tin tức** | cùng lý do |
+
+  Nên nhãn "giáng cấp" của Thanh Bình / Thái Sơn trên thực tế vô nghĩa: **chúng là hai cái duy nhất còn
+  lại**. 14 bậc (2 preset × 7) cho **55 người nam có tên** trên sách 139 chương — trung bình 3,9 người một
+  giọng, và 19 giọng đang bị dùng chung (một bậc có tới 6 người).
+
+  **Kho không phải chỗ thắt cho va chạm cùng chương:** `voice_pool_pressure` đo chương đông nhất cần **8**
+  giọng nam, kho có 14. Cái kho hẹp gây ra là chuyện khác và gián tiếp: càng nhiều người chung một bậc thì
+  càng dễ có hai người trong số họ **gặp nhau ở một chương sau**, và mỗi lần gặp là một lần bỏ pin (rồi
+  một lần pin trôi, xem mục trên).
+
+  **Đòn duy nhất có thể kéo, và nó là chuyện gu:** cho phép vùng **Trung** (`Quang Sơn`) thì kho nam đi
+  **14 → 21 (+50%)**, trung bình xuống 2,6 người một giọng. Hai preset tin tức thì nên để nguyên — giọng
+  đọc bản tin đọc thoại là sai kiểu, đó là phán xét kỹ thuật chứ không phải gu.
+
+  **Câu cho chủ sách:** một nhân vật phụ nói giọng **miền Trung** có chấp nhận được không? Nếu có thì đây
+  là một bản vá nhỏ (thêm `"Trung"` vào `CASTING_REGIONS`, `voice_catalog.py` — file khoá, phải qua hàng
+  chờ và một ranh giới), nhưng **phải đo trước**: thêm bậc làm `_first_free_variant` xếp lại thứ tự, nên
+  người **chưa được ghim** có thể đổi giọng ở lô sau — đúng cái vòng mà pin đang dập. Thứ tự đúng: ghim
+  xong đã (đang làm), rồi mới mở kho.
+
 - **Nhãn xưng hô ngôi thứ ba dùng làm tên nhân vật** (đo 19:55 ngày 15-09; ưu tiên trung, **cuốn 1 nặng
   hơn cuốn 2**). Cùng họ với mục phantom ở trên nhưng **không** cùng cách chữa, nên tách ra:
 
