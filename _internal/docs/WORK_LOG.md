@@ -3789,3 +3789,36 @@ sau đã có đường chữa riêng, nên giá trị thêm trên hai cuốn đa
 
 Thước ở lại thành `scripts/measure_a_phantom_by_its_own_chapter.py` (kèm cả câu chuyện LUCIEN), để
 nếu một cuốn sau cho con số lớn thì công cụ quyết định đã có sẵn, không phải viết lại.
+
+### 05:25 — 1.796 lần xuất hiện teo lại thành 1 đoạn hỏng, khi đem so với NỀN
+
+Lô 4 có hai đoạn cùng một họ mới: **danh từ vay mượn viết bằng chữ Việt**, không phải tên người nên
+`analysis.py` không sinh cách đọc cho chúng (luật bỏ ứng viên xuất hiện một lần, không phải người
+nói — chính luật chặn phantom).
+
+    chuong 157  "À… khí amoniac."  -> Whisper "À, khí âm mồ này ố."  0,56  THAT BAI
+    chuong 158  "Là urê."          -> Whisper "Là một rời!"          0,12  ship kem canh bao
+
+Đếm trên nguồn thì lớp này trông đáng báo động: **1.796 lần xuất hiện, 567 cặp (từ, chương), 533 cặp
+ở chương CHƯA sản xuất** — `nguyên tử` 801 lần/232 chương, `electron` 560/112, `urê` 80/24.
+
+Nhưng con số ấy **không phải một cái giá**, và nó gộp hai thứ khác hẳn: Hán-Việt bình thường
+(`nguyên tử`, `lưu huỳnh`, `dung dịch`) mà giọng đọc không hề vấp, với vay mượn La-tinh (`amoniac`,
+`urê`, `electron`) mới là lớp đã thất bại. Đếm **kết cục từng đoạn** trên 15.024 đoạn đã thu:
+
+    nhom                 tong   sach  canh bao  hong   ti le xau
+    vay muon La-tinh       31     21         9     1      32,3%
+    Han-Viet thuong        58     49         9     0      15,5%
+    khong co tu nao     14935  11333      3570    32      24,1%   <- NEN
+
+**Nền là 24,1%.** Nhóm vay mượn 32,3% trên n=31 nghĩa là 10 đoạn "xấu" ở nơi nền dự đoán 7,5 — chênh
+hai đoạn rưỡi, không nói gì cả. Và gần như mọi cảnh báo ở **cả ba nhóm** là
+`ASR_LOCKED_NAME_ANCHOR_MISMATCH` (đã đo riêng: bắn trên 21–27% mọi đoạn, tốn ~0 GPU). Chính đoạn
+`urê` bị cảnh báo có **độ giống 0,99** — cảnh báo ấy nói về `Lucien`, không nói về `urê`.
+
+Còn lại **1 đoạn thất bại trên 15.024** vì lớp này. **Không viết mã**; ca 157 muốn xử thì thêm một
+dòng vào sổ cách đọc của lô ấy, đúng như ca `Gossett` chương 296.
+
+Bài học đáng giữ hơn kết luận: nửa đo đầu đếm *số lần xuất hiện trong nguồn*, và tôi đã suýt coi đó
+là một cái giá. Chỉ khi đếm *kết cục từng đoạn* và so với *nền* thì 1.796 mới teo lại thành 1. Cả hai
+nửa ở lại trong `scripts/measure_a_loanword_noun.py`, nửa sau nằm dưới nửa trước có lý do.
