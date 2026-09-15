@@ -2246,6 +2246,36 @@ bốn bài test đều xanh và chương vẫn hỏng.
   được chính vì nó **trông như** một cái tên hợp lệ nên chuỗi ấy không bao giờ chạy. Đó cũng là lý do bảng
   "lấy tên trong câu tường thuật: 4/4" ở trên là chứng cứ cho chuỗi sẵn có, không phải cho một luật mới.
 
+- **Nhãn xưng hô ngôi thứ ba dùng làm tên nhân vật** (đo 19:55 ngày 15-09; ưu tiên trung, **cuốn 1 nặng
+  hơn cuốn 2**). Cùng họ với mục phantom ở trên nhưng **không** cùng cách chữa, nên tách ra:
+
+  | | cuốn 2 (đang sản xuất) | cuốn 1 (đang dừng) |
+  |---|---|---|
+  | đại từ ngôi 1 (bản vá đã bắt) | 16 câu (`Mình` 10, `MÌNH` 6) | 71 câu (`Tôi` 70, `TÔI` 1) |
+  | nhãn xưng hô ngôi 3 (**chưa xử**) | 0 câu | **110 câu** (`ME` 94, `CHA` 9, `BÀ` 4, `MẸ` 3) |
+
+  Đọc ca thật (cuốn 1, chương 21, cảnh người đàn bà giả làm mẹ): `BÀ` giữ 3 câu và **đó là lời thật của bà
+  ấy** — bà không có tên trong cảnh. Nên đây **không** phải phantom như `Tôi`; nó là một người **có thật mà
+  chưa được gọi tên**, và dự án đã có đúng cơ chế cho việc ấy: `GENERIC_SPEAKER_TRAITS` (nhãn chung chung
+  kèm giới tính/tuổi) + `NPC_LOCAL:` (phạm vi cục bộ, giọng ổn định trong phạm vi). Chỉ có điều bảng ấy
+  chứa **cụm** ("người đàn ông", "cô gái") mà không chứa **tiếng đơn** (`mẹ`, `cha`, `bà`, `ông`), nên mô
+  hình khai `BÀ` thì nó đi vào hàng như một cái tên riêng.
+
+  Ba hệ quả đã thấy, đều đo được:
+  1. Nó **trông như** tên riêng nên được cấp giọng riêng như một nhân vật.
+  2. Hai cách viết của cùng một nhãn thành hai danh tính: `ME` 94 câu và `MẸ` 3 câu — tức cùng một người
+     hai giọng, đúng lớp khuyết tật mà `one_person_one_voice.py` đi đo.
+  3. `CHA` (9 câu) tồn tại **dù** `"cha"` đã nằm trong `NAME_CANDIDATE_EXCLUSIONS`, một chứng cứ nữa rằng
+     danh sách ấy không hề áp cho tên **do mô hình khai** (xem mục trên).
+
+  Đề xuất (chưa làm): thêm tiếng đơn xưng hô vào `GENERIC_SPEAKER_TRAITS` kèm giới tính/tuổi
+  (`mẹ`→(female, adult), `cha`/`bố`→(male, adult), `bà`→(female, elderly), `ông`→(male, elderly)…) và cho
+  tên **do mô hình khai** thuộc nhóm ấy đi qua `NPC_LOCAL:` thay vì vào hàng như tên riêng. Như thế gộp
+  được hai cách viết, và người nghe được một giọng ổn định trong cảnh mà không có ai bị bịa ra.
+  **Đo trước khi viết:** với mỗi trong 110 câu, kiểm xem cảnh ấy có nêu tên người nói ở đâu gần đó không —
+  nếu có thì nhãn chung chung là **sai** và phải gán về tên ấy; ca `BÀ` là ca "không có tên", chưa biết 94
+  câu của `ME` thuộc loại nào. **Không** chặn `Anh`, `Em`, `Cô` như tên: chúng là tên người Việt thật.
+
 - **Số viết bằng chữ so với chữ số trong phép so ASR** (đo 2026-09-14 21:05; ưu tiên thấp–trung).
   Whisper chuẩn hoá số tiếng Việt thành chữ số (`mười giờ` → `10h`, `hai mươi lăm phần trăm` → `25%`), còn
   tham chiếu giữ nguyên chữ → similarity tụt oan. **829/35.612** đoạn có hình này, **55** dưới 0,90, **4**
