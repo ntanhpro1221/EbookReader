@@ -3508,3 +3508,28 @@ trước đây là 10 lần thu lại cộng một nguy cơ mất chương.
 
 Và `0` ở dòng cuối là điều kiện an toàn: không đoạn nào được tha trong khi **cả hai** thước đều nói nó
 nhanh. Cửa vẫn đóng với bản thu thật sự vội.
+
+### 02:30 — cảnh báo neo tên nổ trên 1/4 số đoạn, và phép đo nói ĐỪNG động vào
+
+Lô 4 đang tổng hợp, và 197/719 đoạn (**27,4%**) mang `ASR_LOCKED_NAME_ANCHOR_MISMATCH`; lô 3 cả lô là
+772/3.680 (**21,0%**). Một cảnh báo nổ trên một phần tư số đoạn thì theo đúng doanh nghĩa dự án đáng nghi —
+*"một bộ canh lúc nào cũng kêu thì tệ hơn không có bộ canh"* (docstring của `_runs_in_flight`). Nên tôi định
+chữa nó. Đo trước thì hoá ra không có gì để chữa:
+
+    lo 3:  3.673 doan, tong 3.740 lan thu   ->  thua 67 lan  (1,8%)
+           3.647 doan xong ngay lan 1; chi 26 doan can >= 2 lan
+           su kien co "ANCHOR": 772   |   su kien "chua dat lan": 66
+
+772 cảnh báo mà chỉ 67 lần thu lại **trên toàn bộ lô**, và những lần ấy không do neo tên. Tức phép kiểm
+**không tốn GPU** — nó chỉ ghi sổ. Và nó ghi đúng chỗ: mã này nằm trong `MACHINE_ACCEPTABLE_SEGMENT_WARNINGS`
+(máy nhận **và ghi lại**) chứ không nằm trong `HIGH_QUALITY_ALLOWED_SEGMENT_WARNINGS` (im lặng) — đúng
+doanh nghĩa "máy chỉ được đè lên một phép kiểm không nói rằng bản thu HỎNG, và phải ghi sổ".
+
+Cái giá thật của nó là **771 dòng sổ** mỗi lô cho một phép kiểm đã bắt đúng **một** ca thật (bản thu đọc
+`Sam Min` thay vì `Xa-men`, xem `docs/LOCKED_NAME_ANCHOR_IS_A_SPELLING_TEST.md`). Rẻ, và không đổi được gì
+bằng cách tắt nó.
+
+**Ghi lại để khỏi đuổi lần nữa** — kể cả tôi: tỉ lệ 21–27% không phải dấu hiệu hỏng, nó là hình dạng của
+một phép kiểm chính tả áp lên bản ghi của Whisper. Hai kiểu hỏng thật của cơ chế ấy đã có tài liệu riêng
+(gấp `k`→`c` đã sửa; phiên âm đánh vần phụ âm còn mở, mới **một** ca). Muốn giảm số dòng sổ thì đó là việc
+của báo cáo, không phải việc của phép kiểm.
