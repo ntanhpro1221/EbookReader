@@ -238,7 +238,15 @@ if [ -n "$PENDING" ]; then
   SUITE="$(grep -oE '[0-9]+ passed[^\r]*' "$LOG" | tail -1)"
   say "bo test: ${SUITE:-(khong thay dong tong ket)}"
   # ---- 2. commit
+  #
+  # `git add -A` ở đây là có chủ ý - mot ban va co the TAO file test moi, nen khong the liet ke
+  # truoc duong dan. Nhung no cung quet sach moi thu dang do trong cay, ke ca viec ai do dang
+  # sua nua doi khi lo vua xong. Vi the: NOI RA truoc khi commit, va dat danh sach vao chinh
+  # commit - de sau nay doc `git show --stat` la thay ngay co gi bi quet vao nham.
   git add -A "$ROOT" >> "$LOG" 2>&1
+  STAGED="$(git status --short | head -40)"
+  say "stage $(git diff --cached --name-only | wc -l | tr -d ' ') file:"
+  printf '%s\n' "$STAGED" | sed 's/^/    /' | tee -a "$LOG"
   git commit -q -F - <<EOF_MSG
 apply the queue at the batch $BATCH boundary: $PENDING
 
@@ -248,6 +256,11 @@ Applied unattended by scripts/boundary.sh once batch $BATCH finished
 APPLIED before that run, so the tree that was tested is the tree in this
 commit. Each patch's reasoning is in its own docstring under
 scripts/pending_patches/.
+
+Staged with git add -A, because a patch may create new test files whose paths
+cannot be listed in advance. What that swept up, verbatim:
+
+$STAGED
 
 Co-Authored-By: $COAUTHOR
 EOF_MSG

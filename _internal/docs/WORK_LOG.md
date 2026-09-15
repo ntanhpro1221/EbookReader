@@ -3822,3 +3822,28 @@ dòng vào sổ cách đọc của lô ấy, đúng như ca `Gossett` chương 2
 Bài học đáng giữ hơn kết luận: nửa đo đầu đếm *số lần xuất hiện trong nguồn*, và tôi đã suýt coi đó
 là một cái giá. Chỉ khi đếm *kết cục từng đoạn* và so với *nền* thì 1.796 mới teo lại thành 1. Cả hai
 nửa ở lại trong `scripts/measure_a_loanword_noun.py`, nửa sau nằm dưới nửa trước có lý do.
+
+### 05:55 — hai lỗ nhỏ trong chính cái ranh giới sắp chạy: một con số bị mất và một phép quét im lặng
+
+Đọc lại bước 1 của `boundary.sh` trước khi nó chạy lần thứ tư, và thấy hai chỗ:
+
+**1. Ranh giới chưa bao giờ ghi được số bài test đã xanh.** Cả hai lần trước đều ghi đúng một dòng:
+
+    09-15 19:23:53 bo test: (khong thay dong tong ket)
+    09-15 03:15:28 bo test: (khong thay dong tong ket)
+
+Nguyên nhân: `apply_all.py` gọi `pytest -q`, mà `pyproject.toml` **đã có** `addopts = "-q"` — hai
+cờ thành `-qq` và pytest **bỏ luôn dòng tổng kết** `N passed in Xs`. Lượt chạy xanh thật (apply_all
+trả 1 khi đỏ, và ranh giới `exit 1` theo), nhưng con số thì không vào được log lẫn commit. Bỏ cờ
+thừa: `pytest tests/test_config.py` giờ in `33 passed in 0.24s`, và `grep` của ranh giới bắt được.
+
+Đây đúng cái bẫy tôi đã tự mắc lúc 03:40 khi thêm `-q` vào lệnh của mình rồi ngạc nhiên vì không
+thấy dòng tổng kết. Lần ấy tôi chỉ sửa cách gõ của mình; lần này sửa chỗ nó thật sự đáng sửa.
+
+**2. `git add -A` của ranh giới quét im lặng.** Nó **có chủ ý** — một bản vá có thể tạo file test
+mới nên không liệt kê trước được đường dẫn — nhưng nó cũng quét mọi thứ đang dở trong cây, kể cả
+việc ai đó (tôi) đang sửa nửa đời khi lô vừa xong. Giờ nó **nói ra**: in số file và danh sách
+`git status --short` vào log trước khi commit, và đặt đúng danh sách ấy vào **thân commit**. Đọc
+`git show` sau này là thấy ngay có gì bị quét vào nhầm, thay vì phải suy từ diff.
+
+Không đổi hành vi nào khác: vẫn `git add -A`, vì lý do của nó vẫn đúng.
