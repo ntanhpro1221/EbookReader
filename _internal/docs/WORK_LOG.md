@@ -2741,3 +2741,46 @@ minh: lần đúc lại sinh ra một tập người nói khác). Nếu người
 chưa ghim, thì đúc lại chương này rồi chương sau lại lệch — đuổi theo mãi. Việc phải làm trước: xem các
 người này đã có pin chưa; nếu chưa, ghim (không tốn GPU) rồi mới đúc lại **những chương còn lệch sau khi
 ghim**. Ghi vào hàng cho ranh giới 3 → 4.
+
+## 2026-09-15, 10:50–11:00 — không ai gọi `pin_the_book_cast`, và luật của nó nghiêm hơn luật của dự án
+
+Đi tìm vì sao 10 người mang hai giọng, và tìm ra hai điều, cả hai đều là gốc:
+
+**1. Không script nào gọi `pin_the_book_cast.py`.** `grep` cả `scripts/*.sh` và `scripts/*.py`: chỉ có tài
+liệu nhắc tên nó. Nó được viết 12-09 cho cuốn 1, đo được 26 người không pin, rồi **chưa bao giờ được nối
+vào đường chạy** — vì nó nằm chờ một quyết định của chủ sách ("xếp lại pin theo mức đã nghe"). Hệ quả đã
+đo: người không pin bị **rút thăm lại giọng ở mỗi lô**, và số người mang hơn một giọng qua cả sách đi
+`11 → 15 → 21` ở cuốn 1 (sau lô 5, 7, 8) và đã là 10 ở cuốn 2 sau hai lô. Lô 3 lúc 10:50: **102 nhân vật,
+34 pin**, và không một ai trong 10 người ấy có pin.
+
+**2. Chạy thử thì nó ghim được đúng 0 người.** 21 dòng `slot đã thuộc …`: mọi giọng đa số mà nó đề nghị đều
+đã có một người ghim. Vì `owned` là {giọng: người}, luật cũ = **một giọng một người ghim**. Nhưng đó không
+phải luật của dự án: bộ cấp giọng vẫn cho nhiều người dùng chung một bậc, và thứ nó cấm là hai người **cùng
+một chương** dùng một giọng (`_first_free_variant` → `shared_chapters`). Nghiêm hơn luật thật không cứu
+người nghe khỏi điều gì — nó chỉ bảo đảm không ai được ghim, tức bảo đảm cái vòng rút thăm tiếp tục.
+
+**Sửa:** `resolve_collisions` nhận thêm `chapters_of` (ai có mặt ở chương nào, theo **cuốn sách đã ghép** —
+cùng nguồn với `majority_voices`) và cho phép chia một giọng khi hai người **chưa từng cùng chương**; áp cho
+cả ca "đề nghị mới đấu pin cũ" lẫn "hai đề nghị mới đấu nhau". Thiếu `chapters_of` thì hành vi lùi về đúng
+như cũ. Thêm `--min-chapters` (mặc định **2**), và con số chọn nó:
+
+| ngưỡng | đề nghị | ghim được | ghi chú |
+|---|---|---|---|
+| ≥1 chương | 68 | 66 | 35 người chỉ nói **một** chương — không có chương thứ hai để đổi giọng, ghim họ không cứu ai |
+| **≥2 chương** | **33** | **31** | phủ **cả 10** người đang mang hai giọng |
+| ≥3 chương | 17 | 15 | bỏ mất EVANS và DURAGO (đúng 2 chương) |
+
+**Mọi pin ở đây đều là pin dùng chung** — kho giọng của sách đã được ghim hết — nên cái giá là: nếu hai
+người chia giọng gặp nhau ở một chương sau, đó là một va chạm cùng chương, và bước 4 ranh giới tự đúc lại
+chương ấy (~12 phút). Cái mua được: một nhân vật phụ quay lại sau mười chương không đổi giọng nữa.
+
+**Nối vào đường chạy:** `launch_batch.sh` và `launch_repair.sh` gọi `pin_the_book_cast.py --apply` sau bước
+gieo và trước `cli run`. Từ giờ mọi project mới — lô, vá, đúc lại — đều bắt đầu với pin theo cuốn sách.
+
+**Áp cho lô 3 đang chạy:** dừng sạch (20 giây), ghim, chạy lại — **6 phút**, giữ nguyên 1.076+ đoạn phân
+tích đã checkpoint. Kết quả: **34 → 65 pin** trên 102 nhân vật; 8 trong 10 người được ghim; CORELLA và WOLF
+bị từ chối **đúng luật** vì người đang giữ giọng đa số của họ có cùng chương với họ. Hai người ấy vẫn bị rút
+thăm ở lô 3, và bước 4 ranh giới sẽ thấy nếu nó thành va chạm.
+
+Bốn test mới/đổi trong `test_pin_the_book_cast` (chia được khi không gặp; không chia được khi gặp; hai đề
+nghị mới cùng chia; pin cũ vẫn không bị lật), 135 test liên quan xanh.

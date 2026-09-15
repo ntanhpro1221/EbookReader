@@ -2198,3 +2198,10 @@ bốn bài test đều xanh và chương vẫn hỏng.
   Thứ tự đúng: (1) `pin_the_book_cast.py --apply` cho các tên trên (không GPU), (2) đúc lại chỉ những
   chương còn lệch, (3) đo lại bằng `one_person_one_voice.py`. Bốn người dưới 5 chương (MEKANZI, CAMIL,
   EVANS, DURAGO) để pin lo, đừng đốt project cho một đồng xu.
+
+- **ĐÃ LÀM 11:00 ngày 15-09** phần "GHIM trước, ĐÚC LẠI sau" của mục trên: `pin_the_book_cast.py` giờ
+  được `launch_batch.sh`/`launch_repair.sh` gọi tự động, luật va chạm theo đúng holder (chia giọng được khi
+  chưa từng cùng chương), `--min-chapters 2`. Lô 3 đã ghim 65/102. **Còn lại của mục ấy:** đo lại
+  `one_person_one_voice.py` sau khi lô 3 lên sách; chỉ đúc lại những chương CÒN lệch (danh sách cũ
+  `1:017 1:020 1:022 1:047 1:048 2:056 2:060 2:061 2:062 2:092` có thể co lại nhờ pin), và CORELLA + WOLF
+  vẫn chưa ghim được vì người giữ giọng của họ cùng chương - nếu họ lệch tiếp thì đúc lại là đường duy nhất.
