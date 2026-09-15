@@ -25,7 +25,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-VERSIONS = Path(r"D:\Novels\Audiobooks\_versions")
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.path trước)
+
 LEASE_STALE_SECONDS = 180.0
 
 # Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
@@ -253,6 +257,30 @@ def _say(line: str) -> None:
         sys.stdout.buffer.write(line.encode("utf-8", "replace") + b"\n")
 
 
+def _version_roots() -> list[Path]:
+    """Mọi thư mục `_versions` có thể chứa một lượt đang bay, cuốn nào cũng tính.
+
+    Điểm bắt đầu là `book_paths.VERSIONS` (cuốn đang sản xuất, đọc từ biến môi trường), rồi bò
+    lên hai bậc và tìm những `_versions` bên cạnh: cuốn 1 ở `Audiobooks/_versions`, cuốn 2 ở
+    `Audiobooks/book2/_versions`, và một cuốn thứ ba mai này sẽ nằm cùng hình ấy.
+    """
+    roots: list[Path] = [VERSIONS]
+    for base in (VERSIONS.parent, VERSIONS.parent.parent):
+        if not base.is_dir():
+            continue
+        roots.append(base / "_versions")
+        roots.extend(sorted(base.glob("*/_versions")))
+    seen: set[str] = set()
+    out: list[Path] = []
+    for root in roots:
+        key = str(root).casefold()
+        if key in seen or not root.is_dir():
+            continue
+        seen.add(key)
+        out.append(root)
+    return out
+
+
 def _runs_in_flight() -> list[tuple[Path, str]]:
     """Project nào thật sự đang chạy, kèm lý do - đọc nhịp tim, không đọc file khoá.
 
@@ -265,12 +293,19 @@ def _runs_in_flight() -> list[tuple[Path, str]]:
     2026-09-08: alpha.56 nhịp cách 2 giây, alpha.50 không có dòng lease nào.
 
     Mở read-only để không chạm vào project đang chạy.
+
+    Quét **mọi cuốn**, không riêng cuốn đang sản xuất. Bản trước ghim cứng
+    `D:\\Novels\\Audiobooks\\_versions` - gốc của cuốn 1 - nên từ 13-09, khi cuốn 2 chuyển sang
+    `.../book2/_versions`, bộ canh này soi một thư mục không có lượt nào và luôn trả lời "không
+    có lượt nào đang chạy". Đúng họ với lỗi đã sửa ở `before_a_batch.py` sáng nay. File bị vá
+    nằm trong `QUALITY_IMPLEMENTATION_FILES`, nên ghi vào chúng giữa một lượt của **bất kỳ**
+    cuốn nào cũng làm lượt ấy bị từ chối khi resume - bộ canh phải nhìn cả hai.
     """
-    if not VERSIONS.is_dir():
-        return []
     now = time.time()
     live: list[tuple[Path, str]] = []
-    for database in sorted(VERSIONS.glob("*/*/project.sqlite3")):
+    for database in sorted(
+        path for root in _version_roots() for path in root.glob("*/*/project.sqlite3")
+    ):
         try:
             connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
             connection.row_factory = sqlite3.Row
