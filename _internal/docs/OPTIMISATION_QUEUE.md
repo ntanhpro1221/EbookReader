@@ -2246,6 +2246,51 @@ bốn bài test đều xanh và chương vẫn hỏng.
   được chính vì nó **trông như** một cái tên hợp lệ nên chuỗi ấy không bao giờ chạy. Đó cũng là lý do bảng
   "lấy tên trong câu tường thuật: 4/4" ở trên là chứng cứ cho chuỗi sẵn có, không phải cho một luật mới.
 
+- **Rút gọn hai trường tự do của phản biện đạo diễn** (đo 23:00–23:30 ngày 15-09; ưu tiên trung–cao,
+  **cần một cửa sổ Ollama rảnh để thí nghiệm**, chưa được vá thẳng).
+
+  Giải phẫu thời gian phân tích của lô 4 (1.647 đoạn đầu, 115,4 phút):
+
+  | | |
+  |---|---|
+  | thời gian model / cả khoảng | **95%** (Ollama tự báo) |
+  | sinh token / thời gian model | **93%** (100,8 phút; nạp prompt chỉ 7%) |
+  | lượt phản biện / cả khoảng | **65%** (75,5 phút, trung vị 11,1 s/lượt) |
+  | token sinh mỗi lần gọi | phản biện **582**, đề xuất **246** → chênh **336** |
+
+  Nên **không có đòn gộp lô** ở phân tích (gộp chỉ bớt 7% phí nạp prompt — khác hẳn ASR, nơi 46% là phí
+  cố định mỗi lời gọi), và **không song song hoá được** (một model, một GPU). Đòn duy nhất là **sinh ít
+  token hơn**.
+
+  Và chênh lệch 336 token ấy được giải thích **trọn vẹn** bằng hai trường tự do mà chỉ phản biện phải
+  viết, đo trên 519 lượt:
+
+      evidence_quote   2.293 giá trị   trung vị  95 ký tự  (~33 token)
+      rationale        2.270 giá trị   trung vị 106 ký tự  (~38 token)
+      => ~71 token mỗi đoạn × 4,4 đoạn/batch = ~312 token mỗi lần gọi   (chênh đo được: 336)
+
+  `evidence_quote` đã bị khoá thành **enum các câu neo** của chính đoạn ấy (`_director_critic_schema`),
+  tức model không tự do bịa — nhưng nó vẫn phải **sinh ra cả câu** để chọn, và câu trung vị dài 95 ký tự.
+
+  **Hai cách rút, cả hai đều phải đo trước khi vá:**
+  1. Cho enum `evidence_quote` chứa **câu neo đã cắt ngắn** (~40 ký tự) rồi map lại phía xác minh: tiết
+     kiệm ~18 token/đoạn ≈ 80 token/lần gọi.
+  2. Hạ `maxLength` của `rationale` từ 200 xuống ~80 (trung vị đang 106): tiết kiệm ~10 token/đoạn. Bản
+     khôn hơn là **chỉ đòi `rationale` khi verdict KHÁC** đề xuất — schema đã có nhánh riêng theo từng ID
+     (`branch = copy.deepcopy(verdict_item)`) nên làm được, nhưng fiddly.
+
+  Cộng lại ~25–30% token sinh của phản biện ≈ **20 phút mỗi lô** ≈ **6,5 giờ** cho 19 lô còn lại của cuốn 2.
+
+  **Rủi ro thật, và vì sao KHÔNG vá thẳng:** bắt model **viết ra** bằng chứng và lý do có thể chính là
+  thứ làm phán quyết của nó tốt hơn ("quote the evidence" là một hiệu ứng có thật). Mà phán biện đang bắt
+  đúng lớp đắt nhất: **38 trong 43** vấn đề nó tìm ra dính trường `speaker`. Cắt sai là đổi 6,5 giờ lấy
+  hàng nghìn câu sai người nói.
+
+  **Thí nghiệm (cần Ollama rảnh, tức một ranh giới):** lấy 3 chương lô 4 đã phân tích làm mốc, chạy lại
+  bộ phân tích trên đúng 3 chương ấy với schema rút gọn, rồi so **ba** con số: tỉ lệ từ chối (đang
+  46/509 = 9,0%), các trường bị bắt (đang 88% dính `speaker`), và thời gian. Chỉ vá nếu tỉ lệ bắt giữ
+  nguyên và thời gian giảm. `analysis.py` là file khoá họ dàn giọng → qua hàng chờ, áp ở ranh giới.
+
 - **Kho giọng NAM cho nhân vật chỉ có 14 bậc, và cái chặn là một CHÍNH SÁCH chứ không phải một khuyết
   tật** (đo 22:20 ngày 15-09; **cần chủ sách quyết một câu**, không phải việc của máy).
 
