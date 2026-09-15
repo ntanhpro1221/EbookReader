@@ -116,6 +116,17 @@ echo "=== 2. gieo, dung thu tu ==="
 "$PY" scripts/seed_listener_acceptances.py "$PREV" "$PROJECT"
 fi
 
+# Ghim giọng theo CUỐN SÁCH ĐÃ GHÉP, sau khi gieo và trước khi chạy. `port_casting` chỉ mang
+# quyết định của MỘT project gieo, và project gieo thường là một project đúc lại một chương -
+# nên gần như ai cũng im lặng ở đó và không có pin nào để mang đi. Người không pin bị rút thăm
+# lại giọng ở MỌI lô: cuốn 1 đi từ 11 lên 21 người mang hơn một giọng qua cả sách (đo sau lô 5,
+# 7, 8), và cuốn 2 đã có 10 người sau hai lô. `pin_the_book_cast.py` lấp đúng chỗ ấy bằng giọng
+# đa số của người ấy trên sách - thứ người nghe đã nghe nhiều nhất.
+#
+# Không có `PREV` (lô đầu của một cuốn) thì cũng gọi: sách có thể đã có chương từ lô trước của
+# cùng cuốn. Script tự từ chối khi project đang chạy, và tự bỏ qua khi chưa có sách.
+"$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply
+
 echo
 echo "=== 3. run ==="
 "$PY" -m ebook_reader.cli run "$PROJECT" --json

@@ -199,6 +199,10 @@ for CH in $BROKEN; do
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_pronunciations.py       "$PREV" "$PROJECT" > /dev/null
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_casting.py              "$PREV" "$PROJECT" > /dev/null
   PYTHONIOENCODING=utf-8 "$PY" scripts/seed_listener_acceptances.py "$PREV" "$PROJECT" > /dev/null
+  # Cùng lý do như trong launch_batch.sh: `port_casting` chỉ mang pin của MỘT project gieo, nên
+  # người chưa từng được ghim bị rút thăm lại giọng - kể cả trong một project vá một chương, nơi
+  # nó quyết giọng cho chính chương sắp lên sách. Ghim theo giọng đa số trên cuốn sách đã ghép.
+  PYTHONIOENCODING=utf-8 "$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply > /dev/null
   # `run` tra JSON; `ok: false` (vi du resume bi tu choi vi hash ma doi) tung bi do vao /dev/null
   # va vong doi ben duoi thay lease chet + chuong khong "chua xong" nen coi la xong. Noi ra.
   RUN_OUT="$(PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli run "$PROJECT" --json 2>&1)"

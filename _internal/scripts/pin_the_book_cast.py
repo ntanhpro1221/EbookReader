@@ -97,6 +97,7 @@ def majority_voices(rows: list[dict]) -> dict[str, tuple[str, int, int]]:
 def resolve_collisions(
     wanted: dict[str, tuple[str, int, int]],
     owned: dict[str, str] | None = None,
+    chapters_of: dict[str, set[str]] | None = None,
 ) -> tuple[dict[str, tuple[str, int, int]], list[str]]:
     """Ai được ghim, sau khi tôn trọng pin ĐÃ CÓ rồi mới xử va chạm giữa các đề nghị mới.
 
@@ -105,21 +106,51 @@ def resolve_collisions(
     chương) **đang giữ pin**, và báo BOWDEN là người nhường. Ngược hẳn: một pin đã có là quyết
     định của `port_casting` hoặc của người nghe, và script này không có quyền lật.
 
-    `owned` = {giọng: người đang giữ pin}. Đề nghị nào rơi vào giọng đã có chủ thì bỏ, nói ra.
-    Còn lại mới so với nhau: người nhiều chương hơn giữ, người kia để allocator cấp giọng mới —
-    nó biết bậc nào còn trống trong lô ấy, còn script này không.
+    `owned` = {giọng: người đang giữ pin}. Còn lại mới so với nhau: người nhiều chương hơn giữ,
+    người kia để allocator cấp giọng mới — nó biết bậc nào còn trống trong lô ấy, còn script này
+    không.
+
+    **Một giọng được phép có hai người ghim, nếu hai người ấy chưa từng cùng chương.** Bản trước
+    bỏ *mọi* đề nghị rơi vào giọng đã có chủ, và đo 10:55 ngày 2026-09-15 trên lô 3 cuốn 2 thì
+    nó bỏ **tất cả**: `0 người sẽ được ghim`, 21 lời "slot đã thuộc …". Hệ quả là đúng cái vòng
+    đã làm cuốn 1 đắt dần — người không pin bị rút thăm lại giọng mỗi lô, và số người mang hơn
+    một giọng qua cả sách đi 11 → 15 → 21.
+
+    Nhưng "một giọng một người" **không phải** luật của dự án: bộ cấp giọng vẫn cho nhiều người
+    dùng chung một bậc, và thứ nó cấm là hai người **cùng chương** dùng một giọng
+    (`_first_free_variant` → `shared_chapters`). Pin phải theo đúng luật ấy, không nghiêm hơn:
+    nghiêm hơn không cứu người nghe khỏi điều gì, mà đổi lấy việc giọng của một nhân vật phụ
+    nhảy mỗi lô.
+
+    `chapters_of` = {tên: {chương}} theo sách đã ghép. Không có nó thì hành vi lùi về đúng như
+    cũ (coi như ai cũng có thể gặp nhau) — chỗ gọi cũ không đổi gì.
     """
     owned = owned or {}
+    known_chapters = chapters_of or {}
+
+    def _never_meet(left: str, right: str) -> bool:
+        here, there = known_chapters.get(left), known_chapters.get(right)
+        if not here or not there:
+            return False
+        return not (here & there)
+
     kept: dict[str, tuple[str, int, int]] = {}
     dropped: list[str] = []
     free: dict[str, tuple[str, int, int]] = {}
     for name, detail in wanted.items():
         holder = owned.get(detail[0])
         if holder is not None and holder != name:
-            dropped.append(
-                f"{name} ({detail[2]} chương) không ghim được"
-                f" {detail[0].replace('preset_', '')}: slot đã thuộc {holder}"
-            )
+            if _never_meet(name, holder):
+                kept[name] = detail
+                dropped.append(
+                    f"{name} ({detail[2]} chương) chia {detail[0].replace('preset_', '')}"
+                    f" với {holder} - chưa từng cùng chương"
+                )
+            else:
+                dropped.append(
+                    f"{name} ({detail[2]} chương) không ghim được"
+                    f" {detail[0].replace('preset_', '')}: {holder} đang giữ và có cùng chương"
+                )
             continue
         free[name] = detail
     by_voice: dict[str, list[str]] = collections.defaultdict(list)
@@ -131,7 +162,16 @@ def resolve_collisions(
             continue
         ranked = sorted(names, key=lambda n: (-free[n][2], -free[n][1], n))
         kept[ranked[0]] = free[ranked[0]]
+        holders = [ranked[0]]
         for loser in ranked[1:]:
+            if all(_never_meet(loser, holder) for holder in holders):
+                kept[loser] = free[loser]
+                holders.append(loser)
+                dropped.append(
+                    f"{loser} ({free[loser][2]} chương) chia {voice.replace('preset_', '')}"
+                    f" với {', '.join(holders[:-1])} - chưa từng cùng chương"
+                )
+                continue
             dropped.append(
                 f"{loser} ({free[loser][2]} chương) nhường {voice.replace('preset_', '')}"
                 f" cho {ranked[0]} ({free[ranked[0]][2]} chương)"
@@ -160,8 +200,28 @@ def voice_profile(voice_key: str, versions: Path = VERSIONS) -> dict | None:
     return None
 
 
-def pin(target: Path, *, apply: bool, book: Path = BOOK, versions: Path = VERSIONS) -> int:
-    """Ghim giọng đa số cho người chưa có pin. Trả về số người được ghim (hoặc sẽ được ghim)."""
+def pin(
+    target: Path,
+    *,
+    apply: bool,
+    book: Path = BOOK,
+    versions: Path = VERSIONS,
+    min_chapters: int = 2,
+) -> int:
+    """Ghim giọng đa số cho người chưa có pin. Trả về số người được ghim (hoặc sẽ được ghim).
+
+    `min_chapters` = 2: chỉ ghim người **người nghe có thể nhận ra là đổi giọng**. Đo 11:05 ngày
+    2026-09-15 trên sách 98 chương của cuốn 2: ngưỡng 1 đề nghị 68 người và ghim được 66, nhưng
+    35 trong số ấy chỉ nói trong **một** chương — ghim họ không cứu ai khỏi điều gì (không có
+    chương thứ hai để so), mà mỗi pin là một lần chia giọng, tức một khả năng va chạm cùng
+    chương ở 817 chương còn lại. Ngưỡng 2 ghim 31 người và phủ **cả 10** người đang mang hai
+    giọng (EVANS và DURAGO đúng 2 chương, tám người kia 4–6).
+
+    Đổi lấy gì: mọi pin ở đây đều **dùng chung** một giọng với người đã ghim (kho giọng của sách
+    đã được ghim hết), nên cái giá là một va chạm cùng chương nếu hai người ấy gặp nhau ở một
+    chương sau - bước 4 ranh giới tự đúc lại chương đó, ~12 phút GPU một ca. Cái mua được: một
+    nhân vật phụ quay lại sau mười chương không còn đổi giọng.
+    """
     rows = fold_names(shipped_rows(book=book, versions=versions))
     if not rows:
         _say("không đọc được cuốn sách đã ghép - không có gì để ghim")
@@ -175,9 +235,16 @@ def pin(target: Path, *, apply: bool, book: Path = BOOK, versions: Path = VERSIO
     owned = {voice: name for name, voice in pins.items()}
     majority = majority_voices(rows)
     unpinned = {
-        name: detail for name, detail in majority.items() if canonical_key(name) not in pins
+        name: detail
+        for name, detail in majority.items()
+        if canonical_key(name) not in pins and detail[2] >= int(min_chapters)
     }
-    todo, dropped = resolve_collisions(unpinned, owned)
+    # Ai có mặt ở chương nào, theo sách đã ghép: đó là bằng chứng cho phép hai người ghim cùng
+    # một giọng mà người nghe không lẫn. Cùng nguồn với `majority_voices`, nên không lệch nhau.
+    chapters_of: dict[str, set[str]] = collections.defaultdict(set)
+    for row in rows:
+        chapters_of[str(row["name"])].add(str(row["chapter"]))
+    todo, dropped = resolve_collisions(unpinned, owned, dict(chapters_of))
     _say(
         f"sách có {len(majority)} người có giọng đa số; {len(pins)} đã được ghim trong"
         f" {target.name}; {len(unpinned)} chưa; ghim được {len(todo)}."
@@ -218,6 +285,12 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("project", type=Path)
     parser.add_argument("--apply", action="store_true", help="ghim thật (mặc định chỉ liệt kê)")
+    parser.add_argument(
+        "--min-chapters",
+        type=int,
+        default=2,
+        help="chỉ ghim người nói ở ít nhất bấy nhiêu chương (mặc định 2 - xem docstring của pin())",
+    )
     args = parser.parse_args(argv)
     target = args.project.expanduser().resolve()
     if not (target / "project.sqlite3").is_file():
@@ -228,7 +301,7 @@ def main(argv: list[str]) -> int:
     if get_status(target).running:
         _say(f"{target.name} đang chạy - ghim giọng lúc này là đổi dàn giọng giữa lượt. Dừng.")
         return 3
-    pin(target, apply=args.apply)
+    pin(target, apply=args.apply, min_chapters=args.min_chapters)
     return 0
 
 
