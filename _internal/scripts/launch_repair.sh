@@ -217,12 +217,21 @@ for CH in $BROKEN; do
   PROJECT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py --newest "$OUT")" || { echo "  create that bai cho $CH"; continue; }
   echo "  project: $(basename "$PROJECT")"
   PYTHONIOENCODING=utf-8 "$PY" scripts/port_pronunciations.py       "$PREV" "$PROJECT" > /dev/null
-  PYTHONIOENCODING=utf-8 "$PY" scripts/port_casting.py              "$PREV" "$PROJECT" > /dev/null
+  # `port_casting` KHONG con bi do vao /dev/null (16-09, 09:30). No la mot trong hai cho QUYET
+  # giong cho ca lo, va no quyet bang mot luat co the chon SAI nguoi: khi hai nguoi tranh cung
+  # mot giong, "ai da noi trong lo nguon" thang "ai dang ghim". Do 09:00 ngay 16-09: chuong 090
+  # len sach voi NATASHA (42 chuong) o giong thieu so vi CHELY noi trong lo 4 con ba ay im. Khong
+  # co dong log nao ke lai chuyen ay - phai doc ba project va tai hien mot project nhap moi biet.
+  # Mot quyet dinh dan giong khong ai doc duoc la mot quyet dinh khong kiem duoc.
+  PYTHONIOENCODING=utf-8 "$PY" scripts/port_casting.py              "$PREV" "$PROJECT"
   PYTHONIOENCODING=utf-8 "$PY" scripts/seed_listener_acceptances.py "$PREV" "$PROJECT" > /dev/null
   # Cùng lý do như trong launch_batch.sh: `port_casting` chỉ mang pin của MỘT project gieo, nên
   # người chưa từng được ghim bị rút thăm lại giọng - kể cả trong một project vá một chương, nơi
   # nó quyết giọng cho chính chương sắp lên sách. Ghim theo giọng đa số trên cuốn sách đã ghép.
-  PYTHONIOENCODING=utf-8 "$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply > /dev/null
+  # Cung khong do vao /dev/null nua, cung mot ly do: day la cho THU HAI quyet giong, va la phep
+  # chua book-wide cho cai luat cuc bo o tren. Khi chuong 090 ra sai, dieu khong biet duoc la
+  # script nay da quyet gi - no co de nghi NATASHA khong, co bi chan khong, chan vi ai.
+  PYTHONIOENCODING=utf-8 "$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply
   # Đồng bộ chuỗi nói trước khi thu, cùng lý do như bước 2b của `boundary.sh`: một bản vá đổi
   # `spoken_symbols_to_words` / chuẩn hoá tiếng / phiên âm làm bản thu ĐÃ CÓ của những đoạn ấy
   # thành bản thu của một văn bản khác, và cổng kiểm ném `spoken-text checksum drifted` - không

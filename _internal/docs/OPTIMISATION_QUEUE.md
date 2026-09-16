@@ -2665,3 +2665,25 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **Không phải lỗi của `_drop_pins_that_share_a_chapter`:** nó chỉ bỏ pin khi hai người pin **thật
   sự cùng chương**, nó ghi sổ khi làm thế, và `runtime_events` của cả hai project không có dòng nào
   như vậy. Nó cũng không ghi vào cột `locked_voice_key`. Đã loại trừ.
+
+  **ĐÃ ĐO phần "đo trước khi sửa" (09:35 ngày 16-09, `scripts/measure_who_contends_for_a_voice.py`):**
+
+      201 nguoi co giong da so; 24 nguoi mang hon mot giong qua ca sach
+      mang hai giong VA bi tranh giong : 23
+      mang hai giong ma KHONG bi tranh :  1
+
+  **23 trên 24.** Tức lớp "một người hai giọng qua các chương" — thứ đã đi 11 → 15 → 21 → 24 người
+  qua các lô — gần như **toàn bộ** là hệ quả của việc quyền sở hữu một giọng dùng chung bị quyết
+  lại mỗi lô. Vài ca đáng nhớ:
+
+      NATASHA      42 chuong  ngoc_linh_f093   <- CHELY (1 chuong!) tranh, chua tung cung chuong
+      WISE          7 chuong  thai_son_f100    <- VICTOR (48 chuong) va 11 nguoi khac
+      GRACE         8 chuong  ngoc_linh_f100   <- FELICIA (36 chuong) va 3 nguoi khac
+      RAFATI        2 chuong  thanh_binh_f100  <- LUCIEN (164 chuong), CUNG chuong 131
+
+  Phần lớn người tranh nhau **chưa từng cùng chương**, tức theo đúng luật holder thì **cả hai đều
+  ghim được** — `pin_the_book_cast` đã cho phép từ 15-09. Chỗ duy nhất còn chọn một người rồi bỏ
+  người kia là `port_casting.read_casting`, và nó chọn theo lô nguồn.
+
+  Kho giọng đã cấp hết (nam 14/14) nên **chia giọng là tất yếu**; thứ phải sửa không phải việc chia
+  mà là việc **quyền sở hữu bị rút thăm lại mỗi lô**.
