@@ -4186,3 +4186,38 @@ phải một biện pháp.** Luật máy móc, không ngoại lệ:
 Commit `15:14` giữ nguyên cái lỗ ấy: nội dung cây đúng, chỉ thân commit thiếu một từ, và sửa lịch
 sử cho một chữ thì đắt hơn là ghi lại ở đây. Ai đọc `git show` của nó thì hiểu chỗ trống là chữ
 `auto`.
+
+### 16:10 — cả cuốn sách: 27 đoạn trên 14.807 là chỗ audio có thể thật sự khác văn bản
+
+Chủ sách ra lệnh **không phải nghe**; lệnh ấy không nói **không được biết**, và đó là ràng buộc thứ
+ba của `docs/SHIPPING_WITHOUT_A_LISTENER.md`: *không im lặng*. `machine_acceptances.py` trả lời cho
+**một project**. Chưa ai hỏi cho **cả cuốn sách người ta đang nghe** — nên
+`scripts/measure_what_the_machine_let_through.py` (mới) hỏi, đọc `manifest.json` để chỉ đếm trong
+project **thắng** của từng chương:
+
+```
+14.807 doan tren sach 180 chuong
+ 3.637 doan mang mot ma canh bao (24,6%)
+
+   3.452  ASR_LOCKED_NAME_ANCHOR_MISMATCH     <- 95% cua tat ca canh bao
+     120  ASR_TRANSCRIPT_TIMELINE_IMPOSSIBLE
+      35  ASR_UNVERIFIABLE_SHORT_TEXT
+      27  ASR_MISMATCH_UNRESOLVED             <- lop dang doc that
+       2  ASR_TRANSCRIPT_RATE_IMPOSSIBLE
+       1  TTS_PACE_BAND_RELAXED
+```
+
+**Con số đáng nói không phải 24,6% mà là 27 — tức 0,18%.** `LOCKED_NAME_ANCHOR` là một **bài chính
+tả**: bản thu đọc tên theo cách đọc đã ghim, Whisper viết theo chữ, nên phép so lệch mà audio không
+sai (đã đo riêng: bắn trên 21–27% mọi đoạn, tốn ~0 GPU). `TIMELINE_IMPOSSIBLE` và
+`UNVERIFIABLE_SHORT_TEXT` là câu quá ngắn để ASR phán. Chỉ `ASR_MISMATCH_UNRESOLVED` là chỗ audio
+**có thể** thật khác văn bản mà không ai nghe, và mỗi đoạn trong 27 ấy có mốc thời gian để tua tới.
+
+Và một con số tôi suýt báo sai: sổ ghi **3.453 đoạn "thay bản thu"** — 23% số đoạn. Đọc thoáng thì
+nó giống một lớp lỗi khổng lồ; thật ra đó là cơ chế *"bản nói xong thắng bản bị cắt giữa câu"* đang
+làm việc ở quy mô cả cuốn, tức **đúng thiết kế**. Tôi đã dừng lại kiểm hai lần trước khi viết nó
+vào báo cáo: một lần vì con số không khớp với ký ức ("3 ca trên 50.196 đoạn" của bản vá sinh ra cơ
+chế ấy — con số đó thuộc một cổng hẹp hơn), và một lần vì phép đếm ban đầu của tôi đếm **dòng sổ**
+chứ không đếm **đoạn** (3.482 dòng / 3.481 đoạn — hôm nay gần bằng nhau, nhưng đừng để nó đúng nhờ
+may). Cả hai đã sửa: `COUNT(DISTINCT segment_stable_id)`, và docstring nói thẳng "đừng đọc nó như
+số đoạn hỏng".
