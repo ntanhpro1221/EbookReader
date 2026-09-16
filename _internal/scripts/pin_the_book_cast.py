@@ -58,16 +58,23 @@ from __future__ import annotations
 
 import argparse
 import collections
+import re
 import sqlite3
 import sys
+import unicodedata
 from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ebook_reader.database import ProjectDB  # noqa: E402
-from scripts.book_paths import TAG_PREFIX  # noqa: E402
+from scripts.book_paths import SOURCE_DIR, TAG_PREFIX  # noqa: E402
 from scripts.voice_matches_the_person import BOOK, VERSIONS, fold_names, shipped_rows  # noqa: E402
+
+# Nhãn chữ La-tinh: chỉ lớp này được phép bị hỏi "chuỗi này có trong nguồn không". Nhãn tiếng Việt
+# (`NGƯỜI TRẢ LỜI`, `TỬ TƯỚC CARENDIA`) là vai chứ không phải tên, và `NPC_LOCAL::...` là phạm vi
+# cục bộ - cả hai giữ nguyên hành vi cũ.
+LATIN_NAME = re.compile(r"^[A-Za-z][A-Za-z'.-]*(?: [A-Za-z][A-Za-z'.-]*)*$")
 
 
 def _say(line: str) -> None:
@@ -92,6 +99,89 @@ def chapters_by_voice(rows: list[dict]) -> dict[str, dict[str, set[str]]]:
             continue
         chapters[name][str(row["voice"])].add(str(row["chapter"]))
     return {name: dict(voices) for name, voices in chapters.items()}
+
+
+def _fold(text: str) -> str:
+    """Bỏ dấu + đ→d, cùng luật với `analysis._name_candidate_key`."""
+    stripped = "".join(
+        ch
+        for ch in unicodedata.normalize("NFD", text.casefold())
+        if unicodedata.category(ch) != "Mn"
+    )
+    return unicodedata.normalize("NFC", stripped).replace("đ", "d")
+
+
+def names_absent_from_the_source(names: list[str], source: Path = SOURCE_DIR) -> set[str]:
+    """Nhãn chữ La-tinh mà chuỗi của nó **không hề có** trong nguồn - tức không thể là tên.
+
+    Đo 10:10-10:20 ngày 2026-09-16 trên cả hai cuốn: sáu nhãn như thế đang **giữ một giọng đã
+    ghim**, trong một kho mà nam đã cấp hết 14/14.
+
+        cuon 1  SELNE (32 nhac, `Selne` 0 lan / `Selene` 198 lan), SELNE VALKRYN,
+                SAMAELE (`Samaele` 0 / `Samael` 1.375), ALICE DRACEN (`Alice` 219 / `Dracen` 0)
+        cuon 2  NATHASA, NATHANAS  (bien the go sai cua NATASHA)
+
+    Chúng sống qua 12-21 project vì `port_casting` mang pin đi theo danh tính: **một lần gõ sai
+    của mô hình thành một chỗ mất không, mãi mãi.**
+
+    Phép kiểm này **nhị phân** và đó là điểm mạnh duy nhất của nó: không đoán ai là ai, chỉ hỏi
+    chuỗi ấy có tồn tại trong văn bản hay không. Luật "gộp về tên gần nhất" thì đã bị phép đo bác
+    bỏ (`scripts/measure_would_a_name_fold_be_safe.py`: 47 cặp ở cuốn 2, phần lớn sai - `JOEL` về
+    `JOHN`, `AARON` về `SHARON`), nên ở đây **không gộp ai với ai**: chỉ thôi không ghim.
+
+    Bỏ dấu cả hai bên, nếu không thì `NGUOI TRA LOI` (160 lần nhắc, có pin) sẽ bị gắn cờ oan.
+    """
+    # `NARRATOR` / `UNKNOWN` là tên DÀNH RIÊNG: đương nhiên chúng không có trong nguồn, và bản đầu
+    # của phép kiểm này đã đề nghị **bỏ pin của người dẫn chuyện** - chạy thử trên lo04 in ra
+    # `BỎ PIN NARRATOR: narrator`. Một lượt `--apply` như thế sẽ đúc lại giọng kể của cả cuốn.
+    # Bắt được vì chạy xem trước; giữ dòng này và đừng bỏ.
+    latin = [
+        name
+        for name in names
+        if LATIN_NAME.match(name)
+        and name.strip().upper() not in {"NARRATOR", "UNKNOWN"}
+        and not name.strip().upper().startswith("ANONYMOUS")
+    ]
+    if not latin:
+        return set()
+    try:
+        text = _fold(
+            "\n".join(
+                path.read_text(encoding="utf-8", errors="replace")
+                for path in sorted(Path(source).glob("*.txt"))
+            )
+        )
+    except OSError as exc:
+        _say(f"  KHÔNG đọc được nguồn {source} ({exc}) - bỏ qua phép kiểm tên-có-trong-nguồn")
+        return set()
+    if not text:
+        return set()
+    return {
+        name
+        for name in latin
+        if not re.search(rf"(?<!\w){re.escape(_fold(name))}(?!\w)", text)
+    }
+
+
+def pinned_character_names(target: Path) -> dict[str, str]:
+    """{canonical_name y như trong DB: voice_key} của mọi nhân vật đang giữ pin.
+
+    `locked_character_voices()` gấp khoá tên, còn `set_locked_character_voice` so bằng đúng
+    `canonical_name` - nên muốn BỎ một pin thì phải có tên nguyên dạng.
+    """
+    database = target / "project.sqlite3"
+    if not database.is_file():
+        return {}
+    connection = sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True)
+    try:
+        rows = connection.execute(
+            "SELECT canonical_name, locked_voice_key FROM characters WHERE locked_voice_key <> ''"
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        connection.close()
+    return {str(row[0]): str(row[1]) for row in rows}
 
 
 def majority_voices(rows: list[dict]) -> dict[str, tuple[str, int, int]]:
@@ -390,6 +480,34 @@ def pin(
         _say(f"  {fixed} pin {'đã được sửa' if apply else 'sẽ được sửa'} về giọng đa số của sách.")
 
     majority = majority_voices(rows)
+    # Một nhãn KHÔNG có trong nguồn thì không phải người: không ghim mới, và pin đã có thì bỏ ra
+    # để trả chỗ lại cho kho giọng. Xem `names_absent_from_the_source` cho phép đo và cho lý do
+    # nó chỉ dám làm đúng một việc (thôi ghim), không gộp ai với ai.
+    # Phải hỏi cả tên trong SÁCH và tên **đang giữ pin trong project này**: một nhãn gõ sai có thể
+    # có pin mà không có dòng nào trên sách (ví dụ `NATHANAS` giữ pin qua 21 project nhưng chỉ nói
+    # ở một lô đã bị đúc lại). Lấy tên thật từ `characters` vì `set_locked_character_voice` so
+    # bằng `canonical_name`, không bằng khoá đã gấp.
+    pinned_names = pinned_character_names(target)
+    absent = names_absent_from_the_source(sorted(set(majority) | set(pinned_names)))
+    for name in sorted(absent & set(majority)):
+        detail = majority[name]
+        _say(
+            f"  KHÔNG CÓ TRONG NGUỒN {name} ({detail[2]} chương): không ghim"
+            f" {detail[0].replace('preset_', '')}"
+        )
+        majority.pop(name, None)
+    freed = 0
+    for name in sorted(absent & set(pinned_names)):
+        _say(
+            f"  BỎ PIN {name}: {pinned_names[name].replace('preset_', '')}"
+            " - nhãn này không có trong nguồn"
+        )
+        freed += 1
+        pins.pop(canonical_key(name), None)
+        if apply:
+            database.set_locked_character_voice(name, "")
+    if freed:
+        _say(f"  {freed} pin {'đã được bỏ' if apply else 'sẽ được bỏ'}, trả chỗ lại cho kho giọng.")
     unpinned = {
         name: detail
         for name, detail in majority.items()
