@@ -45,12 +45,50 @@ lý do với cuốn 1 — xem PRODUCTION_PLAN.md). `check_sources.py`: 915 chư�
 | 22 | 850..885 | 36 | 3.690 | 8,0 | |
 | 23 | 886..914 | 29 | 2.910 | 6,3 | |
 
+## Đang ở đâu (cập nhật 11:40 ngày 2026-09-16)
+
+```
+sach da ghep : 180 chuong, 000..179, LIEN MACH (khong con lo nao)
+lo 1  000..048  xong  (project lo: 48 completed + 1 failed -> chuong ay da co ban va/duc lai)
+lo 2  049..098  xong  (48 + 2 failed, trong do 082 da duoc duc lai thanh cong 16-09 07:51)
+lo 3  099..139  xong  (40 + 1 failed)
+lo 4  140..179  xong  (40/40, khong chuong nao hong)
+lo 5  180..218  DANG CHAY tu 08:04 ngay 16-09
+```
+
+Chương `failed` trong project lô **không** có nghĩa là sách thiếu: bước 3/4/4b của ranh giới tạo
+project vá / đúc lại riêng cho chúng, và bước 7 lấy bản **mới nhất** đã `completed`. Cách kiểm
+đúng là đếm MP3 trên sách (`scripts/assemble_book.py --verify` và đếm khoảng trống), không phải đọc
+trạng thái chương của project lô.
+
+Lịch sử ranh giới đã chạy: 1→2, 2→3, 3→4, **4→5** (06:22–08:04 ngày 16-09, 1 giờ 42, bốn bản vá,
+2.845 bài test xanh). Log của từng ranh giới ở `runtime/boundary_NN.log`; cách đọc ở
+`docs/READING_A_BOUNDARY_LOG.md`.
+
+**Việc đang chờ ở ranh giới 5** (khoảng 23:00 ngày 16-09, khi lô 5 thu xong):
+
+```bash
+bash scripts/boundary.sh 5 --no-next --recast auto
+```
+
+`--no-next` để **không** thả lô 6 ngay: cuốn 1 còn 18 chương (261..278) và luật là không chạy hai
+cuốn cùng lúc, nên khoảng giữa hai lô là cửa sổ duy nhất của nó. Xem `docs/OPTIMISATION_QUEUE.md`
+mục *"Cuốn 1 quay lại sản xuất"* cho hai việc của cuốn 1 và cái giá từng việc.
+
 ## Cách chạy
 
 ```bash
 bash scripts/launch_batch.sh 1 --no-seed        # lô đầu của cuốn: không có lô trước để gieo
-EBOOK_COAUTHOR="Claude Fable 5.1 <noreply@anthropic.com>" bash scripts/boundary.sh 1 --recast auto
+bash scripts/boundary.sh 1 --recast auto
 ```
 
 Từ lô 2 ranh giới tự khởi động lô sau, gieo từ lô liền trước như cuốn 1. Mọi luật của cuốn 1 (ranh giới
 8 bước, hàng chờ bản vá, `before_a_batch`, cây git sạch) áp y nguyên; chỉ gốc sách khác.
+
+Hai cờ đáng biết:
+
+- `--no-next`: làm hết mọi bước **nhưng không thả lô kế**. Dùng khi khoảng giữa hai lô phải dành cho
+  việc khác — ví dụ 18 chương còn lại của cuốn 1, thứ mà bước 6 sẽ chiếm chỗ nếu không có cờ này.
+- `EBOOK_COAUTHOR`: ghi đè dòng `Co-Authored-By` của những commit ranh giới tự tạo. **Không cần** đặt
+  nữa; mặc định đã là model của phiên hiện tại (`Claude Opus 5` từ 16-09). Ví dụ cũ ở đây từng ghim
+  `Claude Fable 5.1` và nó chỉ đúng cho phiên ngày 13–15/09.
