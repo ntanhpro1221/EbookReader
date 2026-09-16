@@ -4145,3 +4145,23 @@ lệnh**. Lần này nó ăn mất đường dẫn `docs/TWO_CHARACTERS_ONE_VOIC
 (để lại "xem , mục") rồi bash chạy chính file `.md` ấy như một script — vô hại nhưng bẩn log. Luật
 từ giờ, không ngoại lệ: **văn bản tiếng Việt hoặc markdown thì viết ra file rồi chạy file**, không
 nhét vào `bash -c` hay `python -c`.
+
+### 14:50 — đĩa có đủ cho 915 chương không? Đo một lần để khỏi ai phải lo
+
+Chưa ai hỏi câu này và nó là loại câu chỉ đáng hỏi **trước** khi hết chỗ:
+
+```
+D:  dung 439,9 GB   trong 514,0 GB
+C:  dung 520,8 GB   trong 432,9 GB
+
+ca cuon 2 (5 lo, 180 chuong da ghep + moi project va/duc lai) : 23,4 GB
+rieng lo 5 dang chay (8/39 chuong)                             :  1,18 GB
+```
+
+Suy ra: ~4,7 GB một lô → **23 lô ≈ 108 GB** cho cuốn 2, cộng cuốn 1 (478 chương, ~60 GB nếu cùng
+tỉ lệ) là **dưới 170 GB**, trong khi D: còn **514 GB**. Không có rủi ro đĩa, và cũng không cần dọn
+gì — mỗi project giữ WAV từng đoạn, và đó là **bằng chứng** chứ không phải rác: `recovery` dùng
+chúng để không phải thu lại khi một lượt chạy bị ngắt.
+
+Con số đáng canh nếu về sau muốn dọn: một project một lô nặng ~4–5 GB, trong đó phần lớn là WAV
+đoạn; MP3 chương chỉ ~1,6 GB cho cả 180 chương đã ghép.
