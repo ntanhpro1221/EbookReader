@@ -3847,3 +3847,66 @@ việc ai đó (tôi) đang sửa nửa đời khi lô vừa xong. Giờ nó **n
 `git show` sau này là thấy ngay có gì bị quét vào nhầm, thay vì phải suy từ diff.
 
 Không đổi hành vi nào khác: vẫn `git add -A`, vì lý do của nó vẫn đúng.
+
+### 08:04 — ranh giới 4 xong trong 1 giờ 42, và chương 082 qua ngay lần thu đầu sau ba lần chết
+
+Ranh giới 4 chạy từ 06:22 tới 08:04, không cần ai nhìn. Từng bước, kèm con số của chính nó:
+
+| bước | kết quả |
+|---|---|
+| 0 | lô 4 xong lúc 06:32: **40/40 chương**, `plan_repair_batch`: *không có chương nào hỏng* |
+| 1 | áp **4 bản vá**, **`bo test: 2845 passed in 301.62s`**, commit `96a1052` (**stage 16 file**, có liệt kê) |
+| 2b | `không đoạn nào lệch chuỗi nói` |
+| 3 | không có chương hỏng → không có lô vá |
+| 4 | `khong thay va cham cung chuong nao` → không đúc lại gì của lô 4 |
+| 4b | lô 1: 017, 020, 047, 048 (022 bỏ qua, đã xong trước); lô 2: **062, 082, 090**; lô 3: 114 bỏ qua |
+| 6 | lô 5 chạy 08:04: `lo05_f88ce3312a`, **39 chương 180..218**, 3.717 đoạn đã tách |
+| 6b | giữ cách đọc ghim cho các đoạn đã lên sách |
+| 7 | **sách đi từ 139 lên 180 chương, 000..179, không còn lỗ nào** |
+
+Tốc độ lô 4: 3.680 đoạn trong 574,8 phút = **6,40 đoạn/phút**, nhịp `worker_leases` chưa lần nào
+quá 180 giây. Đoạn hỏng cuối cùng: **4 trên 3.680 (0,11%)**, cả bốn thuộc lớp máy-nhận và cả bốn
+chương vẫn lên sách.
+
+**Hai bản sửa ship lúc 05:55 tự chứng minh trong log của chính ranh giới:** dòng `bo test: 2845
+passed` là lần đầu một ranh giới ghi được số bài test của mình (hai lần trước: *(khong thay dong tong
+ket)*), và `stage 16 file:` kèm danh sách 16 đường dẫn là phép `git add -A` giờ nói ra nó quét gì —
+đọc `git show 96a1052` là thấy đúng 12 file sửa + 4 file test mới, không có gì lạ bị quét vào.
+
+#### Chương 082: dự đoán đúng phần quan trọng, sai hai con số
+
+Chương duy nhất còn thiếu của cuốn 2, đã hỏng **ba lần** (lô 2, `lo02v_082` sau 22 lần thu,
+`lo02v_082b` sau 11 lần), cả ba lần cùng một đoạn. Lần này:
+
+    lo02r_082_87396b2f3c   chuong completed, 0 doan hong (79 verified + 21 warning)
+
+    c00001_s0000041  "Tôi không biết 'xoay' đâu, Felicia."   LAN THU 1
+      warning ASR_LOCKED_NAME_ANCHOR_MISMATCH   (lop may-nhan, vo hai)
+      chars_per_second          33,85   <- tinh theo NGAN SACH nghi -> NGOAI dai 12,5-24,5
+      chars_per_second_heard    20,00   <- tinh theo khoang lang DO DUOC -> TRONG dai
+      measured_silence_seconds   0,62     duration 1,92 s     pace_outlier 0
+
+Số học khớp từng chữ số: ngân sách `min(0,276 × nhóm, 1,92 × 0,60) = 1,152` giây → 26 ký tự / 0,768 s
+= **33,85**; khoảng lặng thật 0,62 giây → 26 / 1,30 = **20,00**. Ngân sách tính thừa **0,53 giây trên
+một câu dài 1,92 giây**, và đó là toàn bộ khoảng cách giữa "hỏng" và "đạt".
+
+**Dự đoán ghi trước (commit `4cafb48`) sai hai con số:** tôi viết *nhịp nghe 14–17, nhịp tính ~29–32*;
+thật là **20,00** và **33,85**. Hai con số ấy tôi lấy từ 12 bản thu **khác** của cùng câu trong phép
+thử GPU (14,05–16,46) và từ bản thu đã hỏng (32,50) — nhưng đây là một bản thu mới, thời lượng khác,
+nên cả hai dịch lên. Lẽ ra phải phát biểu dự đoán theo **thứ quyết định**: *nhịp nghe lọt vào dải
+trong khi nhịp tính vẫn ngoài dải*. Phát biểu ấy đúng. `scratchpad/probe_082.py` in `DU DOAN LECH`
+cho cả hai dòng vì nó so với đúng con số tôi đã viết — giữ lối ấy, một phép đo nới ra cho người viết
+nó thì không còn là phép đo.
+
+Bản vá nhịp đọc giờ có **hai ca cứu được, đo trên sản xuất** (chương 131 ở ranh giới 3, chương 082 ở
+ranh giới 4) và **0 ca bị nó giết** — đúng thiết kế một chiều: chỉ nới cận trên, không chạm cận dưới.
+
+#### Tên đĩa: bản vá `EBOOK_ALBUM` cũng đã qua lửa
+
+Lần ghép trước ghi `album 'Sách nói'` (chỗ giữ chỗ) cho cả 139 chương. Lần này, **cả 180 chương**
+mang `album: "Throne of Magical Arcana"` — kể cả những chương của lô 1 đã nằm trên sách từ trước, vì
+bước 7 tự đối chiếu thẻ và ghi lại khi lệch. Chương 082 mang `track: "82/915"`, đúng số chương thật.
+
+Và `one_person_one_voice.py` trên cả cuốn 180 chương: **không chương nào có một người hai giọng trong
+cùng chương**. 24 người mang hơn một giọng **qua các chương khác nhau** — lớp khuyết tật cũ, không
+phải lớp cùng-chương.
