@@ -4078,3 +4078,39 @@ Và một bài học về chính cách tôi làm việc: lần commit này chế
 matching quote` vì tôi gộp hai heredoc cùng một `git commit -F -` vào một lệnh bash, với nội dung
 đầy dấu nháy ngược và tiếng Việt. May là bash không chạy gì cả nên không có nửa bản ghi nào. Nội
 dung dài nhiều dấu thì viết ra file rồi nối bằng Python — `scratchpad/append_and_commit.py`.
+
+### 10:45 — luật gộp tên mà tôi vừa đề xuất bị chính phép đo bác bỏ, trước khi viết một dòng mã
+
+Mục hàng chờ 10:20 nói cách chữa "đúng" cho tên gõ sai là gộp ở tầng phân tích. Trước khi viết bản
+vá, đo xem luật ấy sẽ làm gì trên dữ liệu thật. Tầng phân tích chỉ thấy **các chương của project
+mình**, nên luật phải là: *nhãn vắng mặt trong chính văn bản của project + có **đúng một** tên
+trong văn bản cách nó ≤ 2 phép sửa ⇒ một người.*
+
+    cuon 2   luat se GOP 47 cap
+    cuon 1   luat se GOP 31 cap
+
+Và phần lớn là gộp **sai**:
+
+    JOEL   -> JOHN      JOEL noi o 17 chuong, la NGUOI KHAC
+    AARON  -> SHARON    nam -> nu
+    ATHY   -> TAY       TAY la phantom ("tay"), khong phai nguoi
+    GARY / SKAR / NAR / SALA -> SARD        bon nguoi khac nhau
+    CATHY <-> ATHY,  RAY <-> SAM            vong tron
+    LYLE -> LILY,  JAY -> RAY,  ROB -> RAY  (cuon 1)
+
+Đúng chỉ `NATHASA→NATASHA`, `LENA→ELENA`, `SAMAELE→SAMAEL`.
+
+**Vì sao sai:** văn bản của một project **một chương** là mẫu quá nhỏ — hầu hết nhân vật không được
+gọi tên trong đó, nên "vắng mặt" là chuyện thường và không nói lên gì; cộng khoảng cách ≤ 2 trên
+một rừng tên ngắn (RAY, SAM, NAR, TAY, JAY) thì láng giềng giả mọc khắp nơi. Tầng phân tích **không
+có đủ bằng chứng** để làm việc này, và không bằng chứng thì không có luật.
+
+Nên bản vá ấy **không được viết**. Thứ đáng tin vẫn là phép kiểm nhị phân trên **cả nguồn** —
+`Selne` 0 lần / `Selene` 198 lần — và chỉ một script đọc `SOURCE_DIR` trả lời được. Đề xuất thay
+thế, rẻ hơn và không có rủi ro gán sai người: một lượt dọn **bỏ pin** cho nhãn vắng mặt trong cả
+nguồn, trả lại ~5 chỗ kho giọng mà **không gộp danh tính nào**.
+
+Đây là lần thứ tư trong buổi sáng một phép đo chặn tôi trước khi ship: thước phantom gắn cờ
+`LUCIEN`, thước nhóm-nhãn gom `KANG` với `KAIN REICHARDT`, thước ấy gắn cờ `NGUOI TRA LOI`, và giờ
+là luật gộp này. Ba lần đầu là lỗi trong thước; lần này thước đúng và **ý tưởng** sai — đúng cái
+mà "đo trước khi vá" sinh ra để bắt.

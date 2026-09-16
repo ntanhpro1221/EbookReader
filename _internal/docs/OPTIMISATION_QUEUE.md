@@ -2804,3 +2804,35 @@ bốn bài test đều xanh và chương vẫn hỏng.
 
   Cùng một bài học với `measure_a_phantom_by_its_own_chapter.py` sáng nay: thước nào cũng phải
   chạy trên **cả tập** rồi soi những ca nó gắn cờ sai, chứ không chỉ trên các nghi can.
+
+  **LUẬT ĐỀ XUẤT BỊ PHÉP ĐO BÁC BỎ (10:45 ngày 16-09).** Mục trên viết cách chữa "đúng" là gộp ở
+  `character_registry`/`analysis`. Tầng ấy chỉ thấy **các chương của project mình**, nên luật phải
+  là: *nhãn vắng mặt trong chính văn bản của project, và có **đúng một** tên trong văn bản cách nó
+  ≤ 2 phép sửa, thì hai cái là một người.* Đo thử trên toàn bộ project của cả hai cuốn
+  (`scratchpad/would_the_fold_be_safe.py`):
+
+      cuon 2   luat se GOP 47 cap   (bo qua 38 luong lu, 151 khong co ung vien)
+      cuon 1   luat se GOP 31 cap   (bo qua 25 luong lu,  77 khong co ung vien)
+
+  Đọc danh sách thì **phần lớn là gộp SAI**, và sai nặng:
+
+      JOEL   -> JOHN      JOEL noi o 17 chuong, la NGUOI KHAC
+      AARON  -> SHARON    nam -> nu
+      ATHY   -> TAY       TAY la phantom ("tay") chu khong phai nguoi
+      GARY   -> SARD      SKAR -> SARD   NAR -> SARD   SALA -> SARD
+      CATHY  -> ATHY      va  ATHY -> CATHY            (vong tron)
+      RAY    -> SAM       va  SAM  -> RAY              (vong tron, cuon 1)
+      LYLE   -> LILY      JAY -> RAY      ROB -> RAY   (cuon 1)
+
+  Đúng chỉ vài cặp: `NATHASA→NATASHA`, `LENA→ELENA`, `SAMAELE→SAMAEL`.
+
+  **Vì sao luật sai:** văn bản của **một project một chương** là một mẫu quá nhỏ — hầu hết nhân vật
+  không được gọi tên trong đó, nên "vắng mặt trong văn bản project" là chuyện thường và chẳng nói
+  lên gì; cộng với khoảng cách ≤ 2 trên một rừng tên ngắn (RAY, SAM, NAR, TAY, JAY) thì láng giềng
+  giả mọc khắp nơi. **Tầng phân tích không có đủ bằng chứng để làm việc này.**
+
+  **Chỗ đúng là một SCRIPT đọc cả nguồn.** Phép kiểm "chuỗi này có ở đâu trong 915 chương nguồn
+  không" thì nhị phân và đáng tin (đó là phép đo đã tìm ra `SELNE`/`SAMAELE`/`NATHASA`), nhưng chỉ
+  công cụ đọc `SOURCE_DIR` mới trả lời được. Đề xuất mới, rẻ và không cần ranh giới: một lượt dọn
+  **bỏ pin** cho những nhãn vắng mặt trong cả nguồn, chạy cạnh `pin_the_book_cast` — trả lại ~5 chỗ
+  trong kho giọng mà không gộp danh tính nào, tức không có rủi ro gán sai người.
