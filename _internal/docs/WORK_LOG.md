@@ -4114,3 +4114,34 @@ nguồn, trả lại ~5 chỗ kho giọng mà **không gộp danh tính nào**.
 `LUCIEN`, thước nhóm-nhãn gom `KANG` với `KAIN REICHARDT`, thước ấy gắn cờ `NGUOI TRA LOI`, và giờ
 là luật gộp này. Ba lần đầu là lỗi trong thước; lần này thước đúng và **ý tưởng** sai — đúng cái
 mà "đo trước khi vá" sinh ra để bắt.
+
+### 12:35 — "kho giọng đã hết" là câu tôi nói sai sáng nay; tài liệu cũ đã cảnh báo đúng chỗ ấy
+
+Đi đọc `docs/TWO_CHARACTERS_ONE_VOICE.md` trước khi đề xuất nới kho giọng — và tài liệu ấy đã bác
+ba hướng nới (pitch, biên formant, giọng miền Trung) **và** bác luôn cách tôi diễn đạt hôm nay. Nó
+mở đầu bằng đúng cái bẫy tôi vừa bước vào: *"đầy" là kết luận sai từ số đúng*.
+
+Tôi viết trong hàng chờ: *"kho giọng đã cấp hết (nam 14/14) nên chia giọng là tất yếu"*. Con số
+đúng — cả 14 giọng nam đều **có chủ** — nhưng nguyên nhân thì sai: kho không nhỏ. **Chương đông
+nhất chỉ cần 8 trên 14.** Cái làm kho *trông như* đã hết là một thứ khác:
+
+> Một **pin** là chỗ đặt cho cả cuốn, còn ràng buộc thật chỉ theo **chương**.
+> `reserve_pinned_voices` lấy mọi giọng đã ghim ra khỏi vòng cấp phát cho **cả lô**, kể cả của
+> người không nói câu nào trong lô ấy — và nó có lý do đã đo (THEOSBANE im lặng ở alpha.56 bị
+> SAMAEL lấy giọng). Nhưng nó **nghiêm hơn** điều ràng buộc theo chương đòi hỏi.
+
+Nên phép đo 23/24 sáng nay không phải bằng chứng cho "cần thêm giọng"; nó là **bằng chứng cho
+hướng còn lại mà tài liệu ấy đã nêu và chưa ai vá**: cho bộ cấp phát biết ai cùng chương. Hướng ấy
+mua hai thứ cùng lúc — hai người chưa từng cùng chương giữ pin **mà không ai phải nhường**, nên
+mất hẳn cái vòng "mất pin → rút thăm lại giọng → một người hai giọng"; và nó không cần kho rộng
+thêm một giọng nào. Đã ghi thẳng vào mục "Hướng còn lại" của tài liệu ấy, kèm số, và sửa lại cách
+diễn đạt trong hàng chờ.
+
+Bài học riêng: trước khi đề xuất một hướng, **đọc tài liệu của chính dự án về đúng hướng ấy**. Nó
+không chỉ đã bác ba hướng tôi sắp nghĩ tới; nó còn bác cách tôi vừa nói về con số.
+
+Và một lỗi thao tác lặp lần thứ ba: dấu nháy ngược trong chuỗi nháy kép của bash là **thay thế
+lệnh**. Lần này nó ăn mất đường dẫn `docs/TWO_CHARACTERS_ONE_VOICE.md` giữa một câu trong hàng chờ
+(để lại "xem , mục") rồi bash chạy chính file `.md` ấy như một script — vô hại nhưng bẩn log. Luật
+từ giờ, không ngoại lệ: **văn bản tiếng Việt hoặc markdown thì viết ra file rồi chạy file**, không
+nhét vào `bash -c` hay `python -c`.

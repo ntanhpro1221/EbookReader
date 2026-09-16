@@ -217,3 +217,37 @@ biệt tên với NPC — đếm va chạm thì phải đếm cả hai, và côn
 Cặp ấy chưa từng được đúc lại vì ranh giới lô 1 → 2 chưa có `--recast auto`. Đã thêm `1:023` vào
 ranh giới lô 5 → 6 (2026-09-12 02:56), nên sau đêm ấy cuốn sách không còn va chạm cùng chương nào
 mà ta biết mà vẫn để đó.
+
+## Bằng chứng mới cho "hướng còn lại" (2026-09-16, 12:35)
+
+Hướng ở trên — *cho bộ cấp phát biết ai cùng chương* — vẫn chưa vá, và hôm nay có số cho nó.
+
+Đo trên sách 180 chương (`scripts/measure_who_contends_for_a_voice.py`):
+
+```
+201 nguoi co giong da so; 24 nguoi mang hon MOT giong qua ca sach
+mang hai giong VA bi tranh giong : 23
+mang hai giong ma KHONG bi tranh :  1
+```
+
+**23 trên 24.** Lớp "một người đổi giọng giữa các chương" gần như **toàn bộ** là hệ quả của việc
+hai người tranh nhau một `voice_key`, và phần lớn những cặp ấy **chưa từng cùng chương** — tức theo
+đúng luật của chính tài liệu này, họ **được phép** chia giọng mà người nghe không lẫn.
+
+**Chỗ tôi đã nói sai sáng nay và tự sửa:** tôi viết "kho giọng đã cấp hết (nam 14/14) nên chia
+giọng là tất yếu". Câu ấy đúng về số nhưng sai về nguyên nhân, đúng cái bẫy mà tài liệu này mở đầu
+bằng: *"đầy" là kết luận sai từ số đúng*. Kho **không** nhỏ — chương đông nhất vẫn chỉ cần 8 trên
+14. Cái làm nó **trông như** đã hết là: một **pin** là chỗ đặt cho cả cuốn, còn ràng buộc thật thì
+chỉ theo chương. `reserve_pinned_voices` lấy mọi giọng đã ghim ra khỏi vòng cấp phát cho **cả lô**,
+"whether or not that somebody speaks in this batch" — và nó có lý do đã đo (THEOSBANE im lặng ở
+alpha.56 bị SAMAEL lấy giọng). Nhưng nó **nghiêm hơn** ràng buộc theo chương đòi hỏi.
+
+Nên hướng còn lại mua được hai thứ cùng lúc, không phải một:
+
+1. hai người chưa từng cùng chương **cùng giữ pin** mà không ai phải nhường — tức không còn cái
+   vòng "mất pin → rút thăm lại giọng → một người hai giọng" mà 23 ca kia sinh ra từ đó;
+2. và nó không cần kho rộng thêm một giọng nào.
+
+Chuỗi quyết định "ai giữ giọng nào giữa các lô" (sổ cộng dồn → `port_casting` → `pin_the_book_cast`
+→ registry), cùng bốn lớp khuyết tật đã đo và hai ý tưởng đã bị bác bỏ, ở
+[WHO_OWNS_A_VOICE.md](WHO_OWNS_A_VOICE.md).

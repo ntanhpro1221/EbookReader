@@ -2685,8 +2685,11 @@ bốn bài test đều xanh và chương vẫn hỏng.
   ghim được** — `pin_the_book_cast` đã cho phép từ 15-09. Chỗ duy nhất còn chọn một người rồi bỏ
   người kia là `port_casting.read_casting`, và nó chọn theo lô nguồn.
 
-  Kho giọng đã cấp hết (nam 14/14) nên **chia giọng là tất yếu**; thứ phải sửa không phải việc chia
-  mà là việc **quyền sở hữu bị rút thăm lại mỗi lô**.
+  Mọi giọng nam đã **có chủ** (14/14) nên chia giọng là tất yếu — nhưng "có chủ" không phải "kho
+  nhỏ": chương đông nhất chỉ cần 8 trên 14. Cái làm kho trông như đã hết là **một pin đặt chỗ cho
+  cả cuốn trong khi ràng buộc thật chỉ theo chương** (xem `docs/TWO_CHARACTERS_ONE_VOICE.md`, mục
+  "Bằng chứng mới cho hướng còn lại"). Thứ phải sửa không phải việc chia mà là việc **quyền sở hữu
+  bị rút thăm lại mỗi lô**.
   **SỬA CHẨN ĐOÁN, 09:36 ngày 16-09 — `read_casting` KHÔNG sai; sổ cộng dồn bị thu nhỏ.** Mục trên
   quy tội cho luật "ai đã nói thắng ai đang ghim" của `read_casting`. Đi tới cùng thì luật ấy
   **đúng** và nó xếp hạng bằng đúng thứ đáng cân; thứ sai là **đầu vào**:
