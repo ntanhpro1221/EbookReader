@@ -115,6 +115,15 @@ def flying() -> list[str]:
                 "SELECT COUNT(*) FROM segments WHERE (wav_path IS NOT NULL AND wav_path != '') "
                 "!= (wav_sha256 IS NOT NULL AND wav_sha256 != '')"
             ).fetchone()[0]
+            # Trạng thái CHƯƠNG, không chỉ đoạn: nhịp tim của chủ sách hỏi đúng thứ này, và một
+            # lô có thể thu đều mà vẫn không chương nào `completed` (chương chỉ xong khi mọi đoạn
+            # của nó xong, rồi mới tới ghép MP3 + kiểm chất lượng chương).
+            chapters = ", ".join(
+                f"{row['status']} {row['n']}"
+                for row in connection.execute(
+                    "SELECT status, COUNT(*) n FROM chapters GROUP BY status ORDER BY n DESC"
+                )
+            )
             lease = connection.execute("SELECT MAX(heartbeat_at) h FROM worker_leases").fetchone()["h"]
         except sqlite3.Error as exc:
             out.append(f"{path.parent.name}: không đọc được ({exc})")
@@ -127,6 +136,7 @@ def flying() -> list[str]:
             f" phân tích {analysed}/{total} | thu {recorded}/{total}"
             f" | hỏng {failed} | lệch wav {drift} | nhịp {age}s"
         )
+        out.append(f"{'':<26} chương: {chapters}")
     return out
 
 
