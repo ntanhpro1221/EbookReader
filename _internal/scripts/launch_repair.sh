@@ -167,7 +167,13 @@ print(f\"{b['status']}|{b['stage']}|{'alive' if alive else 'dead'}\")
 # noi 128 cau. Dung lai so tu ca chuoi lo da xong, ghi vao PREV, truoc khi gieo.
 # Chuoi: project lo cua moi lo truoc, roi lo nay va cac project va / duc lai cua no theo thu tu
 # tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
-CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py "$BATCH" --chain)"
+# `--chain-all` chu khong `<lo> --chain`: so cong don phai phu MOI lo dang co.
+# Cho nay tung lay thieu khi vá/đúc lại một lô CŨ trong khi sổ phải phủ mọi lô.
+# Do 06:37 ngay 16-09: `launch_repair.sh 1` dung chain(1) nen so cua lo04 bi ghi lai
+# thanh NATASHA 8 cau / 1 lo (that: 389 cau / 10 lo, 42 chuong), CHELY 9 cau / 1 lo.
+# `port_casting` xep hang theo so ay, 8 < 9, nen CHELY thang giong dung chung va NATASHA
+# mat pin - roi chuong 090 len sach voi giong thieu so cua ba ay.
+CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py --chain-all)"
 # `backfill_exposure` ghi so vao project CUOI chuoi, va `port_casting` doc so tu project GIEO.
 # Gieo tu noi khac (--seed-from) thi hai cai ay phai la mot: noi PREV vao cuoi chuoi.
 # PREV phai la phan tu CUOI: backfill ghi so vao chain[-1]. "Them neu thieu" khong du - khi PREV

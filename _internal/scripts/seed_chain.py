@@ -3,6 +3,7 @@
     python scripts/seed_chain.py 3 --seed     # project để GIEO lần chạy kế tiếp: mới nhất trên lô, lô+v, lô+r
     python scripts/seed_chain.py 3 --batch    # project lô (thư mục thường) - nơi đọc danh sách chương hỏng
     python scripts/seed_chain.py 3 --chain    # chuỗi cho backfill_exposure.py, kết thúc ở --seed
+    python scripts/seed_chain.py --chain-all  # chuỗi phủ MỌI lô đang có - dùng khi vá/đúc lại lô cũ
     python scripts/seed_chain.py 3 --repairs  # các project v/r của lô 3, theo thứ tự tạo
     python scripts/seed_chain.py --newest <thư mục>   # project mới nhất trong một thư mục
 
@@ -103,9 +104,37 @@ def chain(batch: int, root: Path = VERSIONS_ROOT) -> list[Path]:
     return links
 
 
+def highest_batch(root: Path = VERSIONS_ROOT) -> int:
+    """Số lô CAO NHẤT đang có project. 0 nếu chưa có lô nào.
+
+    `chain(batch)` chỉ lấy tới `batch`, và đó là câu trả lời đúng cho một lượt phóng lô tiến về
+    phía trước. Nó là câu trả lời SAI cho một lượt vá / đúc lại một lô CŨ: `launch_repair.sh 1`
+    gọi `chain(1)` nên sổ cộng dồn được dựng lại từ **chỉ lô 1** rồi ghi đè lên sổ đầy đủ.
+
+    Cái giá đã đo, 06:37 ngày 2026-09-16: sổ của lo04 bị ghi lại thành `NATASHA 8 câu / 1 lô`
+    (thật: 389 câu / 10 lô, 42 chương) vì lô 1 không có bà ấy; `CHELY` có 9 câu / 1 lô. Lúc
+    `port_casting` xếp hạng ai giữ giọng dùng chung, 8 < 9 nên **CHELY thắng** và NATASHA mất
+    pin — rồi chương 090 lên sách với giọng thiểu số của bà ấy. Một nhân vật 42 chương thua một
+    nhân vật 1 chương vì sổ bị thu nhỏ lại đúng một lô.
+    """
+    found = 0
+    for index in range(1, 100):
+        if batch_project(index, root) is not None or repairs(index, root):
+            found = index
+    return found
+
+
 def main(argv: list[str]) -> int:
     positional = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}
+    if flags == {"--chain-all"} and not positional:
+        # Chuỗi cho `backfill_exposure.py` phủ MỌI lô đang có, không chỉ tới một lô. Xem
+        # `highest_batch` cho cái giá của việc lấy thiếu.
+        links = chain(highest_batch())
+        if not links:
+            return 1
+        print(" ".join(p.as_posix() for p in links))
+        return 0
     if flags == {"--newest"} and len(positional) == 1:
         # Project mới nhất trong MỘT thư mục bất kỳ - launch_repair.sh cần nó ngay sau `create`,
         # vì thư mục lô vá chứa cả các chương đã chạy trước đó trong cùng lượt.

@@ -134,7 +134,13 @@ echo "project: $PROJECT"
 # Chuoi: project lo cua moi lo truoc, roi lo lien truoc va cac project va / duc lai cua no theo
 # thu tu tao. backfill dem moi chuong mot lan (project sau thang) nen khong cong chong.
 if [ -n "$PREV" ]; then
-CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py $((BATCH - 1)) --chain)"
+# `--chain-all` chu khong `<lo> --chain`: so cong don phai phu MOI lo dang co.
+# Cho nay tung lay thieu khi chạy lại một phần của lô cũ bằng --range.
+# Do 06:37 ngay 16-09: `launch_repair.sh 1` dung chain(1) nen so cua lo04 bi ghi lai
+# thanh NATASHA 8 cau / 1 lo (that: 389 cau / 10 lo, 42 chuong), CHELY 9 cau / 1 lo.
+# `port_casting` xep hang theo so ay, 8 < 9, nen CHELY thang giong dung chung va NATASHA
+# mat pin - roi chuong 090 len sach voi giong thieu so cua ba ay.
+CHAIN="$(PYTHONIOENCODING=utf-8 "$PY" scripts/seed_chain.py --chain-all)"
 # So phai nam o project GIEO (port_casting doc tu do); gieo tu noi khac thi noi no vao cuoi.
 # PREV phai la phan tu CUOI: backfill ghi so vao chain[-1]. "Them neu thieu" khong du - khi PREV
 # la mot project duc lai cua lo TRUOC (lo 5 gieo tu lo03r_091) thi no da nam GIUA chuoi, so ghi

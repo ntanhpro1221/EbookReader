@@ -3990,3 +3990,43 @@ cả hai project **không có dòng nào** như vậy — nó cũng không ghi v
 Mục hàng chờ đầy đủ (kèm hai việc rẻ làm ngay và phép đo phải làm trước khi sửa `read_casting`) ở
 `docs/OPTIMISATION_QUEUE.md`, cuối file. Chương 090 thì tự chữa được ở ranh giới 5: `2:090` đã nằm
 trong danh sách tự tìm, và lần này project gieo (lô 5) **có** pin của NATASHA.
+
+### 09:55 — chẩn đoán sai của tôi bị chính phép đo bác bỏ: `read_casting` đúng, SỔ bị thu nhỏ
+
+Lúc 09:05 tôi ghi rằng gốc của ca NATASHA là luật *"ai đã nói trong lô nguồn thắng ai đang ghim"*
+trong `port_casting.read_casting`. Đi tới cùng thì **luật ấy đúng** — nó xếp hạng bằng số câu cộng
+dồn cả sách, đúng thứ đáng cân. Thứ sai là **đầu vào của nó**:
+
+    lo03 (19:23 ngay 15-09)  NATASHA 382 cau / 3 lo      <- so day du
+    lo04 (06:37 ngay 16-09)  NATASHA   8 cau / 1 lo      <- bi GHI DE
+                             CHELY     9 cau / 1 lo
+
+`launch_repair.sh 1` — bước 4b của ranh giới 4, vá các chương của lô 1 — dựng chuỗi cộng dồn bằng
+`seed_chain.py "$BATCH" --chain`, tức `chain(1)`, tức **chỉ lô 1**. Rồi `backfill_exposure.py` ghi
+sổ mới ấy vào project gieo, **ghi đè** sổ đầy đủ của lo04. Lô 1 là chương 000..049, nơi NATASHA
+im; nên ở phép xếp hạng, **8 < 9**, và `CHELY` — một nhân vật **một chương** — thắng giọng của một
+nhân vật **42 chương**.
+
+Chuỗi bằng chứng, từng bước một, mỗi bước là một lệnh chạy được:
+
+    1. sach:        NATASHA 42 chuong f093, CHELY 1 chuong          (measure_who_contends_for_a_voice)
+    2. lo04 so:     NATASHA 8/1, CHELY 9/1                          (doc character_exposure)
+    3. port_casting lo04 -> nhap:  CHELY duoc ghim, NATASHA khong   (tai hien)
+    4. backfill --chain-all (25 project) -> NATASHA 389/10          (tren BAN SAO cua lo04)
+    5. port_casting <ban da sua> -> nhap:
+         BO QUA CHELY (duoc nhac 9 lan): NATASHA (duoc nhac 389 lan) giu ngoc_linh_f093
+         GHIM  NATASHA -> preset_ngoc_linh_f093_p+00
+
+Đã sửa: `seed_chain.py --chain-all` (chuỗi phủ **mọi** lô đang có), dùng ở cả `launch_repair.sh` và
+`launch_batch.sh`. `launch_batch.sh` cũng cần: `$((BATCH - 1)) --chain` đúng cho một lượt phóng
+tiến lên, nhưng sai cho một lượt `--range` chạy lại phần còn lại của lô cũ — **đúng thứ sắp làm với
+lô 10 của cuốn 1**.
+
+`tests/test_the_exposure_chain_covers_every_batch.py` ghim cả hai nửa: `highest_batch` trên một cây
+giả bốn lô (kể cả lô chỉ có project vá), và một phép đọc hai script đòi `--chain-all`, từ chối
+`--chain)`. Không có bài ấy thì phép hồi quy này **im lặng**: sổ vẫn được dựng, vẫn có số, chỉ nhỏ
+hơn sự thật — và cái giá hiện ra nhiều giờ sau, ở một chương đã lên sách với giọng sai.
+
+Không chữa sổ trong `lo04` (vẫn 8/1): không ai gieo từ nó nữa vì bước 4b luôn truyền `--seed-from`
+là project mới nhất, và ghi vào một project đã tag để sửa một con số không ai đọc là đổi một rủi ro
+thật lấy một sự sạch sẽ hình thức.

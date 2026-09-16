@@ -2687,3 +2687,36 @@ bốn bài test đều xanh và chương vẫn hỏng.
 
   Kho giọng đã cấp hết (nam 14/14) nên **chia giọng là tất yếu**; thứ phải sửa không phải việc chia
   mà là việc **quyền sở hữu bị rút thăm lại mỗi lô**.
+  **SỬA CHẨN ĐOÁN, 09:55 ngày 16-09 — `read_casting` KHÔNG sai; sổ cộng dồn bị thu nhỏ.** Mục trên
+  quy tội cho luật "ai đã nói thắng ai đang ghim" của `read_casting`. Đi tới cùng thì luật ấy
+  **đúng** và nó xếp hạng bằng đúng thứ đáng cân; thứ sai là **đầu vào**:
+
+      lo03 (19:23 ngay 15-09)  NATASHA 382 cau / 3 lo     <- so day du
+      lo04 (06:37 ngay 16-09)  NATASHA   8 cau / 1 lo     <- bi GHI DE, thu lai con mot lo
+                               CHELY     9 cau / 1 lo
+
+  `launch_repair.sh 1` (bước 4b, vá các chương của lô 1) dựng chuỗi bằng `seed_chain.py "$BATCH"
+  --chain` = `chain(1)` = **chỉ lô 1**, rồi `backfill_exposure.py` ghi sổ ấy vào project gieo —
+  tức ghi đè sổ đầy đủ của `lo04`. Lô 1 là chương 000..049, nơi NATASHA im; nên 8 < 9 và `CHELY`
+  (một chương) thắng giọng của NATASHA (42 chương).
+
+  **Đã sửa** (`seed_chain.py --chain-all`, dùng ở cả `launch_repair.sh` và `launch_batch.sh`; bài
+  `tests/test_the_exposure_chain_covers_every_batch.py`). Chứng minh đầu-cuối trên bản sao:
+
+      backfill voi --chain-all (25 project) -> NATASHA 389 cau / 10 lo, CHELY 9 / 1
+      port_casting tu ban da sua:
+        BO QUA CHELY (duoc nhac 9 lan): NATASHA (duoc nhac 389 lan) giu ngoc_linh_f093
+        GHIM  NATASHA -> preset_ngoc_linh_f093_p+00        (truoc khi sua: CHELY duoc ghim)
+
+  `launch_batch.sh` cũng đổi theo: `$((BATCH - 1)) --chain` đúng cho một lượt phóng tiến lên,
+  nhưng sai cho một lượt `--range` chạy lại phần còn lại của lô cũ — đúng thứ sắp làm với lô 10
+  cuốn 1.
+
+  **Còn lại của mục này:** sổ trong `lo04` vẫn đang là bản bị thu nhỏ (8/1). Không chữa: không ai
+  gieo từ `lo04` nữa (bước 4b luôn truyền `--seed-from` là project mới nhất), và ghi vào một
+  project đã tag để sửa một con số không ai đọc là đổi một rủi ro thật lấy một sự sạch sẽ hình
+  thức. Ghi ra đây để người sau khỏi giật mình.
+
+  **Việc còn mở, đã đo:** 23/24 người mang hai giọng là người có giọng bị tranh. Bản vá này chặn
+  **nguyên nhân mới sinh ra** chúng; những ca đã có trên sách vẫn cần đúc lại từng chương, và danh
+  sách tự tìm của `one_person_one_voice.py` là đúng danh sách ấy.
