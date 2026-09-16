@@ -3938,3 +3938,55 @@ Nhân đây sửa một con số **đọc ngược** trong nhịp tim của chí
 ĐÃ THU trong pha tổng hợp, nhưng trong pha PHÂN TÍCH nó là số đoạn CHƯA phân tích — nên nhịp 08:20
 báo "3486/3717" cho một lô vừa chạy 16 phút. Giờ in hai con số có nhãn: `phan tich 243/3717 |
 thu 0/3717`. Một nhịp tim nói dối còn tệ hơn không có nhịp tim.
+
+### 09:05 — một lượt đúc lại làm chương 090 XẤU HƠN, và gốc là quyền sở hữu một giọng dùng chung
+
+Sau ranh giới 4 tôi đi kiểm thứ đáng ngờ nhất trong báo cáo: `NATASHA 2 giọng / 42 chương` — người
+mang nhiều chương nhất trong danh sách "một người hai giọng". Hoá ra đó không phải một khuyết tật
+cũ mà là **một khuyết tật vừa mới sinh ra, do chính lượt đúc lại của ranh giới 4**.
+
+Đo bằng `scripts/measure_did_the_recast_help.py` (mới): với mỗi chương vừa đúc lại, so **hai bản
+cuối** của từng người nói, đối chiếu với giọng đa số của người ấy trên cả cuốn (loại chính chương
+đang xét ra khỏi phép đếm để phép so không tự chứng minh):
+
+    tot hon 9 | xau hon 2
+
+    TOT HON   ATHY (017, 020, 047), HERODOTUS (047, 048), MEKANZI (047), OTHELLO (047),
+              IVEN (062), CAMIL (090)
+    XAU HON   WOLF (047)     thai_son_f093   -> thanh_binh_f097   (da so 2 chuong)
+              NATASHA (090)  ngoc_linh_f093  -> ngoc_linh_f087    (da so 41/42 chuong!)
+
+Vòng đúc lại **lãi** — 9 ăn 2 — nhưng hai ca xấu đều là người **không có pin**, và ca NATASHA là
+một chương đã lên sách với giọng sai ở một nhân vật 42 chương.
+
+**Lần theo pin qua chuỗi project** (`characters.locked_voice_key`) thì thấy nó đổi chủ:
+
+    15/09 20:55  lo04        NATASHA f093     CHELY (khong pin)
+    16/09 06:37  lo01r_017   NATASHA (khong)  CHELY f093        <- doi chu o day
+    16/09 07:51  lo02r_090   NATASHA (khong)  CHELY f093        <- chuong 090 ra sai
+    16/09 08:03  lo05        NATASHA f093     CHELY f093        <- tu lanh, ca hai cung ghim
+
+**Tái hiện được trong hai lệnh**, trên một project nháp ở scratchpad:
+
+    cli create --range 017..017            -> 0 nhan vat
+    port_casting.py lo04 <nhap>            -> CHELY f093, NATASHA ''    (NGUOC voi lo04!)
+    pin_the_book_cast.py <nhap> --apply    -> NATASHA f093 (ca hai ghim, 114 pin)
+
+Nguyên nhân là một luật **cố ý** trong `read_casting`: nó lấy hai nguồn — ai ĐÃ NÓI trong lô nguồn
+và ai ĐANG GHIM — rồi cho "ai đã nói" thắng, vì *"a pin says what was decided, a segment says what
+was heard, and what was heard is what the listener accepted"*. Luật ấy đúng cho **giọng của một
+người**, và sai cho **ai sở hữu một giọng dùng chung**: lô 4 là chương 140..179, nơi CHELY nói và
+NATASHA im, nên quyền sở hữu một giọng trải 42 chương bị quyết bởi một lô 40 chương.
+
+`pin_the_book_cast` là phép chữa book-wide và nó **chữa được** (dòng thứ ba ở trên), nhưng ở chuỗi
+thật nó không chữa — và **không có cách nào biết nó đã quyết gì**, vì `launch_repair.sh` đổ đầu ra
+của nó vào `/dev/null`. Một quyết định dàn giọng không ai đọc được là một quyết định không kiểm
+được; đó là việc rẻ nhất phải sửa.
+
+Đã loại trừ đúng một nghi can bằng bằng chứng, không bằng suy luận: `_drop_pins_that_share_a_chapter`
+chỉ bỏ pin khi hai người pin **thật sự cùng chương**, nó ghi sổ khi làm thế, và `runtime_events` của
+cả hai project **không có dòng nào** như vậy — nó cũng không ghi vào cột `locked_voice_key`.
+
+Mục hàng chờ đầy đủ (kèm hai việc rẻ làm ngay và phép đo phải làm trước khi sửa `read_casting`) ở
+`docs/OPTIMISATION_QUEUE.md`, cuối file. Chương 090 thì tự chữa được ở ranh giới 5: `2:090` đã nằm
+trong danh sách tự tìm, và lần này project gieo (lô 5) **có** pin của NATASHA.

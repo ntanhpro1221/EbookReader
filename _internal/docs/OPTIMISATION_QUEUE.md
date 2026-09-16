@@ -2610,3 +2610,58 @@ bốn bài test đều xanh và chương vẫn hỏng.
   `one_person_one_voice.py` sau khi lô 3 lên sách; chỉ đúc lại những chương CÒN lệch (danh sách cũ
   `1:017 1:020 1:022 1:047 1:048 2:056 2:060 2:061 2:062 2:092` có thể co lại nhờ pin), và CORELLA + WOLF
   vẫn chưa ghim được vì người giữ giọng của họ cùng chương - nếu họ lệch tiếp thì đúc lại là đường duy nhất.
+
+## Quyền sở hữu một giọng dùng chung (2026-09-16, 09:00) — bắt được ngay sau ranh giới 4
+
+- **Pin của một giọng DÙNG CHUNG được quyết bởi LÔ CUỐI, không bởi cuốn sách** (đo 09:00 ngày
+  2026-09-16; ưu tiên **cao**; `port_casting.py` là script **không khoá** nên sửa được ngay, nhưng
+  phần ở `character_registry.py` cần một ranh giới).
+
+  Ca thật, bắt được ngay sau ranh giới 4: chương 090 được đúc lại và ra **xấu hơn**. NATASHA đi từ
+  `ngoc_linh_f093` — giọng bà ấy dùng ở **41 trong 42 chương** của cuốn sách — sang `ngoc_linh_f087`.
+
+  Lần theo pin qua chuỗi project (`characters.locked_voice_key`):
+
+      15/09 20:55  lo04                  NATASHA f093    CHELY (khong pin)
+      16/09 06:37  lo01r_017             NATASHA (khong) CHELY f093      <- doi chu o day
+      16/09 07:51  lo02r_090             NATASHA (khong) CHELY f093      <- chuong 090 ra sai
+      16/09 08:03  lo05                  NATASHA f093    CHELY f093      <- tu lanh, ca hai
+
+  **Tái hiện được trong hai lệnh** (project nháp trong scratchpad, không chạm gì thật):
+
+      cli create ... --range 017..017        -> 0 nhan vat
+      port_casting.py lo04 <nhap>           -> CHELY f093,  NATASHA ''   (NGUOC voi lo04!)
+      pin_the_book_cast.py <nhap> --apply    -> NATASHA f093 (ca hai cung ghim, 114 pin)
+
+  Nguyên nhân: `read_casting` cố ý lấy **hai** nguồn — ai ĐÃ NÓI trong lô nguồn, và ai ĐANG GHIM —
+  rồi cho "ai đã nói" thắng khi hai bên xung đột ("a pin says what was decided, a segment says what
+  was heard, and what was heard is what the listener accepted"). Luật ấy đúng cho **giọng của một
+  người**, nhưng sai cho **ai sở hữu một giọng dùng chung**: lô 4 là chương 140..179, nơi CHELY nói
+  và NATASHA im, nên quyền sở hữu một giọng trải 42 chương được quyết bởi một lô 40 chương.
+
+  `pin_the_book_cast` là phép chữa book-wide và nó **chữa được** (bằng chứng ở dòng thứ ba trên),
+  nhưng ở chuỗi thật nó không chữa — nó chạy lúc 06:37 khi sách chỉ có 139 chương và
+  `launch_repair.sh` đổ đầu ra của nó vào `/dev/null`, nên **không có bằng chứng nào** về việc nó đã
+  quyết gì. Hai việc rẻ, làm được ngay:
+
+  1. `launch_repair.sh` / `launch_batch.sh`: **đừng đổ `pin_the_book_cast` vào `/dev/null`** — một
+     quyết định dàn giọng không ai đọc được là một quyết định không kiểm được.
+  2. `port_casting.read_casting`: khi hai người tranh cùng một `voice_key`, mang **cả hai** nếu họ
+     chưa từng cùng chương trên sách (đúng luật `pin_the_book_cast` đang dùng và đúng luật holder
+     của bộ cấp giọng); chỉ khi họ có cùng chương thì mới chọn một, và chọn theo **số chương trên
+     cuốn sách**, không theo số câu trong lô nguồn.
+
+  **Đo trước khi sửa (2):** đếm trên cả cuốn có bao nhiêu cặp (người, người) tranh một giọng mà
+  `chưa từng cùng chương` — `pin_the_book_cast` in ra ~25 dòng "VA CHẠM … chưa từng cùng chương" cho
+  cuốn 2 — và bao nhiêu trong số ấy hiện **đang** mang hai giọng qua cả sách (24 người). Nếu phần
+  lớn 24 người ấy là hệ quả của đúng chỗ này thì đây là gốc của lớp khuyết tật "một người hai giọng
+  qua các chương", thứ đã đi 11 → 15 → 21 → 24 người.
+
+  **Cái giá nếu không sửa:** mỗi lô/lượt đúc lại là một lần rút thăm lại quyền sở hữu, và mỗi lần
+  rút thăm sai là một chương lên sách với giọng sai (đã xảy ra: chương 090). Vòng đúc lại của ranh
+  giới 4 vẫn **lãi** — `scripts/measure_did_the_recast_help.py`: **tốt hơn 9, xấu hơn 2** — nhưng
+  hai ca xấu đều là người **không có pin**.
+
+  **Không phải lỗi của `_drop_pins_that_share_a_chapter`:** nó chỉ bỏ pin khi hai người pin **thật
+  sự cùng chương**, nó ghi sổ khi làm thế, và `runtime_events` của cả hai project không có dòng nào
+  như vậy. Nó cũng không ghi vào cột `locked_voice_key`. Đã loại trừ.
