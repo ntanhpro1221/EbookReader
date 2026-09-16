@@ -69,3 +69,33 @@ def test_no_next_actually_guards_the_launch() -> None:
     step_six = text.index("# ---- 6. lo ke tiep")
     assert step_six < guard < launch, "phép canh phải nằm giữa đầu bước 6 và lệnh thả lô"
     assert "--no-next" in text[: text.index("shift\n")], "dòng usage phải nói ra cờ này"
+
+
+def test_wait_only_stops_before_anything_changes() -> None:
+    """`--wait-only` là người gác, không phải ranh giới: nó phải thoát TRƯỚC bước đầu tiên có ghi.
+
+    Dùng để canh một lô lớn chạy qua đêm khi không còn nhịp tim (16-09: lô 6 = 219..343, ~30 giờ).
+    Nếu cờ được nhận mà lối thoát nằm sau `apply_all` / `git add -A` / `launch_repair` /
+    `launch_batch`, thì một lệnh "chỉ canh" sẽ tự áp bản vá, commit, đúc lại và thả lô 7 vào sáng
+    thứ 6 mà không ai hỏi — đúng cái mà chủ sách bỏ nhịp tim để khỏi phải trông.
+    """
+    text = (ROOT / "scripts" / "boundary.sh").read_text(encoding="utf-8")
+
+    assert "--wait-only) WAIT_ONLY=1" in text, "cờ chưa được phân tích"
+    assert "\nWAIT_ONLY=0\n" in text, "biến chưa khởi tạo - `set -u` sẽ nổ khi không truyền cờ"
+    assert "--wait-only" in text[: text.index("shift\n")], "dòng usage phải nói ra cờ này"
+
+    step_zero_done = text.index('say "lo $BATCH xong: $(chapter_statuses)"')
+    guard = text.index('if [ "$WAIT_ONLY" = 1 ]; then')
+    exit_here = text.index("exit 0", guard)
+    assert step_zero_done < guard, "phải canh XONG lô rồi mới thoát"
+    for writer in (
+        "apply_all.py --apply",
+        "git add -A",
+        "git commit",
+        "bash scripts/launch_repair.sh",
+        'bash scripts/launch_batch.sh "$NEXT"',
+        "assemble_book.py --apply",
+        "tag_here \"",
+    ):
+        assert exit_here < text.index(writer, step_zero_done), f"lối thoát phải nằm trước `{writer}`"

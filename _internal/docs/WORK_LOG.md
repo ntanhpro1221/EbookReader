@@ -4221,3 +4221,36 @@ chế ấy — con số đó thuộc một cổng hẹp hơn), và một lần v
 chứ không đếm **đoạn** (3.482 dòng / 3.481 đoạn — hôm nay gần bằng nhau, nhưng đừng để nó đúng nhờ
 may). Cả hai đã sửa: `COUNT(DISTINCT segment_stable_id)`, và docstring nói thẳng "đừng đọc nó như
 số đoạn hỏng".
+
+### 18:13 — lô 6 lớn: 219..343 (125 chương, 11.129 đoạn), xong khoảng sáng thứ 6; người gác thay nhịp tim
+
+Chủ sách bỏ hẳn nhịp tim (*"thôi dừng luôn không heartbeat gì nữa"*) rồi bảo *"khởi tạo một lô chạy
+thật lớn, căn thời gian xong đến tầm sáng thứ 6"*. Chi tiết và bảng ước tính ở
+`docs/PRODUCTION_PLAN_book2.md`, mục *"Lô 6 lớn"*. Ba điều đáng giữ:
+
+1. **Cỡ lô từ số đo thật, không từ bảng.** "Giờ máy" của bảng (7,78 giây/đoạn) nói 8 giờ một lô; lô 3–5
+   đo được ~4,5 giờ phân tích + ~5,1 giờ thu khi máy rảnh ≈ 9,7 giờ cho ~3.700 đoạn. Gộp nguyên lô 6+7+8
+   của bảng (11.129 đoạn) cho ~29 giờ máy rảnh; tính từ ~00:30 thứ 5 thì xong ~05:30 thứ 6, hoặc ~08:30
+   nếu chiều tối thứ 5 có người dùng máy (bước thu nhường còn ~2/3 tốc độ, đo trên lô 5 chiều nay).
+   Gộp nguyên lô chứ không cắt theo đồng hồ để phần còn lại của bảng chỉ cần đánh số lại (23 → 21 lô).
+2. **Rủi ro nói ra chứ không giấu:** chưa project nào của cả hai cuốn vượt 3.795 đoạn. Trong một lô
+   3.700 đoạn, giây/đoạn ở 1/3 chương cuối không cao hơn 1/3 đầu, nên không thấy chi phí tăng theo vị
+   trí — nhưng 11.129 là gấp ba.
+3. **`boundary.sh --wait-only` (mới):** chỉ bước 0 — canh, `run` lại nếu chết (tối đa hai lần), ghi
+   bằng chứng, thoát. Cả ranh giới thì sáng thứ 6 sẽ tự đúc lại và thả lô 7 khi không ai hỏi; cờ này
+   lấy phần canh gác, bỏ phần quyết định. Bài test đòi lối thoát nằm trước mọi bước có ghi (`apply_all`,
+   `git add -A`, commit, tag, `launch_repair`, `launch_batch`, `assemble_book`), và đã thử đột biến:
+   dời phép canh xuống sau bước 3 → đỏ, xoá nó → đỏ. Chạy thật trên lô 4 đã xong: thoát 0 sau 2,6 giây,
+   cây git không đổi. Bộ test đủ: 2857 passed.
+
+Lệnh đã thả (nền):
+
+```bash
+bash scripts/boundary.sh 5 --recast auto 1:010 1:022 1:027 1:047 2:090 2:094 3:105 3:114 3:136 3:137 3:139 4:167 && bash scripts/boundary.sh 6 --wait-only
+```
+
+Không `--no-next`: 18 chương cuốn 1 (261..278) lùi lại sau lô 6 — lệnh mới thay kế hoạch dành cửa sổ
+giữa lô 5 và 6 cho cuốn 1. Danh sách lô khác đo lại ~18:02, trùng hệt 13:00 (sách không đổi từ 08:04).
+
+Một lỗi hiển thị cũ thấy trên đường, sửa luôn: dòng mở đầu log in `+ tu tim (auto)` cả khi không
+truyền `auto`, vì `${RECAST_AUTO:+...}` coi `0` là có giá trị.

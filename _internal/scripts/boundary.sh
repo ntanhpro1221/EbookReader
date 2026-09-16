@@ -23,7 +23,7 @@
 # nam lenh khong can nguoi. Cai can nguoi la DOC ket qua, va viec ay lam sau cung duoc.
 set -uo pipefail
 
-BATCH="${1:?dung: boundary.sh <so lo> [--recast auto|062|3:084 ...] [--no-next] [--dry-run]}"
+BATCH="${1:?dung: boundary.sh <so lo> [--recast auto|062|3:084 ...] [--no-next] [--wait-only] [--dry-run]}"
 shift
 # `--recast` nhan ba dang, va ca ba deu can:
 #   062     chuong cua chinh lo nay
@@ -45,6 +45,7 @@ FORCE=""
 SKIP=""
 DRY=0
 NO_NEXT=0
+WAIT_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --recast)
@@ -74,6 +75,16 @@ while [ $# -gt 0 ]; do
     # cho no la khoang giua hai lo cua cuon 2 - dung khoang ma buoc 6 lap tuc chiem lay. Khong co
     # co nay thi moi ranh gioi tu dong noi dai cuon dang chay va cuon kia doi vo han.
     --no-next) NO_NEXT=1; shift ;;
+    # `--wait-only`: CHI buoc 0 - doi lo xong, chet giua chung thi `run` lai (toi da hai lan), ghi
+    # bang chung cua lo - roi thoat 0. Khong ap hang cho, khong commit, khong tag, khong va / duc
+    # lai, khong tha lo nao, khong ghep sach.
+    #
+    # Vi sao can: 16-09 chu sach bo nhip tim ("thoi dung luon khong heartbeat gi nua") roi tha mot
+    # lo LON xong vao sang thu 6 (219..343, ~30 gio). Khong ai nhin thi mot lan `run` chet luc ba
+    # gio sang lam mat ca dem; buoc 0 da biet cach chay lai, nhung ca ranh gioi thi se tu y duc lai
+    # va tha lo 7 vao sang thu 6 khi khong ai hoi. Co nay lay dung phan canh gac, khong lay phan
+    # quyet dinh.
+    --wait-only) WAIT_ONLY=1; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
   esac
 done
@@ -170,10 +181,15 @@ tag_here() {
 say "=== ranh gioi lo $BATCH -> $NEXT ==="
 say "  project lo:    $BATCH_PROJECT"
 say "  trang thai:    $(state)  $(chapter_statuses)"
-say "  duc lai giong:${RECAST:- (khong)}${RECAST_AUTO:+  + tu tim (auto)}"
+# Khong dung `${RECAST_AUTO:+...}`: bien luon co gia tri (0 hoac 1), nen dong nay tung in "tu tim"
+# ca khi khong truyen `auto`.
+AUTO_NOTE=""
+if [ "$RECAST_AUTO" = 1 ]; then AUTO_NOTE="  + tu tim (auto)"; fi
+say "  duc lai giong:${RECAST:- (khong)}$AUTO_NOTE"
 say "  duc lai lo khac:${RECAST_OTHER:- (khong)}"
 say "  ep duc lai:    ${FORCE:- (khong)}   bo qua:${SKIP:- (khong)}"
 [ "$NO_NEXT" = 1 ] && say "  --no-next:     CO - buoc 6 se KHONG tha lo $NEXT"
+[ "$WAIT_ONLY" = 1 ] && say "  --wait-only:   CO - chi canh lo $BATCH (run lai neu chet), dung sau buoc 0"
 say "  hang cho:      ${PENDING:=$(pending_patches)}"
 say "  tag da co:     $(git tag -l "$TAG*" "$NEXT_TAG" | tr '\n' ' ')"
 say "  gieo lo $NEXT tu: $(py scripts/seed_chain.py "$BATCH" --seed)   (hien tai; se la project cuoi cua buoc 4)"
@@ -221,6 +237,12 @@ say "lo $BATCH xong: $(chapter_statuses)"
   echo "--- voice_pool_pressure ---";  py scripts/voice_pool_pressure.py "$BATCH_PROJECT"
   echo "--- throttle_report ---";      py scripts/throttle_report.py "$BATCH_PROJECT"
 } >> "$LOG" 2>&1
+
+if [ "$WAIT_ONLY" = 1 ]; then
+  say "--wait-only: lo $BATCH xong va bang chung da ghi. KHONG ap, commit, va, duc lai, tha lo $NEXT hay ghep sach."
+  say "  ranh gioi that: py scripts/one_person_one_voice.py | tail -1, roi bash scripts/boundary.sh $BATCH --recast auto <danh sach ay>"
+  exit 0
+fi
 
 # `auto`: chuong nao co HAI nguoi mot giong TRONG CUNG MOT CHUONG. Doc tu chinh bao cao da ghi
 # o tren, nen khong co khoang cach giua cai duoc in va cai duoc chay. Khong tim thay gi thi noi
