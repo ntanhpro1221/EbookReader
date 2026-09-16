@@ -45,3 +45,27 @@ def test_every_launcher_seeds_through_seed_chain() -> None:
         text = (ROOT / "scripts" / name).read_text(encoding="utf-8")
         assert "seed_chain.py" in text, name
         assert "ls -dt" not in text, f"{name}: mtime thư mục không xếp được project (xem seed_chain.py)"
+
+
+def test_no_next_actually_guards_the_launch() -> None:
+    """`--no-next` phải CHẶN bước 6, không chỉ được nhận rồi bỏ quên.
+
+    Một cờ được phân tích nhưng không ai đọc là cái bẫy tệ nhất trong họ này: người gõ nó tin là
+    GPU sẽ trống cho cuốn khác, rồi quay lại thấy lô kế đã chạy hai tiếng. Bài này đòi ba thứ:
+    cờ có trong bảng tham số, biến được khởi tạo (script chạy `set -u`), và lệnh
+    `launch_batch.sh "$NEXT"` nằm trong một nhánh do chính biến ấy canh.
+
+    Vì sao cần cờ: cuốn 1 dừng ở 261/478 và còn 18 chương của lô 10; luật "không chạy hai cuốn
+    cùng lúc" nghĩa là cửa sổ duy nhất của nó là khoảng giữa hai lô của cuốn 2 - đúng khoảng mà
+    bước 6 lập tức chiếm lấy.
+    """
+    text = (ROOT / "scripts" / "boundary.sh").read_text(encoding="utf-8")
+
+    assert "--no-next) NO_NEXT=1" in text, "cờ chưa được phân tích"
+    assert "\nNO_NEXT=0\n" in text, "biến chưa khởi tạo - `set -u` sẽ nổ khi không truyền cờ"
+
+    launch = text.index('bash scripts/launch_batch.sh "$NEXT"')
+    guard = text.index('if [ "$NO_NEXT" = 1 ]; then')
+    step_six = text.index("# ---- 6. lo ke tiep")
+    assert step_six < guard < launch, "phép canh phải nằm giữa đầu bước 6 và lệnh thả lô"
+    assert "--no-next" in text[: text.index("shift\n")], "dòng usage phải nói ra cờ này"

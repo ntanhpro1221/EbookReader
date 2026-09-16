@@ -23,7 +23,7 @@
 # nam lenh khong can nguoi. Cai can nguoi la DOC ket qua, va viec ay lam sau cung duoc.
 set -uo pipefail
 
-BATCH="${1:?dung: boundary.sh <so lo> [--recast auto|062|3:084 ...] [--dry-run]}"
+BATCH="${1:?dung: boundary.sh <so lo> [--recast auto|062|3:084 ...] [--no-next] [--dry-run]}"
 shift
 # `--recast` nhan ba dang, va ca ba deu can:
 #   062     chuong cua chinh lo nay
@@ -44,6 +44,7 @@ RECAST_AUTO=0
 FORCE=""
 SKIP=""
 DRY=0
+NO_NEXT=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --recast)
@@ -66,6 +67,13 @@ while [ $# -gt 0 ]; do
       while [ $# -gt 0 ] && [[ "$1" =~ ^[0-9]{3}$ ]]; do SKIP="$SKIP $1"; shift; done
       ;;
     --dry-run) DRY=1; shift ;;
+    # `--no-next`: lam het moi buoc NHUNG khong tha lo ke tiep o buoc 6. Buoc 6b va 7 van chay.
+    #
+    # Vi sao can: bang lo cua CUON nay khong phai thu tu viec duy nhat. Cuon 1 dung o 261/478 va
+    # con dung 18 chuong cua lo 10; luat "khong chay hai cuon cung luc" nghia la cua so duy nhat
+    # cho no la khoang giua hai lo cua cuon 2 - dung khoang ma buoc 6 lap tuc chiem lay. Khong co
+    # co nay thi moi ranh gioi tu dong noi dai cuon dang chay va cuon kia doi vo han.
+    --no-next) NO_NEXT=1; shift ;;
     *) echo "tham so la: $1" >&2; exit 2 ;;
   esac
 done
@@ -165,6 +173,7 @@ say "  trang thai:    $(state)  $(chapter_statuses)"
 say "  duc lai giong:${RECAST:- (khong)}${RECAST_AUTO:+  + tu tim (auto)}"
 say "  duc lai lo khac:${RECAST_OTHER:- (khong)}"
 say "  ep duc lai:    ${FORCE:- (khong)}   bo qua:${SKIP:- (khong)}"
+[ "$NO_NEXT" = 1 ] && say "  --no-next:     CO - buoc 6 se KHONG tha lo $NEXT"
 say "  hang cho:      ${PENDING:=$(pending_patches)}"
 say "  tag da co:     $(git tag -l "$TAG*" "$NEXT_TAG" | tr '\n' ' ')"
 say "  gieo lo $NEXT tu: $(py scripts/seed_chain.py "$BATCH" --seed)   (hien tai; se la project cuoi cua buoc 4)"
@@ -376,7 +385,10 @@ if [ -n "$RECAST_OTHER" ]; then
 fi
 
 # ---- 6. lo ke tiep
-if py scripts/seed_chain.py "$NEXT" --batch >/dev/null 2>&1; then
+if [ "$NO_NEXT" = 1 ]; then
+  say "--no-next: KHONG tha lo $NEXT. GPU de trong cho viec khac (vi du lo 10 cuon 1)."
+  say "  khi xong viec ay: bash scripts/launch_batch.sh $NEXT --seed-from \"$SEED\""
+elif py scripts/seed_chain.py "$NEXT" --batch >/dev/null 2>&1; then
   say "lo $NEXT da co project - khong khoi dong lai: $(py scripts/seed_chain.py "$NEXT" --batch)"
 else
   tag_here "$NEXT_TAG"

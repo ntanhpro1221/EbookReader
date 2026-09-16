@@ -3910,3 +3910,31 @@ bước 7 tự đối chiếu thẻ và ghi lại khi lệch. Chương 082 mang 
 Và `one_person_one_voice.py` trên cả cuốn 180 chương: **không chương nào có một người hai giọng trong
 cùng chương**. 24 người mang hơn một giọng **qua các chương khác nhau** — lớp khuyết tật cũ, không
 phải lớp cùng-chương.
+
+### 08:25 — `--no-next`: cuốn 1 cần một cửa sổ, và bước 6 luôn chiếm nó trước
+
+Ranh giới 4 **tự thả lô 5** ở bước 6, đúng thiết kế — và đúng thiết kế ấy làm cuốn 1 đợi vô hạn.
+Cuốn 1 dừng ở 261/478 và còn **18 chương của lô 10** (261..278); luật "không chạy hai cuốn cùng
+lúc" nghĩa là cửa sổ duy nhất của nó là khoảng giữa hai lô của cuốn 2, mà bước 6 lấy ngay khoảng ấy
+để nối dài cuốn đang chạy.
+
+`boundary.sh --no-next`: làm hết mọi bước (kể cả 6b và 7) nhưng **không thả lô kế**, và in ra lệnh
+để thả sau:
+
+    bash scripts/boundary.sh 5 --no-next --recast auto ...
+    -> 08:22 dry-run:  --no-next:     CO - buoc 6 se KHONG tha lo 6
+    -> khi xong viec khac: bash scripts/launch_batch.sh 6 --seed-from <project cuoi chuoi>
+
+Bài `test_no_next_actually_guards_the_launch` đòi ba thứ, vì một cờ **được nhận rồi bỏ quên** là
+cái bẫy tệ nhất trong họ này (người gõ nó tin GPU đang trống, quay lại thấy lô kế đã chạy hai
+tiếng): cờ có trong bảng tham số, biến `NO_NEXT` được khởi tạo (script chạy `set -u`), và lệnh
+`launch_batch.sh "$NEXT"` nằm **sau** phép canh và **trong** bước 6.
+
+Kế hoạch: lô 5 đang phân tích (3.717 đoạn, ~15 đoạn/phút → xong phân tích ~12:00, xong thu ~22:00).
+Ranh giới 5 chạy với `--no-next`, rồi cuốn 1 lấy GPU cho 18 chương, rồi mới thả lô 6. Nếu chủ sách
+muốn cuốn 1 sớm hơn thì dừng lô 5 được: nó chưa thu đoạn nào nên chưa mất giờ GPU nào.
+
+Nhân đây sửa một con số **đọc ngược** trong nhịp tim của chính tôi: `status != 'analyzed'` là số đoạn
+ĐÃ THU trong pha tổng hợp, nhưng trong pha PHÂN TÍCH nó là số đoạn CHƯA phân tích — nên nhịp 08:20
+báo "3486/3717" cho một lô vừa chạy 16 phút. Giờ in hai con số có nhãn: `phan tich 243/3717 |
+thu 0/3717`. Một nhịp tim nói dối còn tệ hơn không có nhịp tim.
