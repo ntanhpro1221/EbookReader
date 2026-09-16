@@ -13,7 +13,7 @@ một lần khai của mô hình đã lấy đi một giọng và tách nhân v�
 Nhãn mô tả (`NGƯỜI TRẢ LỜI`, `NGƯỜI HỌC VIỆC`, `TỬ TƯỚC`) cố ý không có trong nguồn - chúng là vai
 chứ không phải tên. Nên chỉ xét tên **một từ, chữ La-tinh**, đúng lớp mà `SAMAELE` thuộc về.
 
-## Kết quả (10:10 ngày 2026-09-16)
+## Kết quả (09:45 ngày 2026-09-16)
 
     cuon 2  267 ten, 154 ten mot-tu La-tinh -> 6 ten khong co trong nguon (ngoai NARRATOR)
               NATHANAS   3 nhac, 21 project, GIU doan_trang_f087

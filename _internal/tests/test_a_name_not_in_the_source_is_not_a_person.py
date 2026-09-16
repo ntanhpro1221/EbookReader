@@ -1,6 +1,6 @@
 """Một nhãn không có trong nguồn thì không được giữ một giọng — và `NARRATOR` là ngoại lệ.
 
-Kho giọng của cuốn 2 đã cấp hết (nam 14/14), nên mỗi pin là một chỗ. Đo 10:10 ngày 2026-09-16:
+Kho giọng của cuốn 2 đã cấp hết (nam 14/14), nên mỗi pin là một chỗ. Đo 09:45 ngày 2026-09-16:
 **sáu nhãn** đang giữ pin trong khi chuỗi của chúng **không hề xuất hiện** trong nguồn —
 `SELNE` (32 lần nhắc; `Selne` 0 lần / `Selene` 198 lần), `SAMAELE` (`Samaele` 0 / `Samael` 1.375),
 `ALICE DRACEN` (`Alice` 219 / `Dracen` 0), `NATHASA`, `NATHANAS`. Chúng sống qua 12–21 project vì

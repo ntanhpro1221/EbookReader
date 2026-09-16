@@ -5,7 +5,7 @@
 Chỉ đọc. `one_person_one_voice.py` đo "một **tên** hai giọng". Phép đo này đo lớp nó không thấy
 được: **một NGƯỜI nhiều tên**, vì mỗi tên là một dòng `characters` riêng với pin riêng.
 
-## Ca thật (cuốn 1, đo 10:15 ngày 2026-09-16)
+## Ca thật (cuốn 1, đo 09:50 ngày 2026-09-16)
 
     ten              nhac  project  pin
     SELENE             80       61  ngoc_linh_f097

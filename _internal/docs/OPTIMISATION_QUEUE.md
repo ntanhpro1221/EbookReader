@@ -2666,7 +2666,7 @@ bốn bài test đều xanh và chương vẫn hỏng.
   sự cùng chương**, nó ghi sổ khi làm thế, và `runtime_events` của cả hai project không có dòng nào
   như vậy. Nó cũng không ghi vào cột `locked_voice_key`. Đã loại trừ.
 
-  **ĐÃ ĐO phần "đo trước khi sửa" (09:35 ngày 16-09, `scripts/measure_who_contends_for_a_voice.py`):**
+  **ĐÃ ĐO phần "đo trước khi sửa" (09:28 ngày 16-09, `scripts/measure_who_contends_for_a_voice.py`):**
 
       201 nguoi co giong da so; 24 nguoi mang hon mot giong qua ca sach
       mang hai giong VA bi tranh giong : 23
@@ -2687,7 +2687,7 @@ bốn bài test đều xanh và chương vẫn hỏng.
 
   Kho giọng đã cấp hết (nam 14/14) nên **chia giọng là tất yếu**; thứ phải sửa không phải việc chia
   mà là việc **quyền sở hữu bị rút thăm lại mỗi lô**.
-  **SỬA CHẨN ĐOÁN, 09:55 ngày 16-09 — `read_casting` KHÔNG sai; sổ cộng dồn bị thu nhỏ.** Mục trên
+  **SỬA CHẨN ĐOÁN, 09:36 ngày 16-09 — `read_casting` KHÔNG sai; sổ cộng dồn bị thu nhỏ.** Mục trên
   quy tội cho luật "ai đã nói thắng ai đang ghim" của `read_casting`. Đi tới cùng thì luật ấy
   **đúng** và nó xếp hạng bằng đúng thứ đáng cân; thứ sai là **đầu vào**:
 
@@ -2721,9 +2721,9 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **nguyên nhân mới sinh ra** chúng; những ca đã có trên sách vẫn cần đúc lại từng chương, và danh
   sách tự tìm của `one_person_one_voice.py` là đúng danh sách ấy.
 
-## Một cái tên không có trong nguồn thì không phải tên (2026-09-16, 10:10)
+## Một cái tên không có trong nguồn thì không phải tên (2026-09-16, 09:45)
 
-- **Mô hình gõ sai một cái tên, và cái tên gõ sai giữ luôn một giọng — qua 21 project** (đo bằng
+- **Mô hình gõ sai một cái tên, và cái tên gõ sai giữ luôn một giọng — qua 21 project** (đo 09:45 bằng
   `scripts/measure_a_name_that_is_not_in_the_source.py`; ưu tiên **trung–cao** vì kho giọng nam đã
   cấp hết; phần chữa ở `character_registry.py`/`analysis.py` cần một ranh giới, phần rẻ ở
   `port_casting.py` thì không).
@@ -2769,7 +2769,7 @@ bốn bài test đều xanh và chương vẫn hỏng.
   bằng cách viết khác (ví dụ `Selene`); nếu đúng thế thì luật "gộp về tên gần nhất" phải xử được cả
   hình dạng ấy.
 
-- **Một NGƯỜI nhiều NHÃN, mỗi nhãn một giọng** (đo 10:20 ngày 2026-09-16,
+- **Một NGƯỜI nhiều NHÃN, mỗi nhãn một giọng** (đo 09:52 ngày 2026-09-16,
   `scripts/measure_one_person_many_labels.py`). `one_person_one_voice.py` đo "một **tên** hai
   giọng" nên lớp này vô hình với nó: cùng một người, nhiều dòng `characters`, mỗi dòng một pin.
 
@@ -2805,7 +2805,7 @@ bốn bài test đều xanh và chương vẫn hỏng.
   Cùng một bài học với `measure_a_phantom_by_its_own_chapter.py` sáng nay: thước nào cũng phải
   chạy trên **cả tập** rồi soi những ca nó gắn cờ sai, chứ không chỉ trên các nghi can.
 
-  **LUẬT ĐỀ XUẤT BỊ PHÉP ĐO BÁC BỎ (10:45 ngày 16-09).** Mục trên viết cách chữa "đúng" là gộp ở
+  **LUẬT ĐỀ XUẤT BỊ PHÉP ĐO BÁC BỎ (10:11 ngày 16-09).** Mục trên viết cách chữa "đúng" là gộp ở
   `character_registry`/`analysis`. Tầng ấy chỉ thấy **các chương của project mình**, nên luật phải
   là: *nhãn vắng mặt trong chính văn bản của project, và có **đúng một** tên trong văn bản cách nó
   ≤ 2 phép sửa, thì hai cái là một người.* Đo thử trên toàn bộ project của cả hai cuốn
@@ -2837,14 +2837,14 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **bỏ pin** cho những nhãn vắng mặt trong cả nguồn, chạy cạnh `pin_the_book_cast` — trả lại ~5 chỗ
   trong kho giọng mà không gộp danh tính nào, tức không có rủi ro gán sai người.
 
-## Cuốn 1 quay lại sản xuất: việc gì, và cái giá (2026-09-16, 11:35)
+## Cuốn 1 quay lại sản xuất: việc gì, và cái giá (2026-09-16, 10:35)
 
 - **Hai việc khác nhau, đừng trộn.** Chủ sách đã đồng ý cho cuốn 1 quay lại. Có **hai** việc, và
   chúng khác nhau về giá lẫn về giá trị:
 
   1. **Chạy nốt lô 10 — 18 chương 261..278.** Đây là việc *thiếu sách*: sách cuốn 1 đang có 261
      chương liền mạch 000..260 và dừng. Một project 18 chương, ~4–6 giờ GPU. Mọi điều kiện đã kiểm
-     11:00 hôm nay: nguồn có đủ `261.txt`..`278.txt`, project gieo `lo10_24893cbe8c` còn đó, kế
+     10:00 hôm nay: nguồn có đủ `261.txt`..`278.txt`, project gieo `lo10_24893cbe8c` còn đó, kế
      hoạch ghi lô 10 = 253..278, `EBOOK_FIRST_PERSON=SAMAEL` đã chạy suốt chuỗi (đã thử tận
      `book_settings.json`), và giọng người dẫn chuyện của cuốn 1 vẫn là `Phạm Tuyên` như cuốn 2 nên
      không cần ghi đè gì.

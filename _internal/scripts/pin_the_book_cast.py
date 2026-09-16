@@ -114,7 +114,7 @@ def _fold(text: str) -> str:
 def names_absent_from_the_source(names: list[str], source: Path = SOURCE_DIR) -> set[str]:
     """Nhãn chữ La-tinh mà chuỗi của nó **không hề có** trong nguồn - tức không thể là tên.
 
-    Đo 10:10-10:20 ngày 2026-09-16 trên cả hai cuốn: sáu nhãn như thế đang **giữ một giọng đã
+    Đo 09:45-09:52 ngày 2026-09-16 trên cả hai cuốn: sáu nhãn như thế đang **giữ một giọng đã
     ghim**, trong một kho mà nam đã cấp hết 14/14.
 
         cuon 1  SELNE (32 nhac, `Selne` 0 lan / `Selene` 198 lan), SELNE VALKRYN,

@@ -3991,7 +3991,7 @@ Mục hàng chờ đầy đủ (kèm hai việc rẻ làm ngay và phép đo ph�
 `docs/OPTIMISATION_QUEUE.md`, cuối file. Chương 090 thì tự chữa được ở ranh giới 5: `2:090` đã nằm
 trong danh sách tự tìm, và lần này project gieo (lô 5) **có** pin của NATASHA.
 
-### 09:55 — chẩn đoán sai của tôi bị chính phép đo bác bỏ: `read_casting` đúng, SỔ bị thu nhỏ
+### 09:36 — chẩn đoán sai của tôi bị chính phép đo bác bỏ: `read_casting` đúng, SỔ bị thu nhỏ
 
 Lúc 09:05 tôi ghi rằng gốc của ca NATASHA là luật *"ai đã nói trong lô nguồn thắng ai đang ghim"*
 trong `port_casting.read_casting`. Đi tới cùng thì **luật ấy đúng** — nó xếp hạng bằng số câu cộng
@@ -4031,7 +4031,7 @@ Không chữa sổ trong `lo04` (vẫn 8/1): không ai gieo từ nó nữa vì b
 là project mới nhất, và ghi vào một project đã tag để sửa một con số không ai đọc là đổi một rủi ro
 thật lấy một sự sạch sẽ hình thức.
 
-### 10:20 — một nhân vật, bốn tên, ba giọng: tên mô hình gõ sai đang GIỮ chỗ trong kho giọng
+### 09:52 — một nhân vật, bốn tên, ba giọng: tên mô hình gõ sai đang GIỮ chỗ trong kho giọng
 
 Từ ca `SAMAELE` (một chữ `e` thừa) đi ra một lớp khuyết tật chưa ai đếm: **mỗi nhãn là một dòng
 `characters` với pin riêng**, nên một người bị gõ sai tên thành hai người, và cả hai giữ giọng.
@@ -4079,9 +4079,9 @@ matching quote` vì tôi gộp hai heredoc cùng một `git commit -F -` vào m�
 đầy dấu nháy ngược và tiếng Việt. May là bash không chạy gì cả nên không có nửa bản ghi nào. Nội
 dung dài nhiều dấu thì viết ra file rồi nối bằng Python — `scratchpad/append_and_commit.py`.
 
-### 10:45 — luật gộp tên mà tôi vừa đề xuất bị chính phép đo bác bỏ, trước khi viết một dòng mã
+### 10:11 — luật gộp tên mà tôi vừa đề xuất bị chính phép đo bác bỏ, trước khi viết một dòng mã
 
-Mục hàng chờ 10:20 nói cách chữa "đúng" cho tên gõ sai là gộp ở tầng phân tích. Trước khi viết bản
+Mục hàng chờ 09:52 nói cách chữa "đúng" cho tên gõ sai là gộp ở tầng phân tích. Trước khi viết bản
 vá, đo xem luật ấy sẽ làm gì trên dữ liệu thật. Tầng phân tích chỉ thấy **các chương của project
 mình**, nên luật phải là: *nhãn vắng mặt trong chính văn bản của project + có **đúng một** tên
 trong văn bản cách nó ≤ 2 phép sửa ⇒ một người.*
