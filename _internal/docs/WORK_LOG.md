@@ -4165,3 +4165,24 @@ chúng để không phải thu lại khi một lượt chạy bị ngắt.
 
 Con số đáng canh nếu về sau muốn dọn: một project một lô nặng ~4–5 GB, trong đó phần lớn là WAV
 đoạn; MP3 chương chỉ ~1,6 GB cho cả 180 chương đã ghép.
+
+### 15:15 — lần thứ tư cùng một lỗi thao tác, nên viết nó thành luật máy móc
+
+Dấu nháy ngược trong một chuỗi **nháy kép** của bash là **thay thế lệnh**. Hôm nay nó cắn bốn lần:
+
+1. `launch_batch.sh` — `echo "... \`run\` ..."` sẽ chạy `run`. Bắt được lúc đọc lại, trước khi ship.
+2. docstring của `measure_did_the_recast_help.py` — mất đường dẫn `docs/OPTIMISATION_QUEUE.md`.
+3. hàng chờ — mất `docs/TWO_CHARACTERS_ONE_VOICE.md` giữa câu (còn lại "xem , mục"), rồi bash chạy
+   chính file `.md` ấy như một script.
+4. commit `15:14` — mất chữ `auto` trong thân commit: *"batch 5.  only finds same-chapter"*.
+
+Ba lần đầu tôi sửa hậu quả rồi tự nhủ "lần sau cẩn thận". Lần thứ tư thì rõ: **"cẩn thận" không
+phải một biện pháp.** Luật máy móc, không ngoại lệ:
+
+> Mọi văn bản dài — thân commit, khối markdown, docstring tiếng Việt — **viết ra file** bằng công cụ
+> ghi file, rồi `git commit -F <file>` hoặc một script Python đọc file ấy. **Không bao giờ** nhét
+> vào `bash -c "..."` hay `python -c "..."`.
+
+Commit `15:14` giữ nguyên cái lỗ ấy: nội dung cây đúng, chỉ thân commit thiếu một từ, và sửa lịch
+sử cho một chữ thì đắt hơn là ghi lại ở đây. Ai đọc `git show` của nó thì hiểu chỗ trống là chữ
+`auto`.
