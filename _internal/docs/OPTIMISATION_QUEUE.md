@@ -2836,3 +2836,43 @@ bốn bài test đều xanh và chương vẫn hỏng.
   công cụ đọc `SOURCE_DIR` mới trả lời được. Đề xuất mới, rẻ và không cần ranh giới: một lượt dọn
   **bỏ pin** cho những nhãn vắng mặt trong cả nguồn, chạy cạnh `pin_the_book_cast` — trả lại ~5 chỗ
   trong kho giọng mà không gộp danh tính nào, tức không có rủi ro gán sai người.
+
+## Cuốn 1 quay lại sản xuất: việc gì, và cái giá (2026-09-16, 11:35)
+
+- **Hai việc khác nhau, đừng trộn.** Chủ sách đã đồng ý cho cuốn 1 quay lại. Có **hai** việc, và
+  chúng khác nhau về giá lẫn về giá trị:
+
+  1. **Chạy nốt lô 10 — 18 chương 261..278.** Đây là việc *thiếu sách*: sách cuốn 1 đang có 261
+     chương liền mạch 000..260 và dừng. Một project 18 chương, ~4–6 giờ GPU. Mọi điều kiện đã kiểm
+     11:00 hôm nay: nguồn có đủ `261.txt`..`278.txt`, project gieo `lo10_24893cbe8c` còn đó, kế
+     hoạch ghi lô 10 = 253..278, `EBOOK_FIRST_PERSON=SAMAEL` đã chạy suốt chuỗi (đã thử tận
+     `book_settings.json`), và giọng người dẫn chuyện của cuốn 1 vẫn là `Phạm Tuyên` như cuốn 2 nên
+     không cần ghi đè gì.
+
+         source scripts/book1.env && bash scripts/launch_batch.sh 10 --range 261..278 \
+           --seed-from "D:/Novels/Audiobooks/_versions/v0.2.0-lo10/lo10_24893cbe8c"
+
+  2. **Đúc lại 41 chương cho 26 người mang nhiều giọng.** Đây là việc *chất lượng*, và nó **đắt**:
+     41 project một chương, ~12–20 phút mỗi cái, tức **8–14 giờ GPU**. Danh sách do
+     `one_person_one_voice.py` tự in. Bốn ca đầu bảng:
+
+         IVAN     3 giong / 33 chuong   31 + 1 + 1   <- hai chuong le, RE nhat trong ca danh sach
+         ME       2 giong / 24 chuong   16 + 8       <- ban va ngoi thu nhat gop ca 24 ve SAMAEL
+         KANG     4 giong / 20 chuong   8 + 6 + 5 + 1
+         REXERD   3 giong / 16 chuong
+
+     **`KANG` là ca đáng cân lại:** "đa số" của anh ta chỉ là **8 trên 20 chương**, nên ký ức người
+     nghe về giọng KANG đã vỡ sẵn; đúc lại 12 chương để về một giọng là phần **đắt nhất** của danh
+     sách mà lợi ích mơ hồ nhất. Ngược lại `IVAN` chỉ cần **2 chương** (060, 130) để đi từ 3 giọng
+     về 1 — rẻ nhất, rõ nhất.
+
+     Nên nếu có ai muốn chia nhỏ: làm IVAN (2 chương) và những ca một-chương-lẻ trước, rồi mới tính
+     KANG.
+
+  **Việc 1 không phụ thuộc việc 2**, và nó là việc chủ sách nhắc: sách thiếu 18 chương. Thứ tự đề
+  xuất: ranh giới 5 chạy với `--no-next` → việc 1 → rồi mới thả lô 6 của cuốn 2.
+
+  **Bản vá ngôi thứ nhất đổi hai thứ trong danh sách trên:** 8 chương phía thiểu số của `ME` giờ
+  gộp hẳn về `SAMAEL` khi đúc lại (không chỉ "một giọng sai nhưng nhất quán"), và phép chặn ở chương
+  210 tan — báo cáo hiện ghi *"REINER không lấy lại được thanh_binh_f108 - ME đang dùng giọng ấy
+  trong chính chương này"*, mà sau khi gộp thì `ME` không còn giữ giọng ấy nữa.
