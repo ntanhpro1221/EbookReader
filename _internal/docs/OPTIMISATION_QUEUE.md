@@ -2720,3 +2720,87 @@ bốn bài test đều xanh và chương vẫn hỏng.
   **Việc còn mở, đã đo:** 23/24 người mang hai giọng là người có giọng bị tranh. Bản vá này chặn
   **nguyên nhân mới sinh ra** chúng; những ca đã có trên sách vẫn cần đúc lại từng chương, và danh
   sách tự tìm của `one_person_one_voice.py` là đúng danh sách ấy.
+
+## Một cái tên không có trong nguồn thì không phải tên (2026-09-16, 10:10)
+
+- **Mô hình gõ sai một cái tên, và cái tên gõ sai giữ luôn một giọng — qua 21 project** (đo bằng
+  `scripts/measure_a_name_that_is_not_in_the_source.py`; ưu tiên **trung–cao** vì kho giọng nam đã
+  cấp hết; phần chữa ở `character_registry.py`/`analysis.py` cần một ranh giới, phần rẻ ở
+  `port_casting.py` thì không).
+
+  Phép đo: mọi `characters.canonical_name` của mọi project, lọc lấy tên **một từ chữ La-tinh** (nhãn
+  mô tả như `NGƯỜI TRẢ LỜI`, `TỬ TƯỚC` cố ý không có trong nguồn — chúng là vai, không phải tên), rồi
+  hỏi: chuỗi ấy có xuất hiện **ở đâu đó trong nguồn** không?
+
+      cuon 2   NATHANAS   3 nhac, 21 project, GIU doan_trang_f087_p+00
+               NATHASA    1 nhac, 21 project, GIU doan_trang_f115_p+00
+               + JOELENS, NATHANIEL, MUSICIANS, ANHEID   (khong giu giong)
+      cuon 1   SELNE     32 nhac,  8 project, GIU doan_trang_f115_p+00
+               SAMAELE    3 nhac, 12 project, GIU thanh_binh_f097_p-04
+               + REVISIA                                (khong giu giong)
+
+  `NATHANAS` và `NATHASA` đều là **NATASHA gõ sai**, và `SAMAELE` là **SAMAEL gõ sai** — `Samaele`
+  xuất hiện **0 lần** trong 478 chương nguồn của cuốn 1, còn `Samael` 1.375 lần. Mỗi cái đang giữ
+  một giọng đã ghim, và chúng sống qua **21 project** vì `port_casting` mang pin đi theo danh tính:
+  **một lần gõ sai của mô hình thành một chỗ mất không, mãi mãi.**
+
+  Cái giá: 4 chỗ trong kho giọng (cuốn 2 nam **14/14 đã cấp hết**, nữ 15/27) cộng với việc một nhân
+  vật bị tách thành hai người — đúng lớp mà `one_person_one_voice` đi đo, nhưng tách theo **tên** nên
+  nó không thấy.
+
+  **Luật chữa, và vì sao nó an toàn:** nếu một chuỗi **không hề xuất hiện trong nguồn** thì nó không
+  thể là tên — không cần đoán gì. Đó là điều làm luật này khác hẳn phép gộp theo khoảng cách ký tự,
+  thứ đã bị chính phép đo bác bỏ hôm 02:50 (`Simon`/`Simeon`, `Andre`/`Andrei` là **người khác
+  nhau**, và cả hai cách viết đều CÓ trong nguồn). Ở đây: vắng mặt hoàn toàn ⇒ artifact của mô hình.
+  Gộp về cái tên gần nhất **có** trong nguồn (khoảng cách ≤ 2) nếu có đúng một ứng viên; không thì
+  về `UNKNOWN`.
+
+  **Hai chỗ có thể làm, rẻ trước:**
+  1. `port_casting.py` (script, không khoá): **đừng mang pin** cho một cái tên vắng mặt trong các
+     chương của project nguồn. Không sửa được quá khứ nhưng chặn việc chỗ ấy bị giữ mãi, và làm được
+     ngay không cần ranh giới. Cần đo trước: một nhân vật có thể nói trong lô này mà tên chỉ xuất
+     hiện ở lô khác (được gọi bằng "hắn"), nên phép kiểm phải hỏi **cả nguồn của cuốn**, không chỉ
+     các chương của project.
+  2. `character_registry` / `analysis` (khoá, cần ranh giới): gộp ngay lúc dựng sổ nhân vật, để cái
+     tên gõ sai không bao giờ có dòng riêng.
+
+  **Đo trước khi vá (chưa làm):** với mỗi trong 6 ca, đọc tay 2–3 câu của nó để chắc nó là bản gõ
+  sai của ai — `SELNE` 32 lần nhắc là ca duy nhất đủ lớn để có thể là một nhân vật thật mà nguồn gọi
+  bằng cách viết khác (ví dụ `Selene`); nếu đúng thế thì luật "gộp về tên gần nhất" phải xử được cả
+  hình dạng ấy.
+
+- **Một NGƯỜI nhiều NHÃN, mỗi nhãn một giọng** (đo 10:20 ngày 2026-09-16,
+  `scripts/measure_one_person_many_labels.py`). `one_person_one_voice.py` đo "một **tên** hai
+  giọng" nên lớp này vô hình với nó: cùng một người, nhiều dòng `characters`, mỗi dòng một pin.
+
+  Ca nặng nhất (cuốn 1) — `Selene` xuất hiện **198 lần** trong nguồn, `Selne` **0 lần**:
+
+      SELENE           80 nhac   ngoc_linh_f097     <- CO trong nguon
+      SELNE            32 nhac   doan_trang_f115    <- KHONG co trong nguon
+      SELENE VALKRYN    2 nhac   doan_trang_f115    <- CO
+      SELNE VALKRYN     3 nhac   doan_trang_f104    <- KHONG
+
+  Một nhân vật, **bốn danh tính, ba giọng đã ghim**. Cộng `SAMAEL`/`SAMAELE` và
+  `NATASHA`/`NATHASA`/`NATHANAS` ở cuốn 2 thì tổng cộng **~5 chỗ trong kho giọng** bị giữ bởi
+  những cái tên không tồn tại.
+
+  Phép đo chia **hai lớp**, vì chúng khác nhau về mức chắc chắn:
+
+  | lớp | ví dụ | bằng chứng | chữa thế nào |
+  |---|---|---|---|
+  | 1 — chắc chắn | `SELNE`, `SAMAELE`, `NATHASA` | chuỗi **không hề có trong nguồn** (bỏ dấu cả hai bên) | gộp về nhãn gần nhất CÓ trong nguồn (≤ 2 phép sửa); không có ứng viên thì về `UNKNOWN` |
+  | 2 — phải đọc | `SELENE` vs `SELENE VALKRYN`, `KANG` vs `KANG TAE-JIN` | cả hai **đều có** trong nguồn | chưa có luật; `JOHN` và `JOHN SMITH` có thể là hai người |
+
+  Con số: cuốn 1 **5 nhãn** lớp 1 (3 giữ pin), 2 nhóm lớp 2; cuốn 2 **9 nhãn** lớp 1 (2 giữ pin),
+  1 nhóm lớp 2.
+
+  **Thước này đã phải xiết lại hai lần, và cả hai lần do đối chứng:**
+  1. Bản đầu gom mọi nhãn cách nhau ≤ 2 phép sửa, và gom `KANG` (81 nhắc) với `KAIN REICHARDT`
+     (8) — **hai người khác nhau**; cùng lỗi ấy gom `LILY`/`LIORA`/`TIS`. Bỏ phép gom ấy đi:
+     "gần giống" không phải bằng chứng khi **cả hai** đều có trong nguồn.
+  2. Bản thứ hai so nguyên dấu, nên gắn cờ `NGUOI TRA LOI` (160 nhắc, có pin) và `DAO GAM` là
+     "không có trong nguồn" — trong khi nguồn viết đủ dấu. Bỏ dấu cả hai bên thì hai ca ấy biến
+     mất, đúng như phải thế: chúng là **nhãn rơi dấu**, lớp đã có đường chữa riêng.
+
+  Cùng một bài học với `measure_a_phantom_by_its_own_chapter.py` sáng nay: thước nào cũng phải
+  chạy trên **cả tập** rồi soi những ca nó gắn cờ sai, chứ không chỉ trên các nghi can.

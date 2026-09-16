@@ -4030,3 +4030,51 @@ hơn sự thật — và cái giá hiện ra nhiều giờ sau, ở một chươ
 Không chữa sổ trong `lo04` (vẫn 8/1): không ai gieo từ nó nữa vì bước 4b luôn truyền `--seed-from`
 là project mới nhất, và ghi vào một project đã tag để sửa một con số không ai đọc là đổi một rủi ro
 thật lấy một sự sạch sẽ hình thức.
+
+### 10:20 — một nhân vật, bốn tên, ba giọng: tên mô hình gõ sai đang GIỮ chỗ trong kho giọng
+
+Từ ca `SAMAELE` (một chữ `e` thừa) đi ra một lớp khuyết tật chưa ai đếm: **mỗi nhãn là một dòng
+`characters` với pin riêng**, nên một người bị gõ sai tên thành hai người, và cả hai giữ giọng.
+
+    cuon 1   SELENE           80 nhac   ngoc_linh_f097     <- CO trong nguon (198 lan)
+             SELNE            32 nhac   doan_trang_f115    <- KHONG co (0 lan)
+             SELENE VALKRYN    2 nhac   doan_trang_f115    <- CO
+             SELNE VALKRYN     3 nhac   doan_trang_f104    <- KHONG
+             SAMAEL          438 nhac   thanh_binh_f093    <- CO (1.375 lan)
+             SAMAELE           3 nhac   thanh_binh_f097    <- KHONG (0 lan)
+
+    cuon 2   NATASHA         389 nhac   ngoc_linh_f093     <- CO
+             NATHASA           1 nhac   doan_trang_f115    <- KHONG
+             NATHANAS          3 nhac   doan_trang_f087    <- KHONG
+
+**~5 chỗ trong kho giọng** bị giữ bởi những cái tên không tồn tại, trong một kho mà nam đã cấp hết
+(14/14) và nữ dùng 15/27. Và chúng sống qua **21 project** (`NATHANAS`) hay **12** (`SAMAELE`) vì
+`port_casting` mang pin đi theo danh tính — một lần gõ sai thành một chỗ mất không, mãi mãi.
+
+Hai script mới, và cái thứ hai phải **xiết lại hai lần** vì đối chứng bắt nó nói sai:
+
+- `scripts/measure_a_name_that_is_not_in_the_source.py` — nhãn một-từ chữ La-tinh vắng mặt trong
+  nguồn. Nhị phân, không đoán gì.
+- `scripts/measure_one_person_many_labels.py` — nhóm các nhãn của cùng một người.
+  - **Bản đầu** gom mọi nhãn cách nhau ≤ 2 phép sửa và gom ngay `KANG` (81 nhắc) với
+    `KAIN REICHARDT` (8) — **hai người khác nhau**, cách nhau một ký tự; cùng lỗi ấy gom
+    `LILY`/`LIORA`/`TIS`. Bỏ hẳn phép gom ấy: "gần giống" **không phải bằng chứng** khi cả hai
+    nhãn đều có trong nguồn.
+  - **Bản hai** so nguyên dấu, nên gắn cờ `NGUOI TRA LOI` (160 nhắc, có pin) và `DAO GAM` là
+    "không có trong nguồn" — trong khi nguồn viết `NGƯỜI TRẢ LỜI` và `Dao Găm` đủ dấu. Bỏ dấu cả
+    hai bên thì hai ca ấy biến mất, đúng như phải thế: chúng là **nhãn rơi dấu**, lớp đã có đường
+    chữa riêng.
+
+Cùng bài học với thước phantom sáng nay (nó từng gắn cờ `LUCIEN` 378 câu): một thước chỉ đáng tin
+sau khi chạy trên **cả tập** và đọc những ca nó gắn cờ sai. Ba lần trong một buổi sáng.
+
+Phép đo giờ chia hai lớp có mức chắc chắn khác nhau — **lớp 1** (không có trong nguồn) gộp được
+bằng bằng chứng, **lớp 2** (`SELENE` vs `SELENE VALKRYN`, cả hai đều có trong nguồn) thì phải đọc,
+vì `JOHN` và `JOHN SMITH` có thể là hai người. Mục hàng chờ ghi cả hai, kèm chỗ chữa rẻ
+(`port_casting` đừng mang pin cho nhãn vắng mặt trong nguồn — script, không cần ranh giới) và chỗ
+chữa đúng (`character_registry`, cần ranh giới).
+
+Và một bài học về chính cách tôi làm việc: lần commit này chết ở `unexpected EOF while looking for
+matching quote` vì tôi gộp hai heredoc cùng một `git commit -F -` vào một lệnh bash, với nội dung
+đầy dấu nháy ngược và tiếng Việt. May là bash không chạy gì cả nên không có nửa bản ghi nào. Nội
+dung dài nhiều dấu thì viết ra file rồi nối bằng Python — `scratchpad/append_and_commit.py`.
