@@ -31,7 +31,8 @@ người ta có một câu hỏi, không có một chủ đề.
 | Bản thu tốt bị ném đi? | [WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md](WHY_A_GOOD_TAKE_GETS_THROWN_AWAY.md) |
 | Đầu đoạn có tiếng lách cách? | [ONSET_CLICK.md](ONSET_CLICK.md) |
 | Hai nhân vật nói cùng một giọng? | [TWO_CHARACTERS_ONE_VOICE.md](TWO_CHARACTERS_ONE_VOICE.md) |
-| **Một nhân vật nói bằng hai giọng?** | [OPTIMISATION_QUEUE.md](OPTIMISATION_QUEUE.md) — mục *"Câu ngược chưa ai hỏi"*; `scripts/one_person_one_voice.py` |
+| **Một nhân vật nói bằng hai giọng?** | [WHO_OWNS_A_VOICE.md](WHO_OWNS_A_VOICE.md) — chuỗi quyết định ai giữ giọng nào giữa các lô, bốn lớp khuyết tật đã đo, và hai ý tưởng đã bị bác bỏ; `scripts/one_person_one_voice.py` |
+| Một chương vừa đúc lại xong nghe TỆ HƠN? | [WHO_OWNS_A_VOICE.md](WHO_OWNS_A_VOICE.md) — `scripts/measure_did_the_recast_help.py`; ca chương 090 ngày 16-09 |
 
 ## Phép kiểm nói gì, và có tin được không
 
