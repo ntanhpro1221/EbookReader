@@ -65,11 +65,18 @@ Lịch sử ranh giới đã chạy: 1→2, 2→3, 3→4, **4→5** (06:22–08:
 2.845 bài test xanh). Log của từng ranh giới ở `runtime/boundary_NN.log`; cách đọc ở
 `docs/READING_A_BOUNDARY_LOG.md`.
 
-**Việc đang chờ ở ranh giới 5** (khoảng 23:00 ngày 16-09, khi lô 5 thu xong):
+**Việc đang chờ ở ranh giới 5** (khoảng 22:10 ngày 16-09, khi lô 5 thu xong):
 
 ```bash
-bash scripts/boundary.sh 5 --no-next --recast auto
+python scripts/one_person_one_voice.py | tail -1     # LẤY danh sách đúc lại lô khác
+bash scripts/boundary.sh 5 --no-next --recast auto 1:010 1:022 ... 4:167
 ```
+
+**`--recast auto` KHÔNG đủ.** `auto` chỉ tìm va chạm cùng chương **trong lô vừa xong**; những chương
+của lô **khác** phải gõ tay dạng `B:CCC`, và danh sách ấy do `one_person_one_voice.py` in ra ở dòng
+cuối. Đo 13:00 ngày 16-09 nó là 12 chương (`1:010 1:022 1:027 1:047 2:090 2:094 3:105 3:114 3:136
+3:137 3:139 4:167`) — **nhưng phải chạy lại đúng lúc thả ranh giới**, vì sách đổi thì danh sách đổi.
+Ranh giới 4 đã làm đúng như thế và chữa được 9 người (xem `scripts/measure_did_the_recast_help.py`).
 
 `--no-next` để **không** thả lô 6 ngay: cuốn 1 còn 18 chương (261..278) và luật là không chạy hai
 cuốn cùng lúc, nên khoảng giữa hai lô là cửa sổ duy nhất của nó. Xem `docs/OPTIMISATION_QUEUE.md`
