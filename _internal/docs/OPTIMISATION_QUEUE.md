@@ -2879,3 +2879,36 @@ bốn bài test đều xanh và chương vẫn hỏng.
   gộp hẳn về `SAMAEL` khi đúc lại (không chỉ "một giọng sai nhưng nhất quán"), và phép chặn ở chương
   210 tan — báo cáo hiện ghi *"REINER không lấy lại được thanh_binh_f108 - ME đang dùng giọng ấy
   trong chính chương này"*, mà sau khi gộp thì `ME` không còn giữ giọng ấy nữa.
+
+## CHỜ CHỦ SÁCH QUYẾT — gom một chỗ (cập nhật 14:00 ngày 2026-09-16)
+
+Năm câu. Không câu nào chặn việc đang chạy: lô 5 vẫn thu, ranh giới 5 vẫn chạy được, 18 chương còn
+lại của cuốn 1 vẫn khởi động được. Chúng chỉ quyết **việc sau đó**.
+
+1. **Cuốn 1: đúc lại 41 chương cho 26 người mang nhiều giọng — làm hết, làm một phần, hay bỏ?**
+   Giá: **8–14 giờ GPU**. Đề nghị của tôi: **làm một phần** — `IVAN` chỉ cần **2 chương** (060, 130)
+   để đi từ 3 giọng về 1, và những ca một-chương-lẻ cũng rẻ như thế; còn `KANG` thì **bỏ lại**:
+   "đa số" của anh ta chỉ là **8 trên 20 chương**, nên 12 chương đúc lại là phần đắt nhất danh sách
+   với lợi ích mơ hồ nhất. Chi tiết ở mục *"Cuốn 1 quay lại sản xuất"*.
+
+2. **Cuốn 1 kể ngôi thứ nhất: tường thuật và thoại của Samael có nên CÙNG một giọng?**
+   Hiện tường thuật đọc bằng giọng người dẫn chuyện (`Phạm Tuyên`), thoại của anh ta bằng
+   `thanh_binh_f093` — **một người, hai giọng**, theo đúng định nghĩa của `one_person_one_voice`.
+   Sách hữu thanh kể ngôi thứ nhất thường cho **một** người đọc cả hai. Tôi **không tự đổi**: 261
+   chương đã lên sách theo cách hiện tại, đổi bây giờ làm cuốn sách không nhất quán với chính nó.
+   Nếu chủ sách muốn đổi thì nó là một quyết định *toàn cuốn*, và rẻ nhất là làm trước khi cuốn 1
+   chạy tiếp.
+
+3. **Giới tính của `NICAN`** (cuốn 1, chương 062, 4 câu). Mô hình khai không chắc; máy không có
+   bằng chứng trong văn bản. Một câu của chủ sách là xong, hoặc cứ để nguyên và nó ở nhóm vô danh.
+
+4. **Tên cuốn 1.** Đang dùng tên tiếng Anh tra được trên internet lúc 01:20 hôm nay —
+   *"Young Master's PoV: Woke Up As A Villain In A Game One Day"* — vì nguồn không ghi tên bộ. Nếu
+   chủ sách biết tên thật thì đổi một dòng trong `scripts/book1.env` là xong; bước 7 của ranh giới
+   tự ghi lại thẻ cho **cả** sách.
+
+5. **Kho giọng nam 14 bậc là một CHÍNH SÁCH, không phải khuyết tật** (mục riêng ở trên, 22:20 ngày
+   15-09). Chủ sách đã trả lời **"không"** cho giọng miền Trung (00:05 ngày 16-09), nên `Quang Sơn`
+   vẫn bị chặn theo vùng. Câu còn lại nếu có ngày kho thật sự hết: `Xuân Vĩnh` (`EXCLUDED_PRESETS`,
+   do một người nghe Việt phán) có được mở lại không. **Hôm nay chưa cần**: chương đông nhất chỉ
+   dùng 8 trên 14.
