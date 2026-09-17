@@ -271,3 +271,27 @@ Tài liệu này và `VERSIONS.md` vẫn luôn ghi `runtime/.venv`; cái sai là
 Dấu hiệu nhận ra ngay: nếu lỗi liệt kê **nhiều** gói cùng thiếu và torch lệch phiên bản
 trong khi một run vừa chạy xong bình thường, đó là sai interpreter, không phải hỏng môi
 trường. Một môi trường hỏng thật thì run đang chạy cũng đã chết.
+
+## Bản mới thượng nguồn: đọc changelog rồi quyết (2026-09-18, 02:0x)
+
+`pip list --outdated` trên `runtime/.venv` cộng với changelog từng gói. Cột cuối là việc phải làm,
+không phải "nên nâng" chung chung.
+
+| gói | đang cài | mới nhất | changelog nói gì đáng kể | quyết |
+|---|---|---|---|---|
+| `vieneu` | 3.3.0 | 3.8.1 | nhanh ~7,5 lần; clip mẫu Trúc Ly đổi; thêm giọng | **chờ tai chủ sách** (trang nghe), nâng ở ranh giới 6 nếu không giọng nào tệ đi |
+| `transformers` | 5.16.1 | 5.17.0 | "stop synchronizing the accelerator on every decode step" (#47975) — bớt đồng bộ mỗi bước sinh; "prevent unconditionally downloading remote hub files during generation" (#48620) — đúng loại lỗi đã dời `refs/main` hôm 17-09; RoPE 2D/3D dồn về `modeling_rope_utils.py` (**breaking** cho mã tự xếp grid) | đáng nâng, nhưng **phải đo lại âm thanh**: VieNeu sinh qua transformers, nên thay đổi ở đường sinh có thể đổi giọng. Đo trên venv riêng có torch/transformers RIÊNG (overlay `venv-vieneu381` dùng chung site-packages nên không đo được) |
+| `huggingface-hub` | 1.29.0 | 1.32.0 | 1.30 ghi revision đã giải xuống `refs/` để lượt sau offline dùng lại; 1.31 ghi `refs/` nguyên tử (hết đua khi nhiều `snapshot_download`); 1.32 chia sẻ blob Xet giữa các repo | nâng cùng transformers, và **kiểm `runtime_contract` về revision giọng** trước: chính `refs/` là chỗ đã hỏng hôm 17-09 |
+| `torch` / `torchvision` | 2.11.0+cu128 / 0.26.0 | 2.14.0 / 0.29.0 | wheel CUDA 12.8/12.9/13.x; **"enable eligible fused SDPA backends for dense rank-3 inputs"** — đổi số học và cả chuỗi RNG của dropout; TorchScript bắt đầu cảnh báo | **coi như một lần đổi giọng**, không phải nâng gói thường: cùng seed có thể ra audio khác. Chỉ thử sau khi cài driver 592.47 (mở đường cu130 cho sm_120 của RTX 5060), trên venv riêng, và chỉ giữa hai cuốn |
+| `pyworld` | 0.3.5 | 0.3.6 | chỉ sửa build (bản 0.3.6 vá lỗi biên dịch) | nâng khi rảnh, không gấp |
+| `pytest` / `ruff` | 8.3.5 / 0.9.10 | 9.1.1 / 0.16.8 | — | **đây là LỆCH, không phải bản mới**: `pyproject.toml` đã ghim `pytest==9.1.1`, `ruff==0.16.5` mà venv vẫn giữ bản cũ. Sửa ở ranh giới bằng cách cài đúng bản ghim (đổi gói là đổi hash chính sách chất lượng, không làm giữa lô) |
+
+### Cái tìm được nhờ đọc changelog: năm chốt chặn tải mạng đã chết
+
+`transformers` 5.x dọn cả cờ offline lẫn đường dẫn cache về `huggingface_hub`, nên năm mục transformers
+trong `worker._apply_model_network_policy` / `_apply_model_cache_policy` không còn tồn tại và vòng lặp
+`hasattr` lặng lẽ bỏ qua. Dây chuyền không hở (biến môi trường + `huggingface_hub.constants` vẫn chốt,
+`transformers.utils.hub.is_offline_mode()` trả về đúng cờ ấy), nhưng mã đọc như đang có chốt.
+`tests/test_offline_guard_names.py` nay soi thư viện THẬT: mục còn sống phải còn, mục đã chết phải vẫn
+chết, và bật cờ thì transformers phải thành offline. Dọn mã: `patch_a_dead_belt_should_not_look_like_a_belt.py`
+đã xếp trong `ORDER`.

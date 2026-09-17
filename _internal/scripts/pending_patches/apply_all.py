@@ -32,8 +32,12 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Chờ ranh giới gần nhất (ranh giới 6 cũng được): năm dòng chặn offline của transformers trong
+# `worker.py` đã chết từ khi transformers 5.x dọn hai việc ấy về `huggingface_hub` - bỏ chúng không
+# đổi hành vi, chỉ để mã đừng đọc như đang có chốt. Đo và khoá bằng `tests/test_offline_guard_names.py`.
+ORDER: tuple[str, ...] = (
+    "patch_a_dead_belt_should_not_look_like_a_belt.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
