@@ -3097,17 +3097,22 @@ nữa chưa gấp, và nó là **phát âm chuẩn của vùng giọng đang đ�
 
 Tính lại bằng chính `transcript_metrics` của dự án, thêm một bước gấp `tr→ch, gi→d, r→d, s→x`:
 
-    doi tu TRUOT sang QUA: 12      tu QUA sang TRUOT: 0      khong doi: 1.690
+    (do lan dau, SAI thang) doi tu TRUOT sang QUA: 12   |   tu QUA sang TRUOT: 0
+    (do lai bang dung ham day chuyen goi)          : 3   |                     0
 
-**0 đoạn tệ hơn** — đúng luật dự án đã viết cho gấp thanh điệu: *một phép chuẩn hoá chỉ được thêm cơ
-hội khớp, không được lấy đi*. Mười hai ca ấy là: "trầm ngâm"→"chầm ngâm", "chần chừ"→"trần trừ",
-"dụi dụi"→"rụi rụi", "bối rối"→"bồi dối", "xanh xao"→"xanh sao", "dằng dặc"→"răng rạc",
-"Raventi"→"Giaventi".
+**CON SỐ ĐÚNG LÀ 3.** Lần đầu tôi so bằng `transcript_metrics` trần, còn dây chuyền gọi
+`tone_folded_transcript_metrics` — đã gộp thanh điệu **qua âm vị sea-g2p**, và âm vị Việt vốn đã nhập
+phần lớn `tr`/`ch`, `s`/`x`. Chín trong mười hai ca "được cứu" ấy thực ra đã được cứu sẵn. Bài học
+ghi cho lần sau: **đo bằng đúng hàm mà dây chuyền gọi**, không phải hàm gần giống nó.
+
+Ba ca thật: "Lily dụi dụi"→"Layli rụi rụi" (đã `verified`), "Raventi"→"Giaventi" và
+"Lucien"→"Lucy Enliak" (hai ca này mang cảnh báo neo tên, mà neo tên là cổng riêng nên vẫn cảnh
+báo). **0 đoạn tệ hơn** vẫn đúng.
 
 ### Nhưng nói cho đúng: nó KHÔNG chữa bốn đoạn hỏng
 
-Mười hai đoạn đổi kết cục gồm **9 cảnh báo neo tên** và **3 đoạn đã `verified`** (sát ngưỡng). Không
-đoạn `failed` nào trong đó. Lợi ích thật là: bớt cảnh báo giả, bớt lượt thu lại vô ích (mỗi lượt là
+Ba đoạn đổi kết cục gồm **2 cảnh báo neo tên** và **1 đoạn đã `verified`** (sát ngưỡng). Không đoạn
+`failed` nào trong đó. Lợi ích thật là: bớt cảnh báo giả, bớt lượt thu lại vô ích (mỗi lượt là
 thời gian GPU), và bớt lần cổng neo tên phàn nàn về một cái tên mà giọng Bắc đọc đúng
 ("Raventi"→"Giaventi" chính là phép nhập `r`≈`gi`). Bốn đoạn hỏng của lô là chuyện khác — xem mục
 *"Đoạn NGẮN"*.
@@ -3120,12 +3125,15 @@ của nó (`voice_profile_id` → preset → `region`), nên phép gấp phải 
 là câu trả lời cho phản biện hiển nhiên ("gấp `tr`/`ch` là chấp nhận đọc sai"): với giọng Bắc không
 có cái "đọc sai" nào ở đây, chỉ có một âm viết hai cách.
 
-### Việc phải làm
+### Kết: bản vá ĐÃ VIẾT nhưng KHÔNG xếp hàng
 
-1. Viết bản vá cho `asr.py` (file bị khoá → `pending_patches`): thêm phép gấp phụ âm theo vùng vào
-   đường `tone_folded_transcript_metrics`, chỉ bật khi preset của đoạn thuộc miền Bắc.
-2. Đo lại đúng con số trên (12 / 0 / 1.690) trong bài test của bản vá, bằng dữ liệu thật của lô 6,
-   để lần sau có ai nới thêm thì con số "0 đoạn tệ hơn" vẫn là điều kiện.
-3. Cổng **neo tên** dùng phép so âm vị EQUALITY riêng: xét thêm ở đó cẩn thận hơn, vì nới lỏng tên
-   riêng là nới đúng chỗ dự án cố ý thắt (*"Lucy vẫn không thoả neo khoá vào Lucien"*). Chỉ gấp
-   trong phạm vi các cặp phụ âm của vùng, không gấp gì khác.
+`scripts/pending_patches/patch_a_northern_voice_does_not_say_tr.py` (viết 05:5x, thử trên bản sao,
+test riêng xanh) — **không** vào `ORDER`: ba đoạn, trong đó đúng một đoạn đổi kết cục thật, không đủ
+để sửa hai file trong `QUALITY_IMPLEMENTATION_FILES`. Điều kiện xếp hàng ghi ở cuối chính file ấy:
+một lô nào cho ≥ 20 đoạn đổi, hoặc cổng **neo tên** cũng học gộp theo vùng (lúc đó hai ca tên riêng
+mới thật sự đổi kết cục). Neo tên là chỗ dự án cố ý thắt (*"Lucy vẫn không thoả neo khoá vào
+Lucien"*) nên nới nó phải là quyết định riêng, có đo riêng.
+
+Cái bẫy đáng giữ: bản đầu của bản vá làm phép gộp vùng **thay chỗ** phép gộp thanh điệu thay vì là
+ứng viên thứ ba, và ca thật "Susan bối rối"/"Suzanne bồi dối" tụt từ 0,944 xuống 0,865 — một phép
+chuẩn hoá "chỉ thêm cơ hội khớp" lại lấy đi. Bài test bắt được ngay lần chạy đầu.
