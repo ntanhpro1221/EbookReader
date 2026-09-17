@@ -70,6 +70,57 @@ cd _internal
 ./runtime/.venv/Scripts/python.exe scripts/check_dependency_updates.py
 ```
 
+## Trạng thái ngày 2026-09-17 — sau 18 ngày không ai kiểm
+
+**Lỗi quy trình, ghi thẳng ra:** file này nói kiểm lại là "trách nhiệm thường trực", còn
+`check_dependency_updates.py` thì có sẵn. Vậy mà từ 30-08 tới 17-09 nó không được chạy lần nào. Trong khoảng
+ấy VieNeu ra 16 bản, và chủ sách phải tự hỏi *"vietneu có bản mới chưa?"*. Hai thay đổi để việc này không
+lặp lại:
+
+- `check_dependency_updates.py` giờ luôn ghi `runtime/dependency_audit.json` (có giờ kiểm).
+- `heartbeat_tick.py` in một dòng "thượng nguồn: …" ở **mọi** nhịp tim, và la lên
+  `QUÁ N GIỜ CHƯA KIỂM` khi lần kiểm cuối đã quá 24 giờ.
+
+Script cũng được mở rộng tới những chỗ nó từng mù: tag SDK của VieNeu (GitHub "latest release" là bản app
+desktop), torch theo từng biến thể CUDA mà driver chạy được, model Hugging Face đang ghim so với `main`
+(kèm danh sách file đổi), manifest model Ollama trên đĩa so với registry, họ LLM mới vừa VRAM, và UTMOSv2
+ghim theo commit.
+
+Mục tiêu do chủ sách đặt lại ngày 17-09: *"giọng đổi tôi không quan tâm, mục tiêu đang là xây app tốt hơn
+chứ không phải là đang tạo audio book"*. Vì vậy "audio đổi giữa cuốn" không còn là lý do để đứng yên. Mỗi
+lần nâng vẫn là **sự kiện phiên bản**: làm ở ranh giới, không có lô nào bay, chạy bộ test và đo.
+
+| thành phần | đang dùng | mới nhất dùng được | changelog nói gì liên quan tới app | kế hoạch |
+|---|---|---|---|---|
+| **vieneu** | 3.3.0 | **3.8.1** (16-09) | 3.7.0: mọi `infer` trên CUDA đi qua CUDA graph gộp, upstream đo 1 câu 2,3 s → 0,38 s; 3.8.0: sửa frame đệm mã 455 ở cuối giọng mẫu (#198, "một tiếng ngắn nghe rõ" mà model nhả ra cuối câu); 3.6.1: chặn đọc lan man + trần khung theo âm tiết (≤4 tiếng); 3.6.3: nối mảnh giữ đuôi tự nhiên, khoảng nghỉ 0,30/0,50/0,70 s; 3.6.5: cắt mảnh dài không xẻ số; 25 preset — app chỉ biết 14 | **ƯU TIÊN 1.** Venv phủ `runtime/venv-vieneu381` đã dựng; **bộ test đầy đủ chạy bằng 3.8.1: xanh**. Chờ GPU rảnh để chạy `scripts/audition_presets.py` (tốc độ + giọng mới). Rủi ro cần đo: trần 1 s cho câu 1 tiếng với tiếng kéo dài ("Áaaa!") |
+| Ollama | 0.33.2 | 0.34.1 (14-09) | 0.33.3 "Honor GGUF model defined default parameters" (phải chắc app truyền tường minh mọi tham số sinh), báo token prompt đã cache; 0.34.1 ngưỡng phát hiện lặp token lên 100, `/api/tags` nhanh hơn 10 lần | Ưu tiên 2, rủi ro thấp. Nâng ở ranh giới; trước đó soát `options` app gửi |
+| torch / torchvision | 2.11.0+cu128 / 0.26.0 | 2.14.0 / 0.29.0 **chỉ trên cu130/cu126** | bản cu128 cho Windows dừng ở 2.11.0; driver 581.80 chạy được CUDA 13.0 | Ưu tiên 3, rủi ro trung–cao. **torchaudio dừng ở 2.11** trên mọi biến thể, mà UTMOSv2 import torchaudio. Thử trên venv phủ riêng (tải ~3 GB): torch 2.14 cu130 + torchaudio 2.11 có nạp được không, VieNeu có nhanh hơn không |
+| transformers | 5.16.1 | 5.17.0 (09-09) | tối ưu `generate` (app không dùng); thêm model ASR Fun-ASR-Nano, Canary | Nâng cùng đợt torch. Model ASR mới là **ứng viên nghiên cứu** cho tiếng Việt, không phải nâng cấp |
+| huggingface-hub | 1.29.0 | 1.32.0 (17-09) | 1.31: tải bền hơn, vá bảo mật `HfFileSystem.get()`; 1.32: kho blob dùng chung cho file Xet **mới** (đổi bố cục cache) | Rủi ro trung vì `runtime_contract` kiểm đường dẫn snapshot. Thử trên venv phủ + `cli doctor` |
+| pyworld | 0.3.5 | 0.3.6 | (chưa đọc được changelog; repo GitHub đã đổi tên) | Nâng cùng đợt, đo lại biến thể cao độ |
+| ruff / pytest trong `runtime/.venv` | 0.9.10 / 8.3.5 | pin 0.16.5 / 9.1.1 | lệch pin (DRIFT) | Cài đúng pin, không rủi ro |
+| Python | 3.11.9 | — | chặn numpy 2.5.3, scipy 1.18.1, librosa 1.0.0 | Sự kiện lớn riêng; để sau khi xong các mục trên |
+| LLM phân tích | `qwen3:8b` / `qwen3:4b` | tag không bị đẩy lại | họ mới vừa 8 GB VRAM: `qwen3.5` 4b (3,4 GB) / 9b (6,6 GB), `gemma4` e4b-it-qat (6,1 GB) / 12b-it-qat (7,2 GB) | **Ứng viên để đo** chất lượng gán người nói; cần bộ chuẩn trước khi thay |
+| Model Hugging Face | VieNeu `8b7e9cff`, wav2vec2, timm, faster-whisper turbo | — | VieNeu `main` chỉ đổi `README.md` và `onnx_int8/*` (không dùng); wav2vec2, timm trùng `main`; faster-whisper turbo không đổi từ 11-2025 | Không cần làm gì |
+| UTMOSv2 | commit `cc2700db` | trùng HEAD | — | Không cần làm gì |
+| openai-whisper, faster-whisper, ctranslate2, imageio-ffmpeg | 20250625, 1.2.1, 4.8.2, 0.6.0 | trùng | — | Không cần làm gì |
+
+### Giọng mới cho pool (hỏi của chủ sách, 17-09)
+
+Metadata lấy thẳng từ `voices_v3_turbo.json` của 3.8.1, và các trường `region`/`style` khớp đúng hằng số
+của `voice_catalog`. Luật cứng của `casting_presets` (đúng giới, không phải tin tức, vùng Bắc/Nam, không bị
+loại) cho qua **11 giọng app chưa biết**: 7 nam (Adam bựa, Anh Khôi, Minh Quân Pro, Thiền Tâm Đức, Mạnh
+Dũng — Bắc; Đức Trí, Adam — Nam) và 4 nữ (Ngọc Huyền, Quỳnh Anh — Bắc; Mỹ Duyên, Kim Thanh — Nam).
+Pool nam hiện chỉ có 3 preset (Phạm Tuyên, Thanh Bình, Thái Sơn), và lô 6 cần 13/14 bậc.
+
+Độ giống nhau giữa các giọng, tính bằng cosine của `speaker_emb` có sẵn trong file (không cần GPU): cặp
+giống nhất trong giọng nam mới là 0,62 (Thiền Tâm Đức ~ Adam, Adam bựa ~ Adam). Mức ấy ngang cặp Phạm Tuyên
+~ Quang Sơn (0,58) mà catalog đang coi là hai người khác nhau.
+
+Phần còn lại cần GPU (`scripts/audition_presets.py`): mỗi giọng đọc cùng câu, đo thanh điệu/WER bằng
+Whisper, UTMOS, F0 và độ dài thanh quản (F3, Praat). Ngưỡng là giọng **tệ nhất đang được cast**, đo trong
+cùng lượt. Trúc Ly dùng clip mới, nên số đo của giọng này trong `voice_catalog` cũng phải đo lại.
+
 ## Trạng thái ngày 2026-08-30
 
 ### Model và tool — đều đang là bản mới nhất

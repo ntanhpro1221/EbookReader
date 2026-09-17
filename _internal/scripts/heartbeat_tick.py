@@ -74,7 +74,7 @@ def last_lines(log: Path, count: int = 6) -> list[str]:
 
 def command_lines() -> list[str]:
     try:
-        return subprocess.run(
+        return (subprocess.run(
             [
                 "powershell",
                 "-NoProfile",
@@ -83,8 +83,12 @@ def command_lines() -> list[str]:
             ],
             capture_output=True,
             text=True,
+            # utf-8 + replace: với bảng mã mặc định, một dòng lệnh có ký tự lạ làm luồng đọc
+            # stdout chết và `.stdout` về None - nhịp tim 17-09 23:4x nổ AttributeError đúng thế.
+            encoding="utf-8",
+            errors="replace",
             timeout=60,
-        ).stdout.splitlines()
+        ).stdout or "").splitlines()
     except (OSError, subprocess.SubprocessError) as exc:
         say(f"(không đếm được tiến trình: {exc!r})")
         return []
@@ -140,6 +144,33 @@ def flying() -> list[str]:
     return out
 
 
+UPSTREAM_AUDIT = ROOT / "runtime" / "dependency_audit.json"
+UPSTREAM_STALE_HOURS = 24.0
+
+
+def upstream_line(audit: Path = UPSTREAM_AUDIT, now: float | None = None) -> str:
+    """Lần kiểm thượng nguồn cuối cách đây bao lâu, và nó thấy gì - một dòng.
+
+    Vì sao ở đây: `check_dependency_updates.py` nằm im 18 ngày (30-08 → 17-09) trong khi VieNeu ra
+    16 bản, và chủ sách phải tự hỏi. Việc chạy nó là trách nhiệm thường trực (docs/DEPENDENCIES.md);
+    một dòng đỏ ở MỌI nhịp tim khi đã quá 24 giờ thì không thể quên được nữa.
+    """
+    import json
+
+    now = time.time() if now is None else now
+    try:
+        data = json.loads(audit.read_text(encoding="utf-8"))
+        age_hours = (now - float(data["checked_at"])) / 3600.0
+    except (OSError, ValueError, KeyError, TypeError):
+        return "thượng nguồn: CHƯA TỪNG KIỂM - chạy scripts/check_dependency_updates.py"
+    found = [*data.get("outdated_packages", []), *data.get("retagged_ollama_models", []),
+             *data.get("hf_models_behind_main", []), *data.get("git_pins_behind", [])]
+    summary = f"{len(found)} thứ có bản mới ({', '.join(found[:6])}{'…' if len(found) > 6 else ''})" if found else "không có gì mới"
+    if age_hours > UPSTREAM_STALE_HOURS:
+        return f"thượng nguồn: QUÁ {age_hours:.0f} GIỜ CHƯA KIỂM - chạy scripts/check_dependency_updates.py (lần trước: {summary})"
+    return f"thượng nguồn: kiểm {age_hours:.1f} giờ trước - {summary}"
+
+
 def main() -> int:
     say(f"=== nhịp tim {time.strftime('%H:%M:%S ngày %d-%m')} ===")
     say(describe())
@@ -164,6 +195,7 @@ def main() -> int:
         ["git", "status", "--porcelain"], cwd=str(ROOT), capture_output=True, text=True
     ).stdout.strip()
     say(f"cây git: {'sạch' if not dirty else f'{len(dirty.splitlines())} file đổi'}")
+    say(upstream_line())
     say(
         subprocess.run(
             ["git", "log", "--oneline", "-1"], cwd=str(ROOT), capture_output=True, text=True

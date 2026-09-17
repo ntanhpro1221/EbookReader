@@ -4380,3 +4380,25 @@ Nhịp tim 22:58 có 2 đoạn hỏng ở lô 6. Một đoạn là loại ASR đ
 Whisper nghe "Cái thằng và... À còng...", tức giọng đọc tự nở `#` `&` `@` thành tên ký hiệu giữa
 một câu chửi bị che, và máy cho qua. Quét nguồn cả hai cuốn thì chỉ có 5 chỗ như thế, nhưng cái
 nghe được thì rõ. Bản vá và lý do nó phải đợi qua ranh giới 6 nằm ở OPTIMISATION_QUEUE (mục cùng giờ).
+
+### 23:32 — thượng nguồn: 18 ngày không ai kiểm; VieNeu 3.8.1, và 11 giọng app chưa biết
+
+Chủ sách hỏi *"vietneu có bản mới chưa?"*, rồi: *"cũng cần kiểm tra phiên bản, update các package, plugin,
+service mà project sử dụng nữa … đây cũng là một phần công việc của bạn mà? bấy lâu nay chưa thấy bạn báo cáo
+gì"*. Đúng thế: `docs/DEPENDENCIES.md` gọi đây là trách nhiệm thường trực, `check_dependency_updates.py` có
+sẵn, mà lần chạy cuối là 30-08. Bảng đầy đủ và kế hoạch nằm ở `docs/DEPENDENCIES.md`, mục "Trạng thái ngày
+2026-09-17". Ở đây chỉ ghi điều đáng nhớ:
+
+- **Cơ chế thay cho trí nhớ:** checker ghi `runtime/dependency_audit.json`; `heartbeat_tick.py` in dòng
+  "thượng nguồn" ở mọi nhịp tim và la lên khi quá 24 giờ chưa kiểm (4 bài test).
+- **Checker từng mù đúng chỗ đáng giá:** "latest release" của VieNeu là app desktop, không phải SDK. Nó
+  cũng không hỏi torch theo biến thể CUDA, model HF đang ghim, manifest Ollama hay UTMOS theo commit. Đã
+  mở rộng cả năm.
+- **VieNeu 3.8.1:** bộ test đầy đủ chạy bằng venv phủ `runtime/venv-vieneu381` (chỉ đè gói `vieneu` lên
+  site-packages của `runtime/.venv`, không tải lại torch) **xanh**. Lợi ích và rủi ro ở DEPENDENCIES.md.
+- **Giọng:** ngay 3.3.0 đã có 20 preset mà catalog chỉ biết 14; 3.8.1 có 25; 11 giọng qua luật cứng của
+  `casting_presets`, trong đó 7 giọng nam. `scripts/audition_presets.py` (mới) đo phần còn lại khi GPU rảnh.
+- **Không dừng được lô 6 để đo:** lệnh dừng bộ canh và `cli stop` bị bộ phân loại chặn (can thiệp tiến
+  trình đang chạy). Đã hỏi chủ sách; nếu không thì đo khi lô 6 xong (~09:00).
+- Nhịp tim 23:4x nổ `AttributeError`: `.stdout` của PowerShell về `None` khi một dòng lệnh có ký tự lạ
+  với bảng mã mặc định. Đã sửa bằng `encoding="utf-8", errors="replace"` và `or ""`.
