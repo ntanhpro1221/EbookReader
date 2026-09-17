@@ -2960,3 +2960,27 @@ không liên quan bản vá.
 resync `lo06` và đặt đoạn 66 của chương 225 (đã `completed`) về chờ thu. Chương đầu tiên cần bản vá
 là 385, ở lô 8. Chương 225 trên sách giữ bản lỗi; muốn sửa thì một lượt vá riêng chương ấy SAU khi
 bản vá đã vào cây.
+
+## VieNeu SDK 3.3.0 → 3.8.1 (tra 2026-09-17, 23:08) — CHƯA nâng; đo trên venv riêng sau lô 6
+
+Chủ sách hỏi *"vietneu có bản mới chưa?"*. Tra PyPI, Hugging Face và GitHub (so tag `v3.3.0...v3.8.1`,
+76 commit từ 20-08 tới 16-09):
+
+- **Trọng số không đổi** với các file dự án dùng. Repo `pnnbao-ump/VieNeu-TTS-v3-Turbo` từ bản ghim
+  `8b7e9cff` tới `main` chỉ đổi `README.md` và `onnx_int8/*` (bản int8 cho CPU).
+- **Gói Python thì đổi nhiều, có cái lợi và có cái làm ĐỔI GIỌNG:**
+  - 3.7.0: mỗi khung sinh là một CUDA graph. App của họ báo nhanh ~6 lần trên GPU. Dự án dùng đường
+    PyTorch/CUDA (`Vieneu(max_batch_size=...)`), nên có thể hưởng.
+  - 3.6.1: chặn đọc lan man (babble guard) + trần khung theo âm tiết. 3.6.3: nối mảnh không cắt mép,
+    ngừng dài hơn. 3.6.5: cắt mảnh dài theo từ, không xẻ đôi con số. Sửa đếm âm tiết từ tiếng Anh.
+  - 3.8.0: sửa bộ mã hoá **nối thêm một frame đệm nghe được vào clip tham chiếu** (#198); preset lên 25
+    giọng (thêm "Adam bựa", "Thiền Tâm Đức"); **"Trúc Ly dùng clip mới"**, mà sách đang dùng `truc_ly_*`
+    cho nhân vật nữ. 3.8.1: "Minh Quân" đổi tên "Minh Quân Pro" (giữ alias).
+  - V4 là giọng qua máy chủ trả phí (vieneu.io), không chạy trên máy: ngoài phạm vi dự án.
+
+**Vì sao chưa nâng:** dự án ghim revision chính vì giọng đổi giữa cuốn là lỗi mọi phép kiểm đều mù
+(xem `runtime_contract.py`). "Trúc Ly clip mới" và bản sửa frame đệm gần như chắc chắn đổi âm sắc của
+ít nhất một preset đang dùng. Đo trên venv RIÊNG (không đụng `runtime/.venv` đang chạy lô), khi GPU rảnh:
+(1) giây/100 ký tự so với 3.3.0; (2) cùng preset + cùng seed + cùng câu thì giọng còn là giọng ấy không
+(nhúng người nói), cho người kể Phạm Tuyên và các họ `thai_son` `thanh_binh` `ngoc_linh` `truc_ly`
+`doan_trang`. Nhanh mà đổi giọng thì chỉ chủ sách quyết được: nâng giữa cuốn hay chờ sang cuốn sau.
