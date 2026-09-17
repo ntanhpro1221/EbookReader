@@ -295,3 +295,11 @@ trong `worker._apply_model_network_policy` / `_apply_model_cache_policy` không 
 `tests/test_offline_guard_names.py` nay soi thư viện THẬT: mục còn sống phải còn, mục đã chết phải vẫn
 chết, và bật cờ thì transformers phải thành offline. Dọn mã: `patch_a_dead_belt_should_not_look_like_a_belt.py`
 đã xếp trong `ORDER`.
+
+### Model phân tích: hai họ mới, và vì sao nó không nằm cùng bảng với các gói (18-09, 06:0x)
+
+`qwen3.5` (bản 9b: 6,6 GB) và `gemma4` (e2b: 7,2 GB; 12b: 7,6 GB — vượt ngân sách 7,5 GB) đã có trên
+thư viện Ollama. Dự án đang dùng `qwen3:8b`. Đây **không** phải một dòng trong bảng nâng gói: tên
+model nằm trong `settings` nên không vào hash chính sách chất lượng, mà đổi nó thì đổi chỉ dẫn diễn
+xuất → đổi âm thanh → mọi phán quyết tai người cho chương cũ hết hiệu lực. Cách đo và điều kiện đổi:
+mục *"Model chỉ đạo diễn xuất"* trong `docs/OPTIMISATION_QUEUE.md`.

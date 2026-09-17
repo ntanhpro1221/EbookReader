@@ -3137,3 +3137,49 @@ Lucien"*) nên nới nó phải là quyết định riêng, có đo riêng.
 Cái bẫy đáng giữ: bản đầu của bản vá làm phép gộp vùng **thay chỗ** phép gộp thanh điệu thay vì là
 ứng viên thứ ba, và ca thật "Susan bối rối"/"Suzanne bồi dối" tụt từ 0,944 xuống 0,865 — một phép
 chuẩn hoá "chỉ thêm cơ hội khớp" lại lấy đi. Bài test bắt được ngay lần chạy đầu.
+
+## Model chỉ đạo diễn xuất: `qwen3.5` và `gemma4` đã có bản vừa VRAM (2026-09-18, 06:0x — tra rồi, CHƯA đo)
+
+Dự án phân tích bằng `qwen3:8b` (num_ctx 7.168, nhiệt 0,1, có critic). Đó là **cái quyết định diễn
+xuất**: cảm xúc, cường độ, nhịp, ai đang nói — tức đòn bẩy chất lượng lớn nhất còn lại, vì mọi thứ
+sau nó (giọng, thanh điệu, ASR) chỉ thi hành. `check_dependency_updates.newer_llm_families` đã chỉ
+ra hai họ mới; tra trang thư viện Ollama 18-09:
+
+| ứng viên | dung lượng | ngữ cảnh | ghi chú từ trang mô tả |
+|---|---|---|---|
+| `qwen3.5:9b` | 6,6 GB | 256K | Gated Delta Networks + MoE thưa; 201 ngôn ngữ; cùng họ với model đang dùng |
+| `qwen3.5:4b` | 3,4 GB | 256K | bản nhỏ, để so tốc độ / chất lượng theo cỡ |
+| `gemma4:12b` | 7,6 GB | 256K | **vượt ngân sách 7,5 GB** của `VRAM_BUDGET_GB` — chỉ thử nếu đo thấy đáng |
+| `gemma4:e2b` | 7,2 GB | 128K | "thiết kế để chạy trên laptop", có chế độ suy nghĩ bật/tắt |
+
+Ngữ cảnh 256K **không phải** lý do đổi: dự án cố ý hạ `num_ctx` xuống 7.168 và đã đo rằng ngữ cảnh
+rộng hơn làm đổi cả cách chia batch lẫn kết quả suy luận (xem mục `num_ctx` phía trên). Lý do đổi,
+nếu có, phải là **chỉ đạo diễn xuất tốt hơn**.
+
+### Đổi model phân tích là một VERSION EVENT, không phải nâng gói
+
+`quality_policy` băm `analysis.py` và `analysis_casting_v27`, còn model thì nằm trong `settings` —
+nên đổi tên model **không** làm hash đổi, mà kết quả thì đổi hết: chỉ dẫn diễn khác → âm thanh khác →
+mọi phán quyết tai người cho các chương cũ hết hiệu lực. Chính cơ chế đã lấy mất audio của
+`c00007_s0000074` hồi alpha.43 (xem mục `num_ctx`). Nên: **chỉ đo trên project nháp, chỉ đổi giữa hai
+cuốn**, và ghi vào `docs/DEPENDENCIES.md` như một mốc phiên bản.
+
+### Đo thế nào (chưa có script; `compare_asr_models.py` là tiền lệ về hình thức)
+
+Lấy 3 chương đã thu xong của lô 6 (một chương dày thoại, một chương tự sự, một chương có trẻ con),
+phân tích lại bằng từng model ở **cùng seed, cùng nhiệt, cùng num_ctx**, rồi so:
+
+1. `confidence` trung vị và số đoạn dưới `low_confidence_threshold` (0,65) — bao nhiêu lần model tự
+   nhận là không chắc;
+2. tỉ lệ critic bác (`analysis_critic_attempts`) — model mới có làm critic đỡ phải sửa không;
+3. phân bố `pace`/`emotion`/`intensity` — đổi nhiều hay ít, và đổi theo hướng nào (dải `fast` nở ra
+   là dấu hiệu xấu: alpha.43 gán `fast` gấp 5 lần và mất một đoạn vì thế);
+4. số đoạn gán sai người nói (so với dàn nhân vật đã ghim — đây là phép kiểm khách quan duy nhất);
+5. giây/batch và VRAM đỉnh.
+
+Sau đó **đúc lại đúng một chương bằng cả hai bản chỉ dẫn và để chủ sách nghe** — bốn số trên không
+nói được "diễn hay hơn", chỉ tai người nói được. Nếu chủ sách không nghe ra khác biệt thì giữ
+`qwen3:8b`: model đang dùng đã qua cả một cuốn sách.
+
+**Chi phí đo:** ~3 chương × 2 model × (phân tích + critic) ≈ dưới một giờ GPU, làm khi không có lô
+nào bay. Không làm trước ranh giới 6.
