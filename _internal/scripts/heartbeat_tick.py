@@ -55,6 +55,9 @@ def say(line: str = "") -> None:
         print(line.encode("ascii", "backslashreplace").decode("ascii"), flush=True)
 
 
+STAMP = ROOT / "runtime" / "heartbeat_last.txt"
+
+
 def newest_log() -> Path | None:
     logs = sorted(ROOT.glob("runtime/boundary_*.log"), key=lambda p: p.stat().st_mtime)
     return logs[-1] if logs else None
@@ -201,6 +204,10 @@ def main() -> int:
             ["git", "log", "--oneline", "-1"], cwd=str(ROOT), capture_output=True, text=True
         ).stdout.strip()
     )
+    # Dấu thời gian để một canh nền biết nhịp tim có còn đập không: 18-09 01:0x nhịp chết vì tôi
+    # quên thả lại lệnh nền, và chủ sách phải là người phát hiện. Không ai nên phải làm việc ấy.
+    STAMP.parent.mkdir(parents=True, exist_ok=True)
+    STAMP.write_text(time.strftime("%Y-%m-%d %H:%M:%S"), encoding="utf-8")
     return 0
 
 
