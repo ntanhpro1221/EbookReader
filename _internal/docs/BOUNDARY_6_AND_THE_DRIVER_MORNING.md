@@ -66,9 +66,9 @@ và lần này nó đổi giữa hai lô nên phải có mốc.
 (bản 581.80 bên bán chỉ định, chữ ký NVIDIA hợp lệ) và nút "Quay về NVIDIA 581.80" trong
 `CAI_DAT_N176.hta`. Lô 7 chờ được; một dây chuyền không có CUDA thì không.
 
-## Ba đoạn đang hỏng, và điều phải chờ đợi ở bước 3 (đọc DB lúc 03:2x)
+## Bốn đoạn đang hỏng, và điều phải chờ đợi ở bước 3 (đọc DB lúc 03:2x và 03:5x)
 
-Cả ba chương đều đã `completed` và đã có audio (bước ghép sách không bị chặn); ba đoạn này chỉ bị
+Cả bốn chương đều đã `completed` và đã có audio (bước ghép sách không bị chặn); các đoạn này chỉ bị
 đánh dấu `ASR_MISMATCH_UNRESOLVED`, tức máy nghe lại không khớp chữ. Bước 3 sẽ thu lại chúng.
 
 | chương | sách viết | Whisper nghe ra | chờ đợi gì ở bước 3 |
