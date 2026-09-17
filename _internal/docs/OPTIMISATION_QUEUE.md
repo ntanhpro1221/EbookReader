@@ -3085,3 +3085,47 @@ máy móc ấy.
    không phải cái để vá ngay.
 4. Ba trong bốn ca sẽ được bước 3 của ranh giới thu lại; xem `docs/BOUNDARY_6_AND_THE_DRIVER_MORNING.md`
    cho từng ca và điều phải chờ đợi. Kết cục của chúng là dữ liệu cho việc (1).
+
+## Giọng Bắc không phân biệt `tr`/`ch`, mà phép so ASR thì phân biệt (2026-09-18, 04:3x — ĐO RỒI, chưa vá)
+
+Dự án đã gấp `gi`→`d`, `k`→`c` và gấp **thanh điệu** khi so bản chép, với lý lẽ ghi rõ trong
+`asr._vietnamese_phonemes`: *"chính tả Việt viết cùng một âm theo nhiều cách"*. Nhưng còn cả một họ
+nữa chưa gấp, và nó là **phát âm chuẩn của vùng giọng đang đọc**: giọng Bắc nhập `tr`≈`ch`, `s`≈`x`,
+`r`≈`d`≈`gi`. Whisper chép theo cái nó nghe, nên "trầm ngâm" thành "chầm ngâm" là **cùng một âm**.
+
+### Đo trên lô 6 (4.621 đoạn đã thu, 1.702 đoạn chưa đạt hoặc sát ngưỡng)
+
+Tính lại bằng chính `transcript_metrics` của dự án, thêm một bước gấp `tr→ch, gi→d, r→d, s→x`:
+
+    doi tu TRUOT sang QUA: 12      tu QUA sang TRUOT: 0      khong doi: 1.690
+
+**0 đoạn tệ hơn** — đúng luật dự án đã viết cho gấp thanh điệu: *một phép chuẩn hoá chỉ được thêm cơ
+hội khớp, không được lấy đi*. Mười hai ca ấy là: "trầm ngâm"→"chầm ngâm", "chần chừ"→"trần trừ",
+"dụi dụi"→"rụi rụi", "bối rối"→"bồi dối", "xanh xao"→"xanh sao", "dằng dặc"→"răng rạc",
+"Raventi"→"Giaventi".
+
+### Nhưng nói cho đúng: nó KHÔNG chữa bốn đoạn hỏng
+
+Mười hai đoạn đổi kết cục gồm **9 cảnh báo neo tên** và **3 đoạn đã `verified`** (sát ngưỡng). Không
+đoạn `failed` nào trong đó. Lợi ích thật là: bớt cảnh báo giả, bớt lượt thu lại vô ích (mỗi lượt là
+thời gian GPU), và bớt lần cổng neo tên phàn nàn về một cái tên mà giọng Bắc đọc đúng
+("Raventi"→"Giaventi" chính là phép nhập `r`≈`gi`). Bốn đoạn hỏng của lô là chuyện khác — xem mục
+*"Đoạn NGẮN"*.
+
+### Điều kiện: phải theo VÙNG của giọng, không gấp bừa
+
+Giọng **Nam** phân biệt `tr`/`ch` và `s`/`x` thật, nên gấp cho giọng Nam là làm phép kiểm lỏng đi ở
+chỗ nó đang đúng. Kho giọng có cả hai vùng (`Thái Sơn`, `Thục Đoan` là Nam), và mỗi đoạn biết giọng
+của nó (`voice_profile_id` → preset → `region`), nên phép gấp phải **điều kiện theo vùng**. Đó cũng
+là câu trả lời cho phản biện hiển nhiên ("gấp `tr`/`ch` là chấp nhận đọc sai"): với giọng Bắc không
+có cái "đọc sai" nào ở đây, chỉ có một âm viết hai cách.
+
+### Việc phải làm
+
+1. Viết bản vá cho `asr.py` (file bị khoá → `pending_patches`): thêm phép gấp phụ âm theo vùng vào
+   đường `tone_folded_transcript_metrics`, chỉ bật khi preset của đoạn thuộc miền Bắc.
+2. Đo lại đúng con số trên (12 / 0 / 1.690) trong bài test của bản vá, bằng dữ liệu thật của lô 6,
+   để lần sau có ai nới thêm thì con số "0 đoạn tệ hơn" vẫn là điều kiện.
+3. Cổng **neo tên** dùng phép so âm vị EQUALITY riêng: xét thêm ở đó cẩn thận hơn, vì nới lỏng tên
+   riêng là nới đúng chỗ dự án cố ý thắt (*"Lucy vẫn không thoả neo khoá vào Lucien"*). Chỉ gấp
+   trong phạm vi các cặp phụ âm của vùng, không gấp gì khác.

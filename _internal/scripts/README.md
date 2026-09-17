@@ -88,6 +88,7 @@ Nền tảng: [`docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`](../docs/WHERE_A_RUN_SPENDS
 | `keep_the_chapter_cast.py` | Đúc lại một chương đã lên sách mà CHỈ đổi người cần đổi (`--chapters` để mô phỏng) |
 | `ship_only_recasts_that_help.py` | Cổng sau mỗi lần đúc lại: hại nhiều hơn giúp thì dời ra `_quarantine_<ngày>`, sách giữ bản cũ |
 | `audition_presets.py` | Mọi giọng dựng sẵn đọc cùng câu: thanh điệu, WER, UTMOS, F0, thanh quản, tốc độ - vào pool được không (cần GPU rảnh) |
+| `measure_accent_folding.py` | Gấp các phụ âm giọng Bắc không phân biệt (`tr`/`ch`, `s`/`x`, `r`/`d`/`gi`) rồi tính lại phép so ASR của một lô: bao nhiêu đoạn đổi kết cục, và có đoạn nào tệ hơn không |
 | `propose_a_new_voice.py` | `--verify`: đo lại preview giọng đang dùng, phải tái lập số trong `voice_catalog`; rồi đo giọng mới và SINH bản vá thêm nó vào sáu chỗ của catalog (không tự sửa) |
 | `make_listening_samples.py` | Mẫu nghe cho chủ sách: cùng câu + cùng seed qua bản VieNeu của interpreter đang chạy (chạy bằng hai venv để có bản cũ/mới cạnh nhau) |
 | `make_voice_previews.py` | Dựng preview cho giọng chưa có trong `assets/voice_previews` vào `pending_patches/assets` (không đụng assets khi lô đang chạy) |
