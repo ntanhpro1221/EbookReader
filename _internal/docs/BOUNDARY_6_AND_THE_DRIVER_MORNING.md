@@ -66,6 +66,21 @@ và lần này nó đổi giữa hai lô nên phải có mốc.
 (bản 581.80 bên bán chỉ định, chữ ký NVIDIA hợp lệ) và nút "Quay về NVIDIA 581.80" trong
 `CAI_DAT_N176.hta`. Lô 7 chờ được; một dây chuyền không có CUDA thì không.
 
+## Ba đoạn đang hỏng, và điều phải chờ đợi ở bước 3 (đọc DB lúc 03:2x)
+
+Cả ba chương đều đã `completed` và đã có audio (bước ghép sách không bị chặn); ba đoạn này chỉ bị
+đánh dấu `ASR_MISMATCH_UNRESOLVED`, tức máy nghe lại không khớp chữ. Bước 3 sẽ thu lại chúng.
+
+| chương | sách viết | Whisper nghe ra | chờ đợi gì ở bước 3 |
+|---|---|---|---|
+| 225 (đoạn 66) | `“Cái #&!@! Không phải lại nữa chứ?”` | *Cái thằng và... À còng...* | **vẫn hỏng, và đúng như vậy.** Giọng đọc tên ký hiệu (`#` → "thăng", `@` → "a còng"); thu lại bao nhiêu lần cũng thế. Chỉ `patch_a_censored_word_is_a_pause.py` chữa được, mà bản vá ấy phải xếp SAU ranh giới 6. Đừng đuổi theo nó ở bước 3. |
+| 234 (đoạn 13) | `“Chất sống? Môi trường nguyên thủy?”` | *Môi trường Nguyên Thủy* | **nên khỏi.** Giọng đọc bỏ hẳn câu hỏi đầu — một lần thu lại với hạt giống khác thường là xong (ca chương 140 đã vậy). Kiểm lại sau bước 3. |
+| 261 (đoạn 68) | `Jacob day day trán:` | *Rồi cọp dây dây chán* | **có thể vẫn hỏng, và không phải lỗi giọng đọc.** Tên "Jacob" cộng "day day" là chỗ Whisper hay chép sai (cả lô có 1.283 cảnh báo cùng họ: neo tên khoá). Nếu hai lượt thu lại vẫn trượt thì để nguyên và ghi vào hàng chờ, đừng vá gấp. |
+
+Số liệu kèm theo lúc 03:22: 2.690 đoạn `verified`, 1.302 `warning` (1.283 là neo tên khoá, 19 là
+"dòng thời gian bản chép không thể có"), 3 `failed`, 1.286 lần **máy** cho qua, 0 lần người nghe cho
+qua — tức chưa có phán quyết tai người nào bị các lượt thu lại làm mất hiệu lực.
+
 ## Hàng chờ đã xếp cho ranh giới này
 
 `pending_patches/apply_all.py` `ORDER` hiện có hai bản vá, cả hai đã thử trên bản sao:
