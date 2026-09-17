@@ -85,4 +85,5 @@ Nền tảng: [`docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`](../docs/WHERE_A_RUN_SPENDS
 | `resync_spoken_text.py` | Bản vá đổi chuỗi nói: đặt lại đúng những đoạn lệch về chờ thu |
 | `pin_the_book_cast.py` | Ghim giọng đa số của cả sách cho người chưa có pin |
 | `keep_the_chapter_cast.py` | Đúc lại một chương đã lên sách mà CHỈ đổi người cần đổi (`--chapters` để mô phỏng) |
+| `ship_only_recasts_that_help.py` | Cổng sau mỗi lần đúc lại: hại nhiều hơn giúp thì dời ra `_quarantine_<ngày>`, sách giữ bản cũ |
 | `plan_repair_batch.py`, `machine_acceptances.py` | Lô vừa xong: chương nào hỏng vì sao, máy đã nhận gì |

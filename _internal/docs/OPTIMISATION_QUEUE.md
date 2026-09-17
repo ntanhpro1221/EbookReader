@@ -2930,3 +2930,16 @@ phân tích), tức `character_registry.py`, file khoá → bản vá trong `pen
 **Phải đo sau lần chạy thật đầu tiên** (ranh giới 6): `measure_did_the_recast_help.py <các chương>`.
 Chỗ duy nhất phép mô phỏng không thấy được là **phân tích lại đổi nhãn**: người mang nhãn khác thì
 không khớp pin.
+
+## `boundary.sh` 4b: SEED sau khi cổng dời một bản đúc lại ra (2026-09-17, 21:43) — CHỜ boundary.sh rảnh
+
+`launch_repair.sh` giờ chạy `ship_only_recasts_that_help.py` sau mỗi chương đúc lại. Mã 10 thì project
+bị dời ra `_quarantine_<ngày>` và không thành PREV cho chương kế tiếp. Nhưng sau mỗi lô ở bước 4b,
+`boundary.sh` đặt `SEED="$(seed_chain.py --newest "$VERSIONS/${OTHER_TAG}r" || echo "$SEED")"`. Nếu
+bản mới nhất vừa bị dời thì `--newest` trả một bản đúc lại **cũ hơn** của lô ấy (có thể từ ranh giới
+trước), và bước 6 gieo lô kế từ đó. Không hỏng gì — `pin_the_book_cast` vẫn ghim giọng đa số theo
+sách — nhưng không đúng ý "gieo từ project vừa xong".
+
+Sửa: ghi lại mtime/`created_at` của SEED trước khi gọi `launch_repair`, và chỉ nhận `--newest` khi
+nó MỚI hơn SEED cũ. **Không sửa được lúc này**: `boundary.sh 6 --wait-only` đang chạy (bash đọc
+script theo từng đoạn), nên để tới khi nó thoát (~07:00 ngày 18-09), trước khi thả ranh giới 6 thật.

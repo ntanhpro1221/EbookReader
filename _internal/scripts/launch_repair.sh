@@ -280,6 +280,22 @@ for CH in $BROKEN; do
     continue
   fi
   wait_for_run "$PROJECT" "chuong $CH"
+  # Cổng: bản đúc lại chỉ lên sách khi nó giúp nhiều người hơn nó hại. Tối 16-09 năm chương đúc lại
+  # ra tệ hơn bản trên sách (tốt 2 / xấu 8) và chỉ một lần máy tắt giữa chừng mới giữ chúng khỏi
+  # bước 7. Mã 10 = đã dời project ra `_quarantine_<ngày>` (ngoài `_versions`, không xoá): sách giữ
+  # bản cũ, và project ấy KHÔNG thành project gieo cho chương kế tiếp.
+  # Cổng lỗi (mã khác 0/10) thì nói to và đi tiếp như trước khi có cổng: chương lên sách mà không được đo.
+  if [ -n "$EXPLICIT" ] && [ "$AS_REPAIR" != 1 ]; then
+    GATE=0
+    GATE_OUT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/ship_only_recasts_that_help.py "$PROJECT" --apply 2>&1)" || GATE=$?
+    printf '%s\n' "$GATE_OUT" | sed 's/^/  /'
+    if [ "$GATE" = 10 ]; then
+      echo "  chuong $CH: ban duc lai hai nhieu hon giup - KHONG len sach, khong gieo tiep tu no"
+      continue
+    elif [ "$GATE" != 0 ]; then
+      echo "  CANH BAO: cong do chuong $CH loi (ma $GATE) - chuong nay len sach MA KHONG DUOC DO"
+    fi
+  fi
   # Noi duoi: chuong ke tiep gieo tu project vua xong, de giong vua cap di tiep.
   PREV="$PROJECT"
 done

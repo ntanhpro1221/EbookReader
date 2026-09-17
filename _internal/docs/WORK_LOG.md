@@ -4335,3 +4335,25 @@ quarantine: 9 pin sẽ ghi, EVANS về `thai_son_f097`, COMOTZ (một chương) 
 
 Chưa chứng minh ở quy mô thật: lần đúc lại đầu tiên đi qua đường này là ranh giới 6. Đo bằng
 `measure_did_the_recast_help.py`. Mô phỏng không thấy được chỗ phân tích lại đổi nhãn.
+
+### 21:43 — cổng tự động: bản đúc lại chỉ lên sách khi nó giúp nhiều hơn nó hại
+
+Sáng nay tôi đọc `measure_did_the_recast_help.py` **bằng tay** rồi dời bốn project ra quarantine.
+Thước đo đã có từ ranh giới 4. Chỉ thiếu một chỗ **bắt buộc** hỏi nó trước bước 7 ghép sách, và
+tối 16-09 chỉ có cú tắt máy mới giữ năm chương tệ hơn khỏi sách. Chủ sách đã dặn *"project phải tự
+xử lý được"*: một việc tôi làm bằng tay sau sự cố thì phải thành một bước của máy.
+
+`scripts/ship_only_recasts_that_help.py`: với mỗi chương `completed` mà sách đang phát bằng project
+khác, so giọng cũ (trên sách), giọng mới (project này) và giọng đa số (trên sách, trừ chính chương
+ấy). **Lên sách khi và chỉ khi tốt hơn > xấu hơn**; `0 | 0` cũng không lên. Không lên thì dời project
+ra `<gốc sách>/_quarantine_<ngày>/` (ngoài `_versions`, không xoá), mã thoát 10.
+`launch_repair.sh` gọi nó ở chế độ đúc lại ngay sau `wait_for_run`. Mã 10 thì `continue`, nên project
+ấy không thành PREV cho chương kế.
+
+Kiểm trên đúng bốn project sáng nay đã dời bằng tay (lượt không ghi): 010 tốt 0 / xấu 2, 027 0 / 0,
+094 1 / 5, 136 0 / 1. Cả bốn KHÔNG lên sách, khớp số đo tay. 105 đã được bước 7 ghép nên "không còn
+bản cũ để so" → để nguyên.
+
+Test 9 bài; thử ba đột biến, cả ba đều đỏ: `>` thành `>=`; tính đa số gồm cả chương đang phán (tự
+chứng minh); bỏ nhánh "project đang ở trên sách". Còn một chỗ chưa sửa được vì `boundary.sh` đang
+chạy (`--wait-only`). Chỗ ấy là SEED của bước 4b sau khi một bản bị dời ra, xem OPTIMISATION_QUEUE.
