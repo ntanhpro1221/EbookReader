@@ -2984,3 +2984,15 @@ Chủ sách hỏi *"vietneu có bản mới chưa?"*. Tra PyPI, Hugging Face và
 (1) giây/100 ký tự so với 3.3.0; (2) cùng preset + cùng seed + cùng câu thì giọng còn là giọng ấy không
 (nhúng người nói), cho người kể Phạm Tuyên và các họ `thai_son` `thanh_binh` `ngoc_linh` `truc_ly`
 `doan_trang`. Nhanh mà đổi giọng thì chỉ chủ sách quyết được: nâng giữa cuốn hay chờ sang cuốn sau.
+
+### Đã đo (17-09 23:10 – 18-09 00:37, lô 6 tạm dừng lúc đo tốc độ) — chờ tai chủ sách
+
+- **Tốc độ:** bảy giọng pool, 5 câu, cùng máy: 3.3.0 mất 3,27–3,98 giây/100 ký tự, 3.8.1 mất 0,44–0,52 → **~7,5 lần**.
+- **Giọng có đổi:** Trúc Ly F0 220 → 257 Hz (clip mẫu mới của 3.8.0), Thanh Bình 162 → 156 Hz; các giọng khác lệch ≤ 3%.
+- **Giọng chưa dùng, 25 câu sách + UTMOS** (ngưỡng = giọng tệ nhất pool: WER ≤ 7,7%, sai thanh ≤ 1,67%, UTMOS ≥ 2,56):
+  10/11 đạt. Anh Khôi trượt sai thanh 1,9%. Quỳnh Anh trượt ở lượt 5 câu (4,9%) nhưng đạt ở 25 câu (1,4%):
+  **5 câu là quá ít để loại một giọng**, nên cổng của `audition_presets.py` phải chạy `--book-sentences 20`.
+- **Gần người dẫn chuyện:** Thiền Tâm Đức (F0 102 Hz) và Xuân Vĩnh (105 Hz) nằm sát Phạm Tuyên (104 Hz). Nếu nhận
+  thì nên chặn hai giọng này khỏi các cảnh mà người dẫn chuyện đọc xen lời thoại.
+- Chủ sách nghe và chấm trên trang https://claude.ai/artifact/QWCAKLz2pAVo2dhbkMwYve. Kết quả nằm trong db `danh_gia`
+  (`moi__<slug>`, `xuan_vinh`, `nang__<slug>`). **Nâng SDK** ở ranh giới 6 chỉ khi không giọng pool nào bị chấm "bản cũ hay hơn".
