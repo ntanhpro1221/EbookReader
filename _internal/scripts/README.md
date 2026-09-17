@@ -83,6 +83,7 @@ Nền tảng: [`docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`](../docs/WHERE_A_RUN_SPENDS
 | `seed_chain.py` | Project nào là "mới nhất" của một lô; `--chain-all` cho sổ cộng dồn |
 | `before_a_batch.py` | Cổng trước mỗi lô: cây sạch, hàng chờ rỗng, bộ test đã xanh |
 | `assemble_book.py --verify` | Sách đã ghép có lệch gì so với manifest không |
+| `audit_the_shipped_book.py` | Câu `--verify` KHÔNG hỏi: mỗi chương có đủ tiếng so với số chữ nguồn không (bắt chương hụt cả cụm; đo 18-09: 219 chương, 35,5 giờ, dải 94–108% trung vị) |
 | `resync_spoken_text.py` | Bản vá đổi chuỗi nói: đặt lại đúng những đoạn lệch về chờ thu |
 | `pin_the_book_cast.py` | Ghim giọng đa số của cả sách cho người chưa có pin |
 | `keep_the_chapter_cast.py` | Đúc lại một chương đã lên sách mà CHỈ đổi người cần đổi (`--chapters` để mô phỏng) |

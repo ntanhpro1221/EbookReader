@@ -3,9 +3,14 @@
     runtime/.venv/Scripts/python.exe scripts/audit_the_shipped_book.py
 
 Chỉ đọc. Mỗi chương trên sách được so **giây audio / ký tự nguồn** với trung vị của cả sách: một
-chương mất cả cụm thì tỉ lệ ấy tụt hẳn, và không phép kiểm nào của dây chuyền nhìn vào *sách đã
-ghép* (chúng nhìn từng project). Dự án từng mất audio của một đoạn đúng theo kiểu ấy
-(`c00007_s0000074`).
+chương mất cả cụm thì tỉ lệ ấy tụt hẳn.
+
+**Chia việc với `assemble_book.py --verify`, đừng làm trùng:** `--verify` hỏi *"file trong sách có
+đúng là file của project không"* (thời lượng ±0,05 s, kênh, sample rate, sha256 khi trùng thời
+lượng). Nó im lặng đúng ở một chỗ: nếu **chính project** đã mất một đoạn thì hai file vẫn khớp nhau
+hoàn hảo. Script này hỏi câu còn lại: *"chương này có đủ tiếng so với số chữ của nó không"* — phép so
+duy nhất đi ra ngoài dây chuyền, vì nó dùng văn bản nguồn làm mốc. Dự án từng mất audio của một đoạn
+đúng theo kiểu ấy (`c00007_s0000074`).
 
 **Độ nhạy, nói cho đúng:** đo 18-09 trên 219 chương cuốn 2 thì dải thực tế là **94%..108%** của
 trung vị — rất chặt — nên dải chấp nhận đặt ở `[90%, 112%]`. Một chương ~80 đoạn mất MỘT đoạn chỉ
@@ -78,7 +83,8 @@ def main() -> int:
         if share < 0.90 or share > 1.12:
             print(f"{title:7} {seconds:8.1f} {characters:7} {ratio:11.4f} {share:11.0%}  {version}")
             flagged += 1
-    print(f"\n{flagged} chuong lech ngoai [85%, 118%] cua trung vi" if flagged else "\nkhong chuong nao lech")
+    print(f"\n{flagged} chuong lech ngoai [90%, 112%] cua trung vi" if flagged
+          else "\nkhong chuong nao lech ngoai [90%, 112%] cua trung vi")
     return 0
 
 
