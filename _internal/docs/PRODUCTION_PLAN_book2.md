@@ -195,3 +195,9 @@ Ba cờ đáng biết:
 - `EBOOK_COAUTHOR`: ghi đè dòng `Co-Authored-By` của những commit ranh giới tự tạo. **Không cần** đặt
   nữa; mặc định đã là model của phiên hiện tại (`Claude Opus 5` từ 16-09). Ví dụ cũ ở đây từng ghim
   `Claude Fable 5.1` và nó chỉ đúng cho phiên ngày 13–15/09.
+
+## Sáng thứ 6: ranh giới 6 gặp buổi cài driver (ghi 18-09, 02:5x)
+
+Lô 6 xong quãng 8:15 và chủ sách cài BIOS/driver lúc 9:00 — hai việc cùng đòi GPU trong cùng một
+giờ. Thứ tự, nhánh theo đồng hồ, lệnh đúng cú pháp (`1:010` chứ không phải `010`) và cách kiểm CUDA
+sau khi cài: `docs/BOUNDARY_6_AND_THE_DRIVER_MORNING.md`. Luật: **9:00 là của chủ sách.**
