@@ -38,8 +38,18 @@ Không đo được bằng máy, và cố ý không giả vờ: tai người ngh
 """
 from __future__ import annotations
 
+# SDK VieNeu 3.8.1 tự `hf_hub_download` bản `main` khi có mạng, và làm `refs/main` của cache trỏ sang
+# revision mới. Lượt đo 17-09 đã làm đúng thế, và `cli run` sau đó bị hợp đồng runtime chặn
+# ("voice model revision='5f2a3e93…', expected '8b7e9cff…'"). Script đo không được đổi cache mà
+# dây chuyền đang dùng: ép offline TRƯỚC khi nạp gì.
+import os
+
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -59,10 +69,50 @@ from ebook_reader.voice_catalog import (  # noqa: E402
     VOCAL_TRACT_MIN_CM,
     casting_presets,
 )
+from scripts.book_paths import SOURCE_DIR  # noqa: E402
 from scripts.compare_voice_regions import PROBE_SENTENCES, SEED, tone_error_rate  # noqa: E402
 
 SPEED_OF_SOUND_CM_PER_S = 35_000.0
 REGIONS = ("Bắc", "Nam", "Trung")
+OPENERS = "“\"'‘("
+CLOSERS = (".", "!", "?", "…", ":", "“", "\"")
+_SENTENCE = re.compile(r"[^.!?…]+[.!?…]")
+def _has_proper_noun(sentence: str) -> bool:
+    """Một từ viết HOA ở giữa câu (không đứng sau dấu kết câu hay ngoặc mở) - gần như luôn là tên riêng."""
+    words = sentence.split()
+    for previous, word in zip(words, words[1:]):
+        letter = word.lstrip(OPENERS)[:1]
+        if letter and letter.isupper() and not previous.endswith(CLOSERS):
+            return True
+    return False
+
+
+def book_sentences(count: int, source: Path = SOURCE_DIR) -> list[str]:
+    """`count` câu thật từ nguồn sách, chọn tất định: 40–110 ký tự, không chữ số, không tên riêng.
+
+    Vì sao thêm: 5 câu dò của `compare_voice_regions.py` là ~80 từ, và ở đó MỘT lỗi thanh điệu là 0,012.
+    Lượt đo 17-09 cho Quỳnh Anh 0,000 ở SDK 3.3.0 và 0,049 ở 3.8.1 trên đúng năm câu ấy - tức là nhiễu,
+    không phải giọng. Câu thật của sách còn mang đúng nhịp đối thoại mà giọng sẽ phải đọc.
+    Tên riêng bị loại vì cùng lý do với câu dò: chữ La-tinh là một biến nhiễu khác.
+    """
+    if count <= 0:
+        return []
+    picked: list[str] = []
+    files = sorted(source.glob("*.txt"))
+    step = max(1, len(files) // max(count, 1))
+    for path in files[::step]:
+        text = path.read_text(encoding="utf-8", errors="replace").replace("\n", " ")
+        for raw in _SENTENCE.findall(text):
+            sentence = raw.strip().strip("“”\"'‘’ ").strip()
+            if not (40 <= len(sentence) <= 110) or re.search(r"[0-9#&@*/\\()\[\]]", sentence):
+                continue
+            if _has_proper_noun(sentence):
+                continue
+            picked.append(sentence)
+            break
+        if len(picked) >= count:
+            break
+    return picked
 
 
 def sdk_version() -> str:
@@ -145,6 +195,7 @@ def main() -> int:
     parser.add_argument("--presets", default="")
     parser.add_argument("--json", dest="json_out", type=Path, default=None)
     parser.add_argument("--no-utmos", action="store_true")
+    parser.add_argument("--book-sentences", type=int, default=0, help="thêm N câu thật từ nguồn sách (tất định)")
     args = parser.parse_args()
 
     settings = build_settings("high_quality")
@@ -157,6 +208,8 @@ def main() -> int:
     pool = {str(p["name"]) for gender in ("male", "female") for p in casting_presets(gender)}
     wanted = {name.strip() for name in args.presets.split(",") if name.strip()}
     names = [n for n in engine.voices if (not wanted or n in wanted)]
+    sentences = list(PROBE_SENTENCES) + book_sentences(args.book_sentences)
+    print(f"{len(sentences)} cau moi giong ({len(PROBE_SENTENCES)} cau do + {len(sentences) - len(PROBE_SENTENCES)} cau sach)", flush=True)
     print(f"vieneu {version}: {len(engine.voices)} giong dung san; pool hien tai: {sorted(pool)}", flush=True)
 
     rows: list[dict[str, Any]] = []
@@ -169,10 +222,12 @@ def main() -> int:
             ok, why = eligible(meta[name], name)
             per_preset[name] = {**meta[name], "eligible": ok, "why_not": why, "in_pool": name in pool,
                                 "sdk": version, "gen_seconds": 0.0, "audio_seconds": 0.0, "chars": 0}
-            if not ok and name not in pool:
+            # Tên gọi đích danh bằng --presets thì vẫn đo, kể cả giọng bị loại: chủ sách muốn xem lại
+            # Xuân Vĩnh (17-09) sau khi SDK 3.8.1 đổi dữ liệu giọng của nó. Phán quyết vẫn ghi rõ lý do loại.
+            if not ok and name not in pool and name not in wanted:
                 continue
             profile = {"engine": "vieneu", "preset_name": name, "voice_key": f"probe_{name}", "id": 0}
-            for index, sentence in enumerate(PROBE_SENTENCES):
+            for index, sentence in enumerate(sentences):
                 row = dict(warm, text=sentence)
                 started = time.perf_counter()
                 audio = engine.generate_one(row, profile, SEED + index)
@@ -203,7 +258,10 @@ def main() -> int:
     if not args.no_utmos:
         from ebook_reader.perceptual_qa import UTMOSNaturalnessVerifier
 
-        utmos = UTMOSNaturalnessVerifier(settings, log)
+        # `perceptual_qa.enabled` mặc định False trong mọi profile - lượt đo đầu 17-09 in UTMOS "nan"
+        # vì thế. Bật riêng cho verifier này, checkpoint lấy theo đường dẫn mặc định của config.
+        scoring = dict(settings, perceptual_qa={**settings.get("perceptual_qa", {}), "enabled": True})
+        utmos = UTMOSNaturalnessVerifier(scoring, log)
         if utmos.load():
             for row in rows:
                 row["utmos"] = float(utmos._score(Path(str(row["wav"]))))
