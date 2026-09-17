@@ -3011,3 +3011,33 @@ phải phép đo. `--book-sentences` mặc định 20 (tức 25 câu): 5 câu d�
 
 `tests/test_audition_gate.py` khoá cả hai ca thật ở trên. `rejudge.py` (bản dự phòng cạnh trang nghe)
 chấm lại một lượt đo đã lưu mà không phải sinh lại âm thanh.
+
+## Số đo phải cùng THANG với số nó bị so (2026-09-18, 02:2x) — ĐÃ SỬA
+
+`propose_a_new_voice.py --verify` đo lại preview của 10 giọng đang dùng rồi so với chính
+`PRESET_VOCAL_TRACT_CM`: **lệch tới 9,8%**. Không script gốc nào còn lại, nên dò ngược bằng một lưới
+thiết lập Praat trên đúng 10 preview ấy:
+
+| cách đo F3 | lệch trung bình | lệch lớn nhất |
+|---|---|---|
+| **"Get mean" cả clip, 5 formant, trần theo giới** | **0,20%** | **0,31%** |
+| "Get quantile 0,5" cả clip | 2,03% | 6,76% |
+| trung vị trên khung hữu thanh (cách `acoustics` đang dùng) | 4,51% | 9,75% |
+| một trần 5000 Hz cho cả hai giới | 6,47% | 17,83% |
+
+Sau khi `acoustics()` đổi sang cách đầu: cả 10 giọng về **0,0%** — tức đúng cách đã đo ngày ấy. F0 thì
+cách cũ đã đúng họ (trung vị trên khung hữu thanh, lệch trung bình 1,2%, lớn nhất 3,2% ở Thanh Bình;
+trung bình cả clip lệch 6,2%), nên giữ nguyên.
+
+**Vì sao đáng sửa:** con số ấy bị so với `[VOCAL_TRACT_MIN_CM, VOCAL_TRACT_MAX_CM]` — hai hằng số đặt
+theo thang cũ. Lệch 4,5% trên 17 cm là 0,8 cm, đủ để một giọng sát biên bị gọi là ngoài biên (hoặc
+ngược lại) chỉ vì cách đo. Cột `tract` trong `audition/v381*.json` chạy trước 02:2x ngày 18-09 là số
+theo thang CŨ, cao hơn khoảng 4-5%: đừng đặt cạnh số catalog.
+
+**Kèm theo:** `scripts/propose_a_new_voice.py` đo preview của một giọng chưa dùng và **sinh** bản vá
+thêm nó vào sáu chỗ của `voice_catalog` (preset, ống thanh, cao độ, bậc hạ, tên file preview, và chép
+file preview), kèm bậc hạ đề xuất theo luật đọc ra được từ các số đang có. Nó cũng in ra những chỗ số
+mới làm lệch giả định cũ — thử với `Adam` (87,1 Hz) thì nó chỉ ra `Phạm Tuyên` không còn là giọng nam
+trầm nhất, nên dòng `PRESET_MIN_PITCH_SEMITONES["Phạm Tuyên"] = 0` kèm chú thích ấy phải sửa tay.
+Chạy thử đầu-cuối: bản vá sinh ra áp được trên bản sao, catalog vẫn nạp, `casting_presets` nhận giọng
+mới, preview được chép.

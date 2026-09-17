@@ -166,9 +166,29 @@ def eligible(meta: dict[str, str], name: str) -> tuple[bool, str]:
 
 
 def acoustics(wavs: list[Path], gender: str) -> dict[str, float]:
-    """F0 trung vị và F3 trung vị trên khung hữu thanh, gộp mọi câu của một giọng."""
+    """F0 trung vị trên khung hữu thanh, F3 **trung bình cả clip** - cùng thang với `voice_catalog`.
+
+    F3 phải đo đúng cách đã đo các giọng đang dùng, vì số này bị so với
+    `[VOCAL_TRACT_MIN_CM, VOCAL_TRACT_MAX_CM]` - hai hằng số lấy từ chính thang ấy. Không còn script
+    gốc nào, nên 18-09 tôi dò ngược: chạy một lưới thiết lập Praat trên đúng 10 preview đang ship và
+    so với 10 số trong `PRESET_VOCAL_TRACT_CM`.
+
+        cach do F3                      lech trung binh   lech lon nhat
+        "Get mean" ca clip, 5 formant         0,20%           0,31%   <- cach da dung
+        "Get quantile 0.5" ca clip            2,03%           6,76%
+        trung vi tren khung huu thanh         4,51%           9,75%   <- cach nay tung dung, SAI thang
+        tran 5000 cho ca hai gioi             6,47%          17,83%
+
+    Bản đầu của hàm này lấy trung vị trên khung hữu thanh, tức lệch ~4,5% so với thang của catalog -
+    đủ để một giọng nằm sát biên bị gọi là ngoài biên hoặc ngược lại. Trần formant theo giới (5000 Hz
+    cho nam, 5500 cho nữ) là phần quan trọng thứ hai: dùng một trần cho cả hai giới lệch 6,5%.
+
+    F0 thì cách cũ đã đúng họ: trung vị trên khung hữu thanh lệch trung bình 1,2% (lớn nhất 3,2%),
+    còn trung bình cả clip lệch 6,2% - nên giữ trung vị.
+    """
     import parselmouth
     import soundfile as sf
+    from parselmouth.praat import call
 
     f0s: list[float] = []
     f3s: list[float] = []
@@ -179,16 +199,14 @@ def acoustics(wavs: list[Path], gender: str) -> dict[str, float]:
         pitch = sound.to_pitch(pitch_floor=60.0, pitch_ceiling=500.0)
         formant = sound.to_formant_burg(max_number_of_formants=5, maximum_formant=ceiling)
         for index in range(pitch.get_number_of_frames()):
-            time_s = pitch.get_time_from_frame_number(index + 1)
             f0 = pitch.get_value_in_frame(index + 1)
-            if not np.isfinite(f0) or f0 <= 0:
-                continue
-            f0s.append(float(f0))
-            f3 = formant.get_value_at_time(3, time_s)
-            if np.isfinite(f3) and f3 > 0:
-                f3s.append(float(f3))
+            if np.isfinite(f0) and f0 > 0:
+                f0s.append(float(f0))
+        mean_f3 = call(formant, "Get mean", 3, 0, 0, "hertz")
+        if np.isfinite(mean_f3) and mean_f3 > 0:
+            f3s.append(float(mean_f3))
     f0 = float(np.median(f0s)) if f0s else float("nan")
-    f3 = float(np.median(f3s)) if f3s else float("nan")
+    f3 = float(np.mean(f3s)) if f3s else float("nan")
     tract = 5.0 * SPEED_OF_SOUND_CM_PER_S / (4.0 * f3) if f3 == f3 and f3 > 0 else float("nan")
     return {"f0_median_hz": round(f0, 1), "f3_median_hz": round(f3, 1), "vocal_tract_cm": round(tract, 2)}
 
