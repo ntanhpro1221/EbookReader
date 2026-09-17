@@ -77,7 +77,7 @@ def test_apply_ships_only_when_better_outnumbers_worse(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recast: list[dict], ships: bool
 ) -> None:
     target = _project(tmp_path, "lo02r_094_test")
-    monkeypatch.setattr(gate, "shipped_rows", lambda: BOOK)
+    monkeypatch.setattr(gate, "rows_as_they_will_ship", lambda exclude=None: BOOK)
     monkeypatch.setattr(gate, "read_rows", lambda _project: recast)
 
     code = gate.decide(target, apply=True, root=tmp_path)
@@ -92,7 +92,7 @@ def test_apply_ships_only_when_better_outnumbers_worse(
 
 def test_a_dry_run_moves_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = _project(tmp_path, "lo02r_094_test")
-    monkeypatch.setattr(gate, "shipped_rows", lambda: BOOK)
+    monkeypatch.setattr(gate, "rows_as_they_will_ship", lambda exclude=None: BOOK)
     monkeypatch.setattr(gate, "read_rows", lambda _p: _rows(("094", "LOTT", "f100", 3), project="x"))
 
     assert gate.decide(target, apply=False, root=tmp_path) == gate.HARMFUL
@@ -103,7 +103,7 @@ def test_a_project_already_on_the_book_or_a_chapter_never_shipped_is_left_alone(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     shipped_here = _project(tmp_path, "lo02r_094_test")
-    monkeypatch.setattr(gate, "shipped_rows", lambda: _rows(("094", "LOTT", "f104b", 3), project="lo02r_094_test"))
+    monkeypatch.setattr(gate, "rows_as_they_will_ship", lambda exclude=None: _rows(("094", "LOTT", "f104b", 3), project="lo02r_094_test"))
     monkeypatch.setattr(gate, "read_rows", lambda _p: _rows(("094", "LOTT", "f100", 3), project="lo02r_094_test"))
     assert gate.decide(shipped_here, apply=True, root=tmp_path) == 0
 

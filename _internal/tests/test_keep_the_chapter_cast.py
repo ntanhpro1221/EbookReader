@@ -106,7 +106,7 @@ def recast(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ("102", "SIMON", "preset_f116", 1),
         ("103", "CHRISTOPHER", "preset_f090", 1),
     )
-    monkeypatch.setattr(keeper, "shipped_rows", lambda: rows)
+    monkeypatch.setattr(keeper, "rows_as_they_will_ship", lambda exclude=None: rows)
     monkeypatch.setattr(keeper, "fold_names", lambda found: found)
     monkeypatch.setattr(keeper, "project_chapters", lambda _target: {"094"})
     monkeypatch.setattr(
@@ -143,7 +143,7 @@ def test_a_dry_run_writes_nothing(recast: Path) -> None:
     assert ProjectDB(recast / "project.sqlite3").locked_character_voices() == before
 
 
-def test_a_chapter_not_on_the_book_is_left_to_the_allocator(recast: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_chapter_with_no_recorded_take_is_left_to_the_allocator(recast: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(keeper, "project_chapters", lambda _target: {"250"})
 
     assert keeper.keep(recast, apply=True, versions=recast) == 0
@@ -161,3 +161,53 @@ def test_launch_repair_keeps_the_chapter_cast_before_it_runs_a_recast() -> None:
     block_end = text.index("\n  fi\n", guard)
     assert guard != -1 and block_end > call, "chỉ chạy ở chế độ đúc lại"
     assert "continue" in text[call:block_end], "thất bại phải bỏ chương"
+
+
+def _take(versions: Path, folder: str, created: float, chapters: dict[str, str]) -> Path:
+    import sqlite3
+
+    project = versions / "v0.3.0-lo06" / folder
+    project.mkdir(parents=True)
+    connection = sqlite3.connect(project / "project.sqlite3")
+    connection.execute("CREATE TABLE book (created_at REAL)")
+    connection.execute("INSERT INTO book VALUES (?)", (created,))
+    connection.execute("CREATE TABLE chapters (title TEXT, status TEXT)")
+    connection.executemany("INSERT INTO chapters VALUES (?, ?)", list(chapters.items()))
+    connection.commit()
+    connection.close()
+    return project
+
+
+def test_the_cast_to_keep_includes_chapters_the_boundary_has_not_shipped_yet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bước 4 đúc lại chương của LÔ VỪA XONG trước khi bước 7 ghép chúng lên sách (lô 6: 228, 229, 233,
+    244). Chương ấy phải lấy dàn giọng từ bản `completed` MỚI NHẤT; chương đã lên sách thì theo sách;
+    và project đang xét không được làm bản gốc của chính nó."""
+    import json
+
+    book = tmp_path / "_book"
+    book.mkdir()
+    (book / "manifest.json").write_text(
+        json.dumps({"chapters": [{"title": "094", "version": "v0.3.0-lo02", "project": "lo02_x"}]}),
+        encoding="utf-8",
+    )
+    versions = tmp_path / "_versions"
+    batch = _take(versions, "lo06_batch", 100.0, {"228": "completed", "094": "completed", "229": "failed"})
+    older = _take(versions, "lo06r_228_old", 50.0, {"228": "completed"})
+    mine = _take(versions, "lo06r_228b_new", 200.0, {"228": "completed"})
+    monkeypatch.setattr(keeper, "shipped_rows", lambda book, versions: [{"chapter": "094", "name": "EVANS", "voice": "v", "lines": 1, "project": "lo02_x"}])
+    monkeypatch.setattr(
+        keeper,
+        "read_rows",
+        lambda folder: [{"chapter": c, "name": "X", "voice": folder.name, "lines": 1, "project": folder.name} for c in ("228", "094", "229")],
+    )
+
+    rows = keeper.rows_as_they_will_ship(exclude=mine, book=book, versions=versions)
+
+    by_chapter = {(r["chapter"], r["project"]) for r in rows}
+    assert ("094", "lo02_x") in by_chapter and ("094", "lo06_batch") not in by_chapter, "chương trên sách theo sách"
+    assert ("228", "lo06_batch") in by_chapter, "228 chưa lên sách: bản completed mới nhất KHÁC project đang xét"
+    assert all(r["project"] not in (mine.name, older.name) for r in rows if r["chapter"] == "228")
+    assert not any(r["chapter"] == "229" for r in rows), "229 hỏng ở lô - không có dàn giọng nào để giữ"
+    assert batch.is_dir()

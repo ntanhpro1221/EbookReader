@@ -5,8 +5,10 @@
     python scripts/keep_the_chapter_cast.py --chapters 094 136     # mô phỏng trên sách, chưa cần project
 
 `launch_repair.sh` gọi nó ở chế độ đúc lại, SAU `port_casting` và `pin_the_book_cast`, TRƯỚC `run`.
-Nó chỉ đụng tới người **nói trong những chương của project đã có trên sách**; chương chưa lên sách
-(lô vá một chương hỏng) thì không có gì để giữ và script đi qua.
+Nó chỉ đụng tới người **nói trong những chương đã có một bản thu xong**. Bản ấy là bản trên sách, hoặc,
+với chương của lô vừa xong mà bước 7 chưa ghép, là bản `completed` mới nhất trong `_versions` (xem
+`rows_as_they_will_ship`). Chương chưa từng thu xong (lô vá một chương hỏng) thì không có gì để giữ,
+và script đi qua.
 
 ## Vì sao
 
@@ -60,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -74,7 +77,7 @@ from scripts.pin_the_book_cast import (  # noqa: E402
     unpin_character,
     voice_profile,
 )
-from scripts.voice_matches_the_person import VERSIONS, fold_names, shipped_rows  # noqa: E402
+from scripts.voice_matches_the_person import BOOK, VERSIONS, fold_names, read_rows, shipped_rows  # noqa: E402
 
 MIN_CHAPTERS = 2
 KEEP_MAJORITY = "giu (da la da so)"
@@ -152,8 +155,55 @@ def plan_chapter(
     return plan
 
 
-def _book() -> tuple[list[dict], dict[str, tuple[str, int, int]]]:
-    rows = fold_names(shipped_rows())
+def rows_as_they_will_ship(
+    exclude: Path | None = None, book: Path = BOOK, versions: Path = VERSIONS
+) -> list[dict]:
+    """Dàn giọng của cuốn sách NHƯ LÚC NÓ SẼ ĐƯỢC GHÉP: chương đã lên sách lấy từ `manifest.json`,
+    chương CHƯA lên sách lấy từ bản `completed` mới nhất (theo `book.created_at`) trong `_versions`.
+
+    Vì sao không chỉ đọc sách: bước 4 của ranh giới đúc lại chương của LÔ VỪA XONG, và bước 7 ghép
+    chúng lên sách **sau** đó. Đọc riêng sách thì những chương ấy "không có dàn giọng để giữ" và cổng
+    "không có bản cũ để so". Lô 6 (17-09) có 3 va chạm cùng chương ở 228, 229, 233, 244, đúng loại
+    chương ấy. `exclude` = chính project đang xét, để nó không tự làm bản gốc của mình.
+    """
+    rows = shipped_rows(book=book, versions=versions)
+    try:
+        payload = json.loads((book / "manifest.json").read_text(encoding="utf-8"))
+        entries = payload if isinstance(payload, list) else payload.get("chapters", [])
+        on_book = {str(item.get("title") or "") for item in entries}
+    except (OSError, ValueError):
+        on_book = set()
+    skip = exclude.resolve() if exclude is not None else None
+    newest: dict[str, tuple[float, Path]] = {}
+    for database in sorted(versions.glob("*/*/project.sqlite3")):
+        folder = database.parent
+        if skip is not None and folder.resolve() == skip:
+            continue
+        try:
+            connection = sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True)
+            try:
+                created = float(connection.execute("SELECT created_at FROM book").fetchone()[0] or 0)
+                titles = [
+                    str(row[0])
+                    for row in connection.execute("SELECT title FROM chapters WHERE status = 'completed'")
+                ]
+            finally:
+                connection.close()
+        except (sqlite3.Error, TypeError):
+            continue
+        for title in titles:
+            if title not in on_book and (title not in newest or created > newest[title][0]):
+                newest[title] = (created, folder)
+    wanted: dict[Path, set[str]] = collections.defaultdict(set)
+    for title, (_created, folder) in newest.items():
+        wanted[folder].add(title)
+    for folder, titles in sorted(wanted.items()):
+        rows.extend(row for row in read_rows(folder) if str(row["chapter"]) in titles)
+    return rows
+
+
+def _book(exclude: Path | None = None) -> tuple[list[dict], dict[str, tuple[str, int, int]]]:
+    rows = fold_names(rows_as_they_will_ship(exclude))
     return rows, majority_voices(rows)
 
 
@@ -172,11 +222,11 @@ def _print_plan(chapter: str, plan: list[tuple[str, str, str, str]]) -> tuple[in
 
 def keep(target: Path, *, apply: bool, versions: Path = VERSIONS) -> int:
     """Ghim dàn giọng của các chương đã lên sách trong project. Trả về số pin đã (sẽ) ghi."""
-    rows, majority = _book()
-    on_book = {str(r["chapter"]) for r in rows}
-    chapters = sorted(project_chapters(target) & on_book)
+    rows, majority = _book(exclude=target)
+    recorded = {str(r["chapter"]) for r in rows}
+    chapters = sorted(project_chapters(target) & recorded)
     if not chapters:
-        _say(f"{target.name}: không chương nào đã lên sách - không có dàn giọng để giữ.")
+        _say(f"{target.name}: không chương nào có bản đã thu (trên sách hay trong _versions) - không có dàn giọng để giữ.")
         return 0
 
     wanted: dict[str, str] = {}

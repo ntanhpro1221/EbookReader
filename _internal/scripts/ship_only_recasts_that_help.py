@@ -21,11 +21,13 @@ việc ấy, ở đúng lúc ấy, không cần người.
 
 ## Phán thế nào
 
-Với mỗi chương `completed` của project mà sách **đang** phát bằng một project khác:
+Với mỗi chương `completed` của project mà đã có một bản thu xong KHÁC. Bản khác ấy là bản trên sách, hoặc
+bản `completed` mới nhất trong `_versions` với chương của lô vừa xong mà bước 7 chưa ghép; cùng một
+nguồn với `keep_the_chapter_cast.rows_as_they_will_ship`:
 
-- giọng CŨ của mỗi người = giọng nhiều câu nhất của họ ở chương ấy trên sách (`manifest.json`);
+- giọng CŨ của mỗi người = giọng nhiều câu nhất của họ ở chương ấy trong bản khác ấy;
 - giọng MỚI = giọng nhiều câu nhất của họ ở chương ấy trong project này;
-- giọng ĐA SỐ = giọng họ dùng ở nhiều chương nhất trên sách, **trừ chính chương này** ra, để phép so
+- giọng ĐA SỐ = giọng họ dùng ở nhiều chương nhất trên sách-như-sẽ-ghép, **trừ chính chương này** ra, để phép so
   không tự chứng minh (cùng luật với `measure_did_the_recast_help.py`).
 
 Người đổi giọng mà mới == đa số (cũ thì không) là TỐT HƠN. Cũ == đa số mà mới thì không là XẤU HƠN.
@@ -34,8 +36,8 @@ Còn lại là không rõ, không tính.
 **Lên sách khi và chỉ khi tốt hơn > xấu hơn.** `0 | 0` cũng KHÔNG lên: lần đúc lại không sửa được ai,
 và bản đang ở trên sách là bản đã biết là ổn. Chương 027 ngày 17-09 đúng là ca ấy.
 
-Chương chưa lên sách (lô vá chương hỏng) không có gì để so, và project đã được ghép lên sách rồi
-thì không còn bản cũ để so: cả hai trả `0` và nói rõ lý do.
+Chương chưa từng thu xong ở đâu khác (lô vá chương hỏng) không có gì để so, và project đã được ghép
+lên sách rồi thì không còn bản cũ để so: cả hai trả `0` và nói rõ lý do.
 """
 from __future__ import annotations
 
@@ -52,7 +54,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.book_paths import AUDIOBOOKS_ROOT  # noqa: E402
 from scripts.name_marks import fold_dropped_marks  # noqa: E402
 from scripts.pin_the_book_cast import majority_voices  # noqa: E402
-from scripts.voice_matches_the_person import read_rows, shipped_rows  # noqa: E402
+from scripts.keep_the_chapter_cast import rows_as_they_will_ship  # noqa: E402
+from scripts.voice_matches_the_person import read_rows  # noqa: E402
 
 HARMFUL = 10
 BETTER = "TOT HON"
@@ -116,7 +119,7 @@ def quarantine_path(target: Path, root: Path = AUDIOBOOKS_ROOT) -> Path:
 
 
 def decide(target: Path, *, apply: bool, root: Path = AUDIOBOOKS_ROOT) -> int:
-    book = shipped_rows()
+    book = rows_as_they_will_ship(exclude=target)
     mine = read_rows(target)
     on_book: dict[str, set[str]] = collections.defaultdict(set)
     for row in book:
@@ -125,7 +128,7 @@ def decide(target: Path, *, apply: bool, root: Path = AUDIOBOOKS_ROOT) -> int:
     better = worse = judged = 0
     for chapter in sorted(completed_chapters(target)):
         if chapter not in on_book:
-            _say(f"  chuong {chapter}: chua len sach - khong co ban cu de so")
+            _say(f"  chuong {chapter}: khong co ban nao khac da thu xong - khong co ban cu de so")
             continue
         if target.name in on_book[chapter]:
             _say(f"  chuong {chapter}: sach DANG phat chinh project nay - khong con ban cu de so")

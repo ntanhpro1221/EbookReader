@@ -4357,3 +4357,19 @@ bản cũ để so" → để nguyên.
 Test 9 bài; thử ba đột biến, cả ba đều đỏ: `>` thành `>=`; tính đa số gồm cả chương đang phán (tự
 chứng minh); bỏ nhánh "project đang ở trên sách". Còn một chỗ chưa sửa được vì `boundary.sh` đang
 chạy (`--wait-only`). Chỗ ấy là SEED của bước 4b sau khi một bản bị dời ra, xem OPTIMISATION_QUEUE.
+
+### 21:52 — hai script trên phải thấy cả chương của lô VỪA XONG, không chỉ chương đã lên sách
+
+Kiểm dàn giọng lô 6 theo nhịp tim: 32 giọng dùng chung, **3 va chạm cùng chương** (228, 229, 233, 244).
+Male cần 13/14 giọng để không ai trùng, tức kho vừa đủ ("tối ưu, chạm cận dưới"). Bước 4 của ranh giới 6
+sẽ đúc lại các chương ấy. Nhưng đúc lại ở bước 4 xảy ra **trước** bước 7 ghép sách, nên với hai script
+vừa viết thì những chương ấy "chưa lên sách": `keep_the_chapter_cast` không có dàn giọng để giữ, cổng
+không có bản cũ để so. Hai lưới an toàn mới đúng lúc cần nhất lại nhìn không thấy.
+
+Sửa bằng một nguồn chung: `keep_the_chapter_cast.rows_as_they_will_ship(exclude=...)` là dàn giọng
+của sách **như lúc sẽ được ghép**. Chương đã lên sách lấy theo `manifest.json`; chương chưa lên lấy từ
+bản `completed` mới nhất trong `_versions`, trừ chính project đang xét. Cổng dùng cùng nguồn ấy.
+Chạy thật trên 7 chương lô 6 đã thu xong (219–225): về đa số 4, giữ 29, không ghim 5.
+
+Test mới dựng ba project giả + manifest. Thử hai đột biến, cả hai đều đỏ: bỏ `exclude` (project tự làm
+bản gốc của mình); bỏ lọc chương đã lên sách (bản của lô đè lên bản trên sách).
