@@ -76,6 +76,12 @@ Cả ba chương đều đã `completed` và đã có audio (bước ghép sách
 | 225 (đoạn 66) | `“Cái #&!@! Không phải lại nữa chứ?”` | *Cái thằng và... À còng...* | **vẫn hỏng, và đúng như vậy.** Giọng đọc tên ký hiệu (`#` → "thăng", `@` → "a còng"); thu lại bao nhiêu lần cũng thế. Chỉ `patch_a_censored_word_is_a_pause.py` chữa được, mà bản vá ấy phải xếp SAU ranh giới 6. Đừng đuổi theo nó ở bước 3. |
 | 234 (đoạn 13) | `“Chất sống? Môi trường nguyên thủy?”` | *Môi trường Nguyên Thủy* | **nên khỏi.** Giọng đọc bỏ hẳn câu hỏi đầu — một lần thu lại với hạt giống khác thường là xong (ca chương 140 đã vậy). Kiểm lại sau bước 3. |
 | 261 (đoạn 68) | `Jacob day day trán:` | *Rồi cọp dây dây chán* | **có thể vẫn hỏng, và không phải lỗi giọng đọc.** Tên "Jacob" cộng "day day" là chỗ Whisper hay chép sai (cả lô có 1.283 cảnh báo cùng họ: neo tên khoá). Nếu hai lượt thu lại vẫn trượt thì để nguyên và ghi vào hàng chờ, đừng vá gấp. |
+| 266 (đoạn 12) | `“Thích khách!”` | *Trời cắt* (giống 0,18) | **có thể vẫn hỏng.** Bản thu 0,48 s cho hai âm tiết — 4,2 âm tiết/giây, nằm trong dải người nói bình thường, nên có lẽ không bị cắt cụt; Whisper nghe sai một clip nửa giây không ngữ cảnh. Thu lại hai lượt vẫn trượt thì để nguyên. |
+
+Thêm một chỗ mù đã đo được: cổng nhịp chỉ soi đoạn có ≥ 24 ký tự (`rate_check_min_chars`), nên với
+mấy đoạn này **ASR là chốt duy nhất**. Cả bốn đoạn hỏng của lô đều ngắn ≤ 6 từ, còn 3.828 đoạn dài
+hơn 6 từ thì không một đoạn nào hỏng. Xem mục *"Đoạn NGẮN"* trong `docs/OPTIMISATION_QUEUE.md`:
+việc đầu tiên là ĐO xem lối lặp-3 clip có giúp không, và tuyệt đối không mách chữ cho Whisper.
 
 Số liệu kèm theo lúc 03:22: 2.690 đoạn `verified`, 1.302 `warning` (1.283 là neo tên khoá, 19 là
 "dòng thời gian bản chép không thể có"), 3 `failed`, 1.286 lần **máy** cho qua, 0 lần người nghe cho

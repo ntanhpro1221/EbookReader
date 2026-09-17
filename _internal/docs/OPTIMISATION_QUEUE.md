@@ -3041,3 +3041,47 @@ mới làm lệch giả định cũ — thử với `Adam` (87,1 Hz) thì nó ch
 trầm nhất, nên dòng `PRESET_MIN_PITCH_SEMITONES["Phạm Tuyên"] = 0` kèm chú thích ấy phải sửa tay.
 Chạy thử đầu-cuối: bản vá sinh ra áp được trên bản sao, catalog vẫn nạp, `casting_presets` nhận giọng
 mới, preview được chép.
+
+## Đoạn NGẮN: cả bốn đoạn hỏng của lô 6 nằm ở đó, và cổng nhịp không soi chúng (2026-09-18, 04:0x — ĐO RỒI, chưa vá)
+
+Đọc DB lô 6 lúc 03:52 (4.357/7.410 đoạn đã thu), nhóm kết cục ASR theo độ dài:
+
+| độ dài | tổng | đạt | cảnh báo | neo tên | **hỏng** | tỉ lệ hỏng |
+|---|---|---|---|---|---|---|
+| 1–3 từ | 150 | 105 | 15 | 29 | **1** | 0,67% |
+| 4–6 từ | 302 | 223 | 5 | 71 | **3** | 0,99% |
+| 7–12 từ | 528 | 391 | 0 | 137 | 0 | 0,00% |
+| >12 từ | 3.300 | 2.153 | 1 | 1.146 | 0 | 0,00% |
+
+**Không một đoạn nào dài hơn 6 từ bị hỏng, trên 3.828 đoạn.** Cả bốn đoạn hỏng đều ngắn.
+
+Bốn ca (chương của sách): 225 `“Cái #&!@! Không phải lại nữa chứ?”` (ký hiệu bị che — đã có bản vá),
+234 `“Chất sống? Môi trường nguyên thủy?”` (giọng bỏ hẳn câu hỏi đầu), 261 `Jacob day day trán:`,
+266 `“Thích khách!”` (sim 0,18: Whisper nghe "Trời cắt").
+
+### Chỗ mù đo được: `rate_check_min_chars = 24`
+
+`audio_io` chỉ soi nhịp khi đoạn có **≥ 24 ký tự đọc được**. `“Thích khách!”` có 14 ký tự, nên
+băng nhịp `[12,5 .. 24,5]` kt/s không hề được hỏi. Chốt duy nhất còn lại cho đoạn ngắn là sàn thời
+lượng `max(0,20; ký tự/100 × 2,1)` = **0,29 s** cho đoạn ấy, mà bản thu dài 0,48 s nên qua.
+
+Nói cách khác: với đoạn ngắn, **ASR là chốt duy nhất** — và đoạn ngắn đúng là chỗ Whisper yếu nhất
+(0,48 giây, hai âm tiết, không ngữ cảnh). Dự án đã biết điều này và đã có máy móc cho nó
+(`SHORT_CONTEXT_MAX_WORDS = 5`, lặp clip **3 lần** để Whisper có ngữ cảnh mà KHÔNG phải mách chữ,
+`adjudicate_collapsed_repeated_short`, mã `ASR_UNVERIFIABLE_SHORT_TEXT`). Bốn ca này lọt qua cả
+máy móc ấy.
+
+### Việc phải làm, theo thứ tự (đo trước, đừng vá trước)
+
+1. **Đo xem lặp-3 có thật sự giúp không.** Lấy ~40 đoạn ngắn ĐÃ `verified` và 4 đoạn hỏng, chạy lại
+   ASR hai đường (clip đơn / lặp-3) rồi so tỉ lệ khớp. Nếu lặp-3 không hơn, máy móc ấy chỉ là chi
+   phí; nếu hơn rõ, xem tại sao bốn ca này không được nó cứu.
+2. **Đừng mách Whisper chữ mong đợi.** Cách dễ nhất để "chữa" là truyền `initial_prompt` chứa chính
+   câu sách — và nó **phá chính phép kiểm**: ASR là bên xác minh, mách chữ cho nó là biến chốt thành
+   cái gật đầu. Lặp-3 được thiết kế đúng để tránh cạm ấy. Ghi ra đây để lần sau không ai đi lối đó.
+3. **Cân nhắc hạ `rate_check_min_chars`** với băng nhịp tính theo **âm tiết** cho đoạn ngắn: hai âm
+   tiết trong 0,48 s là 4,2 âm tiết/giây — nằm trong dải người nói bình thường, nên ca 266 có lẽ
+   KHÔNG bị cắt cụt, và một băng nhịp cho đoạn ngắn sẽ cho nó qua. Tức đây là cái cần đo (1) trước,
+   không phải cái để vá ngay.
+4. Ba trong bốn ca sẽ được bước 3 của ranh giới thu lại; xem `docs/BOUNDARY_6_AND_THE_DRIVER_MORNING.md`
+   cho từng ca và điều phải chờ đợi. Kết cục của chúng là dữ liệu cho việc (1).
