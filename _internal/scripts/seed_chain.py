@@ -6,6 +6,7 @@
     python scripts/seed_chain.py --chain-all  # chuỗi phủ MỌI lô đang có - dùng khi vá/đúc lại lô cũ
     python scripts/seed_chain.py 3 --repairs  # các project v/r của lô 3, theo thứ tự tạo
     python scripts/seed_chain.py --newest <thư mục>   # project mới nhất trong một thư mục
+    python scripts/seed_chain.py --newest <thư mục> --newer-than <project>   # ... chỉ khi mới hơn project ấy
 
 Vì sao có file này: từ lô 3 có project ĐÚC LẠI GIỌNG từng chương (`lo03r_066` ...). Chúng gieo
 từ lô và cấp giọng **mới** cho người thua khi hai người trùng giọng. Nếu lô 4 gieo từ chính lô 3
@@ -134,6 +135,27 @@ def main(argv: list[str]) -> int:
         if not links:
             return 1
         print(" ".join(p.as_posix() for p in links))
+        return 0
+    if flags == {"--newest", "--newer-than"} and len(positional) == 2:
+        # `--newest <thư mục> --newer-than <project>`: chỉ trả project mới nhất của thư mục nếu nó
+        # MỚI HƠN project đang làm gieo; không thì thoát 1 để launcher giữ gieo cũ (`|| echo "$SEED"`).
+        #
+        # Vì sao: từ 17-09, `launch_repair.sh` dời một bản đúc lại hại nhiều hơn giúp ra
+        # `_quarantine_<ngày>` (`ship_only_recasts_that_help.py`). Khi ấy `--newest` trên thư mục
+        # `loNNr` trả một bản đúc lại CŨ HƠN, có thể từ một ranh giới trước, và `boundary.sh` bước
+        # 4b sẽ gieo lô kế tiếp từ đó thay vì từ project vừa xong.
+        folder, current = Path(positional[0]), Path(positional[1])
+        projects = projects_in(folder)
+        if not projects:
+            print(f"không có project nào trong {folder}", file=sys.stderr)
+            return 1
+        if created_at(projects[-1]) <= created_at(current):
+            print(
+                f"{projects[-1].name} không mới hơn {current.name} - giữ gieo cũ",
+                file=sys.stderr,
+            )
+            return 1
+        print(projects[-1].as_posix())
         return 0
     if flags == {"--newest"} and len(positional) == 1:
         # Project mới nhất trong MỘT thư mục bất kỳ - launch_repair.sh cần nó ngay sau `create`,

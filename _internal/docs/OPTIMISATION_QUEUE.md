@@ -2940,6 +2940,7 @@ bản mới nhất vừa bị dời thì `--newest` trả một bản đúc lạ
 trước), và bước 6 gieo lô kế từ đó. Không hỏng gì — `pin_the_book_cast` vẫn ghim giọng đa số theo
 sách — nhưng không đúng ý "gieo từ project vừa xong".
 
-Sửa: ghi lại mtime/`created_at` của SEED trước khi gọi `launch_repair`, và chỉ nhận `--newest` khi
-nó MỚI hơn SEED cũ. **Không sửa được lúc này**: `boundary.sh 6 --wait-only` đang chạy (bash đọc
+Sửa: `seed_chain.py --newest <thư mục> --newer-than "$SEED"` (đã có, có test) chỉ trả bản mới nhất khi
+nó MỚI hơn gieo hiện tại, không thì thoát 1. Còn lại là thêm `--newer-than "$SEED"` vào ba dòng `SEED=` của
+`boundary.sh` (bước 3, 4, 4b). **Không sửa được lúc này**: `boundary.sh 6 --wait-only` đang chạy (bash đọc
 script theo từng đoạn), nên để tới khi nó thoát (~07:00 ngày 18-09), trước khi thả ranh giới 6 thật.

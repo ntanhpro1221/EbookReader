@@ -130,3 +130,21 @@ def test_a_batch_with_nothing_yet_has_no_seed(tmp_path: Path) -> None:
         made["lo02v_043"],
         made["lo02r_066"],
     ]
+
+
+def test_newest_newer_than_keeps_the_seed_when_the_fresh_recast_was_moved_out(tmp_path: Path, capsys) -> None:
+    """Bước 4b sau khi cổng dời bản đúc lại vừa xong ra quarantine: thư mục `lo02r` chỉ còn một bản
+    CŨ HƠN gieo hiện tại, và gieo không được lùi về nó."""
+    from scripts.seed_chain import main
+
+    made = _tree(tmp_path)
+    seed = _project(tmp_path, f"{TAG_PREFIX}-lo03", "lo03_seed", 10.0)
+    folder = tmp_path / f"{TAG_PREFIX}-lo02r"
+
+    assert main(["--newest", str(folder), "--newer-than", str(seed)]) == 1
+    assert capsys.readouterr().out == ""
+
+    fresh = _project(tmp_path, f"{TAG_PREFIX}-lo02r", "lo02r_094_g", 11.0)
+    assert main(["--newest", str(folder), "--newer-than", str(seed)]) == 0
+    assert capsys.readouterr().out.strip() == fresh.as_posix()
+    assert made["lo02r_066"].is_dir()
