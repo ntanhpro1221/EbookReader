@@ -2988,7 +2988,7 @@ Chủ sách hỏi *"vietneu có bản mới chưa?"*. Tra PyPI, Hugging Face và
 ### Đã đo (17-09 23:10 – 18-09 00:37, lô 6 tạm dừng lúc đo tốc độ) — chờ tai chủ sách
 
 - **Tốc độ:** bảy giọng pool, 5 câu, cùng máy: 3.3.0 mất 3,27–3,98 giây/100 ký tự, 3.8.1 mất 0,44–0,52 → **~7,5 lần**.
-- **Giọng có đổi:** Trúc Ly F0 220 → 257 Hz (clip mẫu mới của 3.8.0), Thanh Bình 162 → 156 Hz; các giọng khác lệch ≤ 3%.
+- **Giọng có đổi:** Trúc Ly F0 220 → 257 Hz (clip mẫu mới của 3.8.0), Thanh Bình 162 → 156 Hz (−4%), Thục Đoan 242 → 250 Hz (+3%); bốn giọng còn lại lệch < 2%.
 - **Giọng chưa dùng, 25 câu sách + UTMOS** (ngưỡng = giọng tệ nhất pool: WER ≤ 7,7%, sai thanh ≤ 1,67%, UTMOS ≥ 2,56):
   10/11 đạt. Anh Khôi trượt sai thanh 1,9%. Quỳnh Anh trượt ở lượt 5 câu (4,9%) nhưng đạt ở 25 câu (1,4%):
   **5 câu là quá ít để loại một giọng**, nên cổng của `audition_presets.py` phải chạy `--book-sentences 20`.
