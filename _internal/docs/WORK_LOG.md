@@ -4373,3 +4373,10 @@ Chạy thật trên 7 chương lô 6 đã thu xong (219–225): về đa số 4,
 
 Test mới dựng ba project giả + manifest. Thử hai đột biến, cả hai đều đỏ: bỏ `exclude` (project tự làm
 bản gốc của mình); bỏ lọc chương đã lên sách (bản của lô đè lên bản trên sách).
+
+### 23:04 — "Cái #&!@!" đọc thành "Cái thăng và a còng": bản vá viết xong, cố ý chưa xếp hàng
+
+Nhịp tim 22:58 có 2 đoạn hỏng ở lô 6. Một đoạn là loại ASR đã biết. Đoạn kia (225/66) là lỗi thật:
+Whisper nghe "Cái thằng và... À còng...", tức giọng đọc tự nở `#` `&` `@` thành tên ký hiệu giữa
+một câu chửi bị che, và máy cho qua. Quét nguồn cả hai cuốn thì chỉ có 5 chỗ như thế, nhưng cái
+nghe được thì rõ. Bản vá và lý do nó phải đợi qua ranh giới 6 nằm ở OPTIMISATION_QUEUE (mục cùng giờ).

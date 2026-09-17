@@ -2944,3 +2944,19 @@ Sửa: `seed_chain.py --newest <thư mục> --newer-than "$SEED"` (đã có, có
 nó MỚI hơn gieo hiện tại, không thì thoát 1. Còn lại là thêm `--newer-than "$SEED"` vào ba dòng `SEED=` của
 `boundary.sh` (bước 3, 4, 4b). **Không sửa được lúc này**: `boundary.sh 6 --wait-only` đang chạy (bash đọc
 script theo từng đoạn), nên để tới khi nó thoát (~07:00 ngày 18-09), trước khi thả ranh giới 6 thật.
+
+## Chữ bị che bằng ký hiệu đọc thành tên ký hiệu (2026-09-17, 23:04) — bản vá ĐÃ VIẾT, xếp SAU ranh giới 6
+
+`scripts/pending_patches/patch_a_censored_word_is_a_pause.py`. Lô 6 chương 225 đoạn 66: "Cái #&!@! Không
+phải lại nữa chứ?" được giọng đọc nở thành "Cái thăng và … a còng …" (Whisper: độ giống 0,42, máy
+cho qua). Nguồn cả hai cuốn chỉ có 5 chỗ: cuốn 2 225, 385, 386, 699; cuốn 1 339. Bản vá biến chuỗi che
+thành "…", còn dấu `*` sót từ định dạng thì giữ luật cũ.
+
+Đã áp thử trên bản sao cây: 9/9 bài mới xanh, và 1056/1057 bài của 18 file đụng `text_processing`
+xanh. Bài còn lại (`test_cli::test_doctor...`) đỏ vì `doctor` tìm model ở thư mục của bản sao,
+không liên quan bản vá.
+
+**Xếp vào `apply_all.ORDER` chỉ SAU KHI ranh giới 6 xong hẳn.** Áp ở ranh giới 6 thì bước 2b sẽ
+resync `lo06` và đặt đoạn 66 của chương 225 (đã `completed`) về chờ thu. Chương đầu tiên cần bản vá
+là 385, ở lô 8. Chương 225 trên sách giữ bản lỗi; muốn sửa thì một lượt vá riêng chương ấy SAU khi
+bản vá đã vào cây.
