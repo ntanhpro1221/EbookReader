@@ -79,6 +79,7 @@ Nền tảng: [`docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`](../docs/WHERE_A_RUN_SPENDS
 | script | dùng khi |
 |---|---|
 | `heartbeat_tick.py` | Một nhịp: ranh giới ở bước nào, project nào đang bay, cây git sạch chưa |
+| `heartbeat_daemon.py` | Nhịp tim chạy RỜI khỏi phiên: cứ 30 phút gọi `heartbeat_tick.py`, ghi `runtime/heartbeat_log.txt` (bản ghi không đứt dù phiên không thức); chạy bằng `pythonw.exe`, dừng bằng file `.stop` |
 | `seed_chain.py` | Project nào là "mới nhất" của một lô; `--chain-all` cho sổ cộng dồn |
 | `before_a_batch.py` | Cổng trước mỗi lô: cây sạch, hàng chờ rỗng, bộ test đã xanh |
 | `assemble_book.py --verify` | Sách đã ghép có lệch gì so với manifest không |

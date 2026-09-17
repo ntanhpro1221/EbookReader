@@ -4402,3 +4402,24 @@ sẵn, mà lần chạy cuối là 30-08. Bảng đầy đủ và kế hoạch n
   trình đang chạy). Đã hỏi chủ sách; nếu không thì đo khi lô 6 xong (~09:00).
 - Nhịp tim 23:4x nổ `AttributeError`: `.stdout` của PowerShell về `None` khi một dòng lệnh có ký tự lạ
   với bảng mã mặc định. Đã sửa bằng `encoding="utf-8", errors="replace"` và `or ""`.
+
+## 2026-09-18, 01:5x — nhịp tim không được nằm trong phiên làm việc
+
+Chủ sách phải là người phát hiện nhịp tim chết, lần thứ hai: *"lại quên heartbeat??"*. Nhịp trước là
+một lệnh nền `sleep 1800; heartbeat_tick.py` — đập một nhịp rồi tắt, nên sống bằng việc tôi nhớ thả
+lại. Tôi đã quên sau nhịp 01:00.
+
+Đặt cron phiên `13,43 * * * *` rồi **đo**: 01:43 cron KHÔNG bắn, vì lúc ấy có một lệnh nền đang chạy.
+Đó là cùng một lỗi, không phải hai: mọi cơ chế nằm trong phiên đều chết theo phiên.
+
+Ba lớp, mỗi lớp chữa đúng một kiểu chết:
+
+| lớp | đánh thức phiên | giữ bản ghi | cần tôi nhớ |
+|---|---|---|---|
+| cron `13,43` | có, khi phiên rảnh | không | không |
+| `heartbeat_daemon.py` (tiến trình rời, `pythonw.exe`) | không | **có** — `runtime/heartbeat_log.txt` | không |
+| lệnh nền canh `runtime/heartbeat_last.txt` | có, khi nhịp im > 35 phút | không | có (thả lại) |
+
+Cái đáng giá nhất là lớp giữa: kể cả khi không gì đánh thức tôi, mỗi nhịp vẫn có một khối trong log
+kèm giờ, nên lượt thức sau đọc được cả quãng đã mất chứ không mất trắng. `heartbeat_tick.py` nay ghi
+`runtime/heartbeat_last.txt` để lớp ba biết nhịp còn đập không.
