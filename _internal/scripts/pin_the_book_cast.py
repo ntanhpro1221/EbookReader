@@ -61,6 +61,7 @@ import collections
 import re
 import sqlite3
 import sys
+import time
 import unicodedata
 from collections.abc import Callable
 from pathlib import Path
@@ -182,6 +183,26 @@ def pinned_character_names(target: Path) -> dict[str, str]:
     finally:
         connection.close()
     return {str(row[0]): str(row[1]) for row in rows}
+
+
+def unpin_character(database: ProjectDB, canonical_name: str) -> int:
+    """Bỏ pin của một nhân vật (tên nguyên dạng như `pinned_character_names`). Trả về số dòng đổi.
+
+    KHÔNG gọi `set_locked_character_voice(name, "")`: hàm ấy **từ chối** giọng rỗng
+    (`ValueError: canonical_name and voice_key are both required`). Bản đầu của bước "bỏ pin nhãn
+    không có trong nguồn" gọi đúng như thế, chỉ được thử ở lượt không `--apply`, và lần đầu chạy
+    thật - ranh giới 5, tối 16-09 - nó nổ ở MỌI chương đúc lại, **trước** vòng ghim giọng đa số.
+    `launch_repair.sh` đi tiếp, nên các chương đúc lại lên dàn giọng thiếu pin đa số và ra tệ hơn
+    bản cũ (`measure_did_the_recast_help.py 010 027 094 105`: tốt hơn 2, xấu hơn 7).
+
+    Cột là `locked_voice_key TEXT NOT NULL DEFAULT ''`, và `locked_character_voices()` đọc
+    `WHERE locked_voice_key <> ''` - nên "không pin" đúng nghĩa là chuỗi rỗng, không phải NULL.
+    """
+    with database.transaction() as conn:
+        return conn.execute(
+            "UPDATE characters SET locked_voice_key='', updated_at=? WHERE canonical_name=?",
+            (time.time(), str(canonical_name)),
+        ).rowcount
 
 
 def majority_voices(rows: list[dict]) -> dict[str, tuple[str, int, int]]:
@@ -505,7 +526,7 @@ def pin(
         freed += 1
         pins.pop(canonical_key(name), None)
         if apply:
-            database.set_locked_character_voice(name, "")
+            unpin_character(database, name)
     if freed:
         _say(f"  {freed} pin {'đã được bỏ' if apply else 'sẽ được bỏ'}, trả chỗ lại cho kho giọng.")
     unpinned = {

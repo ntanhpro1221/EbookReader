@@ -1,4 +1,4 @@
-# Kế hoạch chạy cuốn 2: 915 chương, 21 lô (lô 6 lớn gộp ba lô cũ)
+# Kế hoạch chạy cuốn 2: 915 chương, 22 lô (lô 6 lớn gộp hai lô cũ)
 
 Nguồn: `D:/Novels/Ebook Reader/Text_Tmp` — chủ sách chỉ định 2026-09-13 22:5x (*"lấy tài liệu ở đây mà dev"*)
 sau khi nguồn cuốn 1 (`D:/Novels/Tools/Text`, 478 chương) vào Thùng rác lúc 22:25. Không chung một byte với
@@ -13,7 +13,8 @@ kế hoạch này. Cuốn 1 giữ nguyên tại `D:/Novels/Audiobooks/_versions`
 ```
 915 chương · 2.417.255 từ · 84.211 segment
 23 lô, mỗi lô ~8 giờ máy (~3.700 segment)      <- bảng gốc 13-09
-21 lô từ 16-09: lô 6 = 6+7+8 cũ, lô 9..23 cũ đánh số lại thành 7..21
+22 lô từ 17-09: lô 6 = 6+7 cũ, lô 8..23 cũ đánh số lại thành 7..22
+               (16-09 từng là 21 lô với lô 6 = 6+7+8 cũ; máy tắt 12 giờ nên thu lại)
 tổng ~182 giờ máy  ≈  7,6 ngày chạy liên tục
 ```
 
@@ -31,22 +32,23 @@ lý do với cuốn 1 — xem PRODUCTION_PLAN.md). `check_sources.py`: 915 chư�
 | 3 | 099..139 | 41 | 3.673 | 7,9 | |
 | 4 | 140..179 | 40 | 3.680 | 8,0 | |
 | 5 | 180..218 | 39 | 3.717 | 8,0 | |
-| 6 | 219..343 | 125 | 11.129 | 24,0 | LỚN: gộp lô 6+7+8 cũ, chủ sách bảo 16-09 |
-| 7 | 344..382 | 39 | 3.678 | 7,9 | (lô 9 cũ) |
-| 8 | 383..420 | 38 | 3.683 | 8,0 | |
-| 9 | 421..458 | 38 | 3.653 | 7,9 | |
-| 10 | 459..497 | 39 | 3.705 | 8,0 | |
-| 11 | 498..533 | 36 | 3.709 | 8,0 | |
-| 12 | 534..569 | 36 | 3.654 | 7,9 | |
-| 13 | 570..607 | 38 | 3.650 | 7,9 | |
-| 14 | 608..644 | 37 | 3.716 | 8,0 | |
-| 15 | 645..683 | 39 | 3.705 | 8,0 | |
-| 16 | 684..723 | 40 | 3.663 | 7,9 | |
-| 17 | 724..766 | 43 | 3.682 | 8,0 | |
-| 18 | 767..810 | 44 | 3.742 | 8,1 | |
-| 19 | 811..849 | 39 | 3.718 | 8,0 | |
-| 20 | 850..885 | 36 | 3.690 | 8,0 | |
-| 21 | 886..914 | 29 | 2.910 | 6,3 | |
+| 6 | 219..303 | 85 | 7.410 | 16,0 | LỚN: gộp lô 6+7 cũ (17-09, sau khi máy tắt; bản 16-09 là 219..343) |
+| 7 | 304..343 | 40 | 3.719 | 8,0 | (lô 8 cũ) |
+| 8 | 344..382 | 39 | 3.678 | 7,9 | |
+| 9 | 383..420 | 38 | 3.683 | 8,0 | |
+| 10 | 421..458 | 38 | 3.653 | 7,9 | |
+| 11 | 459..497 | 39 | 3.705 | 8,0 | |
+| 12 | 498..533 | 36 | 3.709 | 8,0 | |
+| 13 | 534..569 | 36 | 3.654 | 7,9 | |
+| 14 | 570..607 | 38 | 3.650 | 7,9 | |
+| 15 | 608..644 | 37 | 3.716 | 8,0 | |
+| 16 | 645..683 | 39 | 3.705 | 8,0 | |
+| 17 | 684..723 | 40 | 3.663 | 7,9 | |
+| 18 | 724..766 | 43 | 3.682 | 8,0 | |
+| 19 | 767..810 | 44 | 3.742 | 8,1 | |
+| 20 | 811..849 | 39 | 3.718 | 8,0 | |
+| 21 | 850..885 | 36 | 3.690 | 8,0 | |
+| 22 | 886..914 | 29 | 2.910 | 6,3 | |
 
 ## Đang ở đâu (cập nhật 11:40 ngày 2026-09-16)
 
@@ -56,11 +58,53 @@ lo 1  000..048  xong  (project lo: 48 completed + 1 failed -> chuong ay da co ba
 lo 2  049..098  xong  (48 + 2 failed, trong do 082 da duoc duc lai thanh cong 16-09 07:51)
 lo 3  099..139  xong  (40 + 1 failed)
 lo 4  140..179  xong  (40/40, khong chuong nao hong)
-lo 5  180..218  DANG CHAY tu 08:04 ngay 16-09
-lo 6  219..343  LON (125 chuong, 11.129 doan) - ranh gioi 5 tu tha, muc tieu xong sang thu 6 18-09
+lo 5  180..218  xong 20:33 ngay 16-09 (39/39, khong chuong nao hong, auto 0 va cham)
+lo 6  219..303  LON (85 chuong, 7.410 doan) - tha lai 17-09 ~10:30, muc tieu xong sang thu 6 18-09
 ```
 
-### Lô 6 lớn (quyết định 16-09 ~18:00)
+### 17-09: máy tắt giữa ranh giới 5, và các bản đúc lại tối ấy ra TỆ HƠN
+
+Máy tắt 22:46 ngày 16-09 (chủ sách tắt nhầm), bật lại 09:20 ngày 17-09. Ranh giới 5 đang ở bước 4b.
+Watchdog lúc khởi động đã tự chạy nốt `lo03r_136`, còn chuỗi `boundary.sh` thì chết theo máy.
+
+Đọc log thì thấy một lỗi khác, nặng hơn: `pin_the_book_cast.py --apply` **nổ ở mọi chương đúc lại**
+(`ValueError: canonical_name and voice_key are both required`). Bước "bỏ pin nhãn không có trong nguồn"
+(36f4db5, 16-09 10:22) gọi `set_locked_character_voice(name, "")`, mà hàm ấy từ chối giọng rỗng. Nó nổ
+**trước** vòng ghim giọng đa số, và `launch_repair.sh` vẫn đi tiếp. Đo bằng
+`measure_did_the_recast_help.py`:
+
+```
+010  tot 0 | xau 2 | khong ro 1      -> cat ra
+027  0 nguoi doi giong               -> cat ra (khong giup ai)
+094  tot 1 | xau 5 | khong ro 1      -> cat ra
+105  tot 1 | xau 0 | khong ro 1      -> GIU
+136  tot 0 | xau 1 | khong ro 5      -> cat ra
+```
+
+Luật dùng: **bản đúc lại chỉ lên sách khi nó giúp nhiều hơn nó hại.** Bốn project bị cắt được **dời**
+(không xoá) sang `D:/Novels/Audiobooks/book2/_quarantine_2026-09-17/`, ra ngoài `_versions` để
+`assemble_book` và `seed_chain` không thấy chúng. Sách giữ bản cũ của 010, 027, 094, 136.
+
+Đã sửa: `pin_the_book_cast.unpin_character` ghi thẳng `locked_voice_key=''`. Bài test mới chạy đường
+`--apply` trên `ProjectDB` thật, và đã thử đột biến (trả lại lời gọi cũ thì bài test đỏ đúng
+`ValueError`). Chạy thử (không ghi) bản đã sửa trên `lo02r_094`: ANDRE, WOLF, MEKANZI, JULIAN được ghim
+đúng giọng đa số. Nhưng CHRISTOPHER, LOTT, HERODOTUS, MAG vẫn **không ghim được**, vì người đang giữ
+giọng ấy có cùng chương với họ ở đâu đó trong sách. Đó là giới hạn cũ: pin giữ chỗ trên cả cuốn, trong
+khi luật chỉ cấm trùng giọng trong cùng một chương. Nên kể cả khi hết lỗi, đúc lại 094 cũng chưa chắc có lãi.
+
+**Lô 6 thu lại còn 219..303** (6+7 cũ, 7.410 đoạn): mất 12 giờ thì 11.129 đoạn sẽ xong chiều tối thứ 6,
+không phải sáng. Ước tính, lô bắt đầu ~10:50 thứ 5: phân tích ~9 giờ (→ ~20:00), thu ~10,2 giờ nếu máy rảnh
+(→ ~06:00 thứ 6), ~11 giờ nếu tối thứ 5 có người dùng máy (→ ~07:00).
+
+**Ranh giới 5 thả lại KHÔNG có danh sách lô khác.** 137, 139, 167 (chưa chạy) và 010, 027, 094, 136 (đã
+cắt) để sáng thứ 6, **đo** bằng `measure_did_the_recast_help.py` rồi mới cho lên sách. Bước 7 của ranh
+giới 5 không có ai trông, nên không được ghép một bản đúc lại chưa đo. Lệnh đã thả 17-09:
+
+```bash
+bash scripts/boundary.sh 5 --recast auto && bash scripts/boundary.sh 6 --wait-only
+```
+
+### Lô 6 lớn (quyết định 16-09 ~18:00; cỡ lô sửa 17-09, xem mục trên)
 
 Chủ sách bỏ nhịp tim (*"thôi dừng luôn không heartbeat gì nữa"*) rồi bảo: *"khởi tạo một lô chạy
 thật lớn, căn thời gian xong đến tầm sáng thứ 6"*. Không ai trông thì không ai thả ranh giới giữa

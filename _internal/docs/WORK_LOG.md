@@ -4254,3 +4254,52 @@ giữa lô 5 và 6 cho cuốn 1. Danh sách lô khác đo lại ~18:02, trùng h
 
 Một lỗi hiển thị cũ thấy trên đường, sửa luôn: dòng mở đầu log in `+ tu tim (auto)` cả khi không
 truyền `auto`, vì `${RECAST_AUTO:+...}` coi `0` là có giá trị.
+
+## 2026-09-17
+
+### 10:30 — máy tắt giữa ranh giới 5; mở log ra thì thấy một lỗi của tôi đã làm các bản đúc lại tối qua TỆ HƠN
+
+Máy tắt 22:46 ngày 16-09 (chủ sách tắt nhầm), bật 09:20. Chủ sách: *"tôi lỡ tắt máy, khởi chạy lại đi"*.
+
+Lúc tắt, ranh giới 5 đang ở bước 4b. Watchdog lúc khởi động đã chạy nốt `lo03r_136` (xong 09:32), còn
+chuỗi `boundary.sh` chết theo máy. Đọc log trước khi thả lại thì thấy **5 traceback giống hệt nhau**, mỗi
+chương đúc lại một cái: `pin_the_book_cast.py --apply` → `set_locked_character_voice(name, "")` →
+`ValueError: canonical_name and voice_key are both required`. Bước "bỏ pin nhãn không có trong nguồn"
+(36f4db5, sáng 16-09) dùng một hàm **từ chối giọng rỗng**. Nó nổ trước vòng ghim giọng đa số, và
+`launch_repair.sh` đi tiếp như không có gì.
+
+Hỏi thước chứ không đoán — `measure_did_the_recast_help.py 010 027 094 105` rồi `136`:
+
+```
+010  tot 0 | xau 2 | khong ro 1     ANDRE, MAG ra khoi giong da so
+027  khong ai doi giong             lan duc lai khong sua duoc ai
+094  tot 1 | xau 5 | khong ro 1     EVANS ve da so (23 chuong); CHRISTOPHER, HERODOTUS, JULIAN, LOTT, MEKANZI ra
+105  tot 1 | xau 0 | khong ro 1     SHARON ve da so
+136  tot 0 | xau 1 | khong ro 5
+```
+
+Ranh giới 4 (pin còn chạy đúng) từng ra tốt 9 / xấu 2. Ranh giới 5 (pin nổ) ra tốt 2 / xấu 8. Chênh
+lệch ấy chính là thứ vòng ghim giọng đa số mang lại.
+
+Ba việc:
+
+1. **Sửa:** `unpin_character()` ghi thẳng `locked_voice_key=''` (cột `NOT NULL DEFAULT ''`, và
+   `locked_character_voices()` đọc `<> ''`). Bài test mới `test_dropping_a_pin_does_not_stop_the_pinning.py`
+   chạy đường `--apply` trên `ProjectDB` thật: bỏ pin GIEDON và **vẫn** ghim LOTT. Đã thử đột biến: trả lại
+   lời gọi cũ thì bài test đỏ đúng `ValueError`. **Bài học:** các bài cũ của script này chỉ thử hàm thuần
+   và lượt không ghi; đường ghi lần đầu chạy là trong sản xuất, lúc không ai trông. Một script có `--apply`
+   phải có ít nhất một bài test đi qua `--apply` trên một DB thật.
+2. **Không ship thứ đo ra là tệ:** luật *bản đúc lại chỉ lên sách khi nó giúp nhiều hơn nó hại*. Dời (không
+   xoá) `lo01r_010`, `lo01r_027`, `lo02r_094`, `lo03r_136` sang `book2/_quarantine_2026-09-17/`, ngoài
+   `_versions`, nên `assemble_book` (glob `_versions/*/*`) và `seed_chain` không thấy chúng. Giữ `lo03r_105`.
+3. **Thả lại có thu hẹp:** ranh giới 5 **không** mang danh sách lô khác nữa. Bước 7 ghép sách mà không ai
+   trông, nên không được ghép một bản đúc lại chưa đo. 137/139/167 và bốn chương vừa cắt để sáng thứ 6.
+   Lô 6 thu từ 219..343 (11.129 đoạn) xuống **219..303** (6+7 cũ, 7.410 đoạn), vì mất 12 giờ thì bản lớn
+   sẽ xong chiều tối thứ 6 chứ không phải sáng. Bảng kế hoạch đánh số lại thành 22 lô.
+
+Chạy thử (không ghi) bản đã sửa trên `lo02r_094` cho thấy vì sao đúc lại **không chắc có lãi, kể cả khi hết
+lỗi**. ANDRE, WOLF, MEKANZI, JULIAN được ghim đúng giọng đa số. CHRISTOPHER (10 chương), LOTT (15),
+HERODOTUS (6), MAG (3) thì `không ghim được … đang giữ và có cùng chương`: người giữ giọng ấy gặp họ ở
+**một** chương nào đó trong sách. Đây là hướng mở đã ghi (pin giữ chỗ trên cả cuốn, luật thì theo từng
+chương). Nó không còn là chuyện hiếm: một lần đúc lại có thể lấy mất giọng đa số của những người
+**không** phải lý do của lần đúc lại ấy.
