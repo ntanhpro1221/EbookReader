@@ -37,6 +37,10 @@ LEASE_STALE_SECONDS = 180.0
 # đổi hành vi, chỉ để mã đừng đọc như đang có chốt. Đo và khoá bằng `tests/test_offline_guard_names.py`.
 ORDER: tuple[str, ...] = (
     "patch_a_dead_belt_should_not_look_like_a_belt.py",
+    # Cùng gốc: `runtime_contract` kiểm mọi thứ quanh giọng mà không kiểm chính gói `vieneu`, nên
+    # `pip install -U vieneu` giữa một cuốn sẽ im lặng đổi giọng các chương còn lại. Bản vá này đổi
+    # nội dung chính sách chất lượng, nên chỉ áp ở ranh giới.
+    "patch_the_sdk_that_makes_the_voice_is_checked_too.py",
 )
 
 APPLIED = (

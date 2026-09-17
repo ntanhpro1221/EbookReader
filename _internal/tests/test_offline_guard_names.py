@@ -11,7 +11,8 @@ Và đã mất thật. `transformers` 5.16.1 không còn `utils._is_offline_mode
 18-09 02:0x, chính bằng phép kiểm này. Dây chuyền không hở, vì lớp thật là biến môi trường
 `HF_HUB_OFFLINE` cộng với `huggingface_hub.constants` (vẫn còn, vẫn được đặt), và
 `test_the_remaining_belt_really_switches_transformers_offline` dưới đây chứng minh lớp ấy điều khiển
-được transformers. Dọn ba mục chết khỏi `worker.py` là việc ở RANH GIỚI (file bị khoá khi lô đang bay).
+được transformers. Dọn năm mục chết khỏi `worker.py` là việc ở RANH GIỚI: file này không bị khoá theo hash, nhưng lô
+đang bay sinh worker mới liên tục, nên sửa giữa lô là để nửa lô sau chạy mã khác nửa trước.
 
 Nâng gói mà phép kiểm này đỏ: đọc changelog, tìm tên mới, sửa cả `worker.py` và danh sách dưới đây.
 """

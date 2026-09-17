@@ -1,9 +1,12 @@
-"""Vá worker.py: bỏ ba chốt chặn offline đã CHẾT của transformers, giữ lại đúng chốt còn tác dụng.
+"""Vá worker.py: bỏ năm chốt chặn offline đã CHẾT của transformers, giữ lại đúng chốt còn tác dụng.
 
 Chạy: python patch_a_dead_belt_should_not_look_like_a_belt.py <root>
 
-**XẾP Ở MỘT RANH GIỚI.** `worker.py` nằm trong `QUALITY_IMPLEMENTATION_FILES`: ghi vào nó giữa một lô
-là resume bị từ chối. Bản vá KHÔNG đổi hành vi (xem dưới), nên ranh giới nào cũng được, kể cả 6.
+**XẾP Ở MỘT RANH GIỚI.** `worker.py` KHÔNG nằm trong `QUALITY_IMPLEMENTATION_FILES` (kiểm 18-09:
+danh sách ấy có 20 module + `pyproject.toml` + `uv.lock`, không có `worker.py`), nên ghi vào nó không
+làm resume bị từ chối — nhưng lô đang bay **sinh worker mới liên tục**, nên sửa giữa lô là để nửa lô
+sau chạy mã khác nửa trước mà không có gì ghi lại. Bản vá KHÔNG đổi hành vi, nên ranh giới nào cũng
+được, kể cả 6.
 
 ## Ca thật (18-09 02:0x, tìm ra bằng `tests/test_offline_guard_names.py`)
 
@@ -106,7 +109,11 @@ def test_the_worker_no_longer_pretends_to_set_a_dead_name(module_name: str, attr
 
 assert OLD_TEST in s, "khong khop test_the_worker_still_names_it"
 s = s.replace(OLD_TEST, NEW_TEST, 1)
-s = s.replace('''Dọn ba mục chết khỏi `worker.py` là việc ở RANH GIỚI (file bị khoá khi lô đang bay).''',
-              '''Đã dọn năm mục chết khỏi `worker.py` ở ranh giới (patch_a_dead_belt_should_not_look_like_a_belt).''', 1)
+OLD_DOC = '''Dọn năm mục chết khỏi `worker.py` là việc ở RANH GIỚI: file này không bị khoá theo hash, nhưng lô
+đang bay sinh worker mới liên tục, nên sửa giữa lô là để nửa lô sau chạy mã khác nửa trước.'''
+NEW_DOC = '''Năm mục chết đã dọn khỏi `worker.py` ở một ranh giới, bằng
+`patch_a_dead_belt_should_not_look_like_a_belt.py`.'''
+assert OLD_DOC in s, "khong khop cau mo ta trong docstring cua phep kiem"
+s = s.replace(OLD_DOC, NEW_DOC, 1)
 io.open(p, "w", encoding="utf-8").write(s)
 print(f"da va {p}")
