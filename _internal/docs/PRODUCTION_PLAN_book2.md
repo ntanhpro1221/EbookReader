@@ -97,7 +97,10 @@ không phải sáng. Ước tính, lô bắt đầu ~10:50 thứ 5: phân tích 
 (→ ~06:00 thứ 6), ~11 giờ nếu tối thứ 5 có người dùng máy (→ ~07:00).
 
 **Ranh giới 5 thả lại KHÔNG có danh sách lô khác.** 137, 139, 167 (chưa chạy) và 010, 027, 094, 136 (đã
-cắt) để sáng thứ 6, **đo** bằng `measure_did_the_recast_help.py` rồi mới cho lên sách. Bước 7 của ranh
+cắt) để sáng thứ 6, **đo** bằng `measure_did_the_recast_help.py` rồi mới cho lên sách. Từ 21:34 ngày 17-09,
+đúc lại đi qua `keep_the_chapter_cast.py`, tức chỉ đổi người cần đổi. Mô phỏng 8 chương ấy: về đa số 15,
+giữ 34, không ghim 6 (người một chương). Xem trước bằng
+`python scripts/keep_the_chapter_cast.py --chapters 010 027 094 136 137 139 167`. Bước 7 của ranh
 giới 5 không có ai trông, nên không được ghép một bản đúc lại chưa đo. Lệnh đã thả 17-09:
 
 ```bash

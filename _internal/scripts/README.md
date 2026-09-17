@@ -84,4 +84,5 @@ Nền tảng: [`docs/WHERE_A_RUN_SPENDS_ITS_TIME.md`](../docs/WHERE_A_RUN_SPENDS
 | `assemble_book.py --verify` | Sách đã ghép có lệch gì so với manifest không |
 | `resync_spoken_text.py` | Bản vá đổi chuỗi nói: đặt lại đúng những đoạn lệch về chờ thu |
 | `pin_the_book_cast.py` | Ghim giọng đa số của cả sách cho người chưa có pin |
+| `keep_the_chapter_cast.py` | Đúc lại một chương đã lên sách mà CHỈ đổi người cần đổi (`--chapters` để mô phỏng) |
 | `plan_repair_batch.py`, `machine_acceptances.py` | Lô vừa xong: chương nào hỏng vì sao, máy đã nhận gì |

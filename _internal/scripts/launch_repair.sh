@@ -238,6 +238,20 @@ for CH in $BROKEN; do
   # chua book-wide cho cai luat cuc bo o tren. Khi chuong 090 ra sai, dieu khong biet duoc la
   # script nay da quyet gi - no co de nghi NATASHA khong, co bi chan khong, chan vi ai.
   PYTHONIOENCODING=utf-8 "$PY" scripts/pin_the_book_cast.py "$PROJECT" --apply
+  # Đúc lại một chương đã lên sách thì CHỈ đổi người cần đổi: ghim mọi người nói trong chương về
+  # giọng đa số nếu còn trống trong chương, không thì về giọng họ đang có trên sách. Lời cuối thuộc
+  # về bước này, nên nó chạy SAU hai bước ở trên. Không có nó, ranh giới 5 (16-09) đúc lại 094 vì
+  # EVANS và đẩy năm người khác ra khỏi giọng đa số (xem docstring của script).
+  # Thất bại thì bỏ CHƯƠNG: chạy đúc lại mà thiếu bước này chính là thứ đã làm chương tệ hơn.
+  # Lô vá (--as-repair) không đi qua đây: chương hỏng chưa lên sách, không có dàn giọng để giữ.
+  if [ -n "$EXPLICIT" ] && [ "$AS_REPAIR" != 1 ]; then
+    KEEP_OUT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/keep_the_chapter_cast.py "$PROJECT" --apply 2>&1)" || {
+      echo "  giu dan giong chuong $CH that bai - bo qua chuong nay, KHONG duc lai mu:"
+      printf '%s\n' "$KEEP_OUT" | tail -3
+      continue
+    }
+    printf '%s\n' "$KEEP_OUT" | sed 's/^/  /'
+  fi
   # Đồng bộ chuỗi nói trước khi thu, cùng lý do như bước 2b của `boundary.sh`: một bản vá đổi
   # `spoken_symbols_to_words` / chuẩn hoá tiếng / phiên âm làm bản thu ĐÃ CÓ của những đoạn ấy
   # thành bản thu của một văn bản khác, và cổng kiểm ném `spoken-text checksum drifted` - không

@@ -2912,3 +2912,21 @@ lại của cuốn 1 vẫn khởi động được. Chúng chỉ quyết **việ
    vẫn bị chặn theo vùng. Câu còn lại nếu có ngày kho thật sự hết: `Xuân Vĩnh` (`EXCLUDED_PRESETS`,
    do một người nghe Việt phán) có được mở lại không. **Hôm nay chưa cần**: chương đông nhất chỉ
    dùng 8 trên 14.
+
+## Đúc lại một chương giữ dàn giọng của chính chương ấy (2026-09-17, 21:30) — ĐÃ LÀM ở tầng script
+
+Hướng mở ở mục *"Quyền sở hữu một giọng dùng chung"* (pin giữ chỗ trên cả cuốn, luật thì theo
+chương) có một nửa sửa được **mà không đụng file khoá**: nửa của **đúc lại**. Với một chương đã lên
+sách, ta biết chính xác ai nói trong chương ấy, nên không cần hỏi "hai người này có từng gặp nhau
+trên cả cuốn không". `scripts/keep_the_chapter_cast.py` ghim mọi người nói trong chương theo ba nhóm
+(neo / thiểu số / một chương) và `launch_repair.sh` gọi nó ở chế độ đúc lại, sau `pin_the_book_cast`
+và trước `run`. Mô phỏng trên 8 chương chờ đúc lại: về đa số 15, giữ nguyên 34, không ghim 6 (đều
+là người một chương). Không ai bị đẩy sang giọng thứ ba.
+
+**Còn mở — nửa kia, lô MỚI:** trước khi phân tích thì chưa biết ai nói ở chương nào, nên
+`pin_the_book_cast` vẫn phải xét trên cả cuốn. Muốn sửa thì phải sửa ở bộ cấp giọng lúc cast (sau
+phân tích), tức `character_registry.py`, file khoá → bản vá trong `pending_patches/`.
+
+**Phải đo sau lần chạy thật đầu tiên** (ranh giới 6): `measure_did_the_recast_help.py <các chương>`.
+Chỗ duy nhất phép mô phỏng không thấy được là **phân tích lại đổi nhãn**: người mang nhãn khác thì
+không khớp pin.

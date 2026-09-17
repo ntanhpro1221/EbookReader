@@ -4303,3 +4303,35 @@ HERODOTUS (6), MAG (3) thì `không ghim được … đang giữ và có cùng 
 **một** chương nào đó trong sách. Đây là hướng mở đã ghi (pin giữ chỗ trên cả cuốn, luật thì theo từng
 chương). Nó không còn là chuyện hiếm: một lần đúc lại có thể lấy mất giọng đa số của những người
 **không** phải lý do của lần đúc lại ấy.
+
+### 21:34 — đúc lại một chương mà chỉ đổi người cần đổi (`keep_the_chapter_cast.py`)
+
+Chủ sách bật lại dev liên tục + nhịp tim 30 phút lúc 18:2x (*"không hẹn nữa, ngay bây giờ"*).
+
+Việc đầu tiên là cái giới hạn lộ ra sáng nay. Sửa xong lỗi `pin_the_book_cast` rồi, chạy thử trên
+`lo02r_094` vẫn cho thấy đúc lại 094 (lý do: EVANS) sẽ đẩy CHRISTOPHER, LOTT, HERODOTUS ra khỏi giọng
+đa số. Người giữ giọng của họ gặp họ ở **một** chương nào đó trên sách, dù không có mặt ở 094.
+
+Nhưng với một chương **đã lên sách** thì ta biết ai nói trong chương. Luật dự án cấm trùng giọng
+**trong cùng chương**, nên chỉ cần xét trong chương ấy. Mô phỏng trước, không viết mã:
+
+- Bản đầu gán theo hạng (nhiều chương trước) → chương 136: SIMON lấy lại `f116` thì IM, người đang
+  nói `f116` trong chương ấy, bị đẩy đi. Sửa một người bằng cách làm hỏng người khác.
+- Bản hai chia ba nhóm: **neo** (giọng ở đây đã là đa số) giữ chỗ trước, **thiểu số** về đa số nếu
+  còn trống, **một chương** không ghim. Trên 8 chương chờ đúc lại: về đa số 15, giữ 34, không ghim 6
+  (đều một chương), không ai sang giọng thứ ba.
+
+Viết thành `scripts/keep_the_chapter_cast.py`, nối vào `launch_repair.sh` ở chế độ đúc lại (sau
+`pin_the_book_cast`, trước `run`). Script thất bại thì **bỏ chương**, không đúc lại mù. Script còn
+bỏ pin cũ của người nói trong chương nếu pin ấy trùng giọng vừa gán cho người khác. Để yên thì
+`_drop_pins_that_share_a_chapter` giữ người nhiều câu hơn và có thể bỏ đúng người vừa được sửa.
+
+Test: 10 bài, có một bài chạy đường `--apply` trên `ProjectDB` thật (bài học sáng nay). Thử đột biến
+ba chỗ. Lần đầu **hai trong ba đột biến sống sót**: dữ liệu test cho người neo nhiều chương hơn, nên
+bỏ thứ tự nhóm vẫn ra đúng; và người một chương trong test không có giọng trống, nên ghim họ cũng ra
+đúng. Sửa dữ liệu test cho đúng ca khó (người thiểu số NHIỀU chương hơn người neo; người một chương
+CÓ giọng trống), rồi cả ba đột biến đều đỏ. Chạy thử (không ghi) trên project 094 thật đã dời ra
+quarantine: 9 pin sẽ ghi, EVANS về `thai_son_f097`, COMOTZ (một chương) để bộ cấp giọng chọn.
+
+Chưa chứng minh ở quy mô thật: lần đúc lại đầu tiên đi qua đường này là ranh giới 6. Đo bằng
+`measure_did_the_recast_help.py`. Mô phỏng không thấy được chỗ phân tích lại đổi nhãn.
