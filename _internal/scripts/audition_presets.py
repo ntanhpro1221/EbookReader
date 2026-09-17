@@ -49,6 +49,7 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 import argparse
 import json
+import math
 import re
 import sys
 import time
@@ -73,6 +74,10 @@ from scripts.book_paths import SOURCE_DIR  # noqa: E402
 from scripts.compare_voice_regions import PROBE_SENTENCES, SEED, tone_error_rate  # noqa: E402
 
 SPEED_OF_SOUND_CM_PER_S = 35_000.0
+# 5 câu dò là ~80 từ so sánh, nên MỘT lỗi thanh điệu ở đó là 1,2% - lớn hơn cả khoảng cách giữa các
+# giọng. Mặc định thêm 20 câu sách: ~400 từ, một lỗi đơn lẻ còn 0,25%.
+BOOK_SENTENCES_DEFAULT = 20
+SQRT2 = math.sqrt(2.0)
 REGIONS = ("Bắc", "Nam", "Trung")
 OPENERS = "“\"'‘("
 CLOSERS = (".", "!", "?", "…", ":", "“", "\"")
@@ -188,6 +193,51 @@ def acoustics(wavs: list[Path], gender: str) -> dict[str, float]:
     return {"f0_median_hz": round(f0, 1), "f3_median_hz": round(f3, 1), "vocal_tract_cm": round(tract, 2)}
 
 
+UNDECIDED = "CHUA KET LUAN"
+
+
+def judge(measured: dict[str, Any], worst: dict[str, Any]) -> dict[str, Any]:
+    """Phán quyết cho một giọng, và nói rõ khi lượt đo quá ngắn để phán.
+
+    Vì sao có nhánh CHƯA KẾT LUẬN (18-09): lượt 5 câu loại Quỳnh Anh vì thanh điệu tệ hơn ngưỡng 1,2%,
+    trên 81 từ - sai số của phép so ở đó là 3,3%, tức lệch nằm gọn trong nhiễu. Lượt 25 câu sau đó cho
+    Quỳnh Anh 1,4% (đạt) và Anh Khôi 1,9% so với ngưỡng 1,67%: lệch 0,26% trong khi sai số là 0,91%.
+    Loại một giọng vì chênh lệch nhỏ hơn sai số của chính phép đo thì không phải kết luận.
+
+    Điều kiện CỨNG (giới, vùng, phong cách, danh sách chặn, thanh quản) thì loại thẳng - chúng không
+    phải phép đo trên vài câu. Chỉ ba số đo có nhánh này.
+    """
+    reasons: list[str] = []
+    undecided: list[str] = []
+    if not measured["eligible"]:
+        reasons.append(measured["why_not"])
+    words = max(int(measured.get("words_compared") or 0), 1)
+    sem = measured.get("utmos_sem") or 0.0
+    for key, label in (("tone_error_rate", "thanh dieu"), ("wer", "WER"), ("utmos", "UTMOS")):
+        limit = worst.get(key)
+        value = measured.get(key)
+        if limit is None or value is None:
+            continue
+        gap = (limit - value) if key == "utmos" else (value - limit)
+        if gap <= 0:
+            continue
+        # Hai tỉ lệ đếm, mỗi cái sai số Poisson sqrt(k)/W = sqrt(ti le / so tu); sai số của HIỆU là hai
+        # cái ấy cộng theo bình phương. UTMOS là trung bình các câu: lấy sai số chuẩn của trung bình,
+        # cũng nhân sqrt(2) vì hiệu gồm hai lượt đo (giả định giọng kia có sai số tương đương).
+        noise = sem * SQRT2 if key == "utmos" else math.hypot(math.sqrt(value / words), math.sqrt(limit / words))
+        worse = f"{label} {'thap hon' if key == 'utmos' else 'te hon'} gioi te nhat trong pool"
+        if gap <= noise:
+            undecided.append(f"{worse} nhung chi {gap:.4f}, con sai so cua phep so la {noise:.4f} "
+                             f"- do them cau roi phan")
+        else:
+            reasons.append(worse)
+    tract = measured["vocal_tract_cm"]
+    if not (tract == tract and VOCAL_TRACT_MIN_CM <= tract <= VOCAL_TRACT_MAX_CM):
+        reasons.append(f"thanh quan {tract} cm ngoai [{VOCAL_TRACT_MIN_CM}, {VOCAL_TRACT_MAX_CM}]")
+    verdict = "khong" if reasons else UNDECIDED if undecided else "VAO POOL DUOC"
+    return {"verdict": verdict, "reasons": reasons + undecided}
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -195,7 +245,8 @@ def main() -> int:
     parser.add_argument("--presets", default="")
     parser.add_argument("--json", dest="json_out", type=Path, default=None)
     parser.add_argument("--no-utmos", action="store_true")
-    parser.add_argument("--book-sentences", type=int, default=0, help="thêm N câu thật từ nguồn sách (tất định)")
+    parser.add_argument("--book-sentences", type=int, default=BOOK_SENTENCES_DEFAULT,
+                        help=f"thêm N câu thật từ nguồn sách (tất định; mặc định {BOOK_SENTENCES_DEFAULT})")
     args = parser.parse_args()
 
     settings = build_settings("high_quality")
@@ -274,10 +325,13 @@ def main() -> int:
         info.update(
             {
                 "sentences": len(mine),
+                "words_compared": words,
                 "wer": round(sum(float(r["wer"]) for r in mine) / len(mine), 4),
                 "similarity": round(sum(float(r["similarity"]) for r in mine) / len(mine), 4),
                 "tone_error_rate": round(sum(int(r["tone_errors"]) for r in mine) / words, 4) if words else 0.0,
                 "utmos": round(float(np.mean([r["utmos"] for r in mine])), 3) if all("utmos" in r for r in mine) else None,
+                "utmos_sem": (round(float(np.std([r["utmos"] for r in mine], ddof=1) / np.sqrt(len(mine))), 3)
+                              if len(mine) > 1 and all("utmos" in r for r in mine) else None),
                 "seconds_per_100_chars": round(100.0 * info["gen_seconds"] / max(info["chars"], 1), 3),
                 "real_time_factor": round(info["gen_seconds"] / max(info["audio_seconds"], 1e-9), 3),
                 **acoustics([Path(str(r["wav"])) for r in mine], info["gender"]),
@@ -292,20 +346,7 @@ def main() -> int:
         "utmos": min((i["utmos"] for i in in_pool if i["utmos"] is not None), default=None),
     }
     for info in measured:
-        reasons = []
-        if not info["eligible"]:
-            reasons.append(info["why_not"])
-        if worst["tone_error_rate"] is not None and info["tone_error_rate"] > worst["tone_error_rate"]:
-            reasons.append("thanh dieu te hon gioi te nhat trong pool")
-        if worst["wer"] is not None and info["wer"] > worst["wer"]:
-            reasons.append("WER te hon gioi te nhat trong pool")
-        if worst["utmos"] is not None and info["utmos"] is not None and info["utmos"] < worst["utmos"]:
-            reasons.append("UTMOS thap hon gioi te nhat trong pool")
-        tract = info["vocal_tract_cm"]
-        if not (tract == tract and VOCAL_TRACT_MIN_CM <= tract <= VOCAL_TRACT_MAX_CM):
-            reasons.append(f"thanh quan {tract} cm ngoai [{VOCAL_TRACT_MIN_CM}, {VOCAL_TRACT_MAX_CM}]")
-        info["verdict"] = "VAO POOL DUOC" if not reasons else "khong"
-        info["reasons"] = reasons
+        info.update(judge(info, worst))
 
     print(f"\nvieneu {version} | nguong = gioi TE NHAT dang o pool: {worst}")
     print(f"{'giong':15s} {'gioi':6s} {'vung':4s} {'pool':4s} {'WER':>6s} {'thanh':>6s} {'UTMOS':>6s} "

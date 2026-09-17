@@ -2996,3 +2996,18 @@ Chủ sách hỏi *"vietneu có bản mới chưa?"*. Tra PyPI, Hugging Face và
   thì nên chặn hai giọng này khỏi các cảnh mà người dẫn chuyện đọc xen lời thoại.
 - Chủ sách nghe và chấm trên trang https://claude.ai/artifact/QWCAKLz2pAVo2dhbkMwYve. Kết quả nằm trong db `danh_gia`
   (`moi__<slug>`, `xuan_vinh`, `nang__<slug>`). **Nâng SDK** ở ranh giới 6 chỉ khi không giọng pool nào bị chấm "bản cũ hay hơn".
+
+### Cổng chọn giọng: "chưa kết luận" là một phán quyết (18-09 01:2x) — ĐÃ LÀM
+
+Cổng cũ so số đo với giọng tệ nhất trong pool rồi loại thẳng, không nhìn xem lượt đo có đủ để thấy
+chênh lệch ấy không. Hai lần nó loại oan: Quỳnh Anh trên 5 câu (thanh điệu lệch 1,2%, sai số của phép
+so 3,3%) và Anh Khôi trên 25 câu (lệch 0,26%, sai số 0,93%).
+
+`audition_presets.judge()` nay trả ba trạng thái. Thanh điệu và WER là tỉ lệ đếm, nên sai số Poisson
+`sqrt(tỉ lệ / số từ)` của hai bên cộng theo bình phương; UTMOS lấy sai số chuẩn của trung bình nhân
+`sqrt(2)`. Lệch không vượt sai số ấy thì verdict là `CHUA KET LUAN` kèm cả hai con số, chứ không phải
+`khong`. Điều kiện cứng (vùng, phong cách, danh sách chặn, thanh quản) vẫn loại thẳng - chúng không
+phải phép đo. `--book-sentences` mặc định 20 (tức 25 câu): 5 câu dò chỉ có ~81 từ so sánh.
+
+`tests/test_audition_gate.py` khoá cả hai ca thật ở trên. `rejudge.py` (bản dự phòng cạnh trang nghe)
+chấm lại một lượt đo đã lưu mà không phải sinh lại âm thanh.
