@@ -213,6 +213,25 @@ _SPOKEN_WORD_SLASH = re.compile(r"(?<=[^\W\d_])\s*/\s*(?=[^\W\d_])", re.UNICODE)
 # in here - they mean "giảm" and "tăng", and a word does not stop meaning something because
 # it happens to start the line.
 _SPOKEN_BOUNDARY_TRIM = SPOKEN_SEPARATORS + SPOKEN_DROPPED + " \t\r\n"
+# Chữ bị CHE bằng ký hiệu ("Cái #&!@!", "dưới *** à") là một khoảng ngừng, không phải tên ký hiệu.
+# Lô 6 cuốn 2 chương 225: giọng đọc tự nở # & @ thành "thăng", "và", "a còng" ngay giữa câu chửi.
+# Luật và các ca KHÔNG đụng tới: xem scripts/pending_patches/patch_a_censored_word_is_a_pause.py.
+_CENSOR_RUN = re.compile(r"[#&@$%*!?]{3,}")
+_CENSOR_MARKS = "#&@$"
+_HAS_LETTER = re.compile(r"[^\W\d_]", re.UNICODE)
+
+
+def _censored_words_as_pauses(text: str) -> str:
+    if not _HAS_LETTER.search(text):
+        return text
+
+    def pause(match: re.Match[str]) -> str:
+        run = match.group(0)
+        if any(mark in run for mark in _CENSOR_MARKS) or run.count("*") >= 3:
+            return "…"
+        return run
+
+    return _CENSOR_RUN.sub(pause, text)
 
 
 def _spoken_symbols_in_span(text: str) -> str:
@@ -256,7 +275,7 @@ def spoken_symbols_to_words(text: str) -> str:
     """
     # "=>" là một mũi tên, không phải "bằng" rồi "lớn hơn": đổi thành → trước mọi bước khác, để
     # luật sẵn có của SPOKEN_SEPARATORS lo phần còn lại (đầu dòng thì cắt, giữa câu thì phẩy).
-    source = str(text).replace("=>", "→")
+    source = _censored_words_as_pauses(str(text).replace("=>", "→"))
     spans: list[tuple[str, bool]] = []
     position = 0
     for match in VOCAL_CUE_PATTERN.finditer(source):
