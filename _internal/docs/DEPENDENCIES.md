@@ -303,3 +303,29 @@ thư viện Ollama. Dự án đang dùng `qwen3:8b`. Đây **không** phải m�
 model nằm trong `settings` nên không vào hash chính sách chất lượng, mà đổi nó thì đổi chỉ dẫn diễn
 xuất → đổi âm thanh → mọi phán quyết tai người cho chương cũ hết hiệu lực. Cách đo và điều kiện đổi:
 mục *"Model chỉ đạo diễn xuất"* trong `docs/OPTIMISATION_QUEUE.md`.
+
+## Mốc driver 18-09-2026 (giữa lô 6 và lô 7)
+
+Chủ sách cài bộ driver của đúng máy (Lecoo N176, AMD) sau khi lô 6 xong lúc 08:28:55 — tức **không lô
+nào bị cắt ngang**, và mọi chương từ lô 7 trở đi được thu trên driver mới.
+
+| thành phần | trước | sau |
+|---|---|---|
+| BIOS | N176DRLKV2222 | **N176DRLKV2525** |
+| NVIDIA RTX 5060 Laptop | 32.0.15.8180 (Game Ready 581.80) | **32.0.15.9247 (592.47, bản Lenovo, `nvlt.inf` khớp `SUBSYS_380317AA`)** |
+| AMD Radeon 610M | 32.0.13050.18 | **32.0.21038.6** |
+| Senary Audio / WiFi / BT / LAN | 3.48.60.19 / 6001.15.156.0 / 18.4017… / 1168.22… | 3.48.109.0 / 6001.15.163.0 / 18.4038.2509.1901 / 1168.28.50.1224 |
+
+Kiểm ngay sau khi cài (09:2x), trước khi chạy lại bất cứ thứ gì có GPU:
+
+    nvidia-smi               592.47, CUDA 13.1, 8151 MiB, P5, 47°C
+    torch 2.11.0+cu128       cuda True, cuDNN 9.19, RTX 5060 Laptop sm_120; matmul fp16 4096 x20 = 0,24 s
+    cli doctor               failures: []  (VRAM trống 7.275 MiB; VieNeu 8b7e9cff; UTMOS sẵn sàng)
+
+MUX (独显直连) bật suốt: RTX 5060 xuất hình trực tiếp 2560×1600 @ 180 Hz. Hai lần khởi động sau khi cài
+(09:15 khởi động lại, 09:20 tắt/bật) đều lên hình — lỗi cũ của 581.80-thế-hệ-mới ("mỗi lần mở máy phải
+bấm Win+Shift+B") chưa thấy lại; theo dõi thêm ở những lần bật máy sau.
+
+**Điều driver mới mở ra:** CUDA 13.1 ở phía driver nghĩa là wheel `torch` cu130 (có từ 2.14) chạy được
+trên máy này. Nhưng nâng torch là một lần **đổi giọng** (xem mục torch 2.14 phía trên: SDPA hợp nhất đổi
+số học và RNG), nên nó vẫn chờ giữa hai cuốn, không phải việc của ranh giới này.

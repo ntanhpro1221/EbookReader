@@ -345,7 +345,7 @@ if [ -n "$TODO" ]; then
   wait_gpu_free
   # shellcheck disable=SC2086
   bash scripts/launch_repair.sh "$BATCH" --chapters $TODO --seed-from "$SEED" --as-repair >> "$LOG" 2>&1 || say "launch_repair (chuong hong) thoat khac 0 - xem $LOG; di tiep."
-  SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${TAG}v" 2>/dev/null || echo "$SEED")"
+  SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${TAG}v" --newer-than "$SEED" 2>/dev/null || echo "$SEED")"
 elif [ -n "$FAILED" ]; then
   say "moi chuong hong da co ban va hoan thanh."
 else
@@ -364,7 +364,7 @@ if [ -n "$TODO" ]; then
   wait_gpu_free
   # shellcheck disable=SC2086
   bash scripts/launch_repair.sh "$BATCH" --chapters $TODO --seed-from "$SEED" >> "$LOG" 2>&1 || say "launch_repair (duc lai) thoat khac 0 - xem $LOG; di tiep."
-  SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${TAG}r" 2>/dev/null || echo "$SEED")"
+  SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${TAG}r" --newer-than "$SEED" 2>/dev/null || echo "$SEED")"
 fi
 if [ -n "$RECAST" ]; then
   # ---- 5. bang chung: va cham cung chuong tren tung project duc lai
@@ -402,7 +402,7 @@ if [ -n "$RECAST_OTHER" ]; then
     # shellcheck disable=SC2086
     bash scripts/launch_repair.sh "$OTHER_BATCH" --chapters $CHS --seed-from "$SEED" >> "$LOG" 2>&1 \
       || say "launch_repair lo $OTHER_BATCH thoat khac 0 - xem $LOG; di tiep."
-    SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${OTHER_TAG}r" 2>/dev/null || echo "$SEED")"
+    SEED="$(py scripts/seed_chain.py --newest "$VERSIONS/${OTHER_TAG}r" --newer-than "$SEED" 2>/dev/null || echo "$SEED")"
   done
 fi
 
