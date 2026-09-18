@@ -216,3 +216,43 @@ def test_the_pair_count_reads_npcs_the_shared_reader_leaves_out(tmp_path: Path) 
     assert gate.same_chapter_pairs(everyone, "228") == 1
     assert gate.everyone_in_chapter(None, "228") == []
     assert gate.everyone_in_chapter(tmp_path / "missing", "228") == []
+
+
+def _failed_db(folder: Path, chapter: str, failed: int, ok: int = 3) -> Path:
+    folder.mkdir(parents=True)
+    connection = sqlite3.connect(folder / "project.sqlite3")
+    connection.executescript(
+        "CREATE TABLE chapters (id INTEGER PRIMARY KEY, title TEXT, status TEXT);"
+        "CREATE TABLE segments (id INTEGER PRIMARY KEY, chapter_id INT, status TEXT);"
+    )
+    connection.execute("INSERT INTO chapters VALUES (1, ?, 'completed')", (chapter,))
+    for status in ["failed"] * failed + ["verified"] * ok:
+        connection.execute("INSERT INTO segments (chapter_id, status) VALUES (1, ?)", (status,))
+    connection.commit()
+    connection.close()
+    return folder
+
+
+def test_failed_lines_are_counted_per_chapter(tmp_path: Path) -> None:
+    project = _failed_db(tmp_path / "lo06_x", "234", failed=1)
+    assert gate.failed_lines(project, "234") == 1
+    assert gate.failed_lines(project, "999") == 0
+    assert gate.failed_lines(None, "234") is None
+    assert gate.failed_lines(tmp_path / "missing", "234") is None
+
+
+@pytest.mark.parametrize(("after", "ships"), [(0, True), (1, False), (2, False)],
+                         ids=["doan hong thu lai duoc - len sach", "van hong - khong", "hong them - khong"])
+def test_a_recast_that_only_rerecords_a_failed_line_ships_when_the_line_is_fixed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, after: int, ships: bool
+) -> None:
+    """Ranh giới 7 đúc lại 234 chỉ để thu lại một đoạn `failed`: dàn giọng ghim nguyên, 0 người đổi."""
+    rows = _rows(("234", "LUCIEN", "thanh_binh_f100", 5), project="lo06_x")
+    target = _project(tmp_path, "lo06r_234_test", chapter="234")
+    monkeypatch.setattr(gate, "rows_as_they_will_ship", lambda exclude=None: rows)
+    monkeypatch.setattr(gate, "read_rows", lambda _project: rows)
+    monkeypatch.setattr(gate, "book_project", lambda name: tmp_path / "book" / name)
+    monkeypatch.setattr(gate, "everyone_in_chapter", lambda project, chapter: [])
+    monkeypatch.setattr(gate, "failed_lines", lambda project, chapter: after if project == target else 1)
+
+    assert (gate.decide(target, apply=False, root=tmp_path) == 0) is ships

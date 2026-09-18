@@ -59,6 +59,16 @@ Phép đếm đọc DB bằng câu riêng (`EVERYONE_SQL`), không qua `read_row
 để hỏi. Lần sửa đầu dùng `read_rows` và đếm ra `0 -> 0` cho chính chương 228 - đúng cặp phải thấy lại
 bị lọc mất. Cùng định nghĩa với `voice_pool_pressure.py`, công cụ đã tìm ra va chạm này: mọi người nói
 lời thoại, trừ người kể.
+
+## Đoạn hỏng được thu lại cũng là một thứ được sửa (thêm 19-09, 01:2x)
+
+Ranh giới 7 phải đúc lại 225/234/261/266 chỉ để thu lại một đoạn `failed` mỗi chương (bước 3 không nhìn
+tới đoạn hỏng trong chương đã `completed` - xem docs/BOUNDARY_6_AND_THE_DRIVER_MORNING.md).
+`keep_the_chapter_cast` ghim nguyên dàn giọng, nên bản đúc lại có `0 người đổi giọng`, `cặp 0 -> 0`,
+và cổng chấm `0 <= 0` rồi dời nó ra - bác đúng cái việc nó được gọi để làm, dù đoạn hỏng đã thu tốt.
+Nên cổng đếm thêm số đoạn `failed` của chương ở mỗi bản: bớt một là TỐT HƠN một, thêm một là XẤU HƠN
+một. `failed` là thứ người nghe nghe thấy sai (hoặc không nghe thấy gì), nên nó cùng thước với một
+người mang sai giọng.
 """
 from __future__ import annotations
 
@@ -140,6 +150,28 @@ def book_project(name: str, versions: Path = VERSIONS) -> Path | None:
     return None
 
 
+FAILED_SQL = """
+SELECT count(*) FROM segments s JOIN chapters ch ON ch.id = s.chapter_id
+WHERE ch.title = ? AND s.status = 'failed'
+"""
+
+
+def failed_lines(project: Path | None, chapter: str) -> int | None:
+    """Số đoạn `failed` của chương trong một project; None nếu không đọc được (thì không tính)."""
+    if project is None or not (project / "project.sqlite3").is_file():
+        return None
+    try:
+        connection = sqlite3.connect(f"file:{(project / 'project.sqlite3').as_posix()}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return None
+    try:
+        return int(connection.execute(FAILED_SQL, (chapter,)).fetchone()[0])
+    except sqlite3.Error:
+        return None
+    finally:
+        connection.close()
+
+
 def same_chapter_pairs(rows: list[dict], chapter: str) -> int:
     """Số cặp người KHÁC NHAU cùng một giọng trong chương - thứ luật "hai người một giọng" cấm."""
     names = sorted({str(r["name"]) for r in rows if str(r["chapter"]) == chapter})
@@ -216,11 +248,17 @@ def decide(target: Path, *, apply: bool, root: Path = AUDIOBOOKS_ROOT) -> int:
         pairs_after = same_chapter_pairs(everyone_in_chapter(target, chapter), chapter)
         good += max(0, pairs_before - pairs_after)
         bad += max(0, pairs_after - pairs_before)
+        failed_before = failed_lines(book_project(shipping[0]), chapter) if len(shipping) == 1 else None
+        failed_after = failed_lines(target, chapter)
+        if failed_before is not None and failed_after is not None:
+            good += max(0, failed_before - failed_after)
+            bad += max(0, failed_after - failed_before)
         better += good
         worse += bad
         _say(
             f"  chuong {chapter}: {len(verdicts)} nguoi doi giong | cap trung giong trong chuong"
-            f" {pairs_before} -> {pairs_after} | tot hon {good} | xau hon {bad}"
+            f" {pairs_before} -> {pairs_after} | doan hong {failed_before if failed_before is not None else '?'}"
+            f" -> {failed_after if failed_after is not None else '?'} | tot hon {good} | xau hon {bad}"
         )
         for name, old, new, top, verdict in verdicts:
             _say(
