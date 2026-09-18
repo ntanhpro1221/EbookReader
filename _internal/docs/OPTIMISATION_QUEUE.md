@@ -3183,3 +3183,41 @@ nói được "diễn hay hơn", chỉ tai người nói được. Nếu chủ s
 
 **Chi phí đo:** ~3 chương × 2 model × (phân tích + critic) ≈ dưới một giờ GPU, làm khi không có lô
 nào bay. Không làm trước ranh giới 6.
+
+## Danh sách đúc lại đã phình từ 12 lên 27 chương, và vì sao (2026-09-18, 07:2x — ĐO RỒI)
+
+`one_person_one_voice.py` chạy lúc 07:22 đề nghị **27 chương** (16-09 nó đề nghị 12):
+
+    1:010 1:022 1:027 1:047 2:090 2:094 3:105 3:107 3:109 3:110 3:111 3:114 3:130 3:136 3:137
+    3:139 4:169 4:170 4:171 4:173 4:174 4:178 5:180 5:183 5:184 5:189 5:196
+
+### Chi phí, tính từ số thật
+
+Chương cuốn 2 có trung vị **84 đoạn**; lô 6 thu 6.632 đoạn trong ~8 giờ, tức **4,3 giây/đoạn** (đã
+gồm cả ASR và các vòng thu lại). Vậy một chương ≈ **6 phút**, và 27 chương ≈ **2,7 giờ GPU** — cộng
+thêm phần cổng `ship_only_recasts_that_help.py` cắt bỏ những bản không giúp (ranh giới 5 cắt 4 trong
+~12, tức ~33% công bỏ đi). Đây không còn là việc "làm kèm ở ranh giới" như hồi 4 chương.
+
+### Nguyên nhân: kho giọng chật, không phải máy ghim sai
+
+17 dòng phàn nàn đều cùng một dạng: *"X không lấy lại được giọng G — Y đang dùng giọng ấy trong chính
+chương này"*. Tức `pin_the_book_cast` **muốn** ghim đúng giọng nhưng không được, vì luật cấm hai
+người cùng giọng trong một chương. Đếm giọng bị tranh:
+
+    thai_son 41 | thanh_binh 29 | ngoc_linh 13 | truc_ly 8 | doan_trang 4
+
+Hai preset **nam** chiếm 70 trong 95 lần tranh — đúng chỗ kho chật nhất (2 preset nam cho nhân vật,
+so với 4 preset nữ). Và con số phình từ 12 → 27 khi sách dài thêm 85 chương là hệ quả trực tiếp: càng
+nhiều chương thì càng nhiều lần hai người cùng bậc gặp nhau.
+
+### Nên làm gì
+
+1. **Nhận thêm giọng nam là cách chữa gốc, rẻ hơn đúc lại.** Chủ sách đang nghe 7 giọng nam mới trên
+   trang chấm giọng; nhận 3–4 giọng là kho nam đi từ 14 bậc lên 21–28 bậc, và phần lớn 70 lần tranh
+   kia biến mất **trước khi thu**, không phải sửa sau bằng 2,7 giờ GPU.
+2. **Ranh giới 6: đừng đúc cả 27 chương.** Đề xuất: đúc bốn chương trong `_quarantine_2026-09-17`
+   (1:010 1:027 2:094 3:136 — đã có máy giữ dàn giọng mới nên lần này khác lần trước) cộng các chương
+   của lô 5 (5:180 5:183 5:184 5:189 5:196), tổng 9 chương ≈ 55 phút. Phần còn lại chờ quyết định về
+   giọng mới, vì nếu kho nới ra thì nhiều chương trong đó sẽ tự hết va chạm ở lần đúc sau.
+3. Một nhân vật (ANNICK) xuất hiện ở 4 chương trong danh sách, luôn tranh `thai_son`: nếu nhận giọng
+   nam mới thì đây là ca đầu tiên nên gán lại.

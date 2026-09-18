@@ -25,6 +25,13 @@ Xem `date` rồi chọn đúng một nhánh:
 
   Phải **chạy lại** `one_person_one_voice.py` ngay lúc ấy chứ không dùng danh sách cũ
   (`3:137 3:139 4:167` đo hôm 16-09): sách đã đổi 85 chương từ lúc ấy, nên danh sách đổi.
+
+  **ĐÃ CHẠY LÚC 07:22 và danh sách là 27 chương** — không phải 12. Tính từ số thật (84 đoạn/chương,
+  4,3 giây/đoạn đo trên lô 6) thì 27 chương ≈ **2,7 giờ GPU**, tức KHÔNG còn là việc làm kèm buổi
+  sáng. Đề xuất cắt xuống **9 chương ≈ 55 phút**: bốn chương trong `_quarantine_2026-09-17`
+  (`1:010 1:027 2:094 3:136`) cộng các chương lô 5 (`5:180 5:183 5:184 5:189 5:196`); phần còn lại
+  chờ quyết định về giọng mới, vì kho giọng nới ra thì nhiều chương trong đó tự hết va chạm. Lý lẽ
+  và số liệu: mục *"Danh sách đúc lại đã phình từ 12 lên 27 chương"* trong `docs/OPTIMISATION_QUEUE.md`.
   `--recast auto` chỉ tự tìm va chạm giọng **trong lô vừa xong**, không thấy lô khác.
 
   Bốn chương bị cắt được thử lại vì máy đúc lại đã khác: `keep_the_chapter_cast.py` ghim dàn giọng
