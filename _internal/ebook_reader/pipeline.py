@@ -36,6 +36,7 @@ from .asr_contract import (
     COLLAPSED_SHORT_CONTEXT_MODE,
 )
 from .audio_io import (
+    VOICE_PRESET_FIELD,
     REPEATED_UTTERANCE_METRIC,
     REPEATED_UTTERANCE_THRESHOLD,
     AudioQualityError,
@@ -2855,6 +2856,25 @@ class BookPipeline:
                     "kết thúc pipeline",
                 )
 
+    def _segment_for_audio_check(self, row: Any) -> Any:
+        """Hàng đoạn cộng tên preset đọc nó - cho cổng nhịp (`PRESET_PACE_SCALE`).
+
+        `synthesize_atomic` ghi đúng trường này trước lần soi của nó; mọi lần soi SAU phải dùng
+        cùng một băng, không thì bản thu được nhận lúc tổng hợp bị gọi lệch nhịp lần sau worker
+        mở lại nó. Không tra được giọng thì trả hàng nguyên vẹn: hệ số 1,0, băng cũ.
+        """
+        try:
+            if str(row["kind"] or "narration") == "thought":
+                profile = self.db.voice_profile_by_key("narrator")
+            else:
+                profile = self.db.voice_profile(int(row["voice_profile_id"]))
+            preset = str(profile["preset_name"] or "")
+        except (AttributeError, IndexError, KeyError, TypeError, ValueError):
+            return row
+        segment = dict(row)
+        segment[VOICE_PRESET_FIELD] = preset
+        return segment
+
     def _inspect_existing_segment(self, row: Any) -> tuple[bool, dict[str, float]]:
         wav_text = str(row["wav_path"] or "")
         if not wav_text:
@@ -2870,7 +2890,7 @@ class BookPipeline:
             wav,
             expected_text,
             self.settings,
-            segment=row,
+            segment=self._segment_for_audio_check(row),
         )
         return valid, metrics if valid else {}
 
@@ -3958,7 +3978,7 @@ class BookPipeline:
                 output,
                 spoken_text,
                 self.settings,
-                segment=row,
+                segment=self._segment_for_audio_check(row),
             )
             if not valid:
                 raise AudioQualityError(reason)
@@ -4188,7 +4208,7 @@ class BookPipeline:
                     output,
                     spoken_text,
                     self.settings,
-                    segment=row,
+                    segment=self._segment_for_audio_check(row),
                 )
                 if not valid:
                     raise AudioQualityError(reason)
@@ -4755,7 +4775,7 @@ class BookPipeline:
                     output,
                     spoken_text,
                     self.settings,
-                    segment=row,
+                    segment=self._segment_for_audio_check(row),
                 )
                 if not valid:
                     raise AudioQualityError(reason)

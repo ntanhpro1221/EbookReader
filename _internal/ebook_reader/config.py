@@ -566,6 +566,18 @@ def validate_settings(settings: dict[str, Any]) -> None:
         raise ValueError("Narrator cannot use a news voice")
     if narrator_voice not in {preset["name"] for preset in narrator_presets(narrator_gender)}:
         raise ValueError("Unsupported narrator voice")
+    # Absent on every project that never changed narrator; see `PresetAllocator` for why it
+    # exists. A typo here would quietly keep the old narrator in the character pool, so every
+    # name must be a real preset, and the current narrator is not its own predecessor.
+    other_narrators = voices.get("other_narrators", [])
+    if not isinstance(other_narrators, list) or not all(
+        isinstance(name, str) and name.strip() for name in other_narrators
+    ):
+        raise ValueError("voices.other_narrators must be a list of preset names")
+    for former in other_narrators:
+        preset_by_name(former)
+        if former == narrator_voice:
+            raise ValueError("voices.other_narrators cannot name the current narrator")
     max_pitch_shift = int(voices.get("max_character_pitch_semitones", -1))
     if not 0 <= max_pitch_shift <= 2:
         raise ValueError("voices.max_character_pitch_semitones must be between 0 and 2")

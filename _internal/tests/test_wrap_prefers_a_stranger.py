@@ -14,7 +14,7 @@ from ebook_reader.voice_catalog import formant_variants_for_preset
 def _full_preset(allocator: PresetAllocator) -> tuple[str, list[str]]:
     """Cast người cho tới khi một preset nam hết bậc; trả về preset ấy và ai giữ bậc nào."""
     holders: list[str] = []
-    for index in range(40):
+    for index in range(200):
         who = f"P{index:02d}"
         allocator.note_chapters(who, {index})  # mỗi người một chương riêng
         preset, _ratio, _pitch = allocator.choose("male", npc=False, who=who)

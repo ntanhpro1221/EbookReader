@@ -353,7 +353,7 @@ requires-dist = [
     { name = "torchvision", specifier = "==0.26.0" },
     { name = "transformers", specifier = "==5.16.1" },
     { name = "utmosv2", git = "https://github.com/sarulab-speech/UTMOSv2.git?rev=cc2700db57bb83ee13dc31ebe1b868c254e15d09" },
-    { name = "vieneu", specifier = "==3.3.0" },
+    { name = "vieneu", specifier = "==3.8.1" },
 ]
 provides-extras = ["dev"]
 
@@ -1126,12 +1126,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/70/b5/d2d3e9ae73362ba4229651b0ee1455cf78073a1ce585f6ff693782ce263e/pandas-3.0.5-cp312-cp312-win_amd64.whl", hash = "sha256:80a611068e8a3ac23f7398c6c14eb46dc974e5cc9997f653e2dcfd1da74edd41", size = 9831691, upload-time = "2026-07-22T22:18:24.534Z" },
     { url = "https://files.pythonhosted.org/packages/52/51/dea1e89d6a6796b9c43f85a09b484ee03edb8a4c4842e73e200a8c11301c/pandas-3.0.5-cp312-cp312-win_arm64.whl", hash = "sha256:25ff585b972a18ef1fe9ffa3ac6544d9950508aa76832e5147640b6022821e49", size = 9105796, upload-time = "2026-07-22T22:18:27.064Z" },
 ]
-
-[[package]]
-name = "perth"
-version = "1.0.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/49/ca/3bfa6b12f28b30ef64a2e63405f9008ae50c014ffd5ef85a4ec00245b29c/perth-1.0.0.tar.gz", hash = "sha256:7a39f7e4b051e670e7667a0b495b3535c550838df6d972352a7126b17849f169", size = 1724, upload-time = "2015-07-24T14:50:30.385Z" }
 
 [[package]]
 name = "pillow"
@@ -2099,7 +2093,7 @@ wheels = [
 
 [[package]]
 name = "vieneu"
-version = "3.3.0"
+version = "3.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gradio" },
@@ -2108,14 +2102,13 @@ dependencies = [
     { name = "librosa" },
     { name = "numpy" },
     { name = "onnxruntime" },
-    { name = "perth" },
     { name = "pyyaml" },
     { name = "sea-g2p" },
     { name = "soundfile" },
     { name = "soxr" },
     { name = "tokenizers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/50/e5/a718669c40f8f43bc89637f88460af0e7c9efd34050533072dc1c7cdb530/vieneu-3.3.0.tar.gz", hash = "sha256:c13946e04a2a42c68f873643b273b536b671c3154a1d4f4ae766ab53b18e7a7e", size = 1189024, upload-time = "2026-08-20T01:22:46.438Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/88/1474f2a85de82461626ba38745b6c130b766828b7785996b8748858c77a3/vieneu-3.8.1.tar.gz", hash = "sha256:56be663c6162e9cef248d4b98a134f052719cbc7e0bb35fed76c755ec2fcbd54", size = 2636780, upload-time = "2026-09-16T14:07:31.997Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/b4/1e32385cf64c28858c9c39390abcefcedbda507a0a12e98307183ef7b80d/vieneu-3.3.0-py3-none-any.whl", hash = "sha256:794c30cbda2adc9a0cb09375f3c071e5b4901edf5d1a11fb3d50061149fc7320", size = 1186070, upload-time = "2026-08-20T01:22:44.686Z" },
+    { url = "https://files.pythonhosted.org/packages/35/03/83c6564f834b90b9fe200c4381a8d8fc506c0697233b1a5b2c3d06d9899f/vieneu-3.8.1-py3-none-any.whl", hash = "sha256:bf24f88ec95f96459756d897b04a118e923536d36bcfcdccd13ba6f8f7d580ba", size = 2642947, upload-time = "2026-09-16T14:07:30.351Z" },
 ]

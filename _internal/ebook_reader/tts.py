@@ -11,6 +11,7 @@ import numpy as np
 import pyworld
 
 from .audio_io import (
+    VOICE_PRESET_FIELD,
     AudioQualityError,
     SegmentDurationPolicy,
     atomic_write_wav,
@@ -38,7 +39,13 @@ from .text_processing import (
     normalize_vocalizations_for_tts,
     spoken_symbols_to_words,
 )
-from .voice_catalog import FORMANT_RATIO_MAX, FORMANT_RATIO_MIN
+from .voice_catalog import (
+    FORMANT_RATIO_MAX,
+    FORMANT_RATIO_MIN,
+    SPEED_FACTOR_MAX,
+    SPEED_FACTOR_MIN,
+    speed_factor_for_preset,
+)
 from .tts_contract import (
     HA_VOCALIZATION_DELIVERY_PROFILE,
     HA_VOCALIZATION_FINAL_SAMPLES_FIELD,
@@ -271,6 +278,47 @@ def apply_pitch_variant(
             "WORLD pitch shift shortened a strict no-padding waveform"
         )
     return np.pad(shifted, (0, array.size - shifted.size)).astype(np.float32, copy=False)
+
+
+def apply_speed_change(audio: Any, sample_rate: int, speed: float) -> np.ndarray:
+    """Read the same line `speed` times faster, keeping pitch and spectrum.
+
+    WORLD analysis with the same constants as `apply_pitch_variant`, then synthesis with a frame
+    period `speed` times shorter: every frame keeps its F0 and envelope, it is only played
+    faster. Unlike `apply_pitch_variant` the length changes on purpose, so nothing is trimmed or
+    padded. See `PRESET_SPEED_FACTOR` for why a slow preset needs this.
+    """
+    array = np.asarray(audio, dtype=np.float32).reshape(-1)
+    speed = float(speed)
+    if abs(speed - 1.0) <= 1e-6 or array.size == 0:
+        return array
+    if not SPEED_FACTOR_MIN <= speed <= SPEED_FACTOR_MAX:
+        raise ValueError(f"speed factor {speed} is outside [{SPEED_FACTOR_MIN}, {SPEED_FACTOR_MAX}]")
+    if sample_rate < 8_000:
+        raise ValueError(f"WORLD speed change requires at least 8000 Hz, got {sample_rate}")
+    waveform = np.asarray(array, dtype=np.float64)
+    f0, time_axis = pyworld.harvest(
+        waveform,
+        sample_rate,
+        f0_floor=WORLD_F0_FLOOR_HZ,
+        f0_ceil=WORLD_F0_CEIL_HZ,
+        frame_period=WORLD_FRAME_PERIOD_MS,
+    )
+    f0 = pyworld.stonemask(waveform, f0, time_axis, sample_rate)
+    if int(np.count_nonzero(f0 > 0.0)) < WORLD_MIN_VOICED_FRAMES:
+        raise ValueError("WORLD could not find enough voiced frames for a speed change")
+    spectral_envelope = pyworld.cheaptrick(waveform, f0, time_axis, sample_rate)
+    aperiodicity = pyworld.d4c(waveform, f0, time_axis, sample_rate)
+    faster = pyworld.synthesize(
+        f0,
+        spectral_envelope,
+        aperiodicity,
+        sample_rate,
+        frame_period=WORLD_FRAME_PERIOD_MS / speed,
+    )
+    peak = float(np.max(np.abs(waveform))) or 1.0
+    faster_peak = float(np.max(np.abs(faster))) or 1.0
+    return np.asarray(faster * min(1.0, peak / faster_peak), dtype=np.float32)
 
 
 def apply_voice_variant(
@@ -955,6 +1003,8 @@ class TTSCoordinator:
                 row,
                 pronunciation_delivery_variant=normalized_pronunciation_variant,
             )
+            # Trước ngân sách sinh và trước cổng: cả hai đo một giọng chậm theo nhịp của nó.
+            spoken_row[VOICE_PRESET_FIELD] = str(_row_value(profile, "preset_name", "") or "")
             vocalization_delivery_profile = (
                 HA_VOCALIZATION_DELIVERY_PROFILE
                 if is_standalone_ha_gasp(str(row["text"]))
@@ -1027,6 +1077,22 @@ class TTSCoordinator:
                     f"Bỏ biến thể cao độ {pitch_steps:+d} cho segment {row['stable_id']} "
                     f"vì xử lý pitch lỗi: {exc}"
                 )
+            # Tốc độ riêng của giọng (PRESET_SPEED_FACTOR), sau cao độ vì hàm cao độ giữ nguyên
+            # độ dài. Bỏ qua tiếng cười "ha": đường ấy có bất biến số mẫu thô.
+            speed_factor = speed_factor_for_preset(str(_row_value(profile, "preset_name", "")))
+            speed_change_skipped = False
+            if (
+                abs(speed_factor - 1.0) > 1e-6
+                and vocalization_delivery_profile != HA_VOCALIZATION_DELIVERY_PROFILE
+            ):
+                try:
+                    audio = apply_speed_change(audio, self.vieneu.sample_rate, speed_factor)
+                except Exception as exc:  # noqa: BLE001
+                    speed_change_skipped = True
+                    self.log(
+                        f"Bỏ hệ số tốc độ x{speed_factor:.2f} cho segment {row['stable_id']} "
+                        f"vì xử lý lỗi: {exc}"
+                    )
             vocalization_provenance: dict[str, Any] = {}
             if vocalization_delivery_profile == HA_VOCALIZATION_DELIVERY_PROFILE:
                 audio_array = np.asarray(audio, dtype=np.float32).reshape(-1)
@@ -1075,6 +1141,8 @@ class TTSCoordinator:
             metrics["effective_pitch_semitones"] = (
                 0 if pitch_variant_skipped else pitch_steps
             )
+            metrics["speed_factor"] = float(speed_factor)
+            metrics["effective_speed_factor"] = 1.0 if speed_change_skipped else float(speed_factor)
             metrics.update(vocalization_provenance)
             if generation_ceiling_hit or (
                 vocalization_delivery_profile == HA_VOCALIZATION_DELIVERY_PROFILE

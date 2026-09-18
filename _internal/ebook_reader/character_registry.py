@@ -4,7 +4,7 @@ import re
 import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from .analysis import (
     DIALOGUE_CLOSERS,
@@ -728,8 +728,21 @@ def _preset_by_name(name: str) -> dict[str, str]:
 
 
 class PresetAllocator:
-    def __init__(self, narrator_voice: str, max_pitch_shift: int) -> None:
+    def __init__(
+        self,
+        narrator_voice: str,
+        max_pitch_shift: int,
+        other_narrators: Iterable[str] = (),
+    ) -> None:
         self.narrator_voice = narrator_voice
+        # Every voice that has narrated this book, not only the one narrating this project. A
+        # book that changes narrator part-way (book 2: Phạm Tuyên for 000..303, Đức Trí from
+        # 304) has taught the listener that the old voice IS the narration; a character who
+        # speaks in it later sounds like the narrator cutting into the dialogue. Empty unless
+        # `voices.other_narrators` says otherwise, so the set is `{narrator_voice}` as before.
+        self.not_for_characters = frozenset(
+            {str(narrator_voice), *(str(name) for name in other_narrators)}
+        )
         self.max_pitch_shift = max(0, int(max_pitch_shift))
         self.pool_usage: dict[str, Counter[str]] = {
             "named": Counter(),
@@ -786,7 +799,7 @@ class PresetAllocator:
         candidates = [
             preset
             for preset in casting_presets(gender)
-            if preset["name"] != self.narrator_voice
+            if preset["name"] not in self.not_for_characters
         ]
         # A preset whose pitch cannot reach the age is not a candidate for it. Warping the
         # tract to a child's size while the pitch stays adult makes a combination no throat
@@ -808,7 +821,7 @@ class PresetAllocator:
             candidates = [
                 preset
                 for preset in VIENEU_PRESETS
-                if preset["name"] != self.narrator_voice
+                if preset["name"] not in self.not_for_characters
                 and preset["style"] != STYLE_NEWS
                 and preset["region"] in CASTING_REGIONS
                 and preset["name"] not in EXCLUDED_PRESETS
@@ -821,7 +834,7 @@ class PresetAllocator:
             candidates = [
                 preset
                 for preset in VIENEU_PRESETS
-                if preset["name"] != self.narrator_voice
+                if preset["name"] not in self.not_for_characters
                 and preset["style"] != STYLE_NEWS
                 and preset["region"] in CASTING_REGIONS
                 and preset["name"] not in EXCLUDED_PRESETS
@@ -1733,6 +1746,7 @@ def build_registry_and_cast(
     allocator = PresetAllocator(
         narrator_voice,
         int(voice_cfg.get("max_character_pitch_semitones", 2)),
+        other_narrators=tuple(voice_cfg.get("other_narrators", ())),
     )
     # Before anyone is cast: a voice that belongs to somebody is taken, whether or not that
     # somebody speaks in this batch.

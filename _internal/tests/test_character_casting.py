@@ -65,7 +65,8 @@ def _casting_db(tmp_path: Path) -> ProjectDB:
         ]
     )[0]
     speakers = [("NARRATOR", "unknown")]
-    speakers.extend((f"Nam {index}", "male") for index in range(1, 7))
+    # Đủ nhiều để buộc phải dùng lại preset: kho có mười giọng nam phân vai được ngoài người kể.
+    speakers.extend((f"Nam {index}", "male") for index in range(1, 21))
     speakers.extend((f"Nữ {index}", "female") for index in range(1, 8))
     speakers.extend(
         [
@@ -342,18 +343,18 @@ def test_casting_prioritizes_natural_north_then_natural_south() -> None:
         for preset in casting_presets(GENDER_FEMALE)
     ]
 
-    # The Southern natural male voice is Xuân Vĩnh, which a listener excluded outright,
-    # so that rank is simply absent rather than filled by someone else.
+    # Natural before storytelling, North before South within each. Xuân Vĩnh is back as a
+    # Northern natural voice since VieNeu 3.8.1, and Adam is the one Southern natural male.
     assert male_order == [
-        (REGION_NORTH, STYLE_NATURAL),
-        (REGION_NORTH, STYLE_STORY),
-        (REGION_SOUTH, STYLE_STORY),
+        *[(REGION_NORTH, STYLE_NATURAL)] * 5,
+        (REGION_SOUTH, STYLE_NATURAL),
+        *[(REGION_NORTH, STYLE_STORY)] * 3,
+        *[(REGION_SOUTH, STYLE_STORY)] * 2,
     ]
     assert female_order == [
-        (REGION_NORTH, STYLE_NATURAL),
-        (REGION_NORTH, STYLE_NATURAL),
-        (REGION_NORTH, STYLE_STORY),
-        (REGION_SOUTH, STYLE_STORY),
+        *[(REGION_NORTH, STYLE_NATURAL)] * 3,
+        *[(REGION_NORTH, STYLE_STORY)] * 2,
+        *[(REGION_SOUTH, STYLE_STORY)] * 3,
     ]
     assert REGION_CENTRAL not in {region for region, _style in male_order + female_order}
 
@@ -1044,6 +1045,17 @@ def test_pitch_ranges_follow_measured_preset_depth() -> None:
         "Trúc Ly": -2,
         "Đoan Trang": -2,
         "Thục Đoan": -2,
+        "Adam": 0,
+        "Adam bựa": -2,
+        "Anh Khôi": -2,
+        "Đức Trí": -1,
+        "Kim Thanh": -2,
+        "Mạnh Dũng": -2,
+        "Minh Quân Pro": -2,
+        "Mỹ Duyên": -2,
+        "Ngọc Huyền": -2,
+        "Quỳnh Anh": -2,
+        "Thiền Tâm Đức": -1,
     }
     assert pitch_variants_for_preset("Phạm Tuyên", 2) == (0, 1, 2)
     assert pitch_variants_for_preset("Xuân Vĩnh", 2) == (0, -1, 1, 2)

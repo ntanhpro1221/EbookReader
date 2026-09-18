@@ -44,9 +44,44 @@ CHARACTER_PITCH_VARIANTS = (0, -1, 1, -2, 2)
 # than in the variant ladder. A Vietnamese listener went through every preset and found
 # only Thanh Bình wanted correcting: at -4 semitones it reads calmer and more suited to
 # storytelling. The other presets are already right at their natural register.
+#
+# Two of the VieNeu 3.8.1 voices wanted the same correction (2026-09-18): the listener heard
+# Adam bựa and Mạnh Dũng at -1..-4 and chose -2 for both.
 PRESET_BASE_PITCH_SEMITONES = {
     "Thanh Bình": -4,
+    "Adam bựa": -2,
+    "Mạnh Dũng": -2,
 }
+# Reading speed per preset, as a factor on the tempo: 1.25 says a line in 80% of the time, with
+# the same pitch and the same spectrum. Register (above) cannot do this - WORLD resynthesises on
+# the same time axis and `apply_pitch_variant` trims or pads back to the original length - so a
+# slow preset needs its own knob. Measured 2026-09-18 with the pipeline's own pace gate: the
+# storytelling presets of VieNeu 3.8.1 read at 10.9-12.7 chars/s against a normal band that
+# starts at 12.5, which put 21-24 of 25 lines out of band. The owner chose each value by ear.
+PRESET_SPEED_FACTOR: dict[str, float] = {
+    # Heard at x1.00..x1.20 in steps of 0.05; Mỹ Duyên was kept at its own speed.
+    "Đức Trí": 1.10,
+    "Thiền Tâm Đức": 1.05,
+    "Kim Thanh": 1.10,
+}
+SPEED_FACTOR_MIN = 0.80
+SPEED_FACTOR_MAX = 1.50
+# How fast this preset reads at its calibrated speed, relative to the voices the pace band was
+# fitted on (the median of the seven presets in use on book 2, measured on the same 25 test
+# lines with the pipeline's own gate). The pace gate multiplies its FLOOR - characters and
+# syllables - by this, so a storytelling voice is called slow when it is slow for itself, at
+# the same percentile as every other voice. One-directional: at most 1.0, and the ceiling and
+# the hard bounds do not move. Measured 2026-09-18 after the owner chose each speed by ear.
+PRESET_PACE_SCALE: dict[str, float] = {
+    # Median chars/s at the chosen speed over 15.64, the median of the seven presets in use.
+    # Those seven sit at 0.94-1.16 and need no entry.
+    "Đức Trí": 0.807,
+    "Thiền Tâm Đức": 0.788,
+    "Kim Thanh": 0.770,
+    "Mỹ Duyên": 0.810,
+}
+PACE_SCALE_MIN = 0.65
+PACE_SCALE_MAX = 1.0
 # Vocal tract length per preset, in centimetres, estimated from the third formant of its
 # own preview clip with the odd-quarter-wavelength tube model L = 5c / (4*F3). Measured
 # with Praat: the male presets cluster tightly at 16.4-16.9 cm and the female ones at
@@ -55,7 +90,11 @@ PRESET_BASE_PITCH_SEMITONES = {
 PRESET_VOCAL_TRACT_CM = {
     "Phạm Tuyên": 16.5,
     "Thanh Bình": 16.9,
-    "Xuân Vĩnh": 16.6,
+    # Xuân Vĩnh re-measured from its VieNeu 3.8.1 preview (was 16.6). Trúc Ly measures 14.4 on
+    # its 3.8.1 preview but stays at 14.7 on purpose: the length sets its formant ladder, and
+    # 14.4 would move its brightest step from 1.148 to 1.125 while book 2 has a character
+    # pinned at 1.148 (24 projects) - the next one cast at 1.125 would sound like a twin.
+    "Xuân Vĩnh": 16.3,
     "Thái Sơn": 16.7,
     "Quang Sơn": 16.4,
     "Trúc Ly": 14.7,
@@ -63,6 +102,17 @@ PRESET_VOCAL_TRACT_CM = {
     "Ngọc Linh": 13.9,
     "Thục Đoan": 15.0,
     "Ngọc Trân": 15.5,
+    "Adam": 16.7,
+    "Adam bựa": 16.4,
+    "Anh Khôi": 16.5,
+    "Đức Trí": 16.6,
+    "Kim Thanh": 13.6,
+    "Mạnh Dũng": 16.6,
+    "Minh Quân Pro": 16.6,
+    "Mỹ Duyên": 14.8,
+    "Ngọc Huyền": 14.2,
+    "Quỳnh Anh": 14.1,
+    "Thiền Tâm Đức": 16.2,
 }
 # A warp by ratio r reads as a vocal tract of length L/r, so the usable range is whatever
 # keeps that inside a plausible adult tract. The upper bound reproduces the limit a
@@ -105,18 +155,32 @@ DEFAULT_NARRATOR_BY_GENDER = {
 }
 PRESET_PREVIEW_MEDIAN_PITCH_HZ = {
     "Phạm Tuyên": 100.6,
-    "Xuân Vĩnh": 116.2,
+    # Re-measured from the 3.8.1 preview (was 116.2), like Trúc Ly below (was 213.7).
+    "Xuân Vĩnh": 103.2,
     "Thái Sơn": 120.7,
     "Quang Sơn": 138.2,
     "Thanh Bình": 155.1,
     "Ngọc Trân": 181.3,
     "Ngọc Linh": 204.7,
-    "Trúc Ly": 213.7,
+    "Trúc Ly": 240.0,
     "Đoan Trang": 225.8,
     "Thục Đoan": 246.2,
+    "Adam": 87.1,
+    "Adam bựa": 146.9,
+    "Anh Khôi": 109.6,
+    "Đức Trí": 98.2,
+    "Kim Thanh": 230.6,
+    "Mạnh Dũng": 145.6,
+    "Minh Quân Pro": 151.7,
+    "Mỹ Duyên": 232.4,
+    "Ngọc Huyền": 207.7,
+    "Quỳnh Anh": 212.9,
+    "Thiền Tâm Đức": 104.4,
 }
 PRESET_MIN_PITCH_SEMITONES = {
-    # Phạm Tuyên is already the lowest measured male preset; lowering it reduces intelligibility.
+    # Set when Phạm Tuyên was the lowest measured male preset, since lowering the lowest voice
+    # costs intelligibility. Adam (87.1 Hz) and Đức Trí (98.2 Hz) are lower now; it stays 0
+    # because it never plays a character in book 2 and moving it would move book 1's ladders.
     "Phạm Tuyên": 0,
     "Xuân Vĩnh": -1,
     "Thái Sơn": -1,
@@ -128,6 +192,19 @@ PRESET_MIN_PITCH_SEMITONES = {
     "Trúc Ly": -2,
     "Đoan Trang": -2,
     "Thục Đoan": -2,
+    # Same rule, applied by `scripts/propose_a_new_voice.py`: the lowest male voice 0, a male
+    # voice within 3.5 semitones of it -1, everything else -2.
+    "Adam": 0,
+    "Adam bựa": -2,
+    "Anh Khôi": -2,
+    "Đức Trí": -1,
+    "Kim Thanh": -2,
+    "Mạnh Dũng": -2,
+    "Minh Quân Pro": -2,
+    "Mỹ Duyên": -2,
+    "Ngọc Huyền": -2,
+    "Quỳnh Anh": -2,
+    "Thiền Tâm Đức": -1,
 }
 VOICE_PREVIEW_FILENAMES = {
     "Phạm Tuyên": "pham_tuyen.wav",
@@ -140,6 +217,17 @@ VOICE_PREVIEW_FILENAMES = {
     "Ngọc Linh": "ngoc_linh.wav",
     "Thục Đoan": "thuc_doan.wav",
     "Ngọc Trân": "ngoc_tran.wav",
+    "Adam": "adam.wav",
+    "Adam bựa": "adam_bua.wav",
+    "Anh Khôi": "anh_khoi.wav",
+    "Đức Trí": "duc_tri.wav",
+    "Kim Thanh": "kim_thanh.wav",
+    "Mạnh Dũng": "manh_dung.wav",
+    "Minh Quân Pro": "minh_quan_pro.wav",
+    "Mỹ Duyên": "my_duyen.wav",
+    "Ngọc Huyền": "ngoc_huyen.wav",
+    "Quỳnh Anh": "quynh_anh.wav",
+    "Thiền Tâm Đức": "thien_tam_duc.wav",
 }
 
 VIENEU_PRESETS: tuple[dict[str, str], ...] = (
@@ -156,8 +244,8 @@ VIENEU_PRESETS: tuple[dict[str, str], ...] = (
         "style": STYLE_STORY, "description": "Nam · Bắc · Kể chuyện",
     },
     {
-        "name": "Xuân Vĩnh", "gender": GENDER_MALE, "region": REGION_SOUTH,
-        "style": STYLE_NATURAL, "description": "Nam · Nam · Tự nhiên",
+        "name": "Xuân Vĩnh", "gender": GENDER_MALE, "region": REGION_NORTH,
+        "style": STYLE_NATURAL, "description": "Nam · Bắc · Tự nhiên",
     },
     {
         "name": "Quang Sơn", "gender": GENDER_MALE, "region": REGION_CENTRAL,
@@ -199,6 +287,51 @@ VIENEU_PRESETS: tuple[dict[str, str], ...] = (
         "name": "Thùy Dung", "gender": GENDER_FEMALE, "region": REGION_SOUTH,
         "style": STYLE_NEWS, "description": "Nữ · Nam · Tin tức",
     },
+    # VieNeu 3.8.1, nhận ngày 2026-09-18 sau khi chủ sách nghe từng giọng.
+    {
+        "name": "Adam", "gender": GENDER_MALE, "region": REGION_SOUTH,
+        "style": STYLE_NATURAL, "description": "Nam · Nam · Tự nhiên",
+    },
+    {
+        "name": "Adam bựa", "gender": GENDER_MALE, "region": REGION_NORTH,
+        "style": STYLE_NATURAL, "description": "Nam · Bắc · Tự nhiên",
+    },
+    {
+        "name": "Anh Khôi", "gender": GENDER_MALE, "region": REGION_NORTH,
+        "style": STYLE_STORY, "description": "Nam · Bắc · Kể chuyện",
+    },
+    {
+        "name": "Đức Trí", "gender": GENDER_MALE, "region": REGION_SOUTH,
+        "style": STYLE_STORY, "description": "Nam · Nam · Kể chuyện",
+    },
+    {
+        "name": "Kim Thanh", "gender": GENDER_FEMALE, "region": REGION_SOUTH,
+        "style": STYLE_STORY, "description": "Nữ · Nam · Kể chuyện",
+    },
+    {
+        "name": "Mạnh Dũng", "gender": GENDER_MALE, "region": REGION_NORTH,
+        "style": STYLE_NATURAL, "description": "Nam · Bắc · Tự nhiên",
+    },
+    {
+        "name": "Minh Quân Pro", "gender": GENDER_MALE, "region": REGION_NORTH,
+        "style": STYLE_NATURAL, "description": "Nam · Bắc · Tự nhiên",
+    },
+    {
+        "name": "Mỹ Duyên", "gender": GENDER_FEMALE, "region": REGION_SOUTH,
+        "style": STYLE_STORY, "description": "Nữ · Nam · Kể chuyện",
+    },
+    {
+        "name": "Ngọc Huyền", "gender": GENDER_FEMALE, "region": REGION_NORTH,
+        "style": STYLE_NATURAL, "description": "Nữ · Bắc · Tự nhiên",
+    },
+    {
+        "name": "Quỳnh Anh", "gender": GENDER_FEMALE, "region": REGION_NORTH,
+        "style": STYLE_STORY, "description": "Nữ · Bắc · Kể chuyện",
+    },
+    {
+        "name": "Thiền Tâm Đức", "gender": GENDER_MALE, "region": REGION_NORTH,
+        "style": STYLE_STORY, "description": "Nam · Bắc · Kể chuyện",
+    },
 )
 
 
@@ -231,6 +364,16 @@ def casting_preset_priority(preset: dict[str, Any]) -> tuple[int, int, int, str]
 def base_pitch_for_preset(preset_name: str) -> int:
     """The calibrated reading register for this preset, in semitones."""
     return int(PRESET_BASE_PITCH_SEMITONES.get(preset_name, 0))
+
+
+def speed_factor_for_preset(preset_name: str) -> float:
+    """The calibrated reading speed for this preset; 1.0 when none was set."""
+    return float(PRESET_SPEED_FACTOR.get(str(preset_name), 1.0))
+
+
+def pace_scale_for_preset(preset_name: str) -> float:
+    """This preset's own tempo as a fraction of the pace band's; 1.0 when none was measured."""
+    return float(PRESET_PACE_SCALE.get(str(preset_name), 1.0))
 
 
 # F0 and formants both feed the impression of a large speaker, so a preset whose register
@@ -361,7 +504,11 @@ AGE_PITCH_MAX_SEMITONES = 16.0
 # second-guess. Xuân Vĩnh was first given a ranking penalty, which only made it a last
 # resort rather than never - the listener's answer was that it should not be reachable at
 # all, in any role, at any warp.
-EXCLUDED_PRESETS = frozenset({"Xuân Vĩnh"})
+#
+# Empty since VieNeu 3.8.1 (2026-09-18): the same listener heard Xuân Vĩnh again and found
+# it had become a natural Northern male voice, "very good", and reopened it. The set stays
+# so the next such verdict has somewhere to go.
+EXCLUDED_PRESETS: frozenset[str] = frozenset()
 
 
 def vocal_tract_target_cm(age: str, gender: str) -> float | None:
@@ -468,6 +615,12 @@ def formant_variants_for_preset(preset_name: str) -> tuple[float, ...]:
     variants: list[float] = []
     for step in CHARACTER_FORMANT_STEPS:
         ratio = round(min(max(step, lower), upper), 3)
+        # Rounding can step just outside a bound that is not a round number - Quỳnh Anh's
+        # ceiling is 14.1 / 12.8 = 1.1015625, which rounds to 1.102. Step back inside.
+        if ratio > upper + 1e-6:
+            ratio = round(ratio - 0.001, 3)
+        elif ratio < lower - 1e-6:
+            ratio = round(ratio + 0.001, 3)
         if all(abs(ratio - existing) > 0.01 for existing in variants):
             variants.append(ratio)
     return tuple(variants) or (1.0,)

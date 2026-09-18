@@ -23,6 +23,7 @@ from .audio_transform_contract import (
 )
 from .io_utils import atomic_write_text, ffmpeg_executable, run_hidden, sha256_file
 from .text_processing import VIETNAMESE_UNITS, vietnamese_number_words
+from .voice_catalog import pace_scale_for_preset, speed_factor_for_preset
 
 
 class AudioQualityError(RuntimeError):
@@ -199,6 +200,26 @@ MIN_GENERATION_SECONDS = 3.0
 MIN_VALIDATION_SECONDS = 5.0
 VALIDATION_PADDING_SECONDS = 8.0
 DEFAULT_PACE_LOWER_BOUNDS = {"slow": 6.0, "normal": 10.5, "fast": 12.0}
+# Tên preset đọc đoạn này, ghi vào hàng đoạn trước khi soi bản thu (`synthesize_atomic`,
+# `Pipeline._segment_for_audio_check`). Hàng trong DB chỉ mang `voice_profile_id`; vắng trường này
+# thì hệ số nhịp là 1,0 và cổng y như trước.
+VOICE_PRESET_FIELD = "voice_preset"
+
+
+def _voice_preset(segment: Any) -> str:
+    """Tên preset trong hàng đoạn, rỗng khi hàng không mang nó.
+
+    Không dùng `_segment_value`: hàng `sqlite3.Row` báo thiếu cột bằng `IndexError`, không phải
+    `KeyError`, và mọi hàng đi thẳng từ DB (ghép chương, recovery) đều thiếu cột này. Bản thử đầu
+    dùng `_segment_value` và làm mọi lần soi trên hàng DB ném lỗi - chương không xuất được MP3.
+    """
+    if segment is None:
+        return ""
+    try:
+        value = segment[VOICE_PRESET_FIELD]
+    except (IndexError, KeyError, TypeError):
+        return ""
+    return str(value or "")
 SHORT_UTTERANCE_MAX_WORDS = 2
 SHORT_UTTERANCE_MAX_SPEAKABLE_CHARS = 8
 SHORT_UTTERANCE_MIN_GENERATION_FRAMES = 12
@@ -441,8 +462,13 @@ def pace_is_outlier(
     pace: str,
     bounds: "tuple[float, float] | list[float]",
     fast_rate: float | None = None,
+    *,
+    floor_scale: float = 1.0,
 ) -> bool:
     """Chậm chỉ khi chậm theo CẢ chữ lẫn âm tiết; nhanh vẫn xét theo chữ như cũ.
+
+    `floor_scale` là nhịp riêng của giọng (`PRESET_PACE_SCALE`): cả hai sàn nhân với nó, cận trên
+    thì không. Mặc định 1,0 - mọi chỗ gọi cũ ra đúng câu trả lời cũ.
 
     Chương 075 của lô 3 mất câu "Và Alice đã ở đó để tận dụng sơ hở ấy." sau 10/10 lần thử ở
     10,64–11,80 chars/s, sàn 12,5. Câu ấy có 2,25 chữ mỗi từ (trung vị kho: 3,33): cùng một
@@ -454,11 +480,11 @@ def pace_is_outlier(
     chỉ bớt cờ, không thêm; bản thu được tha thêm phải có nhịp âm tiết trong dải bình thường
     (`PACE_SYLLABLES_PER_SECOND_FLOOR`). Cận trên giữ nguyên theo chữ - chưa có ca nào đòi hơn.
     """
-    lower_bound = float(bounds[0])
+    lower_bound = float(bounds[0]) * float(floor_scale)
     upper_bound = float(bounds[1])
     syllable_floor = PACE_SYLLABLES_PER_SECOND_FLOOR.get(
         pace, PACE_SYLLABLES_PER_SECOND_FLOOR["normal"]
-    )
+    ) * float(floor_scale)
     too_slow = rate < lower_bound and syllable_rate < syllable_floor
     # Cận trên xét bằng nhịp đo với khoảng lặng CÓ THẬT khi chỗ gọi đưa nó tới. Cùng một hình
     # với phép đếm âm tiết ở trên: thước thứ hai chỉ được bớt lời kết tội, không được thêm -
@@ -508,6 +534,12 @@ def segment_duration_policy(
     configured_bounds = tts.get("pace_chars_per_second", {})
     configured = configured_bounds.get(pace, DEFAULT_PACE_LOWER_BOUNDS.get(pace, 10.5))
     lower_bound = float(configured[0] if isinstance(configured, (list, tuple)) else configured)
+    # Sàn của NHỊP THÔ: một giọng chậm (`PRESET_PACE_SCALE`) sinh bản thu chậm hơn băng, và tốc
+    # độ của nó (`PRESET_SPEED_FACTOR`) chỉ được tăng SAU khi sinh. Cấp khung theo sàn chung thì
+    # câu dài của Đức Trí (11,39 kt/s thô) chạm trần và bị cắt cụt.
+    preset = _voice_preset(segment)
+    if preset:
+        lower_bound *= pace_scale_for_preset(preset) / speed_factor_for_preset(preset)
     speakable_chars = max(1, spoken_speakable_chars(text))
     generation_seconds = max(
         MIN_GENERATION_SECONDS,
@@ -787,8 +819,18 @@ def validate_audio_array(
         metrics["chars_per_second"] = float(rate)
         metrics["chars_per_second_heard"] = float(heard_rate)
         metrics["syllables_per_second"] = float(syllable_rate)
+        pace_scale = pace_scale_for_preset(_voice_preset(segment))
+        if pace_scale != 1.0:
+            metrics["pace_scale"] = float(pace_scale)
         metrics["pace_outlier"] = float(
-            pace_is_outlier(rate, syllable_rate, pace, bounds, fast_rate=heard_rate)
+            pace_is_outlier(
+                rate,
+                syllable_rate,
+                pace,
+                bounds,
+                fast_rate=heard_rate,
+                floor_scale=pace_scale,
+            )
         )
     score = repeated_utterance_score(array, sample_rate)
     if score is not None:

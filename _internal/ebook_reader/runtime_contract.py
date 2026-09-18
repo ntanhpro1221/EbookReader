@@ -131,7 +131,7 @@ CRITICAL_RUNTIME_DISTRIBUTIONS: dict[str, tuple[str, str]] = {
     # clip encoder and Trúc Ly's sample clip, and the same preset, seed and sentence measured
     # 220 Hz on 3.3.0 against 257 Hz on 3.8.1 with identical weights. So `pip install -U
     # vieneu` mid-book would silently re-cast the rest of the chapters.
-    "vieneu": ("vieneu", "3.3.0"),
+    "vieneu": ("vieneu", "3.8.1"),
     # Same silent class: sea-g2p decides the pronunciation of locked names.
     "sea-g2p": ("sea_g2p", "0.9.1"),
 }

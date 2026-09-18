@@ -125,7 +125,7 @@ def test_one_click_startup_contract() -> None:
         "timm==1.0.29",
         "transformers==5.16.1",
         "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@cc2700db57bb83ee13dc31ebe1b868c254e15d09",
-        "vieneu==3.3.0",
+        "vieneu==3.8.1",
         "sea-g2p==0.9.1",
         "praat-parselmouth==0.4.7",
     ]

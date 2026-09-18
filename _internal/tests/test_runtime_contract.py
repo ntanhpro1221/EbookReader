@@ -324,7 +324,7 @@ def test_the_engine_that_makes_the_voice_is_version_checked() -> None:
     `pip install -U vieneu` giữa một cuốn là đổi giọng các chương còn lại mà không gì báo.
     """
     table = runtime_contract.CRITICAL_RUNTIME_DISTRIBUTIONS
-    assert table.get("vieneu") == ("vieneu", "3.3.0")
+    assert table.get("vieneu") == ("vieneu", "3.8.1")
     assert table.get("sea-g2p") == ("sea_g2p", "0.9.1")
 
     checks = runtime_contract.critical_dependency_checks()
