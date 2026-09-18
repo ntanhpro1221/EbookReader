@@ -3267,6 +3267,26 @@ nhiều chương thì càng nhiều lần hai người cùng bậc gặp nhau.
 3. Một nhân vật (ANNICK) xuất hiện ở 4 chương trong danh sách, luôn tranh `thai_son`: nếu nhận giọng
    nam mới thì đây là ca đầu tiên nên gán lại.
 
+### Kết quả dự đoán (19-09, 05:2x): SAI — và cái nó tìm ra
+
+Sau ranh giới 7 (sách 341 chương), `--across` ra **66 chương**, 14 trong đó ở lô 7 — dù lô 7 chạy với kho
+mới và `auto` báo **0** va chạm trong chương. Kho chật không phải nguyên nhân duy nhất.
+
+Những người lệch giọng ở lô 7 phần lớn là **nhân vật của lô 6**: LEO (11 chương lô 6 bằng `thanh_binh_f090`
+→ `adam` ở lô 7), GASTON, CHARLIE, FRANZ, ARTHUR, WALDO. Log ghim khi thả lô 7 (15:11) không có tên nào
+trong số ấy, và FELIPE mang "12/12 chương" - tức chưa đếm 11 chương lô 6 của anh ta. Nguyên nhân:
+`boundary.sh` **thả lô N+1 (bước 6) TRƯỚC khi ghép lô N vào sách (bước 7)**, mà `launch_batch.sh` ghim
+theo sách đã ghép. Ranh giới 6: thả 15:11, ghép 15:13. Nhân vật của lô vừa xong luôn vô hình với bước ghim.
+
+Sửa: bước 6b và 7 chạy trước bước 6 (`scripts/boundary.sh`, test
+`test_the_book_is_assembled_before_the_next_batch_is_pinned_against_it`). Lô 8 dính cùng lỗi (thả 04:49:59,
+ghép 04:52) nhưng chưa phân vai: dừng lúc phân tích 439/3678, `pin_the_book_cast --apply` trên sách đã có
+lô 7 (11 ghim mới, 2 ghim trôi sửa về đa số: THOMPSON `thai_son_f116` 1 chương → `manh_dung_f093` 6 chương,
+PATRICK), rồi `cli run` - phân tích giữ nguyên.
+
+Việc còn lại: 66 chương đang mang giọng thiểu số (~6,6 giờ GPU). Không đúc lại một lượt; mỗi ranh giới
+đúc lại mục của lô vừa xong cộng một phần mục cũ, đo lại `--across` sau mỗi lần để chắc danh sách giảm.
+
 ## Đoạn hỏng trong chương đã XONG không có đường nào thu lại, trừ đúc lại cả chương (2026-09-18, 11:5x — ĐO RỒI, chưa làm)
 
 Bước 3 của `boundary.sh` gọi `launch_repair.sh N` không `--chapters`, và script ấy chỉ lấy chương mà lô

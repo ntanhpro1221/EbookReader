@@ -99,3 +99,16 @@ def test_wait_only_stops_before_anything_changes() -> None:
         "tag_here \"",
     ):
         assert exit_here < text.index(writer, step_zero_done), f"lối thoát phải nằm trước `{writer}`"
+
+
+def test_the_book_is_assembled_before_the_next_batch_is_pinned_against_it() -> None:
+    """`launch_batch.sh` ghim giọng theo SÁCH ĐÃ GHÉP (`pin_the_book_cast.py`), nên lô vừa xong phải
+    lên sách TRƯỚC khi lô kế được thả. Ranh giới 6 làm ngược lại (thả lô 7 15:11, ghép lô 6 15:13) và
+    mọi nhân vật chỉ có ở lô 6 sang lô 7 nhận giọng mới: danh sách một-người-nhiều-giọng 49 -> 66."""
+    text = (Path(__file__).resolve().parents[1] / "scripts" / "boundary.sh").read_text(encoding="utf-8")
+    assemble = text.index("py scripts/assemble_book.py --apply")
+    locked_reading = text.index("py scripts/keep_the_locked_reading.py --book --apply")
+    launch = text.index('bash scripts/launch_batch.sh "$NEXT" --seed-from "$SEED"')
+    assert locked_reading < assemble < launch
+    launcher = (Path(__file__).resolve().parents[1] / "scripts" / "launch_batch.sh").read_text(encoding="utf-8")
+    assert "scripts/pin_the_book_cast.py" in launcher, "nếu lô kế không còn ghim theo sách thì test này hết lý do"

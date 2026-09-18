@@ -406,20 +406,12 @@ if [ -n "$RECAST_OTHER" ]; then
   done
 fi
 
-# ---- 6. lo ke tiep
-if [ "$NO_NEXT" = 1 ]; then
-  say "--no-next: KHONG tha lo $NEXT. GPU de trong cho viec khac (vi du lo 10 cuon 1)."
-  say "  khi xong viec ay: bash scripts/launch_batch.sh $NEXT --seed-from \"$SEED\""
-elif py scripts/seed_chain.py "$NEXT" --batch >/dev/null 2>&1; then
-  say "lo $NEXT da co project - khong khoi dong lai: $(py scripts/seed_chain.py "$NEXT" --batch)"
-else
-  tag_here "$NEXT_TAG"
-  wait_gpu_free
-  say "khoi dong lo $NEXT (gieo tu $(basename "$SEED") - cuoi chuoi, ke ca cac lan duc lai o buoc 4b)"
-  bash scripts/launch_batch.sh "$NEXT" --seed-from "$SEED" >> "$LOG" 2>&1 || { say "launch_batch $NEXT that bai - xem $LOG"; exit 1; }
-  say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
-fi
-
+# ---- 6b va 7 chay TRUOC buoc 6 (doi 19-09 05:3x). Ban truoc tha lo N+1 roi moi ghep lo N vao sach,
+# ma `launch_batch.sh` goi `pin_the_book_cast.py` - ghim giong theo SACH DA GHEP. Nen nhan vat cua lo
+# vua xong luon vo hinh voi buoc ghim: ranh gioi 6 tha lo 7 luc 15:11, ghep lo 6 luc 15:13, va LEO
+# (11 chuong lo 6 bang thanh_binh_f090), CHARLIE, FRANZ, ARTHUR, WALDO... sang lo 7 nhan giong moi -
+# danh sach "mot nguoi nhieu giong" tu 49 len 66 chuong du lo 7 khong co va cham nao trong chuong.
+# Hai buoc nay chi doc/ghi file, het duoi mot phut (15:13:10 -> 15:13:55), nen GPU doi them chung ay.
 # ---- 6b. giu cach doc ghim cho nhung doan DA LEN SACH - khong GPU, nen chay canh lo N+1 vua
 # khoi dong la vo hai. Do 2026-09-11: 348/716 doan duoc sua trong sach doc ten theo chu viet vi
 # ban doc-ghim thua CHI bai chinh ta neo ten. Script de cu lai ban doc-ghim (cung duong voi vong
@@ -443,4 +435,18 @@ if py scripts/assemble_book.py --apply >> "$LOG" 2>&1; then
 else
   say "assemble_book thoat khac 0 - xem $LOG"
 fi
+# ---- 6. lo ke tiep
+if [ "$NO_NEXT" = 1 ]; then
+  say "--no-next: KHONG tha lo $NEXT. GPU de trong cho viec khac (vi du lo 10 cuon 1)."
+  say "  khi xong viec ay: bash scripts/launch_batch.sh $NEXT --seed-from \"$SEED\""
+elif py scripts/seed_chain.py "$NEXT" --batch >/dev/null 2>&1; then
+  say "lo $NEXT da co project - khong khoi dong lai: $(py scripts/seed_chain.py "$NEXT" --batch)"
+else
+  tag_here "$NEXT_TAG"
+  wait_gpu_free
+  say "khoi dong lo $NEXT (gieo tu $(basename "$SEED") - cuoi chuoi, ke ca cac lan duc lai o buoc 4b)"
+  bash scripts/launch_batch.sh "$NEXT" --seed-from "$SEED" >> "$LOG" 2>&1 || { say "launch_batch $NEXT that bai - xem $LOG"; exit 1; }
+  say "lo $NEXT dang chay: $(py scripts/seed_chain.py "$NEXT" --batch)"
+fi
+
 exit 0
