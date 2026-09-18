@@ -120,3 +120,99 @@ def test_launch_repair_gates_a_recast_before_it_seeds_the_next_chapter() -> None
     harmful = text.index('if [ "$GATE" = 10 ]; then', call)
     assert "continue" in text[harmful : text.index("elif", harmful)], "mã 10 phải bỏ qua PREV=\"$PROJECT\""
     assert "|| GATE=$?" in text, "mã khác 0 trong $(...) phải được bắt, nếu không một `set -e` sau này sẽ giết cả vòng"
+
+
+# Chương 228 ranh giới 6: LUCIEN và NPC một chương cùng `thanh_binh_f100`. Lượt đúc lại đặt lại mã NPC
+# (tên khác hẳn giữa hai bản), nên chỉ phép đếm cặp thấy được việc sửa.
+BOOK_228 = _rows(
+    ("228", "LUCIEN", "thanh_binh_f100", 5),
+    ("228", "NPC_LOCAL::C00010::R2401::ÔNG GIÀ", "thanh_binh_f100", 1),
+    ("229", "LUCIEN", "thanh_binh_f100", 9),
+    ("230", "LUCIEN", "thanh_binh_f100", 7),
+    project="lo06_batch",
+)
+
+
+def test_pairs_count_distinct_people_on_one_voice_in_the_chapter() -> None:
+    assert gate.same_chapter_pairs(BOOK_228, "228") == 1
+    assert gate.same_chapter_pairs(BOOK_228, "229") == 0
+    three = _rows(("1", "A", "v", 1), ("1", "B", "v", 1), ("1", "C", "v", 1), ("1", "D", "w", 1))
+    assert gate.same_chapter_pairs(three, "1") == 3
+
+
+def test_one_person_spelled_two_ways_is_not_a_pair() -> None:
+    rows = _rows(("062", "THỦ LÃNH", "f100", 5), ("062", "THU LÃNH", "f100", 2))
+    assert gate.same_chapter_pairs(rows, "062") == 0
+
+
+@pytest.mark.parametrize(
+    ("recast", "ships"),
+    [
+        (
+            _rows(
+                ("228", "LUCIEN", "thanh_binh_f100", 6),
+                ("228", "NPC_LOCAL::C00001::R1F90::ÔNG GIÀ", "adam_bua_f100", 1),
+                project="lo06r_228",
+            ),
+            True,
+        ),
+        (
+            _rows(
+                ("228", "LUCIEN", "thanh_binh_f100", 6),
+                ("228", "NPC_LOCAL::C00001::R1F90::ÔNG GIÀ", "thanh_binh_f100", 1),
+                project="lo06r_228",
+            ),
+            False,
+        ),
+    ],
+    ids=["tach duoc NPC khoi giong LUCIEN - len sach", "van trung - khong"],
+)
+def test_a_collision_fixed_inside_the_chapter_ships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, recast: list[dict], ships: bool
+) -> None:
+    target = _project(tmp_path, "lo06r_228_test", chapter="228")
+    monkeypatch.setattr(gate, "rows_as_they_will_ship", lambda exclude=None: BOOK_228)
+    # `read_rows` lọc NPC ra - đúng như bộ đọc thật - nên thước cũ không thấy gì để phán.
+    monkeypatch.setattr(gate, "read_rows", lambda _project: [r for r in recast if not r["name"].startswith("NPC_")])
+    monkeypatch.setattr(gate, "book_project", lambda name: Path(name))
+    monkeypatch.setattr(
+        gate, "everyone_in_chapter", lambda project, chapter: recast if project == target else BOOK_228
+    )
+
+    assert (gate.decide(target, apply=True, root=tmp_path) == 0) is ships
+
+
+def test_a_recast_that_creates_a_collision_is_worse() -> None:
+    book = _rows(("300", "A", "v1", 3), ("300", "B", "v2", 3), project="lo07_batch")
+    recast = _rows(("300", "A", "v1", 3), ("300", "B", "v1", 3), project="lo07r_300")
+    assert gate.same_chapter_pairs(book, "300") == 0
+    assert gate.same_chapter_pairs(recast, "300") == 1
+
+
+def test_the_pair_count_reads_npcs_the_shared_reader_leaves_out(tmp_path: Path) -> None:
+    """Lần sửa đầu đếm bằng `read_rows` và ra `0 -> 0` cho chương 228: bộ đọc ấy bỏ mọi tên `NPC_`."""
+    target = tmp_path / "lo06_test"
+    target.mkdir()
+    connection = sqlite3.connect(target / "project.sqlite3")
+    connection.executescript(
+        """
+        CREATE TABLE chapters (id INTEGER PRIMARY KEY, title TEXT, status TEXT);
+        CREATE TABLE characters (id INTEGER PRIMARY KEY, canonical_name TEXT);
+        CREATE TABLE voice_profiles (id INTEGER PRIMARY KEY, voice_key TEXT);
+        CREATE TABLE segments (id INTEGER PRIMARY KEY, chapter_id INT, canonical_character_id INT,
+                               voice_profile_id INT, kind TEXT);
+        INSERT INTO chapters VALUES (1, '228', 'completed');
+        INSERT INTO characters VALUES (1, 'LUCIEN'), (2, 'NPC_LOCAL::C00010::R2401::ÔNG GIÀ'), (3, 'NARRATOR');
+        INSERT INTO voice_profiles VALUES (1, 'preset_thanh_binh_f100_p-04'), (2, 'narrator');
+        INSERT INTO segments VALUES (1, 1, 1, 1, 'dialogue'), (2, 1, 2, 1, 'dialogue'), (3, 1, 3, 2, 'narration');
+        """
+    )
+    connection.commit()
+    connection.close()
+
+    everyone = gate.everyone_in_chapter(target, "228")
+
+    assert {row["name"] for row in everyone} == {"LUCIEN", "NPC_LOCAL::C00010::R2401::ÔNG GIÀ"}
+    assert gate.same_chapter_pairs(everyone, "228") == 1
+    assert gate.everyone_in_chapter(None, "228") == []
+    assert gate.everyone_in_chapter(tmp_path / "missing", "228") == []
