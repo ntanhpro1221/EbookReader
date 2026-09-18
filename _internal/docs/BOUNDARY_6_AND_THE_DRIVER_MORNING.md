@@ -161,3 +161,21 @@ Nhân vật đang ghim Trúc Ly sẽ nghe cao hơn từ lô 7 — đã báo ch�
 
 Kho sau bản vá: nam 3 → 11 preset phân vai được (cuốn 2 trừ hai người kể còn 9), nữ 5 → 8. Danh sách
 đúc lại 27 chương ghi ở trên sinh ra từ kho cũ; tính lại sau khi áp.
+
+## Lô 7 chết ở bước phân vai (18-09 22:41) — và vì sao lần thử khô không bắt được
+
+Lô 7 phân tích xong 3719 đoạn rồi dừng ở bước phân vai: `Voice profile narrator is locked and cannot
+change during resume`. `port_casting.py` (bước gieo) chép MỌI giọng của project gieo, kể cả vai
+`NARRATOR -> narrator` — dòng `GHIM NARRATOR -> narrator` có trong log mọi ranh giới. Khi người kể không
+đổi, hồ sơ chép sang trùng khít hồ sơ bước phân vai dựng lại từ settings nên không ai thấy. Lô 7 đổi người
+kể: hồ sơ `narrator` (Phạm Tuyên, khoá) chép từ `lo05r_196` không được đổi thành Đức Trí.
+
+Lần thử khô ở ranh giới (`cli create --dry-run` với `--narrator`) chỉ kiểm settings hợp lệ; nó không
+chạy bước gieo, nên không thấy va chạm này. Bài học: một thay đổi ở settings phải được thử **qua cả chuỗi
+gieo** (`port_casting` → `pin_the_book_cast` → phân vai), không chỉ qua `create`.
+
+Sửa (`scripts/port_casting.py`): vai NARRATOR không được mang như một ghim — giọng người kể là thiết lập
+của project. Test: `test_the_narrator_role_is_not_carried_as_a_pin`. Cứu lô 7 tại chỗ, không mất phân
+tích: bỏ ghim `NARRATOR` bằng `pin_the_book_cast.unpin_character`, xoá hồ sơ `narrator` chép sang (0 đoạn
+dùng nó — bước phân vai chưa chạy), rồi `cli run`. 23:09 lô 7 vào bước thu với người kể Đức Trí (2478
+đoạn), Phạm Tuyên 0 đoạn nhân vật. Mất ~27 phút GPU, cộng quãng máy tắt 19:24 → 21:13.

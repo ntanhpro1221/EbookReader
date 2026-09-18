@@ -190,6 +190,15 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
         # nothing in the target and carrying it only litters the characters table.
         if is_local_speaker(name):
             continue
+        # The narrator's voice is the project's SETTING (`voices.narrator_voice`), and casting
+        # rebuilds the `narrator` profile from it every run - it is not a person's pin to carry.
+        # Carrying it was harmless while every batch had one narrator, because the seeded
+        # profile matched the one casting builds. Book 2 changed narrator at chapter 304: batch 7
+        # was seeded `NARRATOR -> narrator` (Phạm Tuyên) from lo05r_196, finished analysing 3719
+        # lines, and died at casting at 22:41 on 18-09 - "Voice profile narrator is locked and
+        # cannot change during resume" - because the locked profile could not become Đức Trí.
+        if name.strip().upper() == "NARRATOR":
+            continue
         if name in seen:
             # Two voices for one character. The first row wins because the spoke-here query
             # runs first: what was heard outranks what was pinned, since a listener verdict

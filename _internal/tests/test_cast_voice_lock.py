@@ -518,3 +518,16 @@ def test_a_stale_pin_is_skipped_out_loud_rather_than_killing_the_run(tmp_path: P
 
     assert reserved == 0
     assert any("preset_khong_ton_tai_f100_p+00" in line for line in said)
+
+
+def test_the_narrator_role_is_not_carried_as_a_pin(tmp_path: Path) -> None:
+    """Lô 7 cuốn 2 chết ở bước phân vai (22:41, 18-09): `port_casting` ghim `NARRATOR -> narrator`
+    (Phạm Tuyên) từ project gieo, và hồ sơ đã khoá ấy không đổi được thành Đức Trí - người kể mới
+    của project. Giọng người kể là thiết lập của project, bước phân vai dựng lại nó mỗi lượt."""
+    source_db = _cast_project(tmp_path / "old", name="NARRATOR", voice_key="narrator")
+    target = _project(tmp_path / "new")
+
+    assert porter.port(source_db.project_root, target.project_root) == (0, 0)
+    assert "NARRATOR" not in target.locked_character_voices()
+    with pytest.raises(KeyError):
+        target.voice_profile_by_key("narrator")
