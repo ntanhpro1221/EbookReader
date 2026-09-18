@@ -286,6 +286,18 @@ không phải "nên nâng" chung chung.
 | `pyworld` | 0.3.5 | 0.3.6 | chỉ sửa build (bản 0.3.6 vá lỗi biên dịch) | nâng khi rảnh, không gấp |
 | `pytest` / `ruff` | 8.3.5 / 0.9.10 | 9.1.1 / 0.16.8 | — | **đây là LỆCH, không phải bản mới**: `pyproject.toml` đã ghim `pytest==9.1.1`, `ruff==0.16.5` mà venv vẫn giữ bản cũ. Sửa ở ranh giới bằng cách cài đúng bản ghim (đổi gói là đổi hash chính sách chất lượng, không làm giữa lô) |
 
+**Kiểm lại 18-09 12:1x** (`check_dependency_updates.py`, giữa ranh giới 6):
+
+- `vieneu` **đã nâng lên 3.8.1** ở ranh giới 6 sau khi chủ sách chấm (commit e0df5a7; wheel khớp sha256
+  trong `uv.lock`). Tag SDK mới nhất vẫn là v3.8.1. 25 giọng dựng sẵn nằm TRONG wheel
+  (`assets/voices_v3_turbo.json`), không trong repo model - nên nâng SDK không kéo theo đổi revision model.
+- `pnnbao-ump/VieNeu-TTS-v3-Turbo` `main` đổi 6 file, cả 6 trong `onnx_int8/` (+ README). Dây chuyền
+  ghim `8b7e9cf` và chạy đường torch, không đọc `onnx_int8/` - không có gì phải làm; ghi lại để lần sau
+  không đọc nhầm thành "model đã đổi".
+- `pytest` / `ruff` vẫn LỆCH khỏi bản ghim (8.3.5 / 0.9.10 so với 9.1.1 / 0.16.5). Sửa ở **ranh giới 7**:
+  giữa ranh giới 6 thì bước 6 còn phải tự chạy bộ test trước khi thả lô 7, và đổi pytest ngay trước đó là
+  đặt cược lô 7 vào một phiên bản test runner chưa ai chạy thử.
+
 ### Cái tìm được nhờ đọc changelog: năm chốt chặn tải mạng đã chết
 
 `transformers` 5.x dọn cả cờ offline lẫn đường dẫn cache về `huggingface_hub`, nên năm mục transformers
