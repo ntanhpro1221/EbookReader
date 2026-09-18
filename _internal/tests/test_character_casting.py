@@ -1207,7 +1207,7 @@ def test_one_character_cannot_hold_two_voices_through_different_labels(tmp_path:
 
     # The same two lines with one voice between them are accepted.
     rows[1]["voice_profile_id"] = 11
-    assert_voice_stability(_Rows(rows)) is None
+    assert assert_voice_stability(_Rows(rows)) is None
 
 
 def test_an_excluded_preset_is_unreachable_through_every_path() -> None:

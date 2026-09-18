@@ -297,6 +297,16 @@ không phải "nên nâng" chung chung.
 - `pytest` / `ruff` vẫn LỆCH khỏi bản ghim (8.3.5 / 0.9.10 so với 9.1.1 / 0.16.5). Sửa ở **ranh giới 7**:
   giữa ranh giới 6 thì bước 6 còn phải tự chạy bộ test trước khi thả lô 7, và đổi pytest ngay trước đó là
   đặt cược lô 7 vào một phiên bản test runner chưa ai chạy thử.
+  **ĐÃ SỬA sớm hơn, 19-09 00:2x, giữa lô 7** — an toàn vì dây chuyền không import `pytest` (grep
+  `ebook_reader/`: 0) và `ruff` là công cụ ngoài. Wheel tải về đối chiếu sha256 với `uv.lock` (khớp cả
+  hai), cài `--no-deps --no-index` từ chính file ấy; phụ thuộc (pluggy 1.6.0, iniconfig 2.3.0, packaging
+  26.2) vốn đã khớp khoá. Bộ test đầy đủ dưới pytest 9.1.1: **2967 passed**, không đỏ, không cảnh báo mới.
+  `ruff check` 0.16.5 báo 1066 mục — ruff KHÔNG phải cổng của dự án, phần lớn là văn phong. Lọc những
+  loại có thể là lỗi thật (F821, B015, B006, F841, PERF102): một cái thật ở test —
+  `test_character_casting.py:1210` viết `assert_voice_stability(...) is None` THIẾU `assert`, nên phép so
+  bị vứt đi; đã thêm. `character_registry.py:328` dùng `"Sequence[str]"` trong chú thích kiểu dạng chuỗi
+  mà không import (F821): vô hại lúc chạy, nhưng file bị khoá — lần vá kế tiếp chạm file ấy thì thêm
+  `from typing import Sequence`.
 
 ### Cái tìm được nhờ đọc changelog: năm chốt chặn tải mạng đã chết
 
