@@ -3086,6 +3086,26 @@ máy móc ấy.
 4. Ba trong bốn ca sẽ được bước 3 của ranh giới thu lại; xem `docs/BOUNDARY_6_AND_THE_DRIVER_MORNING.md`
    cho từng ca và điều phải chờ đợi. Kết cục của chúng là dữ liệu cho việc (1).
 
+### Lô 7 (19-09, 02:5x): ba đoạn hỏng, cả ba ≤ 4 từ — và một lớp mới: tên riêng mà Whisper "nhận ra"
+
+Lô 7 tới 3.202/3.719 đoạn: 3 hỏng, đều ngắn, đúng khuôn trên.
+
+- 316 LUCIEN (Thanh Bình) `“Ráng chịu đau nhé.”` → *"Dáng chịu đầu nha. Dáng chịu đầu nha."*: `r`→`d`,
+  `đau`→`đầu`, và Whisper **lặp cả câu** trên clip ngắn. Ranh giới 7 đúc lại 316 (cổng nay đếm đoạn hỏng
+  được thu lại, 34cd665) - kết cục là dữ liệu cho việc (1).
+- 325 NARRATOR (Đức Trí) `Amelton nói.` và `Amelton lạnh lùng nói.` → *"Ahmed Lơn nói."*. Âm **đúng**:
+  cách đọc ghim là `A-mét-lơn` và giọng đọc đúng thế. Whisper nghe "A-mét" thành tên tiếng Anh nó quen,
+  **với mọi giọng** - LUCIEN/Thanh Bình ở 304, WALDO/Adam ở 325 đều ra "Ahmed Lơn"; câu dài vẫn qua vì
+  một tên lệch chỉ kéo độ giống xuống ít (0,96-0,98), còn câu 2-3 chữ thì cái tên CHÍNH là câu (0,77 /
+  0,87). Không phải lỗi giọng kể mới. Thu lại vô ích (âm đã đúng) nên 325 KHÔNG nằm trong danh sách ranh
+  giới 7.
+
+Lớp thứ hai này khác lớp "câu ngắn thiếu ngữ cảnh": Whisper nghe **rõ** và đổi âm sang một chữ viết nó
+biết. Hướng đo (đừng vá trước): gấp bản chép của Whisper qua cùng bảng phiên âm (ví dụ "Ahmed Lơn" có về
+`A-mét-lơn` khi so theo âm tiết không dấu không?) trên MỌI đoạn chứa tên đã ghim của lô 6 + 7, đếm bao
+nhiêu đoạn đang `ASR_LOCKED_NAME_ANCHOR_MISMATCH` sẽ thành đạt và có đoạn nào đang đạt mà thành hỏng.
+Luật cũ vẫn đứng: không mách chữ cho Whisper.
+
 ## Giọng Bắc không phân biệt `tr`/`ch`, mà phép so ASR thì phân biệt (2026-09-18, 04:3x — ĐO RỒI, chưa vá)
 
 Dự án đã gấp `gi`→`d`, `k`→`c` và gấp **thanh điệu** khi so bản chép, với lý lẽ ghi rõ trong
