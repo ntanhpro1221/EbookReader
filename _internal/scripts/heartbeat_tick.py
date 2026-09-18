@@ -147,6 +147,49 @@ def flying() -> list[str]:
     return out
 
 
+STOPPED_WINDOW_SECONDS = 12 * 3600.0
+FINISHED_STATUSES = {"completed", "created"}
+# Lô đã chạy HẾT nhưng có chương hỏng: `error|completed_with_errors`. Đó là một lô xong - chương hỏng
+# của nó đi qua project vá riêng - chứ không phải một lượt chết giữa chừng. Và ranh giới ghi sổ cộng dồn
+# vào mọi project cũ (`backfill_exposure`), nên chúng luôn "bị chạm trong 12 giờ qua": không loại ra thì
+# mỗi nhịp tim sau một ranh giới kêu CHẾT cho lô 1, 2, 3 (thấy ngay lần chạy thật đầu tiên, 23:2x).
+FINISHED_STAGES = {"completed", "completed_with_errors"}
+
+
+def stopped(versions: Path = Path(VERSIONS), now: float | None = None) -> list[str]:
+    """Project bị chạm trong 12 giờ qua mà giờ ĐÃ CHẾT (`error`) hoặc ĐỨNG IM giữa chừng.
+
+    Vì sao (18-09 23:0x): lô 7 chết lúc 22:41 ở bước phân vai, và nhịp tim 23:06 chỉ in "project đang
+    bay: (không có)" - đúng về chữ, im về điều duy nhất cần biết. Một project không còn bị chạm trong 5
+    phút thì rơi khỏi `flying()`, dù nó dừng vì xong, vì lỗi, hay vì máy tắt (19:24 cùng ngày). Mục này
+    nói ra hai trường hợp sau, kèm lỗi và số phút.
+    """
+    now = time.time() if now is None else now
+    out: list[str] = []
+    for database in sorted(glob.glob(str(Path(versions) / "*" / "*" / "project.sqlite3"))):
+        path = Path(database)
+        idle = now - path.stat().st_mtime
+        if idle <= TOUCHED_SECONDS or idle > STOPPED_WINDOW_SECONDS:
+            continue
+        connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        try:
+            status, stage, error = connection.execute(
+                "SELECT status, stage, last_error FROM book"
+            ).fetchone()
+        except (sqlite3.Error, TypeError):
+            continue
+        finally:
+            connection.close()
+        if status in FINISHED_STATUSES or stage in FINISHED_STAGES:
+            continue
+        what = "CHẾT" if status == "error" else "ĐỨNG IM"
+        out.append(
+            f"{what} {path.parent.name}: {status}|{stage}, không ai chạm {idle / 60:.0f} phút"
+            + (f" - {str(error)[:140]}" if error else "")
+        )
+    return out
+
+
 UPSTREAM_AUDIT = ROOT / "runtime" / "dependency_audit.json"
 UPSTREAM_STALE_HOURS = 24.0
 
@@ -193,6 +236,12 @@ def main() -> int:
     say("project đang bay (DB bị chạm trong 5 phút qua):")
     for line in flying() or ["    (không có)"]:
         say(f"    {line}")
+    dead = stopped()
+    if dead:
+        say("")
+        say("!!! project CHẾT / ĐỨNG IM (bị chạm trong 12 giờ qua, không xong):")
+        for line in dead:
+            say(f"    {line}")
     say("")
     dirty = subprocess.run(
         ["git", "status", "--porcelain"], cwd=str(ROOT), capture_output=True, text=True
