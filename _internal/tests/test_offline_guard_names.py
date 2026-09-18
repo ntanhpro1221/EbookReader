@@ -11,8 +11,8 @@ Và đã mất thật. `transformers` 5.16.1 không còn `utils._is_offline_mode
 18-09 02:0x, chính bằng phép kiểm này. Dây chuyền không hở, vì lớp thật là biến môi trường
 `HF_HUB_OFFLINE` cộng với `huggingface_hub.constants` (vẫn còn, vẫn được đặt), và
 `test_the_remaining_belt_really_switches_transformers_offline` dưới đây chứng minh lớp ấy điều khiển
-được transformers. Dọn năm mục chết khỏi `worker.py` là việc ở RANH GIỚI: file này không bị khoá theo hash, nhưng lô
-đang bay sinh worker mới liên tục, nên sửa giữa lô là để nửa lô sau chạy mã khác nửa trước.
+được transformers. Năm mục chết đã dọn khỏi `worker.py` ở một ranh giới, bằng
+`patch_a_dead_belt_should_not_look_like_a_belt.py`.
 
 Nâng gói mà phép kiểm này đỏ: đọc changelog, tìm tên mới, sửa cả `worker.py` và danh sách dưới đây.
 """
@@ -52,10 +52,19 @@ def load(module_name: str):
         pytest.skip(f"{module_name} khong co trong moi truong nay: {error}")
 
 
-@pytest.mark.parametrize("module_name, attribute", LIVE + GONE)
+@pytest.mark.parametrize("module_name, attribute", LIVE)
 def test_the_worker_still_names_it(module_name: str, attribute: str) -> None:
     assert f'("{module_name}", "{attribute}"' in WORKER_SOURCE, (
         f"worker.py khong con nhac {module_name}.{attribute}; danh sach trong phep kiem nay da lac hau."
+    )
+
+
+@pytest.mark.parametrize("module_name, attribute", GONE)
+def test_the_worker_no_longer_pretends_to_set_a_dead_name(module_name: str, attribute: str) -> None:
+    # Bỏ ở ranh giới sau khi đo được chúng không còn tồn tại. Nếu thượng nguồn trả tên về thì
+    # `a_dead_entry_stays_dead` đỏ trước, và thêm lại chốt là một quyết định có chủ ý.
+    assert f'("{module_name}", "{attribute}"' not in WORKER_SOURCE, (
+        f"worker.py lai dat {module_name}.{attribute}; neu co y do thi chuyen muc nay sang LIVE."
     )
 
 

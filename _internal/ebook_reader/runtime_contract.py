@@ -126,6 +126,14 @@ CRITICAL_RUNTIME_DISTRIBUTIONS: dict[str, tuple[str, str]] = {
     "timm": ("timm", "1.0.29"),
     "transformers": ("transformers", "5.16.1"),
     "utmosv2": ("utmosv2", "1.3.1.dev0"),
+    # The package that decides how the voice sounds, and the one this table never checked.
+    # Pinning the weights (VIENEU_CACHE_REVISION) is not enough: 3.8.0 changed the reference
+    # clip encoder and Trúc Ly's sample clip, and the same preset, seed and sentence measured
+    # 220 Hz on 3.3.0 against 257 Hz on 3.8.1 with identical weights. So `pip install -U
+    # vieneu` mid-book would silently re-cast the rest of the chapters.
+    "vieneu": ("vieneu", "3.3.0"),
+    # Same silent class: sea-g2p decides the pronunciation of locked names.
+    "sea-g2p": ("sea_g2p", "0.9.1"),
 }
 
 

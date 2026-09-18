@@ -32,16 +32,8 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Chờ ranh giới gần nhất (ranh giới 6 cũng được): năm dòng chặn offline của transformers trong
-# `worker.py` đã chết từ khi transformers 5.x dọn hai việc ấy về `huggingface_hub` - bỏ chúng không
-# đổi hành vi, chỉ để mã đừng đọc như đang có chốt. Đo và khoá bằng `tests/test_offline_guard_names.py`.
-ORDER: tuple[str, ...] = (
-    "patch_a_dead_belt_should_not_look_like_a_belt.py",
-    # Cùng gốc: `runtime_contract` kiểm mọi thứ quanh giọng mà không kiểm chính gói `vieneu`, nên
-    # `pip install -U vieneu` giữa một cuốn sẽ im lặng đổi giọng các chương còn lại. Bản vá này đổi
-    # nội dung chính sách chất lượng, nên chỉ áp ở ranh giới.
-    "patch_the_sdk_that_makes_the_voice_is_checked_too.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -276,6 +268,16 @@ APPLIED = (
     "patch_a_number_with_a_unit_is_read_out.py",
     "patch_a_recording_of_another_text_is_not_evidence.py",
     "patch_a_first_person_book_knows_who_i_is.py",
+    # 2026-09-18: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Chờ ranh giới gần nhất (ranh giới 6 cũng được): năm dòng chặn offline của transformers trong
+    # `worker.py` đã chết từ khi transformers 5.x dọn hai việc ấy về `huggingface_hub` - bỏ chúng không
+    # đổi hành vi, chỉ để mã đừng đọc như đang có chốt. Đo và khoá bằng `tests/test_offline_guard_names.py`.
+    # Cùng gốc: `runtime_contract` kiểm mọi thứ quanh giọng mà không kiểm chính gói `vieneu`, nên
+    # `pip install -U vieneu` giữa một cuốn sẽ im lặng đổi giọng các chương còn lại. Bản vá này đổi
+    # nội dung chính sách chất lượng, nên chỉ áp ở ranh giới.
+    "patch_a_dead_belt_should_not_look_like_a_belt.py",
+    "patch_the_sdk_that_makes_the_voice_is_checked_too.py",
 )
 
 

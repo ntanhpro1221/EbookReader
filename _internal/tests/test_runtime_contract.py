@@ -315,6 +315,22 @@ def test_setup_marker_rejects_legacy_schema(tmp_path) -> None:
     assert "schema_version=1" in result["detail"]
 
 
+def test_the_engine_that_makes_the_voice_is_version_checked() -> None:
+    """Ghim trọng số không đủ: SDK cũng đổi âm.
+
+    Bảng này từng kiểm mọi thứ quanh giọng (torch, transformers, utmosv2) mà không kiểm chính
+    `vieneu`. 3.8.0 sửa bộ mã hoá clip tham chiếu và đổi clip mẫu của Trúc Ly: cùng preset, cùng
+    seed, cùng câu, cao độ đo được 220 Hz ở 3.3.0 và 257 Hz ở 3.8.1 - trọng số y nguyên. Nên
+    `pip install -U vieneu` giữa một cuốn là đổi giọng các chương còn lại mà không gì báo.
+    """
+    table = runtime_contract.CRITICAL_RUNTIME_DISTRIBUTIONS
+    assert table.get("vieneu") == ("vieneu", "3.3.0")
+    assert table.get("sea-g2p") == ("sea_g2p", "0.9.1")
+
+    checks = runtime_contract.critical_dependency_checks()
+    assert checks["vieneu"]["ok"] is True, checks["vieneu"]["detail"]
+
+
 def test_the_contract_table_agrees_with_the_pinned_versions() -> None:
     """One fact, written in two places, must not drift.
 

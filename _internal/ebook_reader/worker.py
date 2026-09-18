@@ -325,11 +325,13 @@ def _apply_locked_model_cache_environment(settings: dict[str, Any]) -> bool:
 
     # Normal worker startup reaches this before these modules are imported. Keep the
     # cached constants aligned as a defensive measure for embedded/test callers.
+    # transformers 5.x doc duong dan cache tu huggingface_hub.constants, khong con ban sao rieng:
+    # `transformers.utils.HF_HUB_CACHE` va `transformers.utils.hub.HF_HUB_CACHE` khong ton tai o
+    # 5.16.1 (do 18-09). Dat chung chi lam mã đọc như có chốt. tests/test_offline_guard_names.py
+    # giu danh sach nay dung voi thu vien that.
     cached_paths = (
         ("huggingface_hub.constants", "HF_HOME", locked_values["HF_HOME"]),
         ("huggingface_hub.constants", "HF_HUB_CACHE", locked_values["HF_HUB_CACHE"]),
-        ("transformers.utils", "HF_HUB_CACHE", locked_values["HF_HUB_CACHE"]),
-        ("transformers.utils.hub", "HF_HUB_CACHE", locked_values["HF_HUB_CACHE"]),
     )
     for module_name, attribute, value in cached_paths:
         module = sys.modules.get(module_name)
@@ -347,11 +349,12 @@ def _apply_model_network_policy(settings: dict[str, Any]) -> bool:
     os.environ["TRANSFORMERS_OFFLINE"] = "1"
     os.environ["HF_DATASETS_OFFLINE"] = "1"
 
+    # transformers.utils.hub.is_offline_mode() nay tra ve chinh
+    # huggingface_hub.constants.HF_HUB_OFFLINE, nen dat mot co la chot ca hai; ba ten
+    # `_is_offline_mode` cu khong con ton tai o 5.16.1 (do 18-09, bang
+    # tests/test_offline_guard_names.py).
     cached_flags = (
         ("huggingface_hub.constants", "HF_HUB_OFFLINE"),
-        ("transformers.utils", "_is_offline_mode"),
-        ("transformers.utils.hub", "_is_offline_mode"),
-        ("transformers.utils.import_utils", "_is_offline_mode"),
         ("datasets.config", "HF_DATASETS_OFFLINE"),
     )
     for module_name, attribute in cached_flags:

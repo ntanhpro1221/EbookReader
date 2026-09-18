@@ -182,7 +182,11 @@ def test_worker_applies_offline_policy_to_environment_and_cached_modules(monkeyp
         )
     )
     assert hub_constants.HF_HUB_OFFLINE is True
-    assert transformers_hub._is_offline_mode is True
+    # `transformers.utils.hub._is_offline_mode` không còn tồn tại ở transformers 5.x - hàm
+    # `is_offline_mode()` của nó đọc thẳng `huggingface_hub.constants.HF_HUB_OFFLINE` (đo 18-09,
+    # `tests/test_offline_guard_names.py`). Worker thôi đặt tên ấy, nên module giả mang tên ấy
+    # phải còn NGUYÊN: đặt vào một thuộc tính mà thư viện thật không đọc là giả vờ đang chốt.
+    assert transformers_hub._is_offline_mode is False
     assert datasets_config.HF_DATASETS_OFFLINE is True
 
 
@@ -209,7 +213,9 @@ def test_high_quality_worker_forces_locked_model_cache_environment(
     assert os.environ["TORCH_HOME"] == str(tmp_path / "models" / "torch")
     assert hub_constants.HF_HOME == expected_hf_home
     assert hub_constants.HF_HUB_CACHE == expected_hub
-    assert transformers_hub.HF_HUB_CACHE == expected_hub
+    # transformers 5.x không giữ bản sao `HF_HUB_CACHE` riêng - nó đọc từ `huggingface_hub.constants`
+    # (đo 18-09). Worker thôi ghi vào tên đã chết ấy; module giả phải còn nguyên giá trị cũ.
+    assert transformers_hub.HF_HUB_CACHE == "old-transformers-cache"
 
 
 def test_balanced_worker_preserves_existing_model_cache_environment(

@@ -10,8 +10,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import os  # noqa: E402
+
 from ebook_reader.voice_catalog import VOCAL_TRACT_MAX_CM, VOCAL_TRACT_MIN_CM  # noqa: E402
+
+# `audition_presets` ép offline NGAY KHI NẠP (có lý do: SDK VieNeu mới từng tự tải `main` và dời
+# `refs/main` của cache). Nạp nó trong bộ test thì hai biến ấy rò sang mọi bài chạy sau - và ranh
+# giới 6 (18-09 09:36) dừng vì đúng thế: `test_perceptual_qa::test_model_load_is_offline_and_
+# environment_is_restored` thấy `TRANSFORMERS_OFFLINE` còn nằm trong môi trường. Giữ nguyên trạng
+# môi trường quanh lần nạp.
+_ENVIRONMENT_BEFORE = {name: os.environ.get(name) for name in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
 from scripts.audition_presets import UNDECIDED, judge  # noqa: E402
+
+for _name, _value in _ENVIRONMENT_BEFORE.items():
+    if _value is None:
+        os.environ.pop(_name, None)
+    else:
+        os.environ[_name] = _value
 
 WORST = {"tone_error_rate": 0.0167, "wer": 0.0769, "utmos": 2.558}
 
