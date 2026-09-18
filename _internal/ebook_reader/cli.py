@@ -747,11 +747,25 @@ def run_project_foreground(project_root: Path | str, *, echo: bool = True) -> Co
 
 def _settings_from_args(args: argparse.Namespace) -> dict[str, Any]:
     first_person = str(getattr(args, "first_person", "") or "").strip()
+    narrator = str(getattr(args, "narrator", "") or "").strip()
+    other_narrators = [
+        str(name).strip() for name in (getattr(args, "other_narrator", None) or []) if str(name).strip()
+    ]
     if args.settings_file is not None:
+        if other_narrators:
+            raise CliUsageError(
+                "--other-narrator cannot be combined with --settings-file: put "
+                "voices.other_narrators in that file instead"
+            )
         if first_person:
             raise CliUsageError(
                 "--first-person cannot be combined with --settings-file: put "
                 "voices.first_person_identity in that file instead"
+            )
+        if narrator:
+            raise CliUsageError(
+                "--narrator cannot be combined with --settings-file: put "
+                "voices.narrator_voice in that file instead"
             )
         return load_settings(Path(args.settings_file).expanduser().resolve())
     if first_person and normalize_name(first_person) in PRONOUNS:
@@ -763,7 +777,20 @@ def _settings_from_args(args: argparse.Namespace) -> dict[str, Any]:
     # rỗng thì `settings_hash` của mọi project đổi, và `preview_project_creation` sẽ coi mọi
     # project đã có là "khác cấu hình" rồi tạo thư mục mới có hậu tố hash - tức một lượt
     # `launch_batch.sh N` chạy lại sẽ THU LẠI cả lô thay vì tiếp tục lô đang có.
-    overrides = {"voices": {"first_person_identity": first_person}} if first_person else None
+    voices: dict[str, Any] = {}
+    if first_person:
+        voices["first_person_identity"] = first_person
+    # Cùng luật như `--first-person`: chỉ ghi khi được NÓI RA. Không truyền thì settings y hệt
+    # trước, nên `settings_hash` của các project cũ không đổi và lượt chạy lại vẫn mở lại chúng.
+    # Người dẫn chuyện là của CUỐN (và có thể đổi giữa cuốn - xem `book_paths.NARRATORS`), nên nó
+    # đi qua dòng lệnh chứ không qua mặc định chung của app. Những người kể KHÁC của cuốn (trước
+    # hoặc sau chỗ đổi) đi cùng: bộ phân vai không trao giọng của họ cho nhân vật nào
+    # (`PresetAllocator.not_for_characters`).
+    if narrator:
+        voices["narrator_voice"] = narrator
+    if other_narrators:
+        voices["other_narrators"] = other_narrators
+    overrides = {"voices": voices} if voices else None
     return build_settings(str(args.profile), overrides)
 
 
@@ -1406,6 +1433,23 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Who 'I' is, for a book told in the first person: pronoun-labelled lines "
             "(tôi/ta/mình/me) are attributed to this character instead of an anonymous voice"
+        ),
+    )
+    create.add_argument(
+        "--narrator",
+        default="",
+        help=(
+            "Preset that reads the narration of this project, when it is not the default "
+            "narrator (a book may change narrator between batches; see scripts/book_paths.py)"
+        ),
+    )
+    create.add_argument(
+        "--other-narrator",
+        action="append",
+        default=[],
+        help=(
+            "A preset that narrates other chapters of this book; no character is cast in it "
+            "(repeatable)"
         ),
     )
     create.add_argument("--settings-file", type=Path, help="Use a fully validated settings JSON instead")

@@ -61,6 +61,61 @@ ALBUM = os.environ.get("EBOOK_ALBUM", "Throne of Magical Arcana")
 # chính; cuốn 2 có 10 câu và **cả 10 là nhật ký của một người thứ ba** - nên đây là công tắc của
 # từng cuốn, không phải một luật chung.
 FIRST_PERSON = os.environ.get("EBOOK_FIRST_PERSON", "")
+# AI DẪN CHUYỆN, theo chương: `0=Phạm Tuyên;304=Đức Trí` nghĩa là Phạm Tuyên kể 000..303 và Đức
+# Trí kể từ 304. Rỗng = cuốn không bao giờ đổi người kể (cuốn 1): không truyền gì, ở đâu cũng vậy.
+#
+# Chủ sách chọn Đức Trí ngày 2026-09-18 trên trang chấm giọng, sau khi nghe bản VieNeu 3.8.1:
+# ranh giới 6 dừng trước khi thả lô 7 (304..343) để lô ấy mở đầu bằng người kể mới.
+# `launch_batch.sh` / `launch_repair.sh` truyền `--narrator <người kể của dải>` và
+# `--other-narrator <mỗi người kể KHÁC của cuốn>` cho MỌI project, cả project vá một chương cũ.
+# Cả hai chiều đều cần: sau 304, người nghe đã quen Phạm Tuyên là giọng kể; còn trước 304, một
+# nhân vật được trao Đức Trí sẽ mang pin ấy sang lô 7 - và nói bằng đúng giọng người kể.
+#
+# Giá của việc luôn truyền: settings của project mới khác project cũ, nên chạy lại một lô tạo
+# TRƯỚC khi có lịch này sẽ tạo project mới thay vì mở lại. Ở ranh giới 6 điều đó không mất gì -
+# bản vá khoá của cùng ranh giới đã đổi dấu vân tay, và project cũ đằng nào cũng không resume.
+NARRATORS = os.environ.get("EBOOK_NARRATORS", "0=Phạm Tuyên;304=Đức Trí")
+
+
+def narrator_schedule(spec: str = NARRATORS) -> list[tuple[int, str]]:
+    """`0=A;304=B` -> [(0, 'A'), (304, 'B')]. Mục đầu phải bắt đầu ở chương 0."""
+    schedule: list[tuple[int, str]] = []
+    for part in (piece.strip() for piece in spec.split(";")):
+        if not part:
+            continue
+        start, sep, name = part.partition("=")
+        if not sep or not start.strip().isdigit() or not name.strip():
+            raise ValueError(f"EBOOK_NARRATORS: mục {part!r} phải có dạng <chương>=<giọng>")
+        schedule.append((int(start), name.strip()))
+    if schedule:
+        if schedule[0][0] != 0:
+            raise ValueError("EBOOK_NARRATORS: mục đầu phải là 0=<người kể của cuốn>")
+        starts = [start for start, _name in schedule]
+        if starts != sorted(set(starts)):
+            raise ValueError("EBOOK_NARRATORS: chương bắt đầu phải tăng dần và không trùng")
+    return schedule
+
+
+def narrator_args(first: int, last: int, spec: str = NARRATORS) -> list[str]:
+    """Tham số `cli create` cho project đọc chương first..last (rỗng khi cuốn không có lịch).
+
+    Một dải vắt qua chỗ đổi người kể bị TỪ CHỐI chứ không chọn giùm: một project chỉ có một người
+    kể, nên nửa kia của dải sẽ đọc sai người mà không cổng nào bắt.
+    """
+    schedule = narrator_schedule(spec)
+    if not schedule:
+        return []
+    index = max(i for i, (start, _name) in enumerate(schedule) if start <= int(first))
+    if index + 1 < len(schedule) and schedule[index + 1][0] <= int(last):
+        raise ValueError(
+            f"chương {int(first):03d}..{int(last):03d} vắt qua chỗ đổi người kể ở chương "
+            f"{schedule[index + 1][0]:03d} - tách thành hai dải"
+        )
+    current = schedule[index][1]
+    args = ["--narrator", current]
+    for name in dict.fromkeys(name for _start, name in schedule if name != current):
+        args += ["--other-narrator", name]
+    return args
 
 
 def tag_of(batch: int) -> str:
@@ -73,8 +128,31 @@ def describe() -> str:
         f"cuốn: root={AUDIOBOOKS_ROOT} tag={TAG_PREFIX} nguồn={SOURCE_DIR} kế hoạch={PLAN}"
         f" đĩa={ALBUM!r}"
         + (f" tôi={FIRST_PERSON!r}" if FIRST_PERSON else "")
+        + (f" người kể={NARRATORS!r}" if NARRATORS else "")
     )
 
 
-if __name__ == "__main__":
+def _main(argv: list[str]) -> int:
+    import sys
+
+    # `narrator-args FIRST LAST`: in mỗi tham số một dòng, UTF-8, xuống dòng kiểu Unix - shell đọc
+    # bằng `mapfile -t`, và `print` trên Windows sẽ để lại `\r` dính vào tên giọng.
+    if len(argv) == 3 and argv[0] == "narrator-args":
+        try:
+            args = narrator_args(int(argv[1]), int(argv[2]))
+        except ValueError as exc:
+            sys.stderr.write(f"{exc}\n")
+            return 2
+        sys.stdout.buffer.write("".join(f"{arg}\n" for arg in args).encode("utf-8"))
+        return 0
+    if argv:
+        sys.stderr.write("dùng: book_paths.py [narrator-args FIRST LAST]\n")
+        return 2
     print(describe())
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    raise SystemExit(_main(sys.argv[1:]))

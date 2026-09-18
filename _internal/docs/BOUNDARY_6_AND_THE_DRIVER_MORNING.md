@@ -111,3 +111,45 @@ trong lô 6) nên phải xếp **sau** khi ranh giới 6 xong hẳn — xem docs
 Nâng VieNeu 3.3.0 → 3.8.1 và các giọng mới: chỉ làm sau khi chủ sách chấm trên trang nghe
 (`voice-review-page` trong bộ nhớ). Nếu chấm xong trước ranh giới thì `scripts/propose_a_new_voice.py`
 sinh bản vá thêm giọng; nếu chưa, ranh giới 6 cứ chạy với kho giọng hiện tại — không chờ.
+
+## Tai chủ sách đã chấm (18-09, 09:xx–11:xx) — ranh giới 6 dừng lại để lô 7 mở đầu bằng người kể mới
+
+Ranh giới 6 được **cố ý dừng** lúc ~10:1x, trước khi tạo project nào, vì kết quả trang chấm giọng đổi
+chính kho giọng mà lô 7 sẽ dùng. Quyết định của chủ sách (db artifact `danh_gia`):
+
+- Nâng VieNeu 3.3.0 → 3.8.1: bảy giọng đang chạy "như cũ".
+- Nhận cả 11 giọng mới; **mở lại Xuân Vĩnh** — ở 3.8.1 nó thành giọng nam tự nhiên miền Bắc.
+- **Đức Trí dẫn chuyện từ chương 304** (lô 7). 000..303 giữ Phạm Tuyên.
+- Nghe từng nấc rồi chọn: Đức Trí ×1,10, Thiền Tâm Đức ×1,05, Kim Thanh ×1,10, Mỹ Duyên giữ nguyên;
+  Adam bựa và Mạnh Dũng hạ −2 nửa cung (như cái −4 của Thanh Bình).
+
+Năm bản vá khoá, xếp theo thứ tự này (mỗi cái neo vào văn bản cái trước để lại):
+
+1. `patch_vieneu_3_8_1.py` — pin, `uv.lock` sinh sẵn, hợp đồng chạy. **Sau khi áp:**
+   `pip install --no-deps vieneu==3.8.1` và `pip uninstall -y perth` trong `runtime/.venv`,
+   không thì test hợp đồng đỏ.
+2. `patch_a_slow_voice_reads_at_its_own_speed.py` — `PRESET_SPEED_FACTOR`, tăng tốc bằng WORLD sau
+   bước cao độ, giữ nguyên F0 và phổ.
+3. `patch_a_slow_voice_is_judged_by_its_own_pace.py` — `PRESET_PACE_SCALE`: ở đúng nấc chủ sách chọn,
+   cổng nhịp vẫn gọi 8/9/13/8 trên 25 câu là "chậm". Không phải số đo sai mà thước sai — băng
+   12,5..24,5 là phân vị 2 của bảy giọng đang chạy (0,94..1,16 lần trung vị 15,64 kt/s), còn bốn giọng
+   kể chuyện ở 0,77..0,81. Cổng nhân **sàn** với nhịp riêng của giọng; cận trên và cận cứng không đổi.
+   Ngân sách khung sinh cũng theo nhịp THÔ của giọng, không thì câu dài của Đức Trí bị cắt cụt.
+4. `patch_a_book_can_change_its_narrator.py` — `voices.other_narrators`: bộ phân vai không trao giọng
+   của người kể KHÁC trong cuốn cho nhân vật nào. Cả hai chiều: sau 304 người nghe đã quen Phạm Tuyên
+   là giọng kể; trước 304 một nhân vật được trao Đức Trí sẽ mang pin ấy sang lô 7.
+5. `patch_the_pool_gains_voices.py` — 11 giọng (nối CUỐI tuple), Xuân Vĩnh (Bắc, bỏ cấm, đo lại), số
+   tốc độ / nhịp / cao độ ở trên, và preview.
+
+Không khoá, sửa thẳng: `cli create --narrator / --other-narrator`; lịch người kể `EBOOK_NARRATORS`
+(`0=Phạm Tuyên;304=Đức Trí`, rỗng trong `book1.env`) trong `scripts/book_paths.py`, đọc bởi
+`launch_batch.sh` (theo dải) và `launch_repair.sh` (theo từng chương — vá chương cũ vẫn là người kể
+cũ); một dải vắt qua chương 304 bị từ chối. `voice_pool_pressure.py` không đếm người kể khác.
+
+**Trúc Ly đổi giọng ở 3.8.1.** So bản thu thật của cùng 5 câu giữa hai bản: sáu giọng lệch dưới 0,7
+nửa cung, riêng Trúc Ly 219,5 → 257,0 Hz (+2,7 nửa cung), ống thanh 14,98 → 14,39 cm. Chủ sách chấm
+"như cũ" và quyết nâng; bảng số theo giọng engine thật sự phát nên Trúc Ly được đo lại từ preview mới.
+Nhân vật đang ghim Trúc Ly sẽ nghe cao hơn từ lô 7 — đã báo chủ sách.
+
+Kho sau bản vá: nam 3 → 11 preset phân vai được (cuốn 2 trừ hai người kể còn 9), nữ 5 → 8. Danh sách
+đúc lại 27 chương ghi ở trên sinh ra từ kho cũ; tính lại sau khi áp.

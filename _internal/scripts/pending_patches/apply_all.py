@@ -32,8 +32,18 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ranh giới 6, sau khi chủ sách chấm giọng 18-09 (docs/BOUNDARY_6_AND_THE_DRIVER_MORNING.md, mục
+# "Tai chủ sách đã chấm"). Thứ tự là bắt buộc: mỗi bản neo vào văn bản bản trước để lại - tốc độ
+# thêm `PRESET_SPEED_FACTOR`, nhịp neo vào nó, danh mục điền số vào cả hai. Sau `--apply`:
+# `pip install --no-deps vieneu==3.8.1` và `pip uninstall -y perth` trong runtime/.venv TRƯỚC bộ
+# test, không thì test hợp đồng chạy đỏ vì gói đang cài vẫn là 3.3.0.
+ORDER: tuple[str, ...] = (
+    "patch_vieneu_3_8_1.py",
+    "patch_a_slow_voice_reads_at_its_own_speed.py",
+    "patch_a_slow_voice_is_judged_by_its_own_pace.py",
+    "patch_a_book_can_change_its_narrator.py",
+    "patch_the_pool_gains_voices.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",

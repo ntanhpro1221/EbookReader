@@ -19,6 +19,7 @@ Chỉ đọc; mở read-only nên chạy được cả khi project đang tổng 
 from __future__ import annotations
 
 import argparse
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -41,7 +42,7 @@ def _is_extra(name: str) -> bool:
     return upper.startswith("NPC_") or upper.startswith("ANONYMOUS")
 
 
-def _capacity(narrator_preset: str) -> dict[str, int]:
+def _capacity(narrator_preset: str, other_narrators: frozenset[str] = frozenset()) -> dict[str, int]:
     """Bao nhiêu giọng *khác nhau* bộ cấp phát có thể đúc cho nhân vật, theo giới.
 
     Không phải 7 nhân số preset: `formant_variants_for_preset` kẹp thang formant vào giới hạn
@@ -51,8 +52,10 @@ def _capacity(narrator_preset: str) -> dict[str, int]:
     for gender in (vc.GENDER_MALE, vc.GENDER_FEMALE):
         total = 0
         for preset in vc.casting_presets(gender):
-            # Người dẫn chuyện giữ nguyên preset của mình; nhân vật không bao giờ dùng chung.
-            if preset["name"] == narrator_preset:
+            # Người dẫn chuyện giữ nguyên preset của mình; nhân vật không bao giờ dùng chung. Người
+            # kể KHÁC của cùng cuốn (`voices.other_narrators`, cuốn đổi người kể ở một chương) cũng
+            # vậy - bộ cấp phát loại họ, nên sức chứa không được đếm họ.
+            if preset["name"] == narrator_preset or preset["name"] in other_narrators:
                 continue
             total += len(vc.formant_variants_for_preset(preset["name"]))
         out[gender] = total
@@ -75,8 +78,13 @@ def main(argv: list[str]) -> int:
         "SELECT preset_name FROM voice_profiles WHERE voice_key='narrator'"
     ).fetchone()
     narrator = str(row["preset_name"]) if row else ""
-    capacity = _capacity(narrator)
+    book = conn.execute("SELECT settings_json FROM book").fetchone()
+    voices = json.loads(book["settings_json"]).get("voices", {}) if book else {}
+    others = frozenset(str(name) for name in voices.get("other_narrators", []))
+    capacity = _capacity(narrator, others)
     _say(f"giọng người dẫn chuyện: {narrator or '(chưa đúc)'}")
+    if others:
+        _say(f"người kể khác của cuốn (không vào vai): {', '.join(sorted(others))}")
 
     speakers = conn.execute(
         """

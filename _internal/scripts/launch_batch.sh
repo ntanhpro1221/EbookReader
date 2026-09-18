@@ -86,6 +86,18 @@ else
 fi
 FIRST="${RANGE%%..*}"
 LAST="${RANGE##*..}"
+# Ai dan chuyen dai nay (EBOOK_NARRATORS, xem scripts/book_paths.py). Rong khi la nguoi ke ban
+# dau cua cuon - khong truyen gi, cung ly do nhu FP_ARGS. Mot dai vat qua cho doi nguoi ke bi
+# tu choi o day, truoc khi tao project nao.
+NARR_OUT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/book_paths.py narrator-args "$((10#$FIRST))" "$((10#$LAST))")" || {
+  echo "Khong xac dinh duoc nguoi ke cho $RANGE. Dung." >&2
+  exit 2
+}
+NARR_ARGS=()
+if [ -n "$NARR_OUT" ]; then
+  mapfile -t NARR_ARGS < <(printf '%s\n' "$NARR_OUT" | tr -d '\r')
+  echo "=== nguoi ke: ${NARR_ARGS[*]} ==="
+fi
 TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$BATCH")"
 TITLE="$(printf 'lo%02d' "$BATCH")"
 OUT="$VERSIONS/$TAG"
@@ -120,7 +132,7 @@ echo "=== 1. create ==="
 "$PY" -m ebook_reader.cli create \
   --output-root "$OUT" --source-dir "$SOURCE_DIR" \
   --range "$RANGE" --width 3 --title "$TITLE" --profile high_quality --json \
-  ${FP_ARGS[@]+"${FP_ARGS[@]}"}
+  ${FP_ARGS[@]+"${FP_ARGS[@]}"} ${NARR_ARGS[@]+"${NARR_ARGS[@]}"}
 
 # Moi nhat theo book.created_at: chay lai lo se tao project thu hai cung tien to ten, va `ls -d`
 # lay cai dau theo alphabet - tuc cai CU.

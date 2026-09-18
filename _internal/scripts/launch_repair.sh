@@ -213,10 +213,20 @@ for CH in $BROKEN; do
     echo "  chuong $CH da co project truoc - tieu de lan nay: ${TITLE}${ATTEMPT}"
   fi
   TITLE="${TITLE}${ATTEMPT}"
+  # Nguoi ke cua CHUONG NAY, khong phai cua lo hay cua project gieo: mot chuong cu (< 304 o cuon
+  # 2) vá sau khi da doi nguoi ke van phai doc bang nguoi ke cu, khong thi sach doi giong ke
+  # qua lai giua hai chuong lien nhau. Xem EBOOK_NARRATORS trong scripts/book_paths.py.
+  NARR_OUT="$(PYTHONIOENCODING=utf-8 "$PY" scripts/book_paths.py narrator-args "$((10#$CH))" "$((10#$CH))")" || {
+    echo "  khong xac dinh duoc nguoi ke cho $CH - bo qua chuong nay"; continue
+  }
+  NARR_ARGS=()
+  if [ -n "$NARR_OUT" ]; then
+    mapfile -t NARR_ARGS < <(printf '%s\n' "$NARR_OUT" | tr -d '\r')
+  fi
   PYTHONIOENCODING=utf-8 "$PY" -m ebook_reader.cli create \
     --output-root "$OUT" --source-dir "$SOURCE_DIR" \
     --range "$CH..$CH" --width 3 --title "$TITLE" --profile high_quality --json \
-    ${FP_ARGS[@]+"${FP_ARGS[@]}"} > /dev/null
+    ${FP_ARGS[@]+"${FP_ARGS[@]}"} ${NARR_ARGS[@]+"${NARR_ARGS[@]}"} > /dev/null
   # Moi nhat theo book.created_at (seed_chain.py), khong theo ten hay mtime: chay lo va lan
   # thu hai tao project thu hai cung tien to, lay cai dau theo alphabet la lay cai CU; con
   # mtime thu muc thi doi moi lan ai do mo DB.
