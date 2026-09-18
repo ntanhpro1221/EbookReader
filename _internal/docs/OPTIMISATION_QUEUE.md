@@ -3264,3 +3264,24 @@ và ghép lại). Hai câu phải trả lời bằng số trước: (1) resume c
 fingerprints`), nên có lẽ phải là project mới một chương với dàn giọng ghim (`keep_the_chapter_cast.py`)
 nhưng chỉ thu đoạn hỏng và lấy lại bản thu cũ cho mọi đoạn khác; (2) cổng `ship_only_recasts_that_help.py`
 so cả chương — với một đoạn thay đổi nó có còn đúng thước không.
+
+### Sau ranh giới 6 (18-09, 15:2x): 49 chương, không phải 18 — và một dự đoán để lô 7 kiểm
+
+Ranh giới 6 đúc lại 9 chương trong danh sách 27, cả 9 lên sách. `one_person_one_voice.py --across` chạy
+lại trên sách vừa ghép (301 chương) ra **49 chương**, 57 người mang hơn một giọng qua cả cuốn (vẫn
+**0** chương có một người hai giọng TRONG cùng chương):
+
+    lô 6 (vừa ghép lần đầu, 224..302)            18 mục   FELICIA doan_trang 4 chương, JOEL f090 3, ...
+    lô cũ, ĐA SỐ bị lô 6 lật                     ~13 mục   JULIANA 088/089 (f097 -> đa số mới f087 ở lô 6),
+                                                          FELIPE 13 f097 / 11 f108, GASTON 7 / 6 ...
+    lô cũ, còn lại từ danh sách 27               18 mục
+
+Danh sách 07:22 đo trên sách **chưa có lô 6**, nên phần lớn chỗ tăng là lô 6 mới được đếm. Nguyên nhân
+gốc vẫn là cái đã ghi ở trên: lô 6 chạy với 2 preset nam cho nhân vật, `pin_the_book_cast` muốn ghim
+đúng giọng mà không được vì luật cấm hai người một giọng trong chương.
+
+**Dự đoán kiểm được:** lô 7 là lô đầu tiên chạy với kho mới (9 preset nam, 8 nữ ngoài người kể). Nếu
+kho chật là nguyên nhân, số người MỚI bị chia giọng do lô 7 phải gần 0, và số dòng "không lấy lại được
+giọng G" của `pin_the_book_cast` ở đầu lô 7 phải giảm hẳn so với lô 6. Đo sau lô 7: chạy lại `--across`
+và đếm mục `7:` cùng số đa số bị lật. Nếu vẫn nhiều, nguyên nhân là chỗ khác và phải tìm trước khi đúc
+lại 49 chương (~5 giờ GPU).
