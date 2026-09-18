@@ -3246,3 +3246,21 @@ nhiều chương thì càng nhiều lần hai người cùng bậc gặp nhau.
    giọng mới, vì nếu kho nới ra thì nhiều chương trong đó sẽ tự hết va chạm ở lần đúc sau.
 3. Một nhân vật (ANNICK) xuất hiện ở 4 chương trong danh sách, luôn tranh `thai_son`: nếu nhận giọng
    nam mới thì đây là ca đầu tiên nên gán lại.
+
+## Đoạn hỏng trong chương đã XONG không có đường nào thu lại, trừ đúc lại cả chương (2026-09-18, 11:5x — ĐO RỒI, chưa làm)
+
+Bước 3 của `boundary.sh` gọi `launch_repair.sh N` không `--chapters`, và script ấy chỉ lấy chương mà lô
+**chưa hoàn thành**. Bốn đoạn `ASR_MISMATCH_UNRESOLVED` của lô 6 (225/66, 234/13, 261/68, 266/12)
+nằm trong chương đã `completed`, nên cả hai lượt ranh giới 6 đều ghi `khong co chuong hong.` và bốn
+đoạn lên sách nguyên như cũ. Sổ tay ranh giới 6 đã hứa "bước 3 sẽ thu lại chúng" — sai, đã sửa.
+
+Đường duy nhất hôm nay: `--recast 6:234` ở ranh giới sau, tức đọc lại **cả chương** (~84 đoạn, ~6 phút
+GPU) để lấy **một** đoạn. Với bốn đoạn là 24 phút cho bốn câu ≤ 6 từ.
+
+Hướng rẻ hơn, cần đo trước khi viết: một bước "thu lại đoạn `failed` trong project đã `completed`"
+chạy ngay trong project gốc (đoạn ấy về `pending`, `cli run` resume chỉ thu nó, rồi xuất lại MP3 chương
+và ghép lại). Hai câu phải trả lời bằng số trước: (1) resume của một project đã `completed` có mở lại
+được sau khi mã khoá đổi vân tay không — lô 10 cuốn 1 cho thấy KHÔNG (`_validate_resume_stage_
+fingerprints`), nên có lẽ phải là project mới một chương với dàn giọng ghim (`keep_the_chapter_cast.py`)
+nhưng chỉ thu đoạn hỏng và lấy lại bản thu cũ cho mọi đoạn khác; (2) cổng `ship_only_recasts_that_help.py`
+so cả chương — với một đoạn thay đổi nó có còn đúng thước không.
