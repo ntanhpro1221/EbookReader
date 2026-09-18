@@ -76,7 +76,15 @@ và lần này nó đổi giữa hai lô nên phải có mốc.
 ## Bốn đoạn đang hỏng, và điều phải chờ đợi ở bước 3 (đọc DB lúc 03:2x và 03:5x)
 
 Cả bốn chương đều đã `completed` và đã có audio (bước ghép sách không bị chặn); các đoạn này chỉ bị
-đánh dấu `ASR_MISMATCH_UNRESOLVED`, tức máy nghe lại không khớp chữ. Bước 3 sẽ thu lại chúng.
+đánh dấu `ASR_MISMATCH_UNRESOLVED`, tức máy nghe lại không khớp chữ. ~~Bước 3 sẽ thu lại chúng.~~
+
+**SAI — sửa 18-09 11:5x.** Bước 3 (`launch_repair.sh N`, không `--chapters`) chỉ chạy lại chương mà
+lô **chưa hoàn thành**; đoạn hỏng nằm trong chương đã `completed` thì nó không nhìn tới. Cả hai lượt
+ranh giới 6 (10:08 và 11:43) đều ghi `khong co chuong hong.` Bốn đoạn dưới đây vì thế **lên sách
+nguyên như cũ**. Cột "chờ đợi gì ở bước 3" giữ lại làm dự đoán cho lần thu lại thật: đường duy nhất
+hiện có là đúc lại cả chương (`--recast 6:234` ở ranh giới 7), 6 phút GPU mỗi chương cho một đoạn — để ranh giới
+7, gộp với 225 sau khi `patch_a_censored_word_is_a_pause.py` vào cây. Một bước "thu lại đoạn hỏng
+trong chương đã xong" rẻ hơn thì chưa có; ghi vào hàng tối ưu.
 
 | chương | sách viết | Whisper nghe ra | chờ đợi gì ở bước 3 |
 |---|---|---|---|
