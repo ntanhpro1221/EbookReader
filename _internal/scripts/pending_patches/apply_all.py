@@ -32,8 +32,12 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ranh giới 7. Xếp 18-09 15:1x, ngay sau khi ranh giới 6 xong hẳn (`chain-exit=0`) - không sớm hơn:
+# bản vá đổi chuỗi nói của chương 225 đoạn 66 (lô 6), và bước 2b của ranh giới 6 sẽ resync project
+# lô ấy rồi đặt đoạn ấy về chờ thu trong một chương đã `completed`. Ranh giới 7 chỉ resync `lo07`
+# (304..343, không có ký hiệu che nào). Đã thử 12:5x trên bản sao của cây e0df5a7+: 2967 pass, hai
+# đỏ đều do bản sao thiếu `runtime/` và shortcut. Chương 225 thì thu lại bằng `--recast 6:225`.
+ORDER: tuple[str, ...] = ("patch_a_censored_word_is_a_pause.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
