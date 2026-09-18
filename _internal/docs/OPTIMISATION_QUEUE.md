@@ -3138,6 +3138,31 @@ Cái bẫy đáng giữ: bản đầu của bản vá làm phép gộp vùng **t
 ứng viên thứ ba, và ca thật "Susan bối rối"/"Suzanne bồi dối" tụt từ 0,944 xuống 0,865 — một phép
 chuẩn hoá "chỉ thêm cơ hội khớp" lại lấy đi. Bài test bắt được ngay lần chạy đầu.
 
+### Cập nhật 07:5x — đo trên chín đoạn HỎNG, và nó cứu một
+
+Hai lần trước tôi đo trên các đoạn *sát ngưỡng*. Lúc 07:52 lô 6 có **9 đoạn hỏng**, và cả chín đều
+dài **2–6 từ** (số từ: 2, 3, 3, 3, 4, 4, 5, 6, 6) — không một đoạn dài nào hỏng, đúng như mục
+*"Đoạn NGẮN"* đã ghi, giờ với chín ca thay vì bốn.
+
+Chạy phép gộp phụ âm vùng trên chín ca ấy, **bằng chính `_passes_asr_content_thresholds` của dự án**:
+
+    ch 298  "Ngài Triết Gia?" -> Whisper "Ngài chết ra."
+            sim 0,80 -> 0,92   wer 0,67 -> 0,33   => TRUOT -> QUA
+
+Một đoạn được cứu. Tám đoạn còn lại không (chúng hỏng vì lý do khác: ký hiệu bị che, giọng bỏ mất
+câu, Whisper ảo giác trên clip nửa giây).
+
+**Và đây là lần thứ hai tôi tự mô phỏng luật thay vì gọi hàm của dự án.** Lần đầu tôi so bằng
+`transcript_metrics` thay vì `tone_folded_transcript_metrics` (12 → 3). Lần này tôi viết luật cổng
+thành `sim >= 0,78 and wer <= 0,30`, trong khi luật thật có ngoại lệ: WER cao được **miễn** khi độ
+giống ≥ 0,90 (`ASR_WER_SIMILARITY_MARGIN = 0,12`). Chính ngoại lệ ấy là thứ cứu ch 298 — mô phỏng của
+tôi đã báo "vẫn trượt". Quy tắc, ghi lần thứ hai: **gọi đúng hàm dự án gọi, đừng viết lại luật.**
+
+**Kế toán mới:** mỗi lô ~84 chương thì phép gộp cứu 3 đoạn sát ngưỡng + 1 đoạn hỏng. Một đoạn hỏng
+tốn vài vòng thu lại và để lại vết trên sách, nên con số này đáng hơn con số cũ — nhưng vẫn không đủ
+để tự mở hai file bị khoá. Điều kiện xếp hàng đổi thành: **đi kèm lần sửa `asr.py` tiếp theo**, để
+một lượt test đầy đủ gánh cả hai thay đổi.
+
 ## Model chỉ đạo diễn xuất: `qwen3.5` và `gemma4` đã có bản vừa VRAM (2026-09-18, 06:0x — tra rồi, CHƯA đo)
 
 Dự án phân tích bằng `qwen3:8b` (num_ctx 7.168, nhiệt 0,1, có critic). Đó là **cái quyết định diễn

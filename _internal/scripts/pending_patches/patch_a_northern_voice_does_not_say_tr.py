@@ -458,9 +458,14 @@ def test_the_fold_only_touches_the_start_of_a_syllable() -> None:
 print(f"da viet {p}")
 
 # ---------------------------------------------------------------- điều kiện xem lại
-# Xếp bản vá này vào `ORDER` khi có MỘT trong hai:
-#   1. một lô nào cho >= 20 đoạn đổi từ trượt sang qua khi đo bằng
-#      `scripts/measure_accent_folding.py` (script ấy nay so bằng đúng hàm dây chuyền dùng), hoặc
-#   2. cổng neo tên cũng học gộp phụ âm theo vùng - lúc ấy hai ca "Raventi"/"Lucien" mới thật sự đổi
-#      kết cục, không chỉ bớt một vòng thu lại.
-# Trước đó thì đây là một thay đổi đúng nguyên lý mà không mua được gì đáng kể.
+# Đo lần ba (18-09 07:5x), trên chín đoạn HỎNG của lô 6 và bằng chính
+# `_passes_asr_content_thresholds`: nó cứu **một** đoạn - ch 298 "Ngài Triết Gia?" mà Whisper chép
+# "Ngài chết ra.", sim 0,80 -> 0,92 (vượt mốc 0,90 nên lời phàn nàn về WER được miễn). Tám đoạn còn
+# lại hỏng vì lý do khác. Vậy mỗi lô ~84 chương: 3 đoạn sát ngưỡng + 1 đoạn hỏng.
+#
+# XẾP VÀO `ORDER` KHI: có một lần sửa `asr.py` khác đi qua ranh giới - cho bản vá này đi kèm, để một
+# lượt test đầy đủ gánh cả hai. Đừng mở hai file bị khoá chỉ vì nó.
+#
+# (Và ghi lại cái bẫy phương pháp: hai lần đo đầu đều sai vì tôi *mô phỏng* luật thay vì gọi hàm dự
+# án gọi - lần đầu dùng `transcript_metrics` thay `tone_folded_transcript_metrics` (12 -> 3), lần hai
+# viết cổng thành `sim >= 0,78 and wer <= 0,30` và bỏ mất ngoại lệ miễn WER khi sim >= 0,90.)
