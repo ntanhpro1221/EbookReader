@@ -1,0 +1,110 @@
+# Đáp án chuẩn chương 397 ("Biến chuyển kỳ quái"), Text_Tmp/396.txt. Vòng 7 (20-09): agent review gán (B), Claude soát đối
+# kháng (A) - ADJUDICATION.md. Lucien đội lốt Beaulac nhưng lời kể gọi "Lucien" trước mọi câu -> LUCIEN đủ, BEAULAC~ trên câu
+# NÓI (quy tắc 13). 16-18 đám quý tộc bỏ chạy (NPC*); 16 "Ác quỷ…" cũng khớp Andris đang quỳ (câu 1) -> ANDRIS~. 31 Sophia
+# nói trước khi được gọi tên (32) -> NPC*~. 29 tiếng vỗ tay (quy tắc 8). 35, 43, 47 cụm trích giữa câu kể (quy tắc 8).
+0 H
+1 N NARRATOR neutral,surprised,afraid 0-1 normal normal u
+2 N NARRATOR neutral,surprised 0-1 normal normal u
+3 N NARRATOR neutral,surprised 0-1 normal normal u
+4 N
+5 T JOCELYN surprised,neutral 1 normal normal f
+6 N NARRATOR neutral,surprised,sad 0-1 normal normal u
+7 N
+8 N
+9 T JOCELYN sad,sarcastic,neutral 0-1 normal normal,soft f
+10 N NARRATOR neutral,sad 0-1 normal normal u
+11 N
+12 N
+13 N
+14 N
+15 N
+16 D NPC*,UNKNOWN~,ANDRIS~ afraid 1-2 fast,normal normal,loud u
+17 D NPC*,UNKNOWN~ afraid,surprised 1-2 fast,normal normal,loud u
+18 D NPC*,UNKNOWN~ afraid 2-3 fast loud u
+19 N NARRATOR neutral,afraid 0-1 normal normal u
+20 N,T NARRATOR,JOCELYN~ angry,sarcastic,neutral 0-1 normal normal u
+21 N
+22 T JOCELYN neutral,sad,sarcastic 0-1 normal normal,soft f
+23 T JOCELYN neutral,sad,angry 0-1 normal normal,soft f
+24 N
+25 T JOCELYN tender,surprised,happy 0-1 normal soft,normal f
+26 N
+27 D LUCIEN,BEAULAC~ surprised,angry 1-2 fast loud,normal m
+28 N
+29 D NARRATOR,UNKNOWN~ neutral 0-1 normal normal u
+30 N
+31 D SOPHIA,NPC*~ happy,sarcastic 1 normal normal f
+32 N
+33 D SOPHIA happy,sarcastic,tender 1 normal normal f
+34 N
+35 D NARRATOR,SOPHIA~ neutral,sarcastic 0-1 normal normal u
+36 N
+37 D LUCIEN,BEAULAC~ neutral,sarcastic 0-1 normal normal m
+38 N
+39 N
+40 D SOPHIA happy,sarcastic 1 normal normal f
+41 N NARRATOR neutral,sarcastic 0-1 normal normal u
+42 N
+43 D NARRATOR neutral,sarcastic 0-1 normal normal u
+44 N NARRATOR neutral,sad,sarcastic 0-1 normal normal u
+45 D LUCIEN,BEAULAC~ neutral 0-1 normal normal m
+46 N
+47 D NARRATOR neutral,sarcastic 0-1 normal normal u
+48 N
+49 N
+50 N
+51 D SOPHIA happy,excited 1 normal normal f
+52 N,T NARRATOR,ANDRIS~ angry,sad,neutral 0-1 normal normal u
+53 N NARRATOR neutral,angry 0-1 normal normal u
+54 D NPC*,UNKNOWN~ sarcastic,happy 1-2 normal loud,normal m
+55 N
+56 N
+57 D NPC*,UNKNOWN~ sarcastic,happy 1-2 normal loud,normal m
+58 N
+59 D NPC*,UNKNOWN~ sarcastic 1-2 normal normal m
+60 N
+61 D NPC*,UNKNOWN~ sarcastic 1 normal normal,soft m
+62 N
+63 N
+64 N NARRATOR neutral,angry 0-1 normal normal u
+65 T ANDRIS angry 2-3 fast,normal normal,loud m
+66 T ANDRIS angry 2-3 fast,normal normal,loud m
+67 T ANDRIS angry 2-3 fast,normal normal,loud m
+68 T ANDRIS angry,sad 2-3 fast,normal normal,loud m
+69 N NARRATOR neutral,angry 0-1 normal normal u
+70 D JOCELYN tender,afraid 0-1 normal normal,soft f
+71 N NARRATOR neutral,sad 0-1 normal normal u
+72 N
+73 D SOPHIA surprised,neutral 0-1 normal normal f
+74 N
+75 D LUCIEN,BEAULAC~ neutral,afraid 0-1 normal normal,soft m
+76 N
+77 D SOPHIA neutral,surprised 0-1 normal normal f
+78 N
+79 D LUCIEN,BEAULAC~ neutral 0-1 normal normal m
+80 N
+81 N
+82 T LUCIEN neutral,surprised 0-1 normal normal,soft m
+83 N
+84 N
+85 T LUCIEN surprised,neutral 0-1 normal normal,soft m
+86 N,T NARRATOR,LUCIEN~ neutral,surprised 0-1 normal normal u
+87 N
+88 D LUCIEN,BEAULAC~ neutral,afraid 1 fast,normal loud,normal m
+89 N
+90 N
+91 D SOPHIA surprised,sarcastic 0-1 normal normal f
+92 D LUCIEN,BEAULAC~ neutral 0-1 normal normal,soft m
+93 N
+94 N
+95 D SOPHIA excited,happy 1-2 fast,normal normal,loud f
+96 D LUCIEN,BEAULAC~ neutral 0-1 normal normal m
+97 N
+98 N NARRATOR neutral,afraid 0-1 normal normal u
+99 N NARRATOR neutral,surprised,afraid 0-1 normal normal u
+100 N NARRATOR neutral,afraid 0-1 normal normal u
+101 D SOPHIA surprised,afraid 1 normal normal f
+102 N
+103 N,T NARRATOR,LUCIEN~ neutral,surprised 0-1 normal normal u
+104 D DUDA afraid 1-2 normal,slow normal,soft m
+105 N NARRATOR neutral,afraid 0-1 normal normal u

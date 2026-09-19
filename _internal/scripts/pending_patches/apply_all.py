@@ -53,12 +53,18 @@ LEASE_STALE_SECONDS = 180.0
 # đè câu trả lời đúng ở TMA 378:25 ("Lo lắng phu nhân Tess..." -> "Lo") và 407:78 ("Lucien còn chưa kịp làm gì khác, một
 # giọng nói... vọng đến" -> Lucien). Thêm ~24 chữ Việt không dấu vào danh sách mở-câu, và im khi người được nêu tên "chưa
 # kịp đáp/làm gì". Trên đáp án chuẩn: 50/52 -> 50/50 lần khoá đều đúng. Thử chung năm bản: chỉ đỏ hai test môi trường.
+#
+# Cùng ranh giới, 20-09 01:3x: khoá "một đoạn văn một người nói" (`_repair_same_paragraph_speakers`) nuốt cả thuật ngữ
+# trích GIỮA câu kể (TMA 419:24, 26: Arthur không hiểu “dây chuyền lắp ráp” hay “tiêu chuẩn hóa” -> giọng Arthur giữa câu
+# kể). Hai cuốn có 561 cụm như thế, ~66 bị khoá. Phát lại 10 chương đáp án TMA qua bộ phân tích đã vá đủ sáu bản: người
+# nói 100%, điểm 100 (trước vá 92,8% người nói). Thử chung sáu bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
 ORDER: tuple[str, ...] = (
     "patch_the_better_known_voice_keeps_its_pin.py",
     "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
     "patch_a_thought_keeps_its_thinker.py",
     "patch_a_corner_bracket_is_a_quote.py",
     "patch_the_name_after_a_quote_is_not_always_its_speaker.py",
+    "patch_a_quoted_term_is_not_the_paragraphs_line.py",
 )
 
 APPLIED = (

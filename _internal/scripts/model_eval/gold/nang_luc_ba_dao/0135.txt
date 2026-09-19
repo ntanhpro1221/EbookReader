@@ -1,0 +1,124 @@
+# "Năng lực bá đạo của tôi trong game tử thần là những thiếu nữ xinh đẹp" file 0135 ("Chương 40"). Vòng 7 (20-09): agent
+# review gán (B), Claude soát đối kháng (A) - ADJUDICATION.md. Hai người: con trai út TRỊNH VĨNH MONG (gọi tên ở 17 -> NPC*~
+# chỉ cho 9-16, quy tắc 5) và trưởng trấn, không có tên riêng, cả trấn gọi "Trịnh lão" -> TRỊNH LÃO đủ (họ + kính xưng là
+# tên, quy tắc 11), NPC*~ vì ông xuất hiện nhiều chương; danh xưng trơn "trưởng trấn" không điểm. 54 "Ai…" là tiếng thở dài.
+0 H
+1 N
+2 N
+3 N
+4 N
+5 N
+6 N
+7 N
+8 N NARRATOR neutral,angry 0-1 normal normal u
+9 D TRỊNH VĨNH MONG,NPC*~ angry,sarcastic 1-2 fast,normal loud,normal m
+10 D TRỊNH VĨNH MONG,NPC*~ angry 1-2 fast,normal loud,normal m
+11 D TRỊNH VĨNH MONG,NPC*~ angry 1-2 fast,normal loud,normal m
+12 D TRỊNH VĨNH MONG,NPC*~ angry,sarcastic 1-2 fast,normal loud,normal m
+13 D TRỊNH VĨNH MONG,NPC*~ excited,angry 1-2 fast,normal loud,normal m
+14 D TRỊNH VĨNH MONG,NPC*~ excited,happy 1-2 normal,fast normal,loud m
+15 D TRỊNH VĨNH MONG,NPC*~ angry,excited 1-2 fast,normal loud,normal m
+16 D TRỊNH VĨNH MONG,NPC*~ angry,sarcastic 1-2 fast,normal loud,normal m
+17 N NARRATOR neutral,angry 0-1 normal normal u
+18 N
+19 N
+20 N NARRATOR neutral,angry 0-1 normal normal u
+21 D TRỊNH LÃO,NPC*~ angry 2-3 fast,normal loud m
+22 D TRỊNH LÃO,NPC*~ angry 2-3 fast,normal loud m
+23 D TRỊNH LÃO,NPC*~ angry,sad 1-2 normal,fast loud,normal m
+24 D TRỊNH LÃO,NPC*~ angry,sad 1-2 normal loud,normal m
+25 D TRỊNH LÃO,NPC*~ angry 2 normal,fast loud m
+26 D TRỊNH LÃO,NPC*~ angry 2-3 fast,normal loud m
+27 D TRỊNH LÃO,NPC*~ angry,excited 2 normal,fast loud m
+28 D TRỊNH LÃO,NPC*~ angry 2-3 fast,normal loud m
+29 N NARRATOR neutral,angry 0-1 normal normal u
+30 N
+31 D TRỊNH VĨNH MONG tender,neutral,afraid 0-1 normal normal,soft m
+32 D TRỊNH VĨNH MONG tender,afraid,neutral 0-1 normal normal,soft m
+33 D TRỊNH VĨNH MONG tender,neutral 0-1 normal normal,soft m
+34 D TRỊNH VĨNH MONG tender,happy 0-1 normal normal m
+35 N NARRATOR neutral,sad 0-1 normal normal u
+36 N
+37 D TRỊNH VĨNH MONG neutral,tender 0-1 normal normal m
+38 D TRỊNH VĨNH MONG neutral 0-1 normal normal m
+39 D TRỊNH VĨNH MONG neutral 0-1 normal normal m
+40 D TRỊNH VĨNH MONG neutral,sad 0-1 normal normal m
+41 D TRỊNH VĨNH MONG neutral,sarcastic 0-1 normal normal m
+42 D TRỊNH VĨNH MONG neutral,excited,angry 0-2 normal normal,loud m
+43 D TRỊNH VĨNH MONG neutral,excited 0-1 normal normal m
+44 D TRỊNH VĨNH MONG sad,neutral 0-1 normal normal m
+45 D TRỊNH VĨNH MONG neutral,sarcastic 0-1 normal normal m
+46 D TRỊNH VĨNH MONG neutral,sad 0-1 normal normal m
+47 D TRỊNH VĨNH MONG neutral,afraid,excited 0-2 normal normal m
+48 D TRỊNH VĨNH MONG neutral,excited 0-1 normal normal m
+49 D TRỊNH VĨNH MONG neutral,excited 0-1 normal normal m
+50 D TRỊNH VĨNH MONG neutral,angry 0-1 normal normal m
+51 D TRỊNH VĨNH MONG excited,neutral 1-2 normal,fast normal,loud m
+52 D TRỊNH VĨNH MONG neutral,excited,sarcastic 0-2 normal normal m
+53 N
+54 D TRỊNH LÃO,NPC*~,NARRATOR~ tired,sad 1 slow soft,normal m
+55 D TRỊNH LÃO,NPC*~ tender,sad,neutral 0-1 slow,normal normal m
+56 D TRỊNH LÃO,NPC*~ neutral 0-1 slow,normal normal m
+57 D TRỊNH LÃO,NPC*~ neutral,tender 0-1 slow,normal normal m
+58 D TRỊNH LÃO,NPC*~ neutral,afraid 0-1 normal normal m
+59 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+60 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+61 D TRỊNH LÃO,NPC*~ neutral,sarcastic 0-1 normal normal m
+62 D TRỊNH LÃO,NPC*~ sarcastic,neutral 0-1 normal normal m
+63 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+64 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+65 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+66 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+67 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+68 D TRỊNH LÃO,NPC*~ neutral 0-1 normal normal m
+69 D TRỊNH LÃO,NPC*~ afraid,sad 1-2 normal normal m
+70 D TRỊNH LÃO,NPC*~ sad 1 slow,normal normal m
+71 D TRỊNH LÃO,NPC*~ sad,angry 1 normal normal m
+72 D TRỊNH LÃO,NPC*~ angry,sad 1-2 normal normal,loud m
+73 D TRỊNH LÃO,NPC*~ angry 1-2 normal normal,loud m
+74 D TRỊNH LÃO,NPC*~ afraid,angry 2 normal,fast loud,normal m
+75 D TRỊNH LÃO,NPC*~ angry,sad 1-2 normal normal m
+76 D TRỊNH LÃO,NPC*~ angry,sad 1-2 normal normal m
+77 D TRỊNH LÃO,NPC*~ neutral,afraid 1 normal normal m
+78 D TRỊNH LÃO,NPC*~ neutral,excited 1-2 normal normal,loud m
+79 D TRỊNH LÃO,NPC*~ neutral,excited,afraid 1-2 normal normal m
+80 N
+81 N
+82 N
+83 D TRỊNH VĨNH MONG angry,sarcastic 1 normal normal m
+84 D TRỊNH VĨNH MONG sarcastic,angry 1 normal normal m
+85 D TRỊNH VĨNH MONG excited,neutral 0-1 normal normal m
+86 D TRỊNH VĨNH MONG neutral,angry 0-1 normal normal m
+87 D TRỊNH VĨNH MONG neutral,angry 0-1 normal normal m
+88 D TRỊNH VĨNH MONG neutral,angry 0-1 normal normal m
+89 D TRỊNH VĨNH MONG neutral,angry 0-1 normal normal m
+90 D TRỊNH VĨNH MONG angry,excited,sarcastic 1-2 normal,fast normal,loud m
+91 D TRỊNH VĨNH MONG angry,excited 1-2 fast,normal loud,normal m
+92 D TRỊNH VĨNH MONG angry,excited 1-2 fast,normal loud,normal m
+93 N
+94 N
+95 D TRỊNH LÃO,NPC*~ neutral,happy 0-1 normal normal m
+96 D TRỊNH LÃO,NPC*~ neutral,happy 0-1 normal normal m
+97 D TRỊNH VĨNH MONG surprised 1 normal normal m
+98 N
+99 D TRỊNH VĨNH MONG surprised,afraid 1 fast,normal normal m
+100 D TRỊNH VĨNH MONG surprised,sarcastic 1 fast,normal normal m
+101 D TRỊNH VĨNH MONG sarcastic,angry 1 normal normal m
+102 N NARRATOR neutral,angry 0-1 normal normal u
+103 D TRỊNH LÃO,NPC*~ angry 2-3 fast,normal loud m
+104 D TRỊNH LÃO,NPC*~ angry 2 normal loud m
+105 D TRỊNH LÃO,NPC*~ angry,sarcastic 2 normal,fast loud m
+106 D TRỊNH LÃO,NPC*~ neutral,happy 0-1 normal normal m
+107 D TRỊNH LÃO,NPC*~ neutral,happy 0-1 normal normal m
+108 D TRỊNH LÃO,NPC*~ neutral,happy 0-1 normal normal m
+109 D TRỊNH LÃO,NPC*~ neutral,angry 0-1 normal normal m
+110 D TRỊNH LÃO,NPC*~ angry,sarcastic 1-2 normal normal,loud m
+111 N
+112 D TRỊNH VĨNH MONG sad,angry 1 normal normal m
+113 D TRỊNH VĨNH MONG sarcastic 0-1 normal normal m
+114 D TRỊNH VĨNH MONG sarcastic,angry 0-1 normal normal m
+115 N
+116 D TRỊNH LÃO,NPC*~ happy,excited 1-2 normal loud,normal m
+117 N NARRATOR neutral,surprised,sarcastic 0-1 normal normal u
+118 N,T NARRATOR,TRỊNH VĨNH MONG surprised 0-1 normal normal u
+119 N,T NARRATOR,TRỊNH VĨNH MONG surprised,sarcastic 0-1 normal normal u

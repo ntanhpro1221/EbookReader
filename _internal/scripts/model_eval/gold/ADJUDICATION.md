@@ -135,3 +135,18 @@ giao 100%. Mọi chỗ lệch là bí danh (HOTOYA TAMAKI, AKOU/AKO MURASAKI do 
 replay TMA 419 (host hiện hành): 98,2 - **419:24, 26 ("dây chuyền lắp ráp", "tiêu chuẩn hoá", thuật ngữ trích giữa câu kể)
 bị host đổi NARRATOR thành Arthur**, người nói của đoạn văn. Lượt kiểm toàn bộ (mọi chương đáp án phát lại) đang chạy.
 Góp ý luật của B (nhận cả ba): quy tắc 6 cho lời dẫn nêu hai người, ví dụ Yamiyo 43 ở quy tắc 10, tiêu đề lặp ở đoạn 1.
+
+## Vòng 7 (20-09 01:2x): B gán một mình, A soát đối kháng - TMA 396, Năng lực bá đạo 0135, Love Unseen 09
+
+B làm nhanh hơn A nhiều (một chương ~3 phút), nên ba chương này B gán và A đọc lại từng câu với nguồn thay vì làm mù.
+B tự liệt kê các câu kém chắc chắn nhất; A soát toàn bộ. B chắc tay: A chỉ đổi 6 dòng người nói trên 476 đoạn.
+
+| câu | kết luận | lý do |
+|---|---|---|
+| TMA 396:16 "Ác quỷ…" | + ANDRIS~ | câu thì thầm có dấu lửng, khớp cách Andris đang quỳ nhìn Lucien ("con quỷ đáng sợ nhất thế giới", câu 1) hơn tiếng la của đám bỏ chạy |
+| Năng lực 0135:31-114 (Trịnh Vĩnh Mong) | bỏ `NPC*~` | **B sai**: quy tắc 5 chỉ cho `NPC*~` câu nói TRƯỚC khi được gọi tên (9-16); từ câu 17 anh ta có tên. Trịnh lão giữ `NPC*~` (không có tên riêng, nói lại ở nhiều chương - lô-gic giọng thần vòng 3) |
+| Love Unseen 09:28 | HAYASE đủ -> ~ | câu kể nêu hai người ở đoạn văn KHÁC và chỉ tả họ vẫy tay - không phải lời dẫn; Narumi là người châm pháo (30) |
+| Love Unseen 09:42, 43, 50 | người thứ hai đủ -> ~ | hai câu liên tiếp sau "Hayase và Narumi gọi Fuyutsuki" là mỗi câu một người (42 gọi "Koharu" = lối Hayase), không phải một câu hai người cùng nói; quy tắc 6 bổ sung |
+
+Góp ý luật của B (nhận): họ + kính xưng là tên khi nhân vật không có tên riêng (quy tắc 11); tên cải trang nửa điểm trên
+câu nói, không điểm trên câu nghĩ (quy tắc 13).

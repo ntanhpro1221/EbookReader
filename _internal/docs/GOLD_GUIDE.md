@@ -44,7 +44,9 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
    những người lùn khác cầu nguyện", "dẫn dắt Myrna... đáp lại") đủ điểm; người có mặt trong cảnh nhưng không được nêu
    trong lời dẫn thì nửa điểm (vòng 1-2). Lời dẫn nêu HAI người cho MỘT câu mà chỉ một người nói ("Công tước James và
    pháp sư Barek... nhỏ giọng thở dài", "Tamaki và Shirawakamaru vội vàng đỡ"): cả hai đủ điểm, người có bằng chứng hơn
-   (lối xưng hô, mạch đối đáp) đứng trước (vòng 6).
+   (lối xưng hô, mạch đối đáp) đứng trước (vòng 6). Nhưng HAI câu liên tiếp sau lời kể nêu hai người ("Hayase và Narumi
+   gọi Fuyutsuki." rồi hai câu chúc) là mỗi câu một người: người có bằng chứng đủ điểm, cách đọc đảo nửa điểm; câu kể tả
+   hai người ở đoạn văn khác ("Narumi và Hayase đứng vẫy tay") không phải lời dẫn (vòng 7).
 7. **Văn bản viết** (thư, ghi chú, nhận xét đang viết, câu trích luận án, tựa sách, lời bài hát, khế ước): `NARRATOR`
    đủ điểm. Hai trường hợp (vòng 3):
    - văn bản chỉ được NHÌN THẤY / trích ra: NARRATOR và TÁC GIẢ đủ điểm (khế ước của "thần" -> giọng thần), người đang
@@ -69,11 +71,13 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
 11. **Tên gọi khác của cùng một người** (Cẩn Huyên / Diệp Cẩn Huyên, Ray / Ray Warner, Douglas / Derrick Douglas): liệt kê
    các dạng, đều đủ điểm. KHÔNG tính dạng có tiền tố vai vế/xưng hô ("CHÚ LƯU ĐẠT", "NGÀI X", "GIÁO SƯ GLAST") hay
    danh hiệu trơn khi đã biết tên ("THÁNH NỮ" cho Magali) - prompt dự án cấm chúng, và nhãn danh hiệu thành giọng thứ
-   hai của cùng người (vòng 4). Tên viết nhầm trong chính bản dịch ("Eris" cho Eria) được nửa điểm ở câu nó dẫn.
+   hai của cùng người (vòng 4). Tên viết nhầm trong chính bản dịch ("Eris" cho Eria) được nửa điểm ở câu nó dẫn. Nhân vật
+   không có tên riêng mà cả truyện gọi bằng họ + kính xưng ("Trịnh lão") thì dạng ấy là tên, đủ điểm (vòng 7).
 12. **Không** cho điểm tên nổi tiếng chỉ vì họ có trong danh sách đã biết - đây là lỗi model hay mắc nhất.
 13. **Nhập xác, cải trang, danh tính ẩn**: tên mà CHƯƠNG NÀY gọi người nói đủ điểm; danh tính thật chỉ lộ ở chương sau
    nửa điểm (Beyer / Rudolf II ở 407). Nếu chính chương đã lộ danh tính thật trước câu nói thì danh tính thật đủ điểm.
-   Giọng của người bị nhập xác (xác hay hồn) là câu hỏi mở cho chủ sách (vòng 5).
+   Giọng của người bị nhập xác (xác hay hồn) là câu hỏi mở cho chủ sách (vòng 5). Cải trang mà lời kể vẫn gọi tên thật
+   trước câu nói (Lucien đội lốt "Beaulac"): tên thật đủ điểm, tên giả nửa điểm trên câu NÓI, không điểm trên câu nghĩ.
 
 ## Cảm xúc, cường độ, nhịp, âm lượng
 
