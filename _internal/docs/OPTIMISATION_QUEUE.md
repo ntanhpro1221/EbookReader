@@ -3106,6 +3106,27 @@ biết. Hướng đo (đừng vá trước): gấp bản chép của Whisper qua
 nhiêu đoạn đang `ASR_LOCKED_NAME_ANCHOR_MISMATCH` sẽ thành đạt và có đoạn nào đang đạt mà thành hỏng.
 Luật cũ vẫn đứng: không mách chữ cho Whisper.
 
+### Người kể mới có làm câu ngắn hỏng nhiều hơn không? (19-09, 10:5x — ĐO RỒI, theo dõi tiếp)
+
+Lô 8 tới 1.293/3.678 đoạn có 5 hỏng, 3 là lời kể ngắn của Đức Trí (`Tại tu viện ở Rentaro.` → "Gentazo",
+`Pesor cười khẩy:` → "Hệ sổ cười khai", `“Choang! Choang! Choang!”` → "Chóng chóng chóng"). Đo lời kể theo
+độ dài, Phạm Tuyên lô 6 so với Đức Trí lô 7+8:
+
+    1-3 chữ    Phạm Tuyên 0/140 (0%)        Đức Trí 3/83 (3,6%)
+    4-6 chữ    Phạm Tuyên 3/331 (0,91%)     Đức Trí 2/263 (0,76%)
+    7-12 chữ   0/646                        0/427
+    > 12 chữ   0/4040                       0/2576
+
+Từ 4 chữ trở lên không khác. Chênh chỉ ở 1-3 chữ, 3 ca, xác suất ngẫu nhiên ~5% (siêu bội) - tín hiệu yếu.
+Cả ba là tên riêng / từ tượng thanh mà Whisper đổi thành chữ nó quen; "khẩy" → "khai" có thể là âm Nam.
+Tỉ lệ cảnh báo neo tên như nhau (23-31% cả hai). Đo lại khi lô 8 và 9 xong; nếu 1-3 chữ vẫn trên ~2% thì
+đây là việc của lớp "tên Whisper nhận ra" ở trên (so theo âm), không phải việc của giọng đọc.
+
+Một ca KHÁC loại, cùng lô: 344 CHLOE (Ngọc Huyền) `“Phải giả định năng lượng là không liên tục, không liên
+tục…”` → Whisper nghe "không liên tục" BA lần. Có vẻ là lỗi âm thật: cụm lặp + dấu ba chấm cuối câu và giọng
+đọc đọc tiếp theo nhịp lặp. Việc cần làm trước khi nghĩ tới bản vá: đếm trong nguồn cả cuốn bao nhiêu câu có
+dạng "X, X…" ở cuối, và bao nhiêu bản thu của chúng có bản chép dài hơn văn bản.
+
 ## Giọng Bắc không phân biệt `tr`/`ch`, mà phép so ASR thì phân biệt (2026-09-18, 04:3x — ĐO RỒI, chưa vá)
 
 Dự án đã gấp `gi`→`d`, `k`→`c` và gấp **thanh điệu** khi so bản chép, với lý lẽ ghi rõ trong
