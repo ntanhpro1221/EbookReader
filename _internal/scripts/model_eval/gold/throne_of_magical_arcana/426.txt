@@ -1,0 +1,105 @@
+# Đáp án chuẩn chương 427 ("Lời khen ngợi hiếm có"), Text_Tmp/426.txt. Vòng 9 (20-09): agent review gán (B), Claude soát
+# đối kháng (A) - ADJUDICATION.md. 36 sau "Levski quay sang Lucien nói:" -> LEVSKI (host cũ khoá cho Lucien, người nghe). 52-53:
+# "một giọng nói đột nhiên vang lên" rồi 54 mới lộ Fernando -> NPC*~. 72: "thầy mình", gọi tên Neeshka ở 76 -> NPC*~. 92-95:
+# nhận xét Neeshka đang VIẾT (quy tắc 7) -> NEESHKA, NARRATOR đủ. 1 "Tự Nhiên?" có thể cả phòng hỏi lại -> NPC*~.
+0 H
+1 D NEESHKA,NPC*~,UNKNOWN~ surprised,neutral 0-1 normal normal m
+2 N
+3 D NEESHKA neutral,surprised 0-1 normal normal m
+4 N NARRATOR neutral,surprised 0-1 normal normal u
+5 N
+6 D NARRATOR,LUCIEN~ neutral 0-1 normal normal u
+7 N
+8 N
+9 D NARRATOR neutral 0-1 normal normal u
+10 N
+11 D NARRATOR neutral 0-1 normal normal u
+12 N
+13 D LUCIEN neutral,excited 0-1 normal normal m
+14 D LUCIEN neutral,excited 0-1 normal normal m
+15 N NARRATOR neutral,surprised,sarcastic 0-1 normal normal u
+16 N
+17 D MILINA happy,neutral 0-1 normal normal f
+18 N NARRATOR neutral,happy 0-1 normal normal u
+19 T LEVSKI excited,happy 1 normal normal,soft m
+20 N
+21 N
+22 D SALGUEIRO neutral,angry,sarcastic 0-1 normal normal m
+23 D SALGUEIRO sarcastic,angry,neutral 0-1 normal normal m
+24 N
+25 D LUCIEN neutral,happy 0-1 normal normal m
+26 D LUCIEN neutral 0-1 normal normal m
+27 D LEVSKI excited,happy 1-2 normal,fast normal,loud m
+28 N
+29 N
+30 N
+31 D NEESHKA neutral,tired,happy 0-1 normal normal m
+32 N
+33 D LUCIEN neutral 0-1 normal normal m
+34 N
+35 N
+36 D LEVSKI tender,happy,sad 1 normal normal m
+37 N NARRATOR neutral,sad 0-1 normal normal u
+38 N NARRATOR neutral,sad 0-1 normal normal u
+39 N NARRATOR neutral,tender 0-1 normal normal u
+40 D LUCIEN tender,neutral 0-1 normal normal,soft m
+41 N
+42 N NARRATOR neutral,tired 0-1 normal normal u
+43 D LEVSKI tired,tender,sad 0-1 normal,slow normal,soft m
+44 D LUCIEN tender,happy 0-1 normal normal m
+45 N
+46 D LUCIEN neutral,tender 0-1 normal normal m
+47 D LUCIEN neutral,tender 0-1 normal normal m
+48 D LEVSKI excited,happy 1-2 normal,fast normal,loud m
+49 N
+50 N
+51 N
+52 D FERNANDO,NPC*~ neutral 0-1 normal normal m
+53 D FERNANDO,NPC*~ neutral 0-1 normal normal m
+54 N
+55 N NARRATOR neutral,happy 0-1 normal normal u
+56 D LUCIEN neutral,happy 0-1 normal normal m
+57 D FERNANDO sarcastic 0-1 normal normal m
+58 N
+59 N
+60 D LUCIEN neutral,happy 0-1 fast,normal normal m
+61 N
+62 D FERNANDO neutral,angry 0-1 normal normal m
+63 D FERNANDO neutral 0-1 normal normal m
+64 D FERNANDO neutral,excited 0-1 normal normal m
+65 D FERNANDO neutral,sad 0-1 normal normal m
+66 N
+67 D LUCIEN neutral 0-1 normal normal m
+68 D FERNANDO angry 2 normal,fast loud m
+69 N
+70 N
+71 N
+72 D NEESHKA,NPC*~ tired,sad,neutral 0-1 normal,slow normal,soft m
+73 N
+74 D SAMANTHA neutral 0-1 normal normal f
+75 D NEESHKA neutral,tired 0-1 normal normal m
+76 N
+77 N
+78 D SAMANTHA,NARRATOR~ neutral,surprised 0-1 normal normal f
+79 D NEESHKA sad,tired 1 slow,normal normal,soft m
+80 N NARRATOR neutral,sad 0-1 normal normal u
+81 N
+82 D SAMANTHA surprised 1 normal normal f
+83 N
+84 D NEESHKA sad,tired 1 normal,slow normal m
+85 N
+86 D NEESHKA sad,neutral 0-1 normal normal m
+87 D NEESHKA neutral,sad 0-1 normal normal m
+88 N
+89 D SAMANTHA sad,angry,surprised,whispering 1 normal soft,normal f
+90 D NEESHKA tired,neutral 0-1 normal normal m
+91 N
+92 D NEESHKA,NARRATOR neutral 0-1 normal normal m
+93 D NEESHKA,NARRATOR neutral 0-1 normal normal m
+94 D NEESHKA,NARRATOR neutral 0-1 normal normal m
+95 D NEESHKA,NARRATOR neutral 0-1 normal normal m
+96 N NARRATOR neutral,sad 0-1 normal normal u
+97 D NEESHKA neutral,tender 0-1 normal,slow normal m
+98 N
+99 D SAMANTHA surprised 1 normal normal f
+100 N

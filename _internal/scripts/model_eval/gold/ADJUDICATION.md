@@ -168,3 +168,17 @@ TMA 418 (làm mù): người nói ưu tiên trùng 97,0% (33 câu), loại 89/89
 Phát hiện sản phẩm từ vòng này (chưa vá): ngoặc 『…』 NGUYÊN DÒNG là một giọng nói ở ba truyện - kẻ nhập xác (Yamiyo, 6.185
 dòng), loa/điện thoại (Two Childhood, 691), bảng hệ thống game (Năng lực bá đạo, 5.048) - nhưng bộ tách đoạn khoá lời kể.
 Bản vá 「」 cố ý không đụng 『』 (thuật ngữ trong câu, ngoặc lồng). Cần đo riêng trước khi vá; không vào ranh giới 9.
+
+## Vòng 9 (20-09 01:4x): TMA 436 cả hai làm mù; TMA 426, hdst 090 B gán - A soát
+
+Hai chương TMA chọn vì có lời dẫn "X quay sang/nhìn Y nói:" mà host cũ khoá cho người NGHE; chúng thuộc lô 10, sẽ chạy
+với host đã vá - đáp án để đo bản vá có ăn trong sản xuất thật. TMA 436 (làm mù): người nói ưu tiên trùng **100%** (39
+câu), loại 83/85, cảm xúc ưu tiên 88,2%.
+
+| câu | kết luận | lý do |
+|---|---|---|
+| 436:7, 16, 25, 64 | hợp hai bên (thêm `~`) | B: Heidi/Lazar có mặt ở 7, 25; Florencia/Raventi ~ ở 64 |
+| 436:72 | giữ A: LUCIEN đủ | phần lớn đoạn là câu hỏi thầm của Lucien, chỉ mở bằng "Lucien khẽ cau mày." - như 418:32 |
+| 426:1 "Tự Nhiên?" | + `NPC*~` | có thể cả phòng hỏi lại (4: "thắc mắc chung của tất cả mọi người") |
+| 426:36, 436:77-78 | LEVSKI; ANNONIS | cả hai bên cùng đúng: chủ ngữ của "quay sang/nhìn ... nói", không phải người nghe |
+| hdst 090 | không đổi | |

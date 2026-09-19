@@ -1,0 +1,90 @@
+# Đáp án chuẩn chương 437 ("Sóng ngầm"), Text_Tmp/436.txt. Vòng 9 (20-09): HỢP NHẤT hai bản làm mù (A = Claude, B = agent
+# review), người nói ưu tiên trùng 100%. 77-78 "Annonis trịnh trọng nhìn Levski nói:" -> ANNONIS (host cũ khoá cho Levski, người
+# nghe - patch_the_one_being_looked_at_is_not_the_speaker.py). 21 Levski ("ông nhìn thấy"). 25 cả nhóm cúi chào: Lucien,
+# Levski nêu tên -> đủ, NPC* đủ, Lazar/Heidi có mặt ~. 72: phần lớn là tiếng lòng Lucien -> đủ (như 418:32).
+0 H
+1 N
+2 N
+3 D LUCIEN sarcastic,happy 0-1 normal normal m
+4 D LUCIEN sarcastic,happy 0-1 normal normal m
+5 D LEVSKI happy 0-1 normal normal m
+6 N NARRATOR neutral,happy 0-1 normal normal u
+7 N,T NARRATOR,HEIDI~,LAZAR~ neutral,happy,sarcastic 0-1 normal normal u
+8 D NARRATOR,LUCIEN~ neutral,sarcastic 0-1 normal normal u
+9 N
+10 N
+11 D LUCIEN neutral 0-1 normal normal m
+12 N
+13 N
+14 N
+15 N NARRATOR neutral,sarcastic 0-1 normal normal u
+16 N,T NARRATOR,LUCIEN~ neutral,sarcastic 0-1 normal normal u
+17 N
+18 N
+19 D LEVSKI neutral 0-1 normal normal m
+20 N
+21 D LEVSKI neutral,surprised 0-1 normal normal,soft m
+22 N
+23 N
+24 N
+25 D LUCIEN,LEVSKI,NPC*,UNKNOWN~,LAZAR~,HEIDI~ neutral 0-1 normal normal m
+26 N
+27 N
+28 D ANNONIS neutral,happy 0-1 normal normal m
+29 N
+30 N
+31 N
+32 D FLORENCIA sarcastic,happy 0-1 normal,slow normal f
+33 N
+34 N
+35 D LUCIEN neutral,happy 0-1 normal normal m
+36 D GASTON sarcastic,happy 0-1 normal normal m
+37 N
+38 N
+39 D RAVENTI neutral,angry 0-1 normal normal m
+40 N
+41 N
+42 D FLORENCIA happy,neutral,sarcastic 0-1 normal normal f
+43 D LUCIEN neutral 0-1 normal normal m
+44 N
+45 N
+46 D RAVENTI neutral,tender 0-1 normal normal m
+47 D RAVENTI neutral 0-1 normal normal m
+48 D RAVENTI neutral,tender 0-1 normal normal m
+49 N NARRATOR neutral,tender 0-1 normal normal u
+50 D K neutral,tender 0-1 normal normal m
+51 N
+52 N
+53 N
+54 N NARRATOR neutral,sarcastic 0-1 normal normal u
+55 D LUCIEN neutral 0-1 normal normal m
+56 N
+57 D LUCIEN neutral 0-1 normal normal m
+58 D LUCIEN neutral 0-1 normal normal m
+59 D RAVENTI neutral,surprised 0-1 normal normal m
+60 N
+61 D FLORENCIA happy,neutral 0-1 normal normal f
+62 N
+63 D LUCIEN neutral,surprised 0-1 normal normal m
+64 D GASTON,UNKNOWN~,FLORENCIA~,RAVENTI~ neutral,tired 0-1 normal normal m
+65 N
+66 N
+67 D GASTON neutral 0-1 normal normal m
+68 D LUCIEN surprised,neutral 0-1 normal normal m
+69 N
+70 N
+71 D FLORENCIA neutral,whispering 0-1 normal,slow soft f
+72 N,T NARRATOR,LUCIEN neutral,surprised,angry 0-1 normal normal u
+73 N,T NARRATOR,LUCIEN neutral,surprised 0-1 normal normal u
+74 N,T NARRATOR,LUCIEN neutral,surprised 0-1 normal normal u
+75 N
+76 N
+77 D ANNONIS sad,neutral,tender 0-1 normal,slow normal m
+78 D ANNONIS neutral,happy,excited 0-1 normal,slow normal,loud m
+79 N NARRATOR neutral,tender 0-1 normal normal u
+80 D LEVSKI sad,happy,tender 1-2 normal,slow normal,soft m
+81 D LEVSKI neutral,excited,tender 0-1 normal,slow normal m
+82 N
+83 D LEVSKI sad,excited 1-2 normal normal,loud m
+84 N NARRATOR neutral,happy 0-1 normal normal u
+85 N
