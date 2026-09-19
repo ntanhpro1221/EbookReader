@@ -78,6 +78,8 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
    nửa điểm (Beyer / Rudolf II ở 407). Nếu chính chương đã lộ danh tính thật trước câu nói thì danh tính thật đủ điểm.
    Giọng của người bị nhập xác (xác hay hồn) là câu hỏi mở cho chủ sách (vòng 5). Cải trang mà lời kể vẫn gọi tên thật
    trước câu nói (Lucien đội lốt "Beaulac"): tên thật đủ điểm, tên giả nửa điểm trên câu NÓI, không điểm trên câu nghĩ.
+   Cả khi chính lời dẫn dùng tên giả ("Aska ngạo nghễ nói" sau khi Aska thật đã bất tỉnh): danh tính đã lộ trước câu thì
+   tên thật đủ, tên giả nửa điểm - giọng người thật nói, không phải giọng cái lốt (vòng 8).
 
 ## Cảm xúc, cường độ, nhịp, âm lượng
 

@@ -1,0 +1,153 @@
+# "Yamiyo no Hotaru" file 189 ("Chap 149 (2)"). CHỈ KHỚP bộ tách đoạn sau patch_a_corner_bracket_is_a_quote.py. Vòng 8 (20-09):
+# agent review gán (B), Claude soát đối kháng (A), không đổi dòng nào - ADJUDICATION.md. Ngôi thứ nhất: "tôi" = TOMOBE. AOI /
+# ONIZUKI AOI. "Sư phụ" không được gọi tên trong chương = KAEDE TOMOE (corpus 168), NPC*~ vì nói ở nhiều chương. Kẻ nhập xác
+# YUUSEI / ONIZUKI YUUSEI nói qua miệng sư phụ, luôn trong 『…』 - 29 câu bị parser khoá lời kể -> NARRATOR (quy tắc 10).
+0 H
+1 N
+2 N NARRATOR sarcastic,angry,neutral 1 normal normal u
+3 D TOMOBE,KAEDE TOMOE~ surprised,afraid 1-2 normal soft,normal m
+4 N NARRATOR neutral,afraid,surprised 0-1 normal normal u
+5 N
+6 N NARRATOR neutral,afraid 0-1 normal normal u
+7 D TOMOBE sarcastic,afraid 1-2 normal normal m
+8 N,T NARRATOR,TOMOBE afraid,angry,surprised 1-2 normal,fast normal u
+9 N NARRATOR sarcastic,neutral 0-1 normal normal u
+10 N,T NARRATOR,TOMOBE afraid,surprised 1-2 fast normal u
+11 N,T NARRATOR,TOMOBE afraid,angry 2 fast normal,loud u
+12 N NARRATOR sarcastic,neutral 0-1 normal normal u
+13 D TOMOBE,NARRATOR~ afraid 3 fast loud m
+14 D AOI,ONIZUKI AOI angry,afraid 3 fast loud f
+15 N NARRATOR neutral,angry 0-1 normal normal u
+16 D AOI,ONIZUKI AOI angry 3 fast loud f
+17 N NARRATOR neutral,afraid 0-1 normal normal u
+18 D AOI,ONIZUKI AOI angry,afraid 2-3 fast loud f
+19 D YUUSEI,ONIZUKI YUUSEI,KAEDE TOMOE,NPC*~ angry,sarcastic 1-2 normal normal,loud m
+20 N NARRATOR afraid,neutral 1 normal normal u
+21 D AOI,ONIZUKI AOI afraid,angry 1-2 fast soft,normal f
+22 N NARRATOR neutral,afraid 0-1 normal normal u
+23 D TOMOBE sarcastic,tired 1-2 normal,slow normal,soft m
+24 N NARRATOR sarcastic,neutral 0-1 normal normal u
+25 D TOMOBE,NARRATOR~ afraid 2-3 fast loud m
+26 N NARRATOR neutral,afraid 0-1 normal normal u
+27 N NARRATOR sarcastic,neutral 0-1 normal normal u
+28 N NARRATOR neutral,afraid 0-1 normal normal u
+29 N NARRATOR angry,sarcastic,neutral,whispering 1 normal soft,normal u
+30 D TOMOBE angry,afraid 2 fast normal,loud m
+31 N NARRATOR neutral,afraid 0-1 normal normal u
+32 D AOI,ONIZUKI AOI afraid,angry 2 fast soft,normal f
+33 D YUUSEI,ONIZUKI YUUSEI,KAEDE TOMOE,NPC*~ angry,sarcastic,afraid 1-2 normal normal,loud m
+34 N NARRATOR neutral,afraid 0-1 normal normal u
+35 D TOMOBE,NARRATOR~ afraid 3 fast loud m
+36 N,T NARRATOR,TOMOBE afraid 2 fast normal,loud u
+37 D KAEDE TOMOE,YUUSEI,ONIZUKI YUUSEI,NPC*~ afraid,angry,sarcastic 2 fast normal,loud f
+38 D TOMOBE,NARRATOR~ afraid 2-3 fast loud m
+39 N NARRATOR neutral,afraid 0-1 normal normal u
+40 D TOMOBE tired,afraid 1-2 slow soft,normal m
+41 N NARRATOR sarcastic,angry,neutral 1 normal normal u
+42 N,T NARRATOR,TOMOBE surprised,neutral 0-1 normal normal u
+43 N NARRATOR sarcastic,neutral 1 normal normal u
+44 N NARRATOR neutral,surprised 0-1 normal normal u
+45 N NARRATOR neutral,afraid 0-1 normal normal u
+46 D TOMOBE,NARRATOR~ afraid 2 fast normal,loud m
+47 D AOI,ONIZUKI AOI afraid,angry 2 fast soft,normal f
+48 N NARRATOR neutral,afraid,sarcastic 0-1 normal normal u
+49 N NARRATOR neutral,sarcastic 0-1 normal normal u
+50 N,T NARRATOR,TOMOBE sarcastic,sad 1 normal normal u
+51 D TOMOBE tired,afraid 2 fast soft,normal m
+52 N NARRATOR neutral,afraid 0-1 normal normal u
+53 N NARRATOR sarcastic,neutral 0-1 normal normal u
+54 N NARRATOR neutral,afraid 0-1 normal normal u
+55 N NARRATOR neutral,afraid 0-1 normal normal u
+56 D TOMOBE afraid,surprised 2 fast normal m
+57 N,T NARRATOR,TOMOBE afraid,neutral 1 normal normal u
+58 D AOI,ONIZUKI AOI afraid 2 fast soft,normal f
+59 N NARRATOR sarcastic,neutral 0-1 normal normal u
+60 N NARRATOR neutral,afraid 0-1 normal normal u
+61 D AOI,ONIZUKI AOI afraid 3 fast soft,normal f
+62 N NARRATOR neutral,afraid,angry 0-1 normal normal u
+63 N NARRATOR neutral,angry 0-1 normal normal u
+64 D AOI,ONIZUKI AOI afraid 2-3 fast soft,normal f
+65 N NARRATOR sarcastic,neutral 0-1 normal normal u
+66 N NARRATOR neutral,angry 0-1 normal normal u
+67 D TOMOBE afraid,sad 2 slow,normal soft m
+68 N NARRATOR sarcastic,neutral 0-1 normal normal u
+69 D AOI,ONIZUKI AOI afraid 2-3 fast soft,normal f
+70 N NARRATOR neutral,afraid 0-1 normal normal u
+71 N NARRATOR sarcastic,neutral 0-1 normal normal u
+72 N NARRATOR neutral,afraid 0-1 normal normal u
+73 N NARRATOR sarcastic,angry,neutral 1 normal normal u
+74 N NARRATOR neutral,afraid 0-1 normal normal u
+75 N NARRATOR neutral,afraid 0-1 normal normal u
+76 D AOI,ONIZUKI AOI afraid 3 fast normal,loud f
+77 N NARRATOR angry,neutral 1-2 normal normal,loud u
+78 D AOI,ONIZUKI AOI afraid,sad 2-3 fast normal,loud f
+79 N NARRATOR neutral,afraid 0-1 normal normal u
+80 N NARRATOR neutral,afraid 0-1 normal normal u
+81 D TOMOBE angry 3 fast loud m
+82 N NARRATOR neutral,excited,angry 0-1 normal,fast normal u
+83 N NARRATOR surprised,neutral 1 normal normal u
+84 D TOMOBE angry 3 fast loud m
+85 N
+86 N NARRATOR surprised,angry,neutral 1 normal normal u
+87 D KAEDE TOMOE,NPC*~,TOMOBE~ afraid,surprised 1-2 fast normal f
+88 N
+89 N NARRATOR neutral,afraid 0-1 normal normal u
+90 D TOMOBE tired,afraid 1-2 normal soft,normal m
+91 N NARRATOR angry,neutral 1 normal normal u
+92 D TOMOBE,NARRATOR~ afraid 2 fast normal,loud m
+93 N NARRATOR neutral,afraid 0-1 normal normal u
+94 N NARRATOR angry,sarcastic,neutral 1 normal normal u
+95 D TOMOBE,NARRATOR~ afraid 3 fast loud m
+96 N NARRATOR afraid,neutral 0-1 normal normal u
+97 D TOMOBE angry,afraid 2 fast normal m
+98 N,T NARRATOR,TOMOBE afraid 1-2 fast normal u
+99 D KAEDE TOMOE,NPC*~ angry 3 fast loud f
+100 N NARRATOR neutral,angry 0-1 normal normal u
+101 N NARRATOR surprised,angry,neutral 1 normal normal u
+102 D KAEDE TOMOE,NPC*~,TOMOBE~ angry,afraid 2 fast normal,loud f
+103 N NARRATOR neutral,surprised 0-1 normal normal u
+104 D KAEDE TOMOE,NPC*~,NARRATOR~ afraid,sad 3 fast loud f
+105 N NARRATOR angry,surprised,neutral 1-2 normal normal,loud u
+106 N NARRATOR neutral,afraid,sad 0-1 normal normal u
+107 D TOMOBE afraid 2 fast normal m
+108 N
+109 N NARRATOR angry,neutral 1 normal normal u
+110 D TOMOBE afraid 2-3 fast soft,normal m
+111 N NARRATOR afraid,neutral 0-1 normal normal u
+112 N NARRATOR sarcastic,angry,neutral 1 normal normal u
+113 N NARRATOR neutral,angry 0-1 normal normal u
+114 N NARRATOR neutral,angry 0-1 normal normal u
+115 D TOMOBE afraid 2-3 fast soft,normal m
+116 N,T NARRATOR,TOMOBE afraid 1-2 normal normal u
+117 T TOMOBE afraid 1-2 normal normal,soft m
+118 N,T NARRATOR,TOMOBE afraid,sad 1 normal normal u
+119 N NARRATOR afraid,neutral 0-1 normal normal u
+120 D TOMOBE angry,afraid 3 fast loud m
+121 N NARRATOR surprised,angry,neutral 1 normal normal u
+122 N NARRATOR neutral,angry 0-1 normal normal u
+123 N NARRATOR surprised,afraid,neutral 1 normal normal u
+124 N NARRATOR neutral,angry 0-1 normal normal u
+125 D TOMOBE happy,angry 2 normal normal,loud m
+126 N,T NARRATOR,TOMOBE happy,angry,excited 1-2 fast normal u
+127 D KAEDE TOMOE,NPC*~ sad,tender 1 slow soft f
+128 N NARRATOR neutral,sad,surprised 0-1 normal normal u
+129 D KAEDE TOMOE,NPC*~ sad,tender,whispering 1-2 slow soft f
+130 N NARRATOR neutral,sad 0-1 normal,slow normal u
+131 D KAEDE TOMOE,YUUSEI,ONIZUKI YUUSEI,NPC*~ sad,angry 2-3 normal,fast normal,loud f
+132 N NARRATOR neutral,sad,angry 0-1 normal normal u
+133 N NARRATOR neutral,sad 0-1 normal normal u
+134 D TOMOBE angry 3 fast loud m
+135 N NARRATOR angry,neutral 2 normal normal,loud u
+136 N NARRATOR neutral,angry 0-1 normal normal u
+137 D TOMOBE angry 3 fast loud m
+138 N NARRATOR angry,afraid,neutral 2-3 normal loud,normal u
+139 N NARRATOR neutral,angry 0-1 normal normal u
+140 N NARRATOR angry,afraid,neutral 1-2 normal normal u
+141 N NARRATOR neutral,afraid 0-1 normal normal u
+142 N NARRATOR neutral,afraid 0-1 normal normal u
+143 N NARRATOR angry,excited,neutral 1-2 normal normal u
+144 N NARRATOR neutral,afraid 0-1 normal normal u
+145 N NARRATOR neutral,sad 0-1 normal normal u
+146 N NARRATOR neutral,sad 0-1 normal,slow normal u
+147 N NARRATOR neutral,sad 0-1 normal,slow normal u
+148 N

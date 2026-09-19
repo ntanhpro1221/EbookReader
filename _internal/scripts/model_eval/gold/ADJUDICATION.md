@@ -162,3 +162,9 @@ TMA 418 (làm mù): người nói ưu tiên trùng 97,0% (33 câu), loại 89/89
 | 385:20, 95, 109 (Sana, Aska, Inke) | **B sai**: bỏ `NPC*~` | tên có ngay ở lời dẫn liền sau câu ("Nhân sư cái Sana nhìn Lucien và nhỏ giọng nói:") - lời dẫn thường, như 419:5 Lillian mà cả hai bên đều không cho NPC. 35 Helges giữ `NPC*~`: lời dẫn không nêu tên |
 | 385:123 Lucien trong hình Aska | LUCIEN, ASKA đều đủ | quy tắc 13: chương gọi "Aska", nhưng đã lộ ngầm trước câu (Aska thật bất tỉnh ở 119) |
 | Two Childhood 013 | không đổi | soát từng câu với nguồn |
+| 385:123 (bổ sung) | ASKA đủ -> ~ | B tự đề xuất: lời dẫn dùng tên giả "Aska" nhưng danh tính thật đã lộ trước câu; tên giả nửa điểm như Beaulac - quy tắc 13 bổ sung |
+| Yamiyo 189 | không đổi | B xác minh "sư phụ" = Kaede Tomoe (corpus 168); 29 câu của kẻ nhập xác Yuusei trong 『…』 bị khoá lời kể -> NARRATOR (quy tắc 10) |
+
+Phát hiện sản phẩm từ vòng này (chưa vá): ngoặc 『…』 NGUYÊN DÒNG là một giọng nói ở ba truyện - kẻ nhập xác (Yamiyo, 6.185
+dòng), loa/điện thoại (Two Childhood, 691), bảng hệ thống game (Năng lực bá đạo, 5.048) - nhưng bộ tách đoạn khoá lời kể.
+Bản vá 「」 cố ý không đụng 『』 (thuật ngữ trong câu, ngoặc lồng). Cần đo riêng trước khi vá; không vào ranh giới 9.

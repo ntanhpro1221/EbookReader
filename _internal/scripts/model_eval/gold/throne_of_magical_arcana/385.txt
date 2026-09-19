@@ -1,6 +1,6 @@
 # Đáp án chuẩn chương 386 ("Từng bước một"), Text_Tmp/385.txt. Vòng 8 (20-09): agent review gán (B), Claude soát đối kháng
 # (A) - ADJUDICATION.md. Lucien cải trang nhân sư Fil, lời kể gọi "Lucien" -> LUCIEN đủ, FIL~ trên câu nói (quy tắc 13); 123 là
-# Lucien trong hình Aska (Aska thật đã bất tỉnh ở 119) -> LUCIEN, ASKA đủ. 20, 95, 109 được gọi tên ngay ở lời dẫn liền sau -> không
+# Lucien trong hình Aska (Aska thật đã bất tỉnh ở 119) -> LUCIEN đủ, ASKA~ (tên giả). 20, 95, 109 gọi tên ngay ở lời dẫn liền sau -> không
 # NPC*; 35 Helges chỉ lộ tên qua câu đáp 37 -> NPC*~. 37 cả đội đồng thanh (NPC*), Lucien chỉ nhép miệng.
 0 H
 1 N
@@ -125,7 +125,7 @@
 120 N,T NARRATOR,INKE~ neutral,sarcastic 0-1 normal normal u
 121 N
 122 D INKE neutral,surprised 0-1 normal normal u
-123 D LUCIEN,ASKA happy,sarcastic 1-2 normal normal,loud m
+123 D LUCIEN,ASKA~ happy,sarcastic 1-2 normal normal,loud m
 124 N
 125 D NPC*,UNKNOWN~ angry,neutral 1-2 normal normal,loud u
 126 N NARRATOR neutral,afraid 0-1 normal normal u
