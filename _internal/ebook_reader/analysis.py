@@ -588,11 +588,25 @@ CORRUPTED_NAME_JOINERS = frozenset(",;:")
 # ở lô 3). Đã kiểm trên 565 tên người nói: không tên nhân vật thật nào có từ đầu bỏ dấu trùng
 # bốn mục này. Chúng **chỉ** vào danh sách mở-đầu-câu, không vào `NAME_CANDIDATE_EXCLUSIONS`:
 # mục "tim" trong danh sách toàn cục đã chặn mất `Tim`, một tên người Anh có thật.
+#
+# Hàng cuối (20-09) cũng là ca thật, đếm trên cả hai cuốn: chữ Việt KHÔNG dấu mở câu kể sau câu thoại ("Lo lắng phu nhân
+# Tess...", "Tay trái của Lucien...", "Y chỉ vào ghế...", "Cho rằng...") - khoảng 40 câu thành người nói không tồn tại.
+# Không chữ nào viết hoa giữa câu như tên người trong hai cuốn. Ham và Lich cố ý để ngoài: có thể là nhân vật thật.
 ATTRIBUTION_SENTENCE_START_EXCLUSIONS = {
     "ban", "cung", "du", "khi", "luc", "neu", "ngoai", "sau", "suy", "thay",
     "theo", "trong", "truoc", "tuy", "vi",
     "giai", "im", "nghe", "tin",
+    "cho", "hy", "khe", "kim", "lo", "ly", "ma", "may", "men", "nhanh", "quai", "quay", "sao", "sinh", "so", "tay",
+    "tra", "uy", "vong", "xe", "xem", "xoa", "xung", "y",
 }
+# "Lucien còn chưa kịp làm gì khác, một giọng nói... vọng đến": tên mở câu kể là người CHƯA nói - câu thoại trước là của
+# người khác. Trừ khi cái chưa kịp chính là nói cho xong ("chưa kịp nói dứt câu", "chưa kịp dứt lời"): khi đó người
+# được nêu tên đúng là người vừa nói và bị ngắt.
+NOT_YET_SPOKEN_PATTERN = re.compile(
+    r"^\s*(?:còn\s+)?(?:chưa|không)\s+kịp\s+"
+    r"(?!nói\s+(?:gì\s+|được\s+)?(?:thêm|hết|xong|dứt|tiếp)|dứt\s+lời|nói\s+dứt)",
+    re.IGNORECASE,
+)
 SPEECH_ATTRIBUTION_PATTERN = re.compile(
     rf"(?P<speaker>{LATIN_PROPER_NAME_SURFACE_PATTERN.pattern})\s+"
     r"(?:nói|hỏi|đáp|trả lời|lên tiếng|thì thầm|quát|kêu|thốt lên)\s*[:：]\s*$"
@@ -1201,11 +1215,33 @@ def _scope_local_speaker(speaker: str, row: Any, local_scope: str) -> str:
     return f"{LOCAL_SPEAKER_STORED_PREFIX}c{chapter_id:05d}::{local_scope}::{label}"
 
 
+CHARACTER_NAME_IN_TEXT_PATTERN = re.compile(
+    r"(?<![\wÀ-ỹĐđ])[A-Z][a-z]{2,}(?:['’-][A-Za-z]+)*(?![\wÀ-ỹĐđ])"
+)
+
+
+def _names_a_character(text: str) -> bool:
+    """Câu kể có nêu tên một nhân vật thật (Latin viết hoa, >= 3 chữ cái, không phải chữ Việt hay từ loại trừ)."""
+    for match in CHARACTER_NAME_IN_TEXT_PATTERN.finditer(text):
+        key = _name_candidate_key(match.group(0))
+        if (
+            key not in NAME_CANDIDATE_EXCLUSIONS
+            and key not in ATTRIBUTION_SENTENCE_START_EXCLUSIONS
+            and not is_vietnamese_syllable(match.group(0))
+        ):
+            return True
+    return False
+
+
 def _generic_speaker_attribution(text: str, *, prefer_last: bool) -> str | None:
     if (
         not text.rstrip().endswith((":", "："))
         and GENERIC_SPEECH_ATTRIBUTION_PATTERN.search(text) is None
     ):
+        return None
+    if _names_a_character(text):
+        # "..., James chỉ vào Lucien rồi nói:" có nhắc "người phụ nữ" vẫn là câu của James; "Joanna cẩn thận hỏi người
+        # phụ nữ." - người phụ nữ là người NGHE. Lời dẫn có tên thì nhãn chung không được khoá; model đọc được tên.
         return None
     matches: list[tuple[int, str]] = []
     for label in GENERIC_SPEAKER_TRAITS:
@@ -1438,13 +1474,40 @@ def _leading_proper_name(text: str) -> str | None:
     return speaker
 
 
+def _names_someone_who_had_not_spoken(text: str, name: str) -> bool:
+    """Câu kể mở bằng `name` rồi "(còn) chưa kịp đáp/làm gì..." - người ấy chưa nói, câu thoại trước không phải của họ."""
+    stripped = text.lstrip()
+    if not stripped.startswith(name):
+        return False
+    return NOT_YET_SPOKEN_PATTERN.match(stripped[len(name) :]) is not None
+
+
+# "Levski quay sang Lucien nói:", "nhìn Tử tước Harrison nói:", "dùng giọng Beaulac nói:": trong ba từ trước tên có một
+# từ hướng về người NGHE - tên là tân ngữ, người nói là chủ ngữ ở đầu câu.
+LISTENER_DIRECTED_WORDS = frozenset({"nhìn", "sang", "với", "giọng", "tai", "chỗ", "phía", "hướng"})
+# "của một Arcanist nói:", "đám học trò Annick nói:", "đám người Lucien nói:": danh từ chung hay một nhóm.
+NOT_A_SPEAKER_BEFORE_NAME_WORDS = frozenset({"một", "của", "đám", "người", "trò"})
+
+
 def _trailing_speech_attribution(text: str) -> str | None:
-    match = SPEECH_ATTRIBUTION_PATTERN.search(text.strip())
+    stripped = text.strip()
+    match = SPEECH_ATTRIBUTION_PATTERN.search(stripped)
     if match is None:
         return None
     speaker = match.group("speaker")
     if _name_candidate_key(speaker) in NAME_CANDIDATE_EXCLUSIONS:
         return None
+    before = stripped[: match.start("speaker")].split()
+    if before:
+        previous = before[-1]
+        if previous[:1].isupper() and previous[-1:].isalpha() and is_vietnamese_syllable(speaker.split()[0]):
+            # Mẫu tên chỉ bắt chữ ASCII nên "Triết Gia", "Trịnh Vĩnh Mong" còn lại "Gia", "Mong": mẩu một tên có dấu,
+            # không phải một tên. ("Rồi Lucien nói:" vẫn khoá: "Lucien" không phải âm tiết tiếng Việt.)
+            return None
+        if previous.casefold() in NOT_A_SPEAKER_BEFORE_NAME_WORDS:
+            return None
+        if any(word.casefold().strip(",.;") in LISTENER_DIRECTED_WORDS for word in before[-3:]):
+            return None
     return speaker
 
 
@@ -1503,6 +1566,11 @@ def _explicit_speaker_attribution(
         following_data = result.get(str(following["stable_id"]))
         if following_data is not None and following_data["kind"] == "narration":
             attributed_speaker = _leading_proper_name(str(following["text"]))
+            if attributed_speaker is not None and _names_someone_who_had_not_spoken(
+                str(following["text"]), attributed_speaker
+            ):
+                # Im lặng, không đoán người khác: câu trả lời của model và lượt phản biện quyết.
+                return None
             if attributed_speaker is None:
                 label = _generic_speaker_attribution(
                     str(following["text"]),
@@ -1614,14 +1682,78 @@ def _repair_addressee_speakers(
         _record_host_note_marker(data, ADDRESSEE_REPAIR_NOTE)
 
 
+IN_SENTENCE_QUOTE_OPEN_ENDINGS = tuple(".!?…:;\"”’)")
+
+
+def _is_quoted_inside_a_sentence(
+    group: list[Any],
+    index: int,
+    result: dict[str, dict[str, Any]],
+) -> bool:
+    """Cụm trích nằm GIỮA một câu kể: "Arthur không hiểu “dây chuyền lắp ráp” hay ...".
+
+    Câu kể trước chưa kết thúc (không có dấu câu cuối) và câu kể sau nối tiếp nó (mở bằng chữ thường hay dấu câu), cùng
+    một đoạn văn. Đó là chữ của người kể trích lời/thuật ngữ, không phải một câu thoại của người nói trong đoạn.
+
+    Lô phân tích chỉ có vài đoạn, nên cụm trích ở MÉP lô chỉ thấy một phía (TMA 419:26 là đoạn cuối lô của nó). Khi ấy
+    phía nhìn thấy phải khớp, và cụm trích phải có dáng thuật ngữ - không kết thúc bằng dấu câu như một câu nói
+    (“Đi thôi,” hắn nói. vẫn là câu thoại).
+    """
+    row = group[index]
+    quoted = str(row["text"]).strip().strip("“”\"'‘’").rstrip()
+    if not quoted or quoted.endswith((",", ".", "!", "?", "…")):
+        return False
+    before = group[index - 1] if index > 0 else None
+    after = group[index + 1] if index + 1 < len(group) else None
+    if before is None and after is None:
+        return False
+    for neighbour in (before, after):
+        if neighbour is None:
+            continue
+        data = result.get(str(neighbour["stable_id"]))
+        if data is None or data["kind"] != "narration" or not _same_paragraph(neighbour, row):
+            return False
+    if before is not None and str(before["text"]).rstrip().endswith(IN_SENTENCE_QUOTE_OPEN_ENDINGS):
+        return False
+    if after is not None:
+        first = str(after["text"]).lstrip()[:1]
+        if not (first.islower() or first in ",;.)?!…"):
+            return False
+    return True
+
+
+def _has_its_own_speech_tag(
+    group: list[Any],
+    index: int,
+    result: dict[str, dict[str, Any]],
+) -> bool:
+    """Câu kể liền trước, cùng đoạn văn, kết thúc bằng dấu hai chấm: câu thoại này có lời dẫn riêng."""
+    if index == 0:
+        return False
+    before, row = group[index - 1], group[index]
+    data = result.get(str(before["stable_id"]))
+    return bool(
+        data is not None
+        and data["kind"] == "narration"
+        and _same_paragraph(before, row)
+        and str(before["text"]).rstrip().endswith((":", "："))
+    )
+
+
 def _repair_same_paragraph_speakers(
     group: list[Any],
     result: dict[str, dict[str, Any]],
 ) -> None:
     by_paragraph: dict[tuple[int, int], list[tuple[Any, dict[str, Any]]]] = defaultdict(list)
-    for row in group:
+    for index, row in enumerate(group):
         data = result.get(str(row["stable_id"]))
         if data is None or data["kind"] != "dialogue":
+            continue
+        if _is_quoted_inside_a_sentence(group, index, result):
+            # Chữ của người kể trích giữa câu (quy tắc 8 của đáp án chuẩn) - không phải câu của người nói trong đoạn.
+            continue
+        if _has_its_own_speech_tag(group, index, result):
+            # "Raventi đang định nói thêm, Florencia liền mỉm cười và cắt ngang: “...”" - một lượt ngắt lời trong cùng đoạn.
             continue
         try:
             key = (int(row["chapter_id"]), int(row["paragraph_index"]))
@@ -1772,7 +1904,10 @@ def _validate(
         speaker = _canonical_speaker(item.get("speaker"))
         gender = _safe_choice(item.get("gender"), ALLOWED_GENDERS, "unknown")
         age = _safe_choice(item.get("age"), ALLOWED_AGES, "unknown")
-        if kind in {"narration", "thought"}:
+        # Lời kể luôn là của người kể. Nội tâm là của người đang nghĩ (7e4d74c, 31-08) - chỉ khi model không
+        # nhận ra ai nghĩ thì mới về người kể. Dòng cũ gộp cả hai thành NARRATOR và là chỗ thứ tư 7e4d74c bỏ sót.
+        unattributed_thought = kind == "thought" and speaker.casefold() in {"", "narrator", "unknown"}
+        if kind == "narration" or unattributed_thought:
             speaker = "NARRATOR"
             gender = "unknown"
             age = "unknown"
@@ -3057,6 +3192,27 @@ def _is_sentence_initial_token(text: str, start: int) -> bool:
     return SENTENCE_INITIAL_PREFIX_PATTERN.search(text[:start]) is not None
 
 
+def _strip_sentence_initial_vietnamese(text: str, match: re.Match[str]) -> tuple[str, int]:
+    """A capitalised run at the start of a sentence, with its leading Vietnamese words removed.
+
+    The Latin-name pattern swallows a capitalised Vietnamese word together with the name after
+    it - "Khi Lucien", "Nghe Morris", "Do Chloe" - because at the start of a sentence both are
+    capitalised. Those words are Vietnamese syllables; stripping them leaves the name, which now
+    stands after a word and so is not sentence-initial any more. A run made only of Vietnamese
+    words keeps its last word, and `register()` rejects it as before.
+    """
+    surface, start = match.group(0), match.start()
+    if not _is_sentence_initial_token(text, start):
+        return surface, start
+    words = list(re.finditer(r"\S+", surface))
+    index = 0
+    while index < len(words) - 1 and is_vietnamese_syllable(words[index].group(0)):
+        index += 1
+    if index == 0:
+        return surface, start
+    return surface[words[index].start():], start + words[index].start()
+
+
 def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
     forms: dict[str, Counter[str]] = defaultdict(Counter)
     occurrences: Counter[str] = Counter()
@@ -3155,12 +3311,15 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
                 and not is_local_speaker(speaker)
             ):
                 dialogue_context_keys.add(match_key)
-            start = max(0, match.start() - 80)
+            surface, surface_start = _strip_sentence_initial_vietnamese(text, match)
+            if not surface:
+                continue
+            start = max(0, surface_start - 80)
             end = min(len(text), match.end() + 80)
             register(
-                match.group(0),
+                surface,
                 example=text[start:end],
-                sentence_initial=_is_sentence_initial_token(text, match.start()),
+                sentence_initial=_is_sentence_initial_token(text, surface_start),
                 text_occurrence=True,
             )
 
@@ -3175,12 +3334,12 @@ def _name_candidate_contexts(rows: list[Any]) -> list[dict[str, Any]]:
             continue
         if key not in speaker_keys and key in lowercase_text_keys:
             continue
-        if (
-            key not in speaker_keys
-            and key not in isolated_dialogue_keys
-            and mid_sentence_occurrences[key] == 0
-        ):
-            continue
+        # No "must also appear mid-sentence" rule any more (19-09): it existed to keep capitalised
+        # Vietnamese words at the start of a sentence out, which `is_vietnamese_syllable` in
+        # `register()` now does wherever they stand, and the "Vietnamese word + name" runs it also
+        # caught are split by `_strip_sentence_initial_vietnamese`. What it still did was drop a
+        # foreign name that only ever opened a sentence - "Gauci Cromwell." went to VieNeu raw and
+        # was read "Gà Yusai Cromwell".
         if key not in speaker_keys and occurrences[key] < NAME_PRONUNCIATION_MIN_OCCURRENCES:
             continue
         representative = max(forms[key], key=len)

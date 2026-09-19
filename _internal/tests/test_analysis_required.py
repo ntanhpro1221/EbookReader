@@ -11113,7 +11113,7 @@ def test_five_row_neutral_one_template_cannot_reach_blanket_accepting_critic(
     assert db.updated == []
 
 
-def test_every_thought_uses_narrator_without_character_identity() -> None:
+def test_a_thought_uses_the_narrator_only_when_nobody_is_thinking_it() -> None:
     row = analysis_group()[0]
     narrator_thought = analysis_item(row["stable_id"])
     narrator_thought.update({"kind": "thought", "speaker": "NARRATOR"})
@@ -11127,12 +11127,14 @@ def test_every_thought_uses_narrator_without_character_identity() -> None:
     fallback = _validate([row], {"segments": [unknown_thought]})
     assert fallback[row["stable_id"]]["speaker"] == "NARRATOR"
 
+    # 7e4d74c (31-08): nội tâm là của người đang nghĩ và đọc bằng giọng người ấy. Test này (03-08) từng khoá
+    # điều ngược lại, cùng với dòng trong `_validate` mà 7e4d74c bỏ sót.
     character_thought = {**narrator_thought, "speaker": "Alisa", "gender": "female"}
     validated = _validate([row], {"segments": [character_thought]})
 
     assert validated[row["stable_id"]]["kind"] == "thought"
-    assert validated[row["stable_id"]]["speaker"] == "NARRATOR"
-    assert validated[row["stable_id"]]["gender"] == "unknown"
+    assert validated[row["stable_id"]]["speaker"] == "Alisa"
+    assert validated[row["stable_id"]]["gender"] == "female"
 
 
 def test_thought_uses_narrator_without_retry_or_warning(monkeypatch) -> None:

@@ -32,52 +32,8 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Ranh giới 9. Xếp 19-09 18:1x, sau khi lô 9 đã tạo (17:53) với luật cũ. Lô 8 bỏ pin của VICTOR
-# (329 câu qua 18 lô) vì MORRIS (54 câu cả cuốn) nói nhiều hơn trong riêng lô ấy; luật mới xếp theo sổ
-# cộng dồn `character_exposure` trước. Đã thử trên bản sao của cây 775dbd2: 2984 pass, hai đỏ đều do
-# bản sao thiếu `runtime/` và shortcut.
-#
-# Cùng ranh giới, 22:1x: chủ sách chọn giữ Việt hoá tên nước ngoài; tên chỉ đứng đầu câu ("Gauci Cromwell.")
-# đang lọt khỏi bảng phiên âm và đi nguyên chữ vào VieNeu. Thử chung hai bản trên bản sao: 2988 pass.
-#
-# Cùng ranh giới, 20-09 01:2x: chủ sách đổi ý - nội tâm của ai thì giọng người ấy đọc. `_validate` vẫn ép mọi thought
-# về NARRATOR (bắt được bằng scripts/model_eval/gold_replay.py: 10/10 câu nội tâm chương 344-347 thành NARRATOR dù
-# đáp án đúng); bản vá giữ người đang nghĩ, chỉ thought không ai nhận mới về người kể, và viết lại test 03-08 khoá hành
-# vi cũ. Thử chung ba bản trên bản sao của cây 149cb67: chỉ đỏ hai test môi trường (doctor, one_click_startup).
-#
-# Cùng ranh giới, 20-09 00:4x: ngoặc góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941
-# dòng thoại, chỉ 286 đoạn ra dialogue). `normalize_text` đổi 「」 thành “”. Chia đoạn lại cả 915 + 478 chương của hai
-# cuốn đang sản xuất trước/sau: 0 chương đổi (không có 「 nào). Thử chung bốn bản trên bản sao của cây 3fafd29.
-#
-# Cùng ranh giới, 20-09 01:1x: luật host "tên đầu câu kể sau câu thoại là người nói" (`_explicit_speaker_attribution`)
-# đè câu trả lời đúng ở TMA 378:25 ("Lo lắng phu nhân Tess..." -> "Lo") và 407:78 ("Lucien còn chưa kịp làm gì khác, một
-# giọng nói... vọng đến" -> Lucien). Thêm ~24 chữ Việt không dấu vào danh sách mở-câu, và im khi người được nêu tên "chưa
-# kịp đáp/làm gì". Trên đáp án chuẩn: 50/52 -> 50/50 lần khoá đều đúng. Thử chung năm bản: chỉ đỏ hai test môi trường.
-#
-# Cùng ranh giới, 20-09 01:3x: khoá "một đoạn văn một người nói" (`_repair_same_paragraph_speakers`) nuốt cả thuật ngữ
-# trích GIỮA câu kể (TMA 419:24, 26: Arthur không hiểu “dây chuyền lắp ráp” hay “tiêu chuẩn hóa” -> giọng Arthur giữa câu
-# kể). Hai cuốn có 561 cụm như thế, ~66 bị khoá. Phát lại 10 chương đáp án TMA qua bộ phân tích đã vá đủ sáu bản: người
-# nói 100%, điểm 100 (trước vá 92,8% người nói). Thử chung sáu bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
-#
-# Cùng ranh giới, 20-09 01:3x: `_trailing_speech_attribution` khoá câu cho tên NGAY trước "nói:" - cả khi tên là người
-# NGHE ("Levski quay sang Lucien nói:", "nhìn Tử tước Harrison nói:") hay mẩu một tên có dấu ("Triết Gia hỏi:" -> "Gia").
-# Cuốn 2: 78 lần bắn, 30 lần như thế (003, 192, 231, 301, 368, 406 đã thu; 426-870 ở các lô sau); sau vá 48 lần khoá còn
-# lại đều là chủ ngữ thật. Thử chung bảy bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
-#
-# Cùng ranh giới, 20-09 01:5x: nhãn chung ("người phụ nữ", "người đàn ông trung niên") khoá câu dù lời dẫn nêu TÊN người nói
-# (418:37 James, 426:22 Salgueiro - trên đáp án chuẩn 2/2 lần sai; cuốn 2: 157/304 lần có tên); và khoá theo đoạn nuốt một
-# lượt ngắt lời có lời dẫn riêng (436:61 Florencia). Phát lại CẢ 28 chương đáp án (10 truyện) qua bộ phân tích đã vá đủ tám
-# bản: 100% người nói, chỉ còn hai câu nửa điểm đúng như đáp án. Thử chung tám bản: chỉ đỏ hai test môi trường.
-ORDER: tuple[str, ...] = (
-    "patch_the_better_known_voice_keeps_its_pin.py",
-    "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
-    "patch_a_thought_keeps_its_thinker.py",
-    "patch_a_corner_bracket_is_a_quote.py",
-    "patch_the_name_after_a_quote_is_not_always_its_speaker.py",
-    "patch_a_quoted_term_is_not_the_paragraphs_line.py",
-    "patch_the_one_being_looked_at_is_not_the_speaker.py",
-    "patch_a_named_tag_beats_a_generic_one.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -342,6 +298,52 @@ APPLIED = (
     # (304..343, không có ký hiệu che nào). Đã thử 12:5x trên bản sao của cây e0df5a7+: 2967 pass, hai
     # đỏ đều do bản sao thiếu `runtime/` và shortcut. Chương 225 thì thu lại bằng `--recast 6:225`.
     "patch_a_censored_word_is_a_pause.py",
+    # 2026-09-20: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Ranh giới 9. Xếp 19-09 18:1x, sau khi lô 9 đã tạo (17:53) với luật cũ. Lô 8 bỏ pin của VICTOR
+    # (329 câu qua 18 lô) vì MORRIS (54 câu cả cuốn) nói nhiều hơn trong riêng lô ấy; luật mới xếp theo sổ
+    # cộng dồn `character_exposure` trước. Đã thử trên bản sao của cây 775dbd2: 2984 pass, hai đỏ đều do
+    # bản sao thiếu `runtime/` và shortcut.
+    #
+    # Cùng ranh giới, 22:1x: chủ sách chọn giữ Việt hoá tên nước ngoài; tên chỉ đứng đầu câu ("Gauci Cromwell.")
+    # đang lọt khỏi bảng phiên âm và đi nguyên chữ vào VieNeu. Thử chung hai bản trên bản sao: 2988 pass.
+    #
+    # Cùng ranh giới, 20-09 01:2x: chủ sách đổi ý - nội tâm của ai thì giọng người ấy đọc. `_validate` vẫn ép mọi thought
+    # về NARRATOR (bắt được bằng scripts/model_eval/gold_replay.py: 10/10 câu nội tâm chương 344-347 thành NARRATOR dù
+    # đáp án đúng); bản vá giữ người đang nghĩ, chỉ thought không ai nhận mới về người kể, và viết lại test 03-08 khoá hành
+    # vi cũ. Thử chung ba bản trên bản sao của cây 149cb67: chỉ đỏ hai test môi trường (doctor, one_click_startup).
+    #
+    # Cùng ranh giới, 20-09 00:4x: ngoặc góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941
+    # dòng thoại, chỉ 286 đoạn ra dialogue). `normalize_text` đổi 「」 thành “”. Chia đoạn lại cả 915 + 478 chương của hai
+    # cuốn đang sản xuất trước/sau: 0 chương đổi (không có 「 nào). Thử chung bốn bản trên bản sao của cây 3fafd29.
+    #
+    # Cùng ranh giới, 20-09 01:1x: luật host "tên đầu câu kể sau câu thoại là người nói" (`_explicit_speaker_attribution`)
+    # đè câu trả lời đúng ở TMA 378:25 ("Lo lắng phu nhân Tess..." -> "Lo") và 407:78 ("Lucien còn chưa kịp làm gì khác, một
+    # giọng nói... vọng đến" -> Lucien). Thêm ~24 chữ Việt không dấu vào danh sách mở-câu, và im khi người được nêu tên "chưa
+    # kịp đáp/làm gì". Trên đáp án chuẩn: 50/52 -> 50/50 lần khoá đều đúng. Thử chung năm bản: chỉ đỏ hai test môi trường.
+    #
+    # Cùng ranh giới, 20-09 01:3x: khoá "một đoạn văn một người nói" (`_repair_same_paragraph_speakers`) nuốt cả thuật ngữ
+    # trích GIỮA câu kể (TMA 419:24, 26: Arthur không hiểu “dây chuyền lắp ráp” hay “tiêu chuẩn hóa” -> giọng Arthur giữa câu
+    # kể). Hai cuốn có 561 cụm như thế, ~66 bị khoá. Phát lại 10 chương đáp án TMA qua bộ phân tích đã vá đủ sáu bản: người
+    # nói 100%, điểm 100 (trước vá 92,8% người nói). Thử chung sáu bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
+    #
+    # Cùng ranh giới, 20-09 01:3x: `_trailing_speech_attribution` khoá câu cho tên NGAY trước "nói:" - cả khi tên là người
+    # NGHE ("Levski quay sang Lucien nói:", "nhìn Tử tước Harrison nói:") hay mẩu một tên có dấu ("Triết Gia hỏi:" -> "Gia").
+    # Cuốn 2: 78 lần bắn, 30 lần như thế (003, 192, 231, 301, 368, 406 đã thu; 426-870 ở các lô sau); sau vá 48 lần khoá còn
+    # lại đều là chủ ngữ thật. Thử chung bảy bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
+    #
+    # Cùng ranh giới, 20-09 01:5x: nhãn chung ("người phụ nữ", "người đàn ông trung niên") khoá câu dù lời dẫn nêu TÊN người nói
+    # (418:37 James, 426:22 Salgueiro - trên đáp án chuẩn 2/2 lần sai; cuốn 2: 157/304 lần có tên); và khoá theo đoạn nuốt một
+    # lượt ngắt lời có lời dẫn riêng (436:61 Florencia). Phát lại CẢ 28 chương đáp án (10 truyện) qua bộ phân tích đã vá đủ tám
+    # bản: 100% người nói, chỉ còn hai câu nửa điểm đúng như đáp án. Thử chung tám bản: chỉ đỏ hai test môi trường.
+    "patch_the_better_known_voice_keeps_its_pin.py",
+    "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
+    "patch_a_thought_keeps_its_thinker.py",
+    "patch_a_corner_bracket_is_a_quote.py",
+    "patch_the_name_after_a_quote_is_not_always_its_speaker.py",
+    "patch_a_quoted_term_is_not_the_paragraphs_line.py",
+    "patch_the_one_being_looked_at_is_not_the_speaker.py",
+    "patch_a_named_tag_beats_a_generic_one.py",
 )
 
 

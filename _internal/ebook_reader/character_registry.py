@@ -1498,10 +1498,29 @@ def _characters_by_profile(
     return inverted
 
 
+def _book_exposure(db: Any) -> dict[str, int]:
+    """Số câu cộng dồn qua cả chuỗi lô, theo `canonical_key` - sổ `character_exposure`.
+
+    Sổ do `scripts/backfill_exposure.py` ghi vào project trước mỗi lô; project không có sổ (cũ, test,
+    một bản sao) trả rỗng, và mọi phép xếp hạng dùng nó trở về như khi chưa có nó.
+    """
+    try:
+        with db.connect() as conn:
+            rows = conn.execute("SELECT canonical_name, dialogue_lines FROM character_exposure").fetchall()
+    except Exception:  # noqa: BLE001 - bảng vắng, db giả trong test: không có sổ thì không xếp theo sổ
+        return {}
+    exposure: dict[str, int] = {}
+    for name, lines in rows:
+        key = canonical_key(str(name))
+        exposure[key] = max(exposure.get(key, 0), int(lines or 0))
+    return exposure
+
+
 def _drop_pins_that_share_a_chapter(
     rows: list[Any],
     locked_voices: dict[str, str],
     log: Any,
+    exposure: dict[str, int] | None = None,
 ) -> dict[str, str]:
     """Bỏ pin của người ít câu hơn khi hai người CÙNG GHIM một giọng và CÙNG NÓI một chương.
 
@@ -1515,9 +1534,13 @@ def _drop_pins_that_share_a_chapter(
     giọng giữa các chương" (người nghe tưởng là cùng một người, ngay trong một cảnh). Nên ở đúng
     chỗ hai điều ấy xung đột, nhất quán phải nhường.
 
-    Ai giữ: người **nhiều câu hơn trong cả lô** - đổi giọng của họ gây chú ý hơn. Người kia mất
-    pin và đi qua `allocator.choose()`, thứ đã tránh người cùng chương sẵn.
+    Ai giữ: người **quen hơn trên cả cuốn** - số câu cộng dồn qua chuỗi lô (`exposure`, sổ
+    `character_exposure`), rồi mới tới số câu trong lô. Bản trước xếp theo số câu trong lô, và lô 8 cuốn 2
+    (19-09) bỏ pin của VICTOR - 329 câu qua 18 lô, 64 chương một giọng - vì MORRIS (54 câu cả cuốn) nói
+    nhiều hơn trong riêng lô ấy; VICTOR đổi giọng ở 4 chương. Không có sổ thì như cũ. Người kia mất pin và
+    đi qua `allocator.choose()`, thứ đã tránh người cùng chương sẵn.
     """
+    exposure = exposure or {}
     if not locked_voices:
         return locked_voices
     chapters: dict[str, set[int]] = {}
@@ -1539,8 +1562,12 @@ def _drop_pins_that_share_a_chapter(
     for voice, identities in sorted(by_voice.items()):
         if len(identities) < 2:
             continue
-        # Người nhiều câu trước; ai đã giữ thì người sau chỉ mất pin nếu CHẠM chương của họ.
-        ranked = sorted(identities, key=lambda name: (-lines.get(name, 0), name))
+        # Người quen hơn trên cả cuốn trước, rồi người nhiều câu trong lô; ai đã giữ thì người sau chỉ
+        # mất pin nếu CHẠM chương của họ.
+        ranked = sorted(
+            identities,
+            key=lambda name: (-exposure.get(name, 0), -lines.get(name, 0), name),
+        )
         holders: list[str] = []
         for identity in ranked:
             clash = next(
@@ -1557,8 +1584,9 @@ def _drop_pins_that_share_a_chapter(
             dropped.add(identity)
             shared = sorted(chapters[identity] & chapters[clash])
             log(
-                f"Bỏ giọng đã ghim của {identity} ({lines.get(identity, 0)} câu): trùng "
-                f"{voice} với {clash} ({lines.get(clash, 0)} câu) ở chương {shared}. "
+                f"Bỏ giọng đã ghim của {identity} ({lines.get(identity, 0)} câu, "
+                f"{exposure.get(identity, 0)} cả cuốn): trùng {voice} với {clash} "
+                f"({lines.get(clash, 0)} câu, {exposure.get(clash, 0)} cả cuốn) ở chương {shared}. "
                 "Hai người một giọng trong cùng chương nặng hơn một người đổi giọng."
             )
     if not dropped:
@@ -1718,7 +1746,9 @@ def build_registry_and_cast(
     # Sau khi pin đã qua phép kiểm "đúng phái", tới phép kiểm "không hai người một giọng trong
     # một chương". Thứ tự này có chủ ý: một pin sai phái thì bỏ dù có va chạm hay không, còn
     # phép kiểm dưới đây chỉ nói về những pin còn lại.
-    locked_voices = _drop_pins_that_share_a_chapter(rows, locked_voices, log)
+    locked_voices = _drop_pins_that_share_a_chapter(
+        rows, locked_voices, log, exposure=_book_exposure(db)
+    )
     unresolved_genders = _validate_casting_inputs(
         rows, minimum_main_mentions, log, locked_genders
     )
