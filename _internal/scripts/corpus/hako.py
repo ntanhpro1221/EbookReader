@@ -145,6 +145,14 @@ def series_info(sources: Sources, path: str) -> dict:
             continue
         chapters.append({"path": urlparse(anchor.get("href")).path, "title": name})
     words = int(re.sub(r"\D", "", stats.get("Số từ", "0")) or 0)
+    last = tree.xpath('//div[contains(@class,"statistic-item")][.//div[normalize-space(.)="Lần cuối"]]//time/@datetime')
+    # Bình luận trang đầu (~10 cái mới nhất): độc giả hay nói "drop rồi à", khen chê, chỉ chỗ đọc raw/bản Anh.
+    comments = []
+    for item in tree.xpath('//div[contains(@class,"ln-comment-item")]'):
+        text = " ".join(item.xpath('string(.//*[contains(@class,"ln-comment-content")])').split())
+        when = item.xpath('.//time/@datetime')
+        if text:
+            comments.append({"time": when[0] if when else "", "text": text[:500]})
     return {
         "path": path,
         "title": title,
@@ -155,15 +163,17 @@ def series_info(sources: Sources, path: str) -> dict:
         "rating": stats.get("Đánh giá", ""),
         "views": int(re.sub(r"\D", "", stats.get("Lượt xem", "0")) or 0),
         "chapters": chapters,
+        "last_update": last[0] if last else "",
+        "comments": comments,
         "summary": " ".join(" ".join(x.text_content().split()) for x in tree.xpath('//div[contains(@class,"summary-content")]'))[:600],
     }
 
 
-def survey(pages: int, sort: str, kind: str = "truyendich") -> list[dict]:
+def survey(pages: int, sort: str, kind: str = "truyendich", status: str = "hoanthanh") -> list[dict]:
     sources = Sources()
     found: dict[str, str] = {}
     for page in range(1, pages + 1):
-        tree = html.fromstring(sources.get(f"/danh-sach?{kind}=1&hoanthanh=1&sapxep={sort}&page={page}"))
+        tree = html.fromstring(sources.get(f"/danh-sach?{kind}=1&{status}=1&sapxep={sort}&page={page}"))
         for anchor in tree.xpath('//div[contains(@class,"series-title")]/a'):
             found.setdefault(urlparse(anchor.get("href")).path, anchor.get("title") or anchor.text_content().strip())
     results = []
@@ -176,7 +186,7 @@ def survey(pages: int, sort: str, kind: str = "truyendich") -> list[dict]:
         info["chapter_count"] = len(info.pop("chapters"))
         results.append(info)
         print(f"  [{index}/{len(found)}] {info['title'][:50]:50} {info['words']:>9,} từ  {info['chapter_count']:>4} ch  {', '.join(info['genres'][:4])}")
-    target = SURVEY_DIR / f"hako_survey_{kind}.json"
+    target = SURVEY_DIR / (f"hako_survey_{kind}.json" if status == "hoanthanh" else f"hako_survey_{kind}_{status}.json")
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(results, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"ghi {target}")
@@ -236,13 +246,15 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--pages", type=int, default=3)
     s.add_argument("--sort", default="top", help="top | topthang | theodoi | sotu | capnhat")
     s.add_argument("--kind", default="truyendich", choices=KINDS)
+    # tamngung = "Tạm ngưng": bộ bị bỏ dở - thứ chủ sách muốn tìm (19-09).
+    s.add_argument("--status", default="hoanthanh", choices=("hoanthanh", "tamngung", "dangtienhanh"))
     d = sub.add_parser("download")
     d.add_argument("path", help="đường dẫn truyện, vd /truyen/259-toi-la-nhen-thi-sao")
     d.add_argument("--title")
     d.add_argument("--workers", type=int, default=6)
     args = parser.parse_args(argv)
     if args.command == "survey":
-        survey(args.pages, args.sort, args.kind)
+        survey(args.pages, args.sort, args.kind, args.status)
     else:
         download(args.path, args.title, args.workers)
     return 0
