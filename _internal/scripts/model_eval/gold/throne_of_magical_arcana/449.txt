@@ -1,0 +1,96 @@
+# Đáp án chuẩn "Chương 450 - Thí nghiệm của mỗi người", Text_Tmp/449.txt (lô 10 - lô đầu tiên chạy với tám bản vá host). Vòng 13 (20-09): agent review gán
+# (B), Claude soát (A) - ADJUDICATION.md. Câu gọi tên: người được gọi là người NGHE.
+0 H
+1 D SƠN CA,SAMANTHA neutral,excited 0-1 normal normal f
+2 D SƠN CA,SAMANTHA neutral,excited 0-1 normal normal f
+3 D SƠN CA,SAMANTHA neutral 0-1 normal normal f
+4 D SƠN CA,SAMANTHA neutral 0-1 normal normal f
+5 D SƠN CA,SAMANTHA neutral,excited 0-1 normal normal f
+6 D SƠN CA,SAMANTHA neutral 0-1 normal normal f
+7 N NARRATOR neutral,excited 0-1 normal normal u
+8 N NARRATOR neutral,angry 0-1 normal normal u
+9 D SƠN CA,SAMANTHA neutral,excited 0-1 normal normal f
+10 D SƠN CA,SAMANTHA neutral 0-1 normal normal f
+11 D SƠN CA,SAMANTHA neutral,excited 0-1 normal normal f
+12 N
+13 D SƠN CA,SAMANTHA happy,neutral 0-1 normal normal f
+14 D NPC*,UNKNOWN~ happy,excited 1 normal normal,loud m
+15 N
+16 N
+17 D NPC*,UNKNOWN~ happy,tender 0-1 normal normal f
+18 N
+19 N
+20 D SƠN CA,SAMANTHA happy,neutral 0-1 normal normal f
+21 D NPC*,UNKNOWN~ excited,neutral 1 normal normal,loud m
+22 D NPC*,UNKNOWN~ excited,sarcastic 1 normal normal,loud m
+23 N
+24 D NPC*,UNKNOWN~ happy,angry,sarcastic 0-1 normal normal m
+25 D NPC*,UNKNOWN~ neutral 0-1 normal normal m
+26 N
+27 D NPC*,UNKNOWN~ tender,happy 0-1 normal normal f
+28 D NPC*,UNKNOWN~ neutral,happy 0-1 normal normal f
+29 N
+30 N
+31 D SƠN CA,SAMANTHA neutral,surprised 0-1 normal normal f
+32 D SƠN CA,SAMANTHA neutral 0-1 normal normal f
+33 D SƠN CA,SAMANTHA neutral,surprised 0-1 normal normal f
+34 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
+35 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
+36 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
+37 N
+38 N NARRATOR neutral,sad 0-1 normal normal u
+39 N NARRATOR neutral,afraid 0-1 normal normal u
+40 N NARRATOR neutral,afraid 0-1 normal normal u
+41 N
+42 N
+43 D BAREK,BAREK PAPHOS neutral 0-1 normal normal m
+44 D BROOK neutral 0-1 normal normal m
+45 N
+46 D BROOK neutral,sarcastic 0-1 normal normal m
+47 D BAREK,BAREK PAPHOS neutral,happy 0-1 normal normal m
+48 N
+49 D BAREK,BAREK PAPHOS neutral 0-1 normal normal m
+50 D BROOK surprised,neutral 0-1 normal normal m
+51 N
+52 N
+53 D BAREK,BAREK PAPHOS afraid,neutral 0-1 normal normal,soft m
+54 D BROOK neutral 0-1 normal normal m
+55 N
+56 N
+57 D BAREK,BAREK PAPHOS afraid,neutral 0-1 normal normal m
+58 D BAREK,BAREK PAPHOS afraid,neutral 0-1 normal normal m
+59 N NARRATOR neutral,afraid 0-1 normal normal u
+60 D BROOK neutral,sad 0-1 slow soft,normal m
+61 N
+62 N
+63 N
+64 N
+65 D NARRATOR neutral 0-1 normal normal u
+66 N
+67 N
+68 D SAMANTHA surprised,neutral 0-1 normal normal f
+69 N,T NARRATOR,SAMANTHA surprised,neutral 0-1 normal normal u
+70 D LUCIEN neutral 0-1 normal normal m
+71 N
+72 D SAMANTHA surprised 0-1 normal normal f
+73 N
+74 D LUCIEN neutral 0-1 normal normal m
+75 N
+76 D LUCIEN neutral 0-1 normal normal m
+77 D SAMANTHA sarcastic,surprised 0-1 normal normal f
+78 N
+79 N
+80 D LUCIEN happy,neutral 0-1 normal normal m
+81 D SAMANTHA sarcastic,happy 0-1 normal normal f
+82 N
+83 N
+84 D LUCIEN happy,tender 0-1 normal normal m
+85 D SAMANTHA neutral 0-1 normal normal f
+86 N
+87 D SAMANTHA neutral,tender 0-1 normal normal f
+88 N
+89 D LUCIEN happy,neutral 0-1 normal normal m
+90 N NARRATOR neutral,sad 0-1 normal normal u
+91 N
+92 N
+93 D NARRATOR,LUCIEN~ neutral 0-1 normal normal u

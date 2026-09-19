@@ -1,0 +1,83 @@
+# Đáp án chuẩn "Chương 430 - Tranh cãi nảy lửa", Text_Tmp/429.txt (lô 10 - lô đầu tiên chạy với tám bản vá host). Vòng 13 (20-09): agent review gán
+# (B), Claude soát (A) - ADJUDICATION.md. Câu gọi tên: người được gọi là người NGHE.
+0 H
+1 N
+2 N
+3 N
+4 N
+5 D NORMAN happy,neutral 0-1 normal normal m
+6 N
+7 N
+8 D LUCIEN neutral 0-1 normal normal m
+9 N
+10 N
+11 N
+12 D NORMAN neutral 0-1 normal normal m
+13 N
+14 D NORMAN excited,neutral 0-1 normal normal m
+15 D NORMAN excited,sad 1 normal normal m
+16 N NARRATOR neutral,sad 0-1 normal normal u
+17 D NORMAN neutral 0-1 normal normal m
+18 N
+19 N
+20 D ARTIL sarcastic,neutral 0-1 normal normal m
+21 N NARRATOR neutral,surprised 0-1 normal normal u
+22 N
+23 N NARRATOR neutral,angry 0-1 normal normal u
+24 N
+25 D NARRATOR neutral,sarcastic 0-1 normal normal u
+26 N
+27 D NORMAN neutral,happy 0-1 normal normal m
+28 D LUCIANA neutral,happy 0-1 normal normal f
+29 N
+30 N
+31 N
+32 D ARTIL sarcastic,neutral 0-1 normal normal m
+33 D ARTIL sarcastic,neutral 0-1 normal normal m
+34 D ARTIL neutral,excited 0-1 normal normal m
+35 N
+36 N
+37 D LUCIANA angry,neutral 0-1 normal normal f
+38 N
+39 D NORMAN neutral,happy 0-1 normal normal m
+40 N
+41 N
+42 D ARTIL neutral,sarcastic 0-1 normal normal m
+43 N
+44 D LUCIEN neutral 0-1 normal normal m
+45 N
+46 D ARTIL excited 1-2 normal,fast normal,loud m
+47 N
+48 D ARTIL excited 1-2 normal,fast normal,loud m
+49 D ARTIL excited,sarcastic 1-2 normal,fast normal,loud m
+50 D ARTIL excited,angry 2 fast loud m
+51 N
+52 D NORMAN neutral,angry 0-1 normal normal m
+53 D NORMAN neutral 0-1 normal normal m
+54 D ARTIL angry,sarcastic 2 normal,fast loud,normal m
+55 N
+56 D ARTIL angry 2 normal,fast loud m
+57 N
+58 D NORMAN angry 1-2 normal,fast normal,loud m
+59 D NORMAN angry 1-2 normal,fast normal,loud m
+60 D ARTIL angry,surprised 2 fast loud m
+61 N
+62 D ARTIL angry 2-3 fast loud m
+63 N
+64 D LUCIANA sarcastic,angry 1 normal normal f
+65 D NORMAN neutral,angry 1 normal normal m
+66 N
+67 D ARTIL angry 3 fast loud m
+68 N NARRATOR neutral,angry 0-1 normal normal u
+69 D NORMAN angry 2 fast loud m
+70 N
+71 N NARRATOR neutral,angry 0-1 normal normal u
+72 N NARRATOR neutral,afraid 0-1 normal normal u
+73 T LUCIEN afraid,sarcastic,neutral 0-1 normal normal,soft m
+74 D ARTIL sarcastic,angry 1-2 normal normal,loud m
+75 D NORMAN angry 2 fast normal,loud m
+76 N
+77 D NORMAN,LUCIANA~,ARTIL~ neutral 0-1 normal normal m
+78 D ARTIL neutral,excited 0-1 normal normal m
+79 D LUCIANA,ARTIL~ neutral,excited 0-1 normal normal f
+80 N NARRATOR neutral,sarcastic 0-1 normal normal u

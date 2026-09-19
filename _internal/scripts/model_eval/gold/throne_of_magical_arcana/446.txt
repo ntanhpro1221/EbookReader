@@ -1,0 +1,94 @@
+# Đáp án chuẩn "Chương 447 - [Thanh âm Arcana]", Text_Tmp/446.txt (lô 10 - lô đầu tiên chạy với tám bản vá host). Vòng 13 (20-09): agent review gán
+# (B), Claude soát (A) - ADJUDICATION.md. Câu gọi tên: người được gọi là người NGHE.
+0 H
+1 N
+2 N
+3 N
+4 N
+5 N
+6 N
+7 N
+8 D ANDY,NPC*~ angry,sarcastic 1 normal normal m
+9 N NARRATOR neutral,sarcastic 0-1 normal normal u
+10 D NPC*,MARTIN~,WILLIAM~,MICKEY~ neutral,whispering 0-1 normal soft m
+11 N
+12 N
+13 D ANDY surprised 1 normal normal m
+14 N NARRATOR neutral,excited 0-1 normal normal u
+15 N
+16 D ANDY angry,whispering 1 normal soft m
+17 N
+18 D MARTIN sarcastic,happy 1 normal soft m
+19 D WILLIAM sarcastic,neutral 0-1 normal soft,normal m
+20 N
+21 D WILLIAM sarcastic,happy 1 normal soft,normal m
+22 D ANDY angry 1 normal normal m
+23 N
+24 D MICKEY angry,whispering 1 normal soft m
+25 N
+26 N
+27 D WILLIAM excited,tender 0-1 normal soft,normal m
+28 N
+29 D MARTIN sarcastic 0-1 normal soft m
+30 N
+31 N
+32 N
+33 N
+34 N
+35 N
+36 N
+37 N
+38 N
+39 D ANDY,WILLIAM,MARTIN~,MICKEY~ happy,tender 0-1 normal soft,normal m
+40 N
+41 D SCARLET,SELMA~,NPC*~ neutral,whispering 0-1 normal soft f
+42 N NARRATOR neutral,excited 0-1 normal normal u
+43 N
+44 N
+45 N NARRATOR neutral,excited 0-1 normal normal u
+46 N NARRATOR neutral,excited 0-1 normal normal u
+47 N
+48 D DẠ OANH,LOUISE~ happy,neutral 0-1 normal normal f
+49 N
+50 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+51 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+52 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+53 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+54 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+55 D SCARLET excited,happy 1-2 normal,fast normal f
+56 N
+57 N,T NARRATOR,ANDY~ neutral,sad 0-1 normal normal u
+58 N
+59 D NPC*,NARRATOR~ excited,happy 0-1 normal normal u
+60 D NPC*,NARRATOR~ excited,happy 0-1 normal normal u
+61 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+62 D DẠ OANH,LOUISE~ neutral,afraid 0-1 normal normal f
+63 N NARRATOR neutral,afraid 0-1 normal normal u
+64 D DẠ OANH,LOUISE~ neutral,afraid 0-1 normal normal f
+65 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+66 D NPC*,UNKNOWN~ afraid,happy 1-2 fast,normal normal u
+67 N
+68 N
+69 D SCARLET sad,afraid 2 normal,slow soft f
+70 N
+71 D DẠ OANH,LOUISE~ neutral,tender 0-1 normal normal f
+72 N NARRATOR neutral,happy 0-1 normal normal u
+73 D DẠ OANH,LOUISE~ neutral,happy 0-1 normal normal f
+74 D DẠ OANH,LOUISE~ neutral,happy 0-1 normal normal f
+75 D ANDY excited 1 normal normal m
+76 N
+77 N
+78 D NPC*,UNKNOWN~ sarcastic,happy 1 normal normal m
+79 N
+80 D SCARLET whispering,happy 0-1 normal soft f
+81 N
+82 N
+83 D DẠ OANH,LOUISE~ happy,neutral 0-1 normal normal f
+84 D SCARLET happy,excited 1 normal normal f
+85 N
+86 D DẠ OANH,LOUISE~ happy 0-1 normal normal f
+87 D FELIPE neutral 0-1 normal normal m
+88 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+89 D DẠ OANH,LOUISE~ neutral 0-1 normal normal f
+90 D DẠ OANH,LOUISE~ surprised 1 normal normal f
+91 D DẠ OANH,LOUISE~ afraid,surprised 1-2 normal,fast normal f

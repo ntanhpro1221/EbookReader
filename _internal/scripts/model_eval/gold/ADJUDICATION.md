@@ -202,3 +202,10 @@ kiểu lỗi lớn nhất của `qwen3:8b` ở lô 9.
 A soát mọi câu có người nói kèm câu kể liền trước/sau: không đổi dòng nào. Đáng ghi: Nageki 73 là một cái BẪY cho model -
 nhóm giả mạo có tên na ná nhóm thật (Krahi Andrihee / Krai Andrey, Kutri Smyat / Sitri Smart); tên nhóm thật không được điểm
 (quy tắc 12). B tự kiểm cả bốn cách viết trong kho.
+
+## Vòng 13 (20-09 03:3x): TMA 429, 446, 449 (lô 10) - B gán, A soát
+
+Cùng 426, 436: năm chương lô 10 để so độ chính xác sản xuất trước (lô 9) và sau tám bản vá host. A giữ mọi nhãn của B trừ
+449:93 (giấy tờ trên bàn Lucien, chỉ được NHÌN thấy, không câu nào nói Lucien viết) -> LUCIEN~ thay vì đủ. "Sơn Ca" là bí
+danh phát thanh của Samantha, chính chương nối hai tên (65-66) -> cả hai đủ (quy tắc 11). LOUISE~ cho Dạ Oanh ở 446: danh tính
+chỉ lộ ở chương sau (quy tắc 13).
