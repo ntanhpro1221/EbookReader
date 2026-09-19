@@ -2,7 +2,7 @@
 
 Mỗi tranh chấp giữa hai người gán nhãn (A = Claude, B = agent review) và kết luận. Quy tắc: `docs/GOLD_GUIDE.md`.
 
-## Vòng 1 - làm mù (20-09 01:0x): B gán độc lập 378 (cuốn 2) và 248 (cuốn 1)
+## Vòng 1 - làm mù (20-09 00:0x): B gán độc lập 378 (cuốn 2) và 248 (cuốn 1)
 
 Độ khớp trước phân xử, trên 94 câu có người nói: người nói ưu tiên trùng 97,9%, tập đủ-điểm giao nhau 100%; loại đoạn
 100% (248/248); giới tính 100% (81/81); cảm xúc ưu tiên trùng 89,1%, tập giao nhau 100%.
@@ -24,7 +24,7 @@ Mỗi tranh chấp giữa hai người gán nhãn (A = Claude, B = agent review)
 | 248:81 "Á hự!" | sad trước | không có sad | nới A | surprised lên đầu; sad giữ ở cuối (đau) |
 | 248:92 | nhịp normal trước | fast | giữ A | cả hai hợp lý, tập A đã có fast |
 
-## Vòng 2 - soát đối kháng (20-09 01:3x): B đọc đáp án của A cho 351, 363, 381 và tìm lỗi
+## Vòng 2 - soát đối kháng (20-09 00:1x): B đọc đáp án của A cho 351, 363, 381 và tìm lỗi
 
 B không tìm ra người nói CHÍNH sai ở câu nào; ~28 câu tranh chấp về điểm của lựa chọn phụ, thứ tự loại, cảm xúc.
 
@@ -74,7 +74,7 @@ Soát 5 chương: không có người nói chính sai; 28 câu tranh chấp.
 | 199:111, 137, 050:26, 29 | + whispering | lẩm bẩm |
 | văn bản viết có người viết đứng đầu (345, 347, 351:73, 344:75-76) | giới tính của người viết | quy ước giới tính mới |
 
-## Vòng 4 (20-09 02:0x): CẢ HAI làm mù hai truyện mới - hdst 060, nise 030
+## Vòng 4 (20-09 00:3x): CẢ HAI làm mù hai truyện mới - hdst 060, nise 030
 
 A (Claude) và B (agent review) gán độc lập, không xem bản của nhau. Hai truyện đều ngôi thứ nhất, bản dịch nghiệp dư
 có lỗi (đại từ đảo, tên viết nhầm). Hợp nhất bằng `merge_gold.py merge` (hợp các tập chấp nhận, ưu tiên theo A) rồi phân
