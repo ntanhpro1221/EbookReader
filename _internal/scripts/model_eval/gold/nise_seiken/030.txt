@@ -1,0 +1,91 @@
+# Đáp án chuẩn "Nise Seiken Monogatari" file 030 ("Chương 29: Tay tôi, buông ra"). Vòng 4 (20-09): HỢP NHẤT hai bản
+# làm mù độc lập (A = Claude, B = agent review) bằng merge_gold.py rồi phân xử - ADJUDICATION.md.
+# Ngôi thứ nhất: "tôi" = MAGALI (câu 52, 55 gọi tên). "THÁNH NỮ" là danh hiệu - không điểm (quy tắc 11). ERIA = hoàng
+# tử; câu 17 viết nhầm "Eris" (ERIS~ ở câu 16 mà nó dẫn). 48/49: bản dịch lẫn đại từ - theo mạch truyện 48 ERIA, 49
+# MAGALI (câu 50 "Đó là nói dối"); cách đọc theo đại từ được nửa điểm. Lời kể là tiếng lòng tức thời của Magali: N,T.
+0 H
+1 N
+2 N,T NARRATOR,MAGALI sad,tired,neutral,surprised 0-2 normal normal u
+3 N NARRATOR neutral,sad 0-1 normal normal u
+4 D ERIA,NPC*~ neutral,tender 0-1 normal normal m
+5 D MAGALI neutral,happy 0-1 normal normal,soft f
+6 N NARRATOR neutral,sarcastic 0-1 normal normal u
+7 N,T NARRATOR,MAGALI sarcastic,neutral 0-1 normal normal u
+8 N NARRATOR neutral,sarcastic 0-1 normal normal u
+9 N NARRATOR neutral,sarcastic 0-1 normal normal u
+10 N NARRATOR neutral,sarcastic 0-1 normal normal u
+11 N NARRATOR neutral,sarcastic 0-1 normal normal u
+12 N,T NARRATOR,MAGALI neutral,sarcastic,tired,angry 0-1 normal normal u
+13 N NARRATOR neutral,sarcastic 0-1 normal normal u
+14 N NARRATOR neutral,sarcastic,afraid 0-1 normal normal u
+15 N
+16 D ERIA,ERIS~ happy,sarcastic,neutral,tender 0-2 normal normal m
+17 N NARRATOR neutral,sarcastic 0-1 normal normal u
+18 N,T NARRATOR,MAGALI sarcastic,neutral,angry 0-1 normal normal,soft u
+19 N NARRATOR neutral,sarcastic,tired 0-1 normal normal u
+20 N NARRATOR neutral,sarcastic,tired 0-1 normal normal u
+21 D MAGALI neutral,happy,sarcastic,tender 0-1 normal normal,soft f
+22 N NARRATOR neutral,sarcastic 0-1 normal normal u
+23 N,T NARRATOR,MAGALI neutral,sarcastic 0-1 normal normal u
+24 D ERIA happy,excited,neutral 0-1 normal normal m
+25 N,T NARRATOR,MAGALI neutral,sarcastic,angry 0-1 normal normal u
+26 N NARRATOR neutral,sarcastic 0-1 normal normal u
+27 N NARRATOR neutral,sarcastic,sad 0-1 normal normal u
+28 N NARRATOR neutral,sarcastic 0-1 normal normal u
+29 N,T NARRATOR,MAGALI angry,excited,neutral 1-2 normal,fast normal,loud u
+30 N
+31 N,T NARRATOR,MAGALI sad,angry,sarcastic 0-2 normal normal u
+32 N NARRATOR neutral,sarcastic 0-1 normal normal u
+33 N,T NARRATOR,MAGALI sarcastic,neutral,angry 0-1 normal normal u
+34 N NARRATOR neutral,sarcastic 0-1 normal normal u
+35 N,T NARRATOR,MAGALI angry,sarcastic,sad 1-2 normal normal u
+36 N,T NARRATOR,MAGALI neutral,sarcastic 0-1 normal normal u
+37 D ERIA neutral,happy,tender 0-1 normal normal m
+38 N,T NARRATOR,MAGALI sarcastic,neutral 0-1 normal normal u
+39 N,T NARRATOR,MAGALI tired,sarcastic,neutral 0-1 normal,slow normal,soft u
+40 N NARRATOR neutral,sarcastic 0-1 normal normal u
+41 D MAGALI neutral,happy 0-1 normal normal f
+42 N,T NARRATOR,MAGALI sarcastic,neutral 0-1 normal normal,soft u
+43 D ERIA tender,neutral 0-1 slow,normal soft,normal m
+44 D MAGALI surprised 1-2 normal,fast normal f
+45 N,T NARRATOR,MAGALI neutral,afraid,surprised 0-1 normal,fast normal u
+46 N,T NARRATOR,MAGALI angry,afraid 1-3 fast,normal normal,loud u
+47 N NARRATOR neutral,afraid 0-1 normal normal u
+48 D ERIA,MAGALI~ tender,neutral 0-1 normal,slow normal,soft m
+49 D MAGALI,ERIA~ neutral,afraid 0-1 normal,fast normal f
+50 N NARRATOR neutral,sarcastic 0-1 normal normal u
+51 N,T NARRATOR,MAGALI angry,afraid 1-2 normal,fast normal,loud u
+52 D ERIA tender,excited,neutral 0-2 normal,slow normal,soft m
+53 N,T NARRATOR,MAGALI afraid,angry 1-3 fast,normal normal,loud u
+54 N,T NARRATOR,MAGALI afraid,angry 1-2 normal,fast normal u
+55 D ERIA tender,excited,neutral 0-2 normal,slow soft,normal m
+56 N,T NARRATOR,MAGALI afraid 2-3 fast,normal loud,normal u
+57 N NARRATOR neutral,afraid 0-1 normal normal u
+58 D NPC*,UNKNOWN~ neutral 0-1 normal normal m
+59 N NARRATOR neutral,happy 0-1 normal normal u
+60 D ERIA angry 1-2 normal,fast normal,loud m
+61 N,T NARRATOR,MAGALI sarcastic,neutral 0-1 normal normal u
+62 N
+63 D NPC*,UNKNOWN~ neutral 0-1 normal normal m
+64 D ERIA surprised,neutral 0-1 normal normal m
+65 N,T NARRATOR,MAGALI happy,excited 1-2 normal,fast normal,loud u
+66 N
+67 D ERIA sad,tender,neutral 0-1 normal,slow normal m
+68 D MAGALI neutral,happy,tender 0-1 normal normal,soft f
+69 N NARRATOR neutral,happy,sarcastic 0-1 normal normal u
+70 N,T NARRATOR,MAGALI sarcastic,angry,neutral 0-1 normal,fast normal u
+71 D ERIA happy,tender 0-1 normal normal,soft m
+72 N NARRATOR neutral,afraid 0-1 normal normal u
+73 N,T NARRATOR,MAGALI afraid 1-2 normal normal u
+74 N,T NARRATOR,MAGALI afraid,tired,neutral 0-1 normal normal u
+75 D MAGALI tired 0-1 slow,normal soft,normal f
+76 N NARRATOR neutral,tired 0-1 normal normal u
+77 N,T NARRATOR,MAGALI tired,neutral 0-1 normal,slow normal u
+78 N
+79 D MAGALI neutral,tired,whispering 0-1 normal,slow soft,normal f
+80 N NARRATOR neutral,tired 0-1 normal normal u
+81 N
+82 N
+83 D SILK,NPC*~ neutral 0-1 normal normal,soft f
+84 N NARRATOR neutral,sarcastic 0-1 normal normal u
+85 N,T NARRATOR,MAGALI sarcastic,happy,neutral 0-1 normal normal u

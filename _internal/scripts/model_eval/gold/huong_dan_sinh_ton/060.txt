@@ -1,0 +1,159 @@
+# Đáp án chuẩn "Hướng dẫn sinh tồn trong học viện" file 060 ("Chương 61: Trận chiến chinh phạt Glast (10)"). Vòng 4 (20-09):
+# HỢP NHẤT hai bản làm mù độc lập (A = Claude, B = agent review) bằng merge_gold.py rồi phân xử - ADJUDICATION.md.
+# Ngôi thứ nhất: "tôi" = ED ROSTAILER / ED (chương này không gọi tên). LUCY chỉ được gọi tên ở câu 62 nên 56, 60
+# có NPC*~ (quy tắc 5). 2, 36 "Hộc... hộc..." = Ed thở dốc (NARRATOR~, quy tắc 8). 6 lời nhắn trong ngoặc vuông của
+# dơi lửa (tinh linh Mug, chương 053) bị parser khoá N -> NARRATOR. 23, 142 tên riêng trong ngoặc đơn bị khoá T.
+0 H
+1 N
+2 D ED ROSTAILER,ED,NARRATOR~ tired 1-2 normal,slow soft,normal m
+3 N NARRATOR neutral,tired 0-1 normal normal u
+4 N NARRATOR neutral,tired 0-1 normal normal u
+5 N
+6 N
+7 N
+8 N NARRATOR neutral,tender 0-1 normal normal u
+9 N
+10 N NARRATOR neutral,surprised 0-1 normal normal u
+11 N NARRATOR neutral,sarcastic 0-1 normal normal u
+12 N
+13 N
+14 N
+15 N
+16 N
+17 N NARRATOR neutral,surprised 0-1 normal normal u
+18 N NARRATOR neutral,surprised 0-1 normal normal u
+19 D NARRATOR,UNKNOWN~ surprised,neutral,excited 1-2 normal,fast loud,normal u
+20 D NARRATOR,NPC*,UNKNOWN~ afraid,surprised,angry,excited 1-3 fast,normal loud u
+21 N NARRATOR neutral,afraid,surprised 0-1 normal normal u
+22 N
+23 N,T NARRATOR,ED ROSTAILER~,ED~ neutral 0-1 normal normal u
+24 N
+25 N
+26 N
+27 N
+28 N
+29 N NARRATOR neutral,tired 0-1 normal normal u
+30 N
+31 N
+32 N
+33 N NARRATOR neutral,sarcastic 0-1 normal normal u
+34 N
+35 N NARRATOR neutral,happy 0-1 normal normal u
+36 D ED ROSTAILER,ED,NARRATOR~ tired 1-2 normal,slow soft,normal m
+37 N
+38 N
+39 N
+40 N
+41 N
+42 N NARRATOR neutral,sarcastic 0-1 normal normal u
+43 D ED ROSTAILER,ED neutral,tired,whispering 0-1 normal,slow soft,normal m
+44 N NARRATOR neutral,happy 0-1 normal normal u
+45 N NARRATOR neutral,happy 0-1 normal normal u
+46 N
+47 N
+48 N
+49 N NARRATOR neutral,tired 0-1 normal,slow normal u
+50 N NARRATOR neutral,tender 0-1 normal normal u
+51 N NARRATOR neutral,tired,tender 0-1 normal,slow normal u
+52 N NARRATOR neutral,tender 0-1 normal normal u
+53 N
+54 N NARRATOR neutral,tender 0-1 normal normal u
+55 D ED ROSTAILER,ED neutral,tired 0-1 normal normal m
+56 D LUCY,LUCY MEIRIL,NPC*~ neutral 0-1 normal,slow normal,soft f
+57 N
+58 N NARRATOR neutral,tender 0-1 normal,slow normal u
+59 N
+60 D LUCY,LUCY MEIRIL,NPC*~ neutral,sad,tender 0-1 normal,slow soft,normal f
+61 N
+62 N NARRATOR neutral,sarcastic 0-1 normal normal u
+63 D LUCY,LUCY MEIRIL neutral 0-1 normal normal,soft f
+64 D ED ROSTAILER,ED neutral,tired 0-1 normal normal m
+65 N
+66 N,T NARRATOR,LUCY~,LUCY MEIRIL~ neutral 0-1 normal normal u
+67 N
+68 D LUCY,LUCY MEIRIL neutral 0-1 normal normal,soft f
+69 D ED ROSTAILER,ED tired,neutral,sarcastic 0-1 normal normal m
+70 D LUCY,LUCY MEIRIL sad,neutral,tired,angry 0-1 normal,slow soft,normal f
+71 N NARRATOR neutral,sarcastic 0-1 normal normal u
+72 N NARRATOR neutral,tender 0-1 normal,slow normal u
+73 N NARRATOR neutral,tender 0-1 normal normal u
+74 D LUCY,LUCY MEIRIL neutral,sad 0-1 normal,slow soft,normal f
+75 N NARRATOR neutral,surprised 0-1 normal normal u
+76 D LUCY,LUCY MEIRIL sad,neutral 0-2 slow,normal soft,normal f
+77 D ED ROSTAILER,ED neutral,tender,surprised 0-1 normal normal,soft m
+78 D LUCY,LUCY MEIRIL neutral,sad 0-1 slow,normal soft,normal f
+79 N NARRATOR neutral,tender,sad 0-1 normal normal u
+80 D LUCY,LUCY MEIRIL neutral,sad 0-1 slow,normal soft,normal f
+81 N NARRATOR neutral,tender 0-1 normal normal u
+82 D LUCY,LUCY MEIRIL neutral,sad 0-1 slow,normal soft,normal f
+83 D ED ROSTAILER,ED neutral,tender 0-1 normal,slow normal,soft m
+84 N
+85 N NARRATOR neutral,sad 0-1 normal normal u
+86 N NARRATOR neutral,sad 0-1 normal normal u
+87 N NARRATOR neutral,sad 0-1 normal,slow normal u
+88 D LUCY,LUCY MEIRIL sad,neutral 0-2 slow soft f
+89 N
+90 N
+91 N
+92 N NARRATOR neutral,angry 0-1 normal normal u
+93 N NARRATOR neutral,angry,sad 0-1 normal normal u
+94 N NARRATOR neutral,tender 0-1 normal normal u
+95 N NARRATOR neutral,tender,sad 0-1 normal normal u
+96 N NARRATOR neutral,sad 0-1 normal,slow normal u
+97 D LUCY,LUCY MEIRIL neutral,tender,sad 0-1 normal,slow soft,normal f
+98 N
+99 N
+100 N
+101 N NARRATOR neutral,tender 0-1 normal,slow normal u
+102 D ED ROSTAILER,ED neutral 0-1 normal,slow normal m
+103 D LUCY,LUCY MEIRIL neutral,sad 0-1 normal,slow soft,normal f
+104 N NARRATOR neutral,tender 0-1 normal normal u
+105 N NARRATOR neutral,tender 0-1 normal normal u
+106 N NARRATOR neutral,tender 0-1 normal normal u
+107 N NARRATOR neutral,tender,sad 0-1 normal normal u
+108 D ED ROSTAILER,ED neutral,tender 0-1 normal,slow soft,normal m
+109 N
+110 D ED ROSTAILER,ED tender,neutral 0-1 normal,slow soft,normal m
+111 N NARRATOR neutral,tender 0-1 normal normal u
+112 N
+113 N NARRATOR neutral,sad 0-1 normal normal u
+114 N NARRATOR neutral,sad 0-1 normal normal u
+115 N NARRATOR neutral,sad 0-1 normal normal u
+116 N
+117 N NARRATOR neutral,sad 0-1 normal normal u
+118 N NARRATOR neutral,sad 0-1 normal normal u
+119 N
+120 N
+121 N NARRATOR neutral,sad 0-1 normal normal u
+122 N
+123 N
+124 D LUCY,LUCY MEIRIL neutral 0-1 normal soft,normal f
+125 N,T NARRATOR,ED ROSTAILER,ED neutral,sarcastic,tired 0-1 normal normal u
+126 D LUCY,LUCY MEIRIL tender,sad,neutral 0-1 slow,normal soft,normal f
+127 N,T NARRATOR,ED ROSTAILER,ED neutral,tender,surprised 0-1 normal normal u
+128 N NARRATOR neutral,tender 0-1 normal normal u
+129 N NARRATOR neutral,sad 0-1 normal normal u
+130 N NARRATOR neutral,sad 0-1 normal normal u
+131 N NARRATOR neutral,sad 0-1 normal,slow normal u
+132 N NARRATOR neutral,sad 0-1 normal normal u
+133 N NARRATOR neutral,tender 0-1 normal normal u
+134 N NARRATOR neutral,tender,sad 0-1 normal normal u
+135 N NARRATOR neutral,tender 0-1 normal normal u
+136 N NARRATOR neutral,tender 0-1 normal,slow normal u
+137 N NARRATOR neutral,tender,happy 0-1 normal,slow normal u
+138 D NARRATOR,UNKNOWN~ surprised,neutral,excited 1-2 normal,fast loud,normal u
+139 N NARRATOR neutral,surprised,excited 0-1 normal normal u
+140 N NARRATOR neutral,surprised 0-1 normal normal u
+141 N
+142 N,T NARRATOR neutral 0-1 normal normal u
+143 N
+144 D TAILY,TAILY MCLORE angry,excited 1-3 normal,fast loud m
+145 N NARRATOR neutral,surprised 0-1 normal normal u
+146 N NARRATOR neutral,tired,sad 0-1 normal,slow normal u
+147 N NARRATOR neutral,afraid 0-1 normal normal u
+148 N
+149 N NARRATOR neutral,sad 0-1 normal normal u
+150 N NARRATOR neutral,sad 0-1 normal,slow normal u
+151 D GLAST sad,tender,whispering 1-2 slow soft m
+152 N NARRATOR neutral,sad 0-1 normal,slow normal u
+153 N

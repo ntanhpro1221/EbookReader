@@ -73,3 +73,26 @@ Soát 5 chương: không có người nói chính sai; 28 câu tranh chấp.
 | 346:5, 14, 199:86 | cường độ 1-3 -> 1-2 | văn bản nói rõ không phải cao trào ("có chút phấn khích") |
 | 199:111, 137, 050:26, 29 | + whispering | lẩm bẩm |
 | văn bản viết có người viết đứng đầu (345, 347, 351:73, 344:75-76) | giới tính của người viết | quy ước giới tính mới |
+
+## Vòng 4 (20-09 02:0x): CẢ HAI làm mù hai truyện mới - hdst 060, nise 030
+
+A (Claude) và B (agent review) gán độc lập, không xem bản của nhau. Hai truyện đều ngôi thứ nhất, bản dịch nghiệp dư
+có lỗi (đại từ đảo, tên viết nhầm). Hợp nhất bằng `merge_gold.py merge` (hợp các tập chấp nhận, ưu tiên theo A) rồi phân
+xử từng câu lệch dưới đây. 86 câu có người nói: người nói ưu tiên trùng 87,2%, tập chấp nhận tương thích 100%; loại trùng
+hệt 234/238; cảm xúc ưu tiên 95,0%, giao 100%. Mọi câu lệch ưu tiên đều là `N` với `N,T` - không câu nào hai bên chọn
+hai người khác nhau. gold_replay: 49 lượt generator + 49 critic, không LỆCH LUẬT; điểm replay 100.
+
+| câu | kết luận | lý do |
+|---|---|---|
+| nise 12, 23, 25, 45 | **A thua**: `N` -> `N,T` + MAGALI đủ | A tự mâu thuẫn: đã cho `N,T` các câu cùng kiểu 7 ("Tại sao tôi phải giả vờ...? Vì thích? Không"), 18, 42. Trong lời kể ngôi thứ nhất ở hiện tại, phản ứng tức thời của người kể (câu hỏi tu từ, "Thôi chết.", nói thầm với người trước mặt "tôi muốn anh làm tường thịt") là tiếng lòng - quy tắc 4 |
+| nise 13 ("Rõ ràng là lợi bất cập hại mà"), 11 ("mọi người hiểu mà đúng không?") | giữ `N` (hai bên cùng) | giải thích/nói với người đọc, không phải tiếng lòng tức thời |
+| nise 5, 21, 41, 44, 49, 68, 75, 79 | bỏ THÁNH NỮ~ | **A sai**: danh hiệu trơn - prompt dự án cấm danh xưng trong nhãn, và nhãn danh hiệu tách thành một giọng thứ hai của cùng người. Quy tắc 11 mở rộng |
+| hdst 151 | bỏ GIÁO SƯ GLAST~ | **A sai**: quy tắc 11 đã cấm tiền tố vai vế từ vòng 3 (CHÚ LƯU ĐẠT) |
+| hdst 56, 60 | + `NPC*~` | B: Lucy chỉ được gọi tên ở 62 - quy tắc 5 |
+| hdst 2, 36 "Hộc... hộc..." | + NARRATOR~ | B: tiếng thở của người là của người ấy - quy tắc 8 |
+| hdst 20 "KÉTTTT!" (tiếng hét sắc lẻm, không rõ của ai) | NARRATOR, `NPC*` đủ; `UNKNOWN~` | B: có người/vật phát ra - quy tắc 8 |
+| nise 16 | + ERIS~ | B: câu 17 dẫn câu này bằng "Eris" (lỗi dịch) - model đọc theo chữ vẫn đúng người |
+| nise 48, 49 | + MAGALI~ / ERIA~ | B: bản dịch đảo đại từ ("em muốn ngài" là lời Eria); mạch truyện quyết định (50 "Đó là nói dối" = Magali nói 49), cách đọc theo đại từ nửa điểm |
+| nise 83 "Tôi là Silk" | + `NPC*~` | B: thí sinh một lần - NPC chấp nhận được nửa điểm, dù cô tự xưng tên ngay trong câu |
+| nise 58, 63 | + `UNKNOWN~` | A: có manh mối (kỵ sĩ hộ tống) - quy tắc 5 |
+| cảm xúc, nhịp, âm lượng, cường độ | hợp hai tập | lệch nhỏ, không câu nào mâu thuẫn (giao 100%) |
