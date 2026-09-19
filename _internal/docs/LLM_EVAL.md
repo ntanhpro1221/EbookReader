@@ -25,15 +25,15 @@ phải chen vào ranh giới lô, vì sản xuất dùng GPU gần như suốt n
 Project đo nằm ở `D:/Novels/Audiobooks/_model_eval*/`, ngoài `book2/_versions`, nên nhịp tim, watchdog và
 chuỗi gieo của sách không nhìn thấy chúng.
 
-## Đáp án chuẩn (20-09 02:0x): 32 chương, 10 truyện, ~3.700 đoạn
+## Đáp án chuẩn (20-09 02:1x): 35 chương, 10 truyện, ~4.200 đoạn
 
 | truyện | chương | cách làm |
 |---|---|---|
 | Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 385, 396, 399, 400, 407, 415, 418-420, 426, 436 | A làm, B làm mù hoặc soát; hoặc B làm, A soát |
-| Young Master's PoV (cuốn 1) | 199, 248 | như trên |
+| Young Master's PoV (cuốn 1) | 134, 188, 199, 248 | như trên (134, 188: B làm, A soát) |
 | Đã bảo là cùng nhau tự sát | 020, 050 | như trên |
 | Hướng dẫn sinh tồn trong học viện | 060, 090 | cả hai làm mù (060); B làm, A soát (090) |
-| Nise Seiken Monogatari | 030 | cả hai làm mù, hợp nhất |
+| Nise Seiken Monogatari | 030, 111 | cả hai làm mù (030); B làm, A soát (111) |
 | Nageki no Bourei wa Intai Shitai | 20 | cả hai làm mù, hợp nhất |
 | Yamiyo no Hotaru | 155, 189 | làm mù (155), B làm - A soát (189); **chỉ khớp bộ tách đoạn sau bản vá ngoặc 「」** |
 | Năng lực bá đạo ... | 0135 | B làm, A soát đối kháng |
@@ -70,7 +70,7 @@ hai người; tên bị cắt; ...).
 | phạm vi | điểm | người nói | chỉ câu thoại | cảm xúc | giới tính |
 |---|---|---|---|---|---|
 | cuốn 2, lô 8, 8 chương | 79,0 | 65,7% | 67,7% | 85,5% | 78,4% |
-| cuốn 1, 2 chương | 74,2 | 50,0% | 43,3% | - | - |
+| cuốn 1, 4 chương (từng chương: 134 lô 5 / 188 lô 7 / 199 lô 8 / 248 lô 9) | 62,9 / 71,4 / 83,4 / 68,9 | 31,2% / 52,9% / 68,8% / 40,4% | - | - | - |
 | cuốn 2, lô 9 (thu 20-09), 9 chương 385, 396, 399, 400, 407, 415, 418, 419, 420 | 79,7 | 68,4% | - | 82,1% | 83,7% |
 
 (Con số 58,7% người nói ngày 19-09 là trên bản đáp án đầu, trước ba vòng soát.) Kiểu lỗi của model, xếp theo số câu ở
@@ -79,7 +79,10 @@ lạ lắm nhé." -> LUCIEN vì Fil là lốt của Lucien; "Hân hạnh đượ
 câu ở 417-419); nội tâm gán cho NARRATOR (một phần do host, đã vá); thuật ngữ/tiếng động giữa câu kể gán cho nhân vật; tên
 viết sai thành nhân vật mới ("JOCLEYN"); không chắc thì chộp tên quen nhất; lượt hoà giải NPC gộp nhầm. Luật host
 `_speaker_is_directly_addressed` chỉ bắt tên gọi ở ĐẦU câu hoặc sau danh xưng, nên sót cả ba kiểu gọi trên - việc kế
-tiếp để điều tra (không vào ranh giới 9: khi bắt được, nó cũng chỉ đổi sang một NPC "người gọi X"). Cảm
+tiếp để điều tra (không vào ranh giới 9: khi bắt được, nó cũng chỉ đổi sang một NPC "người gọi X").
+
+Cuốn 1 lô 5 (chương 134) cho thấy pipeline cũ: phần lớn câu của một cảnh hai người được gán cho nhãn vai trò trơn
+"NGƯỜI TRẢ LỜI", "THỦ LÃNH" (không phải NPC cục bộ) - 31% người nói. Khi cuốn 1 chạy tiếp, các lô đầu là ứng viên đúc lại. Cảm
 xúc, nhịp, âm lượng tốt (model thận trọng, hay chọn neutral/normal). Chỗ yếu thật là **ai nói**.
 
 ## Host đè câu trả lời đúng - kiểm bằng `gold_replay` (20-09)
