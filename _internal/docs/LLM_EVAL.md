@@ -25,20 +25,20 @@ phải chen vào ranh giới lô, vì sản xuất dùng GPU gần như suốt n
 Project đo nằm ở `D:/Novels/Audiobooks/_model_eval*/`, ngoài `book2/_versions`, nên nhịp tim, watchdog và
 chuỗi gieo của sách không nhìn thấy chúng.
 
-## Đáp án chuẩn (20-09 02:1x): 35 chương, 10 truyện, ~4.200 đoạn
+## Đáp án chuẩn (20-09 02:2x): 38 chương, 10 truyện, ~4.550 đoạn
 
 | truyện | chương | cách làm |
 |---|---|---|
 | Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 385, 396, 399, 400, 407, 415, 418-420, 426, 436 | A làm, B làm mù hoặc soát; hoặc B làm, A soát |
 | Young Master's PoV (cuốn 1) | 134, 188, 199, 248 | như trên (134, 188: B làm, A soát) |
-| Đã bảo là cùng nhau tự sát | 020, 050 | như trên |
+| Đã bảo là cùng nhau tự sát | 020, 050, 143 | như trên (143: B làm, A soát) |
 | Hướng dẫn sinh tồn trong học viện | 060, 090 | cả hai làm mù (060); B làm, A soát (090) |
 | Nise Seiken Monogatari | 030, 111 | cả hai làm mù (030); B làm, A soát (111) |
-| Nageki no Bourei wa Intai Shitai | 20 | cả hai làm mù, hợp nhất |
+| Nageki no Bourei wa Intai Shitai | 20, 73 | cả hai làm mù (20); B làm, A soát (73: nhóm giả mạo tên na ná - bẫy cho model) |
 | Yamiyo no Hotaru | 155, 189 | làm mù (155), B làm - A soát (189); **chỉ khớp bộ tách đoạn sau bản vá ngoặc 「」** |
 | Năng lực bá đạo ... | 0135 | B làm, A soát đối kháng |
 | Love Unseen Beneath the Clear Night Sky | 09 | B làm, A soát đối kháng |
-| Two Childhood Friends ... Dungeon ... | 013 | B làm, A soát đối kháng |
+| Two Childhood Friends ... Dungeon ... | 013, 082 | B làm, A soát đối kháng |
 
 A = Claude, B = một agent review (chủ sách cho phép dùng subagent riêng cho việc này, 20-09: *"cả 2 phải thật
 khắt khe"*). Mỗi dòng cho **tập** lựa chọn chấp nhận được (cảm xúc, nhịp, âm lượng, khoảng cường độ); người nói
