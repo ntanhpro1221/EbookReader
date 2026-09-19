@@ -71,9 +71,15 @@ hai người; tên bị cắt; ...).
 |---|---|---|---|---|---|
 | cuốn 2, lô 8, 8 chương | 79,0 | 65,7% | 67,7% | 85,5% | 78,4% |
 | cuốn 1, 2 chương | 74,2 | 50,0% | 43,3% | - | - |
+| cuốn 2, lô 9 (thu 20-09), 5 chương 385, 396, 407, 418, 419 | 78,3 | 63,9% | - | 86,2% | 83,3% |
 
-(Con số 58,7% người nói ngày 19-09 là trên bản đáp án đầu, trước ba vòng soát.) Kiểu lỗi của model: lời thoại/nội
-tâm gán cho NARRATOR; không chắc thì chộp tên quen nhất trong danh sách đã biết; lượt hoà giải NPC gộp nhầm. Cảm
+(Con số 58,7% người nói ngày 19-09 là trên bản đáp án đầu, trước ba vòng soát.) Kiểu lỗi của model, xếp theo số câu ở
+lô 9: **lấy người ĐƯỢC GỌI TÊN làm người nói** ("Haha, Andris, mày..." -> ANDRIS; "Chờ đã, Aska, ..." -> ASKA; "Fil, hôm nay anh
+lạ lắm nhé." -> LUCIEN vì Fil là lốt của Lucien; "Hân hạnh được gặp cậu, Evans." -> một nhân vật ma EVANS có giọng riêng, 6
+câu ở 417-419); nội tâm gán cho NARRATOR (một phần do host, đã vá); thuật ngữ/tiếng động giữa câu kể gán cho nhân vật; tên
+viết sai thành nhân vật mới ("JOCLEYN"); không chắc thì chộp tên quen nhất; lượt hoà giải NPC gộp nhầm. Luật host
+`_speaker_is_directly_addressed` chỉ bắt tên gọi ở ĐẦU câu hoặc sau danh xưng, nên sót cả ba kiểu gọi trên - việc kế
+tiếp để điều tra (không vào ranh giới 9: khi bắt được, nó cũng chỉ đổi sang một NPC "người gọi X"). Cảm
 xúc, nhịp, âm lượng tốt (model thận trọng, hay chọn neutral/normal). Chỗ yếu thật là **ai nói**.
 
 ## Host đè câu trả lời đúng - kiểm bằng `gold_replay` (20-09)
