@@ -308,6 +308,18 @@ không phải "nên nâng" chung chung.
   mà không import (F821): vô hại lúc chạy, nhưng file bị khoá — lần vá kế tiếp chạm file ấy thì thêm
   `from typing import Sequence`.
 
+**Ollama, soát 19-09 07:3x** (điều kiện ghi ở bảng 17-09: "trước khi nâng, soát `options` app gửi").
+Máy chủ đang chạy 0.33.2; mới nhất 0.34.2 (15-09). Đọc ghi chú phát hành: 0.33.3 "Honor GGUF model defined
+default parameters"; 0.34.1 ngưỡng phát hiện lặp token lên 100, `typical_p` không đặt được khi tạo model
+mới; 0.34.2 chỉ là giao diện cài đặt lần đầu và một lỗi bộ nhớ của MLX - không đụng dây chuyền.
+`analysis.py` gửi tường minh `temperature`, `seed`, `num_ctx`, `num_predict` (và `temperature 0.0` cho các
+lượt hỏi đáp), KHÔNG gửi `top_k`/`top_p`/`min_p`/`repeat_penalty`. `/api/show qwen3:8b`: các giá trị ấy đến
+từ lớp tham số của model trong kho (`top_p 0.95`, `top_k 20`, `repeat_penalty 1`), còn siêu dữ liệu GGUF
+**không có khoá `sampling` nào** - nên thay đổi của 0.33.3 không có gì để áp cho model đang dùng. Kết
+luận: nâng lên 0.34.2 không đổi cách lấy mẫu; rủi ro thấp. Nâng ở một ranh giới (máy chủ đang phục vụ
+bước phân tích), bằng bản cài chính thức - việc tải bản cài để chủ sách quyết. Nếu sau này đổi sang model
+nhập từ GGUF (qwen3.5/gemma4 trong mục "Model chỉ đạo diễn xuất"), phải truyền tường minh cả bốn tham số.
+
 ### Cái tìm được nhờ đọc changelog: năm chốt chặn tải mạng đã chết
 
 `transformers` 5.x dọn cả cờ offline lẫn đường dẫn cache về `huggingface_hub`, nên năm mục transformers
