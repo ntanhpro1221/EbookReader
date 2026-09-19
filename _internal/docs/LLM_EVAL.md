@@ -25,11 +25,11 @@ phải chen vào ranh giới lô, vì sản xuất dùng GPU gần như suốt n
 Project đo nằm ở `D:/Novels/Audiobooks/_model_eval*/`, ngoài `book2/_versions`, nên nhịp tim, watchdog và
 chuỗi gieo của sách không nhìn thấy chúng.
 
-## Đáp án chuẩn (20-09 01:5x): 28 chương, 10 truyện, ~3.300 đoạn
+## Đáp án chuẩn (20-09 02:0x): 32 chương, 10 truyện, ~3.700 đoạn
 
 | truyện | chương | cách làm |
 |---|---|---|
-| Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 385, 396, 407, 418, 419, 426, 436 | A làm, B làm mù hoặc soát; hoặc B làm, A soát |
+| Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 385, 396, 399, 400, 407, 415, 418-420, 426, 436 | A làm, B làm mù hoặc soát; hoặc B làm, A soát |
 | Young Master's PoV (cuốn 1) | 199, 248 | như trên |
 | Đã bảo là cùng nhau tự sát | 020, 050 | như trên |
 | Hướng dẫn sinh tồn trong học viện | 060, 090 | cả hai làm mù (060); B làm, A soát (090) |
@@ -71,7 +71,7 @@ hai người; tên bị cắt; ...).
 |---|---|---|---|---|---|
 | cuốn 2, lô 8, 8 chương | 79,0 | 65,7% | 67,7% | 85,5% | 78,4% |
 | cuốn 1, 2 chương | 74,2 | 50,0% | 43,3% | - | - |
-| cuốn 2, lô 9 (thu 20-09), 5 chương 385, 396, 407, 418, 419 | 78,3 | 63,9% | - | 86,2% | 83,3% |
+| cuốn 2, lô 9 (thu 20-09), 9 chương 385, 396, 399, 400, 407, 415, 418, 419, 420 | 79,7 | 68,4% | - | 82,1% | 83,7% |
 
 (Con số 58,7% người nói ngày 19-09 là trên bản đáp án đầu, trước ba vòng soát.) Kiểu lỗi của model, xếp theo số câu ở
 lô 9: **lấy người ĐƯỢC GỌI TÊN làm người nói** ("Haha, Andris, mày..." -> ANDRIS; "Chờ đã, Aska, ..." -> ASKA; "Fil, hôm nay anh
