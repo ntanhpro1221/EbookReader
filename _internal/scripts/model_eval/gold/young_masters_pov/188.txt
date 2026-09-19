@@ -1,0 +1,188 @@
+# Đáp án chuẩn cuốn 1, file 188 ("Chương 187 - Khủng hoảng tình ái"). Vòng 11 (20-09): agent review gán (B), Claude soát (A).
+# "tôi" = SAMAEL. JULIANA / JULIANA VOX ("Juli" là tên Samael gọi); IVAN (Samael cố ý gọi sai "Igor", "Imolde", "Vivan" - không
+# điểm). 3 Ivan ré lên trước khi được gọi tên (14) -> NPC*~.
+0 H
+1 N
+2 N
+3 D IVAN,NPC*~ sad,afraid,surprised 2 fast loud m
+4 N NARRATOR neutral,sad 0-1 normal normal u
+5 N
+6 N NARRATOR neutral,sarcastic 0-1 normal normal u
+7 N NARRATOR neutral,sad 0-1 normal normal u
+8 N
+9 N NARRATOR neutral,angry 0-1 normal normal u
+10 N
+11 D SAMAEL neutral,afraid 1 fast,normal loud,normal m
+12 N
+13 D SAMAEL sarcastic,happy 0-1 normal normal m
+14 N
+15 D IVAN angry,surprised 1-2 fast,normal normal,loud m
+16 N
+17 D JULIANA,JULIANA VOX angry,neutral 0-1 normal normal f
+18 N NARRATOR neutral,afraid 0-1 normal normal u
+19 N NARRATOR neutral,happy 0-1 normal normal u
+20 D SAMAEL sarcastic,happy 0-1 normal normal m
+21 N
+22 D IVAN afraid,sad 1 normal,fast normal,soft m
+23 N NARRATOR neutral,sad 0-1 normal normal u
+24 N,T NARRATOR,SAMAEL surprised,afraid,sarcastic 0-1 normal normal u
+25 N NARRATOR neutral,sarcastic 0-1 normal normal u
+26 D SAMAEL tender,neutral 0-1 normal soft,normal m
+27 N
+28 D SAMAEL tender 0-1 normal soft,normal m
+29 N
+30 D IVAN angry,sad 2 fast loud m
+31 N NARRATOR neutral,tired 0-1 normal normal u
+32 D SAMAEL tired,neutral 0-1 normal normal m
+33 D IVAN angry 2 fast loud m
+34 N
+35 N
+36 D SAMAEL surprised,angry 1 normal normal m
+37 D IVAN angry,sad 2-3 fast loud m
+38 N
+39 N
+40 D SAMAEL angry,neutral 1 normal normal m
+41 N
+42 N
+43 N
+44 D IVAN sad,angry 2-3 fast loud m
+45 N NARRATOR neutral,sad 0-1 normal normal u
+46 N NARRATOR neutral,sarcastic 0-1 normal normal u
+47 N NARRATOR neutral,sarcastic 0-1 normal normal u
+48 N NARRATOR neutral,sarcastic 0-1 normal normal u
+49 N NARRATOR neutral,sarcastic 0-1 normal normal u
+50 N NARRATOR neutral,sarcastic 0-1 normal normal u
+51 N NARRATOR neutral,sarcastic 0-1 normal normal u
+52 N,T NARRATOR,SAMAEL sarcastic,neutral 0-1 normal normal u
+53 N
+54 D SAMAEL tired,tender 0-1 normal normal m
+55 N
+56 D IVAN sad 2 slow soft,normal m
+57 N,T NARRATOR,SAMAEL surprised,neutral 0-1 normal normal u
+58 N
+59 N NARRATOR neutral,sarcastic 0-1 normal normal u
+60 N
+61 N
+62 N
+63 N NARRATOR neutral,sarcastic 0-1 normal normal u
+64 N NARRATOR neutral,sarcastic 0-1 normal normal u
+65 N
+66 N
+67 N
+68 D JULIANA,JULIANA VOX neutral,angry 0-1 normal normal f
+69 D SAMAEL happy,sarcastic 0-1 normal normal m
+70 N
+71 N
+72 N NARRATOR neutral,sarcastic 0-1 normal normal u
+73 N
+74 D SAMAEL sarcastic 0-1 normal normal m
+75 N
+76 N
+77 D SAMAEL neutral,sarcastic 0-1 normal normal m
+78 N
+79 D SAMAEL neutral,sarcastic 0-1 normal normal m
+80 D JULIANA,JULIANA VOX neutral 0-1 normal normal f
+81 N
+82 N
+83 D SAMAEL sarcastic 0-1 normal normal m
+84 N
+85 D JULIANA,JULIANA VOX neutral 0-1 normal normal f
+86 N
+87 D SAMAEL sarcastic 0-1 normal normal m
+88 N
+89 N
+90 D SAMAEL sarcastic,neutral 0-1 normal normal m
+91 N NARRATOR neutral,sarcastic 0-1 normal normal u
+92 N NARRATOR neutral,sarcastic 0-1 normal normal u
+93 D JULIANA,JULIANA VOX sarcastic 1 normal normal f
+94 D SAMAEL sarcastic 0-1 normal normal m
+95 N
+96 N
+97 N
+98 D JULIANA,JULIANA VOX sarcastic,neutral 0-1 normal normal f
+99 N
+100 N
+101 D SAMAEL tired,sarcastic 0-1 normal normal m
+102 N
+103 N
+104 D JULIANA,JULIANA VOX angry 1-2 normal,slow soft,normal f
+105 N
+106 N
+107 N
+108 D JULIANA,JULIANA VOX sarcastic 1 normal normal f
+109 N
+110 D JULIANA,JULIANA VOX sarcastic,angry 1 normal normal f
+111 N
+112 N NARRATOR neutral,sarcastic 0-1 normal normal u
+113 D SAMAEL happy,sarcastic 0-1 normal normal m
+114 N
+115 N NARRATOR neutral,afraid 0-1 normal normal u
+116 N
+117 N
+118 D JULIANA,JULIANA VOX surprised,angry 1 normal normal f
+119 D SAMAEL happy,tender,sarcastic 0-1 normal normal m
+120 N
+121 D SAMAEL happy 0-1 normal normal m
+122 D JULIANA,JULIANA VOX angry,neutral 1 normal normal f
+123 N
+124 N NARRATOR neutral 0-1 normal normal u
+125 D SAMAEL sarcastic,neutral 0-1 normal normal m
+126 D SAMAEL sarcastic,happy 0-1 normal normal m
+127 N NARRATOR neutral,angry 0-1 normal normal u
+128 D JULIANA,JULIANA VOX angry,surprised 2 normal loud f
+129 N
+130 D JULIANA,JULIANA VOX angry,sarcastic 2 normal normal,loud f
+131 N
+132 N
+133 N
+134 D SAMAEL neutral,happy 0-1 normal normal m
+135 N
+136 D SAMAEL sarcastic 0-1 normal normal m
+137 D JULIANA,JULIANA VOX neutral,whispering 0-1 normal soft f
+138 N
+139 D SAMAEL happy,excited 1 normal normal,loud m
+140 N
+141 D SAMAEL happy,sarcastic 0-1 normal normal m
+142 D JULIANA,JULIANA VOX neutral,sarcastic 0-1 normal normal f
+143 N
+144 D JULIANA,JULIANA VOX sarcastic 0-1 normal normal f
+145 N
+146 D SAMAEL happy 0-1 normal normal m
+147 N
+148 D SAMAEL happy,sarcastic 0-1 normal normal m
+149 N NARRATOR neutral,afraid 0-1 normal normal u
+150 N
+151 D JULIANA,JULIANA VOX tired,sarcastic 0-1 normal normal f
+152 N NARRATOR neutral 0-1 normal normal u
+153 D SAMAEL neutral,happy 0-1 normal normal m
+154 N NARRATOR neutral,surprised 0-1 normal normal u
+155 N
+156 N
+157 N
+158 N
+159 D JULIANA,JULIANA VOX tired,neutral 0-1 normal normal f
+160 D SAMAEL happy 1 normal normal m
+161 N
+162 N NARRATOR neutral,sarcastic 0-1 normal normal u
+163 N
+164 N
+165 D SAMAEL neutral,surprised 0-1 normal normal m
+166 N
+167 D SAMAEL happy 0-1 normal normal m
+168 N
+169 D IVAN surprised,happy 1 normal soft,normal m
+170 D SAMAEL neutral 0-1 normal normal m
+171 N
+172 N
+173 N
+174 D IVAN afraid 1 normal,fast normal m
+175 D SAMAEL angry,surprised 1 normal normal m
+176 N
+177 D SAMAEL angry,sarcastic 1-2 normal,fast normal,loud m
+178 D IVAN afraid 2 fast loud m
+179 N NARRATOR neutral,afraid 0-1 normal normal u
+180 N NARRATOR neutral,excited 0-1 normal,fast normal u
+181 N NARRATOR neutral,happy 0-1 normal normal u
+182 D SAMAEL happy 1-2 normal normal m
+183 N
+184 D JULIANA,JULIANA VOX tired 1 normal normal f

@@ -189,3 +189,10 @@ Chọn trong lô 9 để chấm đầu ra THẬT của `qwen3:8b` trên nhiều 
 đổi dòng nào. Điểm đáng ghi: 400 - "Andris" bị một thứ khác nhập (xưng "ta", mặt biến dạng) nhưng không chương nào đến 407
 nêu danh tính ấy -> ANDRIS đủ (quy tắc 13); 415:39 đuôi câu Fernando bị ngoặc lồng cắt, khoá N -> NARRATOR (quy tắc 10);
 399:22, 54, 61 và 400:73, 415:88 là lời dẫn nêu người NGHE - không cho điểm người nghe.
+
+## Vòng 11 (20-09 02:1x): cuốn 1 - YM 134, 188; Nise 111 - B gán, A soát
+
+A soát mọi câu có người nói kèm câu kể liền trước/sau: không đổi người nói nào; thêm bí danh đầy đủ có trong truyện
+(MICHAEL GODSWILL 34 lần, JULIANA VOX 28 lần - quy tắc 11). B sửa lại đề bài của A: Nise 111 là chương NGÔI BA (Marla,
+Alistar), không phải Magali kể. Cả ba chương dày câu gọi tên người nghe ("Samael, ...", "..., Michael", "Marla-san") - đúng
+kiểu lỗi lớn nhất của `qwen3:8b` ở lô 9.

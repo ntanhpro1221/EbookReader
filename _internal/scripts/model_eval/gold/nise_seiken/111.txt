@@ -1,0 +1,105 @@
+# "Nise Seiken Monogatari" file 111 ("Chương 110: Nhiệt thành"). Vòng 11 (20-09): agent review gán (B), Claude soát (A), không
+# đổi. Chương NGÔI BA (khác 030): Marla và Alistar; "mình" trong lời kể là tiếng lòng của Marla (75 là của Alistar). Thuộc hạ không
+# tên là NPC*. "Marla-sama/-san", "Alistar-san" là người được gọi, không phải người nói.
+0 H
+1 N
+2 N
+3 D NPC*,UNKNOWN~ neutral 0-1 normal normal f
+4 D MARLA,MARLA BALDINI neutral 0-1 normal normal f
+5 N
+6 N NARRATOR neutral,sad 0-1 normal normal u
+7 D MARLA,MARLA BALDINI sad,tired 0-1 normal normal f
+8 D NPC*,UNKNOWN~ neutral 0-1 normal normal f
+9 N
+10 N
+11 D MARLA,MARLA BALDINI neutral,tender 0-1 normal normal f
+12 D NPC*,UNKNOWN~ tender,happy 0-1 normal normal,soft f
+13 N
+14 N NARRATOR neutral,happy 0-1 normal normal u
+15 N
+16 D NPC*,UNKNOWN~ neutral,sarcastic,whispering 0-1 normal soft,normal f
+17 D MARLA,MARLA BALDINI,NARRATOR~ surprised 2 fast normal,loud f
+18 N NARRATOR neutral,sarcastic 0-1 normal normal u
+19 N
+20 D MARLA,MARLA BALDINI surprised,angry 2 fast loud f
+21 D NPC*,UNKNOWN~ happy,sarcastic 0-1 normal normal f
+22 D MARLA,MARLA BALDINI surprised,angry 2 fast loud f
+23 N,T NARRATOR,MARLA,MARLA BALDINI tender,surprised,angry 0-1 normal,fast normal u
+24 N,T NARRATOR,MARLA,MARLA BALDINI angry,sarcastic 0-1 normal normal u
+25 D NPC*,UNKNOWN~ happy,tender 0-1 normal normal f
+26 N
+27 N,T NARRATOR,MARLA~,MARLA BALDINI~ neutral,tender 0-1 normal normal u
+28 N
+29 D MARLA,MARLA BALDINI sad,neutral 0-1 normal,slow normal,soft f
+30 N NARRATOR neutral,sad 0-1 normal normal u
+31 D MARLA,MARLA BALDINI sad 1 slow soft,normal f
+32 N
+33 N NARRATOR neutral,sad 0-1 normal normal u
+34 D MARLA,MARLA BALDINI neutral,sad 0-1 normal normal f
+35 D NPC*,UNKNOWN~ neutral,sad 0-1 normal soft,normal f
+36 N
+37 N NARRATOR neutral,sad 0-1 normal normal u
+38 N
+39 D MARLA,MARLA BALDINI neutral,tired 0-1 normal normal f
+40 N
+41 N,T NARRATOR,MARLA,MARLA BALDINI neutral,tired 0-1 normal normal u
+42 N
+43 D ALISTAR happy,tender 0-1 normal normal m
+44 D MARLA,MARLA BALDINI surprised 2 fast normal,loud f
+45 N
+46 N NARRATOR neutral,surprised 0-1 normal normal u
+47 N
+48 D ALISTAR tender,happy 0-1 normal normal m
+49 D MARLA,MARLA BALDINI surprised 1-2 normal normal,loud f
+50 N NARRATOR neutral,tender,sad 0-1 normal normal u
+51 N,T NARRATOR,MARLA,MARLA BALDINI tender,surprised 0-1 normal normal u
+52 D MARLA,MARLA BALDINI surprised,neutral 0-1 normal normal f
+53 D ALISTAR tender 0-1 normal normal m
+54 D MARLA,MARLA BALDINI happy,surprised 0-1 normal normal f
+55 N NARRATOR neutral,tender 0-1 normal normal u
+56 N
+57 N NARRATOR neutral,sarcastic 0-1 normal normal u
+58 N NARRATOR neutral,sarcastic 0-1 normal normal u
+59 D ALISTAR tired,happy 0-1 normal,slow normal m
+60 D MARLA,MARLA BALDINI surprised,tender 0-1 normal normal f
+61 N NARRATOR neutral,sarcastic 0-1 normal normal u
+62 N NARRATOR neutral,sarcastic 0-1 normal normal u
+63 N
+64 D ALISTAR happy 0-1 normal normal m
+65 D MARLA,MARLA BALDINI happy 0-1 normal normal f
+66 D ALISTAR tender 0-1 normal normal m
+67 N NARRATOR neutral,tender 0-1 normal normal u
+68 D MARLA,MARLA BALDINI sarcastic,surprised 0-1 normal normal f
+69 D ALISTAR surprised,afraid 1 normal normal m
+70 N
+71 N NARRATOR neutral,sarcastic 0-1 normal normal u
+72 D MARLA,MARLA BALDINI sad 1 normal,slow normal,soft f
+73 D MARLA,MARLA BALDINI sad 1 normal,slow normal,soft f
+74 D ALISTAR neutral,surprised 0-1 normal normal m
+75 N,T NARRATOR,ALISTAR sarcastic,neutral 0-1 normal normal u
+76 N
+77 D MARLA,MARLA BALDINI sad,afraid 1 slow,normal soft,normal f
+78 N,T NARRATOR,MARLA,MARLA BALDINI afraid,sad 1 normal normal u
+79 N,T NARRATOR,MARLA,MARLA BALDINI sad,afraid 1 normal normal u
+80 N NARRATOR neutral,tender 0-1 normal normal u
+81 N NARRATOR neutral,sad 0-1 normal normal u
+82 N,T NARRATOR,MARLA,MARLA BALDINI sad 1 normal normal u
+83 N NARRATOR neutral,sad 0-1 normal normal u
+84 N NARRATOR neutral,sarcastic 0-1 normal normal u
+85 N NARRATOR neutral,sad 0-1 normal normal u
+86 D MARLA,MARLA BALDINI sad,happy 1-2 normal,fast normal,loud f
+87 N NARRATOR neutral,sad 0-1 normal normal u
+88 N NARRATOR neutral,sarcastic 0-1 normal normal u
+89 N
+90 D ALISTAR neutral,tender 1 normal normal m
+91 N
+92 D ALISTAR tender 1 normal,slow normal m
+93 N NARRATOR neutral,tender,happy 0-1 normal normal u
+94 N NARRATOR neutral,happy,tender 0-1 normal normal u
+95 D ALISTAR tender 1 normal,slow normal m
+96 D MARLA,MARLA BALDINI sad,tender 1 slow soft f
+97 N NARRATOR neutral,sad 0-1 normal normal u
+98 N NARRATOR neutral,sad,tender 0-1 normal normal u
+99 N NARRATOR neutral,sad 0-1 normal normal u
+100 D MARLA,MARLA BALDINI tender,sad 1 slow soft f
+101 N NARRATOR neutral,tender 0-1 normal normal u
