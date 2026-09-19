@@ -18,6 +18,8 @@ phải chen vào ranh giới lô, vì sản xuất dùng GPU gần như suốt n
 | `analysis_only.py PROJECT [--segment-only]` | chạy riêng khâu phân tích bằng mã sản xuất (chia đoạn, `analyze_all`, hoà giải NPC, cách đọc tên), dừng trước phân vai |
 | `score_models.py [PROJECT...] [--gold <thư mục>] [--misses N] [--json]` | chấm theo `gold/<truyện>/*.txt`; chỉ chấm chương có trong project |
 | `gold_replay.py PROJECT --gold <thư mục> [--out x.jsonl]` | chạy đúng bộ phân tích sản xuất nhưng Ollama giả **trả lời bằng đáp án**: ra JSONL (prompt sản xuất, câu trả lời đúng) để huấn luyện, và mọi chỗ trượt khi chấm là một **luật host đè đáp án đúng** |
+| `replay_all.py --root <thư mục mới>` | phát lại MỌI chương đáp án một lượt: JSONL huấn luyện cho từng truyện + bảng kiểm host (dưới 100% người nói = luật host đè đáp án) |
+| `build_training_set.py <root>/train_*.jsonl --out <dir>` | gom JSONL thành train/dev/test chia theo CHƯƠNG; test cố định = các chương dùng so model (không bao giờ vào train) |
 | `dump_segments.py PROJECT` | văn bản nguồn cho người gán nhãn: `[seq] p<đoạn> <N/D/T bị khoá> \| chữ` |
 | `merge_gold.py compare A B` / `merge A B --out` | so hai bản gán nhãn làm mù; hợp nhất (hợp các tập chấp nhận, ưu tiên theo A) |
 | `gold/<truyện>/<chương>.txt` | đáp án chuẩn; luật trong `docs/GOLD_GUIDE.md`, mọi tranh chấp trong `gold/ADJUDICATION.md` |
