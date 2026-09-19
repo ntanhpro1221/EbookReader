@@ -3124,8 +3124,13 @@ Tỉ lệ cảnh báo neo tên như nhau (23-31% cả hai). Đo lại khi lô 8 
 
 Một ca KHÁC loại, cùng lô: 344 CHLOE (Ngọc Huyền) `“Phải giả định năng lượng là không liên tục, không liên
 tục…”` → Whisper nghe "không liên tục" BA lần. Có vẻ là lỗi âm thật: cụm lặp + dấu ba chấm cuối câu và giọng
-đọc đọc tiếp theo nhịp lặp. Việc cần làm trước khi nghĩ tới bản vá: đếm trong nguồn cả cuốn bao nhiêu câu có
-dạng "X, X…" ở cuối, và bao nhiêu bản thu của chúng có bản chép dài hơn văn bản.
+đọc đọc tiếp theo nhịp lặp. **Đã đếm (11:1x):** nguồn cả cuốn có 18 câu dạng "X, X…" (6 đã thu trước lô 8,
+12 ở phía trước). Trong 6 ca cũ, bản chép cho thấy giọng đọc gần như LUÔN thêm một nhịp lặp - `cốc, cốc…` →
+"Cốc, cốc, cốc, cốc", `hm, hm…` → "Hưng, hưng, hưng", `thình thịch, thình thịch…` → ba lần - và cả sáu đều qua
+cổng (từ tượng thanh, câu ngắn). Tức đây là hành vi có hệ thống của giọng đọc trước dấu ba chấm, vô hại với
+từ tượng thanh, thành lỗi khi cụm lặp là NỘI DUNG (344). 18 ca / 915 chương, nên KHÔNG vá lúc này; nếu vá thì
+ở chuẩn hoá văn bản (đổi "…" sau cụm lặp thành "." khi cụm ấy không phải từ tượng thanh), và phải để chủ sách
+nghe hai bản trước vì nó đổi cách ngắt giọng.
 
 ## Giọng Bắc không phân biệt `tr`/`ch`, mà phép so ASR thì phân biệt (2026-09-18, 04:3x — ĐO RỒI, chưa vá)
 
