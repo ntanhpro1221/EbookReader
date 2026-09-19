@@ -1,0 +1,134 @@
+# "Two Childhood Friends..." file 082 ("Chương 83: Thứ Kỳ Lạ"). Vòng 12 (20-09): B gán, A soát, không đổi. 1-47 ngôi ba
+# (Urazumi, thầy đồng nghiệp NPC*); từ 48 ngôi thứ nhất, "tôi" = YOSHIHITO / KUCHINASHI YOSHIHITO - các câu kêu thầm của cậu N,T đủ.
+# 94 là dòng 『』 bị khoá lời kể -> NARRATOR (quy tắc 10).
+0 H
+1 D NPC*,UNKNOWN~ afraid,happy 1-2 fast loud u
+2 D NPC*,UNKNOWN~ excited,happy 1-2 normal,fast normal,loud u
+3 D URAZUMI,URAZUMI SAKUKO,NPC*~ happy,neutral 0-1 normal normal f
+4 D NPC*,UNKNOWN~ happy,excited 2 fast loud u
+5 N NARRATOR neutral,happy 0-1 normal normal u
+6 N
+7 N
+8 N
+9 N NARRATOR neutral,happy 0-1 normal normal u
+10 N
+11 N NARRATOR neutral,happy,tender 0-1 normal normal u
+12 D NPC*,UNKNOWN~ happy,excited 1 normal normal,loud u
+13 D SHIRAMINE,SHIRAMINE KOUTA happy,tender 0-1 normal normal m
+14 N
+15 N
+16 N NARRATOR neutral,sarcastic 0-1 normal normal u
+17 D NPC* neutral,happy 0-1 normal normal u
+18 D URAZUMI,URAZUMI SAKUKO neutral,sad 0-1 normal normal f
+19 N
+20 N
+21 N
+22 N
+23 N NARRATOR neutral,afraid 0-1 normal normal u
+24 N
+25 D NPC* neutral,happy 0-1 normal normal u
+26 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+27 D NPC* neutral 0-1 normal normal u
+28 N
+29 N
+30 D NPC* happy,surprised 0-1 normal normal u
+31 N
+32 N NARRATOR neutral,surprised 0-1 normal normal u
+33 N
+34 D URAZUMI,URAZUMI SAKUKO,NPC*~ neutral 0-1 normal normal f
+35 D NPC*,URAZUMI~,URAZUMI SAKUKO~ sarcastic,happy 0-1 normal normal u
+36 N
+37 D NPC* neutral 0-1 normal normal u
+38 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+39 N
+40 N NARRATOR neutral,afraid 0-1 normal normal u
+41 D NPC* neutral 0-1 normal normal u
+42 D URAZUMI,URAZUMI SAKUKO afraid,neutral 0-1 normal soft,normal f
+43 N
+44 N NARRATOR neutral,afraid 0-1 normal normal u
+45 D URAZUMI,URAZUMI SAKUKO,NPC*~ afraid,sad 1 normal,slow soft,normal f
+46 N,T NARRATOR,URAZUMI,URAZUMI SAKUKO afraid,tender 0-1 normal normal u
+47 N NARRATOR neutral,afraid 0-1 normal normal u
+48 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sad,angry 1 normal normal u
+49 N
+50 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 1-2 normal,fast normal u
+51 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 2 fast normal,loud u
+52 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI tired,afraid 1 normal,slow soft f
+53 D YOSHIHITO,KUCHINASHI YOSHIHITO neutral 0-1 normal normal m
+54 N
+55 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic,neutral 0-1 normal normal u
+56 N
+57 N
+58 D KIRAKO,KUROMITSU KIRAKO sad 1 normal soft,normal f
+59 N
+60 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic 0-1 normal normal u
+61 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic,angry 0-1 normal normal u
+62 D YOSHIHITO,KUCHINASHI YOSHIHITO,GREY~,JANE GREY~ neutral,tender 0-1 normal normal m
+63 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI neutral,afraid 1 normal normal f
+64 N
+65 N NARRATOR neutral,afraid 0-1 normal normal u
+66 N NARRATOR neutral,afraid 0-1 normal normal u
+67 N NARRATOR neutral,afraid 0-1 normal normal u
+68 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO afraid 1 normal normal u
+69 D YOSHIHITO,KUCHINASHI YOSHIHITO,GREY~,JANE GREY~ neutral,surprised 0-1 normal normal m
+70 N
+71 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO neutral,tired 0-1 normal normal u
+72 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,sarcastic 1 normal normal u
+73 D YOSHIHITO,KUCHINASHI YOSHIHITO,GREY~,JANE GREY~ neutral 0-1 normal normal m
+74 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI neutral,excited 0-1 normal normal f
+75 N
+76 N
+77 N
+78 N
+79 D KIRAKO,KUROMITSU KIRAKO,NARRATOR~ surprised,afraid 1-2 fast normal,loud f
+80 N
+81 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic 0-1 normal normal u
+82 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO tired,sarcastic 0-1 normal normal u
+83 D YOSHIHITO,KUCHINASHI YOSHIHITO neutral,tired 0-1 normal normal m
+84 D KIRAKO,KUROMITSU KIRAKO sad,tired 1 normal soft,normal f
+85 N
+86 N NARRATOR neutral,sarcastic 0-1 normal normal u
+87 N NARRATOR neutral,sarcastic 0-1 normal normal u
+88 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic 0-1 normal normal u
+89 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic 0-1 normal normal u
+90 N
+91 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,surprised 1 normal normal u
+92 D KIRAKO,KUROMITSU KIRAKO sad,neutral 0-1 normal normal f
+93 D YOSHIHITO,KUCHINASHI YOSHIHITO neutral,sarcastic 0-1 normal normal m
+94 N NARRATOR neutral,tired,sarcastic 0-1 normal normal u
+95 N NARRATOR neutral,sarcastic 0-1 normal normal u
+96 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 2 fast normal,loud u
+97 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 1-2 fast normal u
+98 N
+99 N
+100 D YOSHIHITO,KUCHINASHI YOSHIHITO tired,angry 0-1 normal normal m
+101 D KIRAKO,KUROMITSU KIRAKO happy,neutral 0-1 normal normal f
+102 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO surprised,sarcastic 1 normal normal u
+103 N
+104 N NARRATOR neutral,sarcastic 0-1 normal normal u
+105 N
+106 N NARRATOR neutral,sarcastic 0-1 normal normal u
+107 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sad,sarcastic 0-1 normal normal u
+108 D KIRAKO,KUROMITSU KIRAKO happy,tired 0-1 normal normal f
+109 N
+110 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,sarcastic 0-1 normal normal u
+111 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,sarcastic 0-1 normal normal u
+112 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 1 normal normal u
+113 N NARRATOR neutral,angry,sarcastic 0-1 normal normal u
+114 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,sarcastic 0-1 normal normal u
+115 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO sarcastic 0-1 normal normal u
+116 D KIRAKO,KUROMITSU KIRAKO sarcastic,whispering 0-1 normal soft f
+117 D YOSHIHITO,KUCHINASHI YOSHIHITO angry,surprised 1 normal soft,normal m
+118 N NARRATOR neutral,afraid 0-1 normal normal u
+119 N
+120 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,sarcastic 0-1 normal normal u
+121 D GREY,JANE GREY surprised,afraid 1 normal,fast normal f
+122 D YOSHIHITO,KUCHINASHI YOSHIHITO neutral,tired 0-1 normal normal m
+123 N
+124 N NARRATOR neutral,surprised 0-1 normal normal u
+125 N NARRATOR neutral,afraid 0-1 normal normal u
+126 N
+127 D GREY,JANE GREY surprised,neutral 0-1 normal normal f
+128 D YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO~,KUROMITSU KIRAKO~ surprised 0-1 normal normal m
+129 N
+130 D GREY,JANE GREY surprised,neutral 1 slow,normal normal,soft f

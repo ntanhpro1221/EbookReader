@@ -1,0 +1,141 @@
+# "Nageki no Bourei wa Intai Shitai" file 73 (ngoại truyện "Bereaving Souls"). Vòng 12 (20-09): B gán, A soát, không đổi.
+# NGÔI BA, không có "tôi". Nhóm GIẢ MẠO Grieving Souls: KRAHI / KRAHI ANDRIHEE (giả Krai), KULE / KULE SAICOOL, KUTRI / KUTRI SMYAT,
+# IZABEE / ELIZABETH SMYAT. KRAI, SITRI... KHÔNG được điểm ở đâu cả (quy tắc 12: model hay chộp tên quen). Trưởng làng là NPC*.
+0 H
+1 N
+2 D NPC*,UNKNOWN~ surprised,excited 2 fast,normal loud,normal m
+3 N
+4 N
+5 N
+6 N
+7 N
+8 N
+9 N
+10 N NARRATOR neutral,surprised 0-1 normal normal u
+11 N
+12 N NARRATOR neutral,surprised,excited 0-1 normal normal u
+13 D KRAHI,KRAHI ANDRIHEE,NPC*~ neutral,happy 0-1 normal normal m
+14 N
+15 D KRAHI,KRAHI ANDRIHEE,NPC*~ neutral 0-1 normal normal m
+16 D NPC*,UNKNOWN~ afraid,neutral 1 normal normal m
+17 N
+18 N
+19 N
+20 N NARRATOR neutral,sarcastic 0-1 normal normal u
+21 N
+22 N NARRATOR neutral,surprised 0-1 normal normal u
+23 N NARRATOR neutral,sarcastic 0-1 normal normal u
+24 N NARRATOR neutral,surprised 0-1 normal normal u
+25 N NARRATOR neutral,sarcastic 0-1 normal normal u
+26 N
+27 N
+28 N NARRATOR neutral,surprised 0-1 normal normal u
+29 N NARRATOR neutral,sarcastic 0-1 normal normal u
+30 D KULE,KULE SAICOOL,NPC*~ sarcastic,neutral 0-1 normal normal m
+31 N NARRATOR neutral 0-1 normal normal u
+32 D KRAHI,KRAHI ANDRIHEE,NPC*~ neutral,happy 0-1 normal normal m
+33 D NPC*,UNKNOWN~ surprised 2 fast normal,loud m
+34 N
+35 N NARRATOR neutral,surprised 0-1 normal normal u
+36 N NARRATOR neutral,surprised 0-1 normal normal u
+37 N NARRATOR neutral,sarcastic 0-1 normal normal u
+38 D KUTRI,KUTRI SMYAT angry 2 fast loud f
+39 N
+40 D KUTRI,KUTRI SMYAT angry 2 fast loud f
+41 D KULE,KULE SAICOOL angry,tired 1-2 normal,fast normal,loud m
+42 N
+43 D KULE,KULE SAICOOL,IZABEE~,ELIZABETH SMYAT~ tired,sad 1 slow soft,normal m
+44 N NARRATOR neutral,sad 0-1 normal normal u
+45 N
+46 N
+47 N NARRATOR neutral,sarcastic 0-1 normal normal u
+48 N NARRATOR neutral,sarcastic 0-1 normal normal u
+49 D KUTRI,KUTRI SMYAT angry,sarcastic 1 normal normal f
+50 D KULE,KULE SAICOOL neutral,tired 0-1 normal normal m
+51 N
+52 N
+53 N
+54 N
+55 N
+56 N NARRATOR neutral,sarcastic 0-1 normal normal u
+57 N
+58 N
+59 N
+60 N NARRATOR neutral,sarcastic 0-1 normal normal u
+61 N
+62 N
+63 N
+64 N
+65 N
+66 N NARRATOR neutral,sarcastic 0-1 normal normal u
+67 N NARRATOR neutral,sad 0-1 normal normal u
+68 N NARRATOR neutral,sarcastic 0-1 normal normal u
+69 N
+70 N
+71 N NARRATOR neutral,sarcastic 0-1 normal normal u
+72 N NARRATOR neutral,sarcastic 0-1 normal normal u
+73 N NARRATOR neutral,sarcastic 0-1 normal normal u
+74 N NARRATOR neutral,sarcastic 0-1 normal normal u
+75 N NARRATOR neutral,sarcastic 0-1 normal normal u
+76 N
+77 N
+78 N
+79 N
+80 N
+81 N
+82 N
+83 N
+84 N NARRATOR neutral,afraid 0-1 normal normal u
+85 N NARRATOR neutral,afraid 0-1 normal normal u
+86 N NARRATOR neutral,tired 0-1 normal normal u
+87 D IZABEE,ELIZABETH SMYAT tired,afraid 1 normal normal f
+88 D KUTRI,KUTRI SMYAT neutral 0-1 normal normal f
+89 N
+90 D KUTRI,KUTRI SMYAT neutral 0-1 normal normal f
+91 D KUTRI,KUTRI SMYAT,IZABEE~,ELIZABETH SMYAT~ neutral,tired 0-1 normal normal f
+92 N NARRATOR neutral 0-1 normal normal u
+93 D KULE,KULE SAICOOL sad,afraid 1 normal normal m
+94 N
+95 N
+96 N
+97 N NARRATOR neutral 0-1 normal normal u
+98 D IZABEE,ELIZABETH SMYAT sad 1 normal normal f
+99 D KUTRI,KUTRI SMYAT angry 1-2 normal,fast normal,loud f
+100 N
+101 D IZABEE,ELIZABETH SMYAT,KUTRI~,KUTRI SMYAT~ sarcastic,tired 0-1 normal normal f
+102 D KULE,KULE SAICOOL,IZABEE~,ELIZABETH SMYAT~ sad,afraid 1 normal normal m
+103 D KUTRI,KUTRI SMYAT,IZABEE~,ELIZABETH SMYAT~ angry,afraid 1-2 normal,fast normal,loud f
+104 D KULE,KULE SAICOOL,IZABEE~,ELIZABETH SMYAT~ tired,neutral 0-1 normal normal m
+105 N
+106 N
+107 N
+108 N
+109 N NARRATOR neutral,sarcastic 0-1 normal normal u
+110 N NARRATOR neutral,sad 0-1 normal normal u
+111 N
+112 D KULE,KULE SAICOOL excited,sarcastic 1-2 normal normal,loud m
+113 N
+114 D KUTRI,KUTRI SMYAT surprised,angry 1-2 normal normal,loud f
+115 N NARRATOR neutral,surprised 0-1 normal normal u
+116 D IZABEE,ELIZABETH SMYAT tired,neutral 0-1 normal normal f
+117 N
+118 D KUTRI,KUTRI SMYAT,IZABEE~,ELIZABETH SMYAT~ sarcastic,angry 1 normal normal f
+119 D KULE,KULE SAICOOL,IZABEE~,ELIZABETH SMYAT~ neutral 0-1 normal normal m
+120 D KUTRI,KUTRI SMYAT,IZABEE~,ELIZABETH SMYAT~ sarcastic,neutral 0-1 normal normal f
+121 D KULE,KULE SAICOOL angry,tired 1 normal normal m
+122 D KUTRI,KUTRI SMYAT angry 2 fast loud f
+123 N
+124 D KULE,KULE SAICOOL excited,happy 1-2 normal,fast normal,loud m
+125 N
+126 N NARRATOR neutral,tired 0-1 normal normal u
+127 D IZABEE,ELIZABETH SMYAT tired,sarcastic 0-1 normal normal f
+128 N
+129 N NARRATOR neutral,sarcastic 0-1 normal normal u
+130 N
+131 D KULE,KULE SAICOOL excited,angry 1-2 normal,fast normal,loud m
+132 D KUTRI,KUTRI SMYAT angry,surprised 2 fast loud f
+133 N
+134 D KUTRI,KUTRI SMYAT angry 2 fast loud f
+135 D KULE,KULE SAICOOL angry 1-2 fast normal,loud m
+136 N NARRATOR neutral,excited 0-1 normal normal u
+137 N NARRATOR neutral,sarcastic 0-1 normal normal u

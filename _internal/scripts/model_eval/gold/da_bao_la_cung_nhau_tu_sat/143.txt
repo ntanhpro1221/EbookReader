@@ -1,0 +1,90 @@
+# "Đã bảo là cùng nhau tự sát..." file 143 ("Chương 144"). Vòng 12 (20-09): agent review gán (B), Claude soát (A), không đổi.
+# Ngôi ba. Gần như cả chương là Hạ Tử Cường kể chuyện (HẠ TỬ CƯỜNG / TỬ CƯỜNG; "anh Hạ" là xưng hô - không điểm). 78 là lời Lý Hữu
+# Quốc được nhắc lại (79) -> tên đủ, NARRATOR~. Đoạn kể về Chu Mặc có câu nghĩ -> CHU MẶC~; câu thuần tiếng lòng -> đủ.
+0 H
+1 D CHU MẶC happy 0-1 normal normal m
+2 N
+3 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral,sad 0-1 normal normal m
+4 N NARRATOR neutral,sad 0-1 normal normal u
+5 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral 0-1 normal normal m
+6 N
+7 N
+8 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral,happy 0-1 normal normal m
+9 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 1 normal normal,loud m
+10 N,T NARRATOR,CHU MẶC~ surprised,neutral 0-1 normal normal u
+11 N,T NARRATOR,CHU MẶC surprised,sarcastic,neutral 0-1 normal normal u
+12 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad,neutral 0-1 normal normal m
+13 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad,excited,angry 1-2 normal normal,loud m
+14 N
+15 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy 1 normal normal m
+16 N NARRATOR neutral,happy 0-1 normal normal u
+17 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral,tender 0-1 normal normal m
+18 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral 0-1 normal normal m
+19 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral,happy 0-1 normal normal m
+20 D HẠ TỬ CƯỜNG,TỬ CƯỜNG tender,happy,sad 0-1 normal normal m
+21 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 1 normal normal m
+22 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 1-2 normal normal,loud m
+23 N,T NARRATOR,CHU MẶC~ neutral,happy 0-1 normal normal u
+24 D CHU MẶC surprised,happy 0-1 normal normal m
+25 N
+26 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,tender 0-1 normal normal m
+27 N
+28 N
+29 D HẠ TỬ CƯỜNG,TỬ CƯỜNG tender,happy 1 normal normal m
+30 N NARRATOR neutral,surprised 0-1 normal normal u
+31 N,T NARRATOR,CHU MẶC surprised 1 normal normal u
+32 N
+33 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral,whispering,tender 0-1 slow,normal soft m
+34 N
+35 N NARRATOR neutral,tender 0-1 normal normal u
+36 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,neutral 0-1 normal normal m
+37 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,sarcastic 0-1 normal normal m
+38 D HẠ TỬ CƯỜNG,TỬ CƯỜNG surprised,angry 1 normal normal m
+39 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,angry 1-2 normal,fast normal,loud m
+40 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,tender 1 normal normal m
+41 D HẠ TỬ CƯỜNG,TỬ CƯỜNG tender,excited 1 normal normal m
+42 N,T NARRATOR,CHU MẶC~ surprised 0-1 normal normal u
+43 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,sarcastic 0-1 normal normal m
+44 N
+45 D CHU MẶC surprised 0-1 normal normal m
+46 N
+47 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 1-2 normal normal,loud m
+48 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 1 normal normal m
+49 N NARRATOR neutral,happy 0-1 normal normal u
+50 N,T NARRATOR,CHU MẶC excited,sarcastic 1 normal normal u
+51 N,T NARRATOR,CHU MẶC excited,happy 1 normal normal u
+52 D HẠ TỬ CƯỜNG,TỬ CƯỜNG tender,happy 0-1 normal normal m
+53 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,excited 1 normal normal m
+54 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad,neutral 0-1 normal normal m
+55 N NARRATOR neutral,happy 0-1 normal normal u
+56 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 1 normal normal,loud m
+57 N
+58 D NARRATOR neutral,sarcastic 0-1 normal normal u
+59 N
+60 N
+61 D HẠ TỬ CƯỜNG,TỬ CƯỜNG excited,happy 2 normal loud m
+62 D CHU MẶC neutral,afraid 0-1 normal normal m
+63 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,neutral 0-1 normal normal m
+64 N
+65 D HẠ TỬ CƯỜNG,TỬ CƯỜNG happy,sarcastic 0-1 normal normal m
+66 N
+67 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad 1 normal,slow normal m
+68 D CHU MẶC sad,surprised 0-1 normal soft,normal m
+69 N
+70 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad,neutral 0-1 normal normal m
+71 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad,neutral 0-1 normal normal m
+72 D HẠ TỬ CƯỜNG,TỬ CƯỜNG tender,happy 0-1 normal normal m
+73 D HẠ TỬ CƯỜNG,TỬ CƯỜNG tender,happy 0-1 normal normal m
+74 D HẠ TỬ CƯỜNG,TỬ CƯỜNG sad,neutral 0-1 normal normal m
+75 N NARRATOR neutral,sad 0-1 normal normal u
+76 D HẠ TỬ CƯỜNG,TỬ CƯỜNG afraid,neutral 0-1 normal normal m
+77 N
+78 D LÝ HỮU QUỐC,NARRATOR~ neutral,afraid 0-1 normal normal m
+79 N
+80 D HẠ TỬ CƯỜNG,TỬ CƯỜNG neutral 0-1 normal normal m
+81 N
+82 D NPC*,HẠ TỬ CƯỜNG~,TỬ CƯỜNG~,UNKNOWN~ neutral,tender 0-1 slow,normal normal m
+83 N NARRATOR neutral,tender 0-1 normal normal u
+84 N NARRATOR neutral,happy 0-1 normal normal u
+85 N NARRATOR neutral,tender 0-1 normal normal u
+86 N NARRATOR neutral,happy,tender 0-1 normal normal u

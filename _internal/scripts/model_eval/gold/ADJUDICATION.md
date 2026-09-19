@@ -196,3 +196,9 @@ A soát mọi câu có người nói kèm câu kể liền trước/sau: không 
 (MICHAEL GODSWILL 34 lần, JULIANA VOX 28 lần - quy tắc 11). B sửa lại đề bài của A: Nise 111 là chương NGÔI BA (Marla,
 Alistar), không phải Magali kể. Cả ba chương dày câu gọi tên người nghe ("Samael, ...", "..., Michael", "Marla-san") - đúng
 kiểu lỗi lớn nhất của `qwen3:8b` ở lô 9.
+
+## Vòng 12 (20-09 02:2x): Đã bảo 143, Nageki 73, Two Childhood 082 - B gán, A soát
+
+A soát mọi câu có người nói kèm câu kể liền trước/sau: không đổi dòng nào. Đáng ghi: Nageki 73 là một cái BẪY cho model -
+nhóm giả mạo có tên na ná nhóm thật (Krahi Andrihee / Krai Andrey, Kutri Smyat / Sitri Smart); tên nhóm thật không được điểm
+(quy tắc 12). B tự kiểm cả bốn cách viết trong kho.
