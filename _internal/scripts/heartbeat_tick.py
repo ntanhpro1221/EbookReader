@@ -108,6 +108,12 @@ def flying() -> list[str]:
         connection.row_factory = sqlite3.Row
         try:
             book = connection.execute("SELECT status, stage FROM book").fetchone()
+            # Xong rồi thì không "bay", dù DB vừa bị chạm: ranh giới ghi sổ cộng dồn vào MỌI project cũ
+            # (`backfill_exposure`) ngay trước khi thả lô kế, và nhịp 17:55 ngày 19-09 in ra cả trăm dòng
+            # "đang bay" cho những project đã xong từ tuần trước.
+            # `created` KHÔNG tính là xong ở đây: một lô vừa tạo đúng là đang bay.
+            if book["status"] == "completed" or book["stage"] in FINISHED_STAGES:
+                continue
             total = connection.execute("SELECT COUNT(*) FROM segments").fetchone()[0]
             analysed = connection.execute(
                 "SELECT COUNT(*) FROM segments WHERE status = 'analyzed'"

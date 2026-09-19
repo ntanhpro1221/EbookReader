@@ -38,3 +38,33 @@ def test_a_dead_or_stalled_project_is_named_and_a_finished_one_is_not(tmp_path: 
     dead = next(line for line in lines if "lo07_dead" in line)
     assert dead.startswith("CHẾT") and "narrator is locked" in dead and "25 phút" in dead
     assert next(line for line in lines if "lo07_stalled" in line).startswith("ĐỨNG IM")
+
+
+def test_a_finished_project_touched_by_the_ledger_is_not_flying(tmp_path: Path, monkeypatch) -> None:
+    """Nhịp 17:55 ngày 19-09 in cả trăm project cũ là "đang bay" vì ranh giới vừa ghi sổ vào chúng."""
+    root = tmp_path / "versions"
+    root.mkdir()
+    for name, status, stage in [
+        ("lo04_done", "completed", "completed"),
+        ("lo01_errors", "error", "completed_with_errors"),
+        ("lo09_new", "created", "created"),
+        ("lo09_live", "analyzing", "full_book_analysis"),
+    ]:
+        folder = root / "v0.3.0-x" / name
+        folder.mkdir(parents=True)
+        connection = sqlite3.connect(folder / "project.sqlite3")
+        connection.executescript(
+            "CREATE TABLE book (status TEXT, stage TEXT, last_error TEXT);"
+            "CREATE TABLE segments (id INTEGER PRIMARY KEY, status TEXT, wav_path TEXT, wav_sha256 TEXT);"
+            "CREATE TABLE chapters (id INTEGER PRIMARY KEY, status TEXT);"
+            "CREATE TABLE worker_leases (heartbeat_at REAL);"
+        )
+        connection.execute("INSERT INTO book VALUES (?, ?, NULL)", (status, stage))
+        connection.commit()
+        connection.close()
+    monkeypatch.setattr(tick, "VERSIONS", root)
+
+    names = " ".join(tick.flying())
+
+    assert "lo09_new" in names and "lo09_live" in names
+    assert "lo04_done" not in names and "lo01_errors" not in names
