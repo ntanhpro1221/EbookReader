@@ -1,0 +1,105 @@
+# Đáp án chuẩn - chương 351 (tiêu đề "Chương 352 - Sự thật"). Claude làm 19-09, KHÔNG nhìn nhãn sản xuất.
+# Cú pháp: seq kind speaker emotion intensity pace volume gender
+#   kind      N narration, D dialogue, T thought, H tiêu đề (không chấm)
+#   speaker   các lựa chọn cách nhau dấu phẩy, đều đủ điểm; hậu tố ~ là nửa điểm; NPC* = bất kỳ NPC_LOCAL
+#   emotion/pace/volume  tập chấp nhận, cách nhau dấu phẩy
+#   intensity khoảng a-b
+#   gender    m / f / u (u: không chấm)
+# Dòng chỉ có "seq N" = NARRATOR neutral 0-1 normal normal u.
+0 H
+1 N
+2 D DOUGLAS happy,neutral,excited 0-2 normal normal m
+3 N
+4 N
+5 N
+6 D LUCIEN neutral,happy 0-1 normal normal m
+7 N
+8 D DOUGLAS happy,excited,neutral 1-2 normal normal m
+9 N
+10 D DOUGLAS neutral 0-1 normal normal m
+11 D DOUGLAS neutral 0-1 normal normal m
+12 N NARRATOR neutral,tired,sarcastic 0-1 normal normal u
+13 T NARRATOR,LUCIEN,FERNANDO~ neutral,sarcastic,happy 0-1 normal normal u
+14 N
+15 D NARRATOR,FERNANDO neutral,sarcastic 0-1 normal normal u
+16 N
+17 D LUCIEN,NARRATOR neutral,sarcastic,happy 0-1 normal normal u
+18 N
+19 N NARRATOR neutral,happy,sarcastic 0-1 normal normal u
+20 N
+21 D OLIVER happy,neutral 0-1 normal normal m
+22 N
+23 D DOUGLAS happy,excited 1-2 normal,fast normal m
+24 D OLIVER neutral,happy,tender 0-1 normal normal m
+25 D OLIVER neutral,happy,tender 0-1 normal normal m
+26 N
+27 N
+28 N
+29 D LUCIEN neutral,happy 0-1 normal,slow normal m
+30 D LUCIEN neutral 0-1 normal,slow normal m
+31 D LUCIEN neutral 0-1 normal,slow normal m
+32 D LUCIEN neutral 0-1 normal,slow normal m
+33 D LUCIEN neutral 0-1 normal,slow normal m
+34 N
+35 N
+36 N
+37 D LUCIEN neutral 0-1 normal,slow normal m
+38 D LUCIEN neutral 0-1 normal,slow normal m
+39 D LUCIEN neutral 0-1 normal,slow normal m
+40 D LUCIEN neutral 0-1 normal,slow normal m
+41 D LUCIEN neutral 0-1 normal,slow normal m
+42 D LUCIEN neutral 0-1 normal,slow normal m
+43 D LUCIEN neutral 0-1 normal,slow normal m
+44 D LUCIEN neutral 0-1 normal,slow normal m
+45 D LUCIEN neutral 0-1 normal,slow normal m
+46 D LUCIEN neutral 0-1 normal,slow normal m
+47 N
+48 N
+49 N
+50 N
+51 N
+52 N
+53 N
+54 D DOUGLAS happy,excited,neutral 1-2 normal normal m
+55 D DOUGLAS happy,neutral,tender 0-2 normal normal m
+56 N
+57 D DOUGLAS happy,tender,neutral 0-2 normal normal m
+58 N
+59 N
+60 N
+61 N
+62 D MORRIS sarcastic,angry,tired 1-2 slow,normal normal m
+63 N
+64 D LUCIEN neutral,happy,sarcastic 0-1 normal normal,soft m
+65 N
+66 N
+67 D NARRATOR,MORRIS sarcastic,neutral 0-1 normal normal u
+68 N
+69 D MORRIS sarcastic,happy 1-2 normal normal m
+70 N NARRATOR neutral,afraid 0-1 normal,fast normal u
+71 N
+72 N
+73 D CHLOE,NARRATOR neutral 0-1 normal normal u
+74 N
+75 D NPC*,UNKNOWN,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
+76 D NPC*,UNKNOWN,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
+77 N
+78 D ROGERIO neutral 0-1 normal normal m
+79 N
+80 D ROGERIO neutral,surprised 0-1 normal normal m
+81 N
+82 D PESOR sarcastic 1-2 normal normal m
+83 D SOUSA,NPC*~ sarcastic,angry 1-2 normal normal m
+84 N
+85 N
+86 D FELIPE sarcastic,angry 1-2 normal normal m
+87 N
+88 D SOUSA angry,sarcastic 1-2 normal normal m
+89 N
+90 N
+91 N
+92 D FELIPE neutral 0-1 normal normal m
+93 N
+94 D FELIPE surprised,neutral,whispering 0-2 slow,normal soft,normal m
+95 N
+96 N

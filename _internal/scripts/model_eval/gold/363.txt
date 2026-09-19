@@ -1,0 +1,87 @@
+# Đáp án chuẩn - chương 363 (tiêu đề "Chương 364 - Tự bê đá đập chân mình"). Claude làm 19-09, không nhìn nhãn sản xuất.
+# Cú pháp như 351.txt; kind có thể là tập (T,N) khi parser khoá sai loại.
+# Nguồn hỏng ở đoạn 68: mở ‘ đóng ” - parser tự phục hồi và coi CẢ 68..81 là thought. Thực chất 69..80 là
+# lời kể (đọc giọng người kể mới đúng), 79 là câu tự hỏi của Bellak, 81 là lời Lucien nói.
+# BELLAK không có trong danh sách nhân vật đã biết: model phải tự nhận ra (nam).
+0 H
+1 N
+2 N NARRATOR neutral,afraid,surprised 0-2 normal,fast normal u
+3 N NARRATOR neutral,afraid,surprised 0-2 normal,fast normal u
+4 N NARRATOR neutral,surprised,excited 0-2 normal,fast normal,loud u
+5 N
+6 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+7 N
+8 D NARRATOR,UNKNOWN~ surprised,neutral 0-2 normal,fast loud,normal u
+9 N NARRATOR neutral,surprised 0-2 normal,fast normal u
+10 N NARRATOR neutral 0-1 normal,fast normal u
+11 N
+12 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+13 N NARRATOR neutral,afraid 0-2 normal normal u
+14 N NARRATOR neutral,afraid,surprised 0-2 normal,fast normal u
+15 N NARRATOR neutral,surprised,excited 0-2 normal,fast normal,loud u
+16 D BELLAK sarcastic,happy,excited 1-3 normal,fast loud,normal m
+17 N
+18 N
+19 D BELLAK excited,happy 1-3 normal,fast loud,normal m
+20 N
+21 N
+22 D BELLAK excited,happy 2-3 fast,normal loud,normal m
+23 D BELLAK neutral,sad,tired 0-1 normal,slow soft,normal m
+24 N
+25 N
+26 D BELLAK neutral 0-1 normal soft,normal m
+27 N
+28 N
+29 D BELLAK sarcastic,happy 1-2 normal normal m
+30 D BELLAK sarcastic,happy 1-2 normal normal m
+31 N
+32 D BELLAK sarcastic,angry 1-2 normal normal,loud m
+33 N NARRATOR neutral,sad,angry 0-1 normal normal u
+34 D BELLAK angry,sad 1-3 normal,fast normal,loud m
+35 D BELLAK angry 1-3 normal,fast normal,loud m
+36 D BELLAK angry,happy,sarcastic,excited 1-3 normal,fast normal,loud m
+37 D BELLAK angry,sarcastic 1-3 normal normal,loud m
+38 N
+39 N
+40 N
+41 N
+42 D BELLAK angry,sarcastic 1-3 normal normal,loud m
+43 D BELLAK angry,sarcastic 1-3 normal normal,loud m
+44 N
+45 N NARRATOR neutral,surprised,afraid 0-2 normal normal u
+46 D NARRATOR,BELLAK~ neutral,surprised,afraid 0-2 normal normal u
+47 N NARRATOR neutral,surprised,afraid 0-2 normal normal u
+48 N,T NARRATOR,BELLAK afraid,surprised 1-2 normal,fast normal,loud u
+49 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+50 N NARRATOR neutral,afraid,surprised 0-2 normal,fast normal u
+51 N NARRATOR neutral,afraid,surprised 0-2 normal,fast normal u
+52 N NARRATOR neutral,afraid 0-2 normal normal u
+53 N NARRATOR neutral,surprised,afraid 0-2 normal,fast normal u
+54 N
+55 N NARRATOR neutral,surprised,excited 0-2 normal,fast normal,loud u
+56 N
+57 N NARRATOR neutral,surprised 0-2 normal normal u
+58 T BELLAK surprised,afraid 1-3 fast,normal normal,loud m
+59 N
+60 N NARRATOR neutral,surprised,afraid 0-2 normal normal u
+61 N
+62 N
+63 N
+64 N
+65 N
+66 D ALFERRIS happy,excited 1-3 normal,fast loud,normal m
+67 N NARRATOR neutral,happy 0-1 normal normal u
+68 T,N BELLAK,NARRATOR~ angry,neutral,afraid 0-2 normal,fast normal u
+69 T,N NARRATOR,BELLAK~ afraid,surprised,neutral 0-2 normal,fast normal u
+70 T,N NARRATOR neutral,surprised 0-2 normal normal u
+71 T,N NARRATOR neutral,afraid 0-2 normal,fast normal u
+72 T,N NARRATOR,BELLAK~ afraid,neutral 0-2 normal normal u
+73 T,N NARRATOR neutral,afraid 0-2 normal normal u
+74 T,N NARRATOR,BELLAK~ surprised,afraid,neutral 0-2 normal normal u
+75 T,N NARRATOR neutral 0-1 normal,slow normal,soft u
+76 T,N NARRATOR neutral,tender 0-1 normal,slow normal,soft u
+77 T,N NARRATOR neutral,afraid 0-2 normal normal u
+78 T,N NARRATOR,BELLAK~ afraid,surprised 1-2 normal normal u
+79 T,N BELLAK,NARRATOR afraid,surprised 1-2 normal,fast normal u
+80 T,N NARRATOR neutral 0-1 normal normal u
+81 D,T LUCIEN neutral,sarcastic,happy 0-1 normal,slow normal,soft m

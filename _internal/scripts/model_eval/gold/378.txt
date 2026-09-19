@@ -1,0 +1,124 @@
+# Đáp án chuẩn - chương 378 (tiêu đề "Chương 379 - Hạ phàm"). Claude làm 19-09, không nhìn nhãn sản xuất.
+# Cú pháp như 351.txt. Gần như toàn nhân vật MỚI (chỉ TESS có trong danh sách đã biết): Augustus (đại trưởng
+# lão người lùn, nam, già), Harold (nam), Myrna (nữ), Quinns (nam), Galata (quản gia, nam), Wells (nam),
+# Edith (hầu gái, nữ). Những câu cả đám cùng nói/niệm chấp nhận NPC, UNKNOWN hoặc một người trong đám.
+0 H
+1 D AUGUSTUS neutral,tender,excited 0-2 slow,normal normal,loud m
+2 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
+3 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
+4 D NPC*,UNKNOWN,HAROLD~,MYRNA~,AUGUSTUS~ neutral,tender,excited 0-2 slow,normal normal,loud u
+5 N
+6 D TESS sarcastic,neutral,happy 0-2 normal normal,soft f
+7 N
+8 N NARRATOR neutral,surprised,afraid 0-2 normal,fast normal u
+9 N
+10 N
+11 D GALATA neutral 0-1 normal normal m
+12 N
+13 D GALATA neutral 0-1 normal normal m
+14 D TESS sarcastic,neutral 0-2 normal normal f
+15 N
+16 N NARRATOR neutral,afraid 0-1 normal normal,soft u
+17 N
+18 N
+19 D GALATA neutral,happy 0-1 normal normal m
+20 N
+21 D GALATA neutral 0-1 normal normal m
+22 D TESS sarcastic,angry 1-2 normal normal f
+23 N NARRATOR neutral,sarcastic 0-1 normal normal u
+24 D TESS angry,sad 1-3 normal,fast normal,loud f
+25 D WELLS neutral,happy 0-1 normal normal m
+26 N
+27 N NARRATOR neutral,happy 0-1 normal normal u
+28 D TESS neutral,sarcastic,happy 0-2 normal normal f
+29 D EDITH neutral,sarcastic 0-2 normal normal f
+30 N
+31 N
+32 D TESS neutral,sarcastic,angry 0-2 normal normal f
+33 D GALATA,WELLS,EDITH,NPC*,UNKNOWN neutral 0-1 normal normal u
+34 N
+35 N
+36 D HAROLD tender,neutral 0-2 slow,normal soft,normal m
+37 D HAROLD tender,neutral,excited 0-2 slow,normal soft,normal m
+38 N
+39 T HAROLD tender,neutral,happy 0-2 slow,normal soft,normal m
+40 N NARRATOR neutral,surprised,afraid 0-2 normal,fast normal u
+41 N NARRATOR neutral,afraid 0-2 normal normal u
+42 N
+43 D HAROLD afraid,surprised 2-3 fast,normal loud,normal m
+44 N NARRATOR neutral,afraid 0-2 normal normal u
+45 N NARRATOR neutral,sarcastic 0-1 normal normal u
+46 D TESS sarcastic,happy 1-2 normal normal f
+47 N NARRATOR neutral,angry,afraid 0-2 normal normal u
+48 D QUINNS angry 2-3 normal,fast loud,normal m
+49 N NARRATOR neutral,angry 0-2 normal,fast normal u
+50 N NARRATOR neutral,surprised,sad 0-1 normal normal u
+51 D MYRNA sad,angry,surprised 1-2 normal,slow normal,soft f
+52 D HAROLD afraid,sad 2-3 fast,normal loud,normal m
+53 N NARRATOR neutral,afraid 0-2 normal normal u
+54 N NARRATOR neutral,sarcastic 0-1 normal normal u
+55 D AUGUSTUS neutral,tender 0-1 normal,slow normal m
+56 N
+57 D HAROLD tender,sad,surprised,happy 1-2 slow,normal soft,normal m
+58 N NARRATOR neutral,happy,tender 0-1 normal normal u
+59 N NARRATOR neutral,sad 0-1 normal normal u
+60 D AUGUSTUS angry,excited,neutral 1-3 normal loud,normal m
+61 D NPC*,UNKNOWN excited,angry 2-3 normal,fast loud u
+62 N NARRATOR neutral,excited 0-2 normal normal u
+63 N NARRATOR neutral,tired 0-1 normal normal u
+64 D TESS tired,sarcastic,neutral 0-1 normal,slow normal,soft f
+65 N
+66 D GALATA neutral 0-1 normal normal m
+67 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+68 N NARRATOR neutral,afraid,sad 0-2 normal normal u
+69 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+70 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+71 N NARRATOR neutral,afraid 0-2 normal normal u
+72 N
+73 D AUGUSTUS afraid,angry,excited 2-3 fast,normal loud m
+74 N NARRATOR neutral,sad,afraid 0-2 normal normal u
+75 N NARRATOR neutral,sad,afraid 0-2 normal normal u
+76 N NARRATOR neutral,sad,afraid 0-2 normal,fast normal u
+77 D TESS angry,sarcastic 1-2 normal loud,normal f
+78 N NARRATOR neutral,afraid 0-2 normal normal u
+79 D NPC*,UNKNOWN afraid 2-3 fast,normal loud u
+80 N NARRATOR neutral,afraid 0-2 normal normal u
+81 N NARRATOR neutral,afraid,sad 0-2 normal,slow normal u
+82 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+83 N
+84 D NPC*,UNKNOWN,AUGUSTUS,HAROLD,MYRNA afraid,surprised 1-2 normal soft,normal u
+85 N NARRATOR neutral,afraid 0-1 normal normal u
+86 N NARRATOR neutral,sad,afraid 0-1 normal normal u
+87 D AUGUSTUS sad 1-3 slow,normal soft,normal m
+88 N NARRATOR neutral,sad 0-2 normal,slow normal u
+89 N
+90 D TESS sarcastic 1-2 normal normal f
+91 D AUGUSTUS sad 1-2 slow,normal soft,normal m
+92 N NARRATOR neutral,sad 0-2 normal,slow normal u
+93 D AUGUSTUS sad 2-3 slow,normal normal,soft m
+94 N NARRATOR neutral,sad 0-2 normal,slow normal u
+95 D AUGUSTUS sad,afraid,excited 2-3 normal loud,normal m
+96 N NARRATOR neutral,excited 0-2 normal normal u
+97 D TESS sarcastic 1-2 normal normal f
+98 N NARRATOR neutral,sarcastic 0-1 normal normal u
+99 D TESS sarcastic 1-2 normal normal f
+100 N NARRATOR neutral,sad 0-2 normal normal u
+101 D WELLS sarcastic,happy 1-2 normal normal m
+102 N NARRATOR neutral,sarcastic 0-1 normal normal u
+103 N NARRATOR neutral,sad 0-2 normal normal u
+104 T HAROLD sad 1-3 slow,normal soft,normal m
+105 N NARRATOR neutral,sad 0-1 normal normal u
+106 N NARRATOR neutral,surprised 0-2 normal normal u
+107 N NARRATOR neutral,surprised,excited 0-2 normal normal u
+108 N NARRATOR neutral,surprised 0-2 normal normal u
+109 N NARRATOR neutral,happy,excited 0-2 normal normal u
+110 D HAROLD happy,tender,excited 1-3 normal,slow normal,loud m
+111 D HAROLD happy,tender,excited 1-3 normal,slow normal,loud m
+112 N NARRATOR neutral,happy,excited 0-2 normal normal u
+113 D NPC*,UNKNOWN,HAROLD,AUGUSTUS happy,tender,excited 1-3 normal,slow normal,loud u
+114 N NARRATOR neutral,excited,tender 0-2 normal normal u
+115 N NARRATOR neutral,surprised 0-2 normal normal u
+116 D AUGUSTUS,NPC*,UNKNOWN,HAROLD excited,happy 1-3 normal loud,normal u
+117 D AUGUSTUS,NPC*,UNKNOWN,HAROLD excited,happy 1-3 normal loud,normal u
+118 N NARRATOR neutral,excited,surprised 0-2 normal normal u
+119 N NARRATOR neutral,surprised 0-2 normal normal u
