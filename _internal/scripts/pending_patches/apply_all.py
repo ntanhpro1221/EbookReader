@@ -32,8 +32,14 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ranh giới 10. Xếp 20-09 05:3x, sau khi ranh giới 9 áp tám bản vá và tôi phát lại cả 41 chương đáp án trên cây THẬT:
+# người nói ~100%, còn đúng MỘT dòng sai - TMA 449:65, cụm trích “Sơn Ca” giữa câu kể bị gán cho Samantha vì câu kể sau
+# mở bằng chính cái tên ("Samantha rảo bước..."). Cuốn 2 viết kiểu ấy 23 chỗ (“bảo vệ” Lucien, “thiên đường trần gian”
+# Đế chế...). Bản vá sửa cả HAI luật dùng chung phép nhận cụm trích giữa câu: khoá theo đoạn văn và "tên đầu câu kể sau".
+# Thử trên bản sao của cây 5c3e3f2: chỉ đỏ hai test môi trường; phát lại 446 + 449 hết dòng sai ấy.
+ORDER: tuple[str, ...] = (
+    "patch_a_nickname_before_a_name_is_still_the_narrators.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
