@@ -182,3 +182,10 @@ câu), loại 83/85, cảm xúc ưu tiên 88,2%.
 | 426:1 "Tự Nhiên?" | + `NPC*~` | có thể cả phòng hỏi lại (4: "thắc mắc chung của tất cả mọi người") |
 | 426:36, 436:77-78 | LEVSKI; ANNONIS | cả hai bên cùng đúng: chủ ngữ của "quay sang/nhìn ... nói", không phải người nghe |
 | hdst 090 | không đổi | |
+
+## Vòng 10 (20-09 02:0x): TMA 399, 400, 415, 420 (lô 9, vừa thu) - B gán, A soát
+
+Chọn trong lô 9 để chấm đầu ra THẬT của `qwen3:8b` trên nhiều chương hơn. A đọc lại mọi câu có người nói với nguồn: không
+đổi dòng nào. Điểm đáng ghi: 400 - "Andris" bị một thứ khác nhập (xưng "ta", mặt biến dạng) nhưng không chương nào đến 407
+nêu danh tính ấy -> ANDRIS đủ (quy tắc 13); 415:39 đuôi câu Fernando bị ngoặc lồng cắt, khoá N -> NARRATOR (quy tắc 10);
+399:22, 54, 61 và 400:73, 415:88 là lời dẫn nêu người NGHE - không cho điểm người nghe.

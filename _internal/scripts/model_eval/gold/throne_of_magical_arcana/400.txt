@@ -1,0 +1,107 @@
+# Đáp án chuẩn "Chương 401 - Căn nguyên", Text_Tmp/400.txt (lô 9 - chấm được đầu ra sản xuất thật). Vòng 10 (20-09): agent review gán (B),
+# Claude soát đối kháng (A), không đổi dòng nào - ADJUDICATION.md. Lucien đội lốt Beaulac: câu nói LUCIEN, BEAULAC~ (quy tắc 13).
+0 H
+1 N NARRATOR neutral,afraid 0-1 normal normal u
+2 N NARRATOR neutral,afraid 0-1 normal normal u
+3 D DUDA surprised,tired 1 normal soft,normal m
+4 N
+5 N NARRATOR neutral,afraid 0-1 normal normal u
+6 D ANDRIS sarcastic,neutral 0-1 normal normal m
+7 D DUDA afraid 1-2 fast,normal normal m
+8 N
+9 D DUDA surprised 1 normal normal m
+10 N
+11 N NARRATOR neutral,afraid 0-1 normal normal u
+12 D ANDRIS sarcastic,happy 0-1 normal normal m
+13 N
+14 D ANDRIS happy,whispering 1 slow soft,normal m
+15 N NARRATOR neutral,afraid 0-1 normal normal u
+16 D DUDA afraid 1-2 normal,fast normal m
+17 D ANDRIS sarcastic 1 normal normal m
+18 N NARRATOR neutral,afraid 0-1 normal normal u
+19 D ANDRIS sarcastic,happy 1 normal normal m
+20 N NARRATOR neutral,afraid 0-1 normal normal u
+21 N NARRATOR neutral,afraid 0-1 normal normal u
+22 N,T NARRATOR,DUDA~ afraid,sad,neutral 0-1 slow,normal normal,soft u
+23 D ANDRIS happy 1 slow soft,normal m
+24 N
+25 N
+26 N
+27 N
+28 N
+29 N
+30 N
+31 N
+32 N
+33 N,T NARRATOR,BEYER surprised,neutral 0-1 normal normal u
+34 D SOPHIA sarcastic,happy 0-1 normal normal f
+35 D SOPHIA sarcastic,happy 0-1 normal normal f
+36 N
+37 N
+38 N
+39 N
+40 D SOPHIA,NARRATOR~ excited,neutral 1-2 fast,normal normal,loud f
+41 N
+42 N
+43 N
+44 N
+45 N
+46 D SOPHIA sarcastic 1 normal normal f
+47 D SOPHIA sarcastic 1 normal normal f
+48 N
+49 D BEYER surprised 1-2 normal normal m
+50 D SOPHIA sarcastic,happy 1 normal normal f
+51 N
+52 D BEYER surprised,sad 1 normal normal m
+53 N
+54 D SOPHIA sarcastic,happy 0-1 normal normal f
+55 D SOPHIA sarcastic,happy 0-1 normal normal f
+56 N
+57 D SOPHIA sarcastic,happy 0-1 normal normal f
+58 N
+59 D SOPHIA sarcastic,happy,tender 0-1 normal normal f
+60 D LUCIEN,BEAULAC~ surprised,angry,neutral 0-1 normal normal m
+61 N
+62 N
+63 D SOPHIA happy,sarcastic 0-1 normal normal f
+64 D LUCIEN,BEAULAC~ surprised,neutral 0-1 normal normal m
+65 N
+66 N
+67 D SOPHIA happy,sarcastic 0-1 normal normal f
+68 D SOPHIA happy,sarcastic 0-1 normal normal f
+69 N,T NARRATOR,LUCIEN~ neutral,sarcastic 0-1 normal normal u
+70 N
+71 D SOPHIA sarcastic 1 normal normal f
+72 N
+73 D LUCIEN,BEAULAC~ neutral,surprised 0-1 normal normal m
+74 N
+75 N
+76 D NARRATOR neutral 0-1 normal normal u
+77 N
+78 D RELPH happy,sarcastic 1-2 normal normal,loud m
+79 D LUCIEN,BEAULAC~ surprised,neutral 0-1 normal normal m
+80 N
+81 N
+82 D RELPH excited,happy 1-2 normal normal,loud m
+83 D RELPH excited,angry 1-2 normal normal,loud m
+84 D RELPH excited,happy 1 normal normal m
+85 D RELPH excited,happy,tender 1 normal normal,soft m
+86 N
+87 T LUCIEN surprised,neutral 0-1 normal normal,soft m
+88 N
+89 N
+90 D NARRATOR neutral 0-1 normal normal u
+91 N
+92 D RELPH angry,sarcastic 1 normal normal m
+93 D LUCIEN,BEAULAC~ happy,sarcastic 0-1 normal normal m
+94 N
+95 N
+96 D BEYER happy,sarcastic 1-2 normal normal,loud m
+97 N
+98 N NARRATOR neutral,afraid 0-1 normal normal u
+99 D SOPHIA surprised,afraid 1-2 normal normal f
+100 N
+101 N
+102 D NARRATOR neutral 0-1 normal normal u
+103 N
+104 N NARRATOR neutral,excited 0-1 normal normal u

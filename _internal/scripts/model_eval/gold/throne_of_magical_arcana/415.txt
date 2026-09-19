@@ -1,0 +1,92 @@
+# Đáp án chuẩn "Chương 416 - Một cuộc tìm kiếm sôi nổi sắp sửa diễn ra", Text_Tmp/415.txt (lô 9 - chấm được đầu ra sản xuất thật). Vòng 10 (20-09): agent review gán (B),
+# Claude soát đối kháng (A), không đổi dòng nào - ADJUDICATION.md. Lucien đội lốt Beaulac: câu nói LUCIEN, BEAULAC~ (quy tắc 13).
+0 H
+1 N
+2 N,T NARRATOR,LUCIEN~ neutral,happy,afraid 0-1 normal normal u
+3 N NARRATOR neutral,tender 0-1 normal normal u
+4 T LUCIEN neutral,surprised 0-1 normal normal,soft m
+5 N
+6 N
+7 N
+8 T LUCIEN surprised,neutral 0-1 normal normal,soft m
+9 N
+10 N
+11 N
+12 N NARRATOR neutral,happy 0-1 normal normal u
+13 D FERNANDO neutral,surprised 0-1 normal normal m
+14 N NARRATOR neutral,angry 0-1 normal normal u
+15 D LUCIEN neutral 0-1 normal normal m
+16 N
+17 N
+18 N
+19 N
+20 N
+21 N
+22 N
+23 N
+24 D FERNANDO neutral,excited 0-1 normal normal m
+25 D FERNANDO neutral 0-1 normal normal m
+26 D FERNANDO neutral 0-1 normal normal m
+27 N
+28 N
+29 N
+30 D LUCIEN neutral 0-1 normal,slow normal m
+31 N
+32 D FERNANDO neutral,whispering 0-1 slow,normal soft,normal m
+33 N
+34 D FERNANDO neutral 0-1 normal normal m
+35 D FERNANDO neutral 0-1 normal normal m
+36 N
+37 N
+38 D FERNANDO happy,sarcastic 0-1 normal normal m
+39 N NARRATOR neutral,happy 0-1 normal normal u
+40 N NARRATOR neutral,sarcastic 0-1 normal normal u
+41 D LUCIEN excited 1 normal,fast normal m
+42 N
+43 D FERNANDO neutral 0-1 normal normal m
+44 D FERNANDO neutral 0-1 normal normal m
+45 D FERNANDO neutral,excited 0-1 normal normal m
+46 N
+47 D FERNANDO sarcastic,neutral 0-1 normal normal m
+48 N
+49 D FERNANDO surprised,neutral 0-1 normal normal m
+50 N
+51 N
+52 D LUCIEN happy 0-1 normal normal m
+53 D FERNANDO surprised 0-1 normal normal m
+54 N
+55 N
+56 D LUCIEN neutral,afraid 0-1 normal,fast normal m
+57 D FERNANDO surprised,sarcastic 0-1 normal normal m
+58 N
+59 D FERNANDO neutral,tender 0-1 normal normal m
+60 D LUCIEN happy 0-1 normal normal m
+61 N NARRATOR neutral,happy 0-1 normal normal u
+62 N
+63 D NARRATOR neutral,sarcastic 0-1 normal normal u
+64 N
+65 D LUCIEN surprised,neutral 0-1 normal normal m
+66 N
+67 D ALFERRIS neutral 0-1 normal normal m
+68 N
+69 D LUCIEN surprised 0-1 normal normal m
+70 N,T NARRATOR,LUCIEN~ surprised,neutral 0-1 normal normal u
+71 N
+72 D ALFERRIS neutral 0-1 normal normal m
+73 N NARRATOR neutral,excited 0-1 normal normal u
+74 T LUCIEN sarcastic,neutral 0-1 normal normal,soft m
+75 N,T NARRATOR,LUCIEN~ sarcastic,happy 0-1 normal normal u
+76 D ALFERRIS happy,sarcastic 0-1 normal normal m
+77 N
+78 D LUCIEN surprised,neutral 0-1 normal normal m
+79 N
+80 D ALFERRIS excited,happy 2 fast,normal normal,loud m
+81 N NARRATOR neutral,happy 0-1 normal normal u
+82 N
+83 N
+84 D FERNANDO neutral 0-1 normal normal m
+85 D LUCIEN surprised 1 normal normal m
+86 N NARRATOR neutral,surprised 0-1 normal normal u
+87 N
+88 D FERNANDO happy,sarcastic 1 normal normal m
+89 N

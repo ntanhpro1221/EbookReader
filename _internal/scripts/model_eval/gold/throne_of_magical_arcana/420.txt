@@ -1,0 +1,93 @@
+# Đáp án chuẩn "Chương 421 - Kiên trì và kỳ vọng của Levski", Text_Tmp/420.txt (lô 9 - chấm được đầu ra sản xuất thật). Vòng 10 (20-09): agent review gán (B),
+# Claude soát đối kháng (A), không đổi dòng nào - ADJUDICATION.md. Lucien đội lốt Beaulac: câu nói LUCIEN, BEAULAC~ (quy tắc 13).
+0 H
+1 N
+2 D ERIC sad,tired 1 normal normal m
+3 D ERIC sad,tender,tired 0-1 normal normal m
+4 N
+5 N
+6 N
+7 N
+8 N
+9 N
+10 N
+11 N NARRATOR neutral,sad 0-1 normal normal u
+12 D LEVSKI angry,sad 2 fast,normal normal,loud m
+13 N NARRATOR neutral,sad,angry 0-1 normal normal u
+14 N
+15 D ERIC neutral,tender,sad 0-1 normal normal m
+16 D ERIC neutral,sad 0-1 normal normal m
+17 D LEVSKI sad 1 slow soft,normal m
+18 N NARRATOR neutral,sad 0-1 normal normal u
+19 D NARRATOR neutral,sarcastic 0-1 normal normal u
+20 N
+21 N NARRATOR neutral,sad 0-1 normal normal u
+22 D NARRATOR,NPC*~ sarcastic,angry 0-1 normal normal u
+23 N
+24 D LEVSKI sad,neutral 1 normal,slow soft,normal m
+25 N
+26 D LEVSKI sad,neutral,excited 1 normal normal m
+27 N
+28 D ERIC sad,tired 0-1 normal normal m
+29 D ERIC sad,tired 0-1 normal normal m
+30 D LEVSKI sad,tender,excited 1 normal normal m
+31 N NARRATOR neutral,sad 0-1 normal normal u
+32 N
+33 D ERIC neutral,tired 0-1 normal normal m
+34 D ERIC neutral 0-1 normal normal m
+35 N
+36 N
+37 D ERIC neutral,tender,tired 0-1 normal normal m
+38 N
+39 N
+40 N,T NARRATOR,LEVSKI neutral,excited,sad 0-1 normal normal u
+41 D LEVSKI tender,sad 1 slow soft,normal m
+42 N
+43 N
+44 D ERIC neutral,tender 0-1 normal normal m
+45 N,T NARRATOR,LEVSKI~ neutral,afraid 0-1 normal normal u
+46 N
+47 N
+48 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
+49 N
+50 N
+51 N
+52 D LUCIEN happy,surprised 0-1 normal normal m
+53 N NARRATOR neutral,happy 0-1 normal normal u
+54 D LAZAR surprised 1 normal normal m
+55 N
+56 D LAZAR excited,happy 2 normal,fast loud,normal m
+57 N NARRATOR neutral,happy 0-1 normal normal u
+58 D LUCIEN happy 1 normal normal m
+59 N
+60 N
+61 D LAZAR happy,excited 1 normal normal,loud m
+62 N
+63 D LAZAR tender,happy 0-1 normal normal m
+64 D LAZAR tender,happy 0-1 normal normal m
+65 D LUCIEN happy,sarcastic 0-1 normal normal m
+66 N
+67 D LUCIEN neutral 0-1 normal normal m
+68 N
+69 D LAZAR happy,excited 0-1 normal normal m
+70 D LAZAR happy,excited 0-1 normal normal m
+71 N
+72 D LUCIEN happy,tender 0-1 normal normal m
+73 N
+74 N
+75 D LAZAR neutral 0-1 normal normal m
+76 N,T NARRATOR,LUCIEN~ neutral,tired,sarcastic 0-1 normal normal u
+77 D LUCIEN neutral 0-1 normal normal m
+78 N
+79 D LAZAR sarcastic,happy 0-1 normal normal m
+80 N
+81 D LUCIEN sarcastic,happy 0-1 normal normal m
+82 N
+83 N
+84 D NPC*,UNKNOWN~ neutral 0 normal normal u
+85 D LUCIEN surprised 0-1 normal normal m
+86 N
+87 N
+88 D NARRATOR,LEVSKI,LUCIEN~ neutral 0-1 normal normal u
+89 N
+90 D LUCIEN neutral 0-1 normal normal m
