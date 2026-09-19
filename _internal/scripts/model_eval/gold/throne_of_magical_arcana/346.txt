@@ -1,0 +1,91 @@
+# Đáp án chuẩn - cuốn 2, file 346 ("Chương 347 - Quy định"). Claude làm 20-09 (lượt đo chi phí token).
+# 46 là cả nhóm Rock cùng đáp. 67 là con vẹt đưa thư (NPC). 86-88 là ghi chú của người dịch - vẫn là lời kể.
+0 H
+1 D LUCIEN neutral,surprised 0-1 normal normal m
+2 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
+3 N NARRATOR neutral,surprised 0-1 normal normal u
+4 N NARRATOR neutral,excited 0-1 normal normal u
+5 D ROCK excited,happy 1-3 fast,normal loud,normal m
+6 N NARRATOR neutral,happy 0-1 normal normal u
+7 N
+8 N
+9 N
+10 N
+11 N NARRATOR neutral,happy,excited 0-1 normal normal u
+12 D LUCIEN neutral,happy 0-1 normal normal m
+13 N
+14 D ROCK excited,happy 1-3 fast,normal normal,loud m
+15 D ROCK excited,happy 1-2 fast,normal normal m
+16 N NARRATOR neutral,happy,sarcastic 0-1 normal normal u
+17 N
+18 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
+19 N
+20 N
+21 N NARRATOR neutral,sarcastic 0-1 normal normal u
+22 N
+23 N
+24 N
+25 D NARRATOR neutral,sarcastic 0-1 normal normal u
+26 N NARRATOR neutral,sarcastic 0-1 normal normal u
+27 D ROCK excited 1-2 fast,normal normal,loud m
+28 N
+29 N
+30 N NARRATOR neutral,happy,excited 0-1 normal normal u
+31 N
+32 N NARRATOR neutral,surprised 0-1 normal normal u
+33 D ROCK excited,surprised 1-2 normal,fast normal m
+34 N NARRATOR neutral,excited 0-1 normal normal u
+35 N
+36 N NARRATOR neutral,afraid 0-1 normal normal u
+37 N NARRATOR neutral,afraid 0-1 normal normal u
+38 N NARRATOR neutral,happy 0-1 normal normal u
+39 N NARRATOR neutral,excited 0-1 normal normal u
+40 N
+41 N
+42 D LUCIEN neutral,happy 0-1 normal normal m
+43 D LUCIEN neutral 0-1 normal normal m
+44 D LUCIEN neutral,happy 0-1 normal normal m
+45 N
+46 D ROCK,NPC*,UNKNOWN excited,happy 1-3 fast,normal loud,normal u
+47 N NARRATOR neutral,happy,excited 0-1 normal normal u
+48 N
+49 N
+50 N
+51 N NARRATOR neutral,happy 0-1 normal normal u
+52 D LUCIEN happy,neutral 0-1 normal normal m
+53 D LUCIEN neutral,happy 0-1 normal normal m
+54 D LUCIEN neutral 0-1 normal normal m
+55 N
+56 N NARRATOR neutral,happy,sarcastic 0-1 normal normal u
+57 N NARRATOR neutral,happy 0-1 normal normal u
+58 N
+59 N
+60 N
+61 N
+62 N NARRATOR neutral,surprised 0-1 normal normal u
+63 N
+64 N
+65 N
+66 N
+67 D NPC*,UNKNOWN neutral 0-1 normal normal u
+68 N
+69 N
+70 T FELIPE surprised,neutral 0-2 normal normal,soft m
+71 N NARRATOR neutral,angry 0-1 normal normal u
+72 N
+73 N
+74 T FELIPE sarcastic,neutral 0-2 normal normal m
+75 N
+76 N NARRATOR neutral,sarcastic 0-1 normal normal u
+77 N NARRATOR neutral,angry 0-1 normal normal u
+78 D LAUREN angry 2-3 fast,normal loud m
+79 N NARRATOR neutral,angry 0-1 normal normal u
+80 N NARRATOR neutral,angry 0-1 normal normal u
+81 D LAUREN angry 2-3 fast,normal loud m
+82 N NARRATOR neutral,surprised 0-1 normal normal u
+83 N NARRATOR neutral,tired 0-1 normal normal u
+84 T LAUREN tired,neutral,sad 0-1 normal,slow normal,soft m
+85 N
+86 N
+87 N
+88 N

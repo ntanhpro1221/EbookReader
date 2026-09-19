@@ -55,6 +55,10 @@ class Gold:
     paces: frozenset[str]
     volumes: frozenset[str]
     gender: str
+    # Thứ tự như đã viết: lựa chọn ĐẦU là cái ưu tiên (gold_replay dùng nó làm câu trả lời để dạy model).
+    emotion_order: tuple[str, ...] = ()
+    pace_order: tuple[str, ...] = ()
+    volume_order: tuple[str, ...] = ()
 
     @property
     def spoken(self) -> bool:
@@ -86,6 +90,7 @@ def parse_gold(path: Path) -> list[Gold]:
                 raise ValueError(f"{path.name}:{number}: dòng rút gọn chỉ dành cho N")
             speaker, emotions, intensity, paces, volumes, gender = NARRATION_DEFAULT
             speakers: tuple[tuple[str, float], ...] = ((speaker, 1.0),)
+            emotion_order, pace_order, volume_order = ("neutral",), ("normal",), ("normal",)
         else:
             # Tên có dấu cách ("THẦN HƠI NƯỚC") nên tách từ PHẢI: 5 trường cuối cố định.
             if len(parts) < 8:
@@ -96,7 +101,10 @@ def parse_gold(path: Path) -> list[Gold]:
                 (speaker_key(option[:-1]), 0.5) if option.endswith("~") else (speaker_key(option), 1.0)
                 for option in speaker_field.split(",")
             )
-            emotions = set(emotion_field.split(","))
+            emotion_order = tuple(emotion_field.split(","))
+            pace_order = tuple(pace_field.split(","))
+            volume_order = tuple(volume_field.split(","))
+            emotions = set(emotion_order)
             low, _, high = intensity_field.partition("-")
             intensity = (int(low), int(high or low))
             paces = set(pace_field.split(","))
@@ -104,7 +112,7 @@ def parse_gold(path: Path) -> list[Gold]:
         kinds = frozenset(KIND_LETTERS[letter] for letter in kind_field.split(","))
         rows.append(
             Gold(chapter, seq, kinds, speakers, frozenset(emotions), intensity,
-                 frozenset(paces), frozenset(volumes), gender)
+                 frozenset(paces), frozenset(volumes), gender, emotion_order, pace_order, volume_order)
         )
     return rows
 

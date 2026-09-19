@@ -1,0 +1,109 @@
+# Đáp án chuẩn - cuốn 2, file 344 ("Chương 345 - Tác động"). Claude làm 20-09 (lượt đo chi phí token).
+# CHLOE ở chương này là NAM ("anh", "ngài Chloe") - sổ nhân vật của sản xuất ghi CHLOE female (6 lần): lệch.
+# 40-46 là giọng máy của pháp trận phân luận án (NPC). 68/93 là tiêu đề luận án, 72/95 là câu trích từ luận án của
+# Lucien, 75/76 là câu ấy vang lại trong đầu Chloe: chấp nhận người kể hoặc người đọc/viết.
+0 H
+1 N
+2 N NARRATOR neutral,happy 0-1 normal normal u
+3 D ERIC tired,happy,neutral,surprised 0-1 normal normal m
+4 N NARRATOR neutral,surprised 0-1 normal normal u
+5 N
+6 N
+7 D LUCIEN neutral,happy 0-1 normal normal m
+8 N
+9 D ERIC surprised 1-2 normal normal m
+10 N
+11 D ERIC surprised 1-2 normal normal m
+12 D LUCIEN neutral 0-1 normal normal m
+13 N
+14 N NARRATOR neutral,surprised 0-1 normal normal u
+15 D ERIC neutral,excited,surprised 0-1 normal normal m
+16 D ERIC neutral,surprised 0-1 normal normal m
+17 D ERIC neutral,surprised 0-1 normal normal m
+18 D ERIC happy,surprised,excited 0-2 normal normal m
+19 N
+20 N
+21 N
+22 D LUCIEN neutral,happy 0-1 normal normal m
+23 N
+24 T ERIC neutral,sarcastic 0-1 normal normal,soft m
+25 N
+26 D ERIC surprised,neutral 0-1 normal normal m
+27 D LUCIEN neutral 0-1 normal normal m
+28 N
+29 N
+30 D ERIC surprised,neutral 0-1 slow,normal soft,normal m
+31 N
+32 N
+33 N
+34 N NARRATOR neutral,surprised,sad 0-1 normal normal u
+35 N
+36 N
+37 N
+38 N
+39 N
+40 D NPC*,UNKNOWN neutral 0-1 normal normal u
+41 D NPC*,UNKNOWN neutral 0-1 normal normal u
+42 D NPC*,UNKNOWN neutral,surprised 0-1 normal normal u
+43 N NARRATOR neutral,surprised 0-1 normal normal u
+44 D NPC*,UNKNOWN neutral,surprised 0-1 normal,slow normal u
+45 N
+46 D NPC*,UNKNOWN neutral 0-1 normal normal u
+47 N
+48 N
+49 N
+50 D CHLOE neutral,afraid 0-1 normal normal m
+51 N NARRATOR neutral,afraid 0-1 normal normal u
+52 D CHLOE afraid,surprised 2-3 fast,normal normal,loud m
+53 N
+54 N
+55 N NARRATOR neutral,afraid,surprised 0-2 normal normal u
+56 N NARRATOR neutral,afraid 0-1 normal normal u
+57 D CHLOE afraid 2-3 fast,normal loud,normal m
+58 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+59 T CHLOE afraid 2-3 fast,normal normal m
+60 N NARRATOR neutral,afraid 0-1 normal normal u
+61 N
+62 N
+63 D NPC*,UNKNOWN neutral 0-1 normal normal u
+64 N
+65 N NARRATOR neutral,tired 0-1 normal normal u
+66 D CHLOE tired,afraid,neutral 0-2 slow,normal soft,normal m
+67 N
+68 D CHLOE,NARRATOR surprised,neutral 0-2 normal,slow normal,soft u
+69 N,T NARRATOR,CHLOE surprised,afraid 1-2 normal,fast normal u
+70 N NARRATOR neutral,afraid 0-1 normal,fast normal u
+71 N
+72 D NARRATOR,LUCIEN,CHLOE neutral 0-1 normal,slow normal u
+73 N NARRATOR surprised,neutral 0-2 normal normal,loud u
+74 N NARRATOR neutral,afraid 0-1 normal normal u
+75 D CHLOE,NARRATOR afraid,neutral 0-2 slow,normal soft,normal u
+76 D CHLOE,NARRATOR afraid,neutral 0-2 slow,normal soft,normal u
+77 N NARRATOR neutral,afraid 0-1 normal normal u
+78 D CHLOE afraid 1-2 slow,normal soft,normal m
+79 N NARRATOR neutral,afraid 0-2 normal,fast normal u
+80 D NARRATOR,UNKNOWN~ surprised,afraid 1-3 fast,normal loud,normal u
+81 N NARRATOR neutral,afraid 0-2 normal normal u
+82 D CHLOE afraid 2-3 fast,normal loud m
+83 N NARRATOR neutral,afraid 0-1 normal normal u
+84 N
+85 T CHLOE neutral,afraid,tired 0-2 normal normal,soft m
+86 N NARRATOR neutral,afraid 0-1 normal normal u
+87 T CHLOE surprised,neutral 0-1 normal normal,soft m
+88 N NARRATOR neutral,afraid 0-1 normal normal u
+89 N
+90 D CHLOE afraid,sad,tired 0-2 slow,normal soft m
+91 N
+92 N
+93 D CHLOE,NARRATOR neutral,afraid 0-1 normal,slow normal,soft u
+94 N
+95 D NARRATOR,LUCIEN,CHLOE neutral,afraid 0-1 normal,slow normal u
+96 N NARRATOR neutral,afraid 0-1 normal normal u
+97 D CHLOE afraid,tired 1-2 slow,normal soft m
+98 N NARRATOR neutral,afraid 0-1 normal normal u
+99 N NARRATOR neutral,afraid 0-1 normal normal u
+100 D CHLOE tired,tender,neutral,afraid 0-1 slow soft m
+101 N NARRATOR neutral,sad 0-1 normal normal u
+102 N NARRATOR neutral,afraid,sad 0-1 normal normal u
+103 N NARRATOR neutral,afraid 0-1 normal normal u
+104 N

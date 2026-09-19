@@ -1,0 +1,92 @@
+# Đáp án chuẩn - cuốn 2, file 345 ("Chương 346 - Phớt lờ"). Claude làm 20-09 (lượt đo chi phí token).
+# Phần lớn "lời thoại" ở đây là VĂN BẢN VIẾT: nhận xét Chloe/Sonia đang viết (1-6, 63-68), câu trích luận án (27, 38),
+# kết luận chính thức của hội đồng (84-85). Chấp nhận người viết hoặc người kể.
+0 H
+1 D CHLOE,NARRATOR neutral 0-1 normal normal u
+2 D CHLOE,NARRATOR neutral 0-1 normal normal u
+3 N
+4 D CHLOE,NARRATOR afraid,neutral 0-1 normal normal u
+5 N NARRATOR neutral,afraid 0-1 normal normal u
+6 D CHLOE,NARRATOR neutral 0-1 normal normal u
+7 N
+8 N
+9 N
+10 N
+11 N
+12 N
+13 N
+14 N
+15 D SONIA surprised,neutral 0-1 slow,normal soft,normal f
+16 N
+17 D SONIA surprised,neutral 0-1 normal soft,normal f
+18 N
+19 N
+20 N
+21 N
+22 N
+23 T SONIA surprised,neutral 0-2 normal normal,soft f
+24 N NARRATOR neutral,happy 0-1 normal normal u
+25 D SONIA happy,excited 1-2 normal normal f
+26 N NARRATOR neutral,surprised 0-1 normal normal u
+27 D NARRATOR,LUCIEN,SONIA neutral 0-1 normal,slow normal u
+28 N NARRATOR neutral,surprised 0-1 normal normal u
+29 T SONIA surprised,afraid,angry 1-2 normal normal f
+30 N NARRATOR neutral,afraid,angry 0-1 normal normal u
+31 N NARRATOR neutral,afraid 0-1 normal normal u
+32 N
+33 N NARRATOR neutral,afraid 0-1 normal normal u
+34 N NARRATOR neutral,afraid 0-1 normal normal u
+35 D SONIA surprised,excited 1-3 normal,fast loud,normal f
+36 N NARRATOR neutral,surprised 0-1 normal normal u
+37 N NARRATOR neutral,afraid 0-1 normal normal u
+38 D NARRATOR,LUCIEN,SONIA afraid,neutral 0-1 normal,slow normal u
+39 N
+40 D SONIA afraid,surprised 0-2 slow,normal soft f
+41 D SONIA afraid,angry 2-3 fast,normal loud f
+42 N
+43 N NARRATOR neutral,afraid 0-2 normal normal u
+44 D SONIA afraid 2-3 fast,normal loud f
+45 N NARRATOR neutral,afraid 0-1 normal normal u
+46 D NARRATOR,UNKNOWN~ surprised 1-3 fast,normal loud,normal u
+47 N NARRATOR neutral,surprised 0-1 normal normal u
+48 N NARRATOR neutral,sad 0-1 normal normal u
+49 D SONIA afraid,tired 1-2 slow soft f
+50 N NARRATOR neutral,afraid 0-1 normal normal u
+51 N NARRATOR neutral,afraid 0-1 normal normal u
+52 N NARRATOR neutral,afraid 0-1 normal normal u
+53 N NARRATOR neutral,afraid 0-1 normal normal u
+54 D SONIA tired,tender,neutral 0-1 slow soft f
+55 N
+56 D SONIA sad,surprised 1-2 normal soft,normal f
+57 N NARRATOR neutral,sad 0-1 normal normal u
+58 N NARRATOR neutral,sad 0-1 normal normal u
+59 T SONIA sarcastic,sad,tired 0-2 normal normal f
+60 N,T NARRATOR,SONIA sarcastic,sad,neutral 0-1 normal normal u
+61 N NARRATOR neutral,afraid 0-1 normal normal u
+62 N
+63 D SONIA,NARRATOR neutral 0-1 normal normal u
+64 D SONIA,NARRATOR neutral 0-1 normal normal u
+65 N
+66 D SONIA,NARRATOR neutral,afraid 0-1 normal normal u
+67 D SONIA,NARRATOR neutral 0-1 normal normal u
+68 D SONIA,NARRATOR neutral 0-1 normal normal u
+69 N
+70 N
+71 N NARRATOR neutral,angry 0-1 normal normal u
+72 D DRUMMOND angry 2-3 fast,normal loud m
+73 N NARRATOR neutral,afraid 0-1 normal normal u
+74 D ISABELLA afraid,surprised 1-2 slow,normal soft f
+75 N NARRATOR neutral,afraid 0-1 normal normal u
+76 D ISABELLA tired,neutral,afraid 0-1 slow soft f
+77 N NARRATOR neutral,sad 0-1 normal normal u
+78 D ISABELLA neutral,tired 0-1 normal,slow normal,soft f
+79 N
+80 N
+81 N
+82 N
+83 N NARRATOR neutral,excited 0-1 normal normal u
+84 D NARRATOR,NPC*,UNKNOWN neutral 0-1 normal normal u
+85 D NARRATOR,NPC*,UNKNOWN neutral 0-1 normal normal u
+86 N NARRATOR neutral,happy 0-1 normal normal u
+87 N
+88 D ROCK surprised,excited,neutral 0-2 normal normal m
