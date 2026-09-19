@@ -39,9 +39,15 @@ LEASE_STALE_SECONDS = 180.0
 #
 # Cùng ranh giới, 22:1x: chủ sách chọn giữ Việt hoá tên nước ngoài; tên chỉ đứng đầu câu ("Gauci Cromwell.")
 # đang lọt khỏi bảng phiên âm và đi nguyên chữ vào VieNeu. Thử chung hai bản trên bản sao: 2988 pass.
+#
+# Cùng ranh giới, 20-09 01:2x: chủ sách đổi ý - nội tâm của ai thì giọng người ấy đọc. `_validate` vẫn ép mọi thought
+# về NARRATOR (bắt được bằng scripts/model_eval/gold_replay.py: 10/10 câu nội tâm chương 344-347 thành NARRATOR dù
+# đáp án đúng); bản vá giữ người đang nghĩ, chỉ thought không ai nhận mới về người kể, và viết lại test 03-08 khoá hành
+# vi cũ. Thử chung ba bản trên bản sao của cây 149cb67: chỉ đỏ hai test môi trường (doctor, one_click_startup).
 ORDER: tuple[str, ...] = (
     "patch_the_better_known_voice_keeps_its_pin.py",
     "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
+    "patch_a_thought_keeps_its_thinker.py",
 )
 
 APPLIED = (

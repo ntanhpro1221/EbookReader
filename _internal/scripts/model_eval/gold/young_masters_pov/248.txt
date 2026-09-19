@@ -50,7 +50,7 @@
 45 D VINCE,VINCE CLEVERLY sad,tired,neutral 0-2 slow,normal soft,normal m
 46 N
 47 N
-48 N NARRATOR neutral,surprised 0-1 normal normal u
+48 N,T NARRATOR,SAMAEL neutral,surprised 0-1 normal normal u
 49 N NARRATOR neutral,sarcastic 0-1 normal normal u
 50 N NARRATOR neutral,sarcastic 0-1 normal normal u
 51 N NARRATOR neutral,sarcastic 0-1 normal normal u
@@ -79,11 +79,11 @@
 74 D SAMAEL neutral 0-1 normal normal m
 75 N
 76 D SAMAEL happy,neutral 0-1 normal normal m
-77 D MICHAEL afraid,angry,excited 2-3 fast normal,loud m
+77 D MICHAEL afraid,angry,excited 2-3 fast loud,normal m
 78 N NARRATOR neutral,surprised 0-2 normal,fast normal u
-79 N NARRATOR surprised,neutral 0-2 normal,fast normal,loud u
+79 N NARRATOR surprised,neutral,excited 0-2 normal,fast normal,loud u
 80 N NARRATOR neutral,surprised 0-2 normal,fast normal u
-81 D SAMAEL sad,angry,afraid,surprised 1-3 fast,normal loud,normal m
+81 D SAMAEL surprised,angry,afraid,sad 1-3 fast,normal loud,normal m
 82 N NARRATOR neutral,angry,sad 0-2 normal normal u
 83 D SAMAEL angry 2-3 fast,normal loud m
 84 N
@@ -103,7 +103,7 @@
 98 N
 99 N NARRATOR neutral,angry 0-1 normal normal u
 100 N
-101 N NARRATOR surprised,neutral 0-2 normal,fast normal,loud u
+101 N NARRATOR surprised,neutral,excited 0-2 normal,fast normal,loud u
 102 N NARRATOR neutral,surprised 0-2 normal,fast normal u
 103 N NARRATOR neutral,angry,surprised 0-1 normal normal u
 104 N NARRATOR neutral,sarcastic 0-1 normal normal u
