@@ -63,6 +63,11 @@ LEASE_STALE_SECONDS = 180.0
 # NGHE ("Levski quay sang Lucien nói:", "nhìn Tử tước Harrison nói:") hay mẩu một tên có dấu ("Triết Gia hỏi:" -> "Gia").
 # Cuốn 2: 78 lần bắn, 30 lần như thế (003, 192, 231, 301, 368, 406 đã thu; 426-870 ở các lô sau); sau vá 48 lần khoá còn
 # lại đều là chủ ngữ thật. Thử chung bảy bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
+#
+# Cùng ranh giới, 20-09 01:5x: nhãn chung ("người phụ nữ", "người đàn ông trung niên") khoá câu dù lời dẫn nêu TÊN người nói
+# (418:37 James, 426:22 Salgueiro - trên đáp án chuẩn 2/2 lần sai; cuốn 2: 157/304 lần có tên); và khoá theo đoạn nuốt một
+# lượt ngắt lời có lời dẫn riêng (436:61 Florencia). Phát lại CẢ 28 chương đáp án (10 truyện) qua bộ phân tích đã vá đủ tám
+# bản: 100% người nói, chỉ còn hai câu nửa điểm đúng như đáp án. Thử chung tám bản: chỉ đỏ hai test môi trường.
 ORDER: tuple[str, ...] = (
     "patch_the_better_known_voice_keeps_its_pin.py",
     "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
@@ -71,6 +76,7 @@ ORDER: tuple[str, ...] = (
     "patch_the_name_after_a_quote_is_not_always_its_speaker.py",
     "patch_a_quoted_term_is_not_the_paragraphs_line.py",
     "patch_the_one_being_looked_at_is_not_the_speaker.py",
+    "patch_a_named_tag_beats_a_generic_one.py",
 )
 
 APPLIED = (

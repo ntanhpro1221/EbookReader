@@ -25,19 +25,20 @@ phải chen vào ranh giới lô, vì sản xuất dùng GPU gần như suốt n
 Project đo nằm ở `D:/Novels/Audiobooks/_model_eval*/`, ngoài `book2/_versions`, nên nhịp tim, watchdog và
 chuỗi gieo của sách không nhìn thấy chúng.
 
-## Đáp án chuẩn (20-09 01:3x): 19 chương, 9 truyện, ~2.300 đoạn
+## Đáp án chuẩn (20-09 01:5x): 28 chương, 10 truyện, ~3.300 đoạn
 
 | truyện | chương | cách làm |
 |---|---|---|
-| Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 396, 407, 419 | A làm, B làm mù hoặc soát đối kháng |
+| Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 385, 396, 407, 418, 419, 426, 436 | A làm, B làm mù hoặc soát; hoặc B làm, A soát |
 | Young Master's PoV (cuốn 1) | 199, 248 | như trên |
 | Đã bảo là cùng nhau tự sát | 020, 050 | như trên |
-| Hướng dẫn sinh tồn trong học viện | 060 | cả hai làm mù, hợp nhất |
+| Hướng dẫn sinh tồn trong học viện | 060, 090 | cả hai làm mù (060); B làm, A soát (090) |
 | Nise Seiken Monogatari | 030 | cả hai làm mù, hợp nhất |
 | Nageki no Bourei wa Intai Shitai | 20 | cả hai làm mù, hợp nhất |
-| Yamiyo no Hotaru | 155 | cả hai làm mù; **chỉ khớp bộ tách đoạn sau bản vá ngoặc 「」** |
+| Yamiyo no Hotaru | 155, 189 | làm mù (155), B làm - A soát (189); **chỉ khớp bộ tách đoạn sau bản vá ngoặc 「」** |
 | Năng lực bá đạo ... | 0135 | B làm, A soát đối kháng |
 | Love Unseen Beneath the Clear Night Sky | 09 | B làm, A soát đối kháng |
+| Two Childhood Friends ... Dungeon ... | 013 | B làm, A soát đối kháng |
 
 A = Claude, B = một agent review (chủ sách cho phép dùng subagent riêng cho việc này, 20-09: *"cả 2 phải thật
 khắt khe"*). Mỗi dòng cho **tập** lựa chọn chấp nhận được (cảm xúc, nhịp, âm lượng, khoảng cường độ); người nói
@@ -53,6 +54,8 @@ khắt khe: chỉ tên liệt kê mới có điểm, `~` là nửa điểm. Đi�
 | 4 | hdst 060, nise 030 | 87,2% | 100% | 234/238 | 95,0% |
 | 5 | 407, nageki 20 | 100% | 100% | 285/285 | 92,9-96,5% |
 | 6 | 419, yamiyo 155 | 100% | 100% | 215/215 | 84,0-93,6% |
+| 8 | 418 | 97,0% | 97,0% | 89/89 | 98,9% |
+| 9 | 436 | 100% | 100% | 83/85 | 88,2% |
 
 Chỗ lệch còn lại gần như chỉ là "lời kể hay tiếng lòng" (`N` hay `N,T`) và bí danh; không vòng nào hai bên chọn
 hai NGƯỜI khác nhau cho một câu mà không phân xử được bằng văn bản. Luật mới sinh ra từ tranh chấp đều ghi vào
@@ -84,8 +87,10 @@ chỉ ra **92,8% người nói** - tức một model hoàn hảo cũng không v�
 | `_explicit_speaker_attribution` | chữ Việt không dấu đầu câu là "tên" ("Lo lắng" -> Lo); "X còn chưa kịp đáp..." khoá cho X | `patch_the_name_after_a_quote_is_not_always_its_speaker.py` |
 | `_repair_same_paragraph_speakers` | thuật ngữ trích giữa câu kể ("dây chuyền lắp ráp") thành giọng người nói của đoạn | `patch_a_quoted_term_is_not_the_paragraphs_line.py` |
 | `_trailing_speech_attribution` | "Levski quay sang **Lucien** nói:" khoá cho người NGHE; "Triết Gia hỏi:" -> "Gia" (~29 câu cuốn 2) | `patch_the_one_being_looked_at_is_not_the_speaker.py` |
+| `_generic_speaker_attribution` + khoá theo đoạn | lời dẫn có tên vẫn khoá cho nhãn chung ("…một người phụ nữ, James chỉ vào Lucien rồi nói:" -> "người phụ nữ"; trên đáp án 2/2 lần sai; cuốn 2: 157/304 lần có tên); lượt ngắt lời trong một đoạn ("Florencia liền … cắt ngang:") bị gán cho người nói trước | `patch_a_named_tag_beats_a_generic_one.py` |
 
-Với đủ các bản vá, 11 chương TMA phát lại được 100% người nói. Cùng đợt, kho truyện lộ lỗi bộ tách đoạn: ngoặc
+Với đủ tám bản vá, phát lại **cả 28 chương đáp án** (10 truyện) được 100% người nói; chỉ còn hai câu nửa điểm đúng
+như đáp án muốn (385:123 lời dẫn dùng tên giả "Aska"; Love Unseen 09:54 lời dẫn viết nhầm "Naurmi"). Cùng đợt, kho truyện lộ lỗi bộ tách đoạn: ngoặc
 góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941 dòng thoại) -
 `patch_a_corner_bracket_is_a_quote.py`; hai cuốn sản xuất không có 「 nên không đổi một đoạn nào (chứng minh bằng
 chia đoạn lại cả 1.393 chương).
