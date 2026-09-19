@@ -1,0 +1,134 @@
+# Đáp án chuẩn - cuốn 1, file 248 ("Chương 247: Nhân vật chính cứu vị cậu chủ vô ơn!"). Claude làm 19-09, không
+# nhìn nhãn sản xuất. "tôi" = SAMAEL. Ray xưng "tớ", Vince xưng "tôi" - 59 là Vince (sau câu Vince thở dài).
+# 32, 57, 72: câu có lời thoại nằm TRONG đoạn parser khoá là lời kể (dấu nháy thẳng giữa dòng) - kind bị khoá N nên
+# người nói phải là NARRATOR. 60: lời nghĩ trong ngoặc đơn giữa lời kể - chấp nhận N/NARRATOR hoặc T/SAMAEL.
+0 H
+1 N NARRATOR neutral,surprised 0-1 normal,fast normal u
+2 N
+3 D SAMAEL surprised,afraid 1-3 fast,normal loud,normal m
+4 N
+5 N NARRATOR neutral,surprised 0-1 normal normal u
+6 N NARRATOR neutral,sarcastic 0-1 normal normal u
+7 N NARRATOR neutral,sarcastic 0-1 normal normal u
+8 N
+9 N NARRATOR neutral 0-1 normal,fast normal u
+10 N NARRATOR neutral,surprised 0-1 normal normal u
+11 D SAMAEL surprised,neutral 0-1 slow,normal soft,normal m
+12 N
+13 D SAMAEL surprised,neutral 0-2 normal normal m
+14 N
+15 D JULIANA surprised,neutral 1-2 normal normal f
+16 N NARRATOR neutral,sarcastic 0-1 normal normal u
+17 N NARRATOR neutral,sarcastic,surprised 0-1 normal normal u
+18 N NARRATOR surprised,neutral,sarcastic 0-2 normal normal u
+19 N
+20 N
+21 D SAMAEL neutral,sarcastic 0-1 normal normal m
+22 N
+23 D JULIANA neutral 0-1 normal normal f
+24 N
+25 D SAMAEL neutral,happy 0-1 normal normal m
+26 N NARRATOR neutral,surprised 0-1 normal normal u
+27 D RAY,RAY WARNER afraid,excited 1-3 fast,normal loud,normal m
+28 N
+29 D RAY,RAY WARNER afraid,excited 1-3 fast,normal loud,normal m
+30 N
+31 N
+32 N NARRATOR neutral,sarcastic 0-1 normal normal u
+33 D JULIANA sarcastic,neutral 0-1 normal normal f
+34 N NARRATOR neutral,sarcastic 0-1 normal normal u
+35 D RAY,RAY WARNER afraid,excited 1-3 fast,normal loud,normal m
+36 N
+37 D RAY,RAY WARNER excited,sad,afraid 1-3 fast,normal loud,normal m
+38 N NARRATOR neutral,sarcastic 0-1 normal normal u
+39 N NARRATOR neutral,sarcastic 0-1 normal normal u
+40 N NARRATOR neutral,sarcastic 0-1 normal normal u
+41 N
+42 N NARRATOR neutral,sarcastic 0-1 normal normal u
+43 N NARRATOR neutral,tired 0-1 normal normal u
+44 D SAMAEL neutral,tired 0-1 normal normal m
+45 D VINCE,VINCE CLEVERLY sad,tired,neutral 0-2 slow,normal soft,normal m
+46 N
+47 N
+48 N NARRATOR neutral,surprised 0-1 normal normal u
+49 N NARRATOR neutral,sarcastic 0-1 normal normal u
+50 N NARRATOR neutral,sarcastic 0-1 normal normal u
+51 N NARRATOR neutral,sarcastic 0-1 normal normal u
+52 N NARRATOR neutral,sarcastic 0-1 normal normal u
+53 N NARRATOR neutral,sarcastic 0-1 normal normal u
+54 N NARRATOR neutral,sarcastic 0-1 normal normal u
+55 N
+56 D JULIANA sarcastic,neutral 0-1 normal normal f
+57 N NARRATOR neutral,sad,sarcastic 0-1 normal normal u
+58 N NARRATOR neutral,sad 0-1 normal normal u
+59 D VINCE,VINCE CLEVERLY angry,sad,afraid 1-3 normal,fast normal,loud m
+60 N,T NARRATOR,SAMAEL neutral 0-1 normal normal,soft u
+61 N
+62 N
+63 D JULIANA sarcastic,neutral 0-1 normal normal f
+64 N
+65 D RAY,RAY WARNER afraid 2-3 fast,normal loud,normal m
+66 N
+67 D JULIANA neutral 0-1 normal normal f
+68 N,T NARRATOR,SAMAEL angry,sarcastic,surprised 0-2 normal normal u
+69 D SAMAEL angry,sarcastic 1-2 normal normal,loud m
+70 N
+71 D SAMAEL neutral,sarcastic 0-1 normal normal m
+72 N NARRATOR neutral,sarcastic 0-1 normal normal u
+73 N
+74 D SAMAEL neutral 0-1 normal normal m
+75 N
+76 D SAMAEL happy,neutral 0-1 normal normal m
+77 D MICHAEL afraid,angry,excited 2-3 fast normal,loud m
+78 N NARRATOR neutral,surprised 0-2 normal,fast normal u
+79 N NARRATOR surprised,neutral 0-2 normal,fast normal,loud u
+80 N NARRATOR neutral,surprised 0-2 normal,fast normal u
+81 D SAMAEL sad,angry,afraid,surprised 1-3 fast,normal loud,normal m
+82 N NARRATOR neutral,angry,sad 0-2 normal normal u
+83 D SAMAEL angry 2-3 fast,normal loud m
+84 N
+85 D MICHAEL angry,excited,neutral 1-3 normal,fast loud,normal m
+86 D SAMAEL angry 2-3 fast,normal loud m
+87 N
+88 D SAMAEL angry 1-3 normal,fast loud,normal m
+89 N NARRATOR neutral,surprised 0-1 normal normal u
+90 D SAMAEL angry,sarcastic 1-3 normal loud,normal m
+91 N
+92 D SAMAEL angry 1-3 normal,fast loud,normal m
+93 N NARRATOR neutral,sarcastic 0-1 normal normal u
+94 D MICHAEL sad,afraid,surprised 0-2 slow,normal soft,normal m
+95 D SAMAEL angry 2-3 fast,normal loud m
+96 N
+97 D SAMAEL angry 2-3 fast,normal loud m
+98 N
+99 N NARRATOR neutral,angry 0-1 normal normal u
+100 N
+101 N NARRATOR surprised,neutral 0-2 normal,fast normal,loud u
+102 N NARRATOR neutral,surprised 0-2 normal,fast normal u
+103 N NARRATOR neutral,angry,surprised 0-1 normal normal u
+104 N NARRATOR neutral,sarcastic 0-1 normal normal u
+105 D SAMAEL angry,sad 1-3 normal,fast loud,normal m
+106 N
+107 D SAMAEL angry 2-3 fast,normal loud m
+108 N
+109 N NARRATOR neutral,angry 0-1 normal normal u
+110 D KANG angry,afraid,neutral 1-2 normal normal,soft m
+111 N
+112 N
+113 D LILY neutral,tender 0-1 normal soft,normal f
+114 N NARRATOR neutral,angry 0-1 normal normal u
+115 N NARRATOR neutral,sarcastic 0-1 normal normal u
+116 D SAMAEL angry 2-3 fast,normal loud m
+117 N NARRATOR neutral,sarcastic 0-1 normal normal u
+118 N NARRATOR neutral,angry 0-1 normal normal u
+119 D SAMAEL angry 2-3 fast,normal loud m
+120 D MICHAEL neutral,tired 0-1 normal soft,normal m
+121 N
+122 N
+123 D SAMAEL angry 1-3 normal,fast loud,normal m
+124 N
+125 N NARRATOR neutral,surprised 0-1 normal normal u
+126 N NARRATOR neutral,afraid 0-1 normal normal u
+127 N NARRATOR neutral,afraid 0-1 normal normal u
+128 N,T NARRATOR,SAMAEL surprised,neutral 0-1 normal,slow normal,soft u
+129 N,T NARRATOR,SAMAEL neutral 0-1 normal normal u

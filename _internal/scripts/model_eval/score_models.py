@@ -3,6 +3,7 @@ r"""Chấm kết quả phân tích của từng model theo đáp án chuẩn tro
     python scripts/model_eval/score_models.py                         # mọi project trong _model_eval
     python scripts/model_eval/score_models.py <project> [<project>...] # project chỉ định (vd lô 8 thật)
     python scripts/model_eval/score_models.py --json out.json          # ghi thêm bảng số ra file
+    python scripts/model_eval/score_models.py --gold young_masters_pov <project>   # đáp án của truyện khác
 
 Đáp án do Claude làm ngày 19-09 mà KHÔNG nhìn nhãn sản xuất (xem đầu mỗi file gold). Mỗi dòng gold nêu
 tập đáp án chấp nhận được chứ không phải một đáp án duy nhất: cảm xúc và nhịp là chuyện cảm nhận, nên
@@ -25,7 +26,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-GOLD_DIR = HERE / "gold"
+# Một thư mục cho mỗi truyện: số chương của các truyện trùng nhau (cuốn 1 cũng có chương 351).
+GOLD_ROOT = HERE / "gold"
+GOLD_DIR = GOLD_ROOT / "throne_of_magical_arcana"
 EVAL_ROOT = Path("D:/Novels/Audiobooks/_model_eval")
 
 KIND_LETTERS = {"N": "narration", "D": "dialogue", "T": "thought"}
@@ -224,11 +227,12 @@ def eval_projects(root: Path = EVAL_ROOT) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("projects", nargs="*", type=Path)
+    parser.add_argument("--gold", default=GOLD_DIR.name, help="thư mục đáp án trong gold/ (mặc định cuốn 2)")
     parser.add_argument("--json", type=Path, help="ghi toàn bộ kết quả (kể cả danh sách lỗi) ra file")
     parser.add_argument("--misses", type=int, default=0, help="in N lỗi người nói đầu tiên của mỗi model")
     args = parser.parse_args(argv)
 
-    gold = load_gold()
+    gold = load_gold(GOLD_ROOT / args.gold)
     chapters = {chapter for chapter, _ in gold}
     projects = args.projects or eval_projects()
     results = []
