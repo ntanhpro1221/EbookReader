@@ -54,21 +54,21 @@
 48 N NARRATOR neutral,afraid 0-1 normal normal u
 49 N
 50 N
-51 D NPC*,UNKNOWN neutral 0-1 normal normal,loud u
+51 D NPC*,UNKNOWN~ neutral 0-1 normal normal,loud u
 52 N NARRATOR neutral,sarcastic 0-1 normal normal u
 53 N NARRATOR neutral,sarcastic 0-1 normal normal u
 54 N NARRATOR neutral,sarcastic 0-1 normal normal u
-55 D NPC*,UNKNOWN neutral 0-1 normal normal,loud u
+55 D NPC*,UNKNOWN~ neutral 0-1 normal normal,loud u
 56 N NARRATOR neutral,sarcastic 0-1 normal normal u
 57 N NARRATOR neutral,sarcastic 0-1 normal normal u
-58 D NPC*,UNKNOWN whispering,angry,afraid 0-2 fast,normal soft,normal u
-59 D NPC*,UNKNOWN neutral,angry 0-2 normal loud,normal u
+58 D NPC*,UNKNOWN~ whispering,angry,afraid 0-2 fast,normal soft,normal u
+59 D NPC*,UNKNOWN~ neutral,angry 0-2 normal loud,normal u
 60 N NARRATOR neutral,sarcastic 0-1 normal normal u
 61 N NARRATOR neutral,sarcastic 0-1 normal normal u
-62 D NPC*,UNKNOWN neutral 0-1 normal normal,loud u
+62 D NPC*,UNKNOWN~ neutral 0-1 normal normal,loud u
 63 N NARRATOR neutral,sarcastic 0-1 normal normal u
 64 N NARRATOR neutral,sarcastic 0-1 normal normal u
-65 D NPC*,UNKNOWN neutral 0-1 normal normal,loud u
+65 D NPC*,UNKNOWN~ neutral 0-1 normal normal,loud u
 66 N NARRATOR neutral,sarcastic 0-1 normal normal u
 67 N NARRATOR neutral,sarcastic 0-1 normal normal u
 68 N,T NARRATOR,SAMAEL sarcastic,neutral 0-1 normal normal u
@@ -81,7 +81,7 @@
 75 N NARRATOR neutral,sarcastic 0-1 normal normal u
 76 N NARRATOR neutral,sarcastic 0-1 normal normal u
 77 N NARRATOR neutral,sarcastic 0-1 normal normal u
-78 D NPC*,UNKNOWN neutral 0-1 normal normal,loud u
+78 D NPC*,UNKNOWN~ neutral 0-1 normal normal,loud u
 79 N
 80 D SAMAEL sarcastic,happy,neutral 0-1 normal,slow normal m
 81 N NARRATOR neutral,sarcastic 0-1 normal normal u
@@ -89,7 +89,7 @@
 83 N
 84 N
 85 N NARRATOR neutral,angry 0-1 normal normal u
-86 D NPC*,UNKNOWN angry,sarcastic 1-3 normal,fast loud,normal f
+86 D NPC*,UNKNOWN~ angry,sarcastic 1-3 normal,fast loud,normal f
 87 N,T NARRATOR,SAMAEL surprised,sarcastic 0-2 normal normal u
 88 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
 89 N
@@ -140,6 +140,6 @@
 134 N NARRATOR neutral,surprised 0-1 normal normal u
 135 N NARRATOR neutral,surprised 0-1 normal normal u
 136 N NARRATOR neutral,surprised 0-1 normal normal u
-137 D NPC*,UNKNOWN surprised,afraid 1-2 normal soft,normal u
+137 D NPC*,UNKNOWN~ surprised,afraid 1-2 normal soft,normal u
 138 N NARRATOR neutral,surprised 0-1 normal normal u
 139 N NARRATOR neutral,surprised,tender 0-1 normal,slow normal u

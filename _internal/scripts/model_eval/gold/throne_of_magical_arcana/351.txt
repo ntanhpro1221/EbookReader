@@ -19,11 +19,11 @@
 10 D DOUGLAS neutral 0-1 normal normal m
 11 D DOUGLAS neutral 0-1 normal normal m
 12 N NARRATOR neutral,tired,sarcastic 0-1 normal normal u
-13 T NARRATOR,LUCIEN,FERNANDO~ neutral,sarcastic,happy 0-1 normal normal u
+13 T NARRATOR,LUCIEN~,FERNANDO~ neutral,sarcastic,happy 0-1 normal normal u
 14 N
-15 D NARRATOR,FERNANDO neutral,sarcastic 0-1 normal normal u
+15 D NARRATOR,FERNANDO~ neutral,sarcastic 0-1 normal normal u
 16 N
-17 D LUCIEN,NARRATOR neutral,sarcastic,happy 0-1 normal normal u
+17 D NARRATOR,LUCIEN~ neutral,sarcastic,happy 0-1 normal normal u
 18 N
 19 N NARRATOR neutral,happy,sarcastic 0-1 normal normal u
 20 N
@@ -73,7 +73,7 @@
 64 D LUCIEN neutral,happy,sarcastic 0-1 normal normal,soft m
 65 N
 66 N
-67 D NARRATOR,MORRIS sarcastic,neutral 0-1 normal normal u
+67 D NARRATOR sarcastic,neutral 0-1 normal normal u
 68 N
 69 D MORRIS sarcastic,happy 1-2 normal normal m
 70 N NARRATOR neutral,afraid 0-1 normal,fast normal u
@@ -81,8 +81,8 @@
 72 N
 73 D CHLOE,NARRATOR neutral 0-1 normal normal u
 74 N
-75 D NPC*,UNKNOWN,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
-76 D NPC*,UNKNOWN,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
+75 D NPC*,UNKNOWN~,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
+76 D NPC*,UNKNOWN~,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
 77 N
 78 D ROGERIO neutral 0-1 normal normal m
 79 N

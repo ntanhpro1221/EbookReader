@@ -28,22 +28,28 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
 4. **Lời kể có câu tự nhủ trực tiếp** ("Ả khốn này!", "Không ổn!", "...V-Vãi.", "Chẳng lẽ...?" ở ngôi của nhân vật):
    chấp nhận `N,T` với `NARRATOR,<người nghĩ>` - đều đủ điểm (dự án cho phép đổi narration thành thought khi là tiếng
    nói nội tâm trực tiếp; không bắt buộc).
-5. **Nhân vật không tên nhưng phân biệt được** (người hầu, lính gác, "một người lùn", giọng máy): `NPC*`. Thêm
-   `UNKNOWN` chỉ khi không có manh mối gì. Người chưa được gọi tên nhưng LÁT NỮA trong chương có tên: tên đủ điểm,
+5. **Nhân vật không tên nhưng phân biệt được** (người hầu, lính gác, "một người lùn", giọng máy): `NPC*`.
+   **`UNKNOWN` đủ điểm CHỈ khi không có manh mối gì** (đúng lời prompt của dự án: "Chỉ dùng UNKNOWN khi hoàn toàn
+   không có dấu hiệu phân biệt người nói"); có manh mối thì `UNKNOWN~` (vòng 2, 20-09). Người chưa được gọi tên nhưng LÁT NỮA trong chương có tên: tên đủ điểm,
    `NPC*~` nửa điểm (lượt hoà giải NPC của dự án có thể nối về tên).
-6. **Câu cả đám cùng nói/niệm**: `NPC*,UNKNOWN` đủ điểm; một người cụ thể trong đám đủ điểm nếu văn bản nêu người ấy dẫn
-   đầu, còn không thì nửa điểm.
-7. **Văn bản viết** (thư, ghi chú, nhận xét đang viết, câu trích luận án, lời bài hát, khế ước): `NARRATOR` đủ điểm;
-   người viết/người đọc to đủ điểm nếu văn bản cho thấy họ đang viết/đọc ra; `NPC*~`/`UNKNOWN~` nửa điểm khi người viết
-   không tên. Thư gửi CHO X thì X không phải người nói.
+6. **Câu cả đám cùng nói/niệm**: `NPC*` đủ điểm (`UNKNOWN~`). Người được NÊU TÊN trong lời dẫn của câu ấy ("Harold và
+   những người lùn khác cầu nguyện", "dẫn dắt Myrna... đáp lại") đủ điểm; người có mặt trong cảnh nhưng không được nêu
+   trong lời dẫn thì nửa điểm (vòng 1-2).
+7. **Văn bản viết** (thư, ghi chú, nhận xét đang viết, câu trích luận án, tựa sách, lời bài hát, khế ước): `NARRATOR`
+   đủ điểm; TÁC GIẢ của văn bản đủ điểm (khế ước của "thần" -> giọng thần); người đang đọc/nhìn thấy nó chỉ nửa điểm,
+   trừ khi văn bản cho thấy họ đọc to ("khàn giọng đọc lên", đang viết) thì đủ điểm; người ký/nhận nó không được điểm.
+   Người viết không tên: `NPC*~`. Thư gửi CHO X thì X không phải người nói.
 8. **Ngoặc kép nhấn mạnh / tiếng tượng thanh trong ngoặc** ("mỉm cười", "quan sát", "Rầm!", "Bùm!"): parser khoá là
-   thoại nhưng thực chất là chữ của người kể → `NARRATOR` đủ điểm; nhân vật mà từ ấy thuộc về đủ điểm nếu đúng là lời
-   của họ; `UNKNOWN~` nửa điểm cho tiếng động.
-9. **Parser khoá sai loại** (nguồn hỏng dấu nháy làm cả đoạn lời kể thành T; thoại nằm giữa dòng lời kể nên bị khoá N):
+   thoại nhưng thực chất là chữ của người kể → `NARRATOR` đủ điểm. Từ/cụm nằm GIỮA câu kể mà gốc là lời của ai
+   ("quan sát" của Fernando, câu đáp của Lucien) thì người ấy chỉ nửa điểm (đổi giọng giữa câu kể là sai). Từ trong
+   ngoặc là MÔ TẢ chứ không phải lời ("ông liền 'mỉm cười' nói") thì không nhân vật nào được điểm. Tiếng động:
+   `UNKNOWN~`. Tiếng thét/kêu của người vẫn là của người ấy (NARRATOR~).
+9. **Thứ tự loại**: loại THẬT đứng trước (`N,T` cho lời kể bị parser khoá thành thought), kể cả khi parser khoá loại kia.
+10. **Parser khoá sai loại** (nguồn hỏng dấu nháy làm cả đoạn lời kể thành T; thoại nằm giữa dòng lời kể nên bị khoá N):
    giữ loại bị khoá là đủ điểm (model không được phép đổi), người nói = người đọc hợp lý nhất theo loại bị khoá (khoá N
    thì NARRATOR; khoá T mà thực chất là lời kể thì NARRATOR, người nghĩ `~`). Ghi chú ở đầu file.
-10. **Tên gọi khác của cùng một người** (Cẩn Huyên / Diệp Cẩn Huyên, Ray / Ray Warner): liệt kê các dạng, đều đủ điểm.
-11. **Không** cho điểm tên nổi tiếng chỉ vì họ có trong danh sách đã biết - đây là lỗi model hay mắc nhất.
+11. **Tên gọi khác của cùng một người** (Cẩn Huyên / Diệp Cẩn Huyên, Ray / Ray Warner): liệt kê các dạng, đều đủ điểm.
+12. **Không** cho điểm tên nổi tiếng chỉ vì họ có trong danh sách đã biết - đây là lỗi model hay mắc nhất.
 
 ## Cảm xúc, cường độ, nhịp, âm lượng
 

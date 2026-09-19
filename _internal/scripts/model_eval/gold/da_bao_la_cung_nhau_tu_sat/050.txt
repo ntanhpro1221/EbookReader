@@ -5,10 +5,10 @@
 0 H
 1 D UÔNG PHI angry 1-3 normal,fast loud,normal f
 2 N NARRATOR neutral,angry,sarcastic 0-1 normal normal u
-3 D NPC*,UNKNOWN angry,sarcastic 1-2 normal,fast normal,loud f
+3 D NPC*,UNKNOWN~ angry,sarcastic 1-2 normal,fast normal,loud f
 4 N
 5 D UÔNG PHI neutral,sad,angry 0-2 normal normal f
-6 D NPC*,UNKNOWN sarcastic,angry 1-3 normal,fast loud,normal f
+6 D NPC*,UNKNOWN~ sarcastic,angry 1-3 normal,fast loud,normal f
 7 N NARRATOR neutral,angry 0-1 normal normal u
 8 D UÔNG PHI angry 2-3 fast,normal loud f
 9 N NARRATOR neutral,sarcastic 0-1 normal normal u
@@ -63,8 +63,8 @@
 58 N
 59 N
 60 N NARRATOR neutral,angry 0-1 normal normal u
-61 D NARRATOR,UNKNOWN,NPC* neutral,happy,tender 0-1 normal normal u
-62 D NARRATOR,UNKNOWN,NPC* neutral,happy,tender 0-1 normal normal u
+61 D NARRATOR,UNKNOWN~,NPC*~ neutral,happy,tender 0-1 normal normal u
+62 D NARRATOR,UNKNOWN~,NPC*~ neutral,happy,tender 0-1 normal normal u
 63 N NARRATOR neutral,sad 0-1 normal normal u
 64 D DIỆP CẨN HUYÊN,CẨN HUYÊN sad,afraid,angry 2-3 fast,normal loud f
 65 N NARRATOR neutral,surprised 0-1 normal normal u

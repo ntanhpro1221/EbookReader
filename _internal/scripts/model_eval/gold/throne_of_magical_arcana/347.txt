@@ -22,10 +22,10 @@
 17 D LUCIEN happy,neutral 0-1 normal normal m
 18 N NARRATOR neutral,surprised 0-1 normal normal u
 19 N NARRATOR neutral,afraid 0-1 normal normal u
-20 D NPC*,UNKNOWN whispering,afraid,neutral 0-2 normal,slow soft u
+20 D NPC*,UNKNOWN~ whispering,afraid,neutral 0-2 normal,slow soft u
 21 N NARRATOR neutral,afraid 0-1 normal normal u
-22 D NPC*,UNKNOWN afraid,neutral,whispering 0-1 normal soft,normal u
-23 D NPC*,UNKNOWN surprised,neutral 0-1 normal normal u
+22 D NPC*,UNKNOWN~ afraid,neutral,whispering 0-1 normal soft,normal u
+23 D NPC*,UNKNOWN~ surprised,neutral 0-1 normal normal u
 24 N
 25 N NARRATOR neutral,afraid 0-1 normal normal u
 26 N
@@ -85,7 +85,7 @@
 80 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
 81 N
 82 N
-83 D NPC*,UNKNOWN neutral,tender 0-1 normal,slow normal m
+83 D NPC*,UNKNOWN~ neutral,tender 0-1 normal,slow normal m
 84 N
 85 N NARRATOR neutral,happy 0-1 normal normal u
 86 D JEROME happy,excited 1-2 normal normal m

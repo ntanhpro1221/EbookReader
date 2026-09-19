@@ -42,13 +42,13 @@
 37 N
 38 N
 39 N
-40 D NPC*,UNKNOWN neutral 0-1 normal normal u
-41 D NPC*,UNKNOWN neutral 0-1 normal normal u
-42 D NPC*,UNKNOWN neutral,surprised 0-1 normal normal u
+40 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
+41 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
+42 D NPC*,UNKNOWN~ neutral,surprised 0-1 normal normal u
 43 N NARRATOR neutral,surprised 0-1 normal normal u
-44 D NPC*,UNKNOWN neutral,surprised 0-1 normal,slow normal u
+44 D NPC*,UNKNOWN~ neutral,surprised 0-1 normal,slow normal u
 45 N
-46 D NPC*,UNKNOWN neutral 0-1 normal normal u
+46 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
 47 N
 48 N
 49 N
@@ -65,16 +65,16 @@
 60 N NARRATOR neutral,afraid 0-1 normal normal u
 61 N
 62 N
-63 D NPC*,UNKNOWN neutral 0-1 normal normal u
+63 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
 64 N
 65 N NARRATOR neutral,tired 0-1 normal normal u
 66 D CHLOE tired,afraid,neutral 0-2 slow,normal soft,normal m
 67 N
-68 D CHLOE,NARRATOR surprised,neutral 0-2 normal,slow normal,soft u
+68 D NARRATOR,CHLOE~ surprised,neutral 0-2 normal,slow normal,soft u
 69 N,T NARRATOR,CHLOE surprised,afraid 1-2 normal,fast normal u
 70 N NARRATOR neutral,afraid 0-1 normal,fast normal u
 71 N
-72 D NARRATOR,LUCIEN,CHLOE neutral 0-1 normal,slow normal u
+72 D NARRATOR,LUCIEN,CHLOE~ neutral 0-1 normal,slow normal u
 73 N NARRATOR surprised,neutral 0-2 normal normal,loud u
 74 N NARRATOR neutral,afraid 0-1 normal normal u
 75 D CHLOE,NARRATOR afraid,neutral 0-2 slow,normal soft,normal u
@@ -95,9 +95,9 @@
 90 D CHLOE afraid,sad,tired 0-2 slow,normal soft m
 91 N
 92 N
-93 D CHLOE,NARRATOR neutral,afraid 0-1 normal,slow normal,soft u
+93 D NARRATOR,CHLOE~ neutral,afraid 0-1 normal,slow normal,soft u
 94 N
-95 D NARRATOR,LUCIEN,CHLOE neutral,afraid 0-1 normal,slow normal u
+95 D NARRATOR,LUCIEN,CHLOE~ neutral,afraid 0-1 normal,slow normal u
 96 N NARRATOR neutral,afraid 0-1 normal normal u
 97 D CHLOE afraid,tired 1-2 slow,normal soft m
 98 N NARRATOR neutral,afraid 0-1 normal normal u

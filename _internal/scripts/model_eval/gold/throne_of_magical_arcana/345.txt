@@ -28,7 +28,7 @@
 24 N NARRATOR neutral,happy 0-1 normal normal u
 25 D SONIA happy,excited 1-2 normal normal f
 26 N NARRATOR neutral,surprised 0-1 normal normal u
-27 D NARRATOR,LUCIEN,SONIA neutral 0-1 normal,slow normal u
+27 D NARRATOR,LUCIEN,SONIA~ neutral 0-1 normal,slow normal u
 28 N NARRATOR neutral,surprised 0-1 normal normal u
 29 T SONIA surprised,afraid,angry 1-2 normal normal f
 30 N NARRATOR neutral,afraid,angry 0-1 normal normal u
@@ -39,7 +39,7 @@
 35 D SONIA surprised,excited 1-3 normal,fast loud,normal f
 36 N NARRATOR neutral,surprised 0-1 normal normal u
 37 N NARRATOR neutral,afraid 0-1 normal normal u
-38 D NARRATOR,LUCIEN,SONIA afraid,neutral 0-1 normal,slow normal u
+38 D NARRATOR,LUCIEN,SONIA~ afraid,neutral 0-1 normal,slow normal u
 39 N
 40 D SONIA afraid,surprised 0-2 slow,normal soft f
 41 D SONIA afraid,angry 2-3 fast,normal loud f
@@ -85,8 +85,8 @@
 81 N
 82 N
 83 N NARRATOR neutral,excited 0-1 normal normal u
-84 D NARRATOR,NPC*,UNKNOWN neutral 0-1 normal normal u
-85 D NARRATOR,NPC*,UNKNOWN neutral 0-1 normal normal u
+84 D NARRATOR,NPC*,UNKNOWN~ neutral 0-1 normal normal u
+85 D NARRATOR,NPC*,UNKNOWN~ neutral 0-1 normal normal u
 86 N NARRATOR neutral,happy 0-1 normal normal u
 87 N
 88 D ROCK surprised,excited,neutral 0-2 normal normal m
