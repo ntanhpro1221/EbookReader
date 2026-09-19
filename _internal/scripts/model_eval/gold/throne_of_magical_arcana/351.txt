@@ -79,7 +79,7 @@
 70 N NARRATOR neutral,afraid 0-1 normal,fast normal u
 71 N
 72 N
-73 D CHLOE,NARRATOR neutral 0-1 normal normal u
+73 D CHLOE,NARRATOR neutral 0-1 normal normal m
 74 N
 75 D NPC*,UNKNOWN~,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u
 76 D NPC*,UNKNOWN~,NARRATOR excited,surprised,neutral 0-2 normal,fast normal u

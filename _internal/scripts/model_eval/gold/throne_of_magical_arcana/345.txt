@@ -2,12 +2,12 @@
 # Phần lớn "lời thoại" ở đây là VĂN BẢN VIẾT: nhận xét Chloe/Sonia đang viết (1-6, 63-68), câu trích luận án (27, 38),
 # kết luận chính thức của hội đồng (84-85). Chấp nhận người viết hoặc người kể.
 0 H
-1 D CHLOE,NARRATOR neutral 0-1 normal normal u
-2 D CHLOE,NARRATOR neutral 0-1 normal normal u
+1 D CHLOE,NARRATOR neutral 0-1 normal normal m
+2 D CHLOE,NARRATOR neutral 0-1 normal normal m
 3 N
-4 D CHLOE,NARRATOR afraid,neutral 0-1 normal normal u
+4 D CHLOE,NARRATOR afraid,neutral 0-1 normal normal m
 5 N NARRATOR neutral,afraid 0-1 normal normal u
-6 D CHLOE,NARRATOR neutral 0-1 normal normal u
+6 D CHLOE,NARRATOR neutral 0-1 normal normal m
 7 N
 8 N
 9 N
@@ -16,7 +16,7 @@
 12 N
 13 N
 14 N
-15 D SONIA surprised,neutral 0-1 slow,normal soft,normal f
+15 D SONIA,NARRATOR,LUCIEN~ surprised,neutral 0-1 slow,normal soft,normal f
 16 N
 17 D SONIA surprised,neutral 0-1 normal soft,normal f
 18 N
@@ -64,12 +64,12 @@
 60 N,T NARRATOR,SONIA sarcastic,sad,neutral 0-1 normal normal u
 61 N NARRATOR neutral,afraid 0-1 normal normal u
 62 N
-63 D SONIA,NARRATOR neutral 0-1 normal normal u
-64 D SONIA,NARRATOR neutral 0-1 normal normal u
+63 D SONIA,NARRATOR neutral 0-1 normal normal f
+64 D SONIA,NARRATOR neutral 0-1 normal normal f
 65 N
-66 D SONIA,NARRATOR neutral,afraid 0-1 normal normal u
-67 D SONIA,NARRATOR neutral 0-1 normal normal u
-68 D SONIA,NARRATOR neutral 0-1 normal normal u
+66 D SONIA,NARRATOR neutral,afraid 0-1 normal normal f
+67 D SONIA,NARRATOR neutral 0-1 normal normal f
+68 D SONIA,NARRATOR neutral 0-1 normal normal f
 69 N
 70 N
 71 N NARRATOR neutral,angry 0-1 normal normal u
@@ -85,8 +85,8 @@
 81 N
 82 N
 83 N NARRATOR neutral,excited 0-1 normal normal u
-84 D NARRATOR,NPC*,UNKNOWN~ neutral 0-1 normal normal u
-85 D NARRATOR,NPC*,UNKNOWN~ neutral 0-1 normal normal u
+84 D NARRATOR,NPC*~,UNKNOWN~ neutral 0-1 normal normal u
+85 D NARRATOR,NPC*~,UNKNOWN~ neutral 0-1 normal normal u
 86 N NARRATOR neutral,happy 0-1 normal normal u
 87 N
 88 D ROCK surprised,excited,neutral 0-2 normal normal m

@@ -10,7 +10,7 @@ Mỗi tranh chấp giữa hai người gán nhãn (A = Claude, B = agent review)
 | câu | A | B | kết luận | lý do |
 |---|---|---|---|---|
 | 378:1, 48, 87, 91, 93, 95 | chỉ tên | tên + `NPC*~` | theo B | lúc nói, người ấy chỉ được gọi "đại trưởng lão"/ẩn danh; tên ở ngay đoạn kề - quy tắc 5 |
-| 378:4, 33, 116, 117 | `NPC*,UNKNOWN` + ... | bỏ `UNKNOWN` | giữ A | câu cả đám: `UNKNOWN` đủ điểm - quy tắc 6 |
+| 378:4, 33, 116, 117 | `NPC*,UNKNOWN` + ... | bỏ `UNKNOWN` | ~~giữ A~~ **bị vòng 2 thay**: `UNKNOWN~` | (cũ) câu cả đám: `UNKNOWN` đủ điểm |
 | 378:61 | `NPC*,UNKNOWN` | + 4 người có tên đủ điểm | nửa đường | "Tất cả người lùn... hét lớn": không ai dẫn đầu, người có tên chỉ nửa điểm - quy tắc 6 |
 | 378:79 "Aaaaah!" | `NPC*,UNKNOWN` | + `NARRATOR~` | theo B | tiếng thét là của nhân vật; người kể đọc thì chấp nhận được nhưng kém |
 | 378:113 | thiếu Myrna, Quinns | có | theo B | câu 112 nêu tên họ đang cầu nguyện |
@@ -47,3 +47,29 @@ B không tìm ra người nói CHÍNH sai ở câu nào; ~28 câu tranh chấp v
 
 A tự áp cùng quy ước cho chương B chưa soát: 344:68, 93 (tựa luận án Chloe chỉ nhìn thấy) và 344:72, 95, 345:27, 38 (câu
 trích luận án: tác giả Lucien đủ, người đọc ~); 050:61-62 (lời nhạc chuông: NPC*~).
+
+## Vòng 3 (20-09 00:2x): B làm mù 344, 345; soát đối kháng 346, 347, 199, 020, 050
+
+Làm mù 344/345 (74 câu có người nói): người nói ưu tiên trùng 98,6%, tập chấp nhận 100%; cảm xúc ưu tiên 94,8%, giao 100%.
+Soát 5 chương: không có người nói chính sai; 28 câu tranh chấp.
+
+| câu | kết luận | lý do |
+|---|---|---|
+| 381:11, 15, 19, 28 giọng thần | **A thua**: `NPC*` -> `NPC*~` | B dẫn chứng: thần nói lại ở chương 460 (585, 793 lộ là Lucien); nhãn NPC chỉ sống trong một chương (`_scope_local_speaker`, hai lượt gộp chỉ cùng chương) nên mỗi chương một giọng |
+| 344:44, 345:15 | người đọc to + NARRATOR đủ, tác giả `~` | văn bản đọc to bằng giọng người đọc - quy tắc 7 mới |
+| 344:68, 93 | + LUCIEN đủ | tiêu đề chỉ được nhìn thấy: tác giả đủ điểm |
+| 344:75, 76 | + LUCIEN~ | câu của Lucien vang lại trong đầu Chloe |
+| 344:82, "Aaaaah!" | + NARRATOR~ | như 378:79 |
+| 344:4 | `N,T` + ERIC | tiếng lòng của Eric ("Tốc độ khiếp luôn!") |
+| 345:84-85 kết luận hội đồng | `NPC*~` | người viết không tên - quy tắc 7 |
+| 347:20 | NARRATOR đủ, người thì thầm `~` | **A sai**: cụm trích nằm giữa câu kể - quy tắc 8 |
+| 346:78 Lauren, 347:27 Larry, 050:64/67/70 người gọi điện | + `NPC*~` | quy tắc 5 áp đều cho người chưa xác định lúc nói |
+| 346:46 | + LAZAR~, HEIDI~, SPRINT~ | có mặt, không được nêu trong lời dẫn - quy tắc 6 |
+| 347:48-51 thư Douglas | + DERRICK DOUGLAS (bí danh), HELLEN~ (người đọc) | quy tắc 7, 11 |
+| 050:32 | bỏ CHÚ LƯU ĐẠT | prompt dự án cấm tiền tố vai vế |
+| 346:38, 199:88, 103, 104, 020:41-43 | `N,T` + người nghĩ | câu tự nhủ trực tiếp - quy tắc 4 |
+| 346:39 | **giữ A** (`N`) | câu giải thích của người kể, không phải tiếng lòng |
+| 020:19 | **giữ A** (`N`) | có lời dẫn "Chu Mặc tán thưởng" - là lời kể |
+| 346:5, 14, 199:86 | cường độ 1-3 -> 1-2 | văn bản nói rõ không phải cao trào ("có chút phấn khích") |
+| 199:111, 137, 050:26, 29 | + whispering | lẩm bẩm |
+| văn bản viết có người viết đứng đầu (345, 347, 351:73, 344:75-76) | giới tính của người viết | quy ước giới tính mới |

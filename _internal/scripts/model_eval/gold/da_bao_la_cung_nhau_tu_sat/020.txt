@@ -43,9 +43,9 @@
 38 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,excited 0-1 normal normal,soft f
 39 N
 40 N
-41 N NARRATOR neutral,tender 0-1 normal normal u
-42 N NARRATOR neutral,sad,tender 0-1 normal normal u
-43 N NARRATOR neutral,tender,happy 0-1 normal,slow normal u
+41 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,tender 0-1 normal normal u
+42 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,sad,tender 0-1 normal normal u
+43 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,tender,happy 0-1 normal,slow normal u
 44 N NARRATOR neutral,happy 0-1 normal normal u
 45 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN surprised,happy 1-2 normal normal u
 46 D CHU MẶC happy,neutral 0-1 normal normal m

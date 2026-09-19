@@ -5,7 +5,7 @@
 2 N NARRATOR neutral,sarcastic,happy 0-1 normal normal u
 3 N NARRATOR neutral,surprised 0-1 normal normal u
 4 N NARRATOR neutral,excited 0-1 normal normal u
-5 D ROCK excited,happy 1-3 fast,normal loud,normal m
+5 D ROCK excited,happy 1-2 fast,normal loud,normal m
 6 N NARRATOR neutral,happy 0-1 normal normal u
 7 N
 8 N
@@ -14,7 +14,7 @@
 11 N NARRATOR neutral,happy,excited 0-1 normal normal u
 12 D LUCIEN neutral,happy 0-1 normal normal m
 13 N
-14 D ROCK excited,happy 1-3 fast,normal normal,loud m
+14 D ROCK excited,happy 1-2 fast,normal normal,loud m
 15 D ROCK excited,happy 1-2 fast,normal normal m
 16 N NARRATOR neutral,happy,sarcastic 0-1 normal normal u
 17 N
@@ -38,7 +38,7 @@
 35 N
 36 N NARRATOR neutral,afraid 0-1 normal normal u
 37 N NARRATOR neutral,afraid 0-1 normal normal u
-38 N NARRATOR neutral,happy 0-1 normal normal u
+38 N,T NARRATOR,LUCIEN neutral,happy,surprised 0-1 normal normal u
 39 N NARRATOR neutral,excited 0-1 normal normal u
 40 N
 41 N
@@ -46,7 +46,7 @@
 43 D LUCIEN neutral 0-1 normal normal m
 44 D LUCIEN neutral,happy 0-1 normal normal m
 45 N
-46 D ROCK,NPC*,UNKNOWN~ excited,happy 1-3 fast,normal loud,normal u
+46 D ROCK,NPC*,UNKNOWN~,LAZAR~,HEIDI~,SPRINT~ excited,happy 1-3 fast,normal loud,normal u
 47 N NARRATOR neutral,happy,excited 0-1 normal normal u
 48 N
 49 N
@@ -78,7 +78,7 @@
 75 N
 76 N NARRATOR neutral,sarcastic 0-1 normal normal u
 77 N NARRATOR neutral,angry 0-1 normal normal u
-78 D LAUREN angry 2-3 fast,normal loud m
+78 D LAUREN,NPC*~ angry 2-3 fast,normal loud m
 79 N NARRATOR neutral,angry 0-1 normal normal u
 80 N NARRATOR neutral,angry 0-1 normal normal u
 81 D LAUREN angry 2-3 fast,normal loud m

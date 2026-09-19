@@ -22,14 +22,14 @@
 17 D LUCIEN happy,neutral 0-1 normal normal m
 18 N NARRATOR neutral,surprised 0-1 normal normal u
 19 N NARRATOR neutral,afraid 0-1 normal normal u
-20 D NPC*,UNKNOWN~ whispering,afraid,neutral 0-2 normal,slow soft u
+20 D NARRATOR,NPC*~,UNKNOWN~ whispering,afraid,neutral 0-2 normal,slow soft u
 21 N NARRATOR neutral,afraid 0-1 normal normal u
 22 D NPC*,UNKNOWN~ afraid,neutral,whispering 0-1 normal soft,normal u
 23 D NPC*,UNKNOWN~ surprised,neutral 0-1 normal normal u
 24 N
 25 N NARRATOR neutral,afraid 0-1 normal normal u
 26 N
-27 D LARRY,K~ tired,sad,surprised,neutral 0-1 normal,slow normal,soft m
+27 D LARRY,K~,NPC*~ tired,sad,surprised,neutral 0-1 normal,slow normal,soft m
 28 N NARRATOR neutral,sad 0-1 normal normal u
 29 N
 30 D LARRY sad,tired,neutral 0-1 normal normal m
@@ -50,14 +50,14 @@
 45 N
 46 N
 47 N
-48 D DOUGLAS,NARRATOR neutral,happy 0-1 normal normal u
-49 D DOUGLAS,NARRATOR neutral 0-1 normal normal u
-50 D DOUGLAS,NARRATOR happy,neutral 0-1 normal normal u
-51 D DOUGLAS,NARRATOR neutral 0-1 normal normal u
+48 D DOUGLAS,DERRICK DOUGLAS,NARRATOR,HELLEN~,HELLEN PARIS~ neutral,happy 0-1 normal normal m
+49 D DOUGLAS,DERRICK DOUGLAS,NARRATOR,HELLEN~,HELLEN PARIS~ neutral 0-1 normal normal m
+50 D DOUGLAS,DERRICK DOUGLAS,NARRATOR,HELLEN~,HELLEN PARIS~ happy,neutral 0-1 normal normal m
+51 D DOUGLAS,DERRICK DOUGLAS,NARRATOR,HELLEN~,HELLEN PARIS~ neutral 0-1 normal normal m
 52 N
-53 D HELLEN,HELLEN PARIS,NARRATOR neutral 0-1 normal normal u
-54 D HELLEN,HELLEN PARIS,NARRATOR neutral 0-1 normal normal u
-55 D HELLEN,HELLEN PARIS,NARRATOR neutral 0-1 normal normal u
+53 D HELLEN,HELLEN PARIS,NARRATOR neutral 0-1 normal normal f
+54 D HELLEN,HELLEN PARIS,NARRATOR neutral 0-1 normal normal f
+55 D HELLEN,HELLEN PARIS,NARRATOR neutral 0-1 normal normal f
 56 N
 57 D LAZAR excited,happy 1-2 normal,fast normal m
 58 N NARRATOR neutral,happy,excited 0-1 normal normal u

@@ -6,7 +6,7 @@
 1 N
 2 N NARRATOR neutral,happy 0-1 normal normal u
 3 D ERIC tired,happy,neutral,surprised 0-1 normal normal m
-4 N NARRATOR neutral,surprised 0-1 normal normal u
+4 N,T NARRATOR,ERIC neutral,surprised 0-1 normal normal u
 5 N
 6 N
 7 D LUCIEN neutral,happy 0-1 normal normal m
@@ -46,7 +46,7 @@
 41 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
 42 D NPC*,UNKNOWN~ neutral,surprised 0-1 normal normal u
 43 N NARRATOR neutral,surprised 0-1 normal normal u
-44 D NPC*,UNKNOWN~ neutral,surprised 0-1 normal,slow normal u
+44 D NPC*,NARRATOR,UNKNOWN~,LUCIEN~ neutral,surprised 0-1 normal,slow normal u
 45 N
 46 D NPC*,UNKNOWN~ neutral 0-1 normal normal u
 47 N
@@ -70,21 +70,21 @@
 65 N NARRATOR neutral,tired 0-1 normal normal u
 66 D CHLOE tired,afraid,neutral 0-2 slow,normal soft,normal m
 67 N
-68 D NARRATOR,CHLOE~ surprised,neutral 0-2 normal,slow normal,soft u
+68 D NARRATOR,LUCIEN,CHLOE~ surprised,neutral 0-2 normal,slow normal,soft u
 69 N,T NARRATOR,CHLOE surprised,afraid 1-2 normal,fast normal u
 70 N NARRATOR neutral,afraid 0-1 normal,fast normal u
 71 N
 72 D NARRATOR,LUCIEN,CHLOE~ neutral 0-1 normal,slow normal u
 73 N NARRATOR surprised,neutral 0-2 normal normal,loud u
 74 N NARRATOR neutral,afraid 0-1 normal normal u
-75 D CHLOE,NARRATOR afraid,neutral 0-2 slow,normal soft,normal u
-76 D CHLOE,NARRATOR afraid,neutral 0-2 slow,normal soft,normal u
+75 D CHLOE,NARRATOR,LUCIEN~ afraid,neutral 0-2 slow,normal soft,normal m
+76 D CHLOE,NARRATOR,LUCIEN~ afraid,neutral 0-2 slow,normal soft,normal m
 77 N NARRATOR neutral,afraid 0-1 normal normal u
 78 D CHLOE afraid 1-2 slow,normal soft,normal m
 79 N NARRATOR neutral,afraid 0-2 normal,fast normal u
 80 D NARRATOR,UNKNOWN~ surprised,afraid 1-3 fast,normal loud,normal u
 81 N NARRATOR neutral,afraid 0-2 normal normal u
-82 D CHLOE afraid 2-3 fast,normal loud m
+82 D CHLOE,NARRATOR~ afraid 2-3 fast,normal loud m
 83 N NARRATOR neutral,afraid 0-1 normal normal u
 84 N
 85 T CHLOE neutral,afraid,tired 0-2 normal normal,soft m
@@ -95,7 +95,7 @@
 90 D CHLOE afraid,sad,tired 0-2 slow,normal soft m
 91 N
 92 N
-93 D NARRATOR,CHLOE~ neutral,afraid 0-1 normal,slow normal,soft u
+93 D NARRATOR,LUCIEN,CHLOE~ neutral,afraid 0-1 normal,slow normal,soft u
 94 N
 95 D NARRATOR,LUCIEN,CHLOE~ neutral,afraid 0-1 normal,slow normal u
 96 N NARRATOR neutral,afraid 0-1 normal normal u

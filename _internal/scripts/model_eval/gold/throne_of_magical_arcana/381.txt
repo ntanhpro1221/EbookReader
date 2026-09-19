@@ -14,15 +14,15 @@
 8 N
 9 D NPC*,HAROLD,UNKNOWN~,AUGUSTUS~ tender,excited,happy,neutral 1-2 slow,normal normal,loud u
 10 N
-11 D LUCIEN,NPC*,THẦN HƠI NƯỚC,UNKNOWN~ neutral 0-2 slow,normal normal,loud u
+11 D LUCIEN,THẦN HƠI NƯỚC,NPC*~,UNKNOWN~ neutral 0-2 slow,normal normal,loud u
 12 N
 13 D AUGUSTUS,MYRNA,NPC*,UNKNOWN~ neutral,tender 0-1 slow,normal normal u
 14 N
-15 D LUCIEN,NPC*,THẦN HƠI NƯỚC,UNKNOWN~ neutral,angry 0-2 slow,normal normal,loud u
+15 D LUCIEN,THẦN HƠI NƯỚC,NPC*~,UNKNOWN~ neutral,angry 0-2 slow,normal normal,loud u
 16 N
 17 D NPC*,UNKNOWN~,AUGUSTUS~,HAROLD~,MYRNA~,QUINNS~ neutral,tender,afraid 0-2 slow,normal normal u
 18 N
-19 D LUCIEN,NPC*,THẦN HƠI NƯỚC,UNKNOWN~ tender,neutral 0-1 slow,normal soft,normal u
+19 D LUCIEN,THẦN HƠI NƯỚC,NPC*~,UNKNOWN~ tender,neutral 0-1 slow,normal soft,normal u
 20 N
 21 D NPC*,UNKNOWN~,AUGUSTUS~,HAROLD~,MYRNA~,QUINNS~ excited,happy,tender,neutral 1-3 normal loud,normal u
 22 N NARRATOR neutral,surprised 0-2 normal normal u
@@ -31,7 +31,7 @@
 25 N
 26 N NARRATOR neutral,surprised,afraid 0-2 normal normal u
 27 N NARRATOR neutral,surprised 0-2 normal normal u
-28 D LUCIEN,NPC*,THẦN HƠI NƯỚC,UNKNOWN~ neutral,tender 0-2 slow,normal normal,loud u
+28 D LUCIEN,THẦN HƠI NƯỚC,NPC*~,UNKNOWN~ neutral,tender 0-2 slow,normal normal,loud u
 29 N
 30 N
 31 D AUGUSTUS,NPC*,UNKNOWN~,HAROLD~,MYRNA~,QUINNS~ tender,excited,neutral 0-2 slow,normal normal u
