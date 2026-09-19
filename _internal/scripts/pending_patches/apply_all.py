@@ -32,8 +32,11 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ranh giới 9. Xếp 19-09 18:1x, sau khi lô 9 đã tạo (17:53) với luật cũ. Lô 8 bỏ pin của VICTOR
+# (329 câu qua 18 lô) vì MORRIS (54 câu cả cuốn) nói nhiều hơn trong riêng lô ấy; luật mới xếp theo sổ
+# cộng dồn `character_exposure` trước. Đã thử trên bản sao của cây 775dbd2: 2984 pass, hai đỏ đều do
+# bản sao thiếu `runtime/` và shortcut.
+ORDER: tuple[str, ...] = ("patch_the_better_known_voice_keeps_its_pin.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
