@@ -1,0 +1,132 @@
+# "Two Childhood Friends Who Have the Strongest Power Kick Each Other in the Dungeon With All Their Might" file 013 ("Chương 14:
+# Quỷ"). Vòng 8 (20-09): agent review gán (B), Claude soát đối kháng (A), không đổi dòng nào. URAZUMI / URAZUMI SAKUKO; ENMI /
+# KAKUSHIGI ENMI / KAKUSHIGI; YOSHIHITO / KUCHINASHI YOSHIHITO; KIRAKO / KUROMITSU KIRAKO; thầy đồng nghiệp và sĩ quan là NPC*.
+# 76-77 nội tâm bị khoá thoại -> T,D. 119, 123: tiếng lòng chung của hai đứa -> cả hai đủ.
+0 H
+1 D NPC* afraid,whispering 1 normal,slow soft m
+2 N
+3 N
+4 N
+5 N
+6 N
+7 N
+8 D URAZUMI,URAZUMI SAKUKO neutral,tired,sarcastic 0-1 normal normal f
+9 D NPC* afraid 2 fast loud m
+10 D URAZUMI,URAZUMI SAKUKO neutral,tired 0-1 normal normal f
+11 D NPC* surprised,angry 1-2 fast,normal loud,normal m
+12 N
+13 N
+14 N
+15 N
+16 N
+17 D NPC* neutral 0-1 normal normal m
+18 D NPC*,URAZUMI~,URAZUMI SAKUKO~ afraid,neutral 0-1 fast,normal normal m
+19 N
+20 N
+21 N
+22 N
+23 N
+24 D URAZUMI,URAZUMI SAKUKO tired,neutral 0-1 normal,slow normal f
+25 N
+26 N
+27 N
+28 N
+29 N
+30 D NPC* neutral 0-1 normal normal m
+31 N
+32 N
+33 N
+34 N
+35 N
+36 N
+37 D URAZUMI,URAZUMI SAKUKO neutral,tired,happy 0-1 normal normal,soft f
+38 N
+39 N
+40 N
+41 D NPC* excited,neutral 1-2 normal,fast loud m
+42 N
+43 N
+44 N NARRATOR neutral,afraid 0-1 normal normal u
+45 N NARRATOR neutral,afraid 0-1 normal normal u
+46 N NARRATOR neutral,afraid 0-1 normal normal u
+47 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI,NPC*~ happy,neutral 0-1 normal normal f
+48 D NPC*,UNKNOWN~ surprised,afraid 1-2 fast normal,loud m
+49 N NARRATOR neutral,surprised 0-1 normal normal u
+50 N
+51 N
+52 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+53 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI happy 1 normal normal f
+54 N NARRATOR neutral,happy 0-1 normal normal u
+55 N
+56 N
+57 N
+58 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+59 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI happy,excited 1 normal normal f
+60 N NARRATOR neutral,happy 0-1 normal normal u
+61 N
+62 N
+63 D YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO~,KUROMITSU KIRAKO~ neutral,tired 0-1 normal normal m
+64 D KIRAKO,KUROMITSU KIRAKO,YOSHIHITO~,KUCHINASHI YOSHIHITO~ neutral,tired 0-1 normal normal f
+65 N
+66 N
+67 N
+68 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+69 D YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO~,KUROMITSU KIRAKO~ neutral,tired,sad 0-1 normal normal m
+70 D KIRAKO,KUROMITSU KIRAKO,YOSHIHITO~,KUCHINASHI YOSHIHITO~ neutral,tired,sad 0-1 normal normal f
+71 N
+72 N
+73 N
+74 N NARRATOR neutral,surprised 0-1 normal normal u
+75 N
+76 T,D YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO~,KUROMITSU KIRAKO~ angry 2 fast,normal normal,loud m
+77 T,D KIRAKO,KUROMITSU KIRAKO angry 2 fast,normal normal,loud f
+78 N NARRATOR neutral,angry 0-1 normal normal u
+79 N NARRATOR neutral,sarcastic 0-1 normal normal u
+80 D NPC* surprised,afraid 1-2 fast,normal normal,loud m
+81 D URAZUMI,URAZUMI SAKUKO,NPC*~ neutral,surprised 0-1 normal normal f
+82 N
+83 N
+84 D YOSHIHITO,KUCHINASHI YOSHIHITO happy,excited 0-1 normal normal m
+85 N NARRATOR neutral,surprised 0-1 normal normal u
+86 D YOSHIHITO,KUCHINASHI YOSHIHITO afraid,sad,neutral 1 normal,fast normal m
+87 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+88 N
+89 N
+90 N
+91 N NARRATOR neutral,sarcastic 0-1 normal normal u
+92 N NARRATOR neutral,sarcastic 0-1 normal normal u
+93 D KIRAKO,KUROMITSU KIRAKO,YOSHIHITO~,KUCHINASHI YOSHIHITO~ happy,neutral 0-1 normal normal f
+94 D YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO~,KUROMITSU KIRAKO~ happy,neutral 0-1 normal normal m
+95 N
+96 N
+97 N
+98 N
+99 N NARRATOR neutral,sarcastic 0-1 normal normal u
+100 D NPC* happy,neutral 0-1 normal normal m
+101 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI sarcastic,neutral 0-1 normal normal f
+102 D URAZUMI,URAZUMI SAKUKO neutral 0-1 normal normal f
+103 N
+104 N
+105 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI happy,excited 0-1 normal normal f
+106 D URAZUMI,URAZUMI SAKUKO,NPC*~ surprised 1 normal normal f
+107 D ENMI,KAKUSHIGI ENMI,KAKUSHIGI happy,sarcastic 0-1 normal normal f
+108 N
+109 N NARRATOR neutral,surprised,afraid 0-1 normal normal u
+110 N NARRATOR neutral,afraid 0-1 normal normal u
+111 N NARRATOR neutral,afraid 0-1 normal normal u
+112 N NARRATOR neutral,afraid 0-1 normal normal u
+113 N NARRATOR neutral,afraid 0-1 normal normal u
+114 N
+115 N NARRATOR neutral,afraid 0-1 normal normal u
+116 N NARRATOR neutral,surprised 0-1 normal normal u
+117 D NPC*,UNKNOWN~ surprised,afraid 2 fast loud m
+118 N NARRATOR neutral,sarcastic 0-1 normal normal u
+119 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO,KUROMITSU KIRAKO surprised,afraid 0-1 normal normal u
+120 N
+121 D YOSHIHITO,KUCHINASHI YOSHIHITO neutral,sarcastic 0-1 normal normal m
+122 D KIRAKO,KUROMITSU KIRAKO neutral,sarcastic 0-1 normal normal f
+123 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO,KIRAKO,KUROMITSU KIRAKO angry 2 fast,normal normal,loud u
+124 N NARRATOR neutral,sarcastic 0-1 normal normal u
+125 N NARRATOR neutral,sad,sarcastic 0-1 normal normal u
+126 D URAZUMI,URAZUMI SAKUKO neutral,whispering 0-1 slow,normal soft f
+127 N

@@ -14,65 +14,109 @@ phải chen vào ranh giới lô, vì sản xuất dùng GPU gần như suốt n
 
 | file | việc |
 |---|---|
-| `make_eval_project.py MODEL` | project nháp: 4 chương cố định, `settings_json` của lô 8 chỉ đổi `analysis.model`, gieo dàn nhân vật từ đúng project đã gieo cho lô 8 |
-| `analysis_only.py PROJECT` | chạy riêng khâu phân tích bằng mã sản xuất (chia đoạn, `analyze_all`, hoà giải NPC, cách đọc tên), dừng trước phân vai |
-| `score_models.py [PROJECT...]` | chấm theo `gold/*.txt`; không đối số thì chấm mọi project trong `D:/Novels/Audiobooks/_model_eval` |
-| `gold/351.txt` ... | đáp án chuẩn (cú pháp ở đầu mỗi file) |
+| `make_eval_project.py MODEL [--chapters ...] [--book <thư mục Corpus>] [--root]` | project nháp. Mặc định: cuốn 2 (`Text_Tmp`), `settings_json` của lô 8 chỉ đổi `analysis.model`, gieo dàn nhân vật của lô 6. `--book`: truyện bất kỳ trong `Corpus/`, không gieo |
+| `analysis_only.py PROJECT [--segment-only]` | chạy riêng khâu phân tích bằng mã sản xuất (chia đoạn, `analyze_all`, hoà giải NPC, cách đọc tên), dừng trước phân vai |
+| `score_models.py [PROJECT...] [--gold <thư mục>] [--misses N] [--json]` | chấm theo `gold/<truyện>/*.txt`; chỉ chấm chương có trong project |
+| `gold_replay.py PROJECT --gold <thư mục> [--out x.jsonl]` | chạy đúng bộ phân tích sản xuất nhưng Ollama giả **trả lời bằng đáp án**: ra JSONL (prompt sản xuất, câu trả lời đúng) để huấn luyện, và mọi chỗ trượt khi chấm là một **luật host đè đáp án đúng** |
+| `dump_segments.py PROJECT` | văn bản nguồn cho người gán nhãn: `[seq] p<đoạn> <N/D/T bị khoá> \| chữ` |
+| `merge_gold.py compare A B` / `merge A B --out` | so hai bản gán nhãn làm mù; hợp nhất (hợp các tập chấp nhận, ưu tiên theo A) |
+| `gold/<truyện>/<chương>.txt` | đáp án chuẩn; luật trong `docs/GOLD_GUIDE.md`, mọi tranh chấp trong `gold/ADJUDICATION.md` |
 
-Project đo nằm ở `D:/Novels/Audiobooks/_model_eval/<model>/`, ngoài `book2/_versions`, nên nhịp tim,
-watchdog và chuỗi gieo của sách không nhìn thấy chúng.
+Project đo nằm ở `D:/Novels/Audiobooks/_model_eval*/`, ngoài `book2/_versions`, nên nhịp tim, watchdog và
+chuỗi gieo của sách không nhìn thấy chúng.
 
-## Đề bài và đáp án (19-09)
+## Đáp án chuẩn (20-09 01:3x): 19 chương, 9 truyện, ~2.300 đoạn
 
-Bốn chương cuốn 2 (tên file nguồn; tiêu đề trong file lệch một số), chọn vì mỗi chương khó một kiểu:
-
-| chương | đoạn | vì sao |
+| truyện | chương | cách làm |
 |---|---|---|
-| 351 | 97 | nhiều người nói nhất lô 8 (13): hội đồng Arcanist, thư từ, họp Bàn tay Nhợt nhạt |
-| 363 | 82 | độc thoại + nguồn hỏng dấu nháy ở đoạn 68 (parser khoá cả 68..81 thành thought) |
-| 378 | 120 | gần như toàn nhân vật MỚI (người lùn, ma cà rồng), nhiều câu cả đám cùng nói |
-| 381 | 104 | "thanh âm" trên trời (Lucien đóng thần), đại trưởng lão chỉ được gọi tên ở đoạn 48 |
+| Throne of Magical Arcana (cuốn 2) | 344-347, 351, 363, 378, 381, 396, 407, 419 | A làm, B làm mù hoặc soát đối kháng |
+| Young Master's PoV (cuốn 1) | 199, 248 | như trên |
+| Đã bảo là cùng nhau tự sát | 020, 050 | như trên |
+| Hướng dẫn sinh tồn trong học viện | 060 | cả hai làm mù, hợp nhất |
+| Nise Seiken Monogatari | 030 | cả hai làm mù, hợp nhất |
+| Nageki no Bourei wa Intai Shitai | 20 | cả hai làm mù, hợp nhất |
+| Yamiyo no Hotaru | 155 | cả hai làm mù; **chỉ khớp bộ tách đoạn sau bản vá ngoặc 「」** |
+| Năng lực bá đạo ... | 0135 | B làm, A soát đối kháng |
+| Love Unseen Beneath the Clear Night Sky | 09 | B làm, A soát đối kháng |
 
-Đáp án làm KHÔNG nhìn nhãn sản xuất. Mỗi dòng cho **tập** lựa chọn chấp nhận được (cảm xúc, nhịp, âm
-lượng, khoảng cường độ); người nói thì khắt khe: chỉ tên liệt kê mới có điểm, `~` là nửa điểm. Điểm tổng =
-45% người nói + 15% cảm xúc + 10% loại đoạn + 10% cường độ + 5% nhịp + 5% âm lượng + 10% giới tính.
+A = Claude, B = một agent review (chủ sách cho phép dùng subagent riêng cho việc này, 20-09: *"cả 2 phải thật
+khắt khe"*). Mỗi dòng cho **tập** lựa chọn chấp nhận được (cảm xúc, nhịp, âm lượng, khoảng cường độ); người nói
+khắt khe: chỉ tên liệt kê mới có điểm, `~` là nửa điểm. Điểm tổng = 45% người nói + 15% cảm xúc + 10% loại đoạn +
+10% cường độ + 5% nhịp + 5% âm lượng + 10% giới tính.
 
-## Kết quả đầu tiên: `qwen3:8b` trong sản xuất (lô 8 thật) — 19-09 22:5x
+Độ đồng thuận giữa hai người gán nhãn làm mù:
 
-    model      điểm  người nói  cảm xúc  loại  c.độ  nhịp  âm l.  g.tính
-    qwen3:8b   76,6       58,7     84,0  100   92,5  99,2  99,0    84,3
+| vòng | chương | người nói ưu tiên | tập chấp nhận | loại đoạn | cảm xúc ưu tiên |
+|---|---|---|---|---|---|
+| 1 | 378, 248 | 97,9% | 100% | 100% | 89,1% |
+| 3 | 344, 345 | 98,6% | 100% | - | 94,8% |
+| 4 | hdst 060, nise 030 | 87,2% | 100% | 234/238 | 95,0% |
+| 5 | 407, nageki 20 | 100% | 100% | 285/285 | 92,9-96,5% |
+| 6 | 419, yamiyo 155 | 100% | 100% | 215/215 | 84,0-93,6% |
 
-**Người nói đúng 58,7%** trên 4 chương khó. Lần ngược từng lỗi qua `analysis_candidates` (đề xuất của
-model → bản sau phản biện → giá trị cuối): gần như mọi lỗi là của **chính model**, lượt phản biện không sửa
-cái nào. Hai kiểu lỗi chiếm gần hết:
+Chỗ lệch còn lại gần như chỉ là "lời kể hay tiếng lòng" (`N` hay `N,T`) và bí danh; không vòng nào hai bên chọn
+hai NGƯỜI khác nhau cho một câu mà không phân xử được bằng văn bản. Luật mới sinh ra từ tranh chấp đều ghi vào
+`GOLD_GUIDE.md` (nội tâm của người nghĩ - quyết định chủ sách 20-09; văn bản viết; nhập xác/cải trang; lời dẫn nêu
+hai người; tên bị cắt; ...).
 
-1. **Lời thoại/nội tâm gán cho NARRATOR** - đọc bằng giọng người kể: đoạn giảng dài của Lucien (351:33,
-   43-45), lời cầu nguyện của Harold (378:36-37, 110-111), đại trưởng lão khóc (378:87, 95), "thanh âm" trên
-   trời (381:11, 15, 28), suy nghĩ của Lucien (381:87-89), Bellak (363:58, 68), Lucien nói (363:81).
-2. **Không chắc thì chộp tên quen nhất trong danh sách đã biết**: Bellak → LUCIEN (363:34-37), đại trưởng lão
-   → NATASHA / VICTOR (378:91, 93), Felipe và Sousa → FELICIA (351:83, 86), Galata → Tess (378:11, 13),
-   Wells → "Lo" (lấy từ chữ "Lo lắng", 378:25).
+**Chi phí làm gold** (đo 19-09, TMA 344-347, 11.307 từ): 4,3 token/từ (đọc 3,2 + viết 0,45 + nghĩ ~0,6), tức
+~130 token/đoạn. Cửa sổ 5 giờ nhích 0 → 1%, tuần giữ 36%.
 
-Lượt **hoà giải NPC** (`reconcile_local_speaker_identities`, cũng do `qwen3:8b`) thêm lỗi riêng: NPC "người
-lùn" → VICTOR (378:79, 84), "thần hơi nước" → "Lo" (378:116-117), "đại trưởng lão" → Quinns (378:1).
+## Mốc: `qwen3:8b` trong sản xuất, chấm theo đáp án hiện hành
 
-Cảm xúc/nhịp/âm lượng thì tốt (84-99%): model thận trọng, hay chọn neutral/normal, mà gold chấp nhận
-neutral ở phần lớn lời kể. Chỗ yếu thật là **ai nói**.
+| phạm vi | điểm | người nói | chỉ câu thoại | cảm xúc | giới tính |
+|---|---|---|---|---|---|
+| cuốn 2, lô 8, 8 chương | 79,0 | 65,7% | 67,7% | 85,5% | 78,4% |
+| cuốn 1, 2 chương | 74,2 | 50,0% | 43,3% | - | - |
 
-## Ứng viên có sẵn (vừa 8 GB VRAM, tải 19-09 22:2x)
+(Con số 58,7% người nói ngày 19-09 là trên bản đáp án đầu, trước ba vòng soát.) Kiểu lỗi của model: lời thoại/nội
+tâm gán cho NARRATOR; không chắc thì chộp tên quen nhất trong danh sách đã biết; lượt hoà giải NPC gộp nhầm. Cảm
+xúc, nhịp, âm lượng tốt (model thận trọng, hay chọn neutral/normal). Chỗ yếu thật là **ai nói**.
+
+## Host đè câu trả lời đúng - kiểm bằng `gold_replay` (20-09)
+
+Phát lại MỌI chương đáp án qua đúng bộ phân tích sản xuất, với câu trả lời đúng: năm truyện ra 100 điểm, cuốn 2
+chỉ ra **92,8% người nói** - tức một model hoàn hảo cũng không vượt trần ấy. Mỗi chỗ trượt là một luật host:
+
+| luật | đè thế nào | bản vá (hàng chờ ranh giới 9) |
+|---|---|---|
+| `_validate` | mọi câu nội tâm về NARRATOR (21 câu / 10 chương) - sót từ 7e4d74c, trái quyết định chủ sách | `patch_a_thought_keeps_its_thinker.py` |
+| `_explicit_speaker_attribution` | chữ Việt không dấu đầu câu là "tên" ("Lo lắng" -> Lo); "X còn chưa kịp đáp..." khoá cho X | `patch_the_name_after_a_quote_is_not_always_its_speaker.py` |
+| `_repair_same_paragraph_speakers` | thuật ngữ trích giữa câu kể ("dây chuyền lắp ráp") thành giọng người nói của đoạn | `patch_a_quoted_term_is_not_the_paragraphs_line.py` |
+| `_trailing_speech_attribution` | "Levski quay sang **Lucien** nói:" khoá cho người NGHE; "Triết Gia hỏi:" -> "Gia" (~29 câu cuốn 2) | `patch_the_one_being_looked_at_is_not_the_speaker.py` |
+
+Với đủ các bản vá, 11 chương TMA phát lại được 100% người nói. Cùng đợt, kho truyện lộ lỗi bộ tách đoạn: ngoặc
+góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941 dòng thoại) -
+`patch_a_corner_bracket_is_a_quote.py`; hai cuốn sản xuất không có 「 nên không đổi một đoạn nào (chứng minh bằng
+chia đoạn lại cả 1.393 chương).
+
+Hệ quả cho việc so model: mọi lượt đo trước ranh giới 9 chạy trên host cũ, nên điểm tuyệt đối bị chặn trần; so
+TƯƠNG ĐỐI giữa các model vẫn công bằng (cùng trần). Đo lại sau ranh giới để có con số thật.
+
+## Ứng viên có sẵn (vừa 8 GB VRAM, tải 19-09)
 
 `qwen3:8b` (mốc), `qwen3:4b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `gemma4:e2b-it-qat`,
 `gemma4:e4b-it-qat`, `gemma4:12b-it-qat`, `ministral-3:8b`. (`qwen3.6` chỉ có 27b/35b - không vừa;
-`granite4.1` không hỗ trợ tiếng Việt.) Lịch đo: cửa sổ GPU sau khi lô 9 thu xong, trước ranh giới 9.
+`granite4.1` không hỗ trợ tiếng Việt.) Lượt đo đầu: chuỗi đêm 19-09 (`run_night_19_09.sh`), 8 model trên 4
+chương TMA ngay sau khi lô 9 thu xong, trước ranh giới 9; kết quả ở `runtime/model_eval_19_09.{log,json}`.
+
+## Huấn luyện
+
+- Dữ liệu: `gold_replay.py --out` ra từng cặp (prompt sản xuất đúng như model thấy, câu trả lời đúng) cho cả
+  generator lẫn lượt phản biện: `D:/Novels/Audiobooks/_model_eval_gold/train_*.jsonl`. Chia train/dev/test theo
+  CHƯƠNG (không trộn đoạn của một chương vào hai tập); test giữ nguyên để so model gốc với model đã huấn luyện.
+- Môi trường: `D:/Novels/LLM_Train/.venv` (torch 2.11.0+cu128, transformers 5.17.0, peft 0.21.0, trl 1.13.0,
+  bitsandbytes 0.50.2). QLoRA 4-bit trên RTX 5060 8 GB, chạy trong cửa sổ GPU giữa hai lô.
+- Chọn model gốc sau lượt đo các model có sẵn.
 
 ## Kho dữ liệu (`D:/Novels/Ebook Reader/Corpus/`)
 
-Gom 19-09 (chỉ SAO CHÉP; bản trong Tools và Thùng rác giữ nguyên):
+Gom 19-09 (chỉ SAO CHÉP; bản trong Tools và Thùng rác giữ nguyên), đẩy lên repo:
 
 | truyện | chương | nguồn |
 |---|---|---|
-| Young Master's PoV (cuốn 1) | 478 | `Ebook Reader/Text` (nguồn sản xuất, không chép) |
-| Throne of Magical Arcana (cuốn 2) | 915 | `Ebook Reader/Text_Tmp` (nguồn sản xuất, không chép) |
+| Young Master's PoV (cuốn 1) | 478 | `Ebook Reader/Text` |
+| Throne of Magical Arcana (cuốn 2) | 915 | `Ebook Reader/Text_Tmp` |
 | Nise Seiken Monogatari | 158 | Tools |
 | Two Childhood Friends ... Dungeon ... | 119 | Tools |
 | Đã bảo là cùng nhau tự sát, cớ sao lại thành sống chung | 254 | Tools |
@@ -82,6 +126,7 @@ Gom 19-09 (chỉ SAO CHÉP; bản trong Tools và Thùng rác giữ nguyên):
 | Năng lực bá đạo của tôi trong game tử thần ... | 1.590 | Thùng rác (D:) |
 | Love Unseen Beneath the Clear Night Sky | 14 | Thùng rác (D:) |
 
+`data/corpus/manifest.json` (`scripts/corpus/manifest.py --check`): 10 truyện, 4.110 chương, 12,95 triệu từ.
 Tên nhận ra bằng nội dung chương đầu và số chương khớp số mp3 trong `D:/Novels/Reading`. Thêm truyện từ Hako
-bằng `scripts/corpus/hako.py` (khảo sát: `data/corpus/hako_survey_*.json`; ba mục: dịch bởi người, AI dịch,
-sáng tác), **né các truyện đã có trong `Reading`/`Completed`** theo lệnh chủ sách.
+bằng `scripts/corpus/hako.py` (khảo sát: `data/corpus/hako_survey_*.json`; dịch bởi người, AI dịch, sáng tác),
+**né các truyện đã có trong `Reading`/`Completed`** theo lệnh chủ sách.

@@ -1,0 +1,131 @@
+# Đáp án chuẩn chương 386 ("Từng bước một"), Text_Tmp/385.txt. Vòng 8 (20-09): agent review gán (B), Claude soát đối kháng
+# (A) - ADJUDICATION.md. Lucien cải trang nhân sư Fil, lời kể gọi "Lucien" -> LUCIEN đủ, FIL~ trên câu nói (quy tắc 13); 123 là
+# Lucien trong hình Aska (Aska thật đã bất tỉnh ở 119) -> LUCIEN, ASKA đủ. 20, 95, 109 được gọi tên ngay ở lời dẫn liền sau -> không
+# NPC*; 35 Helges chỉ lộ tên qua câu đáp 37 -> NPC*~. 37 cả đội đồng thanh (NPC*), Lucien chỉ nhép miệng.
+0 H
+1 N
+2 N NARRATOR neutral,afraid 0-1 normal normal u
+3 N NARRATOR neutral,afraid 0-1 normal normal u
+4 D NPC*,UNKNOWN~ angry 2 normal,fast loud u
+5 N NARRATOR neutral,sarcastic 0-1 normal normal u
+6 N,T NARRATOR,LUCIEN~ neutral,surprised 0-1 normal normal u
+7 N
+8 D LUCIEN,FIL~ afraid,neutral 0-1 normal,fast normal m
+9 N NARRATOR neutral,sarcastic 0-1 normal normal u
+10 N
+11 N
+12 N
+13 N NARRATOR neutral,sarcastic 0-1 normal normal u
+14 D NARRATOR neutral,sarcastic 0-1 normal normal u
+15 N
+16 T LUCIEN surprised,sarcastic 0-1 normal normal,soft m
+17 N NARRATOR neutral,sarcastic 0-1 normal normal u
+18 T LUCIEN sarcastic,neutral 0-1 normal normal,soft m
+19 N
+20 D SANA sarcastic,surprised 0-1 normal soft,normal f
+21 N
+22 D SANA sarcastic,surprised 0-1 normal soft,normal f
+23 N,T NARRATOR,LUCIEN~ angry,sarcastic,neutral 0-1 normal normal u
+24 D NARRATOR,LUCIEN~ sarcastic,neutral 0-1 normal normal u
+25 D LUCIEN,FIL~ neutral,sad,sarcastic 0-1 normal soft,normal m
+26 N NARRATOR neutral,sarcastic 0-1 normal normal u
+27 N
+28 D SANA happy,sarcastic 1 normal normal,loud f
+29 N NARRATOR neutral,sarcastic 0-1 normal normal u
+30 N
+31 D NPC*,UNKNOWN~ angry,sarcastic 1-2 normal loud m
+32 N,T NARRATOR,LUCIEN~ happy,sarcastic,neutral 0-1 normal normal u
+33 N
+34 N NARRATOR neutral,tired 0-1 normal normal u
+35 D HELGES,NPC*~ neutral,angry 0-1 normal normal m
+36 N
+37 D NPC*,UNKNOWN~ neutral 0-1 normal normal m
+38 N
+39 N
+40 N
+41 N
+42 N
+43 N NARRATOR neutral,afraid 0-1 normal normal u
+44 N NARRATOR neutral,afraid 0-1 normal normal u
+45 N
+46 N
+47 N
+48 N
+49 N
+50 N NARRATOR neutral,afraid 0-1 normal normal u
+51 N
+52 N NARRATOR neutral,afraid 0-1 normal normal u
+53 T LUCIEN neutral,surprised 0-1 normal normal,soft m
+54 N
+55 T LUCIEN neutral,surprised 0-1 normal normal,soft m
+56 T,N LUCIEN,NARRATOR neutral,surprised 0-1 normal normal,soft m
+57 N
+58 N
+59 N
+60 N NARRATOR neutral,afraid 0-1 normal normal u
+61 N
+62 N
+63 N
+64 N
+65 N
+66 N
+67 N
+68 D HELGES neutral 0-1 normal normal m
+69 N
+70 N
+71 N
+72 T LUCIEN surprised,neutral 0-1 normal normal,soft m
+73 N
+74 N
+75 D HELGES neutral 0-1 normal soft,normal m
+76 N
+77 N
+78 N
+79 N NARRATOR neutral,afraid 0-1 normal normal u
+80 D HELGES angry,surprised 1-2 fast,normal loud,normal m
+81 N NARRATOR neutral,afraid 0-1 normal,fast normal u
+82 N
+83 N
+84 D NARRATOR neutral,sarcastic 0-1 normal normal u
+85 N
+86 D LUCIEN,FIL~ afraid,sad 1 normal,slow normal,soft m
+87 N
+88 N
+89 D HELGES neutral,tender 0-1 normal soft,normal m
+90 N
+91 N NARRATOR neutral,sarcastic 0-1 normal normal u
+92 N
+93 N
+94 N
+95 D ASKA angry 1-2 normal normal u
+96 N NARRATOR neutral,angry 0-1 normal normal u
+97 D LUCIEN,FIL~ afraid,surprised 1 fast,normal normal m
+98 N
+99 N NARRATOR neutral,angry 0-1 normal normal u
+100 D ASKA angry 2 normal,fast loud u
+101 D LUCIEN,FIL~ afraid,neutral 0-1 normal normal m
+102 N
+103 D LUCIEN,FIL~ afraid,angry 0-1 normal normal m
+104 N
+105 D ASKA angry 2-3 fast,normal loud u
+106 D LUCIEN,FIL~ afraid,angry 1 normal,fast normal m
+107 N
+108 N NARRATOR neutral,angry 0-1 normal normal u
+109 D INKE neutral,afraid 0-1 normal soft,normal u
+110 N
+111 D INKE neutral 0-1 normal soft,normal u
+112 N
+113 D ASKA angry,sarcastic 2 normal loud,normal u
+114 D LUCIEN,FIL~ afraid 1 normal,slow soft m
+115 N
+116 N NARRATOR neutral,angry 0-1 normal normal u
+117 D NARRATOR,UNKNOWN~ surprised,neutral 1-2 fast normal,loud u
+118 N NARRATOR neutral,surprised 0-1 normal,fast normal u
+119 N NARRATOR neutral,surprised 0-1 normal normal u
+120 N,T NARRATOR,INKE~ neutral,sarcastic 0-1 normal normal u
+121 N
+122 D INKE neutral,surprised 0-1 normal normal u
+123 D LUCIEN,ASKA happy,sarcastic 1-2 normal normal,loud m
+124 N
+125 D NPC*,UNKNOWN~ angry,neutral 1-2 normal normal,loud u
+126 N NARRATOR neutral,afraid 0-1 normal normal u

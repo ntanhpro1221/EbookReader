@@ -58,6 +58,11 @@ LEASE_STALE_SECONDS = 180.0
 # trích GIỮA câu kể (TMA 419:24, 26: Arthur không hiểu “dây chuyền lắp ráp” hay “tiêu chuẩn hóa” -> giọng Arthur giữa câu
 # kể). Hai cuốn có 561 cụm như thế, ~66 bị khoá. Phát lại 10 chương đáp án TMA qua bộ phân tích đã vá đủ sáu bản: người
 # nói 100%, điểm 100 (trước vá 92,8% người nói). Thử chung sáu bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
+#
+# Cùng ranh giới, 20-09 01:3x: `_trailing_speech_attribution` khoá câu cho tên NGAY trước "nói:" - cả khi tên là người
+# NGHE ("Levski quay sang Lucien nói:", "nhìn Tử tước Harrison nói:") hay mẩu một tên có dấu ("Triết Gia hỏi:" -> "Gia").
+# Cuốn 2: 78 lần bắn, 30 lần như thế (003, 192, 231, 301, 368, 406 đã thu; 426-870 ở các lô sau); sau vá 48 lần khoá còn
+# lại đều là chủ ngữ thật. Thử chung bảy bản trên bản sao của cây f332f26: chỉ đỏ hai test môi trường.
 ORDER: tuple[str, ...] = (
     "patch_the_better_known_voice_keeps_its_pin.py",
     "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
@@ -65,6 +70,7 @@ ORDER: tuple[str, ...] = (
     "patch_a_corner_bracket_is_a_quote.py",
     "patch_the_name_after_a_quote_is_not_always_its_speaker.py",
     "patch_a_quoted_term_is_not_the_paragraphs_line.py",
+    "patch_the_one_being_looked_at_is_not_the_speaker.py",
 )
 
 APPLIED = (

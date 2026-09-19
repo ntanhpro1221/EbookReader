@@ -150,3 +150,15 @@ B tự liệt kê các câu kém chắc chắn nhất; A soát toàn bộ. B ch�
 
 Góp ý luật của B (nhận): họ + kính xưng là tên khi nhân vật không có tên riêng (quy tắc 11); tên cải trang nửa điểm trên
 câu nói, không điểm trên câu nghĩ (quy tắc 13).
+
+## Vòng 8 (20-09 01:3x): TMA 418 cả hai làm mù; TMA 385, Two Childhood Friends 013 B gán - A soát
+
+TMA 418 (làm mù): người nói ưu tiên trùng 97,0% (33 câu), loại 89/89, cảm xúc ưu tiên 98,9%.
+
+| câu | kết luận | lý do |
+|---|---|---|
+| 418:32 "Chẹp. Thật là một thanh niên có tinh thần văn nghệ, à không, ông già mới đúng. Lucien cười thầm trong lòng." | **A thua**: LUCIEN~ -> đủ | B: phần lớn đoạn là tiếng lòng trực tiếp, lời dẫn ngắn. Khác 419:32, nơi phần kể gọi Lucien là "cậu" |
+| 418:41 hai học trò cùng chào, gọi tên ở 44 | **A thua**: NPC* đủ -> `NPC*~` | quy tắc 5: người được gọi tên sau trong chương; LILLIAN, ISAAC đủ |
+| 385:20, 95, 109 (Sana, Aska, Inke) | **B sai**: bỏ `NPC*~` | tên có ngay ở lời dẫn liền sau câu ("Nhân sư cái Sana nhìn Lucien và nhỏ giọng nói:") - lời dẫn thường, như 419:5 Lillian mà cả hai bên đều không cho NPC. 35 Helges giữ `NPC*~`: lời dẫn không nêu tên |
+| 385:123 Lucien trong hình Aska | LUCIEN, ASKA đều đủ | quy tắc 13: chương gọi "Aska", nhưng đã lộ ngầm trước câu (Aska thật bất tỉnh ở 119) |
+| Two Childhood 013 | không đổi | soát từng câu với nguồn |
