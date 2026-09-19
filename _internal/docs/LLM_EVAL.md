@@ -109,6 +109,29 @@ chia đoạn lại cả 1.393 chương).
 Hệ quả cho việc so model: mọi lượt đo trước ranh giới 9 chạy trên host cũ, nên điểm tuyệt đối bị chặn trần; so
 TƯƠNG ĐỐI giữa các model vẫn công bằng (cùng trần). Đo lại sau ranh giới để có con số thật.
 
+## Lượt đo đêm 20-09 (host CHƯA vá, 4 chương 351/363/378/381) - và bài học về công cụ đo
+
+| model | chạy trọn | điểm | người nói | cảm xúc | c.độ | g.tính | giây |
+|---|---|---|---|---|---|---|---|
+| `qwen3:8b` (mốc) | có | 77,3 | 59,6% | 86,0 | 91,5 | 85,5 | 1.711 |
+| `gemma4:e2b-it-qat` | có | 76,6 | **61,9%** | 81,0 | 85,2 | 82,9 | **771** |
+| `gemma4:e4b-it-qat` | KHÔNG (quá 40 phút) | 74,2* | 57,1%* | 86,0 | 95,7 | 61,7 | - |
+| `gemma4:12b-it-qat` | KHÔNG (rơi ID ở lô 8) | 58,0* | 14,7%* | - | - | - | - |
+| `ministral-3:8b` | KHÔNG (rơi ID ở lô 7) | 56,6* | 14,7%* | - | - | - | - |
+| `qwen3:4b`, `qwen3.5:4b`, `qwen3.5:9b` | KHÔNG (0 ID từ lô 1) | 46,5* | 9,0%* | - | - | - | - |
+
+`*` = chấm trên phần đã phân tích trước khi đổ, KHÔNG so được. Hai điều rút ra:
+
+1. **Độ tin cậy là cổng trước độ chính xác.** `analyze_all` coi một lô trả thiếu ID là lỗi bắt buộc và ném lỗi - trong
+   sản xuất là một lô đứng. Bốn model trả 0 ID ngay lô 1 (dòng qwen3 mới nghĩ trước khi trả JSON: yêu cầu của dự án
+   KHÔNG gửi `think: false`); hai model rơi ID giữa chừng.
+2. **`gemma4:e2b-it-qat` là ứng viên thật**: chạy trọn, người nói CAO HƠN mốc 2,3 điểm, nhanh gấp 2,2 lần, đổi lại cảm
+   xúc/cường độ/giới tính thấp hơn 3-6 điểm. Cần đo lại đàng hoàng trước khi kết luận.
+
+Công cụ đo vì thế viết lại (`eval_models.py`, 20-09): MỖI CHƯƠNG một project, trần giờ cho từng chương, độ tin cậy =
+chương chạy trọn / chương thử + số lần thử lại vì thiếu ID; `analysis_only.py --no-think` gửi `think: false`. Lượt đo
+tiếp (ranh giới 10): cả 20 chương TMA có đáp án, host ĐÃ vá, và chỉ những model qua cổng tin cậy mới được xếp hạng.
+
 ## Ứng viên có sẵn (vừa 8 GB VRAM, tải 19-09)
 
 `qwen3:8b` (mốc), `qwen3:4b`, `qwen3.5:2b`, `qwen3.5:4b`, `qwen3.5:9b`, `gemma4:e2b-it-qat`,
