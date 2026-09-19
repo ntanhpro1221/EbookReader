@@ -256,3 +256,24 @@ def test_a_recast_that_only_rerecords_a_failed_line_ships_when_the_line_is_fixed
     monkeypatch.setattr(gate, "failed_lines", lambda project, chapter: after if project == target else 1)
 
     assert (gate.decide(target, apply=False, root=tmp_path) == 0) is ships
+
+
+class _Status:
+    def __init__(self, running: bool) -> None:
+        self.running = running
+
+
+def test_the_gate_waits_for_the_supervisor_to_settle_before_judging(tmp_path: Path) -> None:
+    """Ranh giới 8, chương 338: cổng thấy "đang chạy" vài giây sau khi chương xong và cho lên sách không đo."""
+    answers = iter([True, True, False])
+    now = [0.0]
+    ok = gate.settled(tmp_path, lambda _t: _Status(next(answers)),
+                      clock=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s))
+    assert ok and now[0] == 2 * gate.SETTLE_POLL_SECONDS
+
+
+def test_a_project_that_really_keeps_running_is_still_refused(tmp_path: Path) -> None:
+    now = [0.0]
+    ok = gate.settled(tmp_path, lambda _t: _Status(True), wait=30,
+                      clock=lambda: now[0], sleep=lambda s: now.__setitem__(0, now[0] + s))
+    assert not ok and now[0] >= 30

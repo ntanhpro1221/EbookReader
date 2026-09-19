@@ -283,6 +283,28 @@ def decide(target: Path, *, apply: bool, root: Path = AUDIOBOOKS_ROOT) -> int:
     return HARMFUL
 
 
+SETTLE_SECONDS = 180.0
+SETTLE_POLL_SECONDS = 5.0
+
+
+def settled(target: Path, get_status, *, wait: float = SETTLE_SECONDS, poll: float = SETTLE_POLL_SECONDS,
+            clock=time.monotonic, sleep=time.sleep) -> bool:
+    """Đợi trạng thái chạy nền của project về "không chạy", tối đa `wait` giây.
+
+    Vì sao (19-09, 17:2x): `launch_repair.sh` gọi cổng ngay khi `wait_for_run` thấy chương
+    `completed` và worker đã tắt, nhưng supervisor còn vài giây để ghi trạng thái kết thúc. Chương 338
+    của ranh giới 8 rơi đúng khe ấy: cổng thấy "đang chạy", trả mã 3, và `launch_repair` cho chương
+    lên sách MÀ KHÔNG ĐO. Lần ấy bản đúc lại tốt (LEO về giọng đa số), nhưng một bản hại cũng sẽ lọt
+    đúng như thế. Đợi một chút rẻ hơn nhiều so với một chương không được phán.
+    """
+    deadline = clock() + wait
+    while get_status(target).running:
+        if clock() >= deadline:
+            return False
+        sleep(poll)
+    return True
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("project", type=Path)
@@ -294,7 +316,7 @@ def main(argv: list[str]) -> int:
         return 2
     from ebook_reader.background_runner import get_status
 
-    if get_status(target).running:
+    if not settled(target, get_status):
         _say(f"{target.name} dang chay - chua co gi de phan.")
         return 3
     try:
