@@ -53,8 +53,9 @@ def _branch_for(schema: dict, batch_id: str) -> dict | None:
 
 
 class Replayer:
-    def __init__(self, db: ProjectDB, gold: dict, out: Path | None) -> None:
+    def __init__(self, db: ProjectDB, gold: dict, out: Path | None, gold_name: str = "") -> None:
         self.gold = gold
+        self.gold_name = gold_name
         self.out = out.open("w", encoding="utf-8") if out else None
         self.segments = [dict(row) for row in db.list_segments()]
         self.chapter_titles = {int(row["id"]): str(row["title"]) for row in db.list_chapters()}
@@ -133,6 +134,20 @@ class Replayer:
                              "evidence_quote": quote, "critic_confidence": round(min(cap, max(floor, 0.9)), 2)})
         return {"candidate_hash": candidate_hash, "verdicts": verdicts}
 
+    def _chapters_of(self, request: dict) -> list[str]:
+        """Chương của mẻ - để chia train/dev/test theo CHƯƠNG, không trộn đoạn một chương vào hai tập."""
+        prompt = request["prompt"]
+        try:
+            if "Hãy phản biện" in prompt:
+                rows = json.loads(prompt[prompt.index("[", prompt.index("Hãy phản biện")):])
+            else:
+                rows = json.loads(prompt.split("Các đoạn liên tiếp:\n", 1)[1].split("\n\nRàng buộc", 1)[0]
+                                  .split("\n\nKết quả lần trước", 1)[0])
+            window = self._locate([str(row["text"]) for row in rows])
+        except (LookupError, ValueError, KeyError, IndexError):
+            return []
+        return sorted({self.chapter_titles[int(segment["chapter_id"])] for segment in window})
+
     def __call__(self, analyzer, request: dict, **_kw) -> dict:
         properties = request["format"].get("properties", {})
         if "segments" in properties:
@@ -143,7 +158,8 @@ class Replayer:
             raise RuntimeError(f"gold_replay không trả lời loại câu hỏi này: {sorted(properties)}")
         self.counts[kind] += 1
         if self.out:
-            self.out.write(json.dumps({"type": kind, "system": request["system"], "prompt": request["prompt"],
+            self.out.write(json.dumps({"type": kind, "gold": self.gold_name, "chapters": self._chapters_of(request),
+                                       "system": request["system"], "prompt": request["prompt"],
                                        "format": request["format"], "response": response}, ensure_ascii=False) + "\n")
         return response
 
@@ -168,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     segment(db, settings, print)
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-    replay = Replayer(db, load_gold(GOLD_ROOT / args.gold), args.out)
+    replay = Replayer(db, load_gold(GOLD_ROOT / args.gold), args.out, args.gold)
 
     def fake_available(self) -> bool:
         self._model_digest = FAKE_DIGEST
