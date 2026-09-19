@@ -2,6 +2,7 @@ r"""Tạo project nháp để đo MỘT model phân tích trên cùng một đ�
 
     python scripts/model_eval/make_eval_project.py qwen3.5:9b
     python scripts/model_eval/make_eval_project.py qwen3:8b --chapters 351 363
+    python scripts/model_eval/make_eval_project.py qwen3:8b --book "Nise Seiken Monogatari" --chapters 010 011
 
 Đề bài cố định (19-09, chủ sách giao việc chọn model phân tích):
 
@@ -14,6 +15,10 @@ r"""Tạo project nháp để đo MỘT model phân tích trên cùng một đ�
     `port_pronunciations` + `port_casting` như `launch_batch.sh`. Model nào cũng mở đầu với cùng
     danh sách "nhân vật đã biết" và cùng bảng phiên âm.
 
+`--book <thư mục trong Corpus/>` dùng truyện khác trong kho: cùng cấu hình, KHÔNG gieo (đầu truyện ấy chưa
+có ai "đã biết"), project ở `_model_eval/<truyện>/<model>/`; `--first-person TÊN` cho truyện kể ngôi thứ nhất.
+Mặc định (không `--book`) giữ nguyên như trên - chuỗi đo đêm 19-09 gọi đúng dạng ấy.
+
 Project nằm ngoài `book2/_versions` nên không lọt vào nhịp tim, watchdog hay chuỗi gieo của sách.
 Chạy lại cùng model thì MỞ LẠI project cũ (tên theo nội dung) - xoá thư mục của model ấy để đo lại.
 """
@@ -21,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sqlite3
 import subprocess
 import sys
@@ -39,6 +45,16 @@ REFERENCE = Path("D:/Novels/Audiobooks/book2/_versions/v0.3.0-lo08/lo08_270cda51
 SEED = Path("D:/Novels/Audiobooks/book2/_versions/v0.3.0-lo06r/lo06r_266_22b5598370")
 SOURCE = Path("D:/Novels/Ebook Reader/Text_Tmp")
 CHAPTERS = ("351", "363", "378", "381")
+CORPUS = Path("D:/Novels/Ebook Reader/Corpus")
+
+
+def book_slug(name: str) -> str:
+    """Tên thư mục ASCII cho một truyện: bỏ dấu, chữ thường, gạch dưới."""
+    import unicodedata
+
+    plain = unicodedata.normalize("NFD", name.replace("đ", "d").replace("Đ", "D"))
+    plain = "".join(ch for ch in plain if not unicodedata.combining(ch))
+    return "_".join(re.findall(r"[a-z0-9]+", plain.lower()))[:60]
 
 
 def slug(model: str) -> str:
@@ -63,20 +79,32 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chapters", nargs="+", default=list(CHAPTERS))
     parser.add_argument("--root", type=Path, default=EVAL_ROOT)
     parser.add_argument("--no-seed", action="store_true", help="không gieo dàn nhân vật (chỉ để thử máy)")
+    parser.add_argument("--book", help="thư mục truyện trong Corpus/ (mặc định: cuốn 2, nguồn sản xuất)")
+    parser.add_argument("--first-person", default="", help="'tôi' là ai, cho truyện kể ngôi thứ nhất")
     args = parser.parse_args(argv)
 
-    files = [SOURCE / f"{chapter}.txt" for chapter in args.chapters]
+    source = SOURCE if not args.book else CORPUS / args.book
+    if args.book and args.chapters == list(CHAPTERS):
+        parser.error("--book cần --chapters của chính truyện ấy")
+    files = [source / f"{chapter}.txt" for chapter in args.chapters]
     missing = [str(path) for path in files if not path.is_file()]
     if missing:
         print("thiếu file nguồn: " + ", ".join(missing), file=sys.stderr)
         return 2
     settings = reference_settings(args.model)
-    output_root = args.root / slug(args.model)
-    title = f"eval_{slug(args.model)}"
+    if args.first_person:
+        settings["voices"]["first_person_identity"] = args.first_person
+        validate_settings(normalize_legacy_locked_settings(settings))
+    if args.book:
+        output_root = args.root / book_slug(args.book) / slug(args.model)
+        title = f"eval_{book_slug(args.book)[:30]}_{slug(args.model)}"
+    else:
+        output_root = args.root / slug(args.model)
+        title = f"eval_{slug(args.model)}"
     paths, db, _used = create_or_open_project(files, output_root, settings, title)
     fresh = not db.list_characters()
     print(f"project: {paths.root}")
-    if not args.no_seed and fresh:
+    if not args.no_seed and not args.book and fresh:
         for script in ("port_pronunciations.py", "port_casting.py"):
             subprocess.run([str(PY), str(ROOT / "scripts" / script), str(SEED), str(paths.root)], check=True)
     elif not fresh:

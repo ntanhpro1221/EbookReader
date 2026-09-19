@@ -1,0 +1,83 @@
+# Đáp án chuẩn - "Đã bảo là cùng nhau tự sát, cớ sao lại thành sống chung", file 020 ("Chương 21: Chụp ảnh").
+# Claude làm 19-09. Romcom Trung Quốc, kể ngôi ba. CHU MẶC (nam) và DIỆP CẨN HUYÊN (nữ), học sinh. Tên gọi tắt
+# "CẨN HUYÊN" chấp nhận ngang tên đầy đủ (cùng một người; gộp bí danh là việc của host). Những câu Cẩn Huyên
+# tự nhủ trong lời kể (13, 28, 29, 45) chấp nhận N/NARRATOR hoặc T/DIỆP CẨN HUYÊN.
+0 H
+1 N
+2 D DIỆP CẨN HUYÊN,CẨN HUYÊN surprised,neutral 0-1 normal normal,soft f
+3 N
+4 D CHU MẶC neutral,happy 0-1 normal normal m
+5 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,surprised,tender 0-1 slow,normal soft,normal f
+6 D CHU MẶC happy,neutral 0-1 normal normal m
+7 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,tender 0-1 normal,slow soft,normal f
+8 N NARRATOR neutral,afraid 0-1 normal normal u
+9 N
+10 N
+11 N
+12 N NARRATOR neutral,tender 0-1 normal normal u
+13 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,tender,sad 0-1 normal,slow normal,soft u
+14 D CHU MẶC excited,happy 1-2 normal,fast loud,normal m
+15 N NARRATOR neutral,tender 0-1 normal,slow normal u
+16 N NARRATOR neutral,tender 0-1 normal normal u
+17 N
+18 N
+19 N NARRATOR neutral,happy 0-1 normal normal u
+20 D CHU MẶC happy,excited 0-2 normal normal m
+21 N NARRATOR neutral,tender 0-1 normal normal u
+22 D CHU MẶC neutral,excited,happy 0-2 normal normal m
+23 N NARRATOR neutral,happy 0-1 normal normal u
+24 N
+25 D CHU MẶC happy,sarcastic,neutral,excited 0-2 normal normal m
+26 D CHU MẶC happy,neutral,excited 0-2 normal normal m
+27 N NARRATOR neutral,happy 0-1 normal normal u
+28 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN surprised,happy 1-2 normal,fast normal u
+29 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN surprised,happy 1-2 normal normal u
+30 N NARRATOR neutral,happy,tender 0-1 normal normal u
+31 N NARRATOR neutral 0-1 normal normal u
+32 D CHU MẶC excited,happy 1-2 normal,fast loud,normal m
+33 N NARRATOR neutral,happy 0-1 normal normal u
+34 D NPC*,UNKNOWN excited,happy 1-3 normal,fast normal,loud m
+35 N NARRATOR neutral,surprised 0-1 normal normal u
+36 N
+37 N NARRATOR neutral,afraid,surprised 0-1 normal,fast normal u
+38 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,excited 0-1 normal normal,soft f
+39 N
+40 N
+41 N NARRATOR neutral,tender 0-1 normal normal u
+42 N NARRATOR neutral,sad,tender 0-1 normal normal u
+43 N NARRATOR neutral,tender,happy 0-1 normal,slow normal u
+44 N NARRATOR neutral,happy 0-1 normal normal u
+45 N,T NARRATOR,DIỆP CẨN HUYÊN,CẨN HUYÊN surprised,happy 1-2 normal normal u
+46 D CHU MẶC happy,neutral 0-1 normal normal m
+47 N
+48 D DIỆP CẨN HUYÊN,CẨN HUYÊN tender,happy 0-2 normal,slow soft,normal f
+49 N NARRATOR neutral,tender,sad 0-1 normal normal u
+50 D CHU MẶC happy,neutral 0-1 normal normal m
+51 N NARRATOR neutral,happy 0-1 normal normal u
+52 D NPC*,UNKNOWN excited,happy 1-2 normal,fast normal f
+53 N
+54 D NPC*,UNKNOWN excited,happy 1-2 normal,fast normal,loud f
+55 N
+56 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,happy,excited 0-1 normal normal f
+57 N
+58 N
+59 N NARRATOR neutral,sad 0-1 normal normal u
+60 N NARRATOR neutral,sad 0-1 normal normal u
+61 D CHU MẶC neutral,happy 0-1 normal normal m
+62 N NARRATOR neutral,happy,tender 0-1 normal normal u
+63 D NPC*,UNKNOWN neutral 0-1 normal normal u
+64 N
+65 D CHU MẶC happy,neutral 0-1 normal normal m
+66 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,tender 0-1 normal soft,normal f
+67 N
+68 N
+69 N NARRATOR neutral,surprised 0-1 normal normal u
+70 D DIỆP CẨN HUYÊN,CẨN HUYÊN neutral,tired 0-2 slow,normal soft,normal f
+71 N
+72 D CHU MẶC happy,tender,neutral 0-1 normal normal m
+73 N NARRATOR neutral,happy,tender 0-1 normal normal u
+74 D CHU MẶC tender,neutral 0-1 normal,slow normal,soft m
+75 N NARRATOR neutral,tender 0-1 normal normal u
+76 D CHU MẶC happy,neutral,tender 0-1 normal normal m
+77 N
+78 N NARRATOR neutral,tender 0-1 normal,slow normal u
