@@ -36,7 +36,13 @@ LEASE_STALE_SECONDS = 180.0
 # (329 câu qua 18 lô) vì MORRIS (54 câu cả cuốn) nói nhiều hơn trong riêng lô ấy; luật mới xếp theo sổ
 # cộng dồn `character_exposure` trước. Đã thử trên bản sao của cây 775dbd2: 2984 pass, hai đỏ đều do
 # bản sao thiếu `runtime/` và shortcut.
-ORDER: tuple[str, ...] = ("patch_the_better_known_voice_keeps_its_pin.py",)
+#
+# Cùng ranh giới, 22:1x: chủ sách chọn giữ Việt hoá tên nước ngoài; tên chỉ đứng đầu câu ("Gauci Cromwell.")
+# đang lọt khỏi bảng phiên âm và đi nguyên chữ vào VieNeu. Thử chung hai bản trên bản sao: 2988 pass.
+ORDER: tuple[str, ...] = (
+    "patch_the_better_known_voice_keeps_its_pin.py",
+    "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
