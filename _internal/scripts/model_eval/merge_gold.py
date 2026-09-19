@@ -35,6 +35,17 @@ def load(path: Path) -> dict[int, Gold]:
         return {row.seq: row for row in parse_gold(copy)}
 
 
+def written_kinds(path: Path) -> dict[int, list[str]]:
+    """Thứ tự loại như A đã viết (parse_gold giữ loại dưới dạng tập): loại THẬT đứng trước (quy tắc 9)."""
+    letters = {letter: kind for kind, letter in LETTER.items()}
+    order = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        parts = raw.split()
+        if len(parts) >= 2 and not raw.startswith("#") and parts[1] != "H":
+            order[int(parts[0])] = [letters[letter] for letter in parts[1].split(",")]
+    return order
+
+
 def headings(path: Path) -> list[int]:
     seqs = []
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -96,8 +107,10 @@ def union(first: tuple[str, ...], second: tuple[str, ...]) -> list[str]:
     return list(first) + [item for item in second if item not in first]
 
 
-def merge_row(x: Gold, y: Gold, drop: set[str]) -> str:
-    kinds = sorted(x.kinds | y.kinds, key=lambda k: (k not in x.kinds, KIND_ORDER.index(k)))
+def merge_row(x: Gold, y: Gold, drop: set[str], written: list[str] | None = None) -> str:
+    first = written or list(KIND_ORDER)
+    kinds = sorted(x.kinds | y.kinds, key=lambda k: (k not in x.kinds, first.index(k) if k in first else 9,
+                                                     KIND_ORDER.index(k)))
     kind_field = ",".join(LETTER[k] for k in kinds)
     names_full = [n for n in union(tuple(full(x)), tuple(full(y))) if n not in drop]
     names_half = [n for n in union(tuple(half(x)), tuple(half(y))) if n not in drop and n not in names_full]
@@ -124,7 +137,8 @@ def merge(path_a: Path, path_b: Path, out: Path, drop: set[str], notes: list[str
         raise SystemExit(f"hai bản lệch dòng: {sorted(set(a) ^ set(b))}")
     lines = [f"# {note}" for note in notes]
     rows = {seq: f"{seq} H" for seq in headings(path_a)}
-    rows.update({seq: merge_row(a[seq], b[seq], drop) for seq in a})
+    written = written_kinds(path_a)
+    rows.update({seq: merge_row(a[seq], b[seq], drop, written.get(seq)) for seq in a})
     lines += [rows[seq] for seq in sorted(rows)]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -44,10 +44,15 @@ LEASE_STALE_SECONDS = 180.0
 # về NARRATOR (bắt được bằng scripts/model_eval/gold_replay.py: 10/10 câu nội tâm chương 344-347 thành NARRATOR dù
 # đáp án đúng); bản vá giữ người đang nghĩ, chỉ thought không ai nhận mới về người kể, và viết lại test 03-08 khoá hành
 # vi cũ. Thử chung ba bản trên bản sao của cây 149cb67: chỉ đỏ hai test môi trường (doctor, one_click_startup).
+#
+# Cùng ranh giới, 20-09 01:1x: ngoặc góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941
+# dòng thoại, chỉ 286 đoạn ra dialogue). `normalize_text` đổi 「」 thành “”. Chia đoạn lại cả 915 + 478 chương của hai
+# cuốn đang sản xuất trước/sau: 0 chương đổi (không có 「 nào). Thử chung bốn bản trên bản sao của cây 3fafd29.
 ORDER: tuple[str, ...] = (
     "patch_the_better_known_voice_keeps_its_pin.py",
     "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
     "patch_a_thought_keeps_its_thinker.py",
+    "patch_a_corner_bracket_is_a_quote.py",
 )
 
 APPLIED = (

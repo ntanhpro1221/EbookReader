@@ -96,3 +96,25 @@ hai người khác nhau. gold_replay: 49 lượt generator + 49 critic, không L
 | nise 83 "Tôi là Silk" | + `NPC*~` | B: thí sinh một lần - NPC chấp nhận được nửa điểm, dù cô tự xưng tên ngay trong câu |
 | nise 58, 63 | + `UNKNOWN~` | A: có manh mối (kỵ sĩ hộ tống) - quy tắc 5 |
 | cảm xúc, nhịp, âm lượng, cường độ | hợp hai tập | lệch nhỏ, không câu nào mâu thuẫn (giao 100%) |
+
+## Vòng 5 (20-09 01:1x): cả hai làm mù TMA 407 (cuốn 2, chương 408) và Nageki 20 (truyện mới)
+
+110 câu có người nói: người nói ưu tiên trùng **100%**, tương thích 100%; loại trùng hệt 285/285; cảm xúc ưu tiên 92,9% /
+96,5%, giao 100%. gold_replay: Nageki 41 + 41 lượt, điểm replay 100; TMA 407 19 + 19 lượt, điểm replay 92,3 - 6 câu nội
+tâm bị host ép NARRATOR (đã có `patch_a_thought_keeps_its_thinker.py` trong hàng chờ) và **407:78 bị luật host
+`_explicit_speaker_attribution` đổi BEYER thành Lucien** (tên đầu câu kể sau: "Lucien còn chưa kịp làm gì khác, một giọng
+nói... vọng đến") - lỗi sản xuất mới, xem `docs/LLM_EVAL.md`.
+
+| câu | kết luận | lý do |
+|---|---|---|
+| 407:3-16 ghi chép rời | **A sai**: + THANOS đủ | B: 406 "ghi chép không hoàn chỉnh do Thanos để lại", 22 "ghi chép của Vua Mặt Trời Thanos" - A đọc sót chương trước |
+| 407:78, 83 | + RUDOLF II~ | B: người trong xác Beyer là Hoàng đế Rudolf II (lộ ở chương 409); tên chương này gọi đủ điểm - quy tắc 13 mới |
+| 407:80 "Beyer?" | + SOPHIA~ | B: Lucien là người nhìn, nhưng Sophia có mặt - chấp nhận nửa điểm |
+| 407:63, 69 | **giữ A**: SOPHIA~ (B cho đủ) | đoạn kể NGÔI BA dài ("Nghe vậy, Sophia chợt... Cô nặng nề ngã xuống đất") chỉ có một câu tự nhủ ở đầu/cuối: đọc cả đoạn bằng giọng Sophia là sai giọng cho phần kể về chính cô. Quy tắc 4 bổ sung |
+| Nageki 178 "Kill…" | + NARRATOR~ | B: tiếng rống của sinh vật là của nó - quy tắc 8 |
+| Nageki 163 "nguyên liệu" | + SITRI SMART~ | bí danh |
+| Nageki 102 | giữ SITRI~ của A | vô hại: host luôn đưa narration về NARRATOR |
+
+Góp ý luật của B (đều nhận): quy tắc 4 bỏ chữ "ở hiện tại" (Nageki kể ở quá khứ mà các câu kêu thầm vẫn là tiếng lòng);
+quy tắc 9 nói rõ nội tâm bị khoá D -> `T,D`, người nghĩ đủ điểm; quy tắc 7 nói rõ tác giả được gọi tên ở chương khác
+hay trích dẫn thoáng qua; quy tắc 13 mới cho nhập xác/cải trang.

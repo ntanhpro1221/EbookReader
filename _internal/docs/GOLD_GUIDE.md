@@ -27,9 +27,11 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
    Chỉ khi thật không biết ai nghĩ mới là NARRATOR.
 4. **Lời kể có câu tự nhủ trực tiếp** ("Ả khốn này!", "Không ổn!", "...V-Vãi.", "Chẳng lẽ...?" ở ngôi của nhân vật):
    chấp nhận `N,T` với `NARRATOR,<người nghĩ>` - đều đủ điểm (dự án cho phép đổi narration thành thought khi là tiếng
-   nói nội tâm trực tiếp; không bắt buộc). Truyện ngôi thứ nhất kể ở hiện tại: phản ứng TỨC THỜI của người kể (câu
-   hỏi tu từ, "Thôi chết.", "Hmph", nói thầm với người trước mặt) là tiếng lòng -> `N,T`; câu giải thích bối cảnh hay
-   nói với người đọc ("mọi người hiểu mà đúng không?") vẫn chỉ `N` (vòng 4).
+   nói nội tâm trực tiếp; không bắt buộc). Truyện ngôi thứ nhất (kể ở hiện tại hay quá khứ): phản ứng TỨC THỜI của
+   người kể trong cảnh (câu hỏi tu từ, "Thôi chết.", "Hmph", nói thầm với người trước mặt) là tiếng lòng -> `N,T`; câu
+   giải thích bối cảnh hay nói với người đọc ("mọi người hiểu mà đúng không?") vẫn chỉ `N` (vòng 4-5). Truyện ngôi ba:
+   đoạn phần lớn là lời kể VỀ nhân vật ("Nghe vậy, Sophia... Cô ngã xuống...") chỉ có một câu tự nhủ ở đầu/cuối -> `N,T`
+   nhưng người nghĩ chỉ `~` (đọc cả đoạn bằng giọng nhân vật là sai giọng cho phần kể về chính họ; vòng 5).
 5. **Nhân vật không tên nhưng phân biệt được** (người hầu, lính gác, "một người lùn", giọng máy): `NPC*`.
    **`UNKNOWN` đủ điểm CHỈ khi không có manh mối gì** (đúng lời prompt của dự án: "Chỉ dùng UNKNOWN khi hoàn toàn
    không có dấu hiệu phân biệt người nói"); có manh mối thì `UNKNOWN~` (vòng 2, 20-09). Người CHƯA được xác định lúc nói mà cùng chương sau đó gọi tên (dù là
@@ -46,7 +48,8 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
      đọc/nhìn thấy nửa điểm;
    - văn bản được một nhân vật ĐỌC TO bằng giọng của mình ("khàn khàn giọng đọc lên", giọng máy đọc tiêu đề kèm dấu
      "?", đang viết nhận xét): người đọc và NARRATOR đủ điểm, tác giả nửa điểm.
-   Người ký/nhận văn bản không được điểm. Người viết không tên: `NPC*~`. Thư gửi CHO X thì X không phải người nói.
+   Người ký/nhận văn bản không được điểm. Người viết không tên: `NPC*~`. Tác giả chỉ được gọi tên ở chương khác hoặc qua
+   một câu trích thoáng qua ("ghi chép của Vua Mặt Trời Thanos"): tên đủ điểm, `NPC*~` (vòng 5). Thư gửi CHO X thì X không phải người nói.
 8. **Ngoặc kép nhấn mạnh / tiếng tượng thanh trong ngoặc** ("mỉm cười", "quan sát", "Rầm!", "Bùm!"): parser khoá là
    thoại nhưng thực chất là chữ của người kể → `NARRATOR` đủ điểm. Từ/cụm nằm GIỮA câu kể mà gốc là lời của ai
    ("quan sát" của Fernando, câu đáp của Lucien) thì người ấy chỉ nửa điểm (đổi giọng giữa câu kể là sai). Từ trong
@@ -55,6 +58,7 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
 9. **Quy tắc 4 thắng quy tắc 10** khi parser cắt vụn (vd đuôi của một câu nghĩ bị khoá N: "này của mình!'"): cho `N,T`.
    Chỉ khi host thật sự khoá ngữ nghĩa (gold_replay báo LỆCH LUẬT) mới giữ N.
    **Thứ tự loại**: loại THẬT đứng trước (`N,T` cho lời kể bị parser khoá thành thought), kể cả khi parser khoá loại kia.
+   Câu NGHĨ bị khoá thoại (có lời dẫn "Trong đầu tôi chỉ nghĩ:" mà nằm trong “”): `T,D`, người nghĩ đủ điểm (vòng 5).
 10. **Parser khoá sai loại** (nguồn hỏng dấu nháy làm cả đoạn lời kể thành T; thoại nằm giữa dòng lời kể nên bị khoá N):
    giữ loại bị khoá là đủ điểm (model không được phép đổi), người nói = người đọc hợp lý nhất theo loại bị khoá (khoá N
    thì NARRATOR; khoá T mà thực chất là lời kể thì NARRATOR, người nghĩ `~`). Ghi chú ở đầu file.
@@ -63,6 +67,9 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
    danh hiệu trơn khi đã biết tên ("THÁNH NỮ" cho Magali) - prompt dự án cấm chúng, và nhãn danh hiệu thành giọng thứ
    hai của cùng người (vòng 4). Tên viết nhầm trong chính bản dịch ("Eris" cho Eria) được nửa điểm ở câu nó dẫn.
 12. **Không** cho điểm tên nổi tiếng chỉ vì họ có trong danh sách đã biết - đây là lỗi model hay mắc nhất.
+13. **Nhập xác, cải trang, danh tính ẩn**: tên mà CHƯƠNG NÀY gọi người nói đủ điểm; danh tính thật chỉ lộ ở chương sau
+   nửa điểm (Beyer / Rudolf II ở 407). Nếu chính chương đã lộ danh tính thật trước câu nói thì danh tính thật đủ điểm.
+   Giọng của người bị nhập xác (xác hay hồn) là câu hỏi mở cho chủ sách (vòng 5).
 
 ## Cảm xúc, cường độ, nhịp, âm lượng
 

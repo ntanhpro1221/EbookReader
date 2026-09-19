@@ -1,0 +1,92 @@
+# Đáp án chuẩn chương 408 ("Trợ lý" thí nghiệm), Text_Tmp/407.txt. Vòng 5 (20-09): HỢP NHẤT hai bản làm mù độc lập
+# (A = Claude, B = agent review) bằng merge_gold.py rồi phân xử - ADJUDICATION.md. Người nói ưu tiên trùng 100%.
+# 3-16: các trang ghi chép rời của THANOS (406: "ghi chép không hoàn chỉnh do Thanos để lại"; 22 "ghi chép của Vua Mặt
+# Trời Thanos") mà Lucien đọc thầm - quy tắc 7: NARRATOR, tác giả đủ; người đọc LUCIEN~; chương chỉ gọi "người viết" nên NPC*~.
+# 78, 83: người trong xác Hoàng tử BEYER thật ra là Hoàng đế RUDOLF II (lộ ở chương 409) - tên chương này gọi đủ điểm,
+# danh tính thật nửa điểm (quy tắc 13). 63, 69: đoạn kể NGÔI BA dài có câu tự nhủ - SOPHIA chỉ nửa điểm (quy tắc 4).
+0 H
+1 N
+2 N
+3 D NARRATOR,THANOS,NPC*~,LUCIEN~ sarcastic,angry,neutral 0-1 normal normal u
+4 D NARRATOR,THANOS,NPC*~,LUCIEN~ sarcastic,angry,neutral 0-1 normal normal u
+5 D NARRATOR,THANOS,NPC*~,LUCIEN~ afraid,neutral 0-2 normal,fast normal,soft u
+6 D NARRATOR,THANOS,NPC*~,LUCIEN~ afraid,neutral 0-1 normal normal u
+7 D NARRATOR,THANOS,NPC*~,LUCIEN~ afraid,surprised,neutral 0-1 normal normal u
+8 D NARRATOR,THANOS,NPC*~,LUCIEN~ excited,surprised,neutral 0-1 normal normal u
+9 D NARRATOR,THANOS,NPC*~,LUCIEN~ afraid,angry,neutral,sarcastic 0-2 normal normal u
+10 D NARRATOR,THANOS,NPC*~,LUCIEN~ neutral,sad,tired 0-1 normal normal u
+11 D NARRATOR,THANOS,NPC*~,LUCIEN~ neutral,sad,tired 0-1 normal normal u
+12 D NARRATOR,THANOS,NPC*~,LUCIEN~ excited,surprised,neutral,happy 0-2 normal normal u
+13 D NARRATOR,THANOS,NPC*~,LUCIEN~ neutral,excited 0-1 normal normal u
+14 D NARRATOR,THANOS,NPC*~,LUCIEN~ surprised,neutral,afraid 0-1 normal normal,soft u
+15 D NARRATOR,THANOS,NPC*~,LUCIEN~ sad,surprised,neutral 0-1 normal,slow normal,soft u
+16 D NARRATOR,THANOS,NPC*~,LUCIEN~ excited,surprised,neutral,afraid 0-2 normal,slow normal u
+17 N
+18 N
+19 T LUCIEN neutral,surprised 0-1 normal normal,soft m
+20 N NARRATOR neutral,sad 0-1 normal normal u
+21 N
+22 N
+23 N
+24 N
+25 N
+26 D LUCIEN neutral 0-1 normal normal m
+27 D SOPHIA neutral,angry 0-1 normal normal,soft f
+28 N NARRATOR neutral,angry 0-1 normal normal u
+29 T SOPHIA angry,sarcastic 1-2 normal,fast normal f
+30 N NARRATOR neutral,angry,sad 0-1 normal normal u
+31 D SOPHIA surprised,afraid 1-2 normal,fast normal f
+32 N
+33 N NARRATOR neutral,afraid 0-1 normal normal u
+34 T SOPHIA afraid 1-2 normal,fast normal,soft f
+35 D LUCIEN neutral,sarcastic 0-1 normal normal m
+36 N
+37 N NARRATOR neutral,angry 0-1 normal normal u
+38 N NARRATOR neutral,angry 0-1 normal normal u
+39 D SOPHIA neutral,angry,afraid 0-1 normal normal f
+40 N NARRATOR neutral,afraid 0-1 normal normal u
+41 N
+42 N NARRATOR neutral,afraid 0-1 normal normal u
+43 N
+44 D LUCIEN neutral 0-1 normal normal m
+45 T SOPHIA surprised,neutral 0-1 normal normal,soft f
+46 N NARRATOR neutral,surprised 0-1 normal normal u
+47 D LUCIEN neutral 0-1 normal normal,soft m
+48 N NARRATOR neutral,surprised 0-1 normal normal u
+49 N
+50 D SOPHIA afraid,surprised,angry 1-2 normal,fast normal f
+51 D LUCIEN neutral 0-1 normal normal m
+52 N
+53 N NARRATOR neutral,afraid,angry 0-1 normal normal u
+54 D LUCIEN neutral,sarcastic 0-1 normal normal m
+55 N
+56 N NARRATOR neutral,afraid 0-1 normal normal u
+57 D LUCIEN neutral 0-1 normal normal m
+58 N
+59 N NARRATOR neutral,afraid 0-1 normal normal u
+60 D LUCIEN neutral,surprised 0-1 normal normal m
+61 N
+62 D NARRATOR,UNKNOWN~ neutral,surprised 0-1 normal normal u
+63 N,T NARRATOR,SOPHIA~ neutral,happy,tired 0-1 normal normal u
+64 N
+65 N
+66 N
+67 N NARRATOR neutral,afraid 0-1 normal normal u
+68 D LUCIEN neutral 0-1 normal normal m
+69 N,T NARRATOR,SOPHIA~ angry,neutral 0-2 normal normal u
+70 N NARRATOR neutral,afraid,angry 0-1 normal normal u
+71 T SOPHIA angry 1-2 normal,fast normal f
+72 N
+73 N
+74 D SOPHIA surprised,tired,afraid 1-2 normal,fast normal f
+75 N NARRATOR neutral,surprised 0-1 normal normal u
+76 T LUCIEN surprised,neutral,afraid 0-1 normal,fast normal,soft m
+77 N
+78 D BEYER,NPC*~,RUDOLF II~ neutral,surprised 0-1 normal normal m
+79 N
+80 D LUCIEN,SOPHIA~ surprised 0-1 normal normal m
+81 N
+82 N
+83 D BEYER,RUDOLF II~ happy,excited,neutral 0-1 normal normal m
+84 N NARRATOR neutral,surprised,afraid 0-1 normal normal u
+85 D SOPHIA surprised,afraid,happy 1-2 normal normal,soft f
