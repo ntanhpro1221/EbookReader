@@ -2,7 +2,7 @@
 
 Chạy: python patch_a_corner_bracket_is_a_quote.py <root>
 
-## Vì sao (20-09, 01:0x)
+## Vì sao (20-09, 00:4x)
 
 Bản dịch light novel Nhật trên Hako hay giữ ngoặc góc của bản gốc: 「Ừ. Hiểu rồi.」 thay cho “Ừ. Hiểu rồi.”. Bộ tách đoạn
 chỉ biết “…”, "…" và ‘…’, nên mọi câu thoại trong ngoặc góc bị khoá là LỜI KỂ - người kể đọc hết, model phân tích không

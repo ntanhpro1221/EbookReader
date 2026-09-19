@@ -45,14 +45,20 @@ LEASE_STALE_SECONDS = 180.0
 # đáp án đúng); bản vá giữ người đang nghĩ, chỉ thought không ai nhận mới về người kể, và viết lại test 03-08 khoá hành
 # vi cũ. Thử chung ba bản trên bản sao của cây 149cb67: chỉ đỏ hai test môi trường (doctor, one_click_startup).
 #
-# Cùng ranh giới, 20-09 01:1x: ngoặc góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941
+# Cùng ranh giới, 20-09 00:4x: ngoặc góc 「…」 của bản dịch light novel Nhật bị khoá là lời kể (Yamiyo no Hotaru: 30.941
 # dòng thoại, chỉ 286 đoạn ra dialogue). `normalize_text` đổi 「」 thành “”. Chia đoạn lại cả 915 + 478 chương của hai
 # cuốn đang sản xuất trước/sau: 0 chương đổi (không có 「 nào). Thử chung bốn bản trên bản sao của cây 3fafd29.
+#
+# Cùng ranh giới, 20-09 01:1x: luật host "tên đầu câu kể sau câu thoại là người nói" (`_explicit_speaker_attribution`)
+# đè câu trả lời đúng ở TMA 378:25 ("Lo lắng phu nhân Tess..." -> "Lo") và 407:78 ("Lucien còn chưa kịp làm gì khác, một
+# giọng nói... vọng đến" -> Lucien). Thêm ~24 chữ Việt không dấu vào danh sách mở-câu, và im khi người được nêu tên "chưa
+# kịp đáp/làm gì". Trên đáp án chuẩn: 50/52 -> 50/50 lần khoá đều đúng. Thử chung năm bản: chỉ đỏ hai test môi trường.
 ORDER: tuple[str, ...] = (
     "patch_the_better_known_voice_keeps_its_pin.py",
     "patch_a_name_at_the_start_of_a_sentence_is_still_a_name.py",
     "patch_a_thought_keeps_its_thinker.py",
     "patch_a_corner_bracket_is_a_quote.py",
+    "patch_the_name_after_a_quote_is_not_always_its_speaker.py",
 )
 
 APPLIED = (
