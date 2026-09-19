@@ -65,7 +65,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("project", type=Path)
     parser.add_argument("--segment-only", action="store_true")
+    parser.add_argument("--no-think", action="store_true",
+                        help='gửi "think": false trong mọi yêu cầu Ollama (dòng qwen3/qwen3.5 nghĩ trước và trả 0 ID)')
     args = parser.parse_args(argv)
+    if args.no_think:
+        original = OllamaBookAnalyzer._stream_json_response
+
+        def without_thinking(self, request, **kwargs):
+            return original(self, {**request, "think": False}, **kwargs)
+
+        OllamaBookAnalyzer._stream_json_response = without_thinking
 
     paths = ProjectPaths.build(args.project.resolve())
     lock = ProjectRunLock(paths.root / ".worker.lock")
