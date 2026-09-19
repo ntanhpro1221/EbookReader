@@ -10,7 +10,8 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
     seq kind speaker emotion intensity pace volume gender
 
 - `kind`: N (lời kể), D (thoại), T (nội tâm); tập như `T,N` khi chấp nhận cả hai, cái đầu là ưu tiên. `H` = tiêu đề
-  chương (không chấm). Dòng chỉ `seq N` = NARRATOR neutral 0-1 normal normal u.
+  chương (không chấm) - chỉ đoạn 0; nguồn lặp lại tiêu đề ở đoạn 1 thì đoạn 1 là `1 N` như lời kể thường (vòng 6).
+  Dòng chỉ `seq N` = NARRATOR neutral 0-1 normal normal u.
 - `speaker`: các lựa chọn cách nhau dấu phẩy, đều đủ điểm; hậu tố `~` = nửa điểm (chấp nhận nhưng kém hơn);
   `NPC*` = bất kỳ NPC_LOCAL nào. Tên VIẾT HOA, tên có dấu cách được (`THẦN HƠI NƯỚC`).
 - `emotion`, `pace`, `volume`: TẬP chấp nhận được, cái đầu là ưu tiên (dùng làm đáp án khi dạy model).
@@ -41,7 +42,9 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
    dùng `NPC*` chỉ được nửa điểm - không thì mỗi chương một giọng (vòng 3).
 6. **Câu cả đám cùng nói/niệm**: `NPC*` đủ điểm (`UNKNOWN~`). Người được NÊU TÊN trong lời dẫn của câu ấy ("Harold và
    những người lùn khác cầu nguyện", "dẫn dắt Myrna... đáp lại") đủ điểm; người có mặt trong cảnh nhưng không được nêu
-   trong lời dẫn thì nửa điểm (vòng 1-2).
+   trong lời dẫn thì nửa điểm (vòng 1-2). Lời dẫn nêu HAI người cho MỘT câu mà chỉ một người nói ("Công tước James và
+   pháp sư Barek... nhỏ giọng thở dài", "Tamaki và Shirawakamaru vội vàng đỡ"): cả hai đủ điểm, người có bằng chứng hơn
+   (lối xưng hô, mạch đối đáp) đứng trước (vòng 6).
 7. **Văn bản viết** (thư, ghi chú, nhận xét đang viết, câu trích luận án, tựa sách, lời bài hát, khế ước): `NARRATOR`
    đủ điểm. Hai trường hợp (vòng 3):
    - văn bản chỉ được NHÌN THẤY / trích ra: NARRATOR và TÁC GIẢ đủ điểm (khế ước của "thần" -> giọng thần), người đang
@@ -61,7 +64,8 @@ tranh chấp và kết luận ghi ở `scripts/model_eval/gold/ADJUDICATION.md`.
    Câu NGHĨ bị khoá thoại (có lời dẫn "Trong đầu tôi chỉ nghĩ:" mà nằm trong “”): `T,D`, người nghĩ đủ điểm (vòng 5).
 10. **Parser khoá sai loại** (nguồn hỏng dấu nháy làm cả đoạn lời kể thành T; thoại nằm giữa dòng lời kể nên bị khoá N):
    giữ loại bị khoá là đủ điểm (model không được phép đổi), người nói = người đọc hợp lý nhất theo loại bị khoá (khoá N
-   thì NARRATOR; khoá T mà thực chất là lời kể thì NARRATOR, người nghĩ `~`). Ghi chú ở đầu file.
+   thì NARRATOR; khoá T mà thực chất là lời kể thì NARRATOR, người nghĩ `~`). Ghi chú ở đầu file. Lời lẩm bẩm không
+   ngoặc nằm trong đoạn kể bị khoá N ("Mọi kế hoạch tan tành. Iruka lẩm bẩm") cũng chỉ NARRATOR (Yamiyo 155:43).
 11. **Tên gọi khác của cùng một người** (Cẩn Huyên / Diệp Cẩn Huyên, Ray / Ray Warner, Douglas / Derrick Douglas): liệt kê
    các dạng, đều đủ điểm. KHÔNG tính dạng có tiền tố vai vế/xưng hô ("CHÚ LƯU ĐẠT", "NGÀI X", "GIÁO SƯ GLAST") hay
    danh hiệu trơn khi đã biết tên ("THÁNH NỮ" cho Magali) - prompt dự án cấm chúng, và nhãn danh hiệu thành giọng thứ

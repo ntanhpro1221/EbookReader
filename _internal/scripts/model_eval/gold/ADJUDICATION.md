@@ -97,7 +97,7 @@ hai người khác nhau. gold_replay: 49 lượt generator + 49 critic, không L
 | nise 58, 63 | + `UNKNOWN~` | A: có manh mối (kỵ sĩ hộ tống) - quy tắc 5 |
 | cảm xúc, nhịp, âm lượng, cường độ | hợp hai tập | lệch nhỏ, không câu nào mâu thuẫn (giao 100%) |
 
-## Vòng 5 (20-09 01:1x): cả hai làm mù TMA 407 (cuốn 2, chương 408) và Nageki 20 (truyện mới)
+## Vòng 5 (20-09 00:5x): cả hai làm mù TMA 407 (cuốn 2, chương 408) và Nageki 20 (truyện mới)
 
 110 câu có người nói: người nói ưu tiên trùng **100%**, tương thích 100%; loại trùng hệt 285/285; cảm xúc ưu tiên 92,9% /
 96,5%, giao 100%. gold_replay: Nageki 41 + 41 lượt, điểm replay 100; TMA 407 19 + 19 lượt, điểm replay 92,3 - 6 câu nội
@@ -118,3 +118,20 @@ nói... vọng đến") - lỗi sản xuất mới, xem `docs/LLM_EVAL.md`.
 Góp ý luật của B (đều nhận): quy tắc 4 bỏ chữ "ở hiện tại" (Nageki kể ở quá khứ mà các câu kêu thầm vẫn là tiếng lòng);
 quy tắc 9 nói rõ nội tâm bị khoá D -> `T,D`, người nghĩ đủ điểm; quy tắc 7 nói rõ tác giả được gọi tên ở chương khác
 hay trích dẫn thoáng qua; quy tắc 13 mới cho nhập xác/cải trang.
+
+## Vòng 6 (20-09 01:0x): cả hai làm mù TMA 419 (chương 420) và Yamiyo no Hotaru 155 (truyện ngoặc 「」)
+
+Yamiyo làm trên bộ tách đoạn SAU `patch_a_corner_bracket_is_a_quote.py` (54/107 đoạn là thoại; trước bản vá là 0). 113 câu
+có người nói: người nói ưu tiên trùng **100%**, tương thích 100%; loại trùng hệt 215/215; cảm xúc ưu tiên 93,6% / 84,0%,
+giao 100%. Mọi chỗ lệch là bí danh (HOTOYA TAMAKI, AKOU/AKO MURASAKI do B đếm trong kho) và nửa điểm:
+
+| câu | kết luận | lý do |
+|---|---|---|
+| 419:47 | **A thua**: BAREK~ -> đủ | B: lời dẫn nêu cả hai ("Công tước James và pháp sư bậc bảy Barek... nhỏ giọng thở dài"); quy tắc 6 bổ sung |
+| 419:69-70 danh sách "cách chết ngu ngốc nhất" | + BAREK~ | B: Barek vừa nói về pháp sư chết vì điện (67) - có thể đọc như ông trích |
+| Yamiyo 80 "Ừ. … Đi thôi." | giữ IRUKA~ của A | Tamaki tự nhủ khi đứng dậy (81) nhưng câu "Ừ" cũng hợp lời Iruka |
+| bí danh | hợp hai bên | quy tắc 11 |
+
+replay TMA 419 (host hiện hành): 98,2 - **419:24, 26 ("dây chuyền lắp ráp", "tiêu chuẩn hoá", thuật ngữ trích giữa câu kể)
+bị host đổi NARRATOR thành Arthur**, người nói của đoạn văn. Lượt kiểm toàn bộ (mọi chương đáp án phát lại) đang chạy.
+Góp ý luật của B (nhận cả ba): quy tắc 6 cho lời dẫn nêu hai người, ví dụ Yamiyo 43 ở quy tắc 10, tiêu đề lặp ở đoạn 1.

@@ -1,0 +1,111 @@
+# "Yamiyo no Hotaru" file 155 ("Chap 126 (1)"). CHỈ KHỚP bộ tách đoạn sau patch_a_corner_bracket_is_a_quote.py (「」 -> “”):
+# trước bản vá cả 54 câu thoại bị khoá lời kể. Vòng 6 (20-09): HỢP NHẤT hai bản làm mù (A = Claude, B = agent review).
+# Người nói ưu tiên trùng 100%, loại 106/106. TAMAKI / HOTOYA TAMAKI; IRUKA (lang nữ Emishi); MURASAKI / AKOU / AKO
+# MURASAKI; SHIRAWAKAMARU (nam). 2, 3, 86 nói trước khi được gọi tên -> NPC*~. 43: lời lẩm bẩm bị khoá N (quy tắc 10).
+0 H
+1 N
+2 D TAMAKI,HOTOYA TAMAKI,NPC*~ neutral,sad 0-1 normal normal,soft f
+3 D IRUKA,NPC*~ neutral 0-1 normal normal f
+4 N
+5 N
+6 N NARRATOR neutral,sad 0-1 normal normal u
+7 N NARRATOR neutral,sad 0-1 normal normal u
+8 N
+9 N NARRATOR neutral,sad 0-1 normal normal u
+10 T TAMAKI,HOTOYA TAMAKI neutral,sad,afraid 0-1 normal normal,soft f
+11 N,T NARRATOR,TAMAKI~,HOTOYA TAMAKI~ sad,neutral,afraid 0-1 normal normal u
+12 T TAMAKI,HOTOYA TAMAKI sad,neutral,tender 0-1 normal,slow soft,normal f
+13 N NARRATOR sad,neutral 0-1 normal,slow normal u
+14 N NARRATOR sad,neutral 0-1 normal normal u
+15 N NARRATOR neutral,excited 0-1 normal normal u
+16 D IRUKA neutral 0-1 normal normal f
+17 D TAMAKI,HOTOYA TAMAKI surprised,afraid 1-2 fast,normal normal,loud f
+18 N NARRATOR neutral,sad 0-1 normal normal u
+19 D IRUKA tender,neutral,sarcastic 0-1 normal normal f
+20 N
+21 D IRUKA sarcastic,neutral 0-1 normal normal f
+22 N,T NARRATOR,TAMAKI~,HOTOYA TAMAKI~ neutral,surprised 0-1 normal normal u
+23 D IRUKA sarcastic,neutral 0-1 normal normal f
+24 D TAMAKI,HOTOYA TAMAKI happy,neutral,sad 0-1 normal soft,normal f
+25 N NARRATOR neutral,sarcastic 0-1 normal normal u
+26 D IRUKA sarcastic,neutral 0-1 normal normal f
+27 D TAMAKI,HOTOYA TAMAKI sad,neutral 0-1 normal,slow soft,normal f
+28 N
+29 N NARRATOR neutral,sad 0-1 normal normal u
+30 D IRUKA neutral,happy 0-1 normal normal f
+31 D TAMAKI,HOTOYA TAMAKI surprised 0-1 normal normal,soft f
+32 N
+33 D IRUKA angry,neutral 0-1 normal normal f
+34 N NARRATOR neutral,sad 0-1 normal normal u
+35 D IRUKA tender,sarcastic,happy 0-1 normal normal f
+36 N
+37 N NARRATOR neutral,sad 0-1 normal normal u
+38 D TAMAKI,HOTOYA TAMAKI neutral,sad 0-1 normal normal,soft f
+39 D IRUKA neutral,sad,sarcastic 0-1 normal normal f
+40 D TAMAKI,HOTOYA TAMAKI surprised 0-2 normal,fast normal,loud f
+41 N NARRATOR neutral,happy 0-1 normal normal u
+42 D IRUKA sad,angry,sarcastic 0-1 normal normal f
+43 N NARRATOR neutral,sad 0-1 normal normal u
+44 N NARRATOR neutral,happy 0-1 normal normal u
+45 D TAMAKI,HOTOYA TAMAKI sarcastic,neutral,surprised,tired 0-1 normal normal f
+46 N
+47 D IRUKA happy,excited 0-1 normal normal f
+48 D TAMAKI,HOTOYA TAMAKI sarcastic,tired,surprised 0-1 normal normal f
+49 N
+50 D IRUKA tender,happy 0-1 normal normal f
+51 D TAMAKI,HOTOYA TAMAKI surprised 0-1 normal normal f
+52 D IRUKA neutral,happy 0-1 normal normal f
+53 D TAMAKI,HOTOYA TAMAKI neutral,surprised 0-1 normal normal f
+54 D IRUKA neutral 0-1 normal normal f
+55 D TAMAKI,HOTOYA TAMAKI surprised,angry 2-3 fast,normal loud f
+56 N,T NARRATOR,TAMAKI~,HOTOYA TAMAKI~ neutral,sarcastic 0-1 normal normal u
+57 D IRUKA neutral,sad 0-1 normal normal f
+58 N
+59 D TAMAKI,HOTOYA TAMAKI neutral,tender 0-1 normal normal f
+60 N
+61 D IRUKA neutral,sarcastic 0-1 normal normal f
+62 N
+63 D TAMAKI,HOTOYA TAMAKI neutral,surprised 0-1 normal normal f
+64 D IRUKA angry,sarcastic 0-1 normal normal f
+65 D TAMAKI,HOTOYA TAMAKI neutral,tender 0-1 normal normal f
+66 N,T NARRATOR,TAMAKI~,HOTOYA TAMAKI~ neutral,sad 0-1 normal normal u
+67 D TAMAKI,HOTOYA TAMAKI tender,sad 0-1 normal normal,soft f
+68 D IRUKA sarcastic,happy 0-1 normal normal f
+69 D TAMAKI,HOTOYA TAMAKI angry,surprised 2-3 fast loud f
+70 N NARRATOR neutral,angry 0-1 normal normal u
+71 D IRUKA happy 0-1 normal normal f
+72 D TAMAKI,HOTOYA TAMAKI angry,sarcastic 1-2 normal,fast loud,normal f
+73 D IRUKA happy,sarcastic 0-1 normal normal f
+74 D TAMAKI,HOTOYA TAMAKI angry,surprised 1-2 fast,normal loud f
+75 N NARRATOR neutral,tired 0-1 normal normal u
+76 D TAMAKI,HOTOYA TAMAKI neutral,tender 0-1 normal normal f
+77 D IRUKA happy,sarcastic,neutral 0-1 normal normal f
+78 D TAMAKI,HOTOYA TAMAKI sarcastic,tired 0-1 normal normal,soft f
+79 N,T NARRATOR,TAMAKI~,HOTOYA TAMAKI~ neutral,sarcastic 0-1 normal normal u
+80 D TAMAKI,HOTOYA TAMAKI,IRUKA~ neutral 0-1 normal normal,soft f
+81 N
+82 D TAMAKI,HOTOYA TAMAKI neutral,tender 0-1 normal normal f
+83 D IRUKA tender,neutral 0-1 normal normal f
+84 N NARRATOR neutral,tender 0-1 normal normal u
+85 N NARRATOR neutral,tender 0-1 normal normal u
+86 D MURASAKI,AKOU MURASAKI,AKO MURASAKI,NPC*~ angry,sarcastic 1-2 normal,fast normal,loud f
+87 N
+88 D TAMAKI,HOTOYA TAMAKI afraid,sad 0-1 fast,normal normal f
+89 N
+90 N
+91 N,T NARRATOR,SHIRAWAKAMARU~ sarcastic,neutral 0-1 normal normal u
+92 N
+93 N
+94 N
+95 N NARRATOR neutral,sarcastic 0-1 normal normal u
+96 D MURASAKI,AKOU MURASAKI,AKO MURASAKI angry,sarcastic 1-2 normal,fast loud,normal f
+97 N
+98 D MURASAKI,AKOU MURASAKI,AKO MURASAKI excited,angry,neutral 1-2 fast,normal loud,normal f
+99 N NARRATOR neutral,sarcastic 0-1 normal normal u
+100 D TAMAKI,HOTOYA TAMAKI,SHIRAWAKAMARU~ neutral,tired 0-1 normal,slow normal,soft f
+101 D SHIRAWAKAMARU,TAMAKI~,HOTOYA TAMAKI~ sarcastic,neutral,tired 0-1 normal normal m
+102 N
+103 D MURASAKI,AKOU MURASAKI,AKO MURASAKI,NARRATOR~ surprised,afraid 2-3 fast loud f
+104 D TAMAKI,HOTOYA TAMAKI,SHIRAWAKAMARU surprised,afraid 1-2 fast loud f
+105 N NARRATOR neutral,surprised 0-1 normal normal u
+106 N
