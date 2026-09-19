@@ -1,0 +1,134 @@
+Chương 422 - Lời bình xét đầu tiên của Lucien
+
+
+Sau trận tuyết rơi, bầu trời quang đãng. Ánh nắng chiếu lên sưởi ấm cơ thể con người.
+
+“Đùng, đùng, đùng.” Tiếng bước chân nặng nề của con golem thép vang lên trên hành lang. Kế đó, cửa mở ra, với hai mắt lóe ánh đỏ, nó cất giọng lành lạnh như kim loại: “Chủ nhân, tôi đã lấy được sáu luận án tương tự do tác giả nộp lên trước đây cùng với đánh giá của các ủy viên.”
+
+Đây là một trong những lợi ích khi trở thành thành viên của Hội đồng Xét duyệt Arcana. Cậu không cần phải tốn một điểm arcana nào cũng có thể tìm đọc được các luận án và kết quả đánh giá. Điều này là để nhằm khuyến khích việc nghiên cứu sâu hơn về arcana và đảm bảo thái độ thận trọng khi viết đánh giá. Hơn nữa, sẽ thật buồn cười nếu một thành viên của Hội đồng Xét duyệt lại phải tự bỏ điểm arcana của mình ra để đổi lấy những luận án tương tự.
+
+Nhận lấy xấp giấy dày cộm, Lucien xua tay bảo con golem thép ra cửa canh gác, sau đó bắt đầu tự mình đọc từng luận án.
+
+Từ những luận án này, có thể thấy tác giả tên Levski đã đào sâu nghiên cứu và hoàn thiện hình học phi Tháp. Tính đến thời điểm cho ra luận án mới nhất này, ông đã xây dựng nên một hệ hình học hoàn toàn mới dựa trên năm tiên đề, bốn định đề của hình học Tháp cùng giả thuyết tiền đề “qua một điểm nằm ngoài một đường thẳng, có thể vẽ được ít nhất hai đường thẳng song song với đường thẳng cho trước”.
+
+‘Không ngờ lại có người tự mình suy ra được hình học Lobachevsky…’[note62973] Lucien thầm nhủ.
+
+Hệ hình học mới này chính là hệ hình học phi Euclid đầu tiên xuất hiện trên Trái Đất được Lobachevsky đề xuất. Trước thời điểm đưa ra giả thuyết về việc “ít nhất vẽ được hai đường thẳng song song” và đúc kết nên hệ hình học mới, ông vẫn là một nhà toán học trẻ tuổi nổi tiếng. Nhưng sau khi hệ hình học này được đề xuất, ông đã phải chịu sự thờ ơ, khinh miệt, vu khống và lăng mạ trong suốt cả quãng đời còn lại của mình, đồng thời bị rất nhiều nhà toán học có thẩm quyền phớt lờ hoặc chỉ trích. Ngay cả “Vua Toán Học” Gauss,[note62974] dù tán đồng với hình học của Lobachevsky, cũng chỉ chọn cách im lặng vì sợ phải đối mặt với sự bất mãn và phản đối của toàn bộ giới học thuật.
+
+Dù hoàn cảnh khốn khổ như vậy, Lobachevsky không hề bỏ cuộc mà vẫn nỗ lực để sinh tồn và phát triển hệ hình học mới của mình. Thậm chí trước khi qua đời một năm, ông còn hoàn thiện thêm một hệ hình học mới khác. Đáng tiếc thay, đến tận khi chết, ông vẫn không thấy được ánh sáng của bình minh, để rồi chết đi trong trầm cảm, đau đớn và mù lòa.
+
+Phải mãi đến hơn một thập kỷ sau khi ông qua đời, các nhà toán học khác chứng minh được hình học mới của ông là đúng trên các bề mặt cong đặc biệt, phát kiến này mới nhận được sự quan tâm nghiên cứu và những lời khen ngợi muộn màng từ giới học thuật.
+
+Những nghiên cứu như vậy đối với sự phát triển hiện tại của arcana xem chừng không có nhiều giá trị, mà nó cũng chẳng giúp cải thiện được sức mạnh ma thuật. Tuy nhiên, kỳ thực, khi arcana và ma thuật tiếp tục được khám phá và tiến vào những lĩnh vực như thời gian, không gian, vũ trụ, v.v., nếu chỉ có những công cụ toán học như hiện tại, chúng ta sẽ rơi vào thế tiến thoái lưỡng nan vì chúng không thể mô tả chính xác cũng như giúp giải quyết những vấn đề thực tiễn. Tới lúc đó, sự phát triển của toán học là cần thiết để cung cấp các công cụ mới.
+
+Chẳng hạn, trên Trái Đất, một hệ hình học phi Euclid khác gọi là hình học Riemann[note62975] với tiền đề “qua một điểm nằm ngoài một đường thẳng, không tồn tại đường thẳng nào song song với đường thẳng cho trước” chính là nền tảng toán học cho Thuyết tương đối rộng để giải thích các vấn đề về không – thời gian. Và hình học Lobachevsky cũng vậy, nó là công cụ để con người áp dụng vào việc nghiên cứu vũ trụ.
+
+Nếu hình học Tháp (hình học Euclid) là trải nghiệm và nhận thức trực quan của con người về thế giới, thì hai hệ hình học phi Euclid kia lại gần với thực tế khách quan – Thực chất cả ba hệ hình học này chỉ khác nhau về độ cong.
+
+Lucien thở dài. Đối với thế giới ma thuật, nơi mà việc cải thiện nhận thức có thể đi đôi với cải thiện sức mạnh, thì những lý thuyết có tính nổi loạn và lật đổ trong lĩnh vực toán học, thứ mà hiện chỉ được sử dụng thuần túy như một công cụ, sẽ bị đối xử khắc nghiệt và bảo thủ hơn, giống như những kết quả đánh giá thế này:
+
+“Một suy luận ngớ ngẩn cùng một kết quả vô lý. Tôi nghĩ tác giả nên ngẩng đầu mà nhìn ra ngoài cửa sổ và quan sát thế giới hiện thực… Theo tôi, luận án này không thể vượt qua xét duyệt.”
+
+“…Đây là một luận án đầy những sai lầm, vô giá trị, không thể vượt qua xét duyệt.”
+
+“…Theo tôi, cách tốt nhất để xử lý những thứ lảm nhảm kỳ quặc và chẳng ai hiểu được này là ném nó vào lò sưởi, để cho nó thực hiện vai trò của nó trong đấy. Hiển nhiên không qua.”
+
+…
+
+Lucien vừa đọc vừa lắc đầu. Mặc dù cậu cũng từng gặp phải trường hợp luận án của mình bị đánh giá thấp, tuy nhiên tiêu chuẩn đánh giá cũng như ngữ điệu của những ngôn từ được sử dụng vẫn ở mức hợp lý. Bên cạnh đó, họ đánh giá thấp chủ yếu là bởi vì không hiểu được luận án hoặc là không thể xác minh kết quả bằng thí nghiệm, chứ không như kết quả xét duyệt của những luận án này, hoặc là trực tiếp tấn công, vu khống và bôi nhọ tác giả, hoặc là xuyên tạc nội dung của luận án để chỉ trích. Thay vì tiến hành bàn luận vấn đề, họ lại chỉ nhìn vào mỗi định đề tiền đề, diễn dịch, suy lý cũng như mâu thuẫn logic của chính luận án. Điều này đã vi phạm nghiêm trọng trách nhiệm của một thành viên Hội đồng Xét duyệt.
+
+Xin phép Fernando xong, Lucien cẩn thận đọc kỹ luận án mới của Levski từ đầu đến cuối và tự mình tiến hành suy luận. Sau đó, cậu cầm bút lông lên và viết đánh giá đầu tiên dưới tư cách là thành viên của Hội đồng Xét duyệt Arcana:
+
+“Giả định táo bạo, suy luận chặt chẽ…”
+
+……
+
+Chiều muộn, được nhuộm một tầng ánh vàng rực rỡ trên nền cảnh hoàng hôn và mặt trời lặn, khung cảnh Allyn trông kinh diễm lạ thường.
+
+Trong một tòa ma tháp vươn tới mây trời, một ông già đội chiếc mũ chóp nhọn xám đặc biệt tên “Tháp” đang nhíu đôi lông mày trắng xóa và giải quyết một bài toán. Vài pháp trận phức tạp chiếm hơn nửa cái bàn chốc chốc lại sáng lên để hỗ trợ ông tính toán.
+
+“Cốc, cốc, cốc.” Đúng lúc này, trợ lý của ông gõ cửa văn phòng.
+
+Ông già chừng sáu mươi, bảy mươi tuổi, trên ngực đeo huy hiệu Arcanist cấp tám và pháp sư bậc bảy gắt gỏng nói: “Vào đi.”
+
+Trợ lý của ông là một phụ nữ trẻ xinh đẹp nhưng nghiêm nghị, trên người mặc một chiếc váy dài theo phong cách Holm bảo thủ, trong tay ôm một xấp tài liệu: “Thưa thầy, con rối arcana của thầy đã chuyển giấy tờ hôm nay đến. Xin hãy phân công ạ.”
+
+Ông già day day lông mày rồi nói: “Đưa ta xem.” Nếu các luận án không quá quan trọng hay khó khăn, ông sẽ để các học trò của mình xét duyệt.
+
+Người phụ nữ trẻ xinh đẹp nhưng vô cảm kia bước lên và đặt xấp tài liệu xuống phía bên phải ông già.
+
+Cầm xấp giấy lên, ông già bắt đầu đọc lướt qua tiêu đề. Đột nhiên, “rầm” một tiếng, ông đập mạnh xuống bàn. “Levski lại nộp lên cái hình học tưởng tượng của mình nữa rồi! Đám viên chức của Cục Quản lý Pháp sư đều mộng du đi làm hết cả rồi à? Tại sao lại cho phép hắn nộp luận án này? Chẳng phải đã bảo thời gian của Hội đồng Xét duyệt chúng ta là vô giá rồi sao? Phải yêu cầu hội đồng cấm tiệt cái luận án này được nộp lên mãi mãi mới được!”
+
+“Samantha, em chiếu theo kết quả đánh giá lần trước của ta mà sửa lại rồi trả về đi!”
+
+……
+
+Cùng lúc đó, tại một biệt thự được coi là nơi có nhiều loài hoa nhất thế giới giữa lòng Allyn.
+
+Một người phụ nữ xinh đẹp, kiều diễm với mái tóc búi cao ném mạnh xấp giấy trong tay xuống đất. “Levski còn chưa chịu từ bỏ sao? Thật là phí phạm tài năng và cuộc đời mà! Cứ đệ trình mãi cái luận án mà nhìn sơ qua cũng thấy rõ rành rành là sai này để làm gì?”
+
+Ngẫm nghĩ một hồi, cô lại nhặt xấp giấy lên rồi lấy ra một cây bút lông đẹp đẽ với kiểu dáng đặc biệt, sau đó bắt đầu viết đánh giá. Xoẹt xoẹt vài nét, cô đã viết xong sau chưa đầy hai phút.
+
+Kế đó, cô tức giận ra lệnh cho người hầu: “Chạng vạng hai ngày sau gửi lại cho hội đồng.”
+
+Cứ để cho tên Levski ngoan cố, khùng điên và đáng ghét đó chịu đựng thêm hai ngày nữa đi!
+
+……
+
+Sau khi gửi kết quả xét duyệt về lại hội đồng, Lucien mỉm cười lấy giấy bút ra và bắt đầu viết luận án.
+
+Buổi sáng ba ngày sau, ngay khi vừa bước vào văn phòng của thầy, Lucien liền nhìn thấy Chủ tịch Ma pháp Nghị viện Douglas hiền từ trong bộ tuxedo đen quen thuộc.
+
+“Chào buổi sáng, Ngài Chủ tịch.” Cậu bối rối chào hỏi.
+
+“Ngạc nhiên khi thấy ta ở đây hả?” Douglas mỉm cười. “Ta tới gặp thầy của cậu để thảo luận về hai lý thuyết mới được công bố trên [Arcana] và [Ma Thuật] gần đây. Đó là hai lý thuyết bác bỏ thí nghiệm của ta.
+
+Những lúc như thế này, ta thường thích mặt đối mặt trò chuyện với Fernando. Nghe cậu ấy gầm lên phản đối những lý thuyết này làm ta cảm thấy dễ chịu hơn rất nhiều.”
+
+Lucien suýt thì không khép miệng vào được. Ngài Chủ tịch hóa ra cũng có mặt hóm hỉnh như vậy sao?
+
+Fernando lắc đầu với biểu cảm khó coi: “Không thể tin được là cái đống giấy lộn này lại có thể được xuất bản trên [Arcana] và [Ma Thuật]! Cho dù phong cách và tiêu chuẩn của bọn họ chưa bao giờ cao thì cũng không nên xuống thấp thế này chứ! Cái gì mà ‘vật liệu được cấu thành từ các hạt tích điện chuyển động trong môi trường Ether sẽ bị co lại nên sẽ có sai số trong phép đo khiến kết quả không chính xác’[note62976] chứ. Hắn có thí nghiệm hữu dụng nào chứng thực được sai số đấy chắc?
+
+So ra thì cái luận án mà Brook trực tiếp chất vấn hệ thống chuyển động thiên thể của ngài còn có sức thuyết phục hơn đấy. Bởi dù sao mấy cái tinh cầu đấy vẫn chỉ đang là tưởng tượng của ngài.”
+
+Douglas không hề lộ vẻ tức giận, chỉ mỉm cười nói với Lucien: “Lucien này, cậu nghĩ sao về thí nghiệm của ta và những tranh cãi, nghi ngờ liên quan đến nó?”
+
+Sao ngày nào cũng có người hỏi vấn đề này thế? Lucien cảm thấy có chút bất đắc dĩ, sau đó nói ra những điều mà mình đã dự định từ lâu: “Ngài Chủ tịch, tôi có một ý kiến nhỏ. Cốt lõi trong lý thuyết của ngài là dựa trên việc tinh cầu có thật, nhưng đó cũng là phần yếu nhất. Bởi vì chúng ta không tìm thấy tinh cầu nào cả, cho nên hệ thống lý thuyết của ngài mới thiếu đi sự hỗ trợ mạnh mẽ.”
+
+“Cậu có cách tìm thấy tinh cầu rồi à?” Fernando không chút do dự đả kích học trò mình.
+
+Lucien làm vẻ nghiêm túc và kiên định nói: “Nếu không tìm thấy tinh cầu nào, sao chúng ta không tự làm một cái?
+
+Sao chúng ta không tạo dựng một tinh cầu nhỏ quay quanh thế giới theo quỹ đạo mà chúng ta đã tính toán?
+
+Nếu nó có thể vận hành và quan sát được, điều đó chẳng phải sẽ trở thành một minh chứng thuyết phục cho hệ thống hấp dẫn sao?”
+
+Đây chính là lời đề xuất mà Lucien đã nghĩ đến trong suốt một thời gian dài kể từ khi đọc lá thư của Douglas!
+
+Cả căn phòng đột nhiên trở nên yên tĩnh, chỉ còn tiếng gió thổi làm giấy bay phần phật.
+
+……
+
+Tại Cục Quản lý Pháp sư, Levski trong chiếc áo choàng ma thuật cũ mèm gõ cửa văn phòng của Eric với vẻ vừa bồn chồn vừa mong đợi.
+
+“Sao anh đến sớm thế?” Không ngạc nhiên trước sự xuất hiện của Levski, Eric chào ông một cách cứng nhắc.
+
+Levski gật đầu, gương mặt tái đi vì gió lạnh: “Hôm qua là ngày thứ ba rồi. Nay hẳn là kết quả xét duyệt sẽ được trả về.”
+
+Eric cũng vừa mới tới chưa được bao lâu. Anh vừa dọn dẹp bàn làm việc vừa nói: “Khoảng 9 giờ 15 phút, đợt kết quả xét duyệt đầu tiên sẽ được gửi về. Anh đợi một lát đi.”
+
+“Ừ.” Levski ngồi xuống được vài phút rồi lại nhấp nhổm đứng dậy, bồn chồn đi tới đi lui. Nếu không phải vì đang ở trong Cục Quản lý Pháp sư, ông đã móc điếu thuốc lá rẻ tiền của mình ra hút rồi.
+
+Thời gian từng phút một trôi qua. Bất chợt, chiếc lồng sắt tỏa ra ánh sáng trắng sữa.
+
+“Về rồi?” Levski kích động hỏi, nhưng trong đó vẫn không giấu được chút sợ hãi.
+
+Eric cầm xấp giấy lên xem, sau đó đột nhiên ngẩng đầu, kinh ngạc nói: “Không có? Không có luận án của anh!”
+
+“Tại… Tại sao?” Levski hoang mang.
+
+……
+
+Mười lăm tầng phía trên Cục Quản lý Pháp sư, tại đại sảnh của Hội đồng Xét duyệt Arcana.
+
+Cầm trong tay ba kết quả đánh giá, sinh mệnh giả kim lâm vào mâu thuẫn.

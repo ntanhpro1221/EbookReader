@@ -1,0 +1,138 @@
+Chương 203 - Đệ trình
+
+
+“Ý tưởng sắp xếp các nguyên tố ban đầu nảy sinh như thế này. Khi mới làm quen với hệ thống nguyên tố được tái định nghĩa, tôi đã tìm về rất nhiều luận án liên quan đến tính chất của các nguyên tố. Sau đó, đối với mỗi nguyên tố, tôi viết ra các tính chất khác nhau, bao gồm cả tính chất oxit của chúng, lên trên một bộ thẻ. Để có thể dễ dàng ghi nhớ, hiểu và áp dụng, tôi bắt đầu sắp xếp các thẻ nguyên tố theo thứ tự khối lượng nguyên tử từ nhỏ đến lớn.
+
+Trong quá trình sắp xếp, tôi ngạc nhiên phát hiện, tính chất của các nguyên tố thể hiện sự lặp lại một cách tuần hoàn. Thậm chí sự tuần hoàn đó cũng tồn tại trong cả chỉ số hóa trị - một chủ đề được thảo luận trong tập san [Nguyên Tố] mới nhất, và dường như tất cả những điều này đều có liên quan đến việc sắp xếp khối lượng nguyên tử từ nhỏ đến lớn. Vì thế tôi lập tức nghĩ ra một giả thuyết táo bạo. Có thể nào tính chất của các nguyên tố là biểu hiện bên ngoài của khối lượng nguyên tử hay không? Liệu có thể thiết lập một hệ thống nguyên tố một cách logic theo khối lượng nguyên tử, để từ đó cung cấp cho chúng ta một quy luật nhằm mục đích tìm và khám phá các nguyên tố mới cũng như tạo ra ma thuật Nguyên tố mới hay không? Chính vì vậy, tôi đã tiến hành nhiều thử nghiệm đối với hệ thống này.”
+
+Vừa rồi là phần giới thiệu trong luận án nghiên cứu của Lucien. Sau khi xác nhận rằng các nguyên tố cũng có quy luật tuần hoàn, cậu mạnh dạn suy đoán rằng trong hạt nhân nguyên tử cũng có proton, electron,... Tuy nhiên, sẽ rất đáng nghi nếu cậu làm được một điều vượt quá trình độ arcana hiện tại của mình, vì thế cậu không thể đưa ra bất kỳ thí nghiệm ma thuật hay bằng chứng lý thuyết nào mà chỉ có thể tiếp tục sắp xếp các nguyên tố theo khối lượng nguyên tử.
+
+Sau phần mở đầu, Lucien căn cứ vào trật tự mà mình đã sắp xếp dựa trên tính chất vật lý và hóa học của các nguyên tố, cũng như tính chất của các hợp chất và sản phẩm giả kim của chúng để lập ra một bảng gồm 65 nguyên tố. Cuối cùng, cậu kết luận:
+
+“Từ bảng tuần hoàn này có thể thấy rõ, các nguyên tố ở mỗi hàng dọc đều có tính chất giống nhau.”
+
+…
+
+“Dựa trên sự tương đồng về tính chất, tôi không sắp xếp các nguyên tố theo khối lượng nguyên tử một cách máy móc mà để lại một số khoảng trống và điều chỉnh lại khối lượng nguyên tử của một số nguyên tố, bởi vì nếu vẫn giữ nguyên số liệu đo hiện tại thì không thể xếp được chúng vào đúng vị trí. Tới đây, tôi mạnh dạn suy đoán rằng khối lượng nguyên tử của những nguyên tố này đã bị đo sai và đề nghị các Arcanist nên đo lại bằng các phương pháp khác nhau. Kết quả cho ra sẽ tương tự như những gì tôi đã điều chỉnh, từ đó cũng có thể chứng minh tính đúng đắn của bảng tuần hoàn này.”
+
+…
+
+“Dựa trên sự tiếp nối của các tính chất tương đồng, tôi mạnh dạn dự đoán rằng sẽ có những nguyên tố mới chưa được khám phá phù hợp với vị trí trống trong bảng. Tôi mạn phép gọi chúng là nguyên tố giống nhôm và nguyên tố giống silicon. Chúng lần lượt phải có tính chất…, và có thể được tìm thấy trong những loại quặng… tương tự.”[note55985]
+
+…
+
+“Trên đây là lời giải thích và suy đoán của tôi về mối quan hệ tuần hoàn giữa tính chất của các nguyên tố và khối lượng nguyên tử. Hy vọng mọi người có thể kiểm chứng nó.”
+
+Lucien ngừng viết và cầm lên đọc đi đọc lại. Xong xuôi, cậu búng nhẹ vào tập giấy rồi cất nó vào túi lưu trữ của mình.
+
+Cậu không mong đợi những nguyên tố bị đo nhầm khối lượng nguyên tử sẽ có thể được xác nhận và điều chỉnh lại sớm, bởi chúng bị đo sai là vì nhiều nguyên nhân phức tạp, như do các đồng vị lạ không thể phân tách chính xác được chẳng hạn, còn lại thì là do những nguyên tố đó được đo quá sớm hoặc do có những sai sót nhỏ trong quá trình chiết xuất. Tuy nhiên, vì sau đó không có sai sót nào xảy ra và người kiểm tra lại là một Arcanist cấp cao nên những nguyên tố bị đo sai đó đã bị bỏ qua. Dù đã biết trước khối lượng nguyên tử đúng của chúng và cũng đã xác minh chính xác nhưng cậu không nhắc đến trong luận án của mình.
+
+Khi Lucien rời khỏi phòng thí nghiệm, trời mùa đông đã tối hẳn. Cậu chậm rãi trở về biệt thự sân vườn của mình, hai tay đút trong túi của bộ suit hai hàng khuy, vừa đi vừa suy tính kế hoạch tiếp theo.
+
+Đột nhiên, một tiếng cười vang lên từ phía sau cậu: “Cậu Evans, thứ Hai tới cậu sẽ tiếp tục đứng lớp đó. Cậu đã sẵn sàng dạy nghiêm túc rồi chứ?”
+
+Đó là Beate, hắn cũng vừa hoàn thành việc thí nghiệm ma thuật của mình.
+
+Lucien quay lại nhìn hắn và mỉm cười: “Xin lỗi nhé, anh Beate. Tôi đã xin hiệu trưởng nghỉ phép rồi, bởi vì thứ Hai tôi phải đến ma tháp Allyn để làm mới lại huy hiệu arcana của mình. Anh biết đấy, bởi vì trong ấn bản tập san [Ma Thuật] mới đây, luận án của tôi đã được Ngài Grand Arcanist trích dẫn, và trong số mới nhất của [Sóng Âm], [Điện Từ] và [Common Arcana], luận án của tôi cũng được trích dẫn trong nhiều luận án mới lắm, đâu đó khoảng bảy hoặc tám bài gì đó thì phải. Ôi thôi chết, tôi quên mất rằng trước đây anh chưa từng được trải nghiệm điều đó bao giờ. Thành thật xin lỗi vì đã khơi lên chuyện buồn với anh như vậy.”
+
+Beate hít sâu hai hơi: “Một thí nghiệm nhỏ như vậy lại đủ để truyền cảm hứng cho một Grand Arcanist thì chỉ là ăn may mà thôi. Hừ, tôi hy vọng vận may của cậu sẽ luôn kéo dài!”
+
+Beate bực bội khi thấy Lucien khoe khoang và mỉa mai mình. Đáng ra khi đã bị trừng phạt như vậy rồi, hắn phải biết điều mà khiêm tốn lại, ai ngờ vẫn dám đê tiện như vậy!
+
+Nói xong, Beate vuốt lại chiếc mũ chóp đen của mình rồi rẽ vào một nhánh khác của khu vườn.
+
+Nhìn bóng lưng Beate rời đi, Lucien khẽ lắc đầu. Hắn còn lâu mới khó đối phó bằng thứ vong linh ghê rợn cứ đeo bám theo dõi cậu suốt thời gian qua.
+
+Khi cậu trở lại biệt thự sân vườn, đèn vẫn sáng. Sáu người học việc, bao gồm Annick, Layria và Sprint, đến để cậu dạy kèm suốt từ chiều vẫn đang chăm chỉ học tập trong phòng khách. Những mảnh giấy tính toán rải khắp bàn trà hoặc trên chiếc bàn thấp trước mặt họ.
+
+“Chào buổi tối, ngài Evans.” Thấy Lucien đã trở lại, tất cả đều như vừa mới tỉnh dậy từ ảo giác bản thân bị cô lập với thế giới. Họ gật đầu chào cậu với đôi mắt đỏ ngầu.
+
+Lucien khẽ mỉm cười gật đầu: “Bài cuối cùng các em làm thế nào rồi?”
+
+“Khó quá đi! Có vài câu kỳ lắm, em đọc mà chẳng hiểu gì cả!” Heidi, người sôi nổi nhất, giơ tay và trả lời. Những người học việc còn lại, bao gồm cả Chely trầm tính và Sprint kiêu ngạo, đều khẽ gật đầu.
+
+Lucien cười cười: “Đây là bài tập giúp các em rèn luyện khả năng tư duy. Đừng làm một cách hấp tấp. Được rồi, hôm nay đến đây thôi, thứ bảy tuần sau hãy nộp cho tôi.” Đó thực ra là một bài toán Olympic!
+
+Nghe được rằng có thể về, Heidi và Layria không khỏi hưng phấn reo lên như được đại xá. Sau đó, hai cô nhóc lè lưỡi cúi đầu, không dám nhìn Lucien. Những người học việc còn lại trên mặt ít nhiều cũng lộ ra vẻ hạnh phúc.
+
+Cậu giả vờ như không nhìn thấy và nhờ người giúp việc tiễn họ về.
+
+Sau khi ra khỏi biệt thự sân vườn, những người học việc vô thức quay lại nhìn. Căn biệt thự đen lập lòe ánh nến trông như một con quái vật đang ẩn núp trong bóng tối, chực chờ ngoạm lấy con mồi.
+
+Khẽ rùng mình, Heidi nhìn tờ giấy trong tay rồi nói: “Các cậu, chúng ta sai rồi phải không? Lẽ ra chúng ta không nên nhờ ngài Evans dạy kèm! Mệt mỏi chết mất! Đau đớn chết mất!”
+
+“Nhưng tớ thấy chúng ta đã tiến bộ rất nhiều mà.” Người vừa nhận xét như vậy là Sprint. “Chúng ta còn chưa phải là pháp sư, nên mệt mỏi hay cay đắng một chút cũng không thành vấn đề. Không dễ để tìm được một giáo viên giỏi như ngài Evans đâu.”
+
+Katrina và Annick gật đầu đồng ý.
+
+Heidi than thở: “Tớ biết, nhưng thật sự là đau đầu quá. Tớ muốn vui vẻ một chút vào cuối tuần cơ! Ngài Evans đúng là một con quỷ! Tớ vừa tôn trọng lại vừa ghét ngài ấy!”
+
+Không ai phản đối. Ngay cả má của Sprint cũng phồng lên. Xem ra cậu cũng đồng ý với Heidi.
+
+……
+
+Chín giờ sáng thứ Hai, một chiếc xe ngựa chầm chậm dừng lại trước ma tháp trụ sở của nghị viện.
+
+Lucien, trong bộ suit gồm sơ mi trắng, vest nâu và áo khoác ngoài hai hàng khuy, trả tiền cho người đánh xe, sau đó đội chiếc mũ chóp màu đen lên và bình tĩnh đi lên các bậc thang trước cửa. Khi cậu bước vào trong, sinh vật bất tử kia liền biến mất.
+
+Lúc đi qua cổng, Prospell chào đón cậu với giọng điệu buồn tẻ: “Chào mừng đến với trụ sở của Ma pháp Nghị viện. Chỉ cần ngài tạo ra một sinh mệnh giả kim nữ, ngài sẽ được tôi chào đón nồng nhiệt.”
+
+Lucien phớt lờ Prospell, bởi nó gặp pháp sư nào cũng nói vậy. Cậu đi thẳng đến khu bốn, Cục Quản lý Pháp sư.
+
+Cindy, người vừa mới chào hỏi xong một pháp sư, có chút kinh ngạc khi thấy Lucien. Cô chớp chớp đôi mắt nâu xinh đẹp và hỏi: “A, ai đây nhỉ? Thì ra là anh Evans, người đã hơn một tháng chưa hề bước chân ra khỏi Trường Ma thuật Douglas!”
+
+Giọng điệu của Cindy chỉ là trêu chọc, nhưng trong đó cũng pha chút phàn nàn. Cô chưa từng có người bạn nào cũng sống ở Allyn mà lại hơn một tháng chưa gặp cả.
+
+“Ô, không phải người nổi tiếng của chúng ta đây sao? Chính là anh Evans, người có luận án được một Grand Arcanist trích dẫn nè! May quá, anh chưa quên chúng tôi.” Dona cũng bày tỏ sự hoan nghênh của mình bằng giọng điệu khoa trương.
+
+Lucien bất đắc dĩ cười nói: “Tôi chỉ đang cố gắng trau dồi nền tảng arcana và viết luận án của mình thôi mà. Nhân tiện, Lazar đâu rồi?”
+
+Thấy thái độ của Lucien không hề lạnh lùng, cũng không vì đã có danh tiếng mà làm cao với họ, hai cô gái đều rất vui vẻ. Họ cùng cậu tán gẫu về những điều thú vị diễn ra trong trụ sở của nghị viện, chẳng hạn như việc Lazar được triệu tập đến Rentaro để chuẩn bị cho cuộc họp sắp được tổ chức trong một tháng tới của Ý chí Nguyên tố, hay việc Grand Arcanist Brook, chủ nhân của luận án chứng minh ánh sáng là sóng điện từ, đã được Viện hàn lâm Ma thuật Vương thất Brianne, Liên minh Ngân Nguyệt chi Ca và Tháp, lần lượt là những vinh dự cao nhất của các hệ Điện từ, Ánh sáng – Bóng tối và Chiêm tinh, trao tặng Huy chương Mặt trăng Bạc – đây là huy chương thứ ba của ông.
+
+Tương tự với giải Vương miện Holm trong lĩnh vực Nguyên tố, Ngai vàng Bất tử trong lĩnh vực Chiêu hồn, Huy chương Mặt trăng Bạc trong lĩnh vực Điện từ, Chiêm tinh và Ánh sáng – Bóng tối, còn có Vòng Nguyệt quế Pháp sư do Viện hàn lâm Ma thuật Calais và Nhà Vu sư đồng sáng lập, chủ yếu tập trung vào lĩnh vực Biến đổi, Ảo ảnh và Triệu hồi, Huy chương Băng Tuyết trong lĩnh vực Nhiệt động lực học và Trường lực do Cabin của Palmeira sáng lập, và cuối cùng là giải Quyền trượng Arcana trong lĩnh vực Chiêm tinh và Toán học thuần túy do Tháp sáng lập.
+
+Tất cả đều được thành lập sau giải thưởng Vương miện Holm. Để duy trì hình ảnh công bằng, Ma pháp Nghị viện đã không can thiệp.
+
+Sau khi trò chuyện với Cindy và Dona một lúc, Lucien gõ cửa văn phòng của Eric.
+
+“Evans, cậu đến để cập nhật huy hiệu của mình phải không?” Eric nở một nụ cười nhẹ trên khuôn mặt cứng nhắc và nghiêm túc của mình.
+
+Sau khi thấy luận án của Lucien được Chúa Tể Bão Táp trích dẫn, anh biết kiểu gì cậu cũng sẽ đến đây để cập nhật huy hiệu arcana và ma thuật của mình.
+
+Cậu mỉm cười gật đầu: “Đúng vậy, xin hãy cập nhật giúp tôi. Nhưng trước đó, tôi có hai việc cần phải làm. Một là tôi muốn đệ trình một luận án arcana mới cho hội đồng xét duyệt. Hai là tôi muốn đăng ký làm bài đánh giá arcana cơ bản.”
+
+Eric im lặng nghe Lucien nói. Anh không ngạc nhiên với việc cậu lại nộp một luận án khác. Từ góc nhìn của anh, với việc ngay luận án đầu tiên đã được đánh giá là “đột phá” và được một Grand Arcanist trích dẫn, nếu cậu mà không tự tin viết một luận án khác thì mới là bất thường.
+
+Tuy nhiên, khi nghe xong nửa câu cuối, Eric liền buột miệng nói: “Thật sao? Cậu có chắc không? Cậu đã học arcana được bao lâu rồi?” Hỏi liền tù tì ba câu là đủ để biểu đạt rõ anh ngạc nhiên đến thế nào.
+
+“Vâng. Mặc dù mới học arcana được khoảng ba tháng, nhưng tôi cảm thấy mình rất có năng khiếu về nó và đã nắm vững những điều cơ bản. Ngài Eric, điều này có gì đáng để ngạc nhiên sao? Ngài Brook đã vượt qua bài kiểm tra arcana cơ bản khi mới mười một tuổi thôi mà.” Lucien điềm đạm khoe.
+
+Eric cảm thấy buồn cười: “Nhưng lúc đó Ngài Brook đã học arcana được hai năm rồi, không phải ba tháng!”
+
+“Nhưng tôi có nền tảng ma thuật, có trí nhớ và khả năng tư duy của người trường thành, còn thành thục phương pháp học tập đúng đắn nữa.” Lucien tự tin đáp.
+
+Eric nhìn chằm chằm vào mắt Lucien bằng đôi đồng tử màu xám nhạt. Thấy cậu không hề dao động, anh lẩm bẩm: “Dù sao cậu cũng đã từng được đánh giá là có tư duy của một Arcanist, vậy tôi sẽ cho cậu thử một lần.”
+
+Trước khi vào phòng kiểm tra, Eric tùy ý viết nhanh chữ “Nguyên tố” lên luận án arcana của Lucien rồi bỏ vào lồng sắt và kéo chuông.
+
+……
+
+Vẫn căn phòng rộng rãi đó, vẫn những chiếc chuông đó đang reo không ngừng.
+
+“Chiêu hồn? Gửi tới ngài Pesor, cô Tina-Timos.”
+
+…
+
+“Nguyên tố? Gửi tới ngài Gaston, ngài Overee.”
+
+…
+
+Trong một căn phòng chứa đầy những chai nguyên tố khác nhau, một thổ tinh linh màu nâu với đôi mắt đỏ rực cầm một luận án từ pháp trận dịch chuyển lên.
+
+“‘Mối quan hệ Tuần hoàn giữa Tính chất của các Nguyên tố và Khối lượng Nguyên tử cùng Dự đoán về Nguyên tố Mới’. Chà, một pháp sư chưa phải là Arcanist chính thức lại thảo luận về tính tuần hoàn của các nguyên tố, một vấn đề vẫn chưa có tiến triển gì trong suốt một thời gian dài, vậy thì không nên làm phiền ngài Gaston đang có việc quan trọng ở Rentaro. Trụ sở chính của tập san [Nguyên Tố] cũng ở đó, thế thì cũng không cần phải phiền Mathew bay xa để chuyển thư. Ngài Larry tình cờ đang ở đây, thế thì chuyển luận án này cho ngài ấy vậy.”
+
+Thế là luận án đã đến tay Larry, người có bộ râu vàng bờm xờm.
+
+Larry liếc nhìn tiêu đề luận án trong tay rồi đặt chúng sang một bên. “Matthew, ba ngày nữa hẵng quay lại.”
+
+Con cú lông hung Mathew dang rộng cánh và bay đi.

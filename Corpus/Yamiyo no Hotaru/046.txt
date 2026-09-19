@@ -1,0 +1,361 @@
+Chap 39
+
+Chap 39
+
+Vùng đất Phù Tang, lấy chốn trung tâm tràn ngập linh lực hùng hậu cùng tứ phương và vô số hòn đảo khác làm lãnh thổ, thế nhưng trừ bỏ vùng Trung Thổ ra thì sự kiểm soát của quốc gia này phần lớn chỉ là những điểm và tuyến rời rạc, và dù trong hay ngoài lãnh thổ đều tồn tại vô số 「ngoại địch」 bất kể là người hay yêu quái.
+
+Không, hoặc có lẽ so với bên ngoài lãnh thổ, thì vấn đề bên trong lãnh thổ lại càng nghiêm trọng hơn. Ít nhất thì đối với các thành quốc ven lục địa tự lập sau khi vương triều sụp đổ, hay đế quốc lưu vong ở phương Nam được thành lập sau khi đế quốc tan rã, quốc gia Phù Tang vẫn luôn duy trì quan hệ hữu hảo trong nhiều năm từ góc độ giao thương và đối sách với yêu quái, thậm chí đôi khi còn viện trợ cả về quân sự lẫn tài chính. Kẻ địch trước mắt của quốc gia này, lại chính là từ trong lòng nó.
+
+Tại quốc nội Phù Tang, những khu vực bị yêu quái dữ tợn chiếm giữ lãnh địa căn bản đều bị cấm người qua lại, binh lính canh phòng và phong tỏa nghiêm ngặt. Đặc biệt là lũ Tengu xảo quyệt và ngạo mạn ẩn mình tại những dãy núi hiểm trở không xa Trung Thổ, hay đám hà bá mang phong vị Innsmouth đang bén rễ đâu đó tại quần đảo phương Nam, thường xuyên tấn công các làng chài và thị trấn ven biển hay ven sông… Bởi vì sở hữu trí tuệ vượt trội khác thường đối với yêu quái, lại còn có một xã hội phát triển cao, chúng chính là những kẻ địch ngoại bang tiêu biểu mà xứ Phù Tang đã xác định là mục tiêu tiêu diệt triệt để trong tương lai.
+
+Dẫu cho yêu quái trở thành kẻ thù giả tưởng của Phù Tang là điều hiển nhiên, thế nhưng điều đó không có nghĩa là họ không đối địch với đồng loại là con người.
+
+Phù Tang, vốn được thành lập với mục tiêu lật đổ sự thống trị của yêu quái để kiến tạo nên một thế giới của con người, do con người và vì con người, bắt đầu từ liên minh giữa các làng mạc và nhân gian rải rác ẩn mình ở Tây Thổ và Nam Thổ, rồi sau khi đoạt lại Trung Thổ từ tay lũ yêu vật phi nhân tính, đã lấy đó làm căn cứ, mở rộng khu vực ảnh hưởng ra tứ phương bằng công cuộc khai khẩn.
+
+Trong quá trình đó, họ cũng nhiều lần tiếp xúc và sáp nhập với các tập đoàn người khác, nhưng không phải tất cả đều diễn ra trong hòa bình. Trong số các tập đoàn ấy, không hiếm kẻ vì nhiều lý do khác nhau mà phản kháng và đối địch với sự can thiệp của Phù Tang. Tiêu biểu là đám Kumaso và Hayato chiếm cứ phương Nam, cùng các dân tộc miền núi sống rải rác khắp các sơn lĩnh sống bằng nghề săn bắn.
+
+Triều đình gọi các bộ tộc bản địa ở Bắc thổ và Đông thổ là man tộc Emishi [note72771], trong lịch sử từng có những lúc dùng chính sách chiêu dụ, cũng có khi dùng vũ lực nhằm thôn tính bọn họ.
+
+Thực tế, trong số Emishi có những bộ tộc như gia tộc Saeki tích cực tiếp nhận sự chi phối và hỗ trợ của triều đình rồi dùng đó để công kích các Emishi khác, cũng có những bộ tộc mỗi lần triều đình cho dân tới khai khẩn ở ranh giới thế lực thì lại tàn sát họ. Văn hóa và nội tình của mỗi nhóm đều có những khác biệt lớn nhỏ. Có thể nói việc nhận định họ như một khối văn hóa thống nhất là biểu hiện của sự thiếu hiểu biết từ phía triều đình.
+
+Trong nguyên tác game, tổ chức tàn dư từ thời Nhân Yêu Đại Loạn mưu toan lật đổ triều đình, 「Cứu Yêu Chúng」, đã tận dụng triệt để những mâu thuẫn trong nội bộ nhân loại này. Từ những bộ tộc đã sớm quy phục yêu quái, đến các bộ tộc bị triều đình áp bức, hoặc bị tiêu diệt và biến thành nô lệ, tất cả đều bị chúng tiếp cận và lợi dụng.
+
+Cái nhát đâm chí tử đánh sập triều đình, thế lực từng gắng gượng chống chọi với yêu quái dù đang mục ruỗng, lại đến từ chính con người… Có thể nói, tuyến truyện bad ending với sự diệt vong của triều đình là một kết cục đầy mỉa mai và tuyệt vọng. Nhưng vốn dĩ đây là một utsuge, đành chịu thôi.
+
+Mà, nói là phiền phức thì đúng là phiền thật đấy, nhưng cũng chỉ là 「nhát đâm cuối cùng」 mà thôi. Bởi vì về cơ bản, thực lực cách biệt quá lớn, cho nên nếu không có sự âm thầm thao túng và hỗ trợ từ phía yêu quái thì cũng không thể trở thành đòn kết liễu Phù Tang. Chỉ cần can thiệp đúng trọng điểm thì tình huống tệ nhất vẫn còn cứu được.
+
+Vì thế mà, thú thật là tôi đã khinh suất rồi…
+
+「Không ngờ chúng lại đến vào đúng lúc này là sao chứ!?」
+
+Vừa tránh lưỡi đao vung đến, tôi vừa chửi thề. Nếu không làm thế thì tôi đã chẳng chịu nổi nữa rồi.
+
+「Chậc, yếu ớt thế mà lại tránh được à!!」
+
+「Đừng nóng vội. Từ từ dồn hắn vào chân tường...」
+
+Bên chém, bên né… Cuộc giao tranh đã kéo dài đến độ đếm qua cũng hơn trăm nhịp rồi.
+
+Loạn chiến hay quyết đấu, thực lực ngang ngửa hay chênh lệch… Thời gian để phân định thắng bại trong những trận chiến bằng đao kiếm tùy thuộc vào tình huống, nhưng chí ít thì trong khi đối phương là một cặp đôi còn tôi là một tên đầy tớ tay không tấc sắt vừa mới bị tra tấn xong, hơn nữa thân thể còn bị trói chặt bằng thừng thô khiến linh lực không thể lưu chuyển, mà vẫn cầm cự được đến giờ, chuyện này đúng là kỳ lạ. Thực lòng thì chính tôi là người kinh ngạc nhất.
+
+(Chẳng lẽ đây là thứ người ta gọi là sức mạnh trong lúc nguy cấp…!?)
+
+Thở hổn hển, tôi lầm bầm trong lòng. Có lẽ do adrenaline tiết ra ào ạt nên cảm giác đau đớn cũng tê liệt đi, tra tấn cỡ này mà lại không thấy đau lắm. À, không, thật ra vẫn đau chứ, đau chết mẹ đi ấy chứ.
+
+(Mà, chắc là còn có nguyên nhân khác nữa…)
+
+「Ông chú, thế này là hết hy vọng rồi phải không? Nhân tiện bịt miệng hắn luôn đi, khỏi cần nương tay nữa, giết quách cho rồi…!」
+
+Gã trẻ tuổi hơn trong hai thích khách, kẻ tên Iruka, gào lên như vậy. Từ câu nói này và cách mà chúng tra tấn tôi nãy giờ đầy nửa vời… không còn nghi ngờ gì nữa, bọn này ngay từ đầu đã nhắm vào tôi. Lại còn là theo lệnh của ai đó.
+
+(Khét lẹt mùi âm mưu…)
+
+Dù đã gom góp được chút thông tin, nhưng nghi vấn trong lòng tôi lại càng thêm sâu. Có nên khiêu khích gã Iruka kia để moi thêm chút thông tin không… Trong thoáng chốc tôi định làm vậy, nhưng đáng tiếc, tôi đã bị chặn trước.
+
+「Iruka, đừng nhiều lời. Xét theo hành động từ nãy đến giờ, ngươi có thể vô tình để lộ thông tin không cần thiết. Im miệng lại đi. …Tên này, tuy chỉ là đầy tớ, nhưng đầu óc linh hoạt lắm đấy.」
+
+Trái ngược với gã Iruka ăn nói bỗ bã và xốc nổi, gã đàn ông trung niên tên Ryuuhi ánh mắt sắc lạnh, không biểu cảm, vừa đề phòng tôi vừa khiển trách đồng bọn. Cái lối nói chuyện cùng sự đánh giá tình huống này, cộng thêm việc kẻ rời đi giữa chừng nãy giờ vẫn chưa trở lại, không nghi ngờ gì nữa, tên này là tên cầm đầu.
+
+「Thu hẹp khoảng cách từng chút một. Cứ chém loạn là bị né thôi. Phải cắt đường lui của hắn.」
+
+「Chậc, hiểu rồi.」
+
+Theo lệnh ấy, hai tên bắt đầu từng bước, từng bước thận trọng ép tôi lùi về phía vách tường. Tôi chẳng còn lựa chọn nào ngoài lùi bước. Nếu có giáp trụ hay vũ khí thì còn khác, chứ giờ thân trần nửa người, linh lực chẳng vận dụng nổi, vũ khí cũng gần như không có, nếu liều lĩnh xông ra phá vòng vây thì quá nguy hiểm. Không, nói chính xác thì không phải là không có gì trong tay… nhưng nếu không nắm được thời cơ thì chỉ tổ phí phạm, rồi toi mạng luôn.
+
+「Này này, hai gã đàn ông vây đánh một kẻ tay không như ta à? Đùa gì thế? Xin lỗi nhé, ta không có mê nam sắc đâu. Nếu các ngươi thích mấy chuyện đó thì về mấy cái nhà thổ nam hoan mà tìm vui đi. Chẳng phải các ngươi đã lén rời núi, giấu cả đồng bọn là vì chuyện đó sao?」
+
+「Khốn kiếp, mày nói cái đéo gì đấy…!!」
+
+Dù chỉ là một lời khiêu khích rẻ tiền đến độ chẳng bằng nửa giá bình thường của tôi, vậy mà gã Iruka lại run người lên. Ánh mắt hắn bùng cháy cơn thịnh nộ. Trong game cũng vậy, bọn người sống ngoài triều đình thường đặc biệt cố chấp với danh dự. Huống chi qua phản ứng từ nãy đến giờ, dù là khi tra tấn cũng có phần diễn kịch, nhưng xem ra tính khí hắn vốn đã nóng nảy. Đúng là đáng để chọc giận.
+
+「Iruka!」
+
+「Còn nữa. Xin lỗi nhé, nhưng chuyện không nương tay, ta cũng đồng tình thôi.... Dù sao thì người cần được ta bảo vệ cũng vừa rời đi rồi, khỏi cần phải kiêng dè gì nữa.」
+
+Nghe đến đó, hai tên như sực nhớ ra, ánh mắt lập tức hướng ra phía sau. Nơi đó, là bóng dáng một thiếu nữ tóc vàng đang chầm chậm rời khỏi gian phòng…
+
+「Gọi Kamui tới! Con nhãi đó đang bỏ trốn…」
+
+「Có cơ hội…!」
+
+Ngay khoảnh khắc đó, tôi phi người lao thẳng về phía Iruka, áp sát hắn trong tích tắc.
+
+「Chậc…!?」
+
+Ngay sau đó, Iruka vung đao ra. Gần như cùng lúc, tôi đã kích hoạt quả bom khói vừa được Thức Thần-sama ban cho…
+
+-
+
+Đây là chuyện đương nhiên, cũng là điều căn bản nhất, lý do tôi luôn túc trực bên cạnh Tachibana Kayo là để hộ vệ cô bé, và để bảo vệ sự an toàn cho cô.
+
+Có lẽ những vệ sĩ khác đang lén bám theo phía sau đã bị vô hiệu hóa và không thể tiếp tục thực thi nhiệm vụ, nhưng điều đó không có nghĩa là tôi cũng được phép vứt bỏ trách nhiệm của mình. Mà trái lại, chính vì vậy mà gánh nặng trên vai tôi càng thêm nặng nề, địa vị của tôi cũng dễ rơi vào tình thế nguy hiểm. Người đã chết thì không thể bị trừng phạt, nhưng kẻ còn sống thì lúc nào cũng có thể bị đem ra làm gương.
+
+Vì thế, việc đưa Tachibana Kayo đang có mặt ở nơi đó đi lánh nạn không chỉ là nhiệm vụ ưu tiên hàng đầu để bảo toàn địa vị của tôi… mà đồng thời cũng là để tạo ra cơ hội cho chính bản thân tôi trốn thoát khỏi nơi đó. Nếu cứ tiếp tục đối mặt bằng tay không như vậy thì tôi chẳng có tương lai nào cả, chỉ có thể từ từ kiệt quệ mà thôi. Vì vậy, để phá vỡ vòng vây của đám thủ phạm, tôi cần phải tạo ra một chút sơ hở dù chỉ trong khoảnh khắc.
+
+Trong lúc tôi đánh lạc hướng, thức thần do Matsushige Botan sai khiến đã tiếp cận Kayo và dẫn dắt cô bé đang hoảng sợ đi lánh nạn. Rồi ngay khoảnh khắc cô từ từ rời khỏi phòng tra khảo, tôi cố tình để cô bị nhận ra và khiến chúng dao động, nhắm vào lúc ý thức của bọn chúng bị phân tán. Chỉ một chút sơ hở nhỏ sinh ra từ đó, tôi lập tức áp sát, rồi dùng khói mù…một loại bom khói thượng hạng do nhà Onizuki chuẩn bị, có tác dụng làm cay mắt và phát ra mùi kích ứng…để che tầm nhìn và phá vỡ vòng vây. Tôi đã làm như thế, nhưng………
+
+「Haa… haa… ugh… haha, đời làm gì có chuyện suôn sẻ chứ…!!?」
+
+Trên lưng tôi là Kayo đang bất tỉnh, tôi vừa thở hổn hển vừa chạy. Trên cơ thể vẫn còn dây thừng thô quấn chặt, mồ hôi lạnh túa ra từ trán, và từ cánh tay phải, máu đỏ tươi nhỏ từng giọt xuống đất không ngừng…
+
+(Khốn kiếp! Dù đã chuẩn bị tinh thần, nhưng đau thật đấy…!!)
+
+Tôi đã cố tình đợi cho đến khi vòng vây siết lại một mức độ nhất định để đề phòng việc đồng đội chém nhau, rồi mới ném bom khói… Tôi đã lường trước việc bị chém, cũng đã chuẩn bị tinh thần, nhưng dù không đến mức không thể cử động, việc bị chém sâu vào cánh tay phải thế này quả thật là một tổn thương lớn.
+
+「Có vết máu chảy ra rơi xuống đất. Dù có chạy xa bao nhiêu cũng sẽ bị phát hiện đường đi. Xin hãy cầm máu ở đâu đó.」
+
+「Biết rồi…! Khục, nơi này là… nhà kho à!?」
+
+Tôi gật đầu trước giọng nói đều đều vô cảm của thức thần, vừa quan sát xung quanh để xác định vị trí. Phòng tra khảo nằm bên trong một kho hàng. Trong kho cất giữ các loại hàng hóa như bao gạo, gỗ… Và khi ra khỏi kho thì thấy những kho hàng có cấu trúc tương tự xếp hàng dài nối tiếp nhau…
+
+(Khu kho của thương nhân… Nhìn qua thì đây là khu kho hàng ở Đông Kinh (Tokyo) rồi)
+
+Dựa vào các món hàng được chất trong kho mà tôi từng liếc qua lúc chạy trốn, tôi suy đoán như vậy. Nếu là khu kho ở Bắc Kinh, tập trung dinh thự của công khanh và lãnh chúa, thì chắc hẳn sẽ chứa những mặt hàng sang trọng hơn. Nếu là ở Tây Kinh, nơi tụ họp của các thợ và nghệ nhân, thì tỷ lệ thủ công mỹ nghệ hay sản phẩm công nghiệp phải cao hơn mới đúng. Cũng không thể loại trừ khả năng đây là kho hàng ở Nam Kinh, nhưng nhìn vào danh mục hàng hóa đã kiểm tra thì chắc chắn là hàng từ vùng Đông Quốc. Như vậy, phải xem đây là khu kho hàng ở Đông Kinh. Nơi đây vắng người… có lẽ đã được phong tỏa để tránh người ngoài lai vãng…
+
+(Mình đã nghĩ đến việc la lớn cầu cứu, nhưng xem ra phải bỏ ý định đó thôi)
+
+Với tình hình này, dù có hét lên thì cũng chỉ tổ bị truy đuổi bắt kịp chứ ai đến cứu nổi.
+
+「Ư… ưm… đâ…đây là…?」
+
+Khi tôi đang suy nghĩ phân tích thì một tiếng rên khe khẽ vang lên từ sau lưng. Lúc tôi dùng bom khói để chạy trốn, vì bị chấn động và tiếng động làm cho hoảng sợ nên cô đã ngất đi… Dù sao thì với đôi chân của cô, cũng quá chậm để có thể tẩu thoát. Tôi đã cõng Tachibana Kayo trên lưng, nhưng xem ra giờ cô ấy đã tỉnh lại. Cũng phải, vụ nổ khi ấy không gây tổn thương lớn đến mức đó.
+
+「Tiểu thư, xin thất lễ một chút…!!」
+
+「Eh!? Kyaa… mưm!!?」
+
+Thấy đây là thời cơ thuận lợi, tôi lập tức nấp vào một góc tối trong khu kho rộng lớn, và vì lý do thể lực nên tôi thô bạo nhấc cô ấy xuống khỏi lưng bằng hai tay. Khi cô định kêu lên theo phản xạ, tôi liền lấy tay bịt miệng và giơ ngón trỏ trước môi ra hiệu giữ im lặng. …Nghĩ lại thì nhìn tôi bây giờ giống hệt một kẻ khả nghi đang bắt cóc trẻ con. Nửa thân trên thì trần trụi, còn toàn thân thì bị trói bằng dây thừng, càng làm hình ảnh trở nên tồi tệ. Nếu ở kiếp trước, chắc chắn là đi thẳng vào tù.
+
+「Ưm… khụ… haa!? Tomobe-san!? Rốt cuộc là chuyện gì…?」
+
+Tôi nhẹ nhàng rút tay khỏi miệng cô để tránh gây ồn ào, Kayo đỏ bừng mặt tức giận vì bị thất lễ, định lớn tiếng mắng tôi… Nhưng khi ánh mắt cô chạm vào vết thương trên cánh tay phải của tôi đang tuôn máu đầm đìa, và thấy cả một vũng máu đỏ đang loang dần trên mặt đất, gương mặt cô bỗng tái nhợt và đông cứng lại.
+
+「Á…ưm…c-chuyện đó…ừm…nếu ta nhớ không lầm thì…」
+
+「Xin hãy bình tĩnh. Hiện giờ chúng ta đang trốn. Với sự yên tĩnh thế này, nếu cất tiếng lớn sẽ bị phát hiện ngay.」
+
+Khi nhớ lại tình cảnh hiện tại của mình, Kayo lập tức tái mặt, ánh mắt rưng rưng. Tôi không muốn cô ấy khóc nên liền quỳ xuống trước mặt cô, đặt tay lên bờ vai nhỏ bé mảnh mai của cô, vừa an ủi vừa nhắc nhở như vậy.
+
+Cô bé tuy nghịch ngợm và bướng bỉnh, nhưng chắc không phải là một kẻ ngốc. Khi nghe lời tôi, cô khẽ gật đầu như thể đã hiểu và cố gắng nuốt lấy tiếng nấc đang trực trào ra khỏi cổ họng. Thật là một cô bé ngoan.
+
+「……Thật xin lỗi. Tôi biết tiểu thư đã rất mong chờ hôm nay, vậy mà lại thành ra một chuyện đáng sợ như thế này. Nếu có trách phạt hay trừng phạt gì, xin hãy để sau. Giờ mong tiểu thư hãy nhẫn nhịn cho tôi nhé.」
+
+Tôi nói lời xin lỗi để an ủi cô. Dù biết cô sẽ không làm chuyện gì ích kỷ trong hoàn cảnh sinh tử như thế này, nhưng tốt nhất vẫn nên giữ lại một chút bảo hiểm. Giờ thì…
+
+「Chẳng phải là cảnh tượng dễ nhìn gì, tiểu thư đừng nên nhìn thì hơn.」
+
+Nói vậy rồi tôi xé phần vải ở gần cổ chân của chiếc hakama chưa bị gỡ ra, dùng nó để lau máu đang tuôn ra từ cánh tay phải.
+
+「Ugh… khặc… ugh…!!」
+
+Máu đỏ đậm mà vải chỉ vừa chạm vào đã nhuộm thẫm màu ngay lập tức. Cơn đau âm ỉ như điện giật lan ra từ vết thương khiến tôi nhăn mặt khẽ rên. Nhưng tôi cố không bật ra tiếng thét.
+
+「Hic… máu… nhiều quá…」
+
+Tôi thì vẫn ổn. Cô cháu gái của Matsushige đang quan sát tôi qua thức thần cũng giữ vẻ bình thản. Nhưng Kayo thì khác. Dù gì đi nữa cô cũng là một tiểu thư sống trong nhung lụa, chỉ cần thấy miếng vải nhuốm máu là đã sợ đến run lên, nước mắt chỉ trực trào ra.
+
+「Haa… haa… đã bảo đừng nhìn rồi mà… Thôi, quay mặt đi. Nhìn thấy vết thương của người khác chẳng mang lại điều gì tốt đẹp đâu.」
+
+Mồ hôi túa ra đầy trán, tôi vừa nói đùa vừa nhẹ nhàng khuyên cô. Nói xong tôi liền quay lưng lại để cô không thấy vết thương. Tuy nhiên, nụ cười của tôi có lẽ đã hơi méo mó vì đau, nên không chừng lại càng khiến cô sợ hơn.
+
+(Dù là với Hina hay với gorilla-sama, mình cũng không muốn tạo ra ám ảnh cho con nít đâu…)
+
+Chỉ vì thế giới này tàn khốc không có nghĩa là nên chủ động cho trẻ con thấy những thứ ghê rợn. Nếu có thể tránh thì nên tránh. …Dù sao thì, lần đó cũng vậy, lần này cũng thế, nói gì thì nói, người thất bại vẫn là tôi.
+
+「Đau quá… khốn thật, thế này không dùng để cầm máu được. Phải xé thêm lần nữa…」
+
+Vừa run lên vì đau và các cơ đang co giật, tôi vừa vứt bỏ miếng vải đã thấm đẫm máu không thể dùng được nữa xuống đất. Tôi định xé thêm vải từ hakama, nhưng đúng lúc ấy, cảm nhận được một cái chạm nhẹ vào bàn tay trái, tôi liền quay đầu lại.
+
+Và điều hiện ra trong tầm mắt tôi là sắc màu vàng cam. Nói chính xác hơn thì, đó là Tachibana Kayo đang cởi chiếc khăn quàng cổ màu vàng cam, cầm trong tay.
+
+「À…ưm… nếu để cầm máu thì… cái này… có được không…?」
+
+Vừa nói vừa rụt rè chìa ra chiếc khăn quàng cổ trong tay, Kayo có vẻ bất an lắm, bàn tay cô bé đang run rẩy.
+
+「………Tôi dùng thật được chứ?「
+
+「À… về chuyện đền bù hay gì đó… anh không cần bận tâm đâu ạ…」
+
+Có lẽ cô hiểu câu hỏi của tôi là đang lo chuyện bồi thường, nên vội vàng lắc đầu, nhưng giọng lại nhỏ đi, rồi khẽ cúi đầu như thể đang sợ.
+
+「À… có phải là… ta đã xen vào chuyện không nên xen không?」
+
+「……Không, tôi sẽ đón nhận tấm lòng này. Cảm ơn nhé.」
+
+Không thể phụ lòng tốt của một đứa trẻ đang bất an đưa tay ra. Tôi đón nhận chiếc khăn quàng cổ và nói lời cảm tạ.
+
+「Phù……」
+
+Khi thấy tôi nhận lấy khăn, biểu cảm cứng đờ trên mặt Kayo cuối cùng cũng dịu xuống, và cô lặng lẽ dõi ánh mắt về phía tôi.
+
+Tôi vốn không thích bị nhìn chằm chằm như vậy, nhưng… chẳng cần thiết phải lên tiếng phàn nàn lúc này. Hơn thế nữa, tôi còn có việc cần làm. Mà này…
+
+(Chất vải tốt thật đấy. …Chắc còn đắt hơn cả cái giá mà mình bị bán đi.)
+
+Tôi nhìn lướt qua chiếc khăn trong tay và nghĩ như vậy.
+
+Là con gái của một đại thương gia đứng trong top mười của đô thành, lại còn được nuông chiều hết mực, dù chỉ là trang phục cải trang thì những gì cô bé khoác lên người cũng toàn là hàng cao cấp. Vì vậy, chỉ cần chạm vào đã đủ hiểu, giá trị của chiếc khăn này còn cao hơn cả cái giá chuộc cuộc đời của tôi, một con người bị bán đi chẳng đáng bao nhiêu.
+
+「Phì…」
+
+「Tomobe…san?」
+
+「Không có gì đâu, tôi chỉ lỡ bật cười nhớ lại chuyện cũ thôi. Tiểu thư đừng bận tâm.」
+
+Tôi lập tức trấn an Kayo đang có vẻ lo lắng vì nụ cười chua chát vừa rồi, rồi xé đôi chiếc khăn quàng cổ ra, dùng phần nhỏ hơn để lau máu, phần lớn hơn thì siết chặt quanh tay để cầm máu.
+
+(Phí thật…)
+
+Ở thế giới này, mạng người rẻ mạt. Chính vì thế mà hành động của tôi hiện tại bỗng thấy như một sự xúc phạm, một điều ngốc nghếch vô cùng. Có lẽ đó là dấu hiệu cho thấy tôi đang dần dần bị thế giới này đồng hóa về mặt giá trị quan mà không hề hay biết.
+
+「Nếu vậy thì………」
+
+Nếu thật sự là vậy thì đó là một điều khiến tôi thấy vô cùng đau đớn và đáng buồn…
+
+-
+
+「Khụ… khụ… khốn kiếp, dám giở trò với ta sao!!」
+
+Trong căn phòng vẫn còn lảng vảng làn khói mang theo mùi kích ứng tê buốt nồng nặc, Iruka vừa ho sặc sụa vừa chửi rủa. Trong giọng nói của hắn, sự căm hận tột cùng hiện rõ mồn một.
+
+「Này này này, chuyện quái gì đang xảy ra vậy? Con nhãi với gã đàn ông đó biến đi đâu rồi?」
+
+Một kẻ từ trong bóng tối bất ngờ xuất hiện lên tiếng. Chính là gã được gọi là Kamui vừa mới rời khỏi căn phòng một mình lúc nãy. Vừa nhìn quanh với vẻ thích thú, hắn vừa hỏi hai người còn lại.
+
+「Ngươi… cuối cùng cũng chịu ló mặt ra rồi à…!! Chính vì ngươi không chịu kiểm tra ám khí cho đàng hoàng nên mới ra nông nỗi này…!!」
+
+「Bình tĩnh đi, Iruka. Ta cũng đã kiểm tra hành trang của tên đó rồi. Hắn quả thật không mang theo gì cả. Có lẽ đã có chuột giấu ở đâu đó. …Đúng là quá chủ quan rồi」
+
+Ryuuhi vừa phân tích vừa trấn an Iruka. Bản thân hắn cũng cho rằng một kẻ đã hạ được từng ấy thức thần thì chắc không còn vấn đề gì nữa, nhưng xem ra đó là sai lầm. Giờ nghĩ lại, có lẽ việc hắn chỉ dùng toàn thức thần chiến đấu là để đánh lạc hướng. Thứ thực sự quan trọng là những thức thần thiên về ẩn hành và giám sát chăng……?
+
+「Rồi, giờ tính sao? Để bọn chúng thoát luôn à?」
+
+「Làm gì có chuyện đó. Một phần thông tin có thể đã bị rò rỉ từ đám thức thần, nhưng những chi tiết then chốt chắc chắn chưa bị lộ. Truy đuổi và bắt lại thôi. Đặc biệt là con nhãi đó, để giữ thể diện thì ít ra cũng phải bắt được nó」
+
+Ryuuhi lập tức thay đổi mục tiêu ưu tiên sang việc bắt giữ Tachibana Kayo. Lần xâm nhập này vào kinh thành, việc cấp phát giấy thông hành ngụy tạo, địa điểm ẩn náu, kinh phí cùng các loại dụng cụ hỗ trợ khác đều là nhờ vào yêu quái ẩn mình trong triều đình và Kurayoshi. Trong đó, yêu cầu của bên yêu quái là bắt giữ và thẩm vấn tên đầy tớ, còn yêu cầu của bên Kurayoshi là phải bắt được Tachibana Kayo. Mà phía trước vẫn còn nhiều cơ hội để xử lý. Dù sao cũng chỉ là một tên đầy tớ, so với việc nhắm vào kẻ quyền quý thì dễ dàng hơn rất nhiều.
+
+Nếu để Tachibana Kayo thoát ở đây, e rằng việc bắt cóc nàng sau này sẽ cực kỳ khó khăn. Không những thế, nếu thất bại trong việc bắt giữ nàng, rất có thể Kurayoshi sẽ thắt sủng và bị gạt bỏ.
+
+Nếu thế thì mọi chuyện sẽ đổ bể theo dây chuyền. Ngay cả với dân làng của chúng, các cuộc giao dịch với Kurayoshi từ trước đến nay đều là những mối làm ăn béo bở. Để duy trì mối giao dịch đó, nhất định không thể để hắn sụp đổ. Họ cũng cần giữ thể diện nên chuyện này tuyệt đối không thể nhượng bộ.
+
+「Kamui. Lát nữa hãy chuyển lời tới con yêu quái đó. Bảo rằng chúng ta tuyệt đối không phớt lờ yêu cầu bên đó. Việc được giao nhất định sẽ hoàn thành」
+
+「Ừ… hiểu rồi」
+
+Dù thuộc loại có trí tuệ cao đến mức có thể trà trộn vào triều đình, thì đối phương cũng vẫn là một con yêu quái. Vì thế, để tránh làm nó nổi giận, Ryuuhi ra lệnh truyền đạt rõ ràng ý chí của mình, nhưng bản thân Kamui lại đáp lại đầy hời hợt. Chính vì thái độ đó mà Ryuuhi, tuy không nói ra miệng, đã hạ thấp một bậc niềm tin dành cho Kamui.
+
+(Lẽ ra người được phái đi để dò xét động tĩnh trong triều đình phải là kẻ đáng tin cậy cơ mà… thế này thì chẳng thể trông cậy được rồi)
+
+Dị năng mà Kamui sở hữu có thể hữu dụng trong cả việc ẩn thân, ám sát hay chiến đấu thông thường. Đã được phái đi để thực hiện nhiệm vụ xâm nhập vào triều đình thì chắc chắn năng lực của hắn cũng nằm trong hàng ngũ ưu tú nhất trong số đồng bọn. Nhưng nếu thái độ như thế thì……
+
+「……Đi thôi. Đối phương đang bị thương. Lại không có vũ khí, đuổi kịp không khó」
+
+Dù sao đi nữa, hiện tại việc cần làm là hoàn thành nhiệm vụ trước mắt. Ryuuhi dẫn theo hai người còn lại đi truy bắt mục tiêu.
+
+「Khốn kiếp, thằng chó đó… tao mà tóm được thì sẽ giết không tha」
+
+「Đừng có nóng nảy như thế. Chính vì vậy mà ngươi mới bị qua mặt đấy」
+
+Im lặng mà làm việc đi, Ryuuhi toan lên tiếng nhắc nhở, nhưng cùng lúc đó, hắn cảm nhận được sự khác thường trong nội dung cuộc đối thoại, liền cau mày và định quay lại.
+
+「……? Này, khoan đã. Câu chuyện vừa rồi……」
+
+Ngay lúc ấy, hắn phát hiện có thứ gì đó vừa lướt qua ngay bên cạnh mình. Đồng thời khi quay lại, hắn chứng kiến cảnh đầu của Kamui nổ tung ngay trước mắt. Hộp sọ vỡ nát, xương trắng, máu đỏ và thứ bên trong màu hồng phun ra tứ phía.
+
+「………!?」
+
+Sững sờ… nhưng cảm xúc đó chỉ kéo dài chưa tới nửa giây. Ngay khoảnh khắc tiếp theo, Ryuuhi và cả Iruka cũng lập tức bật người né ra, ép sát vào vách tường, cảnh giác tối đa với hướng mà vật thể kia lao đến.
+
+Phía trước họ là một cái lỗ nhỏ… đúng vậy, là một cái lỗ có vẻ như được tạo ra khi một tảng đá lớn cỡ đầu người xuyên thủng qua. Và ngay sau đó… toàn bộ bức tường gỗ bị thổi bay. Vật liệu xây dựng và bụi đất tung lên mù mịt…
+
+「Ara, cả áo choàng lẫn đoản đao đều để lại sao? Vậy chẳng phải là tay không rồi còn gì. Rõ ràng là đồ ta tặng, vậy mà… ta sẽ phải phạt chàng ấy sau mới được」
+
+Từ trong bụi mù, vang lên giọng nói của một thiếu nữ trẻ trung, tao nhã và đầy mỹ miều. Và ngay sau đó, bụi mù bị cuốn bay sạch bởi một cơn gió mạnh. Người xuất hiện là… Một thiếu nữ.
+
+Với mái tóc hồng phất phới dưới ánh trăng tròn treo lơ lửng trên bầu trời đêm, cùng bộ y phục cùng sắc đào, cô gái mang vẻ đẹp huyền ảo ấy tựa như tiên nữ trong cổ tích, hay một vị công nương cao quý nào đó khiến người nhìn không thể nào quên được. Là hiện thân gần như tối thượng của khái niệm「cái đẹp」, trong phạm vi mà con người có thể chạm tới… thế nhưng, cả Ryuuhi và Iruka đều không hề bị vẻ đẹp đó làm cho mê mẩn. Dĩ nhiên, không phải vì lý do ngớ ngẩn như hai người chúng là kẻ đam mê nam sắc.
+
+Với lượng linh lực và sát khí hiển hiện rõ ràng đến mức ấy, kể cả đối phương có trần truồng đi nữa thì họ cũng chẳng thể nào thờ ơ nổi. Linh lực nồng đậm tới mức nghẹt thở, sát khí tàn bạo đến đáng sợ. Dù phần tóc mái màu anh đào che khuất ánh mắt của nàng, nhưng ánh nhìn sắc bén phát ra từ đôi mắt ấy vẫn khiến bản năng của con người rung lên hồi chuông cảnh báo.
+
+「Con nhãi này là………」
+
+「Phiền toái rồi đây. Chính là nhị tiểu thư gia tộc Onizuki được nhắc đến trong thông tin trước đó」
+
+Ryuuhi và Iruka vừa rút kiếm vừa thì thầm. Dù để tránh bị nghi ngờ nên họ không lập kết giới vật lý, nhưng xung quanh nơi này đã được bao phủ bằng vô số kết giới che giấu và cản trở dò tìm. Dù có dùng chú thuật tìm người đi nữa, cũng không dễ gì xác định được vị trí. Ấy vậy mà…… lại là do thức thần chăng?
+
+「Ta không nghĩ là cần thiết phải nói cho các ngươi biết đâu nhỉ?」
+
+Vừa xòe chiếc quạt giấy, nhị tiểu thư Onizuki, Onizuki Aoi cất giọng khinh miệt. Đó là thái độ tràn đầy vẻ mỉa mai và khinh thường, hệt như cách mà những kẻ quyền quý của đất nước Phù Tang này vẫn hay dùng để đối đãi với man tộc.
+
+「Iruka, ngươi đuổi theo con bé kia đi」
+
+「Ông già? Một mình ông liệu có xử lý nổi không?」
+
+「Không phải là có thể hay không thể. Là phải đấu.」
+
+Lời của Ryuuhi hoàn toàn đúng. Một nữ nhân thực lực cao cường như vậy chắn trước mặt họ, hiển nhiên là không thể nào bỏ qua. Họ vừa không có lựa chọn từ bỏ nhiệm vụ, lại bị giới hạn về thời gian. Và quân lực còn lại hiện giờ chỉ có hai người… nếu vậy thì việc phân chia chiến lực là điều tất yếu.
+
+「………Ta hiểu rồi. Ta sẽ kết thúc nhanh chóng rồi quay lại」
+
+「Cái gì chứ, trước đó cứ yên tâm đi, ta sẽ dọn dẹp sạch sẽ cho xem!!」
+
+Ngay khoảnh khắc lời nói ấy vang lên. Một tia chớp sắc bén từ cây quạt vừa vung lên lập tức bị Ryuuhi chặn lại bằng kết giới được dựng trong chớp mắt. Đồng thời, một người khác đã rút lui khỏi hiện trường nhờ ẩn hành thuật.
+
+「……Không truy kích sao? Thật bất ngờ đấy」
+
+Vừa thủ thế với thanh kiếm, đồng thời lại giấu một cây kim tẩm độc cây ô đầu phía sau như thể đó chỉ là một mồi nhử…nếu không phải là người có dị năng đặc biệt hoặc kỹ thuật đặc thù, thì dù là trừ ma sư cũng chỉ là con người, độc dược vẫn có tác dụng…Ryuuhi vừa chuẩn bị ném vừa cất tiếng hỏi. Vừa để đánh lạc hướng đối phương, vừa là một nghi vấn chân thực. Bởi với nguồn linh lực khổng lồ mà hắn được nghe kể từ trước, lại đang tận mắt chứng kiến, việc ngăn nàng ta truy đuổi đám đầy tớ kia có vẻ quá dễ dàng. Vậy thì… chẳng phải là cố tình để chúng thoát sao?
+
+「……Ta đây hiện giờ, đang cực kỳ bực bội đấy」
+
+Không có hồi đáp trực tiếp nào dành cho lời Ryuuhi. Thay vào đó, nàng ta chỉ lên tiếng nói ra nỗi bức xúc của bản thân.
+
+「Lẽ ra ta đã có thể dắt chàng ấy đi vòng quanh kinh thành mà chơi đùa rồi đấy. Ngôi nhà đó chẳng có gì thú vị cả, vậy mà giám sát thì dày đặc, cứ như nơi đồng không mông quạnh. Đã vậy còn có con mụ đáng ghét suốt ngày lải nhải nữa chứ」
+
+「………」
+
+Trước những lời than thơ của Aoi, Ryuuhi chỉ lặng thinh đáp lại. Hành động thiếu thận trọng rất nguy hiểm, mà trả lời thì cũng có khả năng bị cuốn vào ngôn linh thuật. Vậy nên, im lặng chính là biện pháp ứng đối tốt nhất. Dù gì thì… nàng ta cũng chẳng trông mong câu trả lời từ hắn.
+
+「Thế mà, thật chẳng ra sao nhỉ? Rõ ràng kinh thành phải là nơi an toàn, vậy mà cứ liên tục xảy ra chuyện. Đã thế mỗi lần như vậy là chàng ấy lại bị thương nặng. Tất cả là do sự chểnh mảng của đám trên kia thôi」
+
+Aoi tiếp tục phê phán. Thực tế thì một phần nguyên nhân cũng nàng ta đánh giá tình hình quá chủ quan, nhưng chuyện đó thì bị phớt lờ hoàn toàn. Dù Aoi có ý định chịu trách nhiệm với chàng ấy, thì với những thứ khác, nàng tuyệt đối không có khái niệm nhận lỗi. Đó là một kiểu nhận thức vô cùng ngạo mạn.
+
+「Chưa kể, chỗ này chỗ kia đều có lũ cái bị dụ tới bởi mùi hương của chàng ấy, không phải sao? Đã thế bọn chúng ai nấy đều chẳng biết thân biết phận, thật phiền toái. Như lũ ruồi bị hoa thơm dụ đến vậy」
+
+Nếu chỉ đơn thuần là mong nhớ từ xa thì không thành vấn đề. Nếu chỉ đơn thuần là ghen tị thì cũng chẳng sao. Cùng lắm thì chỉ nên coi như món đồ chơi tạm thời cho chàng ấy là được rồi. Người duy nhất có thể mãi mãi kề bên chàng, chỉ có nàng mà thôi.
+
+Aoi thật lòng tin rằng bản thân là một người rộng lượng. Bằng không, thì đã chẳng thể chấp nhận chuyện để người khác chạm vào chàng ấy, cho chàng nhìn thấy mấy ả cái đó, hay việc chàng dùng rồi vứt bỏ mấy ả theo cảm hứng nhất thời. Thế mà là gì đây? Vuốt tóc là sao? Đút cho ăn là sao? Đập tường dồn góc là gì chứ? Những ả cái không biết điều đó, có muốn ta moi hết ruột gan ra xem không?
+
+「Thật sự bực mình quá đi mất. Nhưng… điều khiến ta giận nhất lại không phải những chuyện đó」
+
+Đúng vậy, điều không thể tha thứ được nhất chính là khiến chàng ấy bị vấy bẩn, gài bẫy chàng, và bắt chàng ra tay giết người.
+
+「Chuyện đó… tuyệt đối không thể được」
+
+Aoi biết rõ. Hôm đó, vào khoảnh khắc cuối cùng của cuộc đào tẩu ấy. Trong tuyệt vọng, khi chẳng còn ai mong chàng quay về sống sót, chàng ấy vẫn níu giữ chút hy vọng mong manh, để rồi thứ chờ đợi chàng lại là một cái bẫy tàn nhẫn đến lạnh lùng. Và rồi… Aoi lần đầu tiên chứng kiến điều đó. Dáng vẻ hắn tức giận với sát ý nhắm vào con người. Sau một trận chiến tàn khốc đến ghê tởm, chàng đã lấy mạng kẻ thủ ác. Và… gương mặt run rẩy thấm đẫm nỗi buồn và đau đớn của chàng vào lúc ấy.
+
+「……Dù đến tận bây giờ ta vẫn không thể hiểu nổi. Bị đối xử như vậy rồi mà còn có thể mang vẻ mặt như thế sao」
+
+Nếu là Aoi của thời điểm đó, đặt vào hoàn cảnh tương tự thì hẳn sẽ chẳng chút do dự. Trái lại còn tàn bạo hơn, độc ác hơn, lãnh khốc hơn mà dồn kẻ thù đến kết cục bi thảm. Aoi bây giờ vẫn nghĩ đó là lẽ đương nhiên. Với kẻ đã toan sát hại bản thân thì không cần chút nhân từ nào cả. Ấy vậy mà chàng ấy thì………
+
+「Nếu là yêu quái thì có vẻ chàng ấy không để tâm lắm. Dù thật lòng ta nghĩ chỉ vậy mà đã khiến chàng như thế thì…… nhưng ta cũng chẳng muốn thấy dáng vẻ ấy của chàng thêm một lần nào nữa」
+
+Aoi yêu chàng. Việc đẩy chàng vào hoàn cảnh nguy hiểm, bắt chàng chiến đấu không phải vì ác ý. Là vì chàng, và cũng là vì chính nàng. Việc bắt chàng chiến đấu không phải là mục tiêu, mà chỉ là phương tiện để đạt được mục tiêu.
+
+Chính vì thế, điều duy nhất mà Aoi tuyệt đối sẽ không làm, là ép chàng ấy phải làm điều chàng thực lòng muốn tránh. Không thể để chàng làm vậy. Không thể để chuyện đó xảy ra. Vì ký ức đã bị lãng quên kia, chẳng ai biết khi nào sẽ trỗi dậy, và một khi đã nhớ lại, thì chàng sẽ đau khổ và tuyệt vọng.
+
+Chuyện đó không thể tha thứ, và chính vì thế, điều cần tránh nhất chính là để chàng bị hạ nhục, bị gài bẫy, và bị ép phải giết người.
+
+「Vì vậy… ngươi『thì』để ta đối phó là hợp lý rồi còn gì?」
+
+Aoi, sau khi một mạch nói ra bao điều một chiều, đã kết thúc câu chuyện như thế. Vụ rối loạn lần này cần có nhân chứng và hung thủ, chính vì vậy Aoi nhất định không để nam nhân trước mắt này thoát. Người kia thì chàng hẳn có thể xoay xở được, nhưng… với tên hung thủ ngay trước mặt này, thì đối với một người không muốn giết ai như chàng ấy, đó là một gánh nặng quá lớn. Với chàng bây giờ, việc bắt sống, hay thậm chí là thoát khỏi tình huống này cũng chẳng dễ dàng gì.
+
+Quan trọng hơn cả……… nàng cần một người để trút giận.
+
+「Vậy nên……… đừng có dễ hỏng quá đấy nhé?」
+
+Bằng một giọng nói đẹp tựa tiếng chuông ngân, thế nhưng đôi môi lại méo mó đến ghê rợn, thiếu nữ bật cười chế nhạo.
+
+「………!?」
+
+Khoảnh khắc tiếp theo, kẻ thủ ác bị bầu không khí ghê tởm kia áp bức đến mức mồ hôi túa ra trên trán, rồi ném cây kim tẩm độc về phía cổ thiếu nữ………
+
+Hãy bình luận để ủng hộ người đăng nhé!

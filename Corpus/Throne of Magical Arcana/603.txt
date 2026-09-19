@@ -1,0 +1,118 @@
+Chương 604 - Tiết tấu khẩn trương
+
+
+“Toán học nói lên tất cả, nhưng nó còn tùy vào ý nghĩa arcana cụ thể nữa. Chúng ta cần phải thông qua Toán học để biết quá trình là thế nào, tại sao lại như vậy, cũng như nếu dựa theo những quy luật tương tự, chúng ta có thể đạt được những kết quả nào, thay vì chỉ đơn thuần thảo luận về các vấn đề toán học. Đó mới là mục đích chúng ta khám phá thế giới và truy cầu sự thật.” Fernando trước tiên công nhận ý tưởng của Lucien, nhưng cũng bày tỏ ý kiến của bản thân. “Chẳng hạn, trước khi trở thành mô hình không – thời gian của Thuyết tương đối tổng quát, hình học Evans của cậu có rất ít người nghiên cứu nó kỹ càng, ngoại trừ các Arcanist của Tháp.”
+
+Lucien cũng có quan điểm tương tự về vấn đề này: “Đúng vậy. Toán học chính là công cụ tốt nhất của chúng ta. Chúng ta dựa vào nó để thay thế cho trí tưởng tượng của mình. Nhưng bất luận ra sao, chúng ta vẫn cần phải có một lời giải thích, cho Tân Giả kim thuật, cho cấu trúc bên trong của nguyên tử, và cho ý nghĩa arcana của cơ học lượng tử. Tuy nhiên, lời giải thích của chúng ta dù cho có táo bạo đến đâu thì vẫn phải được chứng thực cẩn thận. Thế nên tạm thời em chưa thể cho thầy đáp án được.”
+
+Fernando khẽ gật đầu: “Phương pháp toán học của cậu một khi đã có thể giải quyết vấn đề thành công thì nó ắt phải chứa đựng một ý nghĩa nào đó bên trong mà cậu chưa phát hiện ra.”
+
+Nói rồi, ông day day lông mày và có chút phàn nàn: “Cuối cùng thì ta cũng không cần phải bị mấy vấn đề của Tân Giả kim thuật như điều kiện lượng tử hóa áp đặt làm phiền nữa. Chúng cứ như hàng vạn con ruồi bay vo ve quanh tai ấy, làm ta chỉ muốn hủy diệt luôn cả thế giới. Còn giờ ta lại có thể an tĩnh mà tiếp tục nghiên cứu quy tắc phân bố electron rồi. Sau nguyên lý loại trừ và nguyên lý năng lượng tối thiểu[note69877] vẫn còn cả đống thứ.”
+
+Dù rằng không thốt ra miệng lời khen ngợi nghiên cứu của Lucien, thế nhưng thái độ này cũng đã tỏ rõ niềm vui trong lòng ông.
+
+Đối với những lời của Fernando, Lucien không tin. Lúc thầy gào rống tranh luận với người khác về những vấn đề này, trông mặt thầy hồng hào, vui vẻ lắm mà.
+
+“Mau đem luận án của cậu đi đệ trình đi. Các Arcanist hệ Nguyên tố và Giả kim thuật đều đang rất háo hức mong đợi sự xuất hiện của nó đấy.” Fernando vẫn không nhịn được mà nhắc nhở. “Thật ra cậu có thể dùng những công cụ toán học có sẵn, như vậy thân thiện với mọi người hơn, thay vì khiến cho họ phải học một loại toán học trước, cho dù đó có là toán học cơ bản nhất đi chăng nữa. Cậu mà không phải là học trò của ta thì ta đã xé nát cái luận án này ra ngay trước mặt cậu và bắt cậu viết lại rồi.”
+
+Thật ra ấy mà, học trò của thầy mới là những người bị thầy gào rống nhiều nhất đấy. Lucien thầm trêu chọc một câu, sau đó mỉm cười nói: “Trong quá trình nghiên cứu, em đã đi theo con đường xây dựng công cụ toán học một lần, sau đó mới sực nhớ ra trong hệ thống arcana ban đầu có một số thứ tương tự. Có điều dù sao cũng đã làm xong, em cứ thế dứt khoát mà đệ trình cùng thôi. Haha, cái luận án này của em thế mà lại là hai trong một, ngẫm ra thì siêu giá trị. Đợi hôn lễ kết thúc xong, em sẽ bắt tay vào cải tạo lại nó bằng cách sử dụng những công cụ toán học ban đầu.”
+
+Fernando đã quá quen với cái thói phát minh ra đủ loại từ vựng kỳ quái của Lucien: “Giao cho học trò của cậu hoàn thành đi. Cậu là người có tên tuổi, không cần phải tốn thời gian vào việc đó, chưa kể đấy cũng là cơ hội cho bọn nhóc thực hành nữa. À phải rồi, việc chuẩn bị cho ‘hôn lễ’ diễn ra đến đâu rồi? Cái này cực kỳ quan trọng đấy.”
+
+Lucien trịnh trọng gật đầu nói: “Chỉ còn mỗi việc chế tạo ma cụ huyền thoại độc quyền nữa thôi.”
+
+“Bình thường mà nói, khi mọi thứ đã sẵn sàng thì vẫn phải mất ít nhất một tuần để chế tạo một ma cụ huyền thoại. Nếu lần này mà chế hỏng thì sẽ không kịp nữa… Nhớ phải mượn Vương Miện Gai đấy.” Fernando nhắc nhở. Giờ không phải là lúc keo kiệt điểm arcana. Vì đây là ma cụ huyền thoại độc quyền, thế nên nếu chế tạo thành công, uy lực của nó sẽ mạnh hơn bình thường, có thể sánh ngang với Vương Miện Gai.
+
+“Cho dù chế tạo thành công thì em vẫn sẽ mượn.” Dù rằng có chút hám của, Lucien vẫn sẽ sẵn sàng chi tiền khi cần thiết. Chưa kể, cậu còn phải cân nhắc đến sự an toàn của Natasha nữa.
+
+“Tốt. Ta phải tranh thủ thời gian nghiên cứu đây. Luận án của cậu khơi dậy lại nhiệt huyết của ta rồi.” Fernando cuối cùng cũng khen Lucien một câu.
+
+Thầy à, thầy có lúc nào không tràn đầy nhiệt huyết và động lực đâu. Điều này mỗi một thành viên của Hội đồng Tối cao, mỗi một Arcanist từng bị thầy gầm rống vào mặt đều có thể làm chứng hết đó. Lucien đem luận án của mình sao ra một bản, sau đó mỉm cười rời khỏi thư phòng.
+
+Trong khi đó, Fernando tay phải bấm trán, miệng nghi hoặc lẩm bẩm: “Động lượng nhân vị trí không bằng vị trí nhân động lượng? Cái này rốt cuộc đại diện cho ý nghĩa arcana nào?”
+
+……
+
+Sau khi sinh mệnh giả kim chuyển đi, luận án của Lucien nhanh chóng đến tay hai ủy viên hội đồng là Raventi và Gaston.
+
+Raventi, người đã vì những ưu phiền liên quan đến Tân Giả kim thuật mà hoãn nghi lễ tấn thăng huyền thoại của mình lại, vừa lấy luận án ra từ “người đưa tin”, vừa suy nghĩ về hàm sóng của electron, tính giải quyết vấn đề từ góc độ này.
+
+Là một trong số ít những Arcanist cấp cao theo trường phái thực tế chỉ tin vào sự thật và kết quả thực nghiệm, ông đã bước đầu chấp nhận tư tưởng của Lucien và coi electron như một loại vật chất chưa được hiểu rõ thay vì hạt hoặc sóng theo khái niệm nguyên bản.
+
+Đương nhiên, đây cũng chỉ mới là sự chấp nhận sơ bộ. Tất cả những kết quả thực nghiệm trước đây, những hình ảnh quỹ tích rõ ràng đó đều khiến ông chống đối lại khái niệm sóng electron, không tin nó có thể giải quyết được triệt để vấn đề. Càng lúc ông càng cảm thấy Tân Giả kim thuật đã rơi vào hoàn cảnh sinh tử, tựa hồ bất cứ lúc nào cũng có thể bị phá hủy và tuyên cáo là trong quá khứ đã sai lầm.
+
+Trong tiềm thức đè nén như vậy, thành thử tiến triển trong nghiên cứu của ông rất chậm.
+
+Raventi rút tập luận án dày nhất ra, đôi đồng tử xám đen lập tức đông cứng lại: “Luận về Cơ học Lượng tử? Lucien Evans X?”
+
+Vì phần tiêu đề, ông không trực tiếp liên hệ nó với Tân Giả kim thuật mà lại cho rằng Lucien đang nghiên cứu gì đó về phương diện trường lực và Thuyết tương đối. “Cơ học lượng tử, Thuyết tương đối giải quyết vấn đề lượng tử hóa?”
+
+Chẳng qua, bất kể là luận án nào đi chăng nữa, chỉ cần là kết quả nghiên cứu của Lucien thì luôn đáng để học tập. Raventi lật bìa ra rồi tỉ mỉ đọc. Ma trận ở phần mở đầu khiến ông cực kỳ khó thích ứng. Không phải vì nó khó, mà là vì ông đã quen với các công cụ toán học tương tự trong quá khứ, thành thử khó mà không bị lẫn lộn. Đôi lông mày màu xám tro nhạt của ông khẽ cau lại.
+
+Nhưng khi phần nội dung chính của luận án bắt đầu, lông mày của Raventi dần giãn ra, thay vào đó là vẻ mặt trầm ngâm. Ma trận không tính là kỳ quái, nhưng ý tưởng mà Lucien thể hiện trong bài luận án này lại khá lạ lùng!
+
+Trong khi xem, mạch máu trên mu bàn tay cầm luận án của ông ngày càng nổi rõ, biểu cảm thoáng hiện ra vẻ trống rỗng, bởi vì toàn bộ tinh thần đều đang tập trung cả vào trong mắt.
+
+Bất thình lình, ông đặt luận án xuống, cầm bút lông lên và bắt đầu tính toán theo nội dung trên luận án.
+
+Lông vũ trắng không ngừng rung rinh, thời gian thoăn thoắt trôi đi. Raventi không nhớ mình đã nhìn bao lâu, chỉ biết rằng bản thân đang sóng lòng cuồn cuộn, khó bề kiểm soát.
+
+Những hàng phép tính phức tạp được viết ra, kết quả được thu về từng chút một. Bên ngoài cửa sổ, mặt trăng lặn xuống, mặt trời mọc lên.
+
+Điều kiện lượng tử hóa và công thức thực nghiệm được suy ra một cách tự nhiên thông qua tính toán, kết quả cũng khớp hoàn toàn với số liệu thực nghiệm! “Rắc” một tiếng, chiếc bút lông trong tay Raventi gãy làm đôi.
+
+Ông đột nhiên ngả người ra sau, dựa vào lưng ghế, hai mắt nhắm chặt lại, trên mặt tràn đầy kích động và thỏa mãn.
+
+Qua một lúc lâu sau, ông mới mở mắt ra, phát hiện ánh nắng buổi chiều chói chang mà tươi đẹp, hệt như tâm trạng của ông lúc này. Thế là ông lại cầm bút lông lên, sau đó viết thư cho Morris:
+
+“…Hồi đầu tháng, tôi vẫn còn than thở rằng Tân Giả kim thuật đã tới thời khắc then chốt nhất, gần thành công nhất, nhưng cũng tối tăm nhất, nguy hiểm nhất, khiến tôi loanh quanh không tìm ra lối thoát, bất đắc dĩ phải thỏa hiệp với một giả thuyết chẳng có bằng chứng thực tế nào. Ai mà biết rằng chỉ tới cuối tháng, tôi đã thấy bóng tối tan đi, còn ngai vàng arcana thì hiện ra trước mặt, to lớn và tráng lệ đến mức khiến cho người ta không cách nào rời mắt. Và người đã dẫn dắt chúng ta vượt qua đêm đen nguy hiểm đó chính là Lucien, là công cụ quý giá nhất, toán học. Đúng như những gì cậu ấy đã từng nói, khi khai phá những lĩnh vực chưa biết, chúng ta có thể và chỉ có thể dựa vào các công cụ toán học, như thể ngọn hải đăng trên đường biển vậy…”
+
+Bức thư chứa đựng tâm tình kích động của ông cùng bản sao của luận án được “người đưa tin” gửi tới ma tháp của Morris.
+
+Lúc nhận được thư, Morris đang thưởng thức bữa tối. Vừa khen món bít tết chín tái, ông vừa ung dung mở thư của Raventi ra đọc.
+
+Ngay khi vừa liếc được vài cái, biểu cảm của ông bất chợt cứng lại. “Keng” một tiếng, dao dĩa rơi hết xuống đĩa. Sau khi lóe lên một cái, ông liền tốc biến tới thư phòng rồi bắt đầu đọc, tính toán cũng như suy nghĩ một cách chuyên chú và điên cuồng.
+
+Những người hầu phục vụ cho ông nhìn cảnh này mà kinh ngạc. Ngài Morris chưa bao giờ bỏ phí đồ ăn. Ngài xưa nay vẫn luôn là một người rất tiết kiệm, rất keo kiệt cơ mà. Hôm nay trở trời gì vậy?
+
+Tới tận ngày hôm sau, Morris mới thoát ra được khỏi mớ kiểm chứng rối rắm của mình. Với vẻ vui sướng không thể kìm nén trên mặt, ông vô thức vận động tay chân, chẳng bận tâm đến hình tượng của mình, sau đó trầm giọng thở dài: “Một khi hiểu được rõ ý nghĩa arcana trong lý thuyết của Lucien, ta sẽ có thể bán kiên cố hóa thế giới nhận thức của mình.”
+
+Ông tùy ý nhìn quanh, sau đó đột nhiên thu vào tầm mắt thảm cỏ xanh mướt cùng cảnh xuân tươi sáng, khiến người ta tràn trề sức sống bên ngoài cửa sổ.
+
+“Từ khi nào mà cái lạnh đã kết thúc rồi.”
+
+……
+
+Ngày 1 tháng 4, Onore, một pháp sư sơ cấp, từ sớm đã tới bên ngoài trường thi do Cục Quản lý Pháp sư chuẩn bị. Do hai nữ giám thị có dung mạo xinh đẹp, trẻ trung mơn mởn, gã không kìm được mà liếc mắt nhìn thêm nhiều lần nữa, sau đó nghe thấy họ thảo luận với nhau:
+
+“Heidi, cậu muốn xin đảm nhiệm vai trò giáo viên ở Học viện Ma thuật Holt à? Không sợ ảnh hưởng đến công việc ở viện sao?” Cô gái có mái tóc đuôi ngựa đen nghi hoặc hỏi.
+
+Heidi tóc màu nâu vàng nhạt cười hì hì đáp: “Tớ xem yêu cầu rồi, chỉ cần dạy ba lớp một tuần thôi, hoàn toàn có thời gian rảnh. Với cả thầy chúng ta là hiệu trưởng, chúng ta gì thì gì cũng phải ủng hộ thầy ấy chứ. Layria, làm chung không?”
+
+Nghiên cứu của bọn họ hiện tại đều do họ tự làm chủ. Lucien hầu như không thực hiện bất kỳ phân công chi tiết nào ngoại trừ phân ra một hướng lớn và giao nhiệm vụ học tập cho họ.
+
+“Cậu chỉ muốn quảng bá những thứ kiểu như ‘Tập đề Toán học Evans’ thôi chứ gì…” Layria nhìn thấu “âm mưu” của Heidi.
+
+Heidi cười vui vẻ, cố ý không trả lời câu hỏi mà đổi chủ đề: “Dù sao thì tớ cũng sẽ giảng dạy Tân Giả kim thuật cơ bản.”
+
+“Là mô hình ban đầu á?” Layria thoáng sửng sốt.
+
+“Ừ. Tớ cũng sẽ đề cập một chút đến bản chỉnh sửa nữa.”
+
+Ờm… Học viện sẽ phát giáo trình liên quan đến Tân Giả kim thuật mà, phải không? Onore đang trong trạng thái mù tịt, chẳng hiểu gì những cuộc thảo luận trong nửa năm qua.
+
+Sau khi hoàn thành bài thi phân tích ma thuật vào buổi sáng và bước ra khỏi cửa, gã một lần nữa gặp lại Heidi và Layria. Lúc này, khuôn mặt họ tràn ngập sự vui sướng và kích động khó lòng kiềm chế.
+
+“Haha. Cứ hễ một thời gian dài thầy không phát hành luận án nào là y như rằng lại có kết quả chấn động. Giờ thì hầu hết các vấn đề đều đã được giải quyết rồi.” Heidi phấn khởi nói, dáng vẻ cực kỳ tự hào.
+
+Layria cũng vui vẻ nói: “Mặc dù tớ xem xong không hiểu rõ ý nghĩa arcana cụ thể, thế nhưng chí ít nó cũng đã cho thấy rằng con đường này là khả thi rồi. Heidi, có lẽ giáo trình ‘Tân Giả kim thuật Cơ bản’ của cậu sẽ phải thay đổi đấy. Cậu giảng rõ được ư? Hay nói theo kiểu khác, cậu đọc hiểu được hoàn toàn luận án đó ư?”
+
+“Ah…” Heidi ngẩn ra.
+
+Onore cũng nghệt ra theo. Lý thuyết có thay đổi lớn?
+
+Trên đường trở về, gặp được không ít Arcanist đang phấn khởi, gã cuối cùng cũng hiểu chuyện gì đang xảy ra, bèn thở dài cảm thán rồi viết vào trong cuốn sổ tay ma thuật của mình:
+
+“…Sự phát triển của arcana cứ như một trận hồng thủy cuồn cuộn mà tới, khiến người ta hoàn toàn không theo kịp. Trước kỳ thi sáng nay, các giáo viên coi thi, nhân viên giám thị, pháp sư tham gia kỳ thi đều thảo luận và trao đổi với nhau về mô hình kinh điển của Tân Giả kim thuật, ngay cả giáo trình cũng đã được chuẩn bị. Ấy vậy mà khi kỳ thi kết thúc vào buổi trưa, tất cả tuyệt nhiên đã khác. Mọi người ai nấy đều nghị luận về cơ học lượng tử, về việc phải xây dựng lại mô hình kinh điển của Tân Giả kim thuật, về việc phải sửa lại giáo trình…”
+
+“…Chỉ vẻn vẹn trong một buổi sáng đã xảy ra một thay đổi lớn như vậy. Giáo trình gốc còn chưa đến được tay học sinh thì đã bất đắc dĩ phải soạn lại một lần nữa. Thật là một thời đại thần thoại. Tiết tấu khẩn trương, gấp gáp này buộc chúng ta chỉ có thể guồng chân chạy. May mắn thay là giờ đã có một trường ma thuật giảng dạy mọi thứ…”

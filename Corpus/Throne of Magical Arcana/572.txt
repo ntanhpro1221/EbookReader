@@ -1,0 +1,142 @@
+Chương 573 - Bình minh của hệ Chiêm tinh
+
+
+“Đây là một trong hai tiền đề của luận án này. Tôi gọi nó là nguyên lý tương đương…”
+
+Đối với việc khối lượng hấp dẫn và khối lượng quán tính có thể bằng nhau trên một hệ đơn vị thích hợp, Blake không cảm thấy khó hiểu hay không chấp nhận được. Một số Arcanist trong số họ đã từng thực hiện những nghiên cứu về phương diện này trước đây và thậm chí còn thu được dữ liệu tương đối chính xác. Tuy nhiên, tất cả bọn họ đều chỉ coi sự tương đương của hai khối lượng này là một sự tình cờ chứ không đi tìm hiểu những vấn đề sâu xa hơn đằng sau sự trùng hợp đó.
+
+Nghe Lucien giảng giải sơ bộ về thí nghiệm và số liệu, Blake cảm thấy não mình trương lên. Cậu dứt khoát lấy ra một tờ giấy trắng cùng một cây bút lông, sau đó bắt đầu ghi chép và tính toán trên chiếc bàn trà làm bằng gỗ đỏ, nơi đặt chiếc radio ma thuật, dáng vẻ nghiêm túc và chuyên chú như thể một học trò đang nghe bậc thầy giảng dạy.
+
+Kiểu hành động này xảy ra với đại đa số các Arcanist, những người nghe đài ở mức độ hoặc ít hoặc nhiều. Trong cuộc sống bình thường, bọn họ không có cơ hội nhận được hướng dẫn từ một vị ở cấp bậc chuẩn Grand Arcanist như vậy. Hơn nữa, những gì lực hấp dẫn ánh xạ ra trong những biến đổi của thiên tượng vừa rồi khiến họ cực kỳ tò mò và phấn khích.
+
+“…Nguyên lý của Thuyết tương đối tổng quát đã giải thích xong. Tiếp theo là vận dụng hình học Evans, phân tích tensor và các công cụ hình học khác để hoàn thành việc suy luận và thiết lập toàn bộ hệ thống. Vì nó liên quan đến rất nhiều thứ phức tạp, tôi sẽ giới thiệu ngắn gọn để mọi người có thể hiểu được khái niệm sơ bộ…”
+
+Sau những lời này, chiếc bút lông trong tay Blake dừng lại. Cậu có thể hiểu từng lời ngài Evans nói, nhưng lại chẳng hiểu gì cả khi ghép chúng lại với nhau. Trong mắt cậu xoay vòng vòng đầy mù mịt, trong đầu thì hiện lên lung tung lộn xộn vô số từ ngữ, ký hiệu và công thức vừa kỳ quặc vừa phức tạp nhưng lại chẳng có ý nghĩa thực tế.
+
+Điều này khiến cho cậu cảm thấy choáng váng, như thể đã bước vào một mộng cảnh mà làm sao cũng không thể hiểu rõ.
+
+‘…Cứ tưởng nền tảng arcana của mình đã vững lắm rồi, nhất là trong toán học, nhưng giờ mình mới nhận ra bản thân thực chất còn chưa chạm được đến cái cổng của nó nữa…’
+
+‘…Các Arcanist cấp cao nghiên cứu những thứ thế này mỗi ngày sao? Vậy sao mình vẫn có thể hiểu được khoảng một nửa tập san [Arcana]…?’
+
+Những câu hỏi như vậy không chỉ xuất hiện trong đầu Blake mà còn vang vọng trong đầu của hầu hết các Arcanist cấp cao. Vốn dĩ, họ có niềm tin rất mạnh mẽ vào kỹ năng arcana và trí tuệ của mình, nhưng sau khi nghe những lời thốt ra từ miệng Lucien Evans, họ lại trở nên hoài nghi đến cực điểm. Nói thẳng ra là, họ gần như chẳng hiểu gì cả!
+
+‘Kết luận, nói kết luận trước!’
+
+Họ điên cuồng hét lên trong lòng như vậy, quyết định nghe bản chất của lực hấp dẫn là gì trước đã, kế đó sẽ đổi luận án về để nghiên cứu từ từ sau.
+
+……
+
+Tại Tháp.
+
+Không bao lâu sau khi những biến hóa của thiên tượng kết thúc, Chiêm Tinh Sư Annonis cũng đang nghe Lucien giảng giải thông qua chiếc đài radio ma thuật còn chưa tắt với vẻ mặt cực kỳ nghiêm túc cùng một chút hoài nghi.
+
+Là một Arcanist cấp chín và Đại pháp sư bậc chín thuộc hệ Chiêm tinh, lý thuyết về lực hấp dẫn đối với ông là vô cùng quan trọng. Nếu như có thể nắm bắt được bản chất của lực hấp dẫn và vận dụng nó để giải quyết một số vấn đề của hệ Chiêm tinh đã khiến bản thân trăn trở bấy lâu nay, ông vô cùng tin tưởng rằng mình sẽ có thể trở thành Chiêm Tinh Sư thực thụ!
+
+Tuy nhiên, trước khi tận mắt nhìn thấy luận án và xác minh được hiện tượng, ông vẫn có những hoài nghi cơ bản nhất. Nếu vấn đề về bản chất của lực hấp dẫn lại có thể dễ dàng giải quyết như vậy thì Ngài Douglas đã chẳng hoang mang do dự đến thế.
+
+Ông biết cuộc nói chuyện trước đó của Ngài Chủ tịch đã gây ra khá nhiều sóng gió. Việc Lucien Evans đưa ra một lời giải thích có căn cứ về mặt lý thuyết liên quan đến bản chất của lực hấp dẫn sẽ có tác dụng ổn định lòng người rất lớn, thế nên có khoa trương một chút âu cũng là chuyện bình thường. Dẫu vậy, trong lòng ông vẫn thầm mong đợi, kỳ vọng rằng Lucien Evans thực sự có thể giải quyết được vấn đề bản chất của lực hấp dẫn.
+
+Lúc Lucien giới thiệu hai nguyên lý cơ bản ban đầu, Annonis chỉ cẩn thận lắng nghe mà không ghi chép gì. Tuy nhiên, khi cậu đưa ra mô tả sơ bộ bằng ngôn ngữ hình học, ông bắt đầu trở nên chăm chú hơn.
+
+Chẳng biết từ khi nào, một xấp giấy trắng và một chiếc bút lông đã lơ lửng trước mặt Annonis, còn ông thì không ngừng ghi chép và tính toán gì đó, thi thoảng trên mặt lại lộ ra biểu cảm hoang mang.
+
+Các luận án toán học khó hiểu đăng trên tập san [Tự Nhiên] như hình học Evans hay phân tích tensor thường không được các Arcanist chú ý do không hữu ích. Tuy nhiên, Chiêm Tinh Sư Annonis lại là một Đại pháp sư chuyên về lĩnh vực này, do đó, khác với những Arcanist cấp cao khác, những người hầu như chẳng hiểu chút nào, ông đã có những nghiên cứu ở một mức độ nhất định, thậm chí còn từng xuất bản một số luận án tương tự. Nhưng kể cả vậy, ông cũng khó mà hiểu được rõ hơn. Độ khó của phần luận án này thực sự đã vượt quá sức tưởng tượng của ông.
+
+Trong thư phòng của Annonis cực kỳ yên tĩnh, chỉ có giọng nói dõng dạc mà trầm thấp của Lucien vang lên, cùng với đó là tiếng bút lông khẽ lướt soàn soạt trên giấy trắng.
+
+Đột nhiên, cảm nhận được điều gì đó, ông bỗng quay đầu, để rồi nhìn thấy Nhà Tiên Tri Bergner không biết đã đi vào từ khi nào, lúc này cũng đang dùng pháp trận phụ trợ cùng bút lông để ghi chép và tính toán nội dung của luận án với biểu cảm chăm chú y hệt.
+
+Không hỏi gì hết, Annonis lại quay đầu về, chuyển sự chú ý vào những gì Lucien đang nói.
+
+Còn ở trụ sở của Ý chí Nguyên tố, Raventi, người đang khổ sở vì kiến thức toán học trong phương diện này không đầy đủ, chỉ có thể nhanh chóng ghi lại trọng điểm từ những điều mà Lucien đã nói, không cách nào tính toán hoặc hiểu được.
+
+……
+
+Bên trong cung điện Nekso.
+
+Do cha mình đã đến, cộng thêm muốn đưa ông đi tham quan nhiều nơi, Natasha không có thời gian để nghe kênh [Thanh âm Arcana] và [Sự thực của Thế giới] hôm nay. Mặt khác, vì khoảng cách xa, cô không mấy để ý đến sấm chớp và mưa bão ở Allyn, chỉ cho rằng đó là một cơn mưa rào cục bộ trong khu vực đó, thành thử không xem xét kỹ. Suy cho cùng, tình huống này rất thường thấy vào mùa hè.
+
+Mãi cho đến khi ánh sáng của Mặt trời Rực cháy Vĩnh hằng chiếu rọi cả một phương, Natasha mới nhận ra có điều không ổn và nhanh chóng liên lạc với Lucien. Sau khi không thể kết nối được, lo rằng sẽ quấy rầy và làm ảnh hưởng đến công việc của cậu, cô bèn lý trí tạm dừng lại rồi liên lạc với Hathaway.
+
+Đến khi xác nhận Lucien và Allyn đều không sao, cô mới thở phào nhẹ nhõm, sau đó bật radio ma thuật lên để nghe xem rốt cuộc đã có chuyện gì xảy ra ở Allyn.
+
+Đâu ai ngờ, thanh âm phát ra từ chiếc radio ma thuật lại chính là giọng nói mà cô quen thuộc nhất, điều này khiến cô thực sự yên tâm.
+
+Những ký hiệu và công thức phức tạp hoàn toàn nằm ngoài khả năng hiểu của Natasha, nhưng chúng không thể ngăn cô mải mê chăm chú lắng nghe những lời giảng giải nghiêm túc và chuyên tâm của Lucien.
+
+Vừa nghe, cô vừa lấy tay phải ôm má, trong mắt phủ một lớp sương mù, khóe môi khẽ nhoẻn ý cười.
+
+……
+
+Trong phòng phát sóng trực tiếp của Đài phát thanh Thiên Không.
+
+Toàn bộ các Arcanist, bao gồm cả Samantha, đều đưa ánh mắt vừa ngây thơ vô tội vừa đờ đẫn hoang mang nhìn Lucien, cứ như thể cậu đang nói một thứ ngôn ngữ không tồn tại trên thế giới này.
+
+Nhìn vẻ mặt của họ, Lucien sực nhận ra mình đã đi quá sâu, bèn vội vàng lướt qua phần mô tả bằng ngôn ngữ hình học và phương trình trường hấp dẫn trong dăm ba câu, sau đó đi thẳng đến kết luận:
+
+“Từ những gì chúng ta đã thấy trước đó, khối lượng sẽ gây ra sự bẻ cong thời không, từ đó xuất hiện hiện tượng hấp dẫn. Bản chất của nó chính là không – thời gian cong. Có thể lấy một ví dụ thế này…”
+
+Mặc dù mô tả về tấm lưới đàn hồi không đủ chuẩn xác, song, nó vẫn khiến đám người Samantha hai mắt sáng lên, tựa hồ đã hiểu ra gì đó và đại khái lý giải được bản chất của lực hấp dẫn.
+
+“Thì ra là như vậy…”
+
+“Vậy rốt cuộc nó có còn là lực hay không?”
+
+“Nó có thể được chứng thực bằng hiện tượng không?”
+
+…
+
+Những tiếng xì xào đầy phấn khích, kích động và hoài nghi tràn ngập khắp phòng. Ngay cả Hellen cũng đang hỏi Fernando. Lời giải thích về bản chất của lực hấp dẫn này xuất phát từ một góc độ chưa từng thấy. Đây có vẻ là một vấn đề thuộc không – thời gian bốn chiều, là hiện tượng chuyển động của vật thể trong không – thời gian cong.
+
+“Cái này hoàn toàn nằm ngoài sức tưởng tượng của mình rồi…”
+
+“Mô hình không – thời gian hình như còn khó hiểu hơn nữa…”
+
+Blake và các Arcanist khác đang nghe đài ma thuật một mặt đều cảm thán trước lời giải thích vừa ngoài sức tưởng tượng vừa hoàn hảo này, mặt khác lại vẫn ôm lòng hoài nghi ở mức đáng kể, bởi vì bản chất của thời gian, không gian và lực hấp dẫn mà Lucien mô tả khiến cho người ta đến tưởng tượng thôi còn thấy khó!
+
+Mặt khác, biểu cảm của Nhà Tiên Tri và Chiêm Tinh Sư trong Tháp lại lộ ra vẻ tối tăm và không chắc chắn. Điều này đã lật đổ hoàn toàn mọi suy đoán của họ về bản chất của lực hấp dẫn. Ngay cả việc nó có phải là lực hay không còn trở thành một dấu hỏi.
+
+May mắn là chưa từng có lời giải thích chính thức nào về bản chất của lực hấp dẫn đủ uy tín và được công nhận, đồng thời, họ cũng không dám xây dựng thế giới nhận thức của bản thân dựa trên nó, bởi vậy mới không có tình huống rung chuyển nào phát sinh.
+
+“Hiện tượng này cần phải được nghiệm chứng!”
+
+“Điều này cần phải được chứng thực!”
+
+Hai vị đại nhân vật của hệ Chiêm tinh đồng thanh nói ra những lời na ná nhau. Kể từ sau hình học Levski, họ đã đồng ý rằng không thể phủ nhận một cách mù quáng bất kỳ điều gì dựa trên nhận thức trực quan và kinh nghiệm trong quá khứ. Tuy vậy, bất cứ lý thuyết nào cũng đều phải được chứng thực bằng hiện tượng và thực nghiệm, nếu không, nó sẽ chỉ là suy đoán và ảo tưởng viển vông.
+
+Trong lòng mỗi Arcanist đều có những hoài nghi như vậy. Vừa ôm ấp thái độ tương tự, họ vừa lắng nghe Lucien tiếp tục nói: “Từ góc độ không – thời gian cong, chúng ta có thể tính ra vấn đề về tiến động điểm cận nhật dư thừa của Sao Mai như thế này…”
+
+Công thức tính toán này tương đối đơn giản. Rất nhiều Arcanist cầm bút lên và tính toán theo lời giải thích của cậu, đặc biệt là Nhà Tiên Tri đang run rẩy vì kích động.
+
+Annonis ở bên cạnh hiểu rất rõ tâm trạng lúc này của ông, bởi vì đây chính là vấn đề đã khiến cho toàn bộ hệ Chiêm tinh phải đau đáu một thời gian dài. Khi vấn đề này được tính toán bằng cách áp dụng hệ thống chuyển động thiên thể dựa trên lý thuyết lực hấp dẫn trước đây, nó không hề khớp với các giá trị quan sát được.
+
+Nhà Tiên Tri hoài nghi rằng ở đó còn có những ngôi sao khác, vậy nên mới nảy sinh sai số như vậy, nhưng sau khi nhảy vào không gian, ông lại không tìm thấy dấu vết tồn tại của bất kỳ lực hấp dẫn dư thừa nào.
+
+Chính vì vấn đề này, không biết đã có bao nhiêu Arcanist hệ Chiêm tinh bạc cả tóc, xệ cả da.
+
+Tới khi Lucien giải thích xong cách tính toán và tạm thời ngừng lại, Nhà Tiên Tri cũng có được đáp án.
+
+“Cũng giống vậy… Rất gần với giá trị quan sát được…” Nhà Tiên Tri lẩm bẩm với thần sắc ngẩn ngơ. “Đây lẽ nào thực sự là bản chất của lực hấp dẫn…”
+
+Cũng thu được số liệu cuối cùng, trước mắt Annonis bỗng nhiên trở thành một khoảng mù mịt. Ông không khỏi cúi mặt xuống để che đi đôi mắt, trong lòng thầm cảm thán, rằng sau không biết bao nhiêu ngày đêm nỗ lực, cuối cùng cũng đã có được câu trả lời.
+
+Nhà Tiên Tri bất thình lình lớn giọng: “Đây là một thành tựu kỳ tài vượt xa thời đại, vượt xa lý thuyết arcana hiện tại hàng chục năm! Ta có cảm giác mình đã nhìn thấy sự phát triển vượt bậc của hệ Chiêm tinh rồi!
+
+Có thể chứng kiến cảnh tượng như vậy trong đời, ta chết cũng không tiếc nuối!”
+
+Annonis cố nén lại sự xúc động và phấn khích trong mắt: “Ngài Nhà Tiên Tri, lúc này làm sao có thể chết được? Tôi vẫn muốn hiểu rõ và khám phá sâu hơn bầu trời sao bao la trên kia!”
+
+Tới khi Lucien sử dụng hiệu ứng giãn nở thời gian của trường hấp dẫn để giải quyết vấn đề về các tinh cầu nhân tạo, Annonis đã tương đối tin phục hệ thống này. Ông nói với Nhà Tiên Tri, thân thể khe khẽ run rẩy: “Có hệ thống Thuyết tương đối của Lucien, con đường thăng tiến của ngài xem ra đã rõ ràng và sáng sủa trở lại rồi.”
+
+“Lẽ nào cậu thì không?” Nhà Tiên Tri mỉm cười đáp lại, sau đó liền cảm thán: “Từ giờ về sau sẽ chẳng còn ai dám nói rằng Lucien Evans đã sai lầm khi chọn hệ Chiêm tinh nữa…”
+
+“Tôi muốn đi nghiên cứu luận án này quá!” Annonis sốt ruột nói. Ông dường như đã nhìn thấy triển vọng bán kiên cố hóa thế giới nhận thức của bản thân mình rồi.
+
+……
+
+Trên bầu trời phía xa Allyn.
+
+Kritonia day day lông mày nói: “Nói như vậy, huyết mạch của tôi chính là thao túng lực hấp dẫn và sự biến đổi của vật chất?”
+
+Hư ảnh của Giáo hoàng Benedict III nhỏ giọng thì thầm: “Lucien Evans…”

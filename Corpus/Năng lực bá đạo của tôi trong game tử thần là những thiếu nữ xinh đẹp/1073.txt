@@ -1,0 +1,359 @@
+Chương 2
+
+Chương 2: Vi diệu
+
+Giao diện bảng xếp hạng người chơi toàn server.
+
+Không phải là một bảng xếp hạng đơn lẻ, mà bao gồm bảng tổng hợp người chơi, bảng cấp độ trò chơi, bảng tồn lượng điểm tích lũy, bảng số lượng hạ gục trong trò chơi v.v..., được cấu thành từ nhiều bảng xếp hạng.
+
+Trong đó các bảng danh sách phần lớn sẽ hiển thị top 100 người chơi liên quan, có 2 loại là hiển thị biệt danh và không hiển thị biệt danh.
+
+Dựa vào sự tò mò đối với những người chơi trò chơi tử vong hàng đầu, Y Mặc mở tất cả các bảng danh sách ra xem. Trong đó 70% người chơi chọn ẩn danh, 10% người chơi chọn tấu hài - biệt danh rõ ràng không bình thường, 20% người chơi có lẽ công khai biệt danh thực tế.
+
+Trong những bảng danh sách này, bảng duy nhất Y Mặc lọt vào là bảng tồn lượng điểm tích lũy, đứng thứ 9.
+
+Nói thật, tài khoản chính của anh đều bị xóa sạch, tài khoản mới này chơi được bao nhiêu ván chứ.
+
+Ghi chép khoảng 20 ván trò chơi, không có thẻ bạn gái thì bình thường cũng chỉ tầm cấp 30, có thể xếp hạng 9 toàn thế giới người chơi, đã là vô cùng trâu bò rồi.
+
+Nhưng Y Mặc nhìn 550.000 điểm tích lũy của mình, hơn nữa còn đang mỗi ngày -200, tỏ vẻ áp lực rất lớn, vẫn phải tiếp tục cày điểm.
+
+Đã lên bảng thì cũng tiếp xúc với thông tin liên quan đến biệt danh.
+
+Mặc định là không công khai.
+
+Có thể chọn công khai, thiết lập biệt danh thường dùng, hoặc tùy ý thiết lập biệt danh.
+
+Y Mặc thuộc phái bảo thủ, rõ ràng sẽ không tự đại đến mức đi công khai biệt danh.
+
+Nếu không thì với biệt danh "Kuuhaku" của anh, e rằng server quốc tế có một số người chơi biết đến, hơn nữa phàm là kẻ biết thì không thể nào là loại lương thiện, nói thế nào cũng là những người chơi lão luyện mấy năm.
+
+Tồn lượng điểm tích lũy có thể coi là át chủ bài, vẫn nên giấu đi thì hơn, đây mới phù hợp với thói quen của Y Mặc.
+
+Nhưng cơ hội đều bày ra ở đây rồi, không làm chút trò gì thì cũng vô vị.
+
+Kết quả là, Y Mặc trưng ra đôi mắt cá chết, điền vào biệt danh hai chữ "Thiên Nghịch", chơi trò đụng tên với người chơi đứng nhất về tồn lượng điểm tích lũy.
+
+Mặc dù mơ hồ, Y Mặc cảm thấy thao tác này có lẽ sẽ bị cá biệt vài người chơi nhận ra.
+
+Có điều Y Mặc cảm thấy hễ là kẻ nhận ra thân phận của mình, đều không phải là những người chơi có thể dễ dàng đối phó dựa vào tồn lượng điểm tích lũy, nên vấn đề cũng không lớn lắm.
+
+Trong lúc đó, Y Mặc cũng xem kỹ những người chơi công khai biệt danh bình thường trên bảng xếp hạng.
+
+Top 3 bảng tổng hợp lần lượt là Thiên Nghịch, Thánh Quân, Euphemia.
+
+Có thể nói là tam giác vàng, chiếm cứ top 5 các bảng danh sách lớn, có thể thấy được thực lực tuyệt đối đỉnh cao, có tư cách công khai biệt danh.
+
+Ngoài ra, trong số những người công khai biệt danh cũng có rất nhiều người chơi server nước ngoài, không liệt kê từng người.
+
+Nhưng theo quan sát phán đoán của Y Mặc, Bệnh Viện Tâm Thần hẳn là toàn viên công khai biệt danh, điểm này ngược lại rất phù hợp với tác phong của Bệnh Viện Tâm Thần.
+
+Nói thêm chút, Trùng Muội từng tiếp xúc với Y Mặc qua 2 ván trò chơi, đứng thứ 17 bảng tổng hợp.
+
+Thần Dụ và Phong Ma nếu còn sống, người trước đại khái sẽ ở khoảng top 10, người sau sẽ ở khoảng top 5.
+
+Về điểm này, Y Mặc không khỏi lắc đầu.
+
+Cho dù có thể thắng bọn họ, rốt cuộc cũng là do nhắm vào khắc chế chứ không phải cứng đối cứng chính diện, về thực lực bản thân vẫn còn kém một chút, phương diện tích lũy nội tại này không so được, vẫn phải làm việc khiêm tốn.
+
+Ngoài bảng xếp hạng ra, nội dung cập nhật còn bao gồm mấy điểm dưới đây.
+
+1.
+
+Giới hạn khu vực server được giải trừ, thời đại loạn chiến toàn server chính thức mở ra.
+
+2.
+
+Giới hạn số lần chiến tranh đoàn đội cấp cao được giải trừ, bây giờ có thể ghép trận chiến tranh đoàn đội cấp cao vô hạn.
+
+3.
+
+Mở tăng thêm kinh nghiệm điểm tích lũy trò chơi tử vong, cấp càng thấp tăng thêm càng cao, hệ thống rõ ràng đang tăng tốc tiến độ trò chơi, để càng nhiều người chơi cấp cao xuất hiện.
+
+4.
+
+Mở tính năng khiêu chiến, có thể xin khiêu chiến người chơi trên bảng xếp hạng.
+
+Cần người chơi trên bảng xếp hạng đồng ý, một khi đồng ý, ván trò chơi sau đó sẽ ghép với người chơi tương ứng.
+
+5.
+
+Mở liên thông ngôn ngữ toàn trò chơi, cho dù ghép với người chơi server nước ngoài cũng không cần lo lắng bất đồng ngôn ngữ, có thể tự động hiểu ý đối phương nói, thuận tiện hơn cho người chơi chơi game. (Ngoại trừ ngôn ngữ đặc biệt)
+
+Cùng với một số cập nhật tối ưu hóa nhỏ, không trần thuật quá nhiều.
+
+Y Mặc phân tích, bây giờ hẳn là giai đoạn khởi đầu của server quốc tế, sau khi các đại lão của các server thực sự tiếp xúc chiến đấu, chắc là sẽ còn cập nhật, xuất hiện biến hóa mới.
+
+Chính mình cũng không cần gấp gáp, trước tiên án binh bất động quan sát là được.
+
+Sau khi nắm rõ hệ thống người chơi cao cấp và các thay đổi cập nhật, ánh mắt Y Mặc chuyển về thiên phú của mình.
+
+Bây giờ anh có 3 thiên phú, tuyệt đối là độc nhất vô nhị trong trò chơi tử vong.
+
+Thiên phú thứ nhất "Kiến Tạo Chân Thực", thiên phú thứ hai "Người Giấy", thiên phú thứ ba "Lời Nói Dối Số Ảo".
+
+Y Mặc dựa vào ghế híp mắt lại, cùng với mặt trời lên cao, ánh nắng dần trở nên chói chang.
+
+Việc phơi nắng buổi sáng cũng đã hoàn thành, anh liền xách chiếc ghế nhẹ, đi tới chỗ dưới mái hiên nơi Quý Nhiễm đang ngồi đọc sách.
+
+Đặt chiếc ghế xuống cạnh ghế của Quý Nhiễm một lần nữa, thoải mái dựa ra sau, nghiêng đầu nhìn về phía Quý Nhiễm: “Anh có thêm thiên phú Lời Nói Dối Số Ảo là do em, là em sắp xếp à?”
+
+Quý Nhiễm nhìn về phía Y Mặc, khẽ gật đầu: “Không phải.”
+
+“Lúc đó em mở tối đa thiên phú, chủ yếu nhắm vào hệ thống.”
+
+“Hẳn là giúp anh trai tìm lại ký ức, nhớ lại thiên phú đã quên, đồng thời để anh hiểu được Lời Nói Dối Số Ảo.”
+
+“Kiến Tạo Chân Thực và Lời Nói Dối Số Ảo về bản nguyên tồn tại mối quan hệ nhất định. Về lý thuyết thực ra anh trai cũng có tiềm năng thiên phú Lời Nói Dối Số Ảo. Trong trường hợp bình thường cũng có xác suất sẽ mở ra thiên phú này.”
+
+“Dưới ảnh hưởng của em, tiềm năng của nó được kích hoạt, dẫn đến hệ thống phán định bản thân anh trai tồn tại thiên phú Lời Nói Dối Số Ảo. Khi lựa chọn thiên phú, bị hệ thống cưỡng chế mở ra cùng lúc.”
+
+“Anh trai, hãy giảm bớt số lần sử dụng thiên phú.”
+
+“Nếu gặp nguy hiểm, em có thể thay thế anh trai sử dụng Lời Nói Dối Số Ảo.”
+
+Trở ngại lớn nhất của người chơi đỉnh cao phần lớn không phải kẻ địch, mà là chính bản thân mình, phải thường xuyên đối kháng, chống lại cái thiên phú có thể bùng nổ bất cứ lúc nào kia.
+
+Thiên phú càng lợi hại cũng đại biểu cho việc chính mình càng dễ bị thiên phú giết chết.
+
+Đạo lý đều hiểu, nhưng dưới áp lực của cường địch bên ngoài, ai nấy đều khao khát trở nên mạnh hơn, cuối cùng vẫn sẽ quay lại vấn đề không thể không đối mặt, tác dụng phụ của thiên phú.
+
+Quý Nhiễm nói không sai.
+
+Nhưng Y Mặc vẫn không thể chuyện gì cũng dựa vào Quý Nhiễm.
+
+Dù sao, anh mới là anh trai.
+
+Dưới sự suy tư của Y Mặc, anh gật đầu, không khỏi cảm thán: “Tùy tình hình đi.”
+
+“Lời Nói Dối Số Ảo cũng không thích hợp với anh, hai chúng ta cho dù nắm giữ thiên phú giống nhau, hiệu quả sử dụng cũng khác nhau một trời một vực.”
+
+Y Mặc hiểu về "Lời Nói Dối Số Ảo", nhưng không có nghĩa là Y Mặc có thể sử dụng tốt nó.
+
+Bản chất của thiên phú này là lấy thứ không tồn tại để làm giả thành thật, nhằm đạt tới hiệu quả mạnh hơn vật thật.
+
+Cốt lõi của việc vận dụng nền tảng nằm ở chỗ thấu hiểu tận cùng nguyên lý.
+
+Nói cách khác, anh phải hiểu thật sâu sắc về vạn vật, phân tích và nắm rõ từ trong ra ngoài, thì mới có thể biến giả thành thật, thậm chí còn vượt trội hơn cả bản gốc.
+
+Về phương diện này, Y Mặc kém Quý Nhiễm quá xa.
+
+Y Mặc vừa nghĩ, mắt phải bắn ra tia sáng xanh thẳm, lẩm bẩm tự nói: “Lời Nói Dối Số Ảo, bánh mì việt quất.”
+
+Kèm theo tiếng nói của Y Mặc, hư ảnh một chiếc bánh mì việt quất màu lam hiện lên.
+
+“Kiến Tạo Chân Thực, bánh mì việt quất.”
+
+Trăng máu trong mắt phải hiện lên, bánh mì việt quất ngay sau đó trở nên ngưng thực, rơi xuống từ không trung và được Y Mặc trực tiếp đón lấy.
+
+Y Mặc nhìn về phía Quý Nhiễm: “Kiến Tạo Chân Thực theo lý thuyết có thể trực tiếp tạo dựng sự vật, nhưng thực tế độ khó rất lớn.”
+
+“Nếu như cầm Lời Nói Dối Số Ảo để phụ trợ, ngược lại dễ dàng hơn nhiều.”
+
+“Ừm, sau này chơi game, ít nhất không cần lo bị chết đói.”
+
+“Ăn không?”
+
+Quý Nhiễm: “...”
+
+Anh trai mình gần đây mê mẩn đủ loại vật dụng sinh hoạt tự chế.
+
+Hoàn toàn quên mất lời dặn dò của mình...
+
+Quý Nhiễm không nói gì, trên mặt không có biểu cảm gì thay đổi, nhưng Y Mặc cũng có thể biết Quý Nhiễm đang nghĩ gì, nhanh chóng giải thích: “Sử dụng thiên phú ở mức độ nhỏ này về cơ bản không có gánh nặng gì.”
+
+“Hương vị có lẽ không tệ đâu?”
+
+Quý Nhiễm: “Ừ, ăn.”
+
+Quý Nhiễm gật đầu, nhận lấy chiếc bánh mì việt quất Y Mặc tự chế, bắt đầu ăn.
+
+Có điều...
+
+Cô là linh hồn, không phải có thực thể, là do anh trai hỗ trợ thực thể hóa một chút.
+
+Mà bản thân chiếc bánh mì việt quất cũng không có thực thể, là do song thiên phú của Y Mặc thực thể hóa tạo ra.
+
+Sau đó sáng tạo ra bánh mì có thực thể, đi vào cái bụng không thực thể hóa lắm của mình, cuối cùng cũng đều biến trở về hư vô thể. Chuyện này ít nhiều có chút vi diệu.
+
+Hoàn toàn là công cốc, chỉ có anh trai là chịu hao tổn ở trong đó.
+
+Trong mắt Quý Nhiễm tuyệt đối lý trí, chuyện này căn bản là công cốc, không tồn tại ý nghĩa.
+
+Nhưng cũng không phải hoàn toàn không có ý nghĩa.
+
+Khi khuôn mặt bình thản ấm áp của Y Mặc rơi vào đôi mắt Quý Nhiễm, bóng dáng rõ ràng hiện lên, Quý Nhiễm nghĩ như vậy.
+
+Trong lúc bất tri bất giác, khóe miệng đã hơi nhếch lên, lộ ra nụ cười nhàn nhạt.
+
+Mà nụ cười nhàn nhạt này vừa vặn cũng bị Y Mặc bắt được, khiến anh cảm thấy vô cùng thỏa mãn và an lòng.
+
+Em gái, không biết bắt đầu từ khi nào, đã bắt đầu có thể hiểu được tình cảm.
+
+Y Mặc: “Quý Nhiễm.”
+
+Quý Nhiễm: “Dạ?”
+
+Y Mặc: “Em gái.”
+
+Quý Nhiễm: “Anh trai? Chuyện gì vậy?”
+
+Y Mặc nghiêng đầu nhìn em gái bình thản tự nhiên bên cạnh, cười cười: “Không có gì, chỉ muốn gọi em thôi.”
+
+Quý Nhiễm: “Vâng, anh trai.”
+
+Y Mặc không suy nghĩ thêm về trò chơi nữa, bình tĩnh nhìn lên bầu trời, cảm thấy hạnh phúc không gì bằng.
+
+Đương nhiên, cho dù là tĩnh dưỡng cũng không thể thật sự chẳng làm gì, nên nghiên cứu trò chơi tử vong thì vẫn phải nghiên cứu, nên nghiên cứu thiên phú thì vẫn phải nghiên cứu.
+
+Ví dụ như buổi trưa, Y Mặc đột nhiên nói: “Em gái, chúng ta thử thiên phú Người Giấy mới của anh đi.”
+
+Quý Nhiễm: “Không phải đã thử rất nhiều lần rồi sao?”
+
+Y Mặc lắc đầu: “Không, lần này khác, anh muốn để em kiểm tra.”
+
+Quý Nhiễm: “Em?”
+
+Suy nghĩ...
+
+Quý Nhiễm: “Liệu có hơi kỳ quặc không?”
+
+“Có cảm giác xúc phạm cấm kỵ, mặc dù em cũng không để ý.”
+
+Y Mặc: “...”
+
+“Vốn dĩ rất bình thường, nhưng mà em nói xong, liền thật sự có chút vi diệu. Tóm lại cứ thử xem sao?”
+
+Quý Nhiễm: “Vâng.”
+
+『 Thiên phú: Người Giấy.』
+
+『 Cấp bậc: B.』
+
+『 Hiệu quả:
+
+1. Có thể tạo ra một phân thân, chịu sự điều khiển hoàn toàn của bản thân, sở hữu ngũ giác.
+
+Không thể sử dụng thẻ bài thiên phú, trong trò chơi không được phán định là đơn vị người chơi độc lập. Phân thân chịu ảnh hưởng trừng phạt của hệ thống sẽ phản hồi trực tiếp lên bản thể người chơi.
+
+Tố chất cơ thể của phân thân bằng 80% bản thể, chịu 1.5 lần hiệu quả sát thương. Trong thời gian tồn tại, tố chất cơ thể người chơi giảm xuống còn 80% trạng thái bình thường.
+
+Số lượng tối đa là 1, thời gian duy trì không giới hạn, thời gian hồi chiêu 7 ngày.
+
+2. Hoán đổi.
+
+Có thể hoán đổi vị trí giữa bản thân và phân thân, thanh toán 1000 điểm tích lũy, thời gian hồi chiêu 1 ngày, có thể cộng dồn số lần sử dụng, số lần tích lũy tối đa là 3.』
+
+『 Cái giá phải trả: Tăng gánh nặng tinh thần, mỗi lần sử dụng tiêu hao 500 điểm tích lũy.』
+
+Đây là thiên phú mà Y Mặc vừa nhìn đã thích.
+
+Có lẽ thuộc cùng một loại với thiên phú của Tô Cách, chỉ có điều cấp bậc kém không ít.
+
+Phân thân của Tô Cách chẳng những được coi là người chơi độc lập, hưởng thụ niềm vui nhận thưởng 2 lần mỗi ván trò chơi, hơn nữa cả bản thể và phân thân đều được tăng cường.
+
+Của Y Mặc thuộc dạng cả hai đều suy yếu, thiên phú càng dùng thì bản thân càng yếu đi.
+
+Nhưng thiên phú này lại có ưu điểm riêng, chính là có thể tùy ý nặn hình người, không cố định hình tượng của chính mình. Trong nhiều trường hợp làm việc hoặc thăm dò trò chơi sẽ vô cùng thuận tiện.
+
+Hơn nữa trò chơi tử vong sau cấp 60 đều sẽ có một lần nâng cao hiệu quả thiên phú, điều này khi ở Thâm Sơn Cổ Trấn, Thiên Bạch Đào đã từng nói với Y Mặc.
+
+Y Mặc trực tiếp từ cấp 49 lên cấp 67, hiệu quả thứ 2 "Hoán Đổi" chính là do thiên phú được nâng cấp. Chỉ riêng việc nặn ra một người tùy ý giấu đi, về phương diện chạy trốn đã được coi là thần kỹ, không gian có thể thao tác cực lớn.
+
+Còn về tác dụng phụ là tăng gánh nặng tinh thần và tiêu hao điểm tích lũy.
+
+Đối với người chơi bình thường, tác dụng phụ không nhỏ, điểm tích lũy là không chịu nổi nhiệt.
+
+Nhưng rơi vào người Y Mặc thì chỉ là mưa bụi, đều không được gọi là tác dụng phụ gì, độ phù hợp cực cao.
+
+Trước đó Y Mặc kiểm tra đều là nặn phân thân của chính mình, hoặc nặn phân thân người qua đường, làm quen với việc điều khiển hai cơ thể, kiểm tra cơ chế hoán đổi vị trí.
+
+Nhưng lần này không giống, Y Mặc định nặn một phân thân em gái ra.
+
+Y Mặc: “Người Giấy, phát động!”
+
+Kèm theo thiên phú phát động, điểm tích lũy bị trừ, gánh nặng tinh thần tăng thêm, tố chất cơ thể của anh bị suy yếu.
+
+Một phân thân em gái tồn tại thực thể, không có bất kỳ tì vết nào cũng liền đứng trước mặt Y Mặc và em gái thật.
+
+“Em gái, em thử xem, em có thể trực tiếp tiếp quản cơ thể này không.”
+
+Nếu như có thể, điều đó đại biểu chỉ cần em gái muốn, chỉ cần anh luôn bật thiên phú này, em gái liền có thể hoạt động thực thể trong thời gian dài.
+
+Dưới giọng nói của Y Mặc.
+
+Ánh mắt em gái hơi có vẻ cổ quái, nhìn cơ thể giống hệt mình kia, linh hồn hư thể bay thẳng về phía phân thân.
+
+Khi linh hồn và phân thân chồng lên nhau, mắt phải của linh hồn hư thể tóe ra ánh sáng lam rực rỡ, nói khẽ: “Lời Nói Dối Số Ảo.”
+
+Kèm theo thiên phú phát động, linh hồn thể của Quý Nhiễm đã biến mất.
+
+Giây tiếp theo, phân thân Quý Nhiễm đã mở miệng nói: “Giả thuyết của anh có thể thực hiện được.”
+
+“Nhưng... Rất vi diệu.”
+
+Quý Nhiễm nói, khuôn mặt vậy mà hiếm thấy đỏ lên, đơn giản nhân tính đến mức không giống Quý Nhiễm.
+
+Nhưng Y Mặc cũng thể hiện ra cảm xúc y hệt, không nhịn được quay đầu đi: “Đúng là... rất vi diệu...”
+
+Phân thân là do thiên phú của anh tạo ra, nói thật giống như trực tiếp nắm giữ hai cơ thể vậy, ngũ giác vô cùng rõ ràng.
+
+Về lý thuyết, mặc dù linh hồn thể của em gái có thể mượn nhờ thiên phú để dung hợp với phân thân của anh, coi như cơ thể của cô bé để dùng.
+
+Thế nhưng là...
+
+Dưới trạng thái này, cả hai người lại đều nắm giữ quyền kiểm soát "Người Giấy", hơn nữa chia sẻ ngũ quan, cảm nhận tinh thần cơ thể liên kết lại với nhau.
+
+Cái này, liền vô cùng vi diệu.
+
+Bây giờ nhìn như là Quý Nhiễm đỏ mặt, nhưng kỳ thực căn bản là do Y Mặc ý thức được vấn đề này, bản thân anh đột nhiên có chút xấu hổ, phản hồi lên phân thân, mới dẫn đến phân thân đỏ mặt.
+
+Mà Y Mặc vừa nảy sinh ý xấu này, Quý Nhiễm cũng liền sinh ra cảm xúc tương tự, bị ép buộc đỏ mặt theo Y Mặc, ngay cả cơ hội phản kháng cũng không có.
+
+Theo một ý nghĩa nào đó mà nói, Y Mặc và Quý Nhiễm bây giờ, thuộc về trạng thái từ cơ thể đến linh hồn đều trùng điệp giao thoa với nhau...
+
+Bởi vì nếu tiếp tục truy cứu sâu hơn, có thể sẽ vi diệu đến mức không cách nào qua kiểm duyệt, cho nên Y Mặc không tiếp tục suy nghĩ nữa, nói với em gái kiêm phân thân của mình trước mắt: “Anh nghiên cứu một chút, xem có cách nào khi em nhập vào thì cố gắng cắt đứt hoặc phớt lờ ngũ giác của phân thân ở mức độ lớn nhất không.”
+
+Quý Nhiễm đỏ mặt nói: “Vâng, em ngược lại cũng không để ý.”
+
+“Trạng thái này rất kỳ diệu, giống như càng hiểu anh trai hơn, những cảm xúc mơ hồ trước kia cũng cảm nhận sâu sắc hơn.”
+
+Y Mặc chưa bao giờ thấy em gái đỏ mặt.
+
+Mặc dù sự ngượng ngùng là do chịu ảnh hưởng của anh, nhưng em gái tuyệt đối cũng cảm nhận được thứ tình cảm ngượng ngùng đó, cảm nhận một cách thô bạo và trực tiếp những cảm giác chưa từng trải nghiệm.
+
+Y Mặc: “Vẫn nên để ý một chút, anh nghiên cứu thêm xem sao.”
+
+Mặc dù Quý Nhiễm nói không để ý, nhưng Y Mặc sợ việc chia sẻ ngũ giác sâu sắc sẽ làm hư cô em gái bảo bối của mình, vẫn nên thận trọng đối đãi.
+
+Cứ như vậy, Y Mặc và Quý Nhiễm bắt đầu nghiên cứu làm thế nào để giảm thiểu "tác hại" vi diệu do chia sẻ cảm giác mang lại ở mức tối đa, bắt đầu sự cọ xát về mặt linh hồn.
+
+À, đúng rồi.
+
+Em gái đỏ mặt rất đáng yêu.
+
+Y Mặc nghĩ như vậy, liền bị em gái trực tiếp phát giác.
+
+Điều này dẫn đến khuôn mặt em gái càng thêm đỏ nhuận, lộ ra biểu cảm e thẹn ngượng ngùng, hơi nghiêng mặt đi.
+
+Lần đỏ mặt này bắt nguồn từ bản thân em gái.
+
+Quý Nhiễm: “Anh trai, cái đó... xin đừng để ý?”
+
+Y Mặc: “Ừ, được, được, anh sẽ cố gắng.”
+
+Em gái, thật sự siêu cấp đáng yêu!
+
+.
+
+Cứ như vậy, thời gian Hồi Ký vẫn đang kéo dài.
+
+Ngoài việc điều dưỡng cơ thể, nghiên cứu thiên phú trò chơi, trải qua quãng thời gian bình thường nhất cùng em gái.
+
+Thời gian còn thừa, Y Mặc cũng đang bổ sung kiến thức về sách, truyện tranh, trò chơi, phim ảnh để chuẩn bị cho hành động tiếp theo.
+
+Y Mặc đang bổ sung series tác phẩm gì?
+
+Đáp án, series 《 Resident Evil 》.
+
+Y Mặc cho rằng trước ngày 20 tháng 1, cần thiết phải đi một chuyến đến thế giới 《 Sinh Hóa Tập Kích 》.

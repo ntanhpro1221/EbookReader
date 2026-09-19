@@ -41,5 +41,3 @@ Desktop.ini
 
 # Nguon .txt cua cac cuon (co watermark, khong bao gio vao repo). Cuon 1 = Text/, cuon 2 = Text_Tmp/ (2026-09-13).
 /Text/
-# Kho truyen de do/huan luyen model phan tich (19-09-2026, docs/LLM_EVAL.md). Cung ly do nhu Text/: khong vao repo.
-/Corpus/

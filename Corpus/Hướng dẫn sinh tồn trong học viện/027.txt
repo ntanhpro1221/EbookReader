@@ -1,0 +1,401 @@
+Chương 28: Yennica Failover (1)
+
+Chương 28: Yennica Failover (1)
+
+Một làn gió ấm áp thổi qua.
+
+Trong khu rừng rậm rạp, những tia nắng ấm áp len lỏi vào một vườn hoa mà không ai biết, mơn man trên da.
+
+Yennica ngồi ở đó một cách đoan trang, đang dùng những bông hoa hái được để kết thành một chiếc vòng hoa. Bộ đồng phục phải chú ý đến đủ loại lễ nghi đã được cởi ra trong phòng, cô mặc một chiếc váy màu be thoải mái như khi ở quê nhà, vừa ngân nga hát vừa cẩn thận kết từng bông hoa một.
+
+Chợt, từ một góc rừng, một người đàn ông bước vào. Anh ta cưỡi một con bạch mã trông vô cùng sang trọng. Tiếng vó ngựa lộc cộc nhỏ dần ở một góc vườn hoa, và người đàn ông đó, với một động tác nhẹ nhàng, đã xuống khỏi yên ngựa. Đó là Ed Rostailer.
+
+Yennica cười rạng rỡ và đứng dậy khỏi chỗ ngồi, và Ed, với một khuôn mặt vui mừng, bước vào vườn hoa. Cô đội chiếc vòng hoa đã cất công kết lên đầu Ed, và nắm tay nhau, họ bắt đầu khiêu vũ.
+
+A ha ha ha-
+
+Những cánh hoa bay lượn, và những con bướm nhảy múa. Như thể đang chúc phúc cho hai người, những cây cối trong rừng cũng đã tự động dọn chỗ từ lúc nào.
+
+A ha ha ha ha ha-
+
+Các bước chân ăn khớp với nhau như đã hẹn trước, và tiếng đàn lute, tiếng đàn hạc không rõ nguồn gốc vang lên. Đó đúng là một cảnh tượng như trong truyện cổ tích.
+
+Ha ha ha ha ha- A ha ha ha- Ha ha ha-
+
+.
+
+.
+
+.
+
+.
+
+Chíp- chíp-
+
+Tiếng chim sẻ kêu ríu rít vượt qua cửa sổ Tòa Opelis và mơn man bên tai. Đó là âm thanh báo hiệu buổi sáng.
+
+Yennica cứ thế ngồi dậy.
+
+Vì giấc ngủ sâu đêm qua, tóc cô rối bù, và da thì hơi sưng. Với bộ dạng bù xù đó, Yennica ôm lấy chiếc gối, và cứ thế vùi mặt vào.
+
+“Mình… rốt cuộc đã bao nhiêu tuổi rồi mà còn mơ giấc mơ thế này chứ….”
+
+Cảm giác tự thẹn, xấu hổ dần dần ập đến.
+
+Thảm họa xảy ra vào chiều ngày hôm sau.
+
+“Này, Clara. Tại sao việc thích một người và yêu một người lại có sức nặng khác nhau đến vậy?”
+
+Clara, người đang ngồi đối diện và ăn cà chua trong món salad, đã cứng đờ. Anis, người bạn thân lúc nào cũng đi cùng, cũng vậy. Hai người, những người bạn thân thiết nhất của Yennica, đã dừng lại chiếc nĩa đang hoạt động chăm chỉ và bắt đầu nghi ngờ tai mình.
+
+Giờ ăn trưa, nhà ăn học sinh.
+
+Dù đã bỏ qua những bữa ăn cao cấp của Tòa Opelis để cùng ăn cơm với những người bạn thân, nhưng hành động của Yennica chắc chắn giống như thường ngày.
+
+Đã mười ngày trôi qua kể từ khi Ủy ban kỷ luật của Yennica kết thúc.
+
+Ủy ban kỷ luật được tiến hành trong một bầu không khí trang nghiêm với sự tham gia của cả ba trưởng khoa và Hiệu trưởng Obel, đúng là một chiến trường. Dù chỉ tóm tắt những sự kiện lớn, cũng phải mất cả ngày để giải thích.
+
+Trước lời tuyên bố nhận hết mọi tội lỗi và sẽ cam chịu mọi hình phạt của Yennica, các học sinh năm hai và các giáo sư phụ trách đã đồng loạt đứng lên bênh vực cô, đó là phiên điều trần thứ nhất.
+
+Cuộc tổng tấn công bằng đơn xin giảm án đến Hội đồng học sinh và Ban quản lý học viện. Tổng cộng 1417 lá đơn, đến mức hòm thư góp ý của học viện bị đầy và phải làm một hòm thu gom riêng cho đơn xin giảm án.
+
+Dù bị đội trưởng đội hộ vệ ngăn cản, lời tuyên bố của Hoàng nữ Penia rằng sẽ không truy cứu tội danh âm mưu sát hại hoàng tộc là vào phiên điều trần thứ hai. Đó là vì cô đã cảm động sâu sắc trước hàng ngũ đơn xin giảm án của các học sinh. Quyết định này của hoàng nữ sau này đã trở thành nguyên nhân cơ bản giúp Hoàng nữ Penia nhận được sự ủng hộ áp đảo của các học sinh năm hai trong cuộc bầu cử hội trưởng Hội học sinh, nhưng đó là một câu chuyện riêng biệt với kịch bản chính.
+
+Ngoài ra, vào thời điểm đó, sự thật rằng cô đã ở trong trạng thái bị Belosper kiểm soát nên tính cố ý không được công nhận, đã được học viện chấp nhận nên không bị đuổi học. Tuy nhiên, không phải vì vậy mà thiệt hại về tài chính và thương tích sẽ biến mất, nên tội của Yennica không hoàn toàn biến mất. Lúc này, Lortel đã xuất hiện.
+
+Cô đã đàm phán thành công việc vay vốn tái xây dựng Tòa Neil và Tòa Glockt từ Thương hội Elte với lãi suất thấp, và hỗ trợ hoàn toàn miễn phí tiền bồi thường thương tích, đổi lại, thuế thông quan của các mặt hàng học tập của Thương hội Elte được lưu thông trong Tòa Sinh hoạt sẽ được giảm một nửa. Trong đó, điều khoản giảm án cho Yennica là một món quà kèm theo.
+
+Nhờ vậy, trong số các mặt hàng được lưu thông tại các cơ sở thương mại trong Tòa Sinh hoạt, các mặt hàng học tập của Thương hội Elte đã có được một lợi thế cạnh tranh tuyệt đối, và cô đã có được vị thế của một chủ nợ đúng nghĩa với Học viện Sylvania, chứ không chỉ đơn thuần là một nhà tài trợ, và còn tạo ra một món nợ với Tinh linh sứ đầy hứa hẹn Yennica Failover.
+
+Đúng là một cô gái không bao giờ bỏ lỡ cơ hội, vào ngày ký kết thỏa thuận, ngay cả Tổng trưởng khoa McDowell cũng phải nhíu mày trước Lortel. Dù vậy, việc cô vẫn nở một nụ cười thản nhiên là do bản tính của cô.
+
+Dù sao đi nữa, trong lúc Penia và Lortel vướng vào đủ loại hỗn loạn, các học sinh vẫn không ngừng chạy đôn chạy đáo vì việc giảm án cho Yennica, và kết quả cuối cùng là một thành công lớn.
+
+Cấm túc 10 ngày. Đình chỉ học 20 ngày. Tước bỏ tư cách nhận trợ cấp của Quỹ học bổng Glockt. Tước bỏ tư cách vào ở Tòa Opelis từ học kỳ sau. Tước bỏ quyền lợi hỗ trợ thủ khoa khối. Thu hồi toàn bộ huân chương danh dự của học viện. Không bị lưu ban.
+
+Trước kết quả đó, tất cả các học sinh năm hai đều đứng bật dậy và reo hò. Đây là một sự khoan hồng ngoài sức tưởng tượng. Với họ, đó là một cảm giác như vừa đóng xong một bộ phim thanh xuân cảm động.
+
+Chỉ là, Yennica, người đang đứng sau đám đông và nghe những tiếng reo hò đó, vai vẫn còn rụt rè.
+
+Ít nhất, trong số những người tham dự, không một ai biết được lý do đó.
+
+“B-bất ngờ… cậu nói vậy là sao…?”
+
+Dù sao thì đó cũng là chuyện đã qua. Bây giờ có bàn luận thêm cũng không có ý nghĩa gì, nên Clara chỉ mong rằng Yennica, người đã hết thời gian cấm túc, sẽ không còn rụt rè nữa.
+
+Đêm hôm trước, Clara và Anis đã mô phỏng hoàn hảo những cuộc trò chuyện sẽ có với Yennica, người đã lâu không gặp.
+
+Tuyệt đối không nhắc đến vụ Glascan. Cũng không tỏ ra quá quan tâm, và cũng tuyệt đối không hỏi những câu như tâm trạng thế nào. Cứ như thể đã lâu không gặp, cùng nhau đi ăn trưa. Chủ đề cuộc trò chuyện càng là những chuyện vặt vãnh càng tốt.
+
+Họ thậm chí còn nghĩ trước xem sẽ nói chuyện gì. Chuyện Trợ lý giáo sư Claire bị ngã khi đang phát bài thi thử. Chuyện bông hoa bìm bịp nở ở một góc sân tập ma pháp phòng thủ đã bắt đầu leo lên tường ngoài. Chuyện món bánh trứng ở tiệm bánh Tòa Sinh hoạt rất ngon nên đã làm ầm lên.
+
+Anis và Clara đã trang bị đầy đủ những chủ đề đó và chuẩn bị chu đáo.
+
+“Chỉ là… lời nói yêu một người, có gì đó? So với lời nói thích một người, nó nặng nề hơn rất nhiều, đúng không? Cả về nghĩa đen và khi thực sự sử dụng. Nhưng mà… cái sức nặng đó cuối cùng cũng bắt nguồn từ sức nặng của cảm xúc… vậy thì sức nặng của cảm xúc đó, tùy theo mỗi người lại khác nhau…”
+
+“Yennica, đợi một chút. Tớ ăn xong cái này đã.”
+
+“Ừm? A ha ha. Xin lỗi.”
+
+Clara nở một nụ cười tươi và cắn một miếng cà chua. Và không xóa đi nụ cười, cô liếc nhìn Yennica.
+
+Mồ hôi lạnh đã bắt đầu chảy từ gáy đến một góc trán. Nhìn sang Anis, bên đó cũng vậy. Dù đang duy trì một bộ mặt poker face bằng một tinh thần lực siêu phàm, nhưng đây đã là một thảm họa.
+
+Yennica đã bắt đầu nói những lời như một triết gia trong sách. Thậm chí chủ đề lại không phải là gì khác mà là tình yêu. Cô đang nghiêm túc suy ngẫm về sự khác biệt giữa love và like.
+
+Clara đã rất lo lắng về tâm trạng của Yennica. Hình ảnh cô gái ngồi một mình trong phòng ở Tòa Opelis và nhìn ra ngoài cửa sổ cứ hiện lên trong đầu, cô đã rất lo lắng không biết cô ấy đang nghĩ gì trong không gian cô độc đó… và liệu có đang tự trách mình một cách không cần thiết không.
+
+Trước hết, điều may mắn là Yennica đã phần nào thoát khỏi cảm giác tội lỗi đó. Mười ngày không phải là một thời gian ngắn. Dù có thể đã đau lòng và rụt rè trong hai ba ngày đầu, hoặc lâu hơn là một tuần, nhưng có vẻ như đã hồi phục phần nào, nên cô đã yên tâm.
+
+Tuy nhiên, cô hoàn toàn không lường trước được nỗi lo tiếp theo. Việc đột nhiên bàn luận về định nghĩa của tình yêu ở đây, là điềm báo của một sự kiện lớn có sức ảnh hưởng không thể nào tưởng tượng được.
+
+Cạch!
+
+Cô đã vô thức đặt mạnh chiếc nĩa xuống. Yennica, người đang ngậm một miếng sandwich trong miệng, giật mình.
+
+Clara, với một ánh mắt cương quyết, khẽ đứng dậy khỏi ghế và nhìn xung quanh. Nhà ăn học sinh vào giờ ăn trưa muộn không còn nhiều người. Dù sao thì cũng đã gần hết giờ ăn trưa. Đó là một điều may mắn.
+
+Không có ai đang nghe lén. Trong thời gian cấm túc, cô ấy chắc chắn không thể nào nói chuyện đàng hoàng với ai, nên câu chuyện này của Yennica, chỉ có Anis và Clara biết.
+
+Clara lại ngồi xuống ghế với một tâm thế cương quyết. Bên cạnh có một người đồng đội đáng tin cậy là Anis. Sau khi trao đổi ánh mắt với Anis, Clara nuốt nước bọt khô và gật đầu. Chỉ bằng một cái trao đổi ánh mắt ngắn ngủi, cảm giác như đã có hàng chục lời nói được trao đổi.
+
+“Vậy là…?”
+
+Sự trong sáng của cô gái này phải được bảo vệ. Clara và Anis đã nỗ lực đủ trong thời gian qua, và chưa một lần nào thất bại trong việc vượt qua mọi thử thách. Mỗi khi Yennica sắp bị tổn thương hay gặp khó khăn, hai cô gái này đã dùng hết sức để bảo vệ bạn mình khỏi những sóng gió của thế gian.
+
+Họ đã bảo vệ cô khỏi sự hãm hại của các tiền bối ghen tị với Yennica.
+
+Họ cũng đã đánh bại các trợ lý giáo sư, những người có ác cảm với Yennica, người được các bạn đồng khóa đặc biệt bảo vệ.
+
+Và họ cũng đã bảo vệ tốt khỏi Ed Rostailer, kẻ chắc chắn là một tên khốn nạn trời đánh.
+
+Về Ed, gần đây trong giới học sinh năm nhất có những lời đồn vô căn cứ rằng ‘dù vô lễ nhưng có lẽ cũng có năng lực’, nhưng tuyệt đối không được phán đoán một cách vội vã. Vốn dĩ, bản chất kiêu ngạo và độc ác của hắn chắc chắn là sự thật.
+
+Không thể nào để một nhân vật nguy hiểm như vậy tiếp cận Yennica.
+
+“Yennica đột nhiên lại nói những chuyện như vậy…?”
+
+Cuộc trò chuyện này do tôi dẫn dắt. Clara, với một tâm thế vững chãi như vậy, đã mở lời. Anis, người trông có vẻ như sắp không thể giữ được vẻ mặt của mình, cần một chút thời gian để chấn chỉnh lại ngũ quan.
+
+Phải tiếp cận câu chuyện một cách chậm rãi và cẩn thận, để không có một vết xước nào trong trái tim vô cùng tinh tế của Yennica.
+
+Đó là câu chuyện tình yêu của chính Yennica Failover. Lời nói không có chân mà đi được cả ngàn dặm không phải là một mức độ có thể so sánh. Nếu một quả bom hạt nhân cỡ lớn như thế này lan truyền trong giới học sinh, có khả năng đến sáng mai, toàn bộ học sinh đã biết hết.
+
+Điều đó sẽ để lại một vết thương lớn đến mức nào trong lòng cô gái. Clara nghiến răng và nghĩ rằng phải ngăn chặn điều đó bằng mọi giá.
+
+Yennica từ từ mở miệng.
+
+“Đây là… câu chuyện mình nghe được từ một người bạn gần đây…”
+
+Không được! Yennica!
+
+Cậu đã bị cấm túc và chỉ ở trong phòng suốt 10 ngày qua, không thể nào gặp được ai một cách đàng hoàng! Trên đời có ai tin lời đó chứ…!
+
+Clara đã cố gắng hết sức để kìm lại tiếng hét đó.
+
+“Ừ-ừm. Người bạn đó nói gì?”
+
+“Chỉ là, nếu cứ ngẩn ngơ ngồi trong phòng nhìn vào hư không, bỗng dưng lại có một khuôn mặt nào đó hiện lên…”
+
+“Ôi trời ơi! Chiều nay tớ phải giúp việc cho Trợ lý giáo sư Claire! Hoàn toàn quên mất! Xin lỗi! Mình đi trước nhé! Chào, lần sau gặp lại!”
+
+Có vẻ như không thể nào giữ được poker face, Anis đã chọn cách tự bắn.
+
+Một người đồng đội đã hy sinh. Giao phó lại tất cả gánh nặng cho mình.
+
+Clara nhìn Anis với một vẻ mặt oán trách, nhưng khi nhìn thấy khuôn mặt đã đỏ bừng đến tận tai, cô không thể không để Anis đi. Anis đã không còn khả năng chiến đấu.
+
+Yennica, người vốn dĩ ngây thơ. Bộ dạng đó của cô là một độc dược đối với trái tim của một thiếu nữ.
+
+Bây giờ Clara cũng đang ở trạng thái giới hạn. Cô đã phải cắn lưỡi để kìm lại ham muốn hỏi dồn dập rằng đối phương là ai, họ đã có một mối quan hệ như thế nào, và động lực là gì, và sau này sẽ làm gì.
+
+Khí phách và sự kiên trì đó giống như hình ảnh của một vị tướng dũng mãnh một mình xuyên qua một trận mưa tên.
+
+Tâm hồn trong trắng của một thiếu nữ phải được bảo vệ. Ký ức về mối tình đầu mơ hồ phải trở thành một kỷ niệm đẹp, chứ tuyệt đối không được trở thành một lịch sử đen tối đáng xấu hổ.
+
+“Và… cậu ấy cứ mơ thấy người đó…”
+
+“V-vậy à?”
+
+“Ừ. Cậu ấy nói là mơ thấy cùng nhau khiêu vũ hoặc chơi trong vườn hoa… cậu nghĩ sao…?”
+
+Khóe miệng đang tự động muốn nhảy múa. Clara đã nghiêm túc suy nghĩ liệu có nên dùng nĩa đâm vào đùi mình không.
+
+“Chuyện đó… là việc… của cậu… à không, của người đó… phải suy nghĩ… chứ nhỉ…”
+
+“Ừ, chắc vậy… Nhưng điều kỳ lạ là… dường như không có một động lực nào cả… Cậu biết đấy. Dù là thích hay ghét ai đó, đều có lý do cả mà.”
+
+“Ừ-ừm…”
+
+Những lời muốn nói đã dâng lên đến tận cổ họng.
+
+Trong khoảnh khắc, tâm trạng của một người cha gả con gái đã hiện lên, và trong trí tưởng tượng, cô đã viết xong một cuốn tiểu thuyết tình cảm ba xu, nhưng Clara biết rất rõ rằng tất cả những điều đó đều là sự tọc mạch.
+
+Yennica đang muốn giấu diếm câu chuyện tình yêu của mình. Nếu vậy, nếu cố gắng đào sâu vào trái tim đó một cách vội vã, có thể sẽ bị tổn thương.
+
+Tấm lòng của một người bạn thân nhất của Yennica và sự tò mò của một thiếu nữ về câu chuyện tình yêu của Yennica đang đối đầu nhau một cách quyết liệt.
+
+Nỗi đau này, chắc chắn, còn đau đớn hơn cả lúc chạy đôn chạy đáo vì Ủy ban kỷ luật.
+
+Tuy nhiên, điều quan trọng nhất là gì. Chính là Yennica.
+
+Như đã nói đi nói lại, sự trong sáng của cô gái này phải được bảo vệ. Clara hít một hơi thật sâu và thở ra để lấy lại bình tĩnh.
+
+Một nụ cười tươi tắn.
+
+“Yennica. Không cần phải suy nghĩ quá khó khăn đâu, đúng không? Dù là thích hay ghét ai đó, chuyện đó vốn dĩ là một việc không thể nào lý giải được mà.”
+
+“Thật sao?”
+
+“Ừ. Chỉ cần một thái độ vô tình thể hiện ra cũng có thể khiến mình ghét người đó, và chỉ vì đã ở bên cạnh lúc vui lúc buồn cũng có thể khiến mình thích người đó. Tâm lý con người vốn dĩ là như vậy mà. Mình nghĩ không cần phải suy nghĩ quá cứng nhắc.”
+
+Việc tìm kiếm một lý do cơ bản cho việc thích hay ghét ai đó, chắc chắn, là lĩnh vực của các học giả như nhà tâm lý học hay triết học.
+
+“Cứ gác lại những chuyện phức tạp đó, cứ thành thật với cảm xúc hiện tại của mình, không phải sẽ tốt hơn cho cậu… à không, cho người đó sao?”
+
+“Ừm… đúng vậy. Cậu nói đúng. Quả nhiên là Clara.”
+
+Nhìn nụ cười rạng rỡ đó, cảm giác như có một con dao găm vào tim.
+
+“Nhưng mà, Yennica. Người bạn đó có lẽ sẽ không vui khi câu chuyện nhạy cảm của mình bị bạn bè bàn tán đâu. Nên thay vì hỏi người khác, có lẽ tự mình suy nghĩ sẽ tốt hơn.”
+
+Cô cũng đã chặn trước khả năng tin đồn sẽ lan truyền. Clara là một người có tính cách quyết đoán.
+
+“V-vậy sao? Nhưng mà cậu ấy.. cái đó… ừm… có lẽ là một người không quan tâm nhiều đến những chuyện như vậy…”
+
+“Không đâu, Yennica. Dù có là vậy, việc tùy tiện nói về những câu chuyện nhạy cảm đó với bạn bè… cũng sẽ không tốt cho danh tiếng của cậu đâu.”
+
+“Hức! Cậu nói đúng, Clara! Chắc cậu không thất vọng về mình chứ, Clara…?”
+
+Đúng là một cô gái quá đỗi đáng yêu. Clara phải vuốt mặt một lần nữa để lấy lại bình tĩnh.
+
+“Kh-không sao đâu… Yennica…”
+
+“Ừ, dù sao thì cũng cảm ơn cậu đã nghiêm túc tư vấn. Mình cũng phải quay về Tòa Opelis để báo cáo về thời gian đình chỉ học rồi.”
+
+“Ừ-ừm… mình ngồi thêm một lát rồi đi… có chuyện cần suy nghĩ…”
+
+“Ừ! Lâu rồi không gặp mà trông cậu vẫn khỏe mạnh, thật là may mắn! Sau khi hết thời gian kỷ luật, chúng ta lại gặp nhau nhé, Clara!”
+
+Cứ thế, Yennica chào một cách hoạt bát và rời khỏi nhà ăn học sinh.
+
+Một lúc sau, Clara vùi mặt xuống bàn.
+
+Mình đã làm được, Anis.
+
+Toàn bộ sức lực trong cơ thể đều bị rút đi. Clara phải ở trong tình trạng đó một lúc lâu để hồi phục lại sức lực.
+
+[ Tên: Ed Rostailer ]
+
+Giới tính: Nam
+
+Tuổi: 17
+
+Năm học: 2
+
+Chủng tộc: Người
+
+Thành tựu: Không có
+
+Thể lực 7
+
+Trí lực 7
+
+Tài năng 9
+
+Ý chí 8
+
+Vận may 6
+
+Chi tiết Năng lực chiến đấu>>
+
+Chi tiết Năng lực ma pháp>>
+
+Chi tiết Năng lực sinh hoạt>>
+
+Chi tiết Năng lực giả kim>>
+
+Tôi đang ôm một đống cưa sắt, búa, và đinh lớn, đi về phía khu rừng phía bắc. Tôi đã dùng số đồng vàng có được để mua một vài dụng cụ làm chòi gỗ. Khi công việc nền tảng và chuẩn bị đã kết thúc, đã đến lúc phải bắt tay vào làm.
+
+Vào ngày Trận chiến chinh phạt Glascan diễn ra. Chỉ trong một đêm, chỉ số Trí lực đã tăng lên 2 bậc.
+
+Đó là một chỉ số đã không hề tăng một chút nào dù tôi đã cày ma pháp suốt mấy tháng, đúng là một sự phát triển vượt bậc khiến tôi phải rơi nước mắt.
+
+Không chỉ vậy, tôi đã đạt được thành tựu khi cùng lúc nâng Cảm ứng Tinh linh và Thấu hiểu Tinh linh lên cấp 10, và ô Tinh linh cũng đã được mở ra, tạo ra khả năng có thể thử sử dụng Tinh linh thức, và thậm chí còn có khả năng ký khế ước với cao vị Phong Tinh linh.
+
+Tất nhiên, ở thời điểm hiện tại, việc ký khế ước với cao vị Tinh linh là vô lý về mặt chỉ số, nhưng dù sao thì Merilda ở khu rừng phía bắc cũng không đi đâu cả, nên nếu rèn luyện năng lực ma pháp một cách tử tế, có thể sẽ có thể điều khiển được cao vị Phong Tinh linh.
+
+Đâu chỉ có vậy.
+
+‘Tôi đã xác nhận thư giới thiệu của Hoàng nữ Penia. Có rất nhiều quyền lợi mà Quỹ Glockt có thể cung cấp. Chúng tôi sẽ cố gắng tôn trọng ý kiến của học sinh nhất có thể…’
+
+‘Học bổng.’
+
+‘Việc hỗ trợ về mặt tài chính cũng quan trọng, nhưng trước hết, xin hãy nghe giải thích về các quyền lợi…’
+
+‘Học bổng.’
+
+‘Quỹ của chúng tôi cũng hỗ trợ về mặt học tập, quyền lợi ưu tiên khi sử dụng các cơ sở Tòa Sinh hoạt, điểm cộng cho điểm phục vụ học viện, và đặc biệt là tư cách vào ở các ký túc xá cao cấp…’
+
+‘Nước trung lập… à không, học bổng.’
+
+Dù có nhận được quyền lợi gì đi nữa, nếu không thể đăng ký vào sổ hộ khẩu thì cũng không có ý nghĩa gì.
+
+Có vẻ như Hoàng nữ Penia đã giữ lời hứa và gửi thư giới thiệu đến Hội đồng học viện và Quỹ học bổng Glockt. Không có lý do gì để không ăn miếng bánh đã được dâng đến tận miệng, nên tôi đã nghiến răng và nhận miễn học phí cho học kỳ tới trước.
+
+Nhờ vậy mà tôi đã có thêm thời gian để rèn luyện. Đó là một việc vô cùng may mắn.
+
+Cứ thế, đêm dài như một thảm họa đã trôi qua, và Màn 2 của sân khấu đã mở ra.
+
+Tôi ôm chặt những dụng cụ mộc trong lòng và tiến về phía khu rừng phía bắc.
+
+Dòng chảy của Màn 2 cũng đã nằm trong đầu tôi.
+
+Cuộc chiến cân não giữa Thương hội Elte và học viện, và cuộc chiến mua lại xoay quanh Phong thư của Hiền giả.
+
+Điều thú vị của Màn 2 là ‘Hoàng Kim Vương Elte’, người luôn toát ra một bầu không khí của trùm cuối, lại là một trùm giả. Ở giai đoạn giữa và cuối, Elte bị con gái nuôi Lortel đâm sau lưng và rút lui, và ánh đèn sân khấu sẽ chuyển sang trùm cuối thực sự, ‘Nhà Thám Hiểm Glast’.
+
+Giáo sư cấp cao phụ trách năm nhất, Glast. Dù là một đối thủ có độ khó không hề dễ dàng, nhưng để đến được chỗ ông ta, Tailly còn phải hạ gục rất nhiều trùm giữa. Khác với Màn 1, Màn 2 có đến ba trùm giữa.
+
+‘Tote Kẻ Dẫn Dắt’, ‘Hầu gái trưởng Elise’, và ‘Con gái của Hoàng Kim Lortel’.
+
+Mỗi người đều được giao cho những vai trò khác nhau trong từng chương và sự kiện, nhưng trong số đó, hoạt động của Lortel là nổi bật nhất.
+
+Vai trò của một nữ chính ẩn là chuyện của sau này, ít nhất ở thời điểm Màn 2, Lortel thể hiện một bộ dạng của một nhân vật phản diện áp đảo đến mức tàn nhẫn.
+
+Sống giữa sự thấu hiểu và tính toán, chớp lấy cơ hội khi nó đến, và lợi dụng tất cả những gì có thể. Với bộ dạng của một thương nhân nhuốm đầy lòng tham, cô điều phối tình hình và cân đo lợi ích, một vai trò của một kẻ phản diện tàn ác. Thậm chí, cô còn thể hiện bộ dạng lợi dụng ngược lại người cha nuôi đã nhận nuôi và lợi dụng mình để trấn áp, cho thấy rõ ràng dấu vết của một cuộc đời đã bước đi trên con đường đầy chông gai trong một thực tại đen tối.
+
+Dù sao thì, bài học mà tôi đã nhận được qua Trận chiến chinh phạt Glascan là. Việc câu chuyện có diễn ra tốt đẹp theo cốt truyện chính hay không, phải phán đoán một cách thận trọng và kiên trì.
+
+Không biết biến số nào sẽ tác động như thế nào, nên ít nhất, tuyệt đối không được để xảy ra chuyện tôi bị thiệt hại hay chịu tổn thất trong quá trình đó. Tôi là người bận lo cho cuộc sống của mình.
+
+“Ơ?”
+
+Khi nghĩ vậy và đi ngang qua Tòa Opelis, tôi đã thấy Yennica ở phía xa.
+
+Nghĩ lại thì cũng đã đến lúc thời gian cấm túc của cô ấy kết thúc. Dù thời gian đình chỉ học vẫn còn, nhưng chắc cô ấy đã muốn ra ngoài hít thở không khí.
+
+Nếu nghĩ lại, tôi chưa có một suy nghĩ gì riêng về Yennica.
+
+“Hừm…”
+
+Bây giờ mà tự nhiên tỏ ra thân thiết cũng hơi kỳ. Dù sao thì tôi cũng đã cố tình giữ khoảng cách với Yennica.
+
+Tuy nhiên, ở thời điểm hiện tại, Yennica đã hoàn thành tất cả vai trò của mình và đã rời khỏi sân khấu. Cô ấy sẽ không còn ảnh hưởng đáng kể đến kịch bản nữa, nên tầm quan trọng của cô ấy cũng không khác gì Hầu gái trưởng Bel Maia.
+
+Nếu muốn sống tốt trong thế giới này, phải rèn luyện bản thân, có được một bằng cấp tốt, và tạo ra một môi trường sống tốt hơn, có rất nhiều việc phải làm. Nhưng, trong số rất nhiều tài sản, tài sản mang tên ‘mối quan hệ’ có một sức mạnh đặc biệt không thể thay thế.
+
+Nghĩ lại thì Yennica là một nhân vật đầy hứa hẹn đến mức ngay cả Thương hội Elte cũng phải chủ động tạo ra một món nợ. Nếu tốt nghiệp Sylvania và có được bằng cấp, cô ấy chắc chắn sẽ trở thành một người có tên tuổi.
+
+Hơn nữa, cô ấy cũng đã rời khỏi sân khấu chính của kịch bản, nên đến lúc này, có lẽ nên tích cực tạo ra một mối liên hệ cũng không sao?
+
+Nếu có điều gì đáng lo ngại, đó là đánh giá về con người mang tên Ed Rostailer hiện tại. Trong số các nhân vật chính, có vẻ như đã có vài người đánh giá tôi cao một cách vô ích, và lời đồn trong giới học sinh năm nhất cũng đã được nâng cấp từ một tên khốn trời đánh thành một người vô lễ nhưng có gì đó.
+
+Tuy nhiên, liệu các học sinh năm hai có nghĩ vậy không lại là một vấn đề hoàn toàn khác… Yennica chắc chắn đã nghe rất nhiều lời nói xấu về tôi hôm nay. Cô ấy luôn bị đặt trong một môi trường có thể thay đổi đánh giá về con người tôi bất cứ lúc nào.
+
+Nhưng Yennica có cảm giác như không bị những lời đồn đó chi phối… hầu hết đều phản ứng một cách tử tế.
+
+Dù thế nào đi nữa, chỉ cần chào hỏi và thân thiết một chút cũng không sao chứ nhỉ? Nếu nhìn về lâu dài, cơ hội để tạo ra một mối quan hệ với một người như Yennica không dễ dàng có được.
+
+“Được thôi…”
+
+Tôi gật đầu và tiến về phía Yennica đang đi một cách yếu ớt về phía Tòa Opelis.
+
+“Chào Yennica. Có vẻ cậu đã hết thời gian cấm túc rồi nhỉ.”
+
+Tôi đã chủ động chào một cách sảng khoái.
+
+Việc bất ngờ được chào hỏi chắc chắn là một việc quen thuộc với Yennica. Dù sao thì cô cũng là một thần tượng nhận được tất cả tình yêu thương của các học sinh năm hai.
+
+Cô ấy sẽ đáp lại lời chào một cách hoạt bát, nói chuyện vặt vãnh, và sau khi chào tạm biệt một cách vui vẻ, sẽ quay trở lại làm việc của mình. Tôi đã vẽ ra một dòng chảy như vậy trong đầu và chờ đợi câu trả lời của Yennica.
+
+“Ơ, ừm! Ơ!”
+
+Tuy nhiên, Yennica, ngay khi bắt gặp ánh mắt của tôi, đã ôm chặt cây trượng gỗ sồi và lùi lại vài bước.
+
+“Ừ, Ed! Ừ!”
+
+Với một dáng vẻ khó tiếp cận, cô không thể nào nhìn thẳng vào mắt tôi và cứ đảo đồng tử, và chẳng mấy chốc, với một vẻ mặt như đã quá tải và đỏ bừng.
+
+“Tớ! Có việc! Ở Tòa Opelis! Gặp lại sau nhé! Chào cậu!”
+
+Như thể sợ tôi sẽ bắt chuyện thêm, cô ấy đã chạy trốn một cách vội vã.
+
+……
+
+Giờ đến cả Thánh nữ hiếm có như Yennica cũng cắt đứt quan hệ với mình rồi. Đây cũng là một thành tích đáng nể.
+
+Quả nhiên, lời đồn thật đáng sợ. Nhưng tôi cũng hiểu.
+
+Dù cô gái có một tâm hồn vững chắc đến đâu, cũng không thể không bị những lời đồn hay tin đồn được nghe đi nghe lại trong một thời gian dài chi phối. Sức mạnh của đám đông thật mạnh mẽ.
+
+Dù không bị tổn thương hay u buồn một cách quê mùa, nhưng việc một người có thể trở thành một mối quan hệ tốt đã bay đi, không thể không cảm thấy như một sự tổn thất. Mà, dù có tiếc nuối thì cũng đâu thể làm gì được.
+
+Tôi gật đầu như vậy, và dành một phút mặc niệm cho ứng cử viên mối quan hệ cấp 1 đã bay đi.
+
+Tôi sẽ không bám víu một cách thảm hại đâu. Sống tốt nhé, Yennica…
+
+Tôi ôm chặt những vật liệu xây dựng chòi gỗ và đi con đường của mình. Dù sao thì công việc thiết kế cơ bản cũng đã kết thúc, nên đây là một cơ hội tốt để rèn luyện thêm các kỹ năng hệ sản xuất.
+
+Vì đã có thêm thời gian… rèn luyện, lại rèn luyện.

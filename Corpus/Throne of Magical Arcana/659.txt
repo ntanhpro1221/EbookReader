@@ -1,0 +1,96 @@
+Chương 660 - Thời gian thấm thoát trôi
+
+
+Tháng Tư năm 827, tại Rentaro, gió nhẹ vi vu, nắng xuân rực rỡ.
+
+Bắt chước thần tượng của mình – Nữ Vương Natasha, Heidi toàn thân mặc một bộ trang phục nữ hiệp sĩ gọn gàng, linh hoạt và ngồi trong quán hồng trà ven đường trên đại lộ Hoa Hồng. Vừa lắng nghe khúc nhạc piano du dương, cô vừa thuận tay lật xem cuốn [Tạp chí Arcana và Ma thuật] đặt trên bàn.
+
+Kể từ sau khi giáo hội Nam bị trục xuất, những danh từ như arcana, ma thuật, giả kim ngày càng trở nên quen thuộc với dân chúng. Rất nhiều người dù không hiểu được những lý thuyết arcana cao siêu, phức tạp, cũng chẳng có năng khiếu ma thuật nổi trội gì, nhưng họ vẫn không kìm được mà tràn đầy tò mò đối với lĩnh vực thần bí đang tỏa ra sức hấp dẫn vô hạn này.
+
+Thêm vào đó, cùng với sự phát triển của các trường phổ thông và Trường Blue Fly, số người biết chữ đang ngày một tăng. Kênh [Thanh âm Arcana] đã không còn có thể thỏa mãn khát vọng được tìm hiểu sâu hơn của một bộ phận dân chúng nữa. Bọn họ thường theo dõi kênh [Bản chất của Thế giới] để biết những chuyện thú vị xảy ra trong thế giới arcana và ma thuật, đồng thời ngưỡng mộ những Arcanist và pháp sư nổi tiếng chẳng kém gì đối với những nhạc sĩ hay nhà viết kịch.
+
+Trong cuộc sống hàng ngày, bất cứ ai có thể bàn luận đôi chút về những điều thuộc lĩnh vực tiên tiến nhất của arcana thì đều sẽ được coi là cực kỳ thời thượng, cực kỳ ngầu lòi, dù cho họ chỉ mở miệng thốt ra những từ khiến cho người ta váng đầu, còn thực chất trong lòng căn bản chẳng hiểu nó có ý nghĩa gì cụ thể.
+
+Chính vì vậy, [Tạp chí Arcana và Ma thuật], phiên bản đại chúng của chương trình [Ấn tượng Allyn], đã ra đời đúng lúc. Lượng phát hành của nó không ngờ lại khá đến đáng ngạc nhiên. Căn cứ theo mấy người bạn quý tộc của Heidi, có không ít quý tộc cũng đang muốn chạy theo trào lưu mà cho ra mắt những tờ báo tương tự.
+
+Cầm tách hồng trà lên nhấp một ngụm, Heidi nhàn nhã đọc tờ báo:
+
+“Sau khi Ngài Vương tế ‘Thao Túng Nguyên Tử’ Lucien Evans đề xuất ra phương pháp lượng tử hóa trường điện từ để giải quyết vấn đề bức xạ, hai vị là Annick và Sprint đã trịnh trọng gọi phương pháp này là ‘lượng tử hóa bậc hai’,[note73077] đồng thời áp dụng mở rộng nó sang hệ thống electron và giành được những thành quả xuất sắc. Hai vị Arcanist vô cùng trẻ tuổi này, những người đã từng giành được giải Vương miện Holm và Huy chương Mặt trăng Bạc nhờ mô hình spin electron, lại một lần nữa thể hiện ra tài năng của mình.”
+
+Đọc tin tức chẳng đề cập đến bất cứ lý thuyết cụ thể nào mà chỉ mang tính tường thuật kia, Heidi không khỏi bĩu môi. Dù rằng vẫn có thể bắt kịp tiến độ nghiên cứu của Annick và Sprint trong lĩnh vực vi mô và hiểu được những lý thuyết phức tạp ấy, song cô lại không có cách nào xuất chúng được như họ mà chỉ đạt được lèo tèo vài ba thành quả chẳng thể coi là chấn động. Tuy nhiên, trong phạm trù “trí tuệ nhân tạo”, cô lại có được những thành quả nổi trội rõ rệt.
+
+Sau rất nhiều lần trao đổi với thầy cùng vô số suy xét và thí nghiệm, cô, Chely, Lowi và Alfalia đã có được một kế hoạch đại khái cho phương hướng thiết kế “trí tuệ nhân tạo” sơ bộ và được thầy cô vui miệng gọi là “hệ thống trí tuệ nhân tạo Heidi – Chely”.
+
+Mặt khác, việc chuẩn bị sản phẩm giả kim tương ứng đang được thực hiện dưới sự hỗ trợ kiến thức về vật liệu của Katrina và Layria, dưới sự hướng dẫn từ “ma thuật tinh thể học”[note73078] mà Quý cô Hathaway và Quý cô Hellen xây dựng, dưới ảnh hưởng từ những ‘ý tưởng kỳ quái’ của thầy cô, dưới sự hỗ trợ của rất nhiều ma thuật thần kỳ và dưới sự chung tay nghiên cứu của hàng trăm Arcanist trong các lĩnh vực tương ứng. Trải qua hơn một năm nỗ lực, cuối cùng họ đã đạt được thành quả cơ bản nhất, đó là biến đèn điện tử được thiết kế trước đây thành bóng bán dẫn nhỏ gọn hơn.[note73079]
+
+‘Nhưng lý thuyết arcana hiện tại lại không giải thích toàn vẹn được nguyên lý hoạt động của bóng bán dẫn, chỉ có thể dựa vào ma thuật để chế tạo và ứng dụng nó qua loa. Thứ này đòi hỏi trình độ ma thuật quá cao, căn bản không thể phổ cập và ứng dụng rộng rãi. Lẽ nào vẫn chỉ có thể sử dụng đèn điện tử trong thời gian dài sắp tới?’ Heidi giơ tay phải lên xoắn xoắn tóc, cảm thấy hết sức khổ não về vấn đề này.
+
+Chợt nhớ ra bản thân chính vì chuyện này mới nhận bừa một nhiệm vụ để tới Rentaro giải sầu, Heidi quyết định tạm thời không nghĩ nhiều nữa, bèn cưỡng ép thu hết suy nghĩ lại rồi tiếp tục đọc nội dung trong tờ [Tạp chí Arcana và Ma thuật]:
+
+“Ngài Hoàng Đế Arcana Douglas đã công bố hai nghiệm của phương trình trường hấp dẫn Evans. Ngài cho rằng một nghiệm trong đó mô tả trạng thái đặc biệt của một thiên thể hình thành khi một lượng lớn vật chất tụ lại ở một điểm trong không gian, từ đó hình thành nên một ‘chân trời sự kiện’[note73080] xung quanh, một khi đi qua đó thì ngay cả là ánh sáng cũng không thể thoát ra. Đây là hiện tượng thiên thể đáng sợ nhất, có thể nuốt chửng hết tất cả, do đó nó được gọi là ‘hố đen’.
+
+Còn nghiệm thứ hai là bổ sung cho nghiệm trước. Thứ mà nó mô tả là một hố đen mang điện[note73081] được hình thành từ vật chất có điện tích, còn ‘hố đen’ trước đó thì vừa không mang điện vừa không quay…”
+
+“Hố đen à…” Heidi lẩm bẩm. Với tư cách là một pháp sư gần đạt cao cấp, đồng thời là học trò của một Grand Arcanist, cô biết nhiều hơn những gì được viết trên tờ báo này. ‘Ngài Chủ tịch còn cho rằng, Sao chủ Định mệnh tương ứng với hố đen chính là nguyên nhân làm xuất hiện những Vô Tích Giả. Vận mệnh của họ không hẳn là không thể truy vết, mà vẫn có thể quan sát và xác định được thông qua những hiện tượng gián tiếp… Vận mệnh bí hiểm của thầy hình như cũng vì lý do này mà có thì phải? Có phải thầy sở hữu một hệ sao đôi[note73082] gồm một Sao chủ Định mệnh bình thường và một hố đen không?’
+
+Lắc đầu, Heidi thầm suy đoán: ‘Đợi đến khi Ngài Chủ tịch phát hiện ra dấu vết của hố đen trên bầu trời sao và xác nhận ý nghĩa arcana của hai nghiệm này, ma thuật loại hấp dẫn của ngài ấy chắc chắn sẽ còn ghê gớm hơn nữa… Ừ thì, cả thầy cũng vậy.’
+
+Cho dù có không thể thật sự tạo ra hố đen đi chăng nữa, đến lúc đó, Douglas chắc chắn vẫn có thể mô phỏng nó trong thế giới nhận thức của mình rồi phóng chiếu ra để tạo nên hiệu quả phi phàm. Còn Lucien, với tư cách là người xây dựng phương trình trường, cậu đương nhiên cũng sẽ được hưởng lợi ích tương tự.
+
+Đúng lúc này, từ bên cạnh bỗng vang lên tiếng thì thầm đọc báo của mấy thanh niên xem chừng là học sinh từ Trường Phổ thông 5 gần đó: “Ngài Chúa Tể Bão Táp Fernando đã công bố phát hiện của mình: trong quá trình phân rã nguyên tố, tia nguyền rủa electron[note73083] có dấu hiệu không bảo toàn năng lượng, hơn nữa phổ của nó lại liên tục, không mang tính lượng tử hóa...”
+
+“Căn cứ vào điều này, ngài đã đưa ra suy đoán rằng trong quá trình đó, đi đôi với tia nguyền rủa electron còn có một loại hạt nhỏ không mang điện được phát ra, một loại hạt mới khác biệt với tất cả các hạt cơ bản đã biết. Ngài gọi nó là ‘neutrino’,[note73084] đồng thời phỏng đoán những tình huống có thể xảy ra trong quá trình phân rã hạt nhân, chỉ ra rằng lực cơ bản duy nhất trong bốn lực, thủy lực, vẫn chưa được phát hiện. Nó rất có thể ẩn chứa trong quá trình này…”**
+
+“Lợi hại thật! Chỉ từ một vài hiện tượng thực nghiệm mà đã có thể mạnh dạn dự đoán sự tồn tại của một loại vật chất mới rồi! Arcanist quả thực ngầu hết biết…” Các học sinh thì thầm bàn tán về chuyện này. Trong mắt họ, Arcanist giống như những vị thần nắm giữ quy luật vận hành của thế giới, đồng thời thông qua những quy luật bản chất ấy để dẫn dắt và dự báo tất cả mọi việc.
+
+Heidi mỉm cười nhìn các học sinh kia, tưởng chừng như đang nhìn lại chính mình năm mười bốn, mười lăm tuổi. Thời điểm ấy cô cũng cảm thấy pháp sư thật thần kỳ, thật hùng mạnh, vì vậy mới vô cùng khao khát mà lao mình vào đại dương nghiên cứu arcana vô tận.
+
+Quay đầu về nhìn đồng hồ đeo trên cổ tay, thấy vẫn còn chút thời gian, cô bèn tiếp tục đọc [Tạp chí Arcana và Ma thuật].
+
+“Quý cô Chúa Tể Nguyên Tố Hathaway và Ngài Chúa Tể Bão Táp Fernando đã công bố lý thuyết phân rã nguyên tố sơ bộ dựa trên kết hợp giữa phân tích đảo ngược với những nghiên cứu hiện tại trong lĩnh vực vi mô. Dĩ nhiên, đây mới chỉ là một lý thuyết còn thô sơ, chưa có cấu trúc ma thuật rõ ràng… Dựa vào đóng góp xuất sắc này, cả hai vị đã cùng chia sẻ giải Arcana Evans thứ ba cùng với Vương miện Holm… Điều này đã mở ra cho chúng ta một hướng đi mới trong việc khai thác năng lượng, đồng thời giúp chúng ta tiến sâu hơn trong công cuộc khám phá bí ẩn của sự sáng tạo vạn vật.”
+
+“Hai Quý cô Phù Thủy Băng Địa Hellen và Chúa Tể Nguyên Tố Hathaway lại vừa công bố thêm một luận án nghiên cứu về tinh thể. Trong hai năm qua, cả hai vị đã xây dựng nên một hệ thống trác tuyệt nhờ nghiên cứu chuyên sâu về phạm trù này… Rất có thể giải Arcana Evans thứ tư sẽ thuộc về họ…”
+
+“Ngài Raventi, Ngài Morris, ngài Gaston và các Arcanist khác lại một lần nữa đạt được đột phá kép cả về lý thuyết lẫn thực nghiệm trong nghiên cứu tổng hợp chất sống…”
+
+“Ngài Dieppe, ngài Larry và ngài Jurisian mỗi người đều đã độc lập tiến hành những nỗ lực tương đối hóa phương trình sóng Oliver – Brook. Dẫu vậy, cả ba vị cũng đều thừa nhận rằng những nỗ lực ấy đã thất bại. Chúng không những không khớp với một số thực nghiệm hiện tại mà còn dẫn đến một kết quả kỳ quái là năng lượng âm…”[note73085]
+
+“Ngài Felipe đã đệ trình một bộ giáo trình chuẩn mực trong phạm trù giải phẫu cơ thể người, từ đó thiết lập nên một nền móng vững chắc cho hệ thống bệnh viện vừa mới khởi phát…”
+
+Những nội dung đăng trên [Tạp chí Arcana và Ma thuật] hầu như đều là thành quả nghiên cứu tiên phong trong các lĩnh vực tiên tiến nhất. Nhưng ngay cả như vậy, chúng vẫn chiếm kín cả mấy trang báo, dày đặc đến độ khiến người ta nhìn mà hoa cả mắt. Như vậy đủ thấy tốc độ phát triển của arcana mấy năm gần đây vượt bậc như thế nào. Nó cho thấy một thời đại hoàng kim nơi thành quả không ngừng bùng nổ, đồng thời phản ánh một dòng chảy thời đại với tiết tấu điên cuồng đến mức ngay cả các pháp sư cũng phải thở không ra hơi.
+
+‘Hai mươi vị Pháp sư huyền thoại. Cuối cùng cũng vượt qua ngày xưa rồi…’ Đọc xong tờ báo, Heidi chẳng hiểu sao lại nghĩ đến chuyện này. Sự phát triển vượt bậc trong lĩnh vực vi mô đang dần đem tới những thành quả lớn lao cho nghiên cứu Thuyết tương đối tổng quát. “Gã Xám Bạc Bủn Xỉn” Morris và Chiêm Tinh Sư Annonis bởi vậy mà đều đã tấn thăng.
+
+Heidi gấp tờ báo lại, đặt xuống trước mặt rồi lặng lẽ lắc đầu: ‘Chỉ toàn tin tốt thôi à? Hơn một năm nay, những Arcanist bị đình trệ vì cách diễn giải xác suất và nguyên lý bất định cũng đâu có ít, như ngài Donald chẳng hạn…’
+
+Cũng giống như trước kia từng tạm gác việc tìm hiểu ý nghĩa thực sự đằng sau khái niệm lượng tử, trong thời gian gần đây, phần lớn các Arcanist đều tiếp cận luận án “Cơ sở Cơ học Lượng tử và Tân Giả kim thuật” của Lucien với thái độ thực dụng. Tuy nhiên, kết quả lại khiến cho họ khó mà tin nổi, bởi nó không chỉ giải thích được hầu hết các thí nghiệm trong quá khứ, mà còn thúc đẩy sự phát triển vượt bậc của lĩnh vực vi mô, thậm chí dự đoán được chuẩn xác rất nhiều điều. Vì vậy, không ít Arcanist đã bắt đầu thay đổi thái độ.
+
+Những cuộc tranh luận liên quan đến ba nguyên lý[note73086] đó vẫn không ngừng diễn ra trên các tập san và hội nghị. Douglas, Brook, Fernando, Oliver và nhiều Arcanist khác không ngừng đề xuất ra những thí nghiệm tư duy để chứng minh nó là sai, song đều không ngừng bị Lucien chỉ ra những điểm sai sót và suy nghĩ chưa chu toàn. Về sau, các Arcanist ủng hộ ba nguyên lý của cậu cũng bắt đầu tham gia cuộc tranh luận này.
+
+Mãi đến khi Lucien tiếp tục công bố một luận án mới, tình trạng tranh cãi này mới bắt đầu lắng xuống. Khi dùng phương trình sóng để nghiên cứu vấn đề trao đổi hạt,[note73087] cậu phát hiện: khi đối xứng, các hạt tuân theo thống kê Chloe, còn khi phản đối xứng, chúng lại tuân theo thống kê Hellen – Fernando.[note73088] Nhờ đó, cách diễn giải xác suất của cậu đã tiến thêm được một bước.
+
+‘Tình trạng yên ắng này nhất định chỉ là tạm thời. Mình có linh cảm rằng một cơn bão khủng khiếp đang dần âm ỉ…’ Heidi ngây người nhìn tách hồng trà rỗng trước mặt, trong lòng có cảm giác như thể bị ngộp thở. ‘Mọi thành tựu trong lĩnh vực vi mô suốt những năm qua rồi đều sẽ bị cơn bão này thống nhất lại hoàn toàn cho mà xem…’
+
+Đúng lúc này, một con quái vật thép hình vuông bỗng phanh kít lại bên ngoài quán hồng trà. Sau đó, một người đàn ông trung niên mặc áo choàng đen bước xuống và tiến lại gần Heidi, trên mặt nở một nụ cười thân thiện. Ông ta có chút nịnh hót nói: “Quý cô Heidi phải không?”
+
+“Phải. Ông là Buck của Sở Cảnh sát?” Heidi mỉm cười đứng dậy.
+
+Buck tháo chiếc mũ chóp cao màu đen trên đầu xuống rồi khẽ khom lưng chào: “Rất vinh hạnh được gặp cô. Được một pháp sư xuất chúng như cô giúp đỡ, vụ giết người hàng loạt này chắc chắn sẽ được giải quyết nhanh chóng.”
+
+Pháp sư là người am hiểu rất nhiều phép thuật kỳ quái, nên khi gặp khó khăn trong việc tra án, Sở Cảnh sát thường thỉnh cầu sự giúp đỡ của Ma pháp Nghị viện dưới dạng nhiệm vụ. Nhưng Buck hoàn toàn không ngờ pháp sư đến lần này lại là cô Heidi của Viện Nguyên tử! Một Arcanist gần đạt tới cấp cao, lâu nay lại còn luôn hoạt động trong những lĩnh vực tiên tiến nhất mà lại tới làm một nhiệm vụ nhỏ nhặt thế này?
+
+Sau khi hai bên ngồi lại, Buck lấy ra một bức ảnh hiện trường và đưa cho Heidi –
+
+“Máy ảnh ma thuật đen trắng” đã được đơn giản hóa tới một mức độ nhất định, ít nhất là đủ để một cơ quan sở hữu thực quyền như Sở Cảnh sát có thể sử dụng.
+
+Ngay khi vừa nhận lấy nhìn qua, Heidi liền khẽ nhíu mày. Mặc dù đã nhiều lần tham gia giải phẫu thi thể, song cảnh tượng tàn nhẫn và đẫm máu như thế này vẫn khiến cô vô thức cảm thấy khó chịu.
+
+Trên ảnh là thi thể của một người bình thường với phần bụng bị rạch toang, lấy đi toàn bộ nội tạng. Xung quanh là khung cảnh bẩn thỉu, ô uế của khu ổ chuột trong thành phố.
+
+–––––––––––––––––––––––––––––––––––––––––––––
+
+**Giải thích ý hai đoạn trên: Trong ngữ cảnh, Fernando phát hiện trong quá trình phân rã nguyên tố (thực chất là phân rã beta), electron được phát ra có phổ năng lượng liên tục và tổng năng lượng có vẻ không khớp với năng lượng ban đầu.
+
+Bình thường trong vật lý lượng tử, năng lượng phát xạ là rời rạc (lượng tử hóa) chứ không liên tục. Việc liên tục này khiến cho tổng năng lượng của proton + electron sau khi phân rã nhỏ hơn năng lượng ban đầu của neutron, tức là một phần năng lượng đã “mất tích”, mà theo định luật bảo toàn năng lượng, năng lượng không tự sinh ra hay mất đi mà chỉ chuyển hóa từ dạng này sang dạng khác.
+
+=> Hiện tượng trên gây mâu thuẫn với định luật này. Vậy nên để khôi phục định luật bảo toàn năng lượng, nhà vật lý người Áo Wolfgang Pauli (ở đây là Fernando) mới đề xuất ra giả thuyết tồn tại neutrino – một hạt ẩn, khó quan sát trực tiếp và mang phần năng lượng còn lại. Giả thuyết này đã mở ra con đường nghiên cứu về lực hạt nhân yếu (ở đây là thủy lực).

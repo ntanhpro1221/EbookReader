@@ -1,0 +1,453 @@
+Giải thích về Chín Ngày Đàm Luận
+
+1.
+
+Logic cốt lõi của 『 Chín Ngày Đàm Luận 』 nằm ở chương trước, tức là chương 4 『 Phân tích lại ván đấu 』. Nếu các bạn chưa xem, xin hãy quay lại đọc chương 4 trước, đó là cuộc đối thoại giữa Y Mặc và Tần Mộ Sắc.
+
+2.
+
+Những độc giả chưa đọc quyển thứ 10 『 Chín Ngày Đàm Luận 』 xin vui lòng không đọc chương này. Nó sẽ ảnh hưởng nghiêm trọng đến trải nghiệm khi đọc quyển 10 vì có chứa nội dung tiết lộ cốt truyện cực nặng.
+
+3.
+
+Do nội dung quá nhiều nên trình tự giải mã sẽ hơi lộn xộn, tôi nhớ tới đâu thì giải thích tới đó vậy.
+
+4.
+
+Biển báo khi trò chơi bắt đầu.
+
+『 Những ngày tiếp theo, ngài có thể lựa chọn 1 trong 3 địa điểm để sinh sống. 』
+
+『 A. Học viện Hạnh Phúc, chúng tôi mãnh liệt đề nghị bạn chọn nơi này để ôn lại quãng thời gian học sinh hạnh phúc. 』
+
+『 B. Khách sạn Hạnh Phúc, mức độ đề cử bình thường. Bởi vì ngoại trừ ngủ, bạn sẽ cảm thấy lo âu vì không có việc gì làm. 』
+
+『 C. Bệnh viện Hạnh Phúc, không đề nghị. Ở đây bạn sẽ không nhận được bất kỳ cảm giác hạnh phúc nào, chỉ cảm thấy hối hận mà thôi. 』
+
+Giải mã:
+
+①. Nội dung phía trên là chính xác. Trường học có độ khó thấp nhất, tiếp đến là khách sạn, và Bệnh viện Hạnh Phúc là nơi nguy hiểm nhất.
+
+②. Nếu ngay từ đầu người chơi chọn đi đến Bệnh viện Hạnh Phúc, họ sẽ nhìn thấy một bệnh viện hoang tàn đổ nát. Điều này không trực tiếp dẫn đến cái chết, nhưng sẽ làm tăng nghiêm trọng khả năng người chơi rơi vào "Thế giới đan xen", đây là độ khó Địa Ngục.
+
+Nếu người chơi đã gặp vấn đề (bị bệnh) mà đi đến bệnh viện, họ sẽ nhìn thấy một bệnh viện đèn đuốc sáng trưng. Lúc này nếu bước vào, họ sẽ rơi thẳng vào "Thế giới bên trong" và chết chắc.
+
+③. Biết càng nhiều càng nguy hiểm, nhận thức càng hỗn loạn. Lời khuyên là chỉ nên lấy một cuốn sổ tay quy tắc là đúng đắn nhất.
+
+5.
+
+Giải mã quy tắc trường học.
+
+Vì quy tắc quá nhiều nên tôi sẽ không giải thích từng cái một mà chỉ nhấn mạnh các điểm trọng yếu.
+
+Logic cốt lõi là: Trường học muốn bảo vệ học sinh, hy vọng học sinh có thể tốt nghiệp.
+
+Nhưng những học sinh mang mầm mống nguy hiểm sẽ bị trường học xem như "côn trùng có hại" và bị tiêu diệt.
+
+①. Trong Sổ tay học sinh có ghi: Không đề nghị tân sinh giao lưu với học sinh cũ, cũng không đề nghị các học sinh giao lưu với nhau.
+
+Nguyên nhân là vì cảm xúc sợ hãi có thể lây lan. Để phòng ngừa học sinh "bị bệnh" lây nhiễm cho học sinh khác, nhà trường hạn chế việc giao lưu.
+
+"Tân sinh" thuộc về trạng thái chưa xác định, cần phải sàng lọc.
+
+『 Học sinh cổ xanh 』: Người bệnh nhẹ. Trường học sẽ tăng thêm chương trình học và thời gian làm việc cho họ để di dời sự chú ý, khống chế bệnh tình (giảm bớt thời gian suy nghĩ lung tung, làm tê liệt cảm giác sợ hãi).
+
+Đồng thời, trong quá trình làm việc, sẽ có các nhân viên NPC chịu trách nhiệm giám sát học sinh.
+
+Nếu "bệnh tình" không chuyển biến xấu hoặc có chiều hướng tốt lên, họ sẽ được giữ nguyên trạng thái.
+
+Nếu "bệnh tình" chuyển biến xấu, họ sẽ được sắp xếp đi nơi khác làm việc để tiếp tục quan sát, đón nhận kết cục bị giam cầm hoặc trở thành học sinh cổ đỏ.
+
+Những học sinh NPC cổ xanh còn sống đều là những học sinh tương đối khỏe mạnh, cho nên họ sẽ không từ chối trò chuyện về những nội dung tích cực. Nhưng chỉ cần nhắc đến chủ đề tiêu cực, họ sẽ tỏ ra chán ghét.
+
+Vì vậy, học sinh cổ xanh có thể giao lưu với học sinh cổ xanh, nhưng không thể nói chuyện với tân sinh hoặc học sinh cổ đỏ.
+
+『 Học sinh cổ đỏ 』: Người bệnh nặng, đối tượng nguy hiểm.
+
+Bị cách ly, không được phép giao lưu với bất kỳ học sinh nào.
+
+Trường học sẽ giám sát trọng điểm. Nếu không tích cực phối hợp điều trị uống thuốc hoặc tâm lý không ổn định, họ sẽ bị chỉ định đến Lò đốt rác và bị phía nhà trường tiêu diệt.
+
+Nếu học sinh cổ đỏ không đi đến Lò đốt rác, sẽ có hai kết quả: Chết bệnh hoặc Phản kháng trường học.
+
+Nếu không chết bệnh mà chuyển sang trạng thái phản kháng trường học, nhưng "bệnh tình" không chuyển biến xấu hoặc tốt lên: Nếu hành vi không nghiêm trọng, trường học sẽ không quản; nếu nghiêm trọng, sẽ bị trường học giết chết.
+
+Chú ý: Học sinh cổ đỏ cũng có quy tắc riêng, nội dung chủ yếu giống như lời Thầy chủ nhiệm nói. Nhưng vì Thầy chủ nhiệm đích thân đưa Lưu Khôn đi Lò đốt rác nên không đưa sổ tay cho cậu ta xem nữa.
+
+②. Ban ngày tương đối an toàn, buổi tối tương đối nguy hiểm.
+
+Do đó, sổ tay và các hạng mục quy tắc cơ bản đều cấm học sinh hành động vào buổi tối, bắt buộc phải trở về ký túc xá.
+
+③. Vào nhầm phòng học, không thể quay về ký túc xá, phòng y tế không có bác sĩ hoặc gặp nữ bác sĩ... đều là biểu hiện của việc "bị bệnh". Phải đi đến văn phòng Thầy chủ nhiệm điền biểu mẫu. Căn cứ vào các tình huống gặp phải khác nhau, họ sẽ trở thành học sinh cổ xanh hoặc cổ đỏ. Đây là phương pháp sàng lọc học sinh của nhà trường.
+
+④. Những địa điểm như Giảng đường số 44, số 66 hay Lò sát sinh đều không tồn tại ở thế giới thực (nhưng các học sinh khi phát bệnh sẽ nhìn thấy và nói cho người khác biết).
+
+Đây là những kiến trúc thuộc về "Thế giới bên trong", không phải "Thế giới bên ngoài".
+
+Khi người chơi phát bệnh sẽ nhìn thấy chúng, một khi đi nhầm vào đó thì chắc chắn phải chết.
+
+⑤. 『 Học sinh cổ đen 』: Một bộ phận cực nhỏ là người sống (như trường hợp Chuột Lông Vàng bị lừa gạt), còn đại bộ phận đều là quỷ quái thuộc "Thế giới bên trong".
+
+⑥. Trong phòng ký túc xá, không được động vào đồ vật mà học sinh tốt nghiệp để lại.
+
+Bởi vì một số món đồ sẽ ảnh hưởng đến người chơi, làm sâu sắc thêm nhận thức về quỷ quái, dẫn đến việc người chơi "bị bệnh".
+
+Cho nên các giáo viên cũng không thích những vật đó.
+
+⑦. Sau khi biết logic cốt lõi, mọi người có thể quay lại xem quy tắc, tôi sẽ không giải thích lại từng cái một.
+
+Trong quá trình bảo vệ và sàng lọc người chơi, cũng giống như chơi game phân nhánh, việc không có đồng đội sẽ dẫn đến những hướng đi và kết cục khác nhau.
+
+5.
+
+Kết cục của tất cả nhân vật trong quyển này:
+
+Nam thanh niên ưu tú: Không đưa ra lựa chọn → Lạc vào Khu Rừng Hạnh Phúc → Rơi vào Thế giới bên trong → Kết cục bỏ mạng trong rừng núi.
+
+(Chú ý: Khu Rừng Hạnh Phúc vào đêm khuya sẽ khiến người chơi rơi vào Thế giới bên trong).
+
+Triệu Tiền Tấn: Bệnh nhẹ → Nhưng vi phạm sổ tay, tấn công NPC → Bị Học viện Hạnh Phúc phán định là nguy hiểm → Kết cục bị phía nhà trường giết chết.
+
+Tiết Phương: Bệnh nặng → Không thử điều trị theo Sổ tay học sinh → Gặp nữ bác sĩ ở phòng y tế → Không đến văn phòng → Né tránh việc trở thành học sinh cổ đỏ → Đi đến Bệnh viện Hạnh Phúc → Rơi vào Thế giới bên trong → Kết cục bỏ mạng tại bệnh viện.
+
+Dì Hồng: Bệnh nhẹ → Bị Chuột Lông Vàng (lúc này đã bị lừa gạt) giết chết → Kết cục chết do nội đấu.
+
+Chuột Lông Vàng: Giữa bệnh nặng và nhẹ → Do tìm manh mối ở ký túc xá nên trở thành Cổ đen → Chiến đấu với Tần Mộ Sắc thất bại → Bị lừa trực tiếp vào Thế giới bên trong → Kết cục tử vong tại Giảng đường số 44.
+
+(Chú ý: Sổ tay Cổ đen không phải để bảo vệ người chơi mà là cái bẫy lừa gạt.
+
+Việc ngăn cản người bệnh nặng đi đến Lò đốt rác và Trại chăn nuôi sẽ khiến phe Cổ đen càng thêm bành trướng, có lợi cho phe quỷ quái.
+
+Đi giao lưu với học sinh người chơi khác sẽ làm bệnh tình của họ nặng thêm, giống như lây lan virus, cũng có lợi cho phe quỷ quái.
+
+Sau khi trở thành Cổ đen, việc bị quỷ quái nhắm vào sẽ giảm bớt, thực tế đây đúng là một tuyến đường ẩn.
+
+Nếu không đi đến bệnh viện hay Giảng đường số 44 (các kiến trúc Thế giới bên trong) thì cái chết sẽ không đến ngay lập tức, có thể sống lay lắt qua trò chơi.
+
+Bình thường làm Cổ đen lâu dài chắc chắn sẽ chết, nhưng "Chín Ngày Đàm Luận" là trò chơi sinh tồn tính thời gian, nên ráng gượng 10 ngày thì có thể sống sót qua màn).
+
+Du Thần: Nhìn thấu một phần bản chất trò chơi, giá trị sợ hãi không đạt chuẩn nên sẽ không bị tấn công. Không đi vào nơi giao thoa thế giới nghiêm trọng hoặc Thế giới bên trong, cho rằng có thể qua màn → Nhưng do nhận thức về quỷ quái quá mãnh liệt → Dẫn dụ BOSS xuất hiện → Phát hiện trò chơi không có lời giải → Tự sát trong sự hành hạ đau đớn → Kết cục chết vì quá tỉnh táo.
+
+(Chú ý: Sở dĩ Du Thần nói có bug là vì BOSS không có cách nào phá giải. Sở dĩ nói ngay từ đầu đã trúng chiêu là vì Du Thần phát hiện cuốn sổ tay lấy được lúc bắt đầu đã là bẫy rập của trò chơi. Hiểu quá rõ về quỷ quái ngược lại sẽ rơi vào thế chết chắc).
+
+Lưu Khôn: Bệnh nhẹ → Đến văn phòng → Trở thành Cổ xanh → Quan sát nhân viên không thông qua → Bị đưa đến Trại chăn nuôi → Quan sát nhân viên không thông qua → Gặp Thầy chủ nhiệm ở phòng y tế → Trở thành Cổ đỏ → Đi tới Lò đốt rác → Bị xem như "côn trùng có hại" → Kết cục bị giết chết.
+
+Lưu Kiến: Bệnh nhẹ → Đến văn phòng → Trở thành Cổ xanh → Khỏe mạnh → Bị Lưu Khôn ảnh hưởng → Bị Chuột Lông Vàng giết chết → Kết cục Cổ xanh khỏe mạnh bị hố chết.
+
+Bạch Vũ: Bệnh nhẹ → Ban đầu đã ảnh hưởng đến Lưu Khôn và Lưu Kiến, khiến độ khó trò chơi của họ tăng cao → Tránh né nơi nguy hiểm → Nhưng theo đà trò chơi chuyển biến xấu → Năng lực bản thân quá mẫn cảm với quỷ quái, bệnh tình tăng nặng → Kết cục tự sát.
+
+(Chú ý: Năng lực của Bạch Vũ không phải ưu thế mà ngược lại là điểm yếu lớn nhất, sẽ tự nhiên làm tăng bệnh tình. Không cần quỷ quái giết cô, khi những thứ dơ bẩn xuất hiện nhiều lên, chính cô sẽ khó chịu đến mức chết bệnh. Đây là người chơi duy nhất vô phương cứu chữa, không thể qua màn. Huân Huân biết Bạch Vũ chắc chắn phải chết nên đưa dao găm để cô sớm được giải thoát).
+
+Bình Đầu Ca: Bản thân bệnh nhẹ → Lợi dụng Lục Nhu để dụ quỷ quái, đối đầu trực diện với quỷ quái → Sau khi thất bại, do bản tính khá chính trực nên đã cứu Lục Nhu một mạng → Bị quỷ quái giết chết → Kết cục đối đầu trực diện tại khách sạn không thành công.
+
+Lục Nhu: Bệnh nhẹ → Tuân thủ quy tắc khách sạn → Chuyển biến xấu → Được Bình Đầu Ca cứu → Ở trong nhà an toàn → Được Huân Huân dẫn dắt → Dựa vào ý chí cầu sinh mạnh mẽ mà gượng qua được → Sống sót.
+
+Tần Mộ Sắc: Bệnh nhẹ → Bệnh nặng → Rơi vào Thế giới bên trong → Gặp BOSS → Được Y Mặc cứu.
+
+Huân Huân: Người chơi cấp bậc rất cao → Thiên phú cực mạnh → Sẽ lộ diện ở các chương sau → Đến lúc đó mọi người sẽ biết.
+
+Y Mặc: Buff "Ác ma trở về" có hiệu quả khắc chế quỷ quái → Thiên phú mắt trái chưa rõ → Em gái hỗ trợ → Nhìn thấu trò chơi → Kết cục của kẻ "hack game" siêu cấp.
+
+(Chú ý: Y Mặc tại phòng học vô tận đã nhìn ra ván này có BOSS không thể phá giải nên gia nhập vào phe trường học).
+
+Bổ sung:
+
+①. Trong dàn ý chi tiết ban đầu, sau khi trò chơi kết thúc, Bạch Vũ và Lục Nhu có hai hình ảnh kết cục, nhưng đã bị tôi cắt bỏ.
+
+Nguyên nhân là có một số bình luận mong muốn Bạch Vũ sống sót, khiến tôi rất do dự.
+
+Nhưng năng lực của Bạch Vũ bài trừ với thiết lập cốt lõi của trò chơi, cưỡng ép cho cô ấy sống sẽ khiến logic trò chơi xảy ra vấn đề, tác giả cũng vô lực hồi thiên.
+
+Trong tình huống đó, hình ảnh kết cục cuối cùng của Bạch Vũ và Lục Nhu đã bị tôi cắt bỏ, không viết vào.
+
+②. Trong dàn ý ban đầu, phần phân tích lại là do Y Mặc và Huân Huân nói ra ở thời điểm kết cục.
+
+Nhưng vì lượng thông tin quá lớn, mà Y Mặc và Huân Huân cũng không thân thiết đến mức có thể trò chuyện nhiều như vậy, nên tác giả đổi thành sau khi trò chơi kết thúc, Y Mặc giảng giải cho Tần Mộ Sắc.
+
+③. Quy tắc chuyện lạ thực chất là một trò chơi logic. Nó sẽ cho bạn rất nhiều việc có thể làm và không thể làm, làm xong sẽ thế nào, từng bước từng bước phát triển hướng tới các kết cục khác nhau, vô cùng thú vị.
+
+(Nhưng Quy tắc chuyện lạ phần lớn đều là ngõ cụt).
+
+Ván này ban đầu thiết kế 18 người chơi, mỗi người đều có toan tính riêng, đi các lộ tuyến khác nhau, cuối cùng đón nhận những kiểu chết khác nhau.
+
+Nhưng vì góc nhìn của nam nữ chính ít, muốn rút ngắn độ dài nên tôi đã giảm bớt số lượng người chơi.
+
+Thực ra còn có rất nhiều kết cục khác.
+
+Ví dụ sau khi trở thành học sinh cổ xanh, nếu tại nhà ăn bệnh tình chuyển biến xấu không nghiêm trọng thì vẫn sẽ có lộ trình đi làm ở các kiến trúc khác.
+
+Học sinh cổ xanh bệnh tình chuyển biến xấu nghiêm trọng đi đến Trại chăn nuôi sẽ có kết cục bị giam cầm (Sống chết còn tùy tình huống cụ thể).
+
+Sau khi trở thành học sinh cổ đỏ, có con đường không đi đến Lò đốt rác, trà trộn vào đám học sinh cổ đỏ, bệnh tình yếu bớt, phản kháng trường học, gây rối... (Sống chết tùy tình huống).
+
+Con đường bắt đầu từ bệnh viện, vân vân...
+
+Thiết kế Quy tắc chuyện lạ thực sự đã hành hạ tôi một thời gian dài, quá tốn não.
+
+④. Quy tắc bệnh viện và khách sạn không được làm nhiều.
+
+Nguyên nhân cụ thể là chỉ riêng quy tắc trường học đã quá nhiều rồi, viết nhiều quá mọi người đọc sẽ bị loạn, nên tôi không làm tiếp nữa, chuyên tâm vào phần trong trường học.
+
+⑤. Mọi dự đoán và tính toán của tất cả người chơi trong ván này đều sai lầm, cho nên càng xem càng không hiểu là rất bình thường.
+
+Ừm, các bạn cũng đã bị ốm trong lúc vô tình rồi đấy.
+
+Trường học không khuyến khích học sinh giao lưu.
+
+⑥. Giả thuyết của Tần Mộ Sắc về việc mỗi ngày một người chơi trở thành vật tế là suy đoán logic thông thường của Trò chơi Tử Vong, nhưng thực ra là sai lầm. Ván chơi này có thể không một ai sống sót, cũng có thể toàn bộ đều sống sót, không có thiết lập mỗi ngày phải chết một người.
+
+6.
+
+Cuốn sổ tay ghi chép trong phòng đọc sách.
+
+Đó là nguồn gốc thực sự của Học viện Hạnh Phúc.
+
+Hiệu trưởng cũ muốn phản kháng → Người chết ngày càng nhiều → Bị ngộ nhận là đã điên → Đoạt lại quyền lực rồi đổi mạch suy nghĩ → Quy định các quy tắc, bảo vệ và sàng lọc học sinh → Vẫn có người chết → Phát hiện không có lời giải → Đồng thời bản thân càng phản kháng càng lún sâu vào bẫy rập của quỷ quái → Biết được quỷ quái không giết mình là vì mình đang vô tình giúp đỡ chúng, có lợi cho chúng → Từ bỏ → Hiệu trưởng mới tiếp tục duy trì quy tắc của hiệu trưởng cũ.
+
+Chú ý: Hiệu trưởng cũ chưa chết, chính là ông lão bảo vệ hơn 80 tuổi ở cổng trường, cho nên ông nhìn các học sinh với ánh mắt đầy thương hại.
+
+Biết càng nhiều, cái chết đến càng nhanh, hiệu trưởng cũ cũng không còn cách nào khác.
+
+7.
+
+Sắc mặt Thầy chủ nhiệm rất kém.
+
+Mệt mỏi, cả thể xác lẫn tinh thần đều mệt mỏi, áp lực rất lớn.
+
+8.
+
+Liên quan tới "BOSS".
+
+Không có lời giải. Y Mặc và em gái dốc toàn lực cũng chỉ là tự vệ. Bỏ đi, không cách nào giết chết được.
+
+Phong Ma đối đầu trực diện cũng chỉ có thể tự vệ, không giết nổi.
+
+Trùng Muội có hy vọng có thể tiêu diệt một trong các Thế giới bên trong.
+
+Không thể diễn giải, không thể mô tả.
+
+Tham khảo quyển thứ 7 Thiên Giang Hồ, Thiên Bạch Đào gặp phải nữ thi bất hủ ở sâu trong núi tuyết.
+
+Sự tồn tại ở cấp bậc "Không biết" là vô cùng cao.
+
+9.
+
+6 mảnh giấy nhắn lại trong ký túc xá, nội dung toàn bộ đều là sự thật.
+
+Mảnh giấy số 1:
+
+『 Học sinh A: Tôi không bình thường, cơ thể tôi xuất hiện vấn đề.
+
+Ù tai, hoa mắt, đau đầu, chảy máu mũi...
+
+Tôi nhìn thấy rất nhiều thứ kinh khủng, hơn nữa còn đi nhầm phòng học.
+
+Tôi quyết định đi đến văn phòng Thầy chủ nhiệm xem sao.
+
+Văn phòng Thầy chủ nhiệm hết thảy đều bình thường, tôi phát hiện tình trạng của mình có chuyển biến tốt.
+
+Đúng rồi, tôi là học sinh cổ xanh.
+
+Khoan đã?
+
+Tại sao tôi lại là học sinh cổ xanh?!!
+
+Không đúng, không đúng, không đúng!
+
+Không nên nghĩ nhiều như vậy, tôi sẽ khá hơn thôi.
+
+Không!
+
+Học sinh cổ xanh tuyệt đối không bình thường!!!
+
+Tôi cảm thấy cơ thể mình càng lúc càng tệ, đi đến ■■■ (Bị bôi xóa, hoàn toàn không nhìn ra nội dung, ước chừng 3 chữ).
+
+...
+
+Không, không muốn đi, thật sự không muốn đi!!! 』
+
+Giải mã: Cổ xanh bệnh nặng, bị nhốt vào Trại chăn nuôi, kết cục chuyển biến xấu.
+
+.
+
+Mảnh giấy số 2:
+
+『 Học sinh B: Làm theo lời bọn họ nói, mọi thứ đều sẽ tốt lên. 』
+
+Giải mã: Cổ xanh bệnh nhẹ, tình huống chuyển biến tốt.
+
+.
+
+Mảnh giấy số 3:
+
+『 Học sinh C: Hôm nay là ngày thứ 7 tôi đến trường học Hạnh Phúc.
+
+Tôi rất may mắn khi được đến trường học Hạnh Phúc, chương trình học ở đây vô cùng thú vị, các thầy cô đều rất tốt.
+
+Thức ăn ở nhà ăn không những ngon mà còn hoàn toàn miễn phí, đơn giản là quá tuyệt!
+
+Mãnh liệt đề cử món thịt kho Đông Pha của nhà ăn.
+
+Nếu có thể học ở đây mãi thì tốt biết mấy, nhưng chương trình học của tôi sắp kết thúc rồi, hy vọng lần sau có cơ hội còn có thể tới Học viện Hạnh Phúc.
+
+Thực sự là một trải nghiệm học đường hạnh phúc và tốt đẹp. 』
+
+Giải mã: Phớt lờ mọi chuyện, kết cục tốt nghiệp khỏe mạnh.
+
+.
+
+Mảnh giấy số 4:
+
+『 Học sinh D: Không, không!
+
+Tại sao tôi lại tới nơi này!
+
+Tôi phải rời khỏi đây, tôi phải rời khỏi đây, tôi phải rời khỏi đây!!!
+
+Ha... Ha ha... Ha ha ha...
+
+Không nên tin bất luận kẻ nào, không nên tin bất luận thứ gì ngươi nhìn thấy.
+
+Bởi vì... ở đây căn bản chính là một cái mộ địa, không có bất kỳ người sống nào cả!
+
+...
+
+Bao gồm cả ngươi, bao gồm cả ta. 』
+
+Giải mã: Học sinh cổ đỏ, đã phát điên, kết cục chết bệnh.
+
+.
+
+Mảnh giấy số 5:
+
+『 Học sinh E: Đi bệnh viện.
+
+Bệnh viện mới là nơi duy nhất có thể cứu mạng!!! 』
+
+Giải mã: Đi bệnh viện, kết cục tử vong.
+
+.
+
+Mảnh giấy số 0:
+
+『 Học sinh X: Thế giới này là giả tạo, hãy đi đến văn phòng Thầy chủ nhiệm lúc 0 giờ 6 phút đêm.
+
+Tin tưởng tôi, bạn sẽ tiếp xúc được chân tướng thế giới. 』
+
+Giải mã: Học sinh cổ đen, bị lừa, đồng thời cũng đi lừa gạt người khác.
+
+.
+
+10.
+
+Liên quan tới ký hiệu □■.
+
+Phần bị gạch bỏ trong các bức thư và tấm bảng bắt đầu đều viết rõ ràng là có chữ viết bị che kín, đúng là có thông tin bị che giấu thật.
+
+Nhưng điều đó cũng không mấu chốt, sẽ không ảnh hưởng đến ván chơi này.
+
+Thậm chí nếu biết, ngược lại sẽ làm "bệnh tình" chuyển biến xấu sâu sắc hơn.
+
+Còn lại tiêu đề hồ sơ, tiêu đề chương, cùng với nội dung xuất hiện bên cạnh cửa chính, không phải đại biểu cho việc che giấu văn bản.
+
+Cái muốn biểu đạt là sự chuyển biến giữa Thế giới bên ngoài và Thế giới bên trong.
+
+□: Thế giới bên ngoài.
+
+■: Thế giới bên trong.
+
+⊙: "Không biết".
+
+Bây giờ nhìn lại tên quyển thứ 10, tôi nghĩ mọi người hẳn là có thể hiểu ý nghĩa rồi chứ?
+
+Bởi vì tôi cũng chưa đọc qua sách phong cách Cthulhu, cũng không biết có phải xuất hiện cái này thì nhất định phải đại biểu cho việc che chữ hay không, tư duy cũng không bị quy tắc cố hữu hạn chế.
+
+Nó biểu hiện là hình ảnh khái niệm, không phải là văn tự.
+
+10.5.
+
+Thứ ảnh hưởng người chơi không phải là chỉ số SAN (giá trị lý trí), có sự khác biệt, cho nên toàn bộ quá trình sẽ không xuất hiện khái niệm chỉ số SAN.
+
+11.
+
+Nếu Dì Hồng phóng hỏa đốt trường học thì có thành công không, sẽ xảy ra chuyện gì?
+
+Đáp: Có khả năng thiêu rụi một bộ phận kiến trúc, nhưng sẽ phá vỡ sự cân bằng của quỷ quái. Trước khi bị phía nhà trường nhắm vào thì cô ta đã bị quỷ quái giết chết trước rồi.
+
+11.5.
+
+Thịt kho tàu ở nhà ăn trường học ăn rất ngon, là thịt heo thượng hạng sạch sẽ (Không có thịt người!).
+
+12.
+
+Lượng thông tin quá lớn, có thể có chi tiết bị bỏ sót, tôi sẽ không bổ sung tiếp nữa.
+
+Mọi người có thắc mắc thì cứ bình luận, nếu có ý nghĩa tôi sẽ trả lời.
+
+Nếu câu trả lời đã có sẵn, hoặc có thể suy đoán ra từ nội dung kể trên, tôi sẽ không trả lời lại. Các bạn độc giả nào biết thì có thể giúp tôi trả lời một chút nhé.
+
+13.
+
+Thiên phú của Y Mặc.
+
+Tên không rõ, cấp bậc không rõ, hiệu quả không rõ, tác dụng phụ cực lớn.
+
+Có thể tham khảo sơ qua thiên phú của Quý Nhiễm, hiện tại thuộc về tình báo chưa công khai.
+
+14.
+
+Trong các trò chơi sau này, Y Mặc sẽ không quá ỷ lại vào thiên phú, chơi ngang cơ mới thú vị.
+
+Bởi vì thiên phú của Y Mặc có tác dụng phụ lớn, lại bắt buộc phải dùng khi kết thúc mỗi ván, cho nên bình thường anh không dùng cũng là chuyện thường tình.
+
+Giai đoạn hiện nay vẫn chưa tới lúc một đám người chơi đỉnh cấp quyết đấu "hack game", ngay cả công cụ "hack" cũng phải tính toán lẫn nhau.
+
+15.
+
+Sắp xếp lại một chút tuyến thời gian thực tế của mấy quyển gần đây.
+
+Để mọi người có cái nhìn rõ ràng hơn về cốt truyện thế giới thực dạo gần đây.
+
+Ngày 1 tháng 8: Đồng Mộ Tuyết tiếp nhận khảo hạch của Quý Nhiễm (khoảng 10 ngày).
+
+Ngày 8 tháng 8: Y Mặc và Thi Tinh Lan tiến vào trò chơi.
+
+Ngày 9 tháng 8: Y Mặc và Thi Tinh Lan rời khỏi trò chơi.
+
+Đêm khuya ngày 10 đến sáng sớm ngày 11 tháng 8: Y Mặc và Thi Tinh Lan mở ra cục diện mới.
+
+Ngày 11 tháng 8: Đồng Mộ Tuyết hoàn thành nhiệm vụ, lấy được điện thoại, biết tin Quý Nhiễm mất tích, được Đỗ Đan Thiết Huyết cứu, đón về nhà họ Cố (ở lại 5 ngày).
+
+Đêm ngày 12 tháng 8: Y Mặc và Thi Tinh Lan tiến vào trò chơi.
+
+Hoàng hôn ngày 13 tháng 8: Y Mặc và Thi Tinh Lan rời khỏi trò chơi, Thi Tinh Lan rời đảo Hoa Nhài.
+
+Đêm ngày 14 tháng 8: Ninh Vũ Vũ đến đảo Hoa Nhài.
+
+Buổi trưa ngày 15 tháng 8: Thiên Bạch Đào đến đảo Hoa Nhài.
+
+Ngày 16 tháng 8: Đồng Mộ Tuyết rời khỏi thôn trong thành, đi nghĩa trang, hoàng hôn rời khỏi Thượng Kinh.
+
+Đêm ngày 20 tháng 8: Y Mặc rời khỏi đảo Hoa Nhài.
+
+Ngày 22 tháng 8: Tần Mộ Sắc và Y Mặc tiến vào trò chơi.
+
+Ngày 23 tháng 8: Tần Mộ Sắc và Y Mặc rời khỏi trò chơi.
+
+16.
+
+Cuối cùng cũng viết xong bài tổng kết này, tác giả thực sự rất gấp rút viết nó.
+
+Để tăng tốc độ tiến độ, tôi đã sửa lại một chút kịch bản.
+
+Lúc Đồng Mộ Tuyết rời khỏi Thượng Kinh có một màn rượt đuổi khá kịch liệt. Kịch bản gốc là trước khi Đỗ Đan Thiết Huyết định phát động thiên phú thì Thương Linh San ngồi trực thăng dẫn người tới cứu nguy kịp thời. Đoạn này đã được sửa lại.
+
+(Nếu không thì vừa đánh nhau xong, phần tổng kết còn phải kéo dài rất lâu nữa).
+
+Tuy nhiên việc này không ảnh hưởng đến tuyến chính nên không sao cả, còn có thể để mọi người sớm được xem Y Mặc và Tần Mộ Sắc tương tác với nhau.
+
+17.
+
+Hai chương hơn 13.000 chữ, cuối cùng cũng giải quyết xong, lượng đổi mới tiếp theo sẽ giảm bớt.
+
+Tôi cần nghỉ ngơi điều dưỡng thân thể, suy nghĩ chuẩn bị kịch bản và trò chơi cho quyển này. Đợi đến lúc làm hòm hòm rồi thì tự nhiên sẽ tăng tốc thôi~

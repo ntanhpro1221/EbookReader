@@ -1,0 +1,149 @@
+Chương 3: Ăn chanh
+
+Y Mặc xem sơ qua luật chơi.
+
+Ván game này có sự khác biệt rõ rệt so với các ván trước.
+
+Đó là không có điều kiện thắng và điều kiện thua rõ ràng.
+
+Nếu tạm coi việc nhận nhiệm vụ loại A và hoàn thành nhiệm vụ để được thưởng thoát game là điều kiện thắng đã biết hiện tại.
+
+Thì điều kiện thua lại có vẻ khá mơ hồ.
+
+Ván game này là ván có thời gian chơi dài nhất Y Mặc từng gặp, có thể chơi tùy ý trong 100 ngày, quá 100 ngày thì một ngày trong game cũng chỉ bằng hai ngày bên ngoài.
+
+Theo một cách nào đó, có thể nói là không giới hạn thời gian.
+
+Tuy nhiên, luật 6 vẫn tồn tại, cho thấy hình phạt cho người chơi thua là tử vong.
+
+Theo lý thuyết, nếu nhận một nhiệm vụ nào đó mà không hoàn thành, có lẽ sẽ phải đối mặt với hình phạt thua game trực tiếp?
+
+Dựa vào luật 3, một số nhiệm vụ sẽ được công khai trên bảng nhiệm vụ.
+
+Y Mặc đoán rằng có thể một số nhiệm vụ người chơi nhận sẽ dẫn đến việc người chơi khác thua game, hoặc trực tiếp gây ra tử vong hoặc trừ điểm cho người chơi khác.
+
+Chỉ nhìn từ các quy tắc được công khai, ván game này thật sự thân thiện.
+
+Thậm chí quy tắc 4, một quy tắc có vẻ không rõ ràng và vô dụng, còn đang nói với người chơi rằng đây là một ván game rất tốt.
+
+Nhưng Y Mặc lại cho rằng ván game này có lẽ ẩn chứa sát cơ, không hề đơn giản.
+
+Dù sao, ván game này không hề hạn chế người chơi tấn công và làm hại lẫn nhau.
+
+Và thời điểm hỗn loạn nhất, có lẽ chính là khoảnh khắc người chơi nhận nhiệm vụ, và nhiệm vụ đặc thù được công khai trên bảng nhân vật.
+
+Y Mặc không có quá nhiều thời gian để phân tích luật chơi, mà lập tức xem qua giao diện hệ thống một lần, thấy có thêm 3 giao diện là 『 Danh sách nhiệm vụ 』, 『 Bảng nhiệm vụ người chơi 』, và 『 Bản đồ thế giới 』.
+
+Những thứ này rõ ràng đều rất quan trọng, nhưng vì chúng sẽ không gây hại ngay lập tức cho người chơi, nên Y Mặc không định nghiên cứu chúng bây giờ.
+
+Thay vào đó, anh nhanh chóng xem lại các đạo cụ đã mua trước khi bắt đầu game, và thở phào nhẹ nhõm sau khi xác nhận các vũ khí nóng như súng ống, lựu đạn đều đã bị cấm.
+
+Cảnh tượng trong một game tình yêu, vừa bắt đầu đã bắn nhau, và mấy người chơi đẹp trai nhất chết ngay tại chỗ, Y Mặc vẫn còn nhớ như in.
+
+Hít—!
+
+Y Mặc không muốn chết oan uổng ngay từ đầu đâu!
+
+Dù vũ khí nóng đã bị cấm, nhưng vũ khí lạnh là 『 Dao găm Thụy Sĩ 』 và 『 Đại khảm đao tinh xảo 』 lại không bị cấm, điều này cho Y Mặc biết, vẫn có nguy cơ loạn đả ngay từ đầu.
+
+Nếu chỉ có một mình, Y Mặc chắc chắn sẽ không lấy vũ khí ra lúc này, mà sẽ cố gắng giữ khoảng cách với những người chơi khác và chuẩn bị sẵn sàng để bỏ chạy.
+
+Nhưng bây giờ có một Thiên Bạch Đào đang bị thương nặng ngồi trên người mình, Y Mặc không thể nào chuồn đi được.
+
+Lúc này, anh lấy ra chiếc áo lông nữ, khoác lên cho Thiên Bạch Đào trước, sau đó mới lấy ra cho mình, run rẩy khoác lên.
+
+Thiên Bạch Đào đặt hai tay trước ngực, vì mặc áo lót hai dây lụa trắng, có thể thấy được vùng da trắng mịn mượt mà hơn cả tuyết bay xung quanh, và một khe ngực sâu thẳm ở giữa, trông vô cùng quyến rũ.
+
+Khuôn mặt vốn nhợt nhạt của Thiên Bạch Đào, dưới thời tiết lạnh giá cũng trở nên ửng hồng, cô ngại ngùng nhìn Y Mặc khoác chiếc áo lông nữ lên người mình, hơi thở nhỏ đã biến thành sương trắng, có chút e thẹn nói nhỏ: “Ngô ngô, Y Mặc tốt nhất!”
+
+Thiên Bạch Đào vô cùng đáng yêu, lại rất to lớn, bây giờ lại mang dáng vẻ của một cô gái nhỏ, còn dán sát như vậy, Y Mặc cũng có chút ngượng ngùng.
+
+Anh không nói gì, chỉ hơi quay đầu đi.
+
+Lúc này, vài người chơi xung quanh cũng bắt đầu giữ khoảng cách với nhau, và hầu hết đều đã lấy áo khoác dày từ hệ thống ra khoác lên người.
+
+Nếu biết chuẩn bị quần áo, vậy thì đều không phải là tân thủ!
+
+Không, cũng có một người không lấy quần áo ra, vẫn đang nhìn chằm chằm vào Thiên Bạch Đào.
+
+Chính là Lục Phong Tử với thanh kiếm cùn gỉ sét trên lưng!
+
+Lúc này, Gió Qua Không Dấu Vết, người có mái tóc dài phiêu dật, phong thái công tử ăn chơi, và là người đẹp trai nhất tại hiện trường ngoài Y Mặc, sau khi đánh giá Thiên Bạch Đào một lúc, trong mắt tràn đầy hưng phấn, rõ ràng là đã gặp được con mồi ưng ý nhất.
+
+Cố gắng kiềm chế ham muốn trong mắt, anh ta nhanh chóng tiến về phía Y Mặc và Thiên Bạch Đào.
+
+Miệng còn nói: “Tôi thấy hai vị quen mắt, ván game này mọi người cũng không đối đầu nhau, hay là chúng ta cùng nhau......”
+
+Phịch—!
+
+Y Mặc cũng không phải tân thủ, Gió Qua Không Dấu Vết có tâm tư gì, cũng là đàn ông, Y Mặc sao lại không hiểu?
+
+Anh đã nhìn thấu ngay từ đầu, hết sức đề phòng anh ta, và đang cân nhắc nên đáp lời thế nào.
+
+Nhưng không đợi Y Mặc nghĩ xong, khi Gió Qua Không Dấu Vết vừa dứt lời, Lục Phong Tử đã bước nhanh tới, và tông thẳng vào người Gió Qua Không Dấu Vết từ phía sau.
+
+Nếu là cố ý va chạm, tông ngã người ta cũng là chuyện bình thường.
+
+Nhưng mà a!
+
+Lục Phong Tử này rõ ràng không cố ý va chạm, dường như chỉ là vội vã đi về phía anh và Thiên Bạch Đào, và Gió Qua Không Dấu Vết vừa hay cản đường, nên vô tình đụng phải.
+
+Nhưng!
+
+Chỉ một cú va chạm như vậy, mà lại tông Gió Qua Không Dấu Vết bay xa 3 mét, đầu cắm thẳng vào đống tuyết!
+
+Trời ạ!
+
+Đây là người sao?
+
+Anh là ô tô, hay là Transformers vậy?!!
+
+Y Mặc nhìn mà toàn thân run lên mấy lần, ngay lập tức biết được sự chênh lệch về thể chất giữa mình và Lục Phong Tử này lớn đến mức nào!
+
+Người này, chắc chắn cực kỳ nguy hiểm!!!
+
+Lục Phong Tử bước rất nhanh, đi thẳng đến trước mặt Y Mặc và Thiên Bạch Đào, trong mắt tràn đầy hưng phấn, giọng điệu vui vẻ nói: “Quả cam, không ngờ chúng ta lại gặp nhau!”
+
+“Ta nghe Trùng Muội nói cô trong trận chiến đội một mình quét sạch đám gà mờ 『 Thiên Hình 』, năm tên gà mờ cấp cao bị giết thẳng 3 tên, gặp phải Nhị ca Phong Ma, không những không chết dưới tay Nhị ca, mà còn khiến Nhị ca bị thương nhẹ, ta thực sự rất hưng phấn, liền nhanh chóng ghép đội chơi, không ngờ lại ghép được cùng cô!”
+
+“Thật là may mắn! Một chuyện may mắn lớn!!!”
+
+“Đến đây nào, Quả cam!”
+
+“Lần trước ta thua cô nửa chiêu, lần này ta vừa học được không ít chiêu thức mới, nhất định sẽ thắng cô!!!”
+
+“Ha ha ha!!!”
+
+Giọng nói của Lục Phong Tử rất lớn, bây giờ lại làm ra tư thế chiến đấu, ngay lập tức thu hút sự chú ý của những người khác.
+
+À, không đúng.
+
+Sự chú ý của Thiên Bạch Đào và Y Mặc thì không.
+
+Bây giờ Thiên Bạch Đào đang đắm đuối nhìn Y Mặc, trong mắt trong tai làm gì còn chỗ cho người khác?
+
+Còn Y Mặc thì đang nhìn Thiên Bạch Đào, không nhịn được nói: “Cô vậy mà biết dùng biệt danh khác nhau cho mỗi ván game, thật là hiếm có.”
+
+Thiên Bạch Đào cười ngây ngô: “Ai hắc hắc, thường thì em muốn ăn gì, liền dùng biệt danh đó!”
+
+Biệt danh của Thiên Bạch Đào trong ván game này là 『 Dâu Tây 』.
+
+Y Mặc: “À cái này... Kẹp tóc của cô cũng là một bộ sao?”
+
+Thiên Bạch Đào sờ vào chiếc kẹp tóc hình Dâu Tây trên đầu bên trái, vui vẻ nói: “Vâng vâng vâng!”
+
+“Em siêu thích bộ sưu tập kẹp tóc nhỏ hình hoa quả và điểm tâm, có phải rất đáng yêu không!” Trong mắt cô tràn đầy mong đợi, dường như muốn Y Mặc khen mình.
+
+Không còn cách nào khác, đôi mắt ngây thơ của Thiên Bạch Đào thật sự khiến người ta không nỡ từ chối, ngay cả người thường hay nói chuyện khó nghe như Y Mặc cũng không chống đỡ nổi ánh mắt đó, anh liền nói một câu không mặn không nhạt: “Cũng bình thường thôi, không đáng yêu bằng cô.”
+
+Thiên Bạch Đào nghe vậy mặt đỏ bừng lên, hai tay che mặt, vô cùng hưng phấn cọ vào người Y Mặc, muốn hôn anh.
+
+Nhưng lại bị Y Mặc ấn đầu xuống, không được như ý.
+
+Còn Lục Phong Tử, người đang đứng trước mặt hai người và bị lơ đi, bây giờ đã trợn tròn mắt.
+
+Hú hú hú—!
+
+Gió bắc gào thét lướt qua.
+
+Lục Phong Tử tuy chưa bao giờ hứng thú với phụ nữ, nhưng không biết vì sao, bây giờ lại cảm thấy có chút chua, đúng là ghen tị mà!

@@ -1,0 +1,117 @@
+Chương 655 - Thuyết tất định
+
+*Edit: Lắc
+
+“Cốc, cốc, cốc.” Fernando ở bên trong thư phòng nghe thấy tiếng gõ cửa nhẹ và nhịp nhàng.
+
+“Sớm vậy?” Ông đưa đôi mắt đỏ ngầu liếc nhìn Lucien, trong lòng bỗng nhiên vô thức trở nên cảnh giác và phòng bị đối với sự bất thường của cậu.
+
+Lucien cúi đầu cười cười: “Em mới viết xong luận án, vừa hay trời cũng sáng nên em đến đây luôn.”
+
+“Luận án gì?” Dự cảm nguy hiểm của Fernando trở nên lớn hơn, nhưng thứ dự cảm này không đến từ Sao chủ Định mệnh mà đến từ “kết tinh trí tuệ” của việc nhiều lần trải qua hoàn cảnh tương tự. “Có tính lật đổ không?”
+
+Nghĩ ngợi một hồi, Lucien gật đầu quả quyết: “Có ạ, nhưng nó chỉ xuất phát từ việc quan sát rất nhiều kết quả thực nghiệm, không có chứng minh chặt chẽ, không thể loại trừ trường hợp trong tương lai sẽ có những lý thuyết khác bác bỏ hiện tượng quan sát này.”
+
+“Đưa đây đi.” Fernando thở phào nhẹ nhõm. Như vậy thì cho đến khi có bằng chứng thuyết phục, dù lý thuyết này có lật đổ đến đâu cũng không tới mức làm đầu ông nổ tung.
+
+Lucien lấy ra một tập luận án rồi đưa cho Fernando. Vừa mở ra, nhìn thấy tiêu đề, ông đã ngay lập tức cảm thấy không ổn.
+
+“‘Giải thích Xác suất của Hàm sóng’.” Ông gằn giọng đọc to tiêu đề luận án, dường như đã đoán ra phần nào nội dung bên trong. Trong khoảng thời gian gần đây, dường như hàng loạt thí nghiệm mà ông thực hiện về tán xạ và nhiễu xạ electron đều đang ám chỉ điều gì đó – Thực tế rằng cách mà Oliver diễn giải hàm sóng không khớp với một số kết quả thực nghiệm cũng như đang ngầm hé lộ điều tương tự.
+
+Fernando mở luận án ra rồi lặng im đọc. Bầu không khí xung quanh ông ngày càng trở nên nặng nề, như thể có một cơn bão sắp sửa kéo đến.
+
+Đột nhiên, ông ngẩng phắt đầu lên, đôi mắt đỏ chớp lóe những tia điện, ngữ điệu mang đến cảm giác nguy hiểm lạ thường: “Cậu nói hàm sóng không phải là sóng theo nghĩa thông thường, mà là sóng xác suất?”[note72999]
+
+Lucien không hề nao núng đón lấy ánh mắt đầy nguy hiểm của thầy mình: “Vâng. Thông qua quan sát hàng loạt kết quả thực nghiệm, kết hợp với thống kê Chloe trong lĩnh vực chuyển động phân tử, chúng ta có thể mô tả hàm sóng theo cách đó. Nó biểu thị xác suất mà electron xuất hiện ở một vị trí nhất định trong không gian.”
+
+Fernando tựa hồ đang cố đè nén một cơn phẫn nộ cùng cực: “Thế mà vị trí của nó trên màn tiếp nhận cảm ứng[note73000] lại hoàn toàn xác định đấy! Xác suất là một trăm phần trăm!”
+
+Điều này là sự thật không thể nghi ngờ. Mỗi một Arcanist đều đã từng thấy điểm huỳnh quang[note73001] lóe lên khi electron bắn vào màn cảm ứng. Đây là một hiện tượng thực nghiệm không thể bác bỏ, nó tỏ rõ rằng vị trí của electron là xác định một cách tuyệt đối.
+
+Hiểu tâm tình của thầy, Lucien nghiêm túc nói: “Chẳng hạn, dưới tình huống chưa biết các điều kiện ban đầu, chúng ta tung một đồng xu. Trong toàn bộ quá trình đó, chúng ta chỉ có thể nói rằng nó có xác suất xuất hiện mặt ngửa, nhưng khi nó đã rơi xuống đất, kết quả là cố định và không thể thay đổi được nữa, xác suất lúc đó đương nhiên là một trăm phần trăm. Nhưng cái mà chúng ta đang bàn là trạng thái của electron trước khi quan sát, chứ không phải sau khi kết quả đã định.”
+
+Lucien nói như vậy làm Fernando dễ hiểu hơn một chút, cảm xúc cũng dịu đi phần nào. Ông sau đó liền bắt được trọng điểm: “Trước khi quan sát? Sau khi quan sát? Vậy theo cách cậu giải thích, trước khi chúng ta quan sát, electron có thể xuất hiện ở bất kỳ vị trí nào trong không gian, chỉ là ở một số nơi thì xác suất xuất hiện cao hơn?”
+
+Ông hoàn toàn không hình dung ra nổi hình thái tồn tại của một electron như thế!
+
+Với đồng xu, Fernando có thể dễ dàng chấp nhận. Nó liên tục thay đổi mặt sấp, mặt ngửa nên kết quả mới ngẫu nhiên khi rơi xuống. Nhưng còn electron, nếu cái mà hàm sóng mô tả là xác suất vị trí trong không gian, thế thì bất cứ nơi nào electron cũng đều có thể xuất hiện. Vậy chẳng phải nghĩa là tại cùng một thời điểm, nó có thể ở đây, cũng có thể ở kia, ở khắp mọi nơi sao?
+
+Cái này còn hoang đường hơn bất kỳ loại ma thuật nào!
+
+Chí ít thì cho đến hiện tại, ngoài tầng cấp Á Thần mà không ai có thể thấu hiểu ra, chưa từng có một pháp sư nào đủ khả năng tạo ra loại ma thuật cho phép bản thân tồn tại trong trạng thái như thế hết!
+
+Lucien đưa ra một ví dụ: “Trước khi được quan sát, electron giống như một đám mây hư ảo không có thực thể. Chúng tràn ngập khắp không gian, không nơi nào là không có, là trạng thái chồng chập của mọi khả năng có thể xảy ra. Nơi nào dày đặc hơn chính là nơi electron có xác suất xuất hiện cao hơn. Tuy nhiên, điều đó không có nghĩa là sau khi quan sát, nó nhất định sẽ xuất hiện ở đó.
+
+Trước khi được quan sát, electron là một thứ mà chúng ta không cách nào tưởng tượng được, là một thứ mà mâu thuẫn sóng – hạt lại cùng tồn tại.[note73002] Do đó, nếu cứ dùng những khái niệm nguyên bản để tưởng tượng trạng thái của nó thì sẽ chẳng có ý nghĩa gì hết. Chúng ta chỉ có thể mô tả nó thông qua những kết quả thực nghiệm có thể kiểm chứng.”
+
+Fernando mím chặt môi, giống như thể chỉ cần mở miệng ra là sẽ gầm rống phẫn nộ.
+
+Lucien càng được đà lấn tới: “Trên thực tế, hẳn thầy cũng đã nhận ra điều này trong các thí nghiệm ma thuật gần đây rồi. Khi chúng ta cải tiến pháp trận và giảm số lượng electron bắn ra mỗi lần, có thể thấy lúc mới đầu không xuất hiện hình ảnh nhiễu xạ nào cả mà đó chỉ là những điểm sáng cảm ứng electron lộn xộn, không có trật tự. Nhưng khi số lượng electron tăng lên, hình ảnh nhiễu xạ mới dần dần hiện ra. Tại sao lại như vậy?
+
+Đó là bởi vì, mỗi một electron khi đi qua khe nhiễu xạ, chúng ta không thể xác định chính xác nó sẽ xuất hiện ở đâu, tất cả đều là xác suất. Chúng ta chỉ có thể nói rằng khả năng nó xuất hiện ở chỗ này là cao hơn mà thôi. Do đó, khi số lượng electron ít, nó sẽ hiện ra trạng thái lộn xộn, không có trật tự, nhưng khi số lượng đủ lớn, toàn bộ chỉnh thể sẽ tuân theo phân bố xác suất: có chỗ nhiều electron, có chỗ ít electron, thế là sáng tối đan xen, từ đó tạo nên hình ảnh nhiễu xạ.
+
+Giống như khi chỉ tung đồng xu bảy hoặc tám lần, chúng ta không thể đoán trước được sẽ có bao nhiêu lần là mặt ngửa. Nhưng nếu tung hàng trăm, hàng nghìn, hàng vạn lần, thì khi đó số lần mặt ngửa xuất hiện hẳn sẽ là khoảng một nửa!
+
+Nếu một ngày nào đó chúng ta có thể cải tiến pháp trận để mỗi lần chỉ bắn ra một electron, hiện tượng ấy sẽ càng rõ ràng hơn.”
+
+“Xác suất, xác suất!” Vẻ mặt Fernando có chút vặn vẹo, giống như thể ông đang muốn ăn tươi nuốt sống cái thứ “xác suất” kia.
+
+Ông không cần Lucien giảng giải cho mình kiến thức cơ bản về xác suất. Với tư cách là một trong những chuyên gia về nhiệt động lực học, đây là phạm trù mà ông hiểu rõ nhất. Lúc này, trong đầu ông hiện lên những thí nghiệm nhiễu xạ đã tiến hành gần đây. Quả thực đúng như Lucien đã nói, khi số lượng electron còn chưa đủ nhiều, các điểm sáng đều lộn xộn, không có trật tự.
+
+Hình ảnh rõ mồn một đó khiến cho đôi tay ông khe khẽ run rẩy. Một cơn gió dữ dội cuốn lên, làm giấy trong thư phòng bay loạn: “Trước khi quan sát, electron là một đám mây xác suất[note73003] bao phủ khắp không gian? Sau khi quan sát, nó trở thành vật chất có vị trí xác định? Vậy rốt cuộc chuyện gì đã xảy ra giữa hai trạng thái đó?”
+
+Lucien giống như nhìn mà không thấy trước cơn cuồng phong. Cậu điềm tĩnh như thể một thần chết đang tuyên đọc phán quyết: “Hàm sóng sụp đổ. Từ một đám mây xác suất bao phủ khắp không gian, nó co lại thành một điểm xác định. Chính hành vi quan sát đã dẫn đến sự sụp đổ đó. Còn trước khi quan sát, electron rốt cuộc có hình thái như thế nào thì không liên quan đến chúng ta, hoàn toàn vô nghĩa.”
+
+“Quan sát khiến hàm sóng sụp đổ?” “Đùng!” Một tia sét lóe lên trong thư phòng và đánh nát một bức tượng điêu khắc. Fernando bật dậy, bừng bừng khí thế mà trừng mắt nhìn Lucien: “Ý cậu là chính việc quan sát đã khiến electron thay đổi hình thái?”
+
+Lucien gật đầu: “Thầy, phương pháp mà chúng ta quan sát là dựa trên cái gì? Ta nhìn thấy được sự vật là nhờ ánh sáng phản xạ, nghe được âm thanh là nhờ dao động của không khí. Nhưng ở cấp độ vi mô, ngay cả cách quan sát nhẹ nhất, như dùng photon chẳng hạn, cũng đều sẽ khiến cho electron nhiễu loạn. Nói cách khác, bất cứ hành vi quan sát nào ở cấp độ vi mô của chúng ta cũng đều không thể tránh khỏi việc gây ra thay đổi cho nó.”
+
+“Các hạt vi mô tương tác lẫn nhau?” Sắc mặt Fernando khá lên một xíu, có vẻ phần nào đã hiểu vì sao việc quan sát lại có thể khiến hàm sóng sụp đổ, còn cái gọi là “đám mây xác suất” mà không sao hình dung nổi kia thì ông quyết định tạm thời mặc kệ. Thay vào đó, ông chỉ thẳng vào trọng tâm trong cách giải thích xác suất của Lucien: “Trong hoạt động tung đồng xu, nếu biết được tất cả các điều kiện bên ngoài, chúng ta hoàn toàn có thể dự đoán chính xác kết quả từng lần. Chính vì thế, đó không phải là xác suất thật sự, mà chỉ là xác suất giả. Có nhân tất có quả, mọi kết quả đều sẽ được quyết định duy nhất bởi điều kiện ban đầu. Đây chính là nền tảng của hệ Chiêm tinh, cũng là nền tảng của toàn bộ arcana và ma thuật!
+
+Thế cho nên, tính xác suất mà electron thể hiện ra cũng là giả, là do bị ảnh hưởng bởi những điều kiện bên ngoài mà chúng ta vẫn chưa phát hiện ra!”
+
+Giọng ông khẽ run lên một cách khó nhận ra. Trong thư phòng bắt đầu xuất hiện dấu hiệu cuồng phong bạo vũ sắp sửa bùng nổ.
+
+Lucien kiên định lắc đầu: “Chí ít thì đến giờ vẫn chưa có hiện tượng nào cho thấy có sự ảnh hưởng của điều kiện bên ngoài. Tạm thời, chúng ta chỉ có thể nói rằng sóng xác suất là thuộc tính bản chất, là tính chất nội tại của electron!”
+
+“Nói lại xem!” Fernando cuối cùng gầm lên. Trong thư phòng sấm vang chớp giật như thể khung cảnh ngày tận thế.
+
+Điều khiến arcana và ma thuật trở nên hấp dẫn, điều khiến bao thế hệ pháp sư và Arcanist sẵn sàng đánh đổi tuổi trẻ, tài năng và cả mạng sống để truy cầu bản chất của thế giới, chính là bởi vì thế giới này vận hành theo những quy luật bản chất. Tất cả mọi hiện tượng đều chịu sự chi phối nghiêm ngặt của những quy luật ấy, từ mặt trời Đông mọc Tây lặn, đến chuyển động của tinh cầu, đến gió thổi, mưa rơi, đến sự sinh trưởng của muôn loài, cho đến phản ứng giữa các nguyên tố, bí ẩn của vật chất hay cấu trúc của nguyên tử. Chỉ cần hiểu rõ được những quy luật mang tính bản chất ấy thì hoàn toàn có thể chi phối được chúng!
+
+Thế nhưng lúc này đây, cách giải thích xác suất của Lucien lại như đang chế giễu khát vọng khám phá ấy. Quy luật bản chất của thế giới ấy vậy mà lại là “xác suất”? Tức là cho dù có hiểu bao nhiêu quy luật, có đẩy được sinh mệnh lên tới giới hạn cuối cùng đi chăng nữa, thì kết quả cũng chỉ có thể đoán được nơi mà một electron có khả năng cao nhất sẽ xuất hiện, chứ không thể mô tả được chuẩn xác vị trí của nó ư?
+
+Điều này không chỉ phủ định nền tảng của hệ Chiêm tinh mà còn phủ định cả arcana và ma thuật, những thứ dựa trên việc khám phá quy luật của thế giới!
+
+Lucien chỉ tay vào luận án, thái độ trịnh trọng và nghiêm túc nhìn người thầy đang gầm thét của mình. Do sấm sét giáng xuống dữ dội, Da Nguyên tố trên người cậu đã tự động được kích hoạt. “Trong luận án có phần giải thích liên quan ạ.”
+
+Fernando cúi đầu, nhìn xuống một đoạn trong luận án:
+
+“Trước đây, tất cả chúng ta đều tin rằng, chỉ cần biết được đầy đủ mọi yếu tố hiện tại thì hoàn toàn có thể suy luận ra hoặc xác định được kết quả của sự việc một cách nghiêm ngặt, nguyên nhân như thế nào thì kết quả sẽ như thế nấy. Hơn nữa, quá trình ấy còn có tính khả nghịch, tức là kết quả như thế nào thì nguyên nhân cũng tương ứng. Các Arcanist đã gọi điều này là Thuyết tất định, hay luật nhân quả.
+
+Tôi thì ưa chuộng một định nghĩa nghiêm ngặt hơn: luật nhân quả chân chính là luật nhân quả theo dòng thời gian, trong đó nguyên nhân tất yếu phải xảy ra trước kết quả. Do đó, khái niệm ‘luật nhân quả’ theo nghĩa rộng nói trên tốt hơn hết chỉ nên gọi là Thuyết tất định.
+
+Còn hiện tại, điều tôi muốn nêu ra là, Thuyết tất định ở đây có lẽ đã bắt đầu xuất hiện vấn đề. Có những quá trình là xác suất, là không thể đảo ngược...”
+
+“Thuyết tất định có vấn đề? Luật nhân quả có vấn đề?” Fernando trừng trừng nhìn Lucien, trong mắt như ẩn chứa bão táp. Giữa tiếng sấm rền, ông gầm lên: “Cậu đang bảo ta, quỹ đạo chuyển động của Mặt Trời là xác suất?”
+
+“Đùng!”
+
+“Cậu đang bảo ta, sự tồn tại của chính chúng ta là xác suất?”
+
+“Đùng!”
+
+“Cậu đang bảo ta, ngay cả khi chúng ta đã xây dựng xong mô hình thần chú một cách hoàn hảo vào trong linh hồn và nắm rõ được từng chi tiết nhỏ nhất của nó, khi linh lực ở trong trạng thái sung mãn, mọi thứ đều đã sẵn sàng, thì việc thi triển thần chú lại vẫn chỉ là một quá trình xác suất? Vớ vẩn! Hết sức vớ vẩn!”
+
+“Đùng đùng đùng!”
+
+Giữa những tràng sấm vang dội, chớp giật loạn trời, phía sau Lucien hiện ra một vũ trụ bao la. Bên trong đó, các tinh cầu được cấu thành từ proton và neutron mang màu sắc khác nhau, còn những vệ tinh xoay quanh chúng thì tràn ngập khắp không gian, đâu đâu cũng có. Nhưng khi nhìn kỹ, chúng lại như đang cố định tại một điểm duy nhất.
+
+“Đùng đùng đùng!”
+
+Giữa khung cảnh Địa ngục Sấm sét và Vũ trụ Nguyên tử đan xen, Lucien không hề lùi bước, ánh mắt kiên định đối diện với thầy Fernando, sau đó trịnh trọng và nghiêm nghị cất lời:
+
+“Ít nhất thì trong thế giới vi mô, Thuyết tất định phải chết!”
+
+“Ầm!”
+
+Một tia sét to bè xé toạc cửa sổ thư phòng rồi lan tới bầu trời đêm bên ngoài.

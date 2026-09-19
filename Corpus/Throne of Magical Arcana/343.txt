@@ -1,0 +1,128 @@
+Chương 344 - Sắp xếp
+
+
+Một vài ngày sau đó, tại tầng mười tám trụ sở Ma pháp Nghị viện.
+
+Phòng thí nghiệm thứ bảy có không gian rộng rãi và sáng sủa. Các bệ giả kim lạnh lẽo với đường viền sắc cạnh được dựng trong các căn phòng nhỏ tách biệt nhau. Không chỉ vậy, trong này còn có rất nhiều pháp trận thần bí và phức tạp. Ánh sáng đủ sắc màu từ chúng phản chiếu lên bức tường màu xám bạc, tô điểm cho cả căn phòng một cảm giác đầy huyền ảo.
+
+Trong phòng thí nghiệm lúc này chỉ có bốn pháp sư, bao gồm Lucien, Lazar, Rock và Jerome, cùng với những người học việc như Annick, ngoài ra không có vị khách nào khác đến chúc mừng. Xét cho cùng, khởi đầu của một “dự án nghiên cứu arcana” vẫn luôn là như vậy. Mặc dù cái tên “Viện Nguyên tử” nghe có vẻ kỳ lạ, nhưng đây vẫn là một dự án nghiên cứu đã được Ủy ban Nghiên cứu Ma thuật phê duyệt, chứ không phải là hoàn thành một công trình xây dựng hay thành lập trường học mà phải tổ chức kỷ niệm ăn mừng.
+
+Mặt khác, Lucien cũng rất vui vẻ tận hưởng khoảng thời gian nhàn hạ này, không hề có ý định tổ chức “lễ khánh thành”.
+
+Cứ như vậy, Viện Nguyên tử đã được thành lập theo một cách mà chả ai hay biết.
+
+Thân là Arcanist phụ trách Viện Nguyên tử, Lucien hắng giọng và nghiêm túc cất lời: “Nghiên cứu của chúng ta vẫn chưa bắt đầu, đồng nghiệp hẵng còn rất ít, kết quả cũng chưa xuất hiện. Mọi thứ hiện mới chỉ là khởi đầu. Phía trước chúng ta là một thế giới hoàn toàn mới chưa bao giờ đặt chân đến, nó đang đợi chúng ta tới khám phá và phát triển. Trên con đường này, tôi tin là chúng ta sẽ được tận hưởng những khung cảnh tuyệt mỹ và gặt hái dồi dào quả ngọt.”
+
+Càng nói một cách “nghiêm túc”, ý đùa của Lucien lại càng thêm nồng đậm: “Hôm nay, chúng ta tự hào vì Ma pháp Nghị viện, nhưng trong tương lai, Ma pháp Nghị viện sẽ phải tự hào vì chúng ta!”
+
+Tất cả đám người đang phấn khích với những lời cậu nói trước đó, nghe đến đây liền đột nhiên chết lặng. Ê, tham vọng quá rồi nha?
+
+Thấy mục đích của mình đã đạt được, Lucien không đùa nữa mà bắt đầu phân công nhiệm vụ nghiên cứu: “Lát nữa tôi sẽ phải tham gia cuộc họp thảo luận định kỳ hàng tháng, vậy nên trước mắt Lazar sẽ phụ trách quản lý các công việc cụ thể của viện. Jerome, anh dẫn một nửa các pháp sư học việc đi nghiên cứu đặc tính của các chất khác nhau ở từng mức nhiệt độ thấp riêng biệt. Tạm thời chúng ta sẽ tập trung vào các chất phổ biến như than, sắt, mithril và adamantine, v.v.. Vì mục đích của chúng ta là nghiên cứu những nguyên tắc đằng sau quy luật tuần hoàn của nguyên tố, vậy nên chúng ta phải làm quen với đặc tính của các chất trước. Cho đến nay, vẫn chưa có ai thực hiện được thí nghiệm nào hoàn chỉnh về sự biến đổi trạng thái của chất ở nhiệt độ cực thấp cả.
+
+Yêu cầu của tôi là ghi lại thay đổi ở từng độ C một. Có lẽ chúng ta sẽ phát hiện được điều gì từ đó đấy. Đây là một thí nghiệm tẻ nhạt nhưng đòi hỏi tỉ mỉ, rất phù hợp với một người có tính kiên nhẫn và nhẹ nhàng như anh, Jerome. À phải rồi, nhớ cẩn thận khi làm việc trong môi trường nhiệt độ cực thấp nhé.”
+
+Cho đến nay, nghiên cứu về nhiệt độ cực thấp của Ma pháp Nghị viện vẫn đang kẹt ở mức độ hóa lỏng hydro, vẫn còn cách nhiệt độ cần thiết để đạt được tính siêu dẫn[note59427] là 10°C. Nan đề này phải đến khi thí nghiệm với khí heli mới có thể được phát hiện ra và giải quyết. Lucien không mong đợi họ sẽ phát hiện ra hiện tượng siêu dẫn ngay, thay vào đó, cậu muốn thúc đẩy họ hướng tới việc nhận ra ở nhiệt độ thấp hơn -180°C, than sẽ xuất hiện những thay đổi thú vị và dễ dàng hấp phụ[note59425] không khí, từ đó trở thành một công cụ tuyệt vời để tạo ra chân không. Một khi có thể kết hợp chúng với những pháp trận tương tự thì phát hiện này sẽ vô cùng hữu ích cho những nghiên cứu trong tương lai của cậu.
+
+Viện được đặt tên là “Viện Nguyên tử”, thế nên nghiên cứu những thay đổi của chất chắc chắn là một phần trong mục đích thành lập. Jerome bởi vậy chấp nhận nhiệm vụ mà không chút nghi ngờ.
+
+“Rock, anh đưa một nửa còn lại tiến hành nghiên cứu sự phóng điện của chất khí trong các điều kiện áp suất không khí khác nhau. Larry và K đã gần hoàn thiện lý thuyết về ion hóa và chứng minh được rằng nguyên nhân một số dung dịch có thể dẫn điện là vì các chất hòa tan bên trong được chia thành ion dương và âm.[note59426] Vậy nguyên nhân cho sự phóng điện của chất khí ở đây là gì, chúng ta sẽ nghiên cứu điều đó.”
+
+“Ion” là cái tên được đặt bởi Larry và K.
+
+Thấy Rock cũng đồng ý không chút nghi ngờ, Lucien lại nhìn sang Lazar: “Anh sẽ là người điều phối, bên nào cần giúp thì giúp. Nếu không ai cần giúp, anh có thể làm thí nghiệm của riêng mình.”
+
+“Đừng lo, tôi sẽ để mắt đến họ.” Lazar cười khúc khích. “Lucien này, rốt cuộc trong đầu cậu có bao nhiêu thứ thế? Cậu có thể nhạy bén liên kết bất kỳ kết quả nghiên cứu ngẫu nhiên nào với những thứ khác nhau, chẳng trách được mệnh danh là một Arcanist bẩm sinh.”
+
+Là do tôi nghĩ tới “những thứ khác” trước, còn “kết quả nghiên cứu” chỉ là nhân tiện dùng để che đậy thôi. Lucien thầm tự giễu trong lòng.
+
+……
+
+Sau khi thu xếp xong mọi thứ trong Viện Nguyên tử, Lucien bước ra khỏi phòng thí nghiệm.
+
+“Evans?”
+
+“Cậu Evans?”
+
+Ở góc hành lang, Lucien lại gặp Isabella và Rachel, những người đang ở đây nghiên cứu.
+
+Sau khi khách sáo chào hỏi vài câu, Isabella nhân cơ hội hỏi ngay như thể đã nhịn rất lâu: “Evans, công thức của cậu là sao vậy? Sau khi đọc luận án của năm Grand Arcanist, tôi nhận ra cho dù có nhìn từ góc độ nào đi chăng nữa cũng không thể giải thích được công thức của cậu. Thật sự chúng ta phải đưa ra một giả thuyết lật đổ nhận thức thông thường mới được sao?”
+
+Đây chính là vấn đề đã gây khó dễ cho mọi Arcanist có thể đọc hiểu những luận án trong ấn bản [Arcana] mới được phát hành tháng này. Một số người thậm chí còn phát điên lên vì nó. Suy cho cùng, một người chỉ cần có chút xíu tò mò và tham vọng thì đều không thể không nghĩ tới vấn đề mà cả bảy Grand Arcanist đang thảo luận.
+
+“Thật ra gần đây tôi đã tìm được hướng đi rồi, và hiện tại vẫn đang nỗ lực tiến hành theo hướng đó.” Như những gì Douglas và Fernando đã thảo luận, Lucien tiết lộ nhỏ giọt.
+
+“Thật sao? Hướng nào?” Cả Isabella và Rachel đều đồng thanh hỏi. Họ chưa từng nghĩ tới việc Lucien đã có tiến triển mà chỉ đơn thuần muốn trút ra một ít cảm xúc khi gặp được đúng người liên quan mà thôi.
+
+Nói vừa dứt lời, hai người phụ nữ liền nhanh chóng sực tỉnh và rối rít xin lỗi, tỏ ý không hề muốn dò hỏi nội dung nghiên cứu của cậu.
+
+Lucien không để bụng mà cười nói: “Cái công việc nhọc nhằn này của tôi đã gần xong rồi, tôi cũng đã cho thầy biết nội dung cụ thể, cho nên giờ tiết lộ cũng không sao.”
+
+“Vậy, cậu có thể cho chúng tôi biết không?” Thấy giáo viên của mình tò mò nhưng lại ngại hỏi, Rachel mỉm cười cất lời thay. Cô cho rằng thái độ của Lucien như thế này là bình thường. Nếu cô có thầy là một Grand Arcanist và người đó biết tiến độ nghiên cứu của cô, chắc chắn cô cũng sẽ không lo người khác chiếm đoạt thành quả của mình.
+
+“Từ góc độ chuyển động phân tử mà đồng môn Chloe của tôi thiết lập, tôi đưa xác suất vào để phân tích công thức.” Lucien dần hé mở cánh cửa.
+
+Isabella trầm ngâm gật đầu: “Kể từ lần đầu tiên Chloe đưa ra lý thuyết này đến nay đã mười năm. Mới đầu, nó vô cùng gây tranh cãi, và chuyện đó hành hạ cậu ấy nhiều lắm. Mãi cho đến khi cậu ấy được trao Huy chương Băng Tuyết vì đã giải thích được định luật thứ hai, làn sóng phản đối lý thuyết của cậu ấy mới giảm đi nhiều, thế nhưng hầu hết các Arcanist vẫn không thích nó. Bởi vậy, Evans ạ, cho dù họ có muốn giải thích công thức của cậu, số người chọn góc độ này để bắt đầu cũng sẽ rất ít.”
+
+Cô đang có cảm giác vô cùng háo hức muốn thử phân tích công thức theo hướng mà Lucien tiết lộ, không phải bởi vì muốn là người đầu tiên phát hành luận án, đây chỉ đơn thuần là sự tò mò của một Arcanist mà thôi. Người đứng bên cạnh cô, Rachel, cũng có tâm trạng tương tự.
+
+Bên cạnh đó, thái độ điềm tĩnh và thư thái của Lucien cũng khiến cho họ tin rằng cậu chắc hẳn đã hoàn thành xong công việc giải thích công thức rồi, chỉ còn cần đệ trình lên nữa là xong.
+
+……
+
+Trong văn phòng của Fernando.
+
+Khi Lucien đến nơi, Chloe, Thompson, Ashikana và Lacie Carter đều đã ở đó. Chỉ còn mỗi con rồng pha lê Alferris là vẫn chưa thấy tăm hơi đâu.
+
+“Thompson, sao nhóc pha lê còn chưa tới?” Ashikana thích gọi Alferris bằng biệt danh.
+
+Thompson khẽ đẩy cặp kính gọng vàng lên. “Tôi chưa thấy nó cả tháng nay rồi. Có khi nó lại tham lam đi bán mình rồi cũng nên…”
+
+Thompson không chắc cho lắm, nhưng cũng không lo cho sự an toàn của Alferris. Chỉ cần nó không rời khỏi phạm vi năm trăm kilomet quanh Allyn thì sẽ không có chuyện gì cả. Những ai không biết lai lịch của Alferris thì sẽ không thể đánh bại nó, còn những ai biết lai lịch thì sẽ không dám ức hiếp nó.
+
+“Không phải lo cho nó. Nó vẫn an toàn.” Fernando nói gãy gọn. “Bắt đầu thảo luận đi. Chloe trước.”
+
+Đột nhiên sực tỉnh từ trạng thái thất thần, Chloe nhìn Fernando trước, rồi đánh mắt sang Lucien, kế đó bắt đầu nói: “Tháng trước, em đã khám phá được một hang động magma dưới lòng đất…”
+
+Chia sẻ về phát hiện của mình xong, anh lại nhìn Fernando và Lucien: “Từ lúc ấn bản [Arcana] tháng này được phát hành, em thấy vô cùng hứng thú với công thức Evans mà thầy và các Grand Arcanist khác đang thảo luận. Sau khi cố gắng giải thích từ các góc độ khác không thành công, em đã thử đưa lý thuyết về chuyển động phân tử của mình vào, và lần này, có vẻ em đã tìm được hướng đi đúng đắn. Nhưng công việc quả thực rất khó khăn, có lẽ sẽ phải mất một đến hai tuần nữa mới giải ra được. Hy vọng điều này sẽ khơi gợi được cho cậu chút gì đó, Evans.”
+
+Mặc dù đã từng nhận Huy chương Băng Tuyết, đồng thời còn là thành viên của Ủy ban Xét duyệt Arcana, nhưng tính cách của Chloe vẫn có chút dè dặt, giống một thi sĩ hơn là pháp sư. Dẫu cho chỉ thực hiện nghiên cứu theo cuốn [Arcana] một cách đường hoàng, anh vẫn lo Lucien sẽ hiểu nhầm mình đang cố cướp kết quả nghiên cứu của cậu, từ đó phá hỏng mối quan hệ đồng môn tốt đẹp. Do đó, trong vô thức, anh đã cố thể hiện sự thân thiện của mình với cậu.
+
+“Nghĩ ra được ý này tức là cậu cũng không đến nỗi ngu ngốc. Nhưng Lucien đã giải thích được công thức này từ góc độ đó rồi. Để cậu ta giải thích đi.” Fernando vẫn từ chối khen ngợi học trò như thường lệ.
+
+Đám người Chloe, Thompson đều ngạc nhiên nhìn Lucien.
+
+Nếu trước khi [Arcana] phát hành mà Lucien đã tìm ra hướng đi đúng thì chắc chắn số [Arcana] kỳ này sẽ hoãn lại để chờ nghiên cứu của cậu hoàn thành. Nhưng với tình hình này thì chắc hẳn cậu đã tìm ra lời giải sau khi tập san phát hành, mà từ lúc đó đến giờ mới chỉ có vỏn vẹn vài ngày! Thật đáng sợ!
+
+“Cảm ơn anh đã truyền cảm hứng cho tôi bằng lý thuyết của mình…” Lucien mô tả lại súc tích về cách giải thích của cậu, nhưng khi đề cập đến tiền đề của công thức, cậu cố tình để chừa lại điều kiện quan trọng nhất. Do Chloe, Ashikana và những người khác đều đang cố gắng hiểu và ghi nhớ để về nhà phân tích chi tiết hơn, cho nên không ai phát hiện ra vấn đề này.
+
+Tiếp theo, đến lượt Thompson và các Arcanist còn lại chia sẻ nghiên cứu. Fernando cũng nhắc tới tiến độ của một số nghiên cứu chính mà ông đang làm, còn lấy vài vấn đề trong số đó để hướng dẫn cho các học trò.
+
+“Evans, hình như tôi lại vừa được thấy một người đoạt Huy chương Băng Tuyết nữa rồi.” Kết thúc cuộc họp thường kỳ, Lacie Carter nửa đùa nửa thật nói với Lucien trong khi cả hai đang vừa đi tới cửa vừa thảo luận với nhau.
+
+Đúng lúc này, cửa văn phòng bị đẩy ra một cách thô bạo. Alferris, lúc này đã thu nhỏ lại, vọt vào trong và cất giọng trẻ con đầy ngạc nhiên. “Thảo luận xong rồi á?”
+
+“Cậu đã ở chỗ nào vậy, nhóc pha lê? Bọn tôi vừa xong vài phút trước rồi.” Ashikana buồn cười hỏi.
+
+Alferris giơ hai chân trước lên che mắt, len lén nhìn Fernando qua khe hở. “Tôi ngủ quên á…”
+
+“Alferris, tháng này cậu làm nghiên cứu gì rồi?” Tựa hồ đã hiểu ra điều gì đó, Thompson nhịn cười hỏi.
+
+“Tôi nghiên cứu về giấc mơ.” Alferris làm bộ nghiêm túc.
+
+“Nghĩa là cậu ngủ gần một tháng ấy hả? Hahaha!” Thompson không nể nang cười lớn.
+
+Lucien cũng bật cười. Không ngoài dự đoán, nó quả thực là một con rồng ham ngủ.
+
+……
+
+Trong đêm khuya thanh vắng, hết thảy mọi thứ đều tĩnh mịch, bình yên.
+
+Ngồi trong thư phòng của mình, Chloe sắp xếp lại những gì Lucien đã nói lúc ban ngày và bắt đầu đọc cẩn thận, chốc chốc lại viết ra suy nghĩ của mình.
+
+Ashikana, Thompson và những người khác cũng tương tự. Tuy nhiên, do vẫn cần phải hoàn thành rất nhiều nghiên cứu arcana và phân tích ma thuật, họ chỉ có thể dành ra được chút ít thời gian để xem xét lại. Dù sao đáp án cho câu hỏi này cũng đã có, vậy nên không cần phải vội.
+
+Dưới ánh nến ma thuật rực rỡ, Isabella và Rachel cũng bắt đầu nghiên cứu quy luật đằng sau công thức theo tiết lộ của Lucien.
+
+Mặt khác, Lucien đang lặng lẽ ngồi sau bàn. Một lúc lâu sau, cậu cuối cùng cũng cầm bút lên và viết xuống tiêu đề của luận án:
+
+“Sự Phân bố Năng lượng trong Quang phổ Vật Đen.”[note59428]

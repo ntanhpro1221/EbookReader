@@ -1,0 +1,385 @@
+Chương 17: Tụ Lý Càn Khôn
+
+Dù sao cũng có thể hủy một nhiệm vụ!
+
+Nhiệm vụ loại A tối đa có thể nhận 4 cái, giới hạn nhận cùng lúc là 3, có thể hủy 1 cái.
+
+Theo lý thuyết, bây giờ Y Mặc chỉ có thể nhận thêm một nhiệm vụ loại A nữa.
+
+Và dựa trên luật chơi, nhiệm vụ loại A cuối cùng này, còn phải là nhiệm vụ thoát game, mới có thể nhận!
+
+Dù gặp phải nhiệm vụ tốt hơn khác, cũng không thể nhận.
+
+Y Mặc bây giờ đã biết, ván game này mình coi như là phế rồi.
+
+Bây giờ nhận 3 nhiệm vụ loại A, không nói đến phần thưởng bề ngoài không đặc biệt tốt, mà độ khó hoàn thành cũng cái nào cái nấy đều lớn!
+
+Hơn nữa, bây giờ còn có một thông tin quan trọng chưa xác định.
+
+Đó là khi đã nhận 3 nhiệm vụ loại A, giới hạn nhận nhiệm vụ loại A cùng lúc đã đầy, thì có thể kích hoạt nhiệm vụ loại A nữa hay không.
+
+Nếu không thể kích hoạt, Y Mặc cho rằng ván game này thật sự xong đời!
+
+Nghĩ đến đây, Y Mặc quả quyết định bỏ qua một nhiệm vụ trước!
+
+Hủy nhiệm vụ nào đây?
+
+Y Mặc quyết định hủy nhiệm vụ 『 Tìm công chúa gả đi! 』!
+
+Trong mắt Y Mặc, nhiệm vụ tranh giành danh hiệu thiên hạ đệ nhất tại Hoa Sơn luận kiếm, mọi người chắc chắn sẽ làm tất cả.
+
+Và vì có phần thưởng giết NPC hoặc người chơi, nên mình cũng nhất định sẽ tham gia, dù thế nào cũng không thoát được, nên vẫn phải giữ lại!
+
+Y Mặc nhìn kỹ danh sách nhiệm vụ, góc trên bên phải có một dấu “X”, Y Mặc quả quyết nhấp vào “X”.
+
+『 Đinh linh 』
+
+『 Có muốn hủy nhiệm vụ "Tìm công chúa gả đi!" không!』
+
+Y Mặc từ trước đến nay không phải là người do dự, trực tiếp nhấp xác nhận.
+
+『 Đinh linh, hủy nhiệm vụ thất bại, nguyên nhân không công khai.』
+
+???
+
+Sau khi xác nhận nhiều lần, Y Mặc phát hiện nhiệm vụ này không thể hủy được.
+
+Không chỉ nhiệm vụ này không hủy được, mà ngay cả nhiệm vụ 『 Đạo sư thiên hạ đệ nhất 』 cũng không hủy được!
+
+Nhiệm vụ duy nhất có thể hủy, lại là nhiệm vụ liên quan đến Maaya, 『 Gặp gỡ bất ngờ kỳ diệu 』!
+
+『 Sau khi hủy nhiệm vụ này, độ thiện cảm của Maaya sẽ giảm mạnh, độ khó của ván game này sẽ tăng mạnh, độ khó của các game sau này có thể tăng mạnh, trừ 5000 điểm, có muốn hủy không?』
+
+Y Mặc thấy ba lần “tăng mạnh” và cần phải trừ 5000 điểm.
+
+Hai tay run rẩy, sau khi xác nhận nhiều lần, anh thận trọng đóng giao diện hủy...
+
+Nhiệm vụ 『 Gặp gỡ bất ngờ kỳ diệu 』 này...
+
+Xem ra cũng là khóa cứng...
+
+Và giờ khắc này, hiện trường quán trọ cũng loạn thành một mớ.
+
+Sau khi Vân Dật tuyên bố muốn tham gia Hoa Sơn luận kiếm, giành danh hiệu thiên hạ đệ nhất, đám đông cũng bắt đầu chế giễu.
+
+Tráng hán áo đỏ: “Tôi nói này tiểu huynh đệ, không phải tôi xem thường anh.”
+
+“Uống rượu chém gió, là chuyện rất bình thường!”
+
+“Nhưng không được lên bàn!”
+
+Vân Dật: “Tôi là nghiêm túc!!!”
+
+Tráng hán áo đỏ: “À đúng đúng đúng!”
+
+Vân Dật: “Hừ!” Nghiến răng nghiến lợi!
+
+Tiêu sái ca: “Công tử, tôi thấy, anh thật sự có hy vọng giành được danh hiệu thiên hạ đệ nhất đó!”
+
+Vân Dật nghe vậy lập tức vui vẻ hơn nhiều: “Coi như anh có mắt nhìn!”
+
+Tiêu sái ca: “Ha ha ha, thiên hạ đệ nhất nộp mạng!!!”
+
+“Nghe tôi một lời khuyên, đao kiếm không có mắt, mỗi lần Hoa Sơn luận kiếm, cao thủ chết chắc chắn nhiều hơn sống!”
+
+“Nói là luận bàn, kết quả cuối cùng đều là liều mạng!”
+
+“Làm công tử nhà giàu ngoan ngoãn không tốt sao?”
+
+“Hoa Sơn luận kiếm này, nghe cho vui thôi, đừng đi!”
+
+Tiêu sái ca đảo ngược một cái lớn, tức đến mức Vân Dật trực tiếp rút kiếm ra: “Các người đều cho rằng ta nhất định không lấy được danh hiệu đệ nhất thiên hạ đó đúng không!!!”
+
+Vân Dật khi nói, còn nhìn tùy tùng của mình, người đàn ông lạnh lùng đó.
+
+Tuy nhiên, người đàn ông lạnh lùng đó vậy mà lại quay đầu đi.
+
+Dù không nói thẳng, nhưng rõ ràng đã biểu lộ thái độ!
+
+Vân Dật: “A a a!”
+
+“Hôm nay, ta sẽ cho các ngươi thấy sự lợi hại của tuyệt thế kiếm pháp của ta!!!”
+
+Vân Dật nói xong, vậy mà lại định so tài vài chiêu.
+
+Nhưng cô đứng trên bàn không vững, múa kiếm trong tay, cái bàn lắc lư, “ai” một tiếng, người nghiêng đi, vậy mà lại ngã xuống đất!
+
+Và hướng ngã, chính là hướng của Y Mặc!
+
+Theo tình huống bình thường, Y Mặc đáng lẽ nên ôm lấy Vân Dật, tăng thêm một chút độ thiện cảm của cô, biết đâu còn có chút kịch bản phúc lợi phải không?
+
+Nhưng Y Mặc từ trước đến nay không theo sáo lộ, chỉ sợ Vân Dật ngã xuống, múa kiếm loạn xạ, chém mình trước!
+
+“Mẹ nó, chuồn đi!”
+
+Lập tức lùi ra sau!
+
+Không thể không nói, Vân Dật thật ra cũng không tệ, không phải là không có chút công sức nào, thật đúng là miễn cưỡng điều chỉnh lại tư thế, coi như là đáp đất ổn định, cũng không quá mất mặt!
+
+Tuy nhiên, đám đông xem náo nhiệt xung quanh vẫn cười to một phen.
+
+Vân Dật cắn răng nhìn những người xung quanh, tức giận không nói nên lời.
+
+Vân Dật: “Các ngươi!!!!!”
+
+Vân Dật trong cơn tức giận, lại muốn đánh nhau một trận với những người xung quanh!
+
+Cảnh tượng sắp không thể kiểm soát!
+
+Nhưng vào lúc này.
+
+“Ầm”
+
+Một tiếng vang chói tai vang vọng trong quán trọ.
+
+Âm thanh đó rất lớn, rất đột ngột!
+
+Bầu không khí vui vẻ của quán trọ trực tiếp bị cắt đứt, ngay lập tức im phăng phắc!
+
+Thì ra, là Y Mặc đã đập vỡ một cái vò rượu không!
+
+Ánh mắt mọi người lập tức tập trung vào Y Mặc, có chút không hiểu tại sao Y Mặc rõ ràng không uống rượu, lại nổi điên với rượu trước!
+
+Và trong số đó, người nhìn Y Mặc, tự nhiên có cả Vân Dật.
+
+Y Mặc cười với Vân Dật, dưới ánh mắt của mọi người, đi đến bên cạnh cô và hỏi: “Ngươi muốn giành được danh hiệu thiên hạ đệ nhất đó?”
+
+Vân Dật nhìn Y Mặc, cắn răng: “Ngươi cũng muốn chế giễu ta?”
+
+“À, không cần!”
+
+Y Mặc lắc đầu, không trả lời Vân Dật, mà quay đầu nói với mọi người: “Các vị, xin lỗi vì tôi nói thẳng.”
+
+“Các vị đang ngồi đây, đúng là có mắt không tròng!”
+
+“Huynh đệ này của tôi, Tuyệt Thế Đại Hiệp Vân Dật, võ công đã tu luyện đến phản phác quy chân, cảnh giới chí cao!”
+
+“Các người hiểu cái gì!”
+
+“Tại sao anh ấy lại không thể giành được danh hiệu đệ nhất thiên hạ trong Hoa Sơn luận kiếm đó?!!!”
+
+Y Mặc nịnh Vân Dật thì không sao.
+
+Nhưng lại đập vỡ vò rượu, lại trực tiếp mở miệng chửi toàn bộ mọi người, nói nghiêm túc rằng mọi người ở đây đều có mắt không tròng, khiến không ít người vô cùng khó chịu!
+
+Nếu anh thật sự là một cao thủ võ lâm, vậy thì không vấn đề gì!
+
+Quan trọng là Y Mặc trông cũng không lợi hại!
+
+Lúc này, vài tráng hán liền đứng ra, muốn phản bác Y Mặc.
+
+Người xem náo nhiệt xắn tay áo ra: “Tôi nói, tiểu huynh đệ, anh có phải là hơi quá đáng...”
+
+“Bốp!”
+
+Y Mặc trực tiếp đập thỏi vàng lừa được từ Vân Dật lên bàn: “Hôm nay tất cả chi phí trong quán trọ, tôi bao!”
+
+“Rượu cứ uống thoải mái, thịt cứ ăn thoải mái!”
+
+Người xem náo nhiệt lại xắn tay áo xuống: “Chậc, uống rượu vui vẻ, hơi nóng!”
+
+“Huynh đệ, anh nói tiếp đi!”
+
+Không thể không nói, tiếng thỏi vàng đập lên bàn thật êm tai, trong chốc lát mọi người xung quanh đều trợn tròn mắt.
+
+Ngay lập tức, những tiếng phản đối cũng biến mất không thấy, lập tức biến thành tiếng cung kính.
+
+Dù là cổ đại hay hiện đại, tiền cũng không dễ kiếm!
+
+Nói thẳng ra là, Y Mặc tuy mở miệng chửi toàn bộ, nhưng cuối cùng lực công kích không mạnh đến thế!
+
+Đã người ta mời khách để mọi người thoải mái, thì còn nói gì nữa?
+
+Y Mặc: “Các vị, tôi hỏi mọi người!”
+
+“Tuyệt Thế Đại Hiệp Vân Dật này, có tư thế của thiên hạ đệ nhất cao thủ không!”
+
+Tiêu sái ca: “Tôi đã sớm nhìn ra tiền bối Vân Dật tướng mạo bất phàm, đây tuyệt đối là tư thế của cao thủ!”
+
+“Thiên hạ đệ nhất này, 10 năm trước Tuyệt Đại Đại Hiệp đã từng giành được, bây giờ nói thế nào, cũng nên đến lượt Tuyệt Thế Đại Hiệp!”
+
+Tráng hán áo đỏ: “Tiêu sái ca nói rất đúng!”
+
+Y Mặc giơ hai tay lên, như đang làm bán hàng đa cấp: “Các vị, Hoa Sơn luận kiếm năm nay, thiên hạ đệ nhất là ai!”
+
+Đám đông: “Nhất định là Tuyệt Thế Đại Hiệp Vân Dật đó!”
+
+Khi bà chủ quán trọ mang thịt lên, đám đông đó liền vừa ăn vừa uống, còn náo nhiệt hơn trước.
+
+Vẻ mặt vui mừng, giơ chân gà, giơ bát rượu, theo Y Mặc reo hò, như thể Vân Dật đã giành được danh hiệu thiên hạ đệ nhất, đã bắt đầu ăn mừng!
+
+Trò hề này, ngược lại khiến Vân Dật tỉnh rượu một chút, có chút ngượng ngùng, kéo cánh tay Y Mặc, ngượng ngùng nói: “Cái đó, cảm ơn!”
+
+Y Mặc sảng khoái nói: “Chậc, chúng ta hữu duyên, đây đều là chuyện nên làm!”
+
+“Hoa Sơn luận kiếm lần này, danh hiệu đệ nhất thiên hạ, vốn dĩ không ai khác ngoài anh!”
+
+Vân Dật lúc đó nói mình muốn giành được danh hiệu thiên hạ đệ nhất, chỉ đơn thuần là đầu óc nóng lên.
+
+Bây giờ nghĩ lại, nói thế nào cũng không thực tế, liền ngượng ngùng nói: “Tôi cẩn thận nghĩ lại, thật ra thực lực của tôi vẫn còn kém một chút, có thể không giành được danh hiệu đệ nhất thiên hạ đâu!”
+
+Y Mặc không ngờ Vân Dật lại đánh trống lui quân: “Tuyệt Thế Đại Hiệp, anh không thể tự coi thường mình!”
+
+“Thiên hạ đệ nhất này, anh không giành, ai giành?”
+
+Vân Dật: “Tôi cảm thấy, thực lực của tôi hẳn là yếu hơn Tuyệt Đại Đại Hiệp một chút, quả nhiên thiên hạ đệ nhất vẫn nên thuộc về Tuyệt Đại Đại Hiệp!”
+
+Y Mặc nghe vậy vẻ mặt nghiêm túc lại, kéo Vân Dật ngồi xuống, lại rót một chén rượu: “Huynh đệ, anh đã từng giao thủ với Tuyệt Đại Đại Hiệp đó chưa?”
+
+Vân Dật lắc đầu: “Cái đó thì chưa!”
+
+Y Mặc: “Chưa, sao anh lại cho rằng đánh không lại?”
+
+Vân Dật: “Chưa từng đánh!”
+
+“Nhưng đánh không lại chính là đánh không lại, thực lực chênh lệch tôi vẫn hiểu!”
+
+Y Mặc nghe vậy, ôm vai Vân Dật, nói nhỏ với cô: “Huynh đệ, nếu cho ngươi một cơ hội, để anh có thể đánh bại Tuyệt Đại Đại Hiệp đó, có thể giành được thiên hạ đệ nhất, ngươi có muốn không?”
+
+Vân Dật nghe vậy theo bản năng nói: “Người lăn lộn giang hồ, học võ thuật, ai mà không muốn giành được danh hiệu đệ nhất thiên hạ?”
+
+“Đó là đương nhiên là muốn!”
+
+“Nhưng mà...”
+
+Y Mặc thấy Vân Dật ngượng ngùng, cuối cùng dùng đến đòn sát thủ: “Tôi trước đây đã nghe danh của Tuyệt Thế Đại Hiệp Vân Dật, là một người sảng khoái, vô cùng muốn mạnh!”
+
+“Sao bây giờ còn chưa tỉ thí với người ta, đã tự mình lui bước rồi?”
+
+“Huynh đệ, xin lỗi tôi nói thẳng, thế này không giống đàn ông trong truyền thuyết chút nào!”
+
+“Hay là, danh tiếng đó cũng là do có tiền, mua được?”
+
+Vân Dật nghe vậy sững sờ, bản năng phản bác: “Tôi đương nhiên rất đàn ông!”
+
+“Danh tiếng đó cũng là thật!”
+
+Không phải Y Mặc có thành kiến gì với phụ nữ, chỉ là anh nhìn ra Vân Dật là nữ giả trai.
+
+Nói thẳng ra là, nếu là nữ giả trai, thì chắc chắn không hy vọng bị người khác vạch trần!
+
+Vân Dật vốn đã hiếu thắng, lại bị Y Mặc nắm được nhược điểm.
+
+Y Mặc: “Là đàn ông, có bản lĩnh, thì giành lấy danh hiệu đệ nhất thiên hạ đi!”
+
+Vân Dật vô cùng do dự: “Đương nhiên là người đàn ông chân chính! Cái đó... vậy thì giành lấy thiên hạ đệ nhất!!!”
+
+Dưới phép khích tướng của Y Mặc, và dưới sự uy hiếp bị vạch trần là nữ giả trai, cô lúc đó đã trúng chiêu!
+
+Y Mặc nghe vậy, đưa tay ra: “Một lời đã định!”
+
+Vân Dật do dự đưa tay ra, và bị Y Mặc nắm lấy ngay lập tức.
+
+Dưới sự lừa gạt liên tục của Y Mặc, Vân Dật cuối cùng cũng nói: “Một lời đã định!”
+
+Sau khi hai người tạm thời thỏa thuận xong, Vân Dật cuối cùng cũng nói ra lời trong lòng: “Thật ra, tôi rất muốn có danh hiệu đệ nhất thiên hạ.”
+
+“Nhưng mà...”
+
+“Tôi không phải là cảm thấy mình không lợi hại, mà là thật sự cảm thấy không phải là đối thủ của Tuyệt Đại Đại Hiệp!”
+
+Y Mặc nhìn Vân Dật, gật đầu nói: “Tôi cũng thấy vậy!”
+
+Vân Dật nghe vậy nhíu mày, nhìn chằm chằm Y Mặc nói: “Vậy anh còn nói tôi có thể trở thành thiên hạ đệ nhất!”
+
+Y Mặc lộ ra nụ cười cao thâm khó lường: “Nhưng mà, anh đã gặp tôi!”
+
+“Lúc trước tôi chưa giới thiệu xong.”
+
+“Tại hạ ngoài biệt hiệu One-Punch Man Saitama, người khác cũng đều thích tôn xưng tôi một tiếng lão sư!”
+
+“Anh bây giờ không được, là do chưa được tôi chỉ bảo!”
+
+“Thực lực của anh, cộng với sự chỉ bảo của tôi, chúng ta song kiếm hợp bích, anh chắc chắn có thể!”
+
+Vân Dật nghe vậy ngả người ra sau theo phản xạ: “Thật sự!”
+
+Y Mặc: “Chắc chắn 100%!”
+
+Vân Dật nhếch miệng: “Huynh đệ, nói thật...”
+
+“Sao tôi cứ cảm giác anh, đang lừa tôi thế nhỉ...”
+
+“Nhìn thế nào, anh cũng yếu hơn tôi...”
+
+“Anh không phải cũng đang đùa tôi đấy chứ?”
+
+Y Mặc nghiêm túc hơn vài phần: “Thực lực của tôi có thể kém một chút, nhưng tôi biết nhiều hơn!”
+
+“Trong đầu có mười vạn tám ngàn bản tiểu vàng... à không, bí tịch võ công!”
+
+“Tôi tùy tiện chỉ bảo ngươi vài chiêu, thiên hạ đệ nhất, chuyện nhỏ thôi!”
+
+Vân Dật vẫn không tin: “Anh cho tôi xem trước hai chiêu?”
+
+Y Mặc đương nhiên không biết gì, nhưng anh vẫn có đòn sát thủ!
+
+Khóe miệng Y Mặc nhếch lên: “Được!”
+
+“Xin hỏi Vân Dật huynh đệ, anh có từng nghe qua Tụ Lý Càn Khôn không!”
+
+“Chẳng lẽ anh biết?”
+
+Y Mặc: “Đương nhiên!”
+
+“Nhìn kỹ đây!”
+
+Y Mặc nhớ lại dáng vẻ của các cao thủ võ lâm, múa tay loạn xạ vài cái, rồi trực tiếp lấy ra 2 thỏi gạch vàng từ hệ thống đập lên trước mặt Vân Dật.
+
+Y Mặc thì không biết công phu, nhưng lại có thể lợi dụng hệ thống để chơi vài trò bịp!
+
+Vân Dật lập tức choáng váng, ôm lấy thỏi gạch vàng, trọng lượng vô cùng nặng, vừa nhìn đã biết là thật!
+
+Ngay lập tức, ánh mắt nhìn Y Mặc cũng khác đi, kinh ngạc nói: “Anh vậy mà thật sự biết!”
+
+Y Mặc: “Đương nhiên!”
+
+“Anh đã thấy sự lợi hại của tôi, còn cho rằng dưới sự chỉ bảo của tôi, không thể giành được danh hiệu đệ nhất thiên hạ sao?”
+
+Vân Dật suy nghĩ một chút rồi nói: “Tụ Lý Càn Khôn đích xác lợi hại...”
+
+“Nhưng nhìn thế nào, dường như cũng chỉ lợi hại về mặt trộm cắp thôi...”
+
+“Cái này đánh nhau với người khác, có ích lợi gì?”
+
+Y Mặc giơ một ngón tay lên, lắc lắc nói: “Công phu trên thế gian này, không gì không phá, chỉ có tốc độ là không phá được!”
+
+“Công dụng thực sự của Tụ Lý Càn Khôn của ta, nằm ở việc giấu kiếm!”
+
+“Tụ Lý Càn Khôn, kết hợp với một thanh lợi kiếm thượng hạng, có ai là đối thủ một chiêu của anh?”
+
+“Chậc, thôi bỏ đi.”
+
+“Tôi thấy anh cũng không có hứng thú lớn, thiên hạ đệ nhất đó, vẫn là để tôi đi!”
+
+Y Mặc nói xong, cố tình ngay trước mặt Vân Dật, cất hai thỏi gạch vàng vào hệ thống, rồi quay người định đi.
+
+Vân Dật sau khi chứng kiến sự lợi hại của Y Mặc, đã hoàn toàn động lòng, sao có thể để anh đi?
+
+Khỏi phải nói, chỉ riêng Tụ Lý Càn Khôn này, học được đã là lời to không lỗ!
+
+Kéo cánh tay Y Mặc, lớn tiếng nói: “Saitama-sensei! Đừng đi!”
+
+“Tôi nghĩ lại rồi, danh hiệu đệ nhất thiên hạ đó, quả nhiên vẫn nên là của tôi!”
+
+“Dù sao Tuyệt Đại Đại Hiệp cũng không nhất định đi, nếu cứ để cho bọn chuột nhắt được, chẳng phải là không tốt sao?!!”
+
+“Nếu tôi được danh hiệu đệ nhất thiên hạ, quay đầu anh nói với người khác, đã từng hướng dẫn thiên hạ đệ nhất, chẳng phải là càng lợi hại hơn sao?”
+
+Y Mặc nhìn ánh mắt khát vọng và hưng phấn của Vân Dật, khóe miệng hơi nhếch lên, lại ôm vai cô, chỉ vào ngọn đèn le lói trên bàn ở xa, chắc chắn nói: “Thật ra tôi đã sớm nhìn ra Tuyệt Thế Đại Hiệp Vân Dật thiên tư thông minh, tuyệt không phải là cá trong ao!”
+
+“Bây giờ gặp tôi, tôi chỉ bảo anh một chút, chính là cá chép vượt Long Môn!”
+
+“Vị trí đệ nhất thiên hạ đó, ngoài anh ra còn ai nữa?”
+
+“Hãy để tôi, giúp anh giành được danh hiệu đệ nhất thiên hạ đó sớm vài năm!”
+
+“Giang hồ này, nếu chỉ có Tuyệt Đại Đại Hiệp, thiếu đi anh Tuyệt Thế Đại Hiệp, cũng sẽ cô đơn lắm!”
+
+Vân Dật dưới sự tẩy não của Y Mặc, đã hoàn toàn đắm chìm, trong mắt tràn đầy ước mơ: “Ừm!”
+
+Người đàn ông lạnh lùng đánh giá Y Mặc, tự hỏi chiêu Tụ Lý Càn Khôn vừa rồi của Y Mặc là làm thế nào, vô cùng đề phòng anh.
+
+Lại nhìn vẻ mặt của Vân Dật, dường như muốn đi lên nói gì đó, nhưng sau khi do dự một chút, cuối cùng cũng không nói ra.
+
+Maaya thì lại bóc một chén nhỏ hạt dưa, lén nhìn anh Sakamoto của mình, thở dài, thầm nói: “Xem ra ngoài chị Tachibana ra, tình địch lại sắp có thêm một người rồi.”

@@ -1,0 +1,171 @@
+Chương 7: Thay Đổi Vận Mệnh
+
+Hệ thống sức mạnh của thế giới này khá dễ hiểu.
+
+Có hai loại Thẻ (Card) chính. Về cơ bản, Thẻ là thứ ban cho người sử dụng những năng lực siêu nhiên.
+
+Đầu tiên là Thẻ Khởi Nguyên. Chúng là hiện thân cho linh hồn của một người và quyết định năng lực bẩm sinh của người đó.
+
+Dù về lý thuyết, bất kỳ ai sinh ra cũng mang trong mình tiềm năng thức tỉnh Thẻ Khởi Nguyên, nhưng trên thực tế, chỉ vỏn vẹn năm phần trăm dân số toàn cầu thực sự làm được điều này.
+
+Một tỷ lệ điên rồ, nhất là khi xét đến việc tổng dân số thế giới đang xấp xỉ năm tỷ rưỡi người.
+
+Những ai thức tỉnh được Thẻ Khởi Nguyên cũng sẽ khám phá ra Tiềm Năng Linh Hồn của bản thân, thước đo biểu thị cảnh giới sức mạnh tối đa mà họ có thể chạm tới.
+
+Lấy ví dụ, nếu một người có Tiềm Năng Linh Hồn ở [A-rank], họ chỉ có thể thăng cấp sức mạnh Thẻ Khởi Nguyên của mình lên tối đa là [A-rank].
+
+Cấp Linh Hồn được phân loại theo hệ thống như sau: C » B » A » S » SS » SSS.
+
+Để thăng tiến qua những cấp bậc này, người ta phải thu thập Tinh Hoa Linh Hồn.
+
+Có hai cách để làm điều đó: một là thông qua thiền định để thanh lọc Tinh Hoa Linh Hồn lẫn trong thiên nhiên , một phương pháp tu luyện y hệt mấy bộ tiên hiệp kinh điển; hoặc hai là tiêu diệt Linh thú và hấp thụ Tinh Hoa Linh Hồn đã được tinh luyện sẵn từ xác của chúng. Cách thứ hai mang lại hiệu quả nhanh hơn rất nhiều, nhưng dĩ nhiên rủi ro cũng cao hơn vạn phần.
+
+Giả dụ thế này, trong khi phải mất đến ba tháng ròng rã ngồi thiền chỉ để thăng từ [C] lên [B], thì việc làm thịt vài con Linh thú cấp thấp lại mang đến kết quả tương đương nhưng với tốc độ chớp nhoáng hơn hẳn.
+
+Dẫu vậy, hãy nhớ rằng một khi đã chạm đến ngưỡng giới hạn của Tiềm Năng Linh Hồn, người ta sẽ không thể tiến thêm nửa bước, bất kể có thiền định mòn xác hay tàn sát bao nhiêu sinh mệnh đi chăng nữa.
+
+Đương nhiên, vẫn có một cách để phá vỡ giới hạn tiềm năng này. Chỉ là hiện tại, chẳng một ai trên cái thế giới này vỡ lẽ ra điều đó cả , ngoại trừ tôi.
+
+Nói cho rõ thì, tiềm năng của tôi là [SS-rank], trong khi Cấp Linh Hồn hiện tại mới lẹt đẹt ở mức [C].
+
+Chuyển sang phần tiếp theo, loại Thẻ thứ hai là Thẻ Bổ Sung. Loại thẻ này có thể thu thập bằng cách đánh bại Linh thú, tìm kiếm trong Linh Giới hoặc thế giới thực, hay thậm chí là thừa kế từ người khác.
+
+Tất cả các Thẻ đều được phân Phẩm cấp (Grade) thành:
+
+Thường (Common) (C) » Hiếm (Rare) (B) » Sử thi (Epic) (A) » Huyền thoại (Legendary) (S) » Tối cao (Supreme) (SS) và Thần thoại (Mythical) (SSS) dựa trên độ độc đáo và sức mạnh mà chúng mang lại.
+
+Việc sử dụng Thẻ Bổ Sung bị giới hạn bởi Cấp Linh Hồn hiện tại. Thế nên, nếu chỉ đang ở [B-rank], tấm thẻ cao nhất mà một người có thể sử dụng cũng chỉ dừng lại ở Phẩm cấp Hiếm.
+
+Để sử dụng một Thẻ Bổ Sung, bắt buộc phải đồng điệu nó với linh hồn mình, sau đó đưa vào Kho Thẻ Linh Hồn, hay còn gọi là Bộ Thẻ.
+
+Mỗi người có thể dung nạp tối đa mười Thẻ trong Kho Thẻ Linh Hồn, với giới hạn là ba Thẻ thuộc Phẩm cấp cao nhất so với thứ hạng hiện tại.
+
+Điều này đồng nghĩa với việc, nếu sở hữu nhiều hơn mười Thẻ trong bộ sưu tập, họ buộc phải tính toán chiến thuật, xem xét nên giữ lại hay tráo đổi Thẻ nào trong Bộ Thẻ để linh hoạt ứng phó với từng tình huống khác nhau.
+
+Phụ thuộc vào loại sức mạnh ban cho người sử dụng, Thẻ được chia làm tám phân loại:
+
+1. Thẻ Kỹ Năng (Skill Cards): Cung cấp những năng lực hoặc chiêu thức cụ thể.
+
+2. Thẻ Phép (Spell Cards): Khai thác năng lượng huyền bí để tạo ra những hiệu ứng đa dạng.
+
+3. Thẻ Vật Phẩm (Item Cards): Triệu hồi các đồ vật hoặc tạo tác mang những đặc tính độc nhất.
+
+4. Thẻ Biến Hình (Transformation Cards): Biến đổi hình thể người sử dụng, mang lại các thuộc tính được cường hóa hoặc những năng lực đặc thù.
+
+5. Thẻ Hỗ Trợ (Support Cards): Cung cấp các kỹ năng nội tại hoặc chủ động nhằm cường hóa năng lực bản thân hoặc hỗ trợ đồng minh.
+
+6. Thẻ Triệu Hồi (Summoning Cards): Triệu hồi các sinh vật hoặc thực thể để hỗ trợ.
+
+7. Thẻ Cường Hóa (Enhancement Cards): Tăng cường năng lực thể chất hoặc ma thuật của người sử dụng.
+
+8. Thẻ Suy Yếu (Debuff Card): Gây ra các hiệu ứng tiêu cực lên kẻ thù, chẳng hạn như nguyền rủa hoặc ếm bùa.
+
+Điều thú vị là, bất kỳ ai cũng có thể sử dụng mọi loại Thẻ Bổ Sung (Acquire Card), bất kể Thẻ Khởi Nguyên (Origin Card) của họ là gì.
+
+Ví dụ, Thẻ Khởi Nguyên của tôi là một Thẻ Phép (Spell Card) hiện đang cho phép tôi thao túng vật chất ở mức độ cơ bản.
+
+Dù vậy, tôi vẫn có thể dùng Thẻ Suy Yếu, Thẻ Hỗ Trợ hay bất kỳ loại nào khác mà chẳng gặp chút trở ngại nào, miễn là Phẩm cấp (Grade) của Thẻ (Card) đó thấp hơn hoặc bằng với Cấp Linh Hồn (Soul Rank) của tôi.
+
+Vậy nên, về cơ bản, tiềm năng cho các lối chơi và chiến thuật trong thế giới này là vô tận, khiến cho mọi trận chiến đều trở nên cực kỳ khó đoán.
+
+Tuy nhiên, tốt nhất vẫn là nên xây dựng bộ kỹ năng xoay quanh Thẻ Khởi Nguyên của bản thân, bởi đó chính là thứ vũ khí mang tính sống còn nhất trong mọi cuộc giao tranh.
+
+Nhưng đen đủi ở chỗ, một chiến thuật hiệu quả lại luôn đòi hỏi sự đa dạng của các Thẻ!
+
+Điều đáng lo hơn là, nếu bị cha đuổi khỏi nhà, tôi sẽ bị tịch thu toàn bộ số Thẻ Bổ Sung của mình, vì trên lý thuyết, chúng là tài sản của gia tộc.
+
+"Chẳng công bằng chút nào!" tôi lầm bầm dưới vòi sen.
+
+Quá sức bất công!
+
+Đành rằng đống Thẻ đó do gia tộc cấp phát, nhưng là do tự tay tôi giành lấy cơ mà! Tôi đã đạt thành tích xuất sắc trong huấn luyện, thể hiện vượt trội ở các buổi thực chiến, và thậm chí còn thắng cả những trận quyết đấu trong các kỳ lễ hội của gia tộc!
+
+Không một kẻ nào có quyền ngang nhiên đến cướp đi những phần thưởng mà tôi đã phải đổ mồ hôi sôi nước mắt mới có được, kể cả là chính ngài tộc trưởng đi chăng nữa! Tôi quyết không để chuyện đó xảy ra!
+
+Tôi phải tìm cách thuyết phục cha không từ mặt mình.
+
+•••
+
+Hiện tại, tôi đang sửa soạn trong phòng tắm.
+
+Đã hai ngày rồi chưa tắm gội gì, nên việc đầu tiên tôi làm hôm nay là xông thẳng vào vòi sen.
+
+Tắm táp xong, tôi mặc một chiếc áo sơ mi linen đơn giản bên dưới lớp áo len cashmere xám, phối cùng chiếc quần âu màu than chì được cắt may hoàn hảo.
+
+Bước ra khỏi phòng tắm nối liền với phòng bệnh VIP riêng, tôi xỏ chân vào đôi giày lười bằng da màu nâu sang trọng rồi xịt một chút nước hoa hương gỗ nhẹ dịu.
+
+Chà, thật tuyệt làm sao khi cuối cùng cũng được vứt bỏ bộ đồ bệnh nhân chán ngắt kia để khoác lên mình những món đồ xịn xò đích thực của giới thượng lưu.
+
+"Mời cậu, thưa cậu chủ," Juliana cất lời, khuôn mặt vô cảm khi cô tiến về phía tôi, một tay vắt chiếc áo choàng màu xanh hải quân, tay kia cầm chiếc đồng hồ đen xa xỉ, sẵn sàng giúp tôi mặc đồ.
+
+"Chậc," tôi chép miệng bực bội, giật lấy đống đồ từ tay cô ta. "Ta đã bảo cô đợi ở ngoài cơ mà. Ta có thể tự mặc được."
+
+Cô gái tóc bạc nhún vai.
+
+"Lần cuối cùng cậu tự mặc đồ là khi cậu lên mười. Thế nên xin hãy lượng thứ, tôi chỉ muốn đảm bảo cậu trông tươm tất trước mặt cha cậu, ngài tộc trưởng, thưa cậu chủ."
+
+Argh! Khốn thật, tôi ghét cái việc cô ta nói đúng phóc.
+
+Được rồi, tôi là một gã công tử ngậm thìa vàng, quen để người hầu kẻ hạ mặc đồ cho từ bé đấy. Thì sao nào?!
+
+Chắc chắn sẽ có vài kẻ mỉa mai tôi vì chuyện đó, nhưng tôi cá là nếu một ngày nào đó được giàu nứt đố đổ vách, bọn họ cũng chẳng thèm tự tay nâng một cốc nước đâu, tôi biết tỏng, vì tôi có bao giờ phải làm thế đâu.
+
+Đúng đấy, tôi có người hầu bưng nước dâng tận miệng! Có giỏi thì đi mà kiện tôi!
+
+…Nhưng kể từ khi nhớ lại kiếp trước, cảm giác để người khác liên tục phục vụ mình cứ kỳ kỳ thế nào ấy. Thế nên, chắc là tôi đang cố kìm hãm cái thói sinh hư lại.
+
+Hơn nữa, tôi cũng chẳng mặn mà gì với việc để Juliana cứ chầu chực bên cạnh, nhất là khi đã biết tỏng bản chất thật của cô ta.
+
+Khẽ thở dài, tôi khoác áo choàng và đeo đồng hồ vào trước khi xem giờ. Bây giờ là 12:35 trưa.
+
+"Ông ấy bảo khi nào sẽ đến?" tôi cất tiếng hỏi.
+
+"Tôi là Bóng (Shadow) của cậu, không phải của ngài ấy, thưa cậu chủ," Juliana đáp, giọng nói pha chút thích thú vô cảm.
+
+…Cô ta đang cố chọc tức tôi đấy à?
+
+Tôi quay ngoắt lại, trừng mắt nhìn cô ta. "Cô vừa nói gì với ta?"
+
+Đáp lại, cô ta lập tức hơi cúi người, một điệu bộ hối lỗi đầy mỉa mai.
+
+"Tôi nói là tôi không biết khi nào cha cậu sẽ đến. Cậu có thể mở lòng khoan dung độ lượng mà tha thứ cho Cái Bóng hèn mọn, vô dụng này không, thưa cậu chủ nhân từ của tôi?"
+
+"Lúc nãy cô đâu có nói thế," tôi ném lại một câu, vẫn tiếp tục trừng mắt.
+
+"Không đâu, tôi khá chắc chắn đó là những gì mình đã nói, thưa cậu chủ. Có lẽ tai cậu đang ù đi, tác dụng phụ từ việc bị đập đầu trong lúc chiến đấu chăng?"
+
+…Dẹp mẹ cái trò lợi dụng cô ta đi, có lẽ tôi nên giết quách cô ta cho rảnh nợ.
+
+•••
+
+Ngồi vẩn vơ chờ thêm vài phút, tôi nhận được tin nhắn từ cha – hay đúng hơn là từ một trong những trợ lý của ông – thông báo rằng ngài tộc trưởng sẽ có mặt ở đây trong mười phút nữa.
+
+Tôi hít một hơi thật sâu rồi đứng dậy khỏi ghế sofa.
+
+Juliana, người nãy giờ vẫn đứng yên lặng bên cạnh, cất giọng tò mò một cách tinh tế: "Cậu định đi đâu vậy, thưa cậu chủ?"
+
+"Ra vườn," tôi đáp, chân đã rảo bước về phía cửa. "Ông ấy sắp đến rồi."
+
+Juliana lặng lẽ bám gót theo sau khi tôi rời khỏi phòng.
+
+Chúng tôi sải bước dọc hành lang, lướt qua hàng loạt bệnh nhân, y tá và bác sĩ, cho đến khi vào thang máy và đi xuống tầng trệt.
+
+Tại quầy lễ tân, một nhân viên y tế tiến lại gần. Đó là một gã đàn ông trung niên hói đầu, mặc áo blouse trắng, trông còn ốm yếu và thiếu ngủ hơn cả phần lớn bệnh nhân ở đây.
+
+"N-Ngài Samael, tôi thành thật xin lỗi, nhưng ngài không nên đi lại vào lúc này, "
+
+Trước khi gã kịp dứt lời, tôi đã lướt qua, ném cho gã một cái lườm sắc lẹm. Đám nhân viên khác đang định mở miệng phản đối cũng lập tức câm bặt.
+
+Bọn họ thừa hiểu việc tôi chưa đánh gã này thừa sống thiếu chết vì cái tội dám cản đường đã là một phép màu rồi. Chẳng ai muốn thử thách vận may của mình nữa.
+
+Tôi sẽ không nói là mình khoái chuyện này, nhưng tôi cũng chẳng ghét việc bị người ta sợ hãi đến nhường này.
+
+Biết nói sao đây, cái thằng "tôi" ngày trước điên thật mà?
+
+Hơn nữa, bệnh viện này lại thuộc sở hữu của gia tộc tôi. Đám người này làm việc cho nhà tôi, thế nên tôi hoàn toàn có thể dùng quyền uy của con trai Công tước (Duke) để giở bất cứ trò điên rồ nào mà tôi muốn.
+
+Chà, quyền thế. Tiền tài. Đặc quyền. Lại thêm một nghìn lẻ một lý do khiến tôi không muốn bị đá đít khỏi cái gia tộc này.
+
+Lắc đầu ngán ngẩm, tôi bước ra khỏi tòa nhà bệnh viện, hướng thẳng đến khoảnh sân rộng lớn được bao quanh bởi vài khu vườn nhỏ xinh đẹp ngay bên ngoài.
+
+Chẳng phải đợi lâu, cuối cùng tôi cũng được nhìn thấy cha mình.

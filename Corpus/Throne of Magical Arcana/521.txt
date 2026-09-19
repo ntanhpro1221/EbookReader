@@ -1,0 +1,114 @@
+Chương 522 - Suy xét con đường tương lai
+
+
+Lucien cầm bút lông lên kẻ hai đường trên giấy: “Trước hết, tôi thừa nhận, hệ thống tương đối này vẫn còn rất không hoàn hảo. Nó không giải thích được quán tính, chỉ có thể giới hạn trong hệ quy chiếu chuyển động đều, không mở rộng ra được hệ quy chiếu gia tốc.
+
+Tuy nhiên, dựa trên vấn đề ngài đề xuất, trong khuôn khổ này, chúng ta vẫn có thể thấy được nó không phải là nghịch lý. Đây là dòng thời gian của hai anh em, chúng ta hãy phân tích riêng biệt thế này: Người anh muốn bay đi với tốc độ tiệm cận tốc độ ánh sáng, vậy thì chắc chắn phải có một quá trình gia tốc từ đứng yên đến tốc độ cuối cùng, quá trình này không thể bỏ qua; và nếu như anh ta muốn trở về thì cũng phải có quá trình gia tốc ngược hướng, tức là tất phải khắc phục quán tính, điều này cũng không thể bỏ qua… Tuy nhiên, theo nguyên lý tương đối thì người em lại không có quá trình khắc phục quán tính…”
+
+Vừa phân tích, Lucien vừa tính toán bằng dữ liệu giả định. Đây sẽ là cách thuận tiện và đơn giản nhất để giới thiệu nguyên bản Thuyết tương đối rộng, giải thích quán tính và lực hấp dẫn, dẫn đến sự thay đổi thời gian của quá trình gia tốc. Tuy nhiên, cậu hiện tại không thể làm vậy, mà chỉ có thể sau khi giới thiệu ngắn gọn các khái niệm thì phân tích cụ thể các mốc thời gian tương ứng, cuối cùng vận dụng kiến thức tích phân để tính toán đường đi thời gian, từ đó cho ra kết quả.
+
+“…Thế cho nên, người anh sẽ trẻ hơn người em. Nói chính xác hơn là, những biến đổi trên cơ thể người anh đã chậm lại…” Lucien kết luận.
+
+Oliver xoa xoa cây bút lông, cẩn thận quan sát tính toán của Lucien, đồng thời nhớ lại những phân tích của mình. Cuối cùng, ông gật đầu: “Đúng là ta đã suy nghĩ không đủ kỹ mà bỏ qua quá trình gia giảm tốc. Nhưng nếu người anh không trở về mà vẫn tiếp tục lang thang trong không gian thì ai sẽ là người trẻ hơn, anh ta, người đã đạt tốc độ ổn định, hay là người em trai?”
+
+“Điều này không có ý nghĩa thực tế. Nếu người anh không trở về và gặp em trai mình, vậy thì hai người họ sẽ ở trong những hệ quy chiếu khác nhau, không thể so sánh được. Họ sẽ giống như những con người ở hai thế giới hoàn toàn không liên quan, mỗi người đều có cuộc đời riêng, quy luật riêng, không ảnh hưởng gì đến nhau hết.” Lucien mỉm cười chỉ vào khoảng không bên cạnh: “Có khi ở xung quanh chúng ta cũng đang có một thế giới vật chất chân thực như vậy đó. Nó chồng chéo lên thế giới của chúng ta, nhưng lại không ảnh hưởng gì đến chúng ta. Hai thế giới khi gặp nhau có thể đi xuyên qua nhau một cách dễ dàng. Có khi, tại thế giới ấy, tại chính nơi này, có người đang tổ chức một vũ hội tưng bừng cũng nên.”
+
+Đối với giải thích trước đó của Lucien, Fernando không cảm thấy có vấn đề gì, nhưng khi nghe ví dụ tùy tiện của cậu sau đó, vẻ mặt ông liền trở nên nghiêm nghị: “Ý tưởng này quá kỳ quặc. Nếu có một thế giới như vậy tồn tại, thế thì mọi nghiên cứu của chúng ta về không – thời gian và các lĩnh vực khác có mà vẫn đang ở giai đoạn sơ khai mất. Thật khó mà tưởng tượng ra rằng lại có một thế giới cũng được tạo thành từ vật chất tương tự và chồng chéo lên chúng ta mà không ảnh hưởng lẫn nhau.”
+
+Lucien vội vàng lắc đầu: “Đây chỉ là ý tưởng đột xuất của em thôi, thầy không cần phải bận tâm đâu. Nó không có cơ sở lý thuyết hay ý nghĩa thực tiễn nào hết.”
+
+Vừa rồi cậu đã buột miệng nói ra một phần nội dung của một quan điểm không – thời gian nhất định trong thư viện linh hồn của mình, nhưng đây chỉ là một phỏng đoán chưa được chứng minh dựa trên sự mở rộng của thuyết lượng tử và không được dòng chính thống đánh giá cao.
+
+“Vậy chúng ta chuyển sang câu hỏi tiếp theo…” Oliver lại cất lời.
+
+Sau một thời gian dài trao đổi, khi hiệu ứng tương đối tính đối với các hạt gia tốc được chứng minh, Oliver sơ bộ đã chấp nhận hệ thống này, nhưng ông cũng đồng ý với Lucien và Fernando rằng đây hẵng còn là một lý thuyết không hoàn hảo với nhiều thiếu sót. Chẳng hạn, nếu theo lý thuyết, thời gian trên tinh cầu nhân tạo sẽ phải chậm hơn trên mặt đất, nhưng từ những số liệu cụ thể thu được và những thay đổi về chất lượng liên lạc sau khi điều chỉnh, có thể suy ra rằng thời gian ở trên đó nhanh hơn trên mặt đất.**
+
+“Dù sao thì chúng ta cũng đã có một bước tiến vững chắc trên con đường này. Ta có linh cảm rằng đây sẽ trở thành một cuộc cách mạng lớn trong lĩnh vực vĩ mô đấy. Các Arcanist khác cần phải được dẫn dắt cẩn thận. Haha, Lucien, cả vi mô và vĩ mô cậu đều có khả năng phi thường, thế thì e là sau này sẽ khó mà chọn ra được chức nghiệp huyền thoại của mình đây. Người khác thì lo không tìm được hoặc không xây dựng được một chức nghiệp huyền thoại tương thích với thế giới nhận thức của mình, còn cậu thì lại hoang mang vì không biết phải chọn cái gì. Thật làm người khác ghen tị mà.”
+
+Oliver lịch sự bày tỏ lời khen ngợi: “Ta sẽ sớm đệ trình phép biến đổi lên để cố gắng cho đăng kịp [Arcana] đầu tháng sau.”
+
+Lucien trước nay vẫn luôn thận trọng đối với vấn đề này. Tất cả mọi thứ đều phải dựa vào kết quả thực nghiệm và hiện tượng cụ thể, không được tiến triển một cách hấp tấp. Rốt cuộc, ai mà biết khi nghiên cứu tới cuối cùng, liệu hệ thống tương đối tính hay hệ thống cơ học lượng tử có tự nhiên mâu thuẫn với quy luật của thế giới này hay không.
+
+Linh hồn, linh lực, rào cản không gian, phản hồi của thế giới, mô hình ma thuật và nhiều thứ khác liên tục nhắc nhở cậu rằng đây là một thế giới trông thì có vẻ giống với Trái Đất, nhưng rất có thể bên trong lại tồn tại những khác biệt nền tảng quan trọng.
+
+Tuy nhiên, do không tìm ra được cách nào hay để nghiên cứu chuyên sâu những khía cạnh này, cậu chỉ đành dò đá qua sông[note66222] mà từ từ khám phá theo con đường hiện tại.
+
+Sau khi xác định quan hệ với Natasha, Lucien đã có cái nhìn tổng quan và chi tiết hơn về con đường tương lai của mình, đồng thời cũng sẽ chuẩn bị áp dụng một thái độ bảo thủ hơn, bởi suy cho cùng, cậu không còn chỉ có một mình nữa. Thái độ này của cậu chính là lấy cơ học lượng tử làm chủ, lấy hệ thống tương đối tính làm phụ trong việc xây dựng thế giới nhận thức, đồng thời sẵn sàng sửa đổi hệ thống tương đối tính theo cơ học lượng tử bất cứ lúc nào.
+
+Ít nhất thì trong quan điểm của Lucien, cơ học lượng tử là lý thuyết duy nhất có thể giải thích tại sao hai thế giới có nhiều hằng số giống nhau như vậy nhưng lại khác biệt về ma thuật, linh lực, dung hợp huyết mạch, v.v..
+
+Nếu phải đánh cược, cậu sẽ cược vào cơ học lượng tử hơn là Thuyết tương đối rộng!
+
+Đương nhiên, cậu cũng sẽ không từ bỏ việc thao túng trọng lực và thao túng thời gian mà Thuyết tương đối rộng mang lại.
+
+“Hiện tại, Tân Giả kim thuật vẫn chưa hoàn thiện, dấu vết cho thấy có thể xây dựng chức nghiệp huyền thoại cũng chưa xuất hiện, thế nên tôi chưa nghĩ nhiều về nó.” Lucien suy đoán rằng, khi đến lúc, chức nghiệp huyền thoại của cậu hẳn sẽ là cái gì đó giống như “Điều Khiển Nguyên Tử”, để rồi có thể hạ thấp yêu cầu đối với việc học tập “phân hạch” và “nhiệt hạch” của cậu xuống. Rất có thể Phân tách Nguyên tử và Mặt trời Rực cháy Vĩnh hằng sẽ là những ma thuật cơ sở của chức nghiệp này, giống như Tiếng Hú Á Thần Lich và Giam cầm Linh hồn của Á Thần Lich hay Phân giải Nguyên tố của Hathaway vậy.
+
+Lucien không nói nhiều về việc này nữa mà đổi chủ đề: “Ngài Oliver, nghe nói ngài đang nghiên cứu Hắc Long Thần. Không biết ngài đã phát hiện được gì rồi?”
+
+Do Lucien đã đệ trình “Báo cáo về sự Thay đổi Thần tính của Thần Ell”, đồng thời cậu còn là “người nổi tiếng” trong việc nghiên cứu phạm trù này, Oliver cũng không giấu giếm, chỉ đơn giản nói: “Vấn đề lớn đấy. Ngay khi Hắc Long Thần tiến vào thế giới vật chất chính, thần tính của Hắn lập tức suy yếu, như thể là vì ‘tín lực’ rất khó xuyên qua rào cản không gian để cường hóa cho Hắn vậy. Do đó, khi phần nguồn đã suy giảm đáng kể, Hắn chỉ còn cách tiêu hao những gì đã tích lũy từ trước. Ta tin đó cũng chính là lý do vì sao một vài vương quốc của ngụy thần ở gần Dãy núi Hắc ám lại chiếm đóng và phát triển được ít dị độ không gian đến vậy.
+
+Nhưng tại sao Thần Chân Lý lại không bị ảnh hưởng chút nào? Chẳng lẽ đó chính là sự khác biệt giữa ngụy thần và Chân Thần?”
+
+Oliver không hề tôn trọng Chân Thần. Đối với ông, Thần chỉ là một danh từ và là đối tượng nghiên cứu.
+
+Lucien cũng không quá hiểu mọi chuyện rốt cuộc ra sao, cho nên sau khi ghi lại những nghi vấn của Oliver vào trong sổ ghi chép ma thuật, cậu cất lời cáo từ rồi chuẩn bị rời khỏi Địa ngục Sấm sét để tới Ủy ban Công vụ yêu cầu tài liệu.
+
+“Evans, đợi chút đã.” Oliver đột nhiên gọi cậu lại.
+
+Lucien bối rối nhìn ông. Cậu không quen thân với ông ấy. Có thể là chuyện gì nhỉ?
+
+Oliver bật cười: “Gần đây ta có phạm lỗi với Florencia, thế nên ta đang tính viết một vở opera để chuộc lỗi với cô ấy. Evans, cậu là nhạc sĩ xuất sắc nhất, ta mong có thể hợp tác với cậu. Giai điệu và ca từ của những vở opera trước đó đều rất khó mà vừa lòng nổi.”
+
+“Tôi sẽ dành lúc nào đó thử xem.” Đây là cơ hội làm thân với Oliver, Lucien vì vậy không từ chối. Có thêm một người ủng hộ trong Hội đồng Tối cao vẫn tốt hơn là thêm một kẻ thù.
+
+Bên cạnh đó, cậu cũng đang định viết một bản opera để tặng Natasha làm quà nhân ngày kỷ niệm năm sau. Mặc dù có thể tham khảo trong thư viện linh hồn, nhưng lần này cậu dự định sẽ thực hiện một sự cải biên mạnh mẽ, bởi dù sao món quà tặng cho người trong lòng tốt nhất vẫn nên là sáng tác của chính bản thân mình, như vậy sẽ thể hiện được nhiều thành ý hơn. Thế nên vừa hay cậu cũng sẽ hỏi xin lời khuyên của Oliver.
+
+Nhận được câu trả lời tích cực, Oliver hài lòng rời đi. Ông hẹn sẽ gửi kịch bản cho Lucien trong vài ngày tới.
+
+Nhìn bóng lưng ông biến mất, Fernando bĩu môi: “Nhất định một ngày nào đó hắn sẽ chết dưới tay phụ nữ. Ta thậm chí còn thắc mắc không biết khi nào Florencia sẽ cho hắn một đòn chí mạng lúc đang ngủ đấy.”
+
+“Pháp sư huyền thoại nào có dễ bị giết như thế…” Lucien không chút lo lắng cho sự an nguy của Oliver.
+
+Fernando không nói gì thêm về chuyện đó nữa mà quay lại nhìn cậu: “Chuyện cậu với Natasha đừng nói cho người khác biết vội. Phải để mọi chuyện diễn ra từ từ.”
+
+Mặc dù từ hành tung của họ, không khó để đoán ra Natasha đã cùng Lucien mừng sinh nhật tối qua, nhưng việc sáng sớm cô đã rời đi khiến cho việc đoán biết mức độ trong mối quan hệ của họ vẫn là rất khó. Chưa kể, hành tung của Lucien là cố tình để lộ, nếu không thì cậu đã đeo Mặt Nạ Biến Hình mà quay về rồi.
+
+……
+
+Tại Ủy ban Công Vụ, Lucien tìm thấy Thompson.
+
+“Cậu muốn hồ sơ các giáo sĩ của giáo phận Holm? Giờ cậu đã có hứng thú với tình hình xung quanh rồi sao?” Thompson có chút kinh ngạc. Lucien trong mắt ông là một pháp sư khổ hạnh chuyên tâm nghiên cứu, chẳng bao giờ để ý đến tình hình bên ngoài. Nói đâu xa, cậu còn chẳng có người yêu kìa.
+
+Lucien mỉm cười lấy lệ: “Thì chúng ta dù sao cũng đều sống ở Vương quốc Holm mà. Nếu muốn yên bình làm các thí nghiệm ở đây thì tự khắc phải để ý đến tình hình xung quanh thôi. Thompson, tôi đủ quyền hạn rồi nhỉ?”
+
+“Đủ rồi, quá đủ luôn. Quyền hạn của cậu hiện giờ chỉ sau mỗi thành viên của Hội đồng Tối cao thôi.” Thompson lắc đầu rồi bảo cấp dưới đi tìm tài liệu, sau đó đưa chúng cho Lucien. “Cậu không thể mang đi hoặc sao chép, chỉ có thể đọc chúng ở đây.”
+
+Lucien giở tài liệu ra xem rồi tập trung vào danh sách các giáo sĩ sẵn lòng liên lạc với pháp sư, sau đó lưu vào trong thư viện linh hồn.
+
+“…Hồng y Richard, cấp tám, đã phát biểu trong bài giảng đạo trước người dân rằng, Thần yêu thương thế nhân, không phân đây đó, bất kể thân phận…”
+
+Lấy ngón tay cái miết vào cái tên, Lucien sơ bộ đã có một mục tiêu.
+
+……
+
+Trong cung điện Nekso, Natasha vẫn tiếp kiến các quý tộc lớn nhỏ theo thông lệ trước đó.
+
+Mặc dù chỉ một cuộc trò chuyện ngắn ngủi thì không đủ để cô nắm bắt được hết suy nghĩ và khuynh hướng của mọi người, nhưng củng cố ấn tượng của giới quý tộc về cô cũng như làm sâu sắc thêm lòng tôn kính của họ dành cho quyền lực của Vương thất thông qua những cuộc tiếp kiến như thế này cũng rất xứng đáng.
+
+“Thưa Bệ hạ, thần có một trang viên ở khu vực ngoại ô, không biết liệu thần có thể mời người ghé thăm không?” Công tước James, người đã thay đổi thái độ bảo thủ trước đây, lúc này nói với Natasha bằng điệu bộ lấy lòng.
+
+Natasha mỉm cười nói: “Có thời gian ta sẽ ghé qua.”
+
+Quả nhiên, sau khi biết cô đã ăn mừng sinh nhật cùng Lucien, thái độ của các quý tộc phe khai sáng ngay tức thì trở nên nhiệt tình, ngụ ý cho việc ủng hộ vững chắc.
+
+James, người có cái đầu trọc hung hãn, kính cẩn cáo lui với khuôn mặt vui vẻ. Sau khi ông rời đi, Natasha hỏi Camil, người từ bên ngoài cung điện đi vào: “Dì Camil, phản ứng của giáo hội thế nào?”
+
+Phản ứng của giáo hội chính là phản ứng của Sard.
+
+------------------------------------------------
+
+** Giải thích một chút về hiện tượng này:
+
+Theo Thuyết tương đối hẹp, có hai loại giãn nở thời gian: Giãn nở do vận tốc tương đối (càng di chuyển với vận tốc gần vận tốc ánh sáng thì đồng hồ càng chậm) và giãn nở do hấp dẫn (càng ở xa nơi có khối lượng hấp dẫn cao hơn thì đồng hồ càng nhanh). Thời gian trên vệ tinh quay quanh một hành tinh sẽ là sự kết hợp của cả hai loại giãn nở thời gian này.
+
+Ví dụ, đối với GPS, do di chuyển quanh Trái Đất nên đồng hồ trên vệ tinh chạy chậm hơn đồng hồ trên mặt đất 7 micro giây mỗi ngày (giãn nở thời gian do vận tốc tương đối). Nhưng do vệ tinh bay cao nên hấp dẫn yếu hơn trên mặt đất, dẫn tới đồng hồ vệ tinh chạy nhanh hơn đồng hồ mặt đất 45 micro giây mỗi ngày (giãn nở thời gian do hấp dẫn). Tổng cộng hai tác động này khiến đồng hồ GPS chạy nhanh hơn đồng hồ mặt đất 38 micro giây mỗi ngày.

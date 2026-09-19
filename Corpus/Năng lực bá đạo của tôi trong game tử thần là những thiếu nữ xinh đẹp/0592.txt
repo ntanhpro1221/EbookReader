@@ -1,0 +1,247 @@
+Chương 20
+
+Chương 20: Đoàn đội thứ nhất
+
+19 giờ 30 phút, khu vực biên giới thành phố Gấu Xám, tại trạm kiểm soát trên cây cầu lớn bằng kim loại của thành phố Gấu Xám.
+
+Đông đảo người dân thành phố Gấu Xám đang xếp hàng chờ kiểm tra, tạo thành một hàng dài hỗn loạn.
+
+Tiểu đội 5 người đã tập hợp lại, trong đó S Chó Săn và S Gấu Nâu là hai nhân viên chiến đấu của đoàn đội, đang ở cùng thế lực NPC họ tập hợp được, duy trì trật tự cho đám NPC.
+
+Đội trưởng S Sư Tử đang trao đổi tình hình hiện tại với thanh niên tóc vàng S Hồ Ly và lập trình viên đeo kính S Chuột Hamster.
+
+S Chuột Hamster ôm laptop, xoay nó lại, cho hai người xem biểu đồ hình quạt: "Hiện tại chúng ta tập hợp được 1830 NPC, trong đó bao gồm 1250 người có năng lực chiến đấu, 580 người nhà không có năng lực chiến đấu."
+
+"Trong số nhân viên chiến đấu, có 978 người dân, 192 cảnh sát, 80 nhân viên cứu hộ Umbrella."
+
+"Về trang bị súng ống, đã đạt đến mức nhân viên phi chiến đấu mỗi người một khẩu súng lục, nhân viên chiến đấu mỗi người 1 đến 3 khẩu súng, ít nhất có một khẩu súng tiểu liên."
+
+"Với số lượng nhân viên chiến đấu như vậy, đạn dược dồi dào, hơn nữa trong đó còn bao gồm cảnh sát và nhân viên cứu hộ Umbrella, chỉ cần đoàn đội thứ nhất giáng lâm, chúng ta có thể bao vây họ, xác suất tiêu diệt toàn bộ đối phương là trên 70%!"
+
+"Cá nhân thực lực có mạnh đến đâu, dưới chiến thuật biển người với vũ khí hiện đại cũng rất khó chống cự."
+
+S Chuột Hamster nói đến đây, đẩy gọng kính, nói thêm: "Đương nhiên, điều kiện tiên quyết là sau lưng đoàn đội thứ nhất không có thế lực phụ thuộc, và chúng ta có thể tìm thấy họ."
+
+"Trước đây cũng đã phân tích, đoàn đội thứ hai chúng ta vào game lúc 8 giờ sáng, đoàn đội thứ nhất vào game lúc 8 giờ tối, thời gian thành phố Gấu Xám hủy diệt dưới chiến dịch thanh trừng là 8 giờ sáng hôm sau."
+
+"Tổng cộng 24 giờ chơi, đoàn đội thứ nhất muốn tiến độ trò chơi quá nửa, 12 giờ sau mới vào game, điều này có nghĩa là thực lực đoàn đội thứ nhất rất mạnh, hoặc sau lưng họ sẽ có thế lực NPC, hơn nữa khả năng cao là Tập đoàn Umbrella."
+
+"Thực lực đoàn đội mạnh có thể dùng chiến thuật biển người đánh bại, nhưng nếu sau lưng có Tập đoàn Umbrella, vậy thì ưu thế về quân số của chúng ta sẽ không còn."
+
+Quân sư S Hồ Ly của tiểu đội 5 người nghe vậy nói: "Thế lực Tập đoàn Umbrella quá mạnh, nếu hệ thống cho đoàn đội thứ nhất thế lực Tập đoàn Umbrella, thì quá mất cân bằng."
+
+"Khả năng này không lớn, cho dù đối phương thực sự có thân phận là nhân viên Tập đoàn Umbrella, e rằng cũng không thể điều động sức mạnh của Tập đoàn Umbrella."
+
+"Hamster, cứ lên kế hoạch theo hướng thực lực cá nhân người chơi đối phương khá mạnh đi."
+
+"Camera bố trí thế nào rồi?"
+
+S Chuột Hamster hai tay gõ nhanh trên bàn phím laptop, mở một phần mềm, chi chít hình ảnh theo dõi xuất hiện trên màn hình: "Trong một ngày hành động cứu viện này của chúng ta, tổng cộng đã lắp đặt hơn 600 camera tại khu vực ngoại vi thành phố Gấu Xám, và khoảng 100 camera tại khu vực gần trung tâm."
+
+"Camera có chức năng bắt chuyển động và nhận diện khuôn mặt, tôi đã sửa đổi chương trình một chút, thêm kỹ thuật nhận diện khuôn mặt người đặc thù, nếu quay được người châu Á đều sẽ có thông báo."
+
+Trước đó tổ 5 người luôn lợi dụng các NPC tập hợp được để ra ngoài lôi kéo các NPC khác, bổ sung súng ống, tìm kiếm Shirley.
+
+Trong quá trình này, S Chuột Hamster đã đưa ra ý tưởng, để bọn họ tìm rất nhiều camera chạy bằng pin độc lập, lắp đặt ở các nơi tại khu vực ngoại vi thành phố Gấu Xám.
+
+Bởi vì bên trong thành phố Gấu Xám đã thất thủ, để tránh dẫn dụ Zombie ra sớm, cho nên camera ở khu vực trung tâm rất ít.
+
+S Chuột Hamster đưa ra lý do với NPC là thuận tiện cho việc cứu viện dân thường, nhưng thực tế việc để lại những camera này chính là để sau khi đoàn đội thứ nhất giáng lâm, có thể tìm kiếm đoàn đội thứ nhất dễ dàng hơn.
+
+Ở đây phải nói thêm, S Chuột Hamster cũng không có khả năng hack vào hệ thống giám sát của Chính phủ thành phố Gấu Xám, thêm vào đó thành phố Gấu Xám có thể mất điện trên diện rộng bất cứ lúc nào, hiện tại rất nhiều khu vực kiến trúc đã mất điện, cho nên loại camera chạy bằng pin tìm thấy trong các cửa hàng ở thành phố Gấu Xám này là hữu dụng nhất.
+
+S Chuột Hamster: "Ván chơi này mặc dù có bản đồ hệ thống, nhưng cụ thể định vị của người chơi Trò Chơi Tử Vong có công khai hay không, hiện tại cũng chưa xác định."
+
+"Nếu hiển thị, tác dụng của những camera này không lớn như vậy, nếu không hiển thị, những camera này có thể giúp chúng ta dễ tìm thấy đoàn đội thứ nhất hơn."
+
+"Vấn đề hiện tại là, đoàn đội thứ nhất sẽ giáng lâm ở đâu."
+
+"Nếu đoàn đội thứ nhất giáng lâm tại khu vực trung tâm thành phố Gấu Xám, vậy thì những camera này cũng không có hiệu quả gì."
+
+Sở trường của S Chuột Hamster nằm ở thu thập dữ liệu, phân tích tương đối kém hơn một chút.
+
+S Hồ Ly lắc đầu: "Khả năng cao là sẽ không, nếu bọn họ thực sự giáng lâm tại khu vực trung tâm thành phố Gấu Xám, không cần chúng ta, đám Zombie kia đã đủ cho bọn họ uống một bầu, đối với chúng ta ngược lại là chuyện tốt."
+
+"Đầu tiên hệ thống chắc chắn sẽ không để bọn họ bắt đầu đã là tử cục."
+
+"Cho nên vị trí chúng ta tập hợp cũng không có khả năng."
+
+"Khả năng cao là tại khu vực ngoại vi thành phố Gấu Xám, cách xa khu vực bên này của chúng ta."
+
+"Hoặc, không nằm trong phạm vi phong tỏa của thành phố Gấu Xám."
+
+S Hồ Ly nói, nhìn về phía bức tường cao kim loại và trạm kiểm soát cách đó không xa.
+
+Nhân viên vũ trang của Tập đoàn Umbrella và Chính phủ đang cầm vũ khí trang bị đầy đủ, kiểm tra nghiêm ngặt từng người dân, xác nhận có vết thương hay không.
+
+Và ngay khi S Hồ Ly đang nói, trong đám người dân đang xếp hàng chờ đợi, vì có người trước đó bị cắn, bây giờ đột nhiên biến dị thành Zombie, đã gây ra hỗn loạn.
+
+S Hồ Ly thấy thế, nói với S Sư Tử: "Anh Sư Tử, em đi kiểm soát tình hình một chút, bên này giao cho anh."
+
+S Sư Tử: "Ừ, đi đi."
+
+.
+
+Người phụ trách Umbrella đứng trên tường rào nhìn thấy trong đám người dân xếp hàng thông quan có người hóa zombie, nhìn cảnh hỗn loạn bên dưới, vẻ mặt khó chịu như gặp quỷ: "A, chết tiệt!"
+
+"Virus đã lan đến đây rồi, đóng cổng lại!"
+
+Không chút do dự, trực tiếp ra lệnh đóng cổng trạm kiểm soát.
+
+Khi cổng đóng lại, đám người dân thành phố đang xếp hàng chờ rời đi lập tức rơi vào hoảng loạn, hoàn toàn rối loạn, chen chúc điên cuồng về phía cánh cổng sắt đang đóng.
+
+Chỉ có điều chưa chạy ra được mấy người, cánh cổng lớn đã đóng lại hoàn toàn.
+
+Và ngay trong sự hỗn loạn đó, S Hồ Ly đi tới bên cạnh hai NPC.
+
+Hai người này một là cảnh sát da đen hơi mập, một là người phụ nữ da trắng tư thế hiên ngang với mái tóc ngắn màu nâu đẹp mắt, mặc áo ba lỗ xanh lam, váy ngắn đen bó sát.
+
+Cảnh sát da đen vừa rồi nhiệt tình giúp đỡ, không may bị Zombie đột nhiên biến dị cắn, bây giờ đang nhìn vết thương chửi bới. Người phụ nữ da trắng ở bên cạnh anh ta, nhíu mày nhìn vết thương của người đàn ông da đen, sắc mặt rất kém.
+
+S Hồ Ly: "Này, anh bạn! Anh không sao chứ?"
+
+Cảnh sát da đen: "Đáng chết, đúng là điên rồi!"
+
+"Không sao đâu anh bạn, không chết được!" Cảnh sát da đen mặc dù nói vậy, nhưng vẻ mặt nhe răng trợn mắt của anh ta cùng vết thương máu me đầm đìa bị cắn mất một miếng thịt lớn trên tay rõ ràng không hề nhẹ nhàng.
+
+Và cũng chính vào lúc này, giữa tiếng chửi rủa và bất mãn của người dân thành phố Gấu Xám, dưới hành vi không ngừng va chạm vào cánh cổng trạm kiểm soát, người phụ trách phong tỏa thành phố Gấu Xám trực tiếp ra lệnh mới: Phàm là kẻ lại gần trạm kiểm soát, giết chết bất luận tội!
+
+Đoàng đoàng đoàng đoàng đoàng ——!
+
+Theo tiếng súng cảnh cáo bắn lên trời của nhân viên vũ trang Umbrella, người dân thành phố cũng đã biết bọn họ bị bỏ rơi, trong lúc nhất thời không còn dám tiếp tục chửi bới, trong cơn hoảng loạn bắt đầu bỏ chạy.
+
+Cùng lúc đó, S Hồ Ly cũng đưa hai người cậu ta tìm được lùi về phía sau.
+
+Nếu trong tình huống bình thường, những người dân này sau khi quay lại thành phố Gấu Xám, không cần bao lâu sẽ bị Zombie lan tràn tới giết chết.
+
+Bất quá tiểu đội 5 người chơi Trò Chơi Tử Vong sớm biết thành phố Gấu Xám sẽ bị phong tỏa hoàn toàn, cũng đã sớm chuẩn bị sẵn sàng.
+
+Ở phía bên kia cây cầu lớn, S Gấu Nâu với tướng mạo hung tợn dẫn theo mấy trăm NPC vũ trang đầy đủ, gào to với đám dân chúng, nói mình là tổ chức cứu viện, sẽ bảo vệ an toàn cho mọi người.
+
+Trong tình huống an toàn bản thân không được đảm bảo, hơn 90% trong số mấy ngàn NPC đều bị lôi kéo trực tiếp, tập trung đông nghịt ở phía bên kia cây cầu lớn cách trạm kiểm soát không xa.
+
+S Hồ Ly cũng đưa cảnh sát da đen và người phụ nữ da trắng đầy khí phách về đội ngũ vũ trang bọn họ xây dựng.
+
+S Hồ Ly: "Yên tâm đi, chúng tôi sẽ đảm bảo an toàn cho mọi người."
+
+"Bạn của cô bị thương cũng không lạc quan, bất quá tổ chức cứu viện chúng tôi đã có được thông tin, virus có vắc xin."
+
+"Các người cũng đừng vội, chúng tôi sẽ cố gắng giúp đỡ các người!"
+
+Cảnh sát da đen: "Cảm ơn anh bạn, tôi cũng sẽ góp một phần sức, tôi tên là Peyton." Vẻ mặt biết ơn.
+
+Người phụ nữ da trắng: "Thành viên đội đặc nhiệm Sở cảnh sát thành phố Gấu Xám, Jill Valentine." Nghiêm túc nghiêm nghị.
+
+S Hồ Ly: "Hoan nghênh sự gia nhập của hai người, hai người chờ chút, tôi gọi người lấy chút vật tư y tế, băng bó vết thương trước đã."
+
+S Hồ Ly nói xong, tìm NPC đưa dụng cụ y tế cho Peyton xong, ánh mắt lấp lánh vẻ hưng phấn, trở lại bên cạnh S Sư Tử.
+
+Người cậu ta luôn để ý trước đó chính là Jill Valentine và Peyton.
+
+Hai người này là thành viên trong nhóm nhân vật chính của Alice trong phim "Resident Evil", đều có sức chiến đấu vô cùng mạnh mẽ.
+
+Có thể lôi kéo được NPC cấp bậc này, đối với tiểu đội 5 người bọn họ là một sự trợ giúp không nhỏ.
+
+Đương nhiên, S Hồ Ly chỉ coi hai người là NPC vô cùng lợi hại, lại không hề biết rằng.
+
+Người phụ nữ da trắng đầy khí phách 『Jill Valentine』 này, trước khi gia nhập đội đặc nhiệm Sở cảnh sát thành phố Gấu Xám, chính là cường nhân đã qua huấn luyện của Lực lượng Delta Lục quân Hoa Kỳ, là nữ chính duy nhất trong game "Resident Evil 3".
+
+Khi S Hồ Ly trở lại bên cạnh S Sư Tử và S Chuột Hamster, khoảng cách đến khi đoàn đội thứ nhất giáng lâm cũng chỉ còn 5 phút.
+
+S Hồ Ly nhìn NPC tập hợp xung quanh ngày càng nhiều, trên mặt mang theo chút vẻ kiêu ngạo: "Biết thành phố Gấu Xám sẽ phong tỏa, có thể thừa cơ lôi kéo một lượng lớn NPC, nhưng lại không ngờ thời gian phong tỏa đẹp như vậy, vừa vặn trước khi đoàn đội thứ nhất giáng lâm."
+
+"Quả thực là trời giúp chúng ta!"
+
+"Những NPC này cộng lại, e rằng có 4000 người nhỉ?"
+
+S Chuột Hamster nhìn S Hồ Ly, thiếu hứng thú nói: "Đám NPC lôi kéo này mặc dù đông, nhưng sức chiến đấu quá kém, hơn nữa khó quản lý a, cảm giác tác dụng không lớn."
+
+S Hồ Ly: "Không, rất dễ quản lý."
+
+"Tôi đã sớm nói với S Gấu Nâu và S Chó Săn, cứ nói với đám NPC này là tổ chức chúng ta có người ở cả Tập đoàn Umbrella và Chính phủ, đang trong quá trình trao đổi, sẽ để bọn họ rời đi an toàn."
+
+"Tạm thời ổn định bọn họ không thành vấn đề."
+
+"Đến lúc đó biết vị trí đoàn đội thứ nhất, tùy tiện lừa bọn họ có đường thoát khác, coi bọn họ là bia đỡ đạn đẩy lên trước nhất, NPC có năng lực chiến đấu bọc hậu làm nhân viên tác chiến chủ lực, cộng thêm chúng ta, có gì phải sợ?"
+
+Đội trưởng S Sư Tử vẫn luôn vô cùng bình tĩnh, nhìn S Hồ Ly đang hưng phấn ngắt lời nói: "Nếu đoàn đội thứ nhất cực mạnh, bọn họ không ngăn được thì sao?"
+
+S Hồ Ly thấy đội trưởng mình nghiêm túc như vậy, không khỏi cũng nghiêm túc lại, nói thêm: "Nếu chỉ số dao động của đoàn đội thứ nhất thực sự rất cao, chúng ta liền lấy danh nghĩa thành phố Gấu Xám có vắc xin virus, hơn nữa biết vị trí đại thể, đưa nhóm nhân vật chính thực lực cường hãn, cùng với một bộ phận NPC lợi hại đi hoàn thành nhiệm vụ đoàn đội!"
+
+S Sư Tử gật đầu: "Có thể, cứ làm như vậy đi."
+
+"Đúng rồi Hamster, có tin tức gì của Kuuhaku và Alice không?"
+
+S Chuột Hamster nhìn hình ảnh theo dõi không ngừng thay đổi trên laptop, lúc này khu vực ngoại vi thành phố Gấu Xám, rất nhiều đường phố đã xuất hiện số lượng lớn Zombie, cứ lan tràn thế này, thảm họa xác sống đến vị trí bọn họ cũng sẽ không quá lâu.
+
+S Chuột Hamster: "Không ai từng gặp bọn họ, camera giám sát cũng không bắt được hình ảnh bọn họ."
+
+S Sư Tử nhíu mày suy nghĩ: "Phải không?"
+
+"Với biểu hiện ban đầu của bọn họ, tôi luôn cảm thấy bọn họ không đơn giản như vậy, chắc chắn phải làm gì đó..."
+
+Mặc dù S Sư Tử cảm giác như vậy, nhưng thực sự không phát hiện ra điểm nào bất thường.
+
+S Hồ Ly: "Anh Sư Tử, đoàn đội thứ nhất sắp giáng lâm rồi!"
+
+Theo lời nhắc nhở của S Hồ Ly, S Sư Tử cũng đành phải tạm thời quên Y Mặc và Thi Tinh Lan đi, 3 người lấy súng ống ra, đi tập kết trước tại vị trí NPC chiến lực chủ yếu bên phía S Chó Săn và S Gấu Nâu.
+
+Một khi đoàn đội thứ nhất giáng lâm, như vậy chiến đấu có thể nổ ra bất cứ lúc nào, nhất định phải dốc 120% tinh thần toàn lực chiến đấu.
+
+Trong quá trình này, S Hồ Ly còn cổ vũ tinh thần cho đồng đội qua tai nghe: "Yên tâm đi, ván này chúng ta thuận lợi như vậy, ưu thế lớn như thế, chắc chắn là ổn."
+
+Khi S Hồ Ly nói xong.
+
+Thời gian đã đến đúng 20 giờ, thông báo hệ thống đã truyền đến.
+
+『Đinh linh.』
+
+『Phán định đoàn đội có thực lực đứng đầu ván chơi này, tiến vào trò chơi hoàn tất.』
+
+『Tọa độ giáng lâm của đoàn đội thứ nhất đã công khai, 10 phút sau tọa độ vị trí sẽ đóng lại, nhiệm vụ đoàn đội công bố, trò chơi chính thức bắt đầu.』
+
+Sau khi người chơi Trò Chơi Tử Vong giáng lâm, sẽ có một khoảng thời gian bảo vệ không bị đoàn đội khác hoặc NPC tấn công.
+
+Bây giờ đoàn đội thứ nhất giáng lâm, 10 phút này chính là thời gian bảo vệ của đoàn đội thứ nhất ván này.
+
+Theo nhắc nhở của hệ thống, 5 người đều mở hệ thống ngay lập tức, xác nhận thông tin về đoàn đội thứ nhất.
+
+S Hồ Ly mở bản đồ hệ thống, nhìn thấy ngoài điểm đỏ của mình, ở vị trí cách cậu ta 50km đường thẳng, có một biểu tượng lá cờ nhỏ màu đen, chính là vị trí của đoàn đội thứ nhất.
+
+S Hồ Ly: "Đã xác nhận tọa độ, là vị trí cách khu phong tỏa thành phố Gấu Xám 40km, sau khi thời gian bảo vệ kết thúc, thời gian gặp nhau nhanh nhất khoảng 15 phút!"
+
+"Nếu bọn họ đến thành phố Gấu Xám, vừa vặn sẽ đi qua trạm kiểm soát chúng ta đang ở, nơi chúng ta đang đứng hiện tại chính là địa điểm phục kích tốt nhất!"
+
+Vị trí tọa độ này của đoàn đội thứ nhất, nếu muốn vào thành phố Gấu Xám thì nhất định sẽ đi qua trạm kiểm soát này, vừa vặn có thể lọt vào vòng vây phục kích của tổ 5 người.
+
+Ván bài này, quả thực là thiên thời địa lợi nhân hòa!
+
+S Hồ Ly vô cùng hưng phấn, đã muốn chúc mừng sớm với đồng đội về niềm vui chiến thắng ván chơi này.
+
+Nhưng khi quay đầu lại, nhìn thấy lại là sắc mặt ngưng trọng của các đồng đội xung quanh, rõ ràng đồng đội cũng không vui vẻ.
+
+S Sư Tử giọng âm trầm nói: "Chuẩn bị chia quân đi, tôi bảo vệ tay bắn tỉa S Chó Săn thử phục kích đoàn đội thứ nhất."
+
+"S Hồ Ly, S Chuột Hamster hai cậu sức chiến đấu kém không phải nhân viên chiến đấu, đi theo S Gấu Nâu, dẫn dắt một số NPC lợi hại, nhanh chóng đi hoàn thành nhiệm vụ đoàn đội sẽ xuất hiện sau 10 phút nữa."
+
+S Hồ Ly nghe đến ngây người, nhanh chóng tắt bản đồ hệ thống, mở 『Bảng xếp hạng đoàn đội』.
+
+『Chỉ số dao động của đoàn đội thứ nhất: 401.』
+
+『Thành viên đoàn đội thứ nhất: Sói Cô Độc, Bạch Trú, Người Chỉnh Âm, Vô Thương, Cuồng Nhân, Barrett, Thợ Máy.』
+
+Chỉ số dao động của đoàn đội thứ nhất, gấp đôi đoàn đội thứ hai!
+
+S Hồ Ly nhìn chỉ số dao động này xong, cảm giác đầu óc nổ tung cái rầm, khó hiểu nhìn về phía đội trưởng S Sư Tử: "Sư tử sư tử... Anh Sư Tử, đội ngũ có chỉ số dao động trên 400 là cấp bậc gì?"
+
+Cậu ta gặp nhiều nhất là đội ngũ có chỉ số dao động hơn 200, 400 quả thực là điểm mù kiến thức a!
+
+S Sư Tử nhìn bầu trời âm u, trán đã lấm tấm mồ hôi, nghiến răng nói.
+
+"Đội ngũ cốt cán của ba tổ chức Trò Chơi Tử Vong lớn."
+
+"Biệt danh Sói Cô Độc này tôi từng nghe qua."
+
+"Đối phương đại khái là..."
+
+"Đội 4 Thiên Hình."

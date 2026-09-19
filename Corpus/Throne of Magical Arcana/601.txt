@@ -1,0 +1,112 @@
+Chương 602 - Một ảo thính khác
+
+
+Đối với ma trận cơ học, Lucien cũng chỉ vừa mới học được, nhưng lần này, cậu cố ý không nghiên cứu trước các tài liệu trong thư viện linh hồn mà tự mình suy luận ra dựa trên trí nhớ và hiểu biết của bản thân, bởi vậy mà không được trôi chảy, tự nhiên như khi viết những luận án trước kia. Dưới sự trợ giúp của ma thuật, cậu vẫn xoèn xoẹt viết ra được mười mấy trang, nhưng xem chừng tương đối nhọc nhằn.
+
+Vốn dĩ Lucien có thể lựa chọn phiên bản cơ học lượng tử của Dirac,[note69699] gọn gàng hơn, đẹp đẽ hơn và phù hợp với hiểu biết của các Arcanist hiện tại, đồng thời sử dụng một số công cụ toán học từ hệ thống arcana trong quá khứ để giải quyết. Tuy nhiên, ma trận, thứ nghe tên rất thời thượng này, trong tương lai sẽ có ứng dụng rộng rãi trong rất nhiều lĩnh vực, vậy nên thừa dịp này mà đề xuất nó ra là tốt nhất. Dù sao thì qua hai tháng nữa, cậu cũng sẽ tung ra luận án của Dirac và giúp các Arcanist được giải thoát khỏi mê cung của ma trận.
+
+Ở phần đầu của luận án, Lucien đã dành một phần lớn độ dài để xây dựng công cụ toán học cho ma trận, giải thích rõ từng cái một về nào là định nghĩa, nào là quy tắc tính toán, v.v., sau đó mới thực sự bắt đầu đi vào nội dung của cơ học lượng tử.
+
+Xuất phát từ phương trình chuyển động của electron, Lucien sử dụng phương pháp toán học để mở rộng giải quyết. Sau đó, thông qua các phép toán ma trận khổng lồ và phức tạp, đồng thời dựa trên nền tảng những giá trị arcana có thể quan sát được, cậu đem toàn bộ những mô hình thiết lập nên một thứ tương tự như hệ thống Douglas – Oliver kinh điển. Chỉ khác là trong hệ thống này, phương pháp tính toán được sử dụng là ma trận.
+
+Trong lúc viết đầy gian nan, Lucien dần dần dung hợp và thấm nhuần những kiến thức về cơ học ma trận, đồng thời nắm vững hơn thứ công cụ toán học phức tạp, chẳng thân thiện tí nào này. Cùng lúc đó, cậu cũng trở nên có hứng thú sâu sắc với những hàm nghĩa arcana mà nó đại diện trong cơ học lượng tử.
+
+Thời gian tích tắc trôi đi, màn đêm bên ngoài cửa sổ mỗi lúc một đậm, trên mặt đất phủ một lớp tuyết dày.
+
+Không biết bao lâu trôi qua, tập giấy trước mặt Lucien đã trở nên dày hơn, cậu cũng càng viết càng nhanh, càng viết càng trôi chảy.
+
+Cuối cùng, Lucien giơ tay lên và đặt xuống một dấu chấm đậm, đánh dấu phần chính của luận án đã kết thúc, cùng với đó là sự ra đời của cơ học lượng tử theo đúng nghĩa! Không còn chỉ là sự chắp vá đơn thuần bán cổ điển bán lượng tử như mô hình Tân Giả kim thuật trong quá khứ nữa!
+
+Nhưng lúc này, Lucien không ngừng lại mà tiếp tục sử dụng lý thuyết mới về cơ học ma trận để đưa ra kết luận. Những điều kiện lượng tử hóa mà trước đây bị áp đặt lên electron giờ đều được suy ra một cách tự nhiên thông qua những phép tính phức tạp nhưng rõ ràng!
+
+Thế giới nhận thức của Lucien lặng lẽ hiện ra. Thế giới bán kiên cố hóa này không còn thỏa mãn với những biến đổi hư ảo trong linh hồn nữa mà tràn ra chật ních thư phòng. Những vì sao ở trên cao chiếu sáng mặt đất giống như đèn chùm, vô số điểm sáng nguyên tố thì hiện thực hóa ra thành mô hình nguyên tử. Các electron chuyển động xung quanh neutron và proton như thể một đám mây đen lúc ẩn lúc hiện, chẳng chút chân thực, lúc thì biểu hiện tính sóng, lúc lại biểu hiện tính hạt.
+
+Sáng tối trong phòng dập dềnh, phản chiếu lên mặt tuyết, tựa như địa ngục ghê rợn nhất, kỳ dị nhất, phảng phất có ác quỷ đang điên cuồng gào thét bên trong: “Dừng lại! Dừng lại! Còn đi sâu hơn nữa sẽ là tận cùng của địa ngục!”
+
+“Tiếp tục đi, ngươi tiếp tục đi! Giải phóng con quỷ đáng sợ và không tưởng nhất ra đi!” Những đóa hoa tuyết rơi xuống, tựa như những thiên thần thuần khiết.
+
+“Nó sẽ hủy diệt toàn bộ thế giới! Còn ngươi, tên pháp sư tội lỗi, sẽ bị moi tim và phơi khô trên núi lửa!”
+
+Bên tai Lucien tràn ngập ảo thính, nhưng cậu không hề ngừng lại. Thay vào đó, cậu tiếp tục sử dụng ma trận để suy luận kết quả và đối chiếu chúng với dữ liệu thí nghiệm quang phổ, với công thức kinh nghiệm, cũng như với nhiều thí nghiệm Tân Giả kim thuật.
+
+Nhưng sau khi thế giới nhận thức hiện ra, mô hình nguyên tử vẫn giữ được nguyên trạng. Trước khi số liệu hoàn toàn ăn khớp, Lucien sẽ không tùy tiện thay đổi thế giới nhận thức của chính mình nhiều.
+
+…
+
+Số liệu lần lượt được thu thập và khớp hoàn toàn với kết quả thực nghiệm!
+
+Phương trình lần lượt được suy ra một cách tự nhiên và khớp với công thức kinh nghiệm trong quá khứ!
+
+Đêm đã tiến vào thời khắc tối tăm và sâu thẳm nhất. Bông tuyết tựa như hoa giấy trong tang lễ, tô điểm thêm cảm giác tuyệt vọng, bi thương, im ắng và chết chóc, khiến cho người ta không rét mà run, trong lòng nảy sinh sợ hãi.
+
+Tiếng gào thét của ác quỷ càng lúc càng thê lương: “Ngươi nhòm ngó bản chất của thế giới, ắt sẽ bị xé xác!”
+
+Ta nguyền rủa ngươi mãi mãi phải chịu thống khổ, giày vò vô tận!”
+
+Thiên thần cũng thốt ra những lời đe dọa khủng khiếp nhất: “Thứ ngươi mở ra không phải là cánh cổng dẫn đến Núi Thiên đường, mà là một cái lồng hủy diệt! Tội nhân! Thế giới lúc đó sẽ tương phản hoàn toàn với tưởng tượng của ngươi!”
+
+“Đi chết đi! Bản chất của thế giới không chứa chấp sự báng bổ! Không dung thứ cho kẻ nào đến gần! Tên Arcanist khốn kiếp, ngươi sẽ không bao giờ tìm được thứ mình muốn đâu! Ta sẽ moi linh hồn của ngươi ra và thiêu đốt nó trong ngọn lửa cả vạn năm!”
+
+Lần thứ hai nghe thấy ảo thính tương tự, Lucien không biết đây là do tâm trạng mình dao động, hay là do kết quả từ phản hồi của thế giới thực gây ra, hay là cả hai. Cậu lắc lắc đầu, hít một hơi thật sâu rồi tiếp tục suy luận ra phương trình cốt lõi nhất, then chốt nhất, cũng như trái với quy tắc toán học thông thường nhất trong cơ học ma trận:
+
+Động lượng nhân vị trí không bằng với vị trí nhân động lượng![note69700]
+
+Ngay khi phương trình, thứ chẳng hề tuân theo quy tắc giao hoán của phép nhân, được rút ra, tiếng gào thét của ác quỷ và tiếng đe dọa của thiên thần liền nhất loạt biến thành lời cầu xin sợ hãi:
+
+“Dừng lại đi. Làm ơn xé nó đi. Đó chính là chìa khóa mở ra cánh cổng hủy diệt!”
+
+“Nếu ngươi dừng lại, bọn ta sẽ mãi mãi khắc ghi ngươi như một vị cứu tinh.”
+
+“Chỉ cần ngươi dừng lại, ta sẽ đáp ứng mọi yêu cầu của ngươi.”
+
+Trong thế giới nhận thức, mô hình quỹ đạo của electron lại phát sinh biến đổi. Các electron có dạng đám mây đen căn cứ theo ba số lượng tử mà tự nhiên rải rác ra. Sau nhiều năm chuyển động lung tung hỗn loạn, chúng cuối cùng cũng có quy luật sắp xếp của riêng mình. Cùng lúc đó, các proton và neutron cũng xuất hiện những thay đổi tương ứng. Điều này khiến cho linh hồn và thế giới nhận thức không thể coi là quá ổn định của Lucien thoắt cái liền trở nên rắn chắc. Phương pháp Nhập định Lưỡng tính Evans bản sơ cấp cuối cùng đã có được sự thống nhất ở cấp bậc cao hơn!
+
+Bầu trời sao hư ảo vô ngần, không thể chạm tới một lần nữa lại xuất hiện. Dưới sự dẫn dắt của một loại lực kỳ quái mà quen thuộc, những ký hiệu ma thuật phức tạp và khó hiểu ở dạng lập thể sản sinh trong thế giới nhận thức của Lucien, làm xuất hiện và cấu thành một mô hình ma thuật kỳ quái, khó bề tưởng tượng.
+
+Do thế giới nhận thức đã bán kiên cố hóa, cậu khống chế phạm vi ảnh hưởng rất tốt, người ngoài sẽ khó mà phát hiện. Nếu mà có ai từ dưới mặt đất đầy tuyết nhìn lên tháp Babel của cậu, họ sẽ thấy ánh sáng và bóng tối đang đung đưa một cách quỷ dị từ một trong những ô cửa sổ, như thể có vô số ma quỷ đang nhảy múa.
+
+“…Gọi những đại lượng không khớp với quy tắc giao hoán của phép nhân là đại lượng không giao hoán…”[note72783] Lucien không dừng lại mà tiếp tục hạ bút viết. “Một tổ hợp các đại lượng không giao hoán không thể được xác định đồng thời. Biết chính xác một trong số chúng thì chắc chắn sẽ dẫn đến một sự không xác định khác, giống như thời điểm hiểu được hoàn toàn khối lượng và vận tốc của một electron, chúng ta sẽ phát hiện ra rằng nó đã mất tung mất tích, không còn vị trí nữa…”
+
+“…Qua suy luận, các đại lượng tương tự còn có thời gian và năng lượng. Khi thời gian đặc biệt xác định, đủ tức thời, năng lượng bằng cách nào đó sẽ giãn nở và giảm xuống, dao động năng lượng to lớn sẽ xuất hiện trong chân không…[note69701] Có lẽ, xung quanh chúng ta mỗi phút mỗi giây đều đang xảy ra sự ‘lên xuống chân không’ như vậy.”
+
+“Aaaaah!” Những tiếng hét thê lương vang lên.
+
+“Ôôôôô!” Những tiếng khóc bi thảm vang lên.
+
+Ngay khi nguyên lý bất định của Heisenberg được Lucien viết ra, những “ác quỷ” và “thiên thần” đều trở nên tuyệt vọng, sau đó biến mất vô tung vô ảnh!
+
+Bóng tối vẫn y nguyên, tuyết vẫn y nguyên, nhưng những bông tuyết bay múa như hoa giấy đã không còn rơi xuống nữa!
+
+Trong thế giới nhận thức của Lucien, mô hình thần chú kỳ quái kia đã được xây dựng thành công, nghiễm nhiên hóa thành thần chú huyền thoại mới. Chỉ bằng trực giác, cậu tin rằng cái thần chú dựa trên cơ học lượng tử và nguyên lý bất định này cực kỳ quỷ dị, tựa hồ hàm chứa một chút khí tức phá hủy của Thuyết tất định, cũng chính là luật nhân quả và Thuyết định mệnh mà các Arcanist trong thế giới này hằng tin.
+
+Sau khi nhìn vào kết quả suy luận hoàn toàn khớp với số liệu thực nghiệm và công thức kinh nghiệm kia, Lucien nhắm mắt lại. Hai thế giới rốt cuộc khác biệt ở đâu?
+
+Tại sao một thế giới có linh hồn và ma thuật, trong khi thế giới kia thì không?
+
+Cậu đã gặp ảo thính hai lần. Một lần khi rút ra hằng số Planck, cũng là khởi đầu của cơ học lượng tử, còn bây giờ chính là một lần khác, khi cơ học lượng tử thực sự được thiết lập. Lẽ nào nguyên nhân cho tất cả chính là đây? Lần đầu tiên thì tâm trạng cậu còn xuất hiện nhân tố bất ổn, còn lần này cậu lại có vẻ điềm tĩnh.
+
+Lucien đã đọc qua những cuốn sách tóm lược về sự phát triển của cơ học lượng tử trong thư viện linh hồn, vậy nên đối với những lý thuyết mà còn ma thuật hơn cả ma thuật, thần thoại hơn cả thần thoại, huyễn tưởng hơn cả huyễn tưởng, cậu cũng có một chút hiểu biết. Cậu tin mình hẳn có thể tìm thấy được lời giải thích mà mình muốn từ con đường này.
+
+‘Mình phải đi xem qua Lò Linh hồn mới được. Chưa biết chừng sẽ có thể phát hiện ra bí ẩn của linh hồn từ nơi đó và tìm thấy nguyên nhân tại sao hai thế giới lại khác nhau.’ Lucien hít một hơi thật sâu rồi hạ quyết tâm đi đến Linh Giới. Nếu như không tháo gỡ được bí mật này, cậu vĩnh viễn sẽ không cảm thấy yên tâm, sẽ hoài nghi thế giới này không phải là thực, hoài nghi có người đang thao túng tất cả. Người khác có lẽ túy sinh mộng tử[note69702] được, chứ cậu thà chết còn hơn sống như vậy!
+
+Đương nhiên, Lucien không phải là kiểu người liều lĩnh. Không trở thành huyền thoại bậc hai, cậu tuyệt đối sẽ không tùy tiện tới Thánh điện Tử linh, trừ phi có một Grand Arcanist ở bậc huyền thoại đỉnh phong như Chủ tịch Douglas dẫn đội.
+
+Tạm thời gác những suy nghĩ của mình qua một bên, Lucien lấy những phần liên quan đến nguyên lý bất định ra và cất vào lớp bên trong của Áo Choàng Grand Arcanist. Với phần còn lại, cậu cũng bỏ đi một số bằng chứng khớp với số liệu thực nghiệm và công thức kinh nghiệm, tính để cho các Arcanist tự hoàn thành. Nếu những gì bản thân suy ra từ lý thuyết khớp với các loại kết quả thực nghiệm, bọn họ có thể sẽ dễ dàng tiếp nhận lý thuyết hơn.
+
+Chỉnh lý lại luận án và cất vào trong túi lưu trữ xong, Lucien mới phát hiện giờ đã hơn sáu giờ sáng, thế mà bên ngoài vẫn chỉ một màu đen kịt.
+
+‘Gần sáng rồi mà mình lại chẳng hề hay biết…’ Lucien đút tay vào túi bộ suit đen rồi bước đến bên cửa sổ. Nhìn cảnh đêm tối đen, lạnh lẽo, rồi lại nhìn tuyết trắng mênh mông phản chiếu ánh sáng yếu ớt, cậu khẽ thở dài: ‘Đêm trước bình minh quả nhiên là màn đêm sâu lắng nhất.’
+
+Lời còn chưa kịp dứt, một chấm sáng màu cam từ xa xa bỗng phá tan bóng tối dày đặc, xua đi sự rét lạnh trong lòng cậu.
+
+Mặt trời từ từ mọc lên, rắc những tia sáng rực rỡ xuống, nhuộm đỏ rực mặt đất đầy tuyết, giống như thể một ngọn lửa đang rực cháy bừng bừng, khiến cho ánh sáng và sắc màu tuôn chảy rực rỡ, sáng sủa và đầy mộng ảo.
+
+Tuyết trắng bắt đầu tan, cả thế giới như được rã đông, tựa hồ “ngọn lửa” kia đã thiêu rụi sạch sẽ những điều cũ kỹ và mang tới một trật tự hoàn toàn mới.
+
+Ngọn lửa đẹp đẽ này lan một mạch từ trước mắt Lucien ra tới tận đường chân trời xa xa vô tận, khiến cậu phải khẽ nheo mắt lại, sau đó lẩm bẩm như đang nói với chính mình:
+
+“Bình minh đến rồi.”
+
+Phải, bình minh của Tân Giả kim thuật đã đến!
+
+Nó sẽ giống như vầng mặt trời này, sẽ không thể ngăn lại được, sẽ tỏa xuống ánh sáng cùng hơi ấm, sẽ soi sáng toàn bộ thời đại!

@@ -1,0 +1,299 @@
+Chương 23: Chip và Cục Diện
+
+Chương 23: Chip và Cục Diện
+
+Sau một hồi trò chuyện và tạm biệt Maaya, Y Mặc bước đến trung tâm tổng chỉ huy.
+
+Các lãnh đạo cấp cao của tổ chức Entropy, giới chính trị, và quân đội đều có người ngồi trấn giữ tại đây, sẵn sàng điều chỉnh mọi công tác sắp xếp theo sát tình hình thực tế.
+
+An Băng Yên, Vân Miểu, Tần Mộ Sắc và Đồng Mộ Tuyết cùng đang tất bật làm việc ở nơi này.
+
+Đồng Mộ Tuyết và Tần Mộ Sắc đại diện cho các lãnh đạo tổ chức, còn Vân Miểu đóng vai trò chuyên gia chiến lược và chiến thuật, cả ba đều tham gia vào các cuộc họp và thảo luận.
+
+Riêng An Băng Yên thì hoàn toàn không can dự vào các cuộc thảo luận.
+
+Cô rất rõ vị trí của mình, ngoan ngoãn làm nhiệm vụ của một thư ký văn thư, dù bận rộn nhưng thỉnh thoảng vẫn có thể tìm được chút thời gian rảnh rỗi.
+
+Y Mặc vừa đến, Đồng Mộ Tuyết lập tức tiến lại gần anh.
+
+Mục tiêu hiện tại của trận chiến cuối cùng trong trò chơi sinh tử là giúp Y Mặc thu thập đủ 120 chip để mở khóa Thành Phố Bầu Trời. Vì thế, mọi kế hoạch hành động cốt lõi đều xoay quanh Y Mặc và những đồng chip này.
+
+"Được bao nhiêu chip rồi?"
+
+"30 đồng."
+
+"Quả nhiên, kém xa so với lần trước..." Đồng Mộ Tuyết cúi đầu, trầm ngâm suy nghĩ.
+
+30 đồng chip là số lượng hiện đang nằm trong tay Y Mặc.
+
+Cụ thể, sự chênh lệch chip giữa hai vòng lặp như sau:
+
+Mở đầu vòng lặp 1:
+
+Y Mặc 7 + Entropy 6 + Màn Đêm 2 + Ngẫu nhiên 4, tổng cộng 19 đồng.
+
+Mở đầu vòng lặp 2:
+
+Y Mặc 7 + Entropy 6 + Màn Đêm 2 + Ngẫu nhiên 2 + Cá Muối 1, tổng cộng 18 đồng.
+
+Chỉ tính riêng phần mở đầu, trong tình thế mà "kẻ xui xẻo" Cá Muối ở vòng 2 không sử dụng mà chuyển thẳng chip cho Y Mặc, số lượng vẫn ít hơn vòng trước 1 đồng.
+
+Cấu trúc phân bổ 200 chip gồm: 120 đồng cho bảng tổng hợp, 50 đồng cho người chơi ngẫu nhiên và 30 đồng rải rác ở các khu vực.
+
+Sự khác biệt chính nằm ở các đồng chip ngẫu nhiên.
+
+Thứ này đúng là ngẫu nhiên thật, vòng 1 chọn một nhóm người chơi, vòng 2 lại chọn một nhóm khác. Những người như Cá Muối vớ bở ở cả hai vòng lặp thực sự là một kẻ cực kỳ may mắn, chỉ là trường hợp ngoại lệ hiếm hoi.
+
+Ở vòng 1, tổ chức Entropy tình cờ giữ 2 đồng chip ngẫu nhiên, và các thành viên cấp dưới cũng nhanh chóng tìm được thêm 2 đồng nữa.
+
+Nhưng ở vòng 2, nội bộ Entropy không có đồng chip ngẫu nhiên nào. Tuy cấp dưới cũng tìm được 2 đồng, nhưng đi tới đi lui thì sự cách biệt đã hiện rõ.
+
+Quay lại lúc đàm phán với Hội Sáng Thế, Phòng Tranh Tận Thế, Chủ Đảo và Euphemia ở vòng 1.
+
+Chip người chơi ngẫu nhiên + chip khu vực ngẫu nhiên + chip người qua đường: 17 đồng.
+
+19 đồng + 17 đồng = 36 đồng.
+
+Còn bây giờ ở vòng lặp 2, thời điểm này trễ hơn lúc đàm phán kia tới 8 tiếng đồng hồ.
+
+Chip người chơi ngẫu nhiên + chip khu vực ngẫu nhiên + chip người qua đường + 2 đồng của đội châu Âu Phòng Tranh Tận Thế: 12 đồng.
+
+18 đồng + 12 đồng = 30 đồng.
+
+"Chỉ tính riêng hai mặt này, đã kém tới 6 đồng." Y Mặc gật đầu.
+
+Đồng Mộ Tuyết cũng đưa ra lý do phân tích: "Vận may từ chip ngẫu nhiên kém hơn lần trước là một phần."
+
+"Mặt khác, sau khi có kinh nghiệm từ vòng lặp đầu tiên, những người chơi cũng xảo quyệt hơn rất nhiều."
+
+Những người có được chip ngẫu nhiên trở nên kín tiếng và cẩn trọng hơn.
+
+Bất kỳ người chơi vô danh nào thuộc top 100 bị hạ gục ở vòng 1, sang vòng 2 đều đã thay đổi chiến thuật.
+
+Người tìm tổ chức đầu quân thì đã đầu quân, kẻ muốn bảo toàn mạng sống bỏ trốn thì đã bỏ trốn.
+
+Nói chung là đối phó khó nhằn hơn, việc thu thập chip cũng gian nan hơn, không còn trơn tru một mạch như ở vòng 1 nữa.
+
+Y Mặc gật đầu: "Cũng bình thường thôi, cần cù bù thông minh mà."
+
+"Kinh nghiệm có thể bù đắp lại khoảng cách về thiên phú và trí não."
+
+Số chip của các bạn gái và đồng minh khác ước chừng như sau:
+
+Vũ Vũ + Quả Đào: 2 đồng.
+
+Tô Cách + Nữ Joker + Kỹ Nữ + Jingu Sakurana + Asano Rin: 6 đồng.
+
+(Y Mặc suy luận Tô Cách có 4 đồng là do hắn đã lấy được chip của Hắc Thân Sĩ).
+
+Justice League + Hòa Kiên Hội + Phòng Vạn Sự Phương Đông: Khoảng 11 đồng.
+
+Tổng số chip mà phe Y Mặc hiện đang kiểm soát rơi vào khoảng 49 đồng.
+
+Dưới sự đồng hành của Đồng Mộ Tuyết, Y Mặc xem qua các tài liệu hiện tại và nhận định: "Liên minh Phòng Tranh Tận Thế + Chủ Đảo, số chip ước tính không dưới 35 đồng."
+
+"Cả hai tổ chức này đều có mức 10+ chip. Phòng Tranh Tận Thế có thể kiếm thêm chip ngẫu nhiên ngay trên đất Mỹ, còn Chủ Đảo là một tay buôn tình báo sừng sỏ, nắm rõ thông tin của rất nhiều người chơi top 100."
+
+"35 đồng chip, còn là con số khá khiêm tốn đấy..."
+
+"Bên châu Âu có vẻ như Hội Đồng Châu Âu Mới lại sụp đổ rồi, nhưng thực chất là tất cả đã gia nhập Liên Minh Sát Thủ. Không dễ đánh trực diện thì họ lui vào bóng tối hoạt động."
+
+"Chắc chắn có trong tay 10 đồng chip."
+
+"Tuy không công khai đứng về phe Phòng Tranh Tận Thế, nhưng về cơ bản họ cùng chung một giuộc, vinh nhục có nhau."
+
+Tính toán như vậy.
+
+Phe Y Mặc và liên minh Phòng Tranh Tận Thế ước tính có số chip tương đương nhau, có thể nói là kỳ phùng địch thủ.
+
+"Còn phía cô Euphemia..." Đồng Mộ Tuyết hỏi.
+
+Y Mặc lắc đầu: "Số chip bên cô ấy không ít đâu, tôi đoán chắc cũng phải được 30 đồng."
+
+"Nhưng không dễ lấy đâu..."
+
+Khi Y Mặc chiếm ưu thế tuyệt đối, Euphemia sẽ chủ động đến thương lượng điều kiện.
+
+Nhưng hiện tại, ưu thế của Y Mặc không quá lớn.
+
+Nói trắng ra là cục diện các lộ chư hầu đang chia cắt, chia đều thế lực. Người ta cũng có cơ hội lên ngôi, vậy thì việc gì phải vội.
+
+Có điều, Y Mặc dẫu sao cũng có dây dưa lằng nhằng với Euphemia, chẳng biết rõ là quan hệ họ hàng hay gì nữa, nên bàn bạc thì chắc chắn là được, chỉ là không dễ dàng như trước mà thôi.
+
+"Ừm, chắc là vậy." Đồng Mộ Tuyết nhìn Y Mặc, gật đầu đồng ý.
+
+Kỳ thực, Đồng Mộ Tuyết tin rằng chỉ cần Y Mặc chịu đích thân đi gặp Euphemia.
+
+Trong quá trình đàm phán, Euphemia có thể sẽ đưa ra rất nhiều đòi hỏi, nhưng cuối cùng cô ta vẫn sẽ nhượng lại chip, độ khó chắc cũng chẳng đáng kể.
+
+Nhưng mà... làm vậy có cảm giác như đang bán đứng ông xã của mình, nên cô cũng chỉ biết hùa theo. Thấy Y Mặc bảo khó lấy, cô đành gật gù "ừm ừ" đồng tình.
+
+Y Mặc nhìn thấu suy nghĩ của Đồng Mộ Tuyết, liền giải thích: "Thực ra việc khó lấy không hoàn toàn nằm ở chỗ thuyết phục Euphemia ra sao, mà còn nằm ở cục diện hiện tại nữa."
+
+"Lý do Euphemia chưa mở chế độ tàn sát trên toàn châu Âu là vì Bệnh Viện Tâm Thần đã nhúng tay vào và khai chiến với cô ấy."
+
+"Cục diện lúc này là:"
+
+"Chúng ta và liên minh Phòng Tranh Tận Thế có sức mạnh và số chip ngang ngửa, chia đều thiên hạ."
+
+"Trên cơ sở đó."
+
+"Còn có Euphemia của Camarilla, đang duy trì một sự cân bằng tế nhị với Bệnh Viện Tâm Thần."
+
+"Bệnh Viện Tâm Thần không nói thẳng ra."
+
+"Nhưng việc bọn họ ngáng đường Euphemia, cản trở kế hoạch chi viện cho Chủ Đảo của tôi."
+
+"Đã là lời tuyên bố rất rõ ràng rằng, họ đứng ở thế đối lập với chúng ta."
+
+"Nhìn vào tình hình hiện nay, chỉ cần liên minh Phòng Tranh Tận Thế gặp biến cố lớn, đánh không lại nữa, họ chắc chắn sẽ đầu quân ngay cho Bệnh Viện Tâm Thần và dâng số chip đó cho bọn họ."
+
+"Kết quả là:"
+
+"Chúng ta và Euphemia có khoảng 80 chip, còn Bệnh Viện Tâm Thần + Phòng Tranh Tận Thế cũng sẽ có khoảng 70 đồng."
+
+"Sẽ chẳng ai triệt hạ được ai cả."
+
+"Muốn gom đủ 120 đồng để kết thúc giai đoạn này và mở khóa Thành Phố Bầu Trời, thực sự rất khó."
+
+Cục diện hiện tại đang bị chia rẽ thành 4 thế lực lớn.
+
+Phe Y Mặc, phe Euphemia, phe Phòng Tranh Tận Thế và phe Bệnh Viện Tâm Thần.
+
+Bốn thế lực này nắm giữ tổng cộng khoảng 150 chip.
+
+Số còn lại đang trôi nổi giữa các thế lực cân bằng.
+
+Ví dụ như Thánh Quân không ai chủ động động vào; hay Hội Sáng Thế truy đuổi Phòng Tranh Tận Thế rất gắt, nhưng chắc chắn sẽ không giao chip cho Y Mặc. Thêm vào đó là một số liên minh và tổ chức mạnh mẽ khác, đại khái tình hình là như vậy.
+
+"Cục diện đang rất giằng co... phải chuẩn bị tinh thần đánh một trận chiến trường kỳ." Đồng Mộ Tuyết gật đầu, quay sang hỏi tiếp: "Lần trước khi diễn ra trận chiến cuối cùng cũng có tình trạng giằng co thế này đúng không? Giải quyết thế nào vậy anh?"
+
+Y Mặc lắc đầu: "Trận chiến cuối cùng lần trước đánh nhau liên miên."
+
+"Lúc nào cũng giết chóc, người chết liên tục, máu chảy thành sông."
+
+"Dù sao cũng đã trải qua một trận đại quyết chiến rồi, địa điểm lần này lại ở trên Trái Đất, những lão làng còn sống sót... đều đã biết kềm chế hơn rất nhiều."
+
+Y Mặc nhìn lướt qua những thứ được cất giấu trong hệ thống, khẽ lắc đầu.
+
+Suy cho cùng thì trò chơi cũng đã dung hợp với hiện thực, mọi người thực sự đã rất kiềm chế rồi.
+
+Bàn xong chuyện chip trong trò chơi sinh tử, Y Mặc lại hỏi thăm tình hình xung đột giữa Trung Quốc và nước Mỹ.
+
+Đồng Mộ Tuyết đáp: "Tàu sân bay và hạm đội của Mỹ đã bao vây khu vực này rồi."
+
+"Ban ngày khi Chủ Đảo vẫn đang giao tranh, bọn chúng đã tiếp cận thăm dò vài lần, bị hạm đội của ta đánh cho bốc khói 2 chiếc rồi mới chịu rút lui."
+
+"Bây giờ chúng đang lập thành một chuỗi vòng vây ngoài vùng biển quốc tế và hải phận của vài quốc gia nhỏ, không dám hành động thiếu suy nghĩ. Chúng đang cố xúi giục mấy nước nhỏ đó đến thử thách giới hạn của chúng ta."
+
+"Đồng thời, Mỹ lại tung tin muốn đàm phán hòa bình. Bên mình thì không chịu đàm phán, cứ thế mà giằng co."
+
+Dù sao Y Mặc, Tần Mộ Sắc và những người khác vẫn còn trẻ, chuyện chiến trường vẫn phải nhờ cậy vào các chuyên gia quân sự.
+
+Một chuyên gia quân sự tại trung tâm chỉ huy lên tiếng: "Nước Mỹ là thế đấy."
+
+"Cái gì nuốt trôi được thì ăn sạch sành sanh không chừa lại lấy mẩu xương."
+
+"Cái gì khó nuốt thì xúi giục kẻ khác xông lên ăn thay, đợi hai bên lưỡng bại câu thương thì ngồi làm ngư ông đắc lợi, nhân tiện xơi luôn cả lũ tay sai bị mình xúi giục."
+
+"Không được nữa thì dùng trò uy hiếp, dụ dỗ."
+
+"Hoặc là cứ chọc tức cậu, làm cậu phát điên lên rồi lại ném cho quả táo ngọt xoa dịu, nhưng cũng chỉ là đồ giả thôi, ăn vào là mắc bẫy ngay."
+
+"Mồm thì bảo muốn đàm phán làm hòa, nhưng thực tế vẫn tiếp tục gây sự, ra sức trục lợi cho bản thân."
+
+"Bọn chính trị gia Mỹ toàn là lũ lưu manh thứ thiệt."
+
+"Đối phó với Mỹ, chỉ cần mềm mỏng một chút là bọn chúng sẽ nghĩ cậu dễ bắt nạt ngay. Thái độ bắt buộc phải thật cứng rắn."
+
+"Vùng biển này."
+
+"Chỉ cần nó dám tiến tới một bước."
+
+"Bất kể là Mỹ hay lũ tay sai bên dưới."
+
+"Đánh, cứ đánh rụng thẳng tay, đến bao nhiêu thì nhấn chìm bấy nhiêu!"
+
+"Đánh cho đến khi chúng sợ không dám đến nữa, đánh đến khi chúng phải cầu xin tha mạng mới thôi!"
+
+Vị chuyên gia này là chỉ huy cấp cao trong quân đội, cách nói chuyện rất bình dân, tính khí cũng khá nóng nảy, lời lẽ đầy khí thế.
+
+"Có điều nước Mỹ cũng chẳng to gan đến mức đó đâu."
+
+"Chủ yếu là vì không có lợi ích. Khai chiến với chúng ta thì giới chính khách của chúng không kiếm chác được gì, quốc gia cũng chẳng thu lợi được bao nhiêu, lợi lộc quá ít."
+
+"Lỡ mà đánh thua, chút ánh hào quang cuối cùng của Mỹ coi như cháy rụi, suy tàn hoàn toàn."
+
+"Tạm thời cứ như vậy đã."
+
+"Chắc chắn sẽ không tránh khỏi những vụ xích mích, va chạm nhỏ, quân đội bên này sẽ không lơi lỏng cảnh giác đâu."
+
+Tuy tạm thời chưa thể nổ ra chiến tranh, nhưng các khâu khác không thể lơi lỏng.
+
+Ở Trung Quốc đang là nửa đêm, nhưng bên Mỹ và châu Âu lại là ban ngày. Dù là bộ phận hậu cần, tình báo của Entropy hay tình hình quốc tế đều cần phải được theo dõi sát sao.
+
+Y Mặc bận rộn phụ giúp một lúc đến tận 12 giờ. Đồng Mộ Tuyết giục anh đi nghỉ: "Anh yêu, đi nghỉ một lát đi."
+
+"Tình hình hiện tại đang tương đối ổn định, bên này bọn em có thể xử lý được, có chuyện gì sẽ gọi anh ngay."
+
+Y Mặc lắc đầu: "Không sao đâu."
+
+"Anh có thiên phú chống đỡ, thức thêm ba bốn ngày nữa cũng chẳng hề hấn gì."
+
+"Em cũng bận rộn hơn một ngày trời rồi, em đi nghỉ trước đi, anh đợi thêm một lúc nữa..."
+
+Y Mặc còn chưa dứt lời thì Tần Mộ Sắc đã bước tới.
+
+Với đôi mắt lạnh lùng và nghiêm túc trong công việc, cô nhìn thẳng vào Y Mặc, cắt ngang lời anh ngay tắp lự: "Dùng thiên phú thức trắng 3, 4 ngày, rồi làm một trận ra trò để bán thân bất toại, sau đó bắt bọn em thay nhau chăm sóc anh hả?"
+
+"Anh là tổng chỉ huy, còn phải ra chiến trường đối đầu trực diện với những người chơi T0, là hạt nhân của cốt lõi đấy."
+
+"Hiện tại cục diện đang hướng tới chiến tranh trường kỳ, bây giờ cố thức thì có ý nghĩa gì?"
+
+"Đi, đi nghỉ ngơi với em!"
+
+"Trong điều kiện cho phép, cố gắng mỗi ngày ngủ đủ 4 tiếng!"
+
+Tần Mộ Sắc một tay nắm lấy cổ tay Y Mặc, tay kia kẹp chiếc laptop và xấp tài liệu, quay đầu nói với Đồng Mộ Tuyết: "Em sẽ canh chừng anh ấy."
+
+"Ít nhất phải để anh ấy ngủ đủ 4 tiếng."
+
+"Mộ Tuyết cũng vậy, lúc nào cần nghỉ thì nghỉ, em ở ngay phòng bên cạnh thôi." Nói xong, cô bổ sung, "Chiều nay lúc về em đã chợp mắt một lúc rồi, không cần lo cho em, lúc nào mệt em sẽ tự nghỉ."
+
+Khi Tần Mộ Sắc ở cạnh Y Mặc.
+
+Phần lớn thời gian cô đều bị Y Mặc trêu chọc, dắt mũi đi theo anh.
+
+Nhưng trong những chuyện quan trọng thế này, một khi Tần Mộ Sắc đã nghiêm túc, Y Mặc quả thực khó lòng từ chối.
+
+Cứ như vậy, Y Mặc bị Tần Mộ Sắc kéo sang một căn phòng nhỏ ngay cạnh trung tâm chỉ huy.
+
+Phòng ngủ nhỏ có một chiếc giường đơn, đúng chuẩn phòng khách đơn sơ.
+
+Y Mặc nằm trên giường nghỉ ngơi, còn Tần Mộ Sắc ôm laptop và tài liệu ngồi làm việc ở chiếc bàn học cách đó không xa.
+
+Thực ra âm thanh trao đổi từ trung tâm chỉ huy cách vách khá lớn, cánh cửa này cũng không đóng kín, bên ngoài lại có người qua lại liên tục, môi trường nghỉ ngơi không được tốt cho lắm.
+
+Nhưng đối với người chơi trò chơi sinh tử, hoàn cảnh khắc nghiệt nào mà chẳng từng nếm trải, có một chiếc giường để ngả lưng đã là tốt lắm rồi.
+
+Nhìn bóng lưng cặm cụi làm việc của Tần Mộ Sắc, Y Mặc không suy nghĩ nhiều nữa.
+
+Nghỉ ngơi sớm thì đổi ca sớm.
+
+Việc liên tục chỉ huy và chiến đấu trong trận chiến cuối cùng đã khiến thần kinh Y Mặc thực sự căng như dây đàn.
+
+Dưới sự thôi miên nhẹ nhàng từ thiên phú, Y Mặc rất nhanh chìm vào giấc ngủ say.
+
+Giấc ngủ này không mộng mị, tựa như đã kéo dài rất lâu, ngủ rất sâu.
+
+Lúc tỉnh lại, là do Đồng Mộ Tuyết đánh thức: "Mấy giờ rồi?"
+
+"Tình hình sao rồi?"
+
+Đồng Mộ Tuyết bận rộn nên có vẻ hơi mệt mỏi.
+
+Nhìn dáng vẻ mắt nhắm mắt mở ngái ngủ của Y Mặc, cô không kìm được cúi người hôn nhanh lên má anh một cái.
+
+"3 giờ 36 phút sáng."
+
+Nói xong, sắc mặt cô trở nên nghiêm túc: "Hải quân Mỹ và Trung Quốc, chính thức khai chiến rồi."

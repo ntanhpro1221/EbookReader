@@ -1,0 +1,110 @@
+Chương 593 - Một góc bức màn
+
+
+Trong thư phòng của tháp Babel.
+
+Lucien tựa lưng ra sau ghế, mắt nhắm nghiền như thể đang ngủ, trước mặt là một cốc nước nóng chưa hề vơi đi. Thực chất, cậu đang đọc các tài liệu về cơ học lượng tử trong thư viện linh hồn, háo hức tiếp thu và học hỏi những kiến thức này, đặc biệt là những phần về cơ học ma trận,[note68566] và chốc chốc lại tính toán gì đó trong linh hồn.
+
+Ngay cả đối với cậu bây giờ, nội dung của cơ học ma trận dường như vẫn quá phức tạp và khó nắm vững, muốn học được phải bỏ ra rất nhiều nỗ lực. Nó giống như một con quái thú khổng lồ lạnh lùng, không thân thiện, thậm chí còn tràn đầy khí tức hung ác đối với bất kỳ một người mới bắt đầu nào.
+
+Vốn dĩ, Lucien có thể thuận theo lộ tuyến sóng de Broglie[note68567] rồi đề xuất ra phương trình sóng Schrödinger, từ đó mở ra nội dung của cơ học sóng[note68568] bằng cách sử dụng hình thức mà hệ Điện từ và hệ Ánh sáng – Bóng tối sở trường, cũng như hình thức mà mọi Arcanist đều hiểu rõ và quen thuộc. Đây cũng là một nhánh chính của cơ học lượng tử, có thể giải quyết được hầu hết các nghi vấn hiện tại về Tân Giả kim thuật.
+
+Tuy nhiên, điều này dựa trên quan điểm electron giống như sóng, tức là một phần mở rộng của lý thuyết sóng. Còn Lucien, mặt khác lại được coi là một trong những đại diện chính của lý thuyết hạt. Nếu như cậu đột nhiên quay lưng với những Arcanist thân thiện, nhảy vào vòng tay của lý thuyết sóng và đưa ra bằng chứng đanh thép, rất có thể bạn bè, đồng nghiệp, v.v. của cậu sẽ nổ tung thành từng mảnh.
+
+Bởi vậy, Lucien thà học cơ học ma trận có nền tảng dựa trên tính hạt và tính không liên tục, đồng thời sử dụng nó để giải quyết các vấn đề của mô hình Tân Giả kim thuật còn hơn. Đợi đến khi những người ủng hộ lý thuyết hạt không còn dễ dàng bị lung lay niềm tin vào Tân Giả kim thuật và các hạt nữa, cậu sẽ từ từ giải phóng những con quái vật như sóng de Broglie và thí nghiệm nhiễu xạ electron,[note68626] từ đó thật sự xác lập lưỡng tính sóng – hạt.
+
+‘Cơ học ma trận, cơ học sóng… Đây xem ra sẽ là một chiến trường khác giữa lý thuyết hạt và lý thuyết sóng đây, dù rằng xét về mặt toán học thì chúng thật ra tương đương nhau, là hai hình thức biểu đạt của cùng một lý thuyết…’ Lucien lặng lẽ lẩm bẩm trong lòng. ‘Ma trận à, thật là một từ mang đầy cảm giác thời thượng…’
+
+Cậu lúc này đang nghĩ tới bộ phim Ma Trận.
+
+Đóng cuốn sách về cơ học lượng tử trong thư viện linh hồn lại, Lucien hít một hơi thật sâu rồi hoàn thiện nốt khái niệm toán học mới về ma trận trên bản thảo.
+
+Dù rằng thời gian gần nửa năm là đủ để Lucien có thể bước đầu nắm được cơ học ma trận nguyên thủy, nhưng cậu không định thử suy ra kết luận hoặc tiến hành thí nghiệm ngay mà tính đợi linh hồn mình, thứ vừa mới tiến vào cảnh giới huyền thoại, trở nên ổn định đã rồi mới làm, bởi vậy mà lần này cậu không nhận được phản hồi nào từ thế giới thực. Hơn nữa, trong khoảng thời gian gần đây, một nửa tinh lực của cậu đều dồn vào việc xây dựng mô hình thần chú huyền thoại.
+
+Trong số đó, Quyền trượng Thời Không tương đối đơn giản. Sau khi linh hồn của Lucien khôi phục, cậu đã hoàn thành nó chỉ trong chưa đầy hai tuần. Còn Ánh nhìn Phục thù, nhờ được cậu sử dụng kiến thức về laser trong thư viện linh hồn để phân tích và đơn giản hóa, giờ cũng đang ở vào giai đoạn cuối cùng.
+
+Một mùi thơm thanh mát, thoang thoảng bay qua chóp mũi Lucien, tỏ rõ rằng Natasha đã rời đi. Do hôn lễ vẫn chưa chính thức được tổ chức, và cũng do tính kế đám người Kritonia, vậy nên cả hai không sống chung với nhau. Chẳng qua, Natasha vẫn thường đến Allyn du ngoạn vài ngày, còn Lucien cũng thỉnh thoảng tới cung điện Nekso thăm Đại Công tước Orvarit và ở lại qua đêm.
+
+Hai người đi lại thông qua demiplane của Hathaway, làm như không hề cho đám người Kritonia bất kỳ cơ hội nào. Nhưng cũng có những lúc, họ lại đi tới Thiên Hồ chi Địa để nghỉ ngơi, giống như thể hoàn toàn không để tâm đến nguy hiểm, và quả thực không có nguy hiểm nào xảy ra trong những lần đi nghỉ này.
+
+Lucien hít một hơi thật sâu, trong lòng tràn đầy cảnh giác đối với hôn lễ sẽ diễn ra mấy tháng tới. Nếu đám người Kritonia không nắm bắt “cơ hội” này, cậu cũng không cần phải lãng phí thời gian với bọn họ nữa, cứ trực tiếp phơi bày thực lực huyền thoại đầy chấn nhiếp của mình mà ngăn chặn và loại bỏ mối nguy hiểm ngay từ đầu thôi. Cậu đâu thể chỉ vì muốn giăng bẫy để vây giết bọn họ mà sống cái cuộc sống cẩn trọng từng ly từng tí mãi được, như vậy chẳng thà dọn vào trong demiplane để nâng cao hệ số an toàn còn hơn. Đến lúc ấy, hai nút giao thời không của Vũ trụ Nguyên tử sẽ được đặt ở cung điện Nekso và ma tháp Allyn mỗi nơi một cái.
+
+Thu hồi lại suy nghĩ, Lucien buông bút lông xuống, tính tiếp tục phân tích Ánh nhìn Phục thù và cố gắng hoàn thành trong thời gian sớm nhất. Nhưng đúng lúc này, tiếng gõ cửa “cốc cốc cốc” có tiết tấu vang lên.
+
+Không cần phải vươn trường linh lực ra để cảm ứng, chỉ cần thông qua kiểm soát đối với ma tháp, Lucien đã biết đó là Leo. Ông đang đứng bên ngoài phòng, trong tay cầm một lá thư. “Vào đi.”
+
+“Chủ nhân, là thư của Ngài Raventi.” Biết chủ nhân ghét bị người khác làm phiền khi đang nghiên cứu arcana và ma thuật, Leo nói một cách ngắn gọn.
+
+“Ừ, để lên bàn đi.” Do vẫn luôn trao đổi thư từ với các lãnh đạo của Ý chí Nguyên tố và những Arcanist quen biết, Lucien không hề bất ngờ. Trong nửa năm qua, Raventi vẫn thường xuyên viết thư cho cậu để thảo luận về những vấn đề liên quan đến Tân Giả kim thuật.
+
+Đợi Leo đóng cửa thư phòng lại, Lucien mới cầm lá thư lên. Hình chiếu của Sao chủ Định mệnh khiến cậu có dự cảm không lành.
+
+Mở lá thư ra, tầm mắt cậu đang nhắm vào phần bên trên liền đông cứng lại. Giả thuyết táo bạo này cực kỳ giống với giả thuyết của de Broglie.
+
+‘Không lẽ lại có người thả con quái vật khủng bố này ra sớm ư?’ Lucien mỉm cười tự giễu. Đây không phải là game, không thể nào mà tất cả mọi người đều đi theo tiến độ dự liệu của cậu.
+
+Giờ con quái vật đã thò đầu ra, Lucien không còn phải bận tâm nghĩ lý do cho việc vì sao nó lại xuất hiện sớm như vậy nữa. Thay vào đó, cậu cẩn thận đọc tiếp, đồng thời nghĩ cách làm sao để giảm thiểu tác động của nó.
+
+‘…Xuất phát từ góc độ sóng electron, có thể coi nó là sóng dừng trên quỹ đạo. Như vậy, quỹ đạo cố định chỉ có thể là bội số nguyên của bước sóng, từ đó tự nhiên dẫn đến lượng tử hóa…’ Vừa nghĩ, Lucien vừa day day lông mày.
+
+Một lúc lâu sau, Lucien đặt lá thư xuống bàn và khẽ thở dài: ‘Trên thế giới này thật sự cũng có rất nhiều Arcanist sở hữu những suy nghĩ táo bạo và ý tưởng kỳ lạ. May là ông ấy vẫn chưa hoàn thành thí nghiệm nhiễu xạ electron, bằng không, mình chỉ đành phải dùng đặc quyền của Grand Arcanist để yêu cầu ông ấy hoãn việc đệ trình luận án lại, đồng thời thực hiện từng bước một để tránh cho quá nhiều cái đầu nổ tung.’
+
+Nếu như những thứ như vậy được tung ra, các hệ khác Lucien không dám xét đoán gì, nhưng trong lĩnh vực Nguyên tố và Giả kim thuật, chắc chắn sẽ có ít nhất một phần ba số Arcanist cấp cao không chịu nổi tác động này. Hoặc là đầu của bọn họ sẽ nổ tung, hoặc là thế giới nhận thức của họ sẽ vỡ ra và rắn lại. Phần lớn các Arcanist còn lại cũng sẽ rơi vào trạng thái hoang mang trong thời gian dài. Bởi xét cho cùng, tất cả các hiện tượng và kết quả thí nghiệm khi trước đều đã chứng thực một cách chắc chắn rằng electron là hạt. Kể từ khi cậu phát hiện ra nó, không một ai hoài nghi điều đó hết.
+
+‘Chưa cần phải hoãn việc đệ trình luận án này ngay, dù sao thì nó cũng chưa có thí nghiệm chứng thực. Trước mắt phải phát huy uy quyền của mình để khiến các Arcanist đối mặt với vấn đề này đã. Đợi đến khi họ đã có sự chú ý toàn diện và đi sâu suy xét, đồng thời chuẩn bị xong tinh thần, mình sẽ tung ra thí nghiệm nhiễu xạ electron.’ Lucien rất nhanh liền đưa ra quyết định, sau đó viết ý kiến của mình vào bức thư mà Raventi gửi tới:
+
+“Giả thuyết tuy lạ nhưng hay…”
+
+……
+
+Mặt trời mùa đông sớm đã lặn xuống dưới đường chân trời. Còn chưa đến giờ ăn tối, vậy mà hết thảy mọi thứ xung quanh đều đã tối đen. Dieppe nóng ruột đi đi lại lại khắp phòng khách trong ma tháp của Raventi. Những suy nghĩ kỳ quái cứ năm lần bảy lượt nảy ra trong đầu hắn, vài cái trong số chúng thậm chí còn hoàn toàn mâu thuẫn với nhau.
+
+‘Nếu Ngài Evans đồng tình với luận án của mình, vậy thì điều đó đồng nghĩa với việc electron là sóng à? Khó tin quá, với cả cũng chưa có hiện tượng hay thí nghiệm nào chứng thực được nó cả.’
+
+Bởi vì luận án này dựa trên một giả thuyết táo bạo, bản thân Dieppe cũng dành cho nó một mức độ hoài nghi nhất định. Nếu Ngài Evans tán đồng với nó một cách xác thực, không chút hoài nghi, hắn ngược lại sẽ do dự và không dám chấp nhận. Việc electron là sóng, trong lòng bất kỳ ai cũng đều thấy rất vô lý, ngay cả với chính hắn, người đã đưa ra giả thuyết này.
+
+‘Nếu Ngài Evans cũng đưa ra ý kiến phủ định một cách khéo léo như Ngài Morris và Ngài Gaston, vậy thì có lẽ luận án của mình thực sự đã sai.’
+
+Như vậy thì thế giới sẽ trở lại bình thường. Dieppe sẽ cảm thấy nhẹ nhõm, nhưng trong lòng hắn cũng sẽ có chút gì đó không cam tâm từ bỏ. Ý tưởng táo bạo nảy ra trong giai đoạn Tân Giả kim thuật đang gặp nút thắt cổ chai này, luận án ngoài sức tưởng tượng đã giải quyết được vấn đề ở một mức độ nào đó này, chúng đều là kết tinh tâm huyết của hắn, là tia sáng trí tuệ lóe lên trong chớp mắt của hắn. Nếu nó bị tất cả mọi người phản đối, hắn thực sự sẽ không tài nào chấp nhận nổi.
+
+‘Bất kể thế nào, cho dù Ngài Evans có phản đối, chỉ cần ngài ấy không chỉ rõ ra là sai ở đâu, vậy thì mình vẫn sẽ tìm kết quả thí nghiệm để kiểm chứng, không thể dễ dàng từ bỏ được.’
+
+Trong cuộc đấu tranh nội tâm hết sức mâu thuẫn này, tâm tình Dieppe càng lúc càng nôn nóng. Kỳ vọng có được sự chấp nhận của Lucien dần dà chiếm ưu thế, niềm tự khích lệ bản thân không được dễ dàng từ bỏ ngày một mãnh liệt hơn.
+
+“Sao vẫn chưa có hồi âm nhỉ?” Dieppe lại nhìn ra ngoài cửa sổ. Hắn đã lặp đi lặp lại hành động này hàng trăm lần suốt từ buổi chiều.
+
+Dù hiểu rằng Ngài Evans rất bận rộn với việc nghiên cứu ma thuật và arcana, thế nhưng chung quy hắn vẫn không nhịn được mà chờ mong, trông ngóng.
+
+Đột nhiên, ánh mắt Dieppe bắt được một cái bóng giống chim quen thuộc, thế là hắn bất ngờ nhảy lên một bước, xông ra ngoài cửa và chạy về phía thư phòng của thầy mình, Tăng tốc Cao cấp cũng được thi triển một cách tự nhiên.
+
+Chỉ sau vài giây, Dieppe đã ngồi xuống trước mặt Raventi, chờ đợi “người đưa tin” trở về.
+
+“Cậu mong đợi sao?” Raventi nghiêm nghị nhìn Dieppe.
+
+Dieppe chỉ gật đầu không nói.
+
+Đúng lúc này, “người đưa tin” dễ thương đáp xuống bàn. Raventi lấy thư hồi âm từ bên trong rồi từ từ mở ra.
+
+Hai mắt Dieppe nhìn chằm chằm vào lá thư và biểu cảm của thầy. Nếu không phải vì nể sợ ảnh hưởng lớn mà Raventi xây dựng được, hắn hẳn là đã muốn thi triển ma thuật để nhòm trộm rồi.
+
+Raventi liền lật đến trang cuối cùng của luận án để nhìn xem, nhưng rồi vẻ mặt của ông bỗng nhiên cứng lại, trên đó là sự nghiêm trọng và nghi hoặc không cách nào diễn tả.
+
+“Thầy, ý kiến của Ngài Evans thế nào?” Sau khi đợi một hồi mà không thấy thầy trả lời, Dieppe bạo gan hỏi theo tiếng hối thúc của trái tim đang lo lắng.
+
+Raventi “ừm” một tiếng rồi đọc to từng từ một, trong thanh âm ẩn chứa chút run rẩy khe khẽ:
+
+“Ý kiến của Lucien là: ‘Giả thuyết tuy lạ nhưng hay này đã giúp chúng ta nhìn thấy một mặt có thể tồn tại khác của electron. Bản chất của thế giới luôn bị một bức màn đen dày che khuất, khiến cho chúng ta khó bề thấy được diện mạo thực sự của nó. Tuy nhiên, luận án này có thể đã vén lên một góc của bức màn ấy để tiết lộ một phần sự thật…’”
+
+Còn chưa nghe hết lời của thầy, đầu Dieppe đã váng vất ong ong. Hắn đã nghĩ Ngài Evans sẽ tán thành, nhưng không ngờ lại cho đánh giá cao như vậy.
+
+“Vén lên một góc của bức màn để tiết lộ một phần sự thật…”
+
+Nỗi niềm vui sướng muốn phát điên dâng trào trong lòng Dieppe. Được một người có uy tín khẳng định và công nhận khiến cho mỗi một con người đã bỏ công, nỗ lực đều nảy sinh chung một cảm xúc như vậy. Thế nhưng một lát sau, sự điềm tĩnh của một pháp sư đã giúp hắn định thần lại, kế đó vô thức nói: “Vẫn cần phải có thí nghiệm chứng thực.”
+
+Raventi hài lòng gật đầu rồi tiếp tục đọc: “‘Tôi bằng lòng tin rằng lưỡng tính sóng – hạt có thể được mở rộng sang tất cả các hạt vi mô. Đây chính là con đường để giải quyết cuộc chiến sóng – hạt muôn thuở. Tuy nhiên, những giả thuyết và suy luận chặt chẽ khiến người ta phải kinh ngạc này vẫn cần phải được chứng thực bằng hiện tượng và kết quả thí nghiệm, bởi đây dù sao cũng không chỉ là một mô hình toán học đơn thuần. Tôi kiến nghị nên cho phát hành luận án này ngay và nộp cho các Arcanist của hệ Điện từ xét duyệt, như vậy mọi người đều có thể chú ý tới việc làm phi thường của ông và tham gia vào các thí nghiệm liên quan.’”
+
+“Ý kiến của Ngài Evans rất hay. Em không có phản đối nào hết!” Biểu cảm nôn nóng trên mặt Dieppe đã biến mất từ khi nào. Sống lưng hắn thẳng tắp, thanh âm có phần run run kích động.
+
+Nhìn ý kiến của Lucien trong tay, Raventi có chút bối rối và nghi hoặc nói:
+
+“Electron là sóng ư?”

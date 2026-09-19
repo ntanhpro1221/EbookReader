@@ -1,0 +1,325 @@
+Chương 16
+
+Chương 16: Trò chơi bắt đầu
+
+『 Tên trò chơi: Đảo Sinh Tồn 』
+
+『 Loại hình trò chơi: Loại sinh tồn. 』
+
+『 Số người tham gia: 300 người. 』
+
+『 Quy tắc trò chơi:
+
+1. Ván chơi này chia nhiều phe, tồn tại 2 phương thức kết thúc trò chơi.
+
+①. Khi người chơi sống sót chỉ còn lại 1 phe, trò chơi kết thúc.
+
+Trong phe đó, 15 người chơi có điểm số xếp hạng cao nhất hiện tại thành công qua màn, các người chơi đồng phe còn lại thất bại.
+
+②. Khi người chơi sống sót chỉ còn lại 15 người.
+
+Người chơi đạt điểm số hạng 1 có thể lựa chọn kết thúc trò chơi hoặc tiếp tục.
+
+Nếu chọn kết thúc, phe của người chơi sống sót tuyên bố chiến thắng trò chơi, người chơi đạt điểm số hạng 1 nhận được phần thưởng đặc quyền, phe của người chơi đạt điểm số hạng 1 nhận được thêm điểm tích lũy thường, phần thưởng điểm tích lũy cao cấp.
+
+2. Người chơi trong ván này chia làm 2 loại: Có phe ban đầu và Không có phe ban đầu.
+
+Người chơi không có phe ban đầu, dưới sự mời mọc của người chơi phe khác, có thể gia nhập phe khác, chỉ một lần.
+
+Người chơi có phe ban đầu, dưới sự mời mọc của người chơi phe khác, có thể chuyển sang phe khác, chỉ một lần.
+
+3. Vị trí của người chơi cùng phe được công khai. Người chơi khác phe, khi đến gần phạm vi nhất định, trên bản đồ sẽ xuất hiện cảnh báo nguy hiểm về người chơi khác phe.
+
+4. Ván chơi này tồn tại rất nhiều nhân tố trò chơi, có thể cung cấp khai thác.
+
+5. Người chơi chia đợt tiến vào trò chơi, thời gian vào game khác nhau.
+
+6. Điểm số trò chơi.
+
+Tiêu diệt sinh vật NPC bản đồ, người chơi khác phe..., nhận được điểm số trò chơi.
+
+Tiêu diệt người chơi đồng đội cùng phe, giảm bớt điểm số trò chơi.
+
+Điểm số có thể dùng để tiêu hao, có thể đổi vật tư vật phẩm tại cửa hàng điểm số.
+
+7. Ván chơi này tồn tại bảng xếp hạng điểm số, biệt danh của 20 người chơi đứng đầu bảng xếp hạng được công khai, giai đoạn sau của trò chơi nhất định sẽ công khai vị trí.
+
+8. Dựa vào nhắc nhở của hệ thống để tiến hành thao tác.
+
+9. Trừng phạt phe thất bại: Tử vong.
+
+10. Hiệu quả năng lực thẻ bài lớn hơn quy tắc trò chơi hiện tại. 』
+
+『 Giới thiệu trò chơi: Trò chơi sinh tồn cỡ siêu lớn, mọi người hãy cố gắng ẩn nấp đến cuối cùng nhé. 』
+
+Khi quy tắc trò chơi xuất hiện, trong lúc quan sát quy tắc, Y Mặc cũng tùy ý đi vài bước, tới bên cạnh một cái cây không to lắm. Đại khái là theo thói quen tìm một vật che chắn trước.
+
+“Giống PUBG?”
+
+So với số lượng người tham gia khiến người ta khiếp sợ, quy tắc trò chơi ngược lại không phức tạp.
+
+Chính là 300 người chơi, khi đào thải đến lúc còn lại 15 người chơi, liền có thể tuyên bố trò chơi kết thúc.
+
+Đương nhiên, còn lại 15 người chơi lúc trò chơi kết thúc, là tình huống tốt nhất.
+
+Phương thức chiến thắng phe thứ ② biểu hiện rất rõ ràng, quyền kết thúc trò chơi nằm trong tay người chơi đạt điểm số hạng 1. Nếu người chơi điểm cao nhất không vội kết thúc trò chơi, như vậy ván game 300 người này, cuối cùng giết đến chỉ còn lại 1 người lúc mới kết thúc, cũng là có khả năng.
+
+“Nhiều nhất có thể sống 15 người chơi, nhìn thì thấy nhân số không ít.”
+
+“Nhưng kỳ thực cao nhất chỉ có 5% tỷ lệ sống sót, thuộc về trò chơi có tỷ lệ sống sót cực kỳ cực kỳ thấp.”
+
+Thực ra Trò chơi Tử vong, phần lớn tỷ lệ sống sót ở mức 50%, tàn khốc một chút cũng là 25%, 30%.
+
+Tức là một ván game 20 người chơi, phổ biến sống sót khoảng 10 người, tàn khốc kịch liệt một chút thì 5, 6 người chơi. Những ván game của Y Mặc phổ biến vô cùng tàn khốc, là cực thiểu số.
+
+Mà tỷ lệ đào thải của ván chơi này, trong tình huống tốt nhất cũng là 20 người mới có thể sống 1 người, trong những kinh nghiệm chơi game trước đây của Y Mặc, cũng là trò chơi có tỷ lệ đào thải cao nhất.
+
+“Nhìn như là trò chơi nhiều phe đọ sức, nhưng kỳ thực càng gần với chiến đấu cá nhân.”
+
+“Vứt bỏ việc người chơi cùng phe có thể để mình nắm giữ nhiều ưu thế hơn ra, kỳ thực ảnh hưởng chủ yếu nhất vẫn là định vị cùng phe, cảnh báo nguy hiểm khác phe, cùng với thưởng phạt điểm tích lũy khi giết cùng phe và khác phe.”
+
+Mà quy tắc 4 và quy tắc 6, liên quan đến khai thác yếu tố trò chơi, cùng tiêu diệt sinh vật NPC, người chơi đối địch nhận được điểm tích lũy..., càng là không chút che giấu nói cho bạn biết.
+
+Ván chơi này có nhiệm vụ ẩn và nhiệm vụ nhánh, các người đi tìm đi.
+
+Bản đồ ván này có sinh vật phi nhân loại và mối đe dọa từ NPC, các người tự lo liệu lấy.
+
+Đến nước này, Y Mặc cũng nắm được bảy tám phần quy tắc trò chơi, ánh mắt rơi vào hệ thống.
+
+Mở hệ thống ra, ván chơi này có thêm vài giao diện.
+
+1. Cửa hàng điểm số độc lập.
+
+Bên trong là một chút vật tư, đơn giản như vũ khí nóng..., có thể dùng điểm số trong game để đổi bổ sung vật tư, khác biệt với điểm tích lũy hệ thống, không có gì đáng nói.
+
+2. Bản đồ trò chơi.
+
+Lấy điểm đỏ vị trí của mình làm trung tâm, bị sương mù bao phủ, cũng không cách nào biết được bản đồ cụ thể lớn nhỏ và tình huống thực tế.
+
+Bây giờ ngoại trừ điểm đỏ của Y Mặc, tại nơi rất xa còn có 2 cái điểm đỏ khác, rõ ràng là hệ thống phân phối, định vị của người chơi phe Y Mặc, tạm thời không nhắc tới.
+
+3. Cửa sổ thế giới.
+
+Cửa sổ này vô cùng thú vị, Y Mặc còn là lần đầu tiên gặp phải Trò chơi Tử vong có cái này.
+
+Nhìn quy tắc giới thiệu một chút, tương đương với kênh thế giới trong game online, mọi người có thể gửi văn bản hoặc giọng nói vào trong đó, công khai tất cả mọi người đều có thể nhìn thấy, mỗi 24 giờ có thể gửi một tin.
+
+Bây giờ trò chơi còn chưa chính thức bắt đầu, không có tin tức, cũng không cách nào gửi.
+
+4. Bảng xếp hạng.
+
+Trước mắt là trạng thái trống không, chỉ có một biểu hiện nhân số (244/300), xét đến việc ván chơi này không phải mọi người cùng nhau vào, cụ thể đại biểu cho cái gì cũng không cần nói nhiều.
+
+Cấp bậc hiện tại của Y Mặc là 49, cửa sổ thế giới không có bất kỳ đối thoại nào, có thể xác định anh là người chơi đợt 1 tiến vào trò chơi.
+
+Y Mặc: “Ha ha, trò chơi cỡ siêu lớn, thật đúng là không phải chiến đoàn đội cấp bậc cao...”
+
+Mặc dù không phải chiến đoàn đội cấp bậc cao, nhưng thực lực người chơi tham gia lại rõ ràng chỉ cao hơn chứ không thấp hơn so với chiến đoàn đội cấp bậc cao, độ khó chỉ lớn không nhỏ.
+
+Y Mặc sau khi nhìn lướt qua mấy giao diện thêm vào trong hệ thống, anh mở giao diện vật phẩm đã mua bằng điểm tích lũy trước khi vào game, vừa lấy ra một số thứ bắt đầu hí hoáy, vừa xem xét vật phẩm có thể dùng.
+
+1. Tất cả vũ khí nóng mua bằng điểm tích lũy hệ thống trước khi vào game đều bị cấm, vũ khí lạnh có thể dùng.
+
+Nhưng chú ý, cái cấm dùng này khác với cấm dùng cả ván game thông thường. Nó không phải giao diện màu đen mà là màu xám, tức là giai đoạn hiện tại không thể sử dụng, nhưng về sau đến giai đoạn nhất định, là có thể lấy ra sử dụng.
+
+Nói cách khác, vũ khí nóng hệ thống chuẩn bị sớm bị cấm dùng tạm thời ở giai đoạn này, nhưng sau khi nhận được điểm số trong trò chơi, có thể dùng điểm để đổi tại cửa hàng trò chơi.
+
+2. Các phương tiện cao cấp một chút cũng đều bị cấm.
+
+Ô tô, xe tăng, máy bay trực thăng... ở vào trạng thái màu xám, giống như vũ khí nóng tạm thời bị cấm.
+
+Ca nô hiện ra trạng thái màu đen, bị cấm chỉ cả ván chơi.
+
+“Ca nô bị cấm dùng vĩnh viễn, nói cách khác ván chơi này nhất định tồn tại môi trường sông nước, hơn nữa môi trường sông nước đối với ván chơi này vô cùng quan trọng, quan trọng đến mức máy bay xe tăng cũng là tạm thời không cách nào sử dụng, nhưng ca nô lại là cấm dùng vĩnh viễn...”
+
+Người chơi bình thường thì không vào hệ thống để đổi vật phẩm tàu thuyền.
+
+Đơn thuần một cái tin tức này, liền để Y Mặc về mặt tình báo đã vượt xa các người chơi tại chỗ. Hơn trăm điểm tích lũy này chẳng những không tiêu hoang, ngược lại so với những vật phẩm có thể lấy ra sử dụng, càng có giá trị hơn, có thể nói là lãi to.
+
+Còn những thứ khác thì đều không bị cấm gì.
+
+Về phương diện vật tư sinh hoạt, cũng đều có thể tùy ý lấy ra sử dụng.
+
+Sau khi xác nhận xong tình huống về phương diện vật phẩm, Y Mặc mở hệ thống thẻ bài ra, số lượng thẻ bài tồn tại bên trong là vô cùng kinh người.
+
+Thẻ bài SSR+ tổng cộng 8 tấm, thẻ bài R 4 tấm, thẻ đen đặc biệt 1 tấm, tổng cộng chừng 13 tấm.
+
+Thẻ bài SSR:
+
+Theo thứ tự là 3 tấm Thẻ bạn gái: Tần Mộ Sắc, Thiên Bạch Đào, Ninh Vũ Vũ.
+
+5 tấm thẻ bài chuỗi liên quan đến bạn gái: Thẻ chuyên thuộc của Thiên Bạch Đào 『 Gói quà bí ẩn ẩm thực tinh phẩm 』, 『 Thẻ tiến giai gói quà bí ẩn ẩm thực tinh phẩm 』, Thẻ chuyên thuộc của Ninh Vũ Vũ 『 Tỏa sáng đăng tràng 』, Thẻ chuyên thuộc của Tần Mộ Sắc 『 Hắc Thiết 』, 『 Gia hộ ép xung 』.
+
+3 tấm thẻ ẩn nhân cách bạn gái và 4 tấm thẻ chuyên thuộc bạn gái quen thuộc trước đó không nhắc tới. Tấm thẻ chuyên thuộc thứ hai của Tần Mộ Sắc 『 Gia hộ ép xung 』, chính là thẻ bài SSR+ mới rút được lúc bắt đầu ván chơi này, hiệu quả như sau:
+
+『 Gia hộ ép xung 』
+
+『 Cấp bậc: SSR+ 』
+
+『 Hiệu quả thẻ bài: Khi người chơi Tần Mộ Sắc chịu mối đe dọa sát thương chí mạng, tự động kích hoạt.
+
+Tiến vào trạng thái vô địch, không chịu bất kỳ sát thương nào (Quy tắc loại xóa bỏ vẫn có hiệu lực), không thể tấn công bất kỳ người chơi hoặc NPC nào, tốc độ tăng 1.2 lần, định vị chia sẻ cho người chơi Y Mặc, Y Mặc mỗi giây tiêu hao 50 điểm tích lũy.
+
+Phương pháp điều kiện giải trừ trạng thái:
+
+1. Người chơi Y Mặc cạn kiệt điểm tích lũy.
+
+2. Người chơi Tần Mộ Sắc chủ động giải trừ.
+
+3. Hệ thống phán định mối đe dọa chí mạng biến mất.
+
+Sau khi giải trừ trạng thái vô địch, trong vòng 2 giây không thể tiến hành bất kỳ hành vi tấn công gây sát thương nào. 』
+
+『 Giới thiệu thẻ bài: Đi làm thôi, Ma Vương đại nhân!
+
+Vì sự an toàn của bạn gái, hãy cố gắng hết sức chơi game, nỗ lực kiếm điểm tích lũy nhé.
+
+Gia hộ ép xung là thẻ chuyên thuộc của Tần Mộ Sắc, có thể sử dụng khi có sự hiện diện của Tần Mộ Sắc trong ván chơi.
+
+Thẻ bài này là thẻ bài vĩnh viễn, không giới hạn trò chơi sử dụng, không giới hạn số lần kích hoạt. 』
+
+Y Mặc nhìn qua, là một tấm thẻ bảo mệnh cực mạnh vô cùng hữu dụng, tuyệt đối xứng đáng với cấp bậc SSR+, thậm chí nói là thẻ bảo mệnh cấp T0 cũng không ngoa.
+
+Khuyết điểm là, thật sự đốt điểm tích lũy.
+
+Cho dù Y Mặc là đại gia điểm tích lũy, có gần 100.000 điểm, thế nhưng cũng chỉ có thể bảo vệ Tần Mộ Sắc khoảng 30 phút.
+
+Có lẽ mọi người sẽ nói, thẻ bảo mệnh mạnh 30 phút, quá ngon rồi còn gì.
+
+Chính xác là rất bá đạo, nhưng so với thẻ bảo mệnh mạnh thông thường, thực ra tấm thẻ này tồn tại một khiếm khuyết chí mạng.
+
+Thẻ bảo mệnh mạnh và thẻ vô địch thông thường, hoặc là vô địch thời gian ngắn, hoặc là hiệu quả phục hồi cơ thể siêu cao, một số còn kèm theo các loại tăng cường tố chất thân thể...
+
+Nói cách khác, thẻ bảo mệnh mạnh ngoại trừ có thể bảo mệnh mạnh ra, một tác dụng quan trọng khác chính là phản kích, phản sát người chơi địch quân.
+
+Khi tấm thẻ bài này của Y Mặc kích hoạt, Tần Mộ Sắc không thể tấn công, có chút giống hiệu quả thẻ bài “Ẩn nấp”, có thể bảo mệnh chạy trốn, nhưng không thể tấn công người khác, là có khiếm khuyết nhất định.
+
+Mặc dù có khiếm khuyết, nhưng nhìn chung là một tấm thẻ rất thực dụng.
+
+Mà những tấm thẻ SSR+ Y Mặc nắm giữ, bất kể là thẻ bạn gái hay thẻ chuyên thuộc bạn gái, thực ra hiệu quả đều rất mạnh, xứng đáng với cấp bậc SSR+.
+
+Chỉ có gói quà bí ẩn ẩm thực của Thiên Bạch Đào là hơi kém chút, nhưng sau khi tiến giai cũng có tỷ lệ mở ra đồ vật công nghệ tương lai, thế giới tiên hiệp, cộng thêm vận may của Thiên Bạch Đào, thực ra cũng vô cùng cường hãn.
+
+Y Mặc nhìn tấm thẻ bài này, trong mắt lóe lên vài tia sáng, suy tư một lát rồi thu hồi.
+
+Bỏ qua 8 tấm thẻ bài SSR+ vĩnh viễn, 4 tấm thẻ bài R còn lại là những tấm Y Mặc đã có trước khi vào game.
+
+Hiệu quả lần lượt là: 1. Lơ lửng trên không, 2. Khống chế phạm vi, 3. Loại vô hiệu hóa thẻ bài, 4. Loại tăng cường thiên phú.
+
+Nói thật, hiệu quả và cấp bậc thẻ bài vô cùng không tương xứng. Mặc dù không đến mức đều là hiệu quả cấp SSR, SSR+, nhưng cũng không đến mức là thẻ bài cấp R.
+
+Nhưng mặt lưng màu trắng của thẻ bài và cấp bậc hiển thị trên đó lại thật sự là cấp R, như vậy cũng không có gì để nói nhiều.
+
+Ngoài thẻ bài vĩnh viễn, việc giữ lại thẻ bài dựa trên số lượng cấp bậc, mỗi trận đều tiêu hao điểm tích lũy.
+
+Như vậy Y Mặc đã giữ lại những tấm thẻ bài R này, tự nhiên cũng là cho rằng hữu dụng, xem như con bài tẩy.
+
+Về phần tấm thẻ đen cuối cùng kia, là tấm thẻ trống lấy được lúc trước ở thế giới võ hiệp, tương đối đặc thù.
+
+Nói nó là thẻ bài, các phương diện của nó lại nằm ngoài hệ thống thẻ bài.
+
+Nói nó không phải thẻ bài, nó lại đích thực là một tấm thẻ bài, khiến người ta thực sự khó phân loại.
+
+Chỉ như thế thôi, thẻ bài và vật phẩm của Y Mặc cũng coi như đã nắm rõ.
+
+Y Mặc vừa hí hoáy mấy thứ gì đó, vừa nghiên cứu quy tắc hệ thống thẻ bài... xong xuôi đâu vào đấy, ánh mắt anh rơi vào bản đồ hệ thống đang bị sương mù bao phủ trong ván chơi này.
+
+Nhìn hai điểm đỏ kia, anh lẩm bẩm tự nói.
+
+“Chia đợt tiến vào trò chơi thì hai đồng đội ban đầu này hẳn là Mộ Sắc và Vũ Vũ.”
+
+“Ván chơi này tỷ lệ vũ lực chiếm rất cao, sớm hội hợp với các cô ấy sẽ có lợi lớn cho mình.”
+
+“Nhưng cái điểm đỏ trên bản đồ này, nhìn thế nào cũng cách không gần...”
+
+“Ninh Vũ Vũ có thể dùng thẻ bài kéo qua, nhưng chưa phải tình huống khẩn cấp, bây giờ không cần thiết lãng phí một tấm thẻ chiến lược quan trọng như vậy.”
+
+Y Mặc nói xong, đứng dậy. Trong khi hoạt động cơ thể, vặn vai, tiếng hệ thống cũng đã truyền đến.
+
+『 Đinh linh. 』
+
+『 Ván chơi này, chính thức bắt đầu. 』
+
+Sau khi tiếng nhắc nhở trò chơi bắt đầu vang lên, âm thanh hệ thống cũng không dừng lại ở đó, ngay sau đó tiếng cảnh báo cũng liên tiếp truyền đến.
+
+『 Đinh linh. 』
+
+『 Cảnh báo, khu vực phạm vi gần bạn, tồn tại người chơi phe địch. 』
+
+Đồng thời với tiếng nhắc nhở của hệ thống, tại vị trí điểm đỏ của chính mình trên bản đồ hệ thống, lấy chính mình làm trung tâm, từng vòng gợn sóng màu đỏ lan ra xung quanh, rõ ràng là cảnh báo nguy cơ.
+
+Chỉ là nhắc nhở nguy hiểm đơn thuần, cũng không đánh dấu nguồn gốc nguy hiểm, âu cũng hợp tình hợp lý.
+
+Cùng lúc đó.
+
+Ào ào ào ào ——!
+
+Trong khu rừng nguyên sinh này, gió ấm từ từ thổi qua, lá cây xung quanh cũng theo đó đung đưa, phát ra tiếng kêu ào ào.
+
+Nghe vô cùng thoải mái, nhưng lại mang đến cho người ta một loại cảm giác áp bách nguy hiểm, rõ ràng có kẻ địch đang nhanh chóng tiếp cận anh.
+
+Y Mặc thì chỉ đứng tại chỗ.
+
+Con mắt trái đã mù gợn lên làn sương mù màu đỏ nhạt, mặt không biểu cảm quét mắt nhìn quanh.
+
+Vốn dĩ là một thế giới màu xanh lục, nhưng hiện ra trong mắt trái của Y Mặc lại trở thành thế giới đỏ tươi với độ đậm nhạt khác nhau, một bức tranh âm trầm như địa ngục vực sâu.
+
+Mà ở trong đó, 3 năng lượng đỏ thẫm đại biểu cho kẻ địch, đang di chuyển với tốc độ rất nhanh xuyên qua rừng, nhanh chóng tiếp cận Y Mặc.
+
+Bá ——!
+
+Trong đó một kẻ gần nhất, chỉ mười mấy giây đã lao đến cách Y Mặc không xa.
+
+Trong thoáng chốc.
+
+Một gã đàn ông trẻ tuổi cao khoảng 1 mét 75, để tóc vàng, trên mặt mang nụ cười hưng phấn, giơ cao con dao phay trong tay, liều mạng xung phong về phía Y Mặc.
+
+“Ha ha, đồng đội khoảng cách gần như vậy thì bỏ qua.”
+
+“Cái tên người chơi gà mờ gặp ngay lúc đầu này, có thể kiếm một đợt điểm số trước đã, quá gà luôn!”
+
+Nhìn ra được, tên tóc vàng này có năng lực chiến đấu nhất định.
+
+Không nói đến việc so sánh với người chơi chiến đấu chuyên nghiệp, nhưng thực lực cấp 2, 3 tuyệt đối có. Chiến đấu vật lý đánh một Y Mặc dễ dàng, huống chi còn có 2 người đồng đội nữa?
+
+Ở trong trạng thái này, nhìn thế nào Y Mặc cũng phải bắt đầu "hiến mạng", phải giao chút át chủ bài hoặc kéo Ninh Vũ Vũ tới.
+
+Y Mặc mặt không biểu cảm.
+
+Cũng chỉ lắc đầu, thở dài nói: “Đại khái là, mình xung khắc với mấy tên tóc vàng...”
+
+Mỗi ván game, đều phải gặp một tên tóc vàng đáng ghét.
+
+Tên tóc vàng: “Ha ha, coi như ngươi xui xẻo!”
+
+Tên tóc vàng căn bản không coi Y Mặc ra gì, bây giờ đã cách Y Mặc không đến 5 mét, có thể nói là "đánh thẳng vào hang ổ", giơ dao lên là định chém chết Y Mặc một nhát.
+
+Mà Y Mặc thì chỉ nâng tay phải lên.
+
+“Đoàng ——!”
+
+Một tiếng súng vang lên, vài chiếc lá rụng xuống.
+
+Máu tươi xuyên qua làn da bị rách, lan tràn trên gò má, đồng thời trùng khớp một cách khó hiểu với hình ảnh trong mắt tên tóc vàng.
+
+Khoan đã, vì sao hắn có thể dùng súng?!
+
+Rõ ràng, vũ khí nóng đã bị hệ thống cấm rồi mà!!
+
+Trong cửa hàng điểm số trò chơi có thể đổi súng ống loại vũ khí nóng, nhưng vừa mới bắt đầu, mọi người căn bản không có điểm số trò chơi...
+
+Dưới suy nghĩ như vậy, sau khi trúng đạn, cả người tên tóc vàng đều ngơ ngác. Đợi đến khi lảo đảo đi tới trước người Y Mặc, ý thức đã sắp biến mất.
+
+Y Mặc thì vô cùng nhẹ nhàng tự nhiên nghiêng người.
+
+Tay trái túm lấy tóc tên tóc vàng để hắn không ngã xuống, đồng thời kéo mạnh cơ thể hắn qua một cái, để hắn chắn sau lưng mình, dùng cơ thể tên tóc vàng đỡ một nhát dao đang vung tới từ phía sau.
+
+Nghiêng người, quay đầu.
+
+Ánh mắt lạnh nhạt vô tình, lần nữa nâng khẩu súng ngắn trong tay phải lên, họng súng cách kẻ thứ hai đánh tới chưa đến 1 mét.
+
+“Chính xác là xui xẻo, chẳng qua là các ngươi xui xẻo mà thôi...”
+
+Dưới giọng nói băng lãnh tê liệt không chút tình cảm, cò súng lại được bóp một lần nữa. Tiếng súng vang vọng triệt để trên khu rừng, thật lâu khó dứt.
+
+Trò chơi, chính thức bắt đầu.

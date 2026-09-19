@@ -1,0 +1,121 @@
+Chương 704 - Lối hẹp tương phùng
+
+*Edit: Lắc
+
+Giữa bóng tối mênh mông vô tận, những vì sao lần lượt tỏa ánh sáng rực rỡ, nhưng quỹ đạo chuyển động của chúng lại hoàn toàn trái ngược với các quy luật arcana. Như thể bị một thứ sức mạnh bí ẩn nào đó chi phối, chúng vận hành trong trạng thái vô cùng hỗn loạn, đến mức thường xuyên xuất hiện cảnh tượng một ngôi sao vốn đang ở đúng quỹ đạo của mình bỗng dưng rời khỏi lộ trình, sau đó không chút do dự lao thẳng vào một ngôi sao khác, gây ra những vụ nổ kinh hoàng, làm cuốn lên cơn bão năng lượng đủ để hủy diệt mọi tồn tại dưới bậc huyền thoại.
+
+Chính bởi vậy, Tinh không Hỗn loạn chính là nơi lạnh lẽo và tịch mịch, hầu như không ác ma nào có thể sinh tồn. Đó cũng chính là lý do vì sao nơi này có thể thai nghén ra Phiến Đá Thời Không, nhưng lại không thể tạo nên một Quân chủ Ác ma – Trừ phi là một tồn tại bẩm sinh như Ý Chí Vực Thẳm, còn không thì các ác ma khác đều phải bắt đầu từ dưới đáy, sau đó thăng cấp thông qua việc không ngừng giết chóc và thôn phệ. Mà ở một nơi không có tiểu ác ma nào sống sót nổi như Tinh không Hỗn loạn thì đương nhiên sẽ chẳng tên nào có thể trưởng thành được.
+
+Ngay khi vừa tiến vào Tinh không Hỗn loạn, sau lưng Lucien liền hiện lên một vũ trụ tối đen khác. Nó cũng rộng lớn vô tận, cũng bao la vô cùng, nhưng chỉ khác ở chỗ, những vì sao trong vũ trụ này đều rực rỡ muôn màu và tượng trưng cho các nguyên tố khác nhau. Đó chính là Vũ trụ Nguyên tử, demiplane huyền thoại của Lucien!
+
+Vũ trụ Nguyên tử vừa xuất hiện liền lập tức bành trướng ra, như thể chồng lên tầng Vực thẳm này. Kế đó, mỗi “tinh cầu nguyên tố” bắt đầu rung động tại chỗ, tựa như mỗi hạt vi mô đều có dao động của riêng nó.
+
+Vù vù vù… Giữa những âm thanh hư ảo, toàn bộ Vũ trụ Nguyên tử rung lắc kịch liệt, mang theo từng đợt gợn sóng lan ra khắp Tinh không Hỗn loạn. Đây là hiện tượng bình thường khi hai demiplane giao thoa và dung hợp với nhau.
+
+Từng vòng gợn sóng hư ảo như sóng nước lấy Lucien làm trung tâm, sau đó lan ra bốn phương tám hướng với tốc độ nhanh đến mức tưởng chừng như mọi nơi trong Tinh không Hỗn loạn đều đang diễn ra những biến chuyển tương tự.
+
+Natasha không quấy rầy Lucien mà hứng thú quan sát bầu trời sao hỗn loạn này, sau đó dựa vào chút kiến thức chiêm tinh nông cạn của mình để phán đoán: ‘Đều là tiểu hành tinh, ánh sáng là do tác động bên ngoài, không phải ngôi sao thực sự, cũng giống như Vũ trụ Nguyên tử của anh ấy…’
+
+Dưới sự chỉ dạy của Lucien, cô đã nắm được những kiến thức chiêm tinh cơ bản, thói quen dùng từ cũng gần với cách nói trên Trái Đất hơn. Cộng thêm việc thường xuyên luyện tập trong Vũ trụ Nguyên tử, nhận định của cô về Tinh không Hỗn loạn hầu như không sai lệch gì.
+
+Tầng Vực thẳm này chỉ tương đương với một demiplane, đương nhiên không thể giống như những dị độ không gian bình thường mà sở hữu bầu trời sao tương đối hoàn chỉnh – Trong các dị độ không gian, bầu trời sao, mặt trời, v.v. vốn khác biệt khá lớn so với thế giới vật chất chính, giống như thể chúng chỉ là một phần rất nhỏ của vũ trụ bao la, không thể hiện ra một cách trọn vẹn. Tuy nhiên, chúng cũng vẫn có điểm chung, đó là đều tuân theo quy luật chuyển động của thiên thể, cùng với việc hiện tại đều chưa phát hiện được sự tồn tại của hành tinh.
+
+Khi những gợn sóng bên trong Tinh không Hỗn loạn càng lúc càng dữ dội, nó cũng bắt đầu rung chuyển kịch liệt. Giữa biến chuyển đó, Lucien thông qua phản hồi nhạy bén bắt được thông tin mà mình muốn. Cậu mở to hai mắt, trong đôi đồng tử màu đen thấp thoáng có ánh sao lưu chuyển, sau đó nhìn về phía bên trái bầu trời sao nói: “Phiến Đá Thời Không đang ở bên đó. Vị trí tọa độ là…”
+
+Trong lúc tất cả đều đang rung chuyển, phần lõi đương nhiên sẽ khác biệt đôi chút so với những khu vực khác. Lucien cũng chính nhờ điểm này mà có thể nhanh chóng xác định được vị trí của Phiến Đá Thời Không, nếu không cậu đã chẳng thử để cho Vũ trụ Nguyên tử chồng lên và dung hợp với Tinh không Hỗn loạn. Xét cho cùng, chỉ cần một sơ sảy nhỏ là cũng có thể biến khéo thành vụng, để rồi thực sự bị khí tức của Vực thẳm ô nhiễm. Mặc dù chuyện này không ảnh hưởng đến độ ổn định của demiplane, song việc dọn sạch cũng vẫn khá phiền phức.
+
+‘Chưa tới năm giây đã định vị được vị trí của Phiến Đá Thời Không rồi…’ Trong đôi mắt tím bạc của Natasha ánh lên một tia ngưỡng mộ. Trước mặt Lucien, cô không hề che giấu những cảm xúc rất đỗi bình thường của mình. ‘Ngoài Ý Chí Vực Thẳm và Vương tử Ác ma ra, cũng chỉ mỗi Pháp sư huyền thoại mới có thể dùng cách chồng demiplane lên, cho chúng dung hợp với nhau để gây rung chấn và nhanh chóng định vị được lõi như vậy thôi…”
+
+Những cường giả huyền thoại không có demiplane thì chỉ có thể dùng thủ đoạn khác, nhưng sẽ tương đối chậm.
+
+Để tránh bị khí tức của Vực thẳm ô nhiễm, Vũ trụ Nguyên tử phía sau Lucien dần dần biến mất. Sau đó, cậu nắm lấy cánh tay trái của Natasha, mượn demiplane làm trạm trung chuyển rồi trực tiếp nhảy không gian.
+
+Tinh không Hỗn loạn chỉ là một tầng của Vực thẳm, Lucien và Natasha chỉ mất vẻn vẹn vài giây đã nhảy sang một khoảng không gian kỳ quái khác.
+
+Khoảng không gian này thoạt trông chẳng khác biệt mấy so với những nơi khác trong Tinh không Hỗn loạn, nhưng khi quan sát kỹ sẽ phát hiện bóng tối ở đây đậm nhạt khác nhau, giống như thể trong đó đang ẩn chứa những gấp khúc không gian, hay như một vùng biển nguy hiểm có dày đặc những xoáy nước ẩn vậy.
+
+Biển cả vốn rất khó có thể uy hiếp đến cường giả huyền thoại, nhưng không gian này lại khiến cho Lucien không dám trực tiếp dịch chuyển vào.
+
+Đây chính là “lớp phòng ngự tự nhiên” do sức mạnh rò rỉ ra từ Phiến Đá Thời Không tạo thành. Nó đã thay đổi không – thời gian xung quanh, khiến cho Lucien và Natasha không thể dịch chuyển thẳng tới bên cạnh để lấy nó đi dễ dàng.
+
+Tuy nhiên, vùng không gian hỗn loạn và nguy hiểm này lại giúp cho Lucien chắc chắn hơn vào định vị của mình. Phiến Đá Thời Không đang ở ngay bên trong!
+
+“Cẩn thận chút.” Lucien niệm chú văn, ngưng tụ ra Quyền trượng Thời Không, sau đó yểm lên cả bản thân và Natasha một lớp phòng ngự không – thời gian biến ảo bất định.
+
+Natasha cũng giơ cao Khiên Chân Lý đang nắm chặt trong tay trái. Tuy rằng trong tình huống không đứng yên, phòng ngự của Khiên Chân Lý sẽ có rất nhiều chỗ không thể bao quát được hết, nhưng dùng nó để băng qua vùng không gian nguy hiểm này thì vẫn dư sức.
+
+Hai người hết sức thận trọng bước vào trong không gian “xoáy nước dày đặc”. Được Gương Vận mệnh sáng lấp lánh trước mặt Lucien dẫn đường, họ nhanh chóng tiến lên.
+
+Không gian này trông thì tưởng như vô biên vô tận, nhưng thực chất chỉ là ảo giác do không gian hỗn loạn tạo thành. Suy cho cùng, Phiến Đá Thời Không cũng chỉ là một vật liệu huyền thoại, phạm vi ảnh hưởng của sức mạnh mà nó rò rỉ ra cũng chỉ ở mức độ của một huyền thoại bậc hai bình thường mà thôi – Đương nhiên, sẽ chẳng có huyền thoại nào rảnh rang đến mức đi bao phủ toàn bộ phạm vi ảnh hưởng hết. Khi thi triển ma thuật và phát động tấn công, dù cho có là ma thuật diện rộng, họ cũng sẽ cố gắng tập trung sức mạnh hết mức có thể.
+
+Do đó, chỉ chưa đầy mười giây sau, Lucien và Natasha đã nhìn thấy một tiểu hành tinh kỳ lạ. Nó trong veo và tinh khiết, trông như được tạo thành hoàn toàn từ kim cương và tỏa ra một thứ ánh sáng đẹp đẽ đến độ hầu hết sinh linh đều khó lòng cưỡng lại.
+
+Ánh sáng của nó bắt nguồn từ một phiến đá đen tuyền nằm ở trung tâm, nơi có những gợn sóng lan tỏa trên bề mặt như thể sóng nước, từ đó lưu chuyển một thứ ánh sáng trong trẻo. Lucien có thể thấp thoáng thấy được trên bề mặt nó khắc đầy những hoa văn thần bí, phức tạp, khá là giống với Nguyệt Thời Kế, tràn ngập cảm giác thời gian trôi đi khó bề quay ngược trở lại.
+
+Đây chính là mục đích mà Lucien nhắm tới: vật liệu huyền thoại Phiến Đá Thời Không!
+
+Nhưng khi phát hiện thấy Phiến Đá Thời Không, Lucien và Natasha cũng trông thấy một người đàn ông chừng hơn ba mươi đang đứng bên cạnh tiểu hành tinh ấy. Hắn vóc người cao lớn, tóc ngắn màu vàng nhạt, dung mạo mang nét điển hình của đàn ông Đế quốc Schachran, thô kệch, khí phách, nhưng lại đem đến cho người ta cảm giác ôn hòa, điềm đạm lạ thường.
+
+Chẳng qua, cái cằm hơi hếch lên kia lại khiến cho hắn trông thêm đôi phần cương ngạnh, trầm tĩnh.
+
+“Clement?” Cả Lucien và Natasha đều đồng thanh nói qua liên kết tinh thần.
+
+Thánh đồ Clement của giáo hội Bắc, tướng mạo, khí tức của hắn toàn bộ đều được ghi chép trong hồ sơ tình báo mật của Ma pháp Nghị viện và Vương quốc Holm!
+
+‘Sao hắn cũng chọn thời điểm này để lấy Phiến Đá Thời Không?’ Trong lòng cả hai người đều dấy lên ngờ vực.
+
+Vào khoảnh khắc Lucien và Natasha phát hiện ra Clement, hắn, với tư cách là một Thánh Hồng y bậc ba, đương nhiên cũng cảm nhận được họ, thậm chí trong lòng còn kinh ngạc và hoang mang hơn.
+
+Biết rằng Phiến Đá Thời Không vẫn chưa bị Lucien lấy đi, Clement lập tức có cảm giác bản thân đã đi trước một bước, mọi chuyện nhờ đó sẽ trở nên cực kỳ đơn giản – Hắn cho rằng ngay cả khi Lucien có xuất phát cùng lúc với mình, hắn vẫn có thể đến sớm hơn để lấy Phiến Đá Thời Không dưới sự hỗ trợ của Vương tử Ác ma, thậm chí còn có thể khiến cho cậu không biết người lấy đi là ai. Suy cho cùng, Lucien vừa phải vượt qua Đại dương Sôi sục, lại vừa phải giao chiến kịch liệt với Hỏa Thần ở trình độ huyền thoại bậc ba. Cho dù có tìm cách để đi đường vòng thì chỉ nội việc đi vòng kia thôi cũng đã tốn không ít thời gian rồi.
+
+Và quan trọng hơn cả, đó là Lucien rất có thể vẫn còn đang ở Allyn mà chuẩn bị, chưa hề xuất phát!
+
+Nào ngờ, sau khi tốn một chút thời gian để định vị Phiến Đá Thời Không và vượt qua “xoáy nước không gian”, hắn thế mà lại đụng độ Lucien ngay tại đây! Điều này khiến cho Clement, kẻ vốn không hề định quyết sống mái với cậu, khó tránh khỏi có chút hoảng loạn!
+
+Trông thấy Phiến Đá Thời Không đang ở ngay trước mắt, vươn tay ra là có thể chạm tới, nhưng cảm ứng được Lucien và Natasha đã vào phạm vi tấn công, Clement liền có chút do dự. Nên sớm cất Phiến Đá Thời Không đi, đợi cơ hội rồi bỏ trốn, hay là yểm thêm vài lớp phòng ngự cho bản thân đây?
+
+Hắn chỉ ngần ngừ một thoáng ngắn ngủi, sau đó rất nhanh liền ra quyết định. Có thể từng bước đi lên được tới vị trí hiện tại, hắn hiểu rất rõ, rằng vào những lúc thế này tuyệt đối không được phép do dự!
+
+Phải nỗi, Lucien không cho hắn cơ hội để thực hiện quyết định!
+
+Trong trường cảm ứng của Clement, tiếng đồng hồ tích tắc, tích tắc đột nhiên vang lên.
+
+Trong tay phải của Lucien, người đang mặc suit đen hai hàng khuy, xuất hiện một chiếc đồng hồ bỏ túi màu trắng bạc tinh xảo và cầu kỳ. Trên mặt đồng hồ, những viên đá quý khác nhau khảm thành các biểu tượng chòm sao để chỉ thời gian.
+
+Chiếc đồng hồ bỏ túi màu trắng bạc cùng chiếc kính độc nhãn trên mắt Lucien phản xạ lại ánh sáng trong trẻo. Kế đó, ngón tay cái của cậu nhẹ nhàng nhấn một cái.
+
+“Tách!”
+
+Tất cả màu sắc trong tầm mắt của Clement biến mất, chỉ còn lại một khoảng xám trắng trơ lì cùng với phiến đá đen tuyền tựa hồ vẫn đang tỏa ra ánh sáng nhàn nhạt.
+
+Sau khi sử dụng Dừng Thời gian Cao cấp, Lucien vươn tay phải ra, miệng niệm lên những chú văn cổ xưa, trúc trắc:
+
+“Hào hoa Liệt giải!”
+
+“Băng Tuyết Nữ Thần đích Khoan thứ!”
+
+Hào hoa Liệt giải là một thần chú huyền thoại cực kỳ khó thi triển, còn Băng Tuyết Nữ Thần đích Khoan thứ lại là thần chú băng tuyết có uy lực đạt tới huyền thoại đỉnh phong, thành thử thời gian thi triển của cả hai đều tương đối dài. Trong tình huống đang phải chịu thêm tác dụng của cả Bàn tay Bất định và Trì hoãn Phép, hiệu quả dừng thời gian đã gần kết thúc.
+
+Bóng tối một lần nữa ập tới, những vì sao xung quanh tiếp tục tỏa sáng rực rỡ.
+
+Lucien trong lòng tin chắc, chỉ cần hắn ta không miễn nhiễm với Dừng Thời gian Cao cấp, Hào hoa Liệt giải và Băng Tuyết Nữ Thần đích Khoan thứ, combo này nhất định có thể hạ gục bất kỳ cường giả huyền thoại bậc ba nào!
+
+Thần sắc kinh ngạc vẫn còn sót lại trong mắt Clement. Vô số tia sáng trên người hắn nổ lách tách. Một cột sáng trong suốt lấp lánh mang theo giá rét không tưởng từng chút một giáng xuống, như thể đang chờ hiệu quả của Hào hoa Liệt giải kết thúc!
+
+Thôi xong rồi!
+
+Hắn biết nhiều thần chú biến thái quá vậy!
+
+Đang trong cơn tuyệt vọng, quanh người Clement bỗng nhiên tỏa ra một luồng sáng đầy thánh khiết và thoát tục. Nó kéo hắn đi hàng trăm mét về bên trái, vừa vặn tránh được Băng Tuyết Nữ Thần đích Khoan thứ.
+
+Ngay sau đó, hắn liền nhìn thấy cột sáng kia đóng băng một tiểu hành tinh đang đi qua ở gần nơi hắn vừa đứng!
+
+Từ đâu đó gần Phiến Đá Thời Không, một tiếng ca kỳ ảo, du dương vang lên. Vô số điểm sáng trông như những tiểu thiên thần xuất hiện và vây quanh một bóng người tóc vàng đang dần hiện rõ.
+
+Khi 36 chiếc cánh lông vũ thánh khiết từ từ xòe ra sau lưng hắn, mọi hỗn loạn xung quanh liền trở nên trật tự, khí tức của Vực thẳm cũng tan biến.
+
+“Thiên Thần Vương!”
+
+“Mecantron…”
+
+Natasha và Lucien đồng thanh thốt lên, mỗi người lại dùng một danh xưng khác nhau để xác nhận thân phận của kẻ vừa giáng thế.

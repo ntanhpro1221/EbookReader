@@ -1,0 +1,112 @@
+Chương 650 - Câu hỏi
+
+
+Bên trong Vương quốc Điện từ, Brook đã ngừng bút và chăm chú nhìn vào hàm sóng trên tờ luận án. Nó mới đẹp đẽ và súc tích làm sao, tựa như bên trong hàm chứa mọi bí ẩn của thế giới vi mô vậy.
+
+Ông không hề nghi ngờ suy luận của mình là sai, bởi việc giải ra hàm sóng này sẽ kéo theo một loạt những nghiệm không liên tục, cũng chính là nghiệm lượng tử hóa, được giải ra, và chúng khớp với một vài số liệu thực nghiệm. Hơn nữa, ông cũng đã nhận được phản hồi từ thế giới thực, nhờ đó mà thế giới nhận thức bị vỡ ra và rắn lại của ông một lần nữa thai nghén nên sức sống, tựa hồ bất cứ lúc nào cũng có thể nảy mầm, sinh trưởng và bắt đầu tái cấu trúc.
+
+‘Xét từ góc độ hạt và góc độ không liên tục, cơ học ma trận có thể giải quyết được nhiều vấn đề của Tân Giả kim thuật. Hàm sóng xét từ góc độ sóng và góc độ liên tục xem chừng cũng rất hứa hẹn. Hạt và sóng lẽ nào thực sự thống nhất ở một tầng cấp cao hơn giống như Lucien từng nói? Các hạt vi mô như electron và photon là những thứ mà chúng ta tạm thời không thể xây dựng được chính xác hình tượng cụ thể, chỉ có thể mô tả chúng từ những tính chất xác định, dù cho những tính chất này mâu thuẫn và tương phản với nhau rõ rệt đến đâu đi chăng nữa.’
+
+Nhìn vào phương trình trên tờ luận án, Brook trong lòng suy xét tới vấn đề tối quan trọng đối với ông. Có thể thực sự nắm bắt được “lưỡng tính sóng – hạt” và dùng nó để giải quyết vấn đề mang tính bản chất của sóng điện từ chính là hy vọng để ông một lần nữa đắp nặn lại thế giới nhận thức, thậm chí tiến thêm một bước.
+
+Sau khi trải qua đả kích cùng những thí nghiệm nhiễu xạ electron đầy gian nan hết lần này đến lần khác, ông đã có sự công nhận ở một mức độ nhất định đối với lý thuyết của Lucien, thứ diễn giải bản chất của electron từ một cấp độ tư duy cao hơn, đồng thời không còn kiên trì đến chẳng chút lay chuyển với lý thuyết sóng nữa.
+
+“Ding”. Một tiếng chuông lanh lảnh truyền tới từ bàn làm việc, khiến Brook bỗng nhiên sực tỉnh. Sau khi một tia điện xẹt qua trong mắt, ông liền nghe thấy giọng của Oliver: “Brook, ông cũng xây dựng xong hàm sóng electron rồi đấy à?”
+
+“Ừ. Ông cũng vậy?” Brook cũng đoán được tình hình bên phía Oliver qua ngữ điệu vừa vui vẻ vừa nghi hoặc của ông.
+
+Nghe thấy câu trả lời của Brook, Oliver bật cười: “Hóa ra chúng ta hoàn thành gần như cùng một lúc. Bảo sao phản hồi từ thế giới thực lại không nhiều như tôi tưởng, chứ không thì làm sao một phương trình kinh điển tuyệt đối có thể chiếm giữ một trong những vị trí hàng đầu trong thế giới vi mô lại không thể giúp tôi đột phá chướng ngại hiện tại và chạm đến cánh cổng huyền thoại đỉnh phong chứ?”
+
+Trong ngữ khí của ông rõ ràng mang theo tâm trạng nhẹ nhõm. Mức độ phản hồi từ thế giới thực ban nãy khiến ông có phần hoài nghi về tính quan trọng hoặc tính hoàn chỉnh của phương trình này.
+
+Thông thường mà nói, rất khó để phán đoán tính đúng đắn tuyệt đối của một lý thuyết từ phản hồi từ thế giới thực, bởi vì chỉ cần gần với sự thật hơn trước là đã có thể nhận được một mức độ phản hồi nhất định với khác biệt không nhiều rồi, trừ phi nó vượt qua rất nhiều lý thuyết như Thuyết tương đối tổng quát của Lucien chẳng hạn. Hơn nữa, khi sử dụng phản hồi từ thế giới thực để xác định xem một lý thuyết có đúng hay không thì thế giới nhận thức cũng sẽ biến đổi tương ứng. Bởi vậy, nếu như tìm một vài lý thuyết mâu thuẫn với nhau để thử, chỉ cần chúng không gần với sự thật ngay từ lần đầu tiên thì bộ óc sẽ rất dễ nổ tung.
+
+Lần này sở dĩ Oliver hoài nghi chủ yếu chỉ là vì lượng phản hồi san sẻ ít hơn nhiều so với hồi trước.
+
+“Có lẽ vẫn còn một số lý do khác làm nó yếu đi… Trước tiên, chúng ta nên cùng tiến hành loại suy từ lý thuyết kinh điển, sau đó trực tiếp xây dựng nên một phương trình sóng electron, mặc kệ ý nghĩa arcana và suy luận logic có là gì đi chăng nữa, còn kiểm chứng sự thật và tìm kiếm ý nghĩa arcana cụ thể thì để quay lại làm sau. Chính vì vậy, cho đến khi chúng ta đưa ra được lời giải thích hoàn chỉnh cho bí ẩn của hàm sóng, phản hồi từ thế giới thực hẳn là sẽ bị giảm đi phần lớn.”
+
+Oliver cười ha hả nói: “Còn có thể có ý nghĩa arcana nào nữa chứ? Electron là sóng, còn quỹ đạo và các mức năng lượng thì chẳng là gì khác ngoài sự biến đổi của dao động. Đương nhiên, chúng ta không thể phán đoán bừa bãi mà không có bất kỳ căn cứ nào. Nhất định phải dùng phương trình sóng này để giải quyết các vấn đề hiện tại của Tân Giả kim thuật, của mô hình nguyên tử hydro, đồng thời tìm ra xem hàm sóng rốt cuộc đại diện cho thuộc tính nào của electron…”
+
+Ông rất vui sướng và phấn khích, nhưng cũng không lập tức khẳng định phương trình sóng của mình chính xác hơn và gần với sự thật hơn cơ học ma trận của Lucien.
+
+“Chúng ta đã độc lập suy ra nó cùng lúc, thế thì gọi phương trình này là ‘phương trình sóng Oliver – Brook’[note72958] nhé?” Oliver đề xuất.
+
+Đôi mày Brook chau lại, rồi ngay sau đó liền giãn ra: “Không thành vấn đề.”
+
+Ông chủ yếu nhớ đến trên kênh [Bản chất của Thế giới] một thời gian trước đã từng có phát ngôn trêu chọc cách đặt tên này: “Lấy họ của tôi, thêm tên anh vào”,[note72959] khiến ông nhất thời cảm thấy có chút cổ quái.
+
+Sau khi kết thúc cuộc gọi, Brook khẽ gõ ngón tay xuống bàn: ‘Cơ học ma trận theo góc độ hạt cũng có thể giải quyết được vấn đề của Tân Giả kim thuật, còn được Hathaway mở rộng sang phạm trù mô hình nguyên tử rộng hơn… Có khi nào điều này cho thấy ý nghĩa arcana của hàm sóng có điểm khác với sóng bình thường hay không…’[note72960]
+
+‘Về hàm sóng, vẫn nên viết thư cho Fernando, Hathaway, Hellen, Vicente và Lucien để thảo luận một chút thì hơn.’
+
+Sở dĩ Brook không đề cập đến Douglas là bởi ông tin rằng Oliver chắc chắn sẽ viết thư cho ông ấy để thảo luận chuyện đó, cho nên ông không cần phải làm vậy nữa. Ông cũng tin rằng Lucien, người đã đề xuất ra khái niệm “lưỡng tính sóng – hạt”, sẽ không thể không công nhận hàm sóng.
+
+……
+
+Dẫu cho đã nhìn thấy “cảnh tượng bầu trời sao” kia, Lucien vẫn tuân thủ theo thái độ hoàn thành từng bước trong nghiên cứu arcana, tất cả mọi thứ đều lấy dữ liệu thí nghiệm và hiện tượng quan sát được làm chuẩn. Đã có tương lai rộng mở hơn những Arcanist khác, lại có thể nhìn được xa hơn, sao cậu phải mạo hiểm cực đoan chứ? Và quan trọng nhất, việc nghiên cứu như vậy cũng là một quá trình học hỏi và nắm bắt. Cậu không muốn có một nền tảng không ổn định khi tương lai không có tham chiếu.
+
+Chiếc đồng hồ bỏ túi tích tắc tích tắc nhích tới giờ ăn tối. Natasha, người lúc này đã không còn lo lắng, cầm theo hai lá thư đi vào với sắc mặt đặc biệt tốt: “Lucien, thư của Ngài Brook và Ngài Oliver này. Xem chừng họ có tiến triển trong nghiên cứu đấy.”
+
+Sau khi kết thúc “công việc nữ vương”, Natasha thường đảm nhiệm vai trò “thư ký mật” cho Lucien, giúp chuyển thư, lấy vật liệu thí nghiệm, v.v. cho cậu, bởi vậy mà cô có thể phán đoán ra được đôi điều từ độ dày của phong bì. Tuy nhiên, lúc tiến hành những thí nghiệm tinh vi hơn, cậu thường không cho cô vào phòng thí nghiệm – Cô có quá nhiều tiền án trước đây rồi!
+
+Mở lá thư ra, Lucien liền mỉm cười ngay khi đọc phần mở đầu.
+
+“Gì thế? Kết quả của Ngài Brook có vấn đề gì à?” Natasha xoa xoa cằm rồi tò mò hỏi. Cô vẫn chưa đọc được những bài ở trình độ giống như luận án về hàm sóng này, mà chỉ suy đoán dựa trên biểu cảm của Lucien.
+
+Lucien ngửa lưng dựa vào ghế, Natasha liền ăn ý đặt hai tay lên trán cậu và xoa bóp để giúp cậu thư giãn.
+
+“Lực của Hoàng kim hiệp sĩ quả thực không tệ.” Lucien thuận miệng đùa.
+
+Natasha nhướng lông mày bên trái: “Đó là vì em chưa dùng hết sức thôi, chứ không thì đầu anh đã nát bét, máu đỏ não trắng đã tóe tòe loe khắp sàn nhà rồi.”
+
+“…Thời điểm ấm áp như này đừng có nói mấy cái chủ đề khẩu vị nặng thế chứ.” Khóe môi Lucien giật giật.
+
+Natasha cười hà hà: “Là vợ của Quỷ Nổ Đầu, Kẻ Nghiền Sọ, em tưởng đây là một chủ đề khá là bình thường chứ. Ơ mà, anh vẫn chưa trả lời câu hỏi của em. Kết quả của Ngài Brook có vấn đề gì à?”
+
+“Không. Đó là một thành quả vĩ đại thực thụ đấy.” Lucien thật lòng nói.
+
+……
+
+Sau khi chuyện thăm dò Linh Giới lắng xuống một chút, Douglas triệu tập một cuộc họp Hội đồng Tối cao để bàn về những sự việc liên quan.
+
+Trước đó, trong báo cáo mạo hiểm do ông, Fernando và Lucien đệ trình lên, ba người họ đã cố ý giấu đi phương pháp cụ thể giúp Thanos và Viken trở thành Á Thần. Họ chỉ nói một cách mơ hồ rằng Thanos trở thành Á Thần bằng cách tích tụ đức tin và dựa vào pháp trận đặc thù để chuyển hóa thành ác quỷ viễn cổ, Viken cũng tương tự. Còn nội dung cụ thể đã giải mã ra liên quan đến vấn đề này thì họ không nhắc đến, thay vào đó đổ cho Viken phá hủy và tên quái vật che giấu.
+
+Họ lo ngại rằng trong các thành viên của Hội đồng Tối cao sẽ có người đi theo con đường di họa vô tận của ác quỷ viễn cổ, vậy nên tạm thời chỉ cân nhắc ba người họ rồi dần dần nạp thêm các Grand Arcanist khác vào sau. Đợi đến khi Douglas hoặc ai đó khác trở thành Á Thần dựa trên con đường arcana, họ mới công khai thông tin cho Hội đồng Tối cao. Đến lúc đó, đã có một hướng đi sáng tỏ bày ra trước mắt, họ tin rằng sẽ không có nhiều người lựa chọn một phương pháp nhiều hiểm họa tiềm tàng như vậy nữa. Cho dù có thì lúc ấy cũng đã có một vị Á Thần để trấn áp họ lại.
+
+Lucien theo thói quen đến sớm, song trong phòng họp lại trống huơ trống hoác. Đã không còn Klaus ở đây nữa. Bình thường mà nói, người đến sớm nhất sẽ là ông.
+
+Nhìn thấy khung cảnh này, Lucien khe khẽ thở dài, tâm trạng bỗng trở nên buồn bã.
+
+Cậu vừa ngồi xuống được một lúc thì Raventi tóc xám bước vào. Sau khi cơ học ma trận được đề xuất và giải quyết được nhiều vấn đề của Tân Giả kim thuật, ông cuối cùng cũng không trì hoãn nữa mà thông qua nghi thức rồi trở thành tân Chúa Tể Nguyên Tố. Do chức nghiệp huyền thoại này trùng lặp với Hathaway, ông được trao một danh hiệu huyền thoại tương tự là “Hồng Thủy Nguyên Tố”.
+
+“Chúc mừng ông, ông Raventi.” Lucien đứng dậy nói.
+
+Raventi khẽ gật đầu: “Nếu không có những thay đổi mà cậu mang tới, tôi đã chẳng trở thành huyền thoại nhanh đến vậy.”
+
+“Chẳng ai có thể giúp một pháp sư không sẵn lòng nỗ lực, không tự nguyện nghiên cứu trở thành huyền thoại cả.” Lucien khéo léo bày tỏ sự kính phục của mình.
+
+Raventi lắc đầu: “So với niềm vui được tấn thăng, tôi lại có hứng thú với thế giới vi mô, với bí ẩn của vật chất mà cậu đem tới hơn.”
+
+Khi thành viên của Hội đồng Tối cao và các Grand Arcanist như Fernando, Hathaway và Douglas lần lượt xuất hiện, trọng tâm của cuộc thảo luận chuyển sang phương trình sóng Oliver – Brook.
+
+Đúng lúc này, Brook và Oliver, những người trao đổi suốt dọc đường, từ ngoài bước vào.
+
+Douglas mỉm cười đứng dậy nói: “Chúc mừng hai người. Cả hai đã làm nên thành quả mang tính thời đại.”
+
+Brook vẫn điềm tĩnh nói: “Chúng ta vẫn còn rất nhiều việc phải làm. Một khi chưa xây dựng được hệ thống Tân Giả kim thuật khác với cơ học ma trận bằng phương trình sóng thì vẫn chưa phải là thành quả mang tính thời đại.”
+
+“Bất luận có thế nào, đây vẫn là một thành quả mang tính quyết định trong lĩnh vực vi mô.” Ngân Nguyệt Học Giả Chelsea vui vẻ, kích động nói. Sau khi bị cơ học ma trận giống như con quái vật kia giày vò suốt nhiều tháng, rồi bỗng nhiên lại có được đáp án từ phương trình sóng mà mình quen thuộc, cô thật sự hưng phấn và cảm động đến không lời nào có thể diễn tả. “Vì muốn hiểu rõ tất cả mọi thứ về phương trình này mà mấy ngày nay tôi miệt mài nghiên cứu nó chẳng biết ngày đêm luôn.”
+
+Fernando cũng lẩm bẩm nói: “Kết quả nghiên cứu của cậu không tệ.”
+
+“Haha, tôi cũng nghĩ điều này sẽ cho các Arcanist một hệ thống Tân Giả kim thuật quen thuộc, kinh điển và súc tích, một hệ thống Tân Giả kim thuật được hình tượng hóa, thay vì một cơ học ma trận phức tạp, khổng lồ mà chẳng có hình tượng đối ứng.” Oliver mang theo ý cười đầy mặt nói. “Lucien, tôi không bảo cơ học ma trận của cậu là sai, chỉ là nó quá gần với phương pháp toán học thuần túy, không có ý nghĩa arcana thực sự, cũng không thể hình tượng hóa cho mọi người học được. Nó quá khó. Nghe bảo 99% các pháp sư ở Học viện Ma thuật Holt đều nguyền rủa cơ học ma trận.
+
+Bên cạnh đó, bản chất của tất cả vẫn là sóng.”
+
+Sau khi hàm sóng xuất hiện, lý thuyết sóng và lý thuyết hạt xem chừng lại có điểm đối lập với nhau, nhưng may nhờ có khái niệm được Lucien đề xuất từ trước, tình hình mới không trở nên căng thẳng. Do đó, đám người Hathaway đều không phát biểu ý kiến.
+
+Cảm nhận được ánh mắt của nhiều người đổ về phía mình, Lucien mỉm cười nói: “Tôi có một câu hỏi về hàm sóng. Nó đại diện cho ý nghĩa arcana nào?”
+
+“Nó là hàm phân bố của electron ở dạng sóng trong không gian. Về việc vì sao electron lại biểu hiện tính chất hạt thì tôi đã có ý tưởng và sẽ viết một luận án để giải thích.” Oliver tự tin và lạc quan nói. “Còn câu hỏi nào nữa không, Lucien?”
+
+Lucien cười nói: “Tạm thời thì không.”
