@@ -3351,3 +3351,30 @@ kho chật là nguyên nhân, số người MỚI bị chia giọng do lô 7 ph�
 giọng G" của `pin_the_book_cast` ở đầu lô 7 phải giảm hẳn so với lô 6. Đo sau lô 7: chạy lại `--across`
 và đếm mục `7:` cùng số đa số bị lật. Nếu vẫn nhiều, nguyên nhân là chỗ khác và phải tìm trước khi đúc
 lại 49 chương (~5 giờ GPU).
+
+## Tên và từ tiếng Anh: VieNeu đọc thế nào, và lớp phiên âm của dự án phủ bao nhiêu (19-09, 20:3x — ĐO RỒI)
+
+Chủ sách hỏi khả năng đọc tên/từ tiếng Anh của VieNeu 3.8.1 và tác giả có cam kết gì. Trả lời bằng số:
+
+**Cơ chế.** VieNeu giao chuẩn hoá + G2P cho `sea-g2p` 0.9.1 (cùng tác giả), chế độ `"vi"` = "tiếng Việt kèm
+chuyển mã tiếng Anh": chữ Latin ngoài từ điển Việt đi sang bộ máy tiếng Anh; ép bằng `<en>…</en>`. Thử trên
+bản cài: laptop / check email / "OK, hello world" / Wi-Fi / iPhone ra IPA tiếng Anh đúng; từ Việt đầu câu
+(Sang, May, An, Bay) đọc đúng NHỜ NGỮ CẢNH (phiên âm từng từ đứng riêng thì sai - đừng đo kiểu ấy). Lỗi thấy
+được: `Gauci` bị cắt "Gau"(Việt) + "ci"(Anh "yu-sai") - đúng ca hỏng 370 ("Gà Yusai Cromwell"); tên Nhật
+`Rentaro` đọc kiểu Anh; "Hồng y Sard" (tên chưa phiên âm) kéo chữ "y" thành "wai".
+
+**Cam kết của tác giả: không có.** README nói "bilingual", "10,000+ hours of bilingual training", chỉ cảnh báo
+v3 Nano ("English words come out with a Vietnamese accent and are less stable"); v3 Turbo không có số liệu hay
+bảo đảm. Release notes app 0.16-0.18 không có mục nào về tiếng Anh. sea-g2p chỉ ghi "English code-switching".
+
+**Dự án phủ 99%.** Tên được phiên âm sang âm tiết Việt TRƯỚC VieNeu (`pronunciations`, nguồn
+`english_name_transliteration`), nên không đi qua bộ máy tiếng Anh. Đếm trên lô đã xong (tách từ Unicode, lọc
+bằng luật chính tả âm tiết Việt): lô 7 có 3.474 lần xuất hiện tên/từ nước ngoài, 99,4% có cách đọc ghim; lô 8
+3.203 lần, 98,8%. Phần gửi NGUYÊN CHỮ (21 / 37 lần): tiếng kêu (Haha, Haiz, Kekeke, Pfft), thuật ngữ (Electron,
+Positron, Heli, DNA, Boss, Banshee - đọc kiểu Anh là chấp nhận được), và 1-5 TÊN HIẾM mỗi lô (Gauci, Cromwell,
+Max, Beever, Elks) - chỉ nhóm này rủi ro. Nguyên nhân lọt: bảng sinh ở bước phân tích cho tên nhân vật/tên model
+nhận ra; tên xuất hiện một lần trong lời kể thì hay sót (`Timos` đứng riêng không khớp mục `Tina-Timos`).
+
+Việc có thể làm (chờ chủ sách chọn kiểu đọc: Việt hoá như nay, hay tên Anh đọc giọng Anh bằng `<en>`): một lượt
+quét trước khi thu tìm từ Latin viết hoa không phải âm tiết Việt và không có trong bảng, rồi phiên âm (hoặc bọc
+`<en>`). Quy mô nhỏ: vài tên mỗi lô.
