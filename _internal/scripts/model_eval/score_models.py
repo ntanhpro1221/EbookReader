@@ -286,6 +286,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", type=Path, help="ghi toàn bộ kết quả (kể cả danh sách lỗi) ra file")
     parser.add_argument("--misses", type=int, default=0, help="in N lỗi người nói đầu tiên của mỗi model")
     parser.add_argument(
+        "--chapters",
+        nargs="*",
+        help="chỉ chấm các chương này (tên chương như trong project) - để chấm một lô đang bay, "
+        "khi các chương sau chưa phân tích",
+    )
+    parser.add_argument(
         "--dispute-out",
         type=Path,
         help="ghi phiếu phân xử (TSV) mọi chỗ bài làm khác đáp án, tên model ĐÃ GIẤU thành TS1..TSn; "
@@ -294,6 +300,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     gold = load_gold(GOLD_ROOT / args.gold)
+    if args.chapters:
+        wanted = set(args.chapters)
+        gold = {key: value for key, value in gold.items() if key[0] in wanted}
+        if not gold:
+            raise SystemExit(f"không có đáp án cho chương {sorted(wanted)} trong gold/{args.gold}")
     chapters = {chapter for chapter, _ in gold}
     projects = args.projects or eval_projects()
     results = []

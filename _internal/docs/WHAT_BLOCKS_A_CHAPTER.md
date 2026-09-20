@@ -248,6 +248,32 @@ chứng văn bản nhất trí (`loser = 0`) với những nhân vật mà model
 Ở 3 hit, bằng chứng văn bản **mâu thuẫn với model 5 lần trên 13**. Ngưỡng 5 không phải con số
 tuỳ tiện. Hạ nó là mua một lỗi im lặng để tránh một lỗi ồn ào.
 
+### Chiều ngược lại: model CHIA PHIẾU mà vẫn thắng văn bản (2026-09-20)
+
+Sự cố trên là "văn bản đúng mà ngưỡng chặn". Đo lô 10 lại thấy lỗi ngược, và nó **không chặn gì
+cả** - nó đi thẳng vào sách: `resolve_gender` cho đa số phiếu của model thắng NGAY, nên văn bản
+chỉ được hỏi khi phiếu HOÀ. Một đa số mỏng cũng đủ để văn bản không bao giờ được hỏi:
+
+| nhân vật | phiếu model | văn bản | luật cũ chọn | thật |
+|---|---|---|---|---|
+| NEESHKA (lô 10) | 9 nam / 12 nữ | 23 nam / 7 nữ | **nữ** | nam - "Ngài Neeshka", "Ủy viên Neeshka, **ông** cảm thấy", "Neeshka và những **quý ông** khác" |
+| CHLOE (lô 8) | 2 nam / 13 nữ | 26 nam / 5 nữ | **nữ** | nam - `docs/GOLD_GUIDE.md` đã ghi: chương 344 gọi "anh", "ngài Chloe" |
+| LAUREN (lô 8) | 4 nam / 7 nữ | 11 nam / 0 nữ | **nữ** | nam - "Ý kiến của **ngài** Lauren" |
+
+Ba nhân vật, cả ba đọc bằng giọng khác giới suốt phần sách họ xuất hiện - lỗi nghe rõ nhất có
+thể, mà không cổng nào hé một tiếng.
+
+Bản vá (ghim ranh giới 10, `patch_the_text_outranks_a_split_vote_on_gender.py`): phiếu **chia**
+(cả hai giới đều có phiếu) thì hỏi văn bản TRƯỚC; văn bản dứt khoát thì văn bản thắng, không thì
+mới đếm đa số. Model **nhất trí** vẫn thắng như cũ - đó là điều kiện giữ cho phép đo ngưỡng 5 ở
+trên còn giá trị, và MILINA chứng minh: model nhất trí nữ, văn bản 19 nam / 14 nữ (tỉ lệ 1,36,
+không dứt khoát) -> không đổi, đúng ("cô Milina"). Đo trên 5 project (275 tên người nói): đổi
+đúng 3 ca trên, 0 ca đổi oan.
+
+Lô 10 đang bay nên gỡ bằng đường **không đổi mã**, đúng như mục dưới:
+`cli cast <project> --character NEESHKA --gender male`. Chạy lúc lô còn đang phân tích (chưa đúc
+giọng nào), nhịp tim pipeline không hụt một giây.
+
 ### Cách gỡ đã dùng, và cách sửa đúng
 
 **Gỡ ngay:** `cli cast --character "SỐ SÁU" --gender female`. Đó là **đọc sách**, không phải

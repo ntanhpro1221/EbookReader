@@ -36,9 +36,11 @@ LEASE_STALE_SECONDS = 180.0
 # Không đụng tới cuốn 1 và cuốn 2 (chia lại cả 915 + 478 chương: 0 đoạn đổi) - vá để các truyện
 # Nhật dịch (Yamiyo no Hotaru, Năng lực bá đạo, Two Childhood Friends) không bị NGƯỜI KỂ đọc thoại.
 # Và: "Arthen NGHIÊM NGHỊ hỏi:" vẫn là câu kể nêu tên người nói (đo trên 41 chương đáp án: +17 đúng, 0 sai).
+# Và: model chia phiếu về giới tính thì VĂN BẢN quyết (NEESHKA, CHLOE, LAUREN đều đang bị đọc giọng nữ).
 ORDER: tuple[str, ...] = (
     "patch_a_whole_line_in_white_corner_brackets_is_a_voice.py",
     "patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py",
+    "patch_the_text_outranks_a_split_vote_on_gender.py",
 )
 
 APPLIED = (
