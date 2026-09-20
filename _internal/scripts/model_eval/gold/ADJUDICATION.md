@@ -251,3 +251,27 @@ là dòng `『Một trong hai người nhượng bộ đi chứ...』`. Đáp á
 lời kể). Bản vá 『』 khoá nó thành THOẠI, và bản vá đúng: câu 98 nói rõ "có cả Kakushigi và Grey ở đây", nên câu ấy là
 một người đứng cạnh NÓI RA MIỆNG - để NGƯỜI KỂ đọc là sai. Sửa thành `D NPC*,UNKNOWN,KAKUSHIGI,GREY` (văn bản không
 chỉ rõ ai trong hai người). Phát lại chương: 100%. Đây đúng là ô `ĐÁP_ÁN_SAI` của quy trình, chỉ khác nguồn phát hiện.
+
+## Vòng 15 (20-09 10:1x): phân xử PHIẾU CHẤM lô 10 - lô sản xuất đầu tiên có 8 bản vá host
+
+Chương 426 và 429 (hai chương có đáp án đã phân tích xong khi lô còn đang bay; `score_models.py --chapters`).
+Điểm 79,6 - người nói 71,7%. 26 chỗ lệch, phân xử mù bằng phiếu. **Không sửa dòng đáp án nào.**
+
+| kiểu | số chỗ | phán xử |
+|---|---|---|
+| ARTIL viết thành `ARTEL` / `ARTELI` | 8 | TS_SAI - nguồn có "Artil" 88 lần, "Artel" 0, "Arteli" 0. Mỗi cách viết sai thành một nhân vật riêng có giọng riêng -> `patch_a_name_two_letters_off_still_belongs_to_its_owner.py` |
+| cụm trích giữa câu kể gán cho nhân vật (426:6, 9, 11) | 3 | TS_SAI - người kể đang gọi tên hai tập san giữa câu của chính mình -> `patch_a_term_quoted_mid_sentence_is_the_narrators_own_line.py` |
+| host tự sửa thành `người gọi EVANS` (429:77, 78) | 2 | không phải lỗi đáp án: luật "người được gọi" thay người nói bằng một NPC vô danh, nên 0 điểm dù host đã nhận ra model sai. Đúng như đo trước đó ở `docs/LLM_EVAL.md` - nới luật ấy không được điểm nào |
+| model lấy tên được NHẮC hoặc được GỌI trong câu làm người nói | 13 | TS_SAI |
+
+Ba chỗ phân xử kỹ bằng văn bản gốc:
+
+| chỗ | đáp án | bài làm | bằng chứng | phán xử |
+|---|---|---|---|---|
+| 426:3 | NEESHKA | LEVSKI | nguồn: `“Tự Nhiên?” Neeshka đằng hắng rồi nói: “Ủy viên Evans, lời giải thích của cậu...”` | TS_SAI |
+| 426:79 | NEESHKA | LEVSKI | Samantha hỏi "Thưa thầy, hôm nay thầy thua ạ?" -> người đáp là THẦY của cô, tức Neeshka (xem ghi chú 72 của đáp án). Tên Levski chỉ được NHẮC trong câu ("Hình học mới của Levski đã đúng") | TS_SAI |
+| 429:20, 32-34, 42, 67, 74 | ARTIL | ARTEL/ARTELI | "Artil" 88 lần trong nguồn, hai cách kia 0 lần | TS_SAI |
+
+Đáng ghi: `426:3` sẽ được host tự sửa từ ranh giới 10, vì "Neeshka **đằng hắng rồi** nói:" là đúng mẫu mà
+`patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py` mở ra (đã thử trên cây đã vá: trả về "Neeshka").
+Tổng cộng **11 trên 26** chỗ lệch của lô 10 nằm trong tầm ba bản vá đang ghim ở hàng đợi ranh giới 10.

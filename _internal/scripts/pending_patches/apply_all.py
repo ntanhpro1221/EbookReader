@@ -43,6 +43,8 @@ ORDER: tuple[str, ...] = (
     "patch_the_text_outranks_a_split_vote_on_gender.py",
     # Và: nhãn vắng mặt trong sách lệch HAI ký tự vẫn là cùng một người (ARTELI -> Artil, JOCLEYN -> Jocelyn).
     "patch_a_name_two_letters_off_still_belongs_to_its_owner.py",
+    # Và: cụm trích giữa câu kể là chữ của NGƯỜI KỂ (41 chương đáp án: 29 chỗ đúng, 0 chỗ hại).
+    "patch_a_term_quoted_mid_sentence_is_the_narrators_own_line.py",
 )
 
 APPLIED = (
