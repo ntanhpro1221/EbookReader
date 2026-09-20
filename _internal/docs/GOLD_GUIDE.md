@@ -108,3 +108,29 @@ của sản xuất có thể SAI (vd CHLOE ghi female nhưng chương 344 gọi 
    khi tập của một bên loại mất cách đọc rõ ràng đúng.
 4. Kết luận ghi vào `ADJUDICATION.md` và sửa file gold. Câu không phân xử được: nới tập chấp nhận, hoặc hỏi chủ sách.
 5. Sau khi sửa, chạy `gold_replay.py` (không được có LỆCH LUẬT chưa giải thích) và test `test_model_eval_scoring.py`.
+
+## Khi thí sinh trả lời ĐÚNG HƠN đáp án
+
+Chuyện này xảy ra được, và đã xảy ra bốn lần với người soát (`ADJUDICATION.md`: 347:20, nise ×8, hdst 151, TMA
+407 - A đọc sót chương trước, B đúng). Đáp án là công trình của người đọc chương một lượt; một thí sinh đọc lại
+chỗ ấy kỹ hơn thì nó đúng hơn. **Đáp án sai thì SỬA ĐÁP ÁN** - giấu đi để giữ thể diện thước đo là tự làm hỏng
+thước đo. Nhưng sửa theo bài làm là đường ngắn nhất tới một đáp án chỉ còn đo được chính thí sinh đã dạy nó, nên
+đi đúng sáu bước sau:
+
+1. **Mọi chỗ lệch đều phải PHÂN XỬ, không chỉ trừ điểm.** `score_models.py --dispute-out <file>.tsv` in phiếu:
+   mỗi chỗ lệch một dòng, có nguyên văn đoạn, có cột `phán xử` và `bằng chứng` để điền.
+2. **Phân xử làm MÙ.** Phiếu giấu tên model thành `TS1..TSn` (băm tên, thứ tự không liên quan điểm); khoá ở
+   `<file>.tsv.key`, **chỉ mở SAU khi điền xong cột `phán xử`**. Không phân xử giữa lượt so hai model với nhau:
+   nhận cách đọc của một bên lúc ấy là lặng lẽ cho bên ấy điểm.
+3. **Ba ô, không hai:** `TS_SAI` (văn bản đã quyết định, thí sinh sai - cứ để sai), `ĐÁP_ÁN_SAI` (sửa gold),
+   `NHẬP_NHẰNG` (văn bản thật sự cho hai cách đọc - thêm vào tập chấp nhận, thường `~`). Ô thứ ba là ô dễ bị
+   lạm dụng nhất: một đáp án chấp nhận mọi thứ cho mọi thí sinh 100 điểm và không đo gì cả.
+4. **Bằng chứng phải là câu trong truyện**, dán vào cột `bằng chứng` - chương ấy hoặc chương trước. "Model tự tin",
+   "ba model cùng nói thế", "nghe hợp lý hơn" KHÔNG phải bằng chứng; nhiều thí sinh cùng sai một kiểu là chuyện
+   thường (cả nhà cùng gán người được gọi tên làm người nói). Phép thử: lời giải thích phải thuyết phục được người
+   chưa hề xem bài làm nào.
+5. **Sửa đáp án là HUỶ mọi điểm cũ của chương ấy.** Chấm lại tất cả thí sinh đã đo trên chương đó và ghi cả số cũ
+   lẫn số mới vào `docs/LLM_EVAL.md` - nếu không, điểm tăng không còn phân biệt được "model khá hơn" với "đáp án
+   dễ đi".
+6. **Ghi vào `ADJUDICATION.md`** một dòng: chương:seq, đáp án cũ, đáp án mới, bằng chứng, và nguồn phát hiện (thí
+   sinh nào, sau khi đã mở khoá). Đếm được số lần đáp án phải sửa chính là cách biết đáp án đang khắt khe tới đâu.

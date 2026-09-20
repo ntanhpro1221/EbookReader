@@ -209,3 +209,39 @@ Cùng 426, 436: năm chương lô 10 để so độ chính xác sản xuất tr�
 449:93 (giấy tờ trên bàn Lucien, chỉ được NHÌN thấy, không câu nào nói Lucien viết) -> LUCIEN~ thay vì đủ. "Sơn Ca" là bí
 danh phát thanh của Samantha, chính chương nối hai tên (65-66) -> cả hai đủ (quy tắc 11). LOUISE~ cho Dạ Oanh ở 446: danh tính
 chỉ lộ ở chương sau (quy tắc 13).
+
+## Vòng 14 (20-09 08:4x): phân xử PHIẾU CHẤM lô 9 - thí sinh có đúng hơn đáp án chỗ nào không?
+
+Chủ sách hỏi: nếu bài làm của thí sinh đúng hơn đáp án thì có nhận và sửa đáp án không. Có - đã xảy ra bốn lần với người
+soát (347:20, nise x8, hdst 151, TMA 407). Nay kiểm cả phía model: `score_models.py --dispute-out` in 134 chỗ lệch của
+`qwen3:8b` ở lô 9 (điểm 79,7 - người nói 68,4%), làm mù tên model, phân xử bằng văn bản gốc (`dump_segments.py`).
+
+Phân loại 133 chỗ lệch người nói:
+
+| kiểu | số chỗ | trạng thái |
+|---|---|---|
+| hai nhân vật có tên, nhầm người (phần lớn gán người ĐƯỢC GỌI) | 40 | lỗi model thật |
+| nội tâm bị đẩy về NGƯỜI KỂ | 27 | khoá host, đã vá ở ranh giới 9 |
+| NPC vô danh bị gán tên một nhân vật có tên | 23 | lỗi model thật |
+| lời kể gán cho nhân vật | 19 | lỗi model thật |
+| cụm trích ngắn giữa câu kể bị tách thành giọng | 17 | khoá host, đã vá ở ranh giới 9 |
+| thoại bị đẩy về NGƯỜI KỂ | 6 | lỗi model thật |
+| nhân vật có tên bị gán NPC | 1 | lỗi model thật |
+
+Phân xử kỹ sáu chỗ model nghe có lý nhất - **đáp án đúng cả sáu, không sửa dòng nào**:
+
+| chỗ | đáp án | bài làm | bằng chứng trong truyện | phán xử |
+|---|---|---|---|---|
+| 399:40, 399:41 | NPC*/ARTHEN/RELPH/UNKNOWN | Claire | 42 "Những tiếng kêu kinh ngạc của đám quý tộc trẻ rào rào vang lên" - đây là tiếng phản ứng VỚI câu 39 của Claire | TS_SAI |
+| 399:44 | ARTHEN | Claire | 43 "Arthen nghiêm nghị hỏi:"; Claire là người ĐƯỢC GỌI | TS_SAI |
+| 399:51 | SOPHIA | Claire | 52 "Trên khuôn mặt bình tĩnh của Sophia hiện lên niềm vui mãnh liệt"; tên Claire chỉ được NHẮC trong câu | TS_SAI |
+| 385:4 | NPC*/UNKNOWN | ASKA | 3 "nhân sư vừa ra lệnh kia" - không câu nào nối nó với Aska (Aska vào truyện ở p72, cảnh khác) | TS_SAI |
+| 385:109 | INKE | ASKA | 110 "Inke, cộng sự của Aska, lặng lẽ chỉ vào..."; câu 109 GỌI "Chờ đã, Aska" | TS_SAI |
+| 385:122 | INKE | ASKA | 121 "Inke thấy Aska mặt tươi roi rói bước ra, bèn tò mò hỏi:" | TS_SAI |
+
+Một chỗ đáng ghi riêng: 385:123 model gán ASKA và chỉ được NỬA điểm - đúng quy tắc 13, vì đây là Lucien đội lốt Aska sau
+khi hạ nó (118-119 Lucien đấm, 121 "Aska" tươi roi rói bước ra). Đáp án LUCIEN đủ, ASKA~ nửa: đáp án khắt khe đúng chỗ.
+
+Hai chỗ model gần đúng mà vẫn 0 điểm, giữ 0 có chủ ý: 396:70 `JOCLEYN` (viết sai tên JOCELYN) và 399:98 `HOÀNG TỬ BEYER`
+(thêm tiền tố vai vế). Cả hai trong sản xuất sinh ra một nhân vật MỚI, tức một giọng thứ hai cho cùng người - đó là lỗi
+thật, không phải chuyện chính tả. Quy trình phân xử: `docs/GOLD_GUIDE.md`, mục "Khi thí sinh trả lời ĐÚNG HƠN đáp án".

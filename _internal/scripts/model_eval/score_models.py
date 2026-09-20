@@ -17,6 +17,8 @@ có đúng sai khách quan. Tốc độ KHÔNG nằm trong điểm tổng; nó �
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
 import json
 import re
 import sqlite3
@@ -147,8 +149,22 @@ class Tally:
         return self.earned / self.possible if self.possible else 0.0
 
 
+def dispute_row(where: str, axis: str, wanted: str, given: str, row: dict) -> dict:
+    """Một chỗ thí sinh trả lời khác đáp án, kèm NGUYÊN VĂN đoạn - để phân xử bằng văn bản gốc."""
+    chapter, _, seq = where.partition(":")
+    return {
+        "chương": chapter,
+        "seq": int(seq),
+        "trục": axis,
+        "đáp án": wanted,
+        "bài làm": given,
+        "văn bản": " ".join(str(row["text"] or "").split()),
+    }
+
+
 def score_rows(gold: dict[tuple[str, int], Gold], rows: list[dict]) -> dict:
     tallies = {name: Tally() for name in WEIGHTS}
+    disputes: list[dict] = []
     seen: set[tuple[str, int]] = set()
     unanalyzed = 0
     for row in rows:
@@ -163,13 +179,18 @@ def score_rows(gold: dict[tuple[str, int], Gold], rows: list[dict]) -> dict:
         kind = str(row["kind"] or "")
         speaker = str(row["speaker"] or "")
         tallies["kind"].add(1.0 if kind in expected.kinds else 0.0, f"{where} kind={kind}")
+        if kind not in expected.kinds:
+            disputes.append(dispute_row(where, "loại", "/".join(sorted(expected.kinds)), kind, row))
         if expected.spoken:
             credit = speaker_credit(expected, speaker)
             wanted = "/".join(option for option, _ in expected.speakers)
             tallies["speaker"].add(credit, f"{where} {speaker} (đúng: {wanted}) | {str(row['text'])[:60]}")
+            if credit < 1.0:
+                disputes.append(dispute_row(where, "người nói", wanted, speaker or "(trống)", row))
         elif speaker_key(speaker) != "NARRATOR":
             # Lời kể gán cho nhân vật: cũng là sai giọng, chấm chung vào người nói.
             tallies["speaker"].add(0.0, f"{where} lời kể gán cho {speaker} | {str(row['text'])[:60]}")
+            disputes.append(dispute_row(where, "người nói", "NARRATOR", speaker, row))
         emotion = str(row["emotion"] or "")
         tallies["emotion"].add(1.0 if emotion in expected.emotions else 0.0,
                                f"{where} {emotion} (chấp nhận: {','.join(sorted(expected.emotions))})")
@@ -192,6 +213,7 @@ def score_rows(gold: dict[tuple[str, int], Gold], rows: list[dict]) -> dict:
         "rates": {name: round(100 * tally.rate, 1) for name, tally in tallies.items()},
         "counts": {name: [round(tally.earned, 1), tally.possible] for name, tally in tallies.items()},
         "misses": {name: tally.misses for name, tally in tallies.items()},
+        "disputes": disputes,
     }
 
 
@@ -232,12 +254,43 @@ def eval_projects(root: Path = EVAL_ROOT) -> list[Path]:
     return sorted(path.parent for path in root.glob("*/*/project.sqlite3"))
 
 
+DISPUTE_COLUMNS = ("thí sinh", "chương", "seq", "trục", "đáp án", "bài làm", "phán xử", "bằng chứng", "văn bản")
+
+
+def write_disputes(results: list[dict], path: Path) -> None:
+    """Phiếu phân xử làm MÙ: thí sinh thành TS1..TSn theo băm tên, nên thứ tự không nói gì về điểm.
+
+    Phân xử phải dựa vào cột `văn bản` (và chương gốc), không dựa vào "model nào nói". Cột `phán xử`
+    điền TS_SAI / ĐÁP_ÁN_SAI / NHẬP_NHẰNG, cột `bằng chứng` dán câu trong truyện đã quyết định.
+    """
+    order = sorted(results, key=lambda item: hashlib.sha1(str(item["model"]).encode("utf-8")).hexdigest())
+    labels = {id(item): f"TS{index}" for index, item in enumerate(order, start=1)}
+    rows = [
+        {"thí sinh": labels[id(item)], "phán xử": "", "bằng chứng": "", **dispute}
+        for item in results
+        for dispute in item["disputes"]
+    ]
+    rows.sort(key=lambda row: (row["chương"], row["seq"], row["trục"], row["thí sinh"]))
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=DISPUTE_COLUMNS, delimiter="\t", extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    key = "\n".join(f"{labels[id(item)]}\t{item['model']}\t{item['project']}" for item in order)
+    path.with_suffix(path.suffix + ".key").write_text(key + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("projects", nargs="*", type=Path)
     parser.add_argument("--gold", default=GOLD_DIR.name, help="thư mục đáp án trong gold/ (mặc định cuốn 2)")
     parser.add_argument("--json", type=Path, help="ghi toàn bộ kết quả (kể cả danh sách lỗi) ra file")
     parser.add_argument("--misses", type=int, default=0, help="in N lỗi người nói đầu tiên của mỗi model")
+    parser.add_argument(
+        "--dispute-out",
+        type=Path,
+        help="ghi phiếu phân xử (TSV) mọi chỗ bài làm khác đáp án, tên model ĐÃ GIẤU thành TS1..TSn; "
+        "khoá giải giấu ghi ra <file>.key - chỉ mở SAU khi đã phân xử xong (xem docs/GOLD_GUIDE.md)",
+    )
     args = parser.parse_args(argv)
 
     gold = load_gold(GOLD_ROOT / args.gold)
@@ -267,6 +320,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    - {miss}")
     if args.json:
         args.json.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    if args.dispute_out:
+        write_disputes(results, args.dispute_out)
+        print(f"phiếu phân xử: {args.dispute_out} ({sum(len(r['disputes']) for r in results)} chỗ), "
+              f"khoá giấu tên: {args.dispute_out}.key")
     return 0
 
 
