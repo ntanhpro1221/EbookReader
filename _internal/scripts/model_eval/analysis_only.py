@@ -20,6 +20,7 @@ Kết quả thời gian ghi vào `<project>/model_eval_run.json`; số liệu Ol
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import logging
 import sys
@@ -67,7 +68,31 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--segment-only", action="store_true")
     parser.add_argument("--no-think", action="store_true",
                         help='gửi "think": false trong mọi yêu cầu Ollama (dòng qwen3/qwen3.5 nghĩ trước và trả 0 ID)')
+    parser.add_argument("--no-mention-counts", action="store_true",
+                        help="bỏ `số lần đã gặp` khỏi danh sách nhân vật đã biết và xếp theo TÊN thay vì theo "
+                             "độ nổi tiếng - phép thử cho giả thuyết prompt tự gây thiên lệch (xem docs/LLM_EVAL.md)")
     args = parser.parse_args(argv)
+    if args.no_mention_counts:
+        # Đo trên 3 model của lượt 21-09: khi model chọn SAI một nhân vật có tên, nhân vật ấy nằm ở top
+        # 2-10% bảng độ nổi tiếng (hạng tương đối 0,02-0,10), còn khi chọn ĐÚNG thì 0,21-0,25. Prompt đưa
+        # cho model đúng bảng xếp hạng ấy - cả con số lẫn thứ tự - trong khi luật của prompt chỉ đòi nhất
+        # quán TÊN và GIỚI TÍNH. Cờ này bỏ con số và xếp theo tên, để xem lỗi có giảm hay không.
+        # Đổi prompt KHÔNG đo được bằng phát lại, nên chỉ có đường chạy GPU thật.
+        def _known_summary_without_counts(self) -> str:
+            if not self._speaker_counts:
+                return "(Chưa có nhân vật đã biết)"
+            # Giữ ĐÚNG mức chặn 80 của bản gốc: chọn 80 người theo số lần gặp rồi mới xếp theo tên. Bỏ
+            # mức chặn là đổi cả độ dài prompt, tức đo hai thứ cùng lúc.
+            top = [name for name, _count in self._speaker_counts.most_common(80)]
+            lines = []
+            for name in sorted(top, key=lambda value: str(value).casefold()):
+                genders = self._speaker_genders.get(name, Counter())
+                locked_gender = genders.most_common(1)[0][0] if genders else "unknown"
+                lines.append(f"- {name}; gender đã biết={locked_gender}")
+            return "\n".join(lines)
+
+        OllamaBookAnalyzer._known_summary = _known_summary_without_counts
+
     if args.no_think:
         original = OllamaBookAnalyzer._stream_json_response
 

@@ -327,6 +327,33 @@ Lớp còn lại chưa vá được: `363:34-36`, một lượt thoại dài c�
 NARRATOR hoặc UNKNOWN - **thiên lệch về nhân vật được nhắc nhiều nhất**. Không có mặt chữ nào trong đoạn
 chỉ ra BELLAK; đây là lỗi model thuần, và nó là lý do tốt nhất để huấn luyện model chuyên.
 
+### Giả thuyết: chính PROMPT của chúng ta phát cái thiên lệch ấy (21-09 05:4x) - CHƯA đo, cờ đã có
+
+Đo hạng của nhân vật bị chọn trong bảng `mention_count` của chính project, chuẩn hoá 0 = nổi tiếng nhất:
+
+| model | khi chọn SAI | khi chọn ĐÚNG |
+|---|---|---|
+| `qwen3:4b` | **0,022** (n=34) | 0,205 (n=52) |
+| `gemma4:e2b-it-qat` | **0,062** (n=13) | 0,233 (n=43) |
+| `qwen3:8b` | **0,101** (n=26) | 0,251 (n=45) |
+
+Đoán sai rơi vào **top 2-10%** bảng nổi tiếng; đoán đúng thì rải rộng hơn gấp 2-10 lần. Giống nhau ở cả
+ba model. Và chỗ đáng ngờ nằm trong chính prompt: `_known_summary` liệt kê 80 nhân vật **xếp theo số lần
+gặp giảm dần**, mỗi dòng kèm `số lần đã gặp=<n>`. Tức ta tự tay đưa cho model một **bảng xếp hạng độ nổi
+tiếng** - cả con số lẫn thứ tự - trong khi luật của prompt chỉ đòi nhất quán **tên** và **giới tính**.
+
+Chưa kết luận được nhân-quả từ tương quan này: model có thể nghiêng về nhân vật nổi bật dù prompt không
+nói gì. Tách được bằng một phép thử, và nó chỉ chạy được trên GPU thật (phát lại KHÔNG đo được bản vá đổi
+prompt):
+
+    python scripts/model_eval/eval_models.py qwen3:8b --chapters 351 363 378 381 --no-mention-counts \
+        --root D:/Novels/Audiobooks/_model_eval_v2/21-09-no-counts
+
+Cờ `--no-mention-counts` (cả ở `analysis_only.py`) bỏ con số và xếp danh sách theo TÊN, **giữ đúng mức
+chặn 80** để không đổi độ dài prompt - nếu không thì đo hai thứ cùng lúc. So với mốc 79,4 / 64,1% của
+`qwen3:8b` ở bảng trên. Nếu người nói tăng thì đây là bản vá prompt đáng giá hơn mọi luật host tôi viết
+hôm nay; nếu không đổi thì đóng giả thuyết lại bằng một con số.
+
 ### Bài học ĐO: đừng chấm một project khi các bước sau phân tích chưa xong
 
 Tôi chấm `gemma4:e2b-it-qat` hai lần trên **cùng bốn chương** và ra **74,8** rồi **77,2**. Không phải nhiễu:

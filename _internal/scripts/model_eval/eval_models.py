@@ -38,7 +38,8 @@ def slug(model: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", model.lower()).strip("-")
 
 
-def run_chapter(model: str, chapter: str, root: Path, book: str | None, timeout: int, no_think: bool) -> dict:
+def run_chapter(model: str, chapter: str, root: Path, book: str | None, timeout: int, no_think: bool,
+                no_mention_counts: bool = False) -> dict:
     where = root / slug(model) / chapter
     make = [sys.executable, "scripts/model_eval/make_eval_project.py", model, "--chapters", chapter, "--root", str(where)]
     if book:
@@ -50,6 +51,8 @@ def run_chapter(model: str, chapter: str, root: Path, book: str | None, timeout:
     command = [sys.executable, "scripts/model_eval/analysis_only.py", str(project.parent)]
     if no_think:
         command.append("--no-think")
+    if no_mention_counts:
+        command.append("--no-mention-counts")
     started = time.perf_counter()
     try:
         done = subprocess.run(command, cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
@@ -77,6 +80,9 @@ def main() -> None:
     parser.add_argument("--gold", default="throne_of_magical_arcana")
     parser.add_argument("--timeout", type=int, default=1200, help="giây cho MỘT chương")
     parser.add_argument("--no-think-for", nargs="*", default=["qwen3"], help="tiền tố tên model được gửi think=false")
+    parser.add_argument("--no-mention-counts", action="store_true",
+                        help="bỏ `số lần đã gặp` khỏi prompt và xếp danh sách nhân vật theo TÊN - phép thử cho "
+                             "giả thuyết prompt tự gây thiên lệch về nhân vật nổi tiếng (docs/LLM_EVAL.md)")
     args = parser.parse_args()
 
     gold = load_gold(GOLD_ROOT / args.gold)
@@ -86,7 +92,8 @@ def main() -> None:
         no_think = any(model.startswith(prefix) for prefix in args.no_think_for)
         runs = []
         for chapter in args.chapters:
-            result = run_chapter(model, chapter, args.root, args.book, args.timeout, no_think)
+            result = run_chapter(model, chapter, args.root, args.book, args.timeout, no_think,
+                                 no_mention_counts=args.no_mention_counts)
             runs.append(result)
             print(f"{model} {chapter}: {'OK' if result['ok'] else 'HỎNG'} {result.get('seconds', '')}s "
                   f"thử lại vì thiếu ID {result.get('id_retries', 0)} {result.get('why', '')}", flush=True)
@@ -97,7 +104,7 @@ def main() -> None:
                 rows += chapter_rows
         scored = score_rows(gold, rows) if rows else {"score": 0.0, "rates": {name: 0.0 for name in WEIGHTS}}
         entry = {
-            "model": model, "no_think": no_think,
+            "model": model, "no_think": no_think, "no_mention_counts": bool(args.no_mention_counts),
             "chapters_ok": sum(r["ok"] for r in runs), "chapters": len(runs),
             "id_retries": sum(r.get("id_retries", 0) for r in runs),
             "seconds_ok": round(sum(r.get("seconds", 0) for r in runs if r["ok"]), 1),
