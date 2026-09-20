@@ -32,8 +32,10 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ghim cho ranh giới 11: tiêu đề chương lệch một trường KHÔNG-NGHE-ĐƯỢC thì không sinh "ghi đè cấu trúc".
+# Ca thật: lô 11 chết lúc 17:02 ngày 20-09 ở tiêu đề chương 461 (`deltas=['intensity:0->1']`) vì bản ghi ghi-đè
+# khai `raw_accept: False` trong khi host đã ĐỒNG Ý - tầng sổ bắt đúng mâu thuẫn ấy và ném UNRECOVERABLE.
+ORDER: tuple[str, ...] = ("patch_an_inaudible_delta_on_a_heading_needs_no_override.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
