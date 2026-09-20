@@ -32,8 +32,11 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ranh giới 12: một dòng log gọi sai tên model. Vô hại khi dự án chỉ chạy một model, và bắt đầu
+# nói sai đúng lúc nó quan trọng nhất - khi so nhiều model và phải đọc log để biết model nào hỏng.
+ORDER: tuple[str, ...] = (
+    "patch_the_log_names_the_model_that_actually_answered.py",
+)
 
 APPLIED = (
     "patch_reserve_all.py",
