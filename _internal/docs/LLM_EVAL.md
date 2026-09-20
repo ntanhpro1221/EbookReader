@@ -127,9 +127,33 @@ Và đây là mức lợi của 5 bản vá ghim cho ranh giới 10, đo trên c
 | 8 bản vá (ranh giới 9) - đang chạy | 79,4 | 71,3% | 87,1% | 100% |
 | + 5 bản vá ghim ranh giới 10 | **82,0** | **77,0%** | 87,1% | 100% |
 
-Ba giới hạn phải nhớ khi đọc con số: chỉ chương có đáp án; cột GIỚI TÍNH đi thẳng từ bản đã ghi (host không quyết
-trường ấy - `resolve_gender` quyết ở bước lập sổ nhân vật); và bản vá GOM TÊN (`ARTELI` -> `Artil`) chạy ở bước lập
-sổ nhân vật nên KHÔNG hiện ở đây - điểm người nói đo cái nhãn model viết ra, bản vá ấy sửa cái giọng.
+Đo lại trên mẫu LỚN hơn - lô 9, 915 đoạn có đáp án trên 9 chương (lô 9 chạy bằng host CHƯA vá, nên đây là
+"nếu hồi ấy đã có các bản vá này thì sao"):
+
+| cây | điểm | người nói |
+|---|---|---|
+| host cũ (bản ghi thật của lô 9) | 79,7 | 68,4% |
+| 8 bản vá ranh giới 9 | 79,9 | 69,0% |
+| + 5 bản vá ranh giới 10 | **81,7** | **73,1%** |
+
+Tổng hai mẫu: 1.093 đoạn có đáp án, 5 bản vá ranh giới 10 đáng **+4 đến +6 điểm** độ chính xác người nói.
+
+**Giới hạn lớn nhất, và nó giải thích một con số trông như thất bại:** công cụ chỉ đo được bản sửa CHẠY SAU khi
+model trả lời. Tám bản vá ranh giới 9 phát lại chỉ thêm 0,6 điểm, nhưng không phải vì chúng vô dụng - phần lớn giá
+trị của chúng đến từ chỗ khác: `patch_a_thought_keeps_its_thinker.py` đổi **chính sách trong prompt**, và phép đếm
+câu trả lời THÔ cho thấy nó hiệu nghiệm hẳn trong sản xuất:
+
+| lô | model thô gán nội tâm cho | |
+|---|---|---|
+| lô 9 (host cũ) | NARRATOR **208/208** | 0 nhân vật |
+| lô 10 (8 bản vá) | NARRATOR 4/39 | **nhân vật 35/39** |
+
+Phát lại nạp đúng câu trả lời đã ghi, nên nó không bao giờ tái hiện được một thay đổi ở prompt. Hai loại bản vá,
+hai cách đo: sửa-sau-câu-trả-lời thì phát lại; đổi-prompt thì phải chạy một lô mới rồi đếm câu trả lời thô.
+
+Ba giới hạn nhỏ hơn: chỉ chương có đáp án; cột GIỚI TÍNH đi thẳng từ bản đã ghi (host không quyết trường ấy -
+`resolve_gender` quyết ở bước lập sổ nhân vật); và bản vá GOM TÊN (`ARTELI` -> `Artil`) chạy ở bước lập sổ nhân vật
+nên KHÔNG hiện ở đây - điểm người nói đo cái nhãn model viết ra, bản vá ấy sửa cái giọng.
 
 ## Điều tra kiểu lỗi lớn nhất của model (20-09 09:0x): host có thể tự sửa bao nhiêu?
 
