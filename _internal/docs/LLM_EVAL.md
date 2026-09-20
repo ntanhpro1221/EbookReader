@@ -284,6 +284,30 @@ Tỷ lệ 4,5:1 nghiêng về lợi, nhưng cả hai phía đều không phải 
 tai chủ sách, không thuộc về thước đo: *"một câu bị nhân vật SAI đọc" tệ hơn hay nhẹ hơn "một câu của người ĐÚNG bị
 giọng vô danh đọc"?* Chín ăn hai. Chưa vá, chờ câu trả lời.
 
+## Lượt đo 21-09 (host đã vá 14 bản, 4 chương 351/363/378/381): `qwen3:4b` không kém mốc 8B
+
+| model | tin cậy | rơi ID | điểm | người nói | cảm xúc | giây | VRAM |
+|---|---|---|---|---|---|---|---|
+| `qwen3:4b` | **4/4** | 0 | **80,0** | **65,7%** | 85,0 | **1.573** | 3,7 GB |
+| `qwen3:8b` (mốc, đang chạy sản xuất) | 4/4 | 0 | 79,4 | 64,1% | **85,5** | 2.156 | 5,2 GB |
+| `gemma4:e2b-it-qat` | 4/4 | 0 | 77,2 | 62,2% | 82,0 | **842** | 1,8 GB |
+
+**Cả ba rơi 0 ID** - cổng tin cậy sạch, và đó cũng là bằng chứng cờ `--no-think` làm việc: đêm 19-09 dòng
+`qwen3` trả "0/5 IDs" vì nghĩ trước. Bốn đường gửi yêu cầu (sinh, phản biện, nhận diện nhân vật, cách đọc
+tên) đều đi qua `_stream_json_response`, chỗ bị monkeypatch, nên cờ phủ trọn.
+
+**Đọc con số cho đúng, đừng tuyên vô địch.** 80,0 so với 79,4 là **0,6 điểm**, và người nói 65,7 so với
+64,1 là 1,6 điểm ≈ **6 đoạn** trên tập này. Một lượt chạy của một model không tất định thì 6 đoạn nằm
+trong nhiễu. Điều phát biểu được là: **`qwen3:4b` KHÔNG kém mốc 8B**, mà nhanh hơn **27%** và nhẹ hơn
+1,5 GB VRAM. Điều KHÔNG phát biểu được: nó tốt hơn.
+
+Vì sao vẫn đáng theo: phân tích chiếm **40% giờ máy một lô** (`docs/THROUGHPUT.md`), nên -27% ở khâu ấy là
+lô nhanh hơn ~11%, và 1,5 GB VRAM trả lại là đúng thứ kế hoạch "chồng lấn giai đoạn" đang thiếu. Bước kế
+ở cửa sổ GPU sau: chạy lại `qwen3:4b` so `qwen3:8b` trên **10 chương** đáp án thay vì 4, để tách 0,6 điểm
+kia khỏi nhiễu trước khi bàn đổi model sản xuất.
+
+`gemma4:e2b-it-qat` là sàn tốc độ: nhanh **2,6 lần** mốc với 1,8 GB, đổi lấy 2,2 điểm.
+
 ## Nguồn dữ liệu MỚI: lỗi mà nhiều model CÙNG mắc là lỗi của host (21-09 04:3x)
 
 Một lượt so model cho nhiều hơn một bảng điểm: ba model trả lời **cùng** bốn chương đáp án, nên so chúng
