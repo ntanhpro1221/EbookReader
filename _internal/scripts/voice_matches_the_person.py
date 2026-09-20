@@ -29,20 +29,21 @@ sửa của chúng ngược nhau:
 
 | tên | câu | sổ ghi | giọng | văn bản | ai sai |
 |---|---|---|---|---|---|
-| HATHAWAY | 12 | male | nữ | "bà" x42, "cô" x48, không một "ngài/ông" | **SỔ sai** - giọng đúng |
-| CHRISTOPHER | 8 | male | nữ | nam 86, "ngài" x29 | **GIỌNG sai** - và là ca rối nhất, xem dưới |
-| AMELTON | 6 | male | nữ | "cô" x6, nữ 13 / nam 7 | **SỔ sai** - giọng đúng |
-| ARTHUR DOYLE | 5 | female | nam | nam 13, nữ 0, "ngài/ông" | **SỔ sai** - giọng đúng |
-| SALA | 2 | female | nam | nam 25, nữ 4 | **SỔ sai** - giọng đúng |
-| MAG | 1 | female | nam | nam 10, nữ 0 | **SỔ sai** - giọng đúng |
-| LAUREN | 2 | male | nữ | nam 95, "ngài" x15 | **GIỌNG sai** |
-| DONA | 1 | male (lúc thu) | nữ | nam 15, nữ 3 | **GIỌNG sai** |
+| HATHAWAY | 12 | male | nữ | "bà" x42, "cô" x48, không một "ngài/ông" nào | **SỔ sai** - giọng đúng |
+| CHRISTOPHER | 8 | male | nữ | "ngài" x29, "thầy" x12 | **GIỌNG sai** - và là ca rối nhất, xem dưới |
+| AMELTON | 6 | male | nữ | "cô" x6 so với "ngài" x1 | **SỔ sai** - giọng đúng |
+| ARTHUR DOYLE | 5 | female | nam | "ngài" x1 + "ông" x2 | **SỔ sai** - giọng đúng |
+| SALA | 2 | female | nam | không danh xưng nào | **chưa rõ** - giữ trong danh sách đúc lại |
+| MAG | 1 | female | nam | không danh xưng nào | **chưa rõ** - giữ trong danh sách đúc lại |
+| LAUREN | 2 | male | nữ | "ngài" x15 | **GIỌNG sai** |
+| DONA | 1 | male (lúc thu) | nữ | không danh xưng nào | **chưa rõ** - giữ trong danh sách |
 
-Tức trong 37 câu bị gắn cờ: **11 câu** là giọng sai thật (CHRISTOPHER 8, LAUREN 2, DONA 1) và **26 câu** là sổ ghi
-sai với giọng đang ĐÚNG. Năm cái tên "sổ sai" đã ghim lại bằng `cli cast --character ... --gender ...` ngay giữa
-lô 10 (dữ liệu, không phải mã; nhịp tim pipeline không hụt giây nào) nên nhãn nay thuận với giọng - và **không phải
-đúc lại gì cả**. Nếu đọc báo cáo mà không đọc cột bằng chứng thì sẽ đúc lại 26 câu đang ĐÚNG thành sai; `--recast`
-nay tự lọc bằng cột ấy (13 chương -> 5 chương).
+Tức trong 37 câu bị gắn cờ: **23 câu** danh xưng nói SỔ mới là bên sai (HATHAWAY, AMELTON, ARTHUR DOYLE - giọng
+đang ĐÚNG, đúc lại là phá), **10 câu** là GIỌNG sai (CHRISTOPHER 8, LAUREN 2), và **4 câu** không danh xưng nào nên
+chưa phán xử được (SALA, MAG, DONA). Ba cái tên "sổ sai" đã ghim lại bằng `cli cast --gender` ngay giữa lô 10 (dữ
+liệu, không phải mã; nhịp tim pipeline không hụt giây nào) nên nhãn nay thuận với giọng - và **không phải đúc lại
+gì cả**. `--recast` nay tự lọc: **13 chương -> 7 chương** (5 chắc + 2 chưa phán xử được). Chưa phán xử được thì
+GIỮ LẠI chứ không bỏ: một danh sách rỗng im lặng nói "không có việc gì" trong khi có.
 
 **CHRISTOPHER là ca rối nhất và CHƯA sửa được** - đọc lịch sử giọng của anh ta thì thấy đúng cái bẫy IVAN, nhưng
 nặng hơn:
@@ -266,21 +267,26 @@ def gender_evidence_in_source(names: set[str]) -> dict[str, str]:
         )
     except OSError:
         return {}
-    out: dict[str, str] = {}
-    for name in names:
-        title = name.title()
-        windows = re.findall(rf"(?<![\wÀ-ỹ]).{{0,45}}{re.escape(title)}(?![\wÀ-ỹ]).{{0,45}}", source, re.IGNORECASE)
-        male = female = 0
-        for window in windows:
-            low = window.casefold()
-            male += sum(len(re.findall(rf"(?<![\wÀ-ỹ]){w}(?![\wÀ-ỹ])", low)) for w in MALE_WORDS_NEAR_NAME)
-            female += sum(len(re.findall(rf"(?<![\wÀ-ỹ]){w}(?![\wÀ-ỹ])", low)) for w in FEMALE_WORDS_NEAR_NAME)
-        titled = {
-            word: len(re.findall(rf"(?<![\wÀ-ỹ]){word}\s+{re.escape(title)}(?![\wÀ-ỹ])", source, re.IGNORECASE))
-            for word in HONORIFICS
-        }
-        out[name] = {"male": male, "female": female, "titled": {w: c for w, c in titled.items() if c}}
-    return out
+    # MỘT lượt quét cho mọi tên - xem `_name_occurrences`. Bản đầu quét cả nguồn một lần cho mỗi tên và
+    # báo cáo mất hơn mười phút với 317 tên, tức không dùng được trong nhịp tim.
+    wanted = {name.casefold(): name for name in names if name}
+    if not wanted:
+        return {}
+    male: collections.Counter = collections.Counter()
+    female: collections.Counter = collections.Counter()
+    titled: dict[str, collections.Counter] = {name: collections.Counter() for name in names}
+    for match in _name_occurrences(source, wanted):
+        name = wanted[match.group(0).casefold()]
+        window = source[max(0, match.start() - 45): match.end() + 45].casefold()
+        male[name] += sum(window.count(word) for word in MALE_WORDS_NEAR_NAME)
+        female[name] += sum(window.count(word) for word in FEMALE_WORDS_NEAR_NAME)
+        honorific = _title_right_before(source[max(0, match.start() - 12): match.start()].casefold(), HONORIFICS)
+        if honorific:
+            titled[name][honorific] += 1
+    return {
+        name: {"male": male[name], "female": female[name], "titled": dict(titled[name])}
+        for name in names
+    }
 
 
 def describe_evidence(evidence: dict) -> str:
@@ -314,6 +320,27 @@ def text_verdict(evidence: dict) -> str | None:
     return None
 
 
+def _name_occurrences(source: str, wanted: dict[str, str]):
+    """Mọi lần xuất hiện của MỌI cái tên, trong MỘT lượt quét.
+
+    Bản đầu quét cả nguồn 9 MB một lần cho mỗi tên: 317 tên x 9 MB nên báo cáo chạy hơn mười phút và
+    không dùng được trong nhịp tim. Một alternation duy nhất đưa nó về một lượt.
+    """
+    alternation = "|".join(sorted((re.escape(key) for key in wanted), key=len, reverse=True))
+    return re.finditer(rf"(?<![\wÀ-ỹ])(?:{alternation})(?![\wÀ-ỹ])", source, re.IGNORECASE)
+
+
+def _title_right_before(before: str, titles: "tuple[str, ...]") -> str | None:
+    """Danh xưng đứng NGAY TRƯỚC tên, nếu có. `before` đã hạ chữ và cắt sát mép tên."""
+    stripped = before.rstrip()
+    for title in sorted(titles, key=len, reverse=True):
+        if stripped.endswith(title) and (
+            len(stripped) == len(title) or not stripped[-len(title) - 1].isalpha()
+        ):
+            return title
+    return None
+
+
 ADULT_TITLES_BEFORE_NAME = ("ngài", "ông", "bà", "thầy", "lão", "cụ", "tiên sinh", "phu nhân",
                             "chủ tịch", "giáo sư", "hiệu trưởng", "công tước", "nam tước", "bá tước")
 CHILD_WORDS_NEAR_NAME = ("cậu bé", "thằng bé", "con bé", "đứa trẻ", "bé gái", "bé trai", "trẻ con",
@@ -335,23 +362,72 @@ def age_evidence_in_source(names: set[str]) -> dict[str, tuple[dict[str, int], i
         )
     except OSError:
         return {}
-    out: dict[str, tuple[dict[str, int], int]] = {}
-    for name in names:
-        title = name.title()
-        if len(title) < 3:
+    wanted = {name.casefold(): name for name in names if len(name) >= 3}
+    if not wanted:
+        return {}
+    adult: dict[str, collections.Counter] = {name: collections.Counter() for name in names}
+    child: collections.Counter = collections.Counter()
+    for match in _name_occurrences(source, wanted):
+        name = wanted[match.group(0).casefold()]
+        before = source[max(0, match.start() - 24): match.start()].casefold()
+        title = _title_right_before(before, ADULT_TITLES_BEFORE_NAME)
+        if title:
+            adult[name][title] += 1
+        window = source[max(0, match.start() - 40): match.end() + 40].casefold()
+        child[name] += sum(window.count(word) for word in CHILD_WORDS_NEAR_NAME)
+    return {name: (dict(adult[name]), child[name]) for name in names}
+
+
+def honorific_verdict(evidence: dict) -> str | None:
+    """Phái mà DANH XƯNG + TÊN chỉ ra, hoặc None khi nó không chỉ đủ rõ.
+
+    Tín hiệu MẠNH duy nhất của công cụ này: "ngài Lauren", "bà Hathaway" nói trực tiếp về người ấy. Phép
+    đếm chữ quanh tên thì không - xem `blind_spot_labels`.
+    """
+    titled = evidence.get("titled", {})
+    male = sum(titled.get(word, 0) for word in MALE_HONORIFICS)
+    female = sum(titled.get(word, 0) for word in FEMALE_HONORIFICS)
+    for winner, mine, theirs in (("male", male, female), ("female", female, male)):
+        if mine >= 3 and (theirs == 0 or mine / theirs >= EVIDENCE_MINIMUM_RATIO):
+            return winner
+    return None
+
+
+def blind_spot_labels(rows: list[dict]) -> list[tuple[int, str, str, str, dict[str, int]]]:
+    """Nhãn giới SAI mà giọng đi theo nhãn sai - điểm mù của mọi phép kiểm phía trên.
+
+    `wrong_gender` chỉ thấy khi GIỌNG trái NHÃN. Nếu nhãn sai và giọng đi theo nhãn sai thì hai bên đồng ý
+    và không gì kêu, trong khi người nghe vẫn nghe sai giới. Ca đắt nhất tìm được (20-09 14:4x): **CAMIL**,
+    36 câu, sổ ghi `male`, nhưng nguồn gọi "Quý cô Camil" 29 lần và mô tả "Camil trong chiếc váy dài màu
+    đen" - một phụ nữ bị đọc bằng giọng đàn ông suốt 36 câu.
+
+    **Chỉ dùng DANH XƯNG + TÊN, cố ý bỏ phép đếm chữ quanh tên.** Bản đầu của hàm này dùng phép đếm (như
+    `text_verdict`) và cho 21 ca, 17 trong đó là rác: nó gọi "MỤ PHÙ THỦY GIÀ" là nam, vì cửa sổ 45 ký tự
+    quanh một cái tên đầy chữ chỉ NGƯỜI KHÁC trong cảnh - mà nhân vật chính của cuốn này là đàn ông và có
+    mặt ở khắp nơi. Lọc lại chỉ bằng danh xưng thì còn 4 ca, 3 đã biết và 1 mới (CAMIL) - tất cả kiểm được
+    bằng mắt trong một phút. Một bộ canh kêu 21 lần để đúng 4 lần thì người ta sẽ tắt nó.
+    """
+    by_name: dict[str, dict] = {}
+    for row in rows:
+        entry = by_name.setdefault(row["name"], {"lines": 0, "gender": row["gender"], "voices": set()})
+        entry["lines"] += row["lines"]
+        entry["voices"].add(row["voice"])
+        if row["gender"] in ("male", "female"):
+            entry["gender"] = row["gender"]
+    named = {name: entry for name, entry in by_name.items()
+             if entry["lines"] >= 3 and entry["gender"] in ("male", "female")}
+    evidence = gender_evidence_in_source(set(named))
+    out: list[tuple[int, str, str, str, dict[str, int]]] = []
+    for name, entry in named.items():
+        titled = evidence.get(name, {"titled": {}})["titled"]
+        verdict = honorific_verdict({"titled": titled})
+        if verdict is None or verdict == entry["gender"]:
             continue
-        adult = {
-            word: len(re.findall(rf"(?<![\wÀ-ỹ]){word}\s+{re.escape(title)}(?![\wÀ-ỹ])", source, re.IGNORECASE))
-            for word in ADULT_TITLES_BEFORE_NAME
-        }
-        windows = re.findall(rf"(?<![\wÀ-ỹ]).{{0,40}}{re.escape(title)}(?![\wÀ-ỹ]).{{0,40}}", source, re.IGNORECASE)
-        child = sum(
-            len(re.findall(rf"(?<![\wÀ-ỹ]){word}(?![\wÀ-ỹ])", window.casefold()))
-            for window in windows
-            for word in CHILD_WORDS_NEAR_NAME
-        )
-        out[name] = ({word: count for word, count in adult.items() if count}, child)
-    return out
+        # Điểm mù đúng nghĩa: mọi giọng của người ấy đều thuận NHÃN (nên `wrong_gender` im lặng).
+        if {preset_gender(voice) for voice in entry["voices"]} != {entry["gender"]}:
+            continue
+        out.append((entry["lines"], name, entry["gender"], verdict, dict(titled)))
+    return sorted(out, reverse=True)
 
 
 def age_verdict(adult_titles: dict[str, int], child_words: int) -> str:
@@ -404,16 +480,24 @@ def chapter_batches(book: Path = BOOK) -> dict[str, int]:
 
 
 def voice_is_the_wrong_side(rows: list[dict]) -> list[dict]:
-    """Chỉ những dòng mà VĂN BẢN thuận với `gender` - tức cái sai là GIỌNG, đúc lại mới có nghĩa.
+    """Bỏ khỏi danh sách đúc lại những dòng mà DANH XƯNG trong nguồn nói SỔ mới là bên sai.
 
-    Đo 20-09 trên cuốn 2: 13 dòng sai phái, nhưng chỉ **2** dòng (LAUREN 328, DONA 189) là giọng sai. Mười một
-    dòng còn lại là SỔ ghi sai với giọng đang ĐÚNG (HATHAWAY "bà" x42 / "cô" x48 mà sổ ghi male; AMELTON,
-    ARTHUR DOYLE, SALA, MAG) - đúc lại chúng là đổi giọng đúng thành sai, và tốn GPU để làm việc ấy.
-    Văn bản không chỉ rõ thì KHÔNG đúc lại: một lượt đúc lại đắt, còn im lặng thì không làm hỏng gì.
+    Đo 20-09 trên cuốn 2: 13 dòng sai phái, và danh xưng loại được 6 dòng mà giọng đang ĐÚNG (HATHAWAY
+    "bà" x42 / "cô" x48 mà sổ ghi male; AMELTON "cô" x6; ARTHUR DOYLE "ngài/ông" x3 mà sổ ghi female) -
+    đúc lại chúng là đổi giọng đúng thành sai, và tốn GPU để làm việc ấy.
+
+    **Không phán xử được thì GIỮ LẠI, không bỏ.** Bản đầu của hàm này giữ lại chỉ khi văn bản THUẬN với
+    `gender`, và `test_the_book_is_read_through_the_manifest_and_recast_names_the_batch` đỏ ngay: IVAN
+    thuộc cuốn 1 nên không có trong nguồn cuốn 2, không có danh xưng nào, và cả danh sách đúc lại thành
+    RỖNG. Một danh sách rỗng im lặng thì tệ hơn một danh sách dài: nó nói "không có việc gì" trong khi có.
+    Và chỉ dùng DANH XƯNG, không dùng phép đếm chữ quanh tên - xem `blind_spot_labels` để biết vì sao.
     """
     evidence = gender_evidence_in_source({r["name"] for r in rows})
-    return [r for r in rows if text_verdict(evidence.get(r["name"], {"male": 0, "female": 0, "titled": {}}))
-            == r["gender"]]
+    return [
+        r
+        for r in rows
+        if honorific_verdict(evidence.get(r["name"], {"titled": {}})) in (None, r["gender"])
+    ]
 
 
 def recast_arguments(rows: list[dict], batches: dict[str, int]) -> list[str]:
@@ -476,6 +560,14 @@ def main(argv: list[str]) -> int:
         # thích - trong khi CHRISTOPHER có 8 dòng `age=child` được miễn VÀ 8 dòng `age=unknown` vẫn là lỗi.
         _say(f"  ({len(excused)} dòng KHÁC được miễn vì `age=child` - không phải các dòng trên:"
              f" {', '.join(sorted({r['name'] for r in excused}))})")
+
+    blind = blind_spot_labels(rows)
+    if blind:
+        _say("")
+        _say("ĐIỂM MÙ: nhãn giới sai mà GIỌNG ĐI THEO nhãn sai - không phép kiểm nào ở trên thấy được,")
+        _say("vì nhãn và giọng đồng ý với nhau. Chỉ nhận ca có DANH XƯNG + TÊN đủ mạnh (xem hàm):")
+        for lines, name, label, verdict, titles in blind:
+            _say(f"  {name:18s} {lines:3d} câu | sổ={label:7s} danh xưng nói {verdict:7s} | {titles}")
 
     child_rows = [r for r in rows if r["age"] == "child"]
     if child_rows:
