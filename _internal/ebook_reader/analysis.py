@@ -1544,6 +1544,9 @@ def _explicit_speaker_attribution(
     data = result.get(str(row["stable_id"]))
     if data is None or data["kind"] != "dialogue":
         return None
+    if _is_quoted_inside_a_sentence(group, index, result):
+        # Chữ của người kể trích giữa câu ("Sơn Ca” Samantha rảo bước...") - không phải câu thoại của ai.
+        return None
     attributed_speaker: str | None = None
     if index > 0 and _same_paragraph(group[index - 1], row):
         previous = group[index - 1]
@@ -1713,13 +1716,14 @@ def _is_quoted_inside_a_sentence(
         data = result.get(str(neighbour["stable_id"]))
         if data is None or data["kind"] != "narration" or not _same_paragraph(neighbour, row):
             return False
-    if before is not None and str(before["text"]).rstrip().endswith(IN_SENTENCE_QUOTE_OPEN_ENDINGS):
-        return False
-    if after is not None:
-        first = str(after["text"]).lstrip()[:1]
-        if not (first.islower() or first in ",;.)?!…"):
+    if before is not None:
+        if str(before["text"]).rstrip().endswith(IN_SENTENCE_QUOTE_OPEN_ENDINGS):
             return False
-    return True
+        # Câu kể trước chưa kết thúc: cụm trích nằm giữa câu, dù câu kể sau mở bằng một cái TÊN
+        # (“Sơn Ca” Samantha rảo bước..., Victor đã “bảo vệ” Lucien bằng...). 23 chỗ như thế ở cuốn 2.
+        return True
+    first = str(after["text"]).lstrip()[:1]
+    return bool(first.islower() or first in ",;.)?!…")
 
 
 def _has_its_own_speech_tag(
