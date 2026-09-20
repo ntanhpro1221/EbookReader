@@ -30,7 +30,7 @@ sửa của chúng ngược nhau:
 | tên | câu | sổ ghi | giọng | văn bản | ai sai |
 |---|---|---|---|---|---|
 | HATHAWAY | 12 | male | nữ | "bà" x42, "cô" x48, không một "ngài/ông" | **SỔ sai** - giọng đúng |
-| CHRISTOPHER | 8 | male | nữ | nam 86, "ngài" x29 | luật giọng TRẺ CON (`age=child` ở 8 chương) - không sai |
+| CHRISTOPHER | 8 | male | nữ | nam 86, "ngài" x29 | **GIỌNG sai** - và là ca rối nhất, xem dưới |
 | AMELTON | 6 | male | nữ | "cô" x6, nữ 13 / nam 7 | **SỔ sai** - giọng đúng |
 | ARTHUR DOYLE | 5 | female | nam | nam 13, nữ 0, "ngài/ông" | **SỔ sai** - giọng đúng |
 | SALA | 2 | female | nam | nam 25, nữ 4 | **SỔ sai** - giọng đúng |
@@ -38,10 +38,25 @@ sửa của chúng ngược nhau:
 | LAUREN | 2 | male | nữ | nam 95, "ngài" x15 | **GIỌNG sai** |
 | DONA | 1 | male (lúc thu) | nữ | nam 15, nữ 3 | **GIỌNG sai** |
 
-Tức 37 câu bị gắn cờ chỉ có **3 câu** thật là giọng sai (LAUREN 2, DONA 1); 26 câu là sổ ghi sai với giọng ĐÚNG, và
-8 câu là luật trẻ con. Năm cái tên "sổ sai" đã ghim lại bằng `cli cast --character ... --gender ...` ngay giữa lô 10
-(dữ liệu, không phải mã; nhịp tim pipeline không hụt giây nào) nên nhãn nay thuận với giọng - và **không phải đúc
-lại gì cả**. Nếu đọc báo cáo mà không đọc cột bằng chứng thì sẽ đúc lại 26 câu đang ĐÚNG thành sai.
+Tức trong 37 câu bị gắn cờ: **11 câu** là giọng sai thật (CHRISTOPHER 8, LAUREN 2, DONA 1) và **26 câu** là sổ ghi
+sai với giọng đang ĐÚNG. Năm cái tên "sổ sai" đã ghim lại bằng `cli cast --character ... --gender ...` ngay giữa
+lô 10 (dữ liệu, không phải mã; nhịp tim pipeline không hụt giây nào) nên nhãn nay thuận với giọng - và **không phải
+đúc lại gì cả**. Nếu đọc báo cáo mà không đọc cột bằng chứng thì sẽ đúc lại 26 câu đang ĐÚNG thành sai; `--recast`
+nay tự lọc bằng cột ấy (13 chương -> 5 chương).
+
+**CHRISTOPHER là ca rối nhất và CHƯA sửa được** - đọc lịch sử giọng của anh ta thì thấy đúng cái bẫy IVAN, nhưng
+nặng hơn:
+
+    chương 094        age=unknown  ngoc_linh_f107_p+02   3 câu   <- giọng trẻ/nữ
+    chương 095-097    age=unknown  thanh_binh_f090_p-04  5 câu   <- giọng nam
+    chương 109-149    age=unknown  thai_son / thanh_binh 22 câu  <- giọng nam
+    chương 284-296    age=CHILD    ngoc_linh_f107_p+02   31 câu  <- luật trẻ con, có chủ ý
+    chương 305-306    age=unknown  ngoc_linh_f107_p+02   5 câu   <- giọng trẻ NẰM LẠI sau khi hết `child`
+
+Năm cách đọc cho một cái tên. Hai giả thuyết chưa phân xử được mà không đọc truyện: (a) một nhân vật bị phân loại
+tuổi trôi, hay (b) **hai người khác nhau trùng tên** - một "ngài Christopher" người lớn (94-149) và một đứa trẻ
+(284-296). Ghim tuổi (`cli cast --age`) trước khi biết là (a) hay (b) thì có thể xoá đúng cách đọc đang đúng, nên
+để lại: cần một lượt đọc văn bản, không phải một lệnh.
 
 Con số thật: **IVAN**, `male`, `age=unknown`, 17 câu ở chương 062 đọc bằng `ngoc_linh_f107_p+02`
 — giọng nữ kéo cao dành cho trẻ con. Đường đi của lỗi ấy, đọc từ dữ liệu:
@@ -231,9 +246,39 @@ def gender_evidence_in_source(names: set[str]) -> dict[str, str]:
             word: len(re.findall(rf"(?<![\wÀ-ỹ]){word}\s+{re.escape(title)}(?![\wÀ-ỹ])", source, re.IGNORECASE))
             for word in HONORIFICS
         }
-        decisive = ", ".join(f"{word} {count}" for word, count in titled.items() if count)
-        out[name] = f"văn bản: nam {male}, nữ {female}" + (f" | {decisive}" if decisive else "")
+        out[name] = {"male": male, "female": female, "titled": {w: c for w, c in titled.items() if c}}
     return out
+
+
+def describe_evidence(evidence: dict) -> str:
+    decisive = ", ".join(f"{word} {count}" for word, count in evidence["titled"].items())
+    return f"văn bản: nam {evidence['male']}, nữ {evidence['female']}" + (f" | {decisive}" if decisive else "")
+
+
+MALE_HONORIFICS = ("ngài", "ông", "anh")
+FEMALE_HONORIFICS = ("bà", "cô", "chị")
+EVIDENCE_MINIMUM_HITS = 5
+EVIDENCE_MINIMUM_RATIO = 3.0
+
+
+def text_verdict(evidence: dict) -> str | None:
+    """Phái mà VĂN BẢN chỉ ra, hoặc None khi nó không chỉ đủ rõ.
+
+    Danh xưng + tên ("ngài Lauren", "bà Hathaway") được hỏi TRƯỚC: nó nói trực tiếp về người ấy, còn phép đếm
+    chữ quanh tên thì nhiễm cả những người cùng cảnh - HATHAWAY có nam 145 / nữ 150 (gần bằng nhau) mà danh
+    xưng thì 90 nữ / 0 nam. Ngưỡng của phép đếm lấy đúng ngưỡng dự án đã đo cho `_decisive` (>= 5 lần, tỉ lệ 3).
+    """
+    titled = evidence["titled"]
+    male_titles = sum(titled.get(word, 0) for word in MALE_HONORIFICS)
+    female_titles = sum(titled.get(word, 0) for word in FEMALE_HONORIFICS)
+    for winner, mine, theirs in (("male", male_titles, female_titles), ("female", female_titles, male_titles)):
+        if mine >= 3 and (theirs == 0 or mine / theirs >= EVIDENCE_MINIMUM_RATIO):
+            return winner
+    male, female = evidence["male"], evidence["female"]
+    winner, mine, theirs = ("male", male, female) if male >= female else ("female", female, male)
+    if mine >= EVIDENCE_MINIMUM_HITS and (theirs == 0 or mine / theirs >= EVIDENCE_MINIMUM_RATIO):
+        return winner
+    return None
 
 
 def age_drift(rows: list[dict]) -> dict[str, dict]:
@@ -270,14 +315,29 @@ def chapter_batches(book: Path = BOOK) -> dict[str, int]:
     return out
 
 
+def voice_is_the_wrong_side(rows: list[dict]) -> list[dict]:
+    """Chỉ những dòng mà VĂN BẢN thuận với `gender` - tức cái sai là GIỌNG, đúc lại mới có nghĩa.
+
+    Đo 20-09 trên cuốn 2: 13 dòng sai phái, nhưng chỉ **2** dòng (LAUREN 328, DONA 189) là giọng sai. Mười một
+    dòng còn lại là SỔ ghi sai với giọng đang ĐÚNG (HATHAWAY "bà" x42 / "cô" x48 mà sổ ghi male; AMELTON,
+    ARTHUR DOYLE, SALA, MAG) - đúc lại chúng là đổi giọng đúng thành sai, và tốn GPU để làm việc ấy.
+    Văn bản không chỉ rõ thì KHÔNG đúc lại: một lượt đúc lại đắt, còn im lặng thì không làm hỏng gì.
+    """
+    evidence = gender_evidence_in_source({r["name"] for r in rows})
+    return [r for r in rows if text_verdict(evidence.get(r["name"], {"male": 0, "female": 0, "titled": {}}))
+            == r["gender"]]
+
+
 def recast_arguments(rows: list[dict], batches: dict[str, int]) -> list[str]:
-    """`B:NNN` cho các chương có giọng sai phái. Không gộp chương của `age_drift`.
+    """`B:NNN` cho các chương mà GIỌNG là bên sai. Không gộp chương của `age_drift`.
 
     Vì sao chỉ lấy nhóm sai phái: một người đổi tuổi mà giọng vẫn nhất quán thì không có gì để
     đúc lại, và một người đổi cả giọng đã nằm trong danh sách của `one_person_one_voice
     --across`. Hai công cụ không nên đề nghị cùng một chương hai lần.
+
+    Và vì sao lọc thêm bằng văn bản: xem `voice_is_the_wrong_side`.
     """
-    titles = sorted({r["chapter"] for r in rows})
+    titles = sorted({r["chapter"] for r in voice_is_the_wrong_side(rows)})
     return [f"{batches[title]}:{title}" for title in titles if title in batches]
 
 
@@ -312,7 +372,8 @@ def main(argv: list[str]) -> int:
         for r in sorted(bad, key=lambda r: -r["lines"]):
             _say(f"  chương {r['chapter']}  {r['name']:20s} {r['gender']:6s} age={r['age']:8s}"
                  f" đọc bằng {r['voice'].replace('preset_', ''):26s} {r['lines']:3d} câu"
-                 f"   | {evidence.get(r['name'], 'văn bản: -')}")
+                 f"   | {describe_evidence(evidence[r['name']]) if r['name'] in evidence else 'văn bản: -'}"
+                 f" -> {'GIỌNG sai' if text_verdict(evidence.get(r['name'], {'male': 0, 'female': 0, 'titled': {}})) == r['gender'] else 'SỔ sai / chưa rõ'}")
         _say("")
         _say("  Cột cuối là BẰNG CHỨNG VĂN BẢN quanh cái tên. Nó nói bên nào sai, và hai bên sai khác nhau hẳn:")
         _say("    văn bản thuận với `gender` -> GIỌNG sai, phải ghim giọng rồi đúc lại;")
@@ -322,7 +383,10 @@ def main(argv: list[str]) -> int:
         _say("  NHƯNG chỉ sau khi ghim được tuổi/giọng cho những cái tên ấy: `port_casting` mang"
              " `locked_voice_key` theo danh tính, nên đúc lại trước khi ghim chỉ tốn GPU.")
     if excused:
-        _say(f"  (luật giọng trẻ con giải thích {len(excused)} dòng:"
+        # Nói rõ "dòng KHÁC": các dòng đã in ở trên KHÔNG được miễn (chúng có `age != child`). Bản đầu ghi
+        # "luật giọng trẻ con giải thích N dòng" ngay dưới bảng, và đọc thế thì tưởng bảng trên đã được giải
+        # thích - trong khi CHRISTOPHER có 8 dòng `age=child` được miễn VÀ 8 dòng `age=unknown` vẫn là lỗi.
+        _say(f"  ({len(excused)} dòng KHÁC được miễn vì `age=child` - không phải các dòng trên:"
              f" {', '.join(sorted({r['name'] for r in excused}))})")
 
     drift = age_drift(rows)
