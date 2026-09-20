@@ -23,6 +23,26 @@ cách 0,8 cm — nên một đứa trẻ trai được đọc bằng preset **n�
 sẽ báo EVERAN (nam, `child`, 36 câu) là lỗi và làm người đọc báo cáo mất niềm tin vào chín con
 số còn lại.
 
+Đo lần hai, 2026-09-20 12:3x, trên **cuốn 2** đã ghép (417 chương, 2.304 dòng, 446 tên): 13 dòng giọng sai phái,
+8 tên, 37 câu. Nhưng cột bằng chứng văn bản (thêm cùng ngày) cho thấy con số 37 ấy gộp BA thứ khác nhau, và cách
+sửa của chúng ngược nhau:
+
+| tên | câu | sổ ghi | giọng | văn bản | ai sai |
+|---|---|---|---|---|---|
+| HATHAWAY | 12 | male | nữ | "bà" x42, "cô" x48, không một "ngài/ông" | **SỔ sai** - giọng đúng |
+| CHRISTOPHER | 8 | male | nữ | nam 86, "ngài" x29 | luật giọng TRẺ CON (`age=child` ở 8 chương) - không sai |
+| AMELTON | 6 | male | nữ | "cô" x6, nữ 13 / nam 7 | **SỔ sai** - giọng đúng |
+| ARTHUR DOYLE | 5 | female | nam | nam 13, nữ 0, "ngài/ông" | **SỔ sai** - giọng đúng |
+| SALA | 2 | female | nam | nam 25, nữ 4 | **SỔ sai** - giọng đúng |
+| MAG | 1 | female | nam | nam 10, nữ 0 | **SỔ sai** - giọng đúng |
+| LAUREN | 2 | male | nữ | nam 95, "ngài" x15 | **GIỌNG sai** |
+| DONA | 1 | male (lúc thu) | nữ | nam 15, nữ 3 | **GIỌNG sai** |
+
+Tức 37 câu bị gắn cờ chỉ có **3 câu** thật là giọng sai (LAUREN 2, DONA 1); 26 câu là sổ ghi sai với giọng ĐÚNG, và
+8 câu là luật trẻ con. Năm cái tên "sổ sai" đã ghim lại bằng `cli cast --character ... --gender ...` ngay giữa lô 10
+(dữ liệu, không phải mã; nhịp tim pipeline không hụt giây nào) nên nhãn nay thuận với giọng - và **không phải đúc
+lại gì cả**. Nếu đọc báo cáo mà không đọc cột bằng chứng thì sẽ đúc lại 26 câu đang ĐÚNG thành sai.
+
 Con số thật: **IVAN**, `male`, `age=unknown`, 17 câu ở chương 062 đọc bằng `ngoc_linh_f107_p+02`
 — giọng nữ kéo cao dành cho trẻ con. Đường đi của lỗi ấy, đọc từ dữ liệu:
 
@@ -60,9 +80,9 @@ from ebook_reader.voice_catalog import VIENEU_PRESETS  # noqa: E402
 from scripts.name_marks import fold_dropped_marks  # noqa: E402
 
 try:
-    from scripts.book_paths import BOOK, VERSIONS  # noqa: E402
+    from scripts.book_paths import BOOK, SOURCE_DIR, VERSIONS  # noqa: E402
 except ImportError:  # chạy trực tiếp: python scripts/x.py
-    from book_paths import BOOK, VERSIONS  # noqa: E402
+    from book_paths import BOOK, SOURCE_DIR, VERSIONS  # noqa: E402
 
 VOICES_SQL = """
 SELECT ch.title AS chapter, c.canonical_name AS name, c.gender AS gender, c.age AS age,
@@ -178,6 +198,44 @@ def wrong_gender(rows: list[dict]) -> list[dict]:
     ]
 
 
+MALE_WORDS_NEAR_NAME = ("ông", "anh", "hắn", "gã", "lão", "cậu", "chàng", "ngài", "thằng", "chú")
+FEMALE_WORDS_NEAR_NAME = ("bà", "cô", "chị", "nàng", "ả", "phu nhân", "quý bà")
+HONORIFICS = ("ngài", "ông", "bà", "cô", "anh", "chị")
+
+
+def gender_evidence_in_source(names: set[str]) -> dict[str, str]:
+    """Đếm chữ chỉ người quanh mỗi cái tên trong NGUỒN, để biết bên nào sai.
+
+    Một dòng "giọng sai phái" có hai cách sai và cách sửa NGƯỢC nhau: nếu văn bản thuận với `gender` thì
+    giọng sai (phải ghim giọng rồi đúc lại); nếu văn bản ngược với `gender` thì cái sai là SỔ, giọng đang
+    đúng và đúc lại là làm hỏng. Đo 20-09 trên cuốn 2: trong 8 tên bị gắn cờ, HATHAWAY ("bà" x42, "cô" x48)
+    và AMELTON ("cô" x6) là sổ sai chứ không phải giọng sai - đúc lại chúng là đổi giọng đúng thành sai.
+    """
+    try:
+        source = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in sorted(SOURCE_DIR.glob("*.txt"))
+        )
+    except OSError:
+        return {}
+    out: dict[str, str] = {}
+    for name in names:
+        title = name.title()
+        windows = re.findall(rf"(?<![\wÀ-ỹ]).{{0,45}}{re.escape(title)}(?![\wÀ-ỹ]).{{0,45}}", source, re.IGNORECASE)
+        male = female = 0
+        for window in windows:
+            low = window.casefold()
+            male += sum(len(re.findall(rf"(?<![\wÀ-ỹ]){w}(?![\wÀ-ỹ])", low)) for w in MALE_WORDS_NEAR_NAME)
+            female += sum(len(re.findall(rf"(?<![\wÀ-ỹ]){w}(?![\wÀ-ỹ])", low)) for w in FEMALE_WORDS_NEAR_NAME)
+        titled = {
+            word: len(re.findall(rf"(?<![\wÀ-ỹ]){word}\s+{re.escape(title)}(?![\wÀ-ỹ])", source, re.IGNORECASE))
+            for word in HONORIFICS
+        }
+        decisive = ", ".join(f"{word} {count}" for word, count in titled.items() if count)
+        out[name] = f"văn bản: nam {male}, nữ {female}" + (f" | {decisive}" if decisive else "")
+    return out
+
+
 def age_drift(rows: list[dict]) -> dict[str, dict]:
     """{tên: {ages: {tuổi: {chương}}, voices: {giọng: {chương}}}} cho người bị đổi tuổi giữa các chương.
 
@@ -250,10 +308,15 @@ def main(argv: list[str]) -> int:
     else:
         _say(f"{len(bad)} dòng GIỌNG SAI PHÁI, {len({r['name'] for r in bad})} tên,"
              f" {sum(r['lines'] for r in bad)} câu thoại:")
+        evidence = gender_evidence_in_source({r["name"] for r in bad})
         for r in sorted(bad, key=lambda r: -r["lines"]):
             _say(f"  chương {r['chapter']}  {r['name']:20s} {r['gender']:6s} age={r['age']:8s}"
-                 f" đọc bằng {r['voice'].replace('preset_', ''):26s} {r['lines']:3d} câu")
+                 f" đọc bằng {r['voice'].replace('preset_', ''):26s} {r['lines']:3d} câu"
+                 f"   | {evidence.get(r['name'], 'văn bản: -')}")
         _say("")
+        _say("  Cột cuối là BẰNG CHỨNG VĂN BẢN quanh cái tên. Nó nói bên nào sai, và hai bên sai khác nhau hẳn:")
+        _say("    văn bản thuận với `gender` -> GIỌNG sai, phải ghim giọng rồi đúc lại;")
+        _say("    văn bản ngược với `gender` -> SỔ ghi sai, giọng đang đúng, đừng đúc lại gì cả.")
         _say("Đúc lại: bash scripts/boundary.sh <lô> --recast auto $(python"
              " scripts/voice_matches_the_person.py --recast)")
         _say("  NHƯNG chỉ sau khi ghim được tuổi/giọng cho những cái tên ấy: `port_casting` mang"
