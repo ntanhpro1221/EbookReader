@@ -6395,7 +6395,11 @@ def _adjudicate_director_critic(
                 for field, expected in ANALYSIS_CHAPTER_HEADING_DELIVERY.items()
             )
         )
-        if heading_delivery_is_locked and deltas:
+        # `blocking_deltas`, KHÔNG phải `deltas`: một tiêu đề lệch chỉ ở `emotion`/`intensity` đã được
+        # `host_derived_agreement` nhận, nên không có gì để ghi đè - mà ghi một `structural_override` khai
+        # `raw_accept: False` trong khi host ĐỒNG Ý là tự mâu thuẫn, và `_validate_analysis_acceptance_evidence`
+        # bắt đúng nó: lô 11 chết 17:02 ngày 20-09 ở tiêu đề chương 461 với `deltas=['intensity:0->1']`.
+        if heading_delivery_is_locked and blocking_deltas:
             structural_override = {
                 "policy_version": ANALYSIS_HOST_STRUCTURAL_POLICY_VERSION,
                 "stable_id": stable_id,
