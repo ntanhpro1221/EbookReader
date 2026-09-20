@@ -301,6 +301,26 @@ tên) đều đi qua `_stream_json_response`, chỗ bị monkeypatch, nên cờ 
 trong nhiễu. Điều phát biểu được là: **`qwen3:4b` KHÔNG kém mốc 8B**, mà nhanh hơn **27%** và nhẹ hơn
 1,5 GB VRAM. Điều KHÔNG phát biểu được: nó tốt hơn.
 
+### CHỌN CHƯƠNG chi phối mạnh hơn CHỌN MODEL - đo được, và nó đổi cách đọc mọi bảng ở trên
+
+Lượt 6 chương mới (21-09 06:0x) cho cùng `qwen3:8b`, cùng host, cùng cờ:
+
+| tập chương | điểm | người nói |
+|---|---|---|
+| 4 chương tập test (351/363/378/381) | 79,4 | **64,1%** |
+| 6 chương mới (385/396/399/400/407/415) | 81,8 | **75,9%** |
+
+**11,8 điểm người nói** giữa hai tập chương của MỘT model - lớn gấp bảy lần chênh lệch giữa các model
+(1,6 điểm). Bốn chương tập test khó hơn trung bình rõ rệt.
+
+Hai hệ quả, cả hai đều là luật cho mọi lượt đo sau:
+
+  - **chỉ so trên CÙNG tập chương.** Bảng ba model ở trên thoả điều này (cả ba chạy đúng bốn chương ấy),
+    nhưng một bảng gộp hai tập chương khác nhau là vô nghĩa dù trông đầy đặn hơn;
+  - **chênh lệch nhỏ chỉ đáng tin khi tập đủ lớn.** 4 chương = 399 dòng có đáp án người nói; thêm 6 chương
+    thành **1.034 dòng**, nên 1,6 điểm chuyển từ ~6 đoạn thành ~17 đoạn. Đó là lý do chạy thêm 6 chương
+    thay vì kết luận từ 4.
+
 Vì sao vẫn đáng theo: phân tích chiếm **40% giờ máy một lô** (`docs/THROUGHPUT.md`), nên -27% ở khâu ấy là
 lô nhanh hơn ~11%, và 1,5 GB VRAM trả lại là đúng thứ kế hoạch "chồng lấn giai đoạn" đang thiếu. Bước kế
 ở cửa sổ GPU sau: chạy lại `qwen3:4b` so `qwen3:8b` trên **10 chương** đáp án thay vì 4, để tách 0,6 điểm
