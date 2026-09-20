@@ -36,6 +36,9 @@ LEASE_STALE_SECONDS = 180.0
 # nói sai đúng lúc nó quan trọng nhất - khi so nhiều model và phải đọc log để biết model nào hỏng.
 ORDER: tuple[str, ...] = (
     "patch_the_log_names_the_model_that_actually_answered.py",
+    # Luật đầu tiên rút ra từ lỗi mà NHIỀU MODEL CÙNG MẮC (lượt so model 21-09): cả ba model sửa 11 phá 0
+    # trên 4 chương đáp án, và phát lại đáp án 43 chương / 10 truyện ra y hệt bản gốc từng dòng.
+    "patch_a_thought_outside_every_quote_belongs_to_the_narrator.py",
 )
 
 APPLIED = (
