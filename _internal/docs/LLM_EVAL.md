@@ -262,6 +262,35 @@ tiếp (ranh giới 10): cả 20 chương TMA có đáp án, host ĐÃ vá, và 
 `granite4.1` không hỗ trợ tiếng Việt.) Lượt đo đầu: chuỗi đêm 19-09 (`run_night_19_09.sh`), 8 model trên 4
 chương TMA ngay sau khi lô 9 thu xong, trước ranh giới 9; kết quả ở `runtime/model_eval_19_09.{log,json}`.
 
+## Huấn luyện: dữ liệu đã dựng, script đã có, chờ cửa sổ GPU (20-09 11:3x)
+
+`build_training_set.py` trên bộ phát lại mới nhất (cây 5 bản vá, 41 chương đáp án): **train 1.727 mẫu / dev 76 /
+test 230**, chia theo CHƯƠNG nên không mẫu nào của một chương nằm ở hai tập. Đo bằng tokenizer Qwen3:
+
+| | trung vị | p90 | p99 | tối đa |
+|---|---|---|---|---|
+| cả mẫu (prompt + đáp) | 3.213 | 3.730 | 4.069 | **4.276** |
+| riêng câu trả lời | 369 | | | 784 |
+
+Một epoch = **5,29M token**. `--max-length 4352` để giữ TRỌN mẫu dài nhất: cắt ở đây là cắt mất câu trả lời, tức
+huấn luyện trên một đề bài không có đáp án.
+
+`scripts/model_eval/train_lora.py`: QLoRA 4-bit (nf4, double quant, bf16), LoRA r=16 alpha=32 trên bảy phép chiếu,
+`paged_adamw_8bit`, gradient checkpointing, `packing=False` (mỗi mẫu là một lượt hỏi trọn, ghép lại là trộn hai đề
+bài), và `assistant_only_loss=True` - không có nó thì model học cả việc sinh lại prompt sản xuất, thứ nó sẽ luôn
+được cho sẵn.
+
+Model nền **`Qwen/Qwen3-4B-Instruct-2507`**: cùng họ với `qwen3:8b` đang chạy nên prompt không phải viết lại, vừa
+8 GB VRAM ở 4-bit, và bản `-Instruct-2507` không có chế độ nghĩ - chính chế độ ấy làm `qwen3.5:9b` trả "0/5 IDs"
+đêm 19-09. Nếu một model 4B huấn luyện riêng đánh bại mốc 8B thì đó là kết quả đáng giá gấp đôi: đúng hơn và nhẹ hơn.
+
+Script **TỪ CHỐI chạy khi có lượt sản xuất đang bay** (dùng lại `_runs_in_flight` của `apply_all.py` thay vì viết
+bộ canh thứ hai - docstring hàm ấy ghi hai lần bộ canh tự viết đã sai). Đã thử: nó chặn đúng lô 10. Máy 8 GB VRAM,
+huấn luyện chen vào giữa một lượt thu là ném cả lượt ấy vào OOM.
+
+Việc còn lại cho cửa sổ GPU, theo đúng thứ tự: `--smoke 8` (kiểm đường ống, 3 bước) -> một epoch -> gộp adapter ->
+`ollama create` -> chấm bằng `eval_models.py` trên tập TEST (230 mẫu / 5 chương mà model chuyên chưa từng thấy).
+
 ## Huấn luyện
 
 - Dữ liệu: `gold_replay.py --out` ra từng cặp (prompt sản xuất đúng như model thấy, câu trả lời đúng) cho cả
