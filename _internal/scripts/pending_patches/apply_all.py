@@ -45,6 +45,8 @@ ORDER: tuple[str, ...] = (
     "patch_a_name_two_letters_off_still_belongs_to_its_owner.py",
     # Và: cụm trích giữa câu kể là chữ của NGƯỜI KỂ (41 chương đáp án: 29 chỗ đúng, 0 chỗ hại).
     "patch_a_term_quoted_mid_sentence_is_the_narrators_own_line.py",
+    # Và: giọng mang PITCH trẻ con không thuộc về người đã được ghim là người lớn (lô 10: bỏ đúng 1/266).
+    "patch_a_child_pitched_voice_does_not_belong_to_an_adult.py",
 )
 
 APPLIED = (
