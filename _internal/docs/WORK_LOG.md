@@ -22,6 +22,22 @@ Bố cục hai thư mục làm việc này khả thi:
 | `D:\Novels\Ebook Reader` | chạy run thật (không sửa mã khi đang chạy) |
 | `D:\Novels\Ebook Reader_dev` | worktree git, sửa mã và chạy test song song |
 
+## 2026-09-21
+
+| giờ | việc | bằng chứng |
+|---|---|---|
+| 03:1x | **BỨC TƯỜNG VRAM**: một epoch không phải 2-3 h mà **~40 h** (38 token/s ở VRAM 95% - tràn, không thiếu FLOP). Ba lựa chọn để chủ sách quyết, tôi chọn (3) để không đốt cả đêm | `d1b42b1` |
+| 04:0x | Mổ prompt huấn luyện: **42,5% mọi token là MỘT TRONG ĐÚNG HAI khối `system` tĩnh** (giống từng byte, 864+863 lần). Sửa lại lựa chọn (1) - rút prompt KHÔNG đổi nội dung chất lượng - nhưng chỉ còn ~22 h, gấp 1,7 mà cần gấp 13. Kèm: nếu chính Claude làm LLM phân tích thì 0,59 $/chương, 0,47 $ có cache; cả cuốn 2 = 544 $ / 428 $ | `aac64e6` |
+| 04:2x | Chỗ tiềm ẩn thứ hai cùng họ với cái đã giết lô 11: **đo phơi nhiễm thay vì đi tìm ca tái hiện** - 586 dòng khoá `emotion` trên 53.899, nhưng 579 là tiêu đề (đã vá), chỉ **7 là khoá nghĩa thật**, cả 7 ở một cảnh và cả 7 model đã trả đúng. 0,013% -> **ghim bằng test, KHÔNG vá `database.py`** | `6da337a` |
+| 04:2x | `eval_models.json` chỉ ghi ở cuối cả ba model -> shell chết là mất bảng của 1,5 giờ GPU. Nay ghi sau mỗi model | `badaca9` |
+| 04:2x | Bẫy đọc: `ollama show --template` in `{{ .Prompt }}` KHÔNG nghĩa là `system` bị bỏ - đo thử thì cả gemma4 và qwen3 đều tôn trọng nó | `21de739` |
+| 04:3x | Kết quả âm thứ tư: gán UNKNOWN thay `người gọi X` KHÔNG làm tan câu hỏi "chín ăn hai" - đoạn được sửa CHÍNH LÀ mốc neo của đoạn văn. Đóng bằng đọc mã, 10 phút | `a0dde60` |
+| 04:3x | **Nguồn dữ liệu mới**: lỗi mà NHIỀU MODEL CÙNG MẮC là lỗi của host. 177 đoạn cả ba trả lời -> 17 chỗ mọi model cùng sai. Thêm `common_speaker_errors.py`. Và một lỗi đo của tôi: chấm khi `local_identities` chưa xong là đo mục tiêu đang di chuyển (74,8 rồi 77,2 cùng 4 chương) | `16bf339` |
+| 04:4x | Bản vá "nội tâm ngoài mọi nhịp ngoặc": ba phép thử, **hai bị loại** (một lợi = 0; một PHÁ 29 dòng đáp án vì tiếng Việt cho trống chủ ngữ). Cổng bắt một hồi quy tôi không thể suy ra: `yamiyo_no_hotaru` viết nội tâm bằng **dấu ngoặc đơn** | `f87369c` |
+| 04:5x | **RÚT bản vá ấy khỏi hàng đợi**: nó qua CẢ HAI cổng đo (sửa 11 phá 0; phát lại 43 chương y hệt bản gốc) nhưng `pytest` đầy đủ bắt nó phá test canh quyết định 20-09 của chủ sách. Lợi thật 3 dòng/49.991. **Bài học: hai cổng đo không thay được bộ kiểm đầy đủ** | `988f142` |
+| 04:5x | Lượt so 3 model xong, cả ba rơi 0 ID: `qwen3:4b` 80,0 (người nói 65,7%, 1.573 s, 3,7 GB) · `qwen3:8b` 79,4 (64,1%, 2.156 s) · `gemma4:e2b` 77,2 (62,2%, **842 s**). Không tuyên vô địch: 0,6 điểm ≈ 6 đoạn, trong nhiễu. Đã thả lượt 6 chương mới để tách nhiễu | `3a6d826` |
+| 04:5x | Kiểm thượng nguồn: vẫn im; `ruff` nay khớp bản ghim, và cổng là `pytest` - **xanh toàn bộ** | `5e43cfc` |
+
 ## 2026-09-20
 
 | giờ | việc | bằng chứng |
