@@ -288,8 +288,25 @@ Script **TỪ CHỐI chạy khi có lượt sản xuất đang bay** (dùng lạ
 bộ canh thứ hai - docstring hàm ấy ghi hai lần bộ canh tự viết đã sai). Đã thử: nó chặn đúng lô 10. Máy 8 GB VRAM,
 huấn luyện chen vào giữa một lượt thu là ném cả lượt ấy vào OOM.
 
-Việc còn lại cho cửa sổ GPU, theo đúng thứ tự: `--smoke 8` (kiểm đường ống, 3 bước) -> một epoch -> gộp adapter ->
-`ollama create` -> chấm bằng `eval_models.py` trên tập TEST (230 mẫu / 5 chương mà model chuyên chưa từng thấy).
+### Đường phục vụ model tự huấn luyện: đã thử trọn mắt xích, KHÔNG phỏng đoán (20-09 12:0x)
+
+Muốn chấm model chuyên trong CÙNG điều kiện với mốc `qwen3:8b` thì nó phải chạy qua đúng bộ phân tích sản xuất,
+tức qua Ollama (cùng prompt, cùng lược đồ JSON bắt buộc, cùng `num_ctx`). Ba điều đo được:
+
+1. **Ollama 0.33.2 không nhập được safetensors Qwen3.** `ollama create` từ thư mục safetensors trả
+   `Error: unsupported architecture "Qwen3ForCausalLM"`. Đây là lý do phải qua GGUF - đã thử, không suy đoán.
+2. **`convert_hf_to_gguf.py` bản mới KHÔNG còn tự chứa**: nó import package `conversion` (94 file trong repo
+   llama.cpp), nên tải một file là không đủ. Cách gọn: sparse clone chỉ `conversion/` + `gguf-py` vào
+   `D:/Novels/LLM_Train/llama.cpp` - **3,5 MB**.
+3. **Mắt xích chạy thông**, thử bằng `Qwen/Qwen3-0.6B`: safetensors -> GGUF f16 (1,5 GB) -> `ollama create` ->
+   `POST /api/generate` kèm `format` là lược đồ JSON -> trả **JSON hợp lệ**, `done=True`, `eval_count=61`, 6,4s
+   khi nạp nguội. Đúng hợp đồng `OllamaBookAnalyzer` đọc (`response`/`done`/`done_reason`/`eval_count`).
+
+`scripts/model_eval/serve_lora.py` làm ba bước ấy trong một lệnh (gộp adapter trên CPU ~8 GB RAM, chuyển GGUF,
+`ollama create`). Gộp và chuyển KHÔNG cần GPU nên chạy được giữa lúc lô đang thu; chỉ bước chấm mới cần GPU.
+
+Việc còn lại cho cửa sổ GPU, theo đúng thứ tự: `train_lora.py --smoke 8` (kiểm đường ống, 3 bước) -> một epoch ->
+`serve_lora.py` -> chấm bằng `eval_models.py` trên tập TEST (230 mẫu / 5 chương mà model chuyên chưa từng thấy).
 
 ## Huấn luyện
 
