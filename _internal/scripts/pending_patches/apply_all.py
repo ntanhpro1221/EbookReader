@@ -32,22 +32,8 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Ghim cho ranh giới 10: một dòng NGUYÊN VẸN trong 『…』 là một giọng nói, không phải lời kể.
-# Không đụng tới cuốn 1 và cuốn 2 (chia lại cả 915 + 478 chương: 0 đoạn đổi) - vá để các truyện
-# Nhật dịch (Yamiyo no Hotaru, Năng lực bá đạo, Two Childhood Friends) không bị NGƯỜI KỂ đọc thoại.
-# Và: "Arthen NGHIÊM NGHỊ hỏi:" vẫn là câu kể nêu tên người nói (đo trên 41 chương đáp án: +17 đúng, 0 sai).
-# Và: model chia phiếu về giới tính thì VĂN BẢN quyết (NEESHKA, CHLOE, LAUREN đều đang bị đọc giọng nữ).
-ORDER: tuple[str, ...] = (
-    "patch_a_whole_line_in_white_corner_brackets_is_a_voice.py",
-    "patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py",
-    "patch_the_text_outranks_a_split_vote_on_gender.py",
-    # Và: nhãn vắng mặt trong sách lệch HAI ký tự vẫn là cùng một người (ARTELI -> Artil, JOCLEYN -> Jocelyn).
-    "patch_a_name_two_letters_off_still_belongs_to_its_owner.py",
-    # Và: cụm trích giữa câu kể là chữ của NGƯỜI KỂ (41 chương đáp án: 29 chỗ đúng, 0 chỗ hại).
-    "patch_a_term_quoted_mid_sentence_is_the_narrators_own_line.py",
-    # Và: giọng mang PITCH trẻ con không thuộc về người đã được ghim là người lớn (lô 10: bỏ đúng 1/266).
-    "patch_a_child_pitched_voice_does_not_belong_to_an_adult.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 APPLIED = (
     "patch_reserve_all.py",
@@ -366,6 +352,22 @@ APPLIED = (
     # Đế chế...). Bản vá sửa cả HAI luật dùng chung phép nhận cụm trích giữa câu: khoá theo đoạn văn và "tên đầu câu kể sau".
     # Thử trên bản sao của cây 5c3e3f2: chỉ đỏ hai test môi trường; phát lại 446 + 449 hết dòng sai ấy.
     "patch_a_nickname_before_a_name_is_still_the_narrators.py",
+    # 2026-09-20: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Ghim cho ranh giới 10: một dòng NGUYÊN VẸN trong 『…』 là một giọng nói, không phải lời kể.
+    # Không đụng tới cuốn 1 và cuốn 2 (chia lại cả 915 + 478 chương: 0 đoạn đổi) - vá để các truyện
+    # Nhật dịch (Yamiyo no Hotaru, Năng lực bá đạo, Two Childhood Friends) không bị NGƯỜI KỂ đọc thoại.
+    # Và: "Arthen NGHIÊM NGHỊ hỏi:" vẫn là câu kể nêu tên người nói (đo trên 41 chương đáp án: +17 đúng, 0 sai).
+    # Và: model chia phiếu về giới tính thì VĂN BẢN quyết (NEESHKA, CHLOE, LAUREN đều đang bị đọc giọng nữ).
+    # Và: nhãn vắng mặt trong sách lệch HAI ký tự vẫn là cùng một người (ARTELI -> Artil, JOCLEYN -> Jocelyn).
+    # Và: cụm trích giữa câu kể là chữ của NGƯỜI KỂ (41 chương đáp án: 29 chỗ đúng, 0 chỗ hại).
+    # Và: giọng mang PITCH trẻ con không thuộc về người đã được ghim là người lớn (lô 10: bỏ đúng 1/266).
+    "patch_a_whole_line_in_white_corner_brackets_is_a_voice.py",
+    "patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py",
+    "patch_the_text_outranks_a_split_vote_on_gender.py",
+    "patch_a_name_two_letters_off_still_belongs_to_its_owner.py",
+    "patch_a_term_quoted_mid_sentence_is_the_narrators_own_line.py",
+    "patch_a_child_pitched_voice_does_not_belong_to_an_adult.py",
 )
 
 

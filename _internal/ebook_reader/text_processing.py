@@ -15,6 +15,10 @@ CURLY_QUOTE_SPECS = (
     ("‘", "’", "thought"),
 )
 QUOTE_CLOSING_MARKS = {"”", "’", '"'}
+# Một dòng NGUYÊN VẸN trong 『…』 là một giọng nói: kẻ nhập xác (Yamiyo no Hotaru), bảng thông báo game (Năng lực bá
+# đạo), tiếng qua loa/điện thoại (Two Childhood Friends). Cụm 『…』 nằm GIỮA câu kể là thuật ngữ - để yên, vì đổi giọng
+# giữa một câu kể là sai. 『 cố ý KHÔNG vào CURLY_QUOTE_SPECS: theo lối Nhật nó là ngoặc lồng trong 「…」 (nay là “”).
+WHITE_CORNER_QUOTE_LINE_PATTERN = re.compile(r"『[^』]{1,1600}』")
 INLINE_REFERENCE_MARKER_PATTERN = re.compile(r"\[\s*note\d+\s*\]", re.IGNORECASE)
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+")
 CLAUSE_BOUNDARY = re.compile(r"(?<=[.!?…;:,])\s+")
@@ -652,6 +656,9 @@ def _join_fragments(left: str, right: str) -> str:
 
 def _line_pieces(line: str) -> list[tuple[str, str]]:
     if re.match(r"^[—–-]\s*\S", line):
+        return [(line, "dialogue")]
+    stripped = line.strip()
+    if WHITE_CORNER_QUOTE_LINE_PATTERN.fullmatch(stripped) and has_spoken_content(stripped):
         return [(line, "dialogue")]
     matches = [
         (match, "dialogue" if _quoted_span_is_dialogue(line, match) else "narration")

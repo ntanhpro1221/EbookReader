@@ -324,6 +324,39 @@ def _within_one_edit(left: str, right: str) -> bool:
     return any(longer[:i] + longer[i + 1 :] == shorter for i in range(len(longer)))
 
 
+# Nhãn vắng mặt trong sách mà lệch HAI ký tự: vẫn là cùng một người viết sai, nhưng chỉ gom khi đích duy nhất và
+# nhãn đủ dài - hai ký tự trên bốn thì đã là một cái tên khác.
+TWO_EDIT_MINIMUM_LENGTH = 5
+
+
+def _within_two_edits(left: str, right: str) -> bool:
+    """Lệch nhau đúng hai ký tự (thay/thêm/bớt). Bằng nhau hay lệch một thì KHÔNG tính - lệch một đã có luật riêng."""
+    if left == right or abs(len(left) - len(right)) > 2 or _within_one_edit(left, right):
+        return False
+    previous = list(range(len(right) + 1))
+    for index, letter in enumerate(left, 1):
+        current = [index]
+        for position, other in enumerate(right, 1):
+            current.append(min(previous[position] + 1, current[position - 1] + 1,
+                               previous[position - 1] + (letter != other)))
+        previous = current
+    return previous[-1] == 2
+
+
+def _two_edit_candidates(folded_name: str, present: "Sequence[str]") -> list[str]:
+    """Ứng viên cách hai ký tự, chỉ khi CHỈ CÓ MỘT cách viết đích - hai đích khác nhau thì không đoán."""
+    if len(folded_name) < TWO_EDIT_MINIMUM_LENGTH:
+        return []
+    matches = [
+        other
+        for other in present
+        if _within_two_edits(folded_name, fold_for_source_search(other).strip())
+    ]
+    if len({fold_for_source_search(other).strip() for other in matches}) != 1:
+        return []
+    return matches
+
+
 def fold_to_source_spelling(
     names: "Sequence[str]",
     folded_source: str,
@@ -362,6 +395,10 @@ def fold_to_source_spelling(
                 and _within_one_edit(first_word, fold_for_source_search(other).strip())
             )
         ]
+        if not candidates:
+            # Lệch hai ký tự: `JOCLEYN` -> `Jocelyn`, `ARTELI` -> `ARTIL` (bạn cùng lỗi của nó, `ARTEL`, đã gom
+            # bằng luật lệch một - một mình `ARTELI` đứng lại thành nhân vật riêng là vô nghĩa).
+            candidates = _two_edit_candidates(folded_name, present)
         if not candidates:
             continue
         redirected[name] = max(
@@ -545,13 +582,16 @@ def resolve_gender(
     ranked = votes.most_common()
     if len(ranked) == 1:
         return ranked[0][0], "model"
-    if ranked and (len(ranked) == 1 or ranked[0][1] > ranked[1][1]):
-        return ranked[0][0], "model_majority"
+    # Phiếu CHIA (cả hai giới đều có phiếu) nghĩa là model đang lưỡng lự, nên hỏi văn bản TRƯỚC khi đếm đa số:
+    # một đa số mỏng vẫn thắng được thì văn bản không bao giờ được hỏi, và NEESHKA (9 nam/12 nữ trong khi văn bản
+    # 23 nam/7 nữ, gọi "Ngài Neeshka", "quý ông"), CHLOE, LAUREN đều bị đọc bằng giọng nữ vì thế.
     names = {str(row["speaker"]) for row in identity_rows}
     evidence = _gendered_word_evidence(all_rows, names)
     decided = _decisive(evidence)
     if decided is not None:
         return decided, f"text:{evidence.get('male', 0)}nam/{evidence.get('female', 0)}nữ"
+    if ranked and ranked[0][1] > ranked[1][1]:
+        return ranked[0][0], "model_majority"
     return "unknown", "unresolved"
 
 
@@ -1594,6 +1634,30 @@ def _drop_pins_that_share_a_chapter(
     return {name: voice for name, voice in locked_voices.items() if name not in dropped}
 
 
+VOICE_KEY_SUFFIX_PATTERN = re.compile(r"^preset_(?P<body>.+)_f(?P<formant>\d+)_p(?P<pitch>[+-]\d+)$")
+
+
+def voice_is_child_pitched(voice_key: str) -> bool:
+    """Giọng này có mang đúng PITCH TRẺ CON của preset nó dùng không?
+
+    Chỉ đọc pitch, cố ý không đọc formant: đo trên 117 `voice_key` của cuốn 2 thì 87 formant không khớp phép
+    biến đổi tuổi nào - bộ cấp giọng dùng formant để TÁCH hai người chung preset - còn 108 pitch thì khớp.
+    Và pitch trẻ con là dấu sắc nhất: đúng 1 trong 266 giọng ghim mang nó.
+    """
+    match = VOICE_KEY_SUFFIX_PATTERN.match(str(voice_key))
+    if match is None:
+        return False
+    pitch = int(match.group("pitch"))
+    for preset in VIENEU_PRESETS:
+        if _preset_slug(str(preset["name"])) != match.group("body"):
+            continue
+        gender = str(preset["gender"])
+        child = age_pitch_semitones("child", gender, str(preset["name"]))
+        adult = age_pitch_semitones("adult", gender, str(preset["name"]))
+        return pitch == child != adult
+    return False
+
+
 def _drop_pins_that_contradict_a_person(
     db: Any,
     locked_voices: dict[str, str],
@@ -1622,13 +1686,21 @@ def _drop_pins_that_contradict_a_person(
         contradicts = bool(
             gender and preset and preset != gender and (age or "") != "child"
         )
+        # Luật THỨ HAI, thêm 20-09 và hẹp bằng một phép đo: giọng mang đúng pitch TRẺ CON của preset nó
+        # dùng, trong khi người nghe đã ghim một tuổi KHÁC trẻ con. Không có nó thì ghim `--age adult` của
+        # KAELYN không làm gì cả - preset nữ khớp nhãn nữ nên luật phái im lặng, và bà vẫn được đọc bằng
+        # giọng bé gái. Chỉ đọc PITCH: formant là bước tách giọng (87/117 không khớp tuổi nào).
+        child_pitched = bool(age and age != "child" and voice_is_child_pitched(voice_key))
+        contradicts = contradicts or child_pitched
         if not contradicts:
             kept[key] = voice_key
             continue
-        log(
-            f"Bỏ giọng ghim của {key}: {voice_key} là preset {preset}, còn người nghe đã ghim"
-            f" {gender}" + (f"/{age}" if age else "") + " - cấp lại giọng."
+        reason = (
+            f"mang pitch trẻ con mà người nghe đã ghim tuổi {age}"
+            if child_pitched
+            else f"là preset {preset}, còn người nghe đã ghim {gender}" + (f"/{age}" if age else "")
         )
+        log(f"Bỏ giọng ghim của {key}: {voice_key} {reason} - cấp lại giọng.")
         db.event(
             "warning",
             "CASTING_PIN_CONTRADICTS_A_PERSON",

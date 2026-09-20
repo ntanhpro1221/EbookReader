@@ -23,6 +23,7 @@ from .database import (
     INAUDIBLE_DELIVERY_FIELDS,
     critic_delta_fields,
     ADDRESSEE_REPAIR_NOTE,
+    IN_SENTENCE_QUOTE_NARRATOR_NOTE,
     ANALYSIS_ACTIVE_PRIDE_CUE_FRAGMENT,
     ANALYSIS_CHAPTER_HEADING_CONFIDENCE,
     ANALYSIS_CHAPTER_HEADING_PATTERN,
@@ -318,8 +319,10 @@ GENERIC_SPEAKER_TRAITS = {
     "người dân": ("unknown", "unknown"),
 }
 GENERIC_CHILD_LABELS = {"trẻ em", "đứa bé", "đứa trẻ", "trẻ nhỏ"}
-DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘"})
-DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’"})
+# 『 và 』: một dòng nguyên vẹn trong 『…』 là một giọng nói (xem text_processing). Thiếu chúng ở đây thì khoá "thoại
+# nối tiếp cùng người nói" gán hai dòng 『…』 liền nhau cho một người - hai giọng qua loa nói liên tiếp là một ca thật.
+DIALOGUE_OPENERS = frozenset({'"', "'", "“", "‘", "『"})
+DIALOGUE_CLOSERS = frozenset({'"', "'", "”", "’", "』"})
 DIALOGUE_OUTER_QUOTE_PAIRS = {"“": "”", '"': '"'}
 SCOPED_AFFECT_NEGATION_PREFIX_PATTERN = re.compile(
     r"(?:\b(?:không|chẳng|chưa)"
@@ -607,10 +610,16 @@ NOT_YET_SPOKEN_PATTERN = re.compile(
     r"(?!nói\s+(?:gì\s+|được\s+)?(?:thêm|hết|xong|dứt|tiếp)|dứt\s+lời|nói\s+dứt)",
     re.IGNORECASE,
 )
+# Trạng ngữ chen giữa tên và động từ nói là lối viết thường ngày: "Arthen nghiêm nghị hỏi:", "James mỉm cười
+# nói:". Cho phép 1-3 chữ THƯỜNG ở giữa; dấu phẩy thì không, vì dấu phẩy là đã sang mệnh đề khác.
 SPEECH_ATTRIBUTION_PATTERN = re.compile(
     rf"(?P<speaker>{LATIN_PROPER_NAME_SURFACE_PATTERN.pattern})\s+"
+    r"(?P<middle>(?:[a-zà-ỹđ]+\s+){1,3})?"
     r"(?:nói|hỏi|đáp|trả lời|lên tiếng|thì thầm|quát|kêu|thốt lên)\s*[:：]\s*$"
 )
+# Giới từ ngay trước một cái tên: tên ấy là ĐỐI TƯỢNG của hành động, không phải người nói
+# ("James chỉ vào Lucien rồi nói:"). Chỉ xét MỘT chữ liền kề - "Bước vào phòng, Sophia nói:" thì Sophia vẫn nói.
+OBJECT_MARKER_BEFORE_NAME_WORDS = frozenset({"vào", "cho", "tới", "đến", "về", "lên", "quanh"})
 OLLAMA_LOG_FILENAME = "ollama-server.log"
 DEFAULT_RUNTIME_ROOT = Path(__file__).resolve().parents[1] / "runtime"
 CMUDICT_PATH = Path(__file__).resolve().parent / "assets" / "cmudict.dict"
@@ -1497,6 +1506,8 @@ def _trailing_speech_attribution(text: str) -> str | None:
     speaker = match.group("speaker")
     if _name_candidate_key(speaker) in NAME_CANDIDATE_EXCLUSIONS:
         return None
+    if any(word.casefold() in LISTENER_DIRECTED_WORDS for word in (match.group("middle") or "").split()):
+        return None
     before = stripped[: match.start("speaker")].split()
     if before:
         previous = before[-1]
@@ -1505,6 +1516,8 @@ def _trailing_speech_attribution(text: str) -> str | None:
             # không phải một tên. ("Rồi Lucien nói:" vẫn khoá: "Lucien" không phải âm tiết tiếng Việt.)
             return None
         if previous.casefold() in NOT_A_SPEAKER_BEFORE_NAME_WORDS:
+            return None
+        if previous.casefold() in OBJECT_MARKER_BEFORE_NAME_WORDS:
             return None
         if any(word.casefold().strip(",.;") in LISTENER_DIRECTED_WORDS for word in before[-3:]):
             return None
@@ -1518,6 +1531,7 @@ _SPEAKER_REPAIR_KEY_BY_MARKER = {
     ADDRESSEE_REPAIR_NOTE: "addressee",
     PARAGRAPH_SPEAKER_LOCK_NOTE: "paragraph_speaker_lock",
     CONTINUED_DIALOGUE_LOCK_NOTE: "continued_dialogue",
+    IN_SENTENCE_QUOTE_NARRATOR_NOTE: "in_sentence_quote",
 }
 
 
@@ -1744,6 +1758,27 @@ def _has_its_own_speech_tag(
     )
 
 
+def _repair_in_sentence_quote_speakers(
+    group: list[Any],
+    result: dict[str, dict[str, Any]],
+) -> None:
+    """Cụm trích giữa một câu kể là chữ của NGƯỜI KỂ: "...không thể bảo đây là “Khoa Học” thì đòi hỏi...".
+
+    Đo trên 41 chương đáp án chuẩn: 29 đoạn bị chạm, đáp án nhận NARRATOR đủ điểm cả 29, không đoạn nào từ chối.
+    Loại đoạn để nguyên - bộ tách đoạn đã khoá là thoại, và đáp án ghi đúng thế.
+    """
+    for index, row in enumerate(group):
+        data = result.get(str(row["stable_id"]))
+        if data is None or data["kind"] != "dialogue":
+            continue
+        if normalize_speaker_name(str(data["speaker"])) == "narrator":
+            continue
+        if not _is_quoted_inside_a_sentence(group, index, result):
+            continue
+        data["speaker"] = "NARRATOR"
+        _record_host_note_marker(data, IN_SENTENCE_QUOTE_NARRATOR_NOTE)
+
+
 def _repair_same_paragraph_speakers(
     group: list[Any],
     result: dict[str, dict[str, Any]],
@@ -1941,6 +1976,8 @@ def _validate(
     _repair_addressee_speakers(group, result, local_scope)
     _repair_same_paragraph_speakers(group, result)
     _repair_continued_dialogue_speakers(group, result)
+    # CUỐI chuỗi sửa: hai khoá trên (đoạn văn, thoại nối tiếp) sẽ ghi đè nếu chạy sau.
+    _repair_in_sentence_quote_speakers(group, result)
     _canonicalize_analysis_notes(result)
     return result
 
