@@ -374,6 +374,51 @@ Vậy muốn tự huấn luyện trên máy này thì phải chọn một trong 
 
 Tối nay tôi chọn (3) để không đốt cả đêm vào một epoch 40 giờ, và ghi lại (1)(2) kèm số đo để chủ sách quyết.
 
+#### Mổ prompt: 42,5% mỗi token huấn luyện là MỘT TRONG HAI khối chỉ dẫn tĩnh (21-09 04:2x)
+
+Câu "2,9k trong 3,2k token là prompt" ở trên đúng nhưng còn thô. Đếm bằng chính tokenizer của model nền
+(`Qwen/Qwen3-4B-Instruct-2507`, đo trên `D:/Novels/LLM_Train/data/train.jsonl`):
+
+| lượt | mẫu | token trung vị | **khối `system` tĩnh** | phần thay đổi theo chương | đáp án |
+|---|---|---|---|---|---|
+| generator | 864 | 2.488 | **1.190 (47,8%)** | 948 | 360 |
+| phản biện | 863 | 3.290 | **1.399 (42,5%)** | 1.298 | 596 |
+| cả tập | 1.727 | 3.198 | **2,235 M / 5,265 M = 42,5%** | | |
+
+Và chỉ có **đúng hai** khối `system` khác nhau trên 1.727 mẫu (864 + 863), giống nhau từng byte. Đó là quyển luật
+- không phải ngữ cảnh truyện.
+
+Việc này **sửa lại lựa chọn (1)**: rút prompt KHÔNG nhất thiết là đổi nội dung đang cho 68-77% người nói. Phần
+mang chất lượng (danh sách nhân vật đã biết, `previous_text`/`next_text`, văn bản đoạn) nằm trong vai `user` và
+giữ nguyên; thứ bỏ đi là quyển luật, mà huấn luyện chính là chuyển quyển luật ấy từ prompt vào trọng số - rồi
+sản xuất dùng đúng prompt ngắn ấy. Không đổi một chữ nội dung.
+
+Nhưng nó **không phá nổi bức tường**, và đây là chỗ phải nói thẳng: bỏ hết khối tĩnh còn 3,03 M token/epoch,
+ở 38 token/s đã đo là **~22 giờ** thay vì ~40. Gấp 1,7 lần, mà bức tường cần gấp 13. Ẩn số duy nhất còn lại là
+**38 token/s ấy đo ở mức VRAM 95%** - chuỗi ngắn hơn thì bớt tràn, tốc độ có thể nhảy hơn tỉ lệ token. Đó là một
+phép đo GPU, chưa làm, và làm được trong 20 phút ở cửa sổ GPU kế tiếp:
+
+    # cắt khối system còn một câu, giữ nguyên vai user + đáp án, rồi đo lại giây/mẫu
+    python scripts/model_eval/train_lora.py --smoke 8 --max-length 2560 --short-system
+
+Nếu tốc độ chỉ nhích theo tỉ lệ token thì (1) chết hẳn và chỉ còn (2)(3). Chưa có cờ `--short-system`: viết sau
+khi có phép đo, đừng viết trước.
+
+#### Số phụ cho câu hỏi khác của chủ sách: nếu CHÍNH TÔI làm LLM phân tích
+
+Cùng dữ liệu ấy đếm theo chương (59 chương có dữ liệu thật, gồm cả lượt sinh và lượt phản biện):
+
+| | trung vị mỗi chương |
+|---|---|
+| lượt gọi LLM | 39 |
+| token vào | 107.531 (trong đó khối tĩnh 50.381) |
+| token ra | 18.135 |
+
+Quy ra giá Sonnet 5 (vào 3 $/M, ra 15 $/M, đọc lại cache 0,30, ghi cache 3,75): **0,59 $/chương**, còn
+**0,47 $** nếu bật cache tiền tố (-21%, vì khối tĩnh chỉ phải ghi hai lần). Cả cuốn 2 (915 chương) là
+**544 $**, hay **428 $** có cache; phần chưa đúc (460-915) là **271 $** / **213 $**. Đây là số để chủ sách
+biết bậc độ lớn, không phải một đề xuất.
+
 ### Đường phục vụ model tự huấn luyện: đã thử trọn mắt xích, KHÔNG phỏng đoán (20-09 12:0x)
 
 Muốn chấm model chuyên trong CÙNG điều kiện với mốc `qwen3:8b` thì nó phải chạy qua đúng bộ phân tích sản xuất,
