@@ -107,6 +107,9 @@ phục vụ cả hai cờ.
 | Song song hoá Ollama phía client | **1,00×**. Server tuần tự hoá; `OLLAMA_NUM_PARALLEL` là biến môi trường của server, không sửa trong mã được. `THROUGHPUT.md` |
 | Bộ dò tiếng "tóp" đầu câu | Bị tai người nghe bác bỏ; UTMOSv2 xếp hạng ngược. `ONSET_CLICK.md` |
 | Gộp hai lần tái tổng hợp giọng trẻ em | Người nghe chọn cách hiện tại. `CHILD_VOICE_TRANSFORM.md` |
+| Vá một "lớp lỗi tiếng súng" cho ASR (20-09) | **Không có lớp ấy.** Đếm trên MỌI project cuốn 2: còn 65 đoạn `failed` trên hơn 40.000 (0,15%), 58 trong đó là `ASR_MISMATCH_UNRESOLVED` và chúng KHÔNG có mẫu chung - tên riêng, số giờ, từ nước ngoài, câu ngắn lặp, tiếng súng. Quan trọng hơn: **59/65 nằm trong chương đã `completed`**, tức cơ chế xuất-bản-không-người-nghe đã gánh và chương vẫn lên sách; chỉ 6 đoạn thuộc chương thật sự hỏng, rải qua 11 lô. Vá nó chỉ có nghĩa là nới một cổng chất lượng |
+| Luật host "tên mở câu kể là chủ ngữ" (20-09) | **Được 5 mất 1 trên lỗi model, nhưng ĐÈ 7 đáp án đúng** khi phát lại đáp án chuẩn - đúng loại lỗi im lặng mà tám bản vá ranh giới 9 sinh ra để dọn. Nếu làm lại: chốt danh hiệu xoá được 4/7, nhưng ba chỗ còn lại là chủ ngữ làm việc KHÔNG phải nói với người nói xuất hiện sau, không tách được bằng mặt chữ. `LLM_EVAL.md` |
+| Nới luật "người nói chính là người ĐƯỢC GỌI" (20-09) | **Không được điểm nào** (luật thay người nói bằng NPC vô danh, đáp án muốn người thật) và trên 3.668 đoạn chỉ đổi 11 chỗ: 9 thoát khỏi giọng nhân vật sai, 2 MẤT giọng đúng. Chín ăn hai, cả hai phía đều không phải điểm số mà là "ai đọc câu ấy" - câu hỏi thuộc về tai chủ sách, đang chờ. `LLM_EVAL.md` |
 
 ## Việc còn tồn
 
