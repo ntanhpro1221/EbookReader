@@ -1,6 +1,9 @@
 # "Two Childhood Friends..." file 082 ("Chương 83: Thứ Kỳ Lạ"). Vòng 12 (20-09): B gán, A soát, không đổi. 1-47 ngôi ba
 # (Urazumi, thầy đồng nghiệp NPC*); từ 48 ngôi thứ nhất, "tôi" = YOSHIHITO / KUCHINASHI YOSHIHITO - các câu kêu thầm của cậu N,T đủ.
-# 94 là dòng 『』 bị khoá lời kể -> NARRATOR (quy tắc 10).
+# 94: dòng 『』 nguyên vẹn. Bản vá 20-09 (patch_a_whole_line_in_white_corner_brackets_is_a_voice) khoá nó thành
+# THOẠI, và đó mới đúng: câu 98 nói rõ "có cả Kakushigi và Grey ở đây", nên đây là một người đứng cạnh nói ra
+# miệng chứ không phải chữ của người kể - đáp án cũ (N NARRATOR, quy tắc 10) là SAI. Văn bản không chỉ rõ ai
+# trong hai người, nên nhận cả hai tên và NPC vô danh.
 0 H
 1 D NPC*,UNKNOWN~ afraid,happy 1-2 fast loud u
 2 D NPC*,UNKNOWN~ excited,happy 1-2 normal,fast normal,loud u
@@ -95,7 +98,7 @@
 91 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry,surprised 1 normal normal u
 92 D KIRAKO,KUROMITSU KIRAKO sad,neutral 0-1 normal normal f
 93 D YOSHIHITO,KUCHINASHI YOSHIHITO neutral,sarcastic 0-1 normal normal m
-94 N NARRATOR neutral,tired,sarcastic 0-1 normal normal u
+94 D NPC*,UNKNOWN,KAKUSHIGI,GREY neutral,tired,sarcastic 0-1 normal normal u
 95 N NARRATOR neutral,sarcastic 0-1 normal normal u
 96 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 2 fast normal,loud u
 97 N,T NARRATOR,YOSHIHITO,KUCHINASHI YOSHIHITO angry 1-2 fast normal u

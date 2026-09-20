@@ -109,6 +109,30 @@ chia đoạn lại cả 1.393 chương).
 Hệ quả cho việc so model: mọi lượt đo trước ranh giới 9 chạy trên host cũ, nên điểm tuyệt đối bị chặn trần; so
 TƯƠNG ĐỐI giữa các model vẫn công bằng (cùng trần). Đo lại sau ranh giới để có con số thật.
 
+## Điều tra kiểu lỗi lớn nhất của model (20-09 09:0x): host có thể tự sửa bao nhiêu?
+
+`score_models.py --dispute-out` trên bản thu lô 9 (`qwen3:8b`, 79,7 - người nói 68,4%) cho 134 chỗ lệch; phân loại ở
+`gold/ADJUDICATION.md` vòng 14. Hai kiểu lớn nhất đều là chỗ host ĐÁNG RA biết mà không biết:
+
+**(1) Trạng ngữ chen giữa tên và động từ nói - ĐÃ VÁ, ghim ranh giới 10.** `SPEECH_ATTRIBUTION_PATTERN` đòi động từ
+dính liền tên, nên "Arthen nghiêm nghị hỏi:", "James mỉm cười nói:", "Lucien từ tốn nói:" đều không khớp: trong 9
+chương đáp án của lô 9, luật cũ chỉ bắt được **2** lần, còn 122 câu thoại có câu kể liền trước thì host mù hoàn toàn.
+Nới cho phép 1-3 chữ thường ở giữa (không dấu phẩy) + hai chốt mới (giới từ liền trước tên; chữ hướng tới người nghe
+nằm ở giữa). Đo trên **cả 41 chương đáp án**: **17 câu gán ĐÚNG thêm, 0 câu gán SAI thêm**.
+Bản vá: `patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py`.
+
+**(2) Tên người nghe không ở đầu câu thoại - ĐO RỒI, CỐ Ý CHƯA VÁ.** `_speaker_is_directly_addressed` chỉ thấy tên ở
+đầu câu (`^Tên,`) hoặc danh xưng + tên. Thử 9 lối gọi tên thật: **6 lối bị bỏ sót** - sau thán từ ("Chờ đã, Aska,"),
+cuối câu ("Sao vậy, Beaulac?", "Cảm ơn nhé, Lucien.", "Hân hạnh được gặp cậu, Evans."), giữa câu ("Thôi được rồi,
+Lazar, giờ tôi..."). Đây chính là nguồn "EVANS ma" - model lấy người ĐƯỢC GỌI làm người nói.
+
+Nhưng nới ra **không được điểm nào**: luật này không đoán ai nói, nó thay người nói bằng `người gọi X` (một NPC vô
+danh), mà đáp án thì muốn người nói thật. Và đo mức HẠI trên 41 chương: luật nới nổ trên chính NGƯỜI NÓI THẬT **2
+lần**, cả hai là tự giới thiệu - `347:51 "Bạn của cô, Derrick Douglas."` và `446:48` (Dạ Oanh xướng tên mình trên
+sóng) - **cùng mặt chữ với lối gọi tên**, không tách được bằng văn bản: câu trước dấu phẩy vẫn có đại từ ngôi hai
+("của **cô**"). Tỷ lệ lợi/hại khoảng 3:1 nhưng cả hai phía đều là "đổi một giọng sai thành giọng trung tính" chứ
+không phải điểm số, nên để chủ sách nghe thử rồi quyết, kèm ví dụ - không tự vá.
+
 ## Lượt đo đêm 20-09 (host CHƯA vá, 4 chương 351/363/378/381) - và bài học về công cụ đo
 
 | model | chạy trọn | điểm | người nói | cảm xúc | c.độ | g.tính | giây |
