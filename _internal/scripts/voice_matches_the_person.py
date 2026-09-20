@@ -66,6 +66,26 @@ giọng nam lớn tuổi ở lượt phân vai kế. 39 câu ĐÃ THU vẫn gi�
 Bài học về công cụ: cái thiếu không phải một luật mới mà là **một ghim của người nghe**, và báo cáo này chính là
 thứ chỉ ra ai cần được ghim. Chạy nó sau mỗi vài lô.
 
+## Trục TUỔI: soát nhãn `age=child` bằng văn bản (thêm 20-09 14:0x)
+
+Báo cáo nay có thêm một mục. Vì sao nó phải có: **tuổi chọn HỌ GIỌNG** (trẻ con đọc bằng preset nữ kéo cao), mà
+đáp án chuẩn chấm bảy trục và **tuổi không có trong đó** - nên một nhãn tuổi sai không có thước nào bắt, ngoài chỗ
+này. Đo trên cuốn 2: bốn tên từng mang `age=child`, và ba trong bốn là SAI:
+
+| tên | câu | danh xưng người lớn trong nguồn | chữ trẻ con | phán xử |
+|---|---|---|---|---|
+| CHRISTOPHER | 31 | ngài 29, thầy 12, chủ tịch 6, ông 3 | 0 | **sai** - chủ tịch Hiệp hội Nhạc sĩ, đã ghim `elderly` |
+| KAELYN | 23 | phu nhân 3 | 2 | **sai** - "vợ của quản gia", "thưa phu nhân"; đã ghim `adult` |
+| LUCIEN | 11 | ngài 88, thầy 2, giáo sư 2 | 39 | **sai** nhưng VÔ HẠI: giọng anh ta đã ghim từ trước nên nhãn không đổi được giọng nào |
+| SPRINT | 6 | ngài 1 | 3 | chưa rõ - để lại |
+
+Hai người bị đọc bằng giọng trẻ con **54 câu** vì một nhãn tuổi. Cả hai đã ghim bằng `cli cast --gender ... --age ...`
+giữa lô 10, và `_drop_pins_that_contradict_a_person` sẽ bỏ giọng ghim trái ghim của người nghe ở lượt phân vai kế.
+
+Chốt đọc bảng này: **danh xưng + tên là tín hiệu mạnh, chữ trẻ con quanh tên là tín hiệu yếu** - y như trục giới
+tính. Chữ quanh tên nhiễm cả người khác cùng cảnh: hai chữ "trẻ con" cạnh KAELYN nói về Lena, cô em họ bà ấy tới
+đón, chứ không nói về bà.
+
 Con số thật: **IVAN**, `male`, `age=unknown`, 17 câu ở chương 062 đọc bằng `ngoc_linh_f107_p+02`
 — giọng nữ kéo cao dành cho trẻ con. Đường đi của lỗi ấy, đọc từ dữ liệu:
 
@@ -294,6 +314,61 @@ def text_verdict(evidence: dict) -> str | None:
     return None
 
 
+ADULT_TITLES_BEFORE_NAME = ("ngài", "ông", "bà", "thầy", "lão", "cụ", "tiên sinh", "phu nhân",
+                            "chủ tịch", "giáo sư", "hiệu trưởng", "công tước", "nam tước", "bá tước")
+CHILD_WORDS_NEAR_NAME = ("cậu bé", "thằng bé", "con bé", "đứa trẻ", "bé gái", "bé trai", "trẻ con",
+                         "đứa bé", "cô bé")
+
+
+def age_evidence_in_source(names: set[str]) -> dict[str, tuple[dict[str, int], int]]:
+    """{tên: ({danh xưng người lớn: số lần}, số chữ trẻ con quanh tên)} - soát nhãn `age=child`.
+
+    Vì sao cần: tuổi chọn HỌ GIỌNG, mà đáp án chuẩn không có trục tuổi, nên một nhãn tuổi sai không có
+    thước nào bắt. Đo 20-09 trên cuốn 2: bốn tên từng mang `age=child`, hai trong đó sai hẳn - CHRISTOPHER
+    ("ngài" x29, "thầy" x12, "chủ tịch" x6, không một chữ trẻ con nào) là chủ tịch Hiệp hội Nhạc sĩ đã về
+    danh dự, và KAELYN ("phu nhân" x3) là vợ của một quản gia. Hai người bị đọc bằng giọng trẻ con 54 câu.
+    """
+    try:
+        source = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in sorted(SOURCE_DIR.glob("*.txt"))
+        )
+    except OSError:
+        return {}
+    out: dict[str, tuple[dict[str, int], int]] = {}
+    for name in names:
+        title = name.title()
+        if len(title) < 3:
+            continue
+        adult = {
+            word: len(re.findall(rf"(?<![\wÀ-ỹ]){word}\s+{re.escape(title)}(?![\wÀ-ỹ])", source, re.IGNORECASE))
+            for word in ADULT_TITLES_BEFORE_NAME
+        }
+        windows = re.findall(rf"(?<![\wÀ-ỹ]).{{0,40}}{re.escape(title)}(?![\wÀ-ỹ]).{{0,40}}", source, re.IGNORECASE)
+        child = sum(
+            len(re.findall(rf"(?<![\wÀ-ỹ]){word}(?![\wÀ-ỹ])", window.casefold()))
+            for window in windows
+            for word in CHILD_WORDS_NEAR_NAME
+        )
+        out[name] = ({word: count for word, count in adult.items() if count}, child)
+    return out
+
+
+def age_verdict(adult_titles: dict[str, int], child_words: int) -> str:
+    """Phán xử một nhãn `age=child` từ bằng chứng văn bản.
+
+    DANH XƯNG + TÊN là tín hiệu mạnh, chữ trẻ con quanh tên là tín hiệu yếu - đúng bài học của trục giới
+    tính. Chữ quanh tên nhiễm cả người khác trong cùng cảnh: KAELYN có hai chữ "trẻ con" bên cạnh, nhưng
+    chúng nói về Lena - cô em họ mà bà ấy tới đón - còn "phu nhân Kaelyn" thì nói về chính bà.
+    """
+    adult = sum(adult_titles.values())
+    if adult >= 3 or (adult >= 1 and child_words <= 2):
+        return "NGHI SAI - bằng chứng NGƯỜI LỚN"
+    if child_words >= 3:
+        return "trẻ con: văn bản thuận"
+    return "chưa rõ"
+
+
 def age_drift(rows: list[dict]) -> dict[str, dict]:
     """{tên: {ages: {tuổi: {chương}}, voices: {giọng: {chương}}}} cho người bị đổi tuổi giữa các chương.
 
@@ -401,6 +476,23 @@ def main(argv: list[str]) -> int:
         # thích - trong khi CHRISTOPHER có 8 dòng `age=child` được miễn VÀ 8 dòng `age=unknown` vẫn là lỗi.
         _say(f"  ({len(excused)} dòng KHÁC được miễn vì `age=child` - không phải các dòng trên:"
              f" {', '.join(sorted({r['name'] for r in excused}))})")
+
+    child_rows = [r for r in rows if r["age"] == "child"]
+    if child_rows:
+        _say("")
+        _say("Nhãn `age=child` soát lại bằng VĂN BẢN (tuổi chọn họ giọng, và đáp án chuẩn KHÔNG có trục tuổi -")
+        _say("nên đây là chỗ DUY NHẤT một nhãn tuổi sai bị bắt):")
+        evidence = age_evidence_in_source({r["name"] for r in child_rows})
+        by_name: dict[str, tuple[int, set[str]]] = {}
+        for r in child_rows:
+            lines, chapters = by_name.get(r["name"], (0, set()))
+            by_name[r["name"]] = (lines + r["lines"], chapters | {r["chapter"]})
+        for name, (lines, chapters) in sorted(by_name.items(), key=lambda kv: -kv[1][0]):
+            adult, child = evidence.get(name, ({}, 0))
+            verdict = age_verdict(adult, child)
+            titles = ", ".join(f"{word} {count}" for word, count in adult.items()) or "-"
+            _say(f"  {name:18s} {lines:3d} câu / {len(chapters)} chương | danh xưng người lớn: {titles}"
+                 f" | chữ trẻ con: {child} -> {verdict}")
 
     drift = age_drift(rows)
     if drift:
