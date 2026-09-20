@@ -290,6 +290,54 @@ Hình dạng bản vá: không `raise`, mà ghi log to, phát `db.event`, đúc 
 còn lại, và liệt kê nhân vật ấy trong báo cáo để người nghe khoá lại sau bằng `cli cast`. Giống
 hệt cơ chế máy tự cho qua: **không đợi ai, nhưng không bao giờ im lặng.**
 
+## Một tiêu đề chương giết cả lô, vì bản ghi khai ngược điều host đã làm (2026-09-20)
+
+Lô 11 chết 17:02, mười phút sau khi ranh giới 10 thả nó, ở đoạn **122/3.705**:
+
+```
+[critical] UNRECOVERABLE_PIPELINE_ERROR: Accepted critic evidence does not bind exact
+delivery/confidence for c00002_s0000000: agreement_with_override, structural_override;
+deltas=['intensity:0->1'] expected=['intensity:0->1']
+```
+
+Đoạn ấy là **tiêu đề chương 461**, và `deltas == expected` - nên cái sai không phải delta mà là **cờ**.
+
+**Một cái bẫy đọc log, ghi lại để không ai mất thời gian như tôi.** Ngay TRƯỚC dòng critical là
+`Đã dừng Ollama ẩn do Ebook Reader tự khởi động.` Tôi đọc nó thành nguyên nhân ("app tắt Ollama, lô mất LLM") và
+báo sai một lần. Nó là dấu vết **dọn dẹp của chính dây chuyền** trên đường thoát: câu ấy nghĩa là *"đã dừng con
+Ollama ẩn mà Ebook Reader đã tự khởi động"*. Thứ tự trong log không phải quan hệ nhân quả.
+
+**Mâu thuẫn, đọc từ hai phía.** `analysis.py` ghi vào sổ `"accept": host_derived_agreement` - tức cờ accept LƯU LẠI
+chính là sự đồng ý của host. Nhưng nhánh tiêu đề ghi `structural_override` với `"raw_accept": False` **cứng**, cho
+mọi tiêu đề có delivery khoá và có delta bất kỳ. Còn `database.py` chỉ coi bản ghi ấy hợp lệ khi cờ accept thật sự
+là `False`.
+
+Hai phía khớp khi delta **nghe được**: `blocking_deltas` không rỗng → host không đồng ý → accept False → khớp. Khi
+delta **chỉ** thuộc `INAUDIBLE_DELIVERY_FIELDS` (`emotion`, `intensity`) thì `AFFECT_CUE_DISAGREEMENT_BLOCKS = False`
+làm host ĐỒNG Ý - và bản ghi vẫn khai nó đã từ chối. Tầng sổ bắt đúng chỗ ấy.
+
+Vì thế **11 lô mới nổ một lần**: cần đúng tổ hợp *tiêu đề + delivery khoá + delta chỉ-không-nghe-được*. `run` lại thì
+đi qua, vì lượt phản biện thứ hai không sinh delta - nên nó là cái chết **ngẫu nhiên theo dữ liệu**, thứ khó gặp và
+khó tin khi chỉ đọc một lần.
+
+Vá (ghim ranh giới 11): ghi đè khi có delta **CHẶN**, không phải delta bất kỳ. **Không** đụng `database.py` - phía sổ
+đang đúng, nó chỉ đòi bản ghi phải khớp sự thật.
+
+### Chỗ thứ hai cùng hình dạng - CHƯA vá, và cách sửa phải KHÁC
+
+Có ba chỗ ghi `"raw_accept": False` cứng trong `analysis.py`, và phía sổ gác cả ba bằng `raw_accept_value is False`:
+
+| ghi đè | điều kiện sinh ra nó | trường | nhất quán? |
+|---|---|---|---|
+| structural (tiêu đề) | có delta bất kỳ | mọi trường | **KHÔNG** - đã vá |
+| source_kind | có delta `kind` | `kind` | có: `kind` là trường CHẶN nên accept thô đúng là False |
+| semantic (khoá nghĩa) | critic đổi `emotion` sang giá trị không được phép | `emotion` | **KHÔNG** - `emotion` không chặn, nên accept thô là True |
+
+Nhưng cách sửa chỗ semantic **không được** giống chỗ tiêu đề: khoá nghĩa tồn tại để giữ *ý nghĩa*, không phải vì
+*độ nghe được*, nên gác nó bằng `blocking_deltas` là xoá luôn khoá ấy trong mọi ca nó cần. Cách đúng ở đó là sửa
+phía sổ: mong đợi ghi-đè theo `raw_accept` THẬT (`host_derived_agreement`) thay vì đòi nó bằng False. Đó là ba cổng
+trong file bị khoá chặt nhất của dự án, nên nó phải chờ một **ca tái hiện được** - đừng vá theo suy luận.
+
 ## Cổng 5 cũng là một bức tường, và nó chặn vì một phép đo sát ngưỡng (2026-09-09)
 
 Chương đầu tiên của lô 1 hỏng ngay:
