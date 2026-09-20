@@ -36,10 +36,15 @@ LEASE_STALE_SECONDS = 180.0
 # nói sai đúng lúc nó quan trọng nhất - khi so nhiều model và phải đọc log để biết model nào hỏng.
 ORDER: tuple[str, ...] = (
     "patch_the_log_names_the_model_that_actually_answered.py",
-    # Luật đầu tiên rút ra từ lỗi mà NHIỀU MODEL CÙNG MẮC (lượt so model 21-09): cả ba model sửa 11 phá 0
-    # trên 4 chương đáp án, và phát lại đáp án 43 chương / 10 truyện ra y hệt bản gốc từng dòng.
-    "patch_a_thought_outside_every_quote_belongs_to_the_narrator.py",
 )
+
+# RÚT khỏi hàng đợi 21-09, không phải vì nó sai: `patch_a_thought_outside_every_quote_belongs_to_the_narrator.py`
+# qua cả hai cổng đo (cả ba model sửa 11 phá 0; phát lại đáp án 43 chương / 10 truyện y hệt bản gốc từng dòng)
+# nhưng bộ kiểm ĐẦY ĐỦ bắt nó phá `test_a_thought_uses_the_narrator_only_when_nobody_is_thinking_it` - test
+# canh đúng quyết định của chủ sách 20-09 ("nội tâm đọc bằng giọng người đang nghĩ"). Lợi đo được trong sách
+# thật là 3 dòng trong 49.991 đoạn; cái giá là làm yếu một quyết định của chủ sách và viết lại test canh nó.
+# Giữ nguyên file bản vá: nó đã được đo và ghi chép trọn, và ngày nào ĐỔI MODEL PHÂN TÍCH thì xét lại - lúc
+# ấy lớp lỗi này thành phổ biến (mỗi model trong lượt so mắc 11 lần chỉ trên 4 chương).
 
 APPLIED = (
     "patch_reserve_all.py",
