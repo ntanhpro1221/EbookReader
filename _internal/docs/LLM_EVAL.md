@@ -425,6 +425,17 @@ sau `analyze_all` còn `local_identities` - bước hợp nhất NPC vô danh v�
 Dấu hiệu xong của MỘT chương là **`model_eval_run.json`** trong thư mục project, không phải "đã phân tích đủ
 số đoạn". Điều kiện chờ nào dùng số đoạn cũng sẽ thức sớm.
 
+**Và chỉ báo tiến độ phải là `segments.status`, KHÔNG phải `segments.speaker`.** Tôi theo dõi cả một lượt đo
+bằng `count(*) where speaker is not null and speaker<>''` và nó luôn trả về "đủ 100%" ngay khi chương vừa
+chia đoạn - vì `speaker` **có giá trị mặc định**: lúc đang chạy, một project 97 đoạn với 85 đoạn `pending`
+vẫn hiện `NARRATOR` 52, `UNKNOWN` 40. Truy vấn đúng là `status<>'pending'` (`pending` / `analyzed`) - và đó
+tình cờ là truy vấn tôi viết ĐẦU TIÊN rồi tự đổi sang cái sai.
+
+Ba cái bẫy trong một buổi, cùng một hình dạng - **một dấu hiệu trông như câu trả lời nhưng không phải**:
+dòng log `Đã dừng Ollama ẩn...` đọc thành nguyên nhân; `ollama show --template` in `{{ .Prompt }}`; và cột
+`speaker` có mặc định. Cách chống duy nhất đã hiệu quả: hỏi "dấu hiệu này SAI thì trông thế nào?" rồi đo
+đúng câu ấy - probe `system`, so bản gốc với bản vá, đếm `status` thay vì `speaker`.
+
 ## Lượt đo đêm 20-09 (host CHƯA vá, 4 chương 351/363/378/381) - và bài học về công cụ đo
 
 | model | chạy trọn | điểm | người nói | cảm xúc | c.độ | g.tính | giây |
