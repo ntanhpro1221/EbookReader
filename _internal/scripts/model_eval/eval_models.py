@@ -104,6 +104,12 @@ def main() -> None:
             "score": scored["score"], "rates": scored["rates"], "runs": runs,
         }
         summary.append(entry)
+        # Ghi NGAY sau mỗi model, không đợi cuối: một lượt đo là hàng giờ GPU mà sản xuất đang cần, và
+        # bảng chỉ ghi ở cuối thì shell chết giữa đường là mất trắng phần đã đo xong.
+        args.root.mkdir(parents=True, exist_ok=True)
+        (args.root / "eval_models.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     summary.sort(key=lambda e: (-(e["chapters_ok"] == e["chapters"]), -e["score"]))
     print(f"\n{'model':24} {'tin cậy':>8} {'thử lại':>7} {'điểm':>5} {'người nói':>9} {'cảm xúc':>7} {'giây':>7}")
