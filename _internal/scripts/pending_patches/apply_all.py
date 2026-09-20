@@ -32,8 +32,10 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
-ORDER: tuple[str, ...] = ()
+# Ghim cho ranh giới 10: một dòng NGUYÊN VẸN trong 『…』 là một giọng nói, không phải lời kể.
+# Không đụng tới cuốn 1 và cuốn 2 (chia lại cả 915 + 478 chương: 0 đoạn đổi) - vá để các truyện
+# Nhật dịch (Yamiyo no Hotaru, Năng lực bá đạo, Two Childhood Friends) không bị NGƯỜI KỂ đọc thoại.
+ORDER: tuple[str, ...] = ("patch_a_whole_line_in_white_corner_brackets_is_a_voice.py",)
 
 APPLIED = (
     "patch_reserve_all.py",
