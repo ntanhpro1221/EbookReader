@@ -79,12 +79,17 @@ t-tiền của bọn tôi…"*, *"Khỏe không, người anh em?"*. Một lần
 theo anh ta sang mọi lô sau, vì `port_casting` mang `locked_voice_key` đi cùng danh tính — đúng
 cơ chế giữ nhất quán, và nó giữ nguyên cả cái sai.
 
-**Chưa có cách sửa.** `cli cast --character X --gender male` ghim được PHÁI (viết cho alpha.30,
-khi một lỗi mô hình mà người nghe trả lời trong một giây lại tốn một giờ máy). Không có
-`--age`. Tuổi mới là thứ chọn **họ giọng** (trẻ con: preset nữ kéo cao; nam trưởng thành: preset
-nam), nên lỗ này đắt hơn lỗ mà `--age` được copy từ. Đặc tả bản vá ở
-`docs/OPTIMISATION_QUEUE.md`; đúc lại 062 và 072 chỉ có nghĩa **sau** khi ghim được tuổi, vì
-đúc lại mà port vẫn mang giọng cũ thì chỉ tốn GPU.
+**ĐÃ CÓ cách sửa** (đoạn này viết lại 20-09 13:4x; bản cũ ghi "chưa có" và "không có `--age`" - sai
+từ lúc `--age` được thêm, và một câu lỗi thời thì chặn đúng người định đi sửa). Nay:
+
+    cli cast <project> --character IVAN --gender male --age young
+
+ghim được CẢ tuổi, và `_drop_pins_that_contradict_a_person` (`character_registry.py`) tự bỏ giọng ghim
+khi nó trái với thứ người nghe đã ghim - trừ `age=child`, đúng chỗ luật giọng trẻ con cần. Nên thứ tự
+đúng vẫn là **ghim trước, đúc lại sau**: đúc lại mà port vẫn mang giọng cũ thì chỉ tốn GPU.
+
+IVAN thuộc **cuốn 1** (đang dừng ở 253/478), nên ghim cho nó chỉ có nghĩa khi cuốn 1 chạy lại - lúc ấy
+`source scripts/book1.env` rồi ghim vào project của cuốn 1, không phải project cuốn 2.
 """
 from __future__ import annotations
 
