@@ -166,6 +166,27 @@ Lãi 5 ăn 1 trên lỗi của model không mua được quyền phá 7 câu tr�
 phải nói với người nói xuất hiện sau - không tách được bằng mặt chữ, nên luật này chỉ đúng khi có thêm tín hiệu
 ngoài câu kể ấy.
 
+## Sáu bản vá ranh giới 10, đo trong SẢN XUẤT THẬT (20-09 19:0x) - không cần đáp án, không cần GPU
+
+Lô 11 là lô đầu chạy với chúng. Cách đo: tính lại chính vị từ của bản vá trên các đoạn ĐÃ phân tích của hai lô, rồi
+xem người nói trong sổ có khớp không. Không cần đáp án chuẩn, vì câu hỏi ở đây là *"host có làm đúng điều nó hứa
+không"*, chứ không phải *"ai mới là người nói thật"*.
+
+| bản vá | lô 10 (host cũ) | lô 11 (đã vá) |
+|---|---|---|
+| cụm trích giữa câu kể phải là NGƯỜI KỂ | 23 đoạn khớp vị từ, **chỉ 1** gán NGƯỜI KỂ | 16 đoạn, **16/16** |
+| trạng ngữ giữa tên và động từ nói | 32 chỗ nhận ra lời dẫn, **26** khớp người nói | 14 chỗ, **14/14** |
+
+Sáu chỗ lệch của lô 10 ở hàng thứ hai chính là những ca tôi đã phân xử tay: `426:3` host nói *Neeshka* mà sổ ghi
+*LEVSKI*, và nguồn viết thẳng *"Neeshka đằng hắng rồi nói:"* - tức host đúng, model sai, và lô 11 nay lấy đúng.
+
+Con số tuyệt đối khác nhau (23 so với 16, 32 so với 14) vì hai lô là hai vùng chương khác nhau; thứ đáng đọc là tỉ
+lệ khớp: **1/23 -> 16/16** và **26/32 -> 14/14**.
+
+Dấu vết host (`ADDRESSEE_REPAIR_NOTE` và họ hàng) **không** được lưu vào cột `analysis_notes` - cả lô 10 lẫn lô 11
+đều 0 dòng có dấu `;` - nên đừng đếm chúng ở đó như tôi đã thử; chúng chỉ sống trong lượt phân tích để phản biện
+đạo diễn biết host đã sửa. Cách đo đúng là tính lại vị từ như trên.
+
 ## Phát lại câu trả lời ĐÃ GHI: đo bản vá host trong sản xuất mà không cần GPU (20-09 10:4x)
 
 `scripts/model_eval/replay_from_candidates.py`. Mỗi lô phân tích để lại `analysis_candidates.candidate_json`,
