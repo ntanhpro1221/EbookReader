@@ -22,6 +22,35 @@ Bố cục hai thư mục làm việc này khả thi:
 | `D:\Novels\Ebook Reader` | chạy run thật (không sửa mã khi đang chạy) |
 | `D:\Novels\Ebook Reader_dev` | worktree git, sửa mã và chạy test song song |
 
+## 2026-09-20
+
+| giờ | việc | bằng chứng |
+|---|---|---|
+| 08:1x | Trả lời chủ sách: thí sinh đúng hơn đáp án thì SỬA đáp án - nhưng qua phiếu phân xử GIẤU TÊN model, ba ô, bằng chứng phải là câu trong truyện, và sửa đáp án là chấm lại mọi thí sinh cũ | `765c050` |
+| 08:4x | Phân xử phiếu lô 9 (134 chỗ lệch): đáp án đúng 6/6 chỗ ngờ nhất; 44/134 là hai khoá host đã vá | ADJUDICATION vòng 14 |
+| 09:0x | `『』` nguyên dòng là một giọng (0 đoạn đổi ở cuốn 1+2) và "Arthen **nghiêm nghị** hỏi:" vẫn nêu tên người nói (+17 đúng, 0 sai trên 41 chương) | `535eaa5`, `a974172` |
+| 09:3x | Model chia phiếu về giới tính thì VĂN BẢN quyết - NEESHKA, CHLOE, LAUREN đang bị đọc giọng nữ; ghim NEESHKA ngay giữa lô đang chạy | `490ceed` |
+| 10:0x | Tên lệch hai ký tự vẫn là một người (`ARTELI`->Artil, `JOCLEYN`->Jocelyn) | `24f9f9b` |
+| 10:4x | `replay_from_candidates.py`: phát lại câu trả lời ĐÃ GHI của model qua host mới - đo bản vá host trong sản xuất KHÔNG cần GPU; tự kiểm tái hiện đúng điểm thật của lô 10 | `593dc9b` |
+| 11:0x | Cụm trích giữa câu kể là chữ NGƯỜI KỂ (29 chỗ đúng, 0 hại) | `6c34689` |
+| 11:2x | **LOẠI** một bản vá đã viết xong: nó được 5 mất 1 trên lỗi model nhưng ĐÈ 7 đáp án đúng. Bài học: hai phép phát lại đo hai thứ khác nhau, và "phá bao nhiêu câu đúng" phải bằng 0 | `681552f` |
+| 11:3x | Bộ huấn luyện 1.727/76/230 mẫu + `train_lora.py` (QLoRA, Qwen3-4B, từ chối chạy khi có lô đang bay) | `696dcad` |
+| 12:0x | Đường phục vụ model tự huấn luyện đã thử TRỌN: Ollama không nhập được safetensors Qwen3 -> GGUF -> `ollama create` -> sinh có lược đồ JSON chạy | `aaec229` |
+| 12:3x | Bản kiểm giọng chạy cho cuốn 2: 37 câu bị gắn cờ, thêm cột BẰNG CHỨNG VĂN BẢN thì chỉ 11 câu là giọng sai, 26 câu là SỔ sai với giọng đang đúng; `--recast` 13 chương -> 7 | `0c355cc`, `5d9f2cc` |
+| 13:3x | CHRISTOPHER: đọc truyện ra một ông già bị gán `age=child` 13 chương; ghim `elderly`. Và một lỗ của thước đo: đáp án chuẩn KHÔNG có trục tuổi | `e4f6cf5`, `30321c8` |
+| 14:0x | Soát mọi nhãn `age=child` bằng văn bản: 3/4 sai (thêm KAELYN - "phu nhân", bị đọc giọng bé gái 23 câu) | `76979d4` |
+| 14:4x | ĐIỂM MÙ: nhãn sai mà giọng đi theo nhãn sai thì không phép kiểm nào thấy. CAMIL - "Quý cô Camil" x29 - bị đọc giọng ĐÀN ÔNG 36 câu. Và tự bác phép đo của mình: phép đếm chữ cho 17/21 ca rác | `6bcc215` |
+| 15:0x | Ghim của người nghe bị BỎ khi người ấy im lặng suốt lô gieo (ARTHUR DOYLE, `mention_count=0`) - vỡ lời hứa "outrank vĩnh viễn", vỡ im lặng | `8be321e` |
+| 15:4x | Giọng mang PITCH trẻ con không thuộc người đã ghim là người lớn (đúng 1/266) - vì mô phỏng cho thấy ghim `adult` của KAELYN KHÔNG làm gì cả | `08e442d` |
+| 16:44 | **Ranh giới 10 chạy sạch**: 38/38 chương, `--recast auto` rỗng, 6 bản vá vào cây, **3.043 test passed**, sách 459 chương / 7,3 GB, lô 11 thả 16:52 | `73e213f` |
+| 17:02 | Lô 11 CHẾT ở đoạn 122: tiêu đề chương 461, bản ghi ghi-đè khai `raw_accept: False` trong khi host đã ĐỒNG Ý. Thả lại 17:32, vá ghim cho ranh giới 11 | `49f8f44`, `16c4570` |
+| 19:0x | Sáu bản vá đo trong SẢN XUẤT: cụm trích giữa câu kể **1/23 -> 16/16**; lời dẫn có trạng ngữ **26/32 -> 14/14** | `2674bad` |
+| 19:3x | Gần báo một sụt thông lượng 20% mà thủ phạm là chính tôi: LLM không chậm hơn (6,1s so với 6,7s/lượt), và cửa sổ 10-90 phút gần nhất cho 13,4-14,2 đoạn/phút = đúng bằng lô 10 | `2b33392` |
+
+Chín ghim `cli cast` làm giữa hai lô đang chạy (dữ liệu, không đụng mã, nhịp tim không hụt giây nào):
+NEESHKA nam · CAMIL nữ · CHRISTOPHER nam/elderly · KAELYN nữ/adult · HATHAWAY, AMELTON nữ · ARTHUR DOYLE, SALA, MAG nam.
+Cả chín đã sang lô 11 - kể cả ARTHUR DOYLE, người sẽ MẤT ghim nếu không có bản vá `carry_listener_pins` cùng ngày.
+
 ## 2026-09-01
 
 | giờ | việc | bằng chứng |
