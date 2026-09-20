@@ -109,6 +109,47 @@ chia đoạn lại cả 1.393 chương).
 Hệ quả cho việc so model: mọi lượt đo trước ranh giới 9 chạy trên host cũ, nên điểm tuyệt đối bị chặn trần; so
 TƯƠNG ĐỐI giữa các model vẫn công bằng (cùng trần). Đo lại sau ranh giới để có con số thật.
 
+## Còn sai chỗ nào sau năm bản vá, và cửa host cuối cùng (20-09 11:1x)
+
+Phân loại 115 chỗ CÒN sai người nói của lô 9 (sau khi phát lại qua cây 5 bản vá) theo **câu kể cùng đoạn văn có nêu
+đúng tên người nói hay không**:
+
+| | số chỗ | nghĩa |
+|---|---|---|
+| câu kể cùng đoạn CÓ nêu tên đúng | **57** | host còn cửa - lời dẫn nằm ngay đó mà luật không đọc được |
+| không có câu kể cùng đoạn | 38 | model phải suy từ ngữ cảnh xa; host không giúp được |
+| có câu kể nhưng không nêu tên đúng | 20 | như trên |
+
+Một nửa số 57 là **nội tâm**, và phần ấy đã được sửa bằng prompt (bảng đếm câu trả lời thô ở mục dưới). Nửa còn lại
+là một dạng lời dẫn chưa ai khai thác: câu kể kết bằng `<động từ nói>:` nhưng cái tên **sát động từ** lại là người
+NGHE, còn người nói là **chủ ngữ mở câu**:
+
+    "Một lúc sau, Inke thấy Aska mặt tươi roi rói bước ra, bèn tò mò hỏi:"   -> INKE, không phải Aska
+    "Nhân sư cái Sana nhìn Lucien và nhỏ giọng nói:"                          -> SANA, không phải Lucien
+
+Tôi đã viết luật ấy (lấy tên đầu câu, với bốn chốt đo ra từng cái: bỏ mảnh vụn chữ Việt "Nhìn" -> "Nh" và
+"Ham muốn" -> "Ham"; giới từ/động từ tri giác liền trước tên - "của Lucien", "cao hơn Fil", "Nghe Levski";
+`NOT_YET_SPOKEN_PATTERN` - "Lucien chưa kịp đáp lại, Artil đã ... nói:"; và đứng trước nhãn chung chung).
+
+**Và đã LOẠI nó, sau khi hai phép đo trả lời trái nhau. Đây là bài học đáng giữ hơn cả bản vá.**
+
+| phép đo | kết quả |
+|---|---|
+| phát lại CÂU TRẢ LỜI CỦA MODEL (lô 9 thật, 915 đoạn) | luật nổ 27 lần, đúng 25; đối chiếu từng đoạn: **được 5, mất 1**; người nói 73,1% -> **74,1%** |
+| phát lại ĐÁP ÁN CHUẨN (41 chương) | **host đè 7 đoạn đáp án ĐÚNG**: `351:29-32` (4 đoạn, "Grand Arcanist" - một danh hiệu, đáp án LUCIEN), `418:82` (James/LILLIAN), `420:84` (Lucien/NPC*), `426:25` (Levski/LUCIEN) |
+
+Hai phép đo **đo hai thứ khác nhau**, và một luật host phải qua CẢ HAI:
+
+  - phát lại câu trả lời của model nói *"luật này sửa được bao nhiêu lỗi của model"*;
+  - phát lại đáp án chuẩn nói *"luật này phá bao nhiêu câu trả lời ĐÚNG"* - và con số ấy phải bằng **0**. Cả tám bản
+    vá ranh giới 9 sinh ra chính vì cổng ấy: host đè đáp án đúng là lỗi im lặng, model sai là lỗi ồn ào, và lỗi im
+    lặng thì không ai đi tìm.
+
+Lãi 5 ăn 1 trên lỗi của model không mua được quyền phá 7 câu trả lời đúng. Nếu sau này muốn làm lại: chốt danh hiệu
+(4 trong 7 chỗ là "Grand Arcanist") xoá được hơn một nửa số hại, nhưng ba chỗ còn lại là chủ ngữ làm một việc KHÔNG
+phải nói với người nói xuất hiện sau - không tách được bằng mặt chữ, nên luật này chỉ đúng khi có thêm tín hiệu
+ngoài câu kể ấy.
+
 ## Phát lại câu trả lời ĐÃ GHI: đo bản vá host trong sản xuất mà không cần GPU (20-09 10:4x)
 
 `scripts/model_eval/replay_from_candidates.py`. Mỗi lô phân tích để lại `analysis_candidates.candidate_json`,
