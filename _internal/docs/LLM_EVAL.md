@@ -321,6 +321,23 @@ Hai hệ quả, cả hai đều là luật cho mọi lượt đo sau:
     thành **1.034 dòng**, nên 1,6 điểm chuyển từ ~6 đoạn thành ~17 đoạn. Đó là lý do chạy thêm 6 chương
     thay vì kết luận từ 4.
 
+Vì sao cấu trúc KHÔNG giải thích được: đếm trên đáp án thì hai tập gần như trùng nhau - thoại 32,3% so với
+33,1%, nội tâm 5,5% so với 7,3%, dòng có >1 đáp án 11,8% so với 13,7%; chỉ số người nói khác nhau mỗi
+chương (10 so với 8) và dòng nhận NPC (8,3% so với 5,0%) nghiêng nhẹ về phía khó. Cũng không phải một
+chương ngoại lai: `qwen3:8b` theo từng chương ra **51,5 / 54,8 / 67,0 / 76,7** ở tập khó và
+**66,7 / 75,0 / 78,0 / 78,8 / 81,0 / 84,6** ở tập dễ - cả tập thấp hơn, và phương sai trong mỗi tập cũng lớn.
+
+### Phép so ĐÚNG là so theo cặp từng chương, không phải so hai trung bình
+
+Mười giá trị theo chương ấy có độ lệch chuẩn **~11 điểm**, nên sai số chuẩn của trung bình dù trên 10
+chương vẫn **~3,5 điểm**. Một chênh lệch 1,6 điểm giữa hai model nằm gọn trong đó - *nếu* đọc bằng hai
+trung bình độc lập.
+
+Nhưng cả hai model chạy **đúng cùng những chương ấy**, nên đây là thiết kế **theo cặp**: lấy hiệu từng
+chương rồi đếm model nào thắng bao nhiêu chương. Cách ấy triệt tiêu phần lớn phương sai do chương - thứ
+vừa đo được là to gấp bảy lần hiệu ứng cần tìm. Thắng 8/10 chương là tín hiệu; thắng 5/10 là nhiễu, dù
+trung bình nhích lên.
+
 Vì sao vẫn đáng theo: phân tích chiếm **40% giờ máy một lô** (`docs/THROUGHPUT.md`), nên -27% ở khâu ấy là
 lô nhanh hơn ~11%, và 1,5 GB VRAM trả lại là đúng thứ kế hoạch "chồng lấn giai đoạn" đang thiếu. Bước kế
 ở cửa sổ GPU sau: chạy lại `qwen3:4b` so `qwen3:8b` trên **10 chương** đáp án thay vì 4, để tách 0,6 điểm
