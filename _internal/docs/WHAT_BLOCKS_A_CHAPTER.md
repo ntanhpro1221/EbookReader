@@ -338,6 +338,24 @@ Nhưng cách sửa chỗ semantic **không được** giống chỗ tiêu đề:
 phía sổ: mong đợi ghi-đè theo `raw_accept` THẬT (`host_derived_agreement`) thay vì đòi nó bằng False. Đó là ba cổng
 trong file bị khoá chặt nhất của dự án, nên nó phải chờ một **ca tái hiện được** - đừng vá theo suy luận.
 
+**Đã đo phơi nhiễm, và phép đo nói: ĐỪNG vá (21-09 04:4x).** Đếm trên cả 11 lô đã bay của cuốn 2
+(`analysis_candidates.candidate_json`, 53.899 dòng phản biện đã ghi):
+
+| | dòng |
+|---|---|
+| có khoá `emotion` | 586 |
+| ... trong đó là **tiêu đề chương** (khoá tiêu đề, đã vá ranh giới 11) | 579 |
+| ... **khoá nghĩa thật** | **7** |
+
+Bảy dòng ấy nằm cả ở lô 1, cùng một cảnh bóng đè chương 1-2, và cả bảy lần model đã trả đúng cảm xúc bị khoá -
+nên điều kiện thứ hai (`corrected["emotion"]` nằm ngoài `allowed_emotions`) chưa từng xảy ra. Phơi nhiễm
+7/53.899 = **0,013%**, dồn vào một cảnh, và còn cần một trùng hợp nữa mới nổ.
+
+Vì thế việc đúng không phải là vá mà là **ghim**: `tests/test_the_semantic_lock_override_is_a_latent_contradiction.py`
+giữ mâu thuẫn ấy hiện hình trong bộ kiểm - nó khẳng định dòng `"raw_accept": False` còn đó, rằng nhánh này cố ý
+KHÔNG gác bằng `blocking_deltas`, và rằng `host_derived_accept(["emotion:..."])` là True. Nếu ca thật nổ, test
+nói ngay nó là ca nào; nếu có ai vá, test đỏ và bắt người ấy đọc mục này trước.
+
 ## Cổng 5 cũng là một bức tường, và nó chặn vì một phép đo sát ngưỡng (2026-09-09)
 
 Chương đầu tiên của lô 1 hỏng ngay:
