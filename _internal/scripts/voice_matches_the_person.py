@@ -53,10 +53,18 @@ nặng hơn:
     chương 284-296    age=CHILD    ngoc_linh_f107_p+02   31 câu  <- luật trẻ con, có chủ ý
     chương 305-306    age=unknown  ngoc_linh_f107_p+02   5 câu   <- giọng trẻ NẰM LẠI sau khi hết `child`
 
-Năm cách đọc cho một cái tên. Hai giả thuyết chưa phân xử được mà không đọc truyện: (a) một nhân vật bị phân loại
-tuổi trôi, hay (b) **hai người khác nhau trùng tên** - một "ngài Christopher" người lớn (94-149) và một đứa trẻ
-(284-296). Ghim tuổi (`cli cast --age`) trước khi biết là (a) hay (b) thì có thể xoá đúng cách đọc đang đúng, nên
-để lại: cần một lượt đọc văn bản, không phải một lệnh.
+Năm cách đọc cho một cái tên. **Đã đọc truyện và phân xử xong (20-09 13:3x): MỘT người, và là người lớn tuổi.**
+Ông là chủ tịch Hiệp hội Nhạc sĩ - "ngài Chủ tịch Christopher", "bậc thầy Christopher", "bậc tiền bối", đã có
+"buổi hòa nhạc cuối cùng trong sự nghiệp" (chương 109) rồi chuyển sang chủ tịch danh dự (chương 284). Không có
+Christopher trẻ con nào; nhãn `age=child` ở 284-296 là model gán sai cho một ông già.
+
+Đã ghim `cli cast --character CHRISTOPHER --gender male --age elderly`. Không cần bản vá nào: luật
+`_drop_pins_that_contradict_a_person` trong `character_registry.py` đã bỏ giọng ghim khi nó trái với thứ NGƯỜI đã
+ghim (trừ `age=child`, và nay age đã là `elderly`), nên giọng `ngoc_linh_f107_p+02` sẽ bị bỏ và ông được cấp lại
+giọng nam lớn tuổi ở lượt phân vai kế. 39 câu ĐÃ THU vẫn giữ giọng cũ cho tới một lượt đúc lại thật.
+
+Bài học về công cụ: cái thiếu không phải một luật mới mà là **một ghim của người nghe**, và báo cáo này chính là
+thứ chỉ ra ai cần được ghim. Chạy nó sau mỗi vài lô.
 
 Con số thật: **IVAN**, `male`, `age=unknown`, 17 câu ở chương 062 đọc bằng `ngoc_linh_f107_p+02`
 — giọng nữ kéo cao dành cho trẻ con. Đường đi của lỗi ấy, đọc từ dữ liệu:

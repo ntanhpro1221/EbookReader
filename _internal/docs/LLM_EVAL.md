@@ -109,6 +109,22 @@ chia đoạn lại cả 1.393 chương).
 Hệ quả cho việc so model: mọi lượt đo trước ranh giới 9 chạy trên host cũ, nên điểm tuyệt đối bị chặn trần; so
 TƯƠNG ĐỐI giữa các model vẫn công bằng (cùng trần). Đo lại sau ranh giới để có con số thật.
 
+## Một lỗ của chính thước đo: đáp án chuẩn KHÔNG có trục TUỔI (20-09 13:3x)
+
+Đáp án chuẩn chấm bảy trục: người nói, cảm xúc, loại đoạn, cường độ, nhịp, âm lượng, giới tính. **Tuổi không có
+trong đó** - và tuổi là thứ chọn HỌ GIỌNG (trẻ con đọc bằng preset nữ kéo cao, người già bằng preset khác), nên
+một nhãn tuổi sai đổi giọng mạnh hơn nhiều nhãn cảm xúc sai.
+
+Ca thật, tìm ra bằng `scripts/voice_matches_the_person.py` chứ không phải bằng đáp án: **CHRISTOPHER**, chủ tịch
+Hiệp hội Nhạc sĩ, một ông già ("ngài Chủ tịch", "bậc thầy", "bậc tiền bối", đã có buổi hòa nhạc cuối cùng trong
+sự nghiệp), bị model gán `age=child` ở 13 chương và vì thế đọc bằng giọng nữ kéo cao 39 câu. Đáp án chuẩn KHÔNG
+BAO GIỜ thấy được lỗi ấy: nó không hỏi về tuổi.
+
+Hai cách đọc con số này, và cả hai đều đúng: (1) đừng tưởng "đáp án 100%" nghĩa là "phân tích đúng" - nó nghĩa là
+đúng trên bảy trục ấy; (2) công cụ đúng cho tuổi là bản kiểm giọng trên cuốn sách đã ghép, không phải đáp án -
+mỗi thứ đo được một thứ. Chưa thêm trục tuổi vào đáp án vì 41 file đáp án đang viết theo đúng cú pháp hiện tại
+và đổi cú pháp là viết lại cả 41; nếu sau này thêm, phải thêm cùng lúc cho cả bộ.
+
 ## Còn sai chỗ nào sau năm bản vá, và cửa host cuối cùng (20-09 11:1x)
 
 Phân loại 115 chỗ CÒN sai người nói của lô 9 (sau khi phát lại qua cây 5 bản vá) theo **câu kể cùng đoạn văn có nêu
