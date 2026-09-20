@@ -284,6 +284,35 @@ Tỷ lệ 4,5:1 nghiêng về lợi, nhưng cả hai phía đều không phải 
 tai chủ sách, không thuộc về thước đo: *"một câu bị nhân vật SAI đọc" tệ hơn hay nhẹ hơn "một câu của người ĐÚNG bị
 giọng vô danh đọc"?* Chín ăn hai. Chưa vá, chờ câu trả lời.
 
+## Nguồn dữ liệu MỚI: lỗi mà nhiều model CÙNG mắc là lỗi của host (21-09 04:3x)
+
+Một lượt so model cho nhiều hơn một bảng điểm: ba model trả lời **cùng** bốn chương đáp án, nên so chúng
+với NHAU tách được hai loại lỗi.
+
+    177 đoạn cả ba model đều trả lời và có đáp án người nói
+        17  MỌI model cùng sai   <- luật host còn thiếu; vá một lần thì mọi model đều lợi
+        28  chỉ một số sai       <- chuyện của từng model
+
+Lớp lớn nhất trong 17 chỗ ấy đã thành một bản vá (xếp cho ranh giới 12): lời kể ngôi ba mà bộ tách đoạn gán
+`thought`, cả ba model cùng nêu một người nghĩ - `363:70-72`, "Một tia không màu… bắn thẳng vào Bellak" đọc
+bằng giọng LUCIEN. Xem `scripts/pending_patches/patch_a_thought_outside_every_quote_belongs_to_the_narrator.py`
+cho cả ba phép thử, **hai cái đầu bị loại** (một cái lợi = 0, một cái PHÁ 29 dòng đáp án vì tiếng Việt cho
+trống chủ ngữ), và cho hồi quy mà cổng bắt được: `yamiyo_no_hotaru` viết nội tâm bằng **dấu ngoặc đơn**.
+
+Lớp còn lại chưa vá được: `363:34-36`, một lượt thoại dài của BELLAK mà cả ba model gán cho LUCIEN,
+NARRATOR hoặc UNKNOWN - **thiên lệch về nhân vật được nhắc nhiều nhất**. Không có mặt chữ nào trong đoạn
+chỉ ra BELLAK; đây là lỗi model thuần, và nó là lý do tốt nhất để huấn luyện model chuyên.
+
+### Bài học ĐO: đừng chấm một project khi các bước sau phân tích chưa xong
+
+Tôi chấm `gemma4:e2b-it-qat` hai lần trên **cùng bốn chương** và ra **74,8** rồi **77,2**. Không phải nhiễu:
+sau `analyze_all` còn `local_identities` - bước hợp nhất NPC vô danh vào nhân vật có tên - và nó **ĐỔI trường
+`speaker`**. Đọc sổ lúc ấy là đo một mục tiêu đang di chuyển, và tôi đã kịp báo một khoảng cách sai (4,6
+điểm thay vì 2,2) trước khi tự bắt.
+
+Dấu hiệu xong của MỘT chương là **`model_eval_run.json`** trong thư mục project, không phải "đã phân tích đủ
+số đoạn". Điều kiện chờ nào dùng số đoạn cũng sẽ thức sớm.
+
 ## Lượt đo đêm 20-09 (host CHƯA vá, 4 chương 351/363/378/381) - và bài học về công cụ đo
 
 | model | chạy trọn | điểm | người nói | cảm xúc | c.độ | g.tính | giây |
