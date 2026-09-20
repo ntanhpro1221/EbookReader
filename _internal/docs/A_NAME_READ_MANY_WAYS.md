@@ -217,3 +217,28 @@ bản thu hỏng; đổi cách đọc thì làm người nghe mất tên nhân v
 đoạn đã lên sách — không cần GPU, cả hai đường phiên đã có sẵn — rồi ghép lại các chương chạm
 tới. `promote_segment_candidate` hiện chỉ nhận `dual_passed`/`promoted`, nên cần một đường mới ở
 tầng database, kiểm bốn điều kiện từ chính dữ liệu như `patch_finished_take_beats_a_cut_off_one`.
+
+## Một cái tên VIẾT nhiều kiểu - phía trước micro (2026-09-20)
+
+Phần trên là ASR: cùng một chữ, Whisper nghe ra nhiều kiểu. Có một lỗi song sinh sớm hơn hẳn trong
+mạch chạy: **model phân tích tự viết sai tên**, và mỗi cách viết sai thành một NHÂN VẬT RIÊNG có
+giọng riêng, rồi sổ nhân vật mang nó qua mọi lô sau.
+
+`fold_to_source_spelling` đã chặn phần lớn: nhãn nào **vắng mặt hẳn** trong cả cuốn sách thì trỏ về
+cách viết CÓ trong sách, nếu lệch đúng một ký tự. Đo trên lô 8, 9, 10 - 187 nhãn người nói, 18 vắng
+mặt hẳn, luật cũ gom 5 (`ANICK`/`ANNIK` -> `ANNICK`, `ARTEIL`/`ARTEL` -> `Artil`, `BEAUTE` ->
+`Beate`). Hai nhãn lệch **hai** ký tự thì sống sót:
+
+| nhãn | câu | trong sách | thật |
+|---|---|---|---|
+| `ARTELI` | 1 | 0 lần ("Artil" 88 lần) | Artil - và `ARTEL`, `ARTEIL` đã gom về đấy rồi |
+| `JOCLEYN` | 2 | 0 lần ("Jocelyn" có) | Jocelyn |
+
+Nới lên hai ký tự (`patch_a_name_two_letters_off_still_belongs_to_its_owner.py`, ghim ranh giới 10)
+gom đúng hai nhãn ấy, không kéo theo gì khác: 13 nhãn vắng mặt còn lại không có đích nào ở khoảng
+cách 2 (`PLANTAGENET_ULRICH`, `GRAND ARCANIEST`, `PROFESSOR`, `BIG CHIEF`, `EMMA`, `HENSION`...).
+
+Hai chốt giữ nó khỏi đoán bừa: đích phải **duy nhất** sau khi bỏ dấu và hạ chữ (một nhãn cách 2 với
+hai cái tên khác nhau thì không gom), và nhãn phải dài từ 5 ký tự. Điều kiện gốc không đổi: **nhãn
+thua phải vắng mặt hẳn trong cả cuốn sách** - tác giả chưa từng viết nó thì nó không phải nhân vật,
+nên đây không bao giờ là chuyện gộp hai nhân vật thật.

@@ -41,6 +41,8 @@ ORDER: tuple[str, ...] = (
     "patch_a_whole_line_in_white_corner_brackets_is_a_voice.py",
     "patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py",
     "patch_the_text_outranks_a_split_vote_on_gender.py",
+    # Và: nhãn vắng mặt trong sách lệch HAI ký tự vẫn là cùng một người (ARTELI -> Artil, JOCLEYN -> Jocelyn).
+    "patch_a_name_two_letters_off_still_belongs_to_its_owner.py",
 )
 
 APPLIED = (
