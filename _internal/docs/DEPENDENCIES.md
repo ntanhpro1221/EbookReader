@@ -363,3 +363,21 @@ bấm Win+Shift+B") chưa thấy lại; theo dõi thêm ở những lần bật 
 **Điều driver mới mở ra:** CUDA 13.1 ở phía driver nghĩa là wheel `torch` cu130 (có từ 2.14) chạy được
 trên máy này. Nhưng nâng torch là một lần **đổi giọng** (xem mục torch 2.14 phía trên: SDPA hợp nhất đổi
 số học và RNG), nên nó vẫn chờ giữa hai cuốn, không phải việc của ranh giới này.
+
+## Kiểm 2026-09-20 10:3x (giữa lô 10) — không có tin mới, và đó là tin tốt
+
+`check_dependency_updates.py` báo 6 gói sau PyPI: `pyworld`, `torch`, `torchvision`, `huggingface-hub`,
+`transformers`, `ruff`. Đối chiếu bảng quyết định 18-09 ở trên thì **không một mục nào là tin mới**:
+
+| mục | trạng thái hôm nay |
+|---|---|
+| `torch` 2.14 / `torchvision` 0.29 | vẫn là "một lần đổi giọng", chờ **giữa hai cuốn**. Driver 592.47 mở CUDA 13.1 nên wheel cu130 (2.14.0) chạy được - đường đã mở, quyết định vẫn chưa tới hạn |
+| `transformers` 5.17 + `huggingface-hub` 1.32 | vẫn "đáng nâng, phải ĐO LẠI ÂM THANH trên venv riêng" - việc GPU, chưa làm được khi lô còn chạy |
+| `pyworld` 0.3.6 | chỉ sửa build, không gấp |
+| `ruff` | LỆCH khỏi bản ghim, không phải bản mới; `pyproject.toml` ghim 0.16.5, venv giữ 0.9.10 (`pytest` đã sửa 19-09). Ruff không phải cổng của dự án |
+| `pnnbao-ump/VieNeu-TTS-v3-Turbo` `main` đổi 6 file | vẫn đúng 6 file `onnx_int8/` + README như 18-09; dây chuyền ghim `8b7e9cf` và đi đường torch, không đọc `onnx_int8/` |
+| SDK `vieneu` | tag mới nhất vẫn v3.8.1 = bản đang cài |
+
+Vì sao vẫn ghi lại một lượt kiểm "không có gì": việc thường trực là **kiểm định kỳ và báo cáo**, và một
+lượt kiểm im lặng chỉ đáng tin khi có dấu vết rằng nó đã chạy. Lần sau đọc bảng này trước khi chạy lại
+script - ba trong sáu mục là quyết định ĐÃ CÓ, không phải việc còn tồn.
