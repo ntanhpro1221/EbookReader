@@ -338,6 +338,30 @@ chương rồi đếm model nào thắng bao nhiêu chương. Cách ấy triệt
 vừa đo được là to gấp bảy lần hiệu ứng cần tìm. Thắng 8/10 chương là tín hiệu; thắng 5/10 là nhiễu, dù
 trung bình nhích lên.
 
+### Và phép so theo cặp LẬT LẠI kết luận 4 chương (21-09 06:5x)
+
+| chương | `qwen3:8b` | `qwen3:4b` | hiệu |
+|---|---|---|---|
+| 351 | 76,7 | 85,6 | **+8,9** |
+| 363 | 51,5 | 45,5 | -6,0 |
+| 378 | 67,0 | 64,9 | -2,1 |
+| 381 | 54,8 | 59,7 | +4,9 |
+| 385 | 81,0 | 76,2 | -4,8 |
+| 396 | 66,7 | 76,1 | **+9,4** |
+| 399 | 78,8 | 75,0 | -3,8 |
+| 400 | 75,0 | 69,6 | -5,4 |
+| 407 | 78,0 | 70,7 | -7,3 |
+| 415 | 84,6 | 84,6 | 0,0 |
+
+**Thắng theo chương: 8b 6 - 4b 3 - hoà 1.** Hiệu trung bình **-0,62** điểm, độ lệch chuẩn 6,22, sai số
+chuẩn **1,97** - không đáng kể. Gộp 10 chương: `qwen3:8b` **81,6** / người nói **72,3**; `qwen3:4b` 81,2 /
+71,7. Thời gian 94 phút so với **69 phút**.
+
+Nói thẳng: **con số 4 chương ("4b hơn 1,6 điểm người nói") là nhiễu** - đúng thứ mục trên đã gắn cờ trước
+khi có dữ liệu. Phát biểu đúng: `qwen3:4b` **không phân biệt được về chất lượng** với mốc 8B
+(-0,6 ± 2,0), mà nhanh hơn **27%** và nhẹ hơn 1,5 GB. Lý lẽ đổi model chuyển từ "tốt hơn" sang "ngang
+chất lượng, rẻ hơn rõ" - yếu hơn, nhưng đây là lý lẽ chịu được một lượt đo thứ hai.
+
 Vì sao vẫn đáng theo: phân tích chiếm **40% giờ máy một lô** (`docs/THROUGHPUT.md`), nên -27% ở khâu ấy là
 lô nhanh hơn ~11%, và 1,5 GB VRAM trả lại là đúng thứ kế hoạch "chồng lấn giai đoạn" đang thiếu. Bước kế
 ở cửa sổ GPU sau: chạy lại `qwen3:4b` so `qwen3:8b` trên **10 chương** đáp án thay vì 4, để tách 0,6 điểm
