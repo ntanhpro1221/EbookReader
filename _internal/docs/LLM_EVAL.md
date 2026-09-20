@@ -340,6 +340,40 @@ Script **TỪ CHỐI chạy khi có lượt sản xuất đang bay** (dùng lạ
 bộ canh thứ hai - docstring hàm ấy ghi hai lần bộ canh tự viết đã sai). Đã thử: nó chặn đúng lô 10. Máy 8 GB VRAM,
 huấn luyện chen vào giữa một lượt thu là ném cả lượt ấy vào OOM.
 
+### BỨC TƯỜNG: 8 GB VRAM không huấn luyện được model 4B ở độ dài prompt của dự án (21-09 03:1x)
+
+Tôi ước một epoch mất 2-3 giờ. **Sai một bậc độ lớn**, và đây là số đo:
+
+| cấu hình | mỗi mẫu (~3,2k token) | quy ra | một epoch (1.727 mẫu) |
+|---|---|---|---|
+| Qwen3-4B 4-bit, `paged_adamw_8bit`, accum 8 | 85 s | **38 token/s** | **~40 giờ** |
+| cùng thế + `adamw_8bit` (không paged) + `expandable_segments` | 254 s | **12,6 token/s** | còn tệ hơn |
+
+Giới hạn TÍNH TOÁN của máy này vào khoảng 1.000 token/s cho việc ấy (7,7e13 FLOP mỗi mẫu với gradient checkpointing,
+~15 TFLOPs bf16 hiệu dụng). Chạy ở 12-38 token/s tức chậm gấp **17-80 lần** giới hạn, và `nvidia-smi` chỉ đúng chỗ:
+**7.723 / 8.151 MiB (95%)**. Đó là tràn VRAM, không phải thiếu FLOP - và cái giá của nó lớn hơn mọi mẹo tinh chỉnh.
+
+Hai đường thoát hiển nhiên, cả hai bị chính phép đo chặn:
+
+  - **giảm `max_length`**: ở 1024, TRL loại **mọi mẫu** (`num_samples=0`) - cắt prompt là cắt mất câu trả lời, đúng
+    điều đã ghi trong docstring của `train_lora.py` trước khi chạy;
+  - **model nền nhỏ hơn**: `Qwen/Qwen3-1.7B` là model **hybrid thinking**, và khuôn chat của nó tự chèn
+    `<think>
+
+</think>` trước nội dung assistant. Huấn luyện qua khuôn ấy là dạy model sinh khối think, rồi
+    `json.loads` ở sản xuất vỡ - đúng cái đã làm `qwen3.5:9b` trả "0/5 IDs" đêm 19-09. Dòng `-Instruct-2507` (bỏ chế
+    độ nghĩ) chỉ có ở 4B và 30B.
+
+Vậy muốn tự huấn luyện trên máy này thì phải chọn một trong ba, và cả ba đều là **quyết định của chủ sách**:
+
+  1. **rút ngắn prompt sản xuất** - 2,9k trong 3,2k token là prompt (ngữ cảnh + danh sách nhân vật đã biết). Ngắn
+     hơn thì huấn luyện được, nhưng đó là đổi chính prompt đang cho 68-77% người nói, tức một quyết định chất lượng;
+  2. **model nền cỡ 2B không có chế độ nghĩ** (ví dụ `gemma-4-e2b-it`) - phải viết lại phần dựng dữ liệu vì khuôn
+     chat của gemma không có vai `system` riêng;
+  3. **bỏ tự huấn luyện**, dồn sức chọn model có sẵn tốt nhất - việc đang chạy ở mục dưới.
+
+Tối nay tôi chọn (3) để không đốt cả đêm vào một epoch 40 giờ, và ghi lại (1)(2) kèm số đo để chủ sách quyết.
+
 ### Đường phục vụ model tự huấn luyện: đã thử trọn mắt xích, KHÔNG phỏng đoán (20-09 12:0x)
 
 Muốn chấm model chuyên trong CÙNG điều kiện với mốc `qwen3:8b` thì nó phải chạy qua đúng bộ phân tích sản xuất,

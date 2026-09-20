@@ -63,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--accum", type=int, default=8, help="batch hiệu dụng = accum (batch mỗi bước luôn là 1)")
     parser.add_argument("--smoke", type=int, default=0, help="chỉ N mẫu và 3 bước - kiểm đường ống, không huấn luyện")
     parser.add_argument("--force", action="store_true", help="chạy dù có lượt sản xuất đang bay (sẽ tranh VRAM)")
+    parser.add_argument("--optim", default="paged_adamw_8bit",
+                        help="paged_adamw_8bit (mặc định) hay adamw_8bit - bản `paged` đẩy trạng thái qua PCIe khi "
+                             "VRAM chật, và trên 8 GB đó có thể là nút cổ chai lớn nhất")
     args = parser.parse_args(argv)
 
     from scripts.pending_patches.apply_all import _runs_in_flight  # noqa: PLC0415  (dùng lại bộ canh đã đo)
@@ -113,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         bf16=True,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
-        optim="paged_adamw_8bit",
+        optim=args.optim,
         max_length=args.max_length,
         packing=False,          # mỗi mẫu là một lượt hỏi trọn vẹn; ghép chúng lại là trộn hai đề bài
         assistant_only_loss=True,
