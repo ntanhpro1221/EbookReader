@@ -109,6 +109,28 @@ chia đoạn lại cả 1.393 chương).
 Hệ quả cho việc so model: mọi lượt đo trước ranh giới 9 chạy trên host cũ, nên điểm tuyệt đối bị chặn trần; so
 TƯƠNG ĐỐI giữa các model vẫn công bằng (cùng trần). Đo lại sau ranh giới để có con số thật.
 
+## Phát lại câu trả lời ĐÃ GHI: đo bản vá host trong sản xuất mà không cần GPU (20-09 10:4x)
+
+`scripts/model_eval/replay_from_candidates.py`. Mỗi lô phân tích để lại `analysis_candidates.candidate_json`,
+trong đó `critic_rows[].candidate` là **câu trả lời thô của model**. Nạp lại nó, chạy đúng `_validate` của cây
+đang có, rồi chấm theo đáp án: thế là so được luật host cũ với luật host mới **trên cùng một câu trả lời**, không
+phải chạy lại LLM, không tranh GPU với sản xuất.
+
+Kiểm tính đúng của chính công cụ: phát lại lô 10 (chương 426+429, 45 lô, 178 đoạn có đáp án) qua cây 8 bản vá của
+ranh giới 9 cho **79,4 / người nói 71,3%**, còn bản ghi thật của project là **79,6 / 71,7%** - lệch đúng vì 2 đoạn
+thiếu. Công cụ tái hiện được sản xuất.
+
+Và đây là mức lợi của 5 bản vá ghim cho ranh giới 10, đo trên cùng 178 đoạn ấy:
+
+| cây | điểm | người nói | cảm xúc | loại |
+|---|---|---|---|---|
+| 8 bản vá (ranh giới 9) - đang chạy | 79,4 | 71,3% | 87,1% | 100% |
+| + 5 bản vá ghim ranh giới 10 | **82,0** | **77,0%** | 87,1% | 100% |
+
+Ba giới hạn phải nhớ khi đọc con số: chỉ chương có đáp án; cột GIỚI TÍNH đi thẳng từ bản đã ghi (host không quyết
+trường ấy - `resolve_gender` quyết ở bước lập sổ nhân vật); và bản vá GOM TÊN (`ARTELI` -> `Artil`) chạy ở bước lập
+sổ nhân vật nên KHÔNG hiện ở đây - điểm người nói đo cái nhãn model viết ra, bản vá ấy sửa cái giọng.
+
 ## Điều tra kiểu lỗi lớn nhất của model (20-09 09:0x): host có thể tự sửa bao nhiêu?
 
 `score_models.py --dispute-out` trên bản thu lô 9 (`qwen3:8b`, 79,7 - người nói 68,4%) cho 134 chỗ lệch; phân loại ở
