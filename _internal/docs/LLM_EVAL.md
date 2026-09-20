@@ -176,8 +176,20 @@ Nhưng nới ra **không được điểm nào**: luật này không đoán ai n
 danh), mà đáp án thì muốn người nói thật. Và đo mức HẠI trên 41 chương: luật nới nổ trên chính NGƯỜI NÓI THẬT **2
 lần**, cả hai là tự giới thiệu - `347:51 "Bạn của cô, Derrick Douglas."` và `446:48` (Dạ Oanh xướng tên mình trên
 sóng) - **cùng mặt chữ với lối gọi tên**, không tách được bằng văn bản: câu trước dấu phẩy vẫn có đại từ ngôi hai
-("của **cô**"). Tỷ lệ lợi/hại khoảng 3:1 nhưng cả hai phía đều là "đổi một giọng sai thành giọng trung tính" chứ
-không phải điểm số, nên để chủ sách nghe thử rồi quyết, kèm ví dụ - không tự vá.
+("của **cô**").
+
+**Đo xong bằng phát lại (20-09 11:0x), trên toàn bộ 3.668 đoạn của lô 9** (`replay_from_candidates.py`, cây 5 bản vá
+so với cây ấy + luật nới): điểm người nói 73,1% -> 73,4% (gần như không đổi, đúng như dự đoán), và **đúng 11 đoạn đổi
+người nói**:
+
+| | số đoạn | ví dụ |
+|---|---|---|
+| giọng nhân vật SAI -> giọng vô danh (lợi) | **9** | `418:39 "Hân hạnh được gặp cậu, Evans."` EVANS -> người gọi EVANS; `420:52 "Chào, Lazar..."`; `409:109 "Chúc mừng cậu, Beaulac..."`; `385:109 "Chờ đã, Aska..."` |
+| giọng nhân vật ĐÚNG -> giọng vô danh (hại) | **2** | `417:71-72` lời của ARTHUR có nhắc ", Evans," giữa câu -> người gọi EVANS |
+
+Tỷ lệ 4,5:1 nghiêng về lợi, nhưng cả hai phía đều không phải điểm số: nó là **đổi ai đọc câu ấy**. Câu hỏi thuộc về
+tai chủ sách, không thuộc về thước đo: *"một câu bị nhân vật SAI đọc" tệ hơn hay nhẹ hơn "một câu của người ĐÚNG bị
+giọng vô danh đọc"?* Chín ăn hai. Chưa vá, chờ câu trả lời.
 
 ## Lượt đo đêm 20-09 (host CHƯA vá, 4 chương 351/363/378/381) - và bài học về công cụ đo
 
