@@ -245,3 +245,9 @@ khi hạ nó (118-119 Lucien đấm, 121 "Aska" tươi roi rói bước ra). Đ�
 Hai chỗ model gần đúng mà vẫn 0 điểm, giữ 0 có chủ ý: 396:70 `JOCLEYN` (viết sai tên JOCELYN) và 399:98 `HOÀNG TỬ BEYER`
 (thêm tiền tố vai vế). Cả hai trong sản xuất sinh ra một nhân vật MỚI, tức một giọng thứ hai cho cùng người - đó là lỗi
 thật, không phải chuyện chính tả. Quy trình phân xử: `docs/GOLD_GUIDE.md`, mục "Khi thí sinh trả lời ĐÚNG HƠN đáp án".
+
+**Bổ sung 09:1x - một lần ĐÁP_ÁN_SAI thật, do bản vá phát hiện chứ không do thí sinh:** `two_childhood_friends 082:94`
+là dòng `『Một trong hai người nhượng bộ đi chứ...』`. Đáp án cũ ghi `N NARRATOR` theo quy tắc 10 (bộ tách đoạn khoá
+lời kể). Bản vá 『』 khoá nó thành THOẠI, và bản vá đúng: câu 98 nói rõ "có cả Kakushigi và Grey ở đây", nên câu ấy là
+một người đứng cạnh NÓI RA MIỆNG - để NGƯỜI KỂ đọc là sai. Sửa thành `D NPC*,UNKNOWN,KAKUSHIGI,GREY` (văn bản không
+chỉ rõ ai trong hai người). Phát lại chương: 100%. Đây đúng là ô `ĐÁP_ÁN_SAI` của quy trình, chỉ khác nguồn phát hiện.
