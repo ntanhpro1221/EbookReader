@@ -604,3 +604,38 @@ lượng; giữ lại trong bảng để nhắc rằng đồng hồ treo tườn
 
 **Cảnh báo giữ nguyên hiệu lực:** cả hai ước lượng đều là **giờ máy**, và ràng buộc thật là tai
 người — xem mục trên về 212 chương / 26 phút.
+
+## Tôi gần báo một sụt 20% mà thủ phạm là chính tôi (2026-09-20)
+
+Lô 11 là lô đầu chạy với sáu bản vá host của ranh giới 10. Đo tốc độ phân tích:
+
+    lô 9  (host cũ hơn)   13,5 đoạn/phút
+    lô 10 (8 bản vá)      14,4 đoạn/phút
+    lô 11 (14 bản vá)     11,5 đoạn/phút   <- sụt 20%
+
+Kết luận hiển nhiên là "sáu bản vá làm host chậm đi". Nó **sai**, và hai phép đo tiếp bác nó:
+
+**Một: phía LLM không chậm hơn, còn nhanh hơn.** Trung vị mỗi lượt gọi Ollama:
+
+| | prompt | sinh | tốc độ sinh | tổng mỗi lượt |
+|---|---|---|---|---|
+| lô 10 | 3.178 tok | 339 tok | 55,5 tok/s | 6,7 s |
+| lô 11 | 3.172 tok | 311 tok | **56,3 tok/s** | **6,1 s** |
+
+Số lượt trên mỗi đoạn cũng bằng nhau (0,51 so với 0,52). Vậy thời gian mất thêm nằm **ngoài** LLM.
+
+**Hai: cắt cửa sổ đo theo thời gian thì sụt biến mất.** Đo lại chỉ trên khoảng gần nhất, lúc tôi không chạy gì:
+
+    10 phút gần nhất   13,4 đoạn/phút
+    20 phút gần nhất   14,2
+    40 phút gần nhất   13,6
+    90 phút gần nhất   14,1
+
+Tức lô 11 chạy **đúng bằng** lô 10. Con số 11,5 là trung bình của cả lô, và nó bị kéo xuống bởi đúng những giờ
+tôi chạy bộ test đầy đủ (5 phút CPU mỗi lượt, nhiều lượt), một phép quét regex 10 phút trên nguồn 9 MB, một lần
+chuyển GGUF 1,5 GB, và tải model từ Hugging Face.
+
+**Luật rút ra, và nó áp cho cả những phép đo khác của tôi:** một con số thông lượng đo trên khoảng thời gian mà
+tôi cũng đang dùng máy thì không nói gì về dây chuyền. Trước khi kết luận về hiệu năng: (1) tách phần LLM ra khỏi
+phần host - `Ollama: ... tổng Xs` trong `runtime_events` cho biết ngay; (2) đo trên cửa sổ vài chục phút gần nhất,
+không phải trung bình cả lô; (3) nếu vẫn thấy lệch, hỏi *mình* đã chạy gì trong khoảng ấy trước khi hỏi mã.
