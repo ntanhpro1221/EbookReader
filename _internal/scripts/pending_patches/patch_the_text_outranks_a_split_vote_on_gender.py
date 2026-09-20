@@ -24,6 +24,20 @@ Ngưỡng "dứt khoát" có sẵn (>= 5 lần, tỉ lệ >= 3.0) chính là cá
 trí nữ, văn bản 19 nam / 14 nữ (tỉ lệ 1,36 - không dứt khoát) -> không đổi, đúng ("cô Milina").
 
 Đo trên 5 project (lô 6r, 7, 8, 9, 10 - 275 tên người nói): đổi ĐÚNG 3 ca trên, 0 ca đổi oan.
+
+## Một cảnh báo về chính bằng chứng này (thêm 20-09 15:3x)
+
+`_gendered_word_evidence` ĐẾM chữ chỉ người trong các segment có nêu tên nhân vật. Cùng chiều 20-09 tôi đã chứng
+minh phép đếm ấy sai được: một phép đếm tương tự trên cửa sổ 45 ký tự quanh tên cho **17 ca rác trên 21**, trong đó
+nó gọi "MỤ PHÙ THỦY GIÀ" là NAM - vì quanh một cái tên đầy chữ chỉ NGƯỜI KHÁC trong cảnh, mà nhân vật chính của
+cuốn này là đàn ông và có mặt khắp nơi (xem `scripts/voice_matches_the_person.py`, mục ĐIỂM MÙ).
+
+Bản vá này vẫn đứng, vì ba ca nó đổi đều kiểm được bằng tín hiệu MẠNH hơn - **danh xưng + tên**: "Ngài Neeshka" x6
+và "quý ông", "ngài Chloe" (đã ghi trong `docs/GOLD_GUIDE.md` từ trước), "ngài Lauren" x15. Cộng thêm hai chốt sẵn
+có: `_decisive` đòi >= 5 lần và tỉ lệ >= 3, và luật này chỉ chạy khi model CHIA PHIẾU.
+
+Nhưng nếu về sau nó đổi sai một cái tên, đừng nới ngưỡng: **hỏi danh xưng trước**. `honorific_verdict` trong
+`scripts/voice_matches_the_person.py` là bản đã đo của tín hiệu ấy (4 ca thật trên cuốn 2, không một ca rác).
 """
 import io
 import sys
