@@ -165,3 +165,38 @@ def test_a_project_older_than_the_column_is_migrated(tmp_path: Path) -> None:
     with sqlite3.connect(str(path)) as conn:
         columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(characters)")}
     assert "locked_age" in columns
+
+
+def test_a_pin_survives_a_batch_where_the_person_says_nothing(tmp_path: Path) -> None:
+    """Ghim của người nghe đi theo chuỗi gieo dù người ấy im lặng suốt lô gieo.
+
+    Ca thật (20-09, lô 10): ARTHUR DOYLE được ghim `male`, nhưng `mention_count = 0` vì ông không nói câu
+    nào trong lô ấy. `read_known_characters` lọc `mention_count > 0` - đúng cho danh sách đưa vào prompt -
+    và cùng phép lọc ấy làm ghim biến mất ở lô sau, tức lời hứa "người nghe outrank mô hình vĩnh viễn"
+    vỡ IM LẶNG.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from scripts.port_casting import port, read_pinned_characters
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    origin = ProjectDB(source / "project.sqlite3")
+    ProjectDB(target / "project.sqlite3")
+
+    origin.lock_character_gender("ARTHUR DOYLE", "male")   # im lặng suốt lô: mention_count = 0
+    origin.lock_character_age("KAELYN", "adult")
+    origin.upsert_character(canonical_name="LUCIEN", display_name="Lucien", gender="male",
+                            age="adult", personality="", mentions=40, importance="major",
+                            confidence=0.9)
+
+    assert {row["canonical_name"] for row in read_pinned_characters(source)} == {"ARTHUR DOYLE", "KAELYN"}
+
+    port(source, target)
+
+    landed = ProjectDB(target / "project.sqlite3")
+    assert landed.locked_character_genders().get("ARTHUR DOYLE") == "male"
+    assert landed.locked_character_ages().get("KAELYN") == "adult"

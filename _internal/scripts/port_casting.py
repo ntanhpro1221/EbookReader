@@ -307,6 +307,35 @@ def read_casting(source: Path) -> list[tuple[str, str, dict]]:
     return out
 
 
+def read_pinned_characters(source: Path) -> list[dict]:
+    """Mọi nhân vật NGƯỜI NGHE đã ghim, kể cả người không nói câu nào trong lô này.
+
+    Cố ý KHÔNG lọc `mention_count > 0`: một ghim là câu trả lời của người nghe, và nó đúng dù người ấy
+    im lặng suốt một lô. `read_known_characters` phải lọc (danh sách đưa vào prompt), nhưng dùng chung
+    một phép đọc cho cả hai việc thì ghim của ARTHUR DOYLE - `locked=1`, 0 lần nhắc ở lô 10 - biến mất
+    ở lô sau.
+    """
+    connection = sqlite3.connect(f"file:{source / 'project.sqlite3'}?mode=ro", uri=True)
+    connection.row_factory = sqlite3.Row
+    try:
+        return [
+            dict(row)
+            for row in connection.execute(
+                """
+                SELECT canonical_name, gender, locked, locked_age
+                FROM characters
+                WHERE locked = 1 OR (locked_age IS NOT NULL AND locked_age <> '')
+                ORDER BY canonical_name
+                """
+            )
+        ]
+    except sqlite3.OperationalError:
+        # Project cũ hơn cột `locked_age`: không có ghim nào mang được, và đó không phải lỗi.
+        return []
+    finally:
+        connection.close()
+
+
 def read_known_characters(source: Path) -> list[dict]:
     """Every character the source batch established, with what it learnt about them.
 
@@ -382,13 +411,44 @@ def read_known_characters(source: Path) -> list[dict]:
     return kept
 
 
+def carry_listener_pins(source: Path, database: "ProjectDB | None") -> int:
+    """Mang MỌI ghim của người nghe sang project mới, kể cả người không nói câu nào trong lô gieo.
+
+    `read_known_characters` lọc `mention_count > 0` - đúng cho danh sách "đã biết" đưa vào prompt, vì một
+    cái tên không xuất hiện thì không đáng chiếm chỗ ở đó - nhưng cùng phép lọc ấy làm MẤT GHIM. Đo 20-09
+    trên lô 10: ARTHUR DOYLE (`locked=1`, người nghe đã ghim `male`) có `mention_count = 0` vì ông không
+    nói câu nào trong lô ấy, nên ghim của ông sẽ biến mất ở lô 11 và mô hình lại được quyền đổi ý. Đó là
+    lời hứa "người nghe outrank mô hình vĩnh viễn" bị vỡ, và vỡ IM LẶNG.
+    """
+    if database is None:
+        return 0
+    carried = 0
+    for pinned in read_pinned_characters(source):
+        name = str(pinned["canonical_name"])
+        try:
+            if int(pinned["locked"] or 0) and str(pinned["gender"]) in ("male", "female"):
+                database.lock_character_gender(name, str(pinned["gender"]))
+                carried += 1
+            if str(pinned["locked_age"] or ""):
+                database.lock_character_age(name, str(pinned["locked_age"]))
+                carried += 1
+        except (KeyError, IndexError, ValueError, AttributeError):
+            continue
+    if carried:
+        _say_safely(f"  mang sang {carried} ghim của người nghe (gồm cả người không nói ở lô gieo)")
+    return carried
+
+
 def port(source: Path, target: Path, *, dry_run: bool = False) -> tuple[int, int]:
     """Returns (characters pinned, characters already pinned)."""
     casting = read_casting(source)
+    database = ProjectDB(target / "project.sqlite3") if not dry_run else None
     if not casting:
+        # Ghim của người nghe phải đi trước chỗ này: một project có ghim mà CHƯA phân vai (ghim được làm
+        # trước cả khi phân tích xong - xem `lock_character_gender`) thì thoát ở đây là bỏ mất ghim.
+        carry_listener_pins(source, database)
         _say_safely("project nguồn chưa có casting để mang đi")
         return 0, 0
-    database = ProjectDB(target / "project.sqlite3") if not dry_run else None
     already = (
         set(ProjectDB(target / "project.sqlite3").locked_character_voices())
         if (target / "project.sqlite3").is_file()
@@ -462,6 +522,8 @@ def port(source: Path, target: Path, *, dry_run: bool = False) -> tuple[int, int
             pass
     if known:
         _say_safely(f"  mang sang {len(known)} nhân vật đã biết (tên, giới tính, số lần gặp)")
+
+    carry_listener_pins(source, database)
 
     # Sổ cộng dồn đi theo chuỗi gieo. Không chép thì project đúc lại một chương (`lo03r_066`)
     # không có sổ, và lô sau gieo từ nó phải lùi về `mention_count` của MỘT chương - đúng cái
