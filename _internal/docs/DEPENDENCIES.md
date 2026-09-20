@@ -381,3 +381,21 @@ số học và RNG), nên nó vẫn chờ giữa hai cuốn, không phải việ
 Vì sao vẫn ghi lại một lượt kiểm "không có gì": việc thường trực là **kiểm định kỳ và báo cáo**, và một
 lượt kiểm im lặng chỉ đáng tin khi có dấu vết rằng nó đã chạy. Lần sau đọc bảng này trước khi chạy lại
 script - ba trong sáu mục là quyết định ĐÃ CÓ, không phải việc còn tồn.
+
+## Kiểm 2026-09-21 04:5x (không có lô nào bay) — vẫn im, và một dòng mới về `ruff`
+
+Cùng sáu gói, cùng kết luận như bảng 20-09 ngay trên: `torch` 2.14 / `torchvision` 0.29 chờ **giữa hai
+cuốn**, `transformers` 5.17 + `huggingface-hub` 1.32 chờ một lượt **đo lại âm thanh**, `pyworld` 0.3.6 chỉ
+sửa build, VieNeu SDK vẫn v3.8.1, `main` của `VieNeu-TTS-v3-Turbo` vẫn đúng 6 file `onnx_int8/` + README.
+
+Hai điều đáng thêm, không phải quyết định:
+
+- **`ruff` nay đã KHỚP bản ghim 0.16.5** (bảng 20-09 còn ghi venv giữ 0.9.10). `ruff check .` hôm nay báo
+  **1.177** mục, so với 1.066 hôm 19-09 - tăng vì cây có thêm mã, không phải vì luật đổi. Ruff không phải
+  cổng của dự án; **cổng là `pytest`, và nó xanh toàn bộ** ở lượt kiểm 04:4x hôm nay.
+- Lượt kiểm này chạy khi **GPU đang bị lượt so model chiếm** nên vẫn không làm được phép đo âm thanh cho
+  `transformers` - lý do trì hoãn hôm nay giống hôm qua nhưng KHÁC nguyên nhân (hôm qua vì lô đang thu).
+  Ghi rõ để lần sau không đọc thành "đã bỏ quên hai ngày".
+
+Nhắc lại vì sao vẫn ghi một lượt kiểm rỗng: việc thường trực là kiểm định kỳ **và báo cáo**, và một lượt
+kiểm im lặng chỉ đáng tin khi có dấu vết rằng nó đã chạy.
