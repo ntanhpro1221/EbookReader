@@ -314,6 +314,17 @@ tiếp (ranh giới 10): cả 20 chương TMA có đáp án, host ĐÃ vá, và 
 `granite4.1` không hỗ trợ tiếng Việt.) Lượt đo đầu: chuỗi đêm 19-09 (`run_night_19_09.sh`), 8 model trên 4
 chương TMA ngay sau khi lô 9 thu xong, trước ranh giới 9; kết quả ở `runtime/model_eval_19_09.{log,json}`.
 
+**Một cái bẫy đọc, kiểm trước khi tin một điểm số (21-09 04:5x).** `ollama show gemma4:e2b-it-qat --template` in
+ra đúng `{{ .Prompt }}` - không có `{{ .System }}`. Đọc nguyên văn thì nghĩa là Ollama BỎ khối `system`, tức
+quyển luật 1.190 token không đến tay model và mọi điểm của gemma đo một thứ khác. Đo thử thay vì suy luận:
+
+    POST /api/generate  system="chỉ được trả lời đúng một từ: DUALIEU"  prompt="Hôm nay trời thế nào?"
+    gemma4:e2b-it-qat -> 'DUALIEU'      qwen3:8b -> 'DUALIEU'
+
+Cả hai tôn trọng `system`. Ollama 0.33 dùng renderer dựng sẵn cho model mới và `--template` chỉ in chỗ giữ chỗ,
+nên dòng ấy không nói gì về việc `system` có được ghép hay không. Cùng họ với cái bẫy log đã ghi ở
+`docs/WHAT_BLOCKS_A_CHAPTER.md`: **thứ tự và hình thức trong đầu ra của công cụ không phải là hành vi.**
+
 ## Huấn luyện: dữ liệu đã dựng, script đã có, chờ cửa sổ GPU (20-09 11:3x)
 
 `build_training_set.py` trên bộ phát lại mới nhất (cây 5 bản vá, 41 chương đáp án): **train 1.727 mẫu / dev 76 /
