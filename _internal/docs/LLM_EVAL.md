@@ -183,6 +183,21 @@ Sáu chỗ lệch của lô 10 ở hàng thứ hai chính là những ca tôi đ
 Con số tuyệt đối khác nhau (23 so với 16, 32 so với 14) vì hai lô là hai vùng chương khác nhau; thứ đáng đọc là tỉ
 lệ khớp: **1/23 -> 16/16** và **26/32 -> 14/14**.
 
+Ba bản vá còn lại chỉ chạy ở bước **phân vai**, nên đo khi lô 11 cast xong (22:0x):
+
+| bản vá | kết quả trong sản xuất |
+|---|---|
+| giọng mang pitch trẻ con không thuộc người lớn | `Bỏ giọng ghim của KAELYN: preset_ngoc_linh_f109_p+04 mang pitch trẻ con mà người nghe đã ghim tuổi adult` - đúng 1 ca, cùng với CHRISTOPHER bị luật cũ bỏ |
+| văn bản thắng phiếu CHIA về giới tính | **Nika**: model bỏ phiếu 5 nữ / 1 nam, văn bản 44 nam / 1 nữ -> sổ ghi `male`. Kiểm nguồn: *"đừng tìm đến tên Nika điên. **Hắn** đơn giản chỉ là một ác ma điên cuồng"* - đè ĐÚNG |
+| tên lệch hai ký tự vẫn là một người | **không nổ lần nào**: lô 11 chỉ có `NATHASHA` -> `Natasha`, mà đó là lệch MỘT ký tự nên luật cũ đã lo. Không có nhãn nào lệch hai ký tự trong lô này |
+
+Hàng cuối là cách đọc đúng của một bản vá phòng ngừa: nó không nổ nghĩa là lô này không có ca ấy, không phải nó vô
+dụng - `ARTELI` của lô 10 vẫn còn nguyên trong sổ nhân vật lô ấy như một người thứ hai bên cạnh `ARTIL` (41 lần).
+
+Hai chốt của luật giới tính cũng chạy đúng ở lô 11: `ASIN` (phiếu 2 nam/5 nữ, văn bản 63/22 nhưng tỉ lệ 2,9 < 3)
+KHÔNG bị đè - ngưỡng giữ nó lại; `HATHAWAY` giữ `female` vì **người nghe đã ghim**, và ghim của người nghe đứng
+trên cả văn bản.
+
 Dấu vết host (`ADDRESSEE_REPAIR_NOTE` và họ hàng) **không** được lưu vào cột `analysis_notes` - cả lô 10 lẫn lô 11
 đều 0 dòng có dấu `;` - nên đừng đếm chúng ở đó như tôi đã thử; chúng chỉ sống trong lượt phân tích để phản biện
 đạo diễn biết host đã sửa. Cách đo đúng là tính lại vị từ như trên.
