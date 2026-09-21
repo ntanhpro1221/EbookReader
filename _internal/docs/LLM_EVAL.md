@@ -430,6 +430,44 @@ hết chuyện. Nếu GIÚP thì còn phải tách hai nửa bằng hai lượt 
 và cổng `analysis_only.py` từ chối khi chọn hai biến thể cùng lúc. **Đừng công bố "prompt gây thiên lệch"
 trước khi có `sorted-by-name` hoặc `masked-counts`.**
 
+### Kết quả `no-counts`, 10 chương, so theo cặp (21-09 19:5x): KHÔNG đáng kể - và một cơ chế thật bên dưới
+
+| chương | mốc | bỏ số đếm | hiệu |
+|---|---|---|---|
+| 351 | 76,7 | 74,4 | -2,3 |
+| 363 | 51,5 | 66,7 | **+15,2** |
+| 378 | 67,0 | 67,0 | 0,0 |
+| 381 | 54,8 | 54,8 | 0,0 |
+| 385 | 81,0 | 79,1 | -1,9 |
+| 396 | 66,7 | 66,7 | 0,0 |
+| 399 | 78,8 | 84,6 | +5,8 |
+| 400 | 75,0 | 79,3 | +4,3 |
+| 407 | 78,0 | 69,5 | **-8,5** |
+| 415 | 84,6 | 82,1 | -2,5 |
+
+Hiệu trung bình **+1,01 ± 2,00**, thắng 3 - thua 4 - hoà 3. Gộp: người nói 72,3 -> 73,2%. Thời gian như nhau
+(94 so với 95 phút). Theo đúng luật đặt TRƯỚC khi có số ("không giúp thì đóng giả thuyết"): **không chạy
+`sorted-by-name`, không viết bản vá prompt.**
+
+Nhưng xếp MỌI đoạn đổi đáp án theo hướng độ nổi tiếng thì cơ chế hiện rõ:
+
+| kết quả | rời người NỔI HƠN | về người NỔI HƠN |
+|---|---|---|
+| SỬA | 8 | 2 |
+| HỎNG | 7 | 6 |
+| đổi, không đổi điểm | 16 | 2 |
+| **cộng** | **31** | **10** |
+
+Bỏ bảng xếp hạng đúng là đẩy model **rời khỏi nhân vật nổi tiếng** (31 so với 10) - cơ chế là thật. Chương
+363 là ví dụ đẹp nhất: sáu đoạn SỬA, không đoạn nào HỎNG, cả sáu đều LUCIEN -> BELLAK, gồm chính `363:34-36`
+mà sáng nay cả ba model cùng sai. Nhưng rời người nổi tiếng không phải lúc nào cũng đúng, nên lợi và hại gần
+cân nhau. Khoản HỎNG lớn nhất có hình dạng riêng: `407:10-12` bị đổi **LUCIEN -> "MÌNH"** - một ĐẠI TỪ ngôi
+thứ nhất, không phải nhân vật. Không còn bảng để bám, model gán đại từ làm người nói.
+
+Hai manh mối để lại, cả hai làm được bằng CPU: (1) "MÌNH" lọt qua host thì luật đại-từ-không-phải-nhân-vật
+còn khe - tìm khe ấy; (2) nếu khe ấy được vá, chương 407 thôi hụt và phép thử có thể đổi dấu - lúc ấy mới
+đáng chạy lại. **Chưa kết luận "prompt gây thiên lệch"**: tương quan có, cơ chế có, lợi ròng thì không.
+
 ### Bài học ĐO: đừng chấm một project khi các bước sau phân tích chưa xong
 
 Tôi chấm `gemma4:e2b-it-qat` hai lần trên **cùng bốn chương** và ra **74,8** rồi **77,2**. Không phải nhiễu:
