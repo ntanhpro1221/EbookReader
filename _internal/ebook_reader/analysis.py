@@ -9689,7 +9689,9 @@ class OllamaBookAnalyzer:
                         )
                 if dictionary_readings:
                     dictionary_message = (
-                        "Tên ngắn dùng cách đọc suy từ từ điển CMU vì Qwen thất bại: "
+                        # `self.model`, KHÔNG phải "Qwen" cứng: bước này dùng cùng model với bước phân
+                        # tích, nên khi so nhiều model thì nhãn cứng nói sai đúng lúc log quan trọng nhất.
+                        f"Tên ngắn dùng cách đọc suy từ từ điển CMU vì {self.model} thất bại: "
                         f"{dictionary_readings}. Nên nghe lại."
                     )
                     self.log(dictionary_message)
@@ -9701,7 +9703,7 @@ class OllamaBookAnalyzer:
                     )
                 if fallback_readings:
                     message = (
-                        f"Qwen không tạo được cách đọc hợp lệ ở batch {batch_index} cho {remaining}: "
+                        f"{self.model} không tạo được cách đọc hợp lệ ở batch {batch_index} cho {remaining}: "
                         f"{last_error}. Đã xử lý bằng bộ chuyển cục bộ: {fallback_readings}."
                     )
                     self.log(message)

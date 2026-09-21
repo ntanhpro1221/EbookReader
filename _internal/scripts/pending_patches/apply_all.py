@@ -32,11 +32,8 @@ from scripts.book_paths import VERSIONS  # noqa: E402  (cần ROOT trên sys.pat
 
 LEASE_STALE_SECONDS = 180.0
 
-# Ranh giới 12: một dòng log gọi sai tên model. Vô hại khi dự án chỉ chạy một model, và bắt đầu
-# nói sai đúng lúc nó quan trọng nhất - khi so nhiều model và phải đọc log để biết model nào hỏng.
-ORDER: tuple[str, ...] = (
-    "patch_the_log_names_the_model_that_actually_answered.py",
-)
+# Hàng chờ rỗng. Mọi bản vá đã vào cây; xem `APPLIED` cho thứ tự và lý do từng nhóm.
+ORDER: tuple[str, ...] = ()
 
 # RÚT khỏi hàng đợi 21-09, không phải vì nó sai: `patch_a_thought_outside_every_quote_belongs_to_the_narrator.py`
 # qua cả hai cổng đo (cả ba model sửa 11 phá 0; phát lại đáp án 43 chương / 10 truyện y hệt bản gốc từng dòng)
@@ -385,6 +382,11 @@ APPLIED = (
     # Ca thật: lô 11 chết lúc 17:02 ngày 20-09 ở tiêu đề chương 461 (`deltas=['intensity:0->1']`) vì bản ghi ghi-đè
     # khai `raw_accept: False` trong khi host đã ĐỒNG Ý - tầng sổ bắt đúng mâu thuẫn ấy và ném UNRECOVERABLE.
     "patch_an_inaudible_delta_on_a_heading_needs_no_override.py",
+    # 2026-09-21: rút khỏi hàng chờ bởi `apply_all --apply`, ngay trước bộ test. Lý do từng
+    # bản vá nằm trong docstring của chính nó; khối dưới đây là chú thích của hàng chờ.
+    # Ranh giới 12: một dòng log gọi sai tên model. Vô hại khi dự án chỉ chạy một model, và bắt đầu
+    # nói sai đúng lúc nó quan trọng nhất - khi so nhiều model và phải đọc log để biết model nào hỏng.
+    "patch_the_log_names_the_model_that_actually_answered.py",
 )
 
 
