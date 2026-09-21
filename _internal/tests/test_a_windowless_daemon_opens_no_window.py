@@ -9,7 +9,13 @@ của chính daemon ấy ghi nó dùng `pythonw.exe` "để không có cửa s�
 thân nó, không lo cho con. Cùng loại lỗi `ebook_reader/background_runner.py` đã sửa hôm 11-09.
 
 Kiểm bằng cây cú pháp: mọi lệnh gọi `subprocess.run` / `subprocess.Popen` / `subprocess.call` /
-`subprocess.check_output` trong các script chạy bằng `pythonw` phải truyền `creationflags`.
+`subprocess.check_output` trong các script chạy bằng `pythonw` phải truyền `creationflags` - viết thẳng, hoặc
+qua `**kwargs` (như `background_runner._spawn_detached_supervisor`, gán cờ vào dict rồi mới bung ra).
+
+Phạm vi lấy từ mã thật chứ không từ trí nhớ (grep `pythonw` ngày 21-09): hai script khởi chạy thẳng bằng
+pythonw, watchdog của Ollama, và TOÀN BỘ `ebook_reader/` - vì supervisor của mọi lô là
+`pythonw -m ebook_reader.background_runner supervise`, nên mọi lệnh gọi subprocess của dây chuyền khi sản xuất
+đều có cha không có console. Lúc viết test: 0 lệnh gọi thiếu cờ trên 32 file của dây chuyền.
 """
 from __future__ import annotations
 
@@ -20,10 +26,13 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Các script mà dự án khởi chạy bằng pythonw.exe (daemon nhịp tim, tác vụ Task Scheduler tự chạy lại lô).
+# Các script mà dự án khởi chạy bằng pythonw.exe (daemon nhịp tim, tác vụ Task Scheduler tự chạy lại lô,
+# watchdog của Ollama), cộng mọi module dây chuyền chạy dưới supervisor pythonw.
 WINDOWLESS_SCRIPTS = (
     "scripts/heartbeat_daemon.py",
     "scripts/resume_interrupted.py",
+    "scripts/ollama_watchdog.py",
+    *sorted(str(path.relative_to(ROOT)).replace("\\", "/") for path in (ROOT / "ebook_reader").glob("*.py")),
 )
 SPAWNING_CALLS = {"run", "Popen", "call", "check_call", "check_output"}
 
@@ -39,7 +48,8 @@ def _subprocess_calls_without_flags(path: Path) -> list[int]:
         owner = node.func.value
         if not (isinstance(owner, ast.Name) and owner.id == "subprocess"):
             continue
-        if not any(keyword.arg == "creationflags" for keyword in node.keywords):
+        # `keyword.arg is None` là một `**kwargs` bung ra: cờ có thể nằm trong đó, nên không kết tội.
+        if not any(keyword.arg in ("creationflags", None) for keyword in node.keywords):
             missing.append(node.lineno)
     return missing
 
@@ -65,3 +75,18 @@ def test_the_check_would_catch_the_original_bug(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert _subprocess_calls_without_flags(probe) == [3]
+
+
+def test_flags_passed_through_a_splatted_dict_count(tmp_path: Path) -> None:
+    """Lối của `background_runner`: gán cờ vào dict rồi `Popen(command, **kwargs)` - không được báo nhầm,
+    nhưng lệnh gọi trần cạnh nó trong cùng file vẫn phải bị bắt."""
+    probe = tmp_path / "splat.py"
+    probe.write_text(
+        "import subprocess\n"
+        "def spawn(command):\n"
+        "    kwargs = {'creationflags': 0x08000000}\n"
+        "    subprocess.Popen(command, **kwargs)\n"
+        "    subprocess.run(command)\n",
+        encoding="utf-8",
+    )
+    assert _subprocess_calls_without_flags(probe) == [5]
