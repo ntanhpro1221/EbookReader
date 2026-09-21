@@ -407,8 +407,8 @@ Chưa kết luận được nhân-quả từ tương quan này: model có thể 
 nói gì. Tách được bằng một phép thử, và nó chỉ chạy được trên GPU thật (phát lại KHÔNG đo được bản vá đổi
 prompt):
 
-    python scripts/model_eval/eval_models.py qwen3:8b --chapters 351 363 378 381 --no-mention-counts \
-        --root D:/Novels/Audiobooks/_model_eval_v2/21-09-no-counts
+    python scripts/model_eval/eval_models.py qwen3:8b --chapters 351 363 378 381 385 396 399 400 407 415 \
+        --known-list no-counts --root D:/Novels/Audiobooks/_model_eval_v2/21-09-no-counts
 
 Cờ `--no-mention-counts` (cả ở `analysis_only.py`) bỏ con số và xếp danh sách theo TÊN, **giữ đúng mức
 chặn 80** người. So theo CẶP với mốc `qwen3:8b` 10 chương ở mục trên (điểm 81,6 / người nói 72,3).
@@ -417,9 +417,18 @@ chặn 80** người. So theo CẶP với mốc `qwen3:8b` 10 chương ở mục
 `số lần đã gặp=<n>` là chừng **500 token**, và đo lúc chạy thì prompt xuống 2.528-3.181 token so với
 ~3.172 của mốc. Không thể bỏ thông tin mà không bỏ token, nên lượt này trả lời đúng MỘT câu: *"bỏ tín
 hiệu nổi tiếng (cùng độ dài kèm theo) có giúp hay không?"* Nếu KHÔNG giúp thì giả thuyết đóng lại và
-hết chuyện. Nếu GIÚP thì còn phải tách hai nửa bằng hai lượt nữa: (a) **giữ** con số nhưng xếp theo
-tên - chỉ bỏ thứ tự, token gần như không đổi; (b) **giữ** thứ tự nhưng thay con số bằng một hằng số -
-chỉ bỏ con số. Đừng công bố "prompt gây thiên lệch" trước khi có (a) hoặc (b).
+hết chuyện. Nếu GIÚP thì còn phải tách hai nửa bằng hai lượt nữa, và **cả hai cờ đã viết sẵn** (`--known-list`):
+
+| biến thể | thứ tự | con số | độ dài | tách được gì |
+|---|---|---|---|---|
+| `baseline` | theo độ nổi tiếng | có | - | mốc |
+| `no-counts` | theo TÊN | bỏ | **-~500 tok** | (cả hai nửa lẫn độ dài) |
+| `sorted-by-name` | theo TÊN | **giữ** | gần như nguyên | chỉ THỨ TỰ |
+| `masked-counts` | theo độ nổi tiếng | thay bằng `?` | gần như nguyên | chỉ CON SỐ |
+
+Đã kiểm văn bản prompt sinh ra của cả bốn biến thể mà không cần GPU (gọi hàm đã vá với một đối tượng giả),
+và cổng `analysis_only.py` từ chối khi chọn hai biến thể cùng lúc. **Đừng công bố "prompt gây thiên lệch"
+trước khi có `sorted-by-name` hoặc `masked-counts`.**
 
 ### Bài học ĐO: đừng chấm một project khi các bước sau phân tích chưa xong
 

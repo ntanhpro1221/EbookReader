@@ -71,7 +71,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-mention-counts", action="store_true",
                         help="bỏ `số lần đã gặp` khỏi danh sách nhân vật đã biết và xếp theo TÊN thay vì theo "
                              "độ nổi tiếng - phép thử cho giả thuyết prompt tự gây thiên lệch (xem docs/LLM_EVAL.md)")
+    parser.add_argument("--known-sorted-by-name", action="store_true",
+                        help="GIỮ `số lần đã gặp` nhưng xếp theo TÊN - tách riêng ảnh hưởng của THỨ TỰ, "
+                             "độ dài prompt gần như không đổi")
+    parser.add_argument("--masked-mention-counts", action="store_true",
+                        help="GIỮ thứ tự theo độ nổi tiếng nhưng thay mọi con số bằng `?` - tách riêng ảnh "
+                             "hưởng của CON SỐ, độ dài prompt gần như không đổi")
     args = parser.parse_args(argv)
+    variants = [args.no_mention_counts, args.known_sorted_by_name, args.masked_mention_counts]
+    if sum(bool(flag) for flag in variants) > 1:
+        parser.error("chỉ được một biến thể danh sách nhân vật mỗi lượt - nếu không thì đo hai thứ cùng lúc")
+
+    if args.known_sorted_by_name or args.masked_mention_counts:
+        # Hai biến thể TÁCH NHIỄU cho giả thuyết ở `docs/LLM_EVAL.md`. `--no-mention-counts` bỏ cả con số
+        # lẫn thứ tự VÀ ~500 token, nên nếu nó thắng thì chưa biết nửa nào công. Hai cờ này giữ độ dài
+        # prompt gần như nguyên: một cái chỉ đổi thứ tự, một cái chỉ xoá con số.
+        by_name = bool(args.known_sorted_by_name)
+
+        def _known_summary_variant(self) -> str:
+            if not self._speaker_counts:
+                return "(Chưa có nhân vật đã biết)"
+            top = self._speaker_counts.most_common(80)
+            if by_name:
+                top = sorted(top, key=lambda pair: str(pair[0]).casefold())
+            lines = []
+            for name, count in top:
+                genders = self._speaker_genders.get(name, Counter())
+                locked_gender = genders.most_common(1)[0][0] if genders else "unknown"
+                shown = count if by_name else "?"
+                lines.append(f"- {name}; số lần đã gặp={shown}; gender đã biết={locked_gender}")
+            return "\n".join(lines)
+
+        OllamaBookAnalyzer._known_summary = _known_summary_variant
+
     if args.no_mention_counts:
         # Đo trên 3 model của lượt 21-09: khi model chọn SAI một nhân vật có tên, nhân vật ấy nằm ở top
         # 2-10% bảng độ nổi tiếng (hạng tương đối 0,02-0,10), còn khi chọn ĐÚNG thì 0,21-0,25. Prompt đưa
