@@ -411,9 +411,15 @@ prompt):
         --root D:/Novels/Audiobooks/_model_eval_v2/21-09-no-counts
 
 Cờ `--no-mention-counts` (cả ở `analysis_only.py`) bỏ con số và xếp danh sách theo TÊN, **giữ đúng mức
-chặn 80** để không đổi độ dài prompt - nếu không thì đo hai thứ cùng lúc. So với mốc 79,4 / 64,1% của
-`qwen3:8b` ở bảng trên. Nếu người nói tăng thì đây là bản vá prompt đáng giá hơn mọi luật host tôi viết
-hôm nay; nếu không đổi thì đóng giả thuyết lại bằng một con số.
+chặn 80** người. So theo CẶP với mốc `qwen3:8b` 10 chương ở mục trên (điểm 81,6 / người nói 72,3).
+
+**Giới hạn của phép thử, nói trước khi có kết quả.** Giữ mức chặn 80 không đủ để giữ độ dài: 80 dòng
+`số lần đã gặp=<n>` là chừng **500 token**, và đo lúc chạy thì prompt xuống 2.528-3.181 token so với
+~3.172 của mốc. Không thể bỏ thông tin mà không bỏ token, nên lượt này trả lời đúng MỘT câu: *"bỏ tín
+hiệu nổi tiếng (cùng độ dài kèm theo) có giúp hay không?"* Nếu KHÔNG giúp thì giả thuyết đóng lại và
+hết chuyện. Nếu GIÚP thì còn phải tách hai nửa bằng hai lượt nữa: (a) **giữ** con số nhưng xếp theo
+tên - chỉ bỏ thứ tự, token gần như không đổi; (b) **giữ** thứ tự nhưng thay con số bằng một hằng số -
+chỉ bỏ con số. Đừng công bố "prompt gây thiên lệch" trước khi có (a) hoặc (b).
 
 ### Bài học ĐO: đừng chấm một project khi các bước sau phân tích chưa xong
 
