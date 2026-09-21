@@ -13,7 +13,8 @@ bắn vì một lệnh nền đang chờ. Hai cơ chế ấy cùng hỏng theo m
 Tiến trình rời này nằm ngoài phiên. Nó không đánh thức phiên được — cron làm việc ấy khi phiên rảnh —
 nhưng nó bảo đảm **bản ghi** không bao giờ đứt: mỗi nhịp có một khối trong log kèm giờ, nên lượt thức
 kế tiếp đọc được cả quãng vừa qua chứ không mất trắng. `pythonw.exe` để không có cửa sổ console nháy
-(xem memory `windows-console-flags`).
+(xem memory `windows-console-flags`) - nhưng `pythonw` chỉ lo cho CHÍNH nó: mọi tiến trình con dạng console
+phải mang `NO_WINDOW`, vì thiếu cờ ấy thì mỗi nhịp là một cửa sổ terminal nháy (sửa 21-09, xem `NO_WINDOW`).
 """
 from __future__ import annotations
 
@@ -32,10 +33,17 @@ STOP = RUNTIME / "heartbeat_daemon.stop"
 TICK = ROOT / "scripts" / "heartbeat_tick.py"
 KEEP_BYTES = 400_000
 
+# Daemon này là `pythonw.exe` - KHÔNG có console. Mọi chương trình console nó khởi chạy (python.exe, tasklist)
+# mà thiếu cờ này thì Windows cấp cho một console MỚI, và Windows 11 mở một cửa sổ terminal để hiện nó: nó
+# nháy lên vài giây rồi tắt. Bản đầu thiếu cờ ở cả hai lệnh gọi dưới đây, nên từ 18-09 21:16 cứ mỗi nhịp
+# (30 phút) là một cửa sổ nháy - chủ sách hỏi 21-09 "thi thoảng tôi cứ thấy cái terminal nó pop ra rồi biến
+# mất". Cùng lỗi mà `ebook_reader/background_runner.py::_detached_creation_flags` đã ghi và sửa hôm 11-09.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) if os.name == "nt" else 0
+
 
 def alive(pid: int) -> bool:
     out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True,
-                         encoding="utf-8", errors="replace").stdout
+                         encoding="utf-8", errors="replace", creationflags=NO_WINDOW).stdout
     return str(pid) in out
 
 
@@ -43,7 +51,8 @@ def one_tick(python: Path) -> str:
     started = time.strftime("%Y-%m-%d %H:%M:%S")
     result = subprocess.run([str(python), str(TICK)], cwd=str(ROOT), capture_output=True, text=True,
                             encoding="utf-8", errors="replace",
-                            env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=600)
+                            env={**os.environ, "PYTHONIOENCODING": "utf-8"}, timeout=600,
+                            creationflags=NO_WINDOW)
     body = (result.stdout or "").strip() or f"(nhịp tim không in gì; mã {result.returncode})"
     if result.returncode != 0:
         body += f"\n(mã thoát {result.returncode}) {(result.stderr or '').strip()[-400:]}"
