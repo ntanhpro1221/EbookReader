@@ -468,6 +468,17 @@ Hai manh mối để lại, cả hai làm được bằng CPU: (1) "MÌNH" lọt
 còn khe - tìm khe ấy; (2) nếu khe ấy được vá, chương 407 thôi hụt và phép thử có thể đổi dấu - lúc ấy mới
 đáng chạy lại. **Chưa kết luận "prompt gây thiên lệch"**: tương quan có, cơ chế có, lợi ròng thì không.
 
+**Manh mối (1) đã dò xong, và nó không phải khe của host mà là khe của THƯỚC ĐO.** "mình" CÓ trong
+`character_registry.PRONOUNS`, và ở bước phân vai `build_registry_and_cast` đẩy mọi tên là đại từ vào nhóm
+VÔ DANH - người nghe nghe `407:10-12` bằng giọng vô danh, và đáp án nhận `NPC*`. Host đúng; bộ chấm thì chấm
+cái nhãn model GÕ RA thay vì giọng người nghe NGHE THẤY. `score_models.speaker_key` vốn đã gom `NPC_LOCAL`
+về `NPC*` vì đúng lý do ấy - nó chỉ bỏ sót đại từ, thứ dây chuyền đối xử y hệt. Đã sửa, dùng chính tập
+`PRONOUNS` của dây chuyền (không chép danh sách thứ hai), kèm test.
+
+Chấm lại mọi bảng hôm nay bằng bộ chấm đã sửa: **không một con số nào đổi** ngoài phép thử này (các lượt
+khác có 0 nhãn đại từ; 8b so 4b vẫn -0,62 ± 1,97). Phép thử `no-counts` thành **+1,62 ± 1,76**, gộp
+72,3 -> 73,8% - vẫn thắng 3 thua 4, vẫn trong sai số. Kết luận giữ nguyên, giờ trên một thước đo đúng hơn.
+
 ### Bài học ĐO: đừng chấm một project khi các bước sau phân tích chưa xong
 
 Tôi chấm `gemma4:e2b-it-qat` hai lần trên **cùng bốn chương** và ra **74,8** rồi **77,2**. Không phải nhiễu:

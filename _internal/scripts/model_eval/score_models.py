@@ -28,6 +28,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+if str(HERE.parents[1]) not in sys.path:
+    sys.path.insert(0, str(HERE.parents[1]))
+
+from ebook_reader.character_registry import PRONOUNS  # noqa: E402
+
 # Một thư mục cho mỗi truyện: số chương của các truyện trùng nhau (cuốn 1 cũng có chương 351).
 GOLD_ROOT = HERE / "gold"
 GOLD_DIR = GOLD_ROOT / "throne_of_magical_arcana"
@@ -69,9 +74,17 @@ class Gold:
 
 
 def speaker_key(name: str) -> str:
-    """So tên không phân biệt hoa thường; mọi NPC_LOCAL gom về `NPC*` (nhãn cục bộ không so được)."""
+    """So tên không phân biệt hoa thường; mọi NPC_LOCAL gom về `NPC*` (nhãn cục bộ không so được).
+
+    Một nhãn là ĐẠI TỪ ("MÌNH", "Tôi", "hắn") cũng gom về `NPC*`: ở bước phân vai
+    `build_registry_and_cast` đẩy mọi tên thuộc `character_registry.PRONOUNS` vào nhóm VÔ DANH - tức
+    người nghe nghe nó bằng đúng giọng của một NPC_LOCAL. Thiếu dòng này thì bộ chấm phạt nhãn mà model
+    gõ ra thay vì chấm giọng người nghe nghe thấy: phép thử prompt 21-09 bị trừ oan 5 nhãn như thế
+    (407:10-12 "MÌNH", đáp án nhận `NPC*`). Dùng chính tập của dây chuyền chứ không chép một danh sách
+    thứ hai, để hai bên không bao giờ lệch nhau.
+    """
     text = unicodedata.normalize("NFC", str(name or "")).strip()
-    if text.upper().startswith("NPC_LOCAL") or text.upper() == "NPC*":
+    if text.upper().startswith("NPC_LOCAL") or text.upper() == "NPC*" or text.casefold() in PRONOUNS:
         return "NPC*"
     return re.sub(r"\s+", " ", text).upper()
 

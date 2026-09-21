@@ -37,6 +37,20 @@ def test_the_gold_syntax_is_read_as_written(tmp_path: Path) -> None:
     assert speaker_key("NPC_LOCAL::c1::r2::x") == "NPC*"
 
 
+def test_a_pronoun_label_is_scored_as_the_anonymous_voice_the_listener_hears() -> None:
+    """Dây chuyền đẩy tên là đại từ vào nhóm VÔ DANH khi phân vai, nên bộ chấm gom nó về `NPC*` như NPC_LOCAL.
+
+    Ca thật 21-09: phép thử prompt bị trừ oan `407:10-12` gán "MÌNH" - người nghe nghe giọng vô danh, và
+    đáp án nhận `NPC*`. Tên thật trùng mặt chữ với một đại từ không có trong truyện này, nên luật an toàn.
+    """
+    for pronoun in ("MÌNH", "mình", "Tôi", "hắn", "ta", "me"):
+        assert speaker_key(pronoun) == "NPC*", pronoun
+    # Tên người vẫn so bằng chính nó - kể cả tên CÓ chứa một đại từ bên trong.
+    assert speaker_key("LUCIEN") == "LUCIEN"
+    assert speaker_key("Minh Quân") == "MINH QUÂN"
+    assert speaker_key("MINH") == "MINH", "`minh` không dấu là tên riêng, không nằm trong PRONOUNS"
+
+
 def test_a_line_given_to_the_narrator_costs_the_speaker_score(tmp_path: Path) -> None:
     gold = _gold(tmp_path)
     base = {"chapter": "351", "gender": "male", "intensity": 1, "pace": "normal", "volume": "normal",
