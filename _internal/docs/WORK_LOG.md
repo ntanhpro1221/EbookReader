@@ -37,6 +37,14 @@ Bố cục hai thư mục làm việc này khả thi:
 | 04:5x | **RÚT bản vá ấy khỏi hàng đợi**: nó qua CẢ HAI cổng đo (sửa 11 phá 0; phát lại 43 chương y hệt bản gốc) nhưng `pytest` đầy đủ bắt nó phá test canh quyết định 20-09 của chủ sách. Lợi thật 3 dòng/49.991. **Bài học: hai cổng đo không thay được bộ kiểm đầy đủ** | `988f142` |
 | 04:5x | Lượt so 3 model xong, cả ba rơi 0 ID: `qwen3:4b` 80,0 (người nói 65,7%, 1.573 s, 3,7 GB) · `qwen3:8b` 79,4 (64,1%, 2.156 s) · `gemma4:e2b` 77,2 (62,2%, **842 s**). Không tuyên vô địch: 0,6 điểm ≈ 6 đoạn, trong nhiễu. Đã thả lượt 6 chương mới để tách nhiễu | `3a6d826` |
 | 04:5x | Kiểm thượng nguồn: vẫn im; `ruff` nay khớp bản ghim, và cổng là `pytest` - **xanh toàn bộ** | `5e43cfc` |
+| 05:4x | Giả thuyết: chính PROMPT phát thiên lệch nổi tiếng - model chọn SAI rơi vào top 2-10% bảng `mention_count`, chọn ĐÚNG thì 0,21-0,25, giống nhau ở cả ba model. Cờ `--no-mention-counts` | `a297216` |
+| 06:0x | **Chọn chương chi phối mạnh hơn chọn model**: cùng `qwen3:8b`, 4 chương test ra 64,1% người nói, 6 chương khác ra 75,9% - chênh 11,8 điểm, gấp bảy lần chênh giữa model | `dc8d8eb`, `3555d62` |
+| 06:5x | **So theo cặp 10 chương LẬT kết luận 4 chương**: 8b thắng 6, 4b thắng 3, hoà 1; hiệu -0,62 ± 1,97. `qwen3:4b` NGANG chất lượng, nhanh hơn 27% - không phải "tốt hơn" | `2e55cbf` |
+| 06:5x | Bẫy thứ ba cùng hình dạng: cột `speaker` có mặc định nên báo "đủ 100%" ngay khi chia đoạn; tiến độ đúng là `status`. Thành script `eval_progress.py` | `d1212c1`, `5b1d34a` |
+| 08:5x | Phép thử prompt bò (chương 363 >110 phút so với 7,4): **Unity Editor mở mà nằm im** đủ đẩy VRAM tới 96% và Ollama tự tháo model. Dừng lượt đo, bỏ số đo lúc tranh chấp, không thả lô 12 vào khe 290 MiB | `0b4fcd2` |
+| 09:2x | Viết sẵn hai biến thể tách nhiễu (`sorted-by-name`, `masked-counts`) trong lúc GPU là của chủ sách; kiểm văn bản prompt của cả bốn không cần GPU | `cc37a19` |
+| 09:2x | Phân xử vòng 16 (324 chỗ lệch, lọc theo đồng thuận): đáp án đúng 2/2. Mẫu "thoại nối lại sau câu kể chen giữa" mà nó để lộ bị LOẠI - đáp án chỉ nói cùng người 4/7 | `077a290` |
+| 09:3x | Chủ sách hỏi vì sao Ollama ở khay và terminal nháy: `heartbeat_daemon.py` (pythonw) gọi `python.exe` thiếu `CREATE_NO_WINDOW` mỗi 30 phút từ 18-09; app khay do `ollama list` của TÔI lúc 03:28 (CLI tự mở app qua `cmd.exe`) và nó đã tải Ollama 0.34.2. Sửa, test phủ mọi tiến trình dưới pythonw, kiểm bằng bộ lấy mẫu cửa sổ trên nhịp ép và nhịp tự nhiên: 0 cửa sổ | `fe2c2c6`, `63e224c` |
 
 ## 2026-09-20
 

@@ -295,6 +295,37 @@ Bài học đắt hơn cả ba sửa: test của watchdog chỉ khoá **những 
 mock trong mọi test, nên một probe không bao giờ nói "có" đã sống qua cả bộ test xanh. Bài
 test mới đưa đúng payload đo được của qwen3 vào probe thật.
 
+### Lần thứ hai, 2026-09-21 — `pythonw` chỉ lo cho chính nó
+
+Chủ sách hỏi lại gần như nguyên văn: *"thi thoảng tôi cứ thấy cái terminal nó pop ra rồi biến
+mất"*, kèm câu hỏi vì sao Ollama nằm ở khay hệ thống. Hai nguyên nhân, cả hai tìm ra bằng dữ kiện:
+
+**Nháy định kỳ: `scripts/heartbeat_daemon.py`, mỗi 30 phút từ 18-09 21:16.** Daemon chạy bằng
+`pythonw.exe`, và docstring của nó ghi đúng lý do: tránh cửa sổ nháy. Nhưng mỗi nhịp nó lại cố ý
+đổi sang `python.exe` để chạy `heartbeat_tick.py`, và lệnh `subprocess.run` ấy **không có
+`creationflags`**. Một chương trình console sinh ra từ cha không có console nhận một console mới,
+và Windows 11 mở cửa sổ để hiện nó. Hôm ấy nháy lúc 04:19, 04:49, 05:19, 05:49, 06:19, 06:49,
+09:00, 09:30. Cùng loại lỗi mà mục trên đã sửa ở watchdog — daemon được viết sau đó một tuần và
+lặp lại nó. **`pythonw` chỉ lo cho chính nó; mọi con console của nó vẫn phải mang
+`CREATE_NO_WINDOW`.** Sửa `fe2c2c6`.
+
+**Một lần lúc 03:28: CLI `ollama` tự mở app khay.** Tôi chạy `ollama list` khi máy chủ đang tắt
+(ranh giới 11 vừa tắt máy chủ ẩn của dây chuyền). CLI 0.33.2 thấy không có máy chủ thì chạy
+`cmd.exe /c "ollama app.exe" --hide --fast-startup` — chuỗi ấy có trong chính file nhị phân, và
+app khay khởi động lúc 03:28:52.853, khớp từng giây với lệnh của tôi, cha là `cmd.exe`. App khay
+kéo theo bộ tự cập nhật: nó tải OllamaSetup 0.34.2 (1,5 GB) lúc 03:30. Từ đó dùng HTTP
+(`/api/tags`, `/api/ps`, `keep_alive: 0`) thay cho CLI. Cấu hình hai máy chủ đã so: 41/41 khoá
+giống nhau, nên các số đo chạy trên máy chủ app khay vẫn so được với sản xuất.
+
+**Kiểm bằng đo, như lần trước:** cùng bộ lấy mẫu cửa sổ, một nhịp ép (09:37) và một nhịp tự
+nhiên (10:37:25) — con `python.exe` nhận `conhost.exe 0x4` (console không cửa sổ), **0 cửa sổ
+mới** trong 7 + 13 phút theo dõi, gồm cả bốn lượt của tác vụ tự chạy lại 5 phút.
+
+**Chặn tái phát:** `tests/test_a_windowless_daemon_opens_no_window.py` đọc cây cú pháp của mọi
+tiến trình chạy dưới `pythonw` — daemon, tác vụ tự chạy lại, watchdog, và toàn bộ `ebook_reader/`
+(supervisor của mọi lô là `pythonw`) — và đỏ khi có lệnh gọi `subprocess` thiếu cờ. Danh sách lấy
+từ `grep pythonw` chứ không từ trí nhớ; lúc viết, 0 vi phạm thật trên 33 file.
+
 ## Còn thiếu gì
 
 Nói thẳng, vì chỗ này dễ tưởng là đã xong hơn thực tế:
