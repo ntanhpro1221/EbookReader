@@ -639,3 +639,32 @@ chuyển GGUF 1,5 GB, và tải model từ Hugging Face.
 tôi cũng đang dùng máy thì không nói gì về dây chuyền. Trước khi kết luận về hiệu năng: (1) tách phần LLM ra khỏi
 phần host - `Ollama: ... tổng Xs` trong `runtime_events` cho biết ngay; (2) đo trên cửa sổ vài chục phút gần nhất,
 không phải trung bình cả lô; (3) nếu vẫn thấy lệch, hỏi *mình* đã chạy gì trong khoảng ấy trước khi hỏi mã.
+
+## Một Unity Editor MỞ MÀ NẰM IM là đủ phá một lượt chạy trên card 8 GB (2026-09-21 08:5x)
+
+Phép thử prompt đang chạy `qwen3:8b` trên 10 chương. Chương 351 xong bình thường (478 s, mốc 492 s).
+Chương 363 thì bò: **hơn 110 phút cho 70/82 đoạn**, trong khi mốc là 7,4 phút. Đọc ra bằng hai dòng:
+
+    nvidia-smi   -> 7.103 MiB / 8.151, tải 3%
+    ollama ps    -> qwen3:8b ... UNTIL  Stopping...
+
+Ollama **tự tháo model giữa lượt** vì thiếu chỗ, và phân tích treo chờ nó nạp lại - lặp lại mãi.
+
+Chẩn đoán đầu của tôi là "Unity đang vẽ, giành GPU". **Sai**, và số đo sau khi tháo model bác nó: còn
+**1.719 MiB ở tải 0%**. Unity Editor cùng Rider chỉ **mở mà nằm im**, không vẽ gì - nhưng vẫn giữ VRAM.
+
+| | MiB |
+|---|---|
+| VRAM khi dây chuyền KHÔNG chạy gì, desktop có Unity + Rider mở | **1.654** |
+| sản xuất (`qwen3:8b`, `num_ctx` 7.168) cần | ~6.204 |
+| tổng | 8.151 |
+| **dư** | **~290 (96% đầy)** |
+
+Bình thường desktop chiếm ~1 GB (bảng đầu tài liệu này ghi 1,30 GB), nên chỉ **600 MiB thêm** đã đẩy lượt
+chạy vào đúng vùng 95-96% từng làm lượt huấn luyện QLoRA chạy ở 12-38 token/s thay vì ~1.000
+(`docs/LLM_EVAL.md`, mục BỨC TƯỜNG). Cùng một bức tường, đến từ một cửa khác.
+
+**Việc phải làm khi thấy dấu hiệu này**: `ollama stop <model>` trả lại ~6 GB ngay (7.638 -> 1.719 MiB đo
+được), rồi đợi VRAM trống mới thả lại - đừng thả lô vào khe 290 MiB. Và **số đo lấy trong lúc tranh chấp
+VRAM là số phải bỏ**: cột thời gian là một phần của kết luận, nên chương 363 đã bị xoá để lượt sau chạy
+sạch, chương 351 giữ lại vì nó xong trước khi có tranh chấp.
