@@ -275,3 +275,38 @@ Ba chỗ phân xử kỹ bằng văn bản gốc:
 Đáng ghi: `426:3` sẽ được host tự sửa từ ranh giới 10, vì "Neeshka **đằng hắng rồi** nói:" là đúng mẫu mà
 `patch_a_modifier_between_a_name_and_said_still_names_the_speaker.py` mở ra (đã thử trên cây đã vá: trả về "Neeshka").
 Tổng cộng **11 trên 26** chỗ lệch của lô 10 nằm trong tầm ba bản vá đang ghim ở hàng đợi ranh giới 10.
+
+## Vòng 16 - lượt so ba model 21-09, 10 chương, phiếu giấu tên 324 chỗ
+
+Nguồn: `score_models.py --dispute-out D:/Novels/Audiobooks/_model_eval_gold/dispute_21_09.tsv` trên câu trả
+lời TƯƠI của `qwen3:8b`, `qwen3:4b`, `gemma4:e2b-it-qat` (4 chương tập test) và hai model đầu (6 chương
+385/396/399/400/407/415). **324 chỗ lệch, 323 ở trục người nói, 1 ở loại đoạn.**
+
+Lọc theo mức NGỜ thay vì đọc cả 324: chỗ đáng sợ nhất cho đáp án là nơi **nhiều thí sinh đồng thuận một
+câu trả lời khác đáp án**. Đúng **2 chỗ** có >=3 thí sinh đồng thuận, và cả hai đều phân xử được bằng câu
+trong truyện:
+
+| chỗ | đáp án | bài làm (3/3 thí sinh) | bằng chứng trong truyện | phán xử |
+|---|---|---|---|---|
+| 351:57 | DOUGLAS | LUCIEN | 351:53 `Một lúc sau, Douglas tiên phong vỗ tay:` -> :54-55 là lời Douglas -> :56 `Ông lấy ngón tay chỉ vào đầu mình.` -> :57 -> :58 `Xem ra ông là người rất thích triết học.` Hai câu kể kẹp hai bên đều gọi "ông" = Douglas; và nội dung là người lớn tuổi nói với **"cậu"** về việc vào hội đồng, trong khi Lucien chính là người được kết nạp | **TS_SAI** |
+| 363:80 | NARRATOR | LUCIEN | `Giống như Bellak trước đây, Lucien đặt tay phải lên ngực trái và khẽ cúi đầu**:**` - câu kể mô tả động tác, dấu hai chấm dẫn vào 363:81 `“Cảm ơn về chiếc bình, Bellak.”` Thí sinh lấy CHỦ NGỮ của câu kể làm người nói | **TS_SAI** |
+
+**Đáp án đúng 2/2 chỗ ngờ nhất** - cùng kết quả với vòng 14 (6/6). Không sửa một dòng đáp án nào ở vòng này.
+
+### Sản phẩm phụ đáng giá hơn phiếu - và nó thành một kết quả ÂM
+
+`351:57` để lộ rằng **chính sản xuất cũng sai ở đó** (`speaker=LUCIEN`), theo mẫu "lời thoại nối lại SAU
+một câu kể chen giữa nói về cùng người ấy". Trông rất giống một luật host. Đo trước khi viết:
+
+| | |
+|---|---|
+| mẫu `thoại -> câu kể mở bằng đại từ ngôi ba -> thoại` trong 11 lô | **189 chỗ** |
+| có đáp án chuẩn ở CẢ HAI đầu | 7 |
+| đáp án nói **CÙNG** người | **4** |
+| đáp án nói **KHÁC** người | **3** |
+| trong nhóm "cùng người", sản xuất gán sai | 2 (`351:57`, `378:95`) |
+
+4 trên 7 là gần như tung đồng xu: luật ấy sẽ sửa 2 câu và **phá 3 câu**. **LOẠI.** Ghi lại vì đây đúng
+loại bẫy dễ mắc - một ví dụ sống động (`351:57` đọc lên là thấy ngay ai nói) không phải một luật, và chỉ
+phép đếm mới phân biệt được hai thứ đó. Mẫu quá lỏng vì câu kể chen giữa có thể đổi hẳn người: đại từ
+ngôi ba ở đầu câu không hứa rằng nó chỉ người vừa nói.
