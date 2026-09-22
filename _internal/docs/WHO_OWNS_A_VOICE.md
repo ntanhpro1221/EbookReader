@@ -101,6 +101,12 @@ sửa đúng 3 pin (CAMIL -> `ngoc_huyen_f100`, CHRISTOPHER -> `thanh_binh_f090_
 `ngoc_linh_f093`); diff toàn văn hai lượt chỉ gồm đúng 5 dòng thêm - 7 pin mới còn lại y hệt. Có hiệu
 lực từ lô 14. Chương ĐÃ lên sách không đúc lại (lệnh "đang phát triển, không phải sản xuất").
 
+**Kiểm trong sản xuất, lô 14 (22-09 21:50):** số dòng `Bỏ giọng ghim` lúc phân vai - lô 12: **4**, lô 13:
+**3**, lô 14: **0**. Sổ lô 14 mang CAMIL `ngoc_huyen_f100`, CHRISTOPHER `thanh_binh_f090_p-04`, KAELYN
+`ngoc_linh_f093` từ lúc gieo, và phân vai giữ nguyên cả ba. CAMIL đi đường khác hai người kia: pin cũ của cô
+không được `port_casting` mang sang (JOEL đang giữ `thai_son_f093`), nên cô qua nhánh "chưa có pin" - nhánh
+ấy cũng tính đa số trên hàng hợp lệ, nên vẫn ra `ngoc_huyen_f100`.
+
 Phép đo tương ứng, chạy lại được bất cứ lúc nào:
 
 ```
