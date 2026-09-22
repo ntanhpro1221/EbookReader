@@ -205,6 +205,52 @@ def unpin_character(database: ProjectDB, canonical_name: str) -> int:
         ).rowcount
 
 
+def voice_contradicts_a_person(voice_key: str, gender: str | None, age: str | None) -> bool:
+    """Giọng này có trái với thứ NGƯỜI NGHE đã ghim không? Cùng luật với phân vai.
+
+    Đúng hai luật của `character_registry._drop_pins_that_contradict_a_person`, không thêm không bớt:
+    preset phải đúng phái (trừ trẻ con, vốn đọc bằng preset nữ kéo cao), và giọng mang pitch TRẺ CON
+    không dành cho người đã ghim một tuổi khác. Hai bên phải nói cùng một câu - nếu script này chọn
+    một giọng mà phân vai sẽ bỏ, thì lựa chọn ấy chỉ là một lần rút thăm lại được hoãn tới lượt chạy.
+    """
+    from ebook_reader.character_registry import preset_gender_of_voice_key, voice_is_child_pitched
+
+    preset = preset_gender_of_voice_key(voice_key)
+    wrong_side = bool(gender and preset and preset != gender and (age or "") != "child")
+    child_pitched = bool(age and age != "child" and voice_is_child_pitched(voice_key))
+    return wrong_side or child_pitched
+
+
+def rows_the_listener_would_accept(
+    rows: list[dict],
+    locked: dict[str, tuple[str | None, str | None]],
+    *,
+    canonical: Callable[[str], str],
+) -> list[dict]:
+    """Bỏ các hàng mà giọng trái với ghim giới tính/tuổi của chính người ấy.
+
+    ## Vì sao cần, đo 09:5x ngày 2026-09-22 trên sách 533 chương
+
+    Giọng đa số được tính trên CẢ cuốn sách, mà phần lớn chương của một người thường được thu TRƯỚC
+    lúc người nghe ghim họ - nên đa số chính là cái giọng sai người nghe đã bảo sửa:
+
+        CAMIL        ghim nữ        đa số thai_son_f093 (NAM) 12 chương | ngoc_huyen_f100 5, quynh_anh_f108 1
+        CHRISTOPHER  ghim nam/già   đa số ngoc_linh_f107 (NỮ) 11 chương | thanh_binh_f090 5, thai_son_f104 4
+        KAELYN       ghim nữ/lớn    đa số ngoc_linh_f109 (TRẺ CON) 4    | ngoc_linh_f093 1
+
+    Script ghim đúng cái giọng sai ấy, phân vai bỏ nó (vì nó trái ghim) rồi rút thăm lại giọng khác,
+    và lô sau lặp lại y hệt. Kết quả người nghe nghe thấy: CAMIL `quynh_anh_f108` ở lô 11 rồi
+    `ngoc_huyen_f100` ở lô 12 - đúng phái, nhưng hai giọng khác nhau cho một người ở hai lô liền nhau.
+    """
+    kept: list[dict] = []
+    for row in rows:
+        gender, age = locked.get(canonical(str(row["name"])), (None, None))
+        if (gender or age) and voice_contradicts_a_person(str(row["voice"]), gender, age):
+            continue
+        kept.append(row)
+    return kept
+
+
 def majority_voices(rows: list[dict]) -> dict[str, tuple[str, int, int]]:
     """{tên: (giọng đa số, số chương giọng ấy, tổng số chương)}.
 
@@ -239,8 +285,18 @@ def pins_that_drifted(
     *,
     canonical: Callable[[str], str],
     min_chapters: int = 2,
+    presence: list[dict] | None = None,
+    rejects: Callable[[str, str], bool] | None = None,
 ) -> tuple[dict[str, tuple[str, str, int, int]], list[str]]:
     """Pin nào đang trái với cuốn sách, và sửa lại được mà không gây va chạm trong lô này?
+
+    `rows` là các hàng dùng để tính giọng đa số - người gọi truyền bản đã bỏ giọng trái ghim
+    (`rows_the_listener_would_accept`). `presence` là bản ĐẦY ĐỦ, chỉ dùng để biết ai có mặt ở
+    chương nào cho phép kiểm va chạm: một người bị đọc bằng giọng sai ở chương 110 vẫn CÓ MẶT ở 110.
+    `rejects(khoá, giọng)` nói pin hiện tại có trái với người nghe không; nếu có thì pin ấy luôn được
+    thay bằng giọng hợp lệ tốt nhất, bỏ qua `min_chapters` và điều kiện "ít chương hơn hẳn" - để
+    nguyên thì phân vai chắc chắn bỏ nó rồi rút thăm lại, tức đúng cái trôi giọng mà hàm này sinh ra
+    để chặn (CAMIL 22-09, xem `rows_the_listener_would_accept`).
 
     Trả `{tên: (giọng đang ghim, giọng đa số, số chương của pin, số chương của đa số)}` và một
     danh sách dòng để log.
@@ -281,7 +337,7 @@ def pins_that_drifted(
     """
     by_voice = chapters_by_voice(rows)
     chapters_of_key: dict[str, set[str]] = collections.defaultdict(set)
-    for name, voices in by_voice.items():
+    for name, voices in chapters_by_voice(presence if presence is not None else rows).items():
         for where in voices.values():
             chapters_of_key[canonical(name)] |= where
     owner_of: dict[str, str] = {voice: name for name, voice in pins.items()}
@@ -293,14 +349,15 @@ def pins_that_drifted(
         current = pins.get(key)
         if current is None:
             continue
+        wrong_for_the_person = bool(rejects and rejects(key, current))
         total = sum(len(where) for where in voices.values())
-        if total < int(min_chapters):
+        if total < int(min_chapters) and not wrong_for_the_person:
             continue
         best_voice, best_where = sorted(voices.items(), key=lambda kv: (-len(kv[1]), kv[0]))[0]
         if best_voice == current:
             continue
         here = len(voices.get(current, ()))
-        if here >= len(best_where):
+        if here >= len(best_where) and not wrong_for_the_person:
             continue
         holder = owner_of.get(best_voice)
         if holder is not None and holder != key:
@@ -457,6 +514,19 @@ def pin(
     pins = database.locked_character_voices()
     from ebook_reader.character_registry import canonical_key
 
+    # Ghim giới tính/tuổi của NGƯỜI NGHE, cùng nguồn mà phân vai đọc. Giọng đa số chỉ được tính trên
+    # những hàng không trái với chúng - xem `rows_the_listener_would_accept` cho phép đo CAMIL.
+    genders = database.locked_character_genders()
+    ages = database.locked_character_ages()
+    locked = {key: (genders.get(key), ages.get(key)) for key in set(genders) | set(ages)}
+    voice_rows = rows_the_listener_would_accept(rows, locked, canonical=canonical_key)
+    if len(voice_rows) != len(rows):
+        _say(f"  bỏ {len(rows) - len(voice_rows)} hàng mang giọng trái với ghim của người nghe khi tính đa số")
+
+    def rejects(key: str, voice: str) -> bool:
+        gender, age = locked.get(key, (None, None))
+        return bool(gender or age) and voice_contradicts_a_person(voice, gender, age)
+
     # Pin đã có thắng trước: {giọng: người giữ}. Phải khoá tên theo đúng `canonical_key` vì
     # `locked_character_voices` khoá như thế, còn tên từ cuốn sách thì chưa.
     owned = {voice: name for name, voice in pins.items()}
@@ -466,7 +536,8 @@ def pin(
     # chạm cùng chương trong lô này.
     scope = project_chapters(target)
     drifted, drift_notes = pins_that_drifted(
-        pins, rows, scope, canonical=canonical_key, min_chapters=min_chapters
+        pins, voice_rows, scope, canonical=canonical_key, min_chapters=min_chapters,
+        presence=rows, rejects=rejects,
     )
     for line in drift_notes:
         _say(f"  PIN TRÔI {line}")
@@ -500,7 +571,7 @@ def pin(
     if fixed:
         _say(f"  {fixed} pin {'đã được sửa' if apply else 'sẽ được sửa'} về giọng đa số của sách.")
 
-    majority = majority_voices(rows)
+    majority = majority_voices(voice_rows)
     # Một nhãn KHÔNG có trong nguồn thì không phải người: không ghim mới, và pin đã có thì bỏ ra
     # để trả chỗ lại cho kho giọng. Xem `names_absent_from_the_source` cho phép đo và cho lý do
     # nó chỉ dám làm đúng một việc (thôi ghim), không gộp ai với ai.

@@ -68,6 +68,38 @@ ngoc_linh_f093"*.
 | người mang hai giọng vì giọng bị tranh | **23/24** người mang hai giọng là người bị tranh | chưa: cần đúc lại từng chương đã lên sách |
 | nhãn **không có trong nguồn** giữ pin | ~5–6 chỗ kho giọng (`SELNE`, `SAMAELE`, `NATHASA`, `NATHANAS`, `ALICE DRACEN`) | **đã chữa**: `pin_the_book_cast` bỏ pin ấy |
 | một NGƯỜI nhiều NHÃN | `SELENE` 4 nhãn / 3 giọng | một nửa (nhãn không có trong nguồn); nửa "tên riêng vs tên đầy đủ" còn mở |
+| **ghim của người nghe làm giọng TRÔI mỗi lô** (22-09) | 3/3 người bị ghim: giọng đa số trên sách CHÍNH LÀ giọng sai; CAMIL `quynh_anh_f108` lô 11 rồi `ngoc_huyen_f100` lô 12 | **đã chữa**: `pin_the_book_cast` tính đa số chỉ trên giọng hợp với ghim - xem mục dưới |
+
+## Ghim của người nghe từng khiến giọng trôi, và cách nó được chữa (22-09)
+
+Kiểm phân vai lô 13 thấy đúng ba lần `Bỏ giọng ghim` của lô 12 lặp lại nguyên văn - CAMIL, CHRISTOPHER,
+KAELYN. Lặp lại tức là mỗi lô nhận lại cùng một giọng sai rồi bỏ nó. Truy ngược:
+
+1. Người nghe ghim CAMIL là nữ ở lô 10 (`cli cast --gender female`), vì 36 câu của cô bị đọc giọng nam.
+2. `pin_the_book_cast.py` chạy ở mỗi lần phóng lô và ghim mỗi người vào **giọng đa số trên cả sách**.
+   Phần lớn chương của một người được thu TRƯỚC lúc người nghe ghim, nên đa số chính là giọng sai:
+
+       CAMIL        ghim nữ        thai_son_f093 (NAM) 12 chương | ngoc_huyen_f100 5, quynh_anh_f108 1
+       CHRISTOPHER  ghim nam/già   ngoc_linh_f107 (NỮ) 11 chương | thanh_binh_f090 5, thai_son_f104 4
+       KAELYN       ghim nữ/lớn    ngoc_linh_f109 (TRẺ CON) 4    | ngoc_linh_f093 1
+
+3. Phân vai (`_drop_pins_that_contradict_a_person`) bỏ đúng giọng ấy - đúng - rồi để kho giọng cấp một
+   giọng khác, **tuỳ lúc ấy kho còn gì**. Giọng mới không được ghi vào sổ (allocator không viết pin),
+   nên lô sau lặp lại từ bước 2.
+
+Người nghe nghe thấy: CAMIL đúng phái từ lô 11, nhưng **hai giọng nữ khác nhau ở hai lô liền nhau**.
+Hai tầng mỗi tầng tự đúng, ghép lại thành sai - cùng hình dạng với sự cố CHRISTOPHER chương 114 ở trên.
+
+**Chữa**, trong `pin_the_book_cast.py` (script, không bị khoá): giọng đa số chỉ tính trên các hàng mà
+giọng KHÔNG trái với ghim giới tính/tuổi của chính người ấy (`rows_the_listener_would_accept`, dùng đúng
+hai luật của phân vai qua `voice_contradicts_a_person`), và một pin đang trái ghim thì LUÔN được thay bằng
+giọng hợp lệ tốt nhất - bỏ qua `min_chapters`, vì để nguyên thì phân vai chắc chắn bỏ nó và rút thăm lại.
+Phép kiểm va chạm vẫn dùng sự có mặt ĐẦY ĐỦ: người bị đọc sai giọng ở một chương vẫn có mặt ở chương ấy.
+
+Kiểm trên bản sao sổ lô 13: bản cũ không sửa gì; bản mới bỏ 28 hàng trái ghim khỏi phép tính đa số và
+sửa đúng 3 pin (CAMIL -> `ngoc_huyen_f100`, CHRISTOPHER -> `thanh_binh_f090_p-04`, KAELYN ->
+`ngoc_linh_f093`); diff toàn văn hai lượt chỉ gồm đúng 5 dòng thêm - 7 pin mới còn lại y hệt. Có hiệu
+lực từ lô 14. Chương ĐÃ lên sách không đúc lại (lệnh "đang phát triển, không phải sản xuất").
 
 Phép đo tương ứng, chạy lại được bất cứ lúc nào:
 
