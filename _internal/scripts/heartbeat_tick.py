@@ -25,6 +25,13 @@ Chính shell bọc ngoài của lệnh cũng chứa chuỗi `boundary.sh 4 ...` 
 lọc viết trong `-Command` phải qua hai tầng nháy (Python rồi PowerShell); bản đầu của nó trả về
 rỗng **trong im lặng** và đếm ra 0 gốc trong khi có 1. Nên PowerShell chỉ làm một việc — đổ ra
 từng dòng lệnh — còn lọc thì làm trong Python.
+
+## Một cây là một gốc, dù nó có bốn tiến trình
+
+Từ 24-09 ranh giới chạy RỜI (`scripts/run_detached.py`): `pythonw` của venv → `pythonw` gốc → Git Bash
+`bin/bash.exe` → `usr/bin/bash.exe`, và cả bốn đều mang `boundary.sh 17` trong dòng lệnh mà không cái nào là
+`bash -c`. Phép lọc theo chuỗi báo "4 gốc" cho đúng một ranh giới (nhịp 22:01 ngày 24-09). Nên giờ đếm theo
+cây: một tiến trình khớp chỉ là gốc khi CHA của nó không khớp.
 """
 from __future__ import annotations
 
@@ -75,14 +82,18 @@ def last_lines(log: Path, count: int = 6) -> list[str]:
     return marks[-count:]
 
 
-def command_lines() -> list[str]:
+def processes() -> list[tuple[int, int, str]]:
+    """(pid, pid cha, dòng lệnh) của mọi tiến trình. JSON thay vì dòng trần: không cần nháy lồng nhau."""
+    import json
+
     try:
-        return (subprocess.run(
+        raw = subprocess.run(
             [
                 "powershell",
                 "-NoProfile",
                 "-Command",
-                "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
+                "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,CommandLine"
+                " | ConvertTo-Json -Compress",
             ],
             capture_output=True,
             text=True,
@@ -91,10 +102,27 @@ def command_lines() -> list[str]:
             encoding="utf-8",
             errors="replace",
             timeout=60,
-        ).stdout or "").splitlines()
-    except (OSError, subprocess.SubprocessError) as exc:
+        ).stdout or "[]"
+        rows = json.loads(raw)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
         say(f"(không đếm được tiến trình: {exc!r})")
         return []
+    if isinstance(rows, dict):
+        rows = [rows]
+    return [
+        (int(row.get("ProcessId") or 0), int(row.get("ParentProcessId") or 0), row.get("CommandLine") or "")
+        for row in rows
+    ]
+
+
+def tree_roots(procs: list[tuple[int, int, str]], pattern: str) -> list[str]:
+    """Dòng lệnh của các tiến trình khớp `pattern` mà cha KHÔNG khớp - mỗi cây đếm một lần."""
+    matching = {
+        pid: (parent, line)
+        for pid, parent, line in procs
+        if re.search(pattern, line) and " -c " not in line
+    }
+    return [line for parent, line in matching.values() if parent not in matching]
 
 
 def flying() -> list[str]:
@@ -226,12 +254,11 @@ def upstream_line(audit: Path = UPSTREAM_AUDIT, now: float | None = None) -> str
 def main() -> int:
     say(f"=== nhịp tim {time.strftime('%H:%M:%S ngày %d-%m')} ===")
     say(describe())
-    lines = command_lines()
-    roots = [line for line in lines if re.search(r"boundary\.sh \d", line) and " -c " not in line]
+    procs = processes()
+    roots = tree_roots(procs, r"boundary\.sh \d")
     say(f"tiến trình boundary.sh (gốc thật): {len(roots)}")
-    for line in lines:
-        if re.search(r"launch_(repair|batch)\.sh \d", line) and " -c " not in line:
-            say(f"    con: {' '.join(line.split())[-90:]}")
+    for line in tree_roots(procs, r"launch_(repair|batch)\.sh \d"):
+        say(f"    con: {' '.join(line.split())[-90:]}")
     log = newest_log()
     if log is not None:
         stamp = time.strftime("%H:%M:%S", time.localtime(log.stat().st_mtime))
