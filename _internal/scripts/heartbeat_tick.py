@@ -224,6 +224,28 @@ def stopped(versions: Path = Path(VERSIONS), now: float | None = None) -> list[s
     return out
 
 
+def power_line() -> str | None:
+    """Máy đang chạy PIN thì nói to; cắm sạc thì im.
+
+    Ca thật 24-09: sạc rút lúc ~22:50, GPU bị hạ xuống 480 MHz / 15 W, phân tích tụt từ 56 xuống 3,8 tok/s,
+    và nhịp tim 00:07 mới thấy - lúc pin còn 5%, Windows sắp ngủ đông. Một dòng ở mọi nhịp thì thấy ngay.
+    `ctypes` thay vì PowerShell: nhanh và không mở tiến trình con.
+    """
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    class _Status(ctypes.Structure):
+        _fields_ = [("ac", ctypes.c_ubyte), ("flag", ctypes.c_ubyte), ("percent", ctypes.c_ubyte),
+                    ("saver", ctypes.c_ubyte), ("seconds", ctypes.c_ulong), ("full", ctypes.c_ulong)]
+
+    status = _Status()
+    if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)) or status.ac != 0:
+        return None
+    percent = "?" if status.percent == 255 else f"{status.percent}%"
+    return f"!!! NGUỒN: ĐANG CHẠY PIN ({percent}) - GPU bị hạ xung, phân tích chậm ~15 lần; 2% thì Windows ngủ đông"
+
+
 UPSTREAM_AUDIT = ROOT / "runtime" / "dependency_audit.json"
 UPSTREAM_STALE_HOURS = 24.0
 
@@ -253,6 +275,9 @@ def upstream_line(audit: Path = UPSTREAM_AUDIT, now: float | None = None) -> str
 
 def main() -> int:
     say(f"=== nhịp tim {time.strftime('%H:%M:%S ngày %d-%m')} ===")
+    power = power_line()
+    if power:
+        say(power)
     say(describe())
     procs = processes()
     roots = tree_roots(procs, r"boundary\.sh \d")
