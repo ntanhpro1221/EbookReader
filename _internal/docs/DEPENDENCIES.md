@@ -399,3 +399,14 @@ Hai điều đáng thêm, không phải quyết định:
 
 Nhắc lại vì sao vẫn ghi một lượt kiểm rỗng: việc thường trực là kiểm định kỳ **và báo cáo**, và một lượt
 kiểm im lặng chỉ đáng tin khi có dấu vết rằng nó đã chạy.
+
+## Kiểm 2026-09-24 23:1x (giữa lô 17, pha phân tích) — ba gói mới, không cái nào chạm âm thanh
+
+Lượt kiểm bị trễ 90 giờ (dòng đỏ trong nhịp tim nhắc). Sáu mục cũ giữ nguyên quyết định của bảng 20-09. Mới:
+
+| mục | đọc diff/changelog | quyết định |
+|---|---|---|
+| `vieneu` 3.8.2 + 3.8.3 (23-09) | diff `v3.8.1...v3.8.3` trong `src/`: một dòng trong `voices_v3_turbo.json` + một chú thích - **đổi tên ba giọng** Minh Quân Pro → Hải Đăng, Anh Khôi → Thiện Minh, Mạnh Dũng → Quốc Tuấn, tên cũ vẫn dùng được qua `aliases`. Còn lại là README và `finetune/` (LoRA một giọng) | **không nâng**: engine và audio y hệt. Khi nào nâng (giữa hai cuốn) thì `voice_catalog.py` đổi tên hiển thị cùng lúc, nhưng khoá giọng theo tên cũ của sách vẫn sống nhờ alias |
+| `sea-g2p` 0.10.0 (23-09) | 4 commit, đều là C ABI: tách PyO3 ra sau feature `python`, `normalize_batch` thành vỏ bọc mỏng; logic tách âm tiếng Việt không đổi | **không nâng**: `asr.py` chỉ dùng `G2P` để so âm vị tên riêng; không có gì cho ta |
+| `timm` 1.0.30 (22-09) | phụ thuộc của UTMOSv2, ràng với cache revision đã khoá | **không nâng**, theo luật chung ở đầu file |
+| `pnnbao-ump/VieNeu-TTS-v3-Turbo` `main` đổi **60 file** (trước 6) | thêm thư mục `gguf/` (bf16, q8_0, `voices/*`) cho bộ đọc audio.cpp mới của VieNeu Desktop 0.18.5 (nhanh gấp 3 trên máy họ) | dây chuyền ghim `8b7e9cf` và đi đường torch, không đọc `gguf/`. **Ghi lại làm ứng viên tốc độ** giữa hai cuốn: nếu SDK Python có đường audio.cpp thì phải ĐO lại toàn bộ ngân sách frame và nghe lại, vì đó là engine khác |
