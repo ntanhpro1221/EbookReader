@@ -32,6 +32,7 @@ WINDOWLESS_SCRIPTS = (
     "scripts/heartbeat_daemon.py",
     "scripts/resume_interrupted.py",
     "scripts/ollama_watchdog.py",
+    "scripts/run_detached.py",
     *sorted(str(path.relative_to(ROOT)).replace("\\", "/") for path in (ROOT / "ebook_reader").glob("*.py")),
 )
 SPAWNING_CALLS = {"run", "Popen", "call", "check_call", "check_output"}
