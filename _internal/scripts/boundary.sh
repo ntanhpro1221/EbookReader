@@ -111,7 +111,7 @@ NEXT_TAG="$(printf '%s-lo%02d' "$TAG_PREFIX" "$NEXT")"
 # Doi tu "Claude Fable 5.1" sang "Claude Opus 5" luc 06:25 ngay 16-09: ranh gioi 1-3 da commit
 # duoi ten Fable 5.1 vi phien ay chay model ay; tu phien nay la Opus 5. Mac dinh phai la su that
 # hien tai, vi cai gia cua no la mot dong ghi cong sai trong mot commit khong ai xem luc tao ra.
-COAUTHOR="${EBOOK_COAUTHOR:-Claude Opus 5 <noreply@anthropic.com>}"
+COAUTHOR="${EBOOK_COAUTHOR:-Claude Opus 5.5 <noreply@anthropic.com>}"
 
 BATCH_PROJECT="$(py scripts/seed_chain.py "$BATCH" --batch)" || { say "khong thay project lo $BATCH"; exit 2; }
 
