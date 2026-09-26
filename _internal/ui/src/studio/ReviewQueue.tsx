@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Ear, Loader2, Play, RotateCcw, ShieldCheck } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useClip } from "@/listen/clip";
 import { cn } from "@/shared/cn";
 import { formatPercent } from "@/shared/format";
@@ -58,16 +58,24 @@ export function useReviewCount(bookId: string) {
   return data?.pending ?? 0;
 }
 
+const EMPTY = "empty";
+
 function Row({ bookId, item, onVerdict }: { bookId: string; item: ReviewItem; onVerdict: (verdict: ReviewItem["verdict"]) => void }) {
   const clip = useClip();
   const id = `review-${item.segmentId}`;
   const playing = clip.current === id;
+  // Câu hỏng chưa từng có bản thu; câu khác có thể đã mất WAV riêng khi dọn dẹp. Nút tắt thì phải nói vì sao.
+  const unplayable = item.kind === "failed" ? "Câu này chưa thu được, chưa có gì để nghe" : "Không còn bản thu riêng của câu này";
   return (
-    <li className={cn("grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl px-3 py-3", item.verdict ? "opacity-70" : "hover:bg-hover")}>
+    <li
+      data-review-row={item.stableId}
+      className={cn("grid grid-cols-[40px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl px-3 py-3", item.verdict ? "opacity-70" : "hover:bg-hover")}
+    >
       <button
         type="button"
         disabled={!item.playable}
-        aria-label={playing ? "Dừng" : `Nghe câu: ${item.text}`}
+        title={item.playable ? undefined : unplayable}
+        aria-label={!item.playable ? `${unplayable}: ${item.text}` : playing ? "Dừng" : `Nghe câu: ${item.text}`}
         onClick={() => clip.toggle(id, urls.sample(bookId, item.segmentId))}
         className={cn(
           "grid size-10 place-items-center rounded-full transition-colors disabled:opacity-40",
@@ -91,6 +99,7 @@ function Row({ bookId, item, onVerdict }: { bookId: string; item: ReviewItem; on
           </p>
         )}
         <p className="mt-1 text-xs text-fg-2">{item.reason}</p>
+        {!item.playable && <p className="mt-1 text-xs text-fg-2">{unplayable}.</p>}
       </div>
       <div className="flex gap-1.5">
         <button
@@ -124,6 +133,13 @@ export function ReviewQueue({ bookId }: { bookId: string }) {
   const client = useQueryClient();
   const [showMinor, setShowMinor] = useState(false);
   const [filter, setFilter] = useState<"todo" | "done">("todo");
+  const [focusAfter, setFocusAfter] = useState<string | null>(null);
+  useEffect(() => {
+    if (!focusAfter) return;
+    const row = document.querySelector<HTMLElement>(`[data-review-row="${CSS.escape(focusAfter)}"]`);
+    (row?.querySelector<HTMLElement>("button:not(:disabled)") ?? row)?.focus();
+    setFocusAfter(null);
+  });
   const { data, isLoading } = useQuery({
     queryKey: ["review", bookId, showMinor],
     queryFn: () => api<ReviewView>(`/api/books/${bookId}/review${showMinor ? "?all=1" : ""}`),
@@ -147,6 +163,13 @@ export function ReviewQueue({ bookId }: { bookId: string }) {
 
   if (isLoading || !data) return <div className="mt-6 text-sm text-fg-2">Đang tìm các câu cần nghe lại…</div>;
   const items = data.items.filter((item) => (filter === "todo" ? !item.verdict : Boolean(item.verdict)));
+  const judge = (index: number, value: ReviewItem["verdict"]) => {
+    const item = items[index];
+    // Câu vừa phán rời danh sách đang lọc: đưa tiêu điểm sang câu kế (hay câu trước), đừng để nó rơi về đầu trang.
+    const leaves = filter === "todo" ? value !== null : value === null;
+    if (leaves) setFocusAfter((items[index + 1] ?? items[index - 1])?.stableId ?? EMPTY);
+    verdict.mutate({ stableId: item.stableId, chapterId: item.chapterId, verdict: value });
+  };
   const minor = data.counts.name;
   return (
     <div className="mt-4">
@@ -178,19 +201,16 @@ export function ReviewQueue({ bookId }: { bookId: string }) {
       )}
       {items.length ? (
         <ul className="mt-3 space-y-1">
-          {items.map((item) => (
-            <Row
-              key={item.stableId}
-              bookId={bookId}
-              item={item}
-              onVerdict={(value) => verdict.mutate({ stableId: item.stableId, chapterId: item.chapterId, verdict: value })}
-            />
+          {items.map((item, index) => (
+            <Row key={item.stableId} bookId={bookId} item={item} onVerdict={(value) => judge(index, value)} />
           ))}
         </ul>
       ) : (
-        <EmptyState icon={ShieldCheck} title={filter === "todo" ? "Không còn câu nào cần xem" : "Chưa đánh dấu câu nào"} className="mt-4">
-          {filter === "todo" ? "Mọi câu đáng lo đều đã có phán quyết." : "Nghe một câu rồi bấm Ổn hoặc Cần thu lại."}
-        </EmptyState>
+        <div data-review-row={EMPTY} tabIndex={-1} className="rounded-xl outline-none">
+          <EmptyState icon={ShieldCheck} title={filter === "todo" ? "Không còn câu nào cần xem" : "Chưa đánh dấu câu nào"} className="mt-4">
+            {filter === "todo" ? "Mọi câu đáng lo đều đã có phán quyết." : "Nghe một câu rồi bấm Ổn hoặc Cần thu lại."}
+          </EmptyState>
+        </div>
       )}
       {minor > 0 && (
         <button type="button" onClick={() => setShowMinor((value) => !value)} className="mt-4 text-sm font-medium text-fg-2 hover:text-fg">
