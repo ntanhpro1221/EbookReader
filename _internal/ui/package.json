@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "typecheck": "tsc -p tsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:android": "tsc -p tsconfig.json && vite build -c vite.android.config.ts && node -e \"require('fs').renameSync('../mobile/www/android.html','../mobile/www/index.html')\""
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/core": "^8.5.2",
     "@fontsource/be-vietnam-pro": "^5.3.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-dropdown-menu": "^2.1.24",

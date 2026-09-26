@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget cỡ nhỏ: bìa + phát/dừng. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="8dp">
+
+    <ImageView
+        android:id="@+id/widget_cover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/widget_cover_bg"
+        android:scaleType="centerCrop"
+        android:contentDescription="@string/widget_cover" />
+
+    <TextView
+        android:id="@+id/widget_chapter"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="6dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:textColor="#E9ECF0"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <ImageButton
+        android:id="@+id/widget_toggle"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/widget_play_bg"
+        android:src="@drawable/ic_widget_play"
+        android:contentDescription="@string/widget_toggle" />
+</LinearLayout>

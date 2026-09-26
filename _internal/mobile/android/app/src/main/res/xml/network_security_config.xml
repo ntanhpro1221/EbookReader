@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Đồng bộ với máy tính trong cùng mạng Wi-Fi đi qua http://<IP LAN>:47630 - địa chỉ IP nội bộ không có chứng chỉ
+     HTTPS, nên cho phép HTTP thường. Mọi yêu cầu vẫn phải mang mã thiết bị đã ghép nối. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

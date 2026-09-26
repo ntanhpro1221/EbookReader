@@ -1,0 +1,9 @@
+{
+  "appId": "vn.ebookreader.player",
+  "appName": "Ebook Reader",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0e1115"
+  }
+}

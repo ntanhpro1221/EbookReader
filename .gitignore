@@ -44,3 +44,15 @@ Desktop.ini
 
 # Frontend giao diện: cài bằng npm, không commit
 _internal/ui/node_modules/
+
+# App Android: file sinh tự động
+_internal/mobile/node_modules/
+_internal/mobile/www/
+_internal/mobile/android/.gradle/
+_internal/mobile/android/build/
+_internal/mobile/android/app/build/
+_internal/mobile/android/local.properties
+_internal/mobile/android/app/src/main/assets/public/
+_internal/mobile/android/app/src/main/assets/capacitor.config.json
+_internal/mobile/android/app/src/main/assets/capacitor.plugins.json
+_internal/mobile/android/capacitor-cordova-android-plugins/

@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ebook Reader</string>
+    <string name="title_activity_main">Ebook Reader</string>
+    <string name="package_name">vn.ebookreader.player</string>
+    <string name="custom_url_scheme">vn.ebookreader.player</string>
+    <string name="widget_description">Trình phát sách nói thu nhỏ</string>
+    <string name="widget_cover">Bìa sách</string>
+    <string name="widget_back">Lùi 15 giây</string>
+    <string name="widget_forward">Tới 15 giây</string>
+    <string name="widget_toggle">Phát hoặc tạm dừng</string>
+    <string name="widget_sleep">Hẹn giờ ngủ</string>
+</resources>
