@@ -15,12 +15,26 @@ hoạt động, và nó giải thích khoảng trống **07:40 → 10:35** ngày
 Cách chặn: **luôn để một việc nền đang chạy**. Khi nó kết thúc, hệ thống tự đánh thức và
 lượt mới bắt đầu. Một run nhiều chương vừa là công việc thật vừa là đồng hồ đánh thức.
 
+Từ 2026-09-26 cái đồng hồ ấy là **hai chuông song song** (yêu cầu của chủ sách): **A**
+`scripts/heartbeat_event.py` reo đúng lúc một việc rời xong (dòng "xong (mã N)" trong
+`runtime/detached_runs.log`), một ranh giới biến mất, một project chết/đứng im, hoặc máy chuyển sang pin;
+**B** `scripts/heartbeat_timeout.py --hours 2` là timeout, được đặt lại sau mỗi lần A reo. Việc rời (ranh
+giới) sống qua phiên nên harness không biết nó xong - A lấp đúng chỗ ấy; B bắt những lần A hỏng hay thông
+báo của A lạc. Dòng `chuông:` của `heartbeat_tick.py` cho biết hai chuông còn canh không.
+
 Bố cục hai thư mục làm việc này khả thi:
 
 | thư mục | dùng để |
 |---|---|
 | `D:\Novels\Ebook Reader` | chạy run thật (không sửa mã khi đang chạy) |
 | `D:\Novels\Ebook Reader_dev` | worktree git, sửa mã và chạy test song song |
+
+## 2026-09-26
+
+| giờ | việc | bằng chứng |
+|---|---|---|
+| 09:3x | Ranh giới 17 xong **08:47** (lô 17: 39/40, chương 722 vá ở `lo17v`; thả lô 18) mà nhịp 2 tiếng chỉ thức **09:43** - lô 18 tự chạy nên không mất giờ GPU, nhưng đúng khoảng trống chủ sách chỉ ra. Thả ranh giới 18 (rời) 09:34 | `boundary_17.log`, `detached_runs.log` |
+| 09:4x | **Hai chuông**: A theo sự kiện, B timeout đặt lại được mà không cần giết (giết lệnh nền cũng đánh thức phiên). Đọc tiến trình bằng `psutil` thay PowerShell; thay đổi tiến trình phải đứng qua 2 lần dò (bóng vài giây sau khi thả ranh giới). `heartbeat_tick` nhìn cả file `-wal` khi đo "không ai chạm" | `scripts/heartbeat_event.py`, `scripts/heartbeat_timeout.py`, `scripts/bells.py`, `tests/test_two_heartbeats.py` |
 
 ## 2026-09-21
 

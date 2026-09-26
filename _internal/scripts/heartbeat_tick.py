@@ -51,6 +51,10 @@ try:
     from scripts.book_paths import VERSIONS, describe  # noqa: E402
 except ImportError:  # chạy trực tiếp
     from book_paths import VERSIONS, describe  # noqa: E402
+try:
+    from scripts import bells  # noqa: E402
+except ImportError:  # chạy trực tiếp
+    import bells  # noqa: E402
 
 TOUCHED_SECONDS = 300.0
 
@@ -125,12 +129,28 @@ def tree_roots(procs: list[tuple[int, int, str]], pattern: str) -> list[str]:
     return [line for parent, line in matching.values() if parent not in matching]
 
 
+def touched(database: Path) -> float:
+    """Lần cuối project bị ghi: mốc muộn hơn giữa file DB và file `-wal` của nó.
+
+    SQLite ở chế độ WAL ghi vào `project.sqlite3-wal` trước, file chính chỉ đổi khi checkpoint - nên mtime file
+    chính có thể trễ trong lúc worker vẫn ghi đều. Chuông A (26-09) dò mỗi phút và reo khi một project ĐỨNG IM,
+    nên phép đo "không ai chạm" phải nhìn cả hai file, không thì nó reo vì một checkpoint chưa tới.
+    """
+    stamps = [database.stat().st_mtime]
+    wal = database.with_name(database.name + "-wal")
+    try:
+        stamps.append(wal.stat().st_mtime)
+    except OSError:
+        pass
+    return max(stamps)
+
+
 def flying() -> list[str]:
     out: list[str] = []
     now = time.time()
     for database in sorted(glob.glob(str(Path(VERSIONS) / "*" / "*" / "project.sqlite3"))):
         path = Path(database)
-        if now - path.stat().st_mtime > TOUCHED_SECONDS:
+        if now - touched(path) > TOUCHED_SECONDS:
             continue  # không ai chạm vào trong 5 phút - không phải project đang bay
         connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
         connection.row_factory = sqlite3.Row
@@ -202,7 +222,7 @@ def stopped(versions: Path = Path(VERSIONS), now: float | None = None) -> list[s
     out: list[str] = []
     for database in sorted(glob.glob(str(Path(versions) / "*" / "*" / "project.sqlite3"))):
         path = Path(database)
-        idle = now - path.stat().st_mtime
+        idle = now - touched(path)
         if idle <= TOUCHED_SECONDS or idle > STOPPED_WINDOW_SECONDS:
             continue
         connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
@@ -282,6 +302,7 @@ def main() -> int:
     procs = processes()
     roots = tree_roots(procs, r"boundary\.sh \d")
     say(f"tiến trình boundary.sh (gốc thật): {len(roots)}")
+    say(bells.describe())
     for line in tree_roots(procs, r"launch_(repair|batch)\.sh \d"):
         say(f"    con: {' '.join(line.split())[-90:]}")
     log = newest_log()
