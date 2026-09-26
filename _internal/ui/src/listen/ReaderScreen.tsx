@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, BookOpenText, ChevronLeft, ChevronRight, Headpho
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { cn } from "@/shared/cn";
+import { usePageTitle } from "@/shared/title";
 import { Button, EmptyState, IconButton, Skeleton } from "@/shared/ui";
 import { useClock } from "./clock";
 import { usePlayListenBook } from "./LibraryScreen";
@@ -49,6 +50,7 @@ export function ReaderScreen() {
   const chapterId = Number(chapterParam ?? book?.state.reading?.chapterId ?? chapters[0]?.id ?? 0);
   const chapter = chapters.find((item) => item.id === chapterId);
   const index = chapters.findIndex((item) => item.id === chapterId);
+  usePageTitle(book && chapter ? `${chapter.subtitle || chapter.title} · ${book.title}` : book?.title);
   const { data: script, isLoading } = useScript(id, chapterId || undefined);
   const [prefs, setPrefs] = useState<ReaderPrefs>(loadPrefs);
   const [selected, setSelected] = useState<number | null>(null);

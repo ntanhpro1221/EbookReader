@@ -1,11 +1,12 @@
 import { Clapperboard, Library, Plus, Settings } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { useRestoreLastListening } from "@/listen/LibraryScreen";
 import { useNowPlaying } from "@/listen/player";
 import { NowPlaying, PlayerBar } from "@/listen/PlayerViews";
 import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
+import { APP_TITLE } from "@/shared/title";
 import { formatPercent } from "@/shared/format";
 import { Progress, Vu } from "@/shared/ui";
 import { useLibrary } from "@/studio/data";
@@ -108,9 +109,13 @@ export function Shell({ children }: { children: ReactNode }) {
   // Bấm mục thanh bên khi màn "Đang nghe" đang mở: trang mới phải hiện ra, không bị lớp phủ che.
   useEffect(() => {
     setExpanded(false);
-    const title = TITLES.find(([pattern]) => pattern.test(pathname))?.[1];
-    document.title = title ? `${title} · Ebook Reader` : "Ebook Reader";
   }, [pathname, setExpanded]);
+
+  // Tên chung theo đường dẫn; màn nào biết tên cụ thể (sách, chương, dự án) thì `usePageTitle` ghi đè sau đó.
+  useLayoutEffect(() => {
+    const title = TITLES.find(([pattern]) => pattern.test(pathname))?.[1];
+    document.title = title ? `${title} · ${APP_TITLE}` : APP_TITLE;
+  }, [pathname]);
 
   return (
     <div className="flex h-full">

@@ -33,6 +33,7 @@ import {
 } from "@/shared/ui";
 import type { BookSummary, Chapter } from "@/studio/api";
 import { cn } from "@/shared/cn";
+import { usePageTitle } from "@/shared/title";
 import { phaseTone, useActivity, useBook, useReveal, useStart, useStop } from "@/studio/data";
 import {
   formatClock,
@@ -463,6 +464,7 @@ export function ProjectScreen() {
   const tab = ["chapters", "review", "cast", "activity"].includes(params.get("tab") ?? "") ? params.get("tab")! : "chapters";
   const reviewCount = useReviewCount(id ?? "");
   const { data, isLoading, error } = useBook(id);
+  usePageTitle(data ? `${data.book.title} · Studio` : undefined);
 
   if (isLoading) {
     return (

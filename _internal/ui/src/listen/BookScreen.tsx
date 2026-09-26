@@ -6,6 +6,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
+import { usePageTitle } from "@/shared/title";
 import { formatClock, formatLength, formatNumber } from "@/shared/format";
 import { Button, EmptyState, IconButton, Progress, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger, Tooltip, Vu } from "@/shared/ui";
 import { useClip } from "./clip";
@@ -339,6 +340,7 @@ export function BookScreen({
   const player = usePlayer();
   const playBook = usePlayListenBook();
   const mutations = useListenMutations(id ?? "");
+  usePageTitle(book?.title);
 
   if (isLoading) {
     return (
