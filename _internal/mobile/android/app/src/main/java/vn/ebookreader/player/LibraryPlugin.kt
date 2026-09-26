@@ -180,9 +180,11 @@ class LibraryPlugin : Plugin() {
                 val files = mutableListOf<Pair<String, Long>>()
                 for (index in 0 until chapters.length()) {
                     val chapter = chapters.getJSONObject(index)
+                    // Văn bản của MỌI chương (vài KB) - chế độ đọc đọc được cả chương chưa thu âm; audio chỉ chương đã có.
+                    val script = chapter.optString("script")
+                    if (script.isNotBlank() && script != "null") files += script to 0L
                     if (!chapter.optBoolean("available")) continue
                     files += chapter.getString("file") to chapter.optLong("size")
-                    files += chapter.getString("script") to 0L
                 }
                 files += "cast.json" to 0L
                 val samples = manifest.optJSONArray("samples") ?: JSONArray()

@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 import { BookScreen } from "@/listen/BookScreen";
 import { ClipProvider } from "@/listen/clip";
 import { LibraryScreen, useRestoreLastListening } from "@/listen/LibraryScreen";
+import { ReaderScreen } from "@/listen/ReaderScreen";
 import { NowPlaying, PlayerBar } from "@/listen/PlayerViews";
 import { PlayerProvider, useNowPlaying, usePlayer } from "@/listen/player";
 import { SourceProvider } from "@/listen/source";
@@ -119,6 +120,7 @@ export function AndroidApp() {
                 <Routes>
                   <Route path="/" element={<LibraryPage />} />
                   <Route path="/book/:id" element={<BookScreen />} />
+                  <Route path="/book/:id/read/:chapterId?" element={<ReaderScreen />} />
                   <Route path="/devices" element={<DevicesScreen />} />
                   <Route path="/settings" element={<SettingsScreen />} />
                 </Routes>

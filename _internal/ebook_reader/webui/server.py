@@ -545,6 +545,12 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(HTTPStatus.BAD_REQUEST, "Dấu trang không hợp lệ")
         self._send_json(HTTPStatus.OK, self.app.listening.restore_bookmark(value, body))
 
+    def post_reading(self, _query: dict[str, list[str]], value: str) -> None:
+        self.app._book(value)
+        body = self._body()
+        self.app.listening.set_reading(value, int(body.get("chapterId", 0)), int(body.get("index", 0)))
+        self._send_json(HTTPStatus.OK, {"ok": True})
+
     def post_night(self, _query: dict[str, list[str]], value: str) -> None:
         self.app._book(value)
         self.app.listening.save_night(value, self._body())
@@ -665,6 +671,7 @@ ROUTES: list[Route] = [
     ("DELETE", re.compile(LISTEN + r"/bookmarks/([0-9a-f]+)"), Handler.delete_bookmark),
     ("POST", re.compile(LISTEN + r"/bookmarks/restore"), Handler.post_bookmark_restore),
     ("POST", re.compile(LISTEN + r"/night"), Handler.post_night),
+    ("POST", re.compile(LISTEN + r"/reading"), Handler.post_reading),
     ("GET", re.compile(r"/api/listen/night"), Handler.get_night),
     ("POST", re.compile(r"/api/listen/night/dismiss"), Handler.post_night_dismiss),
     ("GET", re.compile(r"/media/voices/([^/]+)"), Handler.media_voice),

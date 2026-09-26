@@ -156,6 +156,14 @@ class Listening:
             self._save()
             return restored
 
+    def set_reading(self, book: str, chapter_id: int, index: int) -> None:
+        """Chỗ đọc dở ở chế độ đọc: câu thứ `index` của chương."""
+        with self._lock:
+            entry = self._book(book)
+            entry["reading"] = {"chapterId": int(chapter_id), "index": max(0, int(index)), "at": time.time()}
+            entry["updatedAt"] = entry["reading"]["at"]
+            self._save()
+
     def save_night(self, book: str, night: dict[str, Any]) -> None:
         """Nhật ký đêm của trình phát trên máy này (điện thoại gửi của nó qua `merge`)."""
         with self._lock:
@@ -269,6 +277,8 @@ def merge_states(ours: dict[str, Any], theirs: dict[str, Any]) -> dict[str, Any]
     result.setdefault("bookmarks", [])
     if (theirs.get("last") or {}).get("at", 0) > (result.get("last") or {}).get("at", 0):
         result["last"] = theirs["last"]
+    if (theirs.get("reading") or {}).get("at", 0) > (result.get("reading") or {}).get("at", 0):
+        result["reading"] = theirs["reading"]
     for key, record in (theirs.get("chapters") or {}).items():
         mine = result["chapters"].get(key)
         if not mine or float(record.get("at") or 0) > float(mine.get("at") or 0):

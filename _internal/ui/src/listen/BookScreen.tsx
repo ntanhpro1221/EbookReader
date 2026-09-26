@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowLeft, AudioLines, BookOpenText, Check, CheckCheck, CircleDashed, Loader2, MoreHorizontal, Pause, Play, RotateCcw } from "lucide-react";
+import { ArrowLeft, AudioLines, BookOpen, BookOpenText, Check, CheckCheck, CircleDashed, Loader2, MoreHorizontal, Pause, Play, RotateCcw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ function ChapterRow({
 }) {
   const player = usePlayer();
   const playBook = usePlayListenBook();
+  const navigate = useNavigate();
   const current = player.track?.bookId === book.id && player.track.chapterId === chapter.id;
   const heard = chapterHeard(book.state, chapter);
   const done = heard >= 1;
@@ -75,7 +76,7 @@ function ChapterRow({
         )}
       </button>
       <div className="size-8 shrink-0">
-        {chapter.available && (
+        {(
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button
@@ -88,13 +89,20 @@ function ChapterRow({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-52 rounded-xl border border-line bg-panel p-1.5 shadow-float">
-                <DropdownMenu.Item onSelect={() => void playBook(book, chapter.id, 0)} className={MENU_ITEM}>
-                  <Play className="size-4" /> Nghe từ đầu chương
+                {chapter.available && (
+                  <DropdownMenu.Item onSelect={() => void playBook(book, chapter.id, 0)} className={MENU_ITEM}>
+                    <Play className="size-4" /> Nghe từ đầu chương
+                  </DropdownMenu.Item>
+                )}
+                <DropdownMenu.Item onSelect={() => navigate(`/book/${book.id}/read/${chapter.id}`)} className={MENU_ITEM}>
+                  <BookOpen className="size-4" /> Đọc chương này
                 </DropdownMenu.Item>
-                <DropdownMenu.Item onSelect={() => onDone(chapter.id, !done)} className={MENU_ITEM}>
-                  {done ? <CircleDashed className="size-4" /> : <CheckCheck className="size-4" />}
-                  {done ? "Đánh dấu chưa nghe" : "Đánh dấu đã nghe xong"}
-                </DropdownMenu.Item>
+                {chapter.available && (
+                  <DropdownMenu.Item onSelect={() => onDone(chapter.id, !done)} className={MENU_ITEM}>
+                    {done ? <CircleDashed className="size-4" /> : <CheckCheck className="size-4" />}
+                    {done ? "Đánh dấu chưa nghe" : "Đánh dấu đã nghe xong"}
+                  </DropdownMenu.Item>
+                )}
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
@@ -338,6 +346,16 @@ export function BookScreen({
             {caughtUp && (
               <p className="rounded-xl bg-hover px-4 py-2.5 text-sm text-fg-2">Bạn đã nghe hết phần đã có. Chương mới sẽ hiện ở đây khi làm xong.</p>
             )}
+            <Tooltip label="Đọc bằng mắt - đọc được cả chương chưa thu âm; “Nghe từ đây” chuyển sang nghe đúng câu đang đọc">
+              <Button
+                variant="outline"
+                size="lg"
+                icon={BookOpen}
+                onClick={() => navigate(`/book/${book.id}/read/${book.state.reading?.chapterId ?? point?.chapter.id ?? chapters[0]?.id ?? ""}`)}
+              >
+                {book.state.reading ? "Đọc tiếp" : "Đọc"}
+              </Button>
+            </Tooltip>
             {heard > 0 && point && (
               <Tooltip label="Nghe lại từ chương đầu tiên">
                 <Button variant="ghost" size="lg" icon={RotateCcw} onClick={restart}>

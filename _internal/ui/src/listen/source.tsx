@@ -28,6 +28,8 @@ export interface ListenSource {
   dismissNight(bookId: string, nightId: string | undefined): Promise<void>;
   /** Chỉ bộ máy phát web cần: lõi native tự ghi nhật ký đêm. */
   saveNight?(bookId: string, night: NightSession): Promise<void>;
+  /** Chỗ đọc dở ở chế độ đọc (nguồn nào không có thì giao diện tự nhớ trong máy). */
+  saveReading?(bookId: string, chapterId: number, index: number): Promise<void>;
 }
 
 const SourceContext = createContext<ListenSource | null>(null);

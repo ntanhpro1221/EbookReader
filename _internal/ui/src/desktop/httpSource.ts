@@ -36,6 +36,9 @@ export const httpSource: ListenSource = {
   dismissNight: async (bookId, id) => {
     await api("/api/listen/night/dismiss", { method: "POST", body: { bookId, id } });
   },
+  saveReading: async (bookId, chapterId, index) => {
+    await api(`/api/listen/books/${bookId}/reading`, { method: "POST", body: { chapterId, index } });
+  },
   saveNight: async (bookId, night) => {
     await api(`/api/listen/books/${bookId}/night`, { method: "POST", body: night });
   },

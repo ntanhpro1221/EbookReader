@@ -35,6 +35,8 @@ export interface ListeningState {
   rate?: number;
   finished?: boolean;
   bookmarks: Bookmark[];
+  /** Chỗ đọc dở ở chế độ đọc (câu thứ `index` của chương). */
+  reading?: { chapterId: number; index: number; at: number };
   updatedAt?: number;
 }
 

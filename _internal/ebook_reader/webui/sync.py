@@ -158,7 +158,7 @@ def manifest(project_root: Path, book: str, listening: Listening) -> dict[str, A
             "available": path is not None,
             "file": f"chapters/{path.name}" if path else None,
             "size": path.stat().st_size if path else 0,
-            "script": f"scripts/{chapter['id']}.json" if path else None,
+            "script": f"scripts/{chapter['id']}.json",
         })
     cast = store.cast(project_root)
     samples = sorted({person["sampleId"] for person in cast["characters"] + cast["extras"] if person.get("sampleId")})

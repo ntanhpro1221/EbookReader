@@ -8,6 +8,7 @@ import { ClipProvider } from "@/listen/clip";
 import { WebAudioEngine } from "@/listen/engine";
 import { LibraryScreen } from "@/listen/LibraryScreen";
 import { MorningRecap } from "@/listen/MorningRecap";
+import { ReaderScreen } from "@/listen/ReaderScreen";
 import { PlayerProvider, usePlayer } from "@/listen/player";
 import { SourceProvider } from "@/listen/source";
 import { Button, EmptyState, TooltipProvider } from "@/shared/ui";
@@ -179,6 +180,7 @@ export function App() {
                       />
                     }
                   />
+                  <Route path="/book/:id/read/:chapterId?" element={<ReaderScreen />} />
                   <Route path="/studio" element={<ProjectsScreen />} />
                   <Route path="/studio/new" element={<NewProjectScreen />} />
                   <Route path="/studio/:id" element={<ProjectScreen />} />
