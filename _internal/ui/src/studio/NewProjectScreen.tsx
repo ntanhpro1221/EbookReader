@@ -24,7 +24,7 @@ import { useSource } from "@/listen/source";
 import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
 import { formatLength, formatNumber } from "@/shared/format";
-import { Button, Segmented, Vu } from "@/shared/ui";
+import { Button, Segmented, Vu, radioGroupKeys, radioTabIndex } from "@/shared/ui";
 import type { ScanResult, Voice } from "@/studio/api";
 import { pickFiles, pickFolder, useAppInfo, useCreateBook, useScan, useVoices } from "@/studio/data";
 
@@ -60,6 +60,7 @@ const PROFILES: { value: Profile; title: string; pace: string; summary: string; 
     points: ["Rà lại cảm xúc từng câu một lần nữa", "Nghe lại mọi câu, soát kỹ từng chữ", "Đọc lại tới 5 lần nếu câu bị đọc sai"],
   },
 ];
+const PROFILE_VALUES = PROFILES.map((option) => option.value);
 
 // Ước lượng thời gian làm trên máy này, đo từ hai lô gần nhất của cuốn 2 (26-09, mức Chất lượng cao): lô 18 có
 // 113 nghìn chữ, phân tích ~4 giờ, thu âm 4,6-7,1 giờ. Hai mức kia chưa đo trên máy này nên không đoán con số.
@@ -473,8 +474,13 @@ function QualityStep({ profile, setProfile, words, chapters }: { profile: Profil
       <p className="mt-1 text-sm text-fg-2 text-pretty">
         Mức này đi cùng sách tới chương cuối, để mọi chương đọc giống nhau - không đổi được sau khi tạo.
       </p>
-      <div role="radiogroup" aria-label="Chất lượng" className="mt-6 grid gap-4 lg:grid-cols-3">
-        {PROFILES.map((option) => {
+      <div
+        role="radiogroup"
+        aria-label="Chất lượng"
+        onKeyDown={radioGroupKeys(PROFILE_VALUES, profile, setProfile)}
+        className="mt-6 grid gap-4 lg:grid-cols-3"
+      >
+        {PROFILES.map((option, index) => {
           const selected = option.value === profile;
           return (
             <button
@@ -482,6 +488,7 @@ function QualityStep({ profile, setProfile, words, chapters }: { profile: Profil
               type="button"
               role="radio"
               aria-checked={selected}
+              tabIndex={radioTabIndex(PROFILE_VALUES, profile, index)}
               onClick={() => setProfile(option.value)}
               className={cn(
                 "relative flex flex-col rounded-2xl border bg-panel p-5 text-left transition-colors",

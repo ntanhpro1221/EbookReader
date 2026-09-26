@@ -334,6 +334,25 @@ export function Stat({ label, value, hint }: { label: string; value: ReactNode; 
   );
 }
 
+/** Nhóm radio theo mẫu WAI-ARIA: Tab vào đúng MỘT nút (nút đang chọn), mũi tên / Home / End chọn luôn mục kế và
+ * đưa tiêu điểm tới đó. Gắn vào phần tử `role="radiogroup"`; các nút `role="radio"` phải theo đúng thứ tự `values`. */
+export function radioGroupKeys<T>(values: readonly T[], value: T, onChange: (value: T) => void) {
+  return (event: React.KeyboardEvent<HTMLElement>) => {
+    const step = ({ ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 } as Record<string, number>)[event.key];
+    const index = Math.max(values.indexOf(value), 0);
+    const next = step ? (index + step + values.length) % values.length : event.key === "Home" ? 0 : event.key === "End" ? values.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    onChange(values[next]);
+    event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+  };
+}
+
+/** tabIndex của nút thứ `index` trong nhóm radio: chỉ nút đang chọn (hay nút đầu, khi chưa chọn gì) nằm trong vòng Tab. */
+export function radioTabIndex<T>(values: readonly T[], value: T, index: number) {
+  return values[index] === value || (!values.includes(value) && index === 0) ? 0 : -1;
+}
+
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -345,14 +364,21 @@ export function Segmented<T extends string>({
   options: { value: T; label: string }[];
   label: string;
 }) {
+  const values = options.map((option) => option.value);
   return (
-    <div role="radiogroup" aria-label={label} className="inline-flex rounded-lg border border-line bg-panel-2 p-0.5">
-      {options.map((option) => (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      onKeyDown={radioGroupKeys(values, value, onChange)}
+      className="inline-flex rounded-lg border border-line bg-panel-2 p-0.5"
+    >
+      {options.map((option, index) => (
         <button
           key={option.value}
           type="button"
           role="radio"
           aria-checked={value === option.value}
+          tabIndex={radioTabIndex(values, value, index)}
           onClick={() => onChange(option.value)}
           className={cn(
             "h-7 rounded-md px-3 text-[13px] font-medium transition-colors",

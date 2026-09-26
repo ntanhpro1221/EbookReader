@@ -1,7 +1,7 @@
 import { FolderOpen, Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { Button, Kbd, Segmented } from "@/shared/ui";
+import { Button, Kbd, Segmented, radioGroupKeys, radioTabIndex } from "@/shared/ui";
 import { cn } from "@/shared/cn";
 import { pickFolder, useAppInfo, usePreferences } from "@/studio/data";
 import { PhoneSync, Switch } from "./PhoneSync";
@@ -35,6 +35,7 @@ const THEMES = [
   { value: "light", label: "Sáng", icon: Sun },
   { value: "dark", label: "Tối", icon: Moon },
 ] as const;
+const THEME_VALUES = THEMES.map((theme) => theme.value);
 
 const SHORTCUTS: [ReactNode, string][] = [
   [<Kbd key="space">Space</Kbd>, "Phát / tạm dừng"],
@@ -80,8 +81,13 @@ export function SettingsScreen() {
           </div>
         </Section>
         <Section title="Giao diện" description="Màu sáng hay tối. Theo Windows sẽ tự đổi cùng hệ thống.">
-          <div role="radiogroup" aria-label="Giao diện" className="grid max-w-md grid-cols-3 gap-2">
-            {THEMES.map((theme) => {
+          <div
+            role="radiogroup"
+            aria-label="Giao diện"
+            onKeyDown={radioGroupKeys(THEME_VALUES, preferences?.theme ?? "system", (theme) => update({ theme }))}
+            className="grid max-w-md grid-cols-3 gap-2"
+          >
+            {THEMES.map((theme, index) => {
               const selected = (preferences?.theme ?? "system") === theme.value;
               const Icon = theme.icon;
               return (
@@ -90,6 +96,7 @@ export function SettingsScreen() {
                   type="button"
                   role="radio"
                   aria-checked={selected}
+                  tabIndex={radioTabIndex(THEME_VALUES, preferences?.theme ?? "system", index)}
                   onClick={() => update({ theme: theme.value })}
                   className={cn(
                     "flex flex-col items-center gap-2 rounded-xl border bg-panel py-4 text-sm font-medium transition-colors",
