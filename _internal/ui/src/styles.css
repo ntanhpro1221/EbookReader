@@ -1,0 +1,209 @@
+@import "tailwindcss";
+@import "@fontsource/be-vietnam-pro/400.css";
+@import "@fontsource/be-vietnam-pro/500.css";
+@import "@fontsource/be-vietnam-pro/600.css";
+@import "@fontsource/be-vietnam-pro/700.css";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+  Bảng màu: phòng thu ban đêm. Nền than xanh, một màu nhấn hổ phách ấm như đèn ON AIR / kim VU
+  dùng cho hành động chính và tiến độ đang chạy. Xanh lá = nghe được/xong, đỏ = lỗi, xám = dừng.
+  Mọi màu đi qua token; giao diện sáng định nghĩa lại token chứ không lật ngược máy móc.
+*/
+:root {
+  --bg: #f4f5f7;
+  --bg-sunken: #eceef2;
+  --panel: #ffffff;
+  --panel-2: #f7f8fa;
+  --hover: #eef0f4;
+  --line: #e2e5ea;
+  --line-strong: #cfd4db;
+  --text: #14181d;
+  --text-2: #4f5965;
+  --text-3: #858e99;
+  --accent: #e39a2d;
+  --accent-hover: #d18a1f;
+  --accent-ink: #1d1304;
+  --accent-text: #a8660b;
+  --accent-soft: #fbeedb;
+  --success: #1f9d6b;
+  --success-soft: #dff3ea;
+  --danger: #d64545;
+  --danger-soft: #fbe4e4;
+  --warning: #b7791f;
+  --warning-soft: #fcf1dc;
+  --info: #3b6fd8;
+  --info-soft: #e3ebfb;
+  --shadow: 0 1px 2px rgb(20 24 29 / 0.06), 0 8px 24px -12px rgb(20 24 29 / 0.16);
+  --shadow-lg: 0 24px 64px -24px rgb(20 24 29 / 0.35);
+  --scrim: rgb(15 18 22 / 0.45);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0e1115;
+  --bg-sunken: #0a0c0f;
+  --panel: #151a20;
+  --panel-2: #1a2028;
+  --hover: #1f262f;
+  --line: #252d37;
+  --line-strong: #333d49;
+  --text: #e9ecf0;
+  --text-2: #a3acb7;
+  --text-3: #6d7784;
+  --accent: #f2a93f;
+  --accent-hover: #ffba5a;
+  --accent-ink: #1b1204;
+  --accent-text: #f5b65a;
+  --accent-soft: rgb(242 169 63 / 0.13);
+  --success: #43c496;
+  --success-soft: rgb(67 196 150 / 0.13);
+  --danger: #f06b6b;
+  --danger-soft: rgb(240 107 107 / 0.13);
+  --warning: #e8b64c;
+  --warning-soft: rgb(232 182 76 / 0.13);
+  --info: #6f9bf5;
+  --info-soft: rgb(111 155 245 / 0.13);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -14px rgb(0 0 0 / 0.7);
+  --shadow-lg: 0 30px 80px -20px rgb(0 0 0 / 0.75);
+  --scrim: rgb(4 6 8 / 0.62);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sunken: var(--bg-sunken);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--text);
+  --color-fg-2: var(--text-2);
+  --color-fg-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-scrim: var(--scrim);
+  --shadow-card: var(--shadow);
+  --shadow-float: var(--shadow-lg);
+  --font-sans: "Be Vietnam Pro", ui-sans-serif, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html {
+    font-size: 14px;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01" 0;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+  }
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+  button {
+    cursor: default;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Thanh đang chạy: vạch sáng trượt qua, như băng đang quay. Tắt khi người dùng xin giảm chuyển động. */
+@keyframes run-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: run-sheen 1.8s ease-in-out infinite;
+}
+
+/* Cột VU nhảy khi đang thu/đang phát. */
+@keyframes vu {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.vu > span {
+  transform-origin: bottom;
+  animation: vu 1s ease-in-out infinite;
+}
+.vu > span:nth-child(2) {
+  animation-delay: -0.35s;
+}
+.vu > span:nth-child(3) {
+  animation-delay: -0.7s;
+}
+.vu > span:nth-child(4) {
+  animation-delay: -0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen::after,
+  .vu > span {
+    animation: none;
+  }
+  * {
+    transition-duration: 0ms !important;
+  }
+}
