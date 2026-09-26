@@ -353,3 +353,15 @@ def test_scanning_tells_a_missing_folder_from_a_parent_folder(tmp_path: Path) ->
     assert len(quoted["files"]) == 1, "đường dẫn chép bằng Copy as path có ngoặc kép"
     missing = scan_inputs([str(tmp_path / "không có")])
     assert missing["missing"] == [str(tmp_path / "không có")]
+
+
+def test_listening_sessions_are_kept_merged_and_left_out_of_lists(tmp_path: Path) -> None:
+    listening = Listening(tmp_path / "listening.json")
+    session = {"id": "s1", "device": "desktop", "startedAt": 100, "endedAt": 400, "listened": 300,
+               "from": {"chapterId": 1, "seconds": 10}, "to": {"chapterId": 2, "seconds": 5}}
+    listening.add_session("b", session)
+    listening.add_session("b", {**session, "listened": 310})
+    assert [item["listened"] for item in listening.sessions("b")] == [310], "cùng id là cùng một phiên"
+    phone = {"sessions": [{**session, "id": "p1", "device": "phone", "startedAt": 50}]}
+    merged = listening.merge("b", phone)
+    assert [item["id"] for item in merged["sessions"]] == ["p1", "s1"]

@@ -232,6 +232,7 @@ export function PlayerProvider({
     bookmarking: false,
     muted: 0,
     stamp: 0,
+    session: null as { id: string; startedAt: number; from: { chapterId: number; seconds: number }; bookId: string; listened: number; mark: number } | null,
     lastActivity: Date.now(),
     lastActivityPosition: null as NightPosition | null,
     scheduleOffFor: "",
@@ -583,6 +584,46 @@ export function PlayerProvider({
 
   const positionStamp = useCallback(() => refs.current.stamp, []);
 
+  // Phiên nghe (bộ máy web; lõi native chưa ghi): mở lúc bắt đầu phát, đóng lúc dừng. Phiên dưới 20 giây nghe
+  // thật thì bỏ - bấm phát rồi dừng ngay không phải là "đã nghe".
+  const openSession = useCallback(() => {
+    const current = refs.current.track;
+    if (native || !current || refs.current.purpose !== "listen" || !source.addSession) return;
+    if (refs.current.session && refs.current.session.bookId === current.bookId) {
+      refs.current.session.mark = Date.now();
+      return;
+    }
+    refs.current.session = {
+      id: Math.random().toString(16).slice(2, 14),
+      startedAt: Date.now() / 1000,
+      from: { chapterId: current.chapterId, seconds: engine.time },
+      bookId: current.bookId,
+      listened: 0,
+      mark: Date.now(),
+    };
+  }, [engine, native, source]);
+
+  const closeSession = useCallback(() => {
+    const session = refs.current.session;
+    const current = refs.current.track;
+    if (!session || !current || !source.addSession) return;
+    session.listened += (Date.now() - session.mark) / 1000;
+    session.mark = Date.now();
+    refs.current.session = null;
+    if (session.listened < 20 || session.bookId !== current.bookId) return;
+    void source
+      .addSession(session.bookId, {
+        id: session.id,
+        device: "desktop",
+        startedAt: session.startedAt,
+        endedAt: Date.now() / 1000,
+        listened: session.listened,
+        from: session.from,
+        to: { chapterId: current.chapterId, seconds: engine.time },
+      })
+      .catch(() => undefined);
+  }, [engine, source]);
+
   /** Hẹn giờ vừa hết: dừng, trả âm lượng, ghi mốc "tự dừng" cho buổi sáng. */
   const stopBySleep = useCallback(() => {
     night.stop(position());
@@ -608,10 +649,12 @@ export function PlayerProvider({
       engine.on("play", () => {
         setPlaying(true);
         refs.current.pausedAt = 0;
+        openSession();
         if (!native) applySleep(sleepResumed(refs.current.sleep, Date.now()));
       }),
       engine.on("pause", () => {
         setPlaying(false);
+        closeSession();
         syncClock();
         refs.current.pausedAt = Date.now();
         if (!native) applySleep(sleepPaused(refs.current.sleep, Date.now()));
@@ -678,7 +721,7 @@ export function PlayerProvider({
       }),
     ];
     return () => offs.forEach((off) => off());
-  }, [applySleep, clock, engine, load, native, refreshLists, save, source, stopBySleep]);
+  }, [applySleep, clock, closeSession, engine, load, native, openSession, refreshLists, save, source, stopBySleep]);
 
   // Đồng hồ chạy theo khung hình khi đang phát: nhãn giây đổi đúng nhịp 1 giây thay vì theo timeupdate (~4 lần/giây,
   // lệch tới 270 ms). Chỉ component nào chọn giá trị đổi mới render lại.

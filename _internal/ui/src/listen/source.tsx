@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, type ReactNode } from "react";
-import type { Bookmark, Cast, ListenBook, ListeningState, NightSession, Script } from "./model";
+import type { Bookmark, Cast, ListenBook, ListeningSession, ListeningState, NightSession, Script } from "./model";
 
 // Nguồn dữ liệu của phía Nghe. Giao diện chỉ nói chuyện với giao diện này:
 // máy tính cài bằng HTTP tới server cục bộ, Android cài bằng file gói sách trên máy.
@@ -28,6 +28,9 @@ export interface ListenSource {
   dismissNight(bookId: string, nightId: string | undefined): Promise<void>;
   /** Chỉ bộ máy phát web cần: lõi native tự ghi nhật ký đêm. */
   saveNight?(bookId: string, night: NightSession): Promise<void>;
+  /** Lịch sử phiên nghe (nguồn nào chưa có thì tab Lịch sử ẩn đi). */
+  sessions?(bookId: string): Promise<ListeningSession[]>;
+  addSession?(bookId: string, session: ListeningSession): Promise<void>;
   /** Chỗ đọc dở ở chế độ đọc (nguồn nào không có thì giao diện tự nhớ trong máy). */
   saveReading?(bookId: string, chapterId: number, index: number): Promise<void>;
 }

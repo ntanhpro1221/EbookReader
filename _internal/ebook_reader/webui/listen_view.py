@@ -53,7 +53,7 @@ def book(project_root: Path, book_id: str, summary: dict[str, Any], state: dict[
     available = [chapter for chapter in items if chapter["available"]]
     complete = summary["phase"] == "done" and len(available) == len(items)
     # Nhật ký đêm không đi theo danh sách/sách (có thể dài vài trăm mốc): thẻ "Tối qua" hỏi riêng.
-    state = {key: value for key, value in state.items() if key != "night"}
+    state = {key: value for key, value in state.items() if key not in ("night", "sessions")}
     result: dict[str, Any] = {
         "format": FORMAT,
         "id": book_id,

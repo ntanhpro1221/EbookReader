@@ -37,6 +37,7 @@ BOOKMARK_MERGE_SECONDS = 5.0
 # Thẻ "Tối qua" chỉ nói về đêm vừa rồi: nhật ký cũ hơn chừng này thì thôi.
 NIGHT_RECENT_SECONDS = 20 * 3600
 NIGHT_MAX_POINTS = 480
+MAX_SESSIONS = 200
 
 
 def listening_path() -> Path:
@@ -155,6 +156,31 @@ class Listening:
             entry["updatedAt"] = restored["at"]
             self._save()
             return restored
+
+    def add_session(self, book: str, session: dict[str, Any]) -> None:
+        """Một phiên nghe (bấm phát tới lúc dừng): giờ, thiết bị, từ đâu tới đâu - cho tab "Lịch sử" và thống kê."""
+        def place(value: Any) -> dict[str, Any]:
+            value = value if isinstance(value, dict) else {}
+            return {"chapterId": int(value.get("chapterId") or 0), "seconds": round(float(value.get("seconds") or 0), 1)}
+
+        record = {
+            "id": str(session.get("id") or uuid.uuid4().hex[:12])[:40],
+            "device": str(session.get("device") or "")[:20],
+            "startedAt": float(session.get("startedAt") or time.time()),
+            "endedAt": float(session.get("endedAt") or time.time()),
+            "listened": round(max(0.0, float(session.get("listened") or 0)), 1),
+            "from": place(session.get("from")),
+            "to": place(session.get("to")),
+        }
+        with self._lock:
+            entry = self._book(book)
+            sessions = [item for item in entry.get("sessions", []) if item.get("id") != record["id"]] + [record]
+            entry["sessions"] = sorted(sessions, key=lambda item: item["startedAt"])[-MAX_SESSIONS:]
+            self._save()
+
+    def sessions(self, book: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return json.loads(json.dumps((self._data.get(book) or {}).get("sessions", [])))
 
     def set_reading(self, book: str, chapter_id: int, index: int) -> None:
         """Chỗ đọc dở ở chế độ đọc: câu thứ `index` của chương."""
@@ -297,6 +323,12 @@ def merge_states(ours: dict[str, Any], theirs: dict[str, Any]) -> dict[str, Any]
     result["bookmarks"] = sorted((mark for mark in marks.values() if mark["id"] not in deleted),
                                  key=lambda mark: mark.get("at") or 0)
     result["deleted"] = deleted
+    sessions = {item["id"]: item for item in result.get("sessions") or [] if isinstance(item, dict) and item.get("id")}
+    for item in theirs.get("sessions") or []:
+        if isinstance(item, dict) and item.get("id"):
+            sessions[item["id"]] = item
+    if sessions:
+        result["sessions"] = sorted(sessions.values(), key=lambda item: item.get("startedAt") or 0)[-MAX_SESSIONS:]
     night = merge_nights(result.get("night"), theirs.get("night"))
     if night:
         result["night"] = night

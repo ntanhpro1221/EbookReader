@@ -1,11 +1,12 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowLeft, AudioLines, BookOpen, BookOpenText, Check, CheckCheck, CircleDashed, Loader2, MoreHorizontal, Pause, Play, RotateCcw } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowLeft, AudioLines, BookOpen, BookOpenText, Check, CheckCheck, CircleDashed, History, Loader2, MoreHorizontal, Pause, Play, RotateCcw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
-import { formatLength, formatNumber } from "@/shared/format";
+import { formatClock, formatLength, formatNumber } from "@/shared/format";
 import { Button, EmptyState, IconButton, Progress, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger, Tooltip, Vu } from "@/shared/ui";
 import { useClip } from "./clip";
 import { bookStatusText, usePlayListenBook } from "./LibraryScreen";
@@ -246,7 +247,80 @@ export function CastList({ bookId }: { bookId: string }) {
   );
 }
 
-const TABS = ["chapters", "bookmarks", "cast"] as const;
+const TABS = ["chapters", "bookmarks", "history", "cast"] as const;
+
+function dayLabel(epoch: number): string {
+  const date = new Date(epoch * 1000);
+  const today = new Date();
+  const days = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() - new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()) /
+      86_400_000,
+  );
+  if (days === 0) return "Hôm nay";
+  if (days === 1) return "Hôm qua";
+  return date.toLocaleDateString("vi-VN", { weekday: "long", day: "numeric", month: "numeric" });
+}
+
+function clockOf(epoch: number): string {
+  return new Date(epoch * 1000).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Lịch sử nghe: mỗi phiên một dòng, gom theo ngày; bấm để nghe tiếp từ cuối phiên ấy. */
+function HistoryTab({ book }: { book: ListenBook }) {
+  const source = useSource();
+  const playBook = usePlayListenBook();
+  const { data: sessions } = useQuery({
+    queryKey: ["listen", "sessions", book.id],
+    queryFn: () => source.sessions!(book.id),
+    enabled: Boolean(source.sessions),
+  });
+  const titleOf = (chapterId: number) => {
+    const chapter = book.chapters?.find((item) => item.id === chapterId);
+    return chapter ? chapter.title : "chương đã gỡ";
+  };
+  if (!sessions?.length) {
+    return (
+      <EmptyState icon={History} title="Chưa có lịch sử nghe" className="mt-2">
+        Mỗi lần nghe (bấm phát tới lúc dừng) sẽ hiện ở đây - để biết hôm nào nghe tới đâu.
+      </EmptyState>
+    );
+  }
+  const week = sessions.filter((item) => Date.now() / 1000 - item.startedAt < 7 * 86_400).reduce((sum, item) => sum + item.listened, 0);
+  const groups = new Map<string, typeof sessions>();
+  [...sessions].reverse().forEach((item) => {
+    const key = dayLabel(item.startedAt);
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  });
+  return (
+    <div className="mt-3">
+      <p className="text-sm text-fg-2">
+        7 ngày qua: <span className="font-semibold text-fg">{formatLength(week)}</span> nghe cuốn này.
+      </p>
+      {[...groups.entries()].map(([day, items]) => (
+        <section key={day} className="mt-5">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-fg-2">{day}</h3>
+          <ul className="mt-2 divide-y divide-line">
+            {items.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <div className="tabular text-sm font-medium">
+                    {clockOf(item.startedAt)}-{clockOf(item.endedAt)} · {formatLength(item.listened)}
+                  </div>
+                  <div className="tabular truncate text-xs text-fg-2">
+                    {titleOf(item.from.chapterId)} {formatClock(item.from.seconds)} → {titleOf(item.to.chapterId)} {formatClock(item.to.seconds)}
+                  </div>
+                </div>
+                <Button size="sm" variant="ghost" icon={Play} onClick={() => void playBook(book, item.to.chapterId, item.to.seconds)}>
+                  Nghe từ đây
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 export function BookScreen({
   extraActions,
@@ -384,6 +458,7 @@ export function BookScreen({
         <TabsList>
           <TabsTrigger value="chapters" count={chapters.length}>Chương</TabsTrigger>
           <TabsTrigger value="bookmarks" count={book.state.bookmarks.length || undefined}>Dấu trang</TabsTrigger>
+          <TabsTrigger value="history">Lịch sử</TabsTrigger>
           <TabsTrigger value="cast">Nhân vật</TabsTrigger>
         </TabsList>
         <TabsContent value="chapters" className="mt-2">
@@ -398,6 +473,9 @@ export function BookScreen({
         </TabsContent>
         <TabsContent value="bookmarks">
           <BookmarksTab book={book} />
+        </TabsContent>
+        <TabsContent value="history">
+          <HistoryTab book={book} />
         </TabsContent>
         <TabsContent value="cast">
           <CastList bookId={book.id} />

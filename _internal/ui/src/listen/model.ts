@@ -77,6 +77,17 @@ export function seriesOf(title: string): { series: string; volume: number | null
   return { series: match[1].trim(), volume: Number(match[2]) };
 }
 
+/** Một phiên nghe: bấm phát tới lúc dừng. */
+export interface ListeningSession {
+  id: string;
+  device: string;
+  startedAt: number;
+  endedAt: number;
+  listened: number;
+  from: { chapterId: number; seconds: number };
+  to: { chapterId: number; seconds: number };
+}
+
 // ---- Nhật ký đêm (hẹn giờ ngủ) ------------------------------------------------------------------------------
 // Cùng hình dạng với nhật ký của lõi phát Android (Bedtime.kt); máy tính ghi bằng NightRecorder (night.ts).
 
