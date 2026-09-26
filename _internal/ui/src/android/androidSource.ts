@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import type { Cast, ListenBook, ListeningState, Script } from "@/listen/model";
+import type { Cast, ListenBook, ListeningSession, ListeningState, Script } from "@/listen/model";
 import { bookProgress } from "./progress";
 import type { ListenSource } from "@/listen/source";
 import { EbookLibrary, EbookPlayer, type LocalBook } from "./plugins";
@@ -80,6 +80,10 @@ export const androidSource: ListenSource = {
   deleteBookmark: (id, markId) => EbookLibrary.deleteBookmark({ id, markId }),
   restoreBookmark: async (id, mark) => {
     await EbookLibrary.addBookmark({ id, chapterId: mark.chapterId, seconds: mark.seconds, note: mark.note });
+  },
+  async sessions(bookId) {
+    const book = await EbookLibrary.book({ id: bookId });
+    return ((book.state as { sessions?: ListeningSession[] }).sessions ?? []).slice();
   },
   async lastNight() {
     const { session } = await EbookPlayer.lastNight();

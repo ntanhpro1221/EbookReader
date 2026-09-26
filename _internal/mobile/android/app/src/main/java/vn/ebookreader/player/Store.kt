@@ -115,6 +115,19 @@ object Store {
         save(id, state)
     }
 
+    /** Một phiên nghe (cùng hình dạng với máy tính: webui/listening.py add_session), giữ 200 phiên gần nhất. */
+    @Synchronized
+    fun addSession(id: String, session: JSONObject) {
+        val state = state(id)
+        val sessions = state.optJSONArray("sessions") ?: JSONArray()
+        val kept = JSONArray()
+        val start = maxOf(0, sessions.length() - 199)
+        for (index in start until sessions.length()) kept.put(sessions.getJSONObject(index))
+        kept.put(session)
+        state.put("sessions", kept).put("updatedAt", now())
+        save(id, state)
+    }
+
     @Synchronized
     fun addBookmark(id: String, chapterId: Int, seconds: Double, note: String): JSONObject {
         val state = state(id)

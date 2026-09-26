@@ -50,6 +50,45 @@ object Playback {
     var lastInteractionSeconds = 0.0
         private set
 
+    // Phiên nghe: mở lúc bắt đầu phát, đóng lúc dừng; dưới 20 giây nghe thật thì bỏ (bấm phát rồi dừng ngay).
+    private var sessionStartMs = 0L
+    private var sessionListenedMs = 0L
+    private var sessionMarkMs = 0L
+    private var sessionFrom: JSONObject? = null
+    private var sessionBook = ""
+
+    private fun place(): JSONObject = JSONObject().put("chapterId", currentChapter?.id ?: 0).put("seconds", positionSeconds)
+
+    private fun openSession() {
+        val now = System.currentTimeMillis()
+        if (sessionFrom != null && sessionBook == bookId) {
+            sessionMarkMs = now
+            return
+        }
+        sessionStartMs = now
+        sessionListenedMs = 0
+        sessionMarkMs = now
+        sessionFrom = place()
+        sessionBook = bookId
+    }
+
+    private fun closeSession() {
+        val from = sessionFrom ?: return
+        val now = System.currentTimeMillis()
+        sessionListenedMs += now - sessionMarkMs
+        sessionFrom = null
+        if (sessionListenedMs < 20_000 || sessionBook.isEmpty() || sessionBook != bookId) return
+        val session = JSONObject()
+            .put("id", java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+            .put("device", "phone")
+            .put("startedAt", sessionStartMs / 1000.0)
+            .put("endedAt", now / 1000.0)
+            .put("listened", sessionListenedMs / 1000.0)
+            .put("from", from)
+            .put("to", place())
+        runCatching { Store.addSession(sessionBook, session) }
+    }
+
     fun touched() {
         lastInteractionMs = System.currentTimeMillis()
         lastInteractionChapter = currentChapter?.id
@@ -239,7 +278,9 @@ object Playback {
         if (!playing) {
             pausedAtMs = System.currentTimeMillis()
             saveNow()
+            closeSession()
         } else {
+            openSession()
             pausedAtMs = 0
             startTicking()
             SleepTimer.maybeSchedule()
