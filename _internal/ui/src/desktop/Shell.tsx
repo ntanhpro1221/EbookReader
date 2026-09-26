@@ -44,9 +44,15 @@ const NAV_IDLE = "font-medium text-fg-2 hover:bg-hover hover:text-fg";
 /** Mục thanh bên sáng cả khi đang ở trang con của nó (trang sách thuộc Thư viện, trang dự án thuộc Dự án). */
 function NavItem({ to, icon: Icon, match, children }: { to: string; icon: typeof Library; match: (path: string) => boolean; children: ReactNode }) {
   const { pathname } = useLocation();
+  const { setExpanded } = useNowPlaying();
   const active = match(pathname);
   return (
-    <NavLink to={to} aria-current={active ? "page" : undefined} className={cn(NAV, active ? NAV_ACTIVE : NAV_IDLE)}>
+    <NavLink
+      to={to}
+      onClick={() => setExpanded(false)}
+      aria-current={active ? "page" : undefined}
+      className={cn(NAV, active ? NAV_ACTIVE : NAV_IDLE)}
+    >
       <Icon className="size-[18px]" />
       {children}
     </NavLink>

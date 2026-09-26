@@ -241,7 +241,12 @@ function MenuShell({
         </Popover.Trigger>
       </Tooltip>
       <Popover.Portal>
-        <Popover.Content sideOffset={8} collisionPadding={12} className={cn("z-50 rounded-xl border border-line bg-panel p-1.5 shadow-float", width)}>
+        <Popover.Content
+          sideOffset={8}
+          collisionPadding={12}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          className={cn("z-50 rounded-xl border border-line bg-panel p-1.5 shadow-float", width)}
+        >
           {children}
         </Popover.Content>
       </Popover.Portal>
@@ -462,7 +467,8 @@ export function useAddBookmark() {
       return;
     }
     if (mark.existing) {
-      toast("Đã có dấu trang ở chỗ này", { id: "bookmark", description: formatClock(mark.seconds) });
+      toast.dismiss("bookmark");
+      toast("Đã có dấu trang ở chỗ này", { id: "bookmark-existing", description: formatClock(mark.seconds) });
       return;
     }
     toast.success("Đã thêm dấu trang", {
@@ -1114,7 +1120,7 @@ export function NowPlaying({ mobile = false }: { mobile?: boolean }) {
     const target = event.target as HTMLElement;
     if (["INPUT", "TEXTAREA"].includes(target.tagName)) return;
     // Một lần Esc đóng một lớp: menu hay popover đang mở thì chỉ đóng nó.
-    if (document.querySelector("[data-radix-popper-content-wrapper], [role='menu']")) return;
+    if (document.querySelector("[data-radix-popper-content-wrapper] [role='dialog'], [role='menu'], [role='listbox']")) return;
     event.preventDefault();
     setExpanded(false);
   };

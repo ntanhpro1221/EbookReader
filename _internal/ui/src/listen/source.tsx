@@ -31,6 +31,8 @@ export interface ListenSource {
   /** Lịch sử phiên nghe (nguồn nào chưa có thì tab Lịch sử ẩn đi). */
   sessions?(bookId: string): Promise<ListeningSession[]>;
   addSession?(bookId: string, session: ListeningSession): Promise<void>;
+  /** Gửi được cả lúc trang đang đóng (fetch keepalive). */
+  addSessionOnExit?(bookId: string, session: ListeningSession): void;
   /** Chỗ đọc dở ở chế độ đọc (nguồn nào không có thì giao diện tự nhớ trong máy). */
   saveReading?(bookId: string, chapterId: number, index: number): Promise<void>;
 }

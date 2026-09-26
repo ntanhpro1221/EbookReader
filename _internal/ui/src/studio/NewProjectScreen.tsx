@@ -275,13 +275,18 @@ function SourceStep({
               value={title}
               onChange={(event) => onTitle(event.target.value)}
               aria-invalid={!title.trim()}
+              aria-describedby={!title.trim() ? "title-problem" : undefined}
               className={cn(
                 "mt-1.5 h-11 w-full rounded-xl border bg-panel px-3.5 text-[15px] font-medium outline-none focus:border-accent",
                 title.trim() ? "border-line" : "border-danger",
               )}
               placeholder="Tên hiển thị trong thư viện"
             />
-            {!title.trim() && <span className="mt-1 block text-[13px] text-danger">Sách cần có tên để hiện trong thư viện.</span>}
+            {!title.trim() && (
+              <span id="title-problem" role="alert" className="mt-1 block text-[13px] text-danger">
+                Sách cần có tên để hiện trong thư viện.
+              </span>
+            )}
           </label>
           <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
             <div className="tabular text-sm text-fg-2">
@@ -659,6 +664,11 @@ export function NewProjectScreen() {
   const allowed = !scan?.files.length || !title.trim() ? 0 : !draft.narrator ? 1 : STEPS.length - 1;
   const requested = Number(params.get("step") ?? 0);
   const step = Number.isInteger(requested) ? Math.max(0, Math.min(requested, allowed)) : 0;
+  // URL đòi bước chưa được phép (tên vừa bị xoá trống...): kéo URL về đúng bước đang hiện, để lúc điều kiện thoả
+  // lại, trình tạo KHÔNG tự nhảy tới bước cũ trong URL.
+  useEffect(() => {
+    if (params.get("step") && requested !== step) setParams(step ? { step: String(step) } : {}, { replace: true });
+  }, [params, requested, setParams, step]);
 
   // Bước nằm trong URL: nút Back của trình duyệt/chuột lùi đúng một bước.
   const go = (index: number) => {
@@ -721,7 +731,17 @@ export function NewProjectScreen() {
               scanning={scanMutation.isPending}
               onPaths={(paths) => update({ paths, excluded: [], titleEdited: paths.length ? draft.titleEdited : false })}
               onAddFiles={(paths) => update({ paths: [...draft.paths, ...paths] })}
-              onRemove={(path) => update({ excluded: [...draft.excluded, path] })}
+              onRemove={(path) => {
+                update({ excluded: [...draft.excluded, path] });
+                const name = path.split(/[\\/]/).pop();
+                toast(`Đã bỏ ${name}`, {
+                  id: `removed-${path}`,
+                  action: {
+                    label: "Hoàn tác",
+                    onClick: () => setDraft((current) => ({ ...current, excluded: current.excluded.filter((item) => item !== path) })),
+                  },
+                });
+              }}
               problem={problem}
             />
           )}

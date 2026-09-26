@@ -295,6 +295,8 @@ export function PlayerProvider({
   }, [clock, engine, source, save]);
 
   const remember = useCallback((from: { chapterId: number; seconds: number }, to: { chapterId: number; seconds: number }) => {
+    // Nhảy xa là một đoạn nghe khác: phiên cũ kết thúc ở chỗ trước khi nhảy.
+    splitSessionRef.current(from);
     const history = refs.current.history;
     history.push(from);
     if (history.length > HISTORY) history.shift();
@@ -584,6 +586,8 @@ export function PlayerProvider({
 
   const positionStamp = useCallback(() => refs.current.stamp, []);
 
+  const splitSessionRef = useRef<(at: { chapterId: number; seconds: number }) => void>(() => undefined);
+
   // Phiên nghe (bộ máy web; lõi native chưa ghi): mở lúc bắt đầu phát, đóng lúc dừng. Phiên dưới 20 giây nghe
   // thật thì bỏ - bấm phát rồi dừng ngay không phải là "đã nghe".
   const openSession = useCallback(() => {
@@ -603,7 +607,7 @@ export function PlayerProvider({
     };
   }, [engine, native, source]);
 
-  const closeSession = useCallback(() => {
+  const closeSession = useCallback((leaving = false) => {
     const session = refs.current.session;
     const current = refs.current.track;
     if (!session || !current || !source.addSession) return;
@@ -611,6 +615,18 @@ export function PlayerProvider({
     session.mark = Date.now();
     refs.current.session = null;
     if (session.listened < 20 || session.bookId !== current.bookId) return;
+    if (leaving && source.addSessionOnExit) {
+      source.addSessionOnExit(session.bookId, {
+        id: session.id,
+        device: "desktop",
+        startedAt: session.startedAt,
+        endedAt: Date.now() / 1000,
+        listened: session.listened,
+        from: session.from,
+        to: { chapterId: current.chapterId, seconds: engine.time },
+      });
+      return;
+    }
     void source
       .addSession(session.bookId, {
         id: session.id,
@@ -623,6 +639,21 @@ export function PlayerProvider({
       })
       .catch(() => undefined);
   }, [engine, source]);
+
+  splitSessionRef.current = (at) => {
+    const session = refs.current.session;
+    if (!session || native) return;
+    const book = session.bookId;
+    session.listened += (Date.now() - session.mark) / 1000;
+    refs.current.session = null;
+    if (session.listened >= 20 && source.addSession) {
+      void source
+        .addSession(book, { id: session.id, device: "desktop", startedAt: session.startedAt, endedAt: Date.now() / 1000,
+          listened: session.listened, from: session.from, to: at })
+        .catch(() => undefined);
+    }
+    if (!engine.paused) window.setTimeout(() => openSession(), 0);
+  };
 
   /** Hẹn giờ vừa hết: dừng, trả âm lượng, ghi mốc "tự dừng" cho buổi sáng. */
   const stopBySleep = useCallback(() => {
@@ -837,17 +868,28 @@ export function PlayerProvider({
   useEffect(() => {
     const onHide = () => {
       save(true);
+      closeSession(true);
       night.flush();
     };
     window.addEventListener("pagehide", onHide);
     return () => window.removeEventListener("pagehide", onHide);
-  }, [night, save]);
+  }, [closeSession, night, save]);
 
   // Phím tắt (máy tính). Không tranh phím với ô nhập, thanh trượt, tab, menu, hộp thoại; Space trên một nút chỉ
   // kích hoạt nút đó khi người dùng Tab tới nó bằng bàn phím (:focus-visible) - bấm chuột xong thì Space vẫn là
   // phát/tạm dừng như Spotify, YouTube.
   useEffect(() => {
     if (!keyboard || native) return;
+    // Focus đến từ chuột hay bàn phím? Chỉ khi người dùng Tab tới một nút thì Space mới kích hoạt nút ấy.
+    let keyboardNavigation = false;
+    const onPointer = () => {
+      keyboardNavigation = false;
+    };
+    const onTab = (event: KeyboardEvent) => {
+      if (event.key === "Tab" || event.key.startsWith("Arrow")) keyboardNavigation = true;
+    };
+    window.addEventListener("pointerdown", onPointer, true);
+    window.addEventListener("keydown", onTab, true);
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
@@ -855,7 +897,7 @@ export function PlayerProvider({
       if (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (target.closest('[role="menu"],[role="listbox"],[role="dialog"]')) return;
       const widget = target.closest('[role="slider"],[role="tab"],[role="radio"],[role="option"],[role="menuitem"]');
-      const keyboardFocused = target !== document.body && target.matches(":focus-visible");
+      const keyboardFocused = target !== document.body && keyboardNavigation;
       switch (event.key) {
         case " ": {
           // Thanh trượt không dùng Space vào việc gì: Space trên thanh tua vẫn là phát/tạm dừng.
@@ -899,7 +941,11 @@ export function PlayerProvider({
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointer, true);
+      window.removeEventListener("keydown", onTab, true);
+    };
   }, [keyboard, native, next, previous, setRate, setVolume, skip, toggle]);
 
   // Nút media của hệ điều hành (bộ máy web; lõi native tự lo phần này).

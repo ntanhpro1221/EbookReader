@@ -207,7 +207,7 @@ export function ReaderScreen() {
           </Popover.Portal>
         </Popover.Root>
         {script.timed && (
-          <Button size="sm" variant="primary" icon={Headphones} onClick={() => listenFrom(current)} className="max-sm:hidden">
+          <Button size="sm" variant="primary" icon={Headphones} onMouseDown={(event) => event.preventDefault()} onClick={() => listenFrom(current)} className="max-sm:hidden">
             Nghe từ đây
           </Button>
         )}
@@ -272,6 +272,7 @@ export function ReaderScreen() {
             <button
               type="button"
               onClick={() => listenFrom(selected)}
+              onMouseDown={(event) => event.preventDefault()}
               className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-fg px-5 py-2.5 text-sm font-semibold text-bg shadow-float"
             >
               <Play className="size-4" fill="currentColor" strokeWidth={0} /> Nghe từ câu này

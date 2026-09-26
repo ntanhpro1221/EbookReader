@@ -26,7 +26,7 @@ export function sleepFrom(request: SleepRequest, playing: boolean, now: number):
 
 export function sleepLeftMs(mode: SleepMode, now: number): number | null {
   if (mode.kind !== "minutes") return null;
-  return Math.max(0, mode.since === null ? mode.leftMs : mode.leftMs - (now - mode.since));
+  return Math.max(0, mode.since === null ? mode.leftMs : mode.leftMs - Math.max(0, now - mode.since));
 }
 
 /** Đồng hồ ngừng khi tạm dừng, chạy tiếp khi phát. */

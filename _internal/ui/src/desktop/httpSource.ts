@@ -37,6 +37,14 @@ export const httpSource: ListenSource = {
     await api("/api/listen/night/dismiss", { method: "POST", body: { bookId, id } });
   },
   sessions: (bookId) => api<ListeningSession[]>(`/api/listen/books/${bookId}/sessions`),
+  addSessionOnExit: (bookId, session) => {
+    void fetch(mediaUrl(`/api/listen/books/${bookId}/sessions`), {
+      method: "POST",
+      keepalive: true,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(session),
+    }).catch(() => undefined);
+  },
   addSession: async (bookId, session) => {
     await api(`/api/listen/books/${bookId}/sessions`, { method: "POST", body: session });
   },
