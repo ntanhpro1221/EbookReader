@@ -307,3 +307,49 @@ def test_the_listen_view_lists_only_chapters_you_can_hear(library) -> None:
     assert view["chaptersAvailable"] == 1 and view["chaptersTotal"] == 2
     assert view["duration"] == pytest.approx(9.7)
     assert manifest(project, book_id(project), listening)["chapters"][1]["file"] is None
+
+
+# ---- xuất sách, chỗ đọc, quét nguồn ---------------------------------------------------------------------------
+
+
+def test_export_file_names_are_safe_and_keep_vietnamese() -> None:
+    from ebook_reader.webui.export import safe_name
+
+    assert safe_name('Chương 646: Trở về/1?') == "Chương 646 Trở về 1"
+    assert safe_name('  "..."  ') == "Sach"
+
+
+def test_export_takes_only_a_real_png_cover(tmp_path: Path) -> None:
+    import base64
+
+    from ebook_reader.webui.export import _cover_file
+
+    gif = "data:image/png;base64," + base64.b64encode(b"GIF89a" + b"\0" * 20).decode()
+    assert _cover_file(tmp_path, gif) is None, "đuôi PNG nhưng ruột không phải PNG"
+    png = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"\0" * 20).decode()
+    assert _cover_file(tmp_path, png) == tmp_path / "cover.png"
+
+
+def test_the_reading_place_is_kept_and_the_newest_device_wins(tmp_path: Path) -> None:
+    listening = Listening(tmp_path / "listening.json")
+    listening.set_reading("b", 3, 24)
+    mine = listening.get("b")["reading"]
+    assert (mine["chapterId"], mine["index"]) == (3, 24)
+    older = {"reading": {"chapterId": 1, "index": 5, "at": mine["at"] - 100}}
+    assert listening.merge("b", older)["reading"]["chapterId"] == 3
+    newer = {"reading": {"chapterId": 4, "index": 0, "at": mine["at"] + 100}}
+    assert listening.merge("b", newer)["reading"]["chapterId"] == 4
+
+
+def test_scanning_tells_a_missing_folder_from_a_parent_folder(tmp_path: Path) -> None:
+    from ebook_reader.webui.actions import scan_inputs
+
+    book = tmp_path / "Truyện" / "Tập 1"
+    book.mkdir(parents=True)
+    (book / "1.txt").write_text("Chương 1\nMở đầu.", encoding="utf-8")
+    parent = scan_inputs([str(tmp_path / "Truyện")])
+    assert parent["files"] == [] and parent["subfolders"] == [str(book)]
+    quoted = scan_inputs([f'"{book}"'])
+    assert len(quoted["files"]) == 1, "đường dẫn chép bằng Copy as path có ngoặc kép"
+    missing = scan_inputs([str(tmp_path / "không có")])
+    assert missing["missing"] == [str(tmp_path / "không có")]

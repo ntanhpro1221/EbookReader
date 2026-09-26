@@ -45,6 +45,7 @@ import {
   formatTime,
 } from "@/shared/format";
 import { CastList } from "@/listen/BookScreen";
+import { ReviewQueue, useReviewCount } from "./ReviewQueue";
 import { usePlayer } from "@/listen/player";
 import { useSource } from "@/listen/source";
 
@@ -449,7 +450,8 @@ export function ProjectScreen() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "chapters";
+  const tab = ["chapters", "review", "cast", "activity"].includes(params.get("tab") ?? "") ? params.get("tab")! : "chapters";
+  const reviewCount = useReviewCount(id ?? "");
   const { data, isLoading, error } = useBook(id);
 
   if (isLoading) {
@@ -518,11 +520,17 @@ export function ProjectScreen() {
           <TabsTrigger value="chapters" count={chapters.length}>
             Chương
           </TabsTrigger>
+          <TabsTrigger value="review" count={reviewCount || undefined}>
+            Cần nghe lại
+          </TabsTrigger>
           <TabsTrigger value="cast">Nhân vật</TabsTrigger>
           <TabsTrigger value="activity">Nhật ký</TabsTrigger>
         </TabsList>
         <TabsContent value="chapters">
           <ChapterList book={book} chapters={chapters} />
+        </TabsContent>
+        <TabsContent value="review">
+          <ReviewQueue bookId={book.id} />
         </TabsContent>
         <TabsContent value="cast">
           <CastList bookId={book.id} />

@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import actions, listen_view, store
 from .library import Library, Preferences, book_id
 from .listening import Listening
+from .reviews import Reviews, review_view
 from .sync import Devices, ExclusiveHTTPServer, SyncApp, SyncServer, local_addresses, SYNC_PORT
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -83,6 +84,7 @@ class App:
         self.read_only = read_only
         self.static_dir = static_dir
         self.version = version
+        self.reviews = Reviews(preferences.path.with_name("reviews.json"))
         # Thư mục đã xuất trong phiên này - chỉ những thư mục này được mở bằng "Mở thư mục" sau khi xuất.
         self.exports: set[str] = set()
 
@@ -458,6 +460,20 @@ class Handler(BaseHTTPRequestHandler):
         self.app.exports.add(result["folder"])
         self._send_json(HTTPStatus.OK, result)
 
+    def get_review(self, query: dict[str, list[str]], value: str) -> None:
+        project = self.app._book(value)
+        verdicts = self.app.reviews.get(value)
+        self._send_json(HTTPStatus.OK, review_view(project, verdicts, include_minor=query.get("all") == ["1"]))
+
+    def post_review(self, _query: dict[str, list[str]], value: str) -> None:
+        self.app._book(value)
+        body = self._body()
+        verdict = body.get("verdict")
+        if verdict not in (None, "ok", "redo"):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Phán quyết không hợp lệ")
+        self.app.reviews.set(value, str(body.get("stableId", ""))[:80], verdict, int(body.get("chapterId", 0)))
+        self._send_json(HTTPStatus.OK, {"ok": True})
+
     def post_reveal_export(self, _query: dict[str, list[str]]) -> None:
         folder = str(self._body().get("folder", ""))
         if folder not in self.app.exports:
@@ -654,6 +670,8 @@ ROUTES: list[Route] = [
     ("POST", re.compile(BOOK + r"/stop"), Handler.post_stop),
     ("POST", re.compile(BOOK + r"/reveal"), Handler.post_reveal),
     ("POST", re.compile(BOOK + r"/export"), Handler.post_export),
+    ("GET", re.compile(BOOK + r"/review"), Handler.get_review),
+    ("POST", re.compile(BOOK + r"/review"), Handler.post_review),
     ("POST", re.compile(r"/api/reveal-export"), Handler.post_reveal_export),
     ("GET", re.compile(r"/api/sync"), Handler.get_sync),
     ("POST", re.compile(r"/api/sync"), Handler.post_sync),
