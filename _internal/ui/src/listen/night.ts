@@ -32,7 +32,7 @@ export class NightRecorder {
     return Boolean(this.session && !this.session.endedAt);
   }
 
-  start(book: { id: string; title: string }, minutes: number | null, position: NightPosition): void {
+  start(book: { id: string; title: string }, minutes: number | null, position: NightPosition, reason?: "safety"): void {
     const now = Date.now();
     const current = this.session;
     const reusable =
@@ -56,7 +56,13 @@ export class NightRecorder {
       current.endedAt = null;
     }
     this.fadingLogged = false;
-    this.push({ type: "timer", at: now / 1000, minutes: minutes ?? undefined, position });
+    this.push({ type: "timer", at: now / 1000, minutes: minutes ?? undefined, action: reason, position });
+  }
+
+  /** Mốc "còn thức" đã biết từ trước (lần cuối chạm máy trước khi lưới an toàn bật). */
+  touchAt(atMs: number, action: string, position: NightPosition): void {
+    if (!this.active) return;
+    this.push({ type: "touch", action, at: atMs / 1000, position });
   }
 
   /** Người nghe còn thức: một thao tác trên trình phát hay trên máy. Ghi thưa (20 giây một lần) trừ khi `force`. */

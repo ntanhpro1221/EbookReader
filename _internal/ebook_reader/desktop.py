@@ -84,7 +84,7 @@ def run_desktop() -> int:
         def __init__(self) -> None:
             super().__init__()
             self.setWindowTitle(APP_NAME)
-            self.setMinimumSize(960, 640)
+            self.setMinimumSize(1024, 680)  # hẹp hơn thì bảng Studio và thanh phát không còn chỗ
             self.settings = QSettings("EbookReader", "Desktop")
             geometry = self.settings.value("geometry")
             if geometry is not None:

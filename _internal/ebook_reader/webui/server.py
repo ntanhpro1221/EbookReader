@@ -406,6 +406,8 @@ class Handler(BaseHTTPRequestHandler):
             "volume": prefs["volume"],
             "sleepFadeSeconds": prefs.get("sleepFadeSeconds", 30),
             "sleepExtendMinutes": prefs.get("sleepExtendMinutes", 10),
+            "safetyStopHours": prefs.get("safetyStopHours", 2),
+            "sleepSchedule": prefs.get("sleepSchedule"),
         })
 
     def get_library(self, _query: dict[str, list[str]]) -> None:
@@ -554,6 +556,16 @@ class Handler(BaseHTTPRequestHandler):
             allowed["sleepFadeSeconds"] = body["sleepFadeSeconds"]
         if body.get("sleepExtendMinutes") in (5, 10, 15):
             allowed["sleepExtendMinutes"] = body["sleepExtendMinutes"]
+        if body.get("safetyStopHours") in (0, 1, 2, 3):
+            allowed["safetyStopHours"] = body["safetyStopHours"]
+        if "sleepSchedule" in body:
+            schedule = body["sleepSchedule"]
+            clock = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+            if schedule is None:
+                allowed["sleepSchedule"] = None
+            elif (isinstance(schedule, dict) and clock.fullmatch(str(schedule.get("from", "")))
+                  and clock.fullmatch(str(schedule.get("to", ""))) and schedule.get("minutes") in (15, 30, 45, 60)):
+                allowed["sleepSchedule"] = {"from": schedule["from"], "to": schedule["to"], "minutes": schedule["minutes"]}
         self._send_json(HTTPStatus.OK, self.app.preferences.update(allowed))
 
     def post_pick_folder(self, _query: dict[str, list[str]]) -> None:

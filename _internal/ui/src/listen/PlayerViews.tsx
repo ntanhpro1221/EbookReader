@@ -31,7 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent a
 import { toast } from "sonner";
 import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
-import { formatClock, formatLength, formatWhen, spokenClock } from "@/shared/format";
+import { formatClock, formatLength, formatPercent, formatWhen, spokenClock } from "@/shared/format";
 import { IconButton, Tooltip, Vu } from "@/shared/ui";
 import { useClock, useClockReader, useDuration, usePlaybackSecond } from "./clock";
 import type { Bookmark, ListenChapter, Script } from "./model";
@@ -508,6 +508,34 @@ function CompactProgress() {
   );
 }
 
+/** Thiết bị khác (điện thoại) đã nghe xa hơn chỗ đang nạp ở đây: hỏi, đừng lặng lẽ nhảy - và đừng để lần lưu kế tiếp
+ *  của máy này ghi đè vị trí mới hơn ấy (Audible hỏi "tới vị trí xa nhất?"; Audiobookshelf bị chê vì không hỏi). */
+function FurtherElsewhere() {
+  const { track, playing, queue, positionStamp, jumpTo, purpose } = usePlayer();
+  const { data: book } = useListenBook(track?.bookId);
+  const readClock = useClockReader();
+  const asked = useRef("");
+  const last = book?.state.last;
+  useEffect(() => {
+    if (!track || !last || playing || purpose !== "listen") return;
+    const key = `${track.bookId}:${last.at}`;
+    if (asked.current === key || last.at * 1000 <= positionStamp() + 1000) return;
+    const here = readClock().time;
+    if (last.chapterId === track.chapterId && Math.abs(last.seconds - here) < 30) return;
+    asked.current = key;
+    const chapter = queue.find((item) => item.id === last.chapterId);
+    if (!chapter?.available) return;
+    toast("Thiết bị khác đã nghe tới chỗ khác", {
+      id: "further-elsewhere",
+      duration: 20_000,
+      description: `${chapter.title} · ${formatClock(last.seconds)} (${formatWhen(last.at)})`,
+      action: { label: "Nghe tiếp từ đó", onClick: () => jumpTo(last.chapterId, last.seconds) },
+      cancel: { label: "Ở lại đây", onClick: () => undefined },
+    });
+  }, [jumpTo, last, playing, positionStamp, purpose, queue, readClock, track]);
+  return null;
+}
+
 // ---- Thanh phát nhỏ ------------------------------------------------------------------------------------
 
 export function PlayerBar({ compact = false }: { compact?: boolean }) {
@@ -544,6 +572,7 @@ export function PlayerBar({ compact = false }: { compact?: boolean }) {
   return (
     <section aria-label="Trình phát" className="relative z-20 shrink-0 border-t border-line bg-panel">
       <BookmarkShortcut />
+      <FurtherElsewhere />
       <FadingNotice className="mx-4 mt-2" />
       <div className="grid h-[76px] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-4">
         <button
@@ -956,6 +985,33 @@ function initialPanel(): Panel {
   return "text";
 }
 
+/** Tiến độ cả cuốn (phần đã có audio): "Cả cuốn 42% · còn 3 giờ 48 phút (2 giờ 32 phút ở 1,5×)". */
+function BookProgressLine() {
+  const { queue, track, rate } = usePlayer();
+  const tens = useClock((time) => Math.floor(time / 10));
+  const { before, total } = useMemo(() => {
+    let heardBefore = 0;
+    let sum = 0;
+    let reached = false;
+    for (const chapter of queue) {
+      if (!chapter.available) continue;
+      if (chapter.id === track?.chapterId) reached = true;
+      else if (!reached) heardBefore += chapter.duration;
+      sum += chapter.duration;
+    }
+    return { before: heardBefore, total: sum };
+  }, [queue, track?.chapterId]);
+  if (!track || total <= 0) return null;
+  const heard = Math.min(total, before + tens * 10);
+  const left = Math.max(0, total - heard);
+  return (
+    <p className="tabular mt-1 text-xs text-fg-2">
+      Cả cuốn {formatPercent(heard / total)} · còn {formatLength(left)}
+      {rate !== 1 && left > 60 ? ` (${formatLength(left / rate)} ở ${speedLabel(rate)})` : ""}
+    </p>
+  );
+}
+
 function CaughtUpNotice() {
   const { atEnd } = usePlayer();
   if (atEnd !== "caughtUp") return null;
@@ -1074,6 +1130,7 @@ export function NowPlaying({ mobile = false }: { mobile?: boolean }) {
           <p className="mt-0.5 truncate text-sm text-fg-2">
             <TrackSubtitle />
           </p>
+          <BookProgressLine />
         </div>
         <div className="mt-5 w-full">
           <SeekBar large />

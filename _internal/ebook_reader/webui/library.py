@@ -29,6 +29,10 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     # Hẹn giờ ngủ: nhỏ dần bao lâu trước khi tắt, và mỗi lần "nghe thêm" cộng bao nhiêu phút.
     "sleepFadeSeconds": 30,
     "sleepExtendMinutes": 10,
+    # Lưới an toàn ngủ quên: phát liên tục chừng này giờ không ai chạm máy thì tự dừng (0 = tắt).
+    "safetyStopHours": 2,
+    # Lịch đêm tự hẹn giờ: {"from": "22:00", "to": "06:00", "minutes": 30} hoặc None.
+    "sleepSchedule": None,
 }
 MAX_RECENTS = 30
 

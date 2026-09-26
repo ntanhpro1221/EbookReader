@@ -28,8 +28,12 @@ export function ClipProvider({ children, onStart }: { children: ReactNode; onSta
   }
   const [current, setCurrent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Mỗi lần bấm nghe thử có một số thứ tự: bấm nhanh sang clip khác thì play() của clip trước ném AbortError -
+  // lỗi ấy không được xoá trạng thái của clip SAU (trước đây clip sau vẫn phát mà không nút nào hiện "đang phát").
+  const request = useRef(0);
 
   const stop = useCallback(() => {
+    request.current += 1;
     audio.current?.pause();
     setCurrent(null);
     setLoading(false);
@@ -43,12 +47,14 @@ export function ClipProvider({ children, onStart }: { children: ReactNode; onSta
       return;
     }
     onStart?.();
+    const mine = (request.current += 1);
     element.pause();
     element.src = url;
     element.currentTime = 0;
     setCurrent(id);
     setLoading(true);
-    void element.play().catch(() => {
+    void element.play().catch((error: unknown) => {
+      if (request.current !== mine || (error as { name?: string } | null)?.name === "AbortError") return;
       setCurrent(null);
       setLoading(false);
     });

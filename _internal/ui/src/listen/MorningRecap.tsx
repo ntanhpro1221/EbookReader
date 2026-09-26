@@ -50,13 +50,14 @@ function markersOf(session: NightSession): Marker[] {
   const still = [...events].reverse().find((event) => event.type === "still");
   const stopped = [...events].reverse().find((event) => event.type === "stopped");
   const phone = session.device !== "desktop";
+  const safety = timer?.action === "safety";
   const list = [
-    make(timer, "timer", TimerReset, "Hẹn giờ ngủ", "chắc chắn còn thức"),
+    safety ? null : make(timer, "timer", TimerReset, "Hẹn giờ ngủ", "chắc chắn còn thức"),
     lastTouch && lastTouch !== timer
       ? make(lastTouch, "touch", Hand, phone ? "Lần cuối chạm máy" : "Lần cuối dùng máy", "chắc chắn còn thức")
       : null,
     make(still, "still", Smartphone, "Máy bắt đầu nằm yên", "có lẽ bạn ngủ từ khoảng này", BEFORE_SLEEP_SECONDS),
-    make(stopped, "stopped", Moon, "Tự dừng", "lúc hết giờ hẹn"),
+    make(stopped, "stopped", Moon, "Tự dừng", safety ? "không ai chạm máy suốt một lúc lâu" : "lúc hết giờ hẹn"),
   ].filter(Boolean) as Marker[];
   const suggested = list.find((marker) => marker.key === "still") ?? list.find((marker) => marker.key === "touch") ?? list[0];
   if (suggested) suggested.suggested = true;

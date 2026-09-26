@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button, Kbd, Segmented } from "@/shared/ui";
 import { cn } from "@/shared/cn";
 import { pickFolder, useAppInfo, usePreferences } from "@/studio/data";
-import { PhoneSync } from "./PhoneSync";
+import { PhoneSync, Switch } from "./PhoneSync";
 
 function Section({ id, title, description, children }: { id?: string; title: string; description?: string; children: ReactNode }) {
   return (
@@ -131,6 +131,66 @@ export function SettingsScreen() {
                   { value: "15", label: "15 phút" },
                 ]}
               />
+            </Field>
+            <Field
+              label="Tự tắt khi ngủ quên"
+              hint="Phát liên tục mà không ai chạm máy chừng này thì nhỏ dần rồi dừng, và ghi lại chỗ đang nghe cho thẻ “Tối qua”."
+            >
+              <Segmented<"0" | "1" | "2" | "3">
+                label="Tự tắt khi ngủ quên"
+                value={String(preferences?.safetyStopHours ?? 2) as "0" | "1" | "2" | "3"}
+                onChange={(value) => update({ safetyStopHours: Number(value) })}
+                options={[
+                  { value: "0", label: "Không" },
+                  { value: "1", label: "1 giờ" },
+                  { value: "2", label: "2 giờ" },
+                  { value: "3", label: "3 giờ" },
+                ]}
+              />
+            </Field>
+            <Field
+              label="Lịch đêm"
+              hint="Bấm nghe trong khung giờ này thì tự hẹn giờ ngủ - khỏi phải nhớ bấm lúc buồn ngủ."
+            >
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Switch
+                  id="sleep-schedule"
+                  checked={Boolean(preferences?.sleepSchedule)}
+                  onCheckedChange={(on) => update({ sleepSchedule: on ? { from: "22:00", to: "06:00", minutes: 30 } : null })}
+                />
+                {preferences?.sleepSchedule && (
+                  <>
+                    <input
+                      type="time"
+                      aria-label="Từ"
+                      value={preferences.sleepSchedule.from}
+                      onChange={(event) => event.target.value && update({ sleepSchedule: { ...preferences.sleepSchedule!, from: event.target.value } })}
+                      className="tabular h-9 rounded-lg border border-line bg-panel px-2"
+                    />
+                    <span className="text-fg-2">đến</span>
+                    <input
+                      type="time"
+                      aria-label="Đến"
+                      value={preferences.sleepSchedule.to}
+                      onChange={(event) => event.target.value && update({ sleepSchedule: { ...preferences.sleepSchedule!, to: event.target.value } })}
+                      className="tabular h-9 rounded-lg border border-line bg-panel px-2"
+                    />
+                    <span className="text-fg-2">hẹn</span>
+                    <select
+                      aria-label="Số phút hẹn"
+                      value={preferences.sleepSchedule.minutes}
+                      onChange={(event) => update({ sleepSchedule: { ...preferences.sleepSchedule!, minutes: Number(event.target.value) } })}
+                      className="h-9 rounded-lg border border-line bg-panel px-2"
+                    >
+                      {[15, 30, 45, 60].map((minutes) => (
+                        <option key={minutes} value={minutes}>
+                          {minutes} phút
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
             </Field>
             <Field
               label="Tự lùi khi nghe lại"

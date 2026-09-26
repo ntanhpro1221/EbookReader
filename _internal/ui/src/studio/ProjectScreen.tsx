@@ -48,13 +48,14 @@ import { CastList } from "@/listen/BookScreen";
 import { usePlayer } from "@/listen/player";
 import { useSource } from "@/listen/source";
 
-/** Phát một chương ngay trong Studio (nghe kiểm tra) bằng chính trình phát của phía Nghe. */
+/** Phát một chương ngay trong Studio (nghe kiểm tra) bằng chính trình phát của phía Nghe - ở chế độ "nghe kiểm":
+ *  không ghi đè chỗ đang nghe dở, tốc độ hay nhật ký đêm của người nghe. */
 function usePlayChapter() {
   const source = useSource();
   const player = usePlayer();
   return async (bookId: string, chapterId: number) => {
     const book = await source.book(bookId);
-    player.play(book, book.chapters ?? [], chapterId, 0);
+    player.play(book, book.chapters ?? [], chapterId, 0, { purpose: "review" });
   };
 }
 
@@ -183,33 +184,40 @@ function StopDialog({ book, open, onOpenChange }: { book: BookSummary; open: boo
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Dừng tạo sách nói?"
-      description="Mọi chương và câu đã xong được giữ nguyên. Bấm “Tiếp tục” lúc nào cũng được."
+      title={inAnalysis ? "Dừng giữa lúc phân tích truyện?" : "Dừng tạo sách nói?"}
+      description={
+        inAnalysis
+          ? undefined
+          : "Mọi chương và câu đã xong được giữ nguyên. Bấm “Tiếp tục” để làm tiếp từ chỗ dừng."
+      }
     >
       {inAnalysis && (
         <div className="mb-5 flex gap-3 rounded-xl bg-warning-soft p-4 text-sm leading-relaxed text-fg">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-warning" />
-          <div>
-            <div className="font-semibold">Đang ở giữa bước phân tích truyện</div>
-            <p className="mt-1 text-fg-2">
-              Dừng lúc này rồi chạy tiếp, phần phân tích sau chỗ dừng có thể nhận ra người nói khác một chút so với
-              chạy liền một mạch - và kéo theo cách phân vai. Nên để chạy hết bước này
-              {book.eta ? ` (${formatEta(book.eta.seconds)})` : ""}.
+          <div className="text-pretty">
+            <p>
+              Phân tích là bước duy nhất không nên ngắt. Chạy tiếp sau khi dừng sẽ ra <span className="font-semibold">một cuốn
+              sách khác</span> so với chạy liền một mạch: đoạn sau chỗ dừng có thể đổi người nói, kéo theo đổi giọng.
+            </p>
+            <p className="mt-2 text-fg-2">
+              Nên để chạy hết bước này{book.eta ? ` (${formatEta(book.eta.seconds)})` : ""}. Nếu buộc phải dừng (tắt máy), hãy
+              tạo lại sách từ đầu thay vì bấm Tiếp tục.
             </p>
           </div>
         </div>
       )}
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
+        <Button variant={inAnalysis ? "primary" : "ghost"} onClick={() => onOpenChange(false)}>
           Để chạy tiếp
         </Button>
         <Button
           variant="danger"
           icon={Square}
           loading={stop.isPending}
+          disabled={stop.isPending}
           onClick={() => stop.mutate(book.id, { onSettled: () => onOpenChange(false) })}
         >
-          Dừng
+          {inAnalysis ? "Vẫn dừng" : "Dừng"}
         </Button>
       </div>
     </Dialog>
@@ -315,9 +323,10 @@ function ChapterRow({ book, chapter }: { book: BookSummary; chapter: Chapter }) 
       </div>
       <div>
         {working ? (
-          <div className="flex items-center gap-2">
-            <Progress value={recorded} running size="xs" />
-            <span className="tabular text-[11px] text-fg-3">
+          <div className="flex items-center gap-2" title={book.running ? "Đang thu âm" : "Tạm dừng giữa chương"}>
+            <Progress value={recorded} running={book.running} tone={book.running ? "accent" : "muted"} size="xs" />
+            <span className="tabular text-xs text-fg-2">
+              {book.running ? "" : "dừng ở "}
               {chapter.segments.finished}/{chapter.segments.total}
             </span>
           </div>

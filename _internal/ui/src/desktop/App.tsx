@@ -105,6 +105,8 @@ export function App() {
           defaultVolume={info.volume}
           fadeSeconds={preferences?.sleepFadeSeconds ?? info.sleepFadeSeconds}
           extendMinutes={preferences?.sleepExtendMinutes ?? info.sleepExtendMinutes}
+          safetyStopHours={preferences?.safetyStopHours ?? info.safetyStopHours}
+          sleepSchedule={preferences ? preferences.sleepSchedule : info.sleepSchedule}
         >
           <ClipBridge>
             <HashRouter>

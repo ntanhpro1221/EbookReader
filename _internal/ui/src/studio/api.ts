@@ -132,6 +132,10 @@ export interface ScannedFile {
 export interface ScanResult {
   files: ScannedFile[];
   skipped: string[];
+  /** Đường dẫn không tồn tại. */
+  missing: string[];
+  /** Thư mục đã chọn không có TXT ngay bên trong - đây là các thư mục con có. */
+  subfolders: string[];
   suggestedTitle: string;
   totals: { chapters: number; words: number; audioSeconds: number };
 }
@@ -146,6 +150,8 @@ export interface AppInfo {
   volume: number;
   sleepFadeSeconds: number;
   sleepExtendMinutes: number;
+  safetyStopHours: number;
+  sleepSchedule: { from: string; to: string; minutes: number } | null;
 }
 
 export interface Preferences {
@@ -155,6 +161,8 @@ export interface Preferences {
   volume: number;
   sleepFadeSeconds: number;
   sleepExtendMinutes: number;
+  safetyStopHours: number;
+  sleepSchedule: { from: string; to: string; minutes: number } | null;
 }
 
 // Mã phiên do cửa sổ app gắn vào URL (?t=...). Giữ lại trong phiên để điều hướng nội bộ không làm mất nó.

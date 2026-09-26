@@ -32,7 +32,7 @@ function ProjectRow({ book }: { book: BookSummary }) {
     <button
       type="button"
       onClick={() => navigate(`/studio/${book.id}`)}
-      className="grid w-full grid-cols-[48px_minmax(0,1fr)_170px_200px_110px] items-center gap-4 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-hover"
+      className="grid w-full grid-cols-[48px_minmax(0,1fr)_160px_170px] xl:grid-cols-[48px_minmax(0,1fr)_170px_200px_110px] items-center gap-4 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-hover"
     >
       <BookCover title={book.title} size="sm" className="size-12" />
       <div className="min-w-0">
@@ -54,11 +54,11 @@ function ProjectRow({ book }: { book: BookSummary }) {
               <Progress value={book.progress.overall} running={live} tone={live ? "accent" : "muted"} size="sm" />
               <span className="tabular w-9 text-right text-xs font-semibold">{formatPercent(book.progress.overall)}</span>
             </div>
-            <div className="mt-1 text-[11px] text-fg-3">{detail}</div>
+            <div className="mt-1 truncate text-xs text-fg-2">{detail}</div>
           </>
         )}
       </div>
-      <div className={cn("tabular text-right text-xs", live ? "text-accent-text" : "text-fg-3")}>
+      <div className={cn("tabular hidden text-right text-xs xl:block", live ? "text-accent-text" : "text-fg-2")}>
         {live ? "đang chạy" : formatRelative(book.updatedAt)}
       </div>
     </button>
@@ -141,12 +141,12 @@ export function ProjectsScreen() {
             </section>
           )}
           <section className="mt-8">
-            <div className="grid grid-cols-[48px_minmax(0,1fr)_170px_200px_110px] gap-4 border-b border-line px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-fg-3">
+            <div className="grid grid-cols-[48px_minmax(0,1fr)_160px_170px] xl:grid-cols-[48px_minmax(0,1fr)_170px_200px_110px] gap-4 border-b border-line px-3 pb-2 text-xs font-semibold uppercase tracking-[0.06em] text-fg-2">
               <span />
               <span>Dự án</span>
               <span>Trạng thái</span>
               <span>Tiến độ</span>
-              <span className="text-right">Cập nhật</span>
+              <span className="hidden text-right xl:block">Cập nhật</span>
             </div>
             <div className="mt-1.5 space-y-0.5">
               {others.map((book) => (

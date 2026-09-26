@@ -19,6 +19,8 @@ export function phaseTone(phase: Phase, running: boolean): Tone {
   if (phase === "done") return "success";
   if (phase === "error") return "danger";
   if (running) return "accent";
+  // Làm dở mà không chạy: cần người dùng để ý (bấm Tiếp tục) - không phải trạng thái trung tính.
+  if (phase === "analysis" || phase === "casting" || phase === "synthesis" || phase === "stopped") return "warning";
   return "muted";
 }
 
@@ -92,6 +94,7 @@ function useRefresh() {
 export function useStart() {
   const refresh = useRefresh();
   return useMutation({
+    scope: { id: "start-stop" },
     mutationFn: (id: string) => api<BookSummary>(`/api/books/${id}/start`, { method: "POST" }),
     onSuccess: (_book, id) => {
       refresh(id);
@@ -104,6 +107,7 @@ export function useStart() {
 export function useStop() {
   const refresh = useRefresh();
   return useMutation({
+    scope: { id: "start-stop" },
     mutationFn: (id: string) => api<BookSummary>(`/api/books/${id}/stop`, { method: "POST" }),
     onSuccess: (_book, id) => {
       refresh(id);

@@ -44,9 +44,38 @@ export interface Track {
 /** "review": nghe kiểm trong Studio - không ghi đè chỗ đang nghe dở của người nghe. */
 export type Purpose = "listen" | "review";
 
+/** Lịch đêm: bấm nghe trong khung giờ này thì tự hẹn giờ ngủ (giờ dạng "22:00", khung có thể qua nửa đêm). */
+export interface SleepSchedule {
+  from: string;
+  to: string;
+  minutes: number;
+}
+
 export interface PlayerOptions {
   fadeSeconds: number;
   extendMinutes: number;
+  /** Phát liên tục chừng này giờ mà không ai chạm máy thì tự nhỏ dần rồi dừng (0 = tắt) - lưới cho người ngủ quên. */
+  safetyStopHours: number;
+  schedule: SleepSchedule | null;
+}
+
+function minutesOf(clock: string): number {
+  const [hours, minutes] = clock.split(":").map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+}
+
+/** Đang trong khung giờ của lịch? Trả về khoá của đêm ấy (ngày bắt đầu khung) để biết người dùng đã tắt nó chưa. */
+export function scheduleWindow(schedule: SleepSchedule | null, now = new Date()): string | null {
+  if (!schedule) return null;
+  const from = minutesOf(schedule.from);
+  const to = minutesOf(schedule.to);
+  const current = now.getHours() * 60 + now.getMinutes();
+  const overnight = from > to;
+  const inside = overnight ? current >= from || current < to : current >= from && current < to;
+  if (!inside) return null;
+  const start = new Date(now);
+  if (overnight && current < to) start.setDate(start.getDate() - 1);
+  return start.toDateString();
 }
 
 type BookRef = Pick<ListenBook, "id" | "title" | "narrator" | "state"> & { complete?: boolean };
@@ -91,6 +120,8 @@ interface PlayerActions {
   extendSleep: (minutes?: number) => void;
   addBookmark: (note?: string) => Promise<Bookmark | null>;
   close: () => void;
+  /** Lần cuối vị trí trên máy này được nạp hoặc lưu (ms) - vị trí trên máy chủ mới hơn mốc này là từ thiết bị khác. */
+  positionStamp: () => number;
 }
 
 export type PlayerValue = PlayerState & PlayerActions;
@@ -141,6 +172,8 @@ export function PlayerProvider({
   keyboard = true,
   fadeSeconds = DEFAULT_FADE_SECONDS,
   extendMinutes = DEFAULT_EXTEND_MINUTES,
+  safetyStopHours = 2,
+  sleepSchedule = null,
 }: {
   engine: AudioEngine;
   children: ReactNode;
@@ -149,6 +182,8 @@ export function PlayerProvider({
   keyboard?: boolean;
   fadeSeconds?: number;
   extendMinutes?: number;
+  safetyStopHours?: number;
+  sleepSchedule?: SleepSchedule | null;
 }) {
   const source = useSource();
   const client = useQueryClient();
@@ -158,7 +193,12 @@ export function PlayerProvider({
     () => new NightRecorder(source.saveNight ? (bookId, session) => source.saveNight!(bookId, session) : undefined),
     [source],
   );
-  const options = useMemo<PlayerOptions>(() => ({ fadeSeconds, extendMinutes }), [fadeSeconds, extendMinutes]);
+  const scheduleKey = sleepSchedule ? `${sleepSchedule.from}-${sleepSchedule.to}-${sleepSchedule.minutes}` : "";
+  const options = useMemo<PlayerOptions>(
+    () => ({ fadeSeconds, extendMinutes, safetyStopHours, schedule: sleepSchedule }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fadeSeconds, extendMinutes, safetyStopHours, scheduleKey],
+  );
 
   const [track, setTrack] = useState<Track | null>(null);
   const [queue, setQueue] = useState<ListenChapter[]>([]);
@@ -191,6 +231,10 @@ export function PlayerProvider({
     history: [] as { chapterId: number; seconds: number }[],
     bookmarking: false,
     muted: 0,
+    stamp: 0,
+    lastActivity: Date.now(),
+    lastActivityPosition: null as NightPosition | null,
+    scheduleOffFor: "",
   });
   refs.current.track = track;
   refs.current.queue = queue;
@@ -223,6 +267,7 @@ export function PlayerProvider({
     const now = Date.now();
     if (!force && now - refs.current.lastSaved < SAVE_EVERY_MS) return;
     refs.current.lastSaved = now;
+    refs.current.stamp = now;
     void source.saveProgress(current.bookId, current.chapterId, engine.time, engine.duration).catch(() => undefined);
     if (force) refreshLists(current.bookId);
   }, [engine, native, source, refreshLists]);
@@ -234,6 +279,7 @@ export function PlayerProvider({
     setTrack(next);
     refs.current.track = next;
     clock.set(at, 0);
+    refs.current.stamp = Date.now();
     engine.load(
       {
         url: source.audioUrl(next.bookId, next.chapterId),
@@ -479,12 +525,17 @@ export function PlayerProvider({
     const book = refs.current.book;
     if (request.kind === "off") {
       night.cancel(position());
+      // Tự tắt hẹn giờ trong khung lịch đêm: đêm ấy không tự bật lại nữa.
+      refs.current.scheduleOffFor = scheduleWindow(options.schedule) ?? "";
       return;
     }
     if (request.kind === "minutes") setLastSleepMinutes(request.minutes);
     setSleepStoppedAt(null);
     if (book && refs.current.purpose === "listen") night.start(book, request.kind === "minutes" ? request.minutes : null, position());
-  }, [applySleep, endFade, engine, native, night, position]);
+  }, [applySleep, endFade, engine, native, night, options.schedule, position]);
+
+  const setSleepRef = useRef(setSleep);
+  setSleepRef.current = setSleep;
 
   const extendSleep = useCallback((minutes = options.extendMinutes) => {
     if (native) {
@@ -529,6 +580,8 @@ export function PlayerProvider({
     refs.current.history = [];
     setCanGoBack(false);
   }, [applySleep, endFade, engine, night, position, save]);
+
+  const positionStamp = useCallback(() => refs.current.stamp, []);
 
   /** Hẹn giờ vừa hết: dừng, trả âm lượng, ghi mốc "tự dừng" cho buổi sáng. */
   const stopBySleep = useCallback(() => {
@@ -689,14 +742,54 @@ export function PlayerProvider({
     return () => names.forEach((name) => window.removeEventListener(name, onActivity, { capture: true }));
   }, [extendSleep, fading, native]);
 
-  // Còn hẹn giờ thì mọi thao tác trên máy đều là bằng chứng "còn thức" cho nhật ký đêm.
+  // Mọi thao tác trên máy là bằng chứng "còn thức": cho lưới an toàn ngủ quên, và cho nhật ký đêm khi đang hẹn giờ.
   useEffect(() => {
-    if (native || sleep.kind === "off") return;
-    const onActivity = () => night.touch("activity", position());
+    if (native) return;
+    const onActivity = () => {
+      refs.current.lastActivity = Date.now();
+      if (refs.current.track) refs.current.lastActivityPosition = position();
+      if (refs.current.sleep.kind !== "off") night.touch("activity", position());
+    };
     const names = ["keydown", "pointerdown", "wheel"] as const;
     names.forEach((name) => window.addEventListener(name, onActivity, { passive: true }));
     return () => names.forEach((name) => window.removeEventListener(name, onActivity));
-  }, [native, night, position, sleep.kind]);
+  }, [native, night, position]);
+
+  // Lưới an toàn: phát liên tục quá lâu mà không ai chạm máy (ngủ quên, quên hẹn giờ) thì tự hẹn 1 phút - nhỏ dần
+  // rồi dừng như hẹn giờ thường - và ghi nhật ký đêm để sáng ra thẻ "Tối qua" vẫn giúp tìm lại chỗ.
+  useEffect(() => {
+    if (native || !playing || sleep.kind !== "off" || options.safetyStopHours <= 0) return;
+    const check = () => {
+      if (refs.current.sleep.kind !== "off" || refs.current.purpose !== "listen") return;
+      if (Date.now() - refs.current.lastActivity < options.safetyStopHours * 3_600_000) return;
+      const book = refs.current.book;
+      if (book) {
+        night.start(book, 1, position(), "safety");
+        const before = refs.current.lastActivityPosition;
+        if (before) night.touchAt(refs.current.lastActivity, "last-activity", before);
+      }
+      applySleep(sleepFrom({ kind: "minutes", minutes: 1 }, true, Date.now()));
+      toast(`Không thấy ai chạm máy suốt ${options.safetyStopHours} giờ - sẽ tắt sau 1 phút`, {
+        id: "safety-stop",
+        duration: 60_000,
+        action: { label: "Vẫn đang nghe", onClick: () => setSleepRef.current({ kind: "off" }) },
+      });
+    };
+    const timer = window.setInterval(check, 30_000);
+    return () => window.clearInterval(timer);
+  }, [applySleep, native, night, options.safetyStopHours, playing, position, sleep.kind]);
+
+  // Lịch đêm: bắt đầu nghe trong khung giờ thì tự hẹn giờ (trừ khi đêm nay người dùng đã tự tắt nó).
+  useEffect(() => {
+    if (native || !playing || sleep.kind !== "off" || refs.current.purpose !== "listen") return;
+    const night_ = scheduleWindow(options.schedule);
+    if (!night_ || !options.schedule || refs.current.scheduleOffFor === night_) return;
+    setSleepRef.current({ kind: "minutes", minutes: options.schedule.minutes });
+    toast(`Đã tự hẹn giờ ${options.schedule.minutes} phút`, {
+      id: "sleep-schedule",
+      description: `Lịch đêm ${options.schedule.from}-${options.schedule.to}. Tắt ở nút mặt trăng nếu chưa muốn ngủ.`,
+    });
+  }, [native, options.schedule, playing, sleep.kind]);
 
   useEffect(() => {
     const onHide = () => {
@@ -815,10 +908,10 @@ export function PlayerProvider({
     track, queue, playing, buffering, rate, volume, sleep, fading, sleepStoppedAt, lastSleepMinutes, purpose, atEnd,
     canGoBack, error, options,
     play, prepare, toggle, resume, pause, seek, skip, next, previous, jumpTo, goBack, setRate, setVolume, setSleep,
-    extendSleep, addBookmark, close,
+    extendSleep, addBookmark, close, positionStamp,
   }), [track, queue, playing, buffering, rate, volume, sleep, fading, sleepStoppedAt, lastSleepMinutes, purpose, atEnd,
     canGoBack, error, options, play, prepare, toggle, resume, pause, seek, skip, next, previous, jumpTo, goBack, setRate,
-    setVolume, setSleep, extendSleep, addBookmark, close]);
+    setVolume, setSleep, extendSleep, addBookmark, close, positionStamp]);
 
   const nowPlaying = useMemo(() => ({ expanded, setExpanded }), [expanded]);
 

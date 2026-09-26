@@ -99,9 +99,25 @@ def scan_inputs(paths: list[str]) -> dict[str, Any]:
     files: list[Path] = []
     seen: set[str] = set()
     skipped: list[str] = []
+    missing: list[str] = []
+    subfolders: list[str] = []
     for item in paths:
-        path = Path(item).expanduser()
+        # "Copy as path" của Explorer luôn thêm ngoặc kép; khoảng trắng hai đầu cũng hay dính theo khi dán.
+        cleaned = str(item).strip().strip('"').strip("'").strip()
+        path = Path(cleaned).expanduser()
+        if not path.exists():
+            missing.append(cleaned)
+            continue
         candidates = discover_txt_files(path) if path.is_dir() else [path]
+        if path.is_dir() and not candidates:
+            # Chọn nhầm thư mục cha: gợi ý các thư mục con có TXT ngay bên trong.
+            try:
+                subfolders.extend(
+                    str(child) for child in sorted(path.iterdir(), key=lambda entry: natural_key(entry.name))
+                    if child.is_dir() and discover_txt_files(child)
+                )
+            except OSError:
+                pass
         for candidate in candidates:
             if not candidate.is_file() or candidate.suffix.casefold() != ".txt":
                 skipped.append(str(candidate))
@@ -132,6 +148,8 @@ def scan_inputs(paths: list[str]) -> dict[str, Any]:
     return {
         "files": rows,
         "skipped": skipped,
+        "missing": missing,
+        "subfolders": subfolders[:8],
         "suggestedTitle": title,
         "totals": {
             "chapters": len(rows),
