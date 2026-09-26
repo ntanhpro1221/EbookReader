@@ -86,7 +86,7 @@ class Listening:
         with self._lock:
             entry = self._book(book)
             entry["finished"] = bool(finished)
-            entry["updatedAt"] = time.time()
+            entry["finishedAt"] = entry["updatedAt"] = time.time()
             self._save()
             return json.loads(json.dumps(entry))
 
@@ -94,7 +94,7 @@ class Listening:
         with self._lock:
             entry = self._book(book)
             entry["rate"] = float(rate)
-            entry["updatedAt"] = time.time()
+            entry["rateAt"] = entry["updatedAt"] = time.time()
             self._save()
 
     def add_bookmark(self, book: str, chapter_id: int, seconds: float, note: str = "") -> dict[str, Any]:
@@ -120,8 +120,19 @@ class Listening:
         with self._lock:
             entry = self._book(book)
             entry["bookmarks"] = [mark for mark in entry["bookmarks"] if mark["id"] != mark_id]
+            entry.setdefault("deleted", {})[mark_id] = time.time()
             entry["updatedAt"] = time.time()
             self._save()
+
+    def merge(self, book: str, incoming: dict[str, Any]) -> dict[str, Any]:
+        """Gộp trạng thái từ thiết bị khác (điện thoại). Mỗi phần mang mốc thời gian riêng, bên mới hơn thắng;
+        dấu trang hợp theo id, dấu trang đã xoá ở một bên (tombstone) thì xoá ở cả hai."""
+        with self._lock:
+            entry = self._book(book)
+            merged = merge_states(entry, incoming)
+            self._data[book] = merged
+            self._save()
+            return json.loads(json.dumps(merged))
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,3 +163,31 @@ def book_progress(state: dict[str, Any], chapters: list[dict[str, Any]]) -> dict
         "chaptersDone": done_chapters,
         "finished": bool(state.get("finished")) or (bool(chapters) and done_chapters == len(chapters)),
     }
+
+
+def merge_states(ours: dict[str, Any], theirs: dict[str, Any]) -> dict[str, Any]:
+    result = json.loads(json.dumps(ours))
+    result.setdefault("chapters", {})
+    result.setdefault("bookmarks", [])
+    if (theirs.get("last") or {}).get("at", 0) > (result.get("last") or {}).get("at", 0):
+        result["last"] = theirs["last"]
+    for key, record in (theirs.get("chapters") or {}).items():
+        mine = result["chapters"].get(key)
+        if not mine or float(record.get("at") or 0) > float(mine.get("at") or 0):
+            result["chapters"][key] = record
+    for field, stamp in (("rate", "rateAt"), ("finished", "finishedAt")):
+        if field in theirs and float(theirs.get(stamp) or 0) > float(result.get(stamp) or 0):
+            result[field] = theirs[field]
+            result[stamp] = theirs[stamp]
+    deleted = dict(result.get("deleted") or {})
+    deleted.update(theirs.get("deleted") or {})
+    marks = {mark["id"]: mark for mark in result["bookmarks"]}
+    for mark in theirs.get("bookmarks") or []:
+        current = marks.get(mark["id"])
+        if not current or float(mark.get("at") or 0) >= float(current.get("at") or 0):
+            marks[mark["id"]] = mark
+    result["bookmarks"] = sorted((mark for mark in marks.values() if mark["id"] not in deleted),
+                                 key=lambda mark: mark.get("at") or 0)
+    result["deleted"] = deleted
+    result["updatedAt"] = max(float(result.get("updatedAt") or 0), float(theirs.get("updatedAt") or 0))
+    return result

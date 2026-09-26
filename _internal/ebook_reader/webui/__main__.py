@@ -25,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dev", action="store_true")
     parser.add_argument("--real-runner", action="store_true")
     parser.add_argument("--read-only", action="store_true")
+    parser.add_argument("--sync-host", default=None, help="bật đồng bộ điện thoại, chỉ nghe địa chỉ này (dev: 127.0.0.1)")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -39,6 +40,9 @@ def main(argv: list[str] | None = None) -> int:
         read_only=args.read_only,
         version="dev" if args.dev else "",
     )
+    if args.sync_host:
+        app.sync_host = args.sync_host
+        app.set_sync(True)
     server = Server(app, port=args.port).start()
     print(f"Ebook Reader UI: {server.url}  (thư viện: {preferences.get()['libraryRoot']})", flush=True)
     try:

@@ -31,6 +31,8 @@ export class WebAudioEngine implements AudioEngine {
 
   constructor() {
     this.audio.preload = "auto";
+    // ?mute=1: kiểm thử tự động không được phát tiếng ra loa của người dùng.
+    this.audio.muted = new URLSearchParams(window.location.search).get("mute") === "1";
     this.audio.addEventListener("loadedmetadata", () => {
       if (this.pendingSeek !== null) {
         this.audio.currentTime = Math.min(this.pendingSeek, Math.max(0, (this.audio.duration || 0) - 1));

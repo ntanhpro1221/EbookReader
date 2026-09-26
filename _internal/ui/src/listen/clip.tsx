@@ -21,7 +21,11 @@ export function useClip(): ClipContextValue {
 
 export function ClipProvider({ children, onStart }: { children: ReactNode; onStart?: () => void }) {
   const audio = useRef<HTMLAudioElement | null>(null);
-  if (audio.current === null && typeof Audio !== "undefined") audio.current = new Audio();
+  if (audio.current === null && typeof Audio !== "undefined") {
+    audio.current = new Audio();
+    // ?mute=1: kiểm thử tự động không được phát tiếng ra loa của người dùng.
+    audio.current.muted = new URLSearchParams(window.location.search).get("mute") === "1";
+  }
   const [current, setCurrent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 

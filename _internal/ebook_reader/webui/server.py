@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import actions, listen_view, store
 from .library import Library, Preferences, book_id
 from .listening import Listening
+from .sync import Devices, SyncApp, SyncServer, local_addresses, SYNC_PORT
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 ASSET_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -69,6 +70,10 @@ class App:
     ) -> None:
         self.preferences = preferences
         self.listening = listening or Listening(preferences.path.with_name("listening.json"))
+        self.devices = Devices(preferences.path.with_name("devices.json"))
+        self.sync_server: SyncServer | None = None
+        self.sync_host = "0.0.0.0"
+        self.sync_error = ""
         self.library = Library(preferences)
         self.jobs = actions.Jobs(runner)
         self.runner = runner
@@ -143,6 +148,32 @@ class App:
             raise ApiError(HTTPStatus.BAD_REQUEST, "Thư mục này không phải một sách của Ebook Reader")
         self.preferences.add_recent(path.resolve())
         return {"id": book_id(path.resolve())}
+
+    # ---- đồng bộ điện thoại ------------------------------------------------------------------------------
+
+    def sync_view(self) -> dict[str, Any]:
+        running = self.sync_server is not None
+        return {
+            "enabled": running,
+            "error": self.sync_error,
+            "port": self.sync_server.port if running else SYNC_PORT,
+            "addresses": local_addresses() if self.sync_host == "0.0.0.0" else [self.sync_host],
+            "pairing": self.devices.pairing_code() if running else None,
+            "devices": self.devices.list(),
+        }
+
+    def set_sync(self, enabled: bool) -> dict[str, Any]:
+        if enabled and self.sync_server is None:
+            try:
+                app = SyncApp(self.library, self.listening, self.devices, socket_name())
+                self.sync_server = SyncServer(app, host=self.sync_host, port=SYNC_PORT).start()
+                self.sync_error = ""
+            except OSError as error:
+                self.sync_error = f"Không mở được cổng đồng bộ {SYNC_PORT}: {error}"
+        elif not enabled and self.sync_server is not None:
+            self.sync_server.stop()
+            self.sync_server = None
+        return self.sync_view()
 
     # ---- nghe ------------------------------------------------------------------------------------------
 
@@ -387,6 +418,25 @@ class Handler(BaseHTTPRequestHandler):
         actions.reveal(self.app._book(value))
         self._send_json(HTTPStatus.OK, {"ok": True})
 
+    def get_sync(self, _query: dict[str, list[str]]) -> None:
+        self._send_json(HTTPStatus.OK, self.app.sync_view())
+
+    def post_sync(self, _query: dict[str, list[str]]) -> None:
+        self._mutating_guard()
+        self._send_json(HTTPStatus.OK, self.app.set_sync(bool(self._body().get("enabled"))))
+
+    def post_sync_pairing(self, _query: dict[str, list[str]]) -> None:
+        self.app.devices.pairing_code(renew=True)
+        self._send_json(HTTPStatus.OK, self.app.sync_view())
+
+    def delete_sync_device(self, _query: dict[str, list[str]], device: str) -> None:
+        self.app.devices.revoke(device)
+        self._send_json(HTTPStatus.OK, self.app.sync_view())
+
+    def _mutating_guard(self) -> None:
+        if self.app.read_only:
+            raise ApiError(HTTPStatus.FORBIDDEN, "Giao diện đang ở chế độ chỉ xem")
+
     def get_listen_library(self, _query: dict[str, list[str]]) -> None:
         self._send_json(HTTPStatus.OK, self.app.listen_library())
 
@@ -507,6 +557,10 @@ ROUTES: list[Route] = [
     ("POST", re.compile(BOOK + r"/start"), Handler.post_start),
     ("POST", re.compile(BOOK + r"/stop"), Handler.post_stop),
     ("POST", re.compile(BOOK + r"/reveal"), Handler.post_reveal),
+    ("GET", re.compile(r"/api/sync"), Handler.get_sync),
+    ("POST", re.compile(r"/api/sync"), Handler.post_sync),
+    ("POST", re.compile(r"/api/sync/pairing"), Handler.post_sync_pairing),
+    ("DELETE", re.compile(r"/api/sync/devices/([0-9a-f]+)"), Handler.delete_sync_device),
     ("GET", re.compile(r"/api/listen/library"), Handler.get_listen_library),
     ("GET", re.compile(LISTEN), Handler.get_listen_book),
     ("POST", re.compile(LISTEN + r"/progress"), Handler.post_progress),
@@ -551,4 +605,12 @@ class Server:
 
 def new_token() -> str:
     return secrets.token_urlsafe(24)
+
+
+
+def socket_name() -> str:
+    """Tên máy hiện trên điện thoại khi tìm thấy nó."""
+    import socket
+
+    return socket.gethostname() or "Máy tính"
 
