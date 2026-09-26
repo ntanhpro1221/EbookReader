@@ -163,6 +163,8 @@ class App:
         }
 
     def set_sync(self, enabled: bool) -> dict[str, Any]:
+        """Bật/tắt đồng bộ. Tuỳ chọn lưu Ý MUỐN của người dùng, không lưu kết quả: cổng bận một lần lúc khởi
+        động không được tự tắt đồng bộ vĩnh viễn - lần mở sau thử lại."""
         if enabled and self.sync_server is None:
             try:
                 app = SyncApp(self.library, self.listening, self.devices, socket_name())
@@ -170,10 +172,20 @@ class App:
                 self.sync_error = ""
             except OSError as error:
                 self.sync_error = f"Không mở được cổng đồng bộ {SYNC_PORT}: {error}"
-        elif not enabled and self.sync_server is not None:
+        elif not enabled:
+            self.sync_error = ""
+            if self.sync_server is not None:
+                self.sync_server.stop()
+                self.sync_server = None
+        if self.preferences.get().get("syncEnabled") != enabled:
+            self.preferences.update({"syncEnabled": enabled})
+        return self.sync_view()
+
+    def close(self) -> None:
+        """App đóng: tắt cổng đồng bộ nhưng giữ nguyên lựa chọn của người dùng cho lần mở sau."""
+        if self.sync_server is not None:
             self.sync_server.stop()
             self.sync_server = None
-        return self.sync_view()
 
     # ---- nghe ------------------------------------------------------------------------------------------
 

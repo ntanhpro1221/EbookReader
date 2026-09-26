@@ -25,11 +25,15 @@ DEFAULT_PREFERENCES: dict[str, Any] = {
     "positions": {},
     "playbackRate": 1.0,
     "volume": 0.9,
+    "syncEnabled": False,
 }
 MAX_RECENTS = 30
 
 
 def preferences_path() -> Path:
+    override = os.environ.get("EBOOK_READER_PREFERENCES")
+    if override:
+        return Path(override)
     base = os.environ.get("LOCALAPPDATA")
     root = Path(base) / "Ebook Reader" if base else Path.home() / ".ebook_reader"
     return root / "preferences.json"
