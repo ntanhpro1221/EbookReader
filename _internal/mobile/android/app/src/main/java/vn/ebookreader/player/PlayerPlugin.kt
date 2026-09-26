@@ -121,6 +121,15 @@ class PlayerPlugin : Plugin() {
         call.getInt("sleepExtendMinutes")?.let { SleepTimer.extendMinutes = it }
         call.getInt("sleepFadeSeconds")?.let { SleepTimer.fadeMs = it * 1000L }
         call.getBoolean("shakeToExtend")?.let { SleepTimer.shakeEnabled = it }
+        call.getDouble("safetyStopHours")?.let { SleepTimer.safetyStopHours = it }
+        if (call.data.has("schedule")) {
+            val schedule = call.getObject("schedule")
+            fun minutesOf(clock: String?) = clock?.split(":")?.let { (it[0].toIntOrNull() ?: 0) * 60 + (it.getOrNull(1)?.toIntOrNull() ?: 0) }
+            val from = minutesOf(schedule?.getString("from"))
+            val to = minutesOf(schedule?.getString("to"))
+            val planned = schedule?.getInteger("minutes")
+            SleepTimer.schedule = if (from != null && to != null && planned != null) Triple(from, to, planned) else null
+        }
         Playback.configure(call.getDouble("rewindAfterMinutes") ?: 5.0, call.getDouble("rewindSeconds") ?: 5.0)
     }
 

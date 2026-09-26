@@ -55,6 +55,61 @@ export function SettingsScreen() {
             options={[5, 10, 15].map((value) => ({ value: String(value), label: `${value}′` }))}
           />
         </Row>
+        <Row label="Lịch đêm" hint="Bấm nghe trong khung giờ này thì tự hẹn giờ ngủ - khỏi nhớ bấm lúc buồn ngủ.">
+          <Switch.Root
+            checked={Boolean(settings.sleepSchedule)}
+            onCheckedChange={(value) => change({ sleepSchedule: value ? { from: "22:00", to: "06:00", minutes: 30 } : null })}
+            aria-label="Lịch đêm"
+            className="relative h-7 w-12 rounded-full bg-line-strong transition-colors data-[state=checked]:bg-accent"
+          >
+            <Switch.Thumb className="block size-6 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[22px]" />
+          </Switch.Root>
+        </Row>
+        {settings.sleepSchedule && (
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm">
+            <input
+              type="time"
+              aria-label="Từ"
+              value={settings.sleepSchedule.from}
+              onChange={(event) => event.target.value && change({ sleepSchedule: { ...settings.sleepSchedule!, from: event.target.value } })}
+              className="tabular h-10 rounded-lg border border-line bg-bg px-2"
+            />
+            <span className="text-fg-2">đến</span>
+            <input
+              type="time"
+              aria-label="Đến"
+              value={settings.sleepSchedule.to}
+              onChange={(event) => event.target.value && change({ sleepSchedule: { ...settings.sleepSchedule!, to: event.target.value } })}
+              className="tabular h-10 rounded-lg border border-line bg-bg px-2"
+            />
+            <span className="text-fg-2">hẹn</span>
+            <select
+              aria-label="Số phút hẹn"
+              value={settings.sleepSchedule.minutes}
+              onChange={(event) => change({ sleepSchedule: { ...settings.sleepSchedule!, minutes: Number(event.target.value) } })}
+              className="h-10 rounded-lg border border-line bg-bg px-2"
+            >
+              {[15, 30, 45, 60].map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes} phút
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <Row label="Tự tắt khi ngủ quên" hint="Phát liên tục mà không chạm máy chừng này thì nhỏ dần rồi dừng, và ghi lại chỗ đang nghe cho thẻ “Tối qua”.">
+          <Segmented
+            label="Tự tắt khi ngủ quên"
+            value={String(settings.safetyStopHours)}
+            onChange={(value) => change({ safetyStopHours: Number(value) })}
+            options={[
+              { value: "0", label: "Không" },
+              { value: "1", label: "1 giờ" },
+              { value: "2", label: "2 giờ" },
+              { value: "3", label: "3 giờ" },
+            ]}
+          />
+        </Row>
         <Row label="Nhỏ dần trước khi tắt">
           <Segmented
             label="Nhỏ dần trước khi tắt"

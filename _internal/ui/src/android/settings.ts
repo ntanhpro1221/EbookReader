@@ -10,6 +10,10 @@ export interface PlayerSettings {
   shakeToExtend: boolean;
   rewindSeconds: number;
   rewindAfterMinutes: number;
+  /** Phát liên tục chừng này giờ không ai chạm máy thì tự nhỏ dần rồi dừng (0 = tắt). */
+  safetyStopHours: number;
+  /** Lịch đêm tự hẹn giờ. */
+  sleepSchedule: { from: string; to: string; minutes: number } | null;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -19,6 +23,8 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   shakeToExtend: true,
   rewindSeconds: 5,
   rewindAfterMinutes: 5,
+  safetyStopHours: 2,
+  sleepSchedule: null,
 };
 
 const KEY = "ebook-reader-player-settings";
@@ -47,6 +53,8 @@ export async function pushSettings(settings: PlayerSettings): Promise<void> {
     shakeToExtend: settings.shakeToExtend,
     rewindSeconds: settings.rewindSeconds,
     rewindAfterMinutes: settings.rewindAfterMinutes,
+    safetyStopHours: settings.safetyStopHours,
+    schedule: settings.sleepSchedule,
   }).catch(() => undefined);
 }
 

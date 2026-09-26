@@ -37,7 +37,7 @@ object Bedtime {
     private fun nowSeconds() = System.currentTimeMillis() / 1000.0
 
     /** Hẹn giờ mở (hoặc nối tiếp) một đêm: hẹn lại trong vòng 90 phút vẫn là cùng một đêm. */
-    fun timerSet(minutes: Int) {
+    fun timerSet(minutes: Int, reason: String? = null) {
         val current = session
         val continuing = current != null && current.optString("bookId") == Playback.bookId &&
             nowSeconds() - current.optDouble("lastAt", 0.0) < 90 * 60
@@ -51,7 +51,21 @@ object Bedtime {
             stillRun = 0
             stillRecorded = false
         }
-        add("timer", JSONObject().put("minutes", minutes))
+        add("timer", JSONObject().put("minutes", minutes).also { if (reason != null) it.put("action", reason) })
+    }
+
+    /** Mốc "còn thức" đã biết từ trước (lần chạm máy cuối cùng trước khi lưới an toàn bật). */
+    fun touchAt(atMs: Long, chapterId: Int?, seconds: Double) {
+        val current = session ?: return
+        val chapter = Playback.chapters.firstOrNull { it.id == chapterId }
+        val position = JSONObject()
+            .put("chapterId", chapterId ?: JSONObject.NULL)
+            .put("chapterTitle", chapter?.title ?: "")
+            .put("seconds", seconds)
+        current.getJSONArray("events").put(
+            JSONObject().put("type", "touch").put("action", "last-activity").put("at", atMs / 1000.0).put("position", position),
+        )
+        save()
     }
 
     fun interaction(kind: String) {

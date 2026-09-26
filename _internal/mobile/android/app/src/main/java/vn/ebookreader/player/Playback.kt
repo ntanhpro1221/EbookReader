@@ -42,6 +42,19 @@ object Playback {
     private var autoRewindSeconds = 5.0
     private val listeners = mutableSetOf<(JSONObject) -> Unit>()
     private var ticking = false
+    /** Lần cuối người nghe chạm vào trình phát (nút, thông báo, widget) - cho lưới an toàn ngủ quên. */
+    var lastInteractionMs = System.currentTimeMillis()
+        private set
+    var lastInteractionChapter: Int? = null
+        private set
+    var lastInteractionSeconds = 0.0
+        private set
+
+    fun touched() {
+        lastInteractionMs = System.currentTimeMillis()
+        lastInteractionChapter = currentChapter?.id
+        lastInteractionSeconds = positionSeconds
+    }
 
     fun init(context: Context) {
         appContext = context.applicationContext
@@ -161,6 +174,7 @@ object Playback {
     fun toggle() = if (player?.isPlaying == true) pause() else play()
 
     fun seekTo(seconds: Double) {
+        touched()
         player?.seekTo((seconds * 1000).toLong().coerceAtLeast(0))
         Bedtime.interaction("seek")
         emit("seek")
@@ -169,6 +183,7 @@ object Playback {
     fun skip(deltaSeconds: Double) = seekTo(positionSeconds + deltaSeconds)
 
     fun jumpTo(chapterId: Int, seconds: Double) {
+        touched()
         val exo = player ?: return
         val index = chapters.indexOfFirst { it.id == chapterId }
         if (index < 0) return
@@ -196,6 +211,7 @@ object Playback {
     }
 
     fun setRate(rate: Double) {
+        touched()
         player?.playbackParameters = PlaybackParameters(rate.toFloat())
         if (bookId.isNotEmpty()) Store.setRate(bookId, rate)
         emit("rate")
@@ -217,12 +233,16 @@ object Playback {
     // ---- sự kiện từ ExoPlayer ------------------------------------------------------------------------------
 
     fun onPlayingChanged(playing: Boolean) {
+        // Phát/dừng hầu như luôn do người nghe bấm (app, thông báo, tai nghe, widget): tính là còn thức.
+        touched()
+        SleepTimer.onPlaying(playing)
         if (!playing) {
             pausedAtMs = System.currentTimeMillis()
             saveNow()
         } else {
             pausedAtMs = 0
             startTicking()
+            SleepTimer.maybeSchedule()
         }
         emit(if (playing) "play" else "pause")
     }
@@ -251,6 +271,7 @@ object Playback {
                 }
                 beats += 1
                 if (beats % 10 == 0) saveNow()
+                if (beats % 60 == 0) SleepTimer.maybeSafetyStop(lastInteractionMs)
                 Bedtime.checkpoint()
                 emit("tick")
                 main.postDelayed(this, 500)

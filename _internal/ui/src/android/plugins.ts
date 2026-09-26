@@ -59,6 +59,8 @@ export interface EbookPlayerPlugin {
     shakeToExtend?: boolean;
     rewindAfterMinutes?: number;
     rewindSeconds?: number;
+    safetyStopHours?: number;
+    schedule?: { from: string; to: string; minutes: number } | null;
   }): Promise<NativeState>;
   lastNight(): Promise<{ session: BedtimeSession | null }>;
   dismissLastNight(): Promise<void>;
