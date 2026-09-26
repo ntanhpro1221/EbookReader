@@ -43,7 +43,11 @@ function ProjectRow({ book }: { book: BookSummary }) {
         </div>
       </div>
       <div>
-        <StatusPill label={book.starting ? "Đang khởi động" : book.statusLabel} tone={phaseTone(book.phase, live)} live={live} />
+        <StatusPill
+          label={book.queuePosition ? `Xếp hàng · thứ ${book.queuePosition}` : book.starting ? "Đang khởi động" : book.statusLabel}
+          tone={book.queuePosition ? "warning" : phaseTone(book.phase, live)}
+          live={live}
+        />
       </div>
       <div>
         {book.phase === "done" ? (

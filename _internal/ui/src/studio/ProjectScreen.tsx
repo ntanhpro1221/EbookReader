@@ -231,6 +231,7 @@ function Actions({ book }: { book: BookSummary }) {
   const navigate = useNavigate();
   const [confirmStop, setConfirmStop] = useState(false);
   const live = book.running;
+  const stop = useStop();
   return (
     <div className="mt-5 flex flex-wrap items-center gap-2">
       {book.chapters.completed > 0 && (
@@ -238,7 +239,16 @@ function Actions({ book }: { book: BookSummary }) {
           Nghe trong Thư viện
         </Button>
       )}
-      {book.starting ? (
+      {book.queuePosition ? (
+        <>
+          <span className="inline-flex h-11 items-center gap-2 rounded-xl bg-warning-soft px-4 text-sm font-medium text-warning">
+            Đang xếp hàng · thứ {book.queuePosition} - tự bắt đầu khi cuốn đang chạy xong
+          </span>
+          <Button variant="ghost" size="lg" onClick={() => stop.mutate(book.id)}>
+            Bỏ xếp hàng
+          </Button>
+        </>
+      ) : book.starting ? (
         <Button variant="primary" size="lg" loading>
           Đang khởi động
         </Button>

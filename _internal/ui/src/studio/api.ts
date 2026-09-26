@@ -32,6 +32,8 @@ export interface BookSummary {
   audioSeconds: number;
   eta: { phase: Phase; seconds: number } | null;
   position: Position | null;
+  /** Đang xếp hàng chờ cuốn khác chạy xong (thứ tự trong hàng), hoặc null. */
+  queuePosition?: number | null;
   broken?: string;
 }
 

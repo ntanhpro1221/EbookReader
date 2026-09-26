@@ -96,8 +96,14 @@ export function useStart() {
   return useMutation({
     scope: { id: "start-stop" },
     mutationFn: (id: string) => api<BookSummary>(`/api/books/${id}/start`, { method: "POST" }),
-    onSuccess: (_book, id) => {
+    onSuccess: (book, id) => {
       refresh(id);
+      if (book.queuePosition) {
+        toast("Đã xếp hàng", {
+          description: "Một cuốn khác đang chạy - cuốn này tự bắt đầu khi cuốn kia xong (app cần đang mở).",
+        });
+        return;
+      }
       toast.success("Đang khởi động", { description: "Sách chạy nền - đóng cửa sổ cũng không dừng." });
     },
     onError: (error: Error) => toast.error("Không bắt đầu được", { description: error.message }),

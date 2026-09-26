@@ -11,6 +11,7 @@ import mimetypes
 import re
 import secrets
 import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -87,6 +88,11 @@ class App:
         self.reviews = Reviews(preferences.path.with_name("reviews.json"))
         # Thư mục đã xuất trong phiên này - chỉ những thư mục này được mở bằng "Mở thư mục" sau khi xuất.
         self.exports: set[str] = set()
+        # Hàng đợi sản xuất: hai cuốn chạy cùng lúc tranh nhau GPU (phân tích cần ~6,2 GB trên card 8 GB), nên cuốn
+        # thứ hai xếp hàng và tự bắt đầu khi cuốn đang chạy xong. Hàng đợi sống cùng app (đóng app là bỏ hàng).
+        self.queue: list[str] = []
+        self._queue_lock = threading.RLock()  # summary() lấy lại khoá này từ trong start/stop
+        self._queue_thread: threading.Thread | None = None
 
     # ---- sách ------------------------------------------------------------------------------------------
 
@@ -101,7 +107,34 @@ class App:
         result = self.library.summary(path, running=running, starting=self.jobs.starting(path))
         result["startError"] = self.jobs.error(path)
         result.pop("position", None)
+        with self._queue_lock:
+            result["queuePosition"] = self.queue.index(result["id"]) + 1 if result["id"] in self.queue else None
         return result
+
+    def _busy_elsewhere(self, path: Path) -> Path | None:
+        for other in self.library.projects():
+            if other != path and (self.runner.running(other) or self.jobs.starting(other)):
+                return other
+        return None
+
+    def _drain_queue(self) -> None:
+        while True:
+            time.sleep(15)
+            with self._queue_lock:
+                if not self.queue:
+                    self._queue_thread = None
+                    return
+                head = self.queue[0]
+            path = self.library.resolve(head)
+            if path is None:
+                with self._queue_lock:
+                    self.queue.remove(head)
+                continue
+            if self._busy_elsewhere(path) is None:
+                with self._queue_lock:
+                    if self.queue and self.queue[0] == head:
+                        self.queue.pop(0)
+                self.jobs.start(path)
 
     def library_view(self) -> dict[str, Any]:
         books = []
@@ -121,17 +154,35 @@ class App:
         if self.read_only:
             raise ApiError(HTTPStatus.FORBIDDEN, "Giao diện đang ở chế độ chỉ xem")
 
-    def start(self, value: str) -> dict[str, Any]:
+    def start(self, value: str, *, now: bool = False) -> dict[str, Any]:
         self._mutating()
         path = self._book(value)
         if self.runner.running(path):
             return self.summary(path)
+        if not now and self._busy_elsewhere(path) is not None:
+            with self._queue_lock:
+                if value not in self.queue:
+                    self.queue.append(value)
+                if self._queue_thread is None:
+                    self._queue_thread = threading.Thread(target=self._drain_queue, name="production-queue", daemon=True)
+                    self._queue_thread.start()
+            return self.summary(path)
+        with self._queue_lock:
+            if value in self.queue:
+                self.queue.remove(value)
         self.jobs.start(path)
         return self.summary(path)
 
     def stop(self, value: str) -> dict[str, Any]:
         self._mutating()
         path = self._book(value)
+        with self._queue_lock:
+            queued = value in self.queue
+            if queued:
+                # Đang xếp hàng: "Dừng" nghĩa là bỏ khỏi hàng, không có gì để dừng.
+                self.queue.remove(value)
+        if queued:
+            return self.summary(path)  # ngoài khoá: summary() cũng lấy khoá này (Lock không vào lại được)
         self.jobs.stop(path)
         return self.summary(path)
 
