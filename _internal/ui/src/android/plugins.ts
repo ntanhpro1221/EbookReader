@@ -1,5 +1,5 @@
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
-import type { Bookmark, ListeningState } from "@/listen/model";
+import type { Bookmark, ListeningState, NightSession } from "@/listen/model";
 
 // Hai plugin native của app Android (mobile/android/app/src/main/java/vn/ebookreader/player):
 //  EbookPlayer  - lõi phát Media3: hàng đợi chương, hẹn giờ ngủ, lắc để nghe thêm, nhật ký đêm.
@@ -26,29 +26,8 @@ export interface NativeState {
   sleep: NativeSleep;
 }
 
-export interface BedtimePosition {
-  chapterId: number | null;
-  chapterTitle: string;
-  seconds: number;
-}
-
-export interface BedtimeEvent {
-  type: "timer" | "touch" | "shake" | "still" | "moved" | "stopped";
-  at: number;
-  action?: string;
-  minutes?: number;
-  position: BedtimePosition;
-}
-
-export interface BedtimeSession {
-  bookId: string;
-  bookTitle: string;
-  startedAt: number;
-  endedAt?: number;
-  dismissed?: boolean;
-  events: BedtimeEvent[];
-  timeline: (BedtimePosition & { at: number })[];
-}
+// Nhật ký đêm của lõi native - cùng hình dạng với listen/model.ts (NightSession).
+export type BedtimeSession = NightSession;
 
 export interface EbookPlayerPlugin {
   load(options: {
@@ -59,6 +38,7 @@ export interface EbookPlayerPlugin {
     chapterId: number;
     seconds: number;
     rate: number;
+    autoplay?: boolean;
   }): Promise<NativeState>;
   play(): Promise<NativeState>;
   pause(): Promise<NativeState>;

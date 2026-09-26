@@ -30,12 +30,14 @@ export function useAppInfo() {
   return useQuery({ queryKey: ["app"], queryFn: () => api<AppInfo>("/api/app"), staleTime: Infinity });
 }
 
-export function useLibrary() {
+/** `live`: đang ở Studio thì tiến độ sách đang chạy cập nhật 5 giây một lần; ở nơi khác (thanh bên) thì thưa hẳn -
+ *  app có thể mở suốt nhiều giờ sản xuất, và mỗi lần hỏi là một lượt đọc DB của sách đang chạy. */
+export function useLibrary({ live = true }: { live?: boolean } = {}) {
   return useQuery({
     queryKey: ["library"],
     queryFn: () => api<{ root: string; books: BookSummary[] }>("/api/library"),
     refetchInterval: (query) =>
-      query.state.data?.books.some((book) => book.running || book.starting) ? LIVE_MS * 2 : IDLE_MS,
+      query.state.data?.books.some((book) => book.running || book.starting) ? (live ? 5000 : 20000) : IDLE_MS,
   });
 }
 
@@ -44,7 +46,7 @@ export function useBook(id: string | undefined) {
     queryKey: ["book", id],
     enabled: Boolean(id),
     queryFn: () => api<{ book: BookSummary; chapters: Chapter[] }>(`/api/books/${id}`),
-    refetchInterval: (query) => (query.state.data?.book.running || query.state.data?.book.starting ? LIVE_MS : IDLE_MS),
+    refetchInterval: (query) => (query.state.data?.book.running || query.state.data?.book.starting ? LIVE_MS * 1.5 : IDLE_MS),
   });
 }
 

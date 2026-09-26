@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, useContext, type ReactNode } from "react";
-import type { Bookmark, Cast, ListenBook, ListeningState, Script } from "./model";
+import type { Bookmark, Cast, ListenBook, ListeningState, NightSession, Script } from "./model";
 
 // Nguồn dữ liệu của phía Nghe. Giao diện chỉ nói chuyện với giao diện này:
 // máy tính cài bằng HTTP tới server cục bộ, Android cài bằng file gói sách trên máy.
@@ -21,6 +21,13 @@ export interface ListenSource {
   addBookmark(bookId: string, chapterId: number, seconds: number, note: string): Promise<Bookmark>;
   updateBookmark(bookId: string, id: string, note: string): Promise<void>;
   deleteBookmark(bookId: string, id: string): Promise<void>;
+  /** Hoàn tác xoá dấu trang. */
+  restoreBookmark(bookId: string, mark: Bookmark): Promise<void>;
+  /** Đêm gần nhất có hẹn giờ ngủ (cho thẻ "Tối qua"). */
+  lastNight(): Promise<{ bookId: string; night: NightSession } | null>;
+  dismissNight(bookId: string, nightId: string | undefined): Promise<void>;
+  /** Chỉ bộ máy phát web cần: lõi native tự ghi nhật ký đêm. */
+  saveNight?(bookId: string, night: NightSession): Promise<void>;
 }
 
 const SourceContext = createContext<ListenSource | null>(null);
@@ -44,11 +51,17 @@ export function useListenLibrary() {
   });
 }
 
+/** Sách không có (404) thì báo ngay, đừng thử lại ba lần rồi mới báo. */
+function retryUnlessMissing(count: number, error: unknown): boolean {
+  return (error as { status?: number } | null)?.status !== 404 && count < 2;
+}
+
 export function useListenBook(id: string | undefined) {
   const source = useSource();
   return useQuery({
     queryKey: ["listen", "book", id],
     enabled: Boolean(id),
+    retry: retryUnlessMissing,
     queryFn: () => source.book(id!),
     refetchInterval: (query) => (query.state.data?.producing ? 5000 : 30000),
   });
@@ -102,6 +115,10 @@ export function useListenMutations(bookId: string) {
     }),
     deleteBookmark: useMutation({
       mutationFn: (id: string) => source.deleteBookmark(bookId, id),
+      onSuccess: refresh,
+    }),
+    restoreBookmark: useMutation({
+      mutationFn: (mark: Bookmark) => source.restoreBookmark(bookId, mark),
       onSuccess: refresh,
     }),
   };

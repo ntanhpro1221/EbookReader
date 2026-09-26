@@ -144,6 +144,8 @@ export interface AppInfo {
   theme: "system" | "light" | "dark";
   playbackRate: number;
   volume: number;
+  sleepFadeSeconds: number;
+  sleepExtendMinutes: number;
 }
 
 export interface Preferences {
@@ -151,6 +153,8 @@ export interface Preferences {
   theme: "system" | "light" | "dark";
   playbackRate: number;
   volume: number;
+  sleepFadeSeconds: number;
+  sleepExtendMinutes: number;
 }
 
 // Mã phiên do cửa sổ app gắn vào URL (?t=...). Giữ lại trong phiên để điều hướng nội bộ không làm mất nó.

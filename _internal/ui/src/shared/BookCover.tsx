@@ -1,40 +1,39 @@
 import { cn } from "@/shared/cn";
-import { coverStyle, splitTitle } from "@/shared/cover";
+import { coverLabel, coverStyle, splitTitle } from "@/shared/cover";
+import { Vu } from "@/shared/ui";
 
 // Bìa vuông kiểu album sách nói. Hoạ tiết là các vòng sóng âm lan ra từ góc - thứ duy nhất sách TXT
 // "có" là giọng đọc, nên bìa vẽ giọng đọc.
-
-const STOPWORDS = new Set(["the", "and", "của", "và", "những", "các", "một"]);
+//
+// Bìa nhỏ (thanh phát, danh sách) không đủ chỗ cho tên: sách trong một bộ thì số tập là thứ phân biệt được các
+// cuốn ("16", "18"), không phải hai chữ cái đầu giống hệt nhau của tên bộ.
 
 export function BookCover({
   title,
   size = "md",
+  playing = false,
   className,
 }: {
   title: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl";
+  playing?: boolean;
   className?: string;
 }) {
   const style = coverStyle(title);
   const [main, sub] = splitTitle(title);
+  const small = size === "xs" || size === "sm";
   const text = {
-    xs: "hidden",
-    sm: "hidden",
+    xs: "",
+    sm: "",
     md: "text-[15px] leading-[1.15]",
     lg: "text-[19px] leading-[1.12]",
     xl: "text-[24px] leading-[1.1]",
   }[size];
   const pad = { xs: "p-1", sm: "p-1.5", md: "p-3.5", lg: "p-4", xl: "p-5" }[size];
   const rings = [0.28, 0.46, 0.64, 0.82, 1.0];
-  const initials = main
-    .split(/\s+/)
-    .filter((word) => word.length > 2 && !STOPWORDS.has(word.toLowerCase()))
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase() ?? "")
-    .join("");
   return (
     <div
-      className={cn("relative aspect-square shrink-0 overflow-hidden rounded-lg shadow-card", className)}
+      className={cn("relative aspect-square shrink-0 overflow-hidden rounded-lg text-left shadow-card", className)}
       style={{ background: `linear-gradient(155deg, ${style.from} 0%, ${style.to} 100%)` }}
       aria-hidden
     >
@@ -53,33 +52,34 @@ export function BookCover({
         ))}
       </svg>
       <div className={cn("relative flex h-full flex-col justify-between", pad)}>
-        {size === "xs" || size === "sm" ? (
-          <span className="m-auto font-bold tracking-tight" style={{ color: style.ink, fontSize: size === "xs" ? 11 : 14 }}>
-            {initials}
+        {small ? (
+          <span
+            className="m-auto font-bold leading-none tracking-tight"
+            style={{ color: style.ink, fontSize: size === "xs" ? 12 : 17 }}
+          >
+            {coverLabel(title)}
           </span>
         ) : (
           <>
             <span className={cn("line-clamp-4 font-bold tracking-tight text-white", text)}>{main}</span>
-            <div className="flex items-end justify-between gap-2">
-              {sub ? (
-                <span
-                  className="rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider"
-                  style={{ color: style.ink, background: "rgb(0 0 0 / 0.28)" }}
-                >
-                  {sub}
-                </span>
-              ) : (
-                <span />
-              )}
-              <span className="flex h-4 items-end gap-[2px] opacity-80" style={{ color: style.ink }}>
-                <span className="h-2 w-[3px] rounded-sm bg-current" />
-                <span className="h-4 w-[3px] rounded-sm bg-current" />
-                <span className="h-3 w-[3px] rounded-sm bg-current" />
+            {sub ? (
+              <span
+                className="self-start rounded-md px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider"
+                style={{ color: style.ink, background: "rgb(0 0 0 / 0.28)" }}
+              >
+                {sub}
               </span>
-            </div>
+            ) : (
+              <span />
+            )}
           </>
         )}
       </div>
+      {playing && (
+        <span className="absolute bottom-1.5 right-1.5 grid place-items-center rounded-md bg-black/45 px-1 py-0.5" style={{ color: style.ink }}>
+          <Vu className="h-3" />
+        </span>
+      )}
     </div>
   );
 }

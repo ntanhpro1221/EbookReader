@@ -4,6 +4,37 @@
 @import "@fontsource/be-vietnam-pro/600.css";
 @import "@fontsource/be-vietnam-pro/700.css";
 
+/* Chữ số đều độ rộng cắt từ chính Be Vietnam Pro (ui/scripts/make_tabular_digits.py): bản fontsource không có
+   tính năng tnum nên đồng hồ trình phát nhảy vị trí mỗi giây. Chỉ áp cho chữ số, qua lớp .tabular. */
+@font-face {
+  font-family: "Be Vietnam Pro Digits";
+  src: url("./assets/fonts/be-vietnam-pro-digits-400.woff") format("woff");
+  font-weight: 400;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Be Vietnam Pro Digits";
+  src: url("./assets/fonts/be-vietnam-pro-digits-500.woff") format("woff");
+  font-weight: 500;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Be Vietnam Pro Digits";
+  src: url("./assets/fonts/be-vietnam-pro-digits-600.woff") format("woff");
+  font-weight: 600;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Be Vietnam Pro Digits";
+  src: url("./assets/fonts/be-vietnam-pro-digits-700.woff") format("woff");
+  font-weight: 700;
+  unicode-range: U+0030-0039;
+  font-display: swap;
+}
+
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
@@ -21,20 +52,25 @@
   --line-strong: #cfd4db;
   --text: #14181d;
   --text-2: #4f5965;
-  --text-3: #858e99;
+  --text-3: #666f7b;
   --accent: #e39a2d;
   --accent-hover: #d18a1f;
   --accent-ink: #1d1304;
-  --accent-text: #a8660b;
+  --accent-text: #93560a;
   --accent-soft: #fbeedb;
-  --success: #1f9d6b;
+  --success: #15835c;
   --success-soft: #dff3ea;
-  --danger: #d64545;
+  --danger: #c53a3a;
   --danger-soft: #fbe4e4;
-  --warning: #b7791f;
+  --warning: #9a6212;
   --warning-soft: #fcf1dc;
   --info: #3b6fd8;
   --info-soft: #e3ebfb;
+  --nav-active: #ffffff;
+  --nav-active-ring: rgb(20 24 29 / 0.08);
+  --read-along: color-mix(in oklab, var(--accent) 26%, transparent);
+  --avatar-bg-l: 0.93;
+  --avatar-fg-l: 0.43;
   --shadow: 0 1px 2px rgb(20 24 29 / 0.06), 0 8px 24px -12px rgb(20 24 29 / 0.16);
   --shadow-lg: 0 24px 64px -24px rgb(20 24 29 / 0.35);
   --scrim: rgb(15 18 22 / 0.45);
@@ -51,7 +87,7 @@
   --line-strong: #333d49;
   --text: #e9ecf0;
   --text-2: #a3acb7;
-  --text-3: #6d7784;
+  --text-3: #8a94a1;
   --accent: #f2a93f;
   --accent-hover: #ffba5a;
   --accent-ink: #1b1204;
@@ -65,6 +101,11 @@
   --warning-soft: rgb(232 182 76 / 0.13);
   --info: #6f9bf5;
   --info-soft: rgb(111 155 245 / 0.13);
+  --nav-active: #1f262f;
+  --nav-active-ring: transparent;
+  --read-along: color-mix(in oklab, var(--accent) 22%, transparent);
+  --avatar-bg-l: 0.33;
+  --avatar-fg-l: 0.84;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -14px rgb(0 0 0 / 0.7);
   --shadow-lg: 0 30px 80px -20px rgb(0 0 0 / 0.75);
   --scrim: rgb(4 6 8 / 0.62);
@@ -96,6 +137,10 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-scrim: var(--scrim);
+  --color-nav-active: var(--nav-active);
+  /* Gốc chữ 16px (Tailwind text-xs = 12px, text-sm = 14px - đánh giá 26-09: 10,5px là quá nhỏ cho app đọc/nghe);
+     khoảng cách giữ nguyên 3,5px mỗi bậc như trước, nên bố cục không phình ra. */
+  --spacing: 0.21875rem;
   --shadow-card: var(--shadow);
   --shadow-float: var(--shadow-lg);
   --font-sans: "Be Vietnam Pro", ui-sans-serif, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -109,10 +154,11 @@
     height: 100%;
   }
   html {
-    font-size: 14px;
+    font-size: 16px;
   }
   body {
     margin: 0;
+    font-size: 14px;
     background: var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
@@ -149,11 +195,49 @@
 
 @layer utilities {
   .tabular {
+    font-family: "Be Vietnam Pro Digits", var(--font-sans);
     font-variant-numeric: tabular-nums;
+  }
+  .text-pretty {
+    text-wrap: pretty;
   }
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* Câu đang đọc ở Đọc theo: đủ đậm để nổi lên ở cả hai giao diện (giao diện sáng trước đây chỉ 1,06:1). */
+.read-along-active {
+  background: var(--read-along);
+  color: var(--text);
+}
+
+/* Chữ cái đầu của nhân vật: cùng độ sáng cho mọi màu (OKLCH), chỉ đổi sắc - đủ tương phản ở cả hai giao diện. */
+.avatar {
+  background: oklch(var(--avatar-bg-l) 0.05 var(--hue, 250));
+  color: oklch(var(--avatar-fg-l) 0.13 var(--hue, 250));
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes now-playing-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.now-playing {
+  animation: now-playing-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 /* Thanh đang chạy: vạch sáng trượt qua, như băng đang quay. Tắt khi người dùng xin giảm chuyển động. */
@@ -200,7 +284,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sheen::after,
-  .vu > span {
+  .vu > span,
+  .now-playing {
     animation: none;
   }
   * {

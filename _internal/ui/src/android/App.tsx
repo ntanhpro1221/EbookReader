@@ -5,15 +5,15 @@ import { HashRouter, NavLink, Route, Routes, useLocation, useNavigate } from "re
 import { Toaster } from "sonner";
 import { BookScreen } from "@/listen/BookScreen";
 import { ClipProvider } from "@/listen/clip";
-import { LibraryScreen } from "@/listen/LibraryScreen";
+import { LibraryScreen, useRestoreLastListening } from "@/listen/LibraryScreen";
 import { NowPlaying, PlayerBar } from "@/listen/PlayerViews";
-import { PlayerProvider, usePlayer } from "@/listen/player";
+import { PlayerProvider, useNowPlaying, usePlayer } from "@/listen/player";
 import { SourceProvider } from "@/listen/source";
 import { cn } from "@/shared/cn";
 import { Button, EmptyState, TooltipProvider } from "@/shared/ui";
 import { androidSource } from "./androidSource";
 import { DevicesScreen } from "./DevicesScreen";
-import { MorningRecap } from "./MorningRecap";
+import { MorningRecap } from "@/listen/MorningRecap";
 import { NativeAudioEngine } from "./nativeEngine";
 import { SettingsScreen } from "./SettingsScreen";
 import { applyTheme, loadSettings, pushSettings } from "./settings";
@@ -24,15 +24,15 @@ import { applyTheme, loadSettings, pushSettings } from "./settings";
 function BackButton() {
   const navigate = useNavigate();
   const location = useLocation();
-  const player = usePlayer();
+  const { expanded, setExpanded } = useNowPlaying();
   useEffect(() => {
     const handle = CapacitorApp.addListener("backButton", () => {
-      if (player.expanded) player.setExpanded(false);
+      if (expanded) setExpanded(false);
       else if (location.pathname !== "/") navigate(-1);
       else void CapacitorApp.minimizeApp();
     });
     return () => void handle.then((listener) => listener.remove());
-  }, [navigate, location.pathname, player]);
+  }, [navigate, location.pathname, expanded, setExpanded]);
   return null;
 }
 
@@ -52,6 +52,10 @@ function Tab({ to, icon: Icon, label }: { to: string; icon: typeof Library; labe
 }
 
 function MobileShell({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  const { setExpanded } = useNowPlaying();
+  useRestoreLastListening();
+  useEffect(() => setExpanded(false), [pathname, setExpanded]);
   return (
     <div className="relative flex h-full flex-col" style={{ paddingTop: "env(safe-area-inset-top)" }}>
       <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</main>
@@ -88,15 +92,8 @@ function EmptyLibrary() {
   );
 }
 
-function Library() {
-  return (
-    <>
-      <div className="px-4 pt-4">
-        <MorningRecap />
-      </div>
-      <LibraryScreen empty={<EmptyLibrary />} />
-    </>
-  );
+function LibraryPage() {
+  return <LibraryScreen empty={<EmptyLibrary />} recap={<MorningRecap className="mt-5" />} />;
 }
 
 function ClipBridge({ children }: { children: ReactNode }) {
@@ -114,13 +111,13 @@ export function AndroidApp() {
   return (
     <TooltipProvider delayDuration={500}>
       <SourceProvider source={androidSource}>
-        <PlayerProvider engine={engine} keyboard={false}>
+        <PlayerProvider engine={engine} keyboard={false} fadeSeconds={loadSettings().sleepFadeSeconds} extendMinutes={loadSettings().sleepExtendMinutes}>
           <ClipBridge>
             <HashRouter>
               <BackButton />
               <MobileShell>
                 <Routes>
-                  <Route path="/" element={<Library />} />
+                  <Route path="/" element={<LibraryPage />} />
                   <Route path="/book/:id" element={<BookScreen />} />
                   <Route path="/devices" element={<DevicesScreen />} />
                   <Route path="/settings" element={<SettingsScreen />} />
@@ -130,7 +127,7 @@ export function AndroidApp() {
           </ClipBridge>
         </PlayerProvider>
       </SourceProvider>
-      <Toaster position="top-center" toastOptions={{ classNames: { toast: "!bg-panel !border !border-line !text-fg !rounded-xl", description: "!text-fg-2" } }} />
+      <Toaster position="top-center" containerAriaLabel="Thông báo" toastOptions={{ classNames: { toast: "!bg-panel !border !border-line !text-fg !rounded-xl", description: "!text-fg-2" } }} />
     </TooltipProvider>
   );
 }

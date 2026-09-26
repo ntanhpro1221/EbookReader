@@ -1,4 +1,5 @@
-import { BookPlus, Headphones } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { BookPlus, Clapperboard, Compass, Headphones } from "lucide-react";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { HashRouter, Route, Routes, useNavigate } from "react-router";
 import { Toaster } from "sonner";
@@ -6,6 +7,7 @@ import { BookScreen } from "@/listen/BookScreen";
 import { ClipProvider } from "@/listen/clip";
 import { WebAudioEngine } from "@/listen/engine";
 import { LibraryScreen } from "@/listen/LibraryScreen";
+import { MorningRecap } from "@/listen/MorningRecap";
 import { PlayerProvider, usePlayer } from "@/listen/player";
 import { SourceProvider } from "@/listen/source";
 import { Button, EmptyState, TooltipProvider } from "@/shared/ui";
@@ -53,16 +55,38 @@ function EmptyLibrary() {
   );
 }
 
-function StudioLink({ id }: { id: string }) {
+function StudioMenuItem({ id }: { id: string }) {
   const navigate = useNavigate();
   return (
-    <button
-      type="button"
-      onClick={() => navigate(`/studio/${id}`)}
-      className="flex h-9 w-full cursor-default items-center gap-2 rounded-lg px-2 text-left text-sm outline-none hover:bg-hover"
+    <DropdownMenu.Item
+      onSelect={() => navigate(`/studio/${id}`)}
+      className="flex h-9 cursor-default items-center gap-2 rounded-lg px-2 text-sm outline-none data-[highlighted]:bg-hover"
     >
-      Mở trong Studio
+      <Clapperboard className="size-4" /> Mở trong Studio
+    </DropdownMenu.Item>
+  );
+}
+
+function StudioChipLink({ id }: { id: string }) {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(`/studio/${id}`)} className="font-semibold underline underline-offset-2 hover:no-underline">
+      Mở Studio
     </button>
+  );
+}
+
+function NotFound() {
+  const navigate = useNavigate();
+  return (
+    <EmptyState
+      icon={Compass}
+      title="Không có trang này"
+      className="mt-24"
+      action={<Button onClick={() => navigate("/")}>Về Thư viện</Button>}
+    >
+      Đường dẫn có thể đã cũ hoặc gõ nhầm.
+    </EmptyState>
   );
 }
 
@@ -75,17 +99,32 @@ export function App() {
   return (
     <TooltipProvider delayDuration={350} skipDelayDuration={150}>
       <SourceProvider source={httpSource}>
-        <PlayerProvider engine={engine} defaultRate={info.playbackRate} defaultVolume={info.volume}>
+        <PlayerProvider
+          engine={engine}
+          defaultRate={info.playbackRate}
+          defaultVolume={info.volume}
+          fadeSeconds={preferences?.sleepFadeSeconds ?? info.sleepFadeSeconds}
+          extendMinutes={preferences?.sleepExtendMinutes ?? info.sleepExtendMinutes}
+        >
           <ClipBridge>
             <HashRouter>
               <Shell>
                 <Routes>
-                  <Route path="/" element={<LibraryScreen empty={<EmptyLibrary />} />} />
-                  <Route path="/book/:id" element={<BookScreen extraActions={(book) => <StudioLink id={book.id} />} />} />
+                  <Route path="/" element={<LibraryScreen empty={<EmptyLibrary />} recap={<MorningRecap className="mt-6" />} />} />
+                  <Route
+                    path="/book/:id"
+                    element={
+                      <BookScreen
+                        extraActions={(book) => <StudioMenuItem id={book.id} />}
+                        studioLink={(book) => <StudioChipLink id={book.id} />}
+                      />
+                    }
+                  />
                   <Route path="/studio" element={<ProjectsScreen />} />
                   <Route path="/studio/new" element={<NewProjectScreen />} />
                   <Route path="/studio/:id" element={<ProjectScreen />} />
                   <Route path="/settings" element={<SettingsScreen />} />
+                  <Route path="*" element={<NotFound />} />
                 </Routes>
               </Shell>
             </HashRouter>
@@ -95,6 +134,7 @@ export function App() {
       <Toaster
         position="bottom-right"
         offset={96}
+        containerAriaLabel="Thông báo"
         toastOptions={{
           classNames: {
             toast: "!bg-panel !border !border-line !text-fg !shadow-float !rounded-xl",

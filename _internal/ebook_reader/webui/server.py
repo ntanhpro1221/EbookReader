@@ -12,7 +12,7 @@ import re
 import secrets
 import threading
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable, Protocol
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import actions, listen_view, store
 from .library import Library, Preferences, book_id
 from .listening import Listening
-from .sync import Devices, SyncApp, SyncServer, local_addresses, SYNC_PORT
+from .sync import Devices, ExclusiveHTTPServer, SyncApp, SyncServer, local_addresses, SYNC_PORT
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 ASSET_DIR = Path(__file__).resolve().parents[1] / "assets"
@@ -73,6 +73,7 @@ class App:
         self.devices = Devices(preferences.path.with_name("devices.json"))
         self.sync_server: SyncServer | None = None
         self.sync_host = "0.0.0.0"
+        self.sync_port = SYNC_PORT
         self.sync_error = ""
         self.library = Library(preferences)
         self.jobs = actions.Jobs(runner)
@@ -155,11 +156,14 @@ class App:
         running = self.sync_server is not None
         return {
             "enabled": running,
+            "wanted": bool(self.preferences.get().get("syncEnabled")),
             "error": self.sync_error,
-            "port": self.sync_server.port if running else SYNC_PORT,
+            "name": socket_name(),
+            "port": self.sync_server.port if running else self.sync_port,
             "addresses": local_addresses() if self.sync_host == "0.0.0.0" else [self.sync_host],
-            "pairing": self.devices.pairing_code() if running else None,
-            "devices": self.devices.list(),
+            "pairing": self.devices.pairing() if running else None,
+            "pairingBlocked": running and self.devices.blocked,
+            "devices": sorted(self.devices.list(), key=lambda device: -float(device.get("lastSeen") or 0)),
         }
 
     def set_sync(self, enabled: bool) -> dict[str, Any]:
@@ -168,12 +172,13 @@ class App:
         if enabled and self.sync_server is None:
             try:
                 app = SyncApp(self.library, self.listening, self.devices, socket_name())
-                self.sync_server = SyncServer(app, host=self.sync_host, port=SYNC_PORT).start()
+                self.sync_server = SyncServer(app, host=self.sync_host, port=self.sync_port).start()
                 self.sync_error = ""
             except OSError as error:
-                self.sync_error = f"Không mở được cổng đồng bộ {SYNC_PORT}: {error}"
+                self.sync_error = f"Không mở được cổng đồng bộ {self.sync_port}: {error.strerror or error}"
         elif not enabled:
             self.sync_error = ""
+            self.devices.cancel_pairing()
             if self.sync_server is not None:
                 self.sync_server.stop()
                 self.sync_server = None
@@ -399,6 +404,8 @@ class Handler(BaseHTTPRequestHandler):
             "theme": prefs["theme"],
             "playbackRate": prefs["playbackRate"],
             "volume": prefs["volume"],
+            "sleepFadeSeconds": prefs.get("sleepFadeSeconds", 30),
+            "sleepExtendMinutes": prefs.get("sleepExtendMinutes", 10),
         })
 
     def get_library(self, _query: dict[str, list[str]]) -> None:
@@ -438,10 +445,18 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.OK, self.app.set_sync(bool(self._body().get("enabled"))))
 
     def post_sync_pairing(self, _query: dict[str, list[str]]) -> None:
-        self.app.devices.pairing_code(renew=True)
+        self._mutating_guard()
+        if self.app.sync_server is None:
+            raise ApiError(HTTPStatus.CONFLICT, "Bật đồng bộ trước rồi mới ghép điện thoại")
+        self.app.devices.start_pairing()
+        self._send_json(HTTPStatus.OK, self.app.sync_view())
+
+    def delete_sync_pairing(self, _query: dict[str, list[str]]) -> None:
+        self.app.devices.cancel_pairing()
         self._send_json(HTTPStatus.OK, self.app.sync_view())
 
     def delete_sync_device(self, _query: dict[str, list[str]], device: str) -> None:
+        self._mutating_guard()
         self.app.devices.revoke(device)
         self._send_json(HTTPStatus.OK, self.app.sync_view())
 
@@ -495,6 +510,26 @@ class Handler(BaseHTTPRequestHandler):
         self.app.listening.delete_bookmark(value, mark)
         self._send_json(HTTPStatus.OK, {"ok": True})
 
+    def post_bookmark_restore(self, _query: dict[str, list[str]], value: str) -> None:
+        self.app._book(value)
+        body = self._body()
+        if not re.fullmatch(r"[0-9a-f]{6,40}", str(body.get("id", ""))):
+            raise ApiError(HTTPStatus.BAD_REQUEST, "Dấu trang không hợp lệ")
+        self._send_json(HTTPStatus.OK, self.app.listening.restore_bookmark(value, body))
+
+    def post_night(self, _query: dict[str, list[str]], value: str) -> None:
+        self.app._book(value)
+        self.app.listening.save_night(value, self._body())
+        self._send_json(HTTPStatus.OK, {"ok": True})
+
+    def get_night(self, _query: dict[str, list[str]]) -> None:
+        self._send_json(HTTPStatus.OK, self.app.listening.latest_night())
+
+    def post_night_dismiss(self, _query: dict[str, list[str]]) -> None:
+        body = self._body()
+        self.app.listening.dismiss_night(str(body.get("bookId", "")), str(body.get("id", "")))
+        self._send_json(HTTPStatus.OK, {"ok": True})
+
     def post_open(self, _query: dict[str, list[str]]) -> None:
         self._send_json(HTTPStatus.OK, self.app.open_existing(self._body()))
 
@@ -514,6 +549,11 @@ class Handler(BaseHTTPRequestHandler):
     def put_preferences(self, _query: dict[str, list[str]]) -> None:
         body = self._body()
         allowed = {key: body[key] for key in ("theme", "libraryRoot", "playbackRate", "volume") if key in body}
+        # Hai tuỳ chọn hẹn giờ ngủ chỉ nhận đúng các mức giao diện đưa ra.
+        if body.get("sleepFadeSeconds") in (10, 30, 60):
+            allowed["sleepFadeSeconds"] = body["sleepFadeSeconds"]
+        if body.get("sleepExtendMinutes") in (5, 10, 15):
+            allowed["sleepExtendMinutes"] = body["sleepExtendMinutes"]
         self._send_json(HTTPStatus.OK, self.app.preferences.update(allowed))
 
     def post_pick_folder(self, _query: dict[str, list[str]]) -> None:
@@ -572,6 +612,7 @@ ROUTES: list[Route] = [
     ("GET", re.compile(r"/api/sync"), Handler.get_sync),
     ("POST", re.compile(r"/api/sync"), Handler.post_sync),
     ("POST", re.compile(r"/api/sync/pairing"), Handler.post_sync_pairing),
+    ("DELETE", re.compile(r"/api/sync/pairing"), Handler.delete_sync_pairing),
     ("DELETE", re.compile(r"/api/sync/devices/([0-9a-f]+)"), Handler.delete_sync_device),
     ("GET", re.compile(r"/api/listen/library"), Handler.get_listen_library),
     ("GET", re.compile(LISTEN), Handler.get_listen_book),
@@ -582,6 +623,10 @@ ROUTES: list[Route] = [
     ("POST", re.compile(LISTEN + r"/bookmarks"), Handler.post_bookmark),
     ("PUT", re.compile(LISTEN + r"/bookmarks/([0-9a-f]+)"), Handler.put_bookmark),
     ("DELETE", re.compile(LISTEN + r"/bookmarks/([0-9a-f]+)"), Handler.delete_bookmark),
+    ("POST", re.compile(LISTEN + r"/bookmarks/restore"), Handler.post_bookmark_restore),
+    ("POST", re.compile(LISTEN + r"/night"), Handler.post_night),
+    ("GET", re.compile(r"/api/listen/night"), Handler.get_night),
+    ("POST", re.compile(r"/api/listen/night/dismiss"), Handler.post_night_dismiss),
     ("GET", re.compile(r"/media/voices/([^/]+)"), Handler.media_voice),
     ("GET", re.compile(r"/media/books/([A-Za-z0-9_-]+)/chapters/(\d+)"), Handler.media_chapter),
     ("GET", re.compile(r"/media/books/([A-Za-z0-9_-]+)/samples/(\d+)"), Handler.media_sample),
@@ -593,8 +638,7 @@ class Server:
 
     def __init__(self, app: App, *, port: int = 0) -> None:
         handler = type("BoundHandler", (Handler,), {"app": app})
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
-        self.httpd.daemon_threads = True
+        self.httpd = ExclusiveHTTPServer(("127.0.0.1", port), handler)
         handler.port = self.httpd.server_address[1]
         self.app = app
         self.port = int(self.httpd.server_address[1])

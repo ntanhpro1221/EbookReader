@@ -109,7 +109,7 @@ object Playback {
     }
 
     /** Nạp một cuốn: cả danh sách chương vào hàng đợi, bắt đầu ở chương/giây đã chọn. */
-    fun load(id: String, title: String, narratorName: String, items: List<Chapter>, startChapterId: Int, startSeconds: Double, rate: Double) {
+    fun load(id: String, title: String, narratorName: String, items: List<Chapter>, startChapterId: Int, startSeconds: Double, rate: Double, autoplay: Boolean = true) {
         val exo = player ?: return
         saveNow()
         bookId = id
@@ -136,8 +136,11 @@ object Playback {
         exo.setMediaItems(media, index, (startSeconds * 1000).toLong())
         exo.playbackParameters = PlaybackParameters(rate.toFloat())
         exo.prepare()
-        exo.play()
-        startTicking()
+        // Mở lại app: nạp sẵn đúng chỗ đang nghe dở ở trạng thái dừng, người nghe bấm phát khi sẵn sàng.
+        if (autoplay) {
+            exo.play()
+            startTicking()
+        }
         emit("load")
     }
 

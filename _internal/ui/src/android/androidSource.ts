@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import type { Cast, ListenBook, ListeningState, Script } from "@/listen/model";
 import { bookProgress } from "./progress";
 import type { ListenSource } from "@/listen/source";
-import { EbookLibrary, type LocalBook } from "./plugins";
+import { EbookLibrary, EbookPlayer, type LocalBook } from "./plugins";
 
 // Phía Nghe trên Android: đọc sách đã tải về máy (EbookLibrary). Audio chương do lõi phát native mở thẳng từ
 // file, nên audioUrl không dùng tới; câu mẫu nhân vật phát trong WebView qua đường dẫn file đã chuyển đổi.
@@ -26,7 +26,7 @@ function toListenBook(book: LocalBook, withChapters: boolean): ListenBook {
     duration: chapter.duration,
     available: chapter.available && Boolean(chapter.file),
   }));
-  const state: ListeningState = { chapters: {}, bookmarks: [], ...book.state };
+  const state: ListeningState = { ...book.state, chapters: book.state?.chapters ?? {}, bookmarks: book.state?.bookmarks ?? [] };
   return {
     id: book.id,
     title: book.title,
@@ -35,10 +35,13 @@ function toListenBook(book: LocalBook, withChapters: boolean): ListenBook {
     chaptersTotal: book.chaptersTotal,
     chaptersAvailable: chapters.filter((chapter) => chapter.available).length,
     complete: book.complete,
-    producing: !book.complete,
+    // Trên điện thoại không biết máy tính còn đang làm hay không: chỉ biết cuốn này chưa đủ chương.
+    producing: false,
+    paused: !book.complete,
     updatedAt: state.updatedAt ?? null,
     state,
-    progress: bookProgress(state, chapters.filter((chapter) => chapter.available)),
+    progress: bookProgress(state, chapters.filter((chapter) => chapter.available), book.complete),
+    lastChapterTitle: chapters.find((chapter) => chapter.id === state.last?.chapterId)?.fullTitle ?? "",
     chapters: withChapters ? chapters : undefined,
   };
 }
@@ -75,4 +78,12 @@ export const androidSource: ListenSource = {
   addBookmark: (id, chapterId, seconds, note) => EbookLibrary.addBookmark({ id, chapterId, seconds, note }),
   updateBookmark: (id, markId, note) => EbookLibrary.updateBookmark({ id, markId, note }),
   deleteBookmark: (id, markId) => EbookLibrary.deleteBookmark({ id, markId }),
+  restoreBookmark: async (id, mark) => {
+    await EbookLibrary.addBookmark({ id, chapterId: mark.chapterId, seconds: mark.seconds, note: mark.note });
+  },
+  async lastNight() {
+    const { session } = await EbookPlayer.lastNight();
+    return session?.bookId ? { bookId: session.bookId, night: session } : null;
+  },
+  dismissNight: () => EbookPlayer.dismissLastNight(),
 };

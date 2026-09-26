@@ -1,19 +1,32 @@
 import { FolderOpen, Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { Button, Kbd } from "@/shared/ui";
+import { Button, Kbd, Segmented } from "@/shared/ui";
 import { cn } from "@/shared/cn";
 import { pickFolder, useAppInfo, usePreferences } from "@/studio/data";
+import { PhoneSync } from "./PhoneSync";
 
-function Section({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function Section({ id, title, description, children }: { id?: string; title: string; description?: string; children: ReactNode }) {
   return (
-    <section className="grid grid-cols-[260px_minmax(0,1fr)] gap-8 border-b border-line py-7 last:border-b-0">
+    <section id={id} className="grid gap-4 border-b border-line py-7 last:border-b-0 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
       <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
-        {description && <p className="mt-1 text-xs leading-relaxed text-fg-2">{description}</p>}
+        <h2 className="text-base font-semibold">{title}</h2>
+        {description && <p className="mt-1 text-[13px] leading-relaxed text-fg-2 text-pretty">{description}</p>}
       </div>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </section>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-2">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        {hint && <div className="mt-0.5 text-[13px] text-fg-2">{hint}</div>}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -27,6 +40,9 @@ const SHORTCUTS: [ReactNode, string][] = [
   [<Kbd key="space">Space</Kbd>, "Phát / tạm dừng"],
   [<><Kbd>←</Kbd> <Kbd>→</Kbd></>, "Lùi / tới 15 giây"],
   [<><Kbd>Shift</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd></>, "Chương trước / sau"],
+  [<Kbd key="b">B</Kbd>, "Thêm dấu trang"],
+  [<Kbd key="m">M</Kbd>, "Tắt / bật tiếng"],
+  [<><Kbd>[</Kbd> <Kbd>]</Kbd></>, "Giảm / tăng tốc độ đọc"],
   [<Kbd key="esc">Esc</Kbd>, "Thu nhỏ màn hình đang nghe"],
 ];
 
@@ -44,18 +60,21 @@ export function SettingsScreen() {
       toast.error((error as Error).message);
     }
   };
+  const fade = String(preferences?.sleepFadeSeconds ?? 30) as "10" | "30" | "60";
+  const extend = String(preferences?.sleepExtendMinutes ?? 10) as "5" | "10" | "15";
   return (
-    <div className="mx-auto max-w-[920px] px-10 pb-16 pt-9">
-      <h1 className="text-[28px] font-bold tracking-tight">Cài đặt</h1>
-      <div className="mt-4">
+    <div className="mx-auto max-w-[1180px] px-4 pb-16 pt-6 sm:px-10 sm:pt-9">
+      <h1 className="text-2xl font-bold tracking-tight sm:text-[28px]">Cài đặt</h1>
+      <div className="mt-2 max-w-[980px]">
         <Section title="Thư viện" description="Thư mục chứa các sách. Sách mới được tạo trong thư mục này.">
           <div className="flex items-center gap-2">
-            <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-line bg-panel px-3 text-sm">
-              <span className="truncate">{preferences?.libraryRoot}</span>
+            <div className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg bg-sunken px-3 text-sm text-fg-2">
+              <FolderOpen className="size-4 shrink-0" />
+              <span className="truncate" title={preferences?.libraryRoot}>{preferences?.libraryRoot}</span>
             </div>
             {info?.dialogs && (
               <Button icon={FolderOpen} onClick={() => void changeLibrary()}>
-                Đổi
+                Đổi thư mục
               </Button>
             )}
           </div>
@@ -84,27 +103,64 @@ export function SettingsScreen() {
             })}
           </div>
         </Section>
-        <Section title="Nghe" description="Trình phát nhớ vị trí của từng cuốn và tốc độ bạn chọn lần gần nhất.">
-          <ul className="space-y-2 text-sm text-fg-2">
-            <li>Nghe lại sau hơn 5 phút tạm dừng: tự lùi 5 giây để bắt lại mạch truyện.</li>
-            <li>Hẹn giờ tắt: tiếng nhỏ dần 10 giây trước khi dừng.</li>
-            <li>Hết một chương tự sang chương kế đã nghe được.</li>
-          </ul>
+        <Section
+          title="Nghe"
+          description="Trình phát nhớ vị trí và tốc độ của từng cuốn. Hết một chương tự sang chương kế tiếp (nếu đã có audio)."
+        >
+          <div className="divide-y divide-line">
+            <Field label="Nhỏ dần trước khi hẹn giờ tắt" hint="Tiếng giảm êm để không giật mình tỉnh giấc.">
+              <Segmented<"10" | "30" | "60">
+                label="Độ dài nhỏ dần"
+                value={fade}
+                onChange={(value) => update({ sleepFadeSeconds: Number(value) })}
+                options={[
+                  { value: "10", label: "10 giây" },
+                  { value: "30", label: "30 giây" },
+                  { value: "60", label: "1 phút" },
+                ]}
+              />
+            </Field>
+            <Field label="Mỗi lần nghe thêm" hint="Lúc đang nhỏ dần, chạm phím hoặc chuột là được nghe thêm chừng này.">
+              <Segmented<"5" | "10" | "15">
+                label="Số phút nghe thêm"
+                value={extend}
+                onChange={(value) => update({ sleepExtendMinutes: Number(value) })}
+                options={[
+                  { value: "5", label: "5 phút" },
+                  { value: "10", label: "10 phút" },
+                  { value: "15", label: "15 phút" },
+                ]}
+              />
+            </Field>
+            <Field
+              label="Tự lùi khi nghe lại"
+              hint="Dừng dưới 5 phút: không lùi. Từ 5 phút tới 1 giờ: lùi 10 giây. Lâu hơn (ngủ dậy): lùi 30 giây."
+            >
+              <span className="text-[13px] text-fg-2">Tự động</span>
+            </Field>
+          </div>
         </Section>
-        <Section title="Phím tắt">
-          <dl className="space-y-2.5 text-sm">
+        <Section
+          id="phone"
+          title="Điện thoại"
+          description="Nghe tiếp trên điện thoại Android: tải sách về để nghe không cần mạng, chỗ đang nghe và dấu trang tự đồng bộ hai chiều."
+        >
+          <PhoneSync />
+        </Section>
+        <Section title="Phím tắt" description="Dùng được ở mọi màn hình, trừ khi đang gõ chữ.">
+          <dl className="max-w-md space-y-2.5 text-sm">
             {SHORTCUTS.map(([keys, label]) => (
-              <div key={label} className="flex items-center justify-between">
+              <div key={label} className="flex items-center justify-between gap-4">
                 <dt className="text-fg-2">{label}</dt>
-                <dd className="flex items-center gap-1 text-fg-3">{keys}</dd>
+                <dd className="flex items-center gap-1 text-fg-2">{keys}</dd>
               </div>
             ))}
           </dl>
         </Section>
         <Section title="Giới thiệu">
-          <p className="text-sm text-fg-2">
-            Ebook Reader {info?.version} - studio sách nói tiếng Việt chạy hoàn toàn trên máy của bạn: phân tích truyện,
-            phân vai, thu âm và kiểm tra từng câu.
+          <p className="text-sm text-fg-2 text-pretty">
+            Ebook Reader {info?.version} - studio sách nói tiếng Việt chạy hoàn toàn trên máy của bạn: phân tích truyện, phân vai, thu âm và
+            kiểm tra từng câu.
           </p>
         </Section>
       </div>

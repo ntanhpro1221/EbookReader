@@ -36,6 +36,7 @@ SYNC_PORT = 47630
 DISCOVERY_PORT = 47631
 DISCOVERY_PROBE = b"EBOOKREADER_DISCOVER"
 PAIRING_SECONDS = 300
+PAIRING_ATTEMPTS = 5
 CHUNK = 256 * 1024
 MAX_BODY = 2 * 1024 * 1024
 
@@ -44,8 +45,30 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+class ExclusiveHTTPServer(ThreadingHTTPServer):
+    """Máy chủ HTTP giữ cổng cho riêng mình.
+
+    `HTTPServer` bật SO_REUSEADDR, mà trên Windows cờ ấy nghĩa là "cho phép bind đè lên cổng đang có người nghe":
+    một tiến trình khác sẽ lặng lẽ nhận một phần kết nối (của điện thoại, hoặc của chính giao diện - kèm mã phiên),
+    và cổng bận thật thì ta cũng không biết. SO_EXCLUSIVEADDRUSE chặn cả hai.
+    """
+
+    daemon_threads = True
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self) -> None:
+        if os.name == "nt":
+            self.socket.setsockopt(socket.SOL_SOCKET, getattr(socket, "SO_EXCLUSIVEADDRUSE", -5), 1)
+        super().server_bind()
+
+
 class Devices:
-    """Điện thoại đã ghép nối: lưu băm của mã (không lưu mã thật), tên, lần thấy cuối."""
+    """Điện thoại đã ghép nối: lưu băm của mã (không lưu mã thật), tên, lần thấy cuối.
+
+    Mã ghép nối chỉ có khi người dùng bấm "Ghép điện thoại" trên máy tính: 6 số, dùng một lần, sống 5 phút. Một
+    triệu khả năng thì máy khác trong mạng đoán mò được trong vài phút, nên sai `PAIRING_ATTEMPTS` lần là mã bị
+    huỷ và KHÔNG tự sinh lại - người dùng thấy lý do và chủ động tạo mã mới.
+    """
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -55,19 +78,38 @@ class Devices:
         except (OSError, ValueError):
             self._data = {"devices": {}}
         self._pairing: tuple[str, float] | None = None
+        self._failures = 0
+        self.blocked = False
 
-    def pairing_code(self, *, renew: bool = False) -> dict[str, Any]:
+    def start_pairing(self) -> dict[str, Any]:
         with self._lock:
-            now = time.time()
-            if renew or self._pairing is None or self._pairing[1] <= now:
-                self._pairing = (f"{secrets.randbelow(10**6):06d}", now + PAIRING_SECONDS)
+            self._pairing = (f"{secrets.randbelow(10**6):06d}", time.time() + PAIRING_SECONDS)
+            self._failures = 0
+            self.blocked = False
+            return {"code": self._pairing[0], "expiresAt": self._pairing[1]}
+
+    def cancel_pairing(self) -> None:
+        with self._lock:
+            self._pairing = None
+            self._failures = 0
+            self.blocked = False
+
+    def pairing(self) -> dict[str, Any] | None:
+        with self._lock:
+            if self._pairing is None or self._pairing[1] <= time.time():
+                return None
             return {"code": self._pairing[0], "expiresAt": self._pairing[1]}
 
     def pair(self, code: str, name: str) -> str | None:
+        digits = re.sub(r"[^0-9]", "", code)[:12]  # "482 913" cũng được; compare_digest không nhận chữ ngoài ASCII
         with self._lock:
             if not self._pairing or self._pairing[1] <= time.time():
                 return None
-            if not secrets.compare_digest(code.strip(), self._pairing[0]):
+            if not secrets.compare_digest(digits, self._pairing[0]):
+                self._failures += 1
+                if self._failures >= PAIRING_ATTEMPTS:
+                    self._pairing = None
+                    self.blocked = True
                 return None
             self._pairing = None  # mã dùng một lần
             token = secrets.token_urlsafe(32)
@@ -344,8 +386,7 @@ class SyncServer:
     def __init__(self, app: SyncApp, *, host: str = "0.0.0.0", port: int = SYNC_PORT,
                  discovery_port: int = DISCOVERY_PORT) -> None:
         handler = type("BoundSyncHandler", (SyncHandler,), {"app": app})
-        self.httpd = ThreadingHTTPServer((host, port), handler)
-        self.httpd.daemon_threads = True
+        self.httpd = ExclusiveHTTPServer((host, port), handler)
         self.port = int(self.httpd.server_address[1])
         self.discovery = Discovery(app.name, self.port, discovery_port) if host == "0.0.0.0" else None
         self._thread: threading.Thread | None = None

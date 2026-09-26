@@ -71,6 +71,7 @@ class PlayerPlugin : Plugin() {
             Playback.load(
                 book, call.getString("bookTitle") ?: "", call.getString("narrator") ?: "", chapters,
                 call.getInt("chapterId") ?: chapters.first().id, call.getDouble("seconds") ?: 0.0, call.getDouble("rate") ?: 1.0,
+                call.getBoolean("autoplay") ?: true,
             )
             call.resolve(JSObject.fromJSONObject(Playback.state()))
         }

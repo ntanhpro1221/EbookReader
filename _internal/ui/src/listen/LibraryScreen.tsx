@@ -1,11 +1,12 @@
-import { Headphones, Play, Search } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { Headphones, Pause, Play, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
 import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
-import { formatLength, formatRelative } from "@/shared/format";
+import { formatClock, formatLength, formatWhen } from "@/shared/format";
 import { EmptyState, Progress, Segmented, Skeleton } from "@/shared/ui";
-import { resumePoint, type ListenBook } from "./model";
+import { foldVietnamese, resumePoint, type ListenBook } from "./model";
 import { usePlayer } from "./player";
 import { useListenLibrary, useSource } from "./source";
 
@@ -17,8 +18,15 @@ function stateOf(book: ListenBook): Filter {
   return "new";
 }
 
-function leftText(book: ListenBook): string {
+/** Dòng trạng thái của một cuốn, cùng một bộ từ ở Thư viện, trang sách và thẻ nghe dở. */
+export function bookStatusText(book: ListenBook): string {
+  const chapters = `${book.chaptersAvailable}/${book.chaptersTotal} chương`;
   if (book.progress.finished) return "Đã nghe xong";
+  if (book.progress.caughtUp) return `Đã nghe hết phần đã có · ${chapters}`;
+  if (!book.complete) {
+    const lead = book.producing ? "Đang thu âm" : "Chưa hoàn thành";
+    return `${lead} · ${chapters}`;
+  }
   const left = Math.max(0, book.duration - book.progress.heardSeconds);
   if (book.progress.heardSeconds <= 0) return formatLength(book.duration);
   return `Còn ${formatLength(left)}`;
@@ -28,10 +36,19 @@ export function usePlayListenBook() {
   const source = useSource();
   const player = usePlayer();
   return async (book: ListenBook, chapterId?: number, at?: number) => {
+    // Cuốn đang ở trình phát: tiếp tục đúng chỗ đang phát, không nạp lại (nạp lại là lùi về điểm lưu gần nhất).
+    if (chapterId === undefined && player.track?.bookId === book.id) {
+      player.resume();
+      return;
+    }
     const full = book.chapters ? book : await source.book(book.id);
     const chapters = full.chapters ?? [];
     if (chapterId !== undefined) {
       player.play(full, chapters, chapterId, at ?? 0);
+      return;
+    }
+    if (full.progress.caughtUp) {
+      toast("Đã nghe hết phần đã có", { description: "Chương tiếp theo sẽ nghe được khi Studio làm xong." });
       return;
     }
     const point = resumePoint(full, chapters);
@@ -39,24 +56,55 @@ export function usePlayListenBook() {
   };
 }
 
+/** Mở lại app: thanh phát có sẵn cuốn đang nghe dở (đang dừng) - bấm Space là nghe tiếp, khỏi đi tìm. */
+export function useRestoreLastListening() {
+  const { data: books } = useListenLibrary();
+  const player = usePlayer();
+  const source = useSource();
+  const tried = useRef(false);
+  useEffect(() => {
+    if (tried.current || !books || player.track) return;
+    tried.current = true;
+    const recent = books
+      .filter((book) => book.state.last && !book.progress.finished)
+      .sort((a, b) => (b.state.last?.at ?? 0) - (a.state.last?.at ?? 0))[0];
+    if (!recent?.state.last || Date.now() / 1000 - recent.state.last.at > 30 * 86_400) return;
+    void source
+      .book(recent.id)
+      .then((book) => {
+        const point = resumePoint(book, book.chapters ?? []);
+        if (point) player.prepare(book, book.chapters ?? [], point.chapter.id, point.at);
+      })
+      .catch(() => undefined);
+  }, [books, player, source]);
+}
+
 function BookTile({ book }: { book: ListenBook }) {
   const navigate = useNavigate();
   const playBook = usePlayListenBook();
   const player = usePlayer();
   const current = player.track?.bookId === book.id;
+  const playingHere = current && player.playing;
   return (
     <div className="group">
       <div className="relative">
         <button type="button" onClick={() => navigate(`/book/${book.id}`)} className="block w-full rounded-lg" aria-label={`Mở ${book.title}`}>
-          <BookCover title={book.title} size="md" className="w-full" />
+          <BookCover title={book.title} size="md" playing={playingHere} className="w-full" />
         </button>
         <button
           type="button"
-          aria-label={`Nghe ${book.title}`}
-          onClick={() => void playBook(book)}
-          className="absolute bottom-2.5 right-2.5 grid size-10 place-items-center rounded-full bg-accent text-accent-ink opacity-0 shadow-float transition-opacity duration-150 group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100"
+          aria-label={playingHere ? `Tạm dừng ${book.title}` : `Nghe ${book.title}`}
+          onClick={() => (current ? player.toggle() : void playBook(book))}
+          className={cn(
+            "absolute bottom-2.5 right-2.5 grid size-10 place-items-center rounded-full bg-accent text-accent-ink shadow-float transition-opacity duration-150 group-hover:opacity-100 focus-visible:opacity-100 max-md:opacity-100",
+            current ? "opacity-100" : "opacity-0",
+          )}
         >
-          <Play className="size-4 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+          {playingHere ? (
+            <Pause className="size-4" fill="currentColor" strokeWidth={0} />
+          ) : (
+            <Play className="size-4 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+          )}
         </button>
         {book.progress.fraction > 0 && !book.progress.finished && (
           <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden rounded-b-lg bg-black/40">
@@ -66,9 +114,7 @@ function BookTile({ book }: { book: ListenBook }) {
       </div>
       <button type="button" onClick={() => navigate(`/book/${book.id}`)} className="mt-2.5 block w-full text-left">
         <div className={cn("line-clamp-2 text-sm font-semibold leading-snug", current && "text-accent-text")}>{book.title}</div>
-        <div className="mt-1 text-xs text-fg-2">
-          {book.producing ? `Đang làm · ${book.chaptersAvailable}/${book.chaptersTotal} chương` : leftText(book)}
-        </div>
+        <div className="mt-1 text-xs text-fg-2">{bookStatusText(book)}</div>
       </button>
     </div>
   );
@@ -77,33 +123,51 @@ function BookTile({ book }: { book: ListenBook }) {
 function ContinueCard({ book }: { book: ListenBook }) {
   const navigate = useNavigate();
   const playBook = usePlayListenBook();
+  const player = usePlayer();
+  const current = player.track?.bookId === book.id;
+  const playingHere = current && player.playing;
+  const last = book.state.last;
+  const chapter = (current ? player.track?.chapterTitle : undefined) || book.lastChapterTitle;
+  const where = last ? `${chapter ? `${chapter} · ` : ""}${formatClock(last.seconds)}` : "";
   return (
     <section className="flex items-center gap-4 rounded-2xl border border-line bg-panel p-4 shadow-card sm:gap-5 sm:p-5">
       <button type="button" onClick={() => navigate(`/book/${book.id}`)} aria-label={`Mở ${book.title}`}>
-        <BookCover title={book.title} size="md" className="w-20 sm:w-28" />
+        <BookCover title={book.title} size="md" playing={playingHere} className="w-20 sm:w-28" />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-accent-text">Đang nghe dở</div>
+        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-text">Đang nghe dở</div>
         <h2 className="mt-1 line-clamp-2 text-base font-semibold sm:text-lg">{book.title}</h2>
-        <p className="mt-0.5 text-sm text-fg-2">
-          {leftText(book)}
-          {book.state.last ? ` · ${formatRelative(book.state.last.at)}` : ""}
+        <p className="tabular mt-0.5 text-sm text-fg-2">
+          {where}
+          {last ? ` · nghe lần cuối ${formatWhen(last.at)}` : ""}
         </p>
-        <Progress value={book.progress.fraction} size="xs" className="mt-3 max-w-md" />
+        <p className="mt-0.5 text-sm text-fg-2">{bookStatusText(book)}</p>
+        <Progress value={book.progress.fraction} size="xs" className="mt-3 max-w-md" label="Đã nghe" />
       </div>
       <button
         type="button"
-        onClick={() => void playBook(book)}
-        aria-label="Nghe tiếp"
+        onClick={() => (current ? player.toggle() : void playBook(book))}
+        aria-label={playingHere ? `Tạm dừng ${book.title}` : `Nghe tiếp ${book.title}${where ? `, ${where}` : ""}`}
         className="grid size-14 shrink-0 place-items-center rounded-full bg-accent text-accent-ink shadow-card transition-transform hover:scale-105"
       >
-        <Play className="size-6 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+        {playingHere ? (
+          <Pause className="size-6" fill="currentColor" strokeWidth={0} />
+        ) : (
+          <Play className="size-6 translate-x-[1px]" fill="currentColor" strokeWidth={0} />
+        )}
       </button>
     </section>
   );
 }
 
-export function LibraryScreen({ empty, header }: { empty?: ReactNode; header?: ReactNode }) {
+const EMPTY_TEXT: Record<Filter, string> = {
+  all: "Thư viện chưa có sách nào.",
+  listening: "Bạn chưa nghe dở cuốn nào - chọn một cuốn để bắt đầu.",
+  new: "Cuốn nào cũng đã được nghe ít nhất một đoạn.",
+  finished: "Chưa có cuốn nào nghe xong.",
+};
+
+export function LibraryScreen({ empty, header, recap }: { empty?: ReactNode; header?: ReactNode; recap?: ReactNode }) {
   const { data: books, isLoading } = useListenLibrary();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -112,8 +176,9 @@ export function LibraryScreen({ empty, header }: { empty?: ReactNode; header?: R
       .sort((a, b) => (b.state.last?.at ?? 0) - (a.state.last?.at ?? 0))[0],
     [books],
   );
+  const folded = foldVietnamese(query.trim());
   const shown = (books ?? []).filter(
-    (book) => (filter === "all" || stateOf(book) === filter) && (!query || book.title.toLowerCase().includes(query.toLowerCase())),
+    (book) => (filter === "all" || stateOf(book) === filter) && (!folded || foldVietnamese(book.title).includes(folded)),
   );
   return (
     <div className="mx-auto max-w-[1180px] px-4 pb-16 pt-6 sm:px-10 sm:pt-9">
@@ -124,6 +189,7 @@ export function LibraryScreen({ empty, header }: { empty?: ReactNode; header?: R
         </div>
         {header}
       </header>
+      {recap}
       {isLoading ? (
         <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-6">
           {Array.from({ length: 6 }, (_, index) => (
@@ -155,17 +221,18 @@ export function LibraryScreen({ empty, header }: { empty?: ReactNode; header?: R
                 { value: "all", label: "Tất cả" },
                 { value: "listening", label: "Đang nghe" },
                 { value: "new", label: "Chưa nghe" },
-                { value: "finished", label: "Đã xong" },
+                { value: "finished", label: "Nghe xong" },
               ]}
             />
             <label className="relative max-sm:w-full">
+              <span className="sr-only">Tìm sách</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-3" />
               <input
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Tìm sách"
-                className="h-9 w-full rounded-lg border border-line bg-panel pl-9 pr-3 text-sm outline-none placeholder:text-fg-3 focus:border-accent sm:w-60"
+                placeholder="Tìm sách (gõ không dấu cũng được)"
+                className="h-9 w-full rounded-lg border border-line bg-panel pl-9 pr-3 text-sm outline-none placeholder:text-fg-3 focus:border-accent sm:w-72"
               />
             </label>
           </div>
@@ -176,8 +243,8 @@ export function LibraryScreen({ empty, header }: { empty?: ReactNode; header?: R
               ))}
             </div>
           ) : (
-            <EmptyState icon={Search} title="Không có sách khớp" className="mt-4">
-              Thử bộ lọc khác hoặc gõ tên khác.
+            <EmptyState icon={Search} title={query ? `Không có sách nào tên “${query}”` : "Không có sách ở đây"} className="mt-4">
+              {query ? "Thử gõ một phần tên khác." : EMPTY_TEXT[filter]}
             </EmptyState>
           )}
         </>

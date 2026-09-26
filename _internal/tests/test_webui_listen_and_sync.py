@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import socket
 import sqlite3
 import time
 from pathlib import Path
@@ -15,10 +16,10 @@ import pytest
 
 from ebook_reader.webui import humanize, listen_view, store
 from ebook_reader.webui.library import Library, Preferences, book_id
-from ebook_reader.webui.listening import Listening, merge_states
+from ebook_reader.webui.listening import Listening, book_progress, merge_states
 from ebook_reader.webui.server import App, Server
 from ebook_reader.webui.actions import FakeRunner
-from ebook_reader.webui.sync import Devices, SyncApp, SyncServer, manifest
+from ebook_reader.webui.sync import PAIRING_ATTEMPTS, Devices, SyncApp, SyncServer, manifest
 
 
 def make_project(root: Path, title: str = "Sách thử · Tập 1") -> Path:
@@ -140,18 +141,102 @@ def test_merging_two_devices_keeps_the_newest_of_each_part() -> None:
     assert merged["rate"] == 1.5
 
 
+def test_hearing_everything_produced_so_far_is_caught_up_not_finished() -> None:
+    """Sách đang làm dở nghe hết phần đã có: chưa "nghe xong" (không vào bộ lọc Đã xong, không rơi khỏi Đang nghe
+    dở), mà "đã theo kịp"."""
+    chapters = [{"id": 1, "duration": 600.0}, {"id": 2, "duration": 600.0}]
+    state = {"chapters": {"1": {"heard": 600, "done": True}, "2": {"heard": 600, "done": True}}}
+    partial = book_progress(state, chapters, complete=False)
+    assert not partial["finished"] and partial["caughtUp"]
+    whole = book_progress(state, chapters, complete=True)
+    assert whole["finished"] and not whole["caughtUp"]
+    marked = book_progress({**state, "finished": True}, chapters, complete=False)
+    assert marked["finished"] and not marked["caughtUp"], "người dùng tự đánh dấu nghe xong thì tôn trọng"
+
+
+def test_two_bookmarks_at_the_same_spot_are_one(tmp_path: Path) -> None:
+    listening = Listening(tmp_path / "listening.json")
+    first = listening.add_bookmark("b", 3, 64.0)
+    again = listening.add_bookmark("b", 3, 67.5, "đoạn hay")
+    assert again["id"] == first["id"] and again["existing"]
+    assert [mark["note"] for mark in listening.get("b")["bookmarks"]] == ["đoạn hay"]
+    other = listening.add_bookmark("b", 3, 80.0)
+    assert other["id"] != first["id"] and not other.get("existing")
+    listening.delete_bookmark("b", first["id"])
+    listening.restore_bookmark("b", first)
+    state = listening.get("b")
+    assert first["id"] in [mark["id"] for mark in state["bookmarks"]] and first["id"] not in state["deleted"]
+
+
+def test_last_night_is_the_newest_undismissed_night(tmp_path: Path) -> None:
+    listening = Listening(tmp_path / "listening.json")
+    now = time.time()
+    event = {"type": "timer", "at": now - 3600, "minutes": 30, "position": {"chapterId": 1, "seconds": 10}}
+    listening.save_night("a", {"id": "n1", "startedAt": now - 3600, "events": [event]})
+    listening.save_night("b", {"id": "n2", "startedAt": now - 1800, "events": [event]})
+    assert listening.latest_night(now)["bookId"] == "b"
+    listening.dismiss_night("b", "n2")
+    assert listening.latest_night(now)["bookId"] == "a"
+    assert listening.latest_night(now + 2 * 86400) is None, "đêm của mấy hôm trước không phải 'tối qua'"
+    phone = {"night": {"id": "n1", "startedAt": now - 3600, "dismissed": True, "events": [event]}}
+    listening.merge("a", phone)
+    assert listening.latest_night(now) is None, "gạt đi trên điện thoại thì máy tính cũng thôi nhắc"
+
+
 # ---- đồng bộ điện thoại ---------------------------------------------------------------------------------------
 
 
 def test_a_pairing_code_works_once_and_expires(tmp_path: Path) -> None:
     devices = Devices(tmp_path / "devices.json")
-    code = devices.pairing_code()["code"]
+    assert devices.pairing() is None, "chưa bấm Ghép điện thoại thì không có mã nào"
+    code = devices.start_pairing()["code"]
     assert devices.pair("000000" if code != "000000" else "111111", "Điện thoại") is None
-    token = devices.pair(code, "Điện thoại của Anh")
-    assert token and devices.check(token)
+    token = devices.pair(f"{code[:3]} {code[3:]}", "Điện thoại của Anh")
+    assert token and devices.check(token), "gõ mã có dấu cách như trên màn hình cũng được"
     assert devices.pair(code, "máy khác") is None, "mã ghép nối chỉ dùng một lần"
+    assert devices.pair("٤٨٢٩١٣", "chữ số không phải ASCII") is None, "không được nổ TypeError của compare_digest"
     devices.revoke(devices.list()[0]["id"])
     assert not devices.check(token)
+
+
+def test_guessing_the_pairing_code_burns_it(tmp_path: Path) -> None:
+    """Một triệu khả năng: máy lạ trong mạng đoán mò được trong vài phút nếu mã cứ sống. Sai 5 lần là huỷ mã, và
+    mã KHÔNG tự sinh lại - người dùng thấy lý do rồi chủ động tạo mã mới."""
+    devices = Devices(tmp_path / "devices.json")
+    code = devices.start_pairing()["code"]
+    wrong = "000000" if code != "000000" else "111111"
+    for _ in range(PAIRING_ATTEMPTS):
+        assert devices.pair(wrong, "máy lạ") is None
+    assert devices.blocked and devices.pairing() is None
+    assert devices.pair(code, "chủ máy") is None, "mã đúng cũng hết giá trị sau khi bị đoán mò"
+    fresh = devices.start_pairing()["code"]
+    assert not devices.blocked
+    assert devices.pair(fresh, "chủ máy")
+
+
+def test_sync_remembers_what_the_user_chose_not_what_happened(library) -> None:
+    """Tuỳ chọn là Ý MUỐN: đóng app hay cổng bận lúc mở không được lặng lẽ tắt đồng bộ của lần mở sau."""
+    lib, _project, listening = library
+    preferences = lib.preferences
+    app = App(preferences=preferences, runner=FakeRunner(), token="t", listening=listening)
+    app.sync_host, app.sync_port = "127.0.0.1", 0
+    view = app.set_sync(True)
+    assert view["enabled"] and preferences.get()["syncEnabled"]
+    assert view["pairing"] is None, "mã chỉ có khi người dùng bấm Ghép điện thoại"
+    app.close()
+    assert preferences.get()["syncEnabled"], "đóng app không được tắt đồng bộ của lần mở sau"
+
+    holder = socket.socket()
+    holder.bind(("127.0.0.1", 0))
+    holder.listen()
+    try:
+        app.sync_port = holder.getsockname()[1]
+        view = app.set_sync(True)
+    finally:
+        holder.close()
+    assert not view["enabled"] and view["error"] and view["wanted"], "cổng bận: báo lỗi, không cướp cổng"
+    assert preferences.get()["syncEnabled"]
+    assert not app.set_sync(False)["wanted"] and not preferences.get()["syncEnabled"]
 
 
 def _request(port: int, method: str, path: str, token: str = "", body: dict | None = None, headers: dict | None = None):
@@ -175,7 +260,7 @@ def test_a_paired_phone_downloads_a_book_and_syncs_its_place(library, tmp_path: 
     try:
         status, _data, _ = _request(server.port, "GET", "/sync/v1/library")
         assert status == 401, "chưa ghép nối thì không thấy gì"
-        code = devices.pairing_code()["code"]
+        code = devices.start_pairing()["code"]
         status, data, _ = _request(server.port, "POST", "/sync/v1/pair", body={"code": code, "device": "Pixel"})
         token = json.loads(data)["token"]
         status, data, _ = _request(server.port, "GET", "/sync/v1/library", token)

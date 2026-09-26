@@ -1,4 +1,4 @@
-import type { Bookmark, Cast, ListenBook, ListeningState, Script } from "@/listen/model";
+import type { Bookmark, Cast, ListenBook, ListeningState, NightSession, Script } from "@/listen/model";
 import type { ListenSource } from "@/listen/source";
 import { api, mediaUrl } from "@/studio/api";
 
@@ -28,5 +28,15 @@ export const httpSource: ListenSource = {
   },
   deleteBookmark: async (bookId, id) => {
     await api(`/api/listen/books/${bookId}/bookmarks/${id}`, { method: "DELETE" });
+  },
+  restoreBookmark: async (bookId, mark) => {
+    await api(`/api/listen/books/${bookId}/bookmarks/restore`, { method: "POST", body: mark });
+  },
+  lastNight: () => api<{ bookId: string; night: NightSession } | null>("/api/listen/night"),
+  dismissNight: async (bookId, id) => {
+    await api("/api/listen/night/dismiss", { method: "POST", body: { bookId, id } });
+  },
+  saveNight: async (bookId, night) => {
+    await api(`/api/listen/books/${bookId}/night`, { method: "POST", body: night });
   },
 };

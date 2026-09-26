@@ -57,6 +57,33 @@ export function formatDate(epochSeconds: number): string {
   return date.toLocaleDateString("vi-VN", { day: "numeric", month: "numeric", year: "numeric" });
 }
 
+/** Đồng hồ đọc thành lời cho trình đọc màn hình: "5 phút 57 giây". */
+export function spokenClock(seconds: number): string {
+  const whole = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const secs = whole % 60;
+  const parts = [hours ? `${hours} giờ` : "", minutes ? `${minutes} phút` : "", `${secs} giây`].filter(Boolean);
+  return parts.join(" ");
+}
+
+/** Mốc thời gian nói kiểu người: "hôm nay 14:02", "tối qua 23:41", "hôm qua 09:15", "3 ngày trước". */
+export function formatWhen(epochSeconds: number | null | undefined): string {
+  if (!epochSeconds) return "";
+  const date = new Date(epochSeconds * 1000);
+  const today = new Date();
+  const days = Math.round(
+    (new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() -
+      new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()) /
+      86_400_000,
+  );
+  const time = date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  if (days <= 0) return Date.now() / 1000 - epochSeconds < 60 ? "vừa xong" : `hôm nay ${time}`;
+  if (days === 1) return date.getHours() >= 18 ? `tối qua ${time}` : `hôm qua ${time}`;
+  if (days < 7) return `${days} ngày trước`;
+  return formatDate(epochSeconds);
+}
+
 export function formatTime(epochSeconds: number): string {
   const date = new Date(epochSeconds * 1000);
   const today = new Date();

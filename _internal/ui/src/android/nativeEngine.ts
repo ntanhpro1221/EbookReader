@@ -1,34 +1,37 @@
-import type { AudioEngine, EngineEvent, NativeQueue, TrackInfo } from "@/listen/engine";
+import type { EngineEvent, NativeEngine, NativeQueue, TrackInfo } from "@/listen/engine";
 import type { Bookmark } from "@/listen/model";
-import type { SleepMode } from "@/listen/player";
+import type { SleepMode, SleepRequest } from "@/listen/sleep";
 import { chapterFiles } from "./androidSource";
 import { EbookPlayer, type NativeState } from "./plugins";
 
 // Bộ máy phát của Android: mọi thứ thật sự chạy trong lõi Media3 (Playback.kt), kể cả khi tắt màn hình.
 // Lớp này chỉ chuyển lệnh xuống và biến sự kiện "state" của lõi thành sự kiện mà trình phát (player.tsx) hiểu.
+//
+// Lõi báo vị trí mỗi nửa giây; giữa hai lần báo, `time` nội suy theo đồng hồ và tốc độ để nhãn giây trên màn hình
+// chạy đều thay vì nhảy từng nửa giây.
 
-type Event = EngineEvent | "chapter" | "sleep";
-
-export class NativeAudioEngine implements AudioEngine {
-  readonly native = true;
+export class NativeAudioEngine implements NativeEngine {
+  readonly native = true as const;
   private current: NativeState | null = null;
-  private handlers = new Map<Event, Set<() => void>>();
+  private receivedAt = 0;
+  private handlers = new Map<EngineEvent, Set<() => void>>();
 
   constructor() {
     void EbookPlayer.addListener("state", (state) => this.receive(state));
     void EbookPlayer.getState().then((state) => this.receive(state)).catch(() => undefined);
   }
 
-  private fire(event: Event) {
+  private fire(event: EngineEvent) {
     this.handlers.get(event)?.forEach((handler) => handler());
   }
 
   private receive(next: NativeState) {
     const previous = this.current;
     this.current = next;
+    this.receivedAt = Date.now();
+    if (!previous || previous.chapterId !== next.chapterId || previous.bookId !== next.bookId) this.fire("chapter");
     if (!previous || previous.playing !== next.playing) this.fire(next.playing ? "play" : "pause");
     if (!previous || previous.duration !== next.duration) this.fire("duration");
-    if (!previous || previous.chapterId !== next.chapterId || previous.bookId !== next.bookId) this.fire("chapter");
     if (!previous || JSON.stringify(previous.sleep) !== JSON.stringify(next.sleep)) this.fire("sleep");
     if (!previous || previous.buffering !== next.buffering) this.fire(next.buffering ? "waiting" : "playing");
     if (next.kind === "ended") this.fire("ended");
@@ -51,6 +54,7 @@ export class NativeAudioEngine implements AudioEngine {
       chapterId: queue.chapterId,
       seconds: queue.at,
       rate: queue.rate,
+      autoplay: queue.autoplay,
     }).then((state) => this.receive(state));
   }
 
@@ -79,7 +83,7 @@ export class NativeAudioEngine implements AudioEngine {
   }
 
   setRate(rate: number): void {
-    void EbookPlayer.setRate({ rate });
+    void EbookPlayer.setRate({ rate }).then((state) => this.receive(state));
   }
 
   setVolume(_volume: number): void {
@@ -102,10 +106,10 @@ export class NativeAudioEngine implements AudioEngine {
     void EbookPlayer.jumpTo({ chapterId, seconds }).then((state) => this.receive(state));
   }
 
-  setSleep(mode: SleepMode): void {
-    void EbookPlayer.setSleep(
-      mode.kind === "minutes" ? { mode: "minutes", minutes: mode.minutes } : { mode: mode.kind === "chapter" ? "chapter" : "off" },
-    ).then((state) => this.receive(state));
+  setSleep(request: SleepRequest): void {
+    const options =
+      request.kind === "minutes" ? { mode: "minutes" as const, minutes: request.minutes } : { mode: request.kind === "chapter" ? ("chapter" as const) : ("off" as const) };
+    void EbookPlayer.setSleep(options).then((state) => this.receive(state));
   }
 
   extendSleep(minutes?: number): void {
@@ -120,19 +124,36 @@ export class NativeAudioEngine implements AudioEngine {
     const sleep = this.current?.sleep;
     if (!sleep || sleep.mode === "off") return { kind: "off" };
     if (sleep.mode === "chapter") return { kind: "chapter" };
-    return { kind: "minutes", minutes: sleep.minutes ?? 0, endsAt: Date.now() + (sleep.remaining ?? 0) * 1000 };
-  }
-
-  get chapterId(): number | null {
-    return this.current?.chapterId ?? null;
+    return {
+      kind: "minutes",
+      minutes: sleep.minutes ?? 0,
+      leftMs: (sleep.remaining ?? 0) * 1000,
+      since: this.current?.playing ? this.receivedAt : null,
+    };
   }
 
   get bookId(): string {
     return this.current?.bookId ?? "";
   }
 
+  get bookTitle(): string {
+    return this.current?.bookTitle ?? "";
+  }
+
+  get chapterId(): number | null {
+    return this.current?.chapterId ?? null;
+  }
+
+  get chapterTitle(): string {
+    return this.current?.chapterTitle ?? "";
+  }
+
   get time(): number {
-    return this.current?.position ?? 0;
+    const state = this.current;
+    if (!state) return 0;
+    if (!state.playing) return state.position;
+    const elapsed = ((Date.now() - this.receivedAt) / 1000) * (state.rate || 1);
+    return Math.min(state.duration || Infinity, state.position + Math.min(elapsed, 2));
   }
 
   get duration(): number {
@@ -143,11 +164,15 @@ export class NativeAudioEngine implements AudioEngine {
     return !this.current?.playing;
   }
 
+  get ended(): boolean {
+    return this.current?.kind === "ended";
+  }
+
   get rate(): number {
     return this.current?.rate ?? 1;
   }
 
-  on(event: EngineEvent | "chapter" | "sleep", handler: () => void): () => void {
+  on(event: EngineEvent, handler: () => void): () => void {
     const set = this.handlers.get(event) ?? new Set();
     set.add(handler);
     this.handlers.set(event, set);

@@ -51,6 +51,9 @@ def book(project_root: Path, book_id: str, summary: dict[str, Any], state: dict[
          *, with_chapters: bool = True) -> dict[str, Any]:
     items = chapters(project_root)
     available = [chapter for chapter in items if chapter["available"]]
+    complete = summary["phase"] == "done" and len(available) == len(items)
+    # Nhật ký đêm không đi theo danh sách/sách (có thể dài vài trăm mốc): thẻ "Tối qua" hỏi riêng.
+    state = {key: value for key, value in state.items() if key != "night"}
     result: dict[str, Any] = {
         "format": FORMAT,
         "id": book_id,
@@ -59,11 +62,15 @@ def book(project_root: Path, book_id: str, summary: dict[str, Any], state: dict[
         "duration": round(sum(chapter["duration"] for chapter in available), 1),
         "chaptersTotal": len(items),
         "chaptersAvailable": len(available),
-        "complete": summary["phase"] == "done",
+        "complete": complete,
         "producing": bool(summary.get("running") or summary.get("starting")),
+        "paused": not complete and not (summary.get("running") or summary.get("starting")),
         "updatedAt": summary.get("updatedAt"),
         "state": state,
-        "progress": book_progress(state, available),
+        "progress": book_progress(state, available, complete=complete),
+        # Thẻ "Đang nghe dở" nói rõ chương nào, kể cả khi danh sách không kèm chương.
+        "lastChapterTitle": next((chapter["fullTitle"] for chapter in items
+                                  if chapter["id"] == (state.get("last") or {}).get("chapterId")), ""),
     }
     if with_chapters:
         result["chapters"] = items

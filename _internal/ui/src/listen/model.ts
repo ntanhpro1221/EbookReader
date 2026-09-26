@@ -18,6 +18,8 @@ export interface Bookmark {
   seconds: number;
   note: string;
   at: number;
+  /** Máy chủ trả về dấu đã có ngay chỗ ấy (±5 giây) thay vì tạo dấu trùng. */
+  existing?: boolean;
 }
 
 export interface ChapterState {
@@ -42,6 +44,8 @@ export interface BookProgress {
   fraction: number;
   chaptersDone: number;
   finished: boolean;
+  /** Sách đang làm dở, đã nghe hết phần đã có - chưa phải "nghe xong". */
+  caughtUp?: boolean;
 }
 
 export interface ListenBook {
@@ -53,10 +57,42 @@ export interface ListenBook {
   chaptersAvailable: number;
   complete: boolean;
   producing: boolean;
+  /** Chưa làm xong và cũng không đang làm (Studio đã dừng). */
+  paused?: boolean;
   updatedAt: number | null;
   state: ListeningState;
   progress: BookProgress;
+  lastChapterTitle?: string;
   chapters?: ListenChapter[];
+}
+
+// ---- Nhật ký đêm (hẹn giờ ngủ) ------------------------------------------------------------------------------
+// Cùng hình dạng với nhật ký của lõi phát Android (Bedtime.kt); máy tính ghi bằng NightRecorder (night.ts).
+
+export interface NightPosition {
+  chapterId: number | null;
+  chapterTitle: string;
+  seconds: number;
+}
+
+export interface NightEvent {
+  type: "timer" | "touch" | "shake" | "extend" | "still" | "moved" | "fading" | "stopped";
+  at: number;
+  action?: string;
+  minutes?: number;
+  position: NightPosition;
+}
+
+export interface NightSession {
+  id?: string;
+  device?: string;
+  bookId?: string;
+  bookTitle: string;
+  startedAt: number;
+  endedAt?: number | null;
+  dismissed?: boolean;
+  events: NightEvent[];
+  timeline: (NightPosition & { at: number })[];
 }
 
 export interface ScriptSegment {
@@ -109,6 +145,8 @@ export function resumePoint(book: ListenBook, chapters: ListenChapter[]): { chap
       const nearEnd = chapter.duration > 0 && chapter.duration - last.seconds < 15;
       if (!nearEnd) return { chapter, at: last.seconds };
       if (playable[index + 1]) return { chapter: playable[index + 1], at: 0 };
+      // Nghe tới cuối chương cuối ĐÃ CÓ của một cuốn còn đang làm: đứng yên ở đó, đừng quay về chương đầu.
+      if (!book.complete) return { chapter, at: last.seconds };
     }
   }
   const unheard = playable.find((chapter) => !book.state.chapters[String(chapter.id)]?.done);
@@ -120,4 +158,9 @@ export function chapterHeard(state: ListeningState, chapter: ListenChapter): num
   if (!record) return 0;
   if (record.done) return 1;
   return chapter.duration > 0 ? Math.min(1, record.heard / chapter.duration) : 0;
+}
+
+/** Tìm không dấu: "tap 16" khớp "Tập 16", "duc tri" khớp "Đức Trí". */
+export function foldVietnamese(text: string): string {
+  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
 }
