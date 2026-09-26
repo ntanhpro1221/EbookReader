@@ -280,6 +280,7 @@ export function SpeedMenu() {
 
 export function SleepMenu() {
   const { sleep, setSleep, extendSleep, options, sleepStoppedAt, lastSleepMinutes, track } = usePlayer();
+  const [custom, setCustom] = useState(lastSleepMinutes || 20);
   const counting = sleep.kind === "minutes" && sleep.since !== null;
   const now = useTicker(counting);
   const active = sleep.kind !== "off";
@@ -354,6 +355,37 @@ export function SleepMenu() {
             </button>
           </Popover.Close>
         ))}
+      </div>
+      <div className="flex items-center gap-1 px-1 pb-1">
+        <button
+          type="button"
+          aria-label="Bớt 5 phút"
+          onClick={() => setCustom((value) => Math.max(5, value - 5))}
+          className="grid size-9 place-items-center rounded-lg text-lg hover:bg-hover"
+        >
+          −
+        </button>
+        <span className="tabular flex-1 text-center text-sm font-medium" aria-live="polite">
+          {custom} phút
+        </span>
+        <button
+          type="button"
+          aria-label="Thêm 5 phút"
+          onClick={() => setCustom((value) => Math.min(240, value + 5))}
+          className="grid size-9 place-items-center rounded-lg text-lg hover:bg-hover"
+        >
+          +
+        </button>
+        <Popover.Close asChild>
+          <button
+            type="button"
+            disabled={!track}
+            onClick={() => setSleep({ kind: "minutes", minutes: custom })}
+            className="h-9 rounded-lg bg-hover px-3 text-sm font-medium hover:bg-line disabled:opacity-40"
+          >
+            Đặt
+          </button>
+        </Popover.Close>
       </div>
       <Popover.Close asChild>
         <button
