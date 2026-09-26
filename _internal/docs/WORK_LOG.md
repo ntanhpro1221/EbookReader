@@ -35,6 +35,8 @@ Bố cục hai thư mục làm việc này khả thi:
 |---|---|---|
 | 09:3x | Ranh giới 17 xong **08:47** (lô 17: 39/40, chương 722 vá ở `lo17v`; thả lô 18) mà nhịp 2 tiếng chỉ thức **09:43** - lô 18 tự chạy nên không mất giờ GPU, nhưng đúng khoảng trống chủ sách chỉ ra. Thả ranh giới 18 (rời) 09:34 | `boundary_17.log`, `detached_runs.log` |
 | 09:4x | **Hai chuông**: A theo sự kiện, B timeout đặt lại được mà không cần giết (giết lệnh nền cũng đánh thức phiên). Đọc tiến trình bằng `psutil` thay PowerShell; thay đổi tiến trình phải đứng qua 2 lần dò (bóng vài giây sau khi thả ranh giới). `heartbeat_tick` nhìn cả file `-wal` khi đo "không ai chạm" | `scripts/heartbeat_event.py`, `scripts/heartbeat_timeout.py`, `scripts/bells.py`, `tests/test_two_heartbeats.py` |
+| 16:5x | Máy NGỦ 14:37 → 16:50 (Kernel-Power 42/187: `StartMenuExperienceHost.exe` - ai đó chọn Sleep ở menu Start; ngủ tự động đang tắt). Chuông B đúng hẹn 15:39 nhưng đồng hồ đứng theo máy, reo 16:51:40 - không phải thông báo lạc. Lô 18 xong phân tích 13:41, trước giấc ngủ; worker sống qua nó (nạp lại Whisper trên CUDA 16:51) | Event Log System, `runtime_events` |
+| 16:5x | **Thử chuông A đầu-cuối** bằng một việc rời thật (`run_detached.py bash -c "sleep 20"`): việc xong **16:55:43**, A reo **16:55:44** kèm mã thoát, phiên thức 16:55:50. `--reset` dời B đang chạy từ 18:52 sang 18:55 mà không giết nó | `runtime/detached_runs.log` |
 
 ## 2026-09-21
 
