@@ -15,13 +15,13 @@ import threading
 from importlib import metadata
 from typing import Any, Callable
 
-from .gui import (
+from .desktop_shell import (
     APP_ICON_PATH,
     APP_NAME,
-    _claim_single_instance,
-    _connect_instance_activation,
-    _set_windows_app_identity,
-    _signal_startup_ready,
+    claim_single_instance,
+    connect_instance_activation,
+    set_windows_app_identity,
+    signal_startup_ready,
 )
 
 WEB_FLAGS = "--disable-gpu --disable-gpu-compositing --disable-features=Translate"
@@ -108,13 +108,13 @@ def run_desktop() -> int:
             self.settings.setValue("geometry", self.saveGeometry())
             super().closeEvent(event)
 
-    _set_windows_app_identity()
+    set_windows_app_identity()
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setWindowIcon(QIcon(str(APP_ICON_PATH)))
-    instance_server = _claim_single_instance(app)
+    instance_server = claim_single_instance(app)
     if instance_server is None:
-        _signal_startup_ready()
+        signal_startup_ready()
         return 0
 
     window = Window()
@@ -130,9 +130,9 @@ def run_desktop() -> int:
     if preferences.get().get("syncEnabled"):
         web.set_sync(True)
     http = Server(web).start()
-    window.view.loadFinished.connect(lambda _ok: _signal_startup_ready())
+    window.view.loadFinished.connect(lambda _ok: signal_startup_ready())
     window.view.setUrl(QUrl(http.url))
-    _connect_instance_activation(instance_server, window)  # type: ignore[arg-type]
+    connect_instance_activation(instance_server, window._show_from_tray)
     window.show()
     try:
         return app.exec()
