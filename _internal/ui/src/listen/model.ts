@@ -63,7 +63,16 @@ export interface ListenBook {
   state: ListeningState;
   progress: BookProgress;
   lastChapterTitle?: string;
+  /** Sách đang làm: ước lượng của giai đoạn hiện tại (máy tính). */
+  eta?: { phase: string; seconds: number } | null;
   chapters?: ListenChapter[];
+}
+
+/** Bộ và số tập từ tên sách ("Throne of Magical Arcana · Tập 16" -> bộ "Throne of Magical Arcana", tập 16). */
+export function seriesOf(title: string): { series: string; volume: number | null } {
+  const match = title.match(/^(.*?)\s*[·|:—–-]\s*(?:Tập|Quyển|Phần|Vol\.?|Book)\s*(\d+)\b/i);
+  if (!match) return { series: title.trim(), volume: null };
+  return { series: match[1].trim(), volume: Number(match[2]) };
 }
 
 // ---- Nhật ký đêm (hẹn giờ ngủ) ------------------------------------------------------------------------------

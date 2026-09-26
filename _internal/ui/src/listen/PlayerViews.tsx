@@ -34,7 +34,8 @@ import { cn } from "@/shared/cn";
 import { formatClock, formatLength, formatPercent, formatWhen, spokenClock } from "@/shared/format";
 import { IconButton, Tooltip, Vu } from "@/shared/ui";
 import { useClock, useClockReader, useDuration, usePlaybackSecond } from "./clock";
-import type { Bookmark, ListenChapter, Script } from "./model";
+import { usePlayListenBook, useNextVolume } from "./LibraryScreen";
+import { seriesOf, type Bookmark, type ListenChapter, type Script } from "./model";
 import { EDIT_BOOKMARK_EVENT, SKIP_SECONDS, SPEEDS, useNowPlaying, usePlayer } from "./player";
 import { SLEEP_CHOICES, sleepLabel, sleepLeftMs, sleepSpoken } from "./sleep";
 import { useListenBook, useListenMutations, useScript, useSource } from "./source";
@@ -1013,7 +1014,19 @@ function BookProgressLine() {
 }
 
 function CaughtUpNotice() {
-  const { atEnd } = usePlayer();
+  const { atEnd, track } = usePlayer();
+  const next = useNextVolume(track?.bookId, track?.bookTitle);
+  const playBook = usePlayListenBook();
+  if (atEnd === "finished" && next) {
+    return (
+      <div className="mt-3 rounded-xl bg-accent-soft px-3 py-2.5 text-center text-sm">
+        <div className="text-fg">Đã nghe hết cuốn này.</div>
+        <button type="button" onClick={() => void playBook(next)} className="mt-1.5 font-semibold text-accent-text underline underline-offset-2">
+          Nghe tiếp {seriesOf(next.title).volume !== null ? `Tập ${seriesOf(next.title).volume}` : next.title}
+        </button>
+      </div>
+    );
+  }
   if (atEnd !== "caughtUp") return null;
   return (
     <p className="mt-3 rounded-xl bg-hover px-3 py-2 text-center text-sm text-fg-2">

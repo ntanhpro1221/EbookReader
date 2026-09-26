@@ -1,8 +1,8 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { BookPlus, Clapperboard, Compass, Headphones } from "lucide-react";
+import { BookPlus, Clapperboard, Compass, FolderDown, Headphones } from "lucide-react";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { HashRouter, Route, Routes, useNavigate } from "react-router";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { BookScreen } from "@/listen/BookScreen";
 import { ClipProvider } from "@/listen/clip";
 import { WebAudioEngine } from "@/listen/engine";
@@ -11,7 +11,10 @@ import { MorningRecap } from "@/listen/MorningRecap";
 import { PlayerProvider, usePlayer } from "@/listen/player";
 import { SourceProvider } from "@/listen/source";
 import { Button, EmptyState, TooltipProvider } from "@/shared/ui";
-import { useAppInfo, usePreferences } from "@/studio/data";
+import type { ListenBook } from "@/listen/model";
+import { coverArtwork } from "@/shared/cover";
+import { api } from "@/studio/api";
+import { pickFolder, useAppInfo, usePreferences } from "@/studio/data";
 import { NewProjectScreen } from "@/studio/NewProjectScreen";
 import { ProjectScreen } from "@/studio/ProjectScreen";
 import { ProjectsScreen } from "@/studio/ProjectsScreen";
@@ -67,12 +70,61 @@ function StudioMenuItem({ id }: { id: string }) {
   );
 }
 
+/** Xuất thư mục MP3 có tên sách, tên chương, bìa - nghe được bằng mọi trình phát khác. */
+function ExportMenuItem({ book }: { book: ListenBook }) {
+  const { data: info } = useAppInfo();
+  const run = async () => {
+    let target = "";
+    if (info?.dialogs) {
+      const picked = await pickFolder("Chọn nơi lưu bản xuất", "").catch(() => null);
+      if (!picked) return;
+      target = picked;
+    }
+    const pending = toast.loading("Đang xuất sách…", { description: `${book.chaptersAvailable} chương` });
+    try {
+      const result = await api<{ folder: string; files: number; chaptersTotal: number }>(`/api/books/${book.id}/export`, {
+        method: "POST",
+        body: { target, cover: coverArtwork(book.title) },
+      });
+      toast.success(`Đã xuất ${result.files} chương`, {
+        id: pending,
+        description: result.files < result.chaptersTotal ? "Các chương chưa làm xong sẽ không có trong bản xuất." : result.folder,
+        action: {
+          label: "Mở thư mục",
+          onClick: () => void api("/api/reveal-export", { method: "POST", body: { folder: result.folder } }),
+        },
+      });
+    } catch (error) {
+      toast.error("Không xuất được", { id: pending, description: (error as Error).message });
+    }
+  };
+  return (
+    <DropdownMenu.Item
+      onSelect={() => void run()}
+      className="flex h-9 cursor-default items-center gap-2 rounded-lg px-2 text-sm outline-none data-[highlighted]:bg-hover"
+    >
+      <FolderDown className="size-4" /> Xuất MP3 để nghe ở app khác
+    </DropdownMenu.Item>
+  );
+}
+
 function StudioChipLink({ id }: { id: string }) {
   const navigate = useNavigate();
   return (
     <button type="button" onClick={() => navigate(`/studio/${id}`)} className="font-semibold underline underline-offset-2 hover:no-underline">
       Mở Studio
     </button>
+  );
+}
+
+function LibraryRoute() {
+  const navigate = useNavigate();
+  return (
+    <LibraryScreen
+      empty={<EmptyLibrary />}
+      recap={<MorningRecap className="mt-6" />}
+      onOpenUpcoming={(book) => navigate(`/studio/${book.id}`)}
+    />
   );
 }
 
@@ -112,12 +164,17 @@ export function App() {
             <HashRouter>
               <Shell>
                 <Routes>
-                  <Route path="/" element={<LibraryScreen empty={<EmptyLibrary />} recap={<MorningRecap className="mt-6" />} />} />
+                  <Route path="/" element={<LibraryRoute />} />
                   <Route
                     path="/book/:id"
                     element={
                       <BookScreen
-                        extraActions={(book) => <StudioMenuItem id={book.id} />}
+                        extraActions={(book) => (
+                          <>
+                            <ExportMenuItem book={book} />
+                            <StudioMenuItem id={book.id} />
+                          </>
+                        )}
                         studioLink={(book) => <StudioChipLink id={book.id} />}
                       />
                     }

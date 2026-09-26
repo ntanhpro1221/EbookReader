@@ -83,6 +83,8 @@ class App:
         self.read_only = read_only
         self.static_dir = static_dir
         self.version = version
+        # Thư mục đã xuất trong phiên này - chỉ những thư mục này được mở bằng "Mở thư mục" sau khi xuất.
+        self.exports: set[str] = set()
 
     # ---- sách ------------------------------------------------------------------------------------------
 
@@ -195,17 +197,20 @@ class App:
     # ---- nghe ------------------------------------------------------------------------------------------
 
     def listen_library(self) -> list[dict[str, Any]]:
-        """Sách nghe được: mọi sách đã có ít nhất một chương xong - đang sản xuất cũng nghe được phần đã xong."""
+        """Sách nghe được: mọi sách đã có ít nhất một chương xong - đang sản xuất cũng nghe được phần đã xong. Sách vừa
+        tạo, đang làm mà chưa có chương nào, cũng có mặt (chưa nghe được) - người mới tạo sách hỏi "sách của tôi đâu?"."""
         books = []
         for path in self.library.projects():
             try:
                 summary = self.summary(path)
             except Exception:  # noqa: BLE001 - sách hỏng thì phía Studio báo; phía Nghe bỏ qua
                 continue
-            if summary.get("chapters", {}).get("completed", 0) <= 0:
+            producing = bool(summary.get("running") or summary.get("starting"))
+            if summary.get("chapters", {}).get("completed", 0) <= 0 and not producing:
                 continue
-            books.append(listen_view.book(path, summary["id"], summary, self.listening.get(summary["id"]),
-                                          with_chapters=False))
+            view = listen_view.book(path, summary["id"], summary, self.listening.get(summary["id"]), with_chapters=False)
+            view["eta"] = summary.get("eta")
+            books.append(view)
         books.sort(key=lambda item: ((item["state"].get("last") or {}).get("at") or 0, item.get("updatedAt") or 0),
                    reverse=True)
         return books
@@ -439,6 +444,27 @@ class Handler(BaseHTTPRequestHandler):
         actions.reveal(self.app._book(value))
         self._send_json(HTTPStatus.OK, {"ok": True})
 
+    def post_export(self, _query: dict[str, list[str]], value: str) -> None:
+        from .export import export_book
+
+        project = self.app._book(value)
+        body = self._body()
+        target = str(body.get("target") or "").strip()
+        root = Path(target) if target else Path(self.app.preferences.get()["libraryRoot"]) / "Đã xuất"
+        try:
+            result = export_book(project, root, cover=body.get("cover"))
+        except ValueError as error:
+            raise ApiError(HTTPStatus.CONFLICT, str(error)) from error
+        self.app.exports.add(result["folder"])
+        self._send_json(HTTPStatus.OK, result)
+
+    def post_reveal_export(self, _query: dict[str, list[str]]) -> None:
+        folder = str(self._body().get("folder", ""))
+        if folder not in self.app.exports:
+            raise ApiError(HTTPStatus.FORBIDDEN, "Không mở được thư mục này")
+        actions.reveal(Path(folder))
+        self._send_json(HTTPStatus.OK, {"ok": True})
+
     def get_sync(self, _query: dict[str, list[str]]) -> None:
         self._send_json(HTTPStatus.OK, self.app.sync_view())
 
@@ -621,6 +647,8 @@ ROUTES: list[Route] = [
     ("POST", re.compile(BOOK + r"/start"), Handler.post_start),
     ("POST", re.compile(BOOK + r"/stop"), Handler.post_stop),
     ("POST", re.compile(BOOK + r"/reveal"), Handler.post_reveal),
+    ("POST", re.compile(BOOK + r"/export"), Handler.post_export),
+    ("POST", re.compile(r"/api/reveal-export"), Handler.post_reveal_export),
     ("GET", re.compile(r"/api/sync"), Handler.get_sync),
     ("POST", re.compile(r"/api/sync"), Handler.post_sync),
     ("POST", re.compile(r"/api/sync/pairing"), Handler.post_sync_pairing),

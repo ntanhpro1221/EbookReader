@@ -6,7 +6,7 @@ import { BookCover } from "@/shared/BookCover";
 import { cn } from "@/shared/cn";
 import { formatClock, formatLength, formatWhen } from "@/shared/format";
 import { EmptyState, Progress, Segmented, Skeleton } from "@/shared/ui";
-import { foldVietnamese, resumePoint, type ListenBook } from "./model";
+import { foldVietnamese, resumePoint, seriesOf, type ListenBook } from "./model";
 import { usePlayer } from "./player";
 import { useListenLibrary, useSource } from "./source";
 
@@ -160,6 +160,79 @@ function ContinueCard({ book }: { book: ListenBook }) {
   );
 }
 
+/** Tập kế tiếp của cùng bộ trong thư viện (nghe xong Tập 16 thì mời Tập 17). */
+export function useNextVolume(bookId: string | undefined, title: string | undefined): ListenBook | null {
+  const { data: books } = useListenLibrary();
+  if (!bookId || !title || !books) return null;
+  const { series, volume } = seriesOf(title);
+  if (volume === null) return null;
+  return (
+    books
+      .filter((book) => book.id !== bookId && book.chaptersAvailable > 0)
+      .map((book) => ({ book, ...seriesOf(book.title) }))
+      .filter((item) => item.series === series && item.volume !== null && item.volume > volume)
+      .sort((a, b) => (a.volume ?? 0) - (b.volume ?? 0))[0]?.book ?? null
+  );
+}
+
+function UpcomingCard({ book, onOpen }: { book: ListenBook; onOpen?: (book: ListenBook) => void }) {
+  const eta = book.eta && book.eta.phase === "analysis" ? `chương đầu nghe được sau khoảng ${formatLength(book.eta.seconds + 600)}` : "đang chuẩn bị";
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen?.(book)}
+      disabled={!onOpen}
+      className="flex items-center gap-3 rounded-xl border border-dashed border-line-strong bg-panel p-3 text-left hover:border-accent disabled:hover:border-line-strong"
+    >
+      <BookCover title={book.title} size="sm" className="size-12 opacity-80" />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">{book.title}</span>
+        <span className="block text-xs text-fg-2">Đang làm · {eta}</span>
+      </span>
+    </button>
+  );
+}
+
+function Shelf({ books }: { books: ListenBook[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-6">
+      {books.map((book) => (
+        <BookTile key={book.id} book={book} />
+      ))}
+    </div>
+  );
+}
+
+/** Sách cùng bộ đứng cạnh nhau theo số tập; sách lẻ ở cuối. Chỉ gom khi không lọc, không tìm. */
+function SeriesShelves({ books }: { books: ListenBook[] }) {
+  const groups = new Map<string, { book: ListenBook; volume: number | null }[]>();
+  for (const book of books) {
+    const { series, volume } = seriesOf(book.title);
+    const key = volume === null ? `\u0000${book.id}` : series;
+    groups.set(key, [...(groups.get(key) ?? []), { book, volume }]);
+  }
+  const series = [...groups.entries()].filter(([key, items]) => !key.startsWith("\u0000") && items.length > 1);
+  const singles = books.filter((book) => !series.some(([, items]) => items.some((item) => item.book.id === book.id)));
+  return (
+    <div className="mt-6 space-y-10">
+      {series.map(([name, items]) => (
+        <section key={name} aria-label={name}>
+          <h2 className="mb-3 flex items-baseline gap-2 text-base font-semibold">
+            {name} <span className="text-sm font-normal text-fg-2">· {items.length} tập</span>
+          </h2>
+          <Shelf books={items.sort((a, b) => (a.volume ?? 0) - (b.volume ?? 0)).map((item) => item.book)} />
+        </section>
+      ))}
+      {singles.length > 0 && (
+        <section aria-label="Sách lẻ">
+          {series.length > 0 && <h2 className="mb-3 text-base font-semibold">Sách khác</h2>}
+          <Shelf books={singles} />
+        </section>
+      )}
+    </div>
+  );
+}
+
 const EMPTY_TEXT: Record<Filter, string> = {
   all: "Thư viện chưa có sách nào.",
   listening: "Bạn chưa nghe dở cuốn nào - chọn một cuốn để bắt đầu.",
@@ -167,8 +240,21 @@ const EMPTY_TEXT: Record<Filter, string> = {
   finished: "Chưa có cuốn nào nghe xong.",
 };
 
-export function LibraryScreen({ empty, header, recap }: { empty?: ReactNode; header?: ReactNode; recap?: ReactNode }) {
-  const { data: books, isLoading } = useListenLibrary();
+export function LibraryScreen({
+  empty,
+  header,
+  recap,
+  onOpenUpcoming,
+}: {
+  empty?: ReactNode;
+  header?: ReactNode;
+  recap?: ReactNode;
+  /** Máy tính: sách đang làm dở mà chưa có chương nào - mở Studio để xem tiến trình. */
+  onOpenUpcoming?: (book: ListenBook) => void;
+}) {
+  const { data: allBooks, isLoading } = useListenLibrary();
+  const books = useMemo(() => allBooks?.filter((book) => book.chaptersAvailable > 0), [allBooks]);
+  const upcoming = useMemo(() => allBooks?.filter((book) => book.chaptersAvailable === 0) ?? [], [allBooks]);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const listening = useMemo(
@@ -190,6 +276,13 @@ export function LibraryScreen({ empty, header, recap }: { empty?: ReactNode; hea
         {header}
       </header>
       {recap}
+      {upcoming.length > 0 && (
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {upcoming.map((book) => (
+            <UpcomingCard key={book.id} book={book} onOpen={onOpenUpcoming} />
+          ))}
+        </div>
+      )}
       {isLoading ? (
         <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-6">
           {Array.from({ length: 6 }, (_, index) => (
@@ -200,7 +293,7 @@ export function LibraryScreen({ empty, header, recap }: { empty?: ReactNode; hea
           ))}
         </div>
       ) : !books?.length ? (
-        empty ?? (
+        upcoming.length ? null : empty ?? (
           <EmptyState icon={Headphones} title="Chưa có sách nào" className="mt-12">
             Sách nghe được sẽ hiện ở đây.
           </EmptyState>
@@ -237,11 +330,13 @@ export function LibraryScreen({ empty, header, recap }: { empty?: ReactNode; hea
             </label>
           </div>
           {shown.length ? (
-            <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-7 sm:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] sm:gap-x-6">
-              {shown.map((book) => (
-                <BookTile key={book.id} book={book} />
-              ))}
-            </div>
+            filter === "all" && !folded ? (
+              <SeriesShelves books={shown} />
+            ) : (
+              <div className="mt-6">
+                <Shelf books={shown} />
+              </div>
+            )
           ) : (
             <EmptyState icon={Search} title={query ? `Không có sách nào tên “${query}”` : "Không có sách ở đây"} className="mt-4">
               {query ? "Thử gõ một phần tên khác." : EMPTY_TEXT[filter]}
