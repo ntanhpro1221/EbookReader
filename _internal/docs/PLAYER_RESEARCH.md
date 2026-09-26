@@ -57,6 +57,9 @@ track, ảnh bìa) hoặc gộp thành một file M4B có mốc chương.
 
 ## Áp dụng - theo thứ tự đáng làm
 
+Đã làm ngay tối 26-09 (nhánh ui/redesign): #1 (máy tính + lõi Android), #2, #3 (máy tính), #4 (chế độ đọc),
+#5, #6 (xuất MP3 có tag). Còn lại: #7 trở đi.
+
 | # | Ý tưởng | Học từ | Vì sao với ta |
 |---|---|---|---|
 | 1 | **Tự dừng khi nghe liên tục quá lâu mà không chạm máy** (mặc định 2 giờ), ghi luôn mốc "tự dừng" vào nhật ký đêm | SABP | Ngủ quên KHÔNG hẹn giờ là trường hợp tệ nhất cho nỗi đau "sáng dậy tìm chỗ"; lưới này làm thẻ "Tối qua" chạy cả khi quên hẹn giờ |

@@ -23,6 +23,27 @@ Hợp đồng dữ liệu chung là `book.json` (`ebook_reader/webui/listen_view
 được kèm thời lượng, trạng thái nghe. Máy tính dựng nó từ project đang sản xuất (chương nào xong là nghe được
 chương đó); điện thoại tải nó về cùng các file.
 
+## Những gì người dùng có (26-09)
+
+Nghe (máy tính + Android):
+- Thư viện gom các tập cùng bộ, thẻ "Đang nghe dở" nói chương + giờ + lần nghe cuối, thẻ "Tối qua" buổi sáng, sách
+  đang làm mà chưa có chương nào hiện dạng "Đang làm · chương đầu sau khoảng X"; tìm không dấu.
+- Trình phát: hẹn giờ ngủ chỉ đếm khi đang phát, nhỏ dần theo dB, nghe thêm bằng phím/chuột (máy tính) hoặc lắc máy
+  (điện thoại); lịch đêm tự hẹn giờ; lưới an toàn: phát liên tục N giờ không ai chạm máy thì tự dừng và ghi nhật ký
+  đêm; tự lùi theo độ dài lần dừng (0/10/30 giây); "Quay lại chỗ vừa nghe" sau cú nhảy xa; hỏi khi thiết bị khác đã
+  nghe xa hơn; tiến độ cả cuốn; nghe xong một tập thì mời tập kế.
+- Chế độ đọc (`/book/:id/read/:chapterId`): đọc cả chương chưa thu âm, nhớ chỗ đọc, "Nghe từ đây" đúng câu.
+- Dấu trang kèm câu văn, gộp dấu trùng, hoàn tác khi xoá; phím Space/←/→/Shift/B/M/[ ]/Esc.
+
+Studio (máy tính):
+- Trình tạo 4 bước: bước nằm trong URL, nháp giữ khi rời trang, gợi ý thư mục con, ước lượng thời gian đo trên máy
+  này, cảnh báo đừng ngắt pha phân tích.
+- Hàng đợi sản xuất: cuốn thứ hai xếp hàng, tự chạy khi cuốn kia xong.
+- "Cần nghe lại" (`webui/reviews.py`): câu hỏng / chưa kiểm được / tên riêng lệch nhiều, nghe từng câu, bấm Ổn hoặc
+  Cần thu lại; phán quyết ở `reviews.json` (không ghi vào SQLite của sách).
+- "Xuất MP3 để nghe ở app khác" (`webui/export.py`): chép luồng âm thanh kèm tag ID3 đúng + bìa + `.m3u8`.
+- Cài đặt: điện thoại (ghép bằng mã 6 số, huỷ mã sau 5 lần sai), hẹn giờ ngủ, lịch đêm, lưới an toàn.
+
 ## Máy tính: web trong Qt WebEngine
 
 - Cửa sổ: `ebook_reader/desktop.py` - `QWebEngineView` (PySide6 đã có sẵn, **không thêm gói Python**: đổi
