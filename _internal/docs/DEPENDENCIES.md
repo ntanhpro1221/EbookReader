@@ -410,3 +410,14 @@ Lượt kiểm bị trễ 90 giờ (dòng đỏ trong nhịp tim nhắc). Sáu m
 | `sea-g2p` 0.10.0 (23-09) | 4 commit, đều là C ABI: tách PyO3 ra sau feature `python`, `normalize_batch` thành vỏ bọc mỏng; logic tách âm tiếng Việt không đổi | **không nâng**: `asr.py` chỉ dùng `G2P` để so âm vị tên riêng; không có gì cho ta |
 | `timm` 1.0.30 (22-09) | phụ thuộc của UTMOSv2, ràng với cache revision đã khoá | **không nâng**, theo luật chung ở đầu file |
 | `pnnbao-ump/VieNeu-TTS-v3-Turbo` `main` đổi **60 file** (trước 6) | thêm thư mục `gguf/` (bf16, q8_0, `voices/*`) cho bộ đọc audio.cpp mới của VieNeu Desktop 0.18.5 (nhanh gấp 3 trên máy họ) | dây chuyền ghim `8b7e9cf` và đi đường torch, không đọc `gguf/`. **Ghi lại làm ứng viên tốc độ** giữa hai cuốn: nếu SDK Python có đường audio.cpp thì phải ĐO lại toàn bộ ngân sách frame và nghe lại, vì đó là engine khác |
+
+## Kiểm 2026-09-26 16:5x (lô 18 đang thu) — một tin mới: `huggingface-hub` 2.0.0
+
+Cùng chín gói như lượt 24-09 ngay trên; VieNeu SDK vẫn v3.8.3; `main` của `VieNeu-TTS-v3-Turbo` vẫn là 60 file
+(thư mục `gguf/`). Mới:
+
+| mục | đọc release notes | quyết định |
+|---|---|---|
+| `huggingface-hub` **2.0.0** (24-09, "The httpx2 release"; bảng 20-09 còn ghi bản mới nhất là 1.32) | hai thay đổi phá vỡ: tầng HTTP chuyển từ `httpx` sang `httpx2`/`httpcore2`, và bỏ mọi API đã deprecate ở 1.x (`upload_large_folder`, `duplicate_space`, `huggingface-cli`...). Không nói gì về bố cục cache | **không nâng**. Mã của ta chỉ chạm `huggingface_hub.constants` (`HF_HOME`, `HF_HUB_CACHE`, `HF_HUB_OFFLINE` ở `worker.py`) và chạy offline với revision đã khoá. Khi nâng `transformers` giữa hai cuốn, hub 2 sẽ đi theo: kiểm ba hằng số ấy còn tồn tại và `HF_HUB_OFFLINE` vẫn chặn mạng thật (httpx2 dùng kho chứng chỉ của hệ điều hành - không liên quan khi offline) |
+| `ruff` 0.16.9 | công cụ dev, không phải cổng | không nâng |
+| Ollama 0.34.4 (23-09) | máy chủ đang cài 0.33.2; model đang dùng khớp registry | không đụng giữa cuốn - model digest khoá theo sách |
